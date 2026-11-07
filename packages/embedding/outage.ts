@@ -7,7 +7,9 @@
 // text is found by its words, but not by `.near` or a recall. So an outage is
 // a line in the log when it starts and when it ends, and a failure once the
 // texts it holds up have waited {@link OVERDUE}: reported once, the outage as
-// its cause. Anything else a drain throws is unexpected and reports at once.
+// its cause. Anything else a drain throws is unexpected and reports at once,
+// and once while drains keep failing by it: a box drains every few seconds,
+// and one bug is one report. The drain that next answers logs that it did.
 // A text the model refuses is the text's, not the drain's (./sweep.ts
 // `refused`). A model `Withheld` (a host's spent budget) is no failure at
 // all: its texts wait for the ceiling to lift, logged once, never reported.
@@ -28,10 +30,11 @@ import { Unanswered, Withheld } from './embedder.ts'
  */
 export let OVERDUE: number = 15 * 60_000
 
-/** An outage a host's drains are riding out: since when the model has not
- * answered, and whether its wait has been reported or, withheld, needs no
- * report. */
-export type Outage = { since: number; told?: true }
+/** An outage a host's drains are riding out: since when no drain has
+ * answered, whether the wait has been reported or, withheld, needs no report,
+ * and the unexpected failure already reported, while drains keep failing by
+ * it. */
+export type Outage = { since: number; told?: true; bug?: string }
 
 /** What one drain's outcome makes of the outage: the outage it leaves, the
  * failure to report and the line to log, where there is one. */
@@ -56,25 +59,36 @@ export class Overdue extends Error {
 }
 
 /**
- * A drain that answered: an outage it rode out is over.
+ * A drain that answered: an outage it rode out, or the failure it reported,
+ * is over.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
  * equal(drained(null, 0), { outage: null })
  * equal(drained({ since: 0 }, 90_000),
  *   { outage: null, log: 'the outage ended after 90000 ms' })
+ * equal(drained({ since: 0, bug: 'Error: no table' }, 9_000), {
+ *   outage: null,
+ *   log: 'drains answer again after 9000 ms of Error: no table',
+ * })
  * ```
  */
-export let drained: Ride = (outage, now) =>
-  outage
-    ? { outage: null, log: `the outage ended after ${now - outage.since} ms` }
-    : { outage }
+export let drained: Ride = (outage, now) => {
+  if (!outage) return { outage }
+  let ms = now - outage.since
+  return {
+    outage: null,
+    log: outage.bug
+      ? `drains answer again after ${ms} ms of ${outage.bug}`
+      : `the outage ended after ${ms} ms`,
+  }
+}
 
 /**
  * A drain that threw `error`. A model that did not answer starts an outage or
  * rides on in one, until its texts have waited {@link OVERDUE}, which reports
  * once; a model that withheld its answer waits without a report; anything
- * else reports at once.
+ * else reports at once, and not again while drains keep failing by it.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -83,6 +97,9 @@ export let drained: Ride = (outage, now) =>
  *   { model: '@cf/m', texts: '2', tries: '4' }, Error('4009'))
  * equal(failed(down)(null, 0).outage, { since: 0 })
  * equal(failed(down)({ since: 0 }, 60_000), { outage: { since: 0 } })
+ * let bug = failed(Error('no table'))
+ * equal(bug(null, 0).outage, { since: 0, bug: 'Error: no table' })
+ * equal(bug(bug(null, 0).outage, 3_000).report, undefined)
  * ```
  */
 export let failed = (error: unknown): Ride => (outage, now) => {
@@ -92,7 +109,11 @@ export let failed = (error: unknown): Ride => (outage, now) => {
       log: `${error.message}; its texts wait until it lifts`,
     }
   }
-  if (!(error instanceof Unanswered)) return { outage, report: error }
+  if (!(error instanceof Unanswered)) {
+    let bug = String(error)
+    if (outage?.bug == bug) return { outage }
+    return { outage: { ...outage ?? { since: now }, bug }, report: error }
+  }
   if (!outage) {
     return {
       outage: { since: now },

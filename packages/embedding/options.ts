@@ -90,6 +90,9 @@ export type Options = {
   /** how long an empty queue waits before the service looks again, in
    * milliseconds (default 3000) — how soon a new text is embedded */
   after?: number
+  /** the clock the service times a model's outage by (default `Date.now`):
+   * a test's */
+  now?: () => number
 }
 
 /** Where the rows a config names are read: the graph's `get`, which leaves

@@ -49,10 +49,14 @@ test('owed texts waiting past OVERDUE report once, the outage their cause', () =
   equal(overdue.cause instanceof Unanswered, true)
 })
 
-test('an unexpected failure reports at once, in an outage or not', () => {
+test('an unexpected failure reports at once, in an outage or not, once per cause', () => {
   let broken = failed(Error('no such table: embedding_owed'))
+  let other = failed(Error('disk I/O error'))
   equal(run([0, broken]).reports.length, 1)
-  equal(run([0, down], [1, broken], [2, broken]).reports.length, 2)
+  equal(run([0, down], [1, broken], [2, broken]).reports.length, 1)
+  equal(run([0, broken], [1, broken], [2, other], [3, other]).reports.length, 2)
+  let again = run([0, broken], [1, drained], [2, broken])
+  equal([again.reports.length, again.logs], [2, 1])
 })
 
 test('a drain that answers ends the wait; the next outage waits anew', () => {

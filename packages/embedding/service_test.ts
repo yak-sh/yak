@@ -1,10 +1,13 @@
 // The service: a loop over the queue, whoever wrote what it holds.
 
-import { test } from '@yaks/testing'
+import { equal, test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { service } from './service.ts'
 import { TABLE } from './ddl.ts'
 import { retries } from './remote.ts'
+import { OVERDUE, Overdue } from './outage.ts'
+import { Unanswered } from './embedder.ts'
+import type { Host } from './service.ts'
 import { insert, type Statements, tally } from '@yaks/sql'
 import { entity } from '../sqlite/testing.ts'
 import type { Options, Rows } from './options.ts'
@@ -22,10 +25,15 @@ let until = async (want: () => boolean) => {
 }
 
 // A service running over a fresh shop until the test is done with it.
-let running = (options: Options, graph: Rows = none, db = shelf()) => {
+let running = (
+  options: Options,
+  graph: Rows = none,
+  db = shelf(),
+  host: Partial<Host> = {},
+) => {
   let stop = new AbortController()
   let done = service(
-    { vocab: shop, storage: { statements: db }, graph },
+    { vocab: shop, storage: { statements: db }, graph, ...host },
     options,
     stop.signal,
   )
@@ -100,7 +108,7 @@ test('a key that arrives late starts the embedding, without anybody restarting',
   })
 })
 
-test('a model that cannot be reached is reported, and the work waits for it', async () => {
+test('a model that cannot be reached is logged, and the work waits for it', async () => {
   await quiet(async (said) => {
     let up = false
     let fetch = (_: string, init?: { body?: string }) => {
@@ -133,5 +141,94 @@ test('the host ending stops the loop: nothing runs afterwards', async () => {
     db.query({ t: 'drop', kind: 'table', name: 'book' })
     await new Promise((go) => setTimeout(go, 10))
     assertEquals(said, [])
+  })
+})
+
+// A service whose model fails as `fail` says, on a clock the test holds, and
+// what it reports and logs.
+let failing = (fail: () => Error | undefined) => {
+  let at = 0, passes = 0
+  let reports: { error: unknown; tags: Record<string, string> }[] = []
+  let embedders = {
+    lent: () => ({
+      model: 'lent',
+      embed: () => {
+        passes++
+        let error = fail()
+        if (error) throw error
+        return new Float32Array([1, 0, 0])
+      },
+    }),
+  }
+  let run = running(
+    {
+      after: 1,
+      batch: 1,
+      now: () => at,
+      embedder: { provider: 'lent', model: 'lent' },
+    },
+    none,
+    shelf(),
+    {
+      embedders,
+      report: (error, { tags }) => void reports.push({ error, tags }),
+    },
+  )
+  let after = async (n: number) => {
+    let from = passes
+    await until(() => passes >= from + n)
+  }
+  return {
+    ...run,
+    reports,
+    after,
+    set: (ms: number) => (at = ms),
+  }
+}
+
+let unanswered = () =>
+  new Unanswered('box', { model: 'lent', texts: '1', tries: '4' }, 'down')
+
+test('a bug in a pass is reported once while passes keep failing by it, and its end is logged', async () => {
+  await quiet(async (said) => {
+    let error: Error | undefined = Error('no such table: embedding_owed')
+    let s = failing(() => error)
+    await s.after(10)
+    equal(s.reports.map((r) => r.error), [error])
+    equal(s.reports[0].tags, {
+      package: '@yaks/embedding',
+      step: 'embedding pass',
+    })
+    let other = Error('disk I/O error')
+    error = other
+    await s.after(10)
+    equal(s.reports.map((r) => r.error).at(-1), other)
+    equal(s.reports.length, 2)
+    s.set(4_000)
+    error = undefined
+    await until(() => count(s.db) == 4)
+    await s.end()
+    equal(said, ['drains answer again after 4000 ms of Error: disk I/O error'])
+  })
+})
+
+test('a model out past OVERDUE reports once, tagged with its wait, and its end is logged', async () => {
+  await quiet(async (said) => {
+    let up = false
+    let s = failing(() => up ? undefined : unanswered())
+    await s.after(10)
+    equal(s.reports, [])
+    s.set(OVERDUE)
+    await s.after(10)
+    equal(s.reports.length, 1)
+    let [{ error, tags }] = s.reports
+    equal(error instanceof Overdue, true)
+    equal(tags.waited, `${OVERDUE} ms`)
+    equal(tags.model, 'lent')
+    up = true
+    await until(() => count(s.db) == 4)
+    await s.end()
+    equal(said.length, 2, 'the outage logs its start and its end')
+    equal(said[1], `the outage ended after ${OVERDUE} ms`)
   })
 })

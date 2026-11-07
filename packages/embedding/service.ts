@@ -24,9 +24,13 @@
 // pass (./options.ts). A server whose key or provider has not arrived starts
 // up, stores no vectors, reports what it is waiting for once, and keeps
 // looking, so the first pass after it appears is the one that embeds and
-// nothing has to be restarted. A pass that fails is reported where
-// it happens, and its work stays queued for the next look: a machine that
-// cannot reach its model has stale vectors, not a broken graph.
+// nothing has to be restarted. A pass that fails leaves its work queued for
+// the next look: a machine that cannot reach its model has stale vectors, not
+// a broken graph. What its failure is comes from ./outage.ts, as it does for a
+// yaks.app store's drains: a model out for a while is a line in the log when
+// it starts and when it ends, texts it holds up past OVERDUE report once, and
+// any other failure reports at once to the host's tracker, once while passes
+// keep failing by it, with a line when one answers again.
 
 import { sleep } from '@yaks/effects'
 import type { Graph } from '@yaks/graph'
@@ -35,6 +39,7 @@ import { type Derived, type Statements, statements } from '@yaks/sql'
 import { resolved } from './fields.ts'
 import { type Lent, type Options, ready } from './options.ts'
 import { drain } from './sweep.ts'
+import { drained, failed, type Outage, Overdue, type Ride } from './outage.ts'
 import { prepare } from './native.ts'
 
 /** How long an empty queue waits before the loop looks again, by default. */
@@ -50,6 +55,12 @@ export type Host = {
   derived?: Derived
   /** the embedders lent by name (@yaks/host `embedders`) */
   embedders?: Lent
+  /** where a failed pass is reported (@yaks/host `report`; default
+   * `console.error`) */
+  report?: (
+    error: unknown,
+    context: { tags: Record<string, string> },
+  ) => void | Promise<void>
 }
 
 /** Settle the queue for as long as `signal` lets it: one pass when it has
@@ -64,22 +75,47 @@ export let service = async (
   // Reported once per distinct message: a server waiting for a key says so on
   // the first pass and then goes quiet; `vector_check` keeps the answer.
   let told = new Set<string>()
+  let now = options.now ?? Date.now
+  let outage: Outage | null = null
+  let ride = async (made: Ride) => {
+    let rode = made(outage, now())
+    outage = rode.outage
+    if (rode.log) console.warn('@yaks/embedding —', rode.log)
+    if (!rode.report) return
+    // What varies across one outage (the model, how many texts, how many
+    // tries, how long they waited) is the occurrence's, not the bug's.
+    let context = rode.report instanceof Overdue ? rode.report.context : {}
+    let tags = {
+      package: '@yaks/embedding',
+      step: 'embedding pass',
+      ...context,
+    }
+    try {
+      if (host.report) await host.report(rode.report, { tags })
+      else console.error('@yaks/embedding pass —', rode.report)
+    } catch (error) {
+      console.error('@yaks/embedding report —', error)
+    }
+  }
   for (;;) {
     try {
-      let now = await ready(host.vocab, options, host.graph, host.embedders)
-      if (now.embedder) {
-        let text = resolved(now.text, host.derived)
-        let done = await drain(db, text, now.embedder, {
+      let is = await ready(host.vocab, options, host.graph, host.embedders)
+      if (is.embedder) {
+        let text = resolved(is.text, host.derived)
+        let done = await drain(db, text, is.embedder, {
           batch: options.batch,
           signal,
         })
+        // A text the model will not take is the text's, not the pass's: it
+        // has no vector, and ranks by its words alone.
         for (let r of done.refused) {
           console.warn('@yaks/embedding refused', r.entity, '—', r.error)
         }
+        await ride(drained)
       } else {
-        if (!told.has(now.waiting!)) {
-          told.add(now.waiting!)
-          console.warn('@yaks/embedding —', now.waiting)
+        if (!told.has(is.waiting!)) {
+          told.add(is.waiting!)
+          console.warn('@yaks/embedding —', is.waiting)
         }
         // Native scans still search the vectors already stored.
         prepare(db)
@@ -88,7 +124,7 @@ export let service = async (
       // A pass the host ended mid-way wrote nothing it had not settled: its
       // work is still queued, and the store it would report into is closing.
       if (signal.aborted) return
-      console.warn('@yaks/embedding sweep —', error)
+      await ride(failed(error))
     }
     if (signal.aborted) return
     await sleep(after, signal)

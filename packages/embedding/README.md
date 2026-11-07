@@ -152,7 +152,9 @@ among what a `within` filter line admits, compiled by the storage's `screen`.
 graph: it sweeps the queue, takes the next batch at once while work is left, and
 looks again after `after` once the queue is empty. The graph write does not
 await embedding. The service stops when its signal aborts, and a pass the host
-ended leaves its work queued.
+ended leaves its work queued. A pass that fails reports to the host's `report`
+(the box's tracker) as a yaks.app store's drain does (`drained`, `failed`,
+below), tagged `{ package: '@yaks/embedding', step: 'embedding pass' }`.
 
 Options:
 
@@ -295,7 +297,8 @@ between drains: an `Unanswered` starts an outage or rides on in it, and the
 drain that answers ends it, each end a line to log; once its texts have waited
 `OVERDUE` (a quarter of an hour) the outage reports once, as `Overdue`, the
 `Unanswered` as its cause and the wait in its `context`. Any other failure
-reports at once.
+reports at once, and once while drains keep failing by it; the drain that next
+answers logs that it did.
 
 ```ts
 import { equal } from '@yaks/testing'
