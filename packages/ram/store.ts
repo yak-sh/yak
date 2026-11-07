@@ -926,15 +926,9 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       let at = laid.get(b)
       return at != null && at < before ? [mark(at, eid)] : []
     }).sort().filter((m) => page.after == null || m > page.after)
-    let eids: Eid[] = []
-    let next: string | undefined
-    for (let m of found) {
-      if (eids.length >= page.limit) break
-      next = m
-      let [, eid] = JSON.parse(m)
-      if (!named(eid)) eids.push(eid)
-    }
-    return eids.length < page.limit || next == null ? { eids } : { eids, next }
+    let seen = found.slice(0, page.limit)
+    let eids = seen.map((m) => JSON.parse(m)[1] as Eid).filter((e) => !named(e))
+    return seen.length < page.limit ? { eids } : { eids, next: seen.at(-1) }
   }
 
   return {

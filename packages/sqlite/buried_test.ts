@@ -75,4 +75,15 @@ for (
     )
     equal(rest.next, undefined)
   })
+
+  test(`${name}: a page of graves still named answers none and leads on`, async () => {
+    let free = await g.outside.buried!(later, { limit: 9 })
+    store.tx((tx) => tx.prune(free.eids))
+    let pages = 0, eids: string[] = [], after: string | undefined
+    do {
+      let page = await g.outside.buried!(later, { after, limit: 1 })
+      pages++, eids.push(...page.eids), after = page.next
+    } while (after != null)
+    equal({ pages, eids }, { pages: named.length + 1, eids: [] })
+  })
 }

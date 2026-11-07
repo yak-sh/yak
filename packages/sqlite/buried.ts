@@ -4,11 +4,14 @@
 // component's owner and references, the journal's, an embedding's), and every
 // `keep` reference, which outlives its target's tombstone with no key
 // (./ddl.ts). A grave something still names stays: it is that record's
-// target. The walk is in identity order, a page at a time, each probe one
-// index seek.
+// target. The walk is in identity order, a page of graves at a time, each probe
+// one index seek. A page is the graves it looks at, not the ones it finds: a
+// long run of named graves costs as many pages, each one statement of bounded
+// work, rather than one statement that probes them all.
 
 import {
   and,
+  as,
   col,
   type Driver,
   eq,
@@ -20,6 +23,7 @@ import {
   lit,
   lt,
   not,
+  or,
   revision,
   type Select,
   select,
@@ -58,8 +62,8 @@ export let referrers = (driver: Driver, vocab: Vocab): Referrer[] => {
 }
 
 /** The statement selecting a page of graves laid before `before`, past the
- * identity `after`, that none of `refs` names: each grave's eid and integer
- * id, the walk's cursor. */
+ * identity `after`: each grave's eid, its integer id, the walk's cursor, and
+ * whether it is `free`, named by none of `refs`. */
 export let buriedSql = (
   refs: Referrer[],
   before: string,
@@ -73,13 +77,16 @@ export let buriedSql = (
       where: eq(col(column, '__r'), grave),
     }))
   return select({
-    cols: [col('eid', 'e'), col('id', 'e')],
+    cols: [
+      col('eid', 'e'),
+      col('id', 'e'),
+      as(not(or(...refs.map(named))), 'free'),
+    ],
     from: table(TOMBSTONE, 't'),
     joins: [join(table('entity', 'e'), eq(col('id', 'e'), grave))],
     where: and(
       gt(grave, val(page.after ?? 0)),
       lt(col('deleted_at', 't'), val(before)),
-      ...refs.map((r) => not(named(r))),
     ),
     order: [grave],
     limit: val(page.limit),
@@ -101,7 +108,7 @@ export let burying = (driver: Driver, vocab: Vocab) => {
       after: page.after == null ? undefined : Number(page.after),
       limit: page.limit,
     }))
-    let eids = found.map((r) => String(r.eid))
+    let eids = found.filter((r) => r.free).map((r) => String(r.eid))
     let last = found.at(-1)
     return found.length < page.limit || !last
       ? { eids }

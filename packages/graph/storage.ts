@@ -169,11 +169,13 @@ export type Tx = {
    * phase's decision (./mutate.ts); an eid that is not tombstoned is left
    * alone. */
   revive: (eids: Eid[]) => void | Promise<void>
-  /** Up to `limit` tombstoned identities deleted before `before` (ISO-8601)
-   * that nothing refers to: what a retention sweep may `$prune`. A walk goes
-   * in the store's own order, resuming at `after`, the `next` the page before
-   * it answered; a page that ends the walk answers none. A store that keeps
-   * no deletion time leaves it out. */
+  /** The tombstoned identities nothing refers to among the next `limit`
+   * deleted before `before` (ISO-8601): what a retention sweep may `$prune`.
+   * A page looks at `limit` graves and may answer none of them, so a run of
+   * graves still named costs pages of bounded work, not one long read. A walk
+   * goes in the store's own order, resuming at `after`, the `next` the page
+   * before it answered; a page that ends the walk answers none. A store that
+   * keeps no deletion time leaves it out. */
   buried?: (
     before: string,
     page: { after?: string; limit: number },

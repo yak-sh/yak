@@ -103,18 +103,19 @@ export let expire = async (
   })
 }
 
-// A pass's batches each hold the write lock while they apply. Before the next
-// one the pass rests as long as the last one held it: writers waiting on the
-// file get in, where a sweep that took the lock straight back would starve
-// them in their busy handlers, and lease renewals and the worker's other runs
-// get their turn.
+// A pass's batches each hold the write lock while they apply, and its pages of
+// graves each hold the thread while they are read. Before the next one the
+// pass rests as long as the last one held: writers waiting on the file get in,
+// where a sweep that took the lock straight back would starve them in their
+// busy handlers, and lease renewals and the worker's other runs get their
+// turn.
 let pacer = (signal?: AbortSignal) => {
   let held = 0
-  return async <T>(write: () => T | Promise<T>): Promise<T> => {
+  return async <T>(step: () => T | Promise<T>): Promise<T> => {
     if (held) await sleep(held, signal)
     let since = performance.now()
     try {
-      return await write()
+      return await step()
     } finally {
       held = performance.now() - since
     }
@@ -122,9 +123,10 @@ let pacer = (signal?: AbortSignal) => {
 }
 
 // Prune the tombstones deleted before `before`, a page at a time in the
-// store's order. A page refused because something reached a grave between
-// reading and pruning is passed over until the next pass. A store that keeps
-// no deletion time offers no graves.
+// store's order. A page may hold none to prune and still lead on. A page
+// refused because something reached a grave between reading and pruning is
+// passed over until the next pass. A store that keeps no deletion time offers
+// no graves.
 let bury = async (
   g: Access,
   paced: ReturnType<typeof pacer>,
@@ -133,10 +135,10 @@ let bury = async (
   let pruned = 0
   let after: string | undefined
   while (!opts.signal?.aborted && g.outside.buried) {
-    let page = await g.outside.buried(opts.before, {
-      after,
-      limit: opts.batch,
-    })
+    let read = g.outside.buried
+    let page = await paced(() =>
+      read(opts.before, { after, limit: opts.batch })
+    )
     if (page.eids.length) {
       try {
         let applied = await paced(() =>
