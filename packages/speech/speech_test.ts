@@ -411,3 +411,49 @@ test('a caller talking over the model stops it only once their words say somethi
   equal(told, [[1], 'over', 'done', 'over', [3]])
   equal(cancels(), 1)
 })
+
+test('a caller turn ends when the model hears it end, or once quiet after a lone "Okay."', () => {
+  let { s, told, stream, event } = talking(() => Promise.resolve(''))
+  s.fire('open')
+  let sent = (type: string) => s.json().filter((m) => m.type == type).length
+  let hear = (...words: string[]) => {
+    event({ type: 'input_audio_buffer.speech_started' })
+    for (let delta of words) {
+      event({
+        type: 'conversation.item.input_audio_transcription.delta',
+        delta,
+      })
+    }
+  }
+  // 0.7 s of a quiet line, or of a sound, at 8 kHz μ-law.
+  let quiet = () => stream.send(new Uint8Array(5600).fill(0xff))
+  let loud = () => stream.send(new Uint8Array(160).fill(0x10))
+  hear(' Tuesday', '.')
+  quiet()
+  event({ type: 'input_audio_buffer.speech_stopped' })
+  equal([told, sent('response.create'), sent('input_audio_buffer.commit')], [
+    ['stopped'],
+    1,
+    0,
+  ])
+  event({ type: 'response.done' })
+  // "Okay." said, the caller still talking or thinking, waits for the model.
+  loud()
+  hear(' Okay', '.')
+  hear(' Okay', ',')
+  quiet()
+  hear(' Hmm', '.')
+  quiet()
+  equal(sent('response.create'), 1)
+  // Quiet after a lone "Okay.", the turn ends without it, once.
+  loud()
+  hear(' Okay', '.')
+  quiet()
+  equal(sent('input_audio_buffer.commit'), 1)
+  event({ type: 'input_audio_buffer.speech_stopped' })
+  event({
+    type: 'error',
+    error: { code: 'input_audio_buffer_commit_empty', message: 'x' },
+  })
+  equal([told, sent('response.create')], [['stopped', 'done', 'stopped'], 2])
+})

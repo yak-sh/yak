@@ -3,6 +3,8 @@
 // the silence around its sound trimmed.
 // https://www.itu.int/rec/T-REC-G.711
 
+import type { Raw } from './mod.ts'
+
 let BIAS = 0x84, CLIP = 32635
 
 /** One 16-bit sample as G.711 μ-law. */
@@ -64,6 +66,28 @@ export let mulawed = (
 
 // A μ-law sample this close to silence, below about -48 dBFS: exponent 0.
 let quiet = (b: number) => (b & 0x7f) >= 0x70
+
+/**
+ * Whether raw samples hold a sound louder than a quiet line, about -36 dBFS:
+ * μ-law of exponent 4 or more, or 16-bit PCM over 512.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { sounds } from '@yaks/speech'
+ * equal(sounds(new Uint8Array([0xff, 0x7f, 0xc5]), { encoding: 'mulaw', rate: 8000 }), false)
+ * equal(sounds(new Uint8Array([0xff, 0x10]), { encoding: 'mulaw', rate: 8000 }), true)
+ * let pcm = new Uint8Array(new Int16Array([40, -600]).buffer)
+ * equal(sounds(pcm, { encoding: 'linear16', rate: 24000 }), true)
+ * ```
+ */
+export let sounds = (bytes: Uint8Array, format: Raw): boolean => {
+  if (format.encoding == 'mulaw') return bytes.some((b) => (b & 0x7f) < 0x40)
+  let view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length)
+  for (let i = 0; i + 1 < bytes.length; i += 2) {
+    if (Math.abs(view.getInt16(i, true)) > 512) return true
+  }
+  return false
+}
 
 /**
  * A stream of μ-law at `rate` Hz without the silence before its first sound

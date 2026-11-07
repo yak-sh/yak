@@ -220,12 +220,14 @@ export let OPENAI: Provider = {
             transcription: { model: 'gpt-live-transcribe', language: 'en' },
             // A phone held to the ear. The model, not silence, says when
             // the caller is done, letting an "um" or a half sentence run on
-            // instead of answering it as a turn of its own.
+            // instead of answering it as a turn of its own; mod.ts `talk`
+            // answers it. Unsure, it waits up to 4 s at medium eagerness, 8 s
+            // at low, and 2 s at high, which ends a turn at a thinking pause.
             noise_reduction: { type: 'near_field' },
             turn_detection: {
               type: 'semantic_vad',
-              eagerness: 'low',
-              create_response: true,
+              eagerness: 'medium',
+              create_response: false,
               // The caller talking stops the model only once their words
               // say something (mod.ts `talk`), not at the first sound.
               interrupt_response: false,
@@ -287,8 +289,12 @@ export let OPENAI: Provider = {
           break
         }
         case 'error':
-          // A stop that came as the response finished has nothing to stop.
-          if (e.error?.code == 'response_cancel_not_active') break
+          // A stop that came as the response finished has nothing to stop,
+          // and a turn ended as the model heard it end has nothing to end.
+          if (
+            e.error?.code == 'response_cancel_not_active' ||
+            e.error?.code == 'input_audio_buffer_commit_empty'
+          ) break
           said.push(
             e.error?.code == 'conversation_already_has_active_response'
               ? { busy: true }
@@ -322,6 +328,7 @@ export let OPENAI: Provider = {
           content: [{ type: 'input_text', text }],
         },
       }),
+    commit: JSON.stringify({ type: 'input_audio_buffer.commit' }),
   },
 }
 

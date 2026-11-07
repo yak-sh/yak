@@ -6,9 +6,9 @@
 
 export { DEEPGRAM } from './deepgram.ts'
 export { OPENAI } from './openai.ts'
-export { base64, mulawed, mulawOf, trimmed, unbase64 } from './audio.ts'
+export { base64, mulawed, mulawOf, sounds, trimmed, unbase64 } from './audio.ts'
 export { query } from './query.ts'
-import { trimmed } from './audio.ts'
+import { sounds, trimmed } from './audio.ts'
 
 /** How audio is encoded: an MP3, or raw samples at a rate (`mulaw` is the
  * telephone's 8 kHz μ-law; `linear16` is 16-bit PCM). */
@@ -160,6 +160,8 @@ export type Provider = {
     /** something the model is told mid-stream, for what it says next,
      * answered by nothing */
     tell: (text: string) => string
+    /** what ends the caller's turn now, before the model hears it end */
+    commit: string
   }
   /** the account's credit left, in dollars, where the provider says */
   balance?: (ask: Ask) => Promise<number>
@@ -516,6 +518,13 @@ let FILLERS = new Set(
     .split(' '),
 )
 
+// The fillers of a caller thinking, who has more to say.
+let THINKING = new Set('ah hm hmm mm uh um'.split(' '))
+
+let words = (text: string) =>
+  text.toLowerCase().split(/\s+/).map((w) => w.replace(/[^a-z]/g, ''))
+    .filter(Boolean)
+
 /** How many of `text`'s words say something, the `FILLERS` aside.
  *
  * ```ts
@@ -526,12 +535,33 @@ let FILLERS = new Set(
  * ```
  */
 export let meant = (text: string): number =>
-  text.toLowerCase().split(/\s+/).map((w) => w.replace(/[^a-z']/g, ''))
-    .filter((w) => w && !FILLERS.has(w.replace(/'/g, ''))).length
+  words(text).filter((w) => !FILLERS.has(w)).length
+
+/** Whether `text` is a whole turn by its words alone: fillers said as a
+ * sentence, ending in one that is not a caller thinking. A model that hears
+ * when a turn ends takes a lone "Okay." for the start of more, and waits.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { whole } from '@yaks/speech'
+ * equal(['Okay.', ' Um, yes.', 'Okay,', 'Hmm.', 'Okay. So', 'Book it.'].map(whole),
+ *   [true, true, false, false, false, false])
+ * ```
+ */
+export let whole = (text: string): boolean => {
+  let w = words(text)
+  return !!w.length && w.every((x) => FILLERS.has(x)) &&
+    !THINKING.has(w.at(-1)!) && /[.!?]\s*$/.test(text)
+}
 
 // The words a caller says over the model before it stops: fewer, or only
 // fillers, and it goes on. Two say "wait, stop" or "hold on".
 let OVER = 2
+
+// The seconds a caller is quiet after a `whole` turn before it ends. Their
+// words are heard about as late, and one going on ("Okay, so…") is talking
+// again by then.
+let QUIET = 0.7
 
 /**
  * A model that hears and speaks in one stream: `send` takes the caller's raw
@@ -543,6 +573,9 @@ let OVER = 2
  * something (`meant`): an "okay", a laugh, or a noise, lets it go on. The
  * model writes its audio faster than it is said, so what it says is mostly
  * still playing, its response long done, when the caller talks.
+ *
+ * The model says when the caller's turn ends, and is answered then; a turn
+ * `whole` by its words ends once they are `QUIET`, without waiting for it.
  */
 export let talk = (
   o: {
@@ -571,6 +604,20 @@ export let talk = (
   // What the caller has said since they started talking, whether it stopped
   // the model, and whether the response it stopped is still sending audio.
   let hearing = '', over = false, hushed = false
+  // Whether the caller's turn ended and was answered, and for how many
+  // seconds their audio has been quiet.
+  let ended = false, quiet = 0
+  let end = () => {
+    if (ended) return
+    ended = true
+    o.told.stopped?.()
+    ask(goOn)
+  }
+  let soon = () => {
+    if (ended || quiet < QUIET || !whole(hearing)) return
+    s.send(t.commit)
+    end()
+  }
   let ask = (m: string) => {
     if (m != goOn || !waiting.includes(m)) waiting.push(m)
     next()
@@ -593,13 +640,14 @@ export let talk = (
     }),
     (data) => {
       for (let said of t.read(data, model)) {
-        if (said.start) hearing = '', over = false
-        if (said.hearing && !over && meant(hearing += said.hearing) >= OVER) {
+        if (said.start) hearing = '', over = ended = false
+        if (said.hearing) hearing += said.hearing, soon()
+        if (said.hearing && !over && meant(hearing) >= OVER) {
           over = true
           if (busy) s.send(t.cancel), hushed = true
           o.told.over?.()
         }
-        if (said.stopped) o.told.stopped?.()
+        if (said.stopped) end()
         if (said.heard) o.told.heard?.(said.heard)
         if (said.audio && !hushed) o.told.audio(said.audio)
         if (said.said) o.told.said?.(said.said)
@@ -630,6 +678,10 @@ export let talk = (
       if (s.closed()) return
       bytes += audio.length
       s.send(t.audio(audio))
+      quiet = sounds(audio, o.format)
+        ? 0
+        : quiet + audio.length / perSecond(o.format)!
+      soon()
     },
     say: (text) => ask(t.respond(text)),
     tell: (text) => {
