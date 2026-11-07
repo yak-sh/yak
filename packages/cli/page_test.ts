@@ -189,6 +189,14 @@ test('a bundled page compiles its JSX against Preact', async () => {
   }
 })
 
+test('a bundled page carries a package it reaches only by a dynamic import', async () => {
+  let code = await bundle({
+    code: `export let load = () => import('@std/yaml')`,
+    at: new URL('./.page.ts', import.meta.url),
+  })
+  assertEquals(code.includes('a document separator is expected'), true)
+})
+
 test('a body made ahead is found under its key, and only there', async () => {
   let dir = new URL(`file://${await Deno.makeTempDir()}/made/`)
   try {
