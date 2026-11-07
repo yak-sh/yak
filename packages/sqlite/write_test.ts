@@ -399,3 +399,63 @@ test('a batch past 100 entities binds under the Durable Object limit', async () 
   await g.apply(many(2))
   assertEquals((s.read('.product.price=2') as Bundle[]).length, 150)
 })
+
+test('a batch writes each table in one statement, however many entities it gives', () => {
+  let written = (n: number) => {
+    let seen: string[] = []
+    let s = storage(spy(mem(), (sql) => void seen.push(sql)), shop, {
+      number: true,
+    })
+    s.install()
+    s.raise()
+    seen.length = 0
+    let reviews = Array.from({ length: n }, (_, i) => ({
+      entity: { eid: `r${i}` },
+      review: { stars: i, product: `p${i}` },
+    }))
+    let products = Array.from({ length: n }, (_, i) => ({
+      entity: { eid: `p${i}` },
+      doc: { title: `Mug ${i}` },
+      product: { price: i + 0.1 },
+    }))
+    let born = write(s, [...reviews, ...products])
+    assertEquals(
+      born.map((e) => e.num),
+      Array.from({ length: 2 * n }, (_, i) => i + 1),
+    )
+    assertEquals((s.read('.review') as Bundle[]).length, n)
+    let [r, p] = s.get([`r${n - 1}`, `p${n - 1}`])
+    assertEquals(c(r, 'review'), { stars: n - 1, product: `p${n - 1}` })
+    assertEquals(c(p, 'product').price, n - 0.9)
+    return seen.filter((q) => /^\s*insert/.test(q)).length
+  }
+  assertEquals(written(150), written(3))
+})
+
+test('a value written whole reads back as a bound value does', () => {
+  let s = store()
+  let title = 'a\ud800b \u0000 😀'
+  write(s, [
+    { entity: { eid: 'p1' }, doc: { title }, product: { price: 0.1 + 0.2 } },
+    { entity: { eid: 'p2' }, doc: { title: 'x' } },
+  ])
+  write(s, [{ entity: { eid: 'p2' }, doc: { title } }])
+  let [p1, p2] = s.get(['p1', 'p2'])
+  assertEquals(c(p1, 'doc').title, c(p2, 'doc').title)
+  assertEquals(c(p1, 'product').price, 0.30000000000000004)
+})
+
+test("each entity's writes land in the order a batch gives them", () => {
+  let s = store()
+  write(s, [
+    { entity: { eid: 'p1' }, product: { price: 1 }, doc: { title: 'a' } },
+    { entity: { eid: 'p2' }, doc: { title: 'b' }, product: { price: 2 } },
+    { entity: { eid: 'p1' }, product: null },
+    { entity: { eid: 'p1' }, product: { price: 3 } },
+    { entity: { eid: 'p2' }, doc: { title: 'c' } },
+  ])
+  let [p1, p2] = s.get(['p1', 'p2'])
+  assertEquals([c(p1, 'product').price, c(p1, 'doc').title], [3, 'a'])
+  assertEquals([c(p2, 'product').price, c(p2, 'doc').title], [2, 'c'])
+  assertEquals((s.read('.product') as Bundle[]).length, 2)
+})

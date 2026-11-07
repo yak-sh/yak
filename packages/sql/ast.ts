@@ -566,6 +566,71 @@ export let array = (list: readonly Param[]): Query =>
     from: call('json_each', [val(JSON.stringify(list))]),
   })
 
+// The most text one JSON array of rows holds: well inside the largest string
+// a Durable Object binds (2 MB), however its characters encode.
+let PART = 512 * 1024
+
+/** Rows as JSON arrays of at most 512 Ki characters each, a row longer than
+ * that alone in its own: one bound string per statement however many rows it
+ * writes, read back through `json_each` and {@link cell}. Its text is the same
+ * whatever the rows, so a host keeps one prepared statement for all of them,
+ * and no host's ceiling on bound parameters is reached. A value must be one
+ * JSON carries as a bind would ({@link jsonable}); a string that is not
+ * well-formed UTF-16 goes in as a bind encodes it, each lone surrogate a U+FFFD.
+ *
+ * ```ts
+ * import { call, cell, parts, render, select, val } from '@yaks/sql'
+ *
+ * parts([[1, 'a'], [2, 'b']]) // ['[[1,"a"],[2,"b"]]']
+ * render(select({
+ *   cols: [cell(0), cell(1)],
+ *   from: call('json_each', [val(parts([[1, 'a']])[0])]),
+ * })).sql
+ * // `select json_extract("value", '$[0]'), json_extract("value", '$[1]') from "json_each"(?)`
+ * ```
+ */
+export let parts = (rows: readonly (readonly Param[])[]): string[] => {
+  let out: string[] = [], held: string[] = [], size = 0
+  let close = () => {
+    if (held.length) out.push(`[${held.splice(0).join(',')}]`)
+    size = 0
+  }
+  for (let row of rows) {
+    let text = JSON.stringify(row.map(formed))
+    if (size + text.length > PART) close()
+    held.push(text)
+    size += text.length + 1
+  }
+  close()
+  return out
+}
+
+// A value as a bind would hand it to SQLite: a lone surrogate, a high one
+// with no low after it or a low one with no high before it, is U+FFFD.
+let LONE =
+  /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g
+let formed = (v: Param): Param =>
+  typeof v == 'string' ? v.replace(LONE, '\ufffd') : v
+
+/** The `i`th cell of a row {@link parts} wrote, read from `json_each`. */
+export let cell = (i: number): Expr =>
+  fn('json_extract', col('value'), lit(`$[${i}]`))
+
+/** Whether JSON carries a value to SQLite as a bind would: a string, a finite
+ * number, a boolean or null. A double makes the trip exactly; a blob, a
+ * bigint and an infinity do not.
+ *
+ * ```ts
+ * import { jsonable } from '@yaks/sql'
+ *
+ * jsonable(0.1) // true
+ * jsonable(new Uint8Array(1)) // false
+ * ```
+ */
+export let jsonable = (v: unknown): v is string | number | boolean | null =>
+  v == null || typeof v == 'string' || typeof v == 'boolean' ||
+  typeof v == 'number' && Number.isFinite(v)
+
 /** A collection as a query with one `value` column, written the way its host
  * reads one cheapest. A bounded collection is literal VALUES, costing a
  * host that bills rows read (D1) no virtual rows, and any other is an

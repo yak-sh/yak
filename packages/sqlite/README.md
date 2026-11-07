@@ -172,6 +172,16 @@ try {
 }
 ```
 
+A patch writes in bulk: the identities it mints, and the whole rows it gives
+entities that did not hold the component, are one statement per table, each row
+a member of one bound JSON array (`@yaks/sql` `parts`), however many entities
+the patch names. Inside a transaction SQLite opens a savepoint for every write
+statement, copies each page the statement changes into its statement journal,
+and FTS5 writes what it holds pending as a new segment, so a statement per row
+paid all three per row. A partial patch of a row the store holds is still a
+statement of its own, as is a row holding a value JSON does not carry as a bind
+would (a blob, a bigint).
+
 A deleted entity keeps its identity row and gains a tombstone. `tx.revive()`
 removes the tombstone, and the identity keeps its eid, number and integer id;
 which writes bring an entity back is @yaks/graph's to decide. Reference

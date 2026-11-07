@@ -45,6 +45,7 @@ import {
   and,
   as,
   call,
+  cell,
   col,
   type CreateTable,
   type Derived,
@@ -63,6 +64,7 @@ import {
   or,
   over,
   type Param,
+  parts,
   type Row,
   type Select,
   select,
@@ -238,31 +240,6 @@ export let dropDdl = (): Drop[] =>
 // row's own identity and already the change's entity.
 let written = (value: Comp): [string, unknown][] =>
   Object.entries(value).filter(([prop]) => prop != 'eid')
-
-// The most text one JSON array of rows holds: well inside the largest string
-// a Durable Object binds (2 MB), however its characters encode.
-let PART = 512 * 1024
-
-// Rows as JSON arrays of at most PART characters each, a row longer than that
-// alone in its own.
-let parts = (list: Param[][]): string[] => {
-  let out: string[] = [], held: string[] = [], size = 0
-  let close = () => {
-    if (held.length) out.push(`[${held.splice(0).join(',')}]`)
-    size = 0
-  }
-  for (let row of list) {
-    let text = JSON.stringify(row)
-    if (size + text.length > PART) close()
-    held.push(text)
-    size += text.length + 1
-  }
-  close()
-  return out
-}
-
-// The `i`th cell of a row `parts` wrote, read from `json_each`.
-let cell = (i: number): Expr => fn('json_extract', col('value'), lit(`$[${i}]`))
 
 /** Which rows a transaction is written down as, beside its own row: a
  * `journal_change` row per component it wrote or removed (`changes`, the

@@ -717,11 +717,21 @@ export let classed = (driver: Driver): Classes => {
   }
 }
 
-let sizeOf = (b: Bundle) =>
-  JSON.stringify(
-    b,
-    (_key, value) => typeof value == 'bigint' ? String(value) : value,
-  ).length * 2
+// What a bundle takes in memory, about as many bytes as its JSON spelled out
+// in UTF-16, worked out without spelling it: a bundle may hold a transcript.
+let sizeOf = (b: Bundle) => chars(b) * 2
+
+let chars = (value: unknown): number => {
+  if (typeof value == 'string') return value.length + 2
+  if (value == null || typeof value != 'object') return String(value).length
+  if (ArrayBuffer.isView(value)) return value.byteLength
+  let n = 2
+  if (Array.isArray(value)) { for (let v of value) n += chars(v) + 1 }
+  else {
+    for (let [k, v] of Object.entries(value)) n += k.length + 4 + chars(v)
+  }
+  return n
+}
 
 // What `cloned` answers for a value it leaves to structuredClone.
 const OTHER = Symbol('other')
@@ -914,9 +924,14 @@ export let memoized = (
     for (let name of wanted) if (!part.has(name)) return false
     return true
   }
+  // Oldest first, through one iterator: V8 keeps the slot of each entry a Map
+  // deletes until it rehashes, and a fresh iterator steps over every such slot
+  // before the oldest entry left, so an iterator per eviction stepped over the
+  // same slots again for each entry a large bundle evicted.
   let trim = () => {
+    let oldest = k.held.keys()
     while (k.held.size > count || k.bytes > memory) {
-      evict(k.held.keys().next().value!)
+      evict(oldest.next().value!)
     }
   }
   let providers = derivedOf(vocab, derived)

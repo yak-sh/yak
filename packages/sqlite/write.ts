@@ -54,6 +54,8 @@ import {
   and,
   array,
   as,
+  call,
+  cell,
   col,
   cross,
   type Delete,
@@ -66,12 +68,14 @@ import {
   from,
   type Insert,
   isNull,
+  jsonable,
   lit,
   not,
   oneOf,
   op,
   or,
   type Param,
+  parts,
   type Row,
   select,
   sub,
@@ -96,7 +100,12 @@ let owner = (eid: string): Expr =>
     where: eq(col('eid'), val(eid)),
   }))
 
-// The next number, past the sequence's high-water mark.
+// The sequence's high-water mark, and the next number past it.
+let high: Expr = sub(select({
+  cols: [col('high')],
+  from: table('entity_sequence'),
+  where: eq(col('singleton'), lit(1)),
+}))
 let next: Expr = sub(select({
   cols: [op('+', col('high'), lit(1))],
   from: table('entity_sequence'),
@@ -217,6 +226,29 @@ export let mintSql = (
   ]],
   upsert: [{ on: [col('eid')] }],
   returning: IDENTITY,
+})
+
+/** The statement that mints identities, from one of @yaks/sql's `parts`:
+ * each row an eid and the archetype's integer id it is minted in, or null.
+ * `numbered`, each takes a number past the sequence's high-water mark as the
+ * statement found it, in the order the part gives them; otherwise none. It
+ * returns what it minted, as {@link mintSql} does, with the id: nothing for an
+ * eid that already had one. */
+export let mintsSql = (part: string, numbered = false): Insert => ({
+  t: 'insert',
+  into: 'entity',
+  cols: ['eid', 'num', 'archetype'],
+  q: select({
+    cols: [
+      cell(0),
+      numbered ? op('+', high, op('+', col('key'), lit(1))) : lit(null),
+      cell(1),
+    ],
+    from: call('json_each', [val(part)]),
+    where: and(),
+  }),
+  upsert: [{ on: [col('eid')] }],
+  returning: [...IDENTITY, col('id')],
 })
 
 /** The statement that numbers a spine a reference minted, once a bundle of its
@@ -361,6 +393,39 @@ export let upsertSql = (
     }],
   }
 }
+
+/**
+ * The statement that inserts whole rows of one component, from one of
+ * @yaks/sql's `parts`: each row its owner's id, then a value per property in
+ * `cols`, a reference's already its target's id. A row already there is
+ * updated, as {@link upsertSql} does.
+ */
+export let rowsSql = (
+  v: Vocab,
+  comp: string,
+  cols: string[],
+  part: string,
+): Insert => ({
+  t: 'insert',
+  into: comp,
+  cols: ['entity', ...cols.map(field)],
+  q: select({
+    cols: [
+      cell(0),
+      ...cols.map((c, i) =>
+        isJsonb(v, comp, c) ? jsonb(cell(i + 1)) : cell(i + 1)
+      ),
+    ],
+    from: call('json_each', [val(part)]),
+    where: and(),
+  }),
+  upsert: [{
+    on: [col('entity')],
+    set: Object.fromEntries(
+      cols.map((c) => [field(c), col(field(c), 'excluded')]),
+    ),
+  }],
+})
 
 /** The statement that drops one component from one entity — the row goes, the
  * entity stays. */
@@ -610,6 +675,105 @@ export let births = (driver: Driver): Births => {
   }
 }
 
+// A patch's whole rows of components its entities did not hold, gathered by
+// table and the properties they give, so each table is one statement a part
+// (@yaks/sql `parts`) however many entities the patch gives it. Inside a
+// transaction every write statement opens a savepoint, copies each page it
+// changes into the statement journal, and FTS5 writes what it holds pending as
+// a new segment: written a statement per row, a patch paid all three per row.
+//
+// Each entity's writes land in the order the patch gives them, since a
+// trigger may read the entity's other rows (an index over two components, a
+// host's own), and no one order of tables fits every entity. So the rows go in
+// layers, each writing its tables in the order the patch first gave them
+// there: a row joins its entity's last layer where its table comes after the
+// entity's last row there, else the layer after. A write that is not gathered
+// (`later`) runs at once for an entity with nothing gathered, and otherwise
+// after its entity's layer, which the entity's next row then follows; a
+// gathered row is told (`done`) once it is written, so what hears rows come
+// and go hears each entity's in order too. A row
+// whose values JSON would not carry as a bind does (@yaks/sql `jsonable`), or
+// whose owner or target has no id here, is not taken and is written alone.
+let wholes = (
+  driver: Driver,
+  vocab: Vocab,
+  ids: ReadonlyMap<string, number>,
+) => {
+  type Group = {
+    name: string
+    cols: string[]
+    rows: Param[][]
+    done: (() => void)[]
+    at: number
+  }
+  type Layer = { groups: Map<string, Group>; after: (() => void)[] }
+  let layers: Layer[] = []
+  // Where each entity's last gathered write is: its layer, and its table's
+  // place there, past every table for a write that runs after the layer.
+  let last = new Map<string, { layer: number; at: number }>()
+  let layer = (i: number) => layers[i] ??= { groups: new Map(), after: [] }
+  let flush = () => {
+    for (let { groups, after } of layers) {
+      for (let { name, cols, rows, done } of groups.values()) {
+        for (let part of parts(rows)) {
+          write(driver, rowsSql(vocab, name, cols, part))
+        }
+        for (let then of done) then()
+      }
+      for (let run of after) run()
+    }
+    layers = []
+    last.clear()
+  }
+  let later = (eid: string, run: () => void) => {
+    let at = last.get(eid)
+    if (!at) return run()
+    layer(at.layer).after.push(run)
+    last.set(eid, { layer: at.layer, at: Infinity })
+  }
+  let add = (
+    eid: string,
+    name: string,
+    comp: Comp,
+    done: () => void,
+  ): boolean => {
+    let id = ids.get(eid)
+    if (id == null) return false
+    let cols = Object.keys(comp).filter((c) =>
+      vocab.prop(name, c)?.computed === false
+    )
+    let row: Param[] = [id]
+    for (let c of cols) {
+      let raw = comp[c]
+      let value = raw != null && isRef(vocab, name, c)
+        ? ids.get(String(raw))
+        : isJsonb(vocab, name, c)
+        ? jsonIn(raw)
+        : scalar(raw)
+      if (value === undefined && raw != null || !jsonable(value)) return false
+      row.push(value ?? null)
+    }
+    let shape = `${name}\0${cols.join('\0')}`
+    let was = last.get(eid)
+    let i = was?.layer ?? 0
+    let { groups } = layer(i)
+    let at = groups.get(shape)?.at ?? groups.size
+    if (was && at <= was.at) {
+      groups = layer(++i).groups
+      at = groups.get(shape)?.at ?? groups.size
+    }
+    let group = groups.get(shape)
+    if (!group) {
+      groups.set(shape, group = { name, cols, rows: [], done: [], at })
+    }
+    group.rows.push(row)
+    group.done.push(done)
+    last.set(eid, { layer: i, at })
+    return true
+  }
+  return { add, later, flush }
+}
+
 /**
  * Patch a batch of bundles in, in order, and return the spines this patch
  * minted or numbered — each with the `num` it was given, as the statement
@@ -743,34 +907,65 @@ export let patch = (
   let pointers = new Map<string, number>()
   let made: Entity[] = []
   let seen = new Set(known.keys())
+  // A mint the store learns of: its id, and the class it opened in.
+  let took = (row: Row, tables: string[], pointer?: number) => {
+    let id = Number(row.id)
+    ids.set(String(row.eid), id)
+    spined(driver).learn(String(row.eid), {
+      id,
+      num: row.num == null ? null : Number(row.num),
+      dead: false,
+    })
+    if (pointer != null) pointers.set(String(row.eid), pointer)
+    born?.born(String(row.eid), tables, pointer)
+    made.push(minted([row])!)
+  }
+  // The eids minted wait to be minted together, a statement a part
+  // ({@link mintsSql}), while each takes the next number or each takes none.
+  // One that changes which, or states its number, sends those before it
+  // first, so ids and numbers follow the batch's order.
+  let waiting = new Map<string, { tables: string[]; pointer?: number }>()
+  let numbering = false
+  let mint = () => {
+    let rows = new Map<string, Row>()
+    let list = [...waiting].map(([eid, w]) => [eid, w.pointer ?? null])
+    for (let part of parts(list)) {
+      for (let r of driver.query(mintsSql(part, numbering))) {
+        rows.set(String(r.eid), r)
+      }
+    }
+    for (let [eid, { tables, pointer }] of waiting) {
+      let row = rows.get(eid)
+      if (row) took(row, tables, pointer)
+    }
+    waiting.clear()
+  }
   for (let eid of touched(vocab, alive)) {
     if (seen.has(eid)) continue
     seen.add(eid)
     let tables = opening.get(eid) ?? []
     let to = named.get(eid)
+    if (to != null && waiting.has(to)) mint()
     let pointer = to == null
       ? born?.class(tables)
       : to == eid
       ? undefined
       : ids.get(to)
-    let rows = driver.query({
-      ...mintSql(eid, own.has(eid) && take(eid), pointer),
+    let number = own.has(eid) && take(eid)
+    if (typeof number == 'boolean') {
+      if (number != numbering) mint()
+      numbering = number
+      waiting.set(eid, { tables, pointer })
+      continue
+    }
+    mint()
+    let [row] = driver.query({
+      ...mintSql(eid, number, pointer),
       returning: [...IDENTITY, col('id')],
     })
-    let e = minted(rows)
-    if (rows[0]) {
-      let id = Number(rows[0].id)
-      ids.set(eid, id)
-      spined(driver).learn(eid, {
-        id,
-        num: rows[0].num == null ? null : Number(rows[0].num),
-        dead: false,
-      })
-      if (pointer != null) pointers.set(eid, pointer)
-      born?.born(eid, tables, pointer)
-    }
-    if (e) made.push(e)
+    if (row) took(row, tables, pointer)
   }
+  mint()
   // A spine an earlier reference minted is numbered now, if it still carries
   // nothing: an unnumbered entity that carries something was left unnumbered
   // on purpose, and keeps it that way.
@@ -827,28 +1022,37 @@ export let patch = (
       ),
     )
   }
+  let whole = wholes(driver, vocab, ids)
   for (let b of alive) {
     let eid = b.entity.eid
     for (let [name, given] of comps(b)) {
       let comp = given && news(eid, name, given)
       wrote.add(`${eid}\0${name}`)
       if (given != null && lacks(eid, name) && full(name, given)) {
-        write(driver, upsertSql(vocab, eid, name, given, false, resolve))
-        moved?.(eid, name, true)
+        let came = () => moved?.(eid, name, true)
+        if (!whole.add(eid, name, given, came)) {
+          whole.later(eid, () => {
+            write(driver, upsertSql(vocab, eid, name, given, false, resolve))
+            came()
+          })
+        }
         continue
       }
       if (comp && Object.keys(given!).length && !Object.keys(comp).length) {
         continue
       }
-      let { first, fallback } = patchOne(vocab, eid, name, comp, resolve)
-      let changes = ran(driver, first)
-      // A write's own result avoids the absent INSERT when UPDATE hit. D1
-      // still sends the complete plan atomically via patchSql; no read/merge.
-      if (fallback && !changes) changes = ran(driver, fallback())
-      else if (fallback) continue
-      if (changes) moved?.(eid, name, comp != null)
+      whole.later(eid, () => {
+        let { first, fallback } = patchOne(vocab, eid, name, comp, resolve)
+        let changes = ran(driver, first)
+        // A write's own result avoids the absent INSERT when UPDATE hit. D1
+        // still sends the complete plan atomically via patchSql; no read/merge.
+        if (fallback && !changes) changes = ran(driver, fallback())
+        else if (fallback) return
+        if (changes) moved?.(eid, name, comp != null)
+      })
     }
   }
+  whole.flush()
 
   // Metadata can classify a tombstone too; on its own it brings nothing back.
   // A pointer this entity's mint already wrote is not written again.
