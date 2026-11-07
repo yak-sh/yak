@@ -1,0 +1,6 @@
+{
+  "build": {
+    "yaks-app": { "env": { "YAKS_VARIANT": "yaks-app" } },
+    "checks": { "env": { "YAKS_VARIANT": "checks" } }
+  }
+}

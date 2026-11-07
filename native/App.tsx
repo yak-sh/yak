@@ -1,11 +1,12 @@
-// The yaks.app shell: sign in once, then the space's Operator, its apps, and
-// its pages. A kit-built app is drawn natively (kit.tsx); every other app,
+// The shell, as the app its variant makes it (variants.ts): sign in once, then
+// the space's Operator, its apps, and its pages, under the space's brand. A kit-built app is drawn natively (kit.tsx); every other app,
 // and the Operator for now, open as their web pages in a web view that holds
 // the same session.
 import { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -18,14 +19,18 @@ import { WebView } from 'react-native-webview'
 import { colors, Kit } from './kit.tsx'
 import { nativeOf, type NativeView, viewAt } from '@yaks/native/remote'
 import { carried } from './remote.ts'
+import { shown } from './variants.ts'
 import {
   APEX,
   type App as AppRow,
   ask,
+  type Brand,
+  brandOf,
   SignedOut,
   type Space,
   spaces,
   spend,
+  variant,
 } from './yaks.ts'
 
 type Tab = 'operator' | 'apps' | 'space'
@@ -83,7 +88,7 @@ let SignIn = ({ done }: { done: () => void }) => {
   }
   return (
     <View style={styles.card}>
-      <Text style={styles.h1}>yaks.app</Text>
+      <Text style={styles.h1}>{variant.name}</Text>
       <Text style={styles.p}>
         {sent
           ? `Type the code sent to ${address}.`
@@ -188,8 +193,8 @@ let Pages = (
   </View>
 )
 
-let TABS: [Tab, string][] = [
-  ['operator', 'Operator'],
+let tabs = (brand: Brand | null): [Tab, string][] => [
+  ['operator', brand?.operator ?? 'Operator'],
   ['apps', 'Apps'],
   ['space', 'Space'],
 ]
@@ -226,6 +231,11 @@ let Shell = ({ all }: { all: Space[] }) => {
   )
   let [tab, setTab] = useState<Tab>('operator')
   let [open, setOpen] = useState<Open>(null)
+  let [brand, setBrand] = useState<Brand | null>(null)
+  useEffect(() => {
+    setBrand(null)
+    brandOf(space.slug).then(setBrand, (e) => console.warn(e))
+  }, [space.slug])
   let title = open && 'app' in open ? open.app.title : space.title
   let body = open
     ? 'app' in open ? <Opened app={open.app} /> : <Web url={open.url} />
@@ -245,7 +255,13 @@ let Shell = ({ all }: { all: Space[] }) => {
         {open
           ? <Button quiet title='‹ Back' onPress={() => setOpen(null)} />
           : <View style={{ width: 64 }} />}
-        <Pressable onPress={all.length > 1 ? next : undefined}>
+        <Pressable
+          onPress={all.length > 1 ? next : undefined}
+          style={styles.brand}
+        >
+          {brand?.icon && !open
+            ? <Image source={{ uri: brand.icon }} style={styles.logo} />
+            : null}
           <Text style={styles.barTitle}>
             {title}
             {all.length > 1 && !open ? ' ⇄' : ''}
@@ -255,7 +271,7 @@ let Shell = ({ all }: { all: Space[] }) => {
       </View>
       <View style={styles.page}>{body}</View>
       <View style={styles.tabs}>
-        {TABS.map(([t, label]) => (
+        {tabs(brand).map(([t, label]) => (
           <Pressable
             key={t}
             style={styles.tab}
@@ -279,7 +295,7 @@ let Shell = ({ all }: { all: Space[] }) => {
 export default function App() {
   let [all, setAll] = useState<Space[] | null | 'out'>(null)
   let load = () =>
-    spaces().then(setAll, (e) => {
+    spaces().then((all) => setAll(shown(variant, all)), (e) => {
       if (!(e instanceof SignedOut)) console.warn(e)
       setAll('out')
     })
@@ -301,7 +317,15 @@ export default function App() {
             <SignIn done={load} />
           </SafeAreaView>
         )
-        : <Shell all={all} />}
+        : all.length
+        ? <Shell all={all} />
+        : (
+          <SafeAreaView style={[styles.page, styles.center]}>
+            <Text style={[styles.p, styles.card]}>
+              {variant.name} opens a space you are not in yet.
+            </Text>
+          </SafeAreaView>
+        )}
     </SafeAreaProvider>
   )
 }
@@ -338,6 +362,8 @@ let styles = StyleSheet.create({
     paddingHorizontal: 8,
     height: 44,
   },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  logo: { width: 24, height: 24, borderRadius: 6 },
   barTitle: { color: colors.heading, fontSize: 17, fontWeight: '600' },
   row: { backgroundColor: colors.card, borderRadius: 12, padding: 14, gap: 2 },
   rowTitle: { color: colors.text, fontSize: 17, fontWeight: '500' },

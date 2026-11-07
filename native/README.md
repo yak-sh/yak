@@ -1,13 +1,21 @@
-# The yaks.app iOS shell
+# The yaks iOS shell
 
 An Expo app (SDK 58, React Native 0.88): sign in once, then the space's
-Operator, its apps and its pages. A kit-built app is drawn natively: its view
-renders through Preact into @yaks/tui's in-memory DOM, @yaks/native paints the
-tree as plain nodes, and `kit.tsx` turns those into React Native views. Every
-other app, the Operator and the space's pages open as their web pages in a web
-view holding the same session (D-148409).
+Operator, its apps and its pages. yaks.app is one variant of it; a township's or
+an org's app is another, built from the same code (`variants.ts`). A kit-built
+app is drawn natively: its view renders through Preact into @yaks/tui's
+in-memory DOM, @yaks/native paints the tree as plain nodes, and `kit.tsx` turns
+those into React Native views. Every other app, the Operator and the space's
+pages open as their web pages in a web view holding the same session (D-148409).
 
-- `App.tsx`: sign-in, the three tabs, and what each opens.
+- `variants.ts`: each app the shell is built as, as data: its name, bundle id,
+  icon, Apple team, EAS Update channel, the space it opens, and which config
+  plugins and apps it carries. `app.config.ts` makes `app.json` into the one
+  `YAKS_VARIANT` names (yaks.app where it names none), and `eas.json` has a
+  build profile for each.
+- `App.tsx`: sign-in, the three tabs, and what each opens, under the space's
+  brand: its name, its Operator's name and its logo, from the space's web
+  manifest (`yaks.ts` `brandOf`).
 - `yaks.ts`: the doors it asks yaks.app at, the ones a browser uses: the sign-in
   card's posts and the connector's tools at `/mcp`.
 - `remote.ts`: the packages the shell carries (`preact`, `preact/hooks`,
@@ -46,6 +54,24 @@ with no dev server running. Publish a new shell to it with:
 ```sh
 npx eas-cli update --channel main --platform ios --environment preview --message '<what changed>'
 ```
+
+Every variant has its own channel in the same project. The checks variant, a
+test org over the checks space, is channel `checks`:
+
+```sh
+YAKS_VARIANT=checks npx eas-cli update --channel checks --platform ios --environment preview --message '<what changed>'
+```
+
+Expo Go opens it at
+`exp://u.expo.dev/f87fef9c-5d1c-4fef-9f9c-f62d4872c6d6?channel-name=checks&runtime-version=exposdk:58.0.0`.
+
+## A new variant
+
+Add an entry to `VARIANTS` in `variants.ts` (a name, a bundle id, a channel, and
+the space it opens), a build profile of the same name in `eas.json` setting
+`YAKS_VARIANT`, and publish to its channel as above. An icon is a 1024-pixel PNG
+beside `app.config.ts`; the Apple team is its team id. The space gives the rest:
+set its title, its Operator's name and its logo on yaks.app.
 
 A kit-built app's view needs no publish: the shell loads it from the deployed
 app (`@yaks/native/remote`).

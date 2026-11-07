@@ -2,7 +2,14 @@
 // sign-in card's two posts, which leave the platform's session cookie in the
 // phone's cookie store (every web view shares it), and the connector's tools at
 // `/mcp`; an app's own store is @yaks/native/remote's.
+import Constants from 'expo-constants'
+import { type Variant, variantOf } from './variants.ts'
+
 export let APEX = 'https://yaks.app'
+
+/** The app this build is (app.config.ts puts it in `extra`). */
+export let variant: Variant = Constants.expoConfig?.extra?.variant ??
+  variantOf()
 
 /** One app of a space, as `app_list` answers it. */
 export type App = { slug: string; title: string; url: string; access: string }
@@ -59,3 +66,20 @@ export let tool = async <T>(name: string, args: object = {}): Promise<T> => {
 /** Every space the person is in, with its apps. */
 export let spaces = async () =>
   (await tool<{ spaces: Space[] }>('app_list')).spaces
+
+/** A space's brand: its name, its Operator's, and its icon, as its Operator
+ * page installs on a phone (its web manifest). */
+export type Brand = { name: string; operator: string; icon: string | null }
+
+/** The brand of the space at `slug`, or none where it answers none. */
+export let brandOf = async (slug: string): Promise<Brand | null> => {
+  let r = await fetch(`${APEX}/manage/${slug}/manifest.webmanifest`)
+  if (!r.ok) return null
+  let { name, short_name, icons } = await r.json()
+  let src = icons?.[0]?.src
+  return {
+    name,
+    operator: short_name,
+    icon: src ? new URL(src, APEX).href : null,
+  }
+}

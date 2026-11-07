@@ -1547,7 +1547,9 @@ let installable = (space: Space) =>
     h('meta', { name: 'apple-mobile-web-app-title', content: space.operator }),
   ])
 
-/** A space's Operator page as a web app: what a phone installs from. */
+/** A space's Operator page as a web app: what a phone installs from, and the
+ * space's brand a white-labelled shell wears (native/brand.ts): its name, its
+ * Operator's, and its logo as the icon where it has one. */
 export let installing = (space: Space) => {
   let at = chatPath(space.slug)
   return Response.json({
@@ -1559,7 +1561,11 @@ export let installing = (space: Space) => {
     display: 'standalone',
     background_color: PLATFORM_BACKGROUND,
     theme_color: PLATFORM_BACKGROUND,
-    icons: [{ src: ICON, type: 'image/png', sizes: '512x512' }],
+    icons: [
+      space.logo
+        ? { src: logoPath(space), type: space.logo.type }
+        : { src: ICON, type: 'image/png', sizes: '512x512' },
+    ],
   }, {
     headers: {
       'content-type': 'application/manifest+json',

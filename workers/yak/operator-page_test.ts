@@ -3,7 +3,7 @@ import { assertThrows } from '@std/assert'
 import type { VNode } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
-import { textsCard, voiceCard } from './operator-page.ts'
+import { installing, textsCard, voiceCard } from './operator-page.ts'
 import { modelOf, offered } from './speech.ts'
 
 let consent = { number: '+12695550142', at: '2026-11-01T00:00:00Z' } as never
@@ -132,4 +132,18 @@ test('a talking model is picked only with one of its own voices', () => {
     'can’t speak in this voice',
   )
   assertThrows(() => modelOf('gpt-9', 'cedar'), Error, 'ways listed')
+})
+
+test('a space installs as its Operator, wearing its logo where it has one', async () => {
+  let sha = 'a'.repeat(64)
+  let icons = async (logo: unknown) => {
+    let space = { slug: 'ada', title: 'Ada', operator: 'Jeeves', logo }
+    let made = await installing(space as never).json()
+    return [made.short_name, made.icons.map((i: { src: string }) => i.src)]
+  }
+  equal(await icons(null), ['Jeeves', ['/connector-512.png']])
+  equal(await icons({ sha, type: 'image/png' }), [
+    'Jeeves',
+    [`/manage/ada/logo/${sha}`],
+  ])
 })
