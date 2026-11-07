@@ -343,3 +343,25 @@ test("the Operator's page is drawn asking for a number only where a code can be 
   assertEquals(await site.drawn(texting, OPERATOR), OPERATOR)
   assertEquals(await site.drawn({} as Env, '/'), '/')
 })
+
+test("Site keeps the stranger's sign-in card, with its validator", async () => {
+  let env = { APEX: 'yaks.app' } as unknown as Env
+  let ask = (etag = '') =>
+    site.fetch(
+      new Request(site.at(env, '/login'), {
+        headers: { 'if-none-match': etag },
+      }),
+      env,
+    )
+  let card = await ask()
+  assertEquals(card.status, 200)
+  assertEquals(
+    card.headers.get('cache-control'),
+    'public, max-age=30, stale-while-revalidate=86400',
+  )
+  let form = parseHTML(await card.text()).document.querySelector('form')!
+  assertEquals(form.getAttribute('action'), '/login')
+  assertEquals(form.querySelector('[name=return]'), null)
+  let again = await ask(card.headers.get('etag')!)
+  assertEquals(again.status, 304)
+})

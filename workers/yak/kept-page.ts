@@ -9,6 +9,7 @@ import { matches } from './public-cache.ts'
 import type { Fetcher } from './env.ts'
 import { bearing, MOUNT } from './route.ts'
 import { PATHS, shown } from './variant.ts'
+import { cookieValue } from '@yaks/platform/cookie'
 
 // How long Site holds an answer before asking again, and how long past that a
 // visitor may still be answered from it while it is asked (stale while it
@@ -230,10 +231,24 @@ export let isStatic = (path: string) =>
  * change purges both. */
 export let PICTURES = '/gallery/image/'
 
-/** Whether Site keeps this apex path: a listing, a picture one shows, or a
- * static page. */
+/** The sign-in card (identity.ts `GET /login`). A stranger's is the same for
+ * everyone, so Site keeps it; a request that could be somebody's, or carries
+ * an address to go back to, is identity.ts's to answer (`stranger`). */
+export let LOGIN = '/login'
+
+/** Whether a visit to the sign-in card is a stranger's with nowhere to return
+ * to: no session cookie and no credentials, so nobody is signed in to be sent
+ * on, and no `return` the card would carry forward. */
+export let stranger = (req: Request) =>
+  !cookieValue(req.headers.get('cookie')) &&
+  !req.headers.has('authorization') &&
+  !new URL(req.url).searchParams.has('return')
+
+/** Whether Site keeps this apex path: a listing, a picture one shows, a
+ * static page, or the stranger's sign-in card. */
 export let isListing = (path: string) =>
-  LISTINGS.includes(path) || path.startsWith(PICTURES) || isStatic(path)
+  LISTINGS.includes(path) || path.startsWith(PICTURES) || isStatic(path) ||
+  path == LOGIN
 
 /** The listing a visit to this apex path is answered with: the home page
  * variant its visitor is shown (variant.ts) for `/`, else the path's own. */

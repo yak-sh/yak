@@ -19,8 +19,10 @@ import {
   isListing,
   listed,
   listing,
+  LOGIN,
   remember,
   scope,
+  stranger,
   type Timer,
   UNKEPT_AT,
 } from '../kept-page.ts'
@@ -144,7 +146,7 @@ export let kept = (
     platform(host, path, env) || !settled(req)
   ) return null
   if (host == apex(env)) {
-    if (!isListing(path)) return null
+    if (!isListing(path) || (path == LOGIN && !stranger(req))) return null
     return listing(req, env.SITE, apex(env), listed(req, path)).then(
       async (page) => {
         if (page.status >= 500) return null

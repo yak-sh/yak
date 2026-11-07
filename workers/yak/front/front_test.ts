@@ -137,7 +137,12 @@ test('what no kept page may answer goes to the kernel without asking Site', asyn
     ['https://ada.yaks.app/_yaks/hooks/x'],
     ['https://their-domain.com/'],
     ['https://a.b.yaks.app/'],
-    ['https://yaks.app/login'],
+    ['https://yaks.app/login', {
+      headers: { cookie: `yak_session=${body({})}` },
+    }],
+    ['https://yaks.app/login', { headers: { authorization: 'Bearer x' } }],
+    ['https://yaks.app/login?return=https%3A%2F%2Fada.yaks.app%2F'],
+    ['https://yaks.app/login', { method: 'POST', body: 'address=a' }],
     ['https://yaks.app/mcp'],
     ['https://yaks.app/docs/querying.md'],
     ['https://yaks.app/docs/a/b'],
@@ -274,6 +279,25 @@ test("the apex's static pages and the guide's come from Site", async () => {
     assertEquals(f.asked, [`https://site.invalid/yaks.app${path}`])
     assertEquals(f.forwarded.length, 0)
   }
+})
+
+test("a stranger's sign-in card comes from Site and keeps the ad's arrival", async () => {
+  let f = front(() =>
+    new Response('card', {
+      headers: { 'content-type': 'text/html', 'cf-cache-status': 'HIT' },
+    })
+  )
+  let res = await f.go('https://yaks.app/login?utm_source=meta&fbclid=Ab1', {
+    headers: { 'user-agent': 'Mozilla/5.0 (Macintosh) AppleWebKit Safari' },
+  })
+  assertEquals(await res.text(), 'card')
+  assertEquals(f.asked, ['https://site.invalid/yaks.app/login'])
+  assertEquals(f.forwarded.length, 0)
+  assertStringIncludes(
+    res.headers.get('set-cookie')!,
+    'yak_came=utm_source=meta',
+  )
+  assertEquals(f.told.map((c) => c.url), ['https://yaks.app/login'])
 })
 
 test("a listing an ad's click opened keeps its arrival and hands the kernel the view", async () => {

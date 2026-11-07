@@ -14,6 +14,7 @@ import {
   KEPT,
   listing,
   listingAt,
+  LOGIN,
   shareable,
   visitor,
 } from './kept-page.ts'
@@ -26,7 +27,7 @@ import * as docs from './docs.ts'
 import * as gallery from './gallery.ts'
 import { INTEGRATIONS, page as integrations } from './integrations.ts'
 import { apex, type Host, hosted, url } from './host.ts'
-import { lost } from './pages.ts'
+import { askEmail, lost } from './pages.ts'
 import { matches } from './public-cache.ts'
 import { cardTag, SITE_TAG } from './purge.ts'
 import { named, sheeted } from './sheets.ts'
@@ -181,6 +182,12 @@ let rendered = async (
   } else if (path == INTEGRATIONS.path) {
     page = await c.time('listed', () => dir.integrations())
       .then((all) => integrations(all, env))
+  } else if (path == LOGIN) {
+    // The card identity.ts shows someone not signed in, with nowhere to go back.
+    page = await c.time(
+      'login',
+      async () => askEmail({ texts: await textable(env) }, env),
+    )
   } else if (isStatic(path)) {
     page = await c.time(
       'static',
