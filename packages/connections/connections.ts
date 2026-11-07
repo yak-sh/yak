@@ -853,6 +853,18 @@ export let pick = async (
   return found.find((b) => own && address(b) == own) ?? found[0]
 }
 
+/** Every connection to one account of an integration, by its whole address,
+ * whoever owns it: what goes when the account does. */
+export let toAccount = async (
+  read: Read,
+  integration: string,
+  address: string,
+): Promise<Bundle[]> =>
+  (await read(`.${CONNECTION}.integration="${integration}"`)).filter((b) =>
+    String(comp(b, CONNECTION).account ?? '').toLowerCase() ==
+      address.toLowerCase()
+  )
+
 /** The address the provider returned. An id_token is used only to name an
  * account after the authenticated code exchange, never as authorization. */
 export let accountOf = async (

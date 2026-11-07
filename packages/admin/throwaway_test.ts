@@ -55,18 +55,35 @@ let box = async () => {
       .account
   let signIns: string[] = []
   let erased: string[] = []
-  let go = (run: Run, args: Record<string, unknown>) =>
-    throwaway(run, async (_host, _owner, address) => {
-      signIns.push(address)
-      await kept(address)
-    }, (_host, address) => {
+  // yaks.app's account door: it erases the account the request names, or
+  // answers `status` without erasing it.
+  let go = async (run: Run, args: Record<string, unknown>, status = 200) => {
+    let was = globalThis.fetch
+    globalThis.fetch = ((url: string) => {
+      let address = new URL(url).searchParams.get('address')!
+      if (status != 200) {
+        return Promise.resolve(
+          Response.json({ error: { message: 'down' } }, { status }),
+        )
+      }
       erased.push(address)
-      return Promise.resolve()
-    })(
-      { command: 'probe', ...args },
-      host,
-      {} as Parameters<ReturnType<typeof throwaway>>[2],
-    )
+      return Promise.resolve(
+        Response.json({ address, erased: true, spaces: [], seats: [] }),
+      )
+    }) as typeof fetch
+    try {
+      return await throwaway(run, async (_host, _owner, address) => {
+        signIns.push(address)
+        await kept(address)
+      })(
+        { command: 'probe', ...args },
+        host,
+        {} as Parameters<ReturnType<typeof throwaway>>[2],
+      )
+    } finally {
+      globalThis.fetch = was
+    }
+  }
   return { host, kept, accounts, chosen, signIns, erased, go }
 }
 
@@ -135,6 +152,17 @@ test('an account signed in before the command outlives it', async () => {
     await kept('reviewer@bot.yak.sh')
     await go(() => Promise.resolve(0), { name: 'reviewer' })
     equal(erased, [])
+  } finally {
+    await host.close()
+  }
+})
+
+test('an account the platform could not erase still loses its connection', async () => {
+  let { host, accounts, erased, go } = await box()
+  try {
+    equal(await go(() => Promise.resolve(0), { name: 'reviewer' }, 503), 0)
+    equal(erased, [])
+    equal(await accounts(), ['own@example.com'])
   } finally {
     await host.close()
   }

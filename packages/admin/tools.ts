@@ -26,7 +26,6 @@ import {
   acceptInvite,
   budgetNow,
   close,
-  closeAccount,
   doomedIn,
   feeNow,
   linkFor,
@@ -49,6 +48,7 @@ import {
   zone,
 } from './api.ts'
 import { deploys, rollback, table } from './deploys.ts'
+import { erase } from './erase.ts'
 import { select, sweep } from './move.ts'
 import { relocate } from './relocate.ts'
 import { push, type PushProgress, read, versions } from './push.ts'
@@ -341,12 +341,16 @@ export let runs = (
     admin_erase: verb(async (call) => {
       let a = argsOf(call)
       let at = await acting(a)
-      let c = await closeAccount(at.bearer, String(a.address), a.check === true)
+      let c = await erase(host, at.bearer, String(a.address), a.check === true)
+      let ended = a.check === true ? 'would end' : 'ended'
       return [
         said(call, [
-          `${c.address}: ${c.erased ? 'erased' : 'would be erased'}`,
+          `${c.address}: ${
+            c.gone ? 'already gone' : c.erased ? 'erased' : 'would be erased'
+          }`,
           `spaces  ${c.spaces.join(' ') || '(none)'}`,
           `seats   ${c.seats.join(' ') || '(none)'}`,
+          `connections on this box  ${c.connections} ${ended}`,
         ]),
       ]
     }),

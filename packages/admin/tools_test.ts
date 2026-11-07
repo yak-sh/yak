@@ -340,6 +340,69 @@ await tracked.graph.apply([{
 }], { trusted: true })
 let trackerAt = trackerDoor(tracked, platform, 'test-only')
 
+// yaks.app's account door answers `status` (with `code` on a refusal); the
+// box keeps a connection to the erased account, and one to another.
+let erasing = async (
+  args: Record<string, unknown>,
+  status: number,
+  code = '',
+) => {
+  let { host, kept, ask } = await box()
+  try {
+    await kept(ADMIN)
+    await kept('gone@bot.yak.sh')
+    await kept('other@bot.yak.sh')
+    let said = ''
+    let thrown = ''
+    await answering(
+      (url, init) =>
+        status == 200
+          ? Response.json({
+            address: new URL(url).searchParams.get('address'),
+            erased: init?.method == 'DELETE',
+            spaces: ['gone-space'],
+            seats: [],
+          })
+          : Response.json({ error: { code, message: code } }, { status }),
+      async () => {
+        try {
+          said = body(
+            await ask('admin_erase', {
+              address: 'gone@bot.yak.sh',
+              as: ADMIN,
+              ...args,
+            }),
+          )
+        } catch (error) {
+          thrown = (error as CallError).code
+        }
+      },
+    )
+    let left = (await host.graph.read('.connection.owner=owner'))
+      .map((b) => (b.connection as Comp).account).sort()
+    return { said, thrown, left }
+  } finally {
+    await host.close()
+  }
+}
+
+test('erasing a test account ends the box connections to it, also once it is gone', async () => {
+  let others = [ADMIN, 'other@bot.yak.sh'].sort()
+  let all = [ADMIN, 'gone@bot.yak.sh', 'other@bot.yak.sh'].sort()
+  let erased = await erasing({}, 200)
+  equal(erased.left, others)
+  ok(erased.said.includes('gone@bot.yak.sh: erased'))
+  ok(erased.said.includes('connections on this box  1 ended'))
+  let gone = await erasing({}, 404, 'no_account')
+  equal(gone.left, others)
+  ok(gone.said.includes('gone@bot.yak.sh: already gone'))
+  let checked = await erasing({ check: true }, 200)
+  equal(checked.left, all)
+  ok(checked.said.includes('connections on this box  1 would end'))
+  let refused = await erasing({}, 403, 'access')
+  equal([refused.thrown, refused.left], ['access', all])
+})
+
 test('admin_errors answers its caller with every unresolved bug', async () => {
   let { host, kept } = await box()
   try {

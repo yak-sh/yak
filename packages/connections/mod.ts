@@ -103,6 +103,7 @@ export {
   resolve,
   type Resolved,
   type Status,
+  toAccount,
   used,
   using,
 } from './connections.ts'

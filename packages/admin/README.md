@@ -67,7 +67,7 @@ A name that already has a connection uses it and leaves it in place. A process
 killed before it ends can leave its connection behind, which selects nothing
 without `--as`, and its account until the platform's daily sweep. A test account
 to keep across commands is an ordinary sign-in, and the sweep erases it after
-seven days without use:
+seven days without use; `erase` then ends the connection the box still keeps:
 
 ```sh
 yak auth yaks.app --as reviewer@bot.yak.sh
@@ -92,8 +92,10 @@ yak admin relocate ada --move --as admin@bot.yak.sh
 `erase` removes a test account from yaks.app for good: the spaces where it is an
 owner and only test accounts sit, and its seats and grants everywhere else. An
 owner of `yak` may erase any test account, and an account may erase itself. A
-person's account and a reviewer's fixture are refused. `--check` says what would
-go and changes nothing.
+person's account and a reviewer's fixture are refused. Every connection this box
+keeps to the account ends with it, and erasing an account that is already gone,
+as the sweep leaves one, ends them too. `--check` says what would go and changes
+nothing.
 
 ```sh
 yak admin erase t133860@bot.yak.sh --check --as admin@bot.yak.sh
