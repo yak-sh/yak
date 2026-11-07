@@ -67,7 +67,10 @@ export let CTAS = [
 
 /**
  * Count one step. Fire-and-forget, as a view is (views.ts `viewed`): nothing
- * waits on it, and a throw is one report rather than a broken door.
+ * waits on it, and a throw is one report rather than a broken door. A step
+ * taken through a request is a person's only when a browser asked
+ * (crawlers.ts `isPerson`): a crawler's, an assistant's or a script's, such
+ * as an agent going through the sign-up live, counts as nothing.
  */
 export let step = (
   env: Pick<Env, 'VIEWS'>,
@@ -75,7 +78,7 @@ export let step = (
   req?: Request,
   button?: string,
 ) => {
-  if (!env.VIEWS) return
+  if (!env.VIEWS || (req && !isPerson(req))) return
   try {
     env.VIEWS.writeDataPoint(stepOf(name, req as Visited | undefined, button))
   } catch (e) {
@@ -98,10 +101,9 @@ export let clicked = async (
     return Response.json({ error: 'method_not_allowed' }, { status: 405 })
   }
   let name = (await req.text()).slice(0, 64)
-  if (
-    CTAS.some((c) => c.name == name) && fromOurs(req, env) &&
-    isPerson(req)
-  ) step(env, 'click', req, name)
+  if (CTAS.some((c) => c.name == name) && fromOurs(req, env)) {
+    step(env, 'click', req, name)
+  }
   return new Response(null, { status: 204 })
 }
 

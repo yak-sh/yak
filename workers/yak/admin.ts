@@ -371,7 +371,8 @@ let facts = (all: [string, string][]) =>
 // Every visitor's build (newcomer.ts), newest first: each space the home
 // page's box opened a newcomer (its `visitor_build`), and who owns it now when
 // a newcomer no longer does: whoever kept it by signing up (newcomer.ts
-// `keep`).
+// `keep`). One a test account kept, such as an agent's check of the path, is
+// shown only with tests asked for.
 let builds = (d: Reading) => {
   let owners = group(
     d.census.seats.filter((s) => s.member!.role == 'owner'),
@@ -381,7 +382,7 @@ let builds = (d: Reading) => {
     d.census.people.filter(newcomerIs).map((r) => r.entity.eid),
   )
   return newest(
-    d.census.spaces.filter((r) => r.visitor_build),
+    shown(d, d.census.spaces.filter((r) => r.visitor_build)),
     (r) => r.visitor_build!.at ?? '',
   ).map((r) => ({
     r,

@@ -21,9 +21,11 @@ let visit = (ua = BROWSER, path = '/', cf?: Visited['cf']) =>
     { cf },
   )
 
-test('a step is written under the platform, saying what a view says and its campaign', () => {
+test("a step is written under the platform, saying what a view says and its campaign, and a crawler's or a script's is not", () => {
   let views = dataset()
   step({ VIEWS: views }, 'code_sent', visit())
+  step({ VIEWS: views }, 'signup', visit('yaks-e2e-bot'))
+  step({ VIEWS: views }, 'started', visit('ClaudeBot/1.0'))
   step({ VIEWS: views }, 'returned')
   step(
     { VIEWS: views },

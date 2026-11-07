@@ -149,6 +149,17 @@ let hour = 3_600_000
 let inWeek = await swept(KEEPING - hour)
 let pastWeek = await swept(KEEPING + hour)
 
+// An agent checking the path keeps a fourth as a test account: the day counts
+// it, and the admin's page leaves it off unless asked for tests.
+let checked = await build('A reading list', { ip: '203.0.113.11' })
+let checkedSpace = (await k.dir.space(spaceOf(checked)))!
+await keep(
+  env,
+  k.dir,
+  (await k.dir.owners(checkedSpace))[0],
+  await person('e2e@bot.yak.sh'),
+)
+
 // The admin's Visitor builds page, read once everything above is done.
 let root = await person('root@example.com')
 await k.dir.stamp({
@@ -165,16 +176,19 @@ let session = await sign(
   { person: root, space: null, exp: 4e9 },
   env.SESSION_SECRET!,
 )
-let builds = parseHTML(
-  await (await answer(
-    new Request('https://yaks.app/admin/builds', {
-      headers: { cookie: `${COOKIE}=${session}` },
-    }),
-    env,
-    '/admin/builds',
-    k.dir,
-  ))!.text(),
-).document
+let buildsAt = async (path: string) =>
+  parseHTML(
+    await (await answer(
+      new Request(`https://yaks.app${path}`, {
+        headers: { cookie: `${COOKIE}=${session}` },
+      }),
+      env,
+      '/admin/builds',
+      k.dir,
+    ))!.text(),
+  ).document
+let builds = await buildsAt('/admin/builds')
+let withTests = await buildsAt('/admin/builds?tests=1')
 let today = await opened(k.dir)
 
 // Thirty days on the trash erases the third space, and its newcomer with it;
@@ -339,7 +353,7 @@ test('a newcomer builds, and is asked for an address before anything else', asyn
 })
 
 test("the admin's Visitor builds page says today's builds against the day's, and who kept each", () => {
-  assertEquals(today, 3)
+  assertEquals(today, 4)
   let said = (el: ParentNode) =>
     Object.fromEntries(
       [...el.querySelectorAll('dl > div')].map((d) => [
@@ -348,7 +362,7 @@ test("the admin's Visitor builds page says today's builds against the day's, and
       ]),
     )
   let facts = said(builds.querySelector('.Directory_Facts')!)
-  assertEquals([facts['Opened today'], facts.Kept], [`3 of ${DAILY}`, '2 of 3'])
+  assertEquals([facts['Opened today'], facts.Kept], [`4 of ${DAILY}`, '2 of 3'])
   let rows = [...builds.querySelectorAll('.Directory_Row')].map((row) => [
     row.querySelector('strong')!.textContent,
     [...row.querySelectorAll('.Apps_Tag')].map((t) => t.textContent).join(),
@@ -361,4 +375,11 @@ test("the admin's Visitor builds page says today's builds against the day's, and
     [space.slug, 'kept', 'dana'],
   ])
   assertEquals(rows[0][3], dollars(PER_BUILD))
+})
+
+test("the admin's Visitor builds page leaves a test account's build off unless asked for tests", () => {
+  let slugs = (d: Document) =>
+    [...d.querySelectorAll('.Directory_Row strong')].map((s) => s.textContent)
+  assertEquals(slugs(builds).includes(checkedSpace.slug), false)
+  assertEquals(slugs(withTests).includes(checkedSpace.slug), true)
 })
