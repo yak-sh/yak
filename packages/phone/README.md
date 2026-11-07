@@ -94,6 +94,12 @@ outcome back. Nobody is texted before they agree: a text to someone with no
 `stash`. A text waits, with the reason on `deliver.waiting`, while nothing lends
 that name or the texter is `waiting()`.
 
+`@yaks/phone/tools` is the tool `text_send`: it texts a person here who wears a
+`phone{number}` and an `sms_consent`, named by id or by that number, by writing
+a text that asks to go, and refuses anyone else. The texter the config names
+sends it, from its own number. A reply arrives as a `text` from their number,
+and @yaks/session's `session_texted` knocks the session that texted them.
+
 ## Receiving
 
 `keyword(text)` recognizes STOP, HELP and START. `kept(arrival, people)` records
@@ -119,10 +125,14 @@ provider plugin beside @yaks/phone and pass it its credentials and door:
 ]
 ```
 
-The webhook path defaults to `/<via>/webhook`; `door.path` chooses another.
-Telnyx uses a base64 public key and Ed25519. Pinnacle authenticates its
-`PINNACLE-SIGNING-SECRET` header against the configured webhook secret; it does
-not sign the body. voip.ms callbacks use a host-authenticated URL.
+The webhook path defaults to `/<via>/webhook`; `door.path` chooses another. A
+provider that signs nothing and calls a URL instead (its `own.called`, as
+voip.ms does) is answered at `GET /<via>/<door.key>?<own.callback>`: the key in
+the path is what says the call is the provider's, and the host points the
+number's callback there. Telnyx uses a base64 public key and Ed25519. Pinnacle
+authenticates its `PINNACLE-SIGNING-SECRET` header against the configured
+webhook secret; it does not sign the body. voip.ms callbacks use a
+host-authenticated URL.
 
 On yaks.app, the kernel's config names each provider plugin with its credentials
 (workers/yak/config.ts `phoneConfig`), and `PHONE_SENDER` selects the platform's

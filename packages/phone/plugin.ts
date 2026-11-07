@@ -18,6 +18,7 @@ import { Refused } from '@yaks/graph/errors'
 import type { Transport } from './options.ts'
 import { kept, settled } from './received.ts'
 import {
+  type Heard,
   listens,
   type Own,
   type Provider,
@@ -126,18 +127,57 @@ export let texters =
     [via]: lent(via, provider, options),
   })
 
-/** A provider plugin's routes facet: `POST /<via>/webhook`, one verified
- * provider event, where the options name a door. A missing or stale
- * signature is refused quietly; one that is complete and does not match,
- * which is what a wrong key looks like, is refused and reported. */
+// What a door keeps of what its provider said: a text that arrived, from
+// whoever here wears its number, and a sent text's later failure.
+let keep = async (graph: Graph, via: string, heard: Heard): Promise<void> => {
+  let { arrival, outcome } = heard
+  if (arrival) {
+    let people = await graph.read(
+      `.phone.number=${JSON.stringify(arrival.from)}`,
+    )
+    await graph.apply(
+      kept({ ...arrival, via }, people.map((p) => p.entity.eid)),
+    )
+  }
+  if (outcome) {
+    let [sent] = await graph.read(
+      `.text.via=${via}&.text.message_id=${JSON.stringify(outcome.id)}`,
+    )
+    if (sent) {
+      await graph.apply(settled(outcome, sent.entity.eid), { trusted: true })
+    }
+  }
+}
+
+// Two strings compared in time that says nothing of where they differ.
+let same = (a: string, b: string): boolean => {
+  let x = new TextEncoder().encode(a)
+  let y = new TextEncoder().encode(b)
+  let diff = x.length ^ y.length
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    diff |= (x[i] ?? 0) ^ (y[i] ?? 0)
+  }
+  return diff == 0
+}
+
+/** A provider plugin's routes facet, where the options name a door. A
+ * provider that signs its webhooks is posted to at `POST /<via>/webhook`: a
+ * missing or stale signature is refused quietly; one that is complete and
+ * does not match, which is what a wrong key looks like, is refused and
+ * reported. One whose texts arrive by a callback URL it signs nothing on
+ * (its `own.called`, voip.ms's) is called at `GET /<via>/<key>?<query>`, the
+ * door's key in the path being what says the call is the provider's; the
+ * host points the number's callback there, with `own.callback` as its
+ * query. */
 export let routes =
-  (via: string, provider: Provider): Routes => (host, options = {}) =>
-    options.door && listens(provider)
-      ? [{
+  (via: string, provider: Provider): Routes => (host, options = {}) => {
+    let door = options.door
+    if (door && listens(provider)) {
+      return [{
         method: 'POST',
-        path: options.door.path ?? `/${via}/webhook`,
+        path: door.path ?? `/${via}/webhook`,
         handle: async (request) => {
-          let said = await verified(provider, options.door!.key, request)
+          let said = await verified(provider, door.key, request)
           if ('refused' in said) {
             if (said.ours) {
               fault(
@@ -151,32 +191,35 @@ export let routes =
             )
           }
           try {
-            let { arrival, outcome } = said.heard
-            let g = host.graph
-            if (arrival) {
-              let people = await g.read(
-                `.phone.number=${JSON.stringify(arrival.from)}`,
-              )
-              await g.apply(
-                kept({ ...arrival, via }, people.map((p) => p.entity.eid)),
-              )
-            }
-            if (outcome) {
-              let [sent] = await g.read(
-                `.text.via=${via}&.text.message_id=${
-                  JSON.stringify(outcome.id)
-                }`,
-              )
-              if (sent) {
-                await g.apply(settled(outcome, sent.entity.eid), {
-                  trusted: true,
-                })
-              }
-            }
+            await keep(host.graph, via, said.heard)
             return json({})
           } catch (error) {
             return refuse(error, request)
           }
         },
       }]
-      : []
+    }
+    let called = provider.own?.called
+    if (!door || !called) return []
+    let base = door.path ?? `/${via}`
+    return [{
+      method: 'GET',
+      path: `${base}/*`,
+      handle: async (request) => {
+        let url = new URL(request.url)
+        let key = decodeURIComponent(url.pathname.slice(base.length + 1))
+        if (!door.key || !same(key, door.key)) {
+          return new Response('not ours', { status: 403 })
+        }
+        try {
+          let arrival = called(url.searchParams)
+          if (arrival) await keep(host.graph, via, { arrival })
+          return new Response('ok', {
+            headers: { 'content-type': 'text/plain' },
+          })
+        } catch (error) {
+          return refuse(error, request)
+        }
+      },
+    }]
+  }

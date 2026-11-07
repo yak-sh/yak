@@ -809,6 +809,15 @@ the holder as a comment already, knocks neither of them. `knocks(graph, eid)`
 returns the knocks a change owes, and [`watch_test.ts`](./watch_test.ts) runs
 each case through the effect.
 
+## Texts back
+
+A text that arrives (@yaks/phone's `text`) from a number a session texted knocks
+that session while it can hear, else its project's operator, else the project,
+as a watcher's knock is routed. A text from a number no session texted goes the
+same way to the project the number it reached is filed under (`filed.project` on
+the entity wearing that `phone{number}`). `session_texted` knocks once per text
+([`texted_test.ts`](./texted_test.ts)).
+
 ## Claimed-work comments
 
 The session bus delivers no comment to a native transcript: a comment stays a

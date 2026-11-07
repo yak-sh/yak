@@ -960,6 +960,14 @@
       "target": ".task|.comment",
       "description": "knock the sessions watching a task when it is completed, cancelled or answered, or commented on: the session that filed it, those that mention its id and the actors subscribed to watch it. A session that is over is told through its project's operator. One knock per target and change, none for the writer's own"
     },
+    "session_texted": {
+      "effect": true,
+      "created": [
+        "text"
+      ],
+      "target": ".text !deliver",
+      "description": "Knock whoever a text that arrived answers: the session that last texted its number while that session can hear, else its project's operator, else the project. A text from a number no session texted is the project's that the number it reached is filed under."
+    },
     "native": {
       "component": true,
       "journal": false,

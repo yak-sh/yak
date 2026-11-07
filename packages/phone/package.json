@@ -6,7 +6,8 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./effects": "./effects.ts",
-    "./plugin": "./plugin.ts"
+    "./plugin": "./plugin.ts",
+    "./tools": "./tools.ts"
   },
   "license": "Apache-2.0",
   "description": "Phone numbers, provider selection, consent, texts and delivery outcomes in the graph, through a provider supplied at the transport boundary.",
@@ -16,7 +17,8 @@
     "@yaks/graph": "0.2.33",
     "@yaks/hook": "0.2.28",
     "@yaks/host": "0.2.29",
-    "@yaks/vocab": "0.2.32"
+    "@yaks/vocab": "0.2.32",
+    "@yaks/tools": "0.2.30"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

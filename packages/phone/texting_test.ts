@@ -11,6 +11,7 @@ import { arrivalEid, consentEid, phoneDoc, type Sender, stash } from './mod.ts'
 import { effects } from './effects.ts'
 import { sending } from './send.ts'
 import { lent, routes } from './plugin.ts'
+import { runs } from './tools.ts'
 import type { Heard, Provider } from './provider.ts'
 
 let ana = '0b1c2d3e-0000-4000-8000-000000000001'
@@ -173,4 +174,73 @@ test('the door keeps a signed text, takes STOP as the end of consent and START a
 
 test('a door is served only where the options name one', () => {
   assertEquals(routes('acme', acme())({ graph: rig() }, {}), [])
+})
+
+// A call of `text_send`, its bundles applied.
+let send = async (g: ReturnType<typeof rig>, args: Record<string, unknown>) =>
+  await g.apply(
+    await runs().text_send({ entity: { eid: 'c' }, call: { args } }, g),
+  )
+
+test('text_send texts someone who agreed, by id or number, and refuses anyone else', async () => {
+  let texts = stash()
+  let g = rig(texts)
+  await g.apply(person)
+  await send(g, { to: ana, body: 'Deployed.' })
+  await send(g, { to: '(269) 555-0142', body: 'Live.' })
+  assertEquals(texts.sent.map((t) => t.text), ['Deployed.', 'Live.'])
+  let refused = (args: Record<string, unknown>) =>
+    send(g, args).then(() => '', (e: Error) => e.name)
+  assertEquals(await refused({ to: '+12695550199', body: 'Hi' }), 'CallError')
+  await g.apply([{ entity: { eid: consentEid(ana) }, sms_consent: null }])
+  assertEquals(await refused({ to: ana, body: 'Hi' }), 'CallError')
+  assertEquals(texts.sent.length, 2)
+})
+
+// A provider whose texts arrive by an unsigned callback, as voip.ms's do.
+let called: Provider = {
+  sender: () => ({ send: () => Promise.resolve({}) }),
+  own: {
+    fields: {},
+    account: () => {
+      throw new Error('no account here')
+    },
+    callback: 'id={ID}&from={FROM}&message={MESSAGE}',
+    called: (q) =>
+      q.get('id')
+        ? {
+          id: q.get('id')!,
+          from: q.get('from')!,
+          to: OURS,
+          text: q.get('message') ?? '',
+          at: '2026-11-04T00:00:00Z',
+          rcs: false,
+          media: [],
+        }
+        : null,
+    said: { unopened: '', untexting: '' },
+  },
+}
+
+test('a callback door keeps a text called with its key in the path, and refuses another key', async () => {
+  let g = rig(stash())
+  await g.apply(person)
+  let [door] = routes('acme', called)({ graph: g }, { door: { key: 'k3y' } })
+  let at = (key: string, id: string) =>
+    door.handle(
+      new Request(
+        `https://box.example/acme/${key}?id=${id}&from=${
+          encodeURIComponent(ANA)
+        }&message=Tuesday`,
+      ),
+    )
+  assertEquals([
+    (await at('nope', 'm1')).status,
+    (await at('k3y', 'm2')).status,
+  ], [
+    403,
+    200,
+  ])
+  assertEquals(await one(g, arrivalEid('m1', 'acme')), undefined)
+  assertEquals((await one(g, arrivalEid('m2', 'acme')))?.doc?.body, 'Tuesday')
 })

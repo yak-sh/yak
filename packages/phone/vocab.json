@@ -105,6 +105,33 @@
           "description": "The phone provider, such as telnyx, voipms or pinnacle."
         }
       }
+    },
+    "text_send": {
+      "tool": true,
+      "noun": "text",
+      "verb": "send",
+      "title": "Text a person",
+      "description": "Text a person who agreed to be texted, from this graph's own number, through the sender its config names. `to` is the id of a person here who wears a `phone{number}` and an `sms_consent`, or that number; anyone else is refused. Their reply arrives as a `text` from their number and is told to the session that texted them. The text goes asynchronously and `delivered` or `bounced` is written onto it; read it again for its outcome. A sent text cannot be recalled.",
+      "input": {
+        "to": {
+          "type": "string",
+          "description": "the person's id, or their number"
+        },
+        "body": {
+          "type": "string",
+          "description": "the words of the text",
+          "short": "b"
+        }
+      },
+      "required": [
+        "to",
+        "body"
+      ],
+      "openWorld": true,
+      "positional": [
+        "to",
+        "body"
+      ]
     }
   }
 }

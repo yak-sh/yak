@@ -59,6 +59,7 @@
     "@yaks/machine": "0.2.24",
     "@yaks/mail": "0.2.23",
     "@yaks/notify": "0.2.28",
+    "@yaks/phone": "0.2.30",
     "@yaks/project": "0.2.28",
     "@yaks/provenance": "0.2.28",
     "@yaks/ram": "0.2.24",

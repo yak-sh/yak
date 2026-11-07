@@ -3,7 +3,8 @@
   "version": "0.2.30",
   "exports": {
     ".": "./mod.ts",
-    "./graph": "./graph.ts"
+    "./graph": "./graph.ts",
+    "./routes": "./routes.ts"
   },
   "license": "Apache-2.0",
   "description": "voip.ms texting transport, account numbers and inbound callbacks for @yaks/phone.",
