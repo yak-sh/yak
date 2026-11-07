@@ -108,7 +108,10 @@ const greet: Tool = {
   }],
 }
 const vocab = loadVocab([toolsDoc])
-const g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
+const g = graph({
+  vocab,
+  storage: ram(vocab, { computed: executionComputed }),
+})
 const r = runner(g, { tools: [greet] })
 await r.ensure(['person_greet'])
 const bundles = await r.call({
@@ -222,7 +225,10 @@ import {
 import { equal } from '@yaks/testing'
 
 const vocab = loadVocab([toolsDoc])
-const g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
+const g = graph({
+  vocab,
+  storage: ram(vocab, { computed: executionComputed }),
+})
 const write: Tool = {
   name: 'write_text',
   description: 'Write text',
@@ -360,7 +366,9 @@ const r = runner(g, {
   }],
 })
 await r.ensure()
-for (const rule of r.rules) fx.on(rule.plan, (event) => r.due(event.entity.eid))
+for (const rule of r.rules) {
+  fx.on(rule.plan, (event) => r.due(event.entity.eid))
+}
 await g.apply([{
   entity: { eid: 'pending' },
   call: { to: toolEid('echo'), args: {} },
@@ -453,7 +461,10 @@ import {
 import { equal } from '@yaks/testing'
 
 const vocab = loadVocab([toolsDoc, kernelDoc], [kernelKeywords])
-const g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
+const g = graph({
+  vocab,
+  storage: ram(vocab, { computed: executionComputed }),
+})
 let ran = 0
 const r = runner(g, {
   tools: [{
@@ -563,8 +574,9 @@ tools. A **finding** is `{ level, text }` describing something a check found
 or `warn` for a leak or a verdict the check could not establish (`Level`).
 
 `checked(callId, about, findings)` builds one answer bundle, even with no
-findings. `finding.level` carries the most severe level. `ailing(answer)` tests
-for `fail`; reporting a violation does not itself make the invocation fail.
+findings. `finding.level` carries the most severe level. `ailing(tool, answer)`
+tests a check's answer for `fail`, and the CLI exits 1 when it holds; reporting
+a violation does not itself make the invocation fail.
 
 ```ts
 import { ailing, checked, checks, worded } from '@yaks/tools'
@@ -577,13 +589,14 @@ const tools = [{ noun: 'queue', verb: 'check' }, {
 equal(checks(tools), [tools[0]])
 const clear = checked('check-queue', 'No calls are stuck', [])
 equal(worded(clear), 'No calls are stuck — nothing to report')
-equal(ailing(clear), false)
+equal(ailing(tools[0], clear), false)
 const failed = checked('check-queue', 'No calls are stuck', [
   { level: 'warn', text: 'A holder cannot be inspected' },
   { level: 'fail', text: 'A call has no active holder or result' },
 ])
 equal(failed[0].finding, { level: 'fail' })
-equal(ailing(failed), true)
+equal(ailing(tools[0], failed), true)
+equal(ailing(tools[1], failed), false)
 ```
 
 ## App-declared commands

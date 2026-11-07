@@ -10,7 +10,7 @@ import { memoryBlobs } from '@yaks/blob/store'
 import { ramVault } from '@yaks/secrets/vault'
 import { ram } from '@yaks/ram'
 import type { VocabDoc } from '@yaks/vocab'
-import { answerOf, faulted, toolEid } from '@yaks/tools'
+import { ailing, answerOf, faulted, toolEid } from '@yaks/tools'
 import {
   argsFor,
   commandFor,
@@ -368,7 +368,7 @@ export let yak = async (
   ): Promise<Said> => {
     let { tool, landed, id, answer } = await made
     await show({ tui: false, out: say }, views, vocab, answer, {}, from, tool)
-    return { code: faulted(landed, id) ? 1 : 0, out }
+    return { code: faulted(landed, id) || ailing(tool, answer) ? 1 : 0, out }
   }
 
   /** A tool called as `by`, its answer printed the way `yak` prints it. */

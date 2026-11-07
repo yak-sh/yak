@@ -52,7 +52,11 @@ let server = async (
   text?: (answer: unknown[]) => Promise<string>,
 ): Promise<Fetch> => {
   let g = graph({ storage: ram(vocab, { number: true }), vocab })
-  await g.apply([{ entity: { eid: '$a' }, doc: { title: 'Fix it' }, task: {} }])
+  await g.apply([{
+    entity: { eid: '$a' },
+    doc: { title: 'Fix it' },
+    task: {},
+  }])
   let door = mcp({ graph: g, authenticate: () => null, text })
   return served ? addressed(door, served) : door
 }
@@ -146,4 +150,28 @@ test("an answer for no terminal is the server's own text, and one for a terminal
     let { said } = await asked(fetch, query, undefined, more)
     ok(!said.includes('drawn there'), said)
   }
+})
+
+test('a check whose own answer fails exits 1, and one that passes 0', async () => {
+  let fetch = await server(DB)
+  let check = {
+    name: 'sweep_check',
+    verb: 'check',
+    readOnly: true,
+  } as Declared
+  // The server's reply to the call, as @yaks/mcp sends a check's answer.
+  let answering = (level?: string): Fetch => async (request) => {
+    let { id, method } = await request.clone().json()
+    let sent = await fetch(request)
+    if (method != 'tools/call') return sent
+    let found = level ? { finding: { level } } : {}
+    let result = [{ entity: { eid: 'c' }, ...found, content: { body: 'ok' } }]
+    let reply = { content: [], structuredContent: { result } }
+    let body = JSON.stringify({ jsonrpc: '2.0', id, result: reply })
+    return new Response(body, { headers: sent.headers })
+  }
+  for (let [level, code] of [['fail', 1], ['warn', 0], [undefined, 0]]) {
+    equal((await asked(answering(level as string), check, {})).code, code)
+  }
+  equal((await asked(answering('fail'), query)).code, 0)
 })

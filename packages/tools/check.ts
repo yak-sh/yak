@@ -9,9 +9,9 @@
 // `finding{level}` when it found something, `fail` for a measured violation of a
 // contract the package keeps, `warn` for a leak or for a verdict it could not
 // establish. Reporting faults is not itself a failure (`faulted` in
-// ./runner.ts reads the call's own `execution.state`), so a check that finds a
-// broken graph still succeeded, and the caller reads the level instead of
-// guessing from an exit code.
+// ./result.ts reads the call's own `execution.state`), so a check that finds a
+// broken graph still succeeded; `ailing` reads the level, and the CLI exits 1
+// for either.
 //
 // Two rules carried over from the fleet doctor this replaces: a check that
 // finds nothing still returns an answer (silence is indistinguishable from a
@@ -81,7 +81,12 @@ export let checked = (
 
 let said = (f: Finding): string => `- ${f.level}: ${f.text}`
 
-/** Whether a check's answer reports a measured violation — what the CLI turns
- * into an exit code, and what a scheduled sweep looks for. */
-export let ailing = (answer: Bundle[]): boolean =>
+/** Whether a tool is a check whose answer reports a measured violation — what
+ * the CLI turns into exit code 1. Only a check's own answer counts: a query
+ * that returns the answers checks left in the graph is not failing. */
+export let ailing = (
+  tool: { verb?: string },
+  answer: Bundle[],
+): boolean =>
+  tool.verb == CHECK &&
   answer.some((b) => (b.finding as Comp | undefined)?.level == 'fail')

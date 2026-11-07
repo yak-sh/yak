@@ -36,6 +36,7 @@
 // connection lost during it is an error, never a second run.
 
 import type { Bundle } from '@yaks/graph'
+import { ailing } from '@yaks/tools/check'
 import { DB, served, TEXT } from '@yaks/api/address'
 import { type Config, pluginViews, used } from './config.ts'
 import type { Declared } from './words.ts'
@@ -106,7 +107,7 @@ export let warm = async (
   if (last?.headers.has(TEXT)) {
     let { text } = saidBy(said)
     if (text) c.out(text)
-    return said.isError ? 1 : 0
+    return exit(declared, said)
   }
   return await printed(c, config, declared, said, ask)
 }
@@ -119,6 +120,11 @@ let bundles = (said: Result): Bundle[] | undefined => {
   return Array.isArray(result) ? result : undefined
 }
 
+// The exit code ./local.ts `tool` would have returned: 1 for a refusal or a
+// check whose own answer fails.
+let exit = (declared: Declared, said: Result): number =>
+  said.isError || ailing(declared, bundles(said) ?? []) ? 1 : 0
+
 // A reply printed as the command would have printed the answer had it run the
 // tool itself (./local.ts `tool`): `--json` as the data, entities through the
 // views, a refusal's exit code 1. A reply with no entities is its text.
@@ -129,7 +135,7 @@ let printed = async (
   said: Result,
   ask: Rpc,
 ): Promise<number> => {
-  let code = said.isError ? 1 : 0
+  let code = exit(declared, said)
   let answer = bundles(said)
   if (c.json && said.structuredContent !== undefined) {
     c.out(JSON.stringify(said.structuredContent, null, 2))

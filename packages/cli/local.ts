@@ -41,6 +41,7 @@ import type { AnatomyObservation } from '@yaks/code/anatomy'
 import type { Vocab } from '@yaks/vocab'
 import { EFFECT } from '@yaks/effects'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools/result'
+import { ailing } from '@yaks/tools/check'
 import { registry } from './answer.ts'
 import { shown } from './terminal.ts'
 import { type Config, exported, pluginViews, read, used } from './config.ts'
@@ -473,8 +474,9 @@ export let tool = async (
   }
   // A refusal is data, not an exception: the text is printed either way
   // and the exit code is what reports which it was — taken from the runner,
-  // since a tool that returns fault rows has not itself failed.
-  return faulted(landed, id) ? 1 : 0
+  // since a tool that returns fault rows has not itself failed — or from a
+  // check's own verdict.
+  return faulted(landed, id) || ailing(declared, answer) ? 1 : 0
 }
 
 /** A plugin's terminal control, run against the graph opened for it. */
