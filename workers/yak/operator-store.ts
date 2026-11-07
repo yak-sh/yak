@@ -146,24 +146,34 @@ export let BACKSTOP = 15_000
  * open when its object is reset holds back every alarm after it until
  * Cloudflare gives up on it, fourteen minutes for Jeff's (T-145428), the
  * backstop that would take the step up included. Work that fails is
- * reported, and the backstop it leaves armed tries it again.
+ * reported, and the backstop it leaves armed tries it again. The work, going
+ * on after the alarm answers, is handed to `keep` (the object's `waitUntil`).
  */
-export let waking = (storage: Alarms, report: (e: unknown) => void) => {
+export let waking = (
+  storage: Alarms,
+  report: (e: unknown) => void,
+  keep: (work: Promise<void>) => void = () => {},
+) => {
   let armed = 0, going: Promise<void> | undefined
   return async (work: () => Promise<number | null>) => {
     armed = Date.now() + BACKSTOP
     await storage.setAlarm(armed)
-    going ??= (async () => {
-      try {
-        let next = await work()
-        if (next) await storage.setAlarm(next)
-        else if (await storage.getAlarm() == armed) await storage.deleteAlarm()
-      } catch (e) {
-        report(e)
-      } finally {
-        going = undefined
-      }
-    })()
+    if (going) return
+    keep(
+      going = (async () => {
+        try {
+          let next = await work()
+          if (next) await storage.setAlarm(next)
+          else if (await storage.getAlarm() == armed) {
+            await storage.deleteAlarm()
+          }
+        } catch (e) {
+          report(e)
+        } finally {
+          going = undefined
+        }
+      })(),
+    )
   }
 }
 

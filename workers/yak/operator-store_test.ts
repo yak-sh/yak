@@ -54,6 +54,19 @@ test('an alarm that rings while the work goes arms the backstop again and starts
   await until(() => s.at == null)
 })
 
+test('a wake hands its object the work it leaves going, once', async () => {
+  let kept: Promise<void>[] = [], w = held()
+  let wake = waking(storage(), () => {}, (work) => void kept.push(work))
+  await wake(w.work)
+  await wake(w.work)
+  let done = false
+  void kept[0].then(() => done = true)
+  await Promise.resolve()
+  assertEquals([kept.length, done], [1, false])
+  w.end(null)
+  await kept[0]
+})
+
 test('an alarm armed while a wake works outlasts it', async () => {
   let s = storage(), wake = waking(s, () => {})
   await wake(() => (s.setAlarm(1), Promise.resolve(null)))

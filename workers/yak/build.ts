@@ -132,6 +132,9 @@ export type State = Hibernation & Restartable & {
     // same call the Store makes for the same reason (graph.ts).
     deleteAll(): Promise<void>
   } & Alarms
+  // Work still going after an answer or an alarm returns: an object's own
+  // keeps it running, and a test's platform waits on it (`settled`).
+  waitUntil?(work: Promise<unknown>): void
 }
 
 // Who is at a socket, and whether the page is watching the Operator rather
@@ -599,15 +602,18 @@ export class Builder {
       let { operatorFrames } = await import('./operator-host.ts')
       // A write that owes work starts it now, beside a step in flight, so a
       // person's words reach the session they are for at once, within a
-      // slice; the alarm is there for what this wake leaves.
+      // slice; the alarm is there for what this wake leaves. The work goes on
+      // after the write answers, held by the object (`waitUntil`).
       let nudge = () => {
         this.#arming = this.#ctx.storage.setAlarm(Date.now())
         if (!this.#draining && Date.now() >= this.#until) {
           this.#until = Date.now() + SLICE
         }
         if (Date.now() >= this.#until) return
-        store.fx.work(store.g, undefined, { until: this.#until }).catch((e) =>
-          caught(e, { request: 'operator effects' })
+        this.#ctx.waitUntil?.(
+          store.fx.work(store.g, undefined, { until: this.#until }).catch((e) =>
+            caught(e, { request: 'operator effects' })
+          ),
         )
       }
       let store = operatorStore(this.#ctx.storage, {
@@ -683,6 +689,7 @@ export class Builder {
     this.#wake ??= waking(
       this.#ctx.storage,
       (e) => caught(e, { request: 'operator alarm' }),
+      (work) => this.#ctx.waitUntil?.(work),
     )
     await this.#wake(async () => {
       this.#draining = true
