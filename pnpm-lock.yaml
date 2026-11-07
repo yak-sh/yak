@@ -3424,6 +3424,9 @@ importers:
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab
+      libphonenumber-js:
+        specifier: ^1.13.15
+        version: 1.13.15
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
@@ -7047,6 +7050,9 @@ packages:
     resolution: {integrity: sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ==}
     engines: {node: '>=6'}
 
+  libphonenumber-js@1.13.15:
+    resolution: {integrity: sha512-AHdhEQeDFEJ4GKDAQ9AwxChy+v2kUILUB3TGQRpkXMkWePjXTU/WQEzWVQoIx/Gz8fE73Wr5SEuZCy2vk8jrMQ==}
+
   lines-and-columns@1.2.4:
     resolution: {integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==}
 
@@ -8824,6 +8830,8 @@ snapshots:
   json-schema-typed@8.0.2: {}
 
   kleur@4.1.5: {}
+
+  libphonenumber-js@1.13.15: {}
 
   lines-and-columns@1.2.4: {}
 
