@@ -92,7 +92,7 @@ export let readiness = (
         }
       },
     )
-  return { dependencies, web, catalog, all }
+  return { dependencies, web, catalog, client, all }
 }
 
 let modules = (root: string, quiet: boolean) =>
@@ -1430,10 +1430,11 @@ if (import.meta.main) {
       ),
     ]),
   )
-  // The kernel's modules read only tracked source; the catalog and the other
-  // generated assets are what its upload carries, which waits for them.
+  // The kernel's modules read tracked source and the client, whose byte name
+  // they carry (sheet-assets.ts); the catalog and the other generated assets
+  // are what its upload carries, which waits for them.
   let kernel = preflight(
-    () => readied,
+    () => Promise.all([readied, made.client]),
     () => inspected,
     async () => {
       let named = argv.some((a) => /^(-c|--config)(=|$)/.test(a))
