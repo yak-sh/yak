@@ -19,7 +19,7 @@
     },
     "restart": {
       "tool": true,
-      "description": "Hand this box’s processes to ready replacements.",
+      "description": "Hand this box’s processes to ready replacements of the checkout’s code, queued in the background.",
       "input": {
         "replace": {
           "type": "array",

@@ -356,35 +356,11 @@ export let own: Command[] = [
     run: async (args, c) => {
       let runtimeDir = system.env.get('XDG_RUNTIME_DIR')
       if (!runtimeDir) throw new Usage('yak restart needs $XDG_RUNTIME_DIR')
-      let { restart, queueRestart } = await import('./restart.ts')
+      let { restart, queue } = await import('./restart.ts')
       let path = configPath(c.config)
       let replace = Array.isArray(args.replace) ? args.replace.map(String) : []
       if (!args.handover) {
-        let { launching } = await import('./release.ts')
-        let { runtimeSource, FLAGS } = await import('./runtime.ts')
-        // The units run the checkout's command, never this command's private
-        // copy of it (./runtime.ts), which goes once nothing runs from it.
-        let source = (path: string) =>
-          runtimeSource(new URL(path, import.meta.url).href)
-        let launch = [
-          system.execPath(),
-          'run',
-          ...FLAGS,
-          '--config',
-          await launching(
-            () => disk.makeTempDir({ dir: runtimeDir, prefix: 'yak-restart-' }),
-            source('./release.ts'),
-          ),
-          source('./yak.ts'),
-        ]
-        c.out(
-          await queueRestart(launch, {
-            config: path
-              ? new URL(path, `file://${system.cwd()}/`).pathname
-              : undefined,
-            replace,
-          }),
-        )
+        c.out(await queue(runtimeDir, { config: path, replace }))
         return 0
       }
       c.out(

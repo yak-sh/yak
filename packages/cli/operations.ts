@@ -10,20 +10,28 @@ import { toolsIn } from '@yaks/vocab/tools'
 import doc from './vocab.json' with { type: 'json' }
 import { toolHelp } from './show.ts'
 import { commandFor } from './run.ts'
-import { restart, type RestartOptions } from './restart.ts'
+import { queue, type RestartOptions } from './restart.ts'
 
 export let definitions = toolsIn([doc])
 
+/** What a restart is queued with: the config the host was read from, and the
+ * command boundary it queues through. */
+export type Operating = {
+  config?: string
+  runtimeDir?: string
+  run?: RestartOptions['run']
+}
+
 export let operations = (
-  host: Pick<Host, 'tools' | 'config'>,
-  options?: RestartOptions,
+  host: Pick<Host, 'tools'>,
+  options: Operating = {},
 ): NamedTool[] =>
   definitions.map((tool) => ({
     ...tool,
     name: tool.name!,
     run: async (call) => {
       if (tool.name == 'restart') {
-        let runtimeDir = options?.runtimeDir ??
+        let runtimeDir = options.runtimeDir ??
           system.env.get('XDG_RUNTIME_DIR')
         if (!runtimeDir) {
           throw new CallError(
@@ -33,12 +41,10 @@ export let operations = (
         }
         return [said(
           call,
-          await restart({
-            runtimeDir,
-            processes: host.config.processes,
+          await queue(runtimeDir, {
+            config: options.config,
             replace: argsOf(call).replace as string[] | undefined,
-            ...options,
-          }),
+          }, options.run),
         )]
       }
       let words = (argsOf(call).words ?? []) as string[]

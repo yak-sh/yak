@@ -1,7 +1,9 @@
 import * as disk from '@yaks/file/io'
 import { command as launchCommand } from '@yaks/process/command'
+import * as system from '@yaks/process/system'
 import { codeFile, stale as codeStale } from './code.ts'
-import { runtimeTree } from './runtime.ts'
+import { launching } from './release.ts'
+import { FLAGS, runtimeSource, runtimeTree } from './runtime.ts'
 // Ready-first handover for the box's processes. A role whose running units
 // run the code and config a replacement would (./code.ts) keeps them. Every
 // other role's replacement is started at once from its unit template and
@@ -126,6 +128,34 @@ export let queueRestart = async (
     throw new Error(`Could not queue restart: ${result.stderr.trim()}`)
   }
   return `Restart queued in ${unit}.service; handover and failure reporting continue in the background`
+}
+
+/** Queue the handover from the checkout's `yak`, never this process's
+ * private copy of it (./runtime.ts): the handover judges each unit against the
+ * tree it runs from, so it runs from the code a replacement would. Every door
+ * restarts this way, a command and a serving process's tool alike. */
+export let queue = async (
+  runtimeDir: string,
+  { config, replace }: { config?: string; replace?: string[] } = {},
+  execute: NonNullable<RestartOptions['run']> = run,
+): Promise<string> => {
+  let source = (path: string) =>
+    runtimeSource(new URL(path, import.meta.url).href)
+  let launch = [
+    system.execPath(),
+    'run',
+    ...FLAGS,
+    '--config',
+    await launching(
+      () => disk.makeTempDir({ dir: runtimeDir, prefix: 'yak-restart-' }),
+      source('./release.ts'),
+    ),
+    source('./yak.ts'),
+  ]
+  return queueRestart(launch, {
+    config: config && disk.resolve(config),
+    replace,
+  }, execute)
 }
 
 /** Where an instance of a unit template says it is ready: the file its

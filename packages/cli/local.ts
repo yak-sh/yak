@@ -121,19 +121,25 @@ let open = async (
     readOnly || config.duties === false || (!duties && !web)
   ) {
     return host = await compose({ ...config, duties: false }, roles, facet, {
+      path,
       reader,
       warm,
       readOnly,
     })
   }
   if (web) {
-    let served = host = await compose(config, roles, facet, { reader, warm })
+    let served = host = await compose(config, roles, facet, {
+      path,
+      reader,
+      warm,
+    })
     cover = () => covered(served, path, config, roles)
     return served
   }
   let aside = thread<string>(new URL('./duties.ts', import.meta.url))
   asides.add(aside)
   host = await compose(config, roles, facet, {
+    path,
     thread: aside,
     reader,
   })

@@ -252,6 +252,9 @@ export type Served = Host & {
 
 /** How a host is composed, beyond its roles. */
 export type ComposeOpts = {
+  /** The config file this host was read from, which a restart it is asked
+   * for reads the box's roles from. */
+  path?: string
   /** Open SQLite read-only and record no process or tool-call bookkeeping. A
    * reader never changes the schema; every other host brings the file to its
    * composed schema as it opens (@yaks/sqlite `follow`). */
@@ -617,7 +620,10 @@ let composed = async (
       else makes.push(make)
     })
     let built = plan.bind({
-      tools: { package: '@yaks/cli', offer: operations },
+      tools: {
+        package: '@yaks/cli',
+        offer: (host) => operations(host, { config: opts.path }),
+      },
       host: {
         fetch: freshFetch(),
         vault,
