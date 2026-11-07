@@ -1,7 +1,12 @@
 import { queryAt } from '@yaks/query'
 import { rowHolds } from './row_holds.ts'
 import { writeOwner } from './owner.ts'
-import { hosting, legacyOutboxName, storageKey } from './hosting.ts'
+import {
+  formerOutboxScope,
+  hosting,
+  legacyOutboxName,
+  storageKey,
+} from './hosting.ts'
 // The browser half: one graph cache, narrow render signals, one socket,
 // one identity, one camera. Boots are cold and subscription-shaped (T-21491):
 // ~3.4 MB for the root canvas, formerly ~3.4 GB; patches publish only the rows
@@ -154,6 +159,7 @@ let makeClient = () => {
       legacy: legacyOutboxName()
         ? legacyOutbox(legacyOutboxName()!)
         : undefined,
+      former: formerOutboxScope(base()),
     })
     : undefined
   return liveClient({

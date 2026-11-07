@@ -3,6 +3,7 @@ import { assertEquals } from '@std/assert'
 import {
   apiPath,
   door,
+  formerOutboxScope,
   hosting,
   legacyOutboxName,
   localPath,
@@ -84,6 +85,7 @@ test('app and person browser intent is isolated without moving box keys', () => 
     ada.setItem('draft:edit', 'Ada draft')
     assertEquals(storageKey('tasks-outbox'), 'tasks-outbox:notes:ada')
     assertEquals(legacyOutboxName(), 'tasks-outbox:notes:ada')
+    assertEquals(formerOutboxScope('https://app.test/api'), undefined)
     host.YAK_WEB = { ...hosting(), storage: 'notes:eli' }
     let eli = scopedStorage(disk)
     assertEquals(eli.length, 0)
@@ -94,6 +96,10 @@ test('app and person browser intent is isolated without moving box keys', () => 
     assertEquals(legacyOutboxName(), undefined)
     host.YAK_WEB = prior
     assertEquals(legacyOutboxName(), 'tasks-outbox')
+    assertEquals(
+      formerOutboxScope('https://tasks.yak.sh'),
+      JSON.stringify(['https://tasks.yak.sh', {}]),
+    )
     assertEquals(scopedStorage(disk).getItem('draft:edit'), 'box draft')
     assertEquals(storageKey('tasks-outbox'), 'tasks-outbox')
   } finally {

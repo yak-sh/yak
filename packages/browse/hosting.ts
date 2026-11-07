@@ -64,3 +64,9 @@ export let legacyOutboxName = (): string | undefined =>
     : declared()
     ? undefined
     : 'tasks-outbox'
+
+// The queue a page wrote under @yaks/sync's default scope, the API and no
+// person, until T-133002. Only the single-owner box knows whose those writes
+// are; a hosted mount's stay where they are, unsent and kept.
+export let formerOutboxScope = (api: string): string | undefined =>
+  declared() ? undefined : JSON.stringify([api, {}])
