@@ -434,14 +434,16 @@ export let connector = (
     }
     return out
   }
-  // A reply's two readers: the words a person reads, and the same answer as
-  // data (@yaks/tools `valueIn`), which is what a program reads — the words
-  // carry more than the answer.
+  // A reply's readers: the words a person reads, and the same answer as data,
+  // which is what a program reads: its bundles (`structuredContent.result`)
+  // and the value they answered (@yaks/tools `valueIn`). The words carry more
+  // than the answer, and a long text only by a tag beside it.
   let answer = async (name: string, args: unknown = {}) => {
     let out = await call('tools/call', { name, arguments: args })
     let text = String(out.content[0].text)
     if (out.isError) throw new Error(text)
-    return { text, value: valueIn(out.structuredContent?.result ?? []) }
+    let rows: Bundle[] = out.structuredContent?.result ?? []
+    return { text, rows, value: valueIn(rows) }
   }
   let tool = async (name: string, args: unknown = {}) =>
     (await answer(name, args)).text

@@ -75,6 +75,61 @@ export let MOST = 64 * 1024 * 1024
 let inset = (b: Bundle) =>
   '  ' + JSON.stringify(b, null, 2).replaceAll('\n', '\n  ')
 
+// The most characters a text property is said in its JSON string: one that
+// runs longer, or breaks lines, is prose, and `worded` says it as plain text
+// beside its bundle.
+let PROSE = 200
+
+// A component's string a model reads better as plain text than escaped inside
+// a JSON string: one that breaks lines or runs long, holding no control
+// character but its line breaks and tabs, since a result must not command a
+// terminal.
+let prose = (v: unknown): v is string =>
+  typeof v == 'string' && (v.includes('\n') || v.length > PROSE) &&
+  // deno-lint-ignore no-control-regex -- control characters stay escaped
+  !/[\x00-\x08\x0b-\x1f\x7f-\x9f]/.test(v)
+
+// A data bundle with its prose held out: each such property says, in its
+// JSON string, the tag its block opens with, and the blocks follow, one per
+// property, so the JSON still parses and the prose reads as written.
+let heldOut = (b: Bundle): { json: Bundle; blocks: string[] } => {
+  let blocks: string[] = []
+  let json: Record<string, unknown> = { ...b }
+  for (let [k, c] of Object.entries(b)) {
+    if (k == 'entity' || k[0] == '$' || !c || typeof c != 'object') continue
+    let long = Object.entries(c as Comp).filter(([, v]) => prose(v))
+    if (!long.length || Array.isArray(c)) continue
+    let comp: Comp = { ...c as Comp }
+    for (let [p, v] of long as [string, string][]) {
+      let tag = `${k}.${p} ${b.entity.eid}`
+      comp[p] = `<${tag}>`
+      blocks.push(`<${tag}>\n${v}${v.endsWith('\n') ? '' : '\n'}</${k}.${p}>`)
+    }
+    json[k] = comp
+  }
+  return { json: json as Bundle, blocks }
+}
+
+// Pieces said in turn while they fit in `most` characters, and how many of
+// the `n` are past them counted: a piece is made only once it is reached, so
+// an answer of any size words in bounded time and space.
+let capped = (pieces: Iterable<string>, n: number, most: number) => {
+  let text = ''
+  let i = 0
+  for (let s of pieces) {
+    if (text.length + s.length > most) {
+      return {
+        cut: true,
+        text: `${text}${s.slice(0, most - text.length)}\n… ${n - i} of ${n} ` +
+          `not said: an answer is worded in ${most} characters`,
+      }
+    }
+    text += s
+    i++
+  }
+  return { cut: false, text }
+}
+
 // A search answer carries a query-only hit, not the entity's whole body: the
 // id it is called by (its human id where it has one, @yaks/graph/hit), the
 // kind, title and words that found it, and, for a neighbour of something a
@@ -150,13 +205,16 @@ let line = (b: Bundle): string | null => {
  * answer's `content{body}`, or a compact `hit` line for a search result — and
  * the rest as JSON, each run of data bundles one JSON array, so the data in an
  * answer always parses and the lines between read as lines. An answer of data
- * alone is one array, `JSON.stringify(answer, null, 2)`. An entity that
- * carries words among other components (a transcript entry, a comment) is
- * data: said whole, its eid and its writer with its words. It is copied onto
- * the result entity as `content{body}` so a model, a terminal and a transcript
- * all read the answer the same way. It says at most `most` characters, each
- * bundle only once it is reached, and counts the rest, so an answer of any
- * size words in bounded time and space.
+ * alone is one array, `JSON.stringify(answer, null, 2)`. A component's prose
+ * (a string that breaks lines or runs past 200 characters, such as a
+ * `doc.body`) is said as plain text: its JSON string holds the tag of a block
+ * that follows the bundle, which ends the array. An entity that carries words
+ * among other components (a transcript entry, a comment) is data: said whole,
+ * its eid and its writer with its words. It is copied onto the result entity
+ * as `content{body}` so a model, a terminal and a transcript all read the
+ * answer the same way. It says at most `most` characters, each bundle only
+ * once it is reached, and counts the rest, so an answer of any size words in
+ * bounded time and space.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -173,6 +231,12 @@ let line = (b: Bundle): string | null => {
  *   worded([said('one'), entry, said('two')]),
  *   'one\n' + JSON.stringify([entry], null, 2) + '\ntwo',
  * )
+ * let task = { entity: { eid: 't1' }, doc: { body: 'Two\n"lines"' } }
+ * assertEquals(
+ *   worded([task]),
+ *   JSON.stringify([{ ...task, doc: { body: '<doc.body t1>' } }], null, 2) +
+ *     '\n<doc.body t1>\nTwo\n"lines"\n</doc.body>',
+ * )
  * assertEquals(
  *   worded([said('one'), said('two'), said('three')], 5),
  *   'one\nt\n… 2 of 3 not said: an answer is worded in 5 characters',
@@ -184,30 +248,32 @@ export let worded = (answer: Bundle[], most = WORDS): string => {
   // A leading run's `[` is outside the budget, as the closing line is: the
   // budget is the answer's own characters.
   let open = ''
-  let text = ''
   let run = false
-  for (let [i, b] of answer.entries()) {
-    let words = line(b)
-    let s = words != null
-      ? (run ? '\n]' : '') + (i ? '\n' : '') + words
-      : (run ? ',\n' : i ? '\n[\n' : '') + inset(b)
-    if (!i && words == null) open = '[\n'
-    run = words == null
-    if (text.length + s.length > most) {
-      return `${open}${text}${s.slice(0, most - text.length)}\n… ` +
-        `${answer.length - i} of ${answer.length} not said: an answer is ` +
-        `worded in ${most} characters`
+  let pieces = function* () {
+    for (let [i, b] of answer.entries()) {
+      let words = line(b)
+      if (words != null) {
+        yield (run ? '\n]' : '') + (i ? '\n' : '') + words
+        run = false
+        continue
+      }
+      let { json, blocks } = heldOut(b)
+      if (!i) open = '[\n'
+      let s = (run ? ',\n' : i ? '\n[\n' : '') + inset(json)
+      run = !blocks.length
+      yield run ? s : `${s}\n]\n${blocks.join('\n')}`
     }
-    text += s
   }
-  return open + text + (run ? '\n]' : '')
+  let { cut, text } = capped(pieces(), answer.length, most)
+  return open + text + (!cut && run ? '\n]' : '')
 }
 
 /**
  * A tool's answer as the texts a door that sends several sends (MCP's content
- * blocks): its data first, as JSON, then the lines said beside it, so a reader
- * that parses the first text finds the data whole and nothing glued onto it.
- * An answer of one kind is one text, {@link worded}.
+ * blocks): its data first, as JSON, then the prose held out of it, then the
+ * lines said beside it, so a reader that parses the first text finds the data
+ * and nothing glued onto it. An answer of one kind without prose is one text,
+ * {@link worded}.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -215,14 +281,26 @@ export let worded = (answer: Bundle[], most = WORDS): string => {
  * let note = { entity: { eid: '$said' }, content: { body: 'Checked.' } }
  * assertEquals(texts([row, note]), [JSON.stringify([row], null, 2), 'Checked.'])
  * assertEquals(texts([row]), [worded([row])])
+ * let task = { entity: { eid: 't2' }, doc: { body: 'One\ntwo' } }
+ * assertEquals(texts([task]), [
+ *   JSON.stringify([{ ...task, doc: { body: '<doc.body t2>' } }], null, 2),
+ *   '<doc.body t2>\nOne\ntwo\n</doc.body>',
+ * ])
  * ```
  */
 export let texts = (answer: Bundle[], most = WORDS): string[] => {
   let words = answer.filter((b) => line(b) != null)
-  let data = answer.filter((b) => line(b) == null)
-  return words.length && data.length
-    ? [worded(data, most), worded(words, most)]
-    : [worded(answer, most)]
+  let data = answer.filter((b) => line(b) == null).map(heldOut)
+  let long = data.filter((d) => d.blocks.length)
+  if (!data.length || (!words.length && !long.length)) {
+    return [worded(answer, most)]
+  }
+  let blocks = long.map((d, i) => (i ? '\n' : '') + d.blocks.join('\n'))
+  return [
+    worded(data.map((d) => d.json), most),
+    ...long.length ? [capped(blocks, long.length, most).text] : [],
+    ...words.length ? [worded(words, most)] : [],
+  ]
 }
 
 /**

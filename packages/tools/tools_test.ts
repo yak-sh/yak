@@ -30,6 +30,7 @@ import {
   faulted,
   Interrupted,
   runner,
+  texts,
   toolDoc,
   toolEid,
   UnfinishedCall,
@@ -882,7 +883,7 @@ test('an answer too long to send whole is refused, not crashed on', async () => 
 
 test('an answer is worded whole within its budget, and counted past it', () => {
   let answer: Bundle[] = [
-    { entity: { eid: 'a' }, doc: { title: 'one\ntwo' } },
+    { entity: { eid: 'a' }, doc: { title: 'one two' } },
     { entity: { eid: 'b' } },
   ]
   assertEquals(worded(answer), JSON.stringify(answer, null, 2))
@@ -896,6 +897,25 @@ test('an answer is worded whole within its budget, and counted past it', () => {
     cut.endsWith('2 of 2 not said: an answer is worded in 20 characters'),
     true,
   )
+})
+
+test('prose is said as plain text beside its bundle, and the JSON still parses', () => {
+  let body = 'Jeff said:\n\n> fix "it"'
+  let task = { entity: { eid: 't1' }, doc: { title: 'Short', body } }
+  let bare = { entity: { eid: 't2' }, doc: { title: 'x'.repeat(201) } }
+  let ctrl = { entity: { eid: 't3' }, doc: { body: 'a\x1b[2Jb\nc' } }
+  let said = worded([task, ctrl, bare])
+  let [json, rest] = said.split('\n]\n')
+  assertEquals(JSON.parse(json + '\n]'), [
+    { ...task, doc: { title: 'Short', body: '<doc.body t1>' } },
+  ])
+  assertEquals(rest.startsWith(`<doc.body t1>\n${body}\n</doc.body>\n[`), true)
+  // A control character keeps its string escaped; a long line is prose.
+  assertEquals(said.includes(JSON.stringify(ctrl.doc.body)), true)
+  assertEquals(said.endsWith(`</doc.title>`), true)
+  let [data, blocks] = texts([task, ctrl])
+  assertEquals(JSON.parse(data).length, 2)
+  assertEquals(blocks, `<doc.body t1>\n${body}\n</doc.body>`)
 })
 
 test('words between data leave the data parseable, and a row of words alone is data', () => {

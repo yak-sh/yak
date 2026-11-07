@@ -195,9 +195,7 @@ test('a confirmation over the monthly allowance is kept as a bounce and sends no
     app,
     query: '.notice_letter .bounced ?doc',
   })
-  let rows = JSON.parse(result.text.split('\n\n## ')[0]) as {
-    bounced: { reason: string }
-  }[]
+  let rows = result.rows as unknown as { bounced: { reason: string } }[]
   ok(
     rows?.some((r) => r.bounced.reason.includes('100 emails a month')),
     JSON.stringify(result),

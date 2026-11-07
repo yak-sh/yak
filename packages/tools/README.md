@@ -283,13 +283,16 @@ line, and other bundles whole as JSON, each run of them one JSON array, so the
 data in an answer parses with lines between. What a call said is words under a
 name of the tool's own (`$said`) or aimed at the call (`output{source}`); a row
 the answer read or wrote is data even when words are all it holds, since its
-words alone would drop which entity it is. A rehearsal (`check: true`) ends with
-a line saying nothing was written. `texts(answer)` is the same answer for a door
-that sends several texts, as MCP sends content blocks: the data as JSON first,
-then the lines beside it. It limits text to `WORDS` characters by default and
-counts the bundles left unsaid. `most` in runner options limits the answer's
-JSON size to `MOST` characters by default; larger answers are refused with
-`too_large`.
+words alone would drop which entity it is. A component's prose, a string that
+breaks lines or runs past 200 characters such as a `doc.body`, is said as plain
+text: its JSON string holds a tag like `<doc.body t1>`, and a block opening with
+that tag and closing with `</doc.body>` follows the bundle. A rehearsal
+(`check: true`) ends with a line saying nothing was written. `texts(answer)` is
+the same answer for a door that sends several texts, as MCP sends content
+blocks: the data as JSON first, then its prose, then the lines beside it. It
+limits text to `WORDS` characters by default and counts the bundles left unsaid.
+`most` in runner options limits the answer's JSON size to `MOST` characters by
+default; larger answers are refused with `too_large`.
 
 `structured(tool, answer)` returns `{ result: answer }`, or `output.value` for a
 tool declaring `outputSchema`. `valueIn(answer)` reads that data directly.
