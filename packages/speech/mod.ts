@@ -617,7 +617,10 @@ export type Talking = {
   tools?: Setup['tools']
 }
 
-let talker = (provider: Provider) => {
+type Talks = NonNullable<Provider['talk']>
+type Calls = NonNullable<Talks['calls']>
+
+let talker = (provider: Provider): Talks => {
   let t = provider.talk
   if (!t) throw new Error(`${provider.name} has no model that talks`)
   return t
@@ -625,7 +628,7 @@ let talker = (provider: Provider) => {
 
 // The stream's own `LISTEN` comes first among its tools.
 let setup = (
-  t: NonNullable<Provider['talk']>,
+  t: Talks,
   o: Talking,
   format?: Raw,
 ): Setup => ({
@@ -637,27 +640,29 @@ let setup = (
   tools: [LISTEN, ...o.tools ?? []],
 })
 
-let carrier = (provider: Provider) => {
+let carrier = (provider: Provider): Calls => {
   let calls = talker(provider).calls
   if (!calls) throw new Error(`${provider.name}'s line carries no calls`)
   return calls
 }
 
-let calling = async (o: Calling, { path, init }: Asked) => {
+let calling = async (o: Calling, { path, init }: Asked): Promise<void> => {
   await asking(o)(path, init)
 }
 
 /** A call the provider's own line carries picked up, its model set up as
  * `talk` sets one up; `talk` with the `call` then joins it. */
-export let accept = (o: Calling & Talking & { call: string }) =>
+export let accept = (
+  o: Calling & Talking & { call: string },
+): Promise<void> =>
   calling(o, carrier(o.provider).accept(o.call, setup(talker(o.provider), o)))
 
 /** A call the provider's own line carries, refused before it is picked up. */
-export let reject = (o: Calling & { call: string }) =>
+export let reject = (o: Calling & { call: string }): Promise<void> =>
   calling(o, carrier(o.provider).reject(o.call))
 
 /** A call the provider's own line carries, ended. */
-export let hangup = (o: Calling & { call: string }) =>
+export let hangup = (o: Calling & { call: string }): Promise<void> =>
   calling(o, carrier(o.provider).hangup(o.call))
 
 /**
