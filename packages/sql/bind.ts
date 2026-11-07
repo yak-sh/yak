@@ -321,6 +321,10 @@ type Ctx = {
    * numbered walk the number's index in its order and probe each entity's
    * tests, the rest are driven from the component they test, newest first. */
   half?: 'numbered' | 'unnumbered'
+  /** Which half of a page in an indexed property's order this statement
+   * reads (`inOrder`): the rows holding a value, walked from `index` in that
+   * order, or (`null`) the rest. */
+  walk?: { comp: string; index: string } | null
   /** A mandatory stored value filter narrows the root rows (`narrowed`). */
   narrowed?: boolean
   screens?: Map<Extension, Screen>
@@ -2891,8 +2895,8 @@ let indexedRelation = (
   }
   let root:
     | { comp: string; index?: string; pred?: Pred; n?: number }
-    | undefined
-  if (!ctx.spine && !claims(ctx, 'pred') && ctx.d.indexed) {
+    | undefined = ctx.walk ?? undefined
+  if (!root && !ctx.spine && !claims(ctx, 'pred') && ctx.d.indexed) {
     let scalar = flattened(clauses).some((c) =>
       c.kind == 'pred' && !c.not &&
       !c.where && c.path.length == 2 && c.path[0] != 'entity' &&
@@ -3174,6 +3178,7 @@ let indexedRelation = (
       })),
     ],
   }
+  if (ctx.walk) return indexed
   if (ctx.present && root.index && root.comp != ctx.present) {
     let present = ctx.present
     // The same rows driven from the required component's own table.
@@ -3733,6 +3738,97 @@ let halved = (ast: And, ctx: Ctx): Frag | undefined => {
   }))
 }
 
+// A page in the order of an indexed property, `.order=-created.at&.limit=20`.
+// Read as one statement it sorts every entity its filter admits, by the value
+// and then the number and id that break its ties, before it can cut the page:
+// 1.8 s for the box's 450k entries, and 4.4-5.9 s beside a substring test
+// (`.content.body~=`), run on each of them. Read as two halves, the rows
+// holding a value walk the property's index in its order, so SQLite sorts
+// only each run of equal values by the rest and stops at the page; the rows
+// without one, which sort first ascending and last descending, are read only
+// where the other half cannot fill the page. At most twice the page is then
+// put in order. A filter an index seeks, or a needle few rows hold, already
+// bounds what is sorted.
+let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
+  let limit = find<Limit>(ast.clauses, 'limit')
+  let order = find<Order>(ast.clauses, 'order')
+  if (
+    !limit || limit.n <= 0 || !Number.isSafeInteger(limit.n) || !order ||
+    ctx.walk !== undefined || ctx.half || ctx.unordered || ctx.storageOrder ||
+    ctx.spine || ctx.correlated || ctx.row || ctx.owner || ctx.eids ||
+    ctx.candidates || !ctx.d.owned || !ctx.d.indexed ||
+    !(ctx.d.scoped || ctx.d.spine == '"entity"') ||
+    seeksPage(ctx, ast.clauses) ||
+    // a ranking claims its own order (`ranked`, below)
+    claimed(ctx.ext, {
+      ...ast,
+      clauses: ast.clauses.filter((c) => c != order),
+    }) ||
+    ast.clauses.some((c) =>
+      ['after', 'count', 'tally', 'distinct'].includes(c.kind)
+    )
+  ) return
+  let desc = order.value.startsWith('-')
+  let path = order.value.slice(Number(desc)).split('.')
+  let [comp, prop] = path
+  let p = ctx.v.prop(comp, prop)
+  if (
+    path.length != 2 || comp == 'entity' || !p || p.computed ||
+    computed(ctx.v, comp) || ctx.derived[path.join('.')] ||
+    ranked(ctx, path.join('.')) ||
+    !ctx.d.scoped &&
+      (source(ctx, comp) != `"${comp}"` || ctx.d.table(comp) != `"${comp}"`)
+  ) return
+  let index = indexFor(ctx, comp, prop, ast.clauses)?.name
+  if (!index) return
+  let filters = ast.clauses.filter((c) => !directive(c))
+  if (
+    filters.some((c) =>
+      c.kind == 'pred' && !c.not && (indexable(ctx, c) || !!gram(ctx, c))
+    )
+  ) return
+  let page = (walk: Ctx['walk'], has: Pred, n: Cond | number): Query => {
+    let q = lower({ kind: 'and', clauses: [...filters, has, order] }, {
+      ...ctx,
+      walk,
+      tables: new Set(),
+    }, [])
+    let arm = render({
+      ...q,
+      cols: [raw(`${ctx.d.ownerKey('entity')} as id`)],
+      limit: typeof n == 'number'
+        ? val(n)
+        : { t: 'case', arms: [[n, val(0)]], else: val(limit.n) },
+    })
+    return select({
+      from: from(raw(arm.sql, arm.params, arm.table, arm.origin)),
+    })
+  }
+  let held: Pred = { kind: 'pred', path, op: '!', value: null }
+  // Blank, so it holds an empty text too, which the held half may also read.
+  let lacking: Pred = {
+    kind: 'pred',
+    path,
+    op: '=',
+    value: { kind: 'scalar', raw: '' },
+  }
+  let [first, rest]: [Ctx['walk'], Pred][] = desc
+    ? [[{ comp, index }, held], [null, lacking]]
+    : [[null, lacking], [{ comp, index }, held]]
+  let lead = page(first[0], first[1], limit.n), led = render(lead)
+  let full = raw(
+    `exists (${led.sql} limit 1 offset ${limit.n - 1})`,
+    led.params,
+  )
+  return render(select({
+    from: from({
+      t: 'compound',
+      op: 'union',
+      parts: [lead, page(rest[0], rest[1], full)],
+    }),
+  }))
+}
+
 // The component a mandatory test of one of its stored properties needs, when
 // its rows can drive a statement.
 let spun = (ctx: Ctx, c: Pred): string | undefined => {
@@ -3769,7 +3865,7 @@ let lower = (
       }
       : s
   let cs = ast.clauses
-  let bounded = limited(ast, ctx) ?? halved(ast, ctx)
+  let bounded = limited(ast, ctx) ?? halved(ast, ctx) ?? inOrder(ast, ctx)
   if (bounded) {
     // These ids passed the complete predicate inside this same statement.
     // Only shaping remains; repeating the filter adds joins and lowering

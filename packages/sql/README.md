@@ -732,10 +732,15 @@ entities use integer id alone, and so does a `.limit` window without `.order` or
 `.after` whose every match holds a component that no numbered entity holds, as
 the store's census says (`Census.numbered`): a page of `.edge.to=<eid>` then
 reads its own rows through the index its filter seeks, instead of sorting every
-match by a number none of them has. A `.after` cursor is bound like any other
-value, so every page of one query is the same statement. A `.limit` is written
-into the statement, because SQLite prepares a statement again each time its
-limit is bound.
+match by a number none of them has. A `.limit` window in the order of an indexed
+property, `.entry .order=-created.at .limit=20`, walks that property's index in
+its order and stops at the page, sorting only each run of equal values by the
+number and id; the entities with no value are read only when the walk cannot
+fill the page. A filter an index seeks, or a needle few rows hold, bounds the
+sort already and keeps the single statement. A `.after` cursor is bound like any
+other value, so every page of one query is the same statement. A `.limit` is
+written into the statement, because SQLite prepares a statement again each time
+its limit is bound.
 
 ```ts
 import { compile } from '@yaks/sql'
