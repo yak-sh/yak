@@ -69,7 +69,7 @@ import {
   type Wire,
 } from '@yaks/durable-object'
 import type { Alarms } from './operator-store.ts'
-import { system } from '@yaks/fp'
+import { heard, system } from '@yaks/fp'
 import { level, writes } from '@yaks/member'
 import {
   col,
@@ -150,8 +150,10 @@ type Socket = Watching | Lent
 let CUT = 120
 
 /** How long an incarnation's owed work waits once its answers have been
- * read, so the runtime has sent them on (`#behind`). */
+ * read, so the runtime has sent them on (`#behind`), counted in turns of
+ * TURN ms. */
 let BEAT = 100
+let TURN = 25
 export let line = (text: string): string => {
   let first = text.trim().split('\n')[0] ?? ''
   return first.length > CUT ? `${first.slice(0, CUT - 1)}…` : first
@@ -762,18 +764,31 @@ export class Builder {
   // work waits a beat (`BEAT`): begun on a timer as the handler returned, or
   // as the answer was read, the Operator's start-up held a first visit to
   // /manage/checks 81-140 ms after its answer was read (T-149700).
+  //
+  // The beat is time the object heard go by (@yaks/fp `heard`), not a plain
+  // timer: an object's clock stands still while its code runs, so on a new
+  // isolate the read path's own CPU (about 100 ms, compiling its modules) had
+  // used the beat up by the time the answer was read, and the start-up ran
+  // at once, holding the answer about 100 ms more (T-150377). A turn that
+  // comes more than a turn late counts nothing, so the beat starts when the
+  // clock has caught up.
   #behind(work: () => void) {
     this.#ctx.waitUntil?.(
       new Promise<void>((done) =>
-        (this.#env.CLOCK ?? system).after(BEAT, () => {
-          try {
-            work()
-          } catch (e) {
-            caught(e, { request: 'operator resume' })
-          } finally {
-            done()
-          }
-        })
+        heard(
+          BEAT,
+          () => {
+            try {
+              work()
+            } catch (e) {
+              caught(e, { request: 'operator resume' })
+            } finally {
+              done()
+            }
+          },
+          this.#env.CLOCK ?? system,
+          TURN,
+        )
       ),
     )
   }

@@ -104,11 +104,10 @@ let print: string | undefined
  * so it is fitted once a schema: a wake whose print (the storage's own, which
  * carries its fitting's revision, and the blob and search statements beside
  * it, @yaks/sqlite `follow`) the file recorded runs no DDL and writes
- * nothing, under a new Worker version too. Fitted once a Worker version, the
- * first wake on each deploy wrote its receipt before its answer, and a write
- * holds an object's answer until storage confirms it: a chat page's first
- * visit had the answer 117-135 ms after it was read, against 56 with nothing
- * written (T-150377). The print is rendered once an isolate, about 12 ms.
+ * nothing, under a new Worker version too: fitted once a Worker version, the
+ * first wake on each deploy ran the schema's DDL and wrote its receipt before
+ * its answer, though the Operator's words rarely change. The print is
+ * rendered once an isolate, about 12 ms.
  */
 export let operatorStore = (
   durable: DurableStorage,

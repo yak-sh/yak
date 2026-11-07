@@ -234,7 +234,11 @@ A query that works on the box can be refused in a store.
   a schema print, operator-store.ts `FITTED`), a
   migration that finished says so once (channel-move.ts `CHANNELED`), and
   the rest starts in a timer once the answer has returned (build.ts
-  `#behind`, running.ts `behindAnswer`).
+  `#behind`, running.ts `behindAnswer`). An object's clock stands still
+  while its code runs, so a timer set after a stretch of CPU is counted from
+  before it: on a new isolate the read path's 100 ms of compiling used up
+  `#behind`'s beat, which now counts only time the object heard go by
+  (@yaks/fp `heard`, T-150377).
 - **128 MB per isolate**, shared by every object in it (`HELD` in
   packages/embedding/held.ts caps vector copies at 48 MB; the vectors are
   `search-and-embeddings`). The kernel Worker has the same 128 MB, so a body
