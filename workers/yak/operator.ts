@@ -1382,11 +1382,14 @@ export let operating = (
         .map((b) => b.entity.eid)
       helpers.push(...parents)
     }
-    let busy = [], idle = []
-    for (let s of [session, ...helpers]) {
-      let status = statusOf(await transcript(g, s))
-      if (['pending', 'running'].includes(status)) busy.push(s)
-      else if (status != 'stopped') idle.push(s)
+    // Each one's status as the store computes it (`session.status`): a tree
+    // of hundreds read transcript by transcript cost more CPU than a request
+    // has.
+    let busy: string[] = [], idle: string[] = []
+    for (let b of await g.get([session, ...helpers], ['session'])) {
+      let status = comp(b, 'session')?.status
+      if (status == 'pending' || status == 'running') busy.push(b.entity.eid)
+      else if (status != 'stopped') idle.push(b.entity.eid)
     }
     if (!busy.length) {
       return { task: open, session, stopped: false }
