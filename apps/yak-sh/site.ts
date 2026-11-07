@@ -284,7 +284,7 @@ export let SECTIONS: Section[] = [
     view: 'Memory',
     title: 'What one agent learns, every agent after it knows',
     body: [
-      "An agent's context is gone when its session ends, so what it learns is kept in the graph. A **memory** marks words a person said, verbatim, where they said them. A **persona** is the instructions an agent wears: it contains documents and memories by edges, and every session that wears it starts with all of them, after the personas it is built on. A **topic** holds what is known about one subject the same way, and an agent opened on a topic, the oracle, answers from it.",
+      "An agent's context is gone when its session ends, so what it learns is kept in the graph. A **memory** marks words a person said, verbatim, where they said them. A **persona** is the instructions an agent wears: it contains documents and memories by edges, and every session that wears it starts with all of them, after the personas it is built on. A **topic** holds what is known about one subject the same way. A session opened on a topic wears one persona, the oracle, and starts with the topic's tree, so it answers from what the topic holds.",
       '### You say it once',
       'Answering the question, you say why.',
       web(
