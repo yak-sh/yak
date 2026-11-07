@@ -212,13 +212,16 @@ export let worker = (
     )
   // A space tracker that took intake or answered a door joins the platform's
   // list of them, which every bug door reads (`/scopes`), once an isolate. A
-  // failed enrolment is reported and tried again by the next request.
+  // failed enrolment is tried again by the next request, and reported unless
+  // the platform's object still runs the release before `enroll`, as it does
+  // for minutes after a deploy reaches this Worker.
   let enroll = async (scope: string) => {
     if (scope == platform || enrolled.has(scope)) return
     try {
       await call(platform, (stub) => stub.enroll(scope))
       enrolled.add(scope)
     } catch (error) {
+      if (/does not implement the method/.test(String(error))) return
       await report(error, 'enroll')
     }
   }

@@ -235,3 +235,23 @@ test("a space tracker that answers a door or takes intake joins the platform's l
   }])
   equal(enrolled, [a, c])
 })
+
+test('a platform object on the release before enroll is enrolled by a later request, unreported', async () => {
+  let behind = true, enrolled: string[] = []
+  let { w, sent } = fixture({
+    fetch: () => Promise.resolve(Response.json([])),
+    enroll: (scope) =>
+      behind
+        ? Promise.reject(
+          TypeError('The RPC receiver does not implement the method "enroll".'),
+        )
+        : (enrolled.push(scope), Promise.resolve()),
+  })
+  let scope = crypto.randomUUID()
+  let ask = () =>
+    w.fetch(new Request(`https://tracker.test/bugs?scope=${scope}`))
+  await ask()
+  behind = false
+  await ask()
+  equal([enrolled, sent.length], [[scope], 0])
+})

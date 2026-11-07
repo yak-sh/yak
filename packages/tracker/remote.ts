@@ -236,7 +236,8 @@ export let mark = async (
 }
 
 /** The global eids of the spaces whose trackers the Worker has routed to,
- * as the platform tracker lists them. */
+ * as the platform tracker lists them. A Worker whose deploy has not reached
+ * its object yet answers the list's door as no route: it lists none yet. */
 export let spaces = async (
   remote: Remote,
   go: typeof fetch = fetch,
@@ -251,8 +252,11 @@ export let spaces = async (
     throw unanswered(error)
   })
   let answer = await response.json().catch(() => null) as
-    | { scopes?: unknown }
+    | { scopes?: unknown; error?: string }
     | null
+  if (response.status == 404 && answer?.error == 'tracker route not found') {
+    return []
+  }
   if (!response.ok) {
     let refusal =
       `Remote tracker refused its list of spaces (${response.status})`

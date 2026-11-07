@@ -64,3 +64,16 @@ test("admin_errors lists every space tracker's unresolved bugs beside the platfo
     ),
   )
 })
+
+test('a Worker whose deploy has not reached its object lists no space tracker yet, and that is no failure', async () => {
+  let older =
+    ((url: URL, init?: RequestInit) =>
+      new URL(url).pathname == '/scopes'
+        ? Promise.resolve(
+          Response.json({ error: 'tracker route not found' }, { status: 404 }),
+        )
+        : go(url, init)) as typeof fetch
+  let report = await errors(undefined, { remote }, { fetch: older })
+  ok(report[0].startsWith('Tracker: 1 unresolved bugs'))
+  ok(!report.some((line) => line.startsWith('Not read')))
+})
