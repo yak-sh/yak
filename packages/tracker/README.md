@@ -342,8 +342,11 @@ A **standing pass** reads remote bug marks every thirty seconds and reconciles
 matching box groups by global eid or their fault and app. The Worker owns
 resolved, archived, taken and regressed marks; the box retains its own
 occurrences and counters. Remote-only bugs are not imported, and newer local
-evidence is not closed by an older remote snapshot. A guarded patch leaves a
-group changed concurrently for the next pass.
+evidence is not closed by an older remote snapshot. A reopening the box grouped
+itself keeps its own `regressed` stamp, since the Worker's names the same
+reopening on another clock; only a reopening after a resolution the box saw
+takes the Worker's. A guarded patch leaves a group changed concurrently for the
+next pass.
 
 Both the standing pass and the poll below read what moved, not every bug
 (`./poll`'s `since`): each sends the tag of what it last read, a Worker where

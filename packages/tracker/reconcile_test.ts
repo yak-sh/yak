@@ -76,6 +76,26 @@ test('older remote resolution cannot erase newer local regression evidence', () 
   equal(standing(recent, fixed), undefined)
 })
 
+test("one reopening keeps the box's stamp; a later one takes the Worker's", () => {
+  let back = (at: string, extra: Partial<Bundle> = {}) =>
+    row('local', {
+      regressed: { at, by: 'box', via: 's', error: 'e1' },
+      ...extra,
+    })
+  let worker = row('remote', {
+    regressed: { at: '2026-10-18T12:00:02Z', error: 'e2' },
+    taken: { at: '2026-10-18T12:05:00Z' },
+  })
+  let patch = standing(back('2026-10-18T12:00:00Z'), worker)!
+  equal(patch.regressed, undefined)
+  equal(patch.taken, worker.taken)
+  let fixed = { resolved: { at: '2026-10-18T11:00:00Z' } }
+  equal(
+    standing(back('2026-10-18T10:00:00Z', fixed), worker)!.regressed,
+    { at: '2026-10-18T12:00:02Z', by: null, via: null, error: 'e2' },
+  )
+})
+
 test('identical standing produces no write', () => {
   equal(standing(fixed, fixed), undefined)
 })

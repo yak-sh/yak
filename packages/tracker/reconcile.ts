@@ -20,12 +20,21 @@ export let matches = (local: Bundle, remote: Bundle): boolean =>
       comp(local, 'bug').fault == comp(remote, 'bug').fault &&
       app(local) == app(remote))
 
+// Box and Worker each group a reopening and stamp it on their own clock. One
+// the box grouped and has not seen resolved since is the reopening the
+// Worker's mark names too, so its stamp stays: a moved `regressed.at` would be
+// a second opening to its letters and its fixer's start.
+let reopening = (local: Bundle, remote: Bundle) =>
+  !!local.regressed && !!remote.regressed &&
+  (!local.resolved || !!remote.resolved)
+
 /** A guarded, minimal standing patch, with removed explanation properties
  * explicitly cleared. New local evidence must not be closed by an older
  * remote snapshot, nor lose the regression that evidence just established. */
 export let standing = (local: Bundle, remote: Bundle): Bundle | undefined => {
   if (!matches(local, remote)) return
   let newer = str(comp(local, 'bug').last) > str(comp(remote, 'bug').last)
+  let one = reopening(local, remote)
   let patch: Bundle = {
     entity: { eid: local.entity.eid },
     $was: {
@@ -36,10 +45,9 @@ export let standing = (local: Bundle, remote: Bundle): Bundle | undefined => {
   let changed = false
   for (let name of marks) {
     if (
-      newer && (name == 'regressed' || name == 'resolved' && remote.resolved)
-    ) {
-      continue
-    }
+      name == 'regressed' && (newer || one) ||
+      newer && name == 'resolved' && remote.resolved
+    ) continue
     let before = local[name] as Comp | undefined
     let after = remote[name] as Comp | undefined
     if (same(before ?? null, after ?? null)) continue
