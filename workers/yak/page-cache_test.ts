@@ -22,7 +22,7 @@ import { clock } from './timing.ts'
 import { within } from './defects.ts'
 import { dataset } from './testing.ts'
 
-let space = { eid: 's', slug: 'ada' }
+let space = { eid: 's', slug: 'ada', store: 'ada.5e1f00' }
 let app = { eid: 'a', slug: 'cookbook' }
 
 let page = (text: string, status = 200) =>
@@ -118,6 +118,20 @@ test('a kept page answers a revalidation with a 304, and counts a HEAD as a view
   assertEquals(fresh!.status, 304)
   // The HEAD is a view; the 304 sent none.
   assertEquals(g.views.points.length, 1)
+})
+
+// A kept page tells its browser whose the hostname's storage is
+// (site-data.ts), so a browser that saw another space here is cleared of it.
+test('a page kept at the edge tells the browser whose its storage is', async () => {
+  let g = gateway(() => keep(page('one'), space, app))
+  let held = async (cookie: string) => {
+    let got = (await g.get(undefined, { headers: { cookie } }))!
+    await got.body?.cancel()
+    return [got.headers.get('clear-site-data'), got.headers.has('set-cookie')]
+  }
+  assertEquals(await held(''), [null, true])
+  assertEquals(await held('yak_space=rex.0d0d0d'), ['"storage"', true])
+  assertEquals(await held('yak_space=ada.5e1f00'), [null, false])
 })
 
 // The page's scripts ask its store next, so a page a browser runs starts it

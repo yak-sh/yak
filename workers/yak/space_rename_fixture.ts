@@ -56,6 +56,26 @@ export let renamed = async (k: Kernel) => {
     }
   let store = (await row(ada46)).space.store
   assertMatch(store, new RegExp(`^${ada46}\\.[0-9a-f]{6}$`))
+  // Her page tells each browser this hostname's storage is her space's
+  // (site-data.ts), once.
+  let storage = async (host: string, held?: string) => {
+    let page = await k.at(host, '/cookbook/', {
+      headers: held ? { cookie: `yak_space=${held}` } : {},
+    })
+    await page.body?.cancel()
+    return {
+      cleared: page.headers.get('clear-site-data'),
+      told: page.headers.getSetCookie().find((c) => c.startsWith('yak_space=')),
+    }
+  }
+  let told = await storage(`${ada46}.yaks.app`)
+  assertEquals(told.cleared, null)
+  assertMatch(told.told!, new RegExp(`^yak_space=${store}; Path=/;`))
+  assert(!/domain=/i.test(told.told!), "the hostname's own cookie")
+  assertEquals(await storage(`${ada46}.yaks.app`, store), {
+    cleared: null,
+    told: undefined,
+  })
   let mail = (to: string, subject: string) =>
     arrives(k, {
       from: 'ana@books.example',
@@ -219,6 +239,21 @@ export let renamed = async (k: Kernel) => {
     title: 'cookbook',
   })
   assert((await row(ada46)).space.store != store)
+  // A browser that saw her space here is cleared of what her apps left in
+  // it, once, and never of its cookies, so nobody is signed out (T-149225).
+  let page = client(k, `${ada46}.yaks.app`, 'cookbook', rex.cookie)
+  await page.put('/index.html', '<!doctype html><h1>Rex cooks</h1>')
+  await theirs.tool('app_deploy', { space: ada46, app: 'cookbook' })
+  let his = (await row(ada46)).space.store
+  assertEquals(await storage(`${ada46}.yaks.app`, store), {
+    cleared: '"storage"',
+    told: `yak_space=${his}; Path=/; Max-Age=34560000; Secure; HttpOnly; ` +
+      'SameSite=Lax',
+  })
+  assertEquals(await storage(`${ada46}.yaks.app`, his), {
+    cleared: null,
+    told: undefined,
+  })
   assertEquals(
     await client(k, `${ada46}.yaks.app`, 'cookbook', rex.cookie)
       .get(`id=${cake}`),

@@ -88,7 +88,7 @@ export let shown = (env: Env, req: Request, page: Response, at: Seen) => {
  * release: it passes, and only for now. */
 export let keep = (
   page: Response,
-  space: { eid: string; slug: string } | null,
+  space: { eid: string; slug: string; store: string } | null,
   app:
     | {
       eid: string

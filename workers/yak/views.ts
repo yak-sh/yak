@@ -66,11 +66,12 @@ export let VARIANT = 'blob9'
  * app's store, which a page's scripts ask next (used.ts `wake`); a data point
  * never carries it. */
 export let seen = (
-  space: Pick<Space, 'slug'>,
+  space: Pick<Space, 'slug' | 'store'>,
   app: { eid: string; slug: string; store?: string | null },
 ): Seen => ({
   app: app.eid,
   space: space.slug,
+  handle: space.store,
   slug: app.slug,
   store: storeName(space, app),
 })

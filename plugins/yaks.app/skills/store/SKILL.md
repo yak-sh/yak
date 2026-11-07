@@ -818,6 +818,14 @@ instead. (In an installed app its space's owner sandboxed, `localStorage` is the
 platform's: each signed-in person's keys are kept in the app's store rather than
 the browser: <https://yaks.app/docs/sharing.md>.)
 
+**Keeping local data in a cookie.** When something should stay in one browser
+only, keep it in `localStorage` or IndexedDB, not a cookie. Sign-in is the
+platform's, so an app needs no cookie of its own for it. A cookie is sent with
+every request to the space's hostname, and it is the one kind of browser data
+that outlives a change of hands: if the space is renamed and another space takes
+its old name, a browser that visits the new space there has its local storage,
+IndexedDB and caches cleared once, but its cookies are kept.
+
 **Writing the app's own name into the app.** `/chores/api/client.js`,
 `/chores/style.css`, `fetch('/chores/api/query?…')`: each one breaks when
 somebody installs a copy at another address. Write `./api/client.js` and

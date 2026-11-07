@@ -11,6 +11,7 @@ import { bearing, MOUNT } from './route.ts'
 import { PATHS, shown } from './variant.ts'
 import { COOKIE, cookieValue } from '@yaks/platform/cookie'
 import { sha256 } from '@yaks/graph/sha256'
+import { claimed } from './site-data.ts'
 
 // How long Site holds an answer before asking again, and how long past that a
 // visitor may still be answered from it while it is asked (stale while it
@@ -140,9 +141,16 @@ export let shareable = (req: Request, path = new URL(req.url).pathname) => {
 
 /** What a page may say of itself as it answers from the edge, and the store
  * its app keeps (a handle, directory.ts `storeName`), which a page that
- * `opens` starts (used.ts `wake`). A page kept before it said its store says
- * none, and starts nothing. */
-export type Seen = { app: string; space: string; slug: string; store?: string }
+ * `opens` starts (used.ts `wake`), and its space's handle, which the browser
+ * is told the hostname's storage is now (site-data.ts). A page kept before it
+ * said either says none, and starts or tells nothing. */
+export type Seen = {
+  app: string
+  space: string
+  slug: string
+  store?: string
+  handle?: string
+}
 
 /** Whether a browser goes on to run this answer, so that its scripts ask the
  * app's store next: an HTML page, sent whole or revalidated. */
@@ -262,6 +270,7 @@ export let asked = async (
       headers,
     })
   if (!answer.body) await got.body?.cancel()
+  if (at.handle) answer = claimed(req, answer, at.handle)
   if (at.app && at.slug && at.space) count(answer, at as Seen)
   return answer
 }

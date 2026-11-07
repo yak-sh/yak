@@ -1,5 +1,6 @@
 import { refuse as refusedOptions, writeOptions } from '@yaks/api'
 import { decodedPath } from './request-path.ts'
+import { serves, stamped } from './site-data.ts'
 import { BINARY } from '@yaks/vocab/wire'
 import { copyOf } from './directory-copy.ts'
 // The app-serving part: `<space>.yaks.app/<app>/…` — the deploy seam's first
@@ -2438,7 +2439,10 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
       (r) => served(r, env, c, false, undefined, req),
       remember,
     )
-    return timed(told(remember ? toldStores(req, res, env) : res, c), c)
+    return timed(
+      told(stamped(req, remember ? toldStores(req, res, env) : res), c),
+      c,
+    )
   })
 }
 
@@ -2565,6 +2569,9 @@ let served = async (
     return edge ? keep(none, null, null) : none
   }
   if (kernels(space, r.app)) return nothingAt(url.pathname, env)
+  // Its pages tell the browser whose this hostname's storage is now
+  // (site-data.ts), on their way out of `fetch` below.
+  if (!edge) serves(visitor, space.store)
   // The whole space in the trash, before any rung of the order below: every
   // hostname of it answers nothing, and its owner is answered the page that
   // brings it back (`closed` above, T-34431).
