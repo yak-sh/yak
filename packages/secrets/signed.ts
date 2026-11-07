@@ -93,8 +93,9 @@ export let signedWith = async (
   return token
 }
 
-/** The value under a mac this key made, or null. A miss uses WebCrypto's
- * constant-time verify; a hit reuses its result and parses the value afresh. */
+/** The value under a mac this key made, written as signing writes it, or
+ * null. A miss uses WebCrypto's constant-time verify; a hit reuses its result
+ * and parses the value afresh. */
 export let openedWith = async <T = unknown>(
   k: CryptoKey,
   token: string,
@@ -104,12 +105,15 @@ export let openedWith = async <T = unknown>(
   let body = token.slice(0, dot)
   try {
     if (known.get(k)?.get(body) != token) {
-      let ok = await crypto.subtle.verify(
-        'HMAC',
-        k,
-        fromBase64url(token.slice(dot + 1)),
-        enc.encode(body),
-      )
+      // The mac's text must be the one signing wrote. A 32-byte mac is 43
+      // characters whose last carries two padding bits the decoder ignores,
+      // and the decoder takes padding and spaces too, so several texts name
+      // the same bytes: without this, a token with its last character edited
+      // still opened.
+      let text = token.slice(dot + 1)
+      let mac = fromBase64url(text)
+      if (toBase64url(mac) != text) return null
+      let ok = await crypto.subtle.verify('HMAC', k, mac, enc.encode(body))
       if (!ok) return null
     }
     remember(k, body, token)

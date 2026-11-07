@@ -167,7 +167,7 @@ test('a preview ticket never exposes server source or another app', async () => 
       .status,
     404,
   )
-  let tampered = (token.startsWith('x') ? 'y' : 'x') + token.slice(1)
+  let tampered = token.slice(0, -1) + (token.endsWith('x') ? 'y' : 'x')
   equal(
     (await kernel(new Request(url.replace(token, tampered)), env)).status,
     404,

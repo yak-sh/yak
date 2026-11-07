@@ -41,6 +41,33 @@ test('a forged, edited, foreign, or expired token is null', async () => {
   assertEquals(await verify(dead, secret), null)
 })
 
+// Every token one character away: at each position, the character with each
+// of its low two bits flipped, the bits a mac's last character pads with.
+let ALPHABET =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+let edits = (t: string) =>
+  [...t].flatMap((c, i) =>
+    [1, 2, 3].map((bit) =>
+      t.slice(0, i) + (ALPHABET[ALPHABET.indexOf(c) ^ bit] ?? 'A') +
+      t.slice(i + 1)
+    )
+  )
+
+test('a preview ticket or an old session, edited at any position, opens nothing', async () => {
+  let ticket = { space: 'sp', person: 'u-1', app: 'ap', link: 'l', exp: 1 }
+  let old = { person: 'u-1', space: null, exp: CUT }
+  let sealed: [Use, string, unknown][] = [
+    ['preview', await seal('preview', ticket, secret), ticket],
+    ['session', await sealedOld(old, secret), old],
+  ]
+  for (let [use, t, value] of sealed) {
+    assertEquals(await opened(use, t, secret), value)
+    for (let edited of edits(t)) {
+      assertEquals(await opened(use, edited, secret), null, edited)
+    }
+  }
+})
+
 test('a value sealed for one use opens as no other, a session least', async () => {
   // A grant carries a person and an expiry, which is all a session's claims
   // are: sealed for another use, it still fails the session's mac.
