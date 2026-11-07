@@ -4,7 +4,7 @@ import * as system from '@yaks/process/system'
  * suite's baseline only on request. External collectors use the same ratchet
  * and reporting path as timed callbacks. */
 import { type Host, host, type Reporters, reporters } from './host.ts'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import {
   type Baseline,
   type CollectedSuite,
@@ -26,6 +26,7 @@ import {
   covered,
   incomparable,
   loaded,
+  rebased,
   spread,
   tolerance,
   validate,
@@ -41,6 +42,7 @@ export let files: Files = {
   write: async (path, value) => {
     let tmp = `${path}.${crypto.randomUUID()}.tmp`
     try {
+      await io.mkdir(dirname(path), { recursive: true })
       await io.writeTextFile(tmp, JSON.stringify(value, null, 2) + '\n')
       await io.rename(tmp, path)
     } catch (error) {
@@ -62,6 +64,10 @@ export type Options = {
   mode?: 'run' | 'check' | 'accept'
   output: string
   baseline?: string
+  /** Where a check keeps this box's own baseline while `baseline` was banked
+   * on another runtime or CPU. The first such check banks its run there, and
+   * later checks on this runtime and CPU compare with it. */
+  local?: string
   /** Required for acceptance: the least slack any bench is banked with.
    * Checks use the baseline's own. */
   tolerance?: number
@@ -204,26 +210,43 @@ let execute = async (
   }
   // A different acceptance may have banked while our rounds yielded. Read its
   // baseline under the publication lock before comparing or moving the best.
+  let readLocal = async (): Promise<Baseline | undefined> => {
+    try {
+      let local = JSON.parse(await store.read(options.local!))
+      validate(local)
+      return local
+    } catch (error) {
+      if (!io.isNotFound(error)) throw error
+    }
+  }
   let current = await exclusive(async () => {
     let base = await readBase()
     let current = best(runs)
+    // A baseline banked on another runtime or CPU is no reference for this
+    // box. A check judges by the one this box banked on its own, and without
+    // one the run is measured, not judged, and banks as that baseline.
+    let elsewhere = (base: Baseline | undefined) =>
+      base && ['runtime', 'cpu'].includes(incomparable(base, current) ?? '')
+    let banked = elsewhere(base) && mode == 'check' && options.local
+      ? await readLocal()
+      : undefined
+    if (banked && !incomparable(banked, current)) base = banked
     current.tolerance = mode == 'accept'
       ? options.tolerance!
       : base?.tolerance ?? null
     if (mode == 'accept' && !insufficient(current)) {
       current.verdict = loaded(current) ? 'loaded' : 'accepted'
     }
-    // A baseline banked on another runtime or CPU is no reference for this
-    // box: the run is measured, not judged, until one is banked here.
-    let elsewhere = base && ['runtime', 'cpu'].includes(
-      incomparable(base, current) ?? '',
-    )
-    if (elsewhere && mode == 'check' && !insufficient(current)) {
+    if (elsewhere(base) && mode == 'check' && !insufficient(current)) {
       current.verdict = 'measured'
+      let bank = options.local && !loaded(current)
+      if (bank) await store.write(options.local!, rebased(base!, current))
       console.error(
         `${current.suite}: baseline banked on ${base!.runtime}, ${
           base!.cpu
-        }; measured on ${current.runtime}, ${current.cpu}`,
+        }; measured on ${current.runtime}, ${current.cpu}${
+          bank ? `, banked as its baseline here in ${options.local}` : ''
+        }`,
       )
     } else if (base && mode == 'check' && !insufficient(current)) {
       current.regressions = compare(base, current, options.coverage)

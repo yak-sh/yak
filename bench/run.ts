@@ -139,6 +139,12 @@ export let main = async (args = Deno.args): Promise<number> => {
  * runs measured (@yaks/benchmark `baseline`). */
 export let FLOOR = 0
 
+/** Where a check keeps this box's own baseline of a suite whose committed one
+ * was banked on another runtime or CPU, beside the monitor's state, so the
+ * checkout stays clean. */
+export let local = (name: string) =>
+  `${Deno.env.get('HOME') ?? '/tmp'}/.cache/yak/bench/${name}.baseline.json`
+
 let options = (
   name: string,
   action: string,
@@ -155,6 +161,7 @@ let options = (
     rounds,
     output: `bench/${name}.results.json`,
     baseline: `bench/${name}.baseline.json`,
+    ...mode == 'check' ? { local: local(name) } : {},
     tolerance: mode == 'accept' ? floor : undefined,
   }
 }

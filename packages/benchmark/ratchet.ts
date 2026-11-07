@@ -253,6 +253,19 @@ export let baseline = (
   validate(out)
   return out
 }
+/** A baseline banked on another runtime or CPU, banked again from one run on
+ * this one: each bench takes the run's median, with the wider of the slack it
+ * was banked with and the noise the run measured. */
+export let rebased = (base: Baseline, current: Run): Baseline => {
+  let out = baseline(current, base.tolerance)
+  let banked = new Map(base.benches.map((b) => [b.name, b.tolerance]))
+  out.benches = out.benches.map((b) => ({
+    ...b,
+    tolerance: Math.min(CAP, Math.max(b.tolerance!, banked.get(b.name) ?? 0)),
+  }))
+  return out
+}
+
 export type Coverage = 'exact' | 'subset'
 /** Whether every measured workload already has a banked reference. */
 export let covered = (base: Baseline, current: Run): boolean => {

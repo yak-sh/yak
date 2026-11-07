@@ -220,6 +220,28 @@ test('a check against a baseline banked on another runtime or CPU measures', asy
   }
 })
 
+test('the first check on another runtime or CPU banks the baseline it is judged by there', async () => {
+  for (let field of ['runtime', 'cpu'] as const) {
+    let f = fixture()
+    let options = { ...f.options, rounds: 1, local: 'local' }
+    await run(f.suite, { ...options, mode: 'accept', tolerance: .2 })
+    let committed = f.saved.get('baseline')
+    f.context[field] = 'elsewhere'
+    f.suite.benches[0].sample = () => 1e6
+    let check = () => run(f.suite, { ...options, mode: 'check' })
+    equal((await check()).verdict, 'measured')
+    equal((await check()).verdict, 'passed')
+    equal(f.saved.get('baseline'), committed)
+    equal(JSON.parse(f.saved.get('local')!).benches[0].tolerance, .2)
+    f.suite.benches[0].sample = () => 2e6
+    ok(await throws(check) instanceof Regressed)
+    // Back on the committed baseline's runtime, the committed one judges.
+    f.context[field] = 'test'
+    f.suite.benches[0].sample = () => 100
+    equal((await check()).verdict, 'passed')
+  }
+})
+
 test('a slower acceptance that names benches banks only those, as measured', async () => {
   let f = fixture([
     { name: 'chosen', unit: 'ms', sample: () => 100 },

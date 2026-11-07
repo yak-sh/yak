@@ -189,7 +189,13 @@ otherwise keeps the banked median with the wider of the two slacks.
 product, not a measurement; `slower: ['close']` makes that decision for the
 named benches only, and every other bench stays as banked. A baseline banked on
 another runtime, CPU or workload version is no reference, and an exact
-acceptance banks the suite as measured.
+acceptance banks the suite as measured. A check against a baseline banked on
+another runtime or CPU is measured, not judged; with `local`, its run banks
+there as this box's own baseline (`rebased()`: each bench's median, with the
+wider of its banked slack and the run's noise), and later checks on this runtime
+and CPU are judged by it. `bench/run.ts check` keeps it in
+`~/.cache/yak/bench/`, so the committed baseline and the checkout stay as they
+are.
 
 Each baseline bench can retain a `reference` commit for its median. Acceptance
 stamps a changed median with the measured run's commit and preserves the
