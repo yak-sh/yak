@@ -115,6 +115,7 @@ import { refuse } from './tool.ts'
 import { dollars, released } from './numbers.ts'
 import { shown } from '@yaks/phone'
 import { caught } from './defects.ts'
+import { unkept } from './newcomer.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
 // sign-in code's ten minutes, because nobody is standing at the form waiting
@@ -766,11 +767,11 @@ export let erased = async (
 // Kept at this public seam for callers that describe the trash schedule.
 export { DAILY } from './trash.ts'
 
-// The daily sweep (trash.ts's wake and effect rule):
-// every app and every space whose thirty days have run out, erased. It walks
-// the platform because the promise is the platform's, not a space's — and it
-// erases as the person who threw the thing away, since the delete is what it
-// is finishing.
+// The daily sweep (trash.ts's wake and effect rule): every newcomer's space
+// nobody kept in its week, put in the trash as its newcomer, and every app and
+// every space whose thirty days have run out, erased. It walks the platform
+// because the promise is the platform's, not a space's — and it erases as the
+// person who threw the thing away, since the delete is what it is finishing.
 //
 // A space out of days takes its apps with it and is not walked for them: the
 // one erase buries every app in it whatever each app's own mark says, which
@@ -793,6 +794,13 @@ let retitled = async (
 
 export let collected = async (env: Env, now = new Date()) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  // A newcomer's budget is a month's (newcomer.ts `KEEPING`): trashed, the
+  // space spends nothing in the next one, and each one on its own, so one
+  // that will not go holds up none of the rest.
+  for (let { space, person } of await unkept(env, dir, now)) {
+    await trashSpace(env, dir, space, { person, role: 'owner' })
+      .catch((why) => caught(why, { request: 'trash an unkept space' }))
+  }
   let idle = new Set(await abandoned(env, now))
   let gone = 0
   // Every app left standing when the erasures are done, which is exactly the

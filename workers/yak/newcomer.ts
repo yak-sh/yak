@@ -11,6 +11,9 @@
 //                 and model-spend.ts `reserved` hold it to like any space
 //   per day       DAILY newcomers' spaces open a UTC day, across everybody,
 //                 and PER_SOURCE from one address, counted as each opens
+//   per space     once: a budget is a month's, so a space nobody kept goes
+//                 to the trash KEEPING after it opened (`unkept`), before a
+//                 new month could give it PER_BUILD again
 //
 // So a day spends at most DAILY × PER_BUILD dollars, on the Operator's own
 // models (operator.ts `operatorChoice`). Until they give an address a
@@ -39,6 +42,11 @@ export let PER_BUILD = 10
 export let DAILY = 10
 /** The same, from one address. */
 export let PER_SOURCE = 2
+
+/** How long a newcomer's space waits to be kept. Past it the daily sweep
+ * (erase.ts `collected`) puts the space in the trash, where it can be
+ * restored for thirty days more and its Operator answers nothing. */
+export let KEEPING = 7 * 86_400_000
 
 /** Where the home page's box posts. */
 export let START = '/start'
@@ -216,4 +224,23 @@ export let keep = async (
         : [],
     ],
   })
+}
+
+/**
+ * The spaces newcomers opened more than KEEPING ago that nobody kept and
+ * that are not in the trash yet, each with the newcomer who owns it. Keeping
+ * moves a newcomer's owner seats to whoever signed in (`keep`), so a seat a
+ * newcomer still holds is a space nobody kept.
+ */
+export let unkept = async (env: Env, dir: Directory, now = new Date()) => {
+  let since = now.getTime() - KEEPING
+  let people = (await meta(env).query('.newcomer ?email ?phone')).filter((r) =>
+    !r.email && !r.phone &&
+    Date.parse(String((r.newcomer as Comp).at)) <= since
+  ).map((r) => r.entity.eid)
+  let seats = await Promise.all(people.map((p) => dir.seats(p, 'owner')))
+  return seats.flatMap((held, i) =>
+    held.filter((s) => !s.space.trashed)
+      .map((s) => ({ space: s.space, person: people[i] }))
+  )
 }

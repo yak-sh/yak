@@ -16,9 +16,11 @@ import {
   FULL,
   KEEP,
   keep,
+  KEEPING,
   PER_BUILD,
   START,
 } from './newcomer.ts'
+import { collected } from './erase.ts'
 import type { Ctx } from './tool.ts'
 import { TOOLS } from './tools.ts'
 import { PUBLISHED } from './published.ts'
@@ -89,6 +91,18 @@ let danaSeats = await k.dir.seats(dana, 'owner')
 let anaSeats = await k.dir.seats(ana, 'owner')
 let kept = (await k.dir.space(space.slug))!
 
+// Nobody keeps a third: the daily sweep leaves it its week, then trashes it.
+let left = spaceOf(await build('A plant watering log', { ip: '203.0.113.9' }))
+let swept = async (after: number) => {
+  await collected(env, new Date(Date.now() + after))
+  let slugs = [left, space.slug, other.slug]
+  let rows = await Promise.all(slugs.map((s) => k.dir.space(s)))
+  return slugs.filter((_, i) => rows[i]?.trashed)
+}
+let hour = 3_600_000
+let inWeek = await swept(KEEPING - hour)
+let pastWeek = await swept(KEEPING + hour)
+
 test("a stranger's idea opens a space of their own, signed in, in its chat", () => {
   assertEquals(first.status, 303)
   assert(cookie.length > 0, 'the browser is signed in')
@@ -144,6 +158,11 @@ test("somebody with a space keeps a newcomer's beside it", async () => {
     [anas.slug, other.slug].sort(),
   )
   assertEquals((await k.dir.own(ana)).slug, anas.slug)
+})
+
+test("a newcomer's space nobody kept goes to the trash a week after it opened", () => {
+  assertEquals(inWeek, [])
+  assertEquals(pastWeek, [left])
 })
 
 test('the same browser goes on building in the same space', () => {

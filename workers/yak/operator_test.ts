@@ -18,6 +18,7 @@ import { KERNEL } from './meta.ts'
 import { appDoc, appVocab } from './vocab.ts'
 import { withKinds } from './kinds.ts'
 import { declared } from './directory-fixture.ts'
+import { trashSpace } from './erase.ts'
 
 let owner = crypto.randomUUID()
 let fixture = async () => {
@@ -690,4 +691,35 @@ test('another model working for a person is offered the tools their conversation
   // Their conversation is begun for the calls to be its own.
   let root = rootOf(f.space.eid, f.held.person)
   assertEquals((await store.g.get([root]))[0]?.session != undefined, true)
+})
+
+test('the Operator of a space in the trash asks no model', async () => {
+  let eid = crypto.randomUUID()
+  await f.dir.apply({
+    entities: [
+      {
+        entity: { eid },
+        space: { slug: 'binned', store: 'binned' },
+        doc: { title: 'binned' },
+      },
+      {
+        entity: { eid: crypto.randomUUID() },
+        member: { person: owner, space: eid, role: 'owner' },
+      },
+    ],
+  }, { 'x-yak-person': owner, 'x-yak-role': 'owner' })
+  let held = { ...f.held, space: eid }
+  await trashSpace(f.env, f.dir, (await f.dir.space('binned'))!, held)
+  let binned = (await f.dir.space('binned'))!
+  let asked = 0
+  let op = operate(
+    operatorMemory(),
+    f,
+    operatorModel(() => {
+      asked++
+      return Promise.reject('no model')
+    }),
+  )
+  await op.run(held, binned, { say: 'A plant watering log' }).catch(() => {})
+  assertEquals(asked, 0)
 })
