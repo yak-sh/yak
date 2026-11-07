@@ -201,6 +201,8 @@ export let directoryConfig: Config = {
       facets: ['vocab'],
       words: ['phone', 'sms_consent', 'sender'],
     },
+    // The browsers a person allowed notifications on (operator-alerts.ts).
+    { use: '@yaks/push', facets: ['vocab'], words: ['push_subscription'] },
     '@yaks/tunnel',
     {
       use: '@yaks/memory',

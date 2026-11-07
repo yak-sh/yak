@@ -52,31 +52,32 @@ import * as vocab47 from '@yaks/platform/vocab'
 import * as vocab48 from '@yaks/process/vocab'
 import * as vocab49 from '@yaks/project/vocab'
 import * as vocab50 from '@yaks/provenance/vocab'
-import * as vocab51 from '@yaks/rtc/vocab'
-import * as vocab52 from '@yaks/sandbox/vocab'
-import * as vocab53 from '@yaks/secrets/vocab'
-import * as vocab54 from '@yaks/session/vocab'
-import * as vocab55 from '@yaks/spawn/vocab'
-import * as vocab56 from '@yaks/spend/vocab'
-import * as vocab57 from '@yaks/sqlite/vocab'
-import * as vocab58 from '@yaks/task/vocab'
-import * as vocab59 from '@yaks/timing/vocab'
-import * as vocab60 from '@yaks/tmux/vocab'
-import * as vocab61 from '@yaks/tools/vocab'
-import * as vocab62 from '@yaks/topic/vocab'
-import * as vocab63 from '@yaks/tracker/vocab'
-import * as vocab64 from '@yaks/tunnel/vocab'
-import * as vocab65 from '@yaks/ux/vocab'
-import * as vocab66 from '@yaks/visualize/vocab'
-import * as vocab67 from '@yaks/vocab/vocab'
-import * as vocab68 from '@yaks/wake/vocab'
-import * as vocab69 from './facets/app-vocab.ts'
-import * as vocab70 from './facets/attribution-vocab.ts'
-import * as vocab71 from './facets/directory-vocab.ts'
-import * as vocab72 from './facets/git-vocab.ts'
-import * as vocab73 from './facets/meter-vocab.ts'
-import * as vocab74 from './facets/models-vocab.ts'
-import * as vocab75 from './facets/trash-vocab.ts'
+import * as vocab51 from '@yaks/push/vocab'
+import * as vocab52 from '@yaks/rtc/vocab'
+import * as vocab53 from '@yaks/sandbox/vocab'
+import * as vocab54 from '@yaks/secrets/vocab'
+import * as vocab55 from '@yaks/session/vocab'
+import * as vocab56 from '@yaks/spawn/vocab'
+import * as vocab57 from '@yaks/spend/vocab'
+import * as vocab58 from '@yaks/sqlite/vocab'
+import * as vocab59 from '@yaks/task/vocab'
+import * as vocab60 from '@yaks/timing/vocab'
+import * as vocab61 from '@yaks/tmux/vocab'
+import * as vocab62 from '@yaks/tools/vocab'
+import * as vocab63 from '@yaks/topic/vocab'
+import * as vocab64 from '@yaks/tracker/vocab'
+import * as vocab65 from '@yaks/tunnel/vocab'
+import * as vocab66 from '@yaks/ux/vocab'
+import * as vocab67 from '@yaks/visualize/vocab'
+import * as vocab68 from '@yaks/vocab/vocab'
+import * as vocab69 from '@yaks/wake/vocab'
+import * as vocab70 from './facets/app-vocab.ts'
+import * as vocab71 from './facets/attribution-vocab.ts'
+import * as vocab72 from './facets/directory-vocab.ts'
+import * as vocab73 from './facets/git-vocab.ts'
+import * as vocab74 from './facets/meter-vocab.ts'
+import * as vocab75 from './facets/models-vocab.ts'
+import * as vocab76 from './facets/trash-vocab.ts'
 import * as provider0 from '@yaks/anthropic/provider'
 import * as provider1 from '@yaks/openai/provider'
 import * as provider2 from '@yaks/openrouter/provider'
@@ -134,31 +135,32 @@ export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/process': vocab48,
   '@yaks/project': vocab49,
   '@yaks/provenance': vocab50,
-  '@yaks/rtc': vocab51,
-  '@yaks/sandbox': vocab52,
-  '@yaks/secrets': vocab53,
-  '@yaks/session': vocab54,
-  '@yaks/spawn': vocab55,
-  '@yaks/spend': vocab56,
-  '@yaks/sqlite': vocab57,
-  '@yaks/task': vocab58,
-  '@yaks/timing': vocab59,
-  '@yaks/tmux': vocab60,
-  '@yaks/tools': vocab61,
-  '@yaks/topic': vocab62,
-  '@yaks/tracker': vocab63,
-  '@yaks/tunnel': vocab64,
-  '@yaks/ux': vocab65,
-  '@yaks/visualize': vocab66,
-  '@yaks/vocab': vocab67,
-  '@yaks/wake': vocab68,
-  'yak/app': vocab69,
-  'yak/attribution': vocab70,
-  'yak/directory': vocab71,
-  'yak/git': vocab72,
-  'yak/meter': vocab73,
-  'yak/models': vocab74,
-  'yak/trash': vocab75,
+  '@yaks/push': vocab51,
+  '@yaks/rtc': vocab52,
+  '@yaks/sandbox': vocab53,
+  '@yaks/secrets': vocab54,
+  '@yaks/session': vocab55,
+  '@yaks/spawn': vocab56,
+  '@yaks/spend': vocab57,
+  '@yaks/sqlite': vocab58,
+  '@yaks/task': vocab59,
+  '@yaks/timing': vocab60,
+  '@yaks/tmux': vocab61,
+  '@yaks/tools': vocab62,
+  '@yaks/topic': vocab63,
+  '@yaks/tracker': vocab64,
+  '@yaks/tunnel': vocab65,
+  '@yaks/ux': vocab66,
+  '@yaks/visualize': vocab67,
+  '@yaks/vocab': vocab68,
+  '@yaks/wake': vocab69,
+  'yak/app': vocab70,
+  'yak/attribution': vocab71,
+  'yak/directory': vocab72,
+  'yak/git': vocab73,
+  'yak/meter': vocab74,
+  'yak/models': vocab75,
+  'yak/trash': vocab76,
 }
 /** The providers config.ts `providing` and `serving` name, by plugin. */
 export let providerFacets: Record<string, ProviderFacet> = {

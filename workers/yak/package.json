@@ -74,6 +74,7 @@
     "@yaks/page": "0.2.30",
     "@yaks/persona": "0.2.23",
     "@yaks/phone": "0.2.30",
+    "@yaks/push": "0.2.33",
     "@yaks/pinnacle": "0.2.30",
     "@yaks/platform": "0.2.30",
     "@yaks/process": "0.2.28",

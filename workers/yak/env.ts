@@ -115,6 +115,10 @@ export type Env = {
   // key cannot be saved and the connections page says so.
   VAULT?: D1Like
   VAULT_KEY?: string
+  // yaks.app's VAPID key, the JWK of a P-256 private key that signs every
+  // browser notification (operator-alerts.ts `vapidOf`, @yaks/push). Unset,
+  // the Operator page offers no browser notifications.
+  PUSH_VAPID_KEY?: string
   // Whether we claim Client ID Metadata Documents (identity.ts `cimd`). On
   // unless it says `off`; read per request, so dropping the claim is one
   // `wrangler secret put` and no deploy of new code.

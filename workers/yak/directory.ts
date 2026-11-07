@@ -65,6 +65,7 @@ import { firstOf } from './router.ts'
 import { nameOf } from './signin.ts'
 import type { Texting } from './operator-texts.ts'
 import type { Alerting } from './operator-alerts.ts'
+import type { Subscription } from '@yaks/push'
 
 // The slugs no space or app may take, because at `<slug>.yaks.app` and at
 // `<slug>@yaks.app` (post.ts `mailFrom`) they would read as the platform
@@ -774,6 +775,12 @@ export type Row = {
   }
   sms_consent?: { person: Id; consent: string; at: string; space?: Id }
   operator_alerts?: { channel?: Alerting | null }
+  push_subscription?: {
+    person: Id
+    endpoint: string
+    p256dh: string
+    auth: string
+  }
   signed_in?: { at?: string | null; via?: string | null }
   used?: { at?: string | null }
   changed?: { at?: string | null }
@@ -2618,6 +2625,19 @@ export let directoryRows = (rows: {
     // null when they have not chosen (operator-alerts.ts `routeOf`).
     alerts: async (person: string): Promise<Alerting | null> =>
       (await one(`.entity.eid=${person}`))?.operator_alerts?.channel ?? null,
+    // The browsers this person allowed notifications on (@yaks/push), each
+    // as its `PushSubscription` gave it.
+    pushes: async (person: string): Promise<Subscription[]> =>
+      (await theirs(person, `.push_subscription.person=${person}`)).flatMap((
+        { push_subscription: sub },
+      ) =>
+        sub
+          ? [{
+            endpoint: sub.endpoint,
+            keys: { p256dh: sub.p256dh, auth: sub.auth },
+          }]
+          : []
+      ),
     // What to call this person anywhere their address must not go: the name
     // they chose in their settings or were invited under, else the front of
     // their address (signin.ts `nameOf`). An app's store is written this and never the address, so a

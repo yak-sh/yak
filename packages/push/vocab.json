@@ -1,0 +1,35 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/id": true
+  },
+  "title": "push",
+  "$defs": {
+    "push_subscription": {
+      "component": true,
+      "type": "object",
+      "description": "a browser that allowed notifications for its person: where to push, and the keys a message to it is encrypted with; removed when the push service says it is gone",
+      "properties": {
+        "person": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "description": "whose browser it is"
+        },
+        "endpoint": {
+          "type": "string",
+          "identity": true,
+          "description": "the push service's URL for this browser; the eid is derived from it, so a browser subscribing again is one row"
+        },
+        "p256dh": {
+          "type": "string",
+          "description": "the browser's P-256 public key, base64url"
+        },
+        "auth": {
+          "type": "string",
+          "description": "the browser's 16-byte auth secret, base64url"
+        }
+      }
+    }
+  }
+}

@@ -48,7 +48,14 @@ import {
   type Texting,
   texts,
 } from './operator-texts.ts'
-import { type Alerting, alertsRow, routeOf } from './operator-alerts.ts'
+import {
+  type Alerting,
+  alertsRow,
+  pushRow,
+  routeOf,
+  vapidOf,
+} from './operator-alerts.ts'
+import { publicKey, type Subscription } from '@yaks/push'
 import { given } from './operator-name.ts'
 import {
   backendOf,
@@ -154,7 +161,13 @@ export let keepCard = (back: string) =>
 
 // One of a few to pick, as a radio: its name in bold, what it means beside
 // it, `also` on its input.
-type Offer = { id: string; name: string; about: string; checked: boolean }
+type Offer = {
+  id: string
+  name: string
+  about: string
+  checked: boolean
+  also?: Record<string, unknown>
+}
 let choice = (
   name: string,
   o: Offer,
@@ -187,7 +200,7 @@ let choices = (id: string, label: string, name: string, offers: Offer[]) =>
     Form.Field,
     { role: 'radiogroup', 'aria-labelledby': id },
     h(Form.Label, { id }, label),
-    offers.map((o) => choice(name, o)),
+    offers.map((o) => choice(name, o, o.also)),
   )
 
 // The texts' terms, their addresses links to yaks.app's own pages.
@@ -215,7 +228,7 @@ export let textsCard = (
     h(
       'p',
       null,
-      'Text your Operator about anything, and it answers by text; call it, and it answers by voice. It also texts you its alerts, unless you choose email for them, and apps you build can text you reminders. You can still use chat and email.',
+      'Text your Operator about anything, and it answers by text; call it, and it answers by voice. It also texts you its alerts, unless you choose another way for them above, and apps you build can text you reminders. You can still use chat and email.',
     ),
     from || call
       ? h(
@@ -274,16 +287,33 @@ export let textsCard = (
 
 // Where a person chooses how their Operators tell them something away from
 // the page (operator-alerts.ts): what they would be told by when they have
-// not chosen is checked.
+// not chosen is checked. Browser notifications are offered when yaks.app has
+// a VAPID key (`key`, its public half), which the page's script subscribes
+// this browser with before the choice is saved (`settingsScript`).
 export let alertsCard = (
   at: string,
   chosen: Alerting | null,
   consent: Texting | null,
   email: string | null,
+  browsers: Subscription[] = [],
+  key: string | null = null,
 ) => {
-  let route = routeOf(chosen, consent, email)
+  let route = routeOf(chosen, consent, email, browsers)
   let current = chosen ?? route?.by ?? 'updates'
-  let offers = [
+  let n = browsers.length
+  let offers: Omit<Offer, 'checked'>[] = [
+    ...key
+      ? [{
+        id: 'push',
+        name: 'Browser notification',
+        about: n
+          ? `on the ${
+            n == 1 ? 'browser' : `${n} browsers`
+          } you allowed; saving here allows this one too`
+          : 'on this browser, once you allow it',
+        also: { 'data-push': key, 'data-at': `${at}?push=1` },
+      }]
+      : [],
     {
       id: 'text',
       name: 'Text',
@@ -545,6 +575,21 @@ export let operatorAnswer = async (
       return Response.json({
         channel: await directoryOf(env.STORE).alerts(person),
       })
+    } catch (e) {
+      if (!(e instanceof CallError)) throw e
+      return Response.json({ message: e.message }, { status: 400 })
+    }
+  }
+  // A browser the person allowed notifications on, as its
+  // `pushManager.subscribe` gave it.
+  if (q.has('push') && req.method == 'POST') {
+    try {
+      let person = who.person ?? ''
+      let dir = directoryOf(env.STORE)
+      await dir.apply({
+        entities: [pushRow(person, await req.json().catch(() => null))],
+      }, vouched(who))
+      return Response.json({ browsers: (await dir.pushes(person)).length })
     } catch (e) {
       if (!(e instanceof CallError)) throw e
       return Response.json({ message: e.message }, { status: 400 })
@@ -834,15 +879,17 @@ export let conversationOf = async (
 export let operatorBody = async (env: Env, space: Space, who: Who) => {
   let at = managePath('operator', space.slug)
   let dir = directoryOf(env.STORE)
-  let [consent, { pa, beyond }, phone, platform, chosen, email] = await Promise
-    .all([
-      dir.texting(who.person ?? ''),
-      reachOf(dir, space, who.person ?? ''),
-      phoneAt(env, space.sender),
-      phoneAt(env),
-      dir.alerts(who.person ?? ''),
-      dir.emailAt(who.person ?? ''),
-    ])
+  let [consent, { pa, beyond }, phone, platform, chosen, email, browsers] =
+    await Promise
+      .all([
+        dir.texting(who.person ?? ''),
+        reachOf(dir, space, who.person ?? ''),
+        phoneAt(env, space.sender),
+        phoneAt(env),
+        dir.alerts(who.person ?? ''),
+        dir.emailAt(who.person ?? ''),
+        dir.pushes(who.person ?? ''),
+      ])
   let from = phone?.transport().number
   let call = platform?.caller ? platform.transport().number : undefined
   let address = mailFrom(space.slug, null, env)
@@ -875,7 +922,7 @@ export let operatorBody = async (env: Env, space: Space, who: Who) => {
     talks(space.slug),
     nameCard(at, operator),
     voiceCard(at, space, offered(env, space)),
-    alertsCard(at, chosen, consent, email),
+    alertsCard(at, chosen, consent, email, browsers, pushKey(env)),
     textsCard(at, consent, from, call),
   ]) + settingsScript
 }
@@ -917,8 +964,18 @@ export let elsewhere = (beyond: Reach[], pa: boolean) => {
 
 let LIST = new Intl.ListFormat('en', { type: 'conjunction' })
 
-// The settings page's script: the name, the voice and the texts choice, and
-// each voice's sample played in place of whichever was playing.
+// The public half of yaks.app's VAPID key, which a browser subscribes with,
+// or null when browser notifications are not switched on.
+let pushKey = (env: Env) => {
+  let vapid = vapidOf(env)
+  return vapid ? publicKey(vapid.key) : null
+}
+
+// The settings page's script: the name, the voice, the alerts and the texts
+// choice, and each voice's sample played in place of whichever was playing.
+// Choosing browser notifications first allows them on this browser: it
+// registers the service worker that shows them (public/push.js), subscribes
+// with yaks.app's VAPID key and keeps the subscription (\`?push\`).
 let settingsScript = `<script type="module">
 let playing = new Audio()
 for (let play of document.querySelectorAll('[data-sample]')) {
@@ -948,7 +1005,17 @@ let fit = () => {
 }
 voice?.addEventListener('change', fit)
 fit()
-for (let form of document.querySelectorAll('#texts, #name, #voice')) {
+let allow = async (offer) => {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('This browser cannot show notifications. Choose another way.')
+  if (await Notification.requestPermission() != 'granted') throw new Error('Notifications are blocked for yaks.app in this browser. Allow them in its settings, then save again.')
+  let worker = await navigator.serviceWorker.register('/push.js')
+  await navigator.serviceWorker.ready
+  let key = Uint8Array.from(atob(offer.dataset.push.replaceAll('-', '+').replaceAll('_', '/')), (c) => c.charCodeAt(0))
+  let sub = await worker.pushManager.getSubscription() ?? await worker.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key })
+  let response = await fetch(offer.dataset.at, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sub) })
+  if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? 'This browser could not be allowed. Try again.')
+}
+for (let form of document.querySelectorAll('#texts, #name, #voice, #alerts')) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
     let said = form.querySelector('[data-status]')
@@ -956,6 +1023,8 @@ for (let form of document.querySelectorAll('#texts, #name, #voice')) {
     if (e.submitter?.name == 'stop') body.set('stop', '1')
     said.textContent = 'Saving…'
     try {
+      let offer = form.querySelector('[name=channel][value=push]:checked')
+      if (offer) await allow(offer)
       let response = await fetch(form.action, { method: 'POST', body })
       let answer = await response.json().catch(() => null)
       if (!response.ok) throw new Error(answer?.message ?? 'Your choice could not be saved. Try again.')

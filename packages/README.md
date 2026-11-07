@@ -467,6 +467,10 @@ grouped approximately by function, **not** by dependency order.
   a provider plugin takes its signed webhook at `/<via>/webhook`. Phone names no
   provider. A provider that takes calls says when one rings, answers it with its
   audio streamed, and names its stream's frames.
+- **[@yaks/push](./push)** — Web Push: a browser's subscription as
+  `push_subscription{person, endpoint, p256dh, auth}`, and `push()`, which
+  encrypts a message for that browser (RFC 8291) and signs it with the site's
+  VAPID key (RFC 8292) through a fetch the caller may lend.
 
 - **[@yaks/inbox](./inbox)** — A person's inbox, as a plugin a config may leave
   out: the thread and attention policy (Needs you, Replies, Updates and Recent

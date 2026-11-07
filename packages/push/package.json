@@ -1,0 +1,20 @@
+{
+  "name": "@yaks/push",
+  "version": "0.2.33",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./testing": "./testing.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Web Push: a browser's subscription, kept on its person, and a message pushed to it, encrypted for that browser and signed with the site's VAPID key.",
+  "dependencies": {
+    "@yaks/graph": "0.2.33",
+    "@yaks/vocab": "0.2.32"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/testing": "0.2.30"
+  }
+}

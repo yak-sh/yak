@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
 import type { Binding } from '@yaks/cloudflare-mail'
 import type { Item } from '@yaks/model'
 import type { Bundle } from '@yaks/graph'
@@ -13,6 +13,8 @@ import { notificationSend } from './operator-alerts.ts'
 import { operatorAnswer, operatorBody } from './operator-page.ts'
 import { endpoints } from './endpoints.ts'
 import { PER_SEGMENT } from './text-spend.ts'
+import { vapidKey } from '@yaks/push'
+import { browser } from '@yaks/push/testing'
 
 // A space's Operator tells its person something away from the page, the way
 // they chose to be alerted (T-145056).
@@ -89,9 +91,12 @@ let told = async (text: string) => {
   let [row] = await store.g.get([said.notification])
   return { ...said, row }
 }
-let page = async (view: string, fields: Record<string, string>) => {
-  let body = new FormData()
-  for (let [k, v] of Object.entries(fields)) body.set(k, v)
+let page = async (view: string, fields: Record<string, string> | object) => {
+  let body: BodyInit = JSON.stringify(fields)
+  if (view != 'push') {
+    body = new FormData()
+    for (let [k, v] of Object.entries(fields)) body.set(k, String(v))
+  }
   let response = (await operatorAnswer(
     new Request(`https://yaks.app/manage/ana/operator?${view}=1`, {
       method: 'POST',
@@ -179,6 +184,87 @@ test("a wake-up's outcome reaches the person the way they chose", () => {
   assertEquals(woke.map((t) => t.text), [
     `Your weekly report is ready.\n\n${textSigned(space)}`,
   ])
+})
+
+// A browser notification, on each browser the person allowed (T-147488):
+// two browsers at a push service in this process, each opening what it is
+// handed with its own keys.
+let pushes: Record<string, number> = {}
+let heard: { at: string; request: Request }[] = [], refused: string[] = []
+let pushService = endpoints(globalThis).open((req) => {
+  let at = new URL(req.url).pathname, status = pushes[at] ?? 201
+  if (status == 201) heard.push({ at, request: req })
+  else refused.push(at)
+  return new Response(null, { status })
+})
+let [laptop, phone] = await Promise.all([
+  browser(`${pushService.url}/laptop`),
+  browser(`${pushService.url}/phone`),
+])
+let offerless = await operatorBody(env, space, held)
+env.PUSH_VAPID_KEY = JSON.stringify(await vapidKey())
+let offered = await operatorBody(env, space, held)
+let notAllowed = await page('push', { endpoint: 'http://push.invalid' })
+let allowed = [
+  await page('push', laptop.subscription),
+  await page('push', phone.subscription),
+  await page('push', phone.subscription),
+]
+await page('alerts', { channel: 'push' })
+let chosePush = await operatorBody(env, space, held)
+let opened = async () =>
+  Object.fromEntries(
+    await Promise.all(
+      take(heard).map(async ({ at, request }) => {
+        let tab = at.endsWith('laptop') ? laptop : phone
+        return [at.slice(1), JSON.parse((await tab.opened(request)).payload)]
+      }),
+    ),
+  )
+let byPush = await told('Your report is ready.')
+let onBoth = await opened()
+pushes['/laptop'] = 410
+let afterGone = await told('The laptop is gone.')
+let onPhone = await opened()
+let goneOnce = take(refused)
+let left = await dir.pushes(person)
+pushes['/phone'] = 404
+take(texted)
+let fellBack = await told('Every browser is gone.')
+let fallen = [take(heard), take(refused), take(texted).map((t) => t.to)]
+await pushService.stop()
+test('a person allows browser notifications on the Operator page, one subscription per browser', () => {
+  assertEquals(offerless.includes('value="push"'), false)
+  assertStringIncludes(offered, 'value="push"')
+  assertStringIncludes(offered, 'on this browser, once you allow it')
+  assertEquals(notAllowed.status, 400)
+  assertEquals(allowed.map((a) => a.said), [{ browsers: 1 }, { browsers: 2 }, {
+    browsers: 2,
+  }])
+  assertMatch(chosePush, /value="push"[^>]*checked/)
+  assertStringIncludes(chosePush, 'on the 2 browsers you allowed')
+})
+test('an alert to a person who chose push is a notification on each browser they allowed', () => {
+  assertEquals(byPush.reaches, 'push')
+  assertEquals(Object.keys(onBoth).sort(), ['laptop', 'phone'])
+  let shown = onBoth.phone
+  assertEquals([shown.title, shown.body], [
+    space.operator,
+    'Your report is ready.',
+  ])
+  assertStringIncludes(shown.url, '/manage/ana/updates')
+  assertEquals(shown.tag, byPush.notification)
+  assertEquals(typeof (byPush.row.delivered as { at: string }).at, 'string')
+})
+test('a browser that took back its subscription is dropped, and the rest still hear', () => {
+  assertEquals([goneOnce, Object.keys(onPhone)], [['/laptop'], ['phone']])
+  assertEquals(left.map((b) => b.endpoint), [phone.subscription.endpoint])
+  assertEquals(typeof (afterGone.row.delivered as { at: string }).at, 'string')
+})
+test('when every browser allowed is gone, the alert goes the next way, as for a stopped number', async () => {
+  assertEquals(fallen, [[], ['/phone'], [ANA]])
+  assertEquals(await dir.pushes(person), [])
+  assertEquals(typeof (fellBack.row.delivered as { at: string }).at, 'string')
 })
 
 // A spent budget sends nothing and says why on the notification.
