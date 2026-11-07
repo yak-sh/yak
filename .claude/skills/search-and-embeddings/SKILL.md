@@ -58,6 +58,12 @@ these are the words for it:
   they stay findable by words: tool results (`result`, packages/tools) and
   drafts. Text nobody looks up by meaning costs vectors, index time and lookup
   time for nothing.
+- `found: false` on a component keeps its entities out of every search, by
+  words and by meaning, while a read naming the component still answers them.
+  @yaks/kernel's `quarantined` is one, so a quarantined entity of any kind is
+  out of the `search` tool, a bare word in a query, `.near` and memory recall
+  at once: @yaks/fts tests each match's owner against it, and @yaks/embedding
+  makes no vector of it.
 - Vectors are derived data: per store, never synced, never backed up, rebuilt
   from the text. So the box and a yaks.app store may use different models.
 

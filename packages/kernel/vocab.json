@@ -302,6 +302,7 @@
     "quarantined": {
       "component": true,
       "type": "object",
+      "found": false,
       "properties": {
         "at": {
           "type": "string",

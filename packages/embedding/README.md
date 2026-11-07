@@ -197,6 +197,12 @@ is embedded by its content and no other entity carrying `content` is. The same
 list makes @yaks/fts index that text, so what a bare word finds, `.near` finds
 too.
 
+An entity wearing a component marked `embed: false` gets no vector, and neither
+does one wearing a component marked `found: false`, which no search finds
+(@yaks/kernel's `quarantined`). Each field carries those components as its
+`not`; the sweep drops a vector when one is put on and makes it again when it
+comes off.
+
 Each entity gets one vector from its nonblank selected fields joined with
 newlines. The source query reads component columns directly, except a column the
 host reads through an expression: `resolved(fields, host.derived)` gives such a

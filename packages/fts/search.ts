@@ -51,7 +51,14 @@ import {
   when,
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
-import { type Field, type Index, indexes, indexName, worded } from './fields.ts'
+import {
+  type Field,
+  type Index,
+  indexes,
+  indexName,
+  trim,
+  worded,
+} from './fields.ts'
 import { excerpt, match, named } from './term.ts'
 import { cut } from './snippet.ts'
 
@@ -115,6 +122,17 @@ export let permitted = (
     }))
     : lit(true)
 }
+
+// An owner wearing none of `not`, the components whose wearers no word search
+// finds (./fields.ts `unfound`): a seek per component, as the tombstone's is.
+export let unworn = (comps: string[] = [], owner: Expr): Expr[] =>
+  comps.map((comp) =>
+    not(exists(select({
+      cols: [lit(1)],
+      from: table(comp, '__unfound'),
+      where: eq(col('entity', '__unfound'), owner),
+    })))
+  )
 
 // Ranking revisits each index for its page, ties and exact names. Bind each
 // admission relation once, including when several indexes share its scope.
@@ -309,6 +327,7 @@ let chosen = (
     return and(
       op('match', col(fts), val(expr)),
       permitted(name, owner, sources),
+      ...unworn(arms.find((arm) => arm.name == name)!.not, owner),
       ...opts.screen ? [eligible(owner)] : [],
       not(exists(select({
         cols: [lit(1)],
@@ -593,14 +612,16 @@ export let find = (
   }))
   // An index stands once its component's first write made it, and a scope
   // reads a component no table stands for as worn by nobody (@yaks/sqlite).
+  let names = new Set(tables.map((o) => o.name))
   let live = fields.filter((f) => (f.on ?? f.comp) in content)
+    .map((f) => trim(f, (comp) => names.has(comp)))
   let stmt = hits(live, text, {
     plan: db.file ? 'sort' : 'index',
     content,
     ...scope && {
       screens: screens(live, vocab!, {
         ...scope,
-        absent: absentFrom(vocab!, new Set(tables.map((o) => o.name))),
+        absent: absentFrom(vocab!, names),
       }),
     },
     ...opts,

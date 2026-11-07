@@ -10,6 +10,11 @@
 // `content.body`, so `entry_fts` indexes the body of every entity that is an
 // entry, and of no other entity carrying `content`.
 //
+// A component the vocabulary marks `found: false` (a quarantine) keeps its
+// wearers out of every word search: their text stays indexed, so the mark
+// coming off finds them again at once, and each field carries those components
+// as its `not`, which a match tests its owner against.
+//
 // A property can also keep a substring index (`contains: true`): an FTS5
 // trigram index over its text, which a `~=` test reads instead of every value
 // (`grams()`). Its fields are marked `trigram`, and group into indexes of their
@@ -24,6 +29,8 @@ export type Field = {
   comp: string
   prop: string
   on?: string
+  // components whose wearers no word search finds (vocabulary `found: false`)
+  not?: string[]
   trigram?: true
 }
 
@@ -52,15 +59,27 @@ export let fields = (vocab: Vocab, pick: Pick = searched): Field[] => [
     vocab.props(comp)
       .map((prop) => vocab.prop(comp, prop)!)
       .filter(pick)
-      .map((c) => ({ comp, prop: c.prop }))
+      .map((c) => ({ comp, prop: c.prop, ...unfound(vocab) }))
   ),
   ...vocab.all.flatMap((on) =>
     (vocab.comp(on)?.search ?? []).map((name) => {
       let [comp, prop] = name.split('.')
-      return { comp, prop, on }
+      return { comp, prop, on, ...unfound(vocab) }
     })
   ),
 ]
+
+// What keeps an entity out of a word search: the components the vocabulary
+// marks `found: false`, as the `not` of a field (none, no key).
+export let unfound = (vocab: Vocab): { not?: string[] } => {
+  let not = vocab.all.filter((comp) => vocab.comp(comp)?.found === false)
+  return not.length ? { not } : {}
+}
+
+// `f` excluding only the components that stand: one no table stands for yet
+// (@yaks/sqlite makes it on its first write) is worn by nobody.
+export let trim = (f: Field, stands: (comp: string) => boolean): Field =>
+  !f.not || f.not.every(stands) ? f : { ...f, not: f.not.filter(stands) }
 
 // The properties that keep a substring index, the vocabulary's `contains`,
 // by component then declaration order. `pick` narrows them.
@@ -92,17 +111,26 @@ export type Index = {
   comp: string
   props: string[]
   on?: string
+  // components whose wearers it never answers a word for (`Field.not`)
+  not?: string[]
   trigram?: true
 }
 
 // The fields grouped into indexes, one per name, in first-seen order.
 export let indexes = (fields: Field[]): Index[] => {
   let by = new Map<string, Index>()
-  for (let { comp, prop, on, trigram } of fields) {
+  for (let { comp, prop, on, not, trigram } of fields) {
     let name = on ?? comp
     let key = trigram ? gramName(name) : name
     let ix = by.get(key) ??
-      { name, comp, props: [], ...on ? { on } : {}, ...trigram && { trigram } }
+      {
+        name,
+        comp,
+        props: [],
+        ...on ? { on } : {},
+        ...not?.length ? { not } : {},
+        ...trigram && { trigram },
+      }
     ix.props.push(prop)
     by.set(key, ix)
   }

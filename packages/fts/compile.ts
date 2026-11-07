@@ -56,13 +56,14 @@ import {
   Unsupported,
   val,
 } from '@yaks/sql'
-import { permitted, ranked, screens } from './search.ts'
+import { permitted, ranked, screens, unworn } from './search.ts'
 import {
   type Field,
   indexes,
   indexName,
   tableOf,
   tailOf,
+  trim,
   worded,
 } from './fields.ts'
 import { grammed, named, term } from './term.ts'
@@ -168,12 +169,14 @@ export let search = (
   let page: number | null = null
   let ranking = false
   // The fields whose index stands: one over a component no table stands for
-  // yet (@yaks/sql `Site.absent`) holds nothing, and has no index to ask.
+  // yet (@yaks/sql `Site.absent`) holds nothing, and has no index to ask, and
+  // nobody wears such a component to be left out by it.
   let live = fields
   let seen = (site: Site) => {
     let gone = new Set(site.absent)
     live = gone.size
       ? fields.filter((f) => !gone.has(f.comp) && !(f.on && gone.has(f.on)))
+        .map((f) => trim(f, (comp) => !gone.has(comp)))
       : fields
   }
   let rank = (): number[] => {
@@ -259,7 +262,7 @@ export let search = (
           }
         }
         return or(
-          ...indexes(worded(live)).map(({ name }) => {
+          ...indexes(worded(live)).map(({ name, not }) => {
             let fts = indexName(name)
             return among(
               site.owner,
@@ -269,6 +272,7 @@ export let search = (
                 where: and(
                   op('match', col(fts), val(t)),
                   permitted(name, col('rowid', fts), sources),
+                  ...unworn(not, col('rowid', fts)),
                   ...allowed
                     ? [among(
                       col('rowid', fts),

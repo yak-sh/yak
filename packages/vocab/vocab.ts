@@ -829,6 +829,7 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
       wire: wire(name),
       computed: d.computed === true,
       embed: d.embed !== false,
+      found: d.found !== false,
       journal: d.journal !== false,
       kind: !!d.kind,
       mark: mark(name),

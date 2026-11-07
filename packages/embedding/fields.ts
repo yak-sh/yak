@@ -49,7 +49,8 @@ export type Field = {
   comp: string
   prop: string
   on?: string
-  /** components whose wearers are never embedded (vocabulary `embed: false`) */
+  /** components whose wearers are never embedded (vocabulary `embed: false`,
+   * or `found: false`, which no search finds) */
   not?: string[]
   text?: (stored: Expr) => Expr
 }
@@ -106,9 +107,13 @@ export let fields = (vocab: Vocab, pick: Pick = textual): Field[] => [
 ]
 
 /** What keeps an entity from being embedded: the components the vocabulary
- * marks `embed: false`, as the `not` of a field (none, no key). */
+ * marks `embed: false`, or `found: false` (found by no search, so no vector
+ * is made of it either), as the `not` of a field (none, no key). */
 export let unembedded = (vocab: Vocab): { not?: string[] } => {
-  let not = vocab.all.filter((comp) => vocab.comp(comp)?.embed === false)
+  let not = vocab.all.filter((comp) => {
+    let c = vocab.comp(comp)
+    return c?.embed === false || c?.found === false
+  })
   return not.length ? { not } : {}
 }
 
@@ -159,7 +164,7 @@ export let present = (
 let WS = ' \t\n\r\v\f'
 
 // The condition that leaves out entities wearing a component marked
-// `embed: false`.
+// `embed: false` or `found: false`.
 export let allowed = (f: Field, owner: Expr = col('entity', 'c')): Expr[] =>
   (f.not ?? []).map((comp) =>
     not(exists(select({

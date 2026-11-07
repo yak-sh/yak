@@ -6,7 +6,7 @@ import { render } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { objects, storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
-import { fields, schema, search } from './mod.ts'
+import { fields, find, schema, search } from './mod.ts'
 
 test('storage composes FTS explicitly for document and non-document prose', () => {
   let vocab = loadVocab({
@@ -99,4 +99,47 @@ test('.order=search puts the closest match first', () => {
   assertEquals(found('mug .order=-search'), ['far', 'near'])
   assertEquals(found("o'mug .order=search"), ['near'])
   assertThrows(() => found('.doc .order=search'), Error, 'nothing to rank by')
+})
+
+test('a component marked found: false keeps its wearers out of every word search', () => {
+  let vocab = loadVocab({
+    $defs: {
+      doc: {
+        component: true,
+        type: 'object',
+        properties: { title: { type: 'string', search: true } },
+      },
+      set: { component: true, type: 'object', found: false },
+    },
+  })
+  let db = open(':memory:')
+  using _close = { [Symbol.dispose]: () => db.close() }
+  let text = fields(vocab)
+  let indexes = schema(text)
+  let store = storage(db, vocab, {
+    extend: [search(text, db)],
+    over: () => indexes,
+  })
+  store.install()
+  store.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'kept' }, doc: { title: 'use grams' } },
+      { entity: { eid: 'gone' }, doc: { title: 'use grams, gate it' } },
+    ])
+  )
+  let read = (line: string) => store.read(line).map((b) => b.entity.eid).sort()
+  let hits = () => find(db, text, 'grams').map((h) => h.entity).sort()
+  // Before anything wears it, no table stands for it to be asked.
+  assertEquals(read('grams'), ['gone', 'kept'])
+  assertEquals(hits(), ['gone', 'kept'])
+  store.tx((tx) => tx.patch([{ entity: { eid: 'gone' }, set: {} }]))
+  assertEquals(read('grams'), ['kept'])
+  assertEquals(read('grams .limit=5'), ['kept'])
+  assertEquals(read('grams .order=search'), ['kept'])
+  assertEquals(hits(), ['kept'])
+  // Only words leave it out: a read that names it still answers it.
+  assertEquals(read('.set'), ['gone'])
+  // Its text stayed indexed, so the mark coming off finds it at once.
+  store.tx((tx) => tx.patch([{ entity: { eid: 'gone' }, set: null }]))
+  assertEquals(read('grams'), ['gone', 'kept'])
 })

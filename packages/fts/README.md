@@ -56,6 +56,13 @@ index text already written when an entity becomes an entry and remove it when it
 stops being one. Whichever row a transaction writes second does the indexing, so
 the order of a bundle's components does not matter.
 
+A component marked `found: false` (@yaks/vocab) keeps its wearers out of every
+word search: a bare word in a query, its ranking and `find()` all leave out an
+entity wearing it, while a read that names it still answers it. @yaks/kernel's
+`quarantined` is one. Its wearers' text stays indexed, so the mark coming off
+finds them again at once; `fields(vocab)` carries those components on each field
+as its `not`.
+
 ## Substring indexes
 
 A `~=` test (`.content.body~=wyrmling`) matches a substring, which a word index
