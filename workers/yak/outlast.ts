@@ -47,13 +47,25 @@ type Job = { asked: string; ended: Promise<Ended>; heard: boolean; late?: true }
 
 let UNREAD = 'unread'
 
+/** Run `callback` in `ms`, answering how to cancel it. */
+export type After = (
+  ms: number,
+  callback: () => void | Promise<void>,
+) => () => void
+
+let timer: After = (ms, callback) => {
+  let t = setTimeout(callback, ms)
+  return () => clearTimeout(t)
+}
+
 /** One key's calls: one run at a time, joined by every call that arrives while
  * it runs, each waiting at most `patience`. `run` never rejects; a refusal or
  * a failure is how it ended. */
 export let outlasting = (keep: Keep, {
   patience = PATIENCE,
   now = Date.now,
-}: { patience?: number; now?: () => number } = {}) => {
+  after = timer,
+}: { patience?: number; now?: () => number; after?: After } = {}) => {
   let job: Promise<Job> | null = null
   let begin = async (run: () => Promise<Ended>): Promise<Job> => {
     let unread = await keep.get<Unread>(UNREAD)
@@ -81,18 +93,18 @@ export let outlasting = (keep: Keep, {
   return async (run: () => Promise<Ended>): Promise<Heard> => {
     if (!job) {
       let mine: Promise<Job> = begin(run).then((j) => {
-        j.ended.then((out) => setTimeout(() => settle(mine, j, out), 0))
+        j.ended.then((out) => after(0, () => settle(mine, j, out)))
         return j
       })
       job = mine
     }
     let j = await job
-    let timer: ReturnType<typeof setTimeout> | undefined
+    let cancel = () => {}
     let out = await Promise.race([
       j.ended,
-      new Promise<null>((done) => timer = setTimeout(done, patience, null)),
+      new Promise<null>((done) => cancel = after(patience, () => done(null))),
     ])
-    clearTimeout(timer)
+    cancel()
     if (!out) return { running: j.asked }
     j.heard = true
     return { ...out, asked: j.asked, ...j.late ? { late: true as const } : {} }

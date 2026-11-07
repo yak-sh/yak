@@ -1,5 +1,11 @@
-import { equal, test } from '@yaks/testing'
-import { type Ended, type Keep, outlasted, outlasting } from './outlast.ts'
+import { clock, equal, test } from '@yaks/testing'
+import {
+  type Ended,
+  type Keep,
+  KEPT,
+  outlasted,
+  outlasting,
+} from './outlast.ts'
 
 let memory = (): Keep & { held: Map<string, unknown> } => {
   let held = new Map<string, unknown>()
@@ -26,62 +32,70 @@ let runs = () => {
   return { run, end: (out: Ended) => end(out), begun: () => begun }
 }
 
-let tick = () => new Promise((done) => setTimeout(done, 5))
-let at = (ms: number) => () => ms
+// The object's calls, on a clock the test advances.
+let calls = (keep: Keep, patience: number) => {
+  let c = clock()
+  return { c, call: outlasting(keep, { patience, now: c.now, after: c.after }) }
+}
+
+let zero = '1970-01-01T00:00:00.000Z'
 
 test('a call within patience is answered with its own answer', async () => {
-  let call = outlasting(memory(), { patience: 50, now: at(0) })
+  let { call } = calls(memory(), 50)
   let heard = await call(() => Promise.resolve(body('deployed v42')))
-  equal(heard, { ...body('deployed v42'), asked: '1970-01-01T00:00:00.000Z' })
+  equal(heard, { ...body('deployed v42'), asked: zero })
 })
 
 test('a call past patience is still running; the next joins it and hears how it ended', async () => {
   let keep = memory()
-  let call = outlasting(keep, { patience: 20, now: at(0) })
+  let { c, call } = calls(keep, 20)
   let r = runs()
-  equal(await call(r.run), { running: '1970-01-01T00:00:00.000Z' })
+  let first = call(r.run)
+  await c.advance(20)
+  equal(await first, { running: zero })
   let joined = call(r.run)
-  await tick()
+  await c.advance(0)
   r.end(body('deployed v42'))
   equal((await joined as { said: unknown }).said, body('deployed v42').said)
-  await tick()
+  await c.advance(0)
   equal([r.begun(), keep.held.size], [1, 0])
 })
 
 test('an answer nobody heard goes to the next call, once, then calls run again', async () => {
-  let keep = memory()
-  let now = 0
-  let call = outlasting(keep, { patience: 10, now: () => now })
+  let { c, call } = calls(memory(), 10)
   let r = runs()
-  await call(r.run)
+  let first = call(r.run)
+  await c.advance(10)
+  await first
   r.end({ refused: { code: 'arguments', text: 'could not compile' } })
-  await tick()
+  await c.advance(0)
   equal(await call(r.run), {
     refused: { code: 'arguments', text: 'could not compile' },
-    asked: '1970-01-01T00:00:00.000Z',
+    asked: zero,
     late: true,
   })
-  await tick()
+  await c.advance(0)
   let again = call(r.run)
-  await tick()
+  await c.advance(0)
   r.end(body('deployed v43'))
   equal(((await again) as { late?: true }).late, undefined)
   equal(r.begun(), 2)
 })
 
 test('an answer kept past its time is dropped and the call runs', async () => {
-  let keep = memory()
-  let now = 0
-  let call = outlasting(keep, { patience: 10, now: () => now })
+  let { c, call } = calls(memory(), 10)
   let r = runs()
-  await call(r.run)
+  let first = call(r.run)
+  await c.advance(10)
+  await first
   r.end(body('deployed v42'))
-  await tick()
-  now = 16 * 60_000
+  await c.advance(0)
+  await c.advance(KEPT)
   let fresh = call(r.run)
-  await tick()
+  await c.advance(0)
   r.end(body('deployed v43'))
   equal(((await fresh) as { said: unknown }).said, body('deployed v43').said)
+  equal(r.begun(), 2)
 })
 
 test('the door says a late answer was asked earlier, and a refusal stays one', async () => {
