@@ -114,6 +114,10 @@ person, search, project)` and
 is addressed to the project reaches them, and its unassigned decisions are
 theirs to answer.
 
+A door that shows only some threads says which in `search.within`: the
+components a thread's candidate must hold. `{within: ['task', 'decision']}`
+reads the threads of tasks and decisions, and never a conversation's entries.
+
 A **thread summary** is an exact policy record without historical message
 bodies. `readInbox` reads metadata on the server and returns the same lanes,
 ordering, unread state and blockers as `threads`. Text and direction search read

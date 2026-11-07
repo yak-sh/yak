@@ -195,7 +195,7 @@ test('a pass after each commit queues what a whole pass would, reading only what
     equal(wrote, whole)
     return reads - before
   }
-  equal(await commit([]) > 50, true)
+  equal(await commit([]) > 10, true)
   // A row the inbox never reads, the decision's words, a reply to it, and
   // the work that held it up done: each reads what it touched, and the new
   // letter's replies and predecessor, never the inbox again.

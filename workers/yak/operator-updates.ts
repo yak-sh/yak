@@ -108,8 +108,12 @@ let updateOf = (t: Thread, row: Bundle | undefined): Update => {
   }
 }
 
+// What its Updates show: its tasks, its questions and what it tells. Their
+// chats land in Replies, which is the chat app's, so they are never read here.
+let WITHIN = ['task', 'decision', 'notification']
+
 let threadsOf = async (store: Store, person: string, space: string) =>
-  (await readInbox(store.g, store.vocab, person, {}, space))
+  (await readInbox(store.g, store.vocab, person, { within: WITHIN }, space))
     .filter((t) => LANES.includes(t.lane))
 
 /** A person's Updates in a space, newest first with what needs them ahead,

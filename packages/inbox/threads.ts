@@ -9,6 +9,9 @@ export type Search = {
   direction?: Direction
   all?: boolean
   lane?: Lane
+  /** Only the threads of candidates holding one of these components, so a
+   * door that shows only tasks and decisions never reads a conversation. */
+  within?: string[]
 }
 export type Thread<R extends Row = Row> = {
   eid: string

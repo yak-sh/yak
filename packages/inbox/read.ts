@@ -5,7 +5,6 @@ import type { Vocab } from '@yaks/vocab'
 import { tablesOf } from '@yaks/archetype/sets'
 import { listed } from '@yaks/query'
 import {
-  boundedReads,
   candidates,
   dependents,
   discussion,
@@ -141,11 +140,20 @@ let batches = (all: Row[]): Row[][] => {
   for (let i = 0; i < all.length; i += 256) out.push(all.slice(i, i + 256))
   return out
 }
+// A server read asks each round once. boundedReads splits a subscription's
+// query to fit a socket message, and here every part would only scan the same
+// tables again.
+let whole = (rows: Row[], read: (rows: Row[]) => string): string[] => {
+  let query = rows.length ? read(rows) : ''
+  return query ? [query] : []
+}
 let membership = (query: string): string =>
   query.replace(/&\?\w+/g, '') + '&.fields=entity.eid'
 
 let reads = (tx: ReadTx, has: Words, mode: Mode) => {
   let comps = components.filter(has)
+  let worded = comps.filter((c) => has(`${c}.body`))
+  let bodiless = comps.filter((c) => !worded.includes(c))
   let fields = [
     'entity.eid',
     ...(has('entity.archetype') ? ['entity.archetype'] : []),
@@ -199,26 +207,33 @@ let reads = (tx: ReadTx, has: Words, mode: Mode) => {
         }
         for (let comp of comps) if (tables.has(comp)) r.comps[comp] ??= {}
       }
-      // A projection cannot tell absent from present-with-no-selected-values.
-      // Ask membership only for the components it did not carry; no body is
-      // read merely to prove that doc/content (or a zero-property mark) exists.
-      for (let comp of comps) {
-        let missing = part.filter((r) =>
-          !classified.has(r.eid) && !projected.get(r.eid)?.comps[comp]
+      // A projection cannot tell absent from present-with-no-selected-values,
+      // and a row no archetype classifies says nothing of what it holds. Its
+      // bodiless components come in one get, which reads only those its rows
+      // hold, rather than a query per component; a worded one (doc, content)
+      // is asked by membership, so no body is read merely to prove it exists.
+      let mark = (eid: string, comp: string) => {
+        let r = projected.get(eid)
+        if (!r) projected.set(eid, r = { eid, comps: {} })
+        r.comps[comp] ??= {}
+      }
+      let unclassified = part.filter((r) => !classified.has(r.eid))
+      if (unclassified.length && bodiless.length) {
+        let held = await tx.get(unclassified.map((r) => r.eid), bodiless)
+        for (let b of held.filter(Boolean)) {
+          for (let comp of bodiless) if (b[comp]) mark(b.entity.eid, comp)
+        }
+      }
+      for (let comp of worded) {
+        let missing = unclassified.filter((r) =>
+          !projected.get(r.eid)?.comps[comp]
         )
         if (!missing.length) continue
         for (
           let b of await tx.read(
             `.${comp}&${ids(missing)}&.fields=entity.eid`,
           )
-        ) {
-          let r = projected.get(b.entity.eid)
-          if (!r) {
-            r = { eid: b.entity.eid, comps: {} }
-            projected.set(r.eid, r)
-          }
-          r.comps[comp] = {}
-        }
+        ) mark(b.entity.eid, comp)
       }
       out.push(...projected.values())
     }
@@ -325,14 +340,14 @@ let conversation = async (
       .filter((eid) => !queriedRoots.has(eid))
       .map((eid) => ({ eid, comps: {} }))
     roots.forEach((r) => queriedRoots.add(r.eid))
-    let queries = boundedReads(roots, (part) => discussion(part, has, search))
+    let queries = whole(roots, (part) => discussion(part, has, search))
     let parents = [
       ...new Set(all.map((r) => String(r.comps.mail?.reply_to ?? ''))),
     ]
       .filter((eid) => eid && !queriedParents.has(eid))
       .map((eid) => ({ eid, comps: {} }))
     parents.forEach((r) => queriedParents.add(r.eid))
-    queries.push(...boundedReads(parents, (part) => {
+    queries.push(...whole(parents, (part) => {
       let refs = listed(part.map((r) => r.eid))
       return [
         `.entity.eid=${refs}`,
@@ -354,7 +369,7 @@ let conversation = async (
         .map((eid) => ({ eid, comps: {} }))
       replies.forEach((r) => queriedReplies.add(r.eid))
       queries.push(
-        ...boundedReads(
+        ...whole(
           replies,
           (part) => `.mail.reply_to=${listed(part.map((r) => r.eid))}`,
         ),
@@ -390,15 +405,15 @@ export let readInbox = async (
     has,
     search.text?.trim() || search.direction ? 'search' : 'metadata',
   )
-  let first = await read([candidates(who, has)])
+  let first = await read([candidates(who, has, search.within)])
   let all = await conversation(first, who, has, read, search)
   let byId = index(all)
   let roots = [...new Set(all.map((r) => threadOf(r, who, byId)))]
     .map((eid) => ({ eid, comps: {} }))
   let edges = await read(
-    boundedReads(roots, (part) => requirements(part, has)),
+    whole(roots, (part) => requirements(part, has)),
   )
-  let tasks = await read(boundedReads(edges, (part) => dependents(part, has)))
+  let tasks = await read(whole(edges, (part) => dependents(part, has)))
   return threads(unique([...all, ...edges, ...tasks]), who, search)
 }
 
@@ -429,7 +444,7 @@ export let readThread = async (
   let metadata = reads(tx, has, 'metadata').read
   let edges = await metadata([requirements([{ eid, comps: {} }], has)])
   let tasks = await metadata(
-    boundedReads(edges, (part) => dependents(part, has)),
+    whole(edges, (part) => dependents(part, has)),
   )
   return threads(unique([...all, ...edges, ...tasks]), who, { all: true })
     .find((t) => t.eid == eid)

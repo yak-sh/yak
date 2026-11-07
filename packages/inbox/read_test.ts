@@ -59,18 +59,27 @@ let defs: Record<string, string[]> = {
   requires: [],
   edge: ['from', 'to'],
 }
-let vocab = loadVocab([{
-  $defs: Object.fromEntries(
-    Object.entries(defs).map(([name, props]) => [name, {
-      component: true,
-      type: 'object',
-      properties: Object.fromEntries(props.map((prop) => [prop, {
-        type: prop == 'seq' ? 'number' : 'string',
-        ...(prop == 'archetype' ? { ref: 'archetype' } : {}),
-      }])),
-    }]),
-  ),
-}, archetypeDoc])
+let vocabOf = (archetypes: boolean) =>
+  loadVocab([{
+    $defs: Object.fromEntries(
+      Object.entries(defs).map(([name, props]) => [name, {
+        component: true,
+        type: 'object',
+        properties: Object.fromEntries(
+          props.filter((prop) => archetypes || prop != 'archetype').map((
+            prop,
+          ) => [prop, {
+            type: prop == 'seq' ? 'number' : 'string',
+            ...(prop == 'archetype' ? { ref: 'archetype' } : {}),
+          }]),
+        ),
+      }]),
+    ),
+  }, ...archetypes ? [archetypeDoc] : []])
+let vocab = vocabOf(true)
+// A store that keeps no archetypes, as an Operator's keeps none: what a row
+// holds is read rather than looked up.
+let bare = vocabOf(false)
 let at = (n: number) => `2026-10-02T12:${String(n).padStart(2, '0')}:00.000Z`
 let row = (
   eid: string,
@@ -258,8 +267,9 @@ let fixture = (): Bundle[] => [
 
 // Patch fixture facts through storage so server-owned timestamps/authors are
 // exactly the facts the reference policy sees (not discarded by admission).
-let setup = async (kind: 'ram' | 'sqlite', all: Bundle[]) => {
-  let driver = kind == 'sqlite' ? open(':memory:') : undefined
+let setup = async (kind: 'ram' | 'sqlite' | 'bare', all: Bundle[]) => {
+  let driver = kind == 'ram' ? undefined : open(':memory:')
+  let vocab = kind == 'bare' ? bare : vocabOf(true)
   let sql: string[] = []
   if (driver) {
     let query = driver.query.bind(driver)
@@ -277,12 +287,12 @@ let setup = async (kind: 'ram' | 'sqlite', all: Bundle[]) => {
     read: (q, opts) => g.read(q, opts),
     get: (ids, comps) => g.get(ids, comps),
   }
-  return { tx, store, sql, close: () => driver?.close() }
+  return { tx, store, sql, vocab, close: () => driver?.close() }
 }
 
-for (let kind of ['ram', 'sqlite'] as const) {
+for (let kind of ['ram', 'sqlite', 'bare'] as const) {
   test(`${kind}: metadata/search/detail match full inbox policy`, async () => {
-    let { tx, close } = await setup(kind, fixture())
+    let { tx, vocab, close } = await setup(kind, fixture())
     try {
       let all = asRows(await tx.get(fixture().map((b) => b.entity.eid)))
       let person = readerAt(all, 'person')
@@ -404,6 +414,78 @@ test('classified metadata uses descriptor presence, not one query per component'
       queries.filter((q) => /^\.content&|^\.output&|^\.doc&/.test(q)),
       [],
     )
+  } finally {
+    close()
+  }
+})
+
+// A read's queries, and the rows its answers carried.
+let spied = (tx: Pick<Graph, 'read' | 'get'>) => {
+  let queries: string[] = [], seen = new Set<string>()
+  let saw = (
+    found: Bundle[],
+  ) => (found.forEach((b) => b && seen.add(b.entity.eid)), found)
+  let counted: Pick<Graph, 'read' | 'get'> = {
+    read: async (q, opts) =>
+      saw(await tx.read((queries.push(String(q)), q), opts)),
+    get: async (ids, comps) => saw(await tx.get(ids, comps)),
+  }
+  return { counted, queries, seen }
+}
+
+test('unclassified metadata reads what rows hold in one get, asking only worded components one at a time', async () => {
+  let { tx, close } = await setup('bare', fixture())
+  let { counted, queries } = spied(tx)
+  try {
+    assert((await readInbox(counted, bare, 'person')).length > 0)
+    // The reader's own marks (its project, its opened and archived) aside.
+    let reader = ['project', 'opened', 'archived']
+    assertEquals(
+      [
+        ...new Set(
+          queries.flatMap((q) => q.match(/^\.(\w+)&\.entity\.eid=/)?.[1] ?? []),
+        ),
+      ].filter((name) => !reader.includes(name)),
+      ['doc', 'content'],
+    )
+  } finally {
+    close()
+  }
+})
+
+test('within reads only the threads of candidates holding those components, and never a conversation', async () => {
+  let { tx, close } = await setup('bare', fixture())
+  let { counted, seen } = spied(tx)
+  let within = ['task', 'decision', 'notification']
+  try {
+    let all = asRows(await tx.get(fixture().map((b) => b.entity.eid)))
+    let expected = threads(all, readerAt(all, 'person'))
+      .filter((t) => within.some((name) => t.row.comps[name]))
+    assert(expected.length > 3)
+    assertEquals(
+      policy(await readInbox(counted, bare, 'person', { within })),
+      policy(expected),
+    )
+    assertEquals(
+      ['session', 'input', 'output'].filter((eid) => seen.has(eid)),
+      [],
+    )
+  } finally {
+    close()
+  }
+})
+
+test('a server read asks each round of discussion once, however many threads it has', async () => {
+  let all: Bundle[] = [row('person')]
+  for (let i = 0; i < 300; i++) {
+    all.push(row(`root${i}`, { task: {}, filed: { assignee: 'person' } }))
+    all.push(row(`said${i}`, { comment: { target: `root${i}` } }, 2, 'person'))
+  }
+  let { tx, close } = await setup('sqlite', all)
+  let { counted, queries } = spied(tx)
+  try {
+    assertEquals((await readInbox(counted, vocab, 'person')).length, 300)
+    assertEquals(queries.filter((q) => q.includes('.knock.target=')).length, 1)
   } finally {
     close()
   }

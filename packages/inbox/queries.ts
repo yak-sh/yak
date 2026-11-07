@@ -83,8 +83,13 @@ let fields = [
 let read = (q: string, has: Words) =>
   q ? `(${q})` + fields.filter(has).map((s) => `&?${s}`).join('') : ''
 
-/** First read: direct address, assigned work, watched work and attention. */
-export let candidates = (who: Reader, has: Words = () => true): string => {
+/** First read: direct address, assigned work, watched work and attention,
+ * of only the components `within` names when it names any. */
+export let candidates = (
+  who: Reader,
+  has: Words = () => true,
+  within?: string[],
+): string => {
   let targets = [
     who.actor,
     who.session,
@@ -105,24 +110,24 @@ export let candidates = (who: Reader, has: Words = () => true): string => {
     'entry',
   ].filter(has).map((name) => `.${name}`).join('|')
   if (authored && kinds) authored += `&(${kinds})`
-  return read(
-    union([
-      select('comment.target', targets),
-      select('deliver.to', [who.actor, who.session, who.scope]),
-      select('mail.to', who.addrs ?? []),
-      select('mail.from', who.addrs ?? []),
-      select('mail.target', [who.scope, who.session, ...who.watching ?? []]),
-      select('filed.assignee', [who.actor]),
-      authored,
-      select('entity.eid', who.attention?.keys() ?? []),
-      select('decided.by', [who.actor]),
-      select('session.actor', [who.actor]),
-      select('entity.eid', who.watching ?? []),
-      who.actor && who.operator ? '.bug' : '',
-      who.actor && who.operator ? '.decision' : '',
-    ], has),
-    has,
-  )
+  let arms = union([
+    select('comment.target', targets),
+    select('deliver.to', [who.actor, who.session, who.scope]),
+    select('mail.to', who.addrs ?? []),
+    select('mail.from', who.addrs ?? []),
+    select('mail.target', [who.scope, who.session, ...who.watching ?? []]),
+    select('filed.assignee', [who.actor]),
+    authored,
+    select('entity.eid', who.attention?.keys() ?? []),
+    select('decided.by', [who.actor]),
+    select('session.actor', [who.actor]),
+    select('entity.eid', who.watching ?? []),
+    who.actor && who.operator ? '.bug' : '',
+    who.actor && who.operator ? '.decision' : '',
+  ], has)
+  if (!within || !arms) return read(arms, has)
+  let held = union(within.map((name) => `.${name}`), has)
+  return held ? read(`(${arms})&(${held})`, has) : ''
 }
 
 // The lane policy consumes human inputs, visible answers and state changes.
