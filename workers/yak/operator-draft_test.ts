@@ -688,12 +688,18 @@ test('a helper’s line landing before the socket opens is read, once', async ()
 
 test('a page reads its draft only as it opens and as its socket opens, never on a timer', async () => {
   let page = await load(storage(), false, 'new', {}, undefined, 'down')
-  // ask's five tries, then a hundred seconds more, sped up
-  await new Promise((ok) => setTimeout(ok, 120))
-  let alone = page.asked()
+  let status = page.document.querySelector('[data-send-status]')!
+  // ask's five tries, until the page says they failed, then a hundred
+  // seconds more, sped up
+  let tried = async () => {
+    await until(() => page.status() != '')
+    await new Promise((ok) => setTimeout(ok, 100))
+    return page.asked()
+  }
+  let alone = await tried()
+  status.textContent = ''
   page.open()
-  await new Promise((ok) => setTimeout(ok, 120))
-  let opened = page.asked()
+  let opened = await tried()
   page.leave()
   assertEquals([alone, opened], [5, 10])
 })
