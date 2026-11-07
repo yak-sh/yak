@@ -39,3 +39,17 @@ EXPO_PACKAGER_PROXY_URL=https://<name>.trycloudflare.com npx expo start --port 8
 Open `exp://<name>.trycloudflare.com` on the iPhone, from the camera or Safari,
 with Expo Go installed. `npx expo export --platform ios` checks that the bundle
 compiles.
+
+## Publish it
+
+The shell is the EAS project @justyaks/yaks-app. Expo Go opens its channel
+`main` at
+`exp://u.expo.dev/f87fef9c-5d1c-4fef-9f9c-f62d4872c6d6?channel-name=main&runtime-version=exposdk:58.0.0`,
+with no dev server running. Publish a new shell to it with:
+
+```sh
+npx eas-cli update --channel main --platform ios --environment preview --message '<what changed>'
+```
+
+A kit-built app's view needs no publish: the shell loads it from the deployed
+app (`remote.ts`).
