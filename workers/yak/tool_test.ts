@@ -44,6 +44,10 @@ test('a call naming no space means the app’s, the Operator’s, the only one',
       at: (eid: string) => Promise.resolve(all.find((s) => s.eid == eid)),
       space: (slug: string) => Promise.resolve(all.find((s) => s.slug == slug)),
       spaces: (_: string, role?: string) => Promise.resolve(role ? owned : all),
+      seats: (_: string, role?: string) =>
+        Promise.resolve(
+          (role ? owned : all).map((space) => ({ space, role: 'owner' })),
+        ),
       app: (space: Space, slug: string) =>
         Promise.resolve(space == other && slug == 'garden' ? {} : null),
       narrowedTo: () => Promise.resolve(null),

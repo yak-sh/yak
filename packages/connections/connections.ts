@@ -690,20 +690,31 @@ export let attach = async (
   ]
 }
 
+/** An owner named before its eid is known: the walk from a reference to it
+ * to what names it, as `.space.slug=ada` names a space by its address, and
+ * its eid as whatever learns it answers. The host spells the walk, and one
+ * may reach more than one owner: only the eid's are kept. */
+export type Path = { path: `.${string}`; eid: Promise<Eid> }
+
 /** A space's or a person's connections, the `uses` links from the apps that
  * use them, and the integrations they go through. Each is asked by the owner,
  * so all three are asked at once, and a host whose reads asked together
  * travel together answers them in one trip: the integrations among the built
  * ones (the line `installed` asks) and the owner's own. Only one another owner
- * listed is asked after. */
-export let list = async (read: Read, owner: Eid): Promise<Bundle[]> => {
-  let [owned, links, built, theirs] = await Promise.all([
-    read(`.${CONNECTION}.owner=${owner}${ALL}`),
-    read(`.${EDGE}.to.${CONNECTION}.owner=${owner}&.${USES}${ALL}`),
+ * listed is asked after. An owner named by a {@link Path} is asked before its
+ * eid is known, beside whatever learns it. */
+export let list = async (read: Read, owner: Eid | Path): Promise<Bundle[]> => {
+  let at = typeof owner == 'string' ? `=${owner}` : owner.path
+  let [reached, links, built, theirs, eid] = await Promise.all([
+    read(`.${CONNECTION}.owner${at}${ALL}`),
+    read(`.${EDGE}.to.${CONNECTION}.owner${at}&.${USES}${ALL}`),
     read(`.${INTEGRATION}.built`),
-    read(`.${INTEGRATION}.owner=${owner}`),
+    read(`.${INTEGRATION}.owner${at}`),
+    typeof owner == 'string' ? owner : owner.eid,
   ])
+  let owned = reached.filter((b) => comp(b, CONNECTION).owner == eid)
   if (!owned.length) return []
+  let ids = new Set(owned.map((b) => b.entity.eid))
   let names = new Set(
     owned.map((b) => integrationEid(String(comp(b, CONNECTION).integration))),
   )
@@ -712,7 +723,7 @@ export let list = async (read: Read, owner: Eid): Promise<Bundle[]> => {
   ].filter((b) => names.has(b.entity.eid))
   return [
     ...owned,
-    ...links,
+    ...links.filter((l) => ids.has(String(comp(l, EDGE).to))),
     ...kept,
     ...await through(read, [...owned, ...kept]),
   ]

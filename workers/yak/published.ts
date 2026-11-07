@@ -525,19 +525,27 @@ let CONNECTIONS: Row[] = [
       properties: { space: SPACE },
     },
     run: async (ctx, args) => {
-      let { space, who } = await inSpace(ctx, args)
-      let view = await connectionsOf(ctx.env, space, who.person!, {
-        dir: ctx.dir,
-      })
+      // The list is asked by the walk to the space, its address or the
+      // caller's seats where the call names none, beside admitting the
+      // caller, so both travel as one trip, and is drawn once they are let in.
+      let admitted = inSpace(ctx, args)
+      let view = await connectionsOf(
+        ctx.env,
+        admitted.then((a) => a.space),
+        ctx.person,
+        {
+          dir: ctx.dir,
+          by: args.space == null
+            ? `.members_space.member.person=${ctx.person}`
+            : `.space.slug=${text(args.space, 'space')}`,
+        },
+      )
+      let { space } = await admitted
       // An app of this space goes by its slug, the name every tool takes;
       // a copy borrowing from another space, by the title its page shows.
-      // The view asked for them, so this asks nothing (hops.ts `recall`).
-      let slugs = new Map(
-        (await ctx.dir.apps(space)).map((a) => [a.eid, a.slug]),
-      )
       let rows = view.list.map((c) => {
         let uses = c.apps.map((u) =>
-          said(u, slugs.get(u.app) ?? u.title) +
+          said(u, u.slug || u.title) +
           (u.borrower ? ` in ${u.borrower} (borrowing)` : '') +
           calledOn(u) +
           (u.lends == null
@@ -554,7 +562,7 @@ let CONNECTIONS: Row[] = [
         rows.push(
           `${loan.integration} (${loan.eid}): borrowed from ${loan.lender}; ` +
             `${
-              slugs.get(loan.app.app) ?? loan.app.title
+              loan.app.slug || loan.app.title
             } reads it as env.${loan.app.binding} (a sentinel), ` +
             `${loan.app.calls} calls out this month of ${loan.app.cap} allowed. ` +
             `Connect your own at ${pageOf(ctx.env, space.slug)} and use ` +

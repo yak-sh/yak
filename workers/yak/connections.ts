@@ -60,6 +60,7 @@ import {
   namesOf,
   need,
   type Owners,
+  type Path,
   type Read,
   recall,
   set,
@@ -216,6 +217,9 @@ export type Using = {
   /** the app's eid */
   app: string
   title: string
+  /** its address, the name every tool takes, for an app of this space; empty
+   * for one elsewhere */
+  slug: string
   /** what its code reads it as, env.NAME */
   binding: string
   /** handed the key itself rather than a sentinel */
@@ -473,10 +477,15 @@ export let enabled = (req: Request): string[] =>
  * (`own`) it shows theirs too: what they connected for an app that asks each
  * person, and the outside services holding a grant from them. What nothing
  * here is connected to yet is offered to the space — a testing integration
- * only when `enable` names it. */
+ * only when `enable` names it.
+ *
+ * A space still being learned (a door admitting its caller) is asked `by` the
+ * walk to it, so what the page is drawn from travels in the same trip as
+ * what learns the space, and is kept to it once known: a walk that missed it
+ * is asked again by its eid. */
 export let connectionsOf = async (
   env: Env,
-  space: Space,
+  space: Space | Promise<Space>,
   person: string,
   at: {
     own?: boolean
@@ -486,30 +495,57 @@ export let connectionsOf = async (
     add?: string
     /** the request's directory, so these reads travel with what it asks */
     dir?: ReturnType<typeof dirOf>
+    /** the walk to the space, `.space.slug=ada`, while its eid is still being
+     * read (@yaks/connections `Path`) */
+    by?: `.${string}`
   } = {},
 ): Promise<Connections> => {
-  let { own = false, enable = [], add, dir = dirOf(env) } = at
+  let { own = false, enable = [], add, dir = dirOf(env), by } = at
   let read: Read = (q) => typeof q == 'string' ? dir.read(q) : []
   let month = monthOf(Date.now())
+  // The space's apps, connections and the links out of its apps, by its eid
+  // or the walk to it.
+  let drawn = (owner: string | Path) =>
+    Promise.all([
+      dir.apps(typeof owner == 'string' ? { eid: owner } : owner),
+      list(read, owner),
+      dir.read(
+        `.edge.from.app.space${
+          typeof owner == 'string' ? `=${owner}` : owner.path
+        }&.${USES}&*`,
+      ),
+    ])
+  let eid = Promise.resolve(space).then((s) => s.eid)
   // What the page is drawn from is asked by the space and the person, all at
   // once, so it travels as one trip (directory-copy.ts `gathered`); only what
-  // those answers name outside this space is asked after.
-  let [roster, listing, held, loans, built, wanted] = await Promise.all([
-    dir.apps(space),
-    read(`.${LISTED}`),
-    Promise.all(
-      [space.eid, ...own ? [person] : []].map((owner) => list(read, owner)),
-    ),
-    dir.read(`.edge.from.app.space=${space.eid}&.${USES}&*`)
-      .then((out) => borrowed(read, out)),
-    installed(read),
-    add ? known(read, add) : undefined,
-  ])
+  // those answers name outside this space is asked after. A walk says which
+  // spaces it reached, so one that missed this space is asked again.
+  let [here, reached, ahead, listing, mine, built, wanted] = await Promise.all(
+    [
+      space,
+      by ? read(`${by}&.space`) : undefined,
+      drawn(by ? { path: by, eid } : await eid),
+      read(`.${LISTED}`),
+      own ? list(read, person) : [],
+      installed(read),
+      add ? known(read, add) : undefined,
+    ],
+  )
+  let [apps, held, out] =
+    !reached || reached.some((b) => b.entity.eid == here.eid)
+      ? ahead
+      : await drawn(here.eid)
+  let roster = apps.filter((app) => app.space == here.eid)
+  let ours = new Set(roster.map((app) => app.eid))
+  let loans = await borrowed(
+    read,
+    out.filter((l) => ours.has(String(comp(l, 'edge').from))),
+  )
   // The live apps of this space, which a connection of its own may be given.
   let available = roster.filter((app) => !app.trashed)
     .map((app) => ({ app: app.eid, title: app.title || app.slug }))
   let listed = new Set(listing.map((b) => b.entity.eid))
-  let all = held.flat()
+  let all = [...held, ...mine]
   let links = all.filter((b) => b[USES])
   // Each app's space and name: this space's from its roster, and an app
   // elsewhere borrowing from it, or lending to it, from the directory.
@@ -517,7 +553,7 @@ export let connectionsOf = async (
     roster.map((app) => [app.eid, app.title || app.slug]),
   )
   let owners: Record<string, string> = Object.fromEntries(
-    roster.map((app) => [app.eid, space.eid]),
+    roster.map((app) => [app.eid, here.eid]),
   )
   let away = [
     ...new Set(
@@ -535,7 +571,7 @@ export let connectionsOf = async (
       owners[b.entity.eid] = String(comp(b, 'app').space)
     }
   }
-  let names = await spaceNames(read, space, [
+  let names = await spaceNames(read, here, [
     ...Object.values(owners),
     ...loans.filter((b) => b[CONNECTION])
       .map((b) => String(comp(b, CONNECTION).owner)),
@@ -546,6 +582,7 @@ export let connectionsOf = async (
     return {
       app,
       title: named.get(app) ?? 'another app',
+      slug: roster.find((one) => one.eid == app)?.slug ?? '',
       binding: String(u.binding ?? ''),
       direct: u.direct == true,
       anyone: u.anyone == true,
@@ -582,7 +619,7 @@ export let connectionsOf = async (
         scopes: strs(c.scopes).length ? strs(c.scopes) : i?.scopes ?? [],
         apps: to.map(usingOf),
         binding: bindingOf(String(c.integration)),
-        available: (c.owner == space.eid ? available : [])
+        available: (c.owner == here.eid ? available : [])
           .filter((app) => !to.some((l) => comp(l, 'edge').from == app.app)),
         saving: String(comp(b, PROVISIONAL).note ?? ''),
         instructions: typeof i?.instructions == 'string' ? i.instructions : '',

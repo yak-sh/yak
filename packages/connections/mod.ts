@@ -97,6 +97,7 @@ export {
   type Need,
   need,
   type Owners,
+  type Path,
   pick,
   recall,
   refresh,

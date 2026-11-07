@@ -1784,7 +1784,7 @@ let revised = async (via: Fetcher, q: string): Promise<Revised> => {
   return { text, revision: Number(epoch) }
 }
 
-type Page = ReturnType<typeof paged>
+export type Page = ReturnType<typeof paged>
 
 // What a page says out of the rows one snapshot answered: the space (its
 // row given), the app at the address, the front page, the roster when
@@ -2463,10 +2463,15 @@ export let directoryRows = (rows: {
     // spaces is one read rather than one per space, because a person's whole
     // listing is one question (tools.ts `app_list`, T-35431); the answer is
     // still one flat list, and a caller wanting them per space groups by
-    // `app.space`.
+    // `app.space`. A space named by the walk to what names it (`.space.slug=
+    // ada`, @yaks/connections `Path`) is asked before its eid is known, beside
+    // whatever learns it; a walk reaching several answers each one's apps.
     apps: async (
-      space: Pick<Space, 'eid'> | Pick<Space, 'eid'>[],
+      space: Pick<Space, 'eid'> | Pick<Space, 'eid'>[] | { path: string },
     ): Promise<App[]> => {
+      if ('path' in space) {
+        return (await query(`.app.space${space.path}&${ABOUT}`)).map(appOf)
+      }
       let eids = [space].flat().map((s) => s.eid)
       if (!eids.length) return []
       return (await query(`.app.space=${eids.join(',')}&${ABOUT}`))

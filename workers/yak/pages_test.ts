@@ -169,6 +169,7 @@ test('connections: the space’s ask of each person offers nothing to connect, a
           apps: [{
             app: 'n',
             title: 'Notes',
+            slug: 'notes',
             binding: 'WEATHER',
             direct: false,
             anyone: false,
@@ -419,6 +420,7 @@ test('connections: a page opened to add one from the directory offers it first, 
 let used = (over: Partial<Using> = {}): Using => ({
   app: 'notes',
   title: 'Notes',
+  slug: 'notes',
   binding: 'WEATHER',
   direct: false,
   anyone: false,

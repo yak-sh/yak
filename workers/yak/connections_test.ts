@@ -924,20 +924,22 @@ test(
   },
 )
 
-// Admitting the caller is one trip (tool.ts `entered`), and everything the
-// list is drawn from is asked by the space at once, a second (connections.ts
-// `connectionsOf`): however many connections it holds and apps use them.
-test('connection_list reads the directory in two trips, whatever the space holds', async () => {
+// Everything the list is drawn from is asked by the walk to the space, its
+// address or the caller's seats, beside admitting the caller (tool.ts
+// `entered`), so both are one trip: however many connections it holds, apps
+// use them, or other spaces the caller sits in hold.
+test('connection_list reads the directory in one trip, whatever the space holds', async () => {
   let s = await setup()
-  let ctx = { env: s.p.env, dir: s.dir, person: s.person }
-  let listed = async () => {
+  // Each admission opens its own directory, as the connector's door does.
+  let reopen = () => directory({ fetch: over(meta(s.p.env)) })
+  let ctx = { env: s.p.env, dir: reopen(), reopen, person: s.person }
+  let listed = async (
+    args: Record<string, unknown>,
+  ): Promise<[string[] | null, number | undefined]> => {
     let tally = new Map<string, number>()
     let out = await tallying(
       tally,
-      () =>
-        PUBLISHED.find((t) => t.name == 'connection_list')!.run(ctx, {
-          space: 'ada',
-        }),
+      () => PUBLISHED.find((t) => t.name == 'connection_list')!.run(ctx, args),
     )
     return [
       out.text.match(/^\S+(?= \()|\w+ reads it as env\.\w+/gm),
@@ -951,13 +953,42 @@ test('connection_list reads the directory in two trips, whatever the space holds
       hosts: `api.w${n}.test`,
       key: 'sk-0123456789',
     })
-  assertEquals(await listed(), [null, 2])
+  assertEquals(await listed({ space: 'ada' }), [null, 1])
   for (let n of [0, 1, 2, 3]) await add(n)
   let app = await liveApp(s)
   let w0 = (await s.shown()).list.find((c) => c.integration == 'W0')!
   await s.post({ do: 'attach', connection: w0.eid, app: app.eid })
-  assertEquals(await listed(), [
-    ['W0', 'notes reads it as env.W0', 'W1', 'W2', 'W3'],
-    2,
-  ])
+  // A space the caller only sits in, with a connection of its own.
+  await meta(s.p.env).apply([
+    {
+      entity: { eid: '$away' },
+      doc: { title: 'bea' },
+      space: { slug: 'bea', store: 'bea' },
+    },
+    {
+      entity: { eid: '$sat' },
+      member: { space: '$away', person: s.person, role: 'editor' },
+    },
+    {
+      entity: { eid: '$theirs' },
+      connection: { integration: 'openai', owner: '$away', status: 'needed' },
+    },
+  ], KERNEL)
+  let held: [string[], number] = [[
+    'W0',
+    'notes reads it as env.W0',
+    'W1',
+    'W2',
+    'W3',
+  ], 1]
+  assertEquals(await listed({ space: 'ada' }), held)
+  assertEquals(await listed({}), held)
+  assertEquals(await listed({ space: 'bea' }), [['openai'], 1])
+  // A walk that missed the space it learns is asked again by its eid.
+  assertEquals(
+    (await connectionsOf(s.p.env, Promise.resolve(s.space), s.person, {
+      by: '.space.slug=bea',
+    })).list.map((c) => c.integration),
+    ['W0', 'W1', 'W2', 'W3'],
+  )
 })

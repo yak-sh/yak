@@ -26,6 +26,7 @@ import {
   type Directory,
   META,
   META_STORE,
+  type Page,
   type Role,
   type Space,
 } from './directory.ts'
@@ -309,10 +310,19 @@ export let ownSpace = async (
   ctx: Ctx,
   app?: unknown,
   holding?: Space[],
-) => {
+): Promise<Space> => (await ownSeat(ctx, app, holding)).space
+
+// The space a call means, with the caller's seat in it where the read that
+// found it said it: the one space they own, read with their seats, is theirs
+// as owner, so admitting them asks nothing more.
+let ownSeat = async (
+  ctx: Ctx,
+  app?: unknown,
+  holding?: Space[],
+): Promise<{ space: Space; role?: Role }> => {
   if (typeof app == 'string' && app) {
     holding ??= await held(ctx, app)
-    if (holding.length == 1) return holding[0]
+    if (holding.length == 1) return { space: holding[0] }
     if (holding.length > 1) {
       throw refuse(
         'arguments',
@@ -323,23 +333,25 @@ export let ownSpace = async (
     }
   }
   let narrow = await ctx.dir.narrowedTo()
-  if (narrow) return narrow
-  let owned = await ctx.dir.spaces(ctx.person, 'owner')
+  if (narrow) return { space: narrow }
+  let owned = await ctx.dir.seats(ctx.person, 'owner')
   if (owned.length > 1) {
     throw refuse(
       'arguments',
-      `space: name one of ${owned.map((s) => s.slug).join(', ')}`,
+      `space: name one of ${owned.map((s) => s.space.slug).join(', ')}`,
     )
   }
-  if (owned[0]) return owned[0]
+  if (owned[0]) return { space: owned[0].space, role: owned[0].role }
   // The legacy default may mint its space. That internal write uses an
   // authoritative client and starts a new scope before any role is used.
   let space =
     await (ctx.reopen
       ? directory(bound(ctx.env.DIRECTORY, directoryPart.fetch, ctx.env))
       : ctx.dir).own(ctx.person)
-  if (ctx.reopen) return (await reacquire(ctx, space, undefined, false)).space
-  return space
+  if (ctx.reopen) {
+    return { space: (await reacquire(ctx, space, undefined, false)).space }
+  }
+  return { space }
 }
 
 // The caller's spaces holding a live app at `app`. An app in the trash does
@@ -384,29 +396,29 @@ let roleIn = async (
   return role != 'owner' && over && await admin(ctx) ? 'owner' : role
 }
 
-// The space a call names, or the one it means.
-let spaceOf = async (ctx: Ctx, args: Args) => {
-  if (args.space != null) return await named(ctx, text(args.space, 'space'))
-  let space = await ownSpace(ctx, args.app)
-  if (!space) throw refuse('missing', `no space ${args.space}`)
-  return space
-}
-
 // The space a call names with the caller's seat in it, its apps (the one it
 // names among them) and, where the door says `over`, whether the caller is
 // the platform's admin: one snapshot of the directory (directory.ts `page`),
 // so a door admits a call in one trip. A call naming an app and no space
 // reads the one space of theirs holding it the same way (directory.ts
-// `holding`). Any other space it means without naming, or one found only at
-// an address it has left, is read as `spaceOf` reads it, and the caller's
-// seat after.
-let entered = async (ctx: Ctx, args: Args, over: boolean, app?: string) => {
+// `holding`). Any other space it means without naming is read as `ownSeat`
+// reads it, and one found only at an address it has left as `named` does,
+// each with the caller's seat after where that read did not say it.
+let entered = async (
+  ctx: Ctx,
+  args: Args,
+  over: boolean,
+  app?: string,
+): Promise<{ space: Space; page?: Partial<Page> }> => {
   if (args.space == null && app) {
     let found = await ctx.dir.holding(app, ctx.person, over, true)
     if (found?.page?.space) return { space: found.page.space, page: found.page }
     if (found) return { space: await ownSpace(ctx, app, found.holding) }
   }
-  if (args.space == null) return { space: await spaceOf(ctx, args) }
+  if (args.space == null) {
+    let { space, role } = await ownSeat(ctx, args.app)
+    return { space, ...role ? { page: { role } } : {} }
+  }
   let slug = text(args.space, 'space')
   let page = await ctx.dir.page(slug, app ?? null, ctx.person, over, true)
   return page.space
@@ -496,6 +508,9 @@ let seated = async (
   let selected: Space | undefined
   for (let attempt = 0;; attempt++) {
     let scope = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
+    // The call's directory from this attempt's first read: what a tool asks
+    // beside admitting its caller travels in admission's trip.
+    ctx.dir = scope.dir
     try {
       let { space, page } = selected
         ? { space: await scope.dir.at(selected.eid), page: undefined }
@@ -511,7 +526,6 @@ let seated = async (
         page?.administrative,
       )
       if (write && !trash) awake(space)
-      ctx.dir = scope.dir
       admitted(ctx, space, who, page?.roster)
       if (write) ctx.ahead?.(space, who)
       return { space, who }
@@ -624,6 +638,8 @@ let reached = async (
   let slug = text(args.app, 'app')
   for (let attempt = 0;; attempt++) {
     let scope = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
+    // As in `seated`: the call's directory from this attempt's first read.
+    ctx.dir = scope.dir
     try {
       let { space, page } = selectedSpace
         ? { space: await scope.dir.at(selectedSpace.eid), page: undefined }
@@ -654,7 +670,6 @@ let reached = async (
         )
       }
       awake(space, trash ? undefined : app)
-      ctx.dir = scope.dir
       admitted(ctx, space, who, page?.roster)
       if (write) ctx.ahead?.(space, who)
       return {
