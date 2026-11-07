@@ -1,6 +1,7 @@
 import { equal, test, until } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
 import {
+  accept,
   balance,
   DEEPGRAM,
   hear,
@@ -110,7 +111,8 @@ test('a recording is heard with its type, priced by its minutes', async () => {
 
 // A socket that keeps what it was sent and lets a test say what it hears.
 let socket = () => {
-  let on: Record<string, ((e: { data?: unknown }) => void)[]> = {}
+  let on: Record<string, ((e: { data?: unknown; code?: number }) => void)[]> =
+    {}
   let sent: (string | Uint8Array)[] = []
   let opened: { url: string; protocols: string[] }[] = []
   let json = () => sent.map((m) => JSON.parse(String(m)))
@@ -119,8 +121,8 @@ let socket = () => {
     close: () => {},
     addEventListener: (type, f) => void (on[type] ??= []).push(f),
   }
-  let fire = (type: string, data?: unknown) =>
-    on[type]?.forEach((f) => f({ data }))
+  let fire = (type: string, data?: unknown, code?: number) =>
+    on[type]?.forEach((f) => f({ data, code }))
   return {
     sent,
     json,
@@ -523,4 +525,93 @@ test('an answer is not said when the caller stops where a sentence goes on, the 
   equal([answers(), sent('response.cancel')], [1, 3])
   heard('So I need a plumber.')
   equal(answers(), 2)
+})
+
+test('a call the provider’s own line carries is accepted with the session, then joined without audio', async () => {
+  let o = answering(() => new Response(null))
+  await accept({
+    ...o,
+    provider: OPENAI,
+    call: 'rtc_1',
+    voice: 'marin',
+    instructions: 'Be brief.',
+  })
+  let body = JSON.parse(String(o.asked[0].init.body))
+  equal(o.asked[0].url, 'https://api.openai.com/v1/realtime/calls/rtc_1/accept')
+  equal([body.model, body.audio.output, 'format' in body.audio.input], [
+    'gpt-realtime-2.1-mini',
+    { voice: 'marin' },
+    false,
+  ])
+  let s = socket()
+  let told: unknown[] = []
+  let stream = talk({
+    provider: OPENAI,
+    key: 'k1',
+    call: 'rtc_1',
+    instructions: 'Be brief.',
+    open: s.open,
+    told: {
+      audio: () => told.push('audio'),
+      over: () => told.push('over'),
+      plays: () => told.push('plays'),
+      ended: () => told.push('ended'),
+      lost: (why) => told.push('lost: ' + why),
+      call: () => Promise.resolve(''),
+    },
+  })
+  let event = (e: object) => s.fire('message', JSON.stringify(e))
+  equal(s.opened[0].url, 'wss://api.openai.com/v1/realtime?call_id=rtc_1')
+  stream.send(new Uint8Array([1, 2]))
+  s.fire('open')
+  equal(s.sent, [])
+  // Talked over, the line is told to stop playing even with no response
+  // under way: what the model said may still be playing.
+  event({ type: 'output_audio_buffer.started' })
+  event({ type: 'input_audio_buffer.speech_started' })
+  for (let delta of [' Hold', ' on']) {
+    event({ type: 'conversation.item.input_audio_transcription.delta', delta })
+  }
+  equal(s.json(), [{ type: 'output_audio_buffer.clear' }])
+  s.fire('close', undefined, 1000)
+  equal(told, ['plays', 'over', 'ended'])
+  equal(stream.close().seconds, 0)
+})
+
+test('a joined call’s stream that drops is lost, not ended', () => {
+  let s = socket()
+  let told: unknown[] = []
+  talk({
+    provider: OPENAI,
+    key: 'k1',
+    call: 'rtc_1',
+    instructions: '',
+    open: s.open,
+    told: {
+      audio: () => {},
+      ended: () => told.push('ended'),
+      lost: (why) => told.push(why),
+      call: () => Promise.resolve(''),
+    },
+  })
+  s.fire('close', undefined, 1006)
+  equal(told, ['the stream closed'])
+})
+
+test('OpenAI’s webhook says which call rang, with its headers', () => {
+  let rang = OPENAI.talk!.calls!.rang
+  equal(
+    rang({
+      type: 'realtime.call.incoming',
+      data: {
+        call_id: 'rtc_1',
+        sip_headers: [{ name: 'X-Yak-Call', value: 'sealed' }],
+      },
+    }),
+    { id: 'rtc_1', headers: { 'x-yak-call': 'sealed' } },
+  )
+  equal(
+    rang({ type: 'realtime.call.ended', data: { call_id: 'x' } }),
+    undefined,
+  )
 })

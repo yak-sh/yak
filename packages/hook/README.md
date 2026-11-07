@@ -56,6 +56,11 @@ beside the secret it goes with:
   header, written as hex (the default) or base64, after an optional prefix.
 - `'telnyx'`: the `telnyx-signature-ed25519` header, a base64 Ed25519 signature
   of `<telnyx-timestamp>|<raw body>`, refused beyond `SKEW` seconds.
+- `'standard'`: [Standard Webhooks](https://www.standardwebhooks.com), as OpenAI
+  signs: `webhook-signature` carries `v1,<base64>`, several space apart while a
+  secret is rolled, each an HMAC-SHA256 of
+  `<webhook-id>.<webhook-timestamp>.<raw body>` under the bytes of the secret's
+  base64 after `whsec_`, refused beyond `SKEW` seconds.
 - `{signature, timestamp, join}`: the same for any sender signing with Ed25519:
   the signature header, the timestamp header, and what joins the timestamp to
   the body. The secret is the sender's public key, base64.

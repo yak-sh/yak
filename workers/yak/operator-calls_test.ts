@@ -346,8 +346,7 @@ let calling = (
   let done: Parameters<Around['done']>[0][] = []
   let call = converse({
     call: 'v3:c',
-    wire,
-    line,
+    stream: { wire, line },
     listen: (t) => {
       told = t
       return {
@@ -550,8 +549,7 @@ let talkingCall = (real = false, given: Partial<Talking> = {}) => {
   let streamed: Record<string, unknown>[] = []
   let call = talking({
     call: 'v3:t',
-    wire,
-    line,
+    stream: { wire, line },
     talk: (t) => {
       told = t
       if (real) {

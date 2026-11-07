@@ -247,6 +247,9 @@ export type Env = {
   // provider elsewhere, for a test.
   DEEPGRAM_API_KEY?: string
   OPENAI_VOICE_KEY?: string
+  // The signing secret of the webhook a provider whose own line carries
+  // calls rings when one comes in (speech.ts LINES, operator-carried.ts).
+  OPENAI_CALLS_SECRET?: string
   SPEECH_FLOOR?: string
   SPEECH_API?: string
   // `on` signs up a stranger who texts the platform's number

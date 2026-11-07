@@ -515,6 +515,16 @@ export class Builder {
         () => this.#arming,
       )
     }
+    if (new URL(request.url).pathname == '/operator/carried') {
+      let { carrying } = await import('./operator-carried.ts')
+      return carrying(
+        this.#env,
+        operator,
+        space,
+        JSON.parse(request.headers.get('x-yak-call') ?? '{}'),
+        () => this.#arming,
+      )
+    }
     if (new URL(request.url).pathname == '/operator/ws') {
       return this.#accept({
         person,

@@ -238,8 +238,14 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // posts them (operator-texts.ts); a call's audio, streamed to the Operator
   // it reached (operator-calls.ts); and the texts to a person's own number,
   // as its callback sends them under the ticket it was given
-  // (operator-line.ts).
+  // (operator-line.ts). A speech provider whose own line carries calls
+  // rings `/<provider>/calls` (operator-carried.ts).
   let [, via, door] = /^\/([^/]+)\/([^/]+)$/.exec(path) ?? []
+  if (via && door == 'calls') {
+    let { carriedDoor, carrierNamed } = await import('./operator-carried.ts')
+    let carrier = carrierNamed(via)
+    if (carrier) return carriedDoor(req, env, carrier)
+  }
   let phone = via &&
     await import('./phones.ts').then((p) => p.phoneNamed(env, via))
   if (phone && door == 'webhook') {

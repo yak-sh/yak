@@ -65,6 +65,9 @@ export type Said = {
   call?: { id: string; name: string; args: string }
   /** what the turn just finished cost, in dollars */
   spent?: number
+  /** the model's audio began playing to the caller, on a call its own line
+   * carries */
+  plays?: true
   /** the model began a response: no other may be asked for until it is done */
   begun?: true
   /** the model's response ended */
@@ -79,7 +82,8 @@ export type Said = {
 export type Setup = {
   model: string
   voice: string
-  format: Raw
+  /** none on a call the provider's own line carries, which says its own */
+  format?: Raw
   /** how fast it speaks, within the talking model's `speeds` */
   speed: number
   instructions: string
@@ -163,6 +167,23 @@ export type Provider = {
     tell: (text: string) => string
     /** what ends the caller's turn now, before the model hears it end */
     commit: string
+    /** calls its own line carries, such as one sent to it over SIP: their
+     * audio never passes here, and a stream joins one to hear and steer it */
+    calls?: {
+      /** a webhook's event that a call rang: its id and the headers it came
+       * with, their names lower case; undefined for any other event */
+      rang: (
+        event: unknown,
+      ) => { id: string; headers: Record<string, string> } | undefined
+      /** pick a call up, talking as `setup` says */
+      accept: (call: string, setup: Setup) => Asked
+      reject: (call: string) => Asked
+      hangup: (call: string) => Asked
+      /** the path of the stream that joins a call */
+      join: (call: string) => string
+      /** what stops the audio playing to the caller */
+      hush: string
+    }
   }
   /** the account's credit left, in dollars, where the provider says */
   balance?: (ask: Ask) => Promise<number>
@@ -383,7 +404,7 @@ let stream = (
   url: string,
   opening: string[],
   heard: (data: unknown) => void,
-  lost: (reason: string) => void,
+  lost: (reason: string, clean?: boolean) => void,
 ) => {
   let socket = (o.open ?? browser)(url, {
     authorization: o.provider.authorization(o.key),
@@ -396,8 +417,8 @@ let stream = (
     for (let part of waiting.splice(0)) socket.send(part)
   })
   socket.addEventListener('message', (event) => heard(event.data))
-  let dropped = (reason: string) => () => {
-    if (!closing) lost(reason)
+  let dropped = (reason: string) => (event?: { code?: number }) => {
+    if (!closing) lost(reason, event?.code == 1000 || event?.code == 1001)
     closing = true
   }
   socket.addEventListener('close', dropped('the stream closed'))
@@ -495,6 +516,10 @@ export type Talked = {
   call: (name: string, args: string) => Promise<string>
   /** the model's response ended, whatever it said or asked in it */
   done?: () => void
+  /** the model's audio began playing, on a call its own line carries */
+  plays?: () => void
+  /** the call a joined stream steers ended: its stream closed cleanly */
+  ended?: () => void
   /** the stream failed or closed before `close` was asked */
   lost?: (reason: string) => void
 }
@@ -581,6 +606,60 @@ let LISTEN = {
   parameters: { type: 'object', properties: {} },
 }
 
+/** How a talking model is set up: its model, voice, pace, instructions and
+ * tools, each its provider's own where none is given. */
+export type Talking = {
+  model?: string
+  voice?: string
+  /** a multiple of the provider's pace (`paced`) */
+  speed?: number
+  instructions: string
+  tools?: Setup['tools']
+}
+
+let talker = (provider: Provider) => {
+  let t = provider.talk
+  if (!t) throw new Error(`${provider.name} has no model that talks`)
+  return t
+}
+
+// The stream's own `LISTEN` comes first among its tools.
+let setup = (
+  t: NonNullable<Provider['talk']>,
+  o: Talking,
+  format?: Raw,
+): Setup => ({
+  model: o.model ?? t.models[0],
+  voice: o.voice ?? t.voice,
+  format,
+  speed: paced(t.speeds, o.speed),
+  instructions: o.instructions,
+  tools: [LISTEN, ...o.tools ?? []],
+})
+
+let carrier = (provider: Provider) => {
+  let calls = talker(provider).calls
+  if (!calls) throw new Error(`${provider.name}'s line carries no calls`)
+  return calls
+}
+
+let calling = async (o: Calling, { path, init }: Asked) => {
+  await asking(o)(path, init)
+}
+
+/** A call the provider's own line carries picked up, its model set up as
+ * `talk` sets one up; `talk` with the `call` then joins it. */
+export let accept = (o: Calling & Talking & { call: string }) =>
+  calling(o, carrier(o.provider).accept(o.call, setup(talker(o.provider), o)))
+
+/** A call the provider's own line carries, refused before it is picked up. */
+export let reject = (o: Calling & { call: string }) =>
+  calling(o, carrier(o.provider).reject(o.call))
+
+/** A call the provider's own line carries, ended. */
+export let hangup = (o: Calling & { call: string }) =>
+  calling(o, carrier(o.provider).hangup(o.call))
+
 /**
  * A model that hears and speaks in one stream: `send` takes the caller's raw
  * samples in `format`, and `told` hears what the model says back and the
@@ -598,25 +677,32 @@ let LISTEN = {
  * (`open`), when the model asks to `LISTEN`, or when the caller talks again
  * before it plays. A turn left unanswered is answered once they have been
  * quiet `LONG`.
+ *
+ * Given a `call` its own line carries, picked up with `accept`, the stream
+ * joins that call instead: the caller's audio and the model's go over the
+ * line, never through `send` or `told.audio`, and what plays is stopped on
+ * the line; `told.plays` says when the model's audio begins, and
+ * `told.ended` when the call ends. Its audio never heard here, a turn ends
+ * only when the model hears it end, and what the model says plays before
+ * the turn's words are heard.
  */
 export let talk = (
-  o: {
+  o: Talking & {
     provider: Provider
     key: string
-    format: Raw
-    model?: string
-    voice?: string
-    /** a multiple of the provider's pace (`paced`) */
-    speed?: number
-    instructions: string
-    tools?: Setup['tools']
+    /** the caller's audio, on a stream that carries it */
+    format?: Raw
+    /** the call a stream joins, one the provider's own line carries */
+    call?: string
     told: Talked
     open?: Open
   },
 ): Talk => {
-  let t = o.provider.talk
-  if (!t) throw new Error(`${o.provider.name} has no model that talks`)
-  let model = o.model ?? t.models[0]
+  let t = talker(o.provider)
+  let set = setup(t, o, o.format)
+  let model = set.model
+  let joined = o.call == undefined ? undefined : carrier(o.provider)
+  let seconds = (bytes: number) => o.format ? bytes / perSecond(o.format)! : 0
   let bytes = 0, dollars = 0
   // The model answers one response at a time: one asked for while another is
   // under way waits for it to be done. `last` is the one asked for last, asked
@@ -662,6 +748,7 @@ export let talk = (
     held = pending = undefined
     if (waiting.includes(m)) waiting.splice(waiting.indexOf(m), 1)
     else if (busy && last == m) s.send(t.cancel), hushed = true
+    if (joined) s.send(joined.hush)
   }
   let ask = (m: string) => {
     if (m != goOn || !waiting.includes(m)) waiting.push(m)
@@ -674,15 +761,8 @@ export let talk = (
   }
   let s = stream(
     o,
-    o.provider.live + t.path(model),
-    t.opening({
-      model,
-      voice: o.voice ?? t.voice,
-      format: o.format,
-      speed: paced(t.speeds, o.speed),
-      instructions: o.instructions,
-      tools: [LISTEN, ...o.tools ?? []],
-    }),
+    o.provider.live + (joined ? joined.join(o.call!) : t.path(model)),
+    joined ? [] : t.opening(set),
     (data) => {
       for (let said of t.read(data, model)) {
         if (said.start) {
@@ -694,6 +774,7 @@ export let talk = (
         if (said.hearing && !ended && !over && meant(hearing) >= OVER) {
           over = true
           if (busy) s.send(t.cancel), hushed = true
+          if (joined) s.send(joined.hush)
           o.told.over?.()
         }
         if (said.stopped) end()
@@ -711,6 +792,7 @@ export let talk = (
         }
         let text = said.said
         if (text) out(() => o.told.said?.(text))
+        if (said.plays) o.told.plays?.()
         if (said.spent) dollars += said.spent
         if (said.begun) {
           busy = true
@@ -741,15 +823,16 @@ export let talk = (
         }
       }
     },
-    (reason) => o.told.lost?.(reason),
+    (reason, clean) =>
+      joined && clean ? o.told.ended?.() : o.told.lost?.(reason),
   )
   return {
     send: (audio) => {
-      if (s.closed()) return
+      if (s.closed() || !o.format) return
       bytes += audio.length
       s.send(t.audio(audio))
       if (!sounds(audio, o.format)) {
-        quiet += audio.length / perSecond(o.format)!
+        quiet += seconds(audio.length)
         return soon()
       }
       // Talking again before the answer plays, the caller is not done.
@@ -760,10 +843,10 @@ export let talk = (
     tell: (text) => {
       if (!s.closed()) s.send(t.tell(text))
     },
-    spent: () => ({ seconds: bytes / perSecond(o.format)!, dollars }),
+    spent: () => ({ seconds: seconds(bytes), dollars }),
     close: () => {
       s.close()
-      return { seconds: bytes / perSecond(o.format)!, dollars }
+      return { seconds: seconds(bytes), dollars }
     },
   }
 }

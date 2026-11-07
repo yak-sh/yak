@@ -214,3 +214,43 @@ test("telnyx: Ed25519 over the time and the body, under Telnyx's public key", as
   ])
   assertEquals(why.map(ours), [false, true, true, false, false, false])
 })
+
+// What Standard Webhooks (OpenAI) puts on the wire: `v1,<base64 hmac>` of
+// `id.timestamp.body` under the bytes the secret's base64 names.
+let standard = async (raw: string, at: number, key = 'a probe key') => ({
+  'webhook-id': 'wh_1',
+  'webhook-timestamp': String(at),
+  'webhook-signature': `v1,${b64(await mac(key, `wh_1.${at}.${raw}`))}`,
+})
+
+test('standard: an HMAC of the id, time and body under the secret’s bytes, any of several', async () => {
+  let raw = '{"type":"realtime.call.incoming"}'
+  let secret = `whsec_${btoa('a probe key')}`
+  let said = (body: string, headers: Record<string, string>) =>
+    refusal('standard', secret, body, new Headers(headers), NOW)
+  let good = await standard(raw, SEC)
+  let other = await standard(raw, SEC, 'another key')
+  let why = await Promise.all([
+    said(raw, good),
+    said(raw, {
+      ...good,
+      'webhook-signature': `${other['webhook-signature']} ${
+        good['webhook-signature']
+      }`,
+    }),
+    said(`${raw} `, good),
+    said(raw, other),
+    said(raw, await standard(raw, SEC - SKEW - 1)),
+    said(raw, { ...good, 'webhook-signature': 'v1,AAAA' }),
+    said(raw, { 'webhook-timestamp': String(SEC) }),
+  ])
+  assertEquals(why, [
+    '',
+    '',
+    'the signature does not match',
+    'the signature does not match',
+    'the signature is too old',
+    'the signature is not well formed',
+    'no webhook-signature header',
+  ])
+})

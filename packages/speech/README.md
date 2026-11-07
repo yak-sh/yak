@@ -50,6 +50,17 @@ argument; nothing here reads the environment.
   seconds heard and what the stream cost so far, and `close()` ends it answering
   the same, each response priced at its model's rates, or the stream's when it
   names none. A provider without `talk` refuses.
+- A call the provider's own line carries, sent to it over SIP, never passes its
+  audio here. `talk.calls.rang(event)` reads the provider's webhook for the
+  call's `id` and SIP `headers`; `accept({provider, key, call, …})` picks it up
+  with the model set up as `talk` sets one up, and `reject` and `hangup` end it.
+  `talk({…, call})` then joins it instead of streaming: no `format`, nothing to
+  `send` and no `told.audio`; the caller talking over the model stops what plays
+  on the line, `told.plays()` says the model's audio began playing, and
+  `told.ended()` that the call ended (its stream closed cleanly). Its audio
+  never heard here, a turn ends only when the model hears it end, and what the
+  model says plays before the turn's words are heard. OpenAI's realtime models
+  take calls this way.
 - A stream's `open(url, {authorization, protocols})` makes its socket: by
   default the platform's `WebSocket`, offering the key as the provider's
   subprotocols; a host whose sockets take headers sends `authorization`.

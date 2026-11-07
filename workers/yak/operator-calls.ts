@@ -27,6 +27,8 @@ import { type Clock, system } from '@yaks/fp'
 import type { Frame, Line, Ring } from '@yaks/phone'
 import {
   type Keyed,
+  type Provider,
+  type Setup,
   type Socket,
   type Talk as Talker,
   talk,
@@ -93,6 +95,9 @@ export type Ticket = {
   at: number
   /** the caller's first name, when the platform knows what to call them */
   first?: string
+  /** the speech provider whose own line carries the call, with its id for
+   * it in `call`; none for a call streamed to us */
+  carried?: string
 }
 
 let secretOf = (env: Env) => {
@@ -100,10 +105,14 @@ let secretOf = (env: Env) => {
   return env.SESSION_SECRET
 }
 
-// Whom a ring reaches: the person the platform knows by the number, in the
-// space they texted in or write in, their own first, while speech is not
-// paused. Null hangs up on them.
-let reached = async (env: Env, ring: Ring) => {
+/** Whom a ring reaches: the person the platform knows by the number, in the
+ * space they texted in or write in, their own first, while speech (through
+ * `provider`, else the Operator's own) is not paused. Null hangs up on them. */
+export let reached = async (
+  env: Env,
+  ring: Pick<Ring, 'from'>,
+  provider?: Provider,
+) => {
   let dir = directoryOf(env.STORE)
   let person = await dir.phoned(ring.from)
   if (!person) return null
@@ -113,7 +122,9 @@ let reached = async (env: Env, ring: Ring) => {
     dir.nameAt(person),
     dir.texting(person).then((t) => spaceFor(env, person, t?.space)),
   ])
-  if (!space || await paused(env, setupOf(env, space).provider)) return null
+  if (
+    !space || await paused(env, provider ?? setupOf(env, space).provider)
+  ) return null
   return { person, space, first: name?.trim().split(/\s+/)[0] || undefined }
 }
 
@@ -275,9 +286,10 @@ export type Timed = { first?: number; answer?: number; asked?: true }
 export type Around = {
   /** the call, as the provider names it */
   call: string
-  /** the provider's side of the call */
-  wire: Socket
-  line: Line
+  /** the phone provider's side of the call, the socket its audio streams
+   * over and how it speaks; none on a call a talking model's own line
+   * carries, whose audio never passes here */
+  stream?: { wire: Socket; line: Line }
   /** the caller's words, given to the Operator */
   ask: (text: string) => Promise<void>
   /** what is said when the call is answered */
@@ -286,7 +298,7 @@ export type Around = {
    * the dollars of what it heard, every CHARGED and as it ends */
   charge: (used: { seconds: number; heard: number }) => Promise<void>
   /** what the call used in all, how its turns were timed, and what ended
-   * it (`stop`, `close 1000`, `error` or `us`), once it ends */
+   * it (`stop`, `close 1000`, `error`, `ended` or `us`), once it ends */
   done: (
     call: { seconds: number; heard: number; turns: Timed[]; ended: string },
   ) => Promise<void>
@@ -399,7 +411,8 @@ let carry = (
   close: () => void,
 ) => {
   let report = reporter(o)
-  let wire = held(o.wire)
+  let wire = o.stream && held(o.stream.wire)
+  let line = o.stream?.line
   let time = o.time ?? system
   away.get(o.call)?.cancel()
   away.delete(o.call)
@@ -433,34 +446,46 @@ let carry = (
       charging()
     })
   charging()
+  // A call whose line the talking model carries is hung up once this side
+  // lets it go, unless it ended: the caller would be left talking to a
+  // model with no Operator behind it.
   let finish = (ended = 'us') => {
     if (over) return
     over = true
     for (let cancel of timers) cancel()
     close()
     try {
-      wire.close(1000)
+      wire?.close(1000)
     } catch {
       // Already closed by the other side.
     }
+    if (!wire && ended != 'ended') o.hangup().catch(report)
     Promise.all([charge(), o.done({ ...used, turns, ended }).catch(report)])
       .finally(finished)
   }
-  wire.addEventListener('message', (event) => {
-    let frame: Frame = o.line.frame(String(event.data))
+  wire?.addEventListener('message', (event) => {
+    let frame: Frame = line!.frame(String(event.data))
     if (frame.audio) hear(frame.audio)
     if (frame.stop) finish('stop')
   })
-  wire.addEventListener('close', ({ code }) => {
+  wire?.addEventListener('close', ({ code }) => {
     if (!over && !CLEAN.includes(code ?? 1005)) {
       lost(new Error(`A call's line closed with ${code} before it ended`))
     }
     finish(`close ${code ?? 1005}`)
   })
-  wire.addEventListener('error', () => {
+  wire?.addEventListener('error', () => {
     if (!over) lost(new Error(`A call's line failed before it ended`))
     finish('error')
   })
+  // The first sound of a turn's answer, timed from the caller's last word;
+  // `answer` false for an acknowledgement.
+  let timed = (answer: boolean) => {
+    if (!turn) return
+    let ms = time.now() - turn.at
+    turn.timed.first ??= ms
+    if (answer) turn.timed.answer ??= ms
+  }
   return {
     report,
     ended,
@@ -481,16 +506,14 @@ let carry = (
     },
     /** audio played to the caller, the answer's unless `answer` is false */
     play: (audio: Uint8Array, answer = true) => {
-      if (!audio.length || over) return
-      if (turn) {
-        let ms = time.now() - turn.at
-        turn.timed.first ??= ms
-        if (answer) turn.timed.answer ??= ms
-      }
-      wire.send(o.line.play(audio))
+      if (!audio.length || over || !wire) return
+      timed(answer)
+      wire.send(line!.play(audio))
     },
+    /** audio began playing on a line the talking model carries */
+    plays: (answer: boolean) => !over && timed(answer),
     /** stop what is playing */
-    clear: () => wire.send(o.line.clear()),
+    clear: () => wire?.send(line!.clear()),
     /** at the time limit, `goodbye` said and the call hung up */
     limit: (goodbye: () => void) =>
       later((o.minutes ?? MINUTES) * 60_000, () => {
@@ -683,6 +706,8 @@ export let talking = (o: Talking): Call => {
     said: (text) => void lines.push({ text, said: true }),
     done: () => void keep(),
     audio: (bytes) => c.play(bytes, !asking),
+    plays: () => c.plays(!asking),
+    ended: () => c.finish('ended'),
     call: async (name, args) => {
       let look = looks.get(name)
       if (look) {
@@ -755,6 +780,9 @@ export let talking = (o: Talking): Call => {
     ended: c.ended,
   }
 }
+
+// A tool a talking model is given.
+type Tool = Setup['tools'][number]
 
 // The calls this object carries, by space and person: one each.
 let live = new Map<string, Call>()
@@ -841,6 +869,129 @@ export let upgraded = (url: string, { authorization }: Keyed): Socket => {
 declare let WebSocketPair: { new (): { 0: unknown; 1: Upgraded } }
 
 /**
+ * What a call to `space`'s Operator shares however its audio travels: what
+ * the caller says asked of the Operator, what it used charged at the line's
+ * `perMinute`, how its turns were timed logged as it ends, and a talking
+ * model's call (`talks`), its lines kept in their conversation and its tools
+ * the Operator's status and `ask`. `begin` makes the call this object's.
+ */
+export let calling = (
+  env: Env,
+  operator: Operator,
+  space: Space,
+  ticket: Ticket,
+  armed: () => Promise<void> | undefined,
+  o: {
+    setup: ReturnType<typeof setupOf>
+    perMinute: number
+    hangup: () => Promise<void>
+    /** how its audio travels, for the log */
+    line: string
+  },
+) => {
+  let { setup } = o
+  let opens = opening(
+    ticket,
+    space.operator ?? 'your Operator',
+    Date.now(),
+    away.get(ticket.call)?.at,
+  )
+  let turn = 0
+  let key = keyOf(space.eid, ticket.person)
+  let call: Call | undefined
+  // The caller's words, or a talking model's request made of them (`call`),
+  // to their conversation, answered by `model`.
+  let asking = (model: string, call?: string) => async (text: string) => {
+    await receive(
+      operator.store,
+      {
+        space: space.eid,
+        person: ticket.person,
+        channel: 'voice',
+        address: ticket.from,
+        reply_to: ticket.to,
+        via: ticket.via,
+        model,
+        ...call ? { call } : {},
+      },
+      text,
+      { id: requestId(space.eid, opens.turn(++turn)) },
+    )
+    await armed()
+  }
+  let around = {
+    call: ticket.call,
+    hello: opens.hello,
+    minutes: opens.minutes,
+    charge: ({ seconds, heard }: Parameters<Around['charge']>[0]) =>
+      countedSpend(env, space, heard + seconds / 60 * o.perMinute, 0),
+    done: ({ seconds, turns, ended }: Parameters<Around['done']>[0]) => {
+      if (live.get(key) == call) live.delete(key)
+      // How long each turn waited, for comparing providers, models and
+      // lines.
+      console.log(JSON.stringify({
+        call: 'operator',
+        line: o.line,
+        provider: setup.provider.name,
+        model: setup.model,
+        voice: setup.voice,
+        speed: setup.speed,
+        seconds: Math.round(seconds),
+        ended,
+        turns,
+      }))
+      return Promise.resolve()
+    },
+    hangup: o.hangup,
+  }
+  // A talking model's call, line by line, kept in order: where it began,
+  // then what was said on it.
+  let noted = Promise.resolve()
+  let note = (text: string, o: { said?: boolean; began?: boolean }) =>
+    noted = noted.then(() =>
+      operator.note({ person: ticket.person }, space, text, {
+        call: ticket.call,
+        ...o,
+      })
+    ).catch((e) => defect(e, CALL))
+  let glance = {
+    store: operator.store,
+    space: space.eid,
+    person: ticket.person,
+    dir: directoryOf(env.STORE),
+  }
+  let looked = looks(glance)
+  let how: { instructions: string; tools: Tool[] } = {
+    instructions: instructed(space.operator ?? 'the Operator'),
+    tools: [ASK, ...looked.map(({ read: _, ...tool }) => tool)],
+  }
+  return {
+    around,
+    asking,
+    begin: (made: Call) => {
+      call = made
+      live.set(key, made)
+    },
+    /** what a talking model is set up with: who it is, and its tools */
+    how,
+    /** a talking model's call, `talk` opening its stream */
+    talks: (more: Pick<Talking, 'stream'>, talk: (told: Talked) => Talker) => {
+      if (opens.began) note('', { began: true })
+      return talking({
+        ...around,
+        ...more,
+        looks: looked,
+        glance: glanceOf(glance),
+        // Behind a talking model the Operator answers with the fastest model.
+        ask: asking(CALL_MODELS[0], ticket.call),
+        note: (text, said) => note(text, { said }),
+        talk,
+      })
+    },
+  }
+}
+
+/**
  * `/operator/call` in the space's object: the provider's stream accepted,
  * and the conversation run on it until the call ends.
  */
@@ -872,113 +1023,42 @@ export let answering = async (
   passed(ticket.at, setup.provider)
   let pair = new WebSocketPair()
   pair[1].accept()
-  let opens = opening(
-    ticket,
-    space.operator ?? 'your Operator',
-    Date.now(),
-    away.get(ticket.call)?.at,
-  )
-  let turn = 0
-  let key = keyOf(space.eid, ticket.person)
-  // The caller's words, or a talking model's request made of them (`call`),
-  // to their conversation, answered by `model`.
-  let asking = (model: string, call?: string) => async (text: string) => {
-    await receive(
-      operator.store,
-      {
-        space: space.eid,
-        person: ticket.person,
-        channel: 'voice',
-        address: ticket.from,
-        reply_to: ticket.to,
-        via: ticket.via,
-        model,
-        ...call ? { call } : {},
-      },
-      text,
-      { id: requestId(space.eid, opens.turn(++turn)) },
-    )
-    await armed()
-  }
-  let around = {
-    call: ticket.call,
-    wire: pair[1],
-    line,
-    hello: opens.hello,
-    minutes: opens.minutes,
-    charge: ({ seconds, heard }: Parameters<Around['charge']>[0]) =>
-      countedSpend(env, space, heard + seconds / 60 * line.perMinute, 0),
-    done: ({ seconds, turns, ended }: Parameters<Around['done']>[0]) => {
-      if (live.get(key) == call) live.delete(key)
-      // How long each turn waited, for comparing providers and models.
-      console.log(JSON.stringify({
-        call: 'operator',
-        provider: setup.provider.name,
-        model: setup.model,
-        voice: setup.voice,
-        speed: setup.speed,
-        seconds: Math.round(seconds),
-        ended,
-        turns,
-      }))
-      return Promise.resolve()
-    },
+  let c = calling(env, operator, space, ticket, armed, {
+    setup,
+    perMinute: line.perMinute,
     hangup: () => caller().hangup(ticket.call),
-  }
-  // A talking model's call, line by line, kept in order: where it began,
-  // then what was said on it.
-  let noted = Promise.resolve()
-  let note = (text: string, o: { said?: boolean; began?: boolean }) =>
-    noted = noted.then(() =>
-      operator.note({ person: ticket.person }, space, text, {
-        call: ticket.call,
-        ...o,
-      })
-    ).catch((e) => defect(e, CALL))
-  if (setup.talks && opens.began) note('', { began: true })
-  let glance = {
-    store: operator.store,
-    space: space.eid,
-    person: ticket.person,
-    dir: directoryOf(env.STORE),
-  }
-  let looked = looks(glance)
-  let call: Call = setup.talks
-    ? talking({
-      ...around,
-      looks: looked,
-      glance: glanceOf(glance),
-      // Behind a talking model the Operator answers with the fastest model.
-      ask: asking(CALL_MODELS[0], ticket.call),
-      note: (text, said) => note(text, { said }),
-      talk: (told) =>
+    line: ticket.via,
+  })
+  let stream = { wire: pair[1], line }
+  c.begin(
+    setup.talks
+      ? c.talks({ stream }, (told) =>
         talk({
           ...speech,
+          ...c.how,
           format: line.format,
           model: setup.model,
           voice: setup.voice,
           speed: setup.speed,
-          instructions: instructed(space.operator ?? 'the Operator'),
-          tools: [ASK, ...looked.map(({ read: _, ...tool }) => tool)],
           told,
           open: upgraded,
-        }),
-    })
-    : converse({
-      ...around,
-      ask: asking(setup.model),
-      listen: (told) =>
-        turns({ ...speech, format: line.format, told, open: upgraded }),
-      say: async (text) =>
-        (await speaking(env, space, text, {
-          provider: setup.provider,
-          format: line.format,
-          voice: setup.voice,
-          speed: setup.speed,
-        })).body,
-      ack: ACKS,
-    })
-  live.set(key, call)
+        }))
+      : converse({
+        ...c.around,
+        stream,
+        ask: c.asking(setup.model),
+        listen: (told) =>
+          turns({ ...speech, format: line.format, told, open: upgraded }),
+        say: async (text) =>
+          (await speaking(env, space, text, {
+            provider: setup.provider,
+            format: line.format,
+            voice: setup.voice,
+            speed: setup.speed,
+          })).body,
+        ack: ACKS,
+      }),
+  )
   return new Response(
     null,
     { status: 101, webSocket: pair[0] } as ResponseInit & {

@@ -9,6 +9,7 @@
 // that says its balance below which every request to it is refused: its
 // balance at the start less what the pilot may spend. OpenAI's says none; its
 // project holds it to $10 a month instead.
+import type { Scheme } from '@yaks/hook'
 import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
 import {
@@ -35,6 +36,12 @@ import { modelAccess } from './models.ts'
 export let SECRETS = new Map<Provider, keyof Env>([
   [DEEPGRAM, 'DEEPGRAM_API_KEY'],
   [OPENAI, 'OPENAI_VOICE_KEY'],
+])
+
+/** The providers whose own line carries calls sent to them over SIP
+ * (operator-carried.ts), the secret their webhook is signed with, and how. */
+export let LINES = new Map<Provider, { secret: keyof Env; scheme: Scheme }>([
+  [OPENAI, { secret: 'OPENAI_CALLS_SECRET', scheme: 'standard' }],
 ])
 
 /** The provider every app's ./api/speech/ door speaks through. */

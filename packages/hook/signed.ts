@@ -1,7 +1,8 @@
 // Whether a delivered request is signed by whoever holds the secret.
 //
 // A scheme is data, so the receiver can keep it beside the secret it names:
-// `'stripe'`, `'github'`, `'telnyx'`, an HMAC-SHA256 of the raw body in a
+// `'stripe'`, `'github'`, `'telnyx'`, `'standard'` (Standard Webhooks, as
+// OpenAI signs), an HMAC-SHA256 of the raw body in a
 // header of the sender's choosing, or an Ed25519 signature over a timestamp
 // and the body, checked under the sender's public key. The answer is a sentence: '' when the signature holds,
 // else why it does not, because a refusal someone reads in a log should say
@@ -53,6 +54,7 @@ export type Scheme =
   | 'stripe'
   | 'github'
   | 'telnyx'
+  | 'standard'
   | Hmac
   | Ed25519
   | SecretHeader
@@ -97,10 +99,10 @@ let base64 = (s: string) => {
   }
 }
 
-let key = (secret: string) =>
+let key = (secret: string | Uint8Array<ArrayBuffer>) =>
   crypto.subtle.importKey(
     'raw',
-    enc.encode(secret),
+    typeof secret == 'string' ? enc.encode(secret) : secret,
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['verify'],
@@ -111,7 +113,7 @@ let key = (secret: string) =>
 // must never throw its way past the check, and when none is well formed there
 // is nothing to take the secret out for.
 let matches = async (
-  secret: string,
+  secret: string | Uint8Array<ArrayBuffer>,
   payload: string,
   digests: (Uint8Array<ArrayBuffer> | null)[],
 ) => {
@@ -173,6 +175,32 @@ let stripe = async (
   if (Math.abs(now / 1000 - t) > SKEW) return 'the signature is too old'
   let digests = said.filter(([k]) => k == 'v1').map(([, v]) => hex(v))
   return await matches(secret, `${t}.${body}`, digests)
+}
+
+// Standard Webhooks (https://www.standardwebhooks.com): `v1,<base64>` in
+// `webhook-signature`, several space apart while a secret is rolled, each an
+// HMAC of `<webhook-id>.<webhook-timestamp>.<raw body>` under the secret's
+// bytes, the base64 after its `whsec_`.
+let standard = async (
+  secret: string,
+  body: string,
+  headers: HeaderLookup,
+  now: number,
+) => {
+  let line = headers.get('webhook-signature')
+  if (!line) return 'no webhook-signature header'
+  let id = headers.get('webhook-id') ?? ''
+  let at = headers.get('webhook-timestamp') ?? ''
+  if (!/^\d+$/.test(at)) return 'no timestamp on the signature'
+  if (Math.abs(now / 1000 - Number(at)) > SKEW) {
+    return 'the signature is too old'
+  }
+  let raw = base64(secret.replace(/^whsec_/, ''))
+  if (!raw?.length) return MISMATCH
+  let digests = line.split(' ').flatMap((s) =>
+    s.startsWith('v1,') ? [base64(s.slice(3))] : []
+  )
+  return await matches(raw, `${id}.${at}.${body}`, digests)
 }
 
 let hmac = async (
@@ -243,6 +271,8 @@ export let refusal = (
     ? stripe(secret, body, headers, now)
     : scheme == 'telnyx'
     ? ed25519(TELNYX, secret, body, headers, now)
+    : scheme == 'standard'
+    ? standard(secret, body, headers, now)
     : typeof scheme == 'object' && 'token' in scheme
     ? bearer(scheme, secret, headers)
     : scheme != 'github' && 'timestamp' in scheme

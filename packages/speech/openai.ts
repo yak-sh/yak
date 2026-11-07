@@ -6,7 +6,7 @@
 // https://developers.openai.com/api/docs/pricing
 // https://developers.openai.com/api/docs/guides/realtime-conversations
 // https://developers.openai.com/api/reference/resources/realtime/server-events
-import type { Provider, Raw, Said, Turn, Voice } from './mod.ts'
+import type { Provider, Raw, Said, Setup, Turn, Voice } from './mod.ts'
 import { base64, mulawed, unbase64 } from './audio.ts'
 
 // The realtime model's voices; its TTS model speaks in the same ones.
@@ -207,40 +207,7 @@ export let OPENAI: Provider = {
     path: (model) => `/v1/realtime?model=${encodeURIComponent(model)}`,
     opening: (setup) => [JSON.stringify({
       type: 'session.update',
-      session: {
-        type: 'realtime',
-        model: setup.model,
-        instructions: setup.instructions,
-        output_modalities: ['audio'],
-        // The least thought before the first word.
-        reasoning: { effort: 'minimal' },
-        audio: {
-          input: {
-            format: wire(setup.format),
-            transcription: { model: 'gpt-live-transcribe', language: 'en' },
-            // A phone held to the ear. The model says when the caller is
-            // done, in about a second when it is sure; unsure, it waits up to
-            // 4 s at medium eagerness, and mod.ts `talk` ends the turn sooner
-            // and answers it. High eagerness ends a turn at a thinking pause.
-            noise_reduction: { type: 'near_field' },
-            turn_detection: {
-              type: 'semantic_vad',
-              eagerness: 'medium',
-              create_response: false,
-              // The caller talking stops the model only once their words
-              // say something (mod.ts `talk`), not at the first sound.
-              interrupt_response: false,
-            },
-          },
-          output: {
-            format: wire(setup.format),
-            voice: setup.voice,
-            ...setup.speed == 1 ? {} : { speed: setup.speed },
-          },
-        },
-        tools: setup.tools.map((t) => ({ type: 'function', ...t })),
-        tool_choice: 'auto',
-      },
+      session: session(setup),
     })],
     audio: (bytes) =>
       JSON.stringify({
@@ -281,6 +248,9 @@ export let OPENAI: Provider = {
               args: e.arguments ?? '{}',
             },
           })
+          break
+        case 'output_audio_buffer.started':
+          said.push({ plays: true })
           break
         case 'response.created':
           said.push({ begun: true })
@@ -336,8 +306,96 @@ export let OPENAI: Provider = {
         },
       }),
     commit: JSON.stringify({ type: 'input_audio_buffer.commit' }),
+    // A call sent to the project over SIP rings its webhook; once accepted
+    // with the session, a stream joins it by its id. The line plays the
+    // model's audio, and is told to stop.
+    // https://developers.openai.com/api/docs/guides/voice-sip
+    calls: {
+      rang: (event) => {
+        let e = event as {
+          type?: string
+          data?: {
+            call_id?: string
+            sip_headers?: { name?: string; value?: string }[]
+          }
+        }
+        if (e?.type != 'realtime.call.incoming' || !e.data?.call_id) return
+        return {
+          id: e.data.call_id,
+          headers: Object.fromEntries(
+            (e.data.sip_headers ?? []).map((h) => [
+              String(h.name).toLowerCase(),
+              String(h.value ?? ''),
+            ]),
+          ),
+        }
+      },
+      accept: (call, setup) =>
+        posted(
+          `/v1/realtime/calls/${encodeURIComponent(call)}/accept`,
+          session(setup),
+        ),
+      reject: (call) =>
+        posted(`/v1/realtime/calls/${encodeURIComponent(call)}/reject`, {
+          status_code: 486,
+        }),
+      hangup: (call) =>
+        posted(`/v1/realtime/calls/${encodeURIComponent(call)}/hangup`),
+      join: (call) => `/v1/realtime?call_id=${encodeURIComponent(call)}`,
+      hush: JSON.stringify({ type: 'output_audio_buffer.clear' }),
+    },
   },
 }
+
+let posted = (path: string, body?: object) => ({
+  path,
+  init: {
+    method: 'POST',
+    ...body
+      ? {
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }
+      : {},
+  },
+})
+
+// A realtime session as a stream is set up with, or a call accepted with,
+// which says its own audio format.
+let session = (setup: Setup) => ({
+  type: 'realtime',
+  model: setup.model,
+  instructions: setup.instructions,
+  output_modalities: ['audio'],
+  // The least thought before the first word.
+  reasoning: { effort: 'minimal' },
+  audio: {
+    input: {
+      ...setup.format ? { format: wire(setup.format) } : {},
+      transcription: { model: 'gpt-live-transcribe', language: 'en' },
+      // A phone held to the ear. The model says when the caller is done, in
+      // about a second when it is sure; unsure, it waits up to 4 s at medium
+      // eagerness, and mod.ts `talk` ends the turn sooner and answers it.
+      // High eagerness ends a turn at a thinking pause.
+      noise_reduction: { type: 'near_field' },
+      turn_detection: {
+        type: 'semantic_vad',
+        eagerness: 'medium',
+        create_response: false,
+        // The caller talking stops the model only once their words say
+        // something (mod.ts `talk`), not at the first sound.
+        interrupt_response: false,
+      },
+    },
+    output: {
+      ...setup.format ? { format: wire(setup.format) } : {},
+      voice: setup.voice,
+      ...setup.speed == 1 ? {} : { speed: setup.speed },
+    },
+  },
+  tools: setup.tools.map((t) => ({ type: 'function', ...t })),
+  tool_choice: 'auto',
+})
 
 // The model a `response.done` was answered by, where it says: it reports
 // none, so the session's own model prices it.
