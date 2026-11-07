@@ -65,8 +65,12 @@ test('one free space a person, and each space answers to its own allowances', as
     }
     await send(first.slug, 'One too many')
     let said = await until(async () => {
-      let box = await hers.tool('mail_list', { space: first.slug, app: 'post' })
-      return box.includes('bounced') ? box : ''
+      let { rows } = await hers.answer('mail_list', {
+        space: first.slug,
+        app: 'post',
+      })
+      let letters = rows as unknown as { bounced?: { reason: string } }[]
+      return letters.map((l) => l.bounced?.reason).find(Boolean) ?? ''
     }, { timeout: 20_000, poll: 250, label: 'the letter to come to rest' })
     assertStringIncludes(
       said,

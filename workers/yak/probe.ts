@@ -623,15 +623,10 @@ export let meta = (k: Kernel, cookie = k.owner.cookie) => {
   let agent = connector(k, cookie)
   let where = { space: 'yak', app: 'platform' }
   return {
-    // The rows, and only the rows: a tool reply carries the unseen block and
-    // the ceiling line after them (unseen.ts), and the meta space has breaks
-    // of its own to be told about like anybody else.
+    // The rows, read off the answer's data: its words carry the unseen block,
+    // the ceiling line and a long text only by a tag beside it.
     query: async (query: string) =>
-      JSON.parse(
-        (await agent.tool('graph_query', { ...where, query })).split('\n\n## ')[
-          0
-        ],
-      ) as Row[],
+      (await agent.answer('graph_query', { ...where, query })).rows as Row[],
     apply: (entities: unknown[]) =>
       agent.tool('graph_apply', { ...where, entities }),
   }

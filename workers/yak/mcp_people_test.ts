@@ -439,15 +439,13 @@ test('a project document is an entity, and search finds it', async () => {
 
     // The name is the address: read back whole without a lookup, and a
     // rewrite under the same name patches it rather than leaving two.
-    let shown = JSON.parse(await agent.tool('graph_show', { ids: ['combat'] }))
-    assertStringIncludes(JSON.stringify(shown), 'A tick is ten seconds')
+    let shown = await agent.answer('graph_show', { ids: ['combat'] })
+    assertStringIncludes(JSON.stringify(shown.rows), 'A tick is ten seconds')
     await write('# Combat\n\nA tick is five seconds now.')
-    let again = JSON.parse(
-      await agent.tool('graph_query', {
-        app: 'idler-rpg',
-        query: '.note&?doc',
-      }),
-    ) as { doc: { body: string } }[]
+    let again = (await agent.answer('graph_query', {
+      app: 'idler-rpg',
+      query: '.note&?doc',
+    })).rows as unknown as { doc: { body: string } }[]
     assertEquals(again.length, 1)
     assertStringIncludes(again[0].doc.body, 'five seconds now')
   } finally {
