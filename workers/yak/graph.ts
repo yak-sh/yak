@@ -255,12 +255,15 @@ import type {
   ApplyOpts,
   Bundle,
   Comp,
+  Eid,
   Graph,
   Plugin,
   ReadOpts,
 } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
-import { comps, dead as deleted } from '@yaks/graph/bundle'
+import { comps, dead as deleted, TOMBSTONE } from '@yaks/graph/bundle'
+import { hook, type HookContext } from '@yaks/graph/plugin'
+import { doomed } from '@yaks/graph/read'
 import { applyOptions, graph, identityEid } from '@yaks/graph'
 import { actorOf as writerOf } from '@yaks/graph/provenance'
 import { Refused } from '@yaks/graph/errors'
@@ -734,16 +737,28 @@ installContext({
 })
 
 // A directory write that changes nothing an authorization reads raises no
-// serving fence: use receipts (used.ts), and the archetype descriptor a
-// receipt's new set of components mints (@yaks/sqlite archetype.ts). So the
-// receipts each hour's first use writes hold back no serving check
-// (T-131212). A delete, or any other component, fences.
+// serving fence: use receipts (used.ts), the archetype descriptor a
+// receipt's new set of components mints (@yaks/sqlite archetype.ts), and the
+// delete of an entity holding nothing an authorization reads, such as an
+// effect's run, which deletes itself once it finishes (@yaks/effects
+// pool.ts). So the receipts each hour's first use writes, and the runs the
+// directory's effects leave, hold back no serving check (T-131212,
+// T-147454). A deleted entity's stamps and tombstone go with it. Any other
+// delete or component fences.
 let UNFENCED = new Set([...RECEIPTS, 'archetype'])
+let UNHELD = new Set([...UNFENCED, 'effect', 'created', 'updated'])
 let UNREAD = -2
 let unfenced = (bundles: Bundle[], words = UNFENCED): boolean =>
   bundles.every((b) =>
     !deleted(b) && comps(b).every(([name]) => words.has(name))
   )
+// The entities a batch deletes, and whether entities as they stand hold
+// anything an authorization reads.
+let killed = (bundles: Bundle[]): Eid[] => [
+  ...new Set(bundles.filter(deleted).map((b) => b.entity.eid)),
+]
+let unheld = (rows: Bundle[]): boolean =>
+  rows.every((b) => comps(b).every(([name]) => UNHELD.has(name)))
 
 // A hold on a space's budget raises no fence either (T-141144): its receipt,
 // and a `held` spend the directory's own transaction refuses past the budget
@@ -806,6 +821,9 @@ export class Store {
   // The serving fence a directory write commits under: its revision, -1 for
   // none, or UNREAD for a write no authorization reads (`unfenced`).
   #copyWrite = new AsyncLocalStorage<number>()
+  // The entities an UNREAD write deletes, by its transaction, once read in
+  // it to hold nothing an authorization reads (`unheld`).
+  #unheld = new WeakMap<object, Set<Eid>>()
   #copyBatch = new AsyncLocalStorage<number>()
   #bind: Bindings
   // The mover's rules (mover.ts `RULES`), and the ones whose batch failed in
@@ -1455,16 +1473,47 @@ export class Store {
               ? [{
                 name: 'yak/serving-fence',
                 hooks: {
-                  commit: (bundles: Bundle[]) => {
+                  // What an UNREAD write deletes, cascades included, is read
+                  // while it stands.
+                  precondition: hook(
+                    ['$delete', TOMBSTONE],
+                    (bundles, tx, _err, context) => {
+                      let at = context?.transaction
+                      let gone = killed(bundles)
+                      if (
+                        !at || !gone.length ||
+                        this.#copyWrite.getStore() !== UNREAD
+                      ) return bundles
+                      return after(
+                        doomed(tx, vocab, gone),
+                        (all) =>
+                          after(tx.get(all), (rows) => {
+                            if (unheld(rows)) {
+                              this.#unheld.set(at, new Set(all))
+                            }
+                            return bundles
+                          }),
+                      )
+                    },
+                  ),
+                  commit: (
+                    bundles: Bundle[],
+                    _tx: unknown,
+                    _err: unknown,
+                    context?: HookContext,
+                  ) => {
                     let revision = this.#copyWrite.getStore()
                     if (revision === -1) return bundles
                     if (revision === HOLD && unfenced(bundles, HOLDING)) {
                       return bundles
                     }
                     if (revision === UNREAD || revision === HOLD) {
-                      if (unfenced(bundles)) return bundles
-                      let named = bundles.flatMap((b) =>
-                        comps(b).map(([name]) => name)
+                      let read = context?.transaction &&
+                        this.#unheld.get(context.transaction)
+                      let rest = bundles.filter((b) => !read?.has(b.entity.eid))
+                      if (unfenced(rest)) return bundles
+                      let named = rest.flatMap((b) =>
+                        deleted(b) ? ['$delete'] : comps(b).map(([n]) => n)
                       )
                       throw new Error(
                         `An unfenced write committed ${named}`,
@@ -1565,12 +1614,21 @@ export class Store {
           if (batch != null) return under(batch)
           let copy = meta && !opts?.check ? copyOf(this.#bind) : undefined
           if (!copy) return under(-1)
-          // A write no authorization reads raises no fence (`unfenced`).
-          if (unfenced(bundles)) return under(UNREAD)
-          if (hold(bundles)) return under(HOLD)
           // Effects may themselves write the directory and acquire a newer
           // fence. Only explicit synchronous mover batches reuse an epoch.
-          return fenced(copy, under, this.#committed, clockOf(this.#time))
+          let fence = () =>
+            fenced(copy, under, this.#committed, clockOf(this.#time))
+          // A write no authorization reads raises no fence (`unfenced`).
+          let gone = killed(bundles)
+          if (unfenced(bundles.filter((b) => !deleted(b)))) {
+            if (!gone.length) return under(UNREAD)
+            return after(
+              g.get(gone),
+              (rows) => unheld(rows) ? under(UNREAD) : fence(),
+            )
+          }
+          if (hold(bundles)) return under(HOLD)
+          return fence()
         }
         g.admit = (bundles, opts) =>
           this.#copyWrite.run(

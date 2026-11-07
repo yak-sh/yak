@@ -1,6 +1,7 @@
 // Real directory Store mutations, with a separate durable serving-copy core
 // behind an asynchronous RPC-shaped door. No Store state is shared with it.
 import { backoff } from '@yaks/durable-object'
+import { enqueue } from '@yaks/effects'
 import { select, table } from '@yaks/sql'
 import { type Clock, clock, equal, ok, test } from '@yaks/testing'
 import { doorOf, IDEMPOTENCY } from './door.ts'
@@ -90,9 +91,12 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
   // settles with a directory write that fences: wait them out, so a proof's
   // fences are its own however long they take. On a clock of its own, the
   // pool's pauses between passes are kept on it, so it is moved meanwhile.
-  while (ctx.pending.size) {
-    await (time?.advance(0) ?? Promise.allSettled([...ctx.pending]))
+  let settle = async () => {
+    while (ctx.pending.size) {
+      await (time?.advance(0) ?? Promise.allSettled([...ctx.pending]))
+    }
   }
+  await settle()
   let answer = await read()
   let initial = Number(answer.headers.get(EPOCH))
   let body = await answer.text()
@@ -109,6 +113,7 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
     body,
     begins,
     finishes,
+    settle,
     ask: (path: string, body?: unknown) =>
       store.fetch(
         new Request(`http://store${path}`, {
@@ -205,6 +210,35 @@ await proof(
         answers: [200, 200],
         receipts: { fences: 0, current: true },
         seat: { fences: 1, current: false },
+      })
+  },
+)
+
+// An effect's run deletes itself once it finishes; no serving check reads it
+// (T-147454). Deleting what one does read still fences.
+await proof(
+  "an effect's cleanup leaves serving checks standing, and deleting a seat still fences them",
+  async () => {
+    let f = await fixture()
+    let g = await f.graph()
+    await enqueue(g, 'reward_referral', 'app')
+    let owed = f.begins.length
+    await f.settle()
+    let run = {
+      fences: f.begins.length - owed,
+      left: (await g.read('.effect')).length,
+    }
+    await f.at.apply([{ entity: { eid: 'ada' }, person: {} }, {
+      entity: { eid: 'seat' },
+      member: { space: 'space', person: 'ada', role: 'viewer' },
+    }], KERNEL)
+    let seated = f.begins.length
+    await f.at.apply([{ entity: { eid: 'seat' }, $delete: true }], KERNEL)
+    let seat = { fences: f.begins.length - seated }
+    return () =>
+      equal({ run, seat }, {
+        run: { fences: 0, left: 0 },
+        seat: { fences: 1 },
       })
   },
 )
