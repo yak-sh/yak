@@ -61,6 +61,14 @@ export type Said = {
   audio?: Uint8Array
   /** what the model said, once said */
   said?: string
+  /** the next of the model's words, said as it speaks */
+  saying?: string
+  /** the stream takes what is sent after its opening from now on, held
+   * until then */
+  ready?: true
+  /** the model hands work to whoever runs the call, by this id: what the
+   * caller asked is in their words so far */
+  delegated?: string
   /** the model asks for a tool */
   call?: { id: string; name: string; args: string }
   /** what the turn just finished cost, in dollars */
@@ -143,50 +151,71 @@ export type Provider = {
       format: Format,
     ) => TransformStream<Uint8Array, Uint8Array> | undefined
   }
-  /** a model that hears and speaks in one stream, answering as it goes */
-  talk?: {
-    /** the models it offers, the fastest first */
-    models: string[]
-    voice: string
-    voices: Voice[]
-    speeds: Speeds
-    path: (model: string) => string
-    opening: (setup: Setup) => string[]
-    audio: (bytes: Uint8Array) => string
-    /** what one message means, on a stream talking with `model` */
-    read: (data: unknown, model: string) => Said[]
-    /** a tool's answer given back */
-    answer: (call: string, output: string) => string[]
-    /** the model asked for a response: to say `text`, or without it to go
-     * on, asking for `tools` alone when they are given */
-    respond: (text?: string, tools?: Setup['tools']) => string
-    /** what stops the response under way */
-    cancel: string
-    /** something the model is told mid-stream, for what it says next,
-     * answered by nothing */
-    tell: (text: string) => string
-    /** what ends the caller's turn now, before the model hears it end */
-    commit: string
-    /** calls its own line carries, such as one sent to it over SIP: their
-     * audio never passes here, and a stream joins one to hear and steer it */
-    calls?: {
-      /** a webhook's event that a call rang: its id and the headers it came
-       * with, their names lower case; undefined for any other event */
-      rang: (
-        event: unknown,
-      ) => { id: string; headers: Record<string, string> } | undefined
-      /** pick a call up, talking as `setup` says */
-      accept: (call: string, setup: Setup) => Asked
-      reject: (call: string) => Asked
-      hangup: (call: string) => Asked
-      /** the path of the stream that joins a call */
-      join: (call: string) => string
-      /** what stops the audio playing to the caller */
-      hush: string
-    }
-  }
+  /** the models that hear and speak in one stream, answering as they go */
+  talk?: Talker[]
   /** the account's credit left, in dollars, where the provider says */
   balance?: (ask: Ask) => Promise<number>
+}
+
+/** Models that hear and speak in one stream, as their provider words it. */
+export type Talker = {
+  /** the models it offers, the fastest first */
+  models: string[]
+  voice: string
+  voices: Voice[]
+  speeds: Speeds
+  path: (model: string) => string
+  opening: (setup: Setup) => string[]
+  audio: (bytes: Uint8Array) => string
+  /** what one message means, on a stream talking with `model` */
+  read: (data: unknown, model: string) => Said[]
+  /** a tool's answer given back, or a delegation's */
+  answer: (call: string, output: string) => string[]
+  /** something the model is told mid-stream, for what it says next,
+   * answered by nothing */
+  tell: (text: string) => string[]
+  /** calls its own line carries, such as one sent to it over SIP: their
+   * audio never passes here, and a stream joins one to hear and steer it */
+  calls?: {
+    /** a webhook's event that a call rang: its id and the headers it came
+     * with, their names lower case; undefined for any other event */
+    rang: (
+      event: unknown,
+    ) => { id: string; headers: Record<string, string> } | undefined
+    /** pick a call up, talking as `setup` says */
+    accept: (call: string, setup: Setup) => Asked
+    reject: (call: string) => Asked
+    hangup: (call: string) => Asked
+    /** the path of the stream that joins a call */
+    join: (call: string) => string
+    /** what stops the audio playing to the caller */
+    hush: string
+  }
+} & (Turned | Duplex)
+
+/** A model that takes a turn when asked: here is said when the caller's
+ * turn ended, and when to stop. */
+export type Turned = {
+  duplex?: undefined
+  /** the model asked for a response: to say `text`, or without it to go
+   * on, asking for `tools` alone when they are given */
+  respond: (text?: string, tools?: Setup['tools']) => string
+  /** what stops the response under way */
+  cancel: string
+  /** what ends the caller's turn now, before the model hears it end */
+  commit: string
+}
+
+/** A model that hears and speaks at once, as a person on the phone does,
+ * and takes its own turns: it hears when the caller is done and yields when
+ * they talk over it, sending its audio as it is said, quiet and all. Its
+ * tools are whoever runs the call, which it hands work to (`delegated`). */
+export type Duplex = {
+  duplex: true
+  /** what a minute of the stream costs */
+  perMinute: number
+  /** the model asked to say `text` now */
+  say: (text: string) => string[]
 }
 
 let MEDIA: Record<Format['encoding'], string> = {
@@ -504,8 +533,9 @@ export let turns = (
 export type Talked = {
   /** the caller talked over the model: whatever is playing should stop */
   over?: () => void
-  /** the caller stopped talking; the model's answer is on its way */
-  stopped?: () => void
+  /** the caller stopped talking, `ago` seconds before now (none: now); the
+   * model's answer is on its way */
+  stopped?: (ago?: number) => void
   /** what the caller said, once heard */
   heard?: (text: string) => void
   /** audio to play to the caller */
@@ -514,6 +544,9 @@ export type Talked = {
   said?: (text: string) => void
   /** a tool the model asked for, answered with its output */
   call: (name: string, args: string) => Promise<string>
+  /** work a duplex model handed over: what the caller asked, in their
+   * words, answered with what to tell them */
+  delegate?: (request: string) => Promise<string>
   /** the model's response ended, whatever it said or asked in it */
   done?: () => void
   /** the model's audio began playing, on a call its own line carries */
@@ -617,18 +650,30 @@ export type Talking = {
   tools?: Setup['tools']
 }
 
-type Talks = NonNullable<Provider['talk']>
-type Calls = NonNullable<Talks['calls']>
+type Calls = NonNullable<Talker['calls']>
 
-let talker = (provider: Provider): Talks => {
-  let t = provider.talk
-  if (!t) throw new Error(`${provider.name} has no model that talks`)
+/** The entry of `provider`'s that talks with `model`, or with its first
+ * model when none is given, if any. */
+export let talkerOf = (
+  provider: Provider,
+  model?: string,
+): Talker | undefined =>
+  model == undefined
+    ? provider.talk?.[0]
+    : provider.talk?.find((t) => t.models.includes(model))
+
+let talker = (provider: Provider, model?: string): Talker => {
+  let t = talkerOf(provider, model)
+  if (!t) {
+    throw new Error(`${provider.name} has no model ${model ?? ''} that talks`)
+  }
   return t
 }
 
-// The stream's own `LISTEN` comes first among its tools.
+// The stream's own `LISTEN` comes first among a turned model's tools; a
+// duplex model's tools are whoever runs the call.
 let setup = (
-  t: Talks,
+  t: Talker,
   o: Talking,
   format?: Raw,
 ): Setup => ({
@@ -637,11 +682,11 @@ let setup = (
   format,
   speed: paced(t.speeds, o.speed),
   instructions: o.instructions,
-  tools: [LISTEN, ...o.tools ?? []],
+  tools: t.duplex ? [] : [LISTEN, ...o.tools ?? []],
 })
 
-let carrier = (provider: Provider): Calls => {
-  let calls = talker(provider).calls
+let carrier = (provider: Provider, model?: string): Calls => {
+  let calls = talker(provider, model).calls
   if (!calls) throw new Error(`${provider.name}'s line carries no calls`)
   return calls
 }
@@ -655,7 +700,13 @@ let calling = async (o: Calling, { path, init }: Asked): Promise<void> => {
 export let accept = (
   o: Calling & Talking & { call: string },
 ): Promise<void> =>
-  calling(o, carrier(o.provider).accept(o.call, setup(talker(o.provider), o)))
+  calling(
+    o,
+    carrier(o.provider, o.model).accept(
+      o.call,
+      setup(talker(o.provider, o.model), o),
+    ),
+  )
 
 /** A call the provider's own line carries, refused before it is picked up. */
 export let reject = (o: Calling & { call: string }): Promise<void> =>
@@ -669,7 +720,12 @@ export let hangup = (o: Calling & { call: string }): Promise<void> =>
  * A model that hears and speaks in one stream: `send` takes the caller's raw
  * samples in `format`, and `told` hears what the model says back and the
  * tools it asks for, each answered with its output before it goes on. The
- * provider's `talk` says how; one without it refuses.
+ * provider's `talk` entry for `model` says how (its first model by default);
+ * one without it refuses.
+ *
+ * A `Duplex` model takes its own turns and hands its work to
+ * `told.delegate`: everything below is for a `Turned` one, which takes a
+ * turn as it is told here.
  *
  * A caller who talks over the model stops it (`over`) once their words say
  * something (`meant`): an "okay", a laugh, or a noise, lets it go on. The
@@ -703,10 +759,19 @@ export let talk = (
     open?: Open
   },
 ): Talk => {
-  let t = talker(o.provider)
+  let t = talker(o.provider, o.model)
+  return t.duplex ? duplexed(o, t) : turned(o, t)
+}
+
+/** What a talk stream is opened with. */
+type Talks = Parameters<typeof talk>[0]
+
+// A model that takes a turn when asked: the caller's turn is ended, each
+// response asked for, and the response stopped when they talk over it, here.
+let turned = (o: Talks, t: Talker & Turned): Talk => {
   let set = setup(t, o, o.format)
   let model = set.model
-  let joined = o.call == undefined ? undefined : carrier(o.provider)
+  let joined = o.call == undefined ? undefined : carrier(o.provider, model)
   let seconds = (bytes: number) => o.format ? bytes / perSecond(o.format)! : 0
   let bytes = 0, dollars = 0
   // The model answers one response at a time: one asked for while another is
@@ -846,12 +911,99 @@ export let talk = (
     },
     say: (text) => ask(t.respond(text)),
     tell: (text) => {
-      if (!s.closed()) s.send(t.tell(text))
+      for (let m of t.tell(text)) s.send(m)
     },
     spent: () => ({ seconds: seconds(bytes), dollars }),
     close: () => {
       s.close()
       return { seconds: seconds(bytes), dollars }
+    },
+  }
+}
+
+// A model that hears and speaks at once and takes its own turns, so nothing
+// here ends a turn, asks for a response or stops one: what is left is
+// keeping the words each side says as lines, timing each answer from the
+// caller's last sound, and doing the work it hands over. Its audio comes as
+// it is said, quiet included, and plays as it comes.
+let duplexed = (o: Talks, t: Talker & Duplex): Talk => {
+  let format = o.format
+  if (!format || o.call != undefined) {
+    throw new Error(`${o.provider.name}'s duplex model joins no call`)
+  }
+  let set = setup(t, o, format)
+  let bytes = 0
+  // Each side's words since the other last spoke, and the caller's since the
+  // model last handed work over.
+  let hearing = '', saying = '', asked = ''
+  // Whether the caller made a sound since the model last began to, and for
+  // how many seconds they have been quiet.
+  let spoke = false, quiet = 0
+  let heard = () => {
+    let text = hearing.trim()
+    hearing = ''
+    if (text) o.told.heard?.(text), asked += ' ' + text
+  }
+  let said = () => {
+    let text = saying.trim()
+    saying = ''
+    if (text) o.told.said?.(text), o.told.done?.()
+  }
+  // What is sent before the stream is ready, sent once it is.
+  let held: string[] | undefined = []
+  let send = (m: string) => held ? held.push(m) : s.send(m)
+  let s = stream(
+    o,
+    o.provider.live + t.path(set.model),
+    t.opening(set),
+    (data) => {
+      for (let x of t.read(data, set.model)) {
+        if (x.ready && held) { for (let m of held.splice(0)) s.send(m) }
+        if (x.ready) held = undefined
+        if (x.hearing) said(), hearing += x.hearing
+        if (x.saying) heard(), saying += x.saying
+        if (x.audio) {
+          if (spoke && sounds(x.audio, format)) {
+            spoke = false
+            o.told.stopped?.(quiet)
+          }
+          o.told.audio(x.audio)
+        }
+        if (x.error) o.told.lost?.(x.error)
+        let id = x.delegated
+        if (id) {
+          heard(), said()
+          let request = asked.trim()
+          asked = ''
+          Promise.resolve(o.told.delegate?.(request))
+            .catch((error) => `That did not work: ${error?.message ?? error}`)
+            .then((output) => {
+              if (output) t.answer(id, output).forEach(send)
+            })
+        }
+      }
+    },
+    (reason) => o.told.lost?.(reason),
+  )
+  let spent = () => {
+    let seconds = bytes / perSecond(format)!
+    return { seconds, dollars: seconds / 60 * t.perMinute }
+  }
+  return {
+    send: (audio) => {
+      if (s.closed()) return
+      bytes += audio.length
+      send(t.audio(audio))
+      if (sounds(audio, format)) spoke = true, quiet = 0
+      else quiet += audio.length / perSecond(format)!
+    },
+    say: (text) => t.say(text).forEach(send),
+    tell: (text) => t.tell(text).forEach(send),
+    spent,
+    close: () => {
+      heard(), said()
+      s.close()
+      return spent()
     },
   }
 }

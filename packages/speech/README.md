@@ -9,8 +9,9 @@ argument; nothing here reads the environment.
 - `DEEPGRAM`: Nova-3 hears a recording, Flux hears a call and says when a
   speaker's turn ends, and Aura-2 speaks. It has no model that talks.
 - `OPENAI`: gpt-transcribe hears a recording and a call's turns, gpt-4o-mini-tts
-  speaks (its 24 kHz PCM made μ-law for a call), and gpt-realtime-2.1 and its
-  mini hear and speak in one stream (`talk`).
+  speaks (its 24 kHz PCM made μ-law for a call), gpt-realtime-2.1 and its mini
+  hear and speak in one stream (`talk`), and gpt-live-1 hears and speaks at
+  once, taking its own turns.
 
 ## Speaking and hearing
 
@@ -24,7 +25,7 @@ argument; nothing here reads the environment.
 - `speed` is a multiple of the provider's own pace (1 by default), held within
   the `speeds` each provider declares for speaking and for talking
   (`paced(speeds, speed)`): Aura-2 0.7 to 1.5, gpt-4o-mini-tts 0.25 to 4, the
-  realtime models 0.25 to 1.5.
+  realtime models 0.25 to 1.5; gpt-live-1 has only its own.
 - `hear({provider, key, audio, type})` answers a recording's `text`, its length
   in `seconds`, and `dollars`.
 - `turns({provider, key, format, told})` hears audio as it streams. `send` takes
@@ -33,23 +34,36 @@ argument; nothing here reads the environment.
   `told.lost(reason)` when the stream drops. `spent()` answers the seconds heard
   so far and their cost, and `close()` ends the stream answering the same.
 - `talk({provider, key, format, instructions, tools?, model?, voice?, speed?, told})`
-  is a model that hears and speaks itself. `send` takes the caller's raw
-  samples; `told.audio(bytes)` is what to play them, `told.over()` that they
-  talked over the model and what plays should stop (once their words say
-  something, `meant`: an "okay", a laugh or a noise lets it go on, and the
-  response under way is cancelled), `told.stopped()` ends their turn, when the
-  model hears it end or once they are quiet 0.7 s. What the model says to it
-  waits for their words, and is not said when they stopped where a sentence goes
-  on (`open`: "the", "is", "um", a comma), when the model calls the stream's own
-  `listen` tool, or when they talk again before it plays; a turn left unanswered
-  is answered once they have been quiet 5 s. `told.heard` and `told.said` are
-  each side's words, and `told.call(name, args)` answers a tool the model asked
-  for with its output, before it goes on, and `told.done()` ends each of its
-  responses. `say(text)` asks it to say something, and `tell(text)` tells it
-  something it knows from now on without answering it; `spent()` answers the
-  seconds heard and what the stream cost so far, and `close()` ends it answering
-  the same, each response priced at its model's rates, or the stream's when it
-  names none. A provider without `talk` refuses.
+  is a model that hears and speaks itself, `model` one of a `provider.talk`
+  entry's (`talkerOf(provider, model)`; the first by default), which is `Turned`
+  or `Duplex`. A `Turned` one (the realtime models) takes a turn as it is told
+  here. `send` takes the caller's raw samples; `told.audio(bytes)` is what to
+  play them, `told.over()` that they talked over the model and what plays should
+  stop (once their words say something, `meant`: an "okay", a laugh or a noise
+  lets it go on, and the response under way is cancelled), `told.stopped()` ends
+  their turn, when the model hears it end or once they are quiet 0.7 s. What the
+  model says to it waits for their words, and is not said when they stopped
+  where a sentence goes on (`open`: "the", "is", "um", a comma), when the model
+  calls the stream's own `listen` tool, or when they talk again before it plays;
+  a turn left unanswered is answered once they have been quiet 5 s. `told.heard`
+  and `told.said` are each side's words, and `told.call(name, args)` answers a
+  tool the model asked for with its output, before it goes on, and `told.done()`
+  ends each of its responses. `say(text)` asks it to say something, and
+  `tell(text)` tells it something it knows from now on without answering it;
+  `spent()` answers the seconds heard and what the stream cost so far, and
+  `close()` ends it answering the same, each response priced at its model's
+  rates, or the stream's when it names none. A provider without the model
+  refuses.
+- A `Duplex` one (gpt-live-1) hears and speaks at once and takes its own turns:
+  it yields to the caller and waits through their pauses itself, and its audio
+  comes as it is said, quiet and all, so nothing here stops it, ends a turn or
+  asks for a response. Nothing is sent before its session started. Its words
+  come a few at a time and are kept as lines, each side's ending when the other
+  speaks; an answer's first sound ends the caller's turn as `told.stopped(ago)`,
+  `ago` seconds back to their last sound. Its tools are whoever runs the call:
+  work it hands over goes to `told.delegate(request)`, the caller's words since
+  it last did, and what that answers it says in its own words, as it does what
+  `say` asks. It is priced by the minute.
 - A call the provider's own line carries, sent to it over SIP, never passes its
   audio here. `talk.calls.rang(event)` reads the provider's webhook for the
   call's `id` and SIP `headers`; `accept({provider, key, call, …})` picks it up

@@ -1,11 +1,13 @@
 // OpenAI: gpt-transcribe hears a recording and a call's turns,
-// gpt-4o-mini-tts speaks, and gpt-realtime-2.1 hears and speaks in one
-// stream, answering as it goes. Its TTS speaks 24 kHz PCM, made μ-law for a
-// call here; the realtime model takes and speaks a telephone's μ-law itself.
-// Prices are its list, 2026-11-05.
+// gpt-4o-mini-tts speaks, gpt-realtime-2.1 hears and speaks in one stream,
+// answering as it goes, and gpt-live-1 hears and speaks at once, taking its
+// own turns. Its TTS speaks 24 kHz PCM, made μ-law for a call here; the
+// talking models take and speak a telephone's μ-law themselves. Prices are
+// its list, 2026-11-05.
 // https://developers.openai.com/api/docs/pricing
 // https://developers.openai.com/api/docs/guides/realtime-conversations
 // https://developers.openai.com/api/reference/resources/realtime/server-events
+// https://developers.openai.com/api/reference/resources/live/primary-websocket
 import type { Provider, Raw, Said, Setup, Turn, Voice } from './mod.ts'
 import { base64, mulawed, unbase64 } from './audio.ts'
 
@@ -199,7 +201,7 @@ export let OPENAI: Provider = {
     audio: (format) =>
       format.encoding == 'mulaw' ? mulawed(24000, format.rate) : undefined,
   },
-  talk: {
+  talk: [{
     models: ['gpt-realtime-2.1-mini', 'gpt-realtime-2.1'],
     voice: 'cedar',
     voices: VOICES,
@@ -296,7 +298,7 @@ export let OPENAI: Provider = {
         },
       }),
     cancel: JSON.stringify({ type: 'response.cancel' }),
-    tell: (text) =>
+    tell: (text) => [
       JSON.stringify({
         type: 'conversation.item.create',
         item: {
@@ -305,6 +307,7 @@ export let OPENAI: Provider = {
           content: [{ type: 'input_text', text }],
         },
       }),
+    ],
     commit: JSON.stringify({ type: 'input_audio_buffer.commit' }),
     // A call sent to the project over SIP rings its webhook; once accepted
     // with the session, a stream joins it by its id. The line plays the
@@ -344,7 +347,63 @@ export let OPENAI: Provider = {
       join: (call) => `/v1/realtime?call_id=${encodeURIComponent(call)}`,
       hush: JSON.stringify({ type: 'output_audio_buffer.clear' }),
     },
-  },
+  }, {
+    // GPT-Live: hears and speaks at once and takes its own turns, and hands
+    // what needs tools to the client, whoever runs the call (`delegated`),
+    // whose answer it says in its own words. It has no speeds.
+    models: ['gpt-live-1'],
+    duplex: true,
+    perMinute: 0.05,
+    voice: 'cedar',
+    voices: VOICES,
+    speeds: { min: 1, max: 1 },
+    path: () => '/v1/live/sessions',
+    opening: (setup) => [JSON.stringify({
+      type: 'session.start',
+      session: {
+        model: setup.model,
+        instructions: setup.instructions,
+        audio: {
+          ...setup.format ? { format: wired(setup.format) } : {},
+          output: { voice: setup.voice },
+        },
+        delegation: { type: 'client' },
+      },
+    })],
+    audio: (bytes) =>
+      JSON.stringify({
+        type: 'session.input_audio.append',
+        audio: base64(bytes),
+      }),
+    read: (data) => {
+      let e = parsed(data) as Event & {
+        delegation?: { id?: string }
+        event?: unknown
+      }
+      switch (e.type) {
+        case 'session.started':
+          return [{ ready: true }]
+        case 'session.input_transcript.delta':
+          return e.delta ? [{ hearing: e.delta }] : []
+        case 'session.output_transcript.delta':
+          return e.delta ? [{ saying: e.delta }] : []
+        case 'session.output_audio.delta':
+          return e.delta ? [{ audio: unbase64(e.delta) }] : []
+        case 'session.delegation.created':
+          return e.delegation?.id ? [{ delegated: e.delegation.id }] : []
+        case 'error':
+          return [{ error: String(e.error?.message) }]
+      }
+      return []
+    },
+    // What it is asked to say, and a delegation's answer, it says in its
+    // own words, as they come. Instructions appended stand for the rest of
+    // the session, so asking it that way to say a line now has it say the
+    // line again later, and only that.
+    answer: (id, output) => appended('commentary', output, id),
+    say: (text) => appended('commentary', text),
+    tell: (text) => appended('thinking', text),
+  }],
 }
 
 let posted = (path: string, body?: object) => ({
@@ -396,6 +455,56 @@ let session = (setup: Setup) => ({
   tools: setup.tools.map((t) => ({ type: 'function', ...t })),
   tool_choice: 'auto',
 })
+
+// GPT-Live's audio: a call's μ-law, or 16-bit PCM at 16 or 24 kHz.
+let wired = (format: Raw) =>
+  format.encoding == 'mulaw'
+    ? { type: 'audio/pcmu', rate: 8000 }
+    : { type: 'audio/pcm', rate: format.rate }
+
+// About 500 tokens, the most GPT-Live takes in one append.
+let APPENDED = 1800
+
+/**
+ * `text` appended to what GPT-Live knows, as `kind` (`instructions` it
+ * follows, `thinking` it knows without saying, `commentary` it says), about a
+ * delegation or the whole session, in parts each of at most `APPENDED`
+ * characters, split between paragraphs, else lines, else words.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { OPENAI } from '@yaks/speech'
+ * let live = OPENAI.talk!.find((t) => t.duplex)!
+ * equal(live.tell('A.').map((m) => JSON.parse(m)), [{
+ *   type: 'session.thinking.append',
+ *   delegation_id: null,
+ *   content: 'A.',
+ * }])
+ * let long = ['a'.repeat(1000), 'b'.repeat(1000)].join('\n\n')
+ * equal(live.tell(long).map((m) => JSON.parse(m).content.length), [1000, 1000])
+ * ```
+ */
+let appended = (kind: string, text: string, id: string | null = null) =>
+  parts(text, APPENDED).map((content) =>
+    JSON.stringify({
+      type: `session.${kind}.append`,
+      delegation_id: id,
+      content,
+    })
+  )
+
+// `text` in parts of at most `most` characters, split at the widest break
+// that fits.
+let parts = (text: string, most: number): string[] => {
+  if (text.length <= most) return [text]
+  for (let gap of ['\n\n', '\n', ' ']) {
+    let at = text.lastIndexOf(gap, most)
+    if (at > 0) {
+      return [text.slice(0, at), ...parts(text.slice(at + gap.length), most)]
+    }
+  }
+  return [text.slice(0, most), ...parts(text.slice(most), most)]
+}
 
 // The model a `response.done` was answered by, where it says: it reports
 // none, so the session's own model prices it.

@@ -680,6 +680,13 @@ test('a talking model hears the call, asks the Operator, and says its answer', a
   c.call.answered('Your build finished.')
   equal(c.said.at(-1), 'Your build finished.')
   equal(await c.told().call('nope', '{}'), 'There is no tool called nope.')
+  // Work a duplex model hands over, on a turn of its own, is asked the same
+  // way.
+  c.told().stopped!(0.5)
+  let delegated = c.told().delegate!('Move it to Friday')
+  await until(() => c.asked.length == 2)
+  c.call.answered('Moved.')
+  equal([c.asked[1], await delegated], ['Move it to Friday', 'Moved.'])
   c.frame({ event: 'stop' })
   await c.call.ended
   equal(c.done[0].heard, 0.25)

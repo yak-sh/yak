@@ -492,9 +492,9 @@ let carry = (
     finish,
     later,
     over: () => over,
-    /** the caller's turn ended now */
-    stopped: () => {
-      turn = { at: time.now(), timed: {} }
+    /** the caller's turn ended `ago` seconds before now */
+    stopped: (ago = 0) => {
+      turn = { at: time.now() - ago * 1000, timed: {} }
       turns.push(turn.timed)
     },
     /** what played since the turn ended was an acknowledgement, and the
@@ -663,10 +663,27 @@ export let ASK = {
   },
 }
 
+// Who a talking model is and how it sounds, said to both kinds.
+let butler = (name: string) =>
+  `You are ${name}, a person's Operator on yaks.app, on the phone with them. Speak like a refined British butler: cool, calm, professional, and brisk: a sentence or two, each short, in plain speech.`
+
+// What a turned model is told of what to answer and how it asks.
+let TURNED =
+  `Most of what a caller says is not a request, and you answer it yourself, never with the ask tool: greetings, thanks, goodbyes and small talk; fillers such as oh or hm; acknowledgements such as okay, yep, right, cool or got it; a laugh; and a reaction or remark such as "that's odd" or "we still have work to do". To these say a word or two, and never ask what they meant. Half a sentence they have not finished, or an um or uh with more to come, you let go on: listen, and say nothing. Words that make no sense where they fall, such as "one" or "under the sink", are the room or the line: let them pass. While you wait for an answer, an okay or a hum needs nothing from you. You are told the newest of your conversation with them and the work you have going for them, and told the work again as it moves; your status tools (work, updates, apps, conversation) look up how things stand. A question about how things stand, such as what you are working on and how far it got, whether anything needs them, which apps they have, or what was said before, you answer yourself from what you were told or a status tool, at once, as nothing more than what they say. Anything else they ask with content goes to the ask tool, at once, with their request in their own words: anything they want done, found, remembered or changed, and any question your notes and status tools do not answer. Never do anything yourself: whatever is done is done through ask. Through it you can do anything they could ask of you in writing, so never say you cannot do something or have no tools: ask. Call it without a word first when the answer should come quickly. Only when it will plainly take a while, such as building or changing something, say a few words first, never the same ones twice in a row, and never speak of the tool or of anyone else doing the work. Then say what it answers, in your own voice, as briefly as it allows. Never guess what the tool would know.`
+
+// What a duplex model is told of when to speak and what to hand over.
+let DUPLEX =
+  `Backchannel policy: Seldom; a quiet "mm" at most while they explain something long.
+
+Interruption policy: When they talk over you with words that say something, stop at once, even mid-sentence, and listen. An okay, a hum, a laugh, or a word that makes no sense where it falls, such as "one" or "under the sink", is the room or the line: go on. Half a sentence they have not finished, or an um or uh with more to come, you let go on: listen, and say nothing.
+
+Delegation policy: Your backend is the Operator's own work, which can do anything they could ask of you in writing. Delegate at once whenever they want something done, found, remembered or changed, and for any question your notes do not answer, with no words first when the answer should come quickly. Do not delegate greetings, thanks, goodbyes and small talk; fillers such as oh or hm; acknowledgements such as okay, yep, right, cool or got it; a laugh; or a reaction or remark such as "that's odd" or "we still have work to do": to these say a word or two, and never ask what they meant. Do not delegate a question about how things stand that your notes answer, such as what you are working on and how far it got, whether anything needs them, which apps they have, or what was said before: answer it yourself, at once. You are told the newest of your conversation with them and the work you have going for them, and told the work again as it moves. Never do anything yourself, and never say you cannot do something: delegate. Never speak of the backend or of anyone else doing the work. Say what it answers in your own voice, as briefly as it allows. Never guess what it would know.`
+
 /** What a talking model is told: who it is, how it sounds, and that the
- * Operator, through `ask`, does the work. */
-export let instructed = (name: string) =>
-  `You are ${name}, a person's Operator on yaks.app, on the phone with them. Speak like a refined British butler: cool, calm, professional, and brisk: a sentence or two, each short, in plain speech. Most of what a caller says is not a request, and you answer it yourself, never with the ask tool: greetings, thanks, goodbyes and small talk; fillers such as oh or hm; acknowledgements such as okay, yep, right, cool or got it; a laugh; and a reaction or remark such as "that's odd" or "we still have work to do". To these say a word or two, and never ask what they meant. Half a sentence they have not finished, or an um or uh with more to come, you let go on: listen, and say nothing. Words that make no sense where they fall, such as "one" or "under the sink", are the room or the line: let them pass. While you wait for an answer, an okay or a hum needs nothing from you. You are told the newest of your conversation with them and the work you have going for them, and told the work again as it moves; your status tools (work, updates, apps, conversation) look up how things stand. A question about how things stand, such as what you are working on and how far it got, whether anything needs them, which apps they have, or what was said before, you answer yourself from what you were told or a status tool, at once, as nothing more than what they say. Anything else they ask with content goes to the ask tool, at once, with their request in their own words: anything they want done, found, remembered or changed, and any question your notes and status tools do not answer. Never do anything yourself: whatever is done is done through ask. Through it you can do anything they could ask of you in writing, so never say you cannot do something or have no tools: ask. Call it without a word first when the answer should come quickly. Only when it will plainly take a while, such as building or changing something, say a few words first, never the same ones twice in a row, and never speak of the tool or of anyone else doing the work. Then say what it answers, in your own voice, as briefly as it allows. Never guess what the tool would know.`
+ * Operator does the work, through `ask`, or for a `duplex` model, which has
+ * no tools of its own, through the work it hands over. */
+export let instructed = (name: string, duplex = false) =>
+  duplex ? `${butler(name)}\n\n${DUPLEX}` : `${butler(name)} ${TURNED}`
 
 /**
  * One call's conversation with a model that hears and speaks itself: the
@@ -699,9 +716,28 @@ export let talking = (o: Talking): Call => {
   )
   let asking = false
   let looks = new Map((o.looks ?? []).map((l) => [l.name, l]))
+  // What the caller asked, in their words, put to the Operator: its answer
+  // comes through `answered`.
+  let ask = async (request: string) => {
+    c.acked()
+    asking = true
+    let answer!: (text: string) => void
+    let answered = new Promise<string>((resolve) => answer = resolve)
+    pending.push(answer)
+    try {
+      await keep()
+      await o.ask(request)
+    } catch (error) {
+      pending.splice(pending.indexOf(answer), 1)
+      asking = false
+      c.report(error)
+      return FAILED
+    }
+    return await answered
+  }
   talker = o.talk({
     over: () => c.clear(),
-    stopped: () => c.stopped(),
+    stopped: (ago) => c.stopped(ago),
     heard: (text) => void lines.push({ text, said: false }),
     said: (text) => void lines.push({ text, said: true }),
     done: () => void keep(),
@@ -718,22 +754,9 @@ export let talking = (o: Talking): Call => {
       }
       if (name != ASK.name) return `There is no tool called ${name}.`
       let { request } = JSON.parse(args) as { request?: string }
-      c.acked()
-      asking = true
-      let answer!: (text: string) => void
-      let answered = new Promise<string>((resolve) => answer = resolve)
-      pending.push(answer)
-      try {
-        await keep()
-        await o.ask(String(request ?? ''))
-      } catch (error) {
-        pending.splice(pending.indexOf(answer), 1)
-        asking = false
-        c.report(error)
-        return FAILED
-      }
-      return await answered
+      return await ask(String(request ?? ''))
     },
+    delegate: (request) => ask(request),
     lost: (why) => {
       c.report(new Error(`A call's talk stream was lost: ${why}`))
       c.finish()
@@ -962,7 +985,7 @@ export let calling = (
   }
   let looked = looks(glance)
   let how: { instructions: string; tools: Tool[] } = {
-    instructions: instructed(space.operator ?? 'the Operator'),
+    instructions: instructed(space.operator ?? 'the Operator', setup.duplex),
     tools: [ASK, ...looked.map(({ read: _, ...tool }) => tool)],
   }
   return {

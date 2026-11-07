@@ -22,6 +22,7 @@ import {
   type Provider,
   speak,
   spoken,
+  talkerOf,
   type Voice,
 } from '@yaks/speech'
 import type { Answer } from './apps.ts'
@@ -81,6 +82,12 @@ let WAYS: Way[] = [
       'Replies almost at once, like talking with a person. Speaks only in some of the voices.',
   },
   {
+    model: 'gpt-live-1',
+    name: 'Conversational',
+    about:
+      'Listens while it talks, so you can cut in or stop to think, like talking with a person. Speaks only in some of the voices, at its own pace.',
+  },
+  {
     model: CALL_MODELS[0],
     name: 'Quick',
     about: 'Replies after a short pause.',
@@ -129,8 +136,8 @@ let OFFERED = [...BUTLERS, 'cedar', 'marin', 'ash', 'coral']
 export let speaks = (model: string, id: string) =>
   CALL_MODELS.includes(model) ||
   VOICES.some((v) =>
-    v.id == id && talks(v.provider, model) &&
-    v.provider.talk!.voices.some((t) => t.id == id)
+    v.id == id &&
+    !!talkerOf(v.provider, model)?.voices.some((t) => t.id == id)
   )
 
 /** What the settings page offers for `space`'s calls on the providers on
@@ -173,7 +180,7 @@ let answers = (env: Speaking, model: string) =>
 
 /** Whether `model` is one `provider` hears and speaks with itself. */
 export let talks = (provider: Provider, model: string) =>
-  provider.talk?.models.includes(model) ?? false
+  !!talkerOf(provider, model)
 
 /** The model named `id` for a call in `voice`, refused when it neither
  * answers calls here nor talks in that voice: a provider may speak voices
@@ -203,10 +210,10 @@ export let setupOf = (
     WAYS.find((w) =>
       answers(env, w.model) && (!space.voice || speaks(w.model, space.voice))
     )!.model
-  let own = VOICES.find((v) => talks(v.provider, model))?.provider.talk?.voice
+  let own = VOICES.map((v) => talkerOf(v.provider, model)).find(Boolean)?.voice
   let voice = VOICES.find((v) => v.id == (space.voice ?? own ?? BUTLERS[0])) ??
     voiceOf(BUTLERS[0])
-  let talk = talks(voice.provider, model) ? voice.provider.talk : undefined
+  let talk = talkerOf(voice.provider, model)
   return {
     provider: voice.provider,
     // A voice its talking model does not speak in gives way to its own.
@@ -217,6 +224,8 @@ export let setupOf = (
     speed: pace.speed,
     model,
     talks: !!talk,
+    /** it hears and speaks at once, taking its own turns */
+    duplex: !!talk?.duplex,
   }
 }
 

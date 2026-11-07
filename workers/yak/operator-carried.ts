@@ -50,7 +50,10 @@ let joined = new Set<string>()
 
 /** The provider named `name` whose own line carries calls, if any. */
 export let carrierNamed = (name: string) =>
-  [...LINES.keys()].find((p) => p.name == name && p.talk?.calls)
+  [...LINES.keys()].find((p) => p.name == name && lined(p))
+
+// The talking models of `provider`'s whose calls its own line carries.
+let lined = (provider: Provider) => provider.talk?.find((t) => t.calls)
 
 /** The number a SIP header names: `"Ana" <sip:+12695550142@host>;tag=…`. */
 /// numberIn('"Ana" <sip:+12695550142@sip.telnyx.com>;tag=1') -> '+12695550142'
@@ -86,7 +89,7 @@ export let carriedDoor = async (
     }
     return new Response(null, { status: 401 })
   }
-  let rang = provider.talk!.calls!.rang(JSON.parse(raw))
+  let rang = lined(provider)!.calls!.rang(JSON.parse(raw))
   if (!rang) return new Response(null, { status: 204 })
   let from = numberIn(rang.headers.from)
   let who = from ? await reached(env, { from }, provider) : null
@@ -148,7 +151,7 @@ export let carrying = async (
   }
   joined.add(ticket.call)
   let setup = setupOf(env, space)
-  let t = provider.talk!
+  let t = lined(provider)!
   let own = setup.provider == provider && t.models.includes(setup.model)
   let how = {
     model: own ? setup.model : t.models[0],
@@ -158,7 +161,7 @@ export let carrying = async (
   passed(ticket.at, provider)
   let call = { ...speech, call: ticket.call }
   let c = calling(env, operator, space, ticket, armed, {
-    setup: { ...setup, ...how, provider, talks: true },
+    setup: { ...setup, ...how, provider, talks: true, duplex: !!t.duplex },
     perMinute: LINE,
     hangup: () => hangup(call),
     line: provider.name,

@@ -188,6 +188,7 @@ test('an Operator’s setup: its voice names the provider, its pace how fast it 
     speed: 1.15,
     model: 'gpt-realtime-2.1-mini',
     talks: true,
+    duplex: false,
   })
   // Where its provider is off, the next way, in a butler's voice.
   equal(
@@ -199,6 +200,7 @@ test('an Operator’s setup: its voice names the provider, its pace how fast it 
       speed: 1.15,
       model: 'claude-haiku-5-5',
       talks: false,
+      duplex: false,
     },
   )
   // A voice the quickest way can't speak keeps its voice, answered the next.
@@ -211,9 +213,17 @@ test('an Operator’s setup: its voice names the provider, its pace how fast it 
     speed: 1,
     model: 'gpt-realtime-2.1-mini',
     talks: true,
+    duplex: false,
   })
   equal(of('aura-2-draco-en', 'claude-sonnet-5-5', 'brisk').pace, 'brisk')
   equal(of(undefined, undefined, 'gone').pace, 'normal')
   equal(of('fable', 'claude-sonnet-5-5').talks, false)
   equal(of('fable', 'gpt-realtime-2.1').voice, 'cedar')
+  // GPT-Live hears and speaks at once, in the realtime model's voices.
+  equal(
+    [of('marin', 'gpt-live-1'), of('fable', 'gpt-live-1')].map((
+      o,
+    ) => [o.voice, o.talks, o.duplex]),
+    [['marin', true, true], ['cedar', true, true]],
+  )
 })

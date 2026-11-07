@@ -599,7 +599,7 @@ test('a joined call’s stream that drops is lost, not ended', () => {
 })
 
 test('OpenAI’s webhook says which call rang, with its headers', () => {
-  let rang = OPENAI.talk!.calls!.rang
+  let rang = OPENAI.talk![0].calls!.rang
   equal(
     rang({
       type: 'realtime.call.incoming',
@@ -614,4 +614,66 @@ test('OpenAI’s webhook says which call rang, with its headers', () => {
     rang({ type: 'realtime.call.ended', data: { call_id: 'x' } }),
     undefined,
   )
+})
+
+test('GPT-Live is started, takes its own turns, keeps each side’s words as lines, and hands work over', async () => {
+  let s = socket()
+  let told: unknown[] = []
+  let stream = talk({
+    provider: OPENAI,
+    key: 'k1',
+    model: 'gpt-live-1',
+    format: { encoding: 'mulaw', rate: 8000 },
+    instructions: 'Be brief.',
+    open: s.open,
+    told: {
+      stopped: (ago) => told.push(`stopped ${ago}`),
+      heard: (text) => told.push({ heard: text }),
+      said: (text) => told.push({ said: text }),
+      audio: (bytes) => told.push(bytes.length),
+      call: () => Promise.resolve(''),
+      delegate: (
+        request,
+      ) => (told.push({ delegate: request }),
+        Promise.resolve('Moved to Friday.')),
+    },
+  })
+  let event = (e: object) => s.fire('message', JSON.stringify(e))
+  let types = () => s.json().map((m) => m.type)
+  equal(s.opened[0].url, 'wss://api.openai.com/v1/live/sessions')
+  s.fire('open')
+  // Nothing goes before the session started.
+  stream.say('Hello.')
+  stream.send(new Uint8Array(160).fill(0x10))
+  equal(types(), ['session.start'])
+  equal(s.json()[0].session.audio, {
+    format: { type: 'audio/pcmu', rate: 8000 },
+    output: { voice: 'cedar' },
+  })
+  event({ type: 'session.started' })
+  equal(types(), [
+    'session.start',
+    'session.commentary.append',
+    'session.input_audio.append',
+  ])
+  // 0.4 s quiet after the caller spoke: the answer's first sound times
+  // from their last, and quiet audio plays as it comes.
+  stream.send(new Uint8Array(3200).fill(0xff))
+  event({ type: 'session.input_transcript.delta', delta: ' Move it' })
+  event({ type: 'session.input_transcript.delta', delta: ' to Friday.' })
+  event({ type: 'session.output_audio.delta', delta: '//8=' })
+  event({ type: 'session.output_audio.delta', delta: 'EBA=' })
+  event({ type: 'session.output_transcript.delta', delta: ' One moment.' })
+  event({ type: 'session.delegation.created', delegation: { id: 'd1' } })
+  await until(() => s.sent.length == 4)
+  equal(told, [2, 'stopped 0.4', 2, { heard: 'Move it to Friday.' }, {
+    said: 'One moment.',
+  }, { delegate: 'Move it to Friday.' }])
+  equal(s.json().at(-1), {
+    type: 'session.commentary.append',
+    delegation_id: 'd1',
+    content: 'Moved to Friday.',
+  })
+  // Priced by the minute of the stream, $0.05.
+  equal(stream.close(), { seconds: 0.42, dollars: 0.035 / 100 })
 })

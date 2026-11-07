@@ -88,7 +88,12 @@ test('the voice card offers a few voices, the butler-like first, with the pick c
 })
 
 test('the voice card says each way of answering plainly, the realtime one only where its provider is on', () => {
-  equal(names(card(), 'voice_model'), ['Quickest', 'Quick', 'Thorough'])
+  equal(names(card(), 'voice_model'), [
+    'Quickest',
+    'Conversational',
+    'Quick',
+    'Thorough',
+  ])
   equal(
     names(card(undefined, undefined, { DEEPGRAM_API_KEY: 'a' }), 'voice_model'),
     [
