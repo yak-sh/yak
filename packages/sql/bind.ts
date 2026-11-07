@@ -80,6 +80,7 @@ import {
   cond,
   count,
   type Cte,
+  each,
   eq,
   exists,
   type Expr as Cond,
@@ -1608,8 +1609,22 @@ let holding = (where: Cond, known: Cond): Cond =>
 
 // Extensions return owner selections as AST membership tests. Driving from
 // those selections keeps a sparse FTS/vector hit list from scanning the spine
-// when statistics still describe a small store.
+// when statistics still describe a small store. A list of values is a finite
+// selection too (a search's first page, a `.near` neighbourhood): tested on
+// each row of `.comment` under statistics from when it was small,
+// `dragon scale .comment .limit=2` read all 2,002 of its owners to keep the 2
+// it named.
 let selection = (ctx: Ctx, test: Cond): Query | undefined => {
+  if (test.t == 'in' && Array.isArray(test.set)) {
+    let list = test.set.flatMap((e) =>
+      e.t == 'lit' || e.t == 'val' ? [e.v] : []
+    )
+    if (
+      !list.length || list.length < test.set.length ||
+      render(test.e).sql != ctx.d.ownerKey('entity')
+    ) return
+    return selection(ctx, { ...test, set: each(list) })
+  }
   if (
     test.t == 'in' && !Array.isArray(test.set) &&
     (test.set.t == 'select' || test.set.t == 'each')

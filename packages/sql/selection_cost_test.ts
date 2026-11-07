@@ -7,7 +7,16 @@ import { search } from '@yaks/fts'
 import { parse } from '@yaks/query'
 import { driver } from '../sqlite/native.ts'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
-import { type BindOpts, compile, type Row } from './mod.ts'
+import {
+  among,
+  type BindOpts,
+  col,
+  compile,
+  type Row,
+  select,
+  table,
+  val,
+} from './mod.ts'
 import { mixed, seed, text, vocab } from '../../workers/yak/fts_cost_fixture.ts'
 
 let db = new Database(':memory:'), sql = driver(db)
@@ -77,3 +86,35 @@ for (let [line, expected] of handles) {
     }
   })
 }
+
+// A search's first page selects the ids it ranked. Every comment matching, and
+// statistics describing two, the read seeks those few rather than testing each
+// comment against them.
+let broad = new Database(':memory:'), broadSql = driver(broad)
+seed(broadSql, 128)
+mixed(broadSql)
+broadSql.query({
+  t: 'update',
+  table: 'prose',
+  set: { body: val('dragon scale') },
+  where: among(
+    col('entity'),
+    select({ cols: [col('entity')], from: table('comment') }),
+  ),
+})
+let page = compile(parse('dragon scale .comment .limit=2'), vocab, {
+  extend: [search(text, broadSql)],
+})
+test('a ranked page drives from its ids, not every owner it could be', () => {
+  let stmt = broad.prepare(page.sql)
+  try {
+    assertEquals(ids(stmt.all(...page.params)), [
+      'later-1000002',
+      'later-1000001',
+    ])
+    let scans = status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 1, 0)
+    assert(scans < 20, `${scans} full-scan advances\n${page.sql}`)
+  } finally {
+    stmt.finalize()
+  }
+})
