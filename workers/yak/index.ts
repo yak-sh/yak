@@ -343,7 +343,12 @@ class PublicDirectoryStore extends DurableObject<Env> {
           let [row] = ctx.storage.sql.exec(
             'SELECT body FROM copy WHERE id = 1',
           ).toArray() as { body: string }[]
-          return row ? JSON.parse(row.body) as ServingCopyState : undefined
+          if (!row) return undefined
+          // A row saved before the ceiling holds the last fence granted.
+          let saved = JSON.parse(row.body) as
+            | ServingCopyState
+            | { revision: number }
+          return 'ceiling' in saved ? saved : { ceiling: saved.revision }
         },
         write: (state) => {
           ctx.storage.sql.exec(

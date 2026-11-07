@@ -211,9 +211,12 @@ export class Unfenced extends Error {
 //
 // A write that dies leaves its fence up with nobody to lower it: the write
 // failed at `begin` itself (the copy raised the fence, the answer was lost),
-// or its isolate went with a deploy between `begin` and `finish`. `mend`
-// lowers a fence no write of this isolate holds, at the revision the
-// directory has committed. A write that fails mends as it leaves, and a signed
+// or its isolate went with a deploy between `begin` and `finish`. A copy
+// that restarts stands fenced at a revision no write holds, above any it
+// granted (serving-copy.ts `LEASE`). `mend` lowers the copy's fence, at the
+// revision the directory has committed, while no write of this isolate holds
+// a fence: one that does may still commit above that revision, and lowers or
+// mends the fence itself when it ends. A write that fails mends as it leaves, and a signed
 // read whose answer the copy refuses at a revision it still fences asks the
 // directory to mend (MEND), so a fence is up for as long as a write holds it
 // and never longer.
@@ -236,7 +239,7 @@ export let mend = async (copy: ServingCopyDoor, committed: () => number) => {
   try {
     if (raising) return
     let revision = await copy.revision?.()
-    if (revision == null || raising || held.has(revision)) return
+    if (revision == null || raising || held.size) return
     await copy.settle?.(revision, committed())
   } catch (e) {
     if (!moving(e)) defect(e, { request: 'serving fence mend' })
@@ -295,7 +298,10 @@ let lower = async (
   wait: ReturnType<typeof jittered>,
 ) => {
   try {
-    await retried(() => copy.finish(revision), true, moving, wait)
+    // A copy at another revision is held by a newer write, or restarted.
+    if (!await retried(() => copy.finish(revision), true, moving, wait)) {
+      await mend(copy, committed)
+    }
   } catch (e) {
     if (!moving(e)) defect(e, { request: 'serving fence finish' })
     await mend(copy, committed)
@@ -605,6 +611,8 @@ export let signedDirectory = (
     headers.set(EPOCH, '1')
     headers.set(MEND, '1')
     await (await via.fetch(new Request(req, { headers }))).body?.cancel()
+    // A copy the directory mended takes the body it refused.
+    await published([revision, key, body])
   }
   return {
     fetch: (req) => {

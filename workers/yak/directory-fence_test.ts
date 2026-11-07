@@ -144,7 +144,11 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
       offered = fn
     },
     core: () => core,
-    saved: () => saved!,
+    // The copy's fence as it holds it, in memory.
+    fence: () => ({
+      revision: core.revision,
+      blocked: !core.valid(core.revision),
+    }),
     onBegin: (fn: typeof beforeBegin) => {
       beforeBegin = fn
     },
@@ -340,7 +344,7 @@ await proof(
       equal(epoch, String(f.initial + 1))
       equal(f.begins, [f.initial + 1])
       equal(f.finishes, f.begins)
-      equal(f.saved().blocked, false)
+      equal(f.fence().blocked, false)
     }
   },
 )
@@ -356,7 +360,6 @@ await proof(
     return () => {
       equal(before, f.body)
       equal(blocked, true)
-      equal(f.saved().answers, [])
       equal((rows[0].app as { access: string }).access, 'private')
     }
   },
@@ -394,12 +397,14 @@ await proof(
         { entity: { eid: 'bad' }, undeclared_fence_proof: {} },
       ], KERNEL)
     )
-    let finished = [...f.finishes], persisted = f.saved().blocked
+    let finished = [...f.finishes], fenced = f.fence().blocked
     let blocked = !f.core().valid(f.initial)
+    // A restarted copy has lost which fences it granted: it serves again
+    // once a read asks the directory to mend it.
     f.restart()
     let restarted = !f.core().valid(f.initial)
     let rows = await f.at.query('.entity.eid=app&.app')
-    let answer = await f.read()
+    let answer = await f.read(true)
     let epoch = Number(answer.headers.get(EPOCH))
     let filled = f.core().put(epoch, '.app', await answer.text())
     await f.at.apply(
@@ -409,7 +414,7 @@ await proof(
     return () => {
       ok(error.includes('unknown component'), error)
       equal(finished, [])
-      equal([persisted, blocked, restarted], [false, false, false])
+      equal([fenced, blocked, restarted], [false, false, true])
       equal(epoch, f.initial)
       equal(filled, true)
       equal((rows[0].app as { access: string }).access, 'public')
@@ -483,8 +488,8 @@ await proof(
         [['app', 'One'], ['space', 'Two']],
       )
       ok(f.begins.length > f.finishes.length, 'a fence was lost and retaken')
-      equal(f.committed().epoch, String(f.saved().revision))
-      equal(f.saved().blocked, false)
+      equal(f.committed().epoch, String(f.fence().revision))
+      equal(f.fence().blocked, false)
     }
   },
 )
@@ -522,7 +527,7 @@ await proof(
     let blocked = unavailable(f), valid = f.core().valid(f.initial)
     return () => {
       ok(error.includes('begin answer lost'), error)
-      equal([blocked, valid, f.saved().blocked], [true, true, false])
+      equal([blocked, valid, f.fence().blocked], [true, true, false])
     }
   },
 )
@@ -588,13 +593,13 @@ await proof(
     f.core().begin()
     let held = f.core().valid(f.initial)
     await (await f.read()).body?.cancel()
-    let still = f.saved().blocked
+    let still = f.fence().blocked
     let mended = await f.read(true)
     let epoch = Number(mended.headers.get(EPOCH))
     await mended.body?.cancel()
     return () => {
       equal([held, still], [false, true])
-      equal(f.saved().blocked, false)
+      equal(f.fence().blocked, false)
       ok(f.core().valid(epoch))
       equal(epoch, f.initial)
     }
@@ -640,7 +645,7 @@ await proof(
       equal(f.finishes, f.begins)
       equal(epoch, String(f.initial + 1))
       equal(cleared, true)
-      equal(f.saved().blocked, false)
+      equal(f.fence().blocked, false)
     }
   },
 )
@@ -675,7 +680,7 @@ await proof('a write waits out a copy that moves under it', async () => {
     equal([f.begins, f.finishes], [[f.initial + 1, f.initial + 2], [
       f.initial + 2,
     ]])
-    equal(f.saved().blocked, false)
+    equal(f.fence().blocked, false)
   }
 })
 
@@ -689,7 +694,7 @@ await proof(
       ok(error.includes('internal error'), error)
       equal(f.committed(), { access: 'public', epoch: String(f.initial) })
       equal(f.begins.length, backoff.pauses.length + 1)
-      equal(f.saved().blocked, false)
+      equal(f.fence().blocked, false)
     }
   },
 )
@@ -779,7 +784,7 @@ await proof(
     let writing = f.live(patch)
     while (!release) await new Promise((r) => setTimeout(r, 0))
     await (await f.read(true)).body?.cancel()
-    let blocked = f.saved().blocked
+    let blocked = f.fence().blocked
     release()
     let written = (await writing).status
     return () => {
@@ -798,6 +803,6 @@ await proof('a read is answered when the copy fails its mend', async () => {
   await read.body?.cancel()
   return () => {
     equal(read.status, 200)
-    equal(f.saved().blocked, true)
+    equal(f.fence().blocked, true)
   }
 })

@@ -5,6 +5,7 @@ import { clock, equal, ok, test, tick } from '@yaks/testing'
 import { fetch as appFetch } from './apps.ts'
 import * as dirPart from './directory.ts'
 import {
+  COPY,
   EPOCH,
   MEND,
   type ServingCopyDoor,
@@ -59,7 +60,9 @@ let independent = () => {
   let publications: [number, string, string][] = []
   let loseFinish = false
   let door: ServingCopyDoor = {
-    begin: () => Promise.resolve(core.begin()),
+    begin: (committed) => Promise.resolve(core.begin(committed)),
+    revision: () => Promise.resolve(core.revision),
+    settle: (n, committed) => Promise.resolve(core.settle(n, committed)),
     finish: (n) => {
       if (loseFinish) return Promise.reject(Error('finish RPC lost'))
       return Promise.resolve(core.finish(n))
@@ -85,7 +88,7 @@ let independent = () => {
     door,
     publications,
     core: () => core,
-    saved: () => saved!,
+    fenced: () => !core.valid(core.revision),
     loseFinish: () => loseFinish = true,
     restart: () => core = new ServingCopy({ persistence }),
   }
@@ -548,7 +551,7 @@ for (let kind of ['grant', 'member'] as const) {
         ok(!againRpc.includes('signed-only-secret'))
         ok(f.names.length > 0)
         ok(
-          f.names.every((name) => name == 'public'),
+          f.names.every((name) => name == COPY),
           'signed/public authority diverged',
         )
       }
@@ -557,7 +560,7 @@ for (let kind of ['grant', 'member'] as const) {
 }
 
 await proof(
-  'a committed read recovers lost finish without resurrecting an old grant',
+  'a lost finish and a restart never resurrect an old grant',
   async () => {
     let f = await fixture('grant')
     await (await f.page()).body?.cancel()
@@ -569,10 +572,10 @@ await proof(
     } catch (e) {
       lost = String(e)
     }
-    let blocked = f.copy.saved().blocked
     await f.restart()
+    let blocked = f.copy.fenced()
     let answer = await f.page(), body = await answer.text()
-    let recovered = !f.copy.saved().blocked
+    let recovered = !f.copy.fenced()
     let late = await Promise.all(
       before.map(([n, key, data]) => f.copy.door.publish!(n, key, data)),
     )
@@ -581,7 +584,9 @@ await proof(
       stalledBody = await stalled.response.text()
     await f[Symbol.asyncDispose]()
     return () => {
-      ok(lost.includes('finish RPC lost'), lost)
+      // The write is answered once it commits; its finish runs apart.
+      equal(lost, '')
+      // A restarted copy stands fenced until a committed read mends it.
       ok(blocked)
       ok(recovered)
       ok(before.length > 0)

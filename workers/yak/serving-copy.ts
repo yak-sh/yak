@@ -1,12 +1,22 @@
-// An independent, durable copy of query bodies. Reads use only local memory;
-// the caller owns fallback, fills and the authoritative directory mutation.
+// An independent copy of query bodies, held in memory. The caller owns
+// fallback, fills and the authoritative directory mutation.
+//
+// A fence holds in memory. `begin` raises it before it answers, and the
+// directory commits only after that answer, so every read the copy answers
+// once the write commits sees the fence. Saving the fence would hold
+// `begin`'s answer until the save is durable (Durable Objects' output gate,
+// about 60 ms), so only a ceiling is saved: no fence above it was ever
+// granted, and it is raised LEASE fences at a time.
+// A restarted copy has lost which fences it granted and every body, so it
+// stands fenced at its ceiling and serves again only once the directory
+// settles it, holding no fence (directory-copy.ts `mend`), or a committed
+// read at the ceiling finishes it.
 
-/** A single atomic snapshot, including the fence that survives a restart. */
-export type ServingCopyState = {
-  revision: number
-  blocked: boolean
-  answers: [string, string][]
-}
+/** What survives a restart: no fence above `ceiling` was ever granted. */
+export type ServingCopyState = { ceiling: number }
+
+/** How many fences one saved ceiling grants. */
+export let LEASE = 1000
 
 /** Synchronous, atomic snapshot storage, owned by one ServingCopy instance. */
 export type ServingCopyPersistence = {
@@ -41,7 +51,8 @@ export class ServingCopyUnavailable extends Error {
 export class ServingCopy {
   #revision: number
   #blocked: boolean
-  #answers: Map<string, string>
+  #ceiling: number
+  #answers = new Map<string, string>()
   #maxAnswers: number
 
   constructor(private readonly options: ServingCopyOptions) {
@@ -52,11 +63,10 @@ export class ServingCopy {
     ) {
       throw new RangeError('maxAnswers must be an integer between 1 and 1000')
     }
-    let state = options.persistence.read()
-    this.#revision = state?.revision ?? 0
-    this.#blocked = state?.blocked ?? false
-    this.#answers = new Map(this.#blocked ? [] : state?.answers)
-    this.#trim(this.#answers)
+    this.#ceiling = options.persistence.read()?.ceiling ?? 0
+    this.#revision = this.#ceiling
+    // A copy that never granted a fence has none to lose.
+    this.#blocked = this.#ceiling > 0
   }
 
   /** Capture before a fill; bootstrap fills use revision zero. */
@@ -65,9 +75,10 @@ export class ServingCopy {
   }
 
   /**
-   * Persist the fence before the directory commits a mutation with this revision.
-   * A persistence failure must abort that mutation; this instance stays blocked.
-   * The fence is newer than what the directory says it has committed too, so a
+   * Raise the fence before the directory commits a mutation with this
+   * revision. A fence above the saved ceiling saves a new one first; a failure
+   * to save must abort that mutation, and this instance stays blocked. The
+   * fence is newer than what the directory says it has committed too, so a
    * copy left behind it still grants a fence the commit accepts.
    */
   begin(committed = 0): number {
@@ -78,15 +89,17 @@ export class ServingCopy {
     this.#revision = revision
     this.#blocked = true
     this.#answers.clear()
-    this.#persist(this.#revision, true, this.#answers)
+    if (revision > this.#ceiling) {
+      let ceiling = Math.min(revision + LEASE, RETIRED)
+      this.options.persistence.write({ ceiling })
+      this.#ceiling = ceiling
+    }
     return this.#revision
   }
 
   /** Only the latest mutation may unblock; bodies are filled separately. */
   finish(revision: number): boolean {
     if (revision !== this.#revision || this.#retired) return false
-    if (!this.#blocked) return true
-    this.#persist(revision, false, this.#answers)
     this.#blocked = false
     return true
   }
@@ -106,12 +119,10 @@ export class ServingCopy {
     if (!this.#blocked) {
       if (committed === revision) return true
       this.#answers = new Map()
-      this.#persist(committed, false, this.#answers)
       this.#revision = committed
       return true
     }
     if (committed >= revision) return this.finish(revision)
-    this.#persist(committed, false, this.#answers)
     this.#revision = committed
     this.#blocked = false
     return true
@@ -129,19 +140,16 @@ export class ServingCopy {
   put(revision: number, key: string, body: string): boolean {
     if (this.#blocked || revision !== this.#revision) return false
     if (this.#answers.get(key) === body) return true
-    let answers = new Map(this.#answers)
-    answers.delete(key)
     // Directory answers can be listings. Bound UTF-16 code units as well as
     // keys (at most 2 MiB UTF-8 total); oversized listings stay directory-only.
     if (key.length + body.length > 64 * 1024) return false
-    answers.set(key, body)
-    this.#trim(answers)
-    this.#persist(revision, false, answers)
-    this.#answers = answers
+    this.#answers.delete(key)
+    this.#answers.set(key, body)
+    this.#trim(this.#answers)
     return true
   }
 
-  /** No persistence, fallback, registration, timers or recomputation on reads. */
+  /** No fallback, registration, timers or recomputation on reads. */
   get(key: string): string {
     if (this.#blocked) throw new ServingCopyUnavailable()
     let body = this.#answers.get(key)
@@ -179,14 +187,5 @@ export class ServingCopy {
     while (answers.size > this.#maxAnswers || bytes() > 512 * 1024) {
       answers.delete(answers.keys().next().value!)
     }
-  }
-
-  #persist(
-    revision: number,
-    blocked: boolean,
-    answers: Map<string, string>,
-  ): void {
-    // Fresh tuples keep storage and in-memory ownership separate without a clone.
-    this.options.persistence.write({ revision, blocked, answers: [...answers] })
   }
 }
