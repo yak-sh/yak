@@ -165,7 +165,7 @@ import {
   type Who,
   whoIs,
 } from './session.ts'
-import { asking, bearerIn } from './identity.ts'
+import { asking, bearerIn } from './asking.ts'
 import { upgrading } from './protocol.ts'
 import { nameOf } from './signin.ts'
 import { written } from './reach.ts'

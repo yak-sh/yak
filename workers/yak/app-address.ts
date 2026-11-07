@@ -7,7 +7,7 @@ import { picked, reachable } from './declared.ts'
 import { bound, type Env } from './env.ts'
 import { narrowed } from './grants.ts'
 import { spaceHost } from './host.ts'
-import { asking, challenge } from './identity.ts'
+import { asking, challenge } from './asking.ts'
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let no = (status: number, code: string, message: string) =>

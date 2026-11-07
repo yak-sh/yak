@@ -13,7 +13,7 @@ import { clock, test } from '@yaks/testing'
 import { answer, callOf } from '@yaks/extension/wire'
 import { PERSON } from '@yaks/extension/tools'
 import { CallError } from '@yaks/tools/errors'
-import { asking } from './identity.ts'
+import { asking } from './asking.ts'
 import { ledger, mint } from './grants.ts'
 import {
   browsers,

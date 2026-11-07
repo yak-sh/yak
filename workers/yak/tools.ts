@@ -192,7 +192,7 @@ import {
   ticket as ticketFor,
   type Verdict,
 } from './gallery.ts'
-import type { Caller } from './identity.ts'
+import type { Caller } from './asking.ts'
 import {
   DEFAULT,
   GRANT,

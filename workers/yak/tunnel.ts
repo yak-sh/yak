@@ -44,7 +44,7 @@ import { bound, type Env } from './env.ts'
 import { resent } from '@yaks/cloudflare/api'
 import type { Answer } from './apps.ts'
 import { caught } from './defects.ts'
-import { adminWho } from './identity.ts'
+import { adminWho } from './asking.ts'
 
 /** Where an app's worker asks for its space's machine. */
 export let TUNNELED = '/tunneled/'

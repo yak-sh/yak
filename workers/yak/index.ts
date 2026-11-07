@@ -1,61 +1,111 @@
-import {
-  ServingCopy,
-  type ServingCopyState,
-  ServingCopyUnavailable,
-} from './serving-copy.ts'
-// The kernel Worker's entry: the router (kernel.ts) as the runtime loads it.
-// What is here is what only the runtime can load — the Durable Object classes
-// each binding names, the Files, Site, Outbound and SandboxOutbound
-// entrypoints, and the tracker around all of them — and nothing that decides where
-// a request goes. The Store Durable Object (graph.ts) is its own module: a DO
-// may live in a different Worker from the one that binds it, and so are the
-// Wire object (stream.ts), which holds a person's open agent stream, and the
-// Builder (build.ts), which holds a space's build conversation.
+// The kernel Worker's entry: what only the runtime can load — the Durable
+// Object classes each binding names, the Files, Site, Outbound and
+// SandboxOutbound entrypoints, and the tracker around all of them — and
+// nothing that decides where a request goes; that is the router (kernel.ts).
+//
+// Nothing here imports the code it runs (T-148770). Each class loads its own
+// module when the runtime first calls it, and workerd compiles a module when
+// it is first imported (wrangler.toml `new_module_registry`): an isolate that
+// wakes a Store compiles the Store's code, one that answers a page from Site
+// compiles Site's, and neither compiles the other's. The Store Durable Object
+// (graph.ts) is its own module, and so are the Wire object (stream.ts), which
+// holds a person's open agent stream, and the Builder (build.ts), which holds
+// a space's build conversation.
 import {
   DurableObject,
   RpcTarget,
   waitUntil,
   WorkerEntrypoint,
 } from 'cloudflare:workers'
-import { evaluator } from './code-runtime.ts'
 import type { Caller } from '@yaks/egress'
-import type { DurableStorage } from '@yaks/durable-object'
-import { Builder as Built } from './build.ts'
-import { Store as Stored } from './graph.ts'
-import { entry, instrument } from './defects-runtime.ts'
-import { Wire as Wired } from './stream.ts'
-import * as filePart from './files.ts'
-import { builds } from './builds.ts'
+import type { entry as tracked } from './defects-runtime.ts'
 import type { Env, Inbound } from './env.ts'
-import { handler, type Lent } from './kernel.ts'
-export { WorkspaceStore as Workspaces } from './workspaces.ts'
-import { outbound } from './outbound.ts'
-import { swapped } from './sandbox.ts'
-import * as sitePart from './site.ts'
+import type { builds as built } from './builds.ts'
+import type { Lent } from './kernel.ts'
 import { type Purged, purger } from './purge.ts'
-import { outlast } from './outlast-object.ts'
 import type { Asked, Heard } from './outlast.ts'
-import { type Lexicon as Lexical, lexicon } from './lexicon.ts'
-import { hosting } from './inference.ts'
-import { scheduleUse } from './used.ts'
-import * as ads from './ads.ts'
+import type { Lexicon as Lexical } from './lexicon.ts'
 import type { Conversion } from './arrival.ts'
 import type { Inference, InferenceReceipt, Mark } from '@yaks/model'
+import { deferred } from './deferred.ts'
 
-// Agent entrypoints share the same isolated code evaluator.
-let agentEnv = (env: Env): Env => ({
-  ...env,
-  ...(env.LOADER
-    ? {
-      CODE_MODE: evaluator(env.LOADER, (bridge) =>
-        new class extends RpcTarget {
-          call(set: string, name: string, args: string) {
-            return bridge.call(set, name, args)
-          }
-        }()),
-    }
-    : {}),
-})
+// The tracker's boundary (defects-runtime.ts), loaded with the first call it
+// wraps.
+let entry = async <T>(
+  ...args: Parameters<typeof tracked<T | Promise<T>>>
+): Promise<T> => (await import('./defects-runtime.ts')).entry(...args)
+
+let instrumented = async <C>(load: Promise<C>) =>
+  (await import('./defects-runtime.ts')).instrument(await load)
+
+// Agent entrypoints share the same isolated code evaluator, loaded with the
+// first of them.
+let agentEnv = async () => {
+  let { evaluator } = await import('./code-runtime.ts')
+  return (env: Env): Env => ({
+    ...env,
+    ...(env.LOADER
+      ? {
+        CODE_MODE: evaluator(env.LOADER, (bridge) =>
+          new class extends RpcTarget {
+            call(set: string, name: string, args: string) {
+              return bridge.call(set, name, args)
+            }
+          }()),
+      }
+      : {}),
+  })
+}
+
+// What each deferred object answers: its class's own methods, every one of
+// which the tracker wraps (defects-runtime.ts `instrument`). index_test.ts
+// holds each list to its class.
+export let STORE = [
+  'tick',
+  'alarm',
+  'fetch',
+  'webSocketMessage',
+  'webSocketClose',
+  'webSocketError',
+] as const
+export let WIRE = [
+  'log',
+  'warm',
+  'cool',
+  'drop',
+  'crossed',
+  'released',
+  'roster',
+  'said',
+  'listed',
+  'keep',
+  'attach',
+  'tell',
+  'fetch',
+] as const
+export let BUILDER = [
+  'said',
+  'wipe',
+  'joined',
+  'say',
+  'fetch',
+  'alarm',
+  'webSocketMessage',
+  'webSocketClose',
+] as const
+export let WORKSPACES = ['fork', 'retire', 'destroy'] as const
+export let PUBLIC_DIRECTORY = [
+  'valid',
+  'publish',
+  'publishes',
+  'read',
+  'begin',
+  'revision',
+  'finish',
+  'settle',
+  'put',
+  'get',
+] as const
 
 // The Store, at every address the binding names — the directory at
 // `yak/platform` and every app's own beside it (T-33815). It carries the DO's
@@ -64,13 +114,36 @@ let agentEnv = (env: Env): Env => ({
 //
 // Each object is wrapped for tracker reporting (defects.ts): what one throws past its own
 // catch, and what it reports itself, is a defect we hear about.
-export let Store = instrument(Stored)
-export let Wire = instrument(Wired)
-export class Builder extends instrument(Built) {
-  constructor(ctx: ConstructorParameters<typeof Built>[0], env: Env) {
-    super(ctx, agentEnv(env))
-  }
-}
+export let Store = deferred(
+  Object,
+  () => instrumented(import('./graph.ts').then((m) => m.Store)),
+  STORE,
+)
+export let Wire = deferred(
+  Object,
+  () => instrumented(import('./stream.ts').then((m) => m.Wire)),
+  WIRE,
+)
+export let Builder = deferred(
+  Object,
+  async () => {
+    let [Built, agent] = await Promise.all([
+      instrumented(import('./build.ts').then((m) => m.Builder)),
+      agentEnv(),
+    ])
+    return class extends Built {
+      constructor(ctx: ConstructorParameters<typeof Built>[0], env: Env) {
+        super(ctx, agent(env))
+      }
+    }
+  },
+  BUILDER,
+)
+export let Workspaces = deferred(
+  DurableObject,
+  () => import('./workspaces.ts').then((m) => m.WorkspaceStore),
+  WORKSPACES,
+)
 
 // The kernel's cached file entrypoint (cache.ts, wrangler.toml
 // `[exports.Files]`). The default entrypoint below is
@@ -96,7 +169,7 @@ export class Files extends WorkerEntrypoint {
     return entry(
       this.env,
       'Files fetch',
-      () => filePart.fetch(req, this.env),
+      async () => (await import('./files.ts')).fetch(req, this.env),
       req,
     )
   }
@@ -118,7 +191,7 @@ export class Site extends WorkerEntrypoint {
     return entry(
       this.env,
       'Site fetch',
-      () => sitePart.fetch(req, this.env),
+      async () => (await import('./site.ts')).fetch(req, this.env),
       req,
     )
   }
@@ -164,11 +237,17 @@ export class Purger extends DurableObject<Env> {
 // that it is still running.
 export class Outlast extends DurableObject<Env> {
   declare env: Env
-  #call?: ReturnType<typeof outlast>
+  #call?: Promise<(asked: Asked) => Promise<Heard>>
 
   call(asked: Asked): Promise<Heard> {
-    this.#call ??= outlast(this.ctx.storage, this.env)
-    return entry(this.env, 'Outlast call', () => this.#call!(asked))
+    this.#call ??= import('./outlast-object.ts').then((m) =>
+      m.outlast(this.ctx.storage, this.env)
+    )
+    return entry(
+      this.env,
+      'Outlast call',
+      async () => (await this.#call!)(asked),
+    )
   }
 }
 
@@ -176,31 +255,40 @@ export class Outlast extends DurableObject<Env> {
 // anything in, asked instead of the stores themselves.
 export class Lexicon extends DurableObject<Env> implements Lexical {
   declare env: Env
-  #held = lexicon(this.ctx.storage)
+  #lexicon?: Promise<Lexical>
+  get #held() {
+    return this.#lexicon ??= import('./lexicon.ts').then((m) =>
+      m.lexicon(this.ctx.storage)
+    )
+  }
 
   admit(asked: { store: string; fields: string }[], words: string) {
     return entry(
       this.env,
       'Lexicon admit',
-      () => this.#held.admit(asked, words),
+      async () => (await this.#held).admit(asked, words),
     )
   }
   grow(store: string, fields: string, words: string[]) {
     return entry(
       this.env,
       'Lexicon grow',
-      () => this.#held.grow(store, fields, words),
+      async () => (await this.#held).grow(store, fields, words),
     )
   }
   put(store: string, fields: string, words: string[]) {
     return entry(
       this.env,
       'Lexicon put',
-      () => this.#held.put(store, fields, words),
+      async () => (await this.#held).put(store, fields, words),
     )
   }
   forget(store: string) {
-    return entry(this.env, 'Lexicon forget', () => this.#held.forget(store))
+    return entry(
+      this.env,
+      'Lexicon forget',
+      async () => (await this.#held).forget(store),
+    )
   }
 }
 
@@ -211,7 +299,12 @@ export class Uses extends WorkerEntrypoint {
   declare env: Env
 
   used(eid: string): void {
-    entry(this.env, 'Uses used', () => scheduleUse(this.env, eid, waitUntil))
+    entry(
+      this.env,
+      'Uses used',
+      async () =>
+        (await import('./used.ts')).scheduleUse(this.env, eid, waitUntil),
+    )
   }
 }
 
@@ -221,7 +314,11 @@ export class Ads extends WorkerEntrypoint {
   declare env: Env
 
   told(c: Conversion): Promise<void> {
-    return entry(this.env, 'Ads told', () => ads.told(this.env, c))
+    return entry(
+      this.env,
+      'Ads told',
+      async () => (await import('./ads.ts')).told(this.env, c),
+    )
   }
 }
 
@@ -237,7 +334,8 @@ export class Outbound extends WorkerEntrypoint {
     return entry(
       this.env,
       'Outbound send',
-      () => outbound(req, this.env, caller),
+      async () =>
+        (await import('./outbound.ts')).outbound(req, this.env, caller),
       req,
     )
   }
@@ -253,11 +351,14 @@ export class SandboxOutbound extends WorkerEntrypoint {
     return entry(
       this.env,
       'SandboxOutbound send',
-      () => swapped(this.env, container, req),
+      async () =>
+        (await import('./sandbox.ts')).swapped(this.env, container, req),
       req,
     )
   }
 }
+
+let hosting = async (env: Env) => (await import('./inference.ts')).hosting(env)
 
 // No public route reaches this entrypoint. Each executor callback is vouched
 // again against the ask and its immutable private request before doing work.
@@ -267,42 +368,42 @@ export class ModelHost extends WorkerEntrypoint {
     return entry(
       this.env,
       'ModelHost submitted',
-      () => hosting(this.env).submitted(job),
+      async () => (await hosting(this.env)).submitted(job),
     )
   }
   claim(job: Inference) {
     return entry(
       this.env,
       'ModelHost claim',
-      () => hosting(this.env).claim(job),
+      async () => (await hosting(this.env)).claim(job),
     )
   }
   checkpoint(job: Inference, mark: Mark) {
     return entry(
       this.env,
       'ModelHost checkpoint',
-      () => hosting(this.env).checkpoint(job, mark),
+      async () => (await hosting(this.env)).checkpoint(job, mark),
     )
   }
   grants(job: Inference) {
     return entry(
       this.env,
       'ModelHost grants',
-      () => hosting(this.env).grants(job),
+      async () => (await hosting(this.env)).grants(job),
     )
   }
   delivered(job: Inference) {
     return entry(
       this.env,
       'ModelHost delivered',
-      () => hosting(this.env).delivered(job),
+      async () => (await hosting(this.env)).delivered(job),
     )
   }
   report(job: Inference, failure: NonNullable<InferenceReceipt['failure']>) {
     return entry(
       this.env,
       'ModelHost report',
-      () => hosting(this.env).report(job, failure),
+      async () => (await hosting(this.env)).report(job, failure),
     )
   }
 }
@@ -311,94 +412,35 @@ export class ModelHost extends WorkerEntrypoint {
 // (defects.ts), so an exception that escapes the router's catch, or the letter
 // door's, is a defect we hear about. The queue is Workers Builds telling us a
 // build of this Worker failed (builds.ts).
+let handler = async () => (await import('./kernel.ts')).handler
+
 export default {
   fetch: (req: Request, env: Env) =>
-    entry(env, 'gateway fetch', () => handler.fetch(req, agentEnv(env)), req),
+    entry(env, 'gateway fetch', async () => {
+      let [route, agent] = await Promise.all([handler(), agentEnv()])
+      return route.fetch(req, agent(env))
+    }, req),
   email: (message: Inbound, env: Env, ctx?: Lent) =>
     entry(
       env,
       'email',
-      () => handler.email(message, env, ctx ?? { waitUntil }),
+      async () => (await handler()).email(message, env, ctx ?? { waitUntil }),
     ),
-  queue: (batch: Parameters<typeof builds>[0], env: Env) =>
-    entry(env, 'build queue', () => builds(batch, env)),
+  queue: (batch: Parameters<typeof built>[0], env: Env) =>
+    entry(
+      env,
+      'build queue',
+      async () => (await import('./builds.ts')).builds(batch, env),
+    ),
 }
 
-// Independent of yak/platform: only a missed directory deadline reads here.
-class PublicDirectoryStore extends DurableObject<Env> {
-  #copy: ServingCopy
-  constructor(
-    ctx:
-      & ConstructorParameters<typeof DurableObject>[0]
-      & { storage: DurableStorage },
-    env: Env,
-  ) {
-    super(ctx, env)
-    this.#copy = new ServingCopy({
-      persistence: {
-        read: () => {
-          ctx.storage.sql.exec(
-            'CREATE TABLE IF NOT EXISTS copy (id INTEGER PRIMARY KEY, body TEXT)',
-          )
-          let [row] = ctx.storage.sql.exec(
-            'SELECT body FROM copy WHERE id = 1',
-          ).toArray() as { body: string }[]
-          if (!row) return undefined
-          // A row saved before the ceiling holds the last fence granted.
-          let saved = JSON.parse(row.body) as
-            | ServingCopyState
-            | { revision: number }
-          return 'ceiling' in saved ? saved : { ceiling: saved.revision }
-        },
-        write: (state) => {
-          ctx.storage.sql.exec(
-            'INSERT OR REPLACE INTO copy (id, body) VALUES (1, ?)',
-            JSON.stringify(state),
-          )
-        },
-      },
-    })
-  }
-  valid(revision: number) {
-    return this.#copy.valid(revision)
-  }
-  publish(revision: number, key: string, body: string) {
-    return this.#copy.publish(revision, key, body)
-  }
-  publishes(answers: [number, string, string][]) {
-    return this.#copy.publishes(answers)
-  }
-  read(key: string) {
-    try {
-      return this.#copy.read(key)
-    } catch (e) {
-      if (e instanceof ServingCopyUnavailable) return null
-      throw e
-    }
-  }
-  begin(committed?: number) {
-    return this.#copy.begin(committed)
-  }
-  revision() {
-    return this.#copy.revision
-  }
-  finish(revision: number) {
-    return this.#copy.finish(revision)
-  }
-  settle(revision: number, committed: number) {
-    return this.#copy.settle(revision, committed)
-  }
-  put(revision: number, key: string, body: string) {
-    return this.#copy.put(revision, key, body)
-  }
-  get(key: string) {
-    try {
-      return this.#copy.get(key)
-    } catch (e) {
-      if (e instanceof ServingCopyUnavailable) return null
-      throw e
-    }
-  }
-}
-
-export let PublicDirectory = instrument(PublicDirectoryStore)
+// Independent of yak/platform: only a missed directory deadline reads here
+// (public-directory.ts).
+export let PublicDirectory = deferred(
+  DurableObject,
+  () =>
+    instrumented(
+      import('./public-directory.ts').then((m) => m.PublicDirectoryStore),
+    ),
+  PUBLIC_DIRECTORY,
+)

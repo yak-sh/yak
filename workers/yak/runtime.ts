@@ -5,7 +5,8 @@
 // esbuild never reads that map, so a bundle always gets the runtime's own.
 //
 // What is here is what the provider asks of it: the entrypoint base class,
-// and the one global it reads as it loads, the compatibility flags
+// the object and RPC base classes the Worker's entry declares its classes on
+// (index.ts, read by index_test.ts), and the one global it reads as it loads, the compatibility flags
 // wrangler.toml gives the Worker, which is where it learns whether it may
 // fetch a client's metadata document (identity.ts `cimd`).
 import * as io from '@yaks/file/io'
@@ -29,6 +30,10 @@ export class WorkerEntrypoint<E = unknown> {
     this.env = env
   }
 }
+
+export class DurableObject<E = unknown> extends WorkerEntrypoint<E> {}
+
+export class RpcTarget {}
 
 // Retain an invocation's asynchronous delivery in the caller's process.
 let pending = new Set<Promise<unknown>>()

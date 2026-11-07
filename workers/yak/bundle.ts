@@ -1,6 +1,8 @@
-// The kernel's modules: optional doors stay dynamic imports, and the modules
-// every invocation needs share one chunk. This keeps both singleton state
-// and the exported runtime classes while avoiding hundreds of eager links.
+// The kernel's modules: every door stays a dynamic import, and what the entry
+// imports statically shares one chunk. The entry (index.ts) loads each class's
+// code on its first call, and workerd compiles a module when it is first
+// imported (wrangler.toml `new_module_registry`), so that chunk is all a cold
+// isolate compiles before it knows what it was woken for (T-148770).
 import * as io from '@yaks/file/io'
 import * as system from '@yaks/process/system'
 import { build, type Metafile, stop } from 'esbuild'
@@ -116,7 +118,7 @@ export let bundle = async (root: string, output: string, meta: string) => {
         compact: true,
         footer: '\n',
         chunkFileNames: '[name]-[hash].js',
-        manualChunks: (id) => eager.has(id) ? 'kernel' : undefined,
+        manualChunks: (id) => eager.has(id) ? 'entry' : undefined,
         onlyExplicitManualChunks: true,
       })
       let modules = written.output.filter((part) => part.type == 'chunk')

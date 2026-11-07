@@ -73,7 +73,7 @@ import { type Listed, listed, type Worked } from './operator-view.ts'
 import { column, conversationOf } from './operator-page.ts'
 import { ADMIN, managePath } from './route.ts'
 import { admin } from './tool.ts'
-import { adminWho } from './identity.ts'
+import { adminWho } from './asking.ts'
 import { Idle } from './mascot.ts'
 
 export let PATH = ADMIN

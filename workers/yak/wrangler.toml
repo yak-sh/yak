@@ -21,6 +21,9 @@ compatibility_date = "2025-05-08"
 
 # enable_nodejs_process_v2 supplies the native process object to the module
 # build, alongside the runtime's node: modules, without JS polyfills.
+# new_module_registry compiles a module when it is first imported, not every
+# uploaded module when an isolate starts (index.ts, T-148770). It is the
+# default from 2026-11-17.
 # durable_object_io_tasks_prevent_eviction keeps an object up while it waits
 # on I/O nobody connected is waiting for: a call finishing in `Outlast` after
 # its caller was answered (outlast.ts). It is the default from 2026-10-01.
@@ -29,6 +32,7 @@ compatibility_flags = [
   "global_fetch_strictly_public",
   "enable_nodejs_process_v2",
   "durable_object_io_tasks_prevent_eviction",
+  "new_module_registry",
 ]
 
 # Modules ship minified. bundle.ts keeps optional doors as dynamic imports
