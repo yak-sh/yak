@@ -180,24 +180,34 @@ export let askEmail = (at: {
 // one that never came, is answered by a second door to the same address: the
 // first step again, without typing it again. A number was texted, and the
 // card says so.
+//
+// `sent` is the seal naming the code this card said was sent (signin.ts
+// `sealed`), carried by both forms, so the card either one answers can say
+// what became of its letter: `unsent`, why it never left (M-16612).
 export let askCode = (at: {
   address: string
   q?: string | null
   back?: string | null
   why?: string
   status?: number
+  sent?: string
+  unsent?: string | null
 }, env: Host = {}) => {
   let { address } = at
   let q = at.q ?? null, back = at.back ?? null
   let text = texted(address)
+  let to = text ? shown(address) : address
+  let failed = at.unsent
+    ? `The ${text ? 'text' : 'letter'} with your last code to ${to} ` +
+      `never left: ${at.unsent.replace(/\.?$/, '.')} We have been told. `
+    : ''
   return page(
     env,
     {
       title: text ? 'Check your texts' : 'Check your email',
-      lead: at.why ??
-        `We ${text ? 'texted' : 'sent'} a six-digit code to ${
-          text ? shown(address) : address
-        }. It lasts ten minutes.`,
+      lead: failed + (at.why ??
+        `We ${text ? 'texted' : 'sent'} a six-digit code to ${to}. ` +
+          'It lasts ten minutes.'),
       status: at.status ?? 200,
     },
     h(
@@ -214,6 +224,7 @@ export let askCode = (at: {
           : 'Enter it to land on your own space.',
       ),
       held('address', address),
+      held('sent', at.sent),
       h(Field, {
         class: 'Code',
         name: 'code',
@@ -232,6 +243,7 @@ export let askCode = (at: {
       { class: 'Again', method: 'post', action: '/login' },
       carried(q, back),
       held('address', address),
+      held('sent', at.sent),
       h(Button, { type: 'submit' }, 'Send a new code'),
     ),
     home(env),

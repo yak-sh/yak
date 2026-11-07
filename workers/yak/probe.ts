@@ -753,6 +753,12 @@ export let seed = async (
 // nothing here carries media. `GET` a session reads its tracks back, which is
 // how a test sees what the door opened and closed.
 // A worker upload keeps its script and secret names for later API calls.
+// Email Sending refuses every letter to an address at `refused.invalid`, for
+// a test of a letter that never leaves.
+let REFUSED = 'the destination address is not allowed'
+let refused = (to: string | string[]) =>
+  [to].flat().some((t) => t.endsWith('@refused.invalid'))
+
 export let cloudflare = (log = crypto.randomUUID()) => {
   let held = new Map<string, Custom>()
   let dns = new Map<string, string[]>()
@@ -881,6 +887,12 @@ export let cloudflare = (log = crypto.randomUUID()) => {
     }
     if (url.pathname.endsWith('/email/sending/send')) {
       let { to, subject, text, reply_to, from } = await req.json()
+      if (refused(to)) {
+        return Response.json({
+          success: false,
+          errors: [{ code: 10001, message: REFUSED }],
+        }, { status: 400 })
+      }
       wrote(to, subject, text, reply_to, from)
       return ok({})
     }
@@ -921,6 +933,7 @@ export let cloudflare = (log = crypto.randomUUID()) => {
     // an app's own letters leave.
     binding: {
       send: (l: { to: string | string[]; subject: string; text?: string }) => {
+        if (refused(l.to)) return Promise.reject(new Error(REFUSED))
         wrote(l.to, l.subject, l.text)
         return Promise.resolve({ messageId: crypto.randomUUID() })
       },

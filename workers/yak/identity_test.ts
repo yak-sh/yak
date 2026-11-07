@@ -555,7 +555,9 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
     let cards: string[] = []
     for (let i = 0; i <= SENDS; i++) {
       let r = await form(k, '/login', { email: bombed })
-      cards.push(`${r.status}\n${await r.text()}`)
+      // Each card's seal is its own (signin.ts `sealed`), and says nothing.
+      let text = (await r.text()).replace(/(name="sent" value=")[^"]*/g, '$1')
+      cards.push(`${r.status}\n${text}`)
     }
     assertEquals(new Set(cards).size, 1, 'the refusal is the acceptance')
     // The log is the only witness that a letter went out, and it lags the
@@ -921,6 +923,43 @@ test('a connector keeps its door until the person closes it', async () => {
   } finally {
     await k.stop()
   }
+})
+
+// The card answers before its letter goes, so a letter that never leaves is
+// said on the next card that browser asks for, by the seal its card carries
+// (M-16612), and reported. Nobody without the seal hears of it.
+test('a letter that never leaves is said on the next card, and reported', async () => {
+  let k = await kernel()
+  let before = k.reported.length
+  let email = `${unique('unsent')}@refused.invalid`
+  let card = await form(k, '/login', { email })
+  equal(card.status, 200)
+  let seal = parseHTML(await card.text()).document
+    .querySelector('form[action="/login"] input[name="sent"]')
+    ?.getAttribute('value') ?? ''
+  ok(seal, 'the card carries a seal')
+  await k.deliveries()
+  let said = async (path: string, fields: Record<string, string>) =>
+    /never left: .*the destination address is not allowed/.test(
+      await (await form(k, path, { email, ...fields })).text(),
+    )
+  let guess = { code: '000000' }
+  equal(
+    [
+      await said('/login/code', { ...guess, sent: seal }),
+      await said('/login/code', guess),
+      await said('/login/code', { ...guess, sent: `${seal}0` }),
+      await said('/login', { sent: seal }),
+    ],
+    [true, false, false, true],
+  )
+  await k.flushReports()
+  ok(
+    k.reported.slice(before).some((row) =>
+      JSON.stringify(row).includes('the destination address is not allowed')
+    ),
+    'the tracker hears of it',
+  )
 })
 
 // Every code comes in the Operator's letter, answered at the sign-up address,

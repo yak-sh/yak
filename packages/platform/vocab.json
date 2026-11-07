@@ -497,9 +497,14 @@
         "tries": {
           "type": "number",
           "stamped": true
+        },
+        "unsent": {
+          "type": "string",
+          "stamped": true,
+          "description": "why the letter or text carrying the code never left, as its sender said; absent while it went or is still going"
         }
       },
-      "description": "a sign-in in progress: the code mailed or texted out, when it expires, and how many tries are left",
+      "description": "a sign-in in progress: the code mailed or texted out, when it expires, how many tries are left, and why its letter never left when it did not",
       "before": [
         "doc"
       ]

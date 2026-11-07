@@ -169,19 +169,24 @@ import { INVITE, LINK, SLUG } from '@yaks/platform/names'
 import { counted, FULL, keep, oneBuild, START } from './newcomer.ts'
 import {
   type Arrived,
+  type Ask,
   canon,
   codeLetter,
   codeText,
+  drawn,
   guess,
+  lodge,
   mac,
   mayText,
-  mint,
   nameOf,
   type Person,
   personOf,
+  sealed,
   spend,
   stamped,
   texted,
+  unsent,
+  unsentAt,
   visitor,
 } from './signin.ts'
 import { textable } from './phones.ts'
@@ -192,7 +197,7 @@ import { versionOf } from './running.ts'
 import { background, caught, refusing } from './defects.ts'
 import { step } from './funnel.ts'
 import * as ads from './ads.ts'
-import { consentEid, shown } from '@yaks/phone'
+import { Blocked, consentEid, shown } from '@yaks/phone'
 import { credit } from './referral.ts'
 import { unauthorized, withAuth } from './asking.ts'
 
@@ -600,6 +605,61 @@ export let met = async (env: Env, email: string) => {
   return !!person && (await dir.seats(person, 'owner')).length > 0
 }
 
+// A code's letter, or its text, sent after the card that says so has been
+// answered. The letter carries the code and the one click that spends it
+// (link.ts): the same code said as a link, so it lasts the same ten minutes
+// and dies the moment either one is used, and somebody reading it on a phone
+// retypes nothing. It is the Operator's, wherever it was asked for, greeting
+// someone who has a space as met, and a reply to it signs them up as
+// following the link does (signin.ts `codeLetter`). A text goes from the
+// platform's number.
+//
+// One that never leaves is a break for us to read, and the person's to know
+// (M-16612): it is reported, unless a carrier's block (expected until the
+// texting campaign is approved), and said on the code's row (signin.ts
+// `unsent`), which the next card that browser asks for says.
+let deliver = async (
+  env: Env,
+  o: {
+    address: string
+    ask: Ask
+    eid: string
+    q: string | null
+    back: string | null
+  },
+) => {
+  let { address, ask } = o
+  try {
+    if (texted(address)) {
+      let { phoneOf } = await import('./phones.ts')
+      await (await phoneOf(env)).send({ to: address, text: codeText(ask.code) })
+      return
+    }
+    let [link, greeted] = await Promise.all([
+      onceLink(secret(env), {
+        email: address,
+        code: ask.code,
+        q: o.q || undefined,
+        back: o.back || undefined,
+      }, apex(env)),
+      met(env, address),
+    ])
+    await mail(env)(
+      codeLetter(address, ask.code, link, greeted ? 'back' : 'new', env),
+    )
+  } catch (e) {
+    if (!(e instanceof Blocked)) fault(env, 'POST /login', e)
+    let why = e instanceof Error ? e.message : `${e}`
+    await unsent(meta(env), o.eid, ask, why)
+      .catch((e) => fault(env, 'POST /login (unsent)', e))
+  }
+}
+
+// Why the letter a card's seal names never left (signin.ts `unsentAt`), or
+// null, for a card that carries none.
+let lastLetter = async (env: Env, address: string, seal: string) =>
+  seal ? await unsentAt(meta(env), secret(env), address, seal) : null
+
 /**
  * Signing up by a letter whose domain vouched for its sender (inbox.ts,
  * D-136811): the same sign-up a code gives, for someone who never opened the
@@ -764,7 +824,9 @@ let SAID = 4000
 
 /** A code attempt either signs its person in, answering who that is and
  * whether it is their first time, or returns the same closed sign-in card.
- * `newcomer` is who the browser is signed in as (signin.ts `guess`). */
+ * `newcomer` is who the browser is signed in as (signin.ts `guess`). The
+ * card keeps the seal it came with, `sent`, and says what became of that
+ * code's letter (`unsent`), read only when the guess did not open. */
 export let codeCheck = async (
   store: Meta,
   address: string,
@@ -773,11 +835,14 @@ export let codeCheck = async (
   back = '',
   env: Host = {},
   newcomer?: string,
+  letter: { sent?: string; unsent?: () => Promise<string | null> } = {},
 ): Promise<Arrived | Response> =>
   await guess(store, address, digest, { newcomer }) ?? askCode({
     address,
     q,
     back,
+    sent: letter.sent,
+    unsent: await letter.unsent?.(),
     why:
       'That code has expired or was mistyped. Type it again, or send a new one.',
     status: 400,
@@ -1194,52 +1259,26 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       ) {
         return signCard(env, { q, back, why: TOO_MANY, status: 429 })
       }
-      let code = await c.time(
-        'mint',
-        () => mint(meta(env), secret(env), address, from),
-      )
-      if (code && text) {
-        // The text goes after the answer, as the letter does, from the
-        // platform's number (operator-texts.ts `tell`).
+      // A card asked for again says what became of the letter the last one
+      // said was sent (signin.ts `unsentAt`), read beside the new code's
+      // write.
+      let ask = drawn()
+      let [eid, failed] = await Promise.all([
+        c.time('mint', () => lodge(meta(env), secret(env), address, ask, from)),
+        lastLetter(env, address, field('sent')),
+      ])
+      if (eid) {
+        // The letter or text goes after the answer (T-124082): posting it was
+        // a second of the wait, the longest in signing up, and the card says
+        // nothing that depends on it.
         step(env, 'code_sent', req, { who: address })
-        let { tell } = await import('./operator-texts.ts')
-        background(
-          tell(
-            env,
-            { to: address, text: codeText(code) },
-            'POST /login',
-          ),
-        )
-      } else if (code) {
-        // The letter carries the code and the one click that spends it
-        // (link.ts): the same code said as a link, so it lasts the same ten
-        // minutes and dies the moment either one is used. Somebody reading this
-        // on a phone should not have to retype anything. It is the Operator's,
-        // wherever it was asked for, greeting someone who has a space as met, and a reply to it signs them up as following the link does
-        // (signin.ts `codeLetter`).
-        let link = await onceLink(secret(env), {
-          email: address,
-          code,
-          q: q || undefined,
-          back: back || undefined,
-        }, apex(env))
-        // The letter goes after the answer (T-124082): posting it was a second
-        // of the wait, the longest in signing up, and the card says nothing
-        // that depends on it. One that will not leave is a break for us to
-        // read, and the card's "Send a new code" is the person's way to ask
-        // again.
-        step(env, 'code_sent', req, { who: address })
-        background(
-          met(env, address)
-            .then((met) =>
-              mail(env)(
-                codeLetter(address, code, link, met ? 'back' : 'new', env),
-              )
-            )
-            .catch((e) => fault(env, 'POST /login', e)),
-        )
+        background(deliver(env, { address, ask, eid, q, back }))
       }
-      return timed(askCode({ address, q, back }, env), c)
+      let sent = await sealed(secret(env), address, ask)
+      return timed(
+        askCode({ address, q, back, sent, unsent: failed }, env),
+        c,
+      )
     })
   }
 
@@ -1264,6 +1303,10 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
           back,
           env,
           await browser(env, req) ?? undefined,
+          {
+            sent: field('sent'),
+            unsent: () => lastLetter(env, address, field('sent')),
+          },
         ))
       if (arrived instanceof Response) return timed(arrived, c)
       let { person, proved } = proving(arrived, address)
