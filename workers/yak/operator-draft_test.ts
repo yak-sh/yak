@@ -448,6 +448,18 @@ test('what the app beside the chat is made of is drawn again as the Operator wor
   page.leave()
 })
 
+test('a page pressed in What it can do brings Screens forward, where it opens', async () => {
+  let page = await load(storage(), false, 'new', apps, 'notes')
+  let screens = page.document.querySelector(
+    '[name=made][value=screens]',
+  ) as HTMLInputElement
+  // Another tab picked, as linkedom's radios do not uncheck each other.
+  screens.checked = false
+  page.press(page.document.querySelector('[data-shows]')!)
+  assertEquals(screens.checked, true)
+  page.leave()
+})
+
 // A newcomer (newcomer.ts), whose Operator is making them an app.
 let newcomer = crypto.randomUUID()
 await directoryOf(p.env.STORE).apply({

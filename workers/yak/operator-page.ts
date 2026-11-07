@@ -72,7 +72,7 @@ import {
   trouble,
   type Underway,
 } from './operator-view.ts'
-import { does, keeps, type Made, madeOf } from './made.ts'
+import { does, keeps, type Made, madeOf, type Page, pagesOf } from './made.ts'
 import { drafting } from './written.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { linkOf } from './preview.ts'
@@ -1059,7 +1059,12 @@ type Shown = { slug: string; title: string }
  * its draft's preview link (preview.ts), which follows the draft write by
  * write (public/release.js), while the draft holds a page that is not live:
  * before the first release, and while changes wait for the next. */
-type Making = Shown & { made: Made; live: string | null; draft: string | null }
+type Making = Shown & {
+  made: Made
+  pages: Page[]
+  live: string | null
+  draft: string | null
+}
 
 // An app beside the chat as the person may see it, with the tools' own
 // access (tool.ts `inApp`), from its draft as it stands (written.ts
@@ -1078,12 +1083,25 @@ let makingOf = async (
   let draft = await drafting(r2RawObjects(env.BLOBS), ctx.dir, app)
   let file = VOCABS.find((p) => p in draft.files)
   let words = file ? await draft.view.read(`${draft.root}/${file}`) : null
-  let drawn = Object.keys(draft.files).some((p) => p.endsWith('.html'))
-  let pending = drawn && draft.unreleased && !!env.SESSION_SECRET
+  let decoded = (bytes: Uint8Array | null) =>
+    bytes ? new TextDecoder().decode(bytes) : ''
+  let pages = pagesOf(
+    await Promise.all(
+      Object.keys(draft.files).filter((p) => p.endsWith('.html')).map(
+        async (p) =>
+          [p, decoded(await draft.view.read(`${draft.root}/${p}`))] as [
+            string,
+            string,
+          ],
+      ),
+    ),
+  )
+  let pending = !!pages.length && draft.unreleased && !!env.SESSION_SECRET
   return {
     slug: app.slug,
     title: app.title || app.slug,
-    made: madeOf(words && new TextDecoder().decode(words), file),
+    made: madeOf(words && decoded(words), file),
+    pages,
     live: app.source
       ? `https://${spaceHost(env, space.slug)}/${app.slug}/`
       : null,
@@ -1112,6 +1130,7 @@ let screens = (app: Making, operator: string) => {
       class: 'Talk_Frame',
       src: at,
       title: `${app.title}, ${which == 'draft' ? 'the draft' : 'live'}`,
+      name: `screen-${which}`,
       'data-frame': which,
       'data-screen': which,
       ...which == 'live' && draft ? { loading: 'lazy' } : {},
@@ -1253,7 +1272,21 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
         TabSet,
         { class: 'Talk_Made', 'aria-label': `What ${title} is made of` },
         tab('keeps', 'What it keeps', keeps(app.made, whose)),
-        tab('does', 'What it can do', does(app.made, whose, !!app.live)),
+        tab(
+          'does',
+          'What it can do',
+          does(
+            app.made,
+            whose,
+            !!app.live,
+            app.pages,
+            app.draft
+              ? { frame: 'draft', at: app.draft }
+              : app.live
+              ? { frame: 'live', at: app.live }
+              : null,
+          ),
+        ),
         tab('screens', 'Screens', screens(app, operator)),
       ),
     ),
@@ -1733,6 +1766,17 @@ let put = (drawn) => {
   let tab = was.querySelector('[name=made][value="' + next.dataset.stage + '"]')
   if (tab) tab.checked = true
 }
+// A page pressed in What it can do opens in its frame by itself (its
+// link's target); Screens, and that frame among them, come forward with it.
+document.addEventListener('click', (e) => {
+  let shows = e.target.closest?.('[data-shows]')
+  if (!shows) return
+  let app = canvas()
+  let tab = app?.querySelector('[name=made][value=screens]')
+  if (tab) tab.checked = true
+  let frame = app?.querySelector('[name=screen][value="' + shows.dataset.shows + '"]')
+  if (frame) frame.checked = true
+})
 // One read of it at a time; one asked for meanwhile follows it.
 let remaking = false, wanted
 let remake = async (slug) => {

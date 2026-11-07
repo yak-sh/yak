@@ -5,7 +5,7 @@ import { equal, test } from '@yaks/testing'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
-import { does, keeps, madeOf } from './made.ts'
+import { does, keeps, madeOf, pagesOf } from './made.ts'
 import { appVocab } from './vocab.ts'
 
 let whose = { app: 'Recipe box', operator: 'Otto' }
@@ -119,5 +119,39 @@ test('what an app can do is asked for in the chat once it is live', () => {
   equal(
     note(false),
     'Once it is live, you can ask for any of these in this chat, even with none of its pages open.',
+  )
+})
+
+test('what an app can do lists its pages, each shown in its screens when pressed', () => {
+  let pages = pagesOf([
+    ['index.html', '<title>Recipes</title>'],
+    ['about.html', '<h1>About</h1>'],
+  ])
+  let at = 'https://plum.yaks.app/recipes/_preview/t/'
+  let { document } = parseHTML(
+    renderToString(
+      h(
+        'div',
+        null,
+        does(madeOf(null), whose, false, pages, { frame: 'draft', at }),
+      ),
+    ),
+  )
+  equal(read(does(madeOf(null), whose, false, pages)), [
+    'Recipes: /',
+    'About: /about',
+  ])
+  equal(
+    document.querySelector('.Talk_MadeNote')?.textContent,
+    'Its pages, each shown in Screens.',
+  )
+  equal(
+    [...document.querySelectorAll('[data-shows]')].map((
+      a,
+    ) => [a.textContent, a.getAttribute('href'), a.getAttribute('target')]),
+    [
+      ['Show', at, 'screen-draft'],
+      ['Show', at + 'about', 'screen-draft'],
+    ],
   )
 })

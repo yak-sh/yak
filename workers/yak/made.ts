@@ -5,7 +5,7 @@
 // `canvas`), read from the app's draft as each write lands. Pure: the page
 // reads the file and hands its text here.
 import { type ComponentChildren as Node, h } from 'preact'
-import { Empty, Rows } from '@yaks/ui/parts'
+import { Button, Empty, Rows } from '@yaks/ui/parts'
 import { read } from '@yaks/yaml'
 import type { Declared } from './operator-persona.ts'
 
@@ -20,7 +20,7 @@ export let building: Declared = {
   key: 'building',
   title: 'Making a new app',
   body:
-    'While you make an app, the column beside the chat shows it being made, read from its draft as each write lands: What it keeps (the components of its vocab.json), What it can do (its commands), and Screens once the draft holds a page, the newest open. So when you make a new app, write its vocab.json first, in an app_files call of its own, and its pages after it: the person sees what it will keep before its screens. Give each component, each command and each property a title in the person\'s own words ("Address line 2", not street2), and mark a property the app keeps for itself, which nobody fills in (a slug, a sort position, a flag on sample rows), "readOnly": true: the column leaves it out.',
+    'While you make an app, the column beside the chat shows it being made, read from its draft as each write lands: What it keeps (the components of its vocab.json), What it can do (its commands, and its pages by their <title>), and Screens once the draft holds a page, the newest open. So when you make a new app, write its vocab.json first, in an app_files call of its own, and its pages after it: the person sees what it will keep before its screens. Give each component, each command and each property a title in the person\'s own words ("Address line 2", not street2), and mark a property the app keeps for itself, which nobody fills in (a slug, a sort position, a flag on sample rows), "readOnly": true: the column leaves it out.',
 }
 
 /** A kind of thing an app keeps: its name, and what it keeps of each. */
@@ -120,6 +120,65 @@ export let madeOf = (source: string | null, file = 'vocab.json'): Made => {
   }
 }
 
+/** A page of an app: where it is under the app's address ('' for its
+ * index.html, `about` for about.html, `shop/` for shop/index.html), and
+ * what it calls itself. */
+export type Page = { path: string; title: string }
+
+// Text as a page writes it, its markup and character references read.
+let text = (html: string) =>
+  html.replace(/<[^>]*>/g, ' ').replace(
+    /&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi,
+    (_, ref: string) =>
+      ref[0] == '#'
+        ? String.fromCodePoint(parseInt(ref.slice(1).replace(/^x/i, '0x')))
+        : ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' })[
+          ref.toLowerCase() as 'amp'
+        ],
+  ).replace(/\s+/g, ' ').trim()
+
+/**
+ * An app's pages, each `[path, html]` of its files a page: where each is
+ * served and what it calls itself, its `<title>`, else its first `<h1>`,
+ * else its name. Its index comes first and a 404.html, which is no page a
+ * person goes to, is left out.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { pagesOf } from './made.ts'
+ * equal(pagesOf([
+ *   ['about.html', '<h1>About <em>us</em></h1>'],
+ *   ['index.html', '<title>Recipes &amp; more</title>'],
+ *   ['shop/index.html', '<title></title><h1>The shop</h1>'],
+ *   ['gift_cards.html', ''],
+ *   ['404.html', '<title>Not here</title>'],
+ * ]), [
+ *   { path: '', title: 'Recipes & more' },
+ *   { path: 'about', title: 'About us' },
+ *   { path: 'gift_cards', title: 'Gift cards' },
+ *   { path: 'shop/', title: 'The shop' },
+ * ])
+ * ```
+ */
+export let pagesOf = (files: [string, string][]): Page[] =>
+  files.filter(([path]) => path.endsWith('.html') && path != '404.html')
+    .map(([path, html]) => {
+      let at = path.replace(/(^|\/)index\.html$/, '$1').replace(/\.html$/, '')
+      let named = (tag: string) =>
+        text(
+          new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i')
+            .exec(html)?.[1] ?? '',
+        )
+      let name = at.replace(/\/$/, '').split('/').at(-1) || 'home'
+      return {
+        path: at,
+        title: named('title') || named('h1') || capital(plain(name)),
+      }
+    })
+    .sort((a, b) =>
+      a.path == '' ? -1 : b.path == '' ? 1 : a.path < b.path ? -1 : 1
+    )
+
 let AND = new Intl.ListFormat('en', { type: 'conjunction' })
 let OR = new Intl.ListFormat('en', { type: 'disjunction' })
 let a = (word: string) => (/^[aeiou]/i.test(word) ? 'an ' : 'a ') + word
@@ -154,28 +213,79 @@ export let keeps = (made: Made, { app, operator }: Whose): Node =>
       `The kinds of things ${app} keeps show here as ${operator} decides them.`,
     )
 
+/** Where an app's pages open: the screens frame they go to (operator-page.ts
+ * `screens`), and the address under which they are served there. */
+export type Shows = { frame: 'draft' | 'live'; at: string }
+
 /** What an app can do: its own commands, then adding and finding what it
- * keeps, which a person can ask for in the chat once it is live. */
-export let does = (made: Made, { app, operator }: Whose, live: boolean) =>
-  made.acts.length || made.finds.length
+ * keeps, which a person can ask for in the chat once it is live; and its
+ * pages, each shown in its screens when pressed. */
+export let does = (
+  made: Made,
+  { app, operator }: Whose,
+  live: boolean,
+  pages: Page[] = [],
+  shows: Shows | null = null,
+) =>
+  made.acts.length || made.finds.length || pages.length
     ? [
-      h(
-        'p',
-        { class: 'Talk_MadeNote' },
-        live
-          ? 'Ask for any of these in this chat, even with none of its pages open.'
-          : 'Once it is live, you can ask for any of these in this chat, even with none of its pages open.',
-      ),
-      h(
-        Rows,
-        null,
-        made.acts.map((act) => row(act.name, act.about)),
-        made.finds.length
-          ? row(
-            'Add and find what it keeps',
-            capital(OR.format(made.finds.map(a))),
-          )
-          : null,
-      ),
+      made.acts.length || made.finds.length
+        ? [
+          h(
+            'p',
+            { class: 'Talk_MadeNote' },
+            live
+              ? 'Ask for any of these in this chat, even with none of its pages open.'
+              : 'Once it is live, you can ask for any of these in this chat, even with none of its pages open.',
+          ),
+          h(
+            Rows,
+            null,
+            made.acts.map((act) => row(act.name, act.about)),
+            made.finds.length
+              ? row(
+                'Add and find what it keeps',
+                capital(OR.format(made.finds.map(a))),
+              )
+              : null,
+          ),
+        ]
+        : null,
+      pages.length
+        ? [
+          h(
+            'p',
+            { class: 'Talk_MadeNote' },
+            'Its pages, each shown in Screens.',
+          ),
+          h(
+            Rows,
+            null,
+            pages.map((page) =>
+              h(
+                Rows.Item,
+                null,
+                h(
+                  Rows.Main,
+                  null,
+                  h(Rows.Name, null, page.title),
+                  h(Rows.Meta, null, '/' + page.path),
+                ),
+                shows
+                  ? h(
+                    Rows.Actions,
+                    null,
+                    h(Button, {
+                      href: shows.at + page.path,
+                      target: `screen-${shows.frame}`,
+                      'data-shows': shows.frame,
+                    }, 'Show'),
+                  )
+                  : null,
+              )
+            ),
+          ),
+        ]
+        : null,
     ]
     : empty(`What ${app} can do shows here as ${operator} adds it.`)

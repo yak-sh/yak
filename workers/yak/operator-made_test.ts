@@ -102,6 +102,10 @@ let after = async (...steps: Item[]) => {
     ) => [c.textContent, c.querySelector('input')?.hasAttribute('checked')]),
     notes: [...part('screens')?.querySelectorAll('p[data-screen]') ?? []]
       .map((p) => p.getAttribute('data-screen')),
+    // Where each page What it can do lists is shown.
+    pages: [...part('does')?.querySelectorAll('[data-shows]') ?? []].map((
+      a,
+    ) => [a.getAttribute('target'), a.getAttribute('href')]),
     asks: document.querySelector('#ask [name=app]')?.getAttribute('value'),
   }
 }
@@ -145,6 +149,7 @@ test('beside a newcomer’s chat, what their app keeps and can do as their Opera
     frames: {},
     switch: [],
     notes: [],
+    pages: [],
     asks: 'recipes',
   })
 })
@@ -155,12 +160,16 @@ test('its screens open once the first is drawn: the draft, following each write'
     String(drawn.screens).startsWith('https://plum.yaks.app/recipes/_preview/'),
     true,
   )
+  // What it can do names the page, which its draft shows.
+  equal(drawn.does.at(-1), 'Recipes')
+  equal(drawn.pages, [['screen-draft', drawn.screens ?? null]])
 })
 
 test('once released, its screens are the app itself, live', () => {
   equal(live.open, 'screens')
   equal(live.screens, 'https://plum.yaks.app/recipes/')
   equal([live.switch, live.notes], [[], []])
+  equal(live.pages, [['screen-live', 'https://plum.yaks.app/recipes/']])
 })
 
 test('while a live app has changes not yet released, its screens show the draft, with a switch to live and a line saying each', () => {
