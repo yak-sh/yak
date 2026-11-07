@@ -4,16 +4,22 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { clicked, CTAS, funnel, step } from './funnel.ts'
-import { FUNNEL, isHome } from './view-point.ts'
+import { FUNNEL, isHome, type Visited } from './view-point.ts'
 import { analytics, dataset } from './testing.ts'
 import { page } from './site/mod.ts'
 import type { Env } from './env.ts'
 
 let BROWSER = 'Mozilla/5.0 (Macintosh) AppleWebKit Safari'
-let visit = (ua = BROWSER, path = '/') =>
-  new Request(`https://yaks.app${path}`, {
-    headers: { 'user-agent': ua, referer: 'https://news.example.com/item?q=1' },
-  })
+let visit = (ua = BROWSER, path = '/', cf?: Visited['cf']) =>
+  Object.assign(
+    new Request(`https://yaks.app${path}`, {
+      headers: {
+        'user-agent': ua,
+        referer: 'https://news.example.com/item?q=1',
+      },
+    }),
+    { cf },
+  )
 
 test('a step is written under the platform, saying what a view says and its campaign', () => {
   let views = dataset()
@@ -68,6 +74,7 @@ test('the home page is visited by a browser asking for /, not a crawler', () => 
   assertEquals(isHome(visit(), '/', ok), true)
   assertEquals(isHome(visit(), '/', new Response(null, { status: 304 })), true)
   assertEquals(isHome(visit('Googlebot/2.1'), '/', ok), false)
+  assertEquals(isHome(visit(BROWSER, '/', { asn: 32934 }), '/', ok), false)
   assertEquals(isHome(visit(BROWSER, '/gallery'), '/gallery', ok), false)
 })
 

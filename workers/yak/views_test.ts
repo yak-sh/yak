@@ -15,6 +15,7 @@ import {
   assertThrows,
 } from '@std/assert'
 import type { Env } from './env.ts'
+import type { Visited } from './crawlers.ts'
 import { fetch as siteFetch } from './site.ts'
 import {
   ago,
@@ -42,6 +43,19 @@ import {
   viewed,
 } from './views.ts'
 
+// A request from this user agent, and from this network as Cloudflare reads it.
+let asked = (ua: string | null, cf?: Visited['cf']) =>
+  Object.assign(
+    new Request('https://ada.yaks.app/', {
+      headers: ua == null ? {} : { 'user-agent': ua },
+    }),
+    { cf },
+  )
+
+let CHROME =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
+  '(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+
 test('classed: an assistant, a crawler, a person, a script', () => {
   // The AI clients read first: almost all of them spell themselves `…Bot`.
   for (
@@ -52,7 +66,7 @@ test('classed: an assistant, a crawler, a person, a script', () => {
       'Mozilla/5.0 (compatible; PerplexityBot/1.0)',
       'Mozilla/5.0 (compatible; OAI-SearchBot/1.0)',
     ]
-  ) assertEquals(classed(ua), 'agent', ua)
+  ) assertEquals(classed(asked(ua)), 'agent', ua)
 
   for (
     let ua of [
@@ -63,21 +77,37 @@ test('classed: an assistant, a crawler, a person, a script', () => {
       'facebookexternalhit/1.1',
       'Pingdom.com_bot_version_1.4',
     ]
-  ) assertEquals(classed(ua), 'bot', ua)
+  ) assertEquals(classed(asked(ua)), 'bot', ua)
 
   for (
     let ua of [
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
-      '(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+      CHROME,
       'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 ' +
       '(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
       'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0',
     ]
-  ) assertEquals(classed(ua), 'browser', ua)
+  ) assertEquals(classed(asked(ua)), 'browser', ua)
 
   // No user-agent at all is a script, never a person: every browser sends one.
-  assertEquals(classed(null), 'bot')
-  assertEquals(classed(''), 'bot')
+  assertEquals(classed(asked(null)), 'bot')
+  assertEquals(classed(asked('')), 'bot')
+})
+
+test("classed: a browser on an ad network's own network is its crawler", () => {
+  let meta = { country: 'SE', asn: 32934, asOrganization: 'Facebook, Inc.' }
+  assertEquals(classed(asked(CHROME, meta)), 'bot')
+  assertEquals(
+    classed(asked(CHROME, { asOrganization: 'Meta Platforms, Inc.' })),
+    'bot',
+  )
+  assertEquals(
+    classed(asked(CHROME, { asn: 7922, asOrganization: 'Comcast' })),
+    'browser',
+  )
+  assertEquals(
+    classed(asked(CHROME, { asOrganization: 'Metanet AG' })),
+    'browser',
+  )
 })
 
 test('referred: the host, never the path — and never ourselves', () => {

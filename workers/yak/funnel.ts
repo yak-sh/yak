@@ -10,7 +10,8 @@ import type { Env } from './env.ts'
 import { caught } from './defects.ts'
 import type { Host } from './host.ts'
 import { fromOurs } from './page-report.ts'
-import { classed, FUNNEL, stepOf, type Visited } from './view-point.ts'
+import { isPerson } from './crawlers.ts'
+import { FUNNEL, stepOf, type Visited } from './view-point.ts'
 import {
   BUTTON,
   CAMPAIGN,
@@ -98,7 +99,7 @@ export let clicked = async (
   let name = (await req.text()).slice(0, 64)
   if (
     CTAS.some((c) => c.name == name) && fromOurs(req, env) &&
-    classed(req.headers.get('user-agent')) == 'browser'
+    isPerson(req)
   ) step(env, 'click', req, name)
   return new Response(null, { status: 204 })
 }

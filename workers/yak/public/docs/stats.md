@@ -48,14 +48,15 @@ Each visit records these six fields and nothing else:
   referrer: no path and no query string, so a search term a visitor arrived with
   is dropped before anything is written
 - one of three labels for the kind of client: `browser`, `bot` or `agent` (an AI
-  assistant fetching the page)
+  assistant fetching the page). A browser asking from an ad network's own
+  network, such as Meta reviewing an ad's landing page, is a `bot`
 
 ## What is never recorded
 
 - **no IP address**, in any form
 - **no visitor id**, no cookie, no session, no fingerprint
-- **no user-agent string**: a user-agent string is a fingerprint, so only the
-  client label above is derived from it and kept
+- **no user-agent string** and no network: both are a fingerprint, so only the
+  client label above is derived from them and kept
 - nothing that could be joined back to a person, on yaks.app or anywhere else
 
 This is a design choice, not a setting: the data holds no visitor identity, so

@@ -7,7 +7,8 @@
 //
 // The funnel counts its steps by the campaign (funnel.ts), and an ad network is
 // told of a visit its click brought (conversions.ts). Nothing here imports past
-// lib/cookie.ts, so yak-front (front/) holds it.
+// lib/cookie.ts and crawlers.ts, so yak-front (front/) holds it.
+import { isPerson } from './crawlers.ts'
 import { cookieValue } from './lib/cookie.ts'
 
 /** The cookie an arrival is kept in, apart from the session's. */
@@ -141,14 +142,16 @@ export type Conversion = {
 
 /**
  * What this request tells an ad network, or null when no ad network's click
- * brought it: a visit nobody's ad sent is told to nobody.
+ * brought it or no person sent it: a visit nobody's ad sent is told to nobody,
+ * and nor is a crawler following an ad's link (crawlers.ts), the network's
+ * own among them.
  */
 export let conversionOf = (
   told: Told,
   req: Request,
   now = Date.now(),
 ): Conversion | null => {
-  let came = arrival(req)
+  let came = isPerson(req) ? arrival(req) : null
   if (!came || !clicked(came)) return null
   let url = new URL(req.url)
   return {

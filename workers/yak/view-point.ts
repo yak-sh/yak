@@ -1,33 +1,18 @@
 // One page view as Analytics Engine keeps it: what views.ts counts and reads
 // back, and what yak-front (front/) writes for a page it answers from the edge.
-// Nothing here imports past arrival.ts and variant.ts, which import only
-// lib/cookie.ts, so the front Worker can hold it.
+// Nothing here imports past arrival.ts, crawlers.ts and variant.ts, which
+// import only lib/cookie.ts, so the front Worker can hold it.
 import { arrival, campaign } from './arrival.ts'
+import { classed, isPerson, type Visited } from './crawlers.ts'
 import { variant } from './variant.ts'
+
+export type { Visited }
 
 // A blob is capped rather than trusted: a path is whatever the visitor typed,
 // and 16 KB is the budget for all six of them together.
 let CAP = 512
 
 let clipped = (s: string) => (s.length > CAP ? s.slice(0, CAP) : s)
-
-// The AI assistants and the answer engines, which are neither a person's
-// browser nor an old-fashioned crawler. Tested first, because most of them
-// spell themselves `…Bot` and would otherwise land in the line below.
-let AGENTS =
-  /claude|anthropic|gptbot|chatgpt|openai|oai-search|perplexity|gemini|google-extended|cohere|bytespider|amazonbot|meta-externalagent|applebot-extended|ccbot|duckassist|youbot/i
-
-// Crawlers, monitors, link unfurlers and anything speaking through a library.
-let BOTS =
-  /bot|spider|crawler|crawl|slurp|curl|wget|python-requests|go-http-client|okhttp|libwww|httpclient|monitor|uptime|headlesschrome|phantomjs|scrapy|feedfetcher|preview|facebookexternalhit|embedly|pingdom/i
-
-/**
- * What kind of client asked, in one word — the only thing kept out of a
- * user-agent string. An absent UA is a script rather than a person: every
- * browser sends one.
- */
-export let classed = (ua: string | null | undefined): string =>
-  !ua ? 'bot' : AGENTS.test(ua) ? 'agent' : BOTS.test(ua) ? 'bot' : 'browser'
 
 /**
  * The site that linked the visitor here, as a host and nothing more — no path,
@@ -71,9 +56,6 @@ export let point = (v: View) => ({
   doubles: [v.status],
 })
 
-/** A request as the runtime hands it over, with Cloudflare's own facts on it. */
-export type Visited = Request & { cf?: { country?: string } }
-
 /** Whether an answer is a page view: an HTML page answered 200. */
 export let isView = (res: Response) =>
   res.status == 200 &&
@@ -91,7 +73,7 @@ export let pointOf = (
     path: url.pathname,
     country: req.cf?.country ?? '',
     from: referred(req.headers.get('referer'), url.host),
-    client: classed(req.headers.get('user-agent')),
+    client: classed(req),
     status: res.status,
   })
 }
@@ -119,7 +101,7 @@ export let stepOf = (step: string, req?: Visited, button = '') => {
     path: url?.pathname ?? '',
     country: req?.cf?.country ?? '',
     from: req && url ? referred(req.headers.get('referer'), url.host) : '',
-    client: req ? classed(req.headers.get('user-agent')) : '',
+    client: req ? classed(req) : '',
     status: 0,
   })
   p.blobs.push(
@@ -135,11 +117,11 @@ export let stepOf = (step: string, req?: Visited, button = '') => {
  * browser rather than a crawler. */
 export let isPage = (req: Request, res: Response) =>
   req.method == 'GET' && (res.status == 304 || isView(res)) &&
-  classed(req.headers.get('user-agent')) == 'browser'
+  isPerson(req)
 
 /** Whether this answer at the apex is a person visiting the home page: a GET
  * of `/` that was answered, from a browser rather than a crawler. A 304 is a
  * browser coming back to a page it holds, and is a visit too. */
 export let isHome = (req: Request, path: string, res: Response) =>
   path == '/' && req.method == 'GET' && res.status < 400 &&
-  classed(req.headers.get('user-agent')) == 'browser'
+  isPerson(req)

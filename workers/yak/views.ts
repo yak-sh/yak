@@ -43,7 +43,8 @@ import { elapsed } from './lib/hops.ts'
 import { failure, resent } from './workers_api.ts'
 import { isView, pointOf, type Visited } from './view-point.ts'
 import { appTag } from './purge.ts'
-export { classed, point, referred, type View } from './view-point.ts'
+export { classed } from './crawlers.ts'
+export { point, referred, type View } from './view-point.ts'
 
 /** How long Cloudflare keeps a data point. Said in one place. */
 export let KEPT_DAYS = 90

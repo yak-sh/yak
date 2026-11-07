@@ -4,7 +4,7 @@ import { test } from '@yaks/testing'
 import { COOKIE as HOME } from './variant.ts'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { kernel, mailed, toldMeta, unique } from './probe.ts'
-import { COOKIE } from './arrival.ts'
+import { conversionOf, COOKIE } from './arrival.ts'
 
 let BROWSER = 'Mozilla/5.0 (Macintosh) AppleWebKit Safari'
 
@@ -96,4 +96,19 @@ test('every apex page an ad lands on keeps its arrival and is told as a page see
       path,
     )
   }
+})
+
+test("an ad's click followed by its network's own crawler tells nobody", () => {
+  let landed = (ua: string | null, cf?: object) =>
+    Object.assign(
+      new Request('https://yaks.app/?fbclid=Ab1&utm_source=meta', {
+        headers: ua == null ? {} : { 'user-agent': ua },
+      }),
+      { cf },
+    )
+  assertEquals(conversionOf('view', landed(BROWSER))?.told, 'view')
+  assertEquals(conversionOf('view', landed(BROWSER, { asn: 32934 })), null)
+  assertEquals(conversionOf('signup', landed(BROWSER, { asn: 32934 })), null)
+  assertEquals(conversionOf('view', landed('facebookexternalhit/1.1')), null)
+  assertEquals(conversionOf('view', landed(null)), null)
 })
