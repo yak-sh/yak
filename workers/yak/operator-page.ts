@@ -70,6 +70,7 @@ import {
   reply,
   talks,
   trouble,
+  type Underway,
 } from './operator-view.ts'
 import { does, keeps, type Made, madeOf } from './made.ts'
 import { drafting } from './written.ts'
@@ -682,6 +683,7 @@ export let operatorAnswer = async (
       task: talked.task,
       html: talked.html,
       making: ours(space, talked.making),
+      started: !!talked.making?.started,
     }, { headers: { 'cache-control': 'private, no-store' } })
   }
   // An app beside the chat drawn again as the Operator works on it, and the
@@ -754,7 +756,7 @@ export let conversationOf = async (
     title: string
     html: string
     waiting: Bundle[]
-    making: Changed | null
+    making: Underway | null
   }
   return { task, begun, title, html: html + conversation(waiting), making }
 }
@@ -1095,17 +1097,17 @@ let makingOf = async (
 let stageOf = ({ made, src }: Making) =>
   src ? 'screens' : !made.kinds.length && made.acts.length ? 'does' : 'keeps'
 
-// The app open beside the chat (T-140509), and the one a newcomer's Operator
-// is building (D-146737): its icon, its name and where it lives, a way to
-// open it in a tab of its own, and under them what it is made of, a tab each,
-// in the order it is made: the kinds of things it keeps, what it can do, and
-// its screens, the newest stage open. Its screens are the app itself, live,
-// which the page reloads when the Operator changes it, or before it is
-// released its draft, which follows each write (`chatScript`). The app's host
-// lets the platform frame it (cache.ts `sealed`). On a phone it takes the
-// screen in the chat's place while chosen (`#app`), and Chat goes back.
-// Each part the page puts in place again as the Operator works is named by
-// `data-part`.
+// The app open beside the chat (T-140509), and the one the Operator is
+// making in it (D-146737, `following`): its icon, its name and where it
+// lives, a way to open it in a tab of its own, and under them what it is
+// made of, a tab each, in the order it is made: the kinds of things it
+// keeps, what it can do, and its screens, the newest stage open. Its screens
+// are the app itself, live, which the page reloads when the Operator changes
+// it, or before it is released its draft, which follows each write
+// (`chatScript`). The app's host lets the platform frame it (cache.ts
+// `sealed`). On a phone it takes the screen in the chat's place while chosen
+// (`#app`), and Chat goes back. Each part the page puts in place again as
+// the Operator works is named by `data-part`.
 let canvas = (env: Env, space: Space, app: Making, operator: string) => {
   let host = `${spaceHost(env, space.slug)}/${app.slug}`
   let title = app.title || app.slug
@@ -1203,6 +1205,19 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
     ),
   )
 }
+
+/** Which apps open beside the chat by themselves, with none chosen, as the
+ * Operator works (D-146737): for a newcomer any it works on, since their
+ * space holds only what it builds them; for anyone else one it started in
+ * this conversation (app_new), never one that was there before, which opens
+ * only when they choose it (T-140509). Each is a frame's list of them
+ * (operator-view.ts `frame`). */
+type Follows = 'worked' | 'started' | null
+let following = (newcomer: boolean, chosen?: string | null): Follows =>
+  chosen ? null : newcomer ? 'worked' : 'started'
+// Whether the app a conversation is making opens beside it.
+let opens = (follows: Follows, made: Underway | null) =>
+  !!made && (follows == 'worked' || follows == 'started' && made.started)
 
 // The app a step worked on, when it is this space's.
 let ours = (space: Space, worked: Changed | null) =>
@@ -1379,11 +1394,10 @@ let hello = (heading: string, said: string) =>
  * (`data-needs`, T-140508), and under it a few ways to start.
  *
  * Beside it, the app the address names (`chosen`, the side's `aboutPath`),
- * of those the person may open, and no other: an app the conversation
- * changed opens only when they choose it, but for a newcomer's, whose
- * Operator is building them one (D-146737). A new chat about an app asks what
- * should change in it, and the words sent say which page and app are open
- * (operator-view.ts `onPage`).
+ * of those the person may open, and no other. With none named, the app the
+ * conversation is making opens there by itself (`following`). A new chat
+ * about an app asks what should change in it, and the words sent say which
+ * page and app are open (operator-view.ts `onPage`).
  */
 export let chatPage = async (
   env: Env,
@@ -1405,11 +1419,8 @@ export let chatPage = async (
   if (open == 'new' && talked.title) open = root
   let fresh = open == 'new'
   let first = beside.name?.trim().split(/\s+/)[0]
-  // A newcomer watches their app being made (D-146737): with none chosen,
-  // the one their Operator is making opens beside the chat, and the page
-  // follows it from there (`chatScript`).
-  let follows = !!newcomer && !chosen
-  let made = follows ? ours(space, talked.making) : null
+  let follows = following(!!newcomer, chosen)
+  let made = opens(follows, talked.making) ? ours(space, talked.making) : null
   let named = beside.apps?.find((a) => a.slug == (chosen ?? made))
   let app = named && await makingOf(env, space, who, named.slug) || undefined
   // This page's address, which the words written on it name.
@@ -1613,7 +1624,7 @@ let chatScript = (
   space: Space,
   open: string,
   talk: string,
-  follows: boolean,
+  follows: Follows,
 ) =>
   `<script type="module">
 import { browserDrafts } from '/_draft.js'
@@ -1627,8 +1638,9 @@ let heading = document.querySelector('[data-title]')
 let form = document.querySelector('#ask')
 // The app open beside the chat (T-140509) is loaded again when the Operator
 // changes it, and what it is made of drawn again as the Operator works on it
-// (\`canvas\`); a newcomer's page opens the app their Operator is making
-// (D-146737).
+// (\`canvas\`). With none open, the one the Operator is making opens by
+// itself (D-146737): any it works on for a newcomer, else one it started in
+// this conversation (\`following\`), each a frame's list.
 let here = ${JSON.stringify(space.slug)}
 let follows = ${JSON.stringify(follows)}
 let canvas = () => document.querySelector('[data-app]')
@@ -1636,8 +1648,9 @@ let ours = (apps = []) => apps.filter((c) => !c.space || c.space == here).map((c
 let changing = (o) => {
   let app = canvas(), shown = app?.querySelector('[data-frame]')
   if (shown && ours(o.changed).includes(app.dataset.app)) shown.src = shown.getAttribute('src')
-  let worked = ours(o.worked)
-  if (app ? worked.includes(app.dataset.app) : follows && worked.length) remake(app?.dataset.app ?? worked.at(-1))
+  if (app) return void (ours(o.worked).includes(app.dataset.app) && remake(app.dataset.app))
+  let opening = follows ? ours(o[follows]) : []
+  if (opening.length) remake(opening.at(-1))
 }
 // It comes drawn whole, and only the parts of it that changed are put in
 // place, so the screens load again only when where they are changes; its
@@ -1814,7 +1827,7 @@ let read = async () => {
       let was = near()
       if (got.html) redraw(box, got.html), redrawn()
       if (got.title) heading.textContent = got.title
-      if (follows && !canvas() && got.making) remake(got.making)
+      if (follows && !canvas() && got.making && (follows == 'worked' || got.started)) remake(got.making)
       follow(was)
     } while (again)
   })()

@@ -2,7 +2,7 @@
 // by operatorAnswer, loaded again and again over one localStorage: what a
 // person typed is kept when the page is left with its save cut off. And the
 // app beside the chat, drawn again as the Operator works on it, which a
-// newcomer's page opens as their Operator starts making it.
+// page opens as their Operator starts making it.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
@@ -483,6 +483,18 @@ test("a newcomer's chat opens the app their Operator is making beside it, then i
     document.querySelector('[data-frame]')!.getAttribute('src')!,
     'https://clerk.yaks.app/recipes/_preview/',
   )
+  page.leave()
+})
+
+test('a signed-in person’s chat opens beside it an app their Operator starts there, and not one it only works on', async () => {
+  let page = await load(storage())
+  let app = () => page.document.querySelector('[data-app]')
+  page.hear(working({ space: '', app: 'notes' }))
+  await settle()
+  assertEquals(app(), null)
+  let recipes = { space: '', app: 'recipes' }
+  page.hear({ operator: { ...working(recipes).operator, started: [recipes] } })
+  assert(await until(() => app()?.getAttribute('data-app') == 'recipes'))
   page.leave()
 })
 

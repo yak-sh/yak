@@ -22,7 +22,6 @@ import { transcript } from '@yaks/session'
 import { stepOf } from '@yaks/tools/title'
 import type { Tool } from '@yaks/model'
 import {
-  type Changed,
   frame,
   type Helper,
   helperFrame,
@@ -32,6 +31,7 @@ import {
   type Offers,
   stateOf,
   talk,
+  type Underway,
   type Worked,
 } from './operator-view.ts'
 
@@ -489,9 +489,9 @@ export let openedOf = async (
  * what the page keys the conversation by (a task, or the session), and
  * `begun` the request it began with, the same before and after a session
  * takes it up (the key, for one no request began), and `making` the app its
- * newest step worked on (operator-view.ts `making`). `called` is what its
- * Operator is called, and `opens` where a conversation opens by its id, at
- * the chat app's `at` unless the admin's.
+ * newest step worked on and whether it started it (operator-view.ts
+ * `making`). `called` is what its Operator is called, and `opens` where a
+ * conversation opens by its id, at the chat app's `at` unless the admin's.
  */
 export let conversationOf = async (
   store: Store,
@@ -507,7 +507,7 @@ export let conversationOf = async (
   title: string
   html: string
   waiting: Bundle[]
-  making: Changed | null
+  making: Underway | null
 }> => {
   let found = await openedOf(store, open)
   if (found.session) {

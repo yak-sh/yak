@@ -88,7 +88,7 @@ export let paged: Declared = {
   key: 'page',
   title: 'Where they are',
   body:
-    'Each message says how it came: by email, by text, by phone, in their Updates, or in the chat on their yaks.app page, with that page\'s address and the app open beside the chat, if one is. Your page is that chat. Down its left side, its sidebar holds the space\'s name, which switches spaces; your name, which opens your conversation with them; Updates from you, with how many wait on them; Your apps, the first few with each one\'s icon beside its name, and All N apps; and Manage at the foot, the settings behind the page (its apps, people, billing and the rest). Beside the sidebar is your conversation and the box they write in, and with an app open, a column beside the chat holds it under its icon, name and address, in three tabs: What it keeps (the components of its vocab.json, in plain words), What it can do (its commands), and Screens (the app running live, or before its first deploy its draft preview, once the draft holds a page). For someone who has not given their email yet, the app you are making opens there by itself. On a phone the sidebar opens from Menu, and the app from the button with its name. When they write "here" or "this" on the page, they mean what that page shows. By email, text or phone they are not looking at it.',
+    'Each message says how it came: by email, by text, by phone, in their Updates, or in the chat on their yaks.app page, with that page\'s address and the app open beside the chat, if one is. Your page is that chat. Down its left side, its sidebar holds the space\'s name, which switches spaces; your name, which opens your conversation with them; Updates from you, with how many wait on them; Your apps, the first few with each one\'s icon beside its name, and All N apps; and Manage at the foot, the settings behind the page (its apps, people, billing and the rest). Beside the sidebar is your conversation and the box they write in, and with an app open, a column beside the chat holds it under its icon, name and address, in three tabs: What it keeps (the components of its vocab.json, in plain words), What it can do (its commands), and Screens (the app running live, or before its first deploy its draft preview, once the draft holds a page). With none open, an app you start in that conversation (app_new) opens there by itself, and for someone who has not given their email yet, any app you work on. On a phone the sidebar opens from Menu, and the app from the button with its name. When they write "here" or "this" on the page, they mean what that page shows. By email, text or phone they are not looking at it.',
 }
 
 /** How the caller's words on a call its talking model hears reach the
@@ -871,6 +871,8 @@ let CHANGES = byEid(RELEASING)
 // The tools that work on an app: those, and those that read or write the
 // files of its draft.
 let WORKS = byEid({ ...RELEASING, app_files: 'app', sandbox_ship: 'app' })
+// The tool that starts a new app.
+let STARTS = byEid({ app_new: 'slug' })
 
 // Each call to one of `tools` whose answer came back past `from` (by
 // `entry.seq`) and was not refused: the app it named, and when it answered.
@@ -904,9 +906,18 @@ export let changed = apps(CHANGES)
  * conversation as each step lands (operator-page.ts `canvas`). */
 export let worked = apps(WORKS)
 
+/** The apps these lines started, oldest first, which open beside the
+ * conversation that started them (operator-page.ts `chatPage`). */
+export let started = apps(STARTS)
+
+// One app, however each call named its space.
+let same = (a: Changed, b: Changed) =>
+  a.app == b.app && (!a.space || !b.space || a.space == b.space)
+
 /**
  * The app a conversation is making: the one its newest step worked on, of
- * its own lines and its helpers', which do most of its work.
+ * its own lines and its helpers', which do most of its work, and whether
+ * the conversation started it.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -918,24 +929,44 @@ export let worked = apps(WORKS)
  *   { entity: { eid: `r${n}` }, entry: { session: 's', seq: n + 1 },
  *     created: { at: `2026-11-07T0${n}:00:00Z` }, result: { call: `c${n}` } },
  * ]
+ * let begun = [
+ *   { entity: { eid: 'n' }, entry: { session: 's', seq: 0 },
+ *     call: { to: toolEid('app_new'), args: { slug: 'chores' } } },
+ *   { entity: { eid: 'm' }, entry: { session: 's', seq: 0 },
+ *     created: { at: '2026-11-07T00:00:00Z' }, result: { call: 'n' } },
+ * ]
  * equal(making(step(2, 'recipes'), [{ entries: step(1, 'chores') }]), {
- *   space: '', app: 'recipes',
+ *   space: '', app: 'recipes', started: false,
  * })
  * equal(making(step(1, 'recipes'), [{ entries: step(2, 'chores') }]), {
- *   space: '', app: 'chores',
+ *   space: '', app: 'chores', started: false,
+ * })
+ * equal(making(begun, [{ entries: step(2, 'chores') }]), {
+ *   space: '', app: 'chores', started: true,
  * })
  * equal(making([]), null)
  * ```
  */
-export let making = (entries: Bundle[], helpers: Helper[] = []) => {
-  let newest = [entries, ...helpers.map((h) => h.entries)]
-    .flatMap((lines) => answered(WORKS, lines))
+export let making = (
+  entries: Bundle[],
+  helpers: Helper[] = [],
+): Underway | null => {
+  let lines = [entries, ...helpers.map((h) => h.entries)]
+  let newest = lines.flatMap((l) => answered(WORKS, l))
     .sort((a, b) => a.at.localeCompare(b.at)).at(-1)
-  return newest ? { space: newest.space, app: newest.app } : null
+  if (!newest) return null
+  let app = { space: newest.space, app: newest.app }
+  return {
+    ...app,
+    started: lines.some((l) => started(l).some((s) => same(s, app))),
+  }
 }
 
+/** An app underway in a conversation, and whether it started it. */
+export type Underway = Changed & { started: boolean }
+
 /** One task's frame: the lines a step changed, what it is doing now, and
- * the apps it changed and worked on. */
+ * the apps it changed, worked on and started. */
 export let frame = (
   task: string,
   entries: Bundle[],
@@ -948,14 +979,15 @@ export let frame = (
     rows: touched(entries, names, from, seen),
     changed: changed(entries, from),
     worked: worked(entries, from),
+    started: started(entries, from),
     ...doingNow(entries, names),
   },
 })
 
 /** A helper's frame: what it was told past `from`, drawn inside the step
  * that started it (that step drawn again) or, for a helper no step drawn
- * started, on its own; the apps it changed; and what the Operator that
- * started it is doing now. */
+ * started, on its own; the apps it changed, worked on and started; and what
+ * the Operator that started it is doing now. */
 export let helperFrame = (
   task: string,
   helper: Helper,
@@ -979,6 +1011,7 @@ export let helperFrame = (
         : told.map((r) => drawn({ id: r.id, node: r.draw() })),
       changed: changed(helper.entries, from),
       worked: worked(helper.entries, from),
+      started: started(helper.entries, from),
       ...doingNow(entries, names),
     },
   }
