@@ -2517,13 +2517,17 @@ export class Store {
     let said = this.#get('tools') ?? '{}'
     if (this.#runs?.said != said || g != this.#graph) {
       let declared = readTools(said)
+      let host = this.#host, kind = storeKind(this.#get('name') ?? '')
       this.#runs = {
         said,
         run: runner(
           this.#kernelGraph(g),
           {
             host: g,
-            tools: [
+            // Made when a call first asks for a tool, as a host's are: most
+            // wakes run none, and an isolate's first would otherwise bind
+            // every command and package tool before its answer.
+            tools: () => [
               ...commands(declared).map((tool) => ({
                 ...tool,
                 applied: true,
@@ -2681,12 +2685,7 @@ export class Store {
                   }]
                 },
               })),
-              ...storedTools(
-                this.#host,
-                storeKind(this.#get('name') ?? ''),
-                undefined,
-                capture?.composition,
-              ),
+              ...storedTools(host, kind, undefined, capture?.composition),
             ],
             // A call in a transcript is the transcript runner's, run in the
             // order its model asked (@yaks/session, models.ts).
@@ -2695,7 +2694,8 @@ export class Store {
           },
         ),
       }
-      capture?.commands(declared, this.#runs.run.tools)
+      let run = this.#runs.run
+      capture?.commands(declared, () => run.tools)
     }
     return this.#runs.run
   }

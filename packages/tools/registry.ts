@@ -135,12 +135,12 @@ export let registry = (providers: readonly Provider[] = []): Registry => {
 }
 
 /** Existing tool arrays are one local provider; a supplied registry is
- * shared, and one supplied as a function is made when asked for. */
+ * shared, and either one supplied as a function is made when asked for. */
 export let registryOf = (
-  tools: Tool[] | Registry | (() => Registry),
+  tools: Tool[] | Registry | (() => Tool[] | Registry),
 ): Registry =>
-  Array.isArray(tools)
+  typeof tools == 'function'
+    ? registryOf(tools())
+    : Array.isArray(tools)
     ? registry([{ name: 'local', tools }])
-    : typeof tools == 'function'
-    ? tools()
     : tools

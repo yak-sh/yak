@@ -95,9 +95,9 @@ let running = new WeakMap<Graph, Map<Eid, Promise<Bundle[]>>>()
 
 /** What a runner is built with. */
 export type Opts = {
-  /** what it can run: a registry made only once a call asks for a tool,
-   * so a process that runs none builds none */
-  tools: Tool[] | Registry | (() => Registry)
+  /** what it can run: a function makes them only once a call asks for a
+   * tool, so a process that runs none builds none */
+  tools: Tool[] | Registry | (() => Tool[] | Registry)
   /** the graph the tools read and write, when that is not the graph the calls
    * are recorded in (a server that keeps its call records separately) */
   host?: Graph

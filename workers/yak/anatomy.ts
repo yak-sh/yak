@@ -89,9 +89,11 @@ export let workerAnatomy = (config: Config) => {
     capture.graphed()
   }
   let declared: Tools | undefined
-  let tools: NamedTool[] = []
+  // The bound tools, asked for only when the anatomy is read: a store makes
+  // its tools when a call first asks for one.
+  let tools: () => NamedTool[] = () => []
   let commandNames = new Set<string>()
-  let commands = (definitions: Tools, bound: NamedTool[]) => {
+  let commands = (definitions: Tools, bound: () => NamedTool[]) => {
     declared = definitions
     tools = bound
     capture.binding('worker/store', 'commands')
@@ -127,12 +129,13 @@ export let workerAnatomy = (config: Config) => {
     // neither was composed by this store's graph/effects roles.
     base.observed!.routes = base.observed!.secrets = false
     if (declared) {
+      let held = tools()
       base.observed!.commands = true
       // Store tools retain the assembly's loading evidence. A runner's lazy
       // wrapper is not evidence of an imported package run.
       for (let name of commandNames) {
         let bound = value(declared, name) &&
-          tools.find((t) => text(t, 'name') == name)
+          held.find((t) => text(t, 'name') == name)
         let existing = base.tools.find((t) => t.name == name)
         if (existing) existing.loaded = existing.bound = !!bound
         if (!bound) continue
@@ -157,7 +160,7 @@ export let workerAnatomy = (config: Config) => {
         facet: 'commands',
         declared: true,
         loaded: true,
-        bound: tools.some((t) => text(t, 'name') == name),
+        bound: held.some((t) => text(t, 'name') == name),
         description: text(d, 'description'),
         schema: {
           type: 'object',

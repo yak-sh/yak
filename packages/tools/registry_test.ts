@@ -113,6 +113,16 @@ test('admitted calls retain implementation without restoring an older tool decla
   equal(words(await pinned.call(), pending), 'one')
 })
 
+test('a runner given its tools as a function makes them when a call first asks for one', async () => {
+  let made = 0
+  let run = runner(world(), { tools: () => (made++, [sample()]) })
+  equal(made, 0)
+  await run.ensure()
+  let call = ask()
+  equal(words(await run.call(call), call), 'one')
+  equal(made, 1)
+})
+
 let futureGraph = world()
 let futureCatalog = registry([{ name: 'samples', tools: [sample()] }])
 let futureRunner = runner(futureGraph, { tools: futureCatalog })

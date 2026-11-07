@@ -73,7 +73,7 @@ test('worker anatomy is per-store composition, not a native or connector roster'
       input: {},
       query: '.note',
     },
-  }, [tool])
+  }, () => [tool])
   let first = app.read(), second = directory.read()
   assertEquals(first.scope, 'worker')
   assertEquals(first.host, 'worker/store')
@@ -160,7 +160,7 @@ commandCapture.composition.declarations(words.docs, words)
 commandCapture.graph([])
 commandCapture.commands({
   note_list: { description: 'List notes', input: {}, query: '.note' },
-}, [tool])
+}, () => [tool])
 let originalTool = commandCapture.read().tools.find((t) =>
   t.name == 'note_list'
 )!
@@ -168,7 +168,7 @@ let originalTool = commandCapture.read().tools.find((t) =>
 test('worker command replacement updates loading evidence without invoking a run', () => {
   let capture = commandCapture
   let before = originalTool
-  capture.commands({}, [])
+  capture.commands({}, () => [])
   let snapshot = capture.read()
   let after = snapshot.tools.find((t) => t.name == 'note_list')!
   assertEquals(after.id, before.id)
@@ -180,7 +180,7 @@ let lazyCapture = workerAnatomy({ plugins: ['fixture'] })
 lazyCapture.composition.declarations(words.docs, words)
 lazyCapture.composition.effects(new Map([['note_seen', 'fixture']]), true)
 lazyCapture.graph([])
-lazyCapture.commands({}, [tool])
+lazyCapture.commands({}, () => [tool])
 // As above: the initial composition is projected here, as fixture setup.
 lazyCapture.read()
 
