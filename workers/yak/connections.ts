@@ -472,6 +472,62 @@ let rebound = async (env: Env, apps: string[]) => {
 export let enabled = (req: Request): string[] =>
   new URL(req.url).searchParams.getAll('enable').flatMap((n) => n.split(','))
 
+/** Who is asking for a space's connections, and about what. */
+type Asked = {
+  /** whether it is the person's own space; still being read, what they
+   * connected is asked beside the rest and kept only if it is */
+  own?: boolean | Promise<boolean>
+  add?: string
+  /** the request's directory, so these reads travel with what it asks */
+  dir?: ReturnType<typeof dirOf>
+  /** the walk to the space, `.space.slug=ada`, while its eid is still being
+   * read (@yaks/connections `Path`) */
+  by?: `.${string}`
+}
+
+let readOn = (dir: ReturnType<typeof dirOf>): Read => (q) =>
+  typeof q == 'string' ? dir.read(q) : []
+
+// The space's apps, connections and the links out of its apps, by its eid
+// or the walk to it.
+let ownedBy = (dir: ReturnType<typeof dirOf>, owner: string | Path) =>
+  Promise.all([
+    dir.apps(typeof owner == 'string' ? { eid: owner } : owner),
+    list(readOn(dir), owner),
+    dir.read(
+      `.edge.from.app.space${
+        typeof owner == 'string' ? `=${owner}` : owner.path
+      }&.${USES}&*`,
+    ),
+  ])
+
+/** What a connections page is drawn from (`connectionsOf`), asked by the
+ * space and the person all at once, so it travels as one trip
+ * (directory-copy.ts `gathered`). A page asks it ahead of learning its space
+ * (apps.ts `foresee`), and each line is answered again when the page draws
+ * (hops.ts `recall`). */
+export let connectionsAsked = async (
+  env: Env,
+  space: Space | Promise<Space>,
+  person: string,
+  { own, add, dir = dirOf(env), by }: Asked = {},
+) => {
+  let read = readOn(dir)
+  let eid = Promise.resolve(space).then((s) => s.eid)
+  return await Promise.all(
+    [
+      space,
+      by ? read(`${by}&.space`) : undefined,
+      ownedBy(dir, by ? { path: by, eid } : await eid),
+      read(`.${LISTED}`),
+      own ? list(read, person) : [],
+      installed(read),
+      add ? known(read, add) : undefined,
+      own ?? false,
+    ],
+  )
+}
+
 /** What one space's connections page shows: the space's connections, with
  * the apps that use each, and what its apps borrow. On the person's own space
  * (`own`) it shows theirs too: what they connected for an app that asks each
@@ -487,59 +543,23 @@ export let connectionsOf = async (
   env: Env,
   space: Space | Promise<Space>,
   person: string,
-  at: {
-    /** whether it is the person's own space; still being read, what they
-     * connected is asked beside the rest and kept only if it is */
-    own?: boolean | Promise<boolean>
+  at: Asked & {
     /** asked by the caller, and awaited only once the rest is read */
     services?: Promise<Service[]>
     enable?: string[]
-    add?: string
-    /** the request's directory, so these reads travel with what it asks */
-    dir?: ReturnType<typeof dirOf>
-    /** the walk to the space, `.space.slug=ada`, while its eid is still being
-     * read (@yaks/connections `Path`) */
-    by?: `.${string}`
   } = {},
 ): Promise<Connections> => {
-  let { enable = [], add, dir = dirOf(env), by } = at
-  let read: Read = (q) => typeof q == 'string' ? dir.read(q) : []
+  let { enable = [], dir = dirOf(env) } = at
+  let read = readOn(dir)
   let month = monthOf(Date.now())
-  // The space's apps, connections and the links out of its apps, by its eid
-  // or the walk to it.
-  let drawn = (owner: string | Path) =>
-    Promise.all([
-      dir.apps(typeof owner == 'string' ? { eid: owner } : owner),
-      list(read, owner),
-      dir.read(
-        `.edge.from.app.space${
-          typeof owner == 'string' ? `=${owner}` : owner.path
-        }&.${USES}&*`,
-      ),
-    ])
-  let eid = Promise.resolve(space).then((s) => s.eid)
-  // What the page is drawn from is asked by the space and the person, all at
-  // once, so it travels as one trip (directory-copy.ts `gathered`); only what
-  // those answers name outside this space is asked after. A walk says which
-  // spaces it reached, so one that missed this space is asked again.
+  // Only what those answers name outside this space is asked after.
   let [here, reached, ahead, listing, theirs, built, wanted, own] =
-    await Promise.all(
-      [
-        space,
-        by ? read(`${by}&.space`) : undefined,
-        drawn(by ? { path: by, eid } : await eid),
-        read(`.${LISTED}`),
-        at.own ? list(read, person) : [],
-        installed(read),
-        add ? known(read, add) : undefined,
-        at.own ?? false,
-      ],
-    )
+    await connectionsAsked(env, space, person, { ...at, dir })
   let mine = own ? theirs : []
   let [apps, held, out] =
     !reached || reached.some((b) => b.entity.eid == here.eid)
       ? ahead
-      : await drawn(here.eid)
+      : await ownedBy(dir, here.eid)
   let roster = apps.filter((app) => app.space == here.eid)
   let ours = new Set(roster.map((app) => app.eid))
   let loans = await borrowed(

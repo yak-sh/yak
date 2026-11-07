@@ -76,7 +76,12 @@ import {
   wanted,
 } from './billing.ts'
 import { payments, plans } from './payments.ts'
-import { connecting, connectionsOf, enabled } from './connections.ts'
+import {
+  connecting,
+  connectionsAsked,
+  connectionsOf,
+  enabled,
+} from './connections.ts'
 import {
   buying,
   connect,
@@ -2592,7 +2597,7 @@ let rowsAhead = (
   }
   if (view != 'connections') return []
   return [
-    connectionsOf(
+    connectionsAsked(
       at.env,
       at.space.then((s) => s ?? Promise.reject(new Error('no space here'))),
       person,
