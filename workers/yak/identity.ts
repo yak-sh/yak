@@ -166,6 +166,7 @@ import {
   deleted,
 } from './signin-pages.ts'
 import { chatPath, hostOf, LOGOUT, MANAGE, OAUTH, onZone } from './route.ts'
+import { woken } from './build-door.ts'
 import { INVITE, LINK, SLUG } from '@yaks/platform/names'
 import { counted, FULL, keep, oneBuild, START } from './newcomer.ts'
 import {
@@ -798,11 +799,15 @@ let landed = async (
     return page
   }
   // A space they can't be given now is the settle's to report, and /manage
-  // tries again.
+  // tries again. Its Operator, which the chat they land on asks first, is
+  // woken as they are sent there (build-door.ts `woken`).
   return redirect(
     to || await c.time('own', () =>
       own.then(
-        (space) => hostUrl(env, chatPath(space.slug)),
+        (space) => {
+          woken(env, space.eid)
+          return hostUrl(env, chatPath(space.slug))
+        },
         () => hostUrl(env, MANAGE),
       )),
     set,

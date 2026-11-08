@@ -15,6 +15,7 @@ import {
   signIn,
 } from './probe.ts'
 import { chatPath, LOGOUT, MANAGE, managePath } from './route.ts'
+import { WAKE } from './door.ts'
 import { parseHTML } from 'linkedom'
 
 // One space, built as the file loads: a homepage app, a private one, one to
@@ -122,6 +123,26 @@ test('the apex opens a chat with the space’s Operator, its settings behind Man
     to(MANAGE),
   )
   await login.body?.cancel()
+})
+
+// The chat asks the space's Operator before anything, so the page that sends
+// a person there wakes it as it answers, as does every other page of the
+// space they may open the chat from (build-door.ts `woken`).
+test('the apex and a space’s pages wake its Operator for the chat opened next', async () => {
+  let builder = k.builder((await k.dir.space(slug))!.eid)
+  let woke = 0
+  let fetch = builder.fetch.bind(builder)
+  builder.fetch = (r) => (new URL(r.url).pathname == WAKE && woke++, fetch(r))
+  let woken = async (path: string, cookie?: string) => {
+    let before = woke
+    await (await get(path, cookie)).body?.cancel()
+    await k.settled()
+    return woke - before
+  }
+  assertEquals(
+    [await woken(MANAGE), await woken(apps), await woken(MANAGE, '')],
+    [1, 1, 0],
+  )
 })
 
 // Where the dashboard was, letters and answers still send people: each page

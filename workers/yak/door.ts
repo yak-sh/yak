@@ -11,8 +11,8 @@
 // graph.ts replaced: living beside that class dragged src/db.ts into the
 // object's graph and failed that check. That class is gone (T-33807).
 import type { Caller } from '@yaks/egress'
-import { elapsed, heard, hop, WAITS, writing } from './lib/hops.ts'
-import { defect } from './defects.ts'
+import { apart, elapsed, heard, hop, WAITS, writing } from './lib/hops.ts'
+import { background, caught, defect } from './defects.ts'
 import { stamp } from './running.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import {
@@ -168,7 +168,9 @@ export let WARM = '/warm'
  * it: the store comes up as any request brings it up (its boot, the release
  * it serves, the writes it owes) and answers nothing else, so the request
  * behind it finds the store booted. A page sends it for its scripts (used.ts
- * `wake`, T-150366); a birth sends WARM, since its store holds nothing yet. */
+ * `wake`, T-150366); a birth sends WARM, since its store holds nothing yet.
+ * A space's Builder takes it too, ahead of its chat and behind an answer that
+ * says it owes work (build-door.ts `woken`). */
 export let WAKE = '/wake'
 /** Typed directory reads depend on stored data, never the clock or caller code. */
 export let STATIC_QUERY = 'x-yak-static-query'
@@ -329,6 +331,29 @@ export let fetchOf = (
     )
   return as ? metered(as, send) : send()
 }
+
+/**
+ * A start sent ahead of what a caller will ask an object (`WARM`, `WAKE`), so
+ * the object is up when it asks: a new object takes 150 to 500 ms to start
+ * before any code of ours runs in it, and an isolate's first boot spends as
+ * long again on CPU (T-149696). Nobody waits on its answer, so it is no trip
+ * of the request's (hops.ts `apart`), and a failure is reported, never met.
+ * `retain` holds it past the answer (the request's own `waitUntil` unless
+ * named).
+ */
+export let ahead = (
+  send: () => Promise<Response>,
+  tags: Record<string, string>,
+  retain: (work: Promise<void>) => void = background,
+): void =>
+  retain(
+    apart(() =>
+      send().then(
+        (r) => r.body?.cancel(),
+        (e) => caught(e, tags),
+      )
+    ),
+  )
 
 // An answer a resend could replace, read whole inside the replay that sent it:
 // a restart that cuts off its body is sent again instead of reaching whoever

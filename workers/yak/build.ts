@@ -65,7 +65,6 @@
 import type { Hibernation, Wire } from '@yaks/durable-object'
 import { driver, type DurableStorage } from '@yaks/durable-object/sql'
 import type { Alarms } from './operator-store.ts'
-import { system } from '@yaks/fp'
 import { level, writes } from '@yaks/member'
 import {
   col,
@@ -77,7 +76,7 @@ import {
 } from '@yaks/sql'
 import type { Beat, Line } from './builder.ts'
 import { directory, type Space } from './directory.ts'
-import { BEAT, behind, onceRead, type Restartable } from './running.ts'
+import { behind, onceRead, type Restartable } from './running.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
@@ -87,11 +86,13 @@ import { headed } from './timing.ts'
 import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
 import { managePath } from './route.ts'
+import { WAKE } from './door.ts'
 import {
   type Frame,
   type Held,
   NOBODY,
   NOT_A_WRITER,
+  OWED,
   seatOf,
   SPACE,
   WAIT,
@@ -231,10 +232,12 @@ export class Builder {
   // leaves.
   #until = 0
   #draining = false
-  // What this incarnation takes up from the one before it, once it has
-  // answered the request that woke it (`#stored`).
+  // What this incarnation takes up from the one before it (`#stored`), on a
+  // wake or its alarm, which nobody waits on: every answer it gives meanwhile
+  // says so (build-door.ts `OWED`), and its caller wakes it once it has the
+  // answer.
   #owed?: () => void
-  // The requests this incarnation is answering now.
+  // The answers this incarnation is giving now, until each has been read.
   #asked = 0
   // Whether the build's conversation's table stands. Made when it is first
   // asked about, so a wake of the Operator alone writes nothing before its
@@ -420,18 +423,13 @@ export class Builder {
     for (let [name, value] of Object.entries(reported(tally))) {
       headers.set(name, value)
     }
+    if (this.#owed) headers.set(OWED, '1')
     // Under way until its caller has read it (`onceRead`).
     return onceRead(headed(answer, headers), () => this.#gone())
   }
 
-  // An answer gone. The owed work waits behind every answer under way, not
-  // only this one: a page asks for two things at once, and the owed work run
-  // between them is the second's to wait for.
   #gone() {
     this.#asked--
-    this.#behind(() => {
-      if (!this.#asked) this.#resume()
-    })
   }
 
   async #answer(request: Request): Promise<Response> {
@@ -445,6 +443,16 @@ export class Builder {
       await behind(request.headers, this.#env.CF_VERSION_METADATA, this.#ctx)
     }
     let url = new URL(request.url)
+    if (url.pathname == WAKE) {
+      if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
+      await this.#stored()
+      // Nobody waits on this answer, so what the incarnation owes goes on
+      // behind it; beside another answer still under way, whose caller wakes
+      // this object again once it has that answer (`OWED`), it waits for that
+      // wake.
+      if (this.#asked == 1) this.#resume()
+      return new Response(null, { status: 204 })
+    }
     if (url.pathname == '/wipe') {
       // Nobody's but the kernel's, and no person's at all: the space is being
       // deleted and there may be no membership left to read. The header cannot
@@ -663,8 +671,9 @@ export class Builder {
         named,
       )
       // An incarnation takes up what the one before it left: a step a deploy
-      // reset under its reply runs again at once, behind the first request's
-      // answer (a page reconnecting) rather than whenever the person next says
+      // reset under its reply runs again at once, on the wake its first
+      // request's caller sends once it has the answer (a page reconnecting,
+      // build-door.ts `builderOf`), rather than whenever the person next says
       // something. Worked, not only armed: an alarm the reset cut off can hold
       // the next one back for minutes.
       this.#owed = nudge
@@ -727,34 +736,19 @@ export class Builder {
     })
   }
 
-  // The incarnation's owed work, started once.
+  // The incarnation's owed work, started once, where nobody waits on an
+  // answer: the runtime sends one on in turns of the object's event loop, and
+  // the Operator's start-up run as the answer was read, or on a timer as the
+  // handler returned, held a first visit to /manage/checks 81-140 ms
+  // (T-149700).
   #resume() {
     let owed = this.#owed
     this.#owed = undefined
-    owed?.()
-  }
-
-  // Work started once the answer has gone, held by the object. The runtime
-  // sends an answer on in turns of its own event loop, after its caller has
-  // read it from the object, and code run meanwhile holds them until it
-  // yields; writes made meanwhile hold it until they are confirmed. So the
-  // work waits a beat (`BEAT`): begun on a timer as the handler returned, or
-  // as the answer was read, the Operator's start-up held a first visit to
-  // /manage/checks 81-140 ms after its answer was read (T-149700).
-  #behind(work: () => void) {
-    this.#ctx.waitUntil?.(
-      new Promise<void>((done) =>
-        (this.#env.CLOCK ?? system).after(BEAT, () => {
-          try {
-            work()
-          } catch (e) {
-            caught(e, { request: 'operator resume' })
-          } finally {
-            done()
-          }
-        })
-      ),
-    )
+    try {
+      owed?.()
+    } catch (e) {
+      caught(e, { request: 'operator resume' })
+    }
   }
 
   async alarm() {

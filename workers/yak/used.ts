@@ -6,12 +6,12 @@
 import type { Comp, Plugin } from '@yaks/graph'
 import type { Handler } from '@yaks/effects'
 import { parse, retired } from '@yaks/query'
-import { type Namespace, storeOf, WAKE, WARM } from './door.ts'
+import { ahead, type Namespace, storeOf, WAKE, WARM } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { answered, KERNEL } from './meta.ts'
-import { background, caught, defect, within } from './defects.ts'
+import { background, defect, within } from './defects.ts'
 import type { Env } from './env.ts'
-import { apart, tallying } from './lib/hops.ts'
+import { tallying } from './lib/hops.ts'
 
 export let useUntil = (now = Date.now()) =>
   new Date((Math.floor(now / 3_600_000) + 1) * 3_600_000).toISOString()
@@ -134,11 +134,8 @@ export let scheduleUse = (
   retain?: (work: Promise<void>) => void,
 ): void => schedule(env, used(eid), retain)
 
-// A caller about to ask a store something sends a start ahead of it, so the
-// object is up when it asks. A new object takes 150 to 500 ms to start before
-// any code of ours runs in it, and an isolate's first boot of a store spends
-// as long again on CPU (T-149696). Nothing waits on either, so neither is a
-// trip of the answer's (hops.ts `apart`).
+// A start a caller sends a store ahead of what it will ask (door.ts
+// `ahead`).
 let starting = (path: string, request: string) =>
 (
   env: Partial<Env>,
@@ -147,13 +144,10 @@ let starting = (path: string, request: string) =>
 ): void => {
   let STORE = env.STORE
   if (!STORE) return
-  ;(retain ?? background)(
-    apart(() =>
-      storeOf(STORE, store)(path, {}, KERNEL).then(
-        (r) => r.body?.cancel(),
-        (e) => caught(e, { request, store }),
-      )
-    ),
+  ahead(
+    () => storeOf(STORE, store)(path, {}, KERNEL),
+    { request, store },
+    retain,
   )
 }
 

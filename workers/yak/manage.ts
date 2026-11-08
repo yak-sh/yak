@@ -75,6 +75,7 @@ import { writes } from '@yaks/member'
 import { brokenIn, fault, trackedIn } from './unseen.ts'
 import { TOOLS } from './tools.ts'
 import { caught } from './defects.ts'
+import { woken } from './build-door.ts'
 import { invitation } from './referral.ts'
 import { budget, gauges, spent } from './meter.ts'
 import { sha256 } from './versions.ts'
@@ -175,9 +176,11 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
   // their own) is sent on to where its page is now, so links in letters keep
   // working.
   if ('first' in at || 'legacy' in at) {
-    let slug = 'legacy' in at && accountView(at.legacy)
-      ? ''
-      : asked ?? (await dir.own(person)).slug
+    let account = 'legacy' in at && accountView(at.legacy)
+    let own = account || asked ? null : await dir.own(person)
+    // The chat `/manage` opens asks the space's Operator before anything.
+    if (own && 'first' in at) woken(env, own.eid)
+    let slug = account ? '' : asked ?? own!.slug
     let to = new URL(landing(at, slug), hostUrl(env))
     for (let [k, v] of url.searchParams) {
       if (k != 'space') to.searchParams.append(k, v)
@@ -240,6 +243,15 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
   // opens the files sent in it where it stands (operator-view.ts `attached`).
   // Its Updates open in the chat app too.
   let reading = req.method == 'GET' || req.method == 'HEAD'
+  // Any other page of the space wakes its Operator for a member who talks to
+  // it, so the chat they open next finds it up (build-door.ts `woken`); the
+  // chat and Updates ask it themselves.
+  let asks = view == 'updates' || view == 'operator' && at.open
+  if (
+    reading && !asks && writes(who.role) && !administrative && !space.trashed
+  ) {
+    woken(env, space.eid)
+  }
   if (view == 'updates' && writes(who.role) && !space.trashed) {
     if (req.method == 'POST') {
       let { updatesAnswer } = await import('./updates.ts')

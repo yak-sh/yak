@@ -220,7 +220,15 @@ A query that works on the box can be refused in a store.
   sent `WAKE` (used.ts `wake`), which brings it up as any request does (boot,
   release, owed writes) and answers nothing else, so the call behind it finds
   it booted. A page view wakes its app's store for the scripts that ask it
-  next, from the edge too (page-cache.ts `shown`, front.ts through `Uses`).
+  next, from the edge too (page-cache.ts `shown`, front.ts through `Uses`),
+  and the pages that send a person to a space's chat wake its Builder
+  (build-door.ts `woken`). Both go through door.ts `ahead`.
+- **Only the caller knows an answer has arrived.** The runtime sends an
+  object's answer on in turns of its event loop, so work begun as the answer
+  was read, or on a timer as the handler returned, held it (T-149700). Work
+  nobody waits for runs where no answer is under way: the Builder marks its
+  answers while its incarnation owes work (build-door.ts `OWED`), and its
+  door wakes it once it has one.
 - **An isolate's first wake runs every path cold.** Its boot and first read
   cost a store 130-320 ms of CPU against a warm wake's 5-15 ms (T-148354):
   each function runs for the first time, and each per-isolate derivation (a

@@ -18,17 +18,20 @@ import type { Wire } from '@yaks/durable-object'
 import * as apps from './apps.ts'
 import { Builder } from './build.ts'
 import {
+  builderOf,
   type Frame,
   type Held,
   NOBODY,
   NOT_A_WRITER,
+  OWED,
   seated,
 } from './build-door.ts'
+import { WAKE } from './door.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { ai, modelPage, platform, state, type Turn } from './testing.ts'
-import { clock, test, until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { sign } from './lib/token.ts'
 
 let SECRET = 'a probe secret'
@@ -71,7 +74,7 @@ let dirOf = (env: Env) =>
 
 // A space with Ada in it, and her builder's object.
 let seeded = async (script: Turn[] = []) => {
-  let { env } = platform(SECRET, {
+  let { env, states } = platform(SECRET, {
     AI: ai(script) as Env['AI'],
     BUILDER_MODEL_FREE: '@cf/test/free',
     MODEL_FETCH: () =>
@@ -100,6 +103,7 @@ let seeded = async (script: Turn[] = []) => {
     env,
     space,
     ctx,
+    states,
     object: new Builder(ctx, env),
     held: { person: ADA, role: 'owner', space: space.eid } as Held,
   }
@@ -367,24 +371,6 @@ let asking =
     said.push(path)
   }
 
-let tick = () => new Promise((r) => setTimeout(r, 1))
-
-test("an object works its Operator once every answer under way has gone, not between a page's two reads", async () => {
-  let o = await seeded()
-  let said: string[] = []
-  let arm = o.ctx.storage.setAlarm.bind(o.ctx.storage)
-  o.ctx.storage.setAlarm = (at) => (said.push('armed'), arm(at))
-  let ask = asking(o, said)
-  let seat = holding(o, 1)
-  let both = Promise.all([ask('updates'), ask('conversation')])
-  while (!said.length) await tick()
-  await tick()
-  seat.go()
-  await both
-  await Promise.all(o.ctx.pending)
-  assertEquals(said.slice(0, 3), ['updates', 'conversation', 'armed'])
-})
-
 test('a new incarnation makes its store while a seat read is under way', async () => {
   let o = await seeded()
   // What its storage ran before the seat read answered, and in all.
@@ -401,36 +387,82 @@ test('a new incarnation makes its store while a seat read is under way', async (
   assert(held > (ran - held) / 2, `${held} of ${ran} ran before the seat`)
 })
 
-// Behind the answer its caller has read, and a beat after it: what the owed
-// work runs and writes before the runtime has sent the answer on holds it.
-test('an object works its Operator a beat after its first answer has been read, so a step a deploy reset runs again at once', async () => {
+// What a new incarnation owes (a step a deploy reset under its reply) is taken
+// up on a wake, which nobody waits on, never behind an answer somebody does:
+// the runtime sends an answer on in turns of the object's event loop.
+let posted = (o: Awaited<ReturnType<typeof seeded>>, path: string) =>
+  o.object.fetch(
+    new Request(`https://builder${path}`, {
+      method: 'POST',
+      headers: path == WAKE
+        ? { 'x-yak-kernel': '1' }
+        : { 'x-space-eid': o.space.eid, 'x-yak-person': ADA },
+      body: '{}',
+    }),
+  )
+
+let armed = async (o: { ctx: ReturnType<typeof state> }) =>
+  (await o.ctx.storage.getAlarm()) != null
+
+test('a new incarnation says it owes work in its answers, and takes the work up on a wake', async () => {
   let o = await seeded()
-  let time = clock(Date.now())
-  o.env.CLOCK = time
-  let armed = async () => (await o.ctx.storage.getAlarm()) != null
-  let answer = await o.object.fetch(
+  let read = await posted(o, '/operator/conversation')
+  await read.text()
+  await Promise.all(o.ctx.pending)
+  let before = await armed(o)
+  let woke = await posted(o, WAKE)
+  let after = await posted(o, '/operator/conversation')
+  await after.text()
+  assertEquals(
+    [read.headers.has(OWED), before, woke.status, await armed(o)],
+    [true, false, 204, true],
+  )
+  assertEquals(after.headers.has(OWED), false)
+})
+
+test('a wake beside an answer still under way leaves the work to the wake behind that answer', async () => {
+  let o = await seeded()
+  let seat = holding(o, 0)
+  let read = posted(o, '/operator/conversation')
+  await until(() => seat.asked())
+  await (await posted(o, WAKE)).body?.cancel()
+  let beside = await armed(o)
+  seat.go()
+  let answer = await read
+  await answer.text()
+  await posted(o, WAKE)
+  assertEquals([beside, answer.headers.has(OWED), await armed(o)], [
+    false,
+    true,
+    true,
+  ])
+})
+
+test('the door wakes a space’s object behind an answer that says it owes work', async () => {
+  let o = await seeded()
+  let answer = await builderOf(o.env, o.space.eid)(() =>
     new Request('https://builder/operator/conversation', {
       method: 'POST',
       headers: { 'x-space-eid': o.space.eid, 'x-yak-person': ADA },
       body: '{}',
-    }),
+    })
   )
-  await time.advance(1000)
-  let unread = await armed()
-  await answer.text()
-  await time.advance(99)
-  let read = await armed()
-  await time.advance(1)
-  await Promise.all(o.ctx.pending)
-  assertEquals([unread, read, await armed()], [false, false, true])
+  assertEquals(answer.status, 200)
+  let ctx = [...o.states].find(([name]) => name.startsWith('builder '))![1]
+  await until(() => armed({ ctx }))
 })
 
-// Its first request, before the beat that makes the Operator: the write owes
+test('a wake is the kernel’s alone', async () => {
+  let o = await seeded()
+  let r = await o.object.fetch(new Request(`https://builder${WAKE}`))
+  assertEquals(r.status, 403)
+  await r.body?.cancel()
+})
+
+// Its first request, before anything has made the Operator: the write owes
 // the Operator's run all the same.
 test('a request a new incarnation receives before it has made its Operator is carried out', async () => {
   let o = await seeded([{ text: 'Done.' }])
-  let time = clock(Date.now())
-  o.env.CLOCK = time
   let model = o.env.AI as unknown as ReturnType<typeof ai>
   let r = await o.object.fetch(
     new Request('https://builder/operator/receive', {
@@ -441,7 +473,6 @@ test('a request a new incarnation receives before it has made its Operator is ca
   )
   assertEquals(r.status, 202)
   await r.body?.cancel()
-  await time.advance(100)
   while (o.ctx.pending.size) await Promise.all(o.ctx.pending)
   assertEquals(model.asked.length, 1)
 })

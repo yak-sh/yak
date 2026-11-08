@@ -2,7 +2,7 @@
 // frames, independent of the Durable Object that keeps the conversation.
 import { jittered } from '@yaks/durable-object/resets'
 import { type Level, level } from '@yaks/member'
-import { fetchOf } from './door.ts'
+import { ahead, fetchOf, WAKE } from './door.ts'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
@@ -86,10 +86,54 @@ export type Frame =
   | { ready: true; building: boolean }
   | { busy: string }
 
+/** The header an answer says its object owes work in: what an incarnation
+ * takes up from the one before it (build.ts `#owed`), which the object starts
+ * on a wake, never behind an answer someone waits for. */
+export let OWED = 'x-yak-owed'
+
 /** This space's object. The name is the space's eid, which never moves — a
- * slug does. A request's waits on it are its `operator_wait` (timing.ts). */
-export let builderOf = (env: Env, space: string) =>
-  fetchOf(env.BUILDER, space, jittered(env.CLOCK), 'operator_wait')
+ * slug does. A request's waits on it are its `operator_wait` (timing.ts).
+ *
+ * An answer that says the object owes work (`OWED`) is had whole here, and the
+ * object woken behind it (`woken`): the runtime sends an answer on in turns
+ * of the object's event loop, so work the object began as its code let the
+ * answer go held a first chat page 81-140 ms (T-149700), and only the caller
+ * knows when the answer has arrived. A socket's 101, or a stream, has arrived
+ * as it is answered. */
+export let builderOf = (env: Env, space: string) => {
+  let ask = fetchOf(env.BUILDER, space, jittered(env.CLOCK), 'operator_wait')
+  return async (make: () => Request): Promise<Response> => {
+    let answer = await ask(make)
+    if (!answer.headers.has(OWED)) return answer
+    let had = !answer.body || answer.status == 101 ||
+        /ndjson|event-stream/.test(answer.headers.get('content-type') ?? '')
+      ? answer
+      : new Response(await answer.arrayBuffer(), answer)
+    woken(env, space)
+    return had
+  }
+}
+
+/** Wake the space's object (door.ts `WAKE`), ahead of what a person will ask
+ * its Operator or behind an answer that says it owes work: it comes up as any
+ * request brings it, makes what a read of the Operator needs, and takes up
+ * what its incarnation owes, since nobody waits on this answer. */
+export let woken = (
+  env: Env,
+  space: string,
+  retain?: (work: Promise<void>) => void,
+): void =>
+  ahead(
+    () =>
+      fetchOf(env.BUILDER, space, jittered(env.CLOCK))(() =>
+        new Request('https://builder' + WAKE, {
+          method: 'POST',
+          headers: { 'x-yak-kernel': '1' },
+        })
+      ),
+    { request: 'operator wake', space },
+    retain,
+  )
 
 /**
  * The handshake, carried to the object with the kernel's own vouch on it and
