@@ -206,14 +206,13 @@ let kept = JSON.parse(
   }))
     .text,
 )
-let DEBUG = await agent.answer('result_query', {
+let read = await agent.answer('result_query', {
   space: slug,
   id: kept.id,
   query:
     '.result[0].content.body | fromjson | .entries | map(select(.result) | {result, refusal, content, operator_files})',
 })
-Deno.writeTextFileSync('.scratch/rq.txt', DEBUG.text.slice(0, 4000))
-let steps = JSON.parse(DEBUG.text).values[0]
+let steps = JSON.parse(read.text).values[0]
 await k.stop()
 
 test('a member’s browser connects to their Operator by the token it bears', () => {
