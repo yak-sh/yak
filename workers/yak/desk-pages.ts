@@ -6,12 +6,12 @@ import { agentSetup, pasteLink } from './signin-pages.ts'
 import {
   Button,
   Card,
+  Cards,
   Chip,
   Chips,
   Empty,
   Field,
   Form,
-  Grid,
   Group,
   Icon,
   More,
@@ -1741,7 +1741,7 @@ let connections = (at: DeskPage, env: Host) => {
         one.status == 'connected' && !one.failed ? 'positive' : 'negative',
       ),
     )
-  let grid = (cards: Kids[]) => cards.length ? h(Grid, null, cards) : null
+  let grid = (cards: Kids[]) => cards.length ? h(Cards, null, cards) : null
   let group = (title: Kids, ...kids: Kids[]) =>
     kids.some(Boolean) ? [h(Group, null, title), kids] : null
   let yours = [

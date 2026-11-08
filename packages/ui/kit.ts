@@ -15,6 +15,7 @@ import * as body from './Body.ts'
 import * as button from './Button.ts'
 import * as card from './Card.ts'
 import * as catalog from './Catalog.ts'
+import * as cards from './Cards.ts'
 import * as chart from './Chart.ts'
 import * as check from './Check.ts'
 import * as chip from './Chip.ts'
@@ -29,7 +30,6 @@ import * as empty from './Empty.ts'
 import * as field from './Field.ts'
 import * as form from './Form.ts'
 import * as gallery from './Gallery.ts'
-import * as grid from './Grid.ts'
 import { halved } from './halved.ts'
 import * as group from './Group.ts'
 import * as head from './Head.ts'
@@ -154,7 +154,7 @@ let modules = {
     Palette: palette,
     Catalog: catalog,
     Gallery: gallery,
-    Grid: grid,
+    Cards: cards,
   },
 }
 

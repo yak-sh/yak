@@ -77,7 +77,7 @@ export let WORN = [
   'Check',
   'Catalog',
   'Gallery',
-  'Grid',
+  'Cards',
 ]
 
 /** What yaks.app wears of the kit. */

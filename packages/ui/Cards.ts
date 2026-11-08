@@ -14,8 +14,8 @@ import { Card } from './Card.ts'
 import { block, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 
-/** A grid. */
-export let Grid: Part = block('div', 'Grid', {})
+/** Cards in a grid. */
+export let Cards: Part = block('div', 'Cards', {})
 
 /** What it is, in a line. */
 export let description =
@@ -23,7 +23,7 @@ export let description =
 
 /** A terminal lists the cells, each a blank line from the next. */
 export let sheet = (_c: Colors): Sheet => ({
-  Grid: { gap: true },
+  Cards: { gap: true },
 })
 
 let cell = (title: string, sub: string) =>
@@ -42,9 +42,9 @@ let cell = (title: string, sub: string) =>
 /** Four cards, one saying more than the others. */
 export let specimens = (): Specimen[] => [
   [
-    'Grid',
+    'Cards',
     h(
-      Grid,
+      Cards,
       {},
       cell('Calendar', 'Productivity'),
       cell('Weather API', 'Forecasts for any place on Earth, by the hour.'),

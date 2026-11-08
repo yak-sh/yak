@@ -1,12 +1,12 @@
 /* Like things in equal columns, as many as fit at a card's least width, each
    row as tall as its tallest cell; one column on a phone. A cell fills its
    column, so cards side by side line up. */
-.Grid {
+.Cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
   gap: var(--gap);
   min-width: 0;
 }
-.Grid > * {
+.Cards > * {
   min-width: 0;
 }
