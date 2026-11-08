@@ -8,7 +8,7 @@ import { statements, storage } from '@yaks/sqlite'
 import { BOOKSHOP } from '../sqlite/testing.ts'
 import { fields } from './fields.ts'
 import { schema } from './ddl.ts'
-import { watch } from './owed.ts'
+import { triggers, watch } from './owed.ts'
 import { installed } from './native.ts'
 import { shelf, shop } from './testing.ts'
 
@@ -27,6 +27,20 @@ let dropTrigger = () => ({
   t: 'drop' as const,
   kind: 'trigger' as const,
   name: 'embedding_owed_book_insert',
+})
+
+// A field's table is made by its first write (@yaks/sqlite `raise`), after
+// the triggers over the tables that stood were made: one more field adds
+// triggers, and redefines none of those already standing.
+test('a field added to the queue redefines none of its triggers', () => {
+  let not = ['draft']
+  let doc = { comp: 'doc', prop: 'body', not }
+  let entry = { comp: 'content', prop: 'body', on: 'entry', not }
+  let plot = { comp: 'plot', prop: 'text', not }
+  let made = (fs: typeof doc[]) =>
+    new Map(triggers(fs).map((t) => [t.name, render(t).sql]))
+  let before = made([doc, entry]), after = made([doc, entry, plot])
+  for (let [name, sql] of before) assertEquals(after.get(name), sql, name)
 })
 
 let exercise = (d: Statements, mutate: Pick<Statements, 'query'> = d) => {

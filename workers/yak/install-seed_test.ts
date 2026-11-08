@@ -60,6 +60,28 @@ await installer.tool('graph_apply', {
 await installer.tool('app_deploy', { app: 'second' })
 let after = await rows()
 let again = await rows('second')
+// A seed whose text is embedded is checked by the write that makes its
+// component's table, beside the embedding queue's triggers.
+await publisher.tool('app_new', { slug: 'diary', title: 'Diary' })
+await publisher.tool('app_files', {
+  app: 'diary',
+  files: [
+    { path: 'index.html', content: '<h1>Diary</h1>' },
+    {
+      path: 'vocab.json',
+      content: vocabFile({ plot: { text: { ...txt, search: true } } }),
+    },
+    {
+      path: 'seed.json',
+      content: JSON.stringify([{
+        entity: { eid: '$a' },
+        plot: { text: 'bed' },
+      }]),
+    },
+  ],
+})
+let diary = await publisher.tool('app_deploy', { app: 'diary' })
+  .catch((e: Error) => e.message)
 await k.stop()
 
 test('a second install seeds its component home and preserves the first copy’s edits', () => {
@@ -85,4 +107,8 @@ test('borrowed seed rows remain writable through either copy and are seeded once
     after.map((r: { notebook: { title: string } }) => r.notebook.title).sort(),
     ['Edited through second copy', 'My fixed notebook', 'My notebook'],
   )
+})
+
+test('a seed of embedded text deploys', () => {
+  assertStringIncludes(diary, 'deployed')
 })

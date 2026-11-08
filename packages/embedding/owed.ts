@@ -39,7 +39,6 @@ import {
   lit,
   not,
   op,
-  or,
   render,
   select,
   table,
@@ -125,17 +124,18 @@ export let triggers = (fields: Field[]): CreateTrigger[] => {
     }),
     ...[...new Set(fields.flatMap((f) => f.not ?? []))].flatMap((name) => [
       trigger(`exclude:${name}_insert`, 'insert', name, NEW, wears(TABLE, NEW)),
-      trigger(
-        `exclude:${name}_delete`,
-        'delete',
-        name,
-        OLD,
-        or(
-          ...fields.filter((f) => f.not?.includes(name)).map((f) =>
-            and(wears(f.comp, OLD), ...f.on ? [wears(f.on, OLD)] : [])
-          ),
+      // One per group the exclusion hides, so each reads only its own tables
+      // and stays as it was made when another field's table is made later.
+      ...[...groups].filter(([, g]) => g.some((f) => f.not?.includes(name)))
+        .map(([key, [f]]) =>
+          trigger(
+            `exclude:${name}_${key}_delete`,
+            'delete',
+            name,
+            OLD,
+            and(wears(f.comp, OLD), ...f.on ? [wears(f.on, OLD)] : []),
+          )
         ),
-      ),
     ]),
     ...fields.length
       ? [
