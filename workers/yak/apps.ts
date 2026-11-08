@@ -257,6 +257,7 @@ let DOORS = new Map<string, () => Promise<Answer>>([
   ['speech', async () => (await import('./speech.ts')).speechDoor],
   ['rtc', async () => (await import('./rtc.ts')).voice],
   ['notices', async () => (await import('./notices.ts')).notices],
+  ['form', async () => (await import('./forms.ts')).forms],
 ])
 
 // A refusal is read — by the page that catches it, and by the person's agent
@@ -3116,6 +3117,21 @@ let served = async (
   // that code may do as the app is `env.APP` and nothing else; its `env.STORE`
   // is still the visitor, so a worker that only passes a store read on refuses
   // exactly what the page would have.
+  if (/^\/form\/[^/]+$/.test(path)) {
+    if (edge) return passed()
+    let name = decodedPath(path.slice('/form/'.length))
+    if (!name) return json(404, 'not_found')
+    let found = await appStore(env.STORE, space, app, env).consume(
+      `/form?${new URLSearchParams({ name })}`,
+      async (r) => {
+        await r.body?.cancel()
+        return r.status
+      },
+      {},
+      KERNEL,
+    )
+    if (found != 204) return json(found, 'not_found')
+  }
   let door = pageDoor(app.access, who, !!itself)
   let mayRead = door == 'page'
   // Both at once, because they are two halves of one answer and neither

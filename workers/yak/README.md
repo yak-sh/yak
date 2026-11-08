@@ -593,6 +593,21 @@ with a `.` or `..` path segment cannot be addressed by the REST delete route:
 the URL parser normalizes it. That erasure retains its directory record and
 reports the bucket to empty in the R2 dashboard before retrying.
 
+## Form submissions
+
+`POST ./api/form/<form>` takes JSON `{answers: {<question eid>: <value>}}`. The
+form can be addressed by eid or `alias{name}`. The door writes a completed
+registration as the app, matches the directory, and answers an empty 204. It
+refuses missing required answers and closed or full forms without writing
+anything. Submitting grants no read access; the app’s existing access policy
+still applies.
+
+`<app>/form/<alias>` resolves the alias to a form and serves the app’s ordinary
+page at that path. The app supplies its page and form rendering. A completed
+registration owes `form_post`: durable email to `form.notify` recipients and a
+confirmation to the submitted email, or the matched person’s directory email.
+These letters use the app’s existing mail sender and allowance.
+
 ## Analytics
 
 `CF_ANALYTICS_TOKEN` reads both usage metrics and page visits. It needs

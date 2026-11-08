@@ -282,6 +282,7 @@ import { actorOf as writerOf } from '@yaks/graph/provenance'
 import { Refused, status } from '@yaks/graph/errors'
 import { DELIVER, MAIL } from '@yaks/mail'
 import { subscription } from './notices.ts'
+import { formIn } from './forms.ts'
 import {
   Denied,
   edits,
@@ -4553,6 +4554,9 @@ export class Store {
     let kernel = request.headers.get('x-yak-kernel') == '1'
     // Brought up for the request behind it (door.ts `WAKE`), and nothing more.
     if (path == WAKE && kernel) return new Response(null, { status: 204 })
+    if (path == '/form' && kernel) {
+      return formIn(request, this.#stored(this.#graph))
+    }
     if (path == '/notices' && kernel) {
       return subscription(request, this.#stored(this.#graph))
     }

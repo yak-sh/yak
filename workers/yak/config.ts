@@ -69,6 +69,7 @@ export let appConfig: Config = {
     { use: '@yaks/id', words: [] },
     ...addressed,
     '@yaks/doc',
+    '@yaks/forms',
     '@yaks/draft',
     { use: '@yaks/member', with: { through: { document_page: 'document' } } },
     {

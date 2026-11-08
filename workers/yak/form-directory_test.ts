@@ -1,10 +1,12 @@
-import { type Bundle, type Comp, graph } from '@yaks/graph'
+import { type Bundle, type Comp, graph, hook } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { formsDoc } from '@yaks/forms/vocab'
 import { phoneDoc } from '@yaks/phone'
-import { equal, test } from '@yaks/testing'
+import { equal, test, throws } from '@yaks/testing'
+import { storage } from '@yaks/durable-object'
+import { durable } from '../../packages/durable-object/testing.ts'
 import { directoryForms, directoryPhone } from './form-directory.ts'
 
 let text = { type: 'string' }
@@ -261,3 +263,24 @@ for (
     equal(((await g.get(['signup']))[0].registration as Comp).person, 'member')
   })
 }
+
+let rollbackStore = storage(durable(), vocab)
+rollbackStore.install()
+let rollback = graph({
+  vocab,
+  storage: rollbackStore,
+  plugins: [directoryForms(vocab), {
+    name: 'failed-commit',
+    hooks: {
+      commit: hook(['registration'], () => {
+        throw new Error('failed commit')
+      }),
+    },
+  }],
+})
+await rollback.apply(await phoned.read('.form|.question'))
+
+test('a failed durable registration rolls back its directory changes', async () => {
+  await throws(() => rollback.apply(sign({ first: 'New' })), 'failed commit')
+  equal(await rollback.read('.individual|.registration|.relation'), [])
+})
