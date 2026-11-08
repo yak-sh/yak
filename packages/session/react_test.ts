@@ -25,7 +25,7 @@ import {
   type Request,
 } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
-import { toolEid } from '@yaks/tools'
+import { CUT, toolEid } from '@yaks/tools'
 import { sessionDoc } from './comp.ts'
 import { contextDoc } from '@yaks/context'
 import { taskDoc } from '@yaks/task/vocab'
@@ -34,14 +34,7 @@ import { docDoc } from '@yaks/doc/vocab'
 import { kindOf, statusOf, textOf } from './state.ts'
 import { appendEntry } from './append.ts'
 import { sessions } from './plugin.ts'
-import {
-  CUT,
-  type Deps,
-  react,
-  recent,
-  ToolError,
-  transcript,
-} from './react.ts'
+import { type Deps, react, recent, ToolError, transcript } from './react.ts'
 import { running, runningAt, settle } from './run.ts'
 import { took } from './timing.ts'
 import { GAP } from './compact.ts'
@@ -1500,7 +1493,9 @@ test('a reply cut at its output limit never ends the run: its unfinished call is
         kind: 'call',
         id: 'c2',
         name: 'echo',
-        args: '{"text":"a long scr',
+        // As far as it was written, whatever that spells: here arguments
+        // the tool's schema refuses.
+        args: '{"text":5}',
       }],
     }),
     cut({ id: 'r2', model: 'fake-1', items: [] }),

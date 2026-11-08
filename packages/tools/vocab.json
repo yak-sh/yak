@@ -33,6 +33,13 @@
         }
       }
     },
+    "cut": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "description": "on a call: its writer stopped before its arguments were finished, as a model's reply cut at its output token limit does; it never runs, and its refusal (code cut) says why",
+      "properties": {}
+    },
     "result": {
       "component": true,
       "embed": false,

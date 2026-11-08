@@ -11,6 +11,13 @@ import { actionable, exceptionOf } from './fault.ts'
 import { MOST } from './result.ts'
 import { said } from './said.ts'
 
+/** What a call cut off before its arguments were finished (`cut`) is
+ * answered: nothing ran, and how its writer, a model, fits it in a reply. */
+export let CUT = 'This call was cut off: your reply reached its output limit ' +
+  'while writing it, so its arguments were incomplete and nothing ran. Make ' +
+  'it again with less in one reply: think less before it, and split a long ' +
+  'script or file across several smaller calls.'
+
 /** What a rehearsal says after the batch it answers. */
 let CHECKED = 'Checked: nothing was written. Its eids were made for ' +
   'this check alone; the same call without check writes it, under eids of ' +
@@ -89,6 +96,9 @@ export let invoke = async (
   }
   let answered: Bundle[]
   try {
+    // An unfinished call's arguments are not what its writer meant: whatever
+    // they spell, it is refused for what it is.
+    if (call.cut) throw new CallError('cut', CUT)
     let args = await resolved(tool, validated(tool, parsed(c.args)), host)
     let actor = who(call)
     let called: Bundle = {

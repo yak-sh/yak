@@ -28,6 +28,7 @@ import {
   answerOf,
   callDoc,
   CallError,
+  CUT,
   faulted,
   Interrupted,
   runner,
@@ -763,6 +764,18 @@ test('a defect is reported with its tool; a refusal is not', async () => {
     type: broke.name,
     value: broke.message,
   })
+})
+
+test('a call cut off before its arguments were finished is refused as cut, never run', async () => {
+  let ran = 0
+  let { r } = world([{ ...echo, run: (call, g) => (ran++, echo.run(call, g)) }])
+  await r.ensure()
+  for (let args of [{}, { value: 'whole' }]) {
+    let answer = await r.call({ ...called('example_echo', args), cut: {} })
+    let refused = answer.find((b) => b.refusal)
+    assertEquals([refused?.refusal, body(refused)], [{ code: 'cut' }, CUT])
+  }
+  assertEquals(ran, 0)
 })
 
 test('a batch the graph refuses is the call failing, not a call left claimed', async () => {

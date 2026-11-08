@@ -70,4 +70,4 @@ export {
   registry,
 } from './registry.ts'
 
-export { invoke, type Land } from './invoke.ts'
+export { CUT, invoke, type Land } from './invoke.ts'
