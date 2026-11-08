@@ -229,6 +229,20 @@ the versions it installed in `package-lock.json`.
 Deeper: <https://yaks.app/docs/code.md> — env, routes, keys, limits, whole
 workers to copy, and TypeScript and npm packages.
 
+## Sandbox
+
+Each person has a private Linux container in each space, the **sandbox**, where
+an agent runs commands and keeps files while it works: a script over an
+attachment, a CSV reconciled against an app's data, an API call, a compile to
+WebAssembly, a site built with Vite or Astro. `sandbox_write` puts a file in,
+`sandbox_shell` runs a command, `sandbox_read` reads a file out, and
+`sandbox_ship` copies files into an app. Its files are temporary: only what
+`sandbox_ship` copied into an app is kept.
+
+Deeper: <https://yaks.app/docs/sandbox.md> — the toolchains installed, how long
+files last, the network, the monthly compute time, and the `yak` CLI it is
+signed in with.
+
 ## Front Page and Routing
 
 The space's front page, set with `app_set(app, home: true)`, is served at the

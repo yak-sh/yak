@@ -398,7 +398,7 @@ let spacePage: Renderer = {
       ['Requests', trended(h, count(num(m.requests)), u.requesting, 'request')],
       ['Rows read', count(num(m.rows_read))],
       ['Rows written', count(num(m.rows_written))],
-      ['Build seconds', count(num(m.seconds))],
+      ['Compute seconds', count(num(m.seconds))],
       ['Letters', count(num(m.emails))],
       ['Metered', m.at ? `${str(m.month)}, read ${day(str(m.at))}` : 'never'],
     ])

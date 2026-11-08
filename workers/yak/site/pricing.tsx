@@ -270,9 +270,9 @@ export let Pricing = () => (
             </tr>
             <tr>
               <th scope='row'>
-                Build time a month{' '}
+                Compute time a month{' '}
                 <small>
-                  Time spent compiling code, such as Rust to WebAssembly.
+                  Time your sandbox runs commands, and compiling code at deploy.
                 </small>
               </th>
               <td>1 hour</td>
@@ -281,8 +281,8 @@ export let Pricing = () => (
             </tr>
             <tr>
               <th scope='row'>
-                Builds at once{' '}
-                <small>Each build runs on a computer of its own.</small>
+                Sandboxes at once{' '}
+                <small>Each sandbox is a computer of its own.</small>
               </th>
               <td>1</td>
               <td>2</td>

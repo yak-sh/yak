@@ -594,7 +594,7 @@ test('the build line warns at 80%, and the line says both numbers', () => {
   // Build counts are per space; model cost is attributed to this space while
   // each space's models and voice share its budget.
   let said = gauged(space({ builds: 1, models: 4, built: 1 }), 2, NOW)
-  assertStringIncludes(said, '1 of 5 builds, 0 of 3,600 build seconds')
+  assertStringIncludes(said, '1 of 5 builds, 0 of 3,600 compute seconds')
   assertStringIncludes(said, "20% of jeff's model and voice budget used")
   let plus = gauged(
     space({ builds: 4, models: 0.0012, built: 44 }, 'plus'),

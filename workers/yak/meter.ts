@@ -181,7 +181,7 @@ export let BUDGET: Record<Tier, number> = {
 // has had theirs, holds none (directory.ts `mint`, `starter`).
 export let STARTER = 100
 
-// Build seconds a month: the sandbox container's (sandbox.ts) and the compile
+// Compute seconds a month: the sandbox container's (sandbox.ts) and the compile
 // at app_deploy's (esbuild.ts). An hour free is six builds' whole sandbox
 // budget (sandbox.ts `BUDGET`); ten hours on the Plus plan is about $1.30 of
 // standard-2 time at Cloudflare's rates (wrangler.toml). A compile's second
@@ -736,7 +736,7 @@ let NAME: Record<Ceiling, string> = {
   files: 'photos and files',
   emails: 'emails',
   builds: 'builds',
-  seconds: 'build seconds',
+  seconds: 'compute seconds',
 }
 
 let READ: Record<Ceiling, (g: Gauge) => string> = {
@@ -746,7 +746,7 @@ let READ: Record<Ceiling, (g: Gauge) => string> = {
   files: (g) => `${size(g.used)} of ${size(g.limit)} of photos and files`,
   emails: (g) => `${count(g.used)} of ${count(g.limit)} emails`,
   builds: (g) => `${count(g.used)} of ${count(g.limit)} builds`,
-  seconds: (g) => `${count(g.used)} of ${count(g.limit)} build seconds`,
+  seconds: (g) => `${count(g.used)} of ${count(g.limit)} compute seconds`,
 }
 
 // What only the hourly sweep reads. Before its first reading of the month
@@ -851,7 +851,7 @@ export let atCeiling = (
     seconds: () =>
       `${space.slug} is on the ${tier} tier, which is ${
         count(allowance('seconds', space.tier))
-      } build seconds a month (the sandbox, and compiling ` +
+      } compute seconds a month (the sandbox, and compiling ` +
       `TypeScript and npm packages at app_deploy), and this month's are ` +
       `spent — they come back on the 1st, and an app of html, css and js ` +
       `needs none`,

@@ -143,7 +143,7 @@ export let Privacy = () => (
         All of it is on Cloudflare, which hosts yaks.app. Cloudflare's workers
         run the code, its storage holds each app's data and files, its network
         carries every request, its model answers you in the builder, and its
-        sandbox is where a build compiles anything a browser can't. Cloudflare
+        containers are the sandboxes where your agent runs commands. Cloudflare
         handles this information on our behalf and keeps its own operational
         records of requests, as any host does. That network is worldwide, so
         your information may be stored in a different country from someone

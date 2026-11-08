@@ -793,24 +793,24 @@ test('sandbox_shell names what is in the image, and where the rest comes from', 
     assertStringIncludes(said, want)
   }
   // And the other half of the promise: the image is a floor, not a ceiling,
-  // and nothing a build adds outlives it.
+  // and nothing a command adds outlives the container.
   assertStringIncludes(said, 'apt-get install')
-  assertStringIncludes(said, 'destroyed when the build ends')
+  assertStringIncludes(said, 'files are temporary')
 })
 
 // The guide's page and the limits page, read once, as read rather than as
 // wrapped: the formatter may break a line anywhere.
-let [guide, tech] = ['public/docs/code.md', 'public/docs/technical.md']
+let [guide, tech] = ['public/docs/sandbox.md', 'public/docs/technical.md']
   .map((page) => at(page).replace(/\s+/g, ' '))
 
 test('the guide and the limits page say the same image', () => {
   for (let [name, version] of pinned()) {
-    assert(guide.includes(version), `code.md names ${name} ${version}`)
+    assert(guide.includes(version), `sandbox.md names ${name} ${version}`)
     assert(tech.includes(version), `technical.md names ${name} ${version}`)
   }
   for (let page of [guide, tech]) {
     assertStringIncludes(page, 'apt')
-    assertStringIncludes(page, 'destroyed when the build ends')
+    assertStringIncludes(page, 'five minutes after its last command')
   }
 })
 
@@ -915,6 +915,6 @@ test("the month of sandbox time is the space's, and it refuses", async () => {
         command: 'ls',
       }),
     Error,
-    'build seconds a month',
+    'compute seconds a month',
   )
 })

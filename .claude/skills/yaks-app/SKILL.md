@@ -188,7 +188,7 @@ outlasts the retries files under one bug per wording (defects.ts `defect`),
 whichever caller and deploy it names. The tracker's own deploy waits for its object
 (`workers/tracker/deploy.ts`).
 
-The same deploy carries two container images: the builder's sandbox and the app
+The same deploy carries two container images: the sandbox and the app
 compiler (`yak-esbuild`, a Worker in front of native esbuild, built from
 packages/esbuild by workers/yak/esbuild/Dockerfile). Workers Builds has Docker,
 so wrangler builds them, pushes them to Cloudflare's registry and rolls the

@@ -1,6 +1,7 @@
-// The builder's workbench (T-34264): a container it can run commands in, so
-// the things a browser cannot compile get compiled somewhere and the artifact
-// is shipped into the app as ordinary files. It is the sandbox workspace this host lends
+// The sandbox, called the workbench in code (T-34264): a person's private
+// container in a space, where an agent runs commands and keeps files while it
+// works: a script over an attachment, an API call, a compile whose artifact is
+// shipped into an app as ordinary files. It is the sandbox workspace this host lends
 // file-and-command tools through @yaks/sandbox/cloudflare; computers and sandbox
 // provisioning are separate from that Workspace interface.
 //
@@ -158,9 +159,9 @@ export let LIFE = (BUDGET + NAP) / 3600
 /** No container bound here — the workerd probes and a test run, where the
  * binding does not exist. Said as a sentence, because a model reads it. */
 export let NO_BOX =
-  'No sandbox is running here: the workbench is a Cloudflare Container and ' +
-  'this runtime has none. Write the app in files a browser runs — html, css ' +
-  'and js — and nothing needs compiling.'
+  'No sandbox is running here: the sandbox is a Cloudflare Container and ' +
+  'this runtime has none. Work through the other tools, and write an app ' +
+  'in files a browser runs — html, css and js — so nothing needs compiling.'
 
 /** How many sandboxes one space may hold awake at once, by its plan
  * (D-131886). A sandbox is keyed per person and space (`named`), so each

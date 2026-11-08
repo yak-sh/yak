@@ -24,7 +24,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'code',
     'title': 'Backend Code',
     'description':
-      "Backend code for an app: worker.js, the server module that answers an app's requests before its static files. Which routes it receives (a 404 falls through to the files, /api/ is reserved), what env holds (STORE, APP, FILES, the keys the person connected, and wrangler.jsonc bindings such as D1, R2, Vectorize, vpc_services and ai), API keys through sentinels and ./api/fetch, the request headers that identify the visitor (x-yak-person, x-yak-role, x-yak-app), the CPU and subrequest limits, error handling, and complete example workers (webhook, paid API, RSVP). TypeScript and npm packages in a worker or a page's scripts: package.json, the package-lock.json app_deploy pins them in, and what the compile refuses. The platform's @yaks packages, named \"platform\", whose components the app's store also keeps. The build sandbox, and deploying a site built with Vite, Astro, Eleventy or SvelteKit. Check the draft worker and pages with app_preview, including screenshots, console messages and page errors, before releasing them.",
+      "Backend code for an app: worker.js, the server module that answers an app's requests before its static files. Which routes it receives (a 404 falls through to the files, /api/ is reserved), what env holds (STORE, APP, FILES, the keys the person connected, and wrangler.jsonc bindings such as D1, R2, Vectorize, vpc_services and ai), API keys through sentinels and ./api/fetch, the request headers that identify the visitor (x-yak-person, x-yak-role, x-yak-app), the CPU and subrequest limits, error handling, and complete example workers (webhook, paid API, RSVP). TypeScript and npm packages in a worker or a page's scripts: package.json, the package-lock.json app_deploy pins them in, and what the compile refuses. The platform's @yaks packages, named \"platform\", whose components the app's store also keeps. Deploying a site built in the sandbox with Vite, Astro, Eleventy or SvelteKit. Check the draft worker and pages with app_preview, including screenshots, console messages and page errors, before releasing them.",
     'brief':
       'backend code in worker.js, env bindings, API keys; TypeScript, npm',
   },
@@ -123,6 +123,14 @@ export let PAGES: Record<string, Page> = {
     'description':
       'The filter grammar used everywhere a store is read (query(), subscribe(), ./api/query, graph_query, commands, workers), with examples: presence and absence, contains, comparisons, ranges, time phrases, following references and back-references, count, tally and distinct, limit, reading one entity by id, full-text search, similarity with .near — and why a row carries only the components its filter named.',
     'brief': 'the query filter grammar, with examples',
+  },
+  'sandbox': {
+    'slug': 'sandbox',
+    'title': 'Sandbox',
+    'description':
+      "The sandbox: a private Linux container in the space where an agent runs commands and keeps files while it works, through sandbox_write, sandbox_shell, sandbox_wait, sandbox_stop, sandbox_read and sandbox_ship. Its uses (a script over an attachment, a CSV reconciled against an app's data, an API call, compiling to WebAssembly, building a site), the toolchains installed in it, installing more, how long its files last, copying files into an app with sandbox_ship, its network, how many may be awake and the monthly compute time, and the yak CLI and $YAKS_TOKEN it is signed in with.",
+    'brief':
+      'the sandbox, a private Linux container for running commands and keeping files',
   },
   'selling': {
     'slug': 'selling',
@@ -362,31 +370,31 @@ export let WORDS: Record<string, Words> = {
       "Write the app's files (index.html and any css, js or images beside it), or list, read or delete them. files: [{path, content}, …] writes a whole app in one call, with op left out; path and content write one file, and base64 in place of content writes one that is not text (an image, the .wasm a worker.js imports). Check the draft with app_preview at phone and desktop widths, including its console and errors, before app_deploy. No local files or browser are needed. Edits stay private until app_deploy releases them with the app's vocabulary and worker; released files serve at <space>.yaks.app/<app>/<path>, index.html for the directory, another page at its own name (about.html at /about), and a 404.html for a page that is not there. An app's data lives in its own store, never localStorage: a page uses `import { apply, query, search } from './api/client.js'`. Each page gets a `<base>` at its own folder under the app's address, so relative URLs still work in a copy installed elsewhere; a page in a folder reaches the client at ../api/client.js. A write returns its byte count and SHA-256, and for a .json file whether it parses and where it does not; a picture that does not decode is refused. The app's icon, the picture beside its name wherever yaks.app lists it (the space's apps, the Operator's sidebar) and on a home screen, is its icon.png: a PNG fetched there with op: fetch, or else an icon.svg written as content (a square viewBox, no <text>), which the platform draws as icon.png. An app with neither wears the platform's default yak. It shows once deployed. NOTES.md beside index.html holds the app's notes in the person's words (up to 4 KB), returned by the about tool; like vocab.json it is never served on the web. op: patch with path, find and replace edits one file in place; find is an exact string that must occur exactly once. edits: [{path, find, replace}, …] with op: patch makes many edits across any of the app's files in one call, in order and all or none, and answers each edit's line: send every edit a change needs as one patch call, never one call per edit. op: fetch with path and url downloads an https body to path (how a library is vendored) and returns its integrity hash. Pass op explicitly unless writing. list says each path with its SHA-256, the live version, and whether the draft differs from it (as data too: files: [{path, sha}], version and unreleased); read with path returns that file's text, and with paths several files, or with neither every text file in the app, in one call: each under its path and SHA-256, up to 64 KB in all, naming each file left out and why (as data too: files: [{path, sha, size}], unread: [{path, why}] and version). delete confirms the path. Replaced or deleted bytes are kept for 30 days. To undo any write, patch, fetch or delete: op: history with path lists them newest first (sha256, size, when, by whom), and op: restore puts one back, the newest or the one sha or at names; a restore is itself a write. op: restore with no path goes back one write: every file the newest write changed returns to what it replaced, and asking again goes back one more. Documentation: https://yaks.app/docs/files.",
   },
   'sandbox_shell': {
-    'title': 'Run a build command',
+    'title': 'Run a sandbox command',
     'step': {
-      'doing': 'Running a build command…',
-      'done': 'Ran a build command',
+      'doing': 'Running a command…',
+      'done': 'Ran a command',
     },
     'description':
-      "Run one command in this space's build sandbox, a Linux container for what a browser cannot do alone: compile to WebAssembly, build a site with any tool (Vite, Astro, Eleventy, SvelteKit), run a generator, minify an asset. html, css and js need none of it. Installed: Rust 1.98.1 with wasm32-unknown-unknown, wasm-bindgen 0.2.128 and wasm-opt 132; Python 3.13.15 with pip; Go 1.27.1; Zig 0.16.0, also the C and C++ compiler (`zig cc -target wasm32-freestanding -nostdlib -Wl,--no-entry` makes a module a browser loads with no glue code, -target wasm32-wasi one a WASI layer runs); Deno 2.9.1, and the image's Node and Bun. The command runs as root, so `apt-get install -y <pkg>`, cargo, pip, npm and go get install anything for that build. Its network reaches the whole internet, so git clone, npm create and any API work. sandbox_write writes source in; sandbox_ship copies a built artifact into the app. It is signed in as the person: `yak` is installed with $YAKS_TOKEN and $YAKS_HOST set, so `yak <tool>` and curl call these same tools. $YAKS_TOKEN is a placeholder, which yaks.app swaps for a short-lived token of the person's on its way to yaks.app or the space's own address, and nowhere else; the token is revoked when the container is destroyed. Use is metered in seconds charged to the space: a {{budget}}-second budget per managed build (or standalone tool call), and the space's monthly allowance. One sandbox awake in a space at a time on the free tier, two on the Plus plan. The container is destroyed when the build ends; separate MCP calls reuse it until five idle minutes put it to sleep, and its files are temporary. A command ending within timeout milliseconds returns its exit code and last 40 lines of output, stdout then stderr, cut after 8,000 characters; one still running keeps running for at most 240 seconds, and the answer gives its process id for sandbox_wait and sandbox_stop. What a command did through these tools to apps is not undone by discarding the container. Documentation: https://yaks.app/docs/code.",
+      "Run one command in the person's sandbox in this space: a private Linux container where an agent runs commands and keeps files while it works. Use it for what a browser and the other tools cannot do alone: run a script over an attachment, reconcile a CSV, call an API, compile to WebAssembly, build a site with any tool (Vite, Astro, Eleventy, SvelteKit), run a generator. An app of html, css and js needs none of it. Installed: Rust 1.98.1 with wasm32-unknown-unknown, wasm-bindgen 0.2.128 and wasm-opt 132; Python 3.13.15 with pip; Go 1.27.1; Zig 0.16.0, also the C and C++ compiler (`zig cc -target wasm32-freestanding -nostdlib -Wl,--no-entry` makes a module a browser loads with no glue code, -target wasm32-wasi one a WASI layer runs); Deno 2.9.1, and the image's Node and Bun. The command runs as root, so `apt-get install -y <pkg>`, cargo, pip, npm and go get install anything until the container goes. Its network reaches the whole internet, so git clone, npm create and any API work. sandbox_write puts a file in, sandbox_read reads one out, and sandbox_ship copies files into an app. It is signed in as the person: `yak` is installed with $YAKS_TOKEN and $YAKS_HOST set, so `yak <tool>` and curl call these same tools. $YAKS_TOKEN is a placeholder, which yaks.app swaps for a short-lived token of the person's on its way to yaks.app or the space's own address, and nowhere else; the token is revoked when the container is destroyed. Use is metered in seconds charged to the space: {{budget}} seconds per managed build or per call outside one, and the space's monthly allowance. One sandbox awake in a space at a time on the free tier, two on the Plus plan. A managed build destroys the container when it ends; separate MCP calls reuse it until five idle minutes put it to sleep, and its files are temporary. A command ending within timeout milliseconds returns its exit code and last 40 lines of output, stdout then stderr, cut after 8,000 characters; one still running keeps running for at most 240 seconds, and the answer gives its process id for sandbox_wait and sandbox_stop. What a command did through these tools to apps is not undone by discarding the container. Documentation: https://yaks.app/docs/sandbox.",
   },
   'sandbox_wait': {
-    'title': 'Wait for a build command',
+    'title': 'Wait for a sandbox command',
     'step': {
-      'doing': 'Waiting for the build…',
-      'done': 'Waited for the build',
+      'doing': 'Waiting for the command…',
+      'done': 'Waited for the command',
     },
     'description':
-      "Wait for a command sandbox_shell left running in this space's build sandbox, by the process id its answer gave. Returns the exit code and the last 40 lines of output, stdout then stderr, or says it is still running when timeout milliseconds pass (default 60000). Waiting keeps the sandbox awake, metered by the second as with sandbox_shell. Documentation: https://yaks.app/docs/code.",
+      "Wait for a command sandbox_shell left running in the person's sandbox in this space, by the process id its answer gave. Returns the exit code and the last 40 lines of output, stdout then stderr, or says it is still running when timeout milliseconds pass (default 60000). Waiting keeps the sandbox awake, metered by the second as with sandbox_shell. Documentation: https://yaks.app/docs/sandbox.",
   },
   'sandbox_stop': {
-    'title': 'Stop a build command',
+    'title': 'Stop a sandbox command',
     'step': {
-      'doing': 'Stopping the build…',
-      'done': 'Stopped the build',
+      'doing': 'Stopping the command…',
+      'done': 'Stopped the command',
     },
     'description':
-      "Stop a command sandbox_shell left running in this space's build sandbox, by the process id its answer gave, and return its exit code. Waking the sandbox is metered by the second, as with sandbox_shell. Nothing to undo: what it already wrote to the sandbox stays, and sandbox_shell runs it again. Documentation: https://yaks.app/docs/code.",
+      "Stop a command sandbox_shell left running in the person's sandbox in this space, by the process id its answer gave, and return its exit code. Waking the sandbox is metered by the second, as with sandbox_shell. Nothing to undo: what it already wrote to the sandbox stays, and sandbox_shell runs it again. Documentation: https://yaks.app/docs/sandbox.",
   },
   'attachment_read': {
     'title': 'Read source text',
@@ -395,34 +403,34 @@ export let WORDS: Record<string, Words> = {
       'done': 'Read source text',
     },
     'description':
-      'Read original UTF-8 text from a message or file by its attachment id in this space. Call inside code_mode: structuredContent.result[0].output.value.text contains the complete text, preserving whitespace, with no truncation. Parse, reconcile and verify in the script; return only counts or concise differences. This does not wake a build sandbox. Binary or invalid UTF-8 files are refused; sandbox_write with attachment can write their bytes.',
+      'Read original UTF-8 text from a message or file by its attachment id in this space. Call inside code_mode: structuredContent.result[0].output.value.text contains the complete text, preserving whitespace, with no truncation. Parse, reconcile and verify in the script; return only counts or concise differences. This does not wake the sandbox. Binary or invalid UTF-8 files are refused; sandbox_write with attachment can write their bytes.',
   },
   'sandbox_write': {
-    'title': 'Write a build file',
+    'title': 'Write a sandbox file',
     'step': {
-      'doing': 'Writing %{path} for the build…',
-      'done': 'Wrote %{path} for the build',
+      'doing': 'Writing %{path} in the sandbox…',
+      'done': 'Wrote %{path} in the sandbox',
     },
     'description':
-      "Write one file inside this space's build sandbox: a Cargo.toml, a src/lib.rs, whatever the build needs. These are not the app's files: nothing here is served, and files are temporary, not durable app storage. app_files stages what app_deploy will serve; sandbox_ship copies a built artifact from the sandbox into the app. Waking the sandbox is metered by the second, as with sandbox_shell. Pass a sandbox path and nonempty text, or in place of the text an attachment id from the conversation (including original message text), which writes its bytes there for a command to read (a CSV a script parses); this overwrites that path without file history and returns the path written. Nothing to undo: nothing of the app lives here, and only sandbox_ship copies build output into durable app files. Documentation: https://yaks.app/docs/code.",
+      "Write one file inside the person's sandbox in this space: a script, a data file, a Cargo.toml, whatever a command will read. These are not the app's files: nothing here is served, and files are temporary, not durable app storage. app_files stages what app_deploy will serve; sandbox_ship copies files from the sandbox into the app. Waking the sandbox is metered by the second, as with sandbox_shell. Pass a sandbox path and nonempty text, or in place of the text an attachment id from the conversation (including original message text), which writes its bytes there for a command to read (a CSV a script parses); this overwrites that path without file history and returns the path written. Nothing to undo: nothing of the app lives here, and only sandbox_ship copies sandbox files into durable app files. Documentation: https://yaks.app/docs/sandbox.",
   },
   'sandbox_read': {
-    'title': 'Read a build file',
+    'title': 'Read a sandbox file',
     'step': {
-      'doing': 'Reading %{path} from the build…',
-      'done': 'Read %{path} from the build',
+      'doing': 'Reading %{path} from the sandbox…',
+      'done': 'Read %{path} from the sandbox',
     },
     'description':
-      "Read one file out of this space's build sandbox: a generated source, a build log, whatever the last command left behind. Waking the sandbox is metered by the second, as with sandbox_shell. Pass a path relative to /workspace. Returns file text, truncated after 8,000 characters; sandbox_shell can inspect a large or binary file with a command. Documentation: https://yaks.app/docs/code.",
+      "Read one file out of the person's sandbox in this space: a script's output, a generated source, a log, whatever the last command left behind. Waking the sandbox is metered by the second, as with sandbox_shell. Pass a path relative to /workspace. Returns file text, truncated after 8,000 characters; sandbox_shell can inspect a large or binary file with a command. Documentation: https://yaks.app/docs/sandbox.",
   },
   'sandbox_ship': {
-    'title': 'Copy build output into the app',
+    'title': 'Copy sandbox files into the app',
     'step': {
-      'doing': 'Copying the build into %{app}…',
-      'done': 'Copied the build into %{app}',
+      'doing': 'Copying sandbox files into %{app}…',
+      'done': 'Copied sandbox files into %{app}',
     },
     'description':
-      "Copy what the build produced into the app's draft, as if app_files had written it. Name files, folders or wildcard patterns (globs) relative to /workspace. A folder copies every file inside it and keeps its subfolders: dist lands dist/about/index.html at about/index.html. A file or glob match lands under its own name, below the deepest folder its matches share: pkg/*.wasm lands beside index.html, and dist/* lands as dist does. into names a folder of the app to land them under instead of its root, and replace: true makes that folder hold exactly this build, deleting each file an earlier build left there (kept in its history). Two different files landing on one path are refused. The app keeps the artifact independently of the temporary sandbox. This call does not itself destroy the sandbox. Binary files are copied as bytes, so a .wasm arrives intact. Waking the sandbox is metered by the second, as with sandbox_shell. To undo: these are written through app_files, so each keeps the bytes it replaced; use app_files op: history, then op: restore. Returns the copied paths, file count and app URL. Check the staged build with app_preview before app_deploy; it runs the browser on Cloudflare and returns the screenshot, console messages and page errors. Documentation: https://yaks.app/docs/code.",
+      "Copy files from the sandbox into the app's draft, as if app_files had written them: a built site, a compiled .wasm, a file a script produced. Name files, folders or wildcard patterns (globs) relative to /workspace. A folder copies every file inside it and keeps its subfolders: dist lands dist/about/index.html at about/index.html. A file or glob match lands under its own name, below the deepest folder its matches share: pkg/*.wasm lands beside index.html, and dist/* lands as dist does. into names a folder of the app to land them under instead of its root, and replace: true makes that folder hold exactly what this call copies, deleting each file an earlier copy left there (kept in its history). Two different files landing on one path are refused. The app keeps the files independently of the temporary sandbox. This call does not itself destroy the sandbox. Binary files are copied as bytes, so a .wasm arrives intact. Waking the sandbox is metered by the second, as with sandbox_shell. To undo: these are written through app_files, so each keeps the bytes it replaced; use app_files op: history, then op: restore. Returns the copied paths, file count and app URL. Check the staged files with app_preview before app_deploy; it runs the browser on Cloudflare and returns the screenshot, console messages and page errors. Documentation: https://yaks.app/docs/sandbox.",
   },
   'app_preview': {
     'title': 'Preview an app draft',
@@ -764,9 +772,9 @@ export let WORDS: Record<string, Words> = {
       "Return page-view counts for an app: the total over the last 30 days by default, and counts by page, referring site and country. These count page loads, not distinct people. Pass days for a different window, up to 90 days; if analytics is not configured, returns that fact instead. Aggregate counts and nothing else: no visitor is identified, no address and no session is kept, so this can never say who someone was or what one person did. Only the app's own members may ask. Documentation: https://yaks.app/docs/stats.",
   },
   'sandbox_exec': {
-    'title': 'Run a build command (listed name)',
+    'title': 'Run a sandbox command (listed name)',
     'description':
-      "The name sandbox_shell was listed under: run cmd in this space's build sandbox, in cwd (default /workspace), for at most timeout seconds (default and maximum 240). Returns the exit code and the last lines the command printed. A command can call these tools and change apps, so its effects outside the container are not undone by discarding it. New work calls sandbox_shell, which can also leave a long command running. Documentation: https://yaks.app/docs/code.",
+      "The name sandbox_shell was listed under: run cmd in the person's sandbox in this space, in cwd (default /workspace), for at most timeout seconds (default and maximum 240). Returns the exit code and the last lines the command printed. A command can call these tools and change apps, so its effects outside the container are not undone by discarding it. New work calls sandbox_shell, which can also leave a long command running. Documentation: https://yaks.app/docs/sandbox.",
   },
   'app_secret_set': {
     'title': 'Set a worker secret',

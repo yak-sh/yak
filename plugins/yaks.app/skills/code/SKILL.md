@@ -1,6 +1,6 @@
 ---
 name: code
-description: "Backend Code (yaks.app). Backend code for an app: worker.js, the server module that answers an app's requests before its static files. Which routes it receives (a 404 falls through to the files, /api/ is reserved), what env holds (STORE, APP, FILES, the keys the person connected, and wrangler.jsonc bindings such as D1, R2, Vectorize, vpc_services and ai), API keys through sentinels and ./api/fetch, the request headers that identify the visitor (x-yak-person, x-yak-role, x-yak-app), the CPU and subrequest limits, error handling, and complete example workers (webhook, paid API, RSVP). TypeScript and npm packages in a worker or a page's scripts: package.json, the package-lock.json app_deploy pins them in, and what the compile refuses. The platform's @yaks packages, named \"platform\", whose components the app's store also keeps. The build sandbox, and deploying a site built with Vite, Astro, Eleventy or SvelteKit. Check the draft worker and pages with app_preview, including screenshots, console messages and page errors, before releasing them."
+description: "Backend Code (yaks.app). Backend code for an app: worker.js, the server module that answers an app's requests before its static files. Which routes it receives (a 404 falls through to the files, /api/ is reserved), what env holds (STORE, APP, FILES, the keys the person connected, and wrangler.jsonc bindings such as D1, R2, Vectorize, vpc_services and ai), API keys through sentinels and ./api/fetch, the request headers that identify the visitor (x-yak-person, x-yak-role, x-yak-app), the CPU and subrequest limits, error handling, and complete example workers (webhook, paid API, RSVP). TypeScript and npm packages in a worker or a page's scripts: package.json, the package-lock.json app_deploy pins them in, and what the compile refuses. The platform's @yaks packages, named \"platform\", whose components the app's store also keeps. Deploying a site built in the sandbox with Vite, Astro, Eleventy or SvelteKit. Check the draft worker and pages with app_preview, including screenshots, console messages and page errors, before releasing them."
 ---
 
 # Backend Code
@@ -131,7 +131,7 @@ each package is installed; there is no nested dependency tree.
 A failed compile refuses the deploy with the compiler's error lines
 (`main.ts:3:9: Expected ";" but found "number"`) and changes nothing: the last
 release keeps serving. The seconds a compile takes count against the space's
-build time, together with the sandbox's.
+compute time, together with the sandbox's.
 
 - Types are stripped, not checked.
 - Import a file by its own extension or by none: `./util.ts` or `./util`. An
@@ -852,98 +852,11 @@ kept worker and files; a legacy version without its own immutable source is
 prepared from its pinned bytes before switching, so rolling back an app also
 rolls back its code.
 
-## The build sandbox
-
-Some code has to be compiled before a browser can run it, such as a chess
-engine, an image codec or a solver. `sandbox_shell` runs the compiler in a Linux
-container that belongs to the space. Preinstalled:
-
-    Rust 1.98.1      with wasm32-unknown-unknown, wasm-bindgen 0.2.128,
-                     wasm-opt 132
-    Python 3.13.15   with pip
-    Go 1.27.1        GOOS=js GOARCH=wasm, and lib/wasm/wasm_exec.js beside it
-    Zig 0.16.0       and with it C and C++: `zig cc`, `zig c++`
-    Deno 2.9.1       plus the Node and Bun the base image ships
-
-`zig cc -target wasm32-freestanding -nostdlib -Wl,--no-entry` is the shortest
-way from C to a WebAssembly module a browser instantiates with no glue code; the
-`wasm32-wasi` target produces one that runs under a WASI shim. C++ takes the
-same flags, with `-fno-exceptions`.
-
-**Other tools install for the session.** Commands run as root, so
-`apt-get install -y <package>`, `cargo`, `pip`, `npm` and `go get` all work, and
-nothing installed affects the next build.
-
-**The container is destroyed when the build ends**, with everything in it. Only
-the files `sandbox_ship` copied into the app are kept.
-
-**`sandbox_ship` keeps a build's folder structure.** Name a file, a folder or a
-glob in the sandbox. A folder copies every file inside it, so a site built into
-`dist/` lands where its pages expect its files:
-
-    sandbox_ship(app, paths: ['dist'])
-      dist/index.html        → index.html
-      dist/about/index.html  → about/index.html
-      dist/_astro/app.js     → _astro/app.js
-
-A file, or each file a glob matched, is copied under its own name, relative to
-the folder its matches share, so `pkg/*.wasm` lands beside `index.html` and
-`dist/*` lands the same way `dist` does. `into: 'dist'` puts everything shipped
-under that folder of the app instead of its root. Two different files that would
-land on the same path are refused. `replace: true`, with `into`, makes that
-folder contain exactly what this call ships: each file an earlier build left
-there is deleted, and kept in its history like any other delete.
-
-**The sandbox has full internet access.** `git clone` from GitHub, a scaffolder
-that downloads its template (`npm create astro`), any registry and any API all
-work.
-
-**One sandbox at a time.** Your sandbox is private to you in each space, and a
-space can have one sandbox awake at a time on the free plan, two on the Plus
-plan. A sandbox goes to sleep five minutes after its last command, and another
-member's sandbox in that space can wake after that. The monthly build time (the
-sandbox's, and compiling TypeScript and npm packages at `app_deploy`) is 1 hour
-for each free space and 10 hours for each space on the Plus plan.
-
-That container is **signed in as you**. Two variables are set in every command's
-environment, and the `yak` CLI is installed:
-
-    YAKS_TOKEN   a placeholder for a grant — you, narrowed to this space
-    YAKS_HOST    https://yaks.app
-
-So a build script can call the same tools your agent has, as you:
-
-    yak app_list
-    yak graph query '.recipe'
-    yak apply @rows.ndjson
-
-`yak <tool>` runs any tool this connector lists (it reads the list at run time,
-so it always matches the connector), and `yak apply` streams a file of NDJSON
-bundles into the graph 50 at a time. `curl` reaches the same MCP endpoint if you
-prefer to write the JSON-RPC yourself:
-
-    curl -sS "$YAKS_HOST/mcp" \
-      -H "authorization: Bearer $YAKS_TOKEN" \
-      -H 'content-type: application/json' \
-      -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
-           {"name":"app_list","arguments":{}}}'
-
-The container never holds the grant itself. `$YAKS_TOKEN` is a placeholder, and
-yaks.app replaces it with the grant in an outgoing request, only when the
-request goes to yaks.app or to your space's own address (`<space>.yaks.app`,
-which answers a clone of your app). Sent anywhere else, it stays a placeholder,
-so printing it, or a package reading it, reveals nothing.
-
-The grant is minted when the container wakes and **expires with the container**:
-it is revoked as soon as the sandbox is destroyed, and it expires on its own
-soon after the sandbox would have gone to sleep. It never has more permission
-than you: it carries no permission of its own, only your membership, and only in
-this space.
-
 ## Deploying a site built with Vite, Astro, Eleventy or SvelteKit
 
 A site made with Vite, Astro, Eleventy, SvelteKit or any other tool that writes
-a folder of files is built in the sandbox and served as built:
+a folder of files is built in the sandbox
+([Sandbox](https://yaks.app/docs/sandbox.md)) and served as built:
 
 1. Write the project into the sandbox, then install and build in one
    `sandbox_shell` command. Its files last until the sandbox goes to sleep, five

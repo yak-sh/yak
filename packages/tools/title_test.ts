@@ -16,9 +16,9 @@ Deno.test('a title is said in the tense of the call', () => {
         'Renamed, moved or reshared an app',
       ],
       [
-        'Stop a build command',
-        'Stopping a build command…',
-        'Stopped a build command',
+        'Stop a sandbox command',
+        'Stopping a sandbox command…',
+        'Stopped a sandbox command',
       ],
       ['Retry a write', 'Retrying a write…', 'Retried a write'],
       ['Run code', 'Running code…', 'Ran code'],

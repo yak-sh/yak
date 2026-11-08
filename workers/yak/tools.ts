@@ -3932,7 +3932,7 @@ let OURS: Row[] = [
           throw refuse(
             'missing',
             `nothing in the sandbox matches ${asked.join(', ')} — ` +
-              'sandbox_shell `ls` to see what the build left',
+              'sandbox_shell `ls` to see what the commands left',
           )
         }
         // A file two paths both named is read once and lands at each.

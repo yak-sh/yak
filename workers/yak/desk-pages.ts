@@ -2082,7 +2082,12 @@ let ALLOWANCES: [Ceiling, string, (n: number) => string, string][] = [
     count,
     'Building with your own agent isn’t counted.',
   ],
-  ['seconds', 'Build seconds', count, 'The sandbox, and compiling at deploy.'],
+  [
+    'seconds',
+    'Compute seconds',
+    count,
+    'The sandbox, and compiling at deploy.',
+  ],
 ]
 
 // One allowance as a row: its name, how much of it is used, and, from four

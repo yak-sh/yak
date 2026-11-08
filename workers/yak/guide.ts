@@ -295,18 +295,20 @@ account's Workers AI.
 Almost nothing else needs compiling: an app is html, css and js, served as
 written, TypeScript and npm packages compile at app_deploy, and a build step
 added where none is needed is the most common way to waste time here.
-When something genuinely must be compiled — Rust
-to WebAssembly for a chess engine, an image codec, a solver — there is a
-sandbox: sandbox_write the sources, sandbox_shell the build (a Linux container
-with pinned Rust, Python, Go and Zig toolchains — zig cc is its C and C++
-compiler — plus wasm-bindgen and wasm-opt; sandbox_shell names the versions,
-and anything else installs for the session with apt or a package manager), then
-sandbox_ship the artifact — pkg/*.wasm, pkg/*.js — into the app, where it is
-served beside index.html and the page imports it; a build's folder (dist)
-ships whole, keeping its subfolders. Its files are gone when the
-build ends; only what you ship survives. Every second
-the container is awake is charged to the space, so plan the build, run it
-once, and ship.
+
+Each person also has a sandbox in the space: a private Linux container where
+an agent runs commands and keeps files while it works, for a script over an
+attachment, a CSV, an API call, or what genuinely must be compiled — Rust to
+WebAssembly for a chess engine, an image codec, a solver. sandbox_write puts a
+file in, sandbox_shell runs a command (it has pinned Rust, Python, Go and Zig
+toolchains — zig cc is its C and C++ compiler — plus wasm-bindgen and
+wasm-opt; sandbox_shell names the versions, and anything else installs with
+apt or a package manager), sandbox_read reads a file out, and sandbox_ship
+copies files — pkg/*.wasm, pkg/*.js, or a whole dist folder with its
+subfolders — into the app, where they are served beside index.html. Its files
+are temporary; only what you ship survives. Every second the container is
+awake is charged to the space, so plan the commands, run them once, and ship.
+Call guide with page sandbox.
 
 Asked to save things from other sites — a recipe, a listing, an article —
 give the app a /clip route on its worker.js: it fetches the address, reads
@@ -486,6 +488,7 @@ export let PAGES: Page[] = [
   'tools',
   'notes',
   'code',
+  'sandbox',
   'clipping',
   'library',
   'sharing',

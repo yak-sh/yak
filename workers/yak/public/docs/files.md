@@ -44,7 +44,7 @@ previous files, vocabulary and worker serving together.
 Build and check the app through the connector before releasing it. No local
 checkout, shell or computer is needed:
 
-1. Write the files with `app_files`, or copy a sandbox build with
+1. Write the files with `app_files`, or copy them from the sandbox with
    `sandbox_ship`.
 2. Call `app_preview(app: 'recipes', width: 390, height: 844)` for a phone, then
    `app_preview(app: 'recipes', width: 1280, height: 900)` for a desktop.

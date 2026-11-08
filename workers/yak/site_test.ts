@@ -442,8 +442,8 @@ test('the pricing page tabulates the limits the code holds a space to', () => {
     ['Emails a month', (t) => count(LETTERS[t])],
     ['AI use', () => 'Included'],
     ['Builds a month', (t) => String(BUILDS[t])],
-    ['Build time a month', (t) => hours(SECONDS[t])],
-    ['Builds at once', (t) => String(AWAKE[t])],
+    ['Compute time a month', (t) => hours(SECONDS[t])],
+    ['Sandboxes at once', (t) => String(AWAKE[t])],
   ]
   let table = pricing().querySelector('.Limits table')!
   assertEquals(
