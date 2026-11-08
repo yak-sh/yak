@@ -11,6 +11,7 @@ import {
 } from '@std/assert'
 import {
   type Lent,
+  listPrice,
   type MediaReceipt,
   ModelError,
   type Request,
@@ -26,14 +27,21 @@ let usage = {
   output_tokens: 823,
 }
 
-let harness = (answer: () => Response, room?: () => Promise<void>) => {
+let harness = (
+  answer: (request: globalThis.Request) => Response,
+  room?: () => Promise<void>,
+) => {
   let sent: { url: string; body: Record<string, unknown> }[] = []
   let stored: { bytes: Uint8Array; type: string }[] = []
   let receipts = new Map<string, MediaReceipt>()
   let lent: Lent = {
     fetch: (url, init) => {
-      sent.push({ url: String(url), body: JSON.parse(String(init!.body)) })
-      return Promise.resolve(answer())
+      let request = new globalThis.Request(url, init)
+      sent.push({
+        url: String(url),
+        body: init?.body ? JSON.parse(String(init.body)) : {},
+      })
+      return Promise.resolve(answer(request))
     },
     key: () => Promise.resolve(undefined),
     refresh: () => Promise.resolve(undefined),
@@ -141,9 +149,17 @@ test('a store with no room refuses before the image is asked or paid for', async
 })
 
 test('text models keep their token pricing and listing', async () => {
-  let { model } = harness(ok)
+  let { model } = harness((request) => {
+    assertEquals(request.url, 'https://api.openai.com/v1/models')
+    return Response.json({ data: [{ id: 'gpt-5', context_length: 400000 }] })
+  })
   assertEquals(model.quote!(ask('gpt-5'), 1), undefined)
-  assertEquals(await model.info!('gpt-5'), undefined)
+  assertEquals(await model.list!(), [{ name: 'gpt-5', context: 400000 }])
+  assertEquals(await model.info!('gpt-5'), {
+    name: 'gpt-5',
+    context: 400000,
+    price: listPrice('gpt-5'),
+  })
   assertEquals((await model.info!('gpt-image-2.6-flare'))?.modalities, [
     'image',
   ])

@@ -5,7 +5,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { Refused } from '@yaks/graph/errors'
-import type { Lent } from '@yaks/model'
+import { type Lent, listPrice, ModelError } from '@yaks/model'
 import { CODEX, OPENAI } from './credential.ts'
 import {
   configuredImages,
@@ -28,6 +28,57 @@ let lent = (over: Partial<Lent> = {}): Lent => ({
   store,
   env: () => undefined,
   ...over,
+})
+
+test('text model metadata comes from the credential catalogue and published model limits', async () => {
+  let asked: Request[] = []
+  let model = providers(
+    lent({
+      env: (name) => name == 'OPENAI_API_KEY' ? 'own-key' : undefined,
+      fetch: (input, init) => {
+        let req = new Request(input, init)
+        asked.push(req)
+        return Promise.resolve(
+          req.url == `${OPENAI}/models`
+            ? Response.json({ data: [{ id: 'gpt-5-mini' }] })
+            : new Response(`- 400,000 context window
+- Maximum input tokens: 272,000
+- 128,000 max output tokens`),
+        )
+      },
+    }),
+    { images: false },
+  ).openai
+  assertEquals(await model.list?.(), [{ name: 'gpt-5-mini' }])
+  let info = await model.info?.('gpt-5-mini')
+  assertEquals(info, {
+    name: 'gpt-5-mini',
+    context: 400000,
+    output: 128000,
+    price: listPrice('gpt-5-mini'),
+  })
+  assertEquals(await model.info?.('gpt-5-mini'), info)
+  assertEquals(
+    asked.map((req) => [req.url, req.headers.get('authorization')]),
+    [
+      [`${OPENAI}/models`, 'Bearer own-key'],
+      [`${OPENAI}/models`, 'Bearer own-key'],
+      ['https://developers.openai.com/api/docs/models/gpt-5-mini.md', null],
+    ],
+  )
+  assertEquals(await model.info?.('unlisted-model'), undefined)
+  assertEquals(asked.at(-1)?.url, `${OPENAI}/models`)
+})
+
+test('text model discovery preserves credential refusals', async () => {
+  let model = providers(
+    lent({
+      env: (name) => name == 'OPENAI_API_KEY' ? 'key' : undefined,
+      fetch: () => Promise.resolve(Response.json({}, { status: 401 })),
+    }),
+    { images: false },
+  ).openai
+  await assertRejects(() => model.info!('gpt-5-mini'), ModelError, '401')
 })
 
 test('OpenAI credential uses its grant, refreshes it, or selects an explicit API key', async () => {

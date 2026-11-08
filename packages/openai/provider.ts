@@ -174,6 +174,7 @@ export let providers = (
       anchor: () => undefined,
       lateResults: true,
       recover: true,
+      info: true,
       reads,
     },
   )
@@ -193,7 +194,7 @@ export let providers = (
         quote: (req: Parameters<Model>[0], remaining: number) =>
           image(req.model) ? imageQuote(req, remaining) : undefined,
         info: (name: string) =>
-          Promise.resolve(image(name) ? imageListed(name) : undefined),
+          image(name) ? Promise.resolve(imageListed(name)) : text.info!(name),
         recover: async (call: string) =>
           image(String((await lent.receipts?.read(call))?.model))
             ? pictures.recover(call)

@@ -1,4 +1,5 @@
 import { listing } from './list.ts'
+import { described } from './info.ts'
 import { reads } from './reads.ts'
 import { generatedImages, type Images } from './images.ts'
 // Provider-neutral model items in and out; transport.ts alone owns the HTTP
@@ -9,6 +10,7 @@ import {
   type CacheContext,
   cacheExpiry,
   type Item,
+  type Listed,
   type MediaReceipt,
   type MediaReceipts,
   type Model,
@@ -229,12 +231,26 @@ export let items = (done: Frame[]): Item[] => {
  * nothing, so through it a caller replays the conversation and the id is only a
  * record, not something to continue from.
  */
-export let responses = (opts: Options): Model =>
-  Object.assign(ask(opts), {
+export let responses = (opts: Options): Model => {
+  let list = async () =>
+    listing(await opts.credential(), opts.fetch, opts.refresh, opts.headers)
+  let known = new Map<string, Promise<Listed | undefined>>()
+  let info = (name: string) => {
+    let held = known.get(name) ?? list().then((models) => {
+      let model = models.find((m) => m.name == name)
+      return model ? described(model, opts.fetch) : undefined
+    }).catch((error) => {
+      known.delete(name)
+      throw error
+    })
+    known.set(name, held)
+    return held
+  }
+  return Object.assign(ask(opts), {
     reads,
     lateResults: true as const,
-    list: async () =>
-      listing(await opts.credential(), opts.fetch, opts.refresh, opts.headers),
+    list,
+    info,
     vocab: openaiDoc,
     mark: (reply: Reply, cache?: CacheContext) => ({
       [opts.provider ?? OPENAI_COMP]: {
@@ -257,6 +273,7 @@ export let responses = (opts: Options): Model =>
         (receipt) => delivered(receipt, opts),
       ),
   })
+}
 
 let ask = (opts: Options) => {
   let client = transport({
