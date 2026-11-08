@@ -213,6 +213,10 @@ ${links(env, 'pages.css')}${
     main.includes('data-idle')
       ? `<script src="${asset(env, 'idle.js')}" defer></script>`
       : ''
+  }${
+    main.includes('data-side')
+      ? `<script src="${asset(env, 'side.js')}" defer></script>`
+      : ''
   }<script src="${asset(env, 'drop.js')}" defer></script>${deployed(env)}</body>
 </html>`
   return new Response(
@@ -823,6 +827,9 @@ export type DeskPage = {
   /** a member of the space who does not own it: of its pages they may open
    * only the Operator, so the side links only that */
   member?: boolean
+  /** whether the person keeps the side collapsed to its icons
+   * (`desk_sidebar{collapsed}`) */
+  collapsed?: boolean
 }
 
 /** A side in the dashboard's frame: what it is called, what sits beside its

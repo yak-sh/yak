@@ -83,3 +83,20 @@
     flex-wrap: wrap;
   }
 }
+/* The column collapsed to a rail of its icons: each link a square around
+   its icon, its label kept for a screen reader and said by its title. A
+   phone's row has its words, whatever the rail. */
+@media (min-width: 701px) {
+  .SideNav-rail .SideNav_Link {
+    justify-content: center;
+    padding-inline: .6rem;
+  }
+  .SideNav-rail .SideNav_Label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

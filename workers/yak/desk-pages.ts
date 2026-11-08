@@ -210,6 +210,50 @@ let navIcons = {
 // A glyph the pages draw (icons.ts), as the kit's Icon.
 let glyph = (name: IconName) => h(Icon, { of: icons[name] })
 
+// Words beside an icon of the side, which its rail does not show: still the
+// element's accessible text, and said by its title.
+export let worded = (words: Kids) => h('span', { class: 'Desk_Label' }, words)
+
+/**
+ * The side's own button (T-151458): it collapses the side to a rail of its
+ * icons, and opens it again. It is a form keeping the choice on the person's
+ * row (`desk_sidebar{collapsed}`, manage.ts `account`), so it holds on every page
+ * and device; public/side.js sends it without leaving the page, and sets
+ * `rail`, the body's modifier, and `SideNav-rail` on the side's navs. Without
+ * script the page is drawn again at `back`, the page it was pressed on.
+ */
+export let fold = (collapsed: boolean, back: string, rail: string) => {
+  let said = collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'
+  return h(
+    'form',
+    {
+      class: 'Desk_Fold',
+      method: 'post',
+      action: managePath('profile'),
+      'data-side': rail,
+    },
+    h('input', {
+      type: 'hidden',
+      name: 'sidebar',
+      value: collapsed ? 'open' : 'collapsed',
+    }),
+    h('input', { type: 'hidden', name: 'back', value: back }),
+    h(
+      Button,
+      {
+        type: 'submit',
+        class: 'Desk_Folder',
+        title: said,
+        'aria-label': said,
+        'aria-controls': 'menu',
+        'aria-expanded': String(!collapsed),
+      },
+      h(Icon, { of: icons['panel-left-close'], class: 'Desk_Shut' }),
+      h(Icon, { of: icons['panel-left-open'], class: 'Desk_Unshut' }),
+    ),
+  )
+}
+
 // The space a page is in, as the side and the page's head name it.
 let picked = (at: DeskPage) =>
   at.spaces?.find((s) => s.slug == at.space) ??
@@ -240,9 +284,14 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
     let on = view == key || (view == 'new' && key == 'apps')
     return h(
       SideNav.Link,
-      { href: to, mod: on && 'on', 'aria-current': on ? 'page' : undefined },
+      {
+        href: to,
+        title: label,
+        mod: on && 'on',
+        'aria-current': on ? 'page' : undefined,
+      },
       glyph(navIcons[key]),
-      label,
+      h(SideNav.Label, null, label),
       key == 'trash' && at.trash?.length
         ? h('span', { class: 'Desk_Count' }, at.trash.length)
         : null,
@@ -251,14 +300,23 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
   let { title, back } = yourOperator(at)
   let operator = link('operator', title)
   let host = spaceHost(env, at.space)
+  let rail = at.collapsed ? 'rail' : undefined
   return {
     label: 'Manage',
-    top: h(
-      Button,
-      { mod: 'go', class: 'Desk_Back', href: chatPath(at.space) },
-      glyph('chevron-left'),
-      `Back to ${back}`,
-    ),
+    top: [
+      h(
+        Button,
+        {
+          mod: 'go',
+          class: 'Desk_Back',
+          href: chatPath(at.space),
+          title: `Back to ${back}`,
+        },
+        glyph('chevron-left'),
+        worded(`Back to ${back}`),
+      ),
+      fold(!!at.collapsed, managePath(view, at.space), 'Desk-rail'),
+    ],
     side: [
       h('h2', { class: 'Desk_Title' }, 'Manage'),
       h(
@@ -271,7 +329,7 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
           chooser(at, view),
           h(
             SideNav,
-            { 'aria-labelledby': 'side-space' },
+            { 'aria-labelledby': 'side-space', mod: rail },
             at.member ? operator : [
               link('apps', 'Apps'),
               link('people', 'People'),
@@ -292,7 +350,7 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
         h('h3', { class: 'Desk_Group', id: 'side-account' }, 'Your account'),
         h(
           SideNav,
-          { 'aria-labelledby': 'side-account' },
+          { 'aria-labelledby': 'side-account', mod: rail },
           link('profile', 'Profile'),
           link('invite', 'Invite a friend'),
           link('agents', 'Agents'),
@@ -304,19 +362,35 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
         { class: 'Desk_Foot' },
         h(
           'a',
-          { href: `https://${host}/`, target: '_blank', rel: 'noopener' },
-          `Open ${host} `,
+          {
+            href: `https://${host}/`,
+            target: '_blank',
+            rel: 'noopener',
+            title: `Open ${host}`,
+          },
           glyph('external-link'),
+          worded(`Open ${host}`),
         ),
         h(
           'a',
-          { href: url(env, '/help'), target: '_blank', rel: 'noopener' },
-          'Help',
+          {
+            href: url(env, '/help'),
+            target: '_blank',
+            rel: 'noopener',
+            title: 'Help',
+          },
+          glyph('circle-question-mark'),
+          worded('Help'),
         ),
         h(
           'form',
           { method: 'post', action: url(env, LOGOUT) },
-          h('button', { class: 'Desk_Out', type: 'submit' }, 'Sign out'),
+          h(
+            'button',
+            { class: 'Desk_Out', type: 'submit', title: 'Sign out' },
+            glyph('log-out'),
+            worded('Sign out'),
+          ),
         ),
       ),
     ],
@@ -377,7 +451,12 @@ let chooser = (at: DeskPage, view: ManageView) =>
           !s.owner ? 'operator' : view == 'new' ? 'apps' : view,
           s.slug,
         ),
-    h('a', { class: 'Desk_New', href: managePath('space') }, '+ New space'),
+    h(
+      'a',
+      { class: 'Desk_New', href: managePath('space'), title: 'New space' },
+      glyph('plus'),
+      worded('New space'),
+    ),
   )
 
 /** A space's logo, or where it has none its first letter. */
@@ -1952,7 +2031,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
         'cache-control': 'private, no-store',
         'x-robots-tag': 'noindex',
       },
-      layout: 'Desk',
+      layout: at.collapsed ? 'Desk Desk-rail' : 'Desk',
     },
     deskFrame({
       ...navigation(at, view, env),

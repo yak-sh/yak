@@ -42,6 +42,14 @@ import Mic from 'lucide/dist/esm/icons/mic.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Phone from 'lucide/dist/esm/icons/phone.mjs'
 // @ts-types="@yaks/ui/lucide"
+import CircleQuestionMark from 'lucide/dist/esm/icons/circle-question-mark.mjs'
+// @ts-types="@yaks/ui/lucide"
+import LogOut from 'lucide/dist/esm/icons/log-out.mjs'
+// @ts-types="@yaks/ui/lucide"
+import PanelLeftClose from 'lucide/dist/esm/icons/panel-left-close.mjs'
+// @ts-types="@yaks/ui/lucide"
+import PanelLeftOpen from 'lucide/dist/esm/icons/panel-left-open.mjs'
+// @ts-types="@yaks/ui/lucide"
 import TriangleAlert from 'lucide/dist/esm/icons/triangle-alert.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Plug from 'lucide/dist/esm/icons/plug.mjs'
@@ -97,6 +105,10 @@ export let icons = {
   mic: Mic,
   phone: Phone,
   'triangle-alert': TriangleAlert,
+  'circle-question-mark': CircleQuestionMark,
+  'log-out': LogOut,
+  'panel-left-close': PanelLeftClose,
+  'panel-left-open': PanelLeftOpen,
 }
 export type IconName = keyof typeof icons
 

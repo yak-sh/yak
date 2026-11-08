@@ -2078,4 +2078,145 @@
       gap: 0;
     }
   }
+  /* The side's fold (desk-pages.ts `fold`): one button at its top, showing
+     the way it goes, which collapses the side to a rail of its icons and
+     opens it again. The words beside the side's icons (`Desk_Label`, and
+     the kit's `SideNav_Label`) are still each one's accessible text in the
+     rail, and its title says them. On a phone the side opens whole from
+     Menu, so there is nothing to fold. */
+  .Desk_Fold {
+    display: flex;
+    margin: 0;
+  }
+  .Desk_Folder {
+    padding: .45rem;
+  }
+  .Desk_Folder .Icon {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  .Desk_Unshut {
+    display: none;
+  }
+  .Desk_Foot a,
+  .Desk_Out {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+  }
+  @media (min-width: 701px) {
+    .Desk-rail .Desk_Shut,
+    .Talk_Page-rail .Desk_Shut {
+      display: none;
+    }
+    .Desk-rail .Desk_Unshut,
+    .Talk_Page-rail .Desk_Unshut {
+      display: inline-block;
+    }
+    .Desk-rail .Desk_Label,
+    .Talk_Page-rail .Desk_Label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .Desk-rail .Desk_Count,
+    .Talk_Page-rail .Talk_Count {
+      position: absolute;
+      top: .1rem;
+      right: .1rem;
+      min-width: 1.1rem;
+      margin: 0;
+    }
+    /* The space selector is its tile; Change still opens the list beside
+       the rail, over the page. */
+    .Desk-rail .Desk_Here > .Desk_Space,
+    .Desk-rail .Desk_Here > .Desk_Pick > summary,
+    .Talk_Page-rail .Talk_Whose .Desk_Space {
+      grid-template-columns: 2rem;
+      justify-content: center;
+      padding: .4rem;
+    }
+    .Desk-rail .Desk_Here > .Desk_Space .Desk_Name,
+    .Desk-rail .Desk_Here > .Desk_Pick > summary :is(.Desk_Name, .Desk_Change),
+    .Talk_Page-rail .Talk_Whose > .Desk_Space .Desk_Name,
+    .Talk_Page-rail .Talk_Whose > .Desk_Pick > summary :is(.Desk_Name, .Desk_Change) {
+      display: none;
+    }
+    /* The dashboard's frame (`deskFrame`). */
+    .Desk-rail main {
+      grid-template-columns: 4.5rem minmax(0, 1fr);
+    }
+    .Desk-rail .Desk_Side {
+      gap: 1.25rem;
+      padding: 1.25rem .5rem;
+    }
+    .Desk-rail .Desk_Top {
+      flex-direction: column-reverse;
+      gap: .75rem;
+    }
+    .Desk-rail .Desk_Back {
+      padding-inline: .6rem;
+    }
+    .Desk-rail :is(.Desk_Title, .Desk_Group) {
+      display: none;
+    }
+    .Desk-rail .SideNav {
+      margin-right: -.5rem;
+    }
+    .Desk-rail .Desk_Here {
+      margin-right: -.5rem;
+      padding: .5rem 0 .5rem .25rem;
+    }
+    .Desk-rail .Desk_Here .SideNav {
+      margin-right: 0;
+    }
+    .Desk-rail .Desk_Here > :is(.Desk_Space, .Desk_Pick, .Desk_New) {
+      margin-right: .75rem;
+    }
+    .Desk-rail .Desk_Foot {
+      justify-items: center;
+      padding-inline: 0;
+      font-size: 1rem;
+    }
+    /* The chat app's side (operator-page.ts `side`). */
+    .Talk_Page-rail .Talk {
+      grid-template-columns: 4.5rem minmax(0, 1fr);
+    }
+    .Talk_Page-rail .Talk-app {
+      grid-template-columns: 4.5rem minmax(20rem, 1fr) minmax(0, 1.4fr);
+    }
+    .Talk_Page-rail .Talk_Side {
+      padding-inline: .5rem;
+    }
+    .Talk_Page-rail .Talk_Top {
+      flex-direction: column;
+      padding: 0;
+    }
+    .Talk_Page-rail .Talk_Scroll {
+      margin-right: -.5rem;
+      padding-right: .5rem;
+    }
+    .Talk_Page-rail .Talk_Side .SideNav {
+      margin-right: -.5rem;
+    }
+    .Talk_Page-rail :is(.Talk_Group, .Talk_None) {
+      display: none;
+    }
+    /* The selector's list lies beside the rail, out of the side's scroll. */
+    .Talk_Page-rail .Talk_Whose .Desk_Menu {
+      position: fixed;
+      top: auto;
+      left: auto;
+      min-width: 18rem;
+      max-width: 26rem;
+    }
+  }
+  @media (max-width: 700px) {
+    .Desk_Fold {
+      display: none;
+    }
+  }
 }

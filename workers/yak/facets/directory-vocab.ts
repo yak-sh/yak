@@ -199,6 +199,14 @@ export let directoryDoc: VocabDoc = {
         channel: { type: 'string', enum: ['push', 'text', 'email', 'updates'] },
       },
     },
+    // How a person keeps the side of their yaks.app pages (desk-pages.ts
+    // `deskFrame`, operator-page.ts `side`): collapsed to a rail of icons,
+    // or open with each one's name beside it, the way it was without it.
+    desk_sidebar: {
+      component: true,
+      type: 'object',
+      properties: { collapsed: { type: 'boolean' } },
+    },
     // One OAuth grant a person holds, as their agents and services are listed
     // (grant-rows.ts): written as the provider writes the grant to KV, gone
     // when it deletes it, and holding none of its secrets. Its eid is derived

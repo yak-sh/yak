@@ -432,6 +432,17 @@ export let shared = async (
 }
 
 // Where a dashboard form lands back: the page that sent it, at the apex.
+// Where a form names to go back to, if it is one of these pages, else
+// Profile: a form never sends the person off yaks.app.
+let backTo = (env: Env, back: string) => {
+  let home = new URL(hostUrl(env))
+  let to = new URL(back || managePath('profile'), home)
+  return to.origin == home.origin &&
+      (to.pathname == MANAGE || to.pathname.startsWith(`${MANAGE}/`))
+    ? to.href
+    : new URL(managePath('profile'), home).href
+}
+
 let sentFrom = (req: Request, env: Env) => {
   let at = new URL(req.url)
   return new URL(at.pathname + at.search, hostUrl(env))
@@ -465,23 +476,25 @@ let pickable = async (dir: ReturnType<typeof directory>, seats: Seat[]) => {
 
 // What the chat app's side holds (operator-page.ts `Beside`), asked at once:
 // the spaces its selector offers, the apps here this person may open, and
-// what they are called, and whether they are the platform's admin, which the
-// page's read said (`administrative`).
+// what they are called, whether they are the platform's admin, which the
+// page's read said (`administrative`), and how they keep the side.
 let beside = async (
   dir: ReturnType<typeof directory>,
   space: Space,
   who: Owner,
 ): Promise<Beside> => {
-  let [spaces, { mine }, name] = await Promise.all([
+  let [spaces, { mine }, name, collapsed] = await Promise.all([
     dir.seats(who.person).then((seats) => pickable(dir, seats)),
     dir.apps(space).then((apps) => shelf(apps, space, who)),
     dir.nameAt(who.person),
+    dir.collapsed(who.person),
   ])
   return {
     spaces,
     apps: mine.map((a) => ({ eid: a.eid, slug: a.slug, title: a.title })),
     name,
     admin: !!who.administrative,
+    collapsed,
   }
 }
 
@@ -530,6 +543,7 @@ let desk = async (
     billed,
     provider,
     made,
+    collapsed,
   ] = await Promise.all([
     shelved,
     // What is broken in each app (unseen.ts `brokenIn`), read only for the
@@ -601,6 +615,8 @@ let desk = async (
         return undefined
       })
       : undefined,
+    // How the person keeps the side (`desk_sidebar{collapsed}`).
+    dir.collapsed(owner),
   ])
   let known = await inHand(agents)
   let page = deskPage({
@@ -668,6 +684,7 @@ let desk = async (
     ],
     operator,
     member: who.role != 'owner',
+    collapsed,
     ...typed,
     say: said?.say ?? returned(q)?.say ?? '',
     no: said?.no ?? returned(q)?.no,
@@ -696,15 +713,17 @@ let mine = async (
     return nothingHere(env)
   }
   if (req.method != 'POST') foresee(dir, person, view)
-  let [picks, name, email, agents, theirs, referral, own] = await Promise.all([
-    dir.seats(person).then((seats) => pickable(dir, seats)),
-    dir.nameAt(person),
-    view == 'profile' ? dir.emailAt(person) : undefined,
-    view == 'agents' ? agentsOf(env, person, dir) : [],
-    view == 'shared' ? shared(dir, person) : undefined,
-    view == 'invite' ? invitation(env, dir, person) : undefined,
-    dir.own(person),
-  ])
+  let [picks, name, email, agents, theirs, referral, own, collapsed] =
+    await Promise.all([
+      dir.seats(person).then((seats) => pickable(dir, seats)),
+      dir.nameAt(person),
+      view == 'profile' ? dir.emailAt(person) : undefined,
+      view == 'agents' ? agentsOf(env, person, dir) : [],
+      view == 'shared' ? shared(dir, person) : undefined,
+      view == 'invite' ? invitation(env, dir, person) : undefined,
+      dir.own(person),
+      dir.collapsed(person),
+    ])
   let chosen = q.get('space') ?? inOf(req)
   let space = picks.find((s) => s.slug == chosen)?.slug ?? own.slug
   let page = deskPage({
@@ -727,6 +746,7 @@ let mine = async (
       ...picks,
     ],
     member: !picks.find((s) => s.slug == space)?.owner,
+    collapsed,
     ...typed,
     say: said?.say ?? returned(q)?.say ?? '',
     no: said?.no ?? returned(q)?.no,
@@ -760,6 +780,21 @@ let account = async (
     )
   }
   if (view != 'profile') return nothingHere(env)
+  // The side's fold (desk-pages.ts `fold`), pressed on any page: kept on the
+  // person's row, then that page again, or for the script that sent it,
+  // nothing more.
+  if (form.has('sidebar')) {
+    await dir.apply({
+      entities: [{
+        entity: { eid: who.person },
+        desk_sidebar: { collapsed: form.get('sidebar') == 'collapsed' },
+      }],
+    }, { 'x-yak-person': who.person, 'x-yak-role': 'owner' })
+    if (!req.headers.get('accept')?.includes('text/html')) {
+      return new Response(null, { status: 204 })
+    }
+    return redirect(backTo(env, String(form.get('back') ?? '')), 303)
+  }
   // Cleared, the front of their address comes back — a person always has a
   // title, because a member row names them by it and a titleless one reads
   // back as a bare eid (T-32733). `nameOf` is the same fallback signing in

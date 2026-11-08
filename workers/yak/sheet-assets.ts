@@ -29,6 +29,7 @@ export let FILES = [
   'idle.js',
   'chart.js',
   'menu.js',
+  'side.js',
   'cta.js',
   'carousel.js',
   'wander.js',

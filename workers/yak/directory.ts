@@ -805,6 +805,7 @@ export type Row = {
   }
   sms_consent?: { person: Id; consent: string; at: string; space?: Id }
   operator_alerts?: { channel?: Alerting | null }
+  desk_sidebar?: { collapsed?: boolean | null }
   push_subscription?: {
     person: Id
     endpoint: string
@@ -3127,6 +3128,9 @@ export let directoryRows = (rows: {
     // null when they have not chosen (operator-alerts.ts `routeOf`).
     alerts: async (person: string): Promise<Alerting | null> =>
       (await one(`.entity.eid=${person}`))?.operator_alerts?.channel ?? null,
+    // Whether this person keeps the side of their pages collapsed to icons.
+    collapsed: async (person: string): Promise<boolean> =>
+      !!(await one(`.entity.eid=${person}`))?.desk_sidebar?.collapsed,
     // The browsers this person allowed notifications on (@yaks/push), each
     // as its `PushSubscription` gave it.
     pushes: async (person: string): Promise<Subscription[]> =>

@@ -20,7 +20,7 @@ import { builderOf, carried, operatorDoor, seated } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
 import { esc, type Picked, script, shell } from './pages.ts'
-import { choice as spaceChoice } from './desk-pages.ts'
+import { choice as spaceChoice, fold, worded } from './desk-pages.ts'
 import { spaceHost, url } from './host.ts'
 import {
   ADMIN,
@@ -1142,6 +1142,9 @@ export type Beside = {
   apps?: { eid: string; slug: string; title: string }[]
   name?: string | null
   admin?: boolean
+  /** whether the person keeps the side collapsed to its icons
+   * (`desk_sidebar{collapsed}`) */
+  collapsed?: boolean
 }
 
 // How many of the space's apps the side shows before "All N apps".
@@ -1167,7 +1170,7 @@ let side = (
   space: Space,
   who: Who,
   beside: Beside,
-  at: { current: string[]; waiting: number; app?: string },
+  at: { current: string[]; waiting: number; app?: string; here: string },
 ) => {
   let owner = who.role == 'owner'
   let here = beside.spaces?.find((s) => s.slug == space.slug) ?? {
@@ -1183,6 +1186,7 @@ let side = (
   let host = `https://${spaceHost(env, space.slug)}`
   let operator = space.operator
   let open = at.current.find((c) => c && c != 'updates') ?? 'new'
+  let rail = beside.collapsed ? 'rail' : undefined
   return h(
     'aside',
     { class: 'Talk_Side', id: 'menu', 'aria-label': 'Menu' },
@@ -1193,8 +1197,9 @@ let side = (
         'a',
         { class: 'Talk_Brand', href: chatPath(space.slug) },
         h(Idle, { base: url(env), size: 36 }),
-        'yaks.app',
+        worded('yaks.app'),
       ),
+      fold(!!beside.collapsed, at.here, 'Talk_Page-rail'),
       h(Button, { href: '#', class: 'Talk_Close' }, '✕ Close'),
     ),
     h(
@@ -1214,7 +1219,7 @@ let side = (
       ),
       h(
         SideNav,
-        { 'aria-label': operator },
+        { 'aria-label': operator, mod: rail },
         link(
           chatPath(space.slug),
           !at.app && !at.current.includes('updates'),
@@ -1233,7 +1238,7 @@ let side = (
       apps.length
         ? h(
           SideNav,
-          { 'aria-labelledby': 'side-apps' },
+          { 'aria-labelledby': 'side-apps', mod: rail },
           apps.slice(0, APPS).map((a) =>
             link(
               aboutPath(space.slug, a.slug, open),
@@ -1250,10 +1255,13 @@ let side = (
             )
           ),
           owner && apps.length > APPS
-            ? h(
-              SideNav.Link,
-              { href: managePath('apps', space.slug), class: 'Talk_All' },
+            ? link(
+              managePath('apps', space.slug),
+              false,
+              h(Icon, { of: icons['layout-grid'] }),
               `All ${apps.length} apps`,
+              null,
+              'Talk_All',
             )
             : null,
         )
@@ -1265,7 +1273,7 @@ let side = (
     ),
     h(
       SideNav,
-      { class: 'Talk_Foot', 'aria-label': 'Settings' },
+      { class: 'Talk_Foot', 'aria-label': 'Settings', mod: rail },
       link(
         managePath(owner ? 'apps' : 'operator', space.slug),
         false,
@@ -1279,12 +1287,29 @@ let side = (
   )
 }
 
-// A link of the side, the page on screen lit and said to be current.
-let link = (href: string, on: boolean, ...face: Node[]) =>
+// A link of the side, the page on screen lit and said to be current: its
+// icon, its label, which is its title too (the tooltip its rail shows), and
+// what is counted beside it.
+let link = (
+  href: string,
+  on: boolean,
+  icon: Node,
+  label: string,
+  count: Node = null,
+  kind?: string,
+) =>
   h(
     SideNav.Link,
-    { href, mod: on && 'on', 'aria-current': on ? 'page' : undefined },
-    ...face,
+    {
+      href,
+      class: kind,
+      title: label,
+      mod: on && 'on',
+      'aria-current': on ? 'page' : undefined,
+    },
+    icon,
+    h(SideNav.Label, null, label),
+    count,
   )
 
 /** A conversation, or a new chat, with one of the space's apps beside it. */
@@ -1640,6 +1665,8 @@ let talkPage = (
     main: Node
     // the main's own modifier, beside `Talk_Main`
     kind?: string
+    // this page's address, where the side's fold draws it again
+    here: string
     // where the skip link goes, and what it says
     skip: [string, string]
     script?: string
@@ -1662,6 +1689,7 @@ let talkPage = (
           waiting: page.waiting,
           current: page.current,
           app: page.app?.slug,
+          here: page.here,
         }),
         h(
           'div',
@@ -1692,7 +1720,7 @@ let talkPage = (
       ),
     ]) + (page.script ?? ''),
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
-    'Talk_Page',
+    beside.collapsed ? 'Talk_Page Talk_Page-rail' : 'Talk_Page',
     installable(space),
   )
 
@@ -1801,6 +1829,7 @@ export let chatPage = async (
     waiting: news.waiting,
     current: [open, talked.task],
     kind: fresh ? 'Talk_Main-new' : '',
+    here,
     skip: fresh || talked.title
       ? ['#ask', 'Skip to the message box']
       : ['#content', 'Skip to content'],
@@ -1883,6 +1912,7 @@ export let updatesPage = async (
     status: 200,
     waiting: news.updates.filter((u) => u.needs).length,
     current: ['updates'],
+    here: managePath('updates', space.slug),
     skip: ['#content', 'Skip to content'],
     main: h(
       'div',

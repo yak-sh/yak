@@ -202,6 +202,65 @@ test('the name is the person’s, saved on their Profile', async () => {
   assertStringIncludes(confirmed, 'value="Dana"')
 })
 
+// The side collapses to a rail of its icons (T-151458): the choice is the
+// person's, kept on their row, so every page of theirs draws it, the
+// settings' and the chat's alike; each icon keeps its name as its title and
+// its words.
+test('the side collapses to its icons on every page, and opens again', async () => {
+  let fold = (sidebar: string, back: string, accept = 'text/html') =>
+    k.at('yaks.app', profile, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        cookie: them.cookie,
+        origin: 'https://yaks.app',
+        accept,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ sidebar, back }),
+    })
+  let drawn = async (path: string) =>
+    parseHTML(await (await get(path)).text()).document
+  let people = managePath('people', slug)
+  let folded = await fold('collapsed', people)
+  assertEquals(folded.status, 303)
+  assertEquals(folded.headers.get('location'), to(people))
+  for (
+    let [path, rail] of [
+      [people, 'Desk-rail'],
+      [profile, 'Desk-rail'],
+      [home, 'Talk_Page-rail'],
+    ]
+  ) {
+    let page = await drawn(path)
+    assert(page.body.classList.contains(rail), path)
+    let links = [...page.querySelectorAll('#menu .SideNav_Link')]
+    assert(links.length > 3, path)
+    for (let a of links) {
+      let label = a.querySelector('.SideNav_Label')?.textContent
+      assert(a.parentElement!.classList.contains('SideNav-rail'), label)
+      assert(a.querySelector('.Icon, img'), `${label} has an icon`)
+      assertEquals(a.getAttribute('title'), label)
+    }
+    let button = page.querySelector('#menu .Desk_Folder')!
+    assertEquals(button.getAttribute('aria-expanded'), 'false')
+    assertEquals(button.getAttribute('aria-label'), 'Expand the sidebar')
+  }
+  // As the page's script sends it: kept, and nothing more drawn.
+  let opened = await fold('open', people, '*/*')
+  assertEquals(opened.status, 204)
+  let page = await drawn(people)
+  assert(!page.body.classList.contains('Desk-rail'))
+  assertEquals(page.querySelector('#menu .SideNav-rail'), null)
+  // A form never sends the person off these pages.
+  for (let back of ['https://elsewhere.test/manage', '/help']) {
+    assertEquals(
+      (await fold('open', back)).headers.get('location'),
+      to(profile),
+    )
+  }
+})
+
 // The space's Settings: its address and homepage, its name, and the way to
 // delete it; none of it the person's own name.
 test('a space’s Settings save its address and its name', async () => {
