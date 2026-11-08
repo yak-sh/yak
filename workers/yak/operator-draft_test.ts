@@ -220,7 +220,9 @@ let load = async (
     'redraw',
     'rowsOf',
     'asideHtml',
+    'glanceHtml',
     'helperHtml',
+    'ordered',
     'lasted',
     'turnHtml',
     'voice',
@@ -240,7 +242,9 @@ let load = async (
     redraw,
     talk.rowsOf,
     talk.asideHtml,
+    talk.glanceHtml,
     talk.helperHtml,
+    talk.ordered,
     talk.lasted,
     talk.turnHtml,
     (o: Parameters<typeof voice>[0]) =>
@@ -317,6 +321,11 @@ let load = async (
       sockets[0].onmessage!({ data: JSON.stringify(frame) }),
     press: (button: Element) =>
       button.dispatchEvent(new Event('click', { bubbles: true })),
+    // A key pressed on the page.
+    key: (key: string) =>
+      document.dispatchEvent(
+        Object.assign(new Event('keydown', { bubbles: true }), { key }),
+      ),
     // Whether the page has heard the store's drafts.
     read: () => reads > 0,
     // Once the page has heard the store's drafts.
@@ -835,6 +844,96 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
     theirs.document.querySelector(`${row} a`)?.getAttribute('href'),
     link,
   )
+})
+
+// On a phone, or wherever the margin has no room, the aside is a summary at
+// the bar's right end: a dot for the turn and each helper, how many more past
+// four, and the whole list under the bar while it is open.
+test('the aside’s summary in the bar shows a dot for each, “+N” past four, and opens to the list', async () => {
+  let store = operatorStore(p.states.get(`builder ${eid}`)!.storage)
+  let { g } = store
+  let { session } = await openedOf(store, park)
+  let parent = session!.entity.eid
+  let line = (session: string, b: object) => ({
+    entity: { eid: crypto.randomUUID() },
+    entry: { session },
+    ...b,
+  })
+  let helpers = Array.from({ length: 5 }, () => crypto.randomUUID())
+  let ends = [
+    { output: {}, content: { body: 'Imported.' } },
+    { exception: {}, content: { body: 'The sandbox stopped.' } },
+  ]
+  for (let [i, helper] of helpers.entries()) {
+    let call = crypto.randomUUID()
+    await g.apply([
+      line(parent, {
+        entity: { eid: call },
+        call: { to: crypto.randomUUID(), args: {} },
+      }),
+      { entity: { eid: helper }, session: {}, spawned: { parent, call } },
+      line(helper, { content: { body: `Helper ${i}` }, using: {} }),
+      ...ends[i] ? [line(helper, ends[i])] : [],
+    ], { trusted: true })
+  }
+  let page = await load(storage(), false, park)
+  let { document } = page
+  let glance = () =>
+    document.querySelector('.Talk_Bar [data-aside] [data-glance]')!
+  let aside = document.querySelector('[data-aside]')!
+  let dots = () =>
+    [...glance().querySelectorAll('.Dot')].map((d) => d.className)
+  let seen = () => ({
+    open: aside.hasAttribute('data-open'),
+    expanded: glance().getAttribute('aria-expanded'),
+  })
+  // Each the list draws, the turn under way among them.
+  let listed = document.querySelectorAll('[data-helping] > *').length +
+    document.querySelectorAll('[data-turn] time').length
+  let first = {
+    dots: dots(),
+    more: glance().textContent,
+    hidden: aside.hasAttribute('hidden'),
+  }
+  page.press(glance())
+  let pressed = seen()
+  page.press(glance())
+  let again = seen()
+  page.press(glance())
+  page.key('Escape')
+  let escaped = seen()
+  page.press(glance())
+  page.press(document.querySelector('[data-conversation]')!)
+  let outside = seen()
+  page.press(glance())
+  // A helper's step lands while the list is open: its dot changes, and the
+  // list stays open.
+  let at = new Date().toISOString()
+  page.hear({
+    operator: {
+      task: document.querySelector('[data-task]')?.getAttribute('data-task'),
+      helping: {
+        session: helpers[2],
+        title: 'Helper 2',
+        standing: 'failed',
+        step: 'It stopped.',
+        since: at,
+        until: at,
+      },
+    },
+  })
+  let heard = { ...seen(), label: glance().getAttribute('aria-label') }
+  page.leave()
+  assertEquals(first.hidden, false)
+  assertEquals(first.dots.length, 4, 'four dots, then how many more')
+  assertEquals(listed >= 1 + helpers.length, true, 'the turn and each helper')
+  assertEquals(first.more, `+${listed - 4}`)
+  assertEquals(pressed, { open: true, expanded: 'true' })
+  assertEquals(again, { open: false, expanded: 'false' })
+  assertEquals(escaped, { open: false, expanded: 'false' })
+  assertEquals(outside, { open: false, expanded: 'false' })
+  assertEquals(heard.open, true)
+  assertStringIncludes(heard.label!, '2 failed')
 })
 
 test('a page reads its draft only as it opens and as its socket opens, never on a timer', async () => {

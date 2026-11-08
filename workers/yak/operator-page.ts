@@ -19,7 +19,7 @@ import { reachOf } from './operator-reach.ts'
 import { builderOf, carried, operatorDoor, seated } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
-import { esc, type Picked, shell } from './pages.ts'
+import { esc, type Picked, script, shell } from './pages.ts'
 import { choice as spaceChoice } from './desk-pages.ts'
 import { spaceHost, url } from './host.ts'
 import {
@@ -1644,6 +1644,8 @@ let talkPage = (
     skip: [string, string]
     script?: string
     app?: Making
+    // what it is doing now, at the bar's right end (operator-aside.ts)
+    aside?: Node
   },
 ) =>
   shell(
@@ -1682,6 +1684,7 @@ let talkPage = (
               h('p', { class: 'Talk_Who' }, whoseOf(space)),
             ),
             page.app ? showing(page.app) : null,
+            page.aside,
           ),
           page.main,
         ),
@@ -1806,9 +1809,6 @@ export let chatPage = async (
       // `talk`), and what needs the person by Updates (updates.ts).
       newcomer ? keepCard(here) : null,
       talked.html ? column(talked.html) : column('', greeting),
-      // What it is doing now and the helpers it set going, in the margin
-      // (operator-aside.ts).
-      talked.aside ? h(Aside, { aside: talked.aside, now: Date.now() }) : null,
       landing
         ? h(
           'div',
@@ -1845,7 +1845,13 @@ export let chatPage = async (
         )
         : null,
     ],
+    // What it is doing now and the helpers it set going, in the bar
+    // (operator-aside.ts).
+    aside: talked.aside
+      ? h(Aside, { aside: talked.aside, now: Date.now() })
+      : undefined,
     script: chatScript(
+      talked.aside ?? { turn: null, helpers: [] },
       at,
       who,
       space,
@@ -1983,6 +1989,7 @@ let composer = (
 // aloud said to a person who talked. `paid` is whether the platform's
 // speech is on, for a browser that has none of its own.
 let chatScript = (
+  now: Asided,
   at: string,
   who: Who,
   space: Space,
@@ -1996,7 +2003,7 @@ let chatScript = (
   `<script type="module">
 import { browserDrafts } from '/_draft.js'
 import { redraw } from '/redraw.js'
-import { asideHtml, helperHtml, lasted, rowsOf, turnHtml } from '/_talk.js'
+import { asideHtml, glanceHtml, helperHtml, lasted, ordered, rowsOf, turnHtml } from '/_talk.js'
 import { voice } from '/voice.js'
 import { when } from '/when.js'
 let open = ${JSON.stringify(open)}
@@ -2035,7 +2042,8 @@ let put = (drawn) => {
     page.classList.add('Talk-app')
     page.append(next)
     made.innerHTML = drawn.show
-    document.querySelector('.Talk_Bar').append(made.content.firstElementChild)
+    let bar = document.querySelector('.Talk_Bar')
+    bar.insertBefore(made.content.firstElementChild, bar.querySelector('[data-aside]'))
     return
   }
   if (was.dataset.app != next.dataset.app) return
@@ -2142,28 +2150,44 @@ let said = (e) => { status.textContent = e.message }
 let speech = form && voice({ button: form.querySelector('[data-voice]'), form, say: form.elements.say, at: '${at}', paid: ${paid}, said })
 let thread = () => box.querySelector('[data-task]')
 let working = () => !!box.querySelector('[data-pending]')
-// The aside in the margin (operator-aside.ts): the turn under way and the
-// helpers, each put in place as a frame tells it, shown while either is
-// there, and how long each has lasted kept current every second.
+// The aside in the bar (operator-aside.ts): the turn under way and the
+// helpers (\`happening\`), each put in place as a frame tells it, shown while either
+// is there, and how long each has lasted kept current every second. Where
+// the margin has no room for it, its summary's dots are drawn again with
+// each, and a press on it shows the whole list under the bar
+// (\`[data-open]\`) until pressed again, pressed outside it or Escape.
+let happening = ${script(now)}
 let aside = () => document.querySelector('[data-aside]')
 let drawn = (html) => {
   let made = document.createElement('template')
   made.innerHTML = html
   return made.content.firstElementChild
 }
+let unfolded = () => aside()?.hasAttribute('data-open') ?? false
 let shown = () => {
   let a = aside()
   if (!a) return
   let helping = !!a.querySelector('[data-helping]').children.length
   a.querySelector('[data-helpers]').hidden = !helping
   a.hidden = !helping && !a.querySelector('[data-turn] time')
+  let glance = a.querySelector('[data-glance]'), next = drawn(glanceHtml(happening, unfolded()))
+  glance.innerHTML = next.innerHTML
+  for (let name of ['aria-label', 'aria-expanded']) glance.setAttribute(name, next.getAttribute(name))
+}
+let unfold = (open) => {
+  let a = aside()
+  if (!a) return
+  a.toggleAttribute('data-open', open)
+  shown()
 }
 let turning = (turn) => {
+  happening.turn = turn ?? null
   let at = aside()?.querySelector('[data-turn]')
-  if (at) at.replaceWith(drawn(turnHtml(turn ?? null)))
+  if (at) at.replaceWith(drawn(turnHtml(happening.turn)))
   shown()
 }
 let helped = (helper) => {
+  happening.helpers = ordered([helper, ...happening.helpers.filter((h) => h.session != helper.session)])
   let list = aside()?.querySelector('[data-helping]')
   if (!list) return
   let row = drawn(helperHtml(helper))
@@ -2172,6 +2196,17 @@ let helped = (helper) => {
   else list.prepend(row)
   shown()
 }
+document.addEventListener('click', (e) => {
+  let a = aside()
+  if (!a) return
+  if (e.target.closest?.('[data-glance]')) return void unfold(!unfolded())
+  if (unfolded() && !a.contains(e.target)) unfold(false)
+})
+document.addEventListener('keydown', (e) => {
+  if (e.key != 'Escape' || !unfolded()) return
+  unfold(false)
+  aside().querySelector('[data-glance]').focus()
+})
 let lasting = () => {
   for (let t of document.querySelectorAll('[data-since]')) t.textContent = lasted(t.dataset.since, t.dataset.until)
 }
@@ -2247,7 +2282,7 @@ let read = async () => {
       standing = got.standing
       let was = near()
       if (got.html) redraw(box, got.html), redrawn()
-      if (got.aside && aside()) aside().replaceWith(drawn(asideHtml(got.aside))), shown()
+      if (got.aside && aside()) happening = got.aside, aside().replaceWith(drawn(asideHtml(happening, unfolded()))), shown()
       if (got.title) heading.textContent = got.title
       if (follows && !canvas() && got.making && (follows == 'worked' || got.started)) remake(got.making)
       follow(was)

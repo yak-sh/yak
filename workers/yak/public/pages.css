@@ -1417,26 +1417,48 @@
     display: none;
   }
   /* What the conversation is doing now and the helpers it set going
-     (operator-aside.ts): at the reading width over the box, and in the
-     margin to the right of the conversation, held in view as it scrolls,
-     where the page is wide enough. */
-  .Talk_Main {
-    position: relative;
-  }
+     (operator-aside.ts), in the bar: a summary at its right end, a dot for
+     each and how many more, that shows the whole list under the bar while
+     it is open; and where the page is wide enough, that list in the margin
+     to the right of the conversation, held in view as it scrolls. */
   .Talk_Aside {
-    width: 100%;
-    max-width: 46rem;
-    margin: 0 auto;
-    padding-inline: 1.25rem;
+    flex: none;
+    margin-left: auto;
   }
   .Talk_Aside[hidden],
   .Talk_Aside [hidden] {
     display: none;
   }
+  .Talk_Glance {
+    gap: .3rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .Talk_Glance .Dot {
+    width: .55rem;
+    height: .55rem;
+  }
+  .Talk_More {
+    color: var(--muted);
+    font-size: var(--fine);
+    font-weight: 700;
+  }
   .Talk_AsideIn {
-    display: grid;
+    display: none;
+    position: absolute;
+    top: calc(100% + .5rem);
+    right: .75rem;
     gap: .75rem;
-    padding-bottom: .75rem;
+    width: min(22rem, calc(100cqw - 1.5rem));
+    max-height: calc(100dvh - 6rem);
+    overflow-y: auto;
+  }
+  .Talk_Aside[data-open] .Talk_AsideIn {
+    display: grid;
+    padding: .5rem;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    box-shadow: 0 .5rem 1.5rem color-mix(in srgb, var(--text) 12%, transparent);
   }
   .Talk_Turn {
     margin: 0;
@@ -1445,18 +1467,19 @@
     font-variant-numeric: tabular-nums;
   }
   @container talk (min-width: 76rem) {
-    .Talk_Aside {
-      position: absolute;
-      top: 0;
-      right: 0;
-      bottom: 0;
-      width: min(22rem, calc((100cqw - 46rem) / 2));
-      max-width: none;
-      padding: 4.5rem 1.25rem 1.25rem 0;
+    .Talk_Glance {
+      display: none;
     }
-    .Talk_AsideIn {
-      position: sticky;
-      top: 4.5rem;
+    .Talk_AsideIn,
+    .Talk_Aside[data-open] .Talk_AsideIn {
+      display: grid;
+      top: calc(100% + .75rem);
+      right: 1.25rem;
+      width: calc(min(22rem, (100cqw - 46rem) / 2) - 1.25rem);
+      padding: 0;
+      background: none;
+      border: 0;
+      box-shadow: none;
     }
   }
   /* Updates from the Operator (updates.ts): a card for each, what needs the
@@ -2029,6 +2052,9 @@
     .Talk-app .Talk_Show {
       display: inline-flex;
       margin-left: auto;
+    }
+    .Talk-app .Talk_Show + .Talk_Aside {
+      margin-left: 0;
     }
     .Talk_App {
       display: none;

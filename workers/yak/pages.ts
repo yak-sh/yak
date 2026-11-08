@@ -155,8 +155,9 @@ export let labeled = (
     hint ? h(Form.Hint, null, hint) : null,
   )
 
-// A value as text a script can hold: JSON, with nothing that could close it.
-let script = (value: unknown) =>
+/** A value as text a script can hold: JSON, with nothing that could close
+ * it. */
+export let script = (value: unknown) =>
   JSON.stringify(value).replaceAll('<', '\\u003c')
 
 // The script that moves an open page onto a newer deploy (public/deploy.js),
