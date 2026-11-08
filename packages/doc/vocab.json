@@ -20,6 +20,7 @@
           "type": "string",
           "store": "blob",
           "search": true,
+          "contains": true,
           "description": "the prose, as markdown — content-addressed when @yaks/blob is composed in, plain text otherwise"
         }
       }

@@ -467,12 +467,13 @@ let owned = (ctx: Ctx, comp: string, where?: string): Cond => {
       params: [],
     })
   }
-  // A presence spine, known outer identities or a disjunction's candidates
-  // already supply the owners. Probe each owner's key instead of building its
-  // entire owning set first: a page's `!references` beside its few links read
-  // all 36,600 `references` rows to answer for three.
-  return ctx.correlated || ctx.bounded || ctx.present || ctx.candidates ||
-      ctx.few || ctx.half == 'numbered'
+  // A presence spine, an ordered walk, known outer identities or a
+  // disjunction's candidates already supply the owners. Probe each owner's
+  // key instead of building its entire owning set first: a page's
+  // `!references` beside its few links read all 36,600 `references` rows to
+  // answer for three.
+  return ctx.correlated || ctx.bounded || ctx.present || ctx.walk ||
+      ctx.candidates || ctx.few || ctx.half == 'numbered'
     ? cond({
       sql: `exists (select 1 from ${ctx.d.table(comp)} where ${
         ctx.d.ownerKey(comp)
@@ -929,8 +930,9 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   // narrowed and correlated probes use an owner predicate or retain the keyed
   // expression; they never build a global candidate set for a few owners.
   let selected = ctx.derived[`${hop.comp}.${hop.prop}`]
-  let point = !!(ctx.bounded || ctx.narrowed || ctx.correlated || ctx.owner) ||
+  let keyed = !!(ctx.bounded || ctx.correlated || ctx.owner) ||
     !!ctx.few && ctx.few != p
+  let point = keyed || ctx.narrowed
   let operands = op == '' ? literals(p.value) : undefined
   if ((point ? selected?.test : selected?.select) && operands?.length) {
     // Use the same typed equality lowering as the scalar expression.
@@ -994,7 +996,9 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   // theirs: a needle nothing holds read the box's 2.2 GB of transcripts in
   // 5.6 s. The test still reads each, so the index only narrows, and each
   // owner's component is probed by its key, never read whole beside them.
-  let few = point ? undefined : gram(ctx, p)
+  // Another stored filter can still admit the whole history (a date bound
+  // among them). Only known owners skip the substring index's candidates.
+  let few = keyed ? undefined : gram(ctx, p)
   if (few) {
     return and(
       among(raw(ctx.d.ownerKey('entity')), few),
@@ -1654,6 +1658,20 @@ let holding = (where: Cond, known: Cond): Cond =>
     ? and(...where.parts.map((p) => holding(p, known)))
     : where
 
+let conjunctsOf = (c: Cond): Cond[] =>
+  c.t == 'op' && c.op == 'and' ? c.parts.flatMap(conjunctsOf) : [c]
+
+// A compound's output names come from its first arm, as a SELECT's do from
+// its columns. Substring candidates unite head, tail and still-owed texts.
+let column = (q: Query): Cond | undefined =>
+  q.t == 'each'
+    ? col('value')
+    : q.t == 'select'
+    ? q.cols?.[0]
+    : q.t == 'compound' && q.parts.length
+    ? column(q.parts[0])
+    : undefined
+
 // Extensions return owner selections as AST membership tests. Driving from
 // those selections keeps a sparse FTS/vector hit list from scanning the spine
 // when statistics still describe a small store. A list of values is a finite
@@ -1672,13 +1690,10 @@ let selection = (ctx: Ctx, test: Cond): Query | undefined => {
     ) return
     return selection(ctx, { ...test, set: each(list) })
   }
-  if (
-    test.t == 'in' && !Array.isArray(test.set) &&
-    (test.set.t == 'select' || test.set.t == 'each')
-  ) {
+  if (test.t == 'in' && !Array.isArray(test.set)) {
     let set = test.set
     if (render(test.e).sql != ctx.d.ownerKey('entity')) return
-    let first = set.t == 'each' ? col('value') : set.cols?.[0]
+    let first = column(set)
     let name = first?.t == 'as' || first?.t == 'col' ? first.name : undefined
     if (!name) return
     return select({
@@ -3106,10 +3121,7 @@ let indexedRelation = (
     (!root || root.pred && ['<', '<=', '>', '>='].includes(opOf(root.pred))) &&
     !ctx.candidates && !ctx.correlated && s.where
   ) {
-    let tests = s.where.t == 'op' && s.where.op == 'and'
-      ? s.where.parts
-      : [s.where]
-    let selected = tests.flatMap((test) => {
+    let selected = conjunctsOf(s.where).flatMap((test) => {
       let q = selection(ctx, test)
       return q ? [{ q, test }] : []
     })
@@ -3891,8 +3903,9 @@ let halved = (ast: And, ctx: Ctx): Frag | undefined => {
 // only each run of equal values by the rest and stops at the page; the rows
 // without one, which sort first ascending and last descending, are read only
 // where the other half cannot fill the page. At most twice the page is then
-// put in order. A filter an index seeks, or a needle few rows hold, already
-// bounds what is sorted.
+// put in order. A filter another index seeks, or a needle few rows hold,
+// already bounds what is sorted. A bound on the ordered property instead
+// narrows the same walk, which still stops at the page.
 let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
   let limit = find<Limit>(ast.clauses, 'limit')
   let order = find<Order>(ast.clauses, 'order')
@@ -3928,7 +3941,9 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
   let filters = ast.clauses.filter((c) => !directive(c))
   if (
     filters.some((c) =>
-      c.kind == 'pred' && !c.not && (indexable(ctx, c) || !!gram(ctx, c))
+      c.kind == 'pred' && !c.not &&
+      (indexable(ctx, c) && c.path.join('.') != path.join('.') ||
+        !!gram(ctx, c))
     )
   ) return
   let page = (
@@ -4017,6 +4032,15 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
       }),
     }))
   }
+  // A test requiring the ordered value excludes nulls already. One index
+  // walk answers it, including empty text where that test admits it; there
+  // is no missing-value half to scan before an ascending page.
+  if (
+    flattened(filters).some((c) =>
+      c.kind == 'pred' && !c.not && !c.where &&
+      c.path.join('.') == path.join('.') && needs(opOf(c), c.value)
+    )
+  ) return render(page({ walk: { comp, index } }, [], limit.n))
   let holding: Pred = { kind: 'pred', path, op: '!', value: null }
   // Blank, so it holds an empty text too, which the holding half may also read.
   let lacking: Pred = {

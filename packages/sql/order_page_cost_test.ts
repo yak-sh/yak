@@ -119,6 +119,30 @@ let pages: [string, string, string[]][] = [
     '.entry .content.body~=common ?created .order=-created.at .limit=3',
     ['row-3998', 'row-3999', 'row-3996'],
   ],
+  [
+    'newest first within a time range',
+    '.entry .content.body~=common .created.at>2026-01-01T00:00:00Z .order=-created.at .limit=3',
+    ['row-3998', 'row-3999', 'row-3996'],
+  ],
+  [
+    'oldest first above a bound',
+    `.entry .content.body~=common .created.at>${
+      at(3000)
+    } .order=created.at .limit=3`,
+    ['row-3002', 'row-3003', 'row-3004'],
+  ],
+  [
+    'newest first below a bound',
+    `.entry .content.body~=common .created.at<${
+      at(3000)
+    } .order=-created.at .limit=3`,
+    ['row-2998', 'row-2999', 'row-2996'],
+  ],
+  [
+    'an empty time range',
+    '.entry .content.body~=common .created.at>2027-01-01 .order=-created.at .limit=3',
+    [],
+  ],
   ['without a value last', '.comment .order=-created.at .limit=3', [
     'row-50',
     'row-3000',
@@ -166,6 +190,14 @@ test('a page in an indexed order stops at the page', () => {
     let line of [
       '.entry ?created .order=-created.at .limit=3',
       '.entry .content.body~=common .order=-created.at .limit=3',
+      '.entry .content.body~=common .created.at>2026-01-01T00:00:00Z .order=-created.at .limit=3',
+      `.entry .content.body~=common .created.at>${
+        at(3000)
+      } .order=created.at .limit=3`,
+      `.entry .content.body~=common .created.at<${
+        at(3000)
+      } .order=-created.at .limit=3`,
+      '.entry .content.body~=common .created.at>2027-01-01 .order=-created.at .limit=3',
       '.content.body~=common .order=-created.at .limit=3',
       '.entry|.comment .order=-created.at .limit=3',
       '!comment .order=-created.at .limit=3',
@@ -204,6 +236,11 @@ let counted: [string, string, BindOpts][] = [
     '.comment !link .order=created.at .limit=3',
     few({ comment: 2 }),
   ],
+  [
+    'a time range',
+    '.comment !link .created.at>2025-01-01 .order=-created.at .limit=3',
+    few({ comment: 2 }),
+  ],
 ]
 for (let [name, line, opts] of counted) {
   test(`a page of few owners: ${name}`, () =>
@@ -214,9 +251,11 @@ for (let [name, line, opts] of counted) {
 // reads every moment to learn it, 188,483 VM steps, and the census sends the
 // page to the comments.
 test('a page of few owners reads them, not the index', () => {
-  let { steps } = read(
-    '.comment !link .order=-created.at .limit=3',
-    few({ comment: 2 }),
-  )
-  assert(steps < 1_000, `${steps} VM instructions`)
+  for (let bound of ['', '.created.at>2025-01-01']) {
+    let { steps } = read(
+      `.comment !link ${bound} .order=-created.at .limit=3`,
+      few({ comment: 2 }),
+    )
+    assert(steps < 1_000, `${steps} VM instructions`)
+  }
 })
