@@ -103,6 +103,13 @@ deployed. `yak admin rollback [version]` is for a broken build path and refuses
 to cross a data migration boundary. A Durable Object already migrated keeps its
 data, even when older code is deployed.
 
+A busy Durable Object takes new code up to 300 seconds after its version goes
+live: Cloudflare defers an active object's code update until it hibernates or
+`max_delay` (300 s by default) passes. A Builder working an Operator run stays
+on the old version for those minutes while stateless requests serve the new one.
+To see a fix live in an object, compare the `version` tag on what it reports
+with `admin_deploys`, and look again once the 300 seconds have passed.
+
 ## Workers Builds
 
 A push to `main` deploys, through Cloudflare Workers Builds — not through a
