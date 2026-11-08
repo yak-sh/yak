@@ -89,7 +89,7 @@ test('a store keyed by entity before the rename is healed, rows and all', () => 
   for (let stmt of schema()) db.query(stmt)
   assert(vectorOf(db, 'e-1', 'm'))
   assertEquals(due(db, 10), [{ owner: 2, n: 3 }])
-  put(db, 2, 'm', 'new', vec)
+  put(db, { owner: 2, entity: 'e-2', text: 'new' }, 'm', vec)
   assertEquals(owners(db, DIRTY), [1, 2])
   rekey(db) // healed once, it has nothing left to do
   assertEquals(owners(db, TABLE), [1, 2])

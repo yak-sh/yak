@@ -221,26 +221,39 @@ export let sources = (
   return assemble(rows.sort((a, b) => a.owner - b.owner || a.ord - b.ord))
 }
 
-/** Store one entity's vector, replacing whatever it had. */
+/**
+ * Store a source's vector, replacing whatever its owner had, and say whether
+ * it did. The vector was made from text read before the model was asked, and
+ * anything may run while it answers: the identity may be gone by then (the
+ * write that made it rolled back, the store was emptied) or its integer id
+ * may name another entity (an emptied store planted again). So the row is
+ * written only while the owner's id still names the source's entity.
+ */
 export let put = (
   db: Statements,
-  owner: number,
+  source: Pick<Source, 'owner' | 'entity' | 'text'>,
   model: string,
-  text: string,
   vec: Float32Array,
-): void => {
+): boolean => {
   let fresh = (k: string) => col(k, 'excluded')
   let stored = unit(vec)
-  db.query({
+  let wrote = db.query({
     t: 'insert',
     into: TABLE,
     cols: ['owner', 'model', 'hash', 'vec'],
-    rows: [[
-      val(owner),
-      val(model),
-      val(hash(model, text)),
-      val(pack(stored)),
-    ]],
+    q: select({
+      cols: [
+        col('id'),
+        val(model),
+        val(hash(model, source.text)),
+        val(pack(stored)),
+      ],
+      from: table('entity'),
+      where: and(
+        eq(col('id'), val(source.owner)),
+        eq(col('eid'), val(source.entity)),
+      ),
+    }),
     upsert: [{
       on: [col('owner')],
       set: {
@@ -250,8 +263,10 @@ export let put = (
         at: fresh('at'),
       },
     }],
-  })
-  code(db, owner, stored)
+    returning: [col('owner')],
+  }).length > 0
+  if (wrote) code(db, source.owner, stored)
+  return wrote
 }
 
 // Delete one entity's vector: it has no text to make one from, or its text
@@ -354,6 +369,7 @@ export let sweep = async (
   })
   let got = await embedAll(embedder, todo.map(({ s }) => s.text))
   let refused: Swept['refused'] = []
+  let fresh = 0
   let shape = got.find((v) => v instanceof Float32Array)
   if (shape instanceof Float32Array) prepare(db, shape.length)
   todo.forEach(({ d, s }, i) => {
@@ -361,7 +377,7 @@ export let sweep = async (
     if (v instanceof Refused) {
       refused.push({ entity: s.entity, error: v })
       drop(db, d.owner)
-    } else put(db, d.owner, model, s.text, v)
+    } else if (put(db, s, model, v)) fresh++
     paid(db, d)
   })
   // What was queued and has nothing to embed: no text, deleted, or no longer
@@ -372,7 +388,7 @@ export let sweep = async (
     if (!by.has(d.owner)) drop(db, d.owner)
     paid(db, d)
   }
-  return { fresh: todo.length - refused.length, left: left(db), refused }
+  return { fresh, left: left(db), refused }
 }
 
 // A turn for the rest of the thread between batches of codes.

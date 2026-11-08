@@ -95,7 +95,7 @@ test('a changed or deleted vector loses its codes, and the sweep codes its own',
   vecs.set(1, vecs.get(2)!)
   equal(names(watched, 2), names(plain, 2))
   equal(heal(db), 1)
-  put(db, 3, model, 'three', vecs.get(3)!)
+  put(db, { owner: 3, entity: 'v-3', text: 'three' }, model, vecs.get(3)!)
   ok(complete(db))
   scans = []
   equal(names(watched, 3), names(plain, 3))

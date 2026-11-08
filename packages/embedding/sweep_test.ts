@@ -184,6 +184,43 @@ test('a text the model refuses is dropped; the batch it rode in is not', async (
   assert(!has(db, 'book-3'))
 })
 
+// A sweep whose model answers once `move` has changed the database under it:
+// what a store's drain meets when anything runs while it waits (bug 16d085e5).
+let meanwhile = async (move: (db: Db) => void) => {
+  let db = shelf(), asked = Promise.withResolvers<void>()
+  let slow: Embedder = {
+    model: embedder.model,
+    embed: (
+      t,
+    ) => (asked.resolve(), asked.promise.then(() => embedder.embed(t))),
+  }
+  let pass = sweep(db, text, slow)
+  await asked.promise
+  move(db)
+  return { db, got: await pass }
+}
+// Book 3's identity, gone: its row and its spine.
+let gone = (db: Db) => {
+  unrow(db, 'book', 3)
+  db.query({ t: 'delete', from: 'entity', where: by({ id: 3 }) })
+}
+
+test('an identity gone while the model answers is stored no vector', async () => {
+  let { db, got } = await meanwhile(gone)
+  // Its removal queued it again, for the next pass to settle.
+  assertEquals([got.fresh, got.left, count(db)], [3, 1, 3])
+  assertEquals(await swept(db), { fresh: 0, left: 0 })
+  assert(!has(db, 'book-3'))
+})
+
+test('an id another entity holds by the time the model answers is not given the vector', async () => {
+  let { db, got } = await meanwhile((db) => {
+    gone(db)
+    db.query(insert('entity', { id: 3, eid: 'book-9' }))
+  })
+  assertEquals([got.fresh, has(db, 'book-9')], [3, false])
+})
+
 test('a vocabulary with nothing to embed sweeps to nothing', async () => {
   let db = emptySweep
   assertEquals(await sweep(db, [], embedder), {
