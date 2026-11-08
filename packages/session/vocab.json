@@ -359,6 +359,7 @@
       "properties": {
         "session": {
           "type": "string",
+          "index": true,
           "ref": "session",
           "death": "cascade",
           "description": "the transcript it belongs to"

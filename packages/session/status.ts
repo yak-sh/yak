@@ -54,6 +54,7 @@ import {
   isNull,
   type Join,
   join,
+  le,
   left,
   lit,
   not,
@@ -114,6 +115,23 @@ let TAIL = 128
 let LATEST = '__latest'
 let ANCHOR = '__anchor'
 
+// The session index orders entries by identity, independently of sequence.
+// These bounds seek sparse marks; the join still checks their session when
+// other transcripts' entries lie between the two ends.
+let within = (owner: Expr, entry: Expr): Expr => {
+  let bound = (descending: boolean) =>
+    sub(select({
+      cols: [col('entity', 'extent')],
+      from: table('entry', 'extent'),
+      where: eq(col('session', 'extent'), owner),
+      order: [
+        descending ? desc(col('entity', 'extent')) : col('entity', 'extent'),
+      ],
+      limit: lit(1),
+    }))
+  return and(ge(entry, bound(false)), le(entry, bound(true)))
+}
+
 /**
  * The same rule as SQL, for @yaks/sqlite's derived-property registry
  * (`storage(driver, vocab, { derived: sessionDerived(vocab) })`), so
@@ -169,12 +187,12 @@ export let sessionStatus = {
       ['notice', 'content', 'lines'].every(declared)
         ? exists(select({
           cols: [lit(1)],
-          from: table('content', 'prose'),
+          from: table('lines', 'origin'),
           joins: [
-            join(
-              table('lines', 'origin'),
-              eq(col('entity', 'origin'), col('entity', 'prose')),
-            ),
+            {
+              ...cross(table('content', 'prose')),
+              on: eq(col('entity', 'origin'), col('entity', 'prose')),
+            },
           ],
           where: and(
             eq(col('entity', 'prose'), entry),
@@ -218,11 +236,9 @@ export let sessionStatus = {
     let ended = fn('coalesce', col('ended', 'candidate'), lit(false))
     // A stopped transcript must either be ended or contain a stop/control.
     // Historical controls are candidates, never an alternative status rule.
-    let tableOwners = (name: string) =>
-      select({ cols: [col('session')], from: table(name) })
     let controls = ['stop', 'notice'].filter(declared).map((name) =>
       select({
-        cols: [col('session', 'ce')],
+        cols: [col('session', 'ce'), col('seq', 'ce')],
         from: table(name, 'cm'),
         joins: [
           {
@@ -233,9 +249,10 @@ export let sessionStatus = {
         ...name == 'notice' ? { where: cancelled(col('entity', 'ce')) } : {},
       })
     )
-    let controlOwners = controls.length
-      ? unionAll(...controls)
-      : select({ cols: [lit(null)], where: lit(false) })
+    let controlOwners = controls.length ? unionAll(...controls) : select({
+      cols: [as(lit(null), 'session'), as(lit(null), 'seq')],
+      where: lit(false),
+    })
     // Whether a transcript's newest turn is at rest, read walking down from its
     // newest entry: the first entry holding work or an ask ends the walk. An ask
     // with nothing unread above it proves it, and so does reaching the start of
@@ -255,6 +272,33 @@ export let sessionStatus = {
       'stop',
       'interrupted',
     ].filter(declared)
+    let input = (entry: Expr) =>
+      and(
+        wears('content', entry),
+        ...inputKinds.map((name) => not(wears(name, entry))),
+      )
+    // A historical stop matters only until the next input. Find that input
+    // directly after the newest control, rather than working out the entire
+    // status of every transcript that ever stopped and later resumed.
+    let halted = exists(select({
+      cols: [lit(1)],
+      from: table('__status_controls', 'control'),
+      where: and(
+        eq(col('session', 'control'), owner),
+        or(
+          col('legacy', 'control'),
+          not(exists(select({
+            cols: [lit(1)],
+            from: table('entry', 'resumed'),
+            where: and(
+              eq(col('session', 'resumed'), owner),
+              gt(col('seq', 'resumed'), col('seq', 'control')),
+              input(col('entity', 'resumed')),
+            ),
+          }))),
+        ),
+      ),
+    }))
     let inflight = (entry: Expr) =>
       declared('attempt')
         ? exists(select({
@@ -278,12 +322,7 @@ export let sessionStatus = {
                 or(
                   wears('result', col('entity', 'gap')),
                   wears('tool_progress', col('entity', 'gap')),
-                  and(
-                    wears('content', col('entity', 'gap')),
-                    ...inputKinds.map((name) =>
-                      not(wears(name, col('entity', 'gap')))
-                    ),
-                  ),
+                  input(col('entity', 'gap')),
                 ),
                 'heard',
               ),
@@ -424,12 +463,16 @@ export let sessionStatus = {
     let waiting = !background ? lit(false) : few
       ? exists(select({
         cols: [lit(1)],
-        from: table('entry', 'pe'),
+        from: table('tool_async', 'p'),
         joins: [{
-          ...cross(table('tool_async', 'p')),
+          ...cross(table('entry', 'pe')),
           on: eq(col('entity', 'p'), col('entity', 'pe')),
         }],
-        where: and(eq(col('session', 'pe'), owner), unanswered('p')),
+        where: and(
+          within(owner, col('entity', 'p')),
+          eq(col('session', 'pe'), owner),
+          unanswered('p'),
+        ),
       }))
       : among(
         owner,
@@ -462,7 +505,7 @@ export let sessionStatus = {
       stopped
         ? or(
           wears('stop', newest),
-          among(owner, tableOwners('__status_controls')),
+          halted,
           and(ended, notNull(newest), not(atRest)),
         )
         : lit(false),
@@ -484,7 +527,15 @@ export let sessionStatus = {
           ? [{
             name: '__status_controls',
             materialized: true,
-            q: controlOwners,
+            q: select({
+              cols: [
+                col('session', 'controls'),
+                as(fn('max', col('seq', 'controls')), 'seq'),
+                as(fn('max', isNull(col('seq', 'controls'))), 'legacy'),
+              ],
+              from: from(controlOwners, 'controls'),
+              group: [col('session', 'controls')],
+            }),
           }]
           : [],
         ...background && !few
@@ -564,12 +615,12 @@ export let sessionStatus = {
       ['notice', 'content', 'lines'].every(declared)
         ? exists(select({
           cols: [lit(1)],
-          from: table('content', 'text'),
+          from: table('lines', 'origin'),
           joins: [
-            join(
-              table('lines', 'origin'),
-              eq(col('entity', 'origin'), col('entity', 'text')),
-            ),
+            {
+              ...cross(table('content', 'text')),
+              on: eq(col('entity', 'origin'), col('entity', 'text')),
+            },
           ],
           where: and(
             eq(col('entity', 'text'), col('entity', alias)),
@@ -624,6 +675,16 @@ export let sessionStatus = {
         col('entity', 'e'),
         col('seq', 'e'),
         as(e.worn('stop'), 'stop'),
+        as(
+          and(
+            e.worn('ask'),
+            not(e.worn('attempt')),
+            ...['exception', 'refusal', 'interrupted'].map((c) =>
+              not(e.worn(c))
+            ),
+          ),
+          'unfinished',
+        ),
         as(
           iff(
             e.worn('refusal'),
@@ -1312,8 +1373,8 @@ export let sessionStatus = {
         where: eq(col('entity', 's'), owner),
       }),
     )
-    // A transcript whose newest entry is a stop is stopped, whatever its
-    // turn: that reads neither its asks nor its turn.
+    // A newest stop, or an ended ask with no attempt or failure, is stopped
+    // whatever the earlier turn owes. Neither needs its history read.
     let said = (verdict: Select) =>
       fn(
         'coalesce',
@@ -1329,7 +1390,7 @@ export let sessionStatus = {
             iff(
               exists(select({
                 from: table(LATEST, 'l'),
-                where: col('stop', 'l'),
+                where: or(col('stop', 'l'), and(ended, col('unfinished', 'l'))),
               })),
               lit('stopped'),
               sub(select({ cols: [col('v', 'x')], from: from(verdict, 'x') })),
@@ -1419,6 +1480,24 @@ export let sessionDerived = (vocab: Vocab, reading: Derived = {}): Derived => {
             text,
             owner,
           )
+          if (
+            one &&
+            values.every((v) =>
+              (v.t == 'val' || v.t == 'lit') && UNFINISHED.includes(String(v.v))
+            )
+          ) {
+            // Ended sessions cannot match. Decline before creating even empty
+            // candidate CTEs for each historical owner on an ordered page.
+            return iff(
+              sub(select({
+                cols: [col('ended', 'ended')],
+                from: table('session', 'ended'),
+                where: eq(col('entity', 'ended'), owner),
+              })),
+              lit(false),
+              exists(one),
+            )
+          }
           return one && exists(one)
         }
         return among(

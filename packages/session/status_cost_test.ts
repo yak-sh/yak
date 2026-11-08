@@ -55,6 +55,7 @@ let cost = async (long: number, apart: number) => {
   let { driver, steps } = stepping()
   let s = storage(driver, vocab, { derived: sessionDerived(vocab) })
   s.install()
+  s.raise()
   let g = graph({ storage: s, vocab })
   let others = Array.from({ length: apart }, (_, n) => `t${n}`)
   await g.apply([
@@ -73,7 +74,16 @@ let cost = async (long: number, apart: number) => {
     equal((row.session as { status: string }).status, status)
     return steps() - before
   }
-  return [await read('chat', 'settled'), await read('new', 'running')]
+  let query = '.entity.eid=chat .session.status=running .fields=entity.eid'
+  await g.read(query)
+  let before = steps()
+  equal(await g.read(query), [])
+  let filtered = steps() - before
+  return [
+    await read('chat', 'settled'),
+    await read('new', 'running'),
+    filtered,
+  ]
 }
 
 test('reading a session costs its newest turn, not its transcript', async () => {
@@ -84,4 +94,63 @@ test('reading a session costs its newest turn, not its transcript', async () => 
 test("reading a session costs its newest turn, not the store's asks", async () => {
   let [, few] = await cost(1, 4), [, many] = await cost(1, 59)
   ok(many < few * 1.2, `${few} VM steps beside 5 asks, ${many} beside 60`)
+})
+
+test('filtering a session costs its newest turn, not its transcript', async () => {
+  let [, , few] = await cost(5, 0), [, , many] = await cost(60, 0)
+  ok(many < few * 1.2, `${few} VM steps at 5 turns, ${many} at 60`)
+})
+
+let history = async (size: number, ended = false) => {
+  let { driver, steps } = stepping()
+  let s = storage(driver, vocab, { derived: sessionDerived(vocab) })
+  s.install()
+  let g = graph({ storage: s, vocab })
+  await g.apply([
+    { entity: { eid: 'chat' }, session: { ended } },
+    {
+      entity: { eid: 'input' },
+      entry: { session: 'chat', seq: 1 },
+      content: { body: 'hello' },
+    },
+    { entity: { eid: 'stop' }, entry: { session: 'chat', seq: 2 }, stop: {} },
+    {
+      entity: { eid: 'resume' },
+      entry: { session: 'chat', seq: 3 },
+      content: { body: 'continue' },
+    },
+    ...Array.from({ length: size }, (_, i) => ({
+      entity: { eid: `output-${i}` },
+      entry: { session: 'chat', seq: i + 4 },
+      content: { body: 'prose' },
+      output: { source: 'chat' },
+    })),
+    ...ended
+      ? [{
+        entity: { eid: 'ask' },
+        entry: { session: 'chat', seq: size + 4 },
+        ask: {},
+      }]
+      : [],
+  ], { trusted: true })
+  let query = '.session.status=stopped .fields=entity.eid'
+  await g.read(query)
+  return async () => {
+    let before = steps()
+    equal((await g.read(query)).map((b) => b.entity.eid), ended ? ['chat'] : [])
+    return steps() - before
+  }
+}
+let brief = await history(10), long = await history(1000)
+let stoppedBrief = await history(10, true),
+  stoppedLong = await history(1000, true)
+
+test('a stopped filter skips resumed transcripts without reading their history', async () => {
+  let few = await brief(), many = await long()
+  ok(many < few * 1.2, `${few} VM steps at 10 outputs, ${many} at 1000`)
+})
+
+test('an ended unanswered ask stops without reading its history', async () => {
+  let few = await stoppedBrief(), many = await stoppedLong()
+  ok(many < few * 1.2, `${few} VM steps at 10 outputs, ${many} at 1000`)
 })

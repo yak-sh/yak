@@ -1133,6 +1133,17 @@ test('the SQL rule reads the ended mark as the rule over bundles does', () => {
     [[input(1)], 'stopped'],
     [[input(1), said(2, S)], 'settled'],
     [[input(1), entry(2, { exception: {}, content: { body: 'x' } })], 'failed'],
+    [[input(1), entry(2, { ask: { through: 'e1' } })], 'stopped'],
+    [[input(1), entry(2, { ask: { through: 'e1' }, attempt: {} })], 'settled'],
+    [[input(1), entry(2, { ask: { through: 'e1' }, exception: {} })], 'failed'],
+    [[
+      input(1),
+      entry(2, {
+        ask: { through: 'e1' },
+        interrupted: {},
+        failed: {},
+      }),
+    ], 'failed'],
   ]
   for (let [entries, status] of shapes) {
     let g = store()
