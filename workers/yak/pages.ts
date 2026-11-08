@@ -171,7 +171,9 @@ let deployed = (env: Host) => {
 }
 
 // The document every page here is, around the `<main>` it is handed as markup:
-// its head, and the scripts the parts in it call for.
+// its head, and the scripts the parts in it call for. `later` is markup the
+// end of the `<main>` waits on: everything before it is sent at once, and the
+// rest once it settles (`staged`).
 let documented = (
   env: Host,
   title: string,
@@ -180,9 +182,9 @@ let documented = (
   headers: Record<string, string> = {},
   layout = '',
   head = '',
-) =>
-  new Response(
-    `<!doctype html>
+  later?: Promise<string>,
+) => {
+  let open = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -190,34 +192,56 @@ let documented = (
 <meta name="color-scheme" content="light dark">
 <title>${title} · yaks.app</title>
 ${links(env, 'pages.css')}${
-      head.includes('rel="apple-touch-icon"')
-        ? ''
-        : `\n<link rel="apple-touch-icon" href="${
-          asset(env, 'apple-touch-icon.png')
-        }">`
-    }${head ? `\n${head}` : ''}
+    head.includes('rel="apple-touch-icon"')
+      ? ''
+      : `\n<link rel="apple-touch-icon" href="${
+        asset(env, 'apple-touch-icon.png')
+      }">`
+  }${head ? `\n${head}` : ''}
 </head>
-<body${layout ? ` class="${layout}"` : ''}><main>${main}</main>${
-      main.includes('data-chart')
-        ? `<script src="${asset(env, 'chart.js')}" defer></script>`
-        : ''
-    }${
-      main.includes('data-menu')
-        ? `<script src="${asset(env, 'menu.js')}" defer></script>`
-        : ''
-    }${
-      main.includes('data-idle')
-        ? `<script src="${asset(env, 'idle.js')}" defer></script>`
-        : ''
-    }<script src="${asset(env, 'drop.js')}" defer></script>${
-      deployed(env)
-    }</body>
-</html>`,
+<body${layout ? ` class="${layout}"` : ''}><main>${main}`
+  let close = `</main>${
+    main.includes('data-chart')
+      ? `<script src="${asset(env, 'chart.js')}" defer></script>`
+      : ''
+  }${
+    main.includes('data-menu')
+      ? `<script src="${asset(env, 'menu.js')}" defer></script>`
+      : ''
+  }${
+    main.includes('data-idle')
+      ? `<script src="${asset(env, 'idle.js')}" defer></script>`
+      : ''
+  }<script src="${asset(env, 'drop.js')}" defer></script>${deployed(env)}</body>
+</html>`
+  return new Response(
+    later
+      ? staged(open, later.then((said) => said + close, () => close))
+      : open + close,
     {
       status,
       headers: { 'content-type': 'text/html; charset=utf-8', ...headers },
     },
   )
+}
+
+// A body sent in two parts: `first` at once, `rest` once it settles. A reader
+// that went away meanwhile is owed nothing more.
+let staged = (first: string, rest: Promise<string>) => {
+  let bytes = new TextEncoder()
+  return new ReadableStream<Uint8Array>({
+    async start(body) {
+      body.enqueue(bytes.encode(first))
+      let last = await rest
+      try {
+        body.enqueue(bytes.encode(last))
+        body.close()
+      } catch {
+        // Cancelled: nobody is reading.
+      }
+    },
+  })
+}
 
 /** What a page says about itself: its title, the line under it where it
  * opens with the two, its status, the headers beside its content type (the
@@ -230,6 +254,10 @@ export type Said = {
   headers?: Record<string, string>
   layout?: string
   head?: string
+  /** what the page says once it knows: drawn after its parts when it
+   * settles, and everything before it shown meanwhile, so nothing a person
+   * can already read or press waits on it */
+  later?: Promise<Kids>
 }
 
 /** A page: what it says about itself, and its parts, rendered once. A page
@@ -246,6 +274,7 @@ export let page = (env: Host, at: Said, ...parts: Kids[]) =>
     at.headers,
     at.layout,
     at.head,
+    at.later?.then(markup),
   )
 
 /** The same page written as markup, for the pages that still are (admin.ts,

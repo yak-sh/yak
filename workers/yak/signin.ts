@@ -74,7 +74,6 @@ export type Signin = {
     code: string
     expires: string
     tries: number
-    unsent?: string
   }
 }
 
@@ -338,8 +337,8 @@ export let mint = async (
 }
 
 /** A code about to be asked for: its digits and when it dies, drawn before
- * the write that keeps it, so the card saying it was sent can name it
- * (`sealed`). */
+ * the write that keeps it, so the card saying it was sent answers without
+ * waiting on that write. */
 export type Ask = { code: string; expires: string }
 
 export let drawn = (now = Date.now()): Ask => ({
@@ -367,57 +366,6 @@ export let lodge = async (
     },
   }])
   return minted(applied).$code ?? null
-}
-
-/**
- * A code whose letter or text never left, said on its row (M-16612): why, as
- * its sender said it, for the person's next card to say (`unsentAt`). Only
- * on the row still standing as it was kept: one a sign-in buried meanwhile
- * stays buried (`$was`), and nothing is left to say.
- */
-export let unsent = async (
-  store: Meta,
-  eid: string,
-  ask: Ask,
-  why: string,
-) => {
-  try {
-    await apply(store, [{
-      entity: { eid },
-      signin: { unsent: why.slice(0, 300) },
-      $was: { signin: { expires: token(ask.expires) } },
-    }])
-  } catch (e) {
-    if (!(e instanceof Stale)) throw e
-  }
-}
-
-// What a card's seal is a mac of: the code it names, by when it dies. A
-// six-digit code is never this.
-let named = (expires: string) => `sent ${expires}`
-
-/** What a code's card carries to name the code it said was sent, so the next
- * card that browser asks for can say what became of its letter
- * (`unsentAt`), and nobody else can ask: a seal is the session secret's mac
- * of the address and the code's expiry. */
-export let sealed = async (secret: string, address: string, ask: Ask) =>
-  `${ask.expires} ${await mac(address, named(ask.expires), secret)}`
-
-/** Why the letter a card's seal names never left, or null: when it went,
- * when it is still going, when the address had had its letters and nothing
- * was kept, and for a seal that is not ours. */
-export let unsentAt = async (
-  store: Meta,
-  secret: string,
-  address: string,
-  seal: string,
-) => {
-  let [expires, sum] = seal.split(' ')
-  if (!expires || sum != await mac(address, named(expires), secret)) {
-    return null
-  }
-  let rows = await signins(store, line(address))
-  return rows.find((r) => r.signin.expires == expires)?.signin.unsent ?? null
 }
 
 // Spend a code: the person it signs in for any code still open on this

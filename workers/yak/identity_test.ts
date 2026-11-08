@@ -556,9 +556,7 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
     let cards: string[] = []
     for (let i = 0; i <= SENDS; i++) {
       let r = await form(k, '/login', { email: bombed })
-      // Each card's seal is its own (signin.ts `sealed`), and says nothing.
-      let text = (await r.text()).replace(/(name="sent" value=")[^"]*/g, '$1')
-      cards.push(`${r.status}\n${text}`)
+      cards.push(`${r.status}\n${await r.text()}`)
     }
     assertEquals(new Set(cards).size, 1, 'the refusal is the acceptance')
     // The log is the only witness that a letter went out, and it lags the
@@ -941,33 +939,25 @@ test('asking for a code waits on no store, and its letter still comes', async ()
 })
 
 // The card answers before its letter goes, so a letter that never leaves is
-// said on the next card that browser asks for, by the seal its card carries
-// (M-16612), and reported. Nobody without the seal hears of it.
-test('a letter that never leaves is said on the next card, and reported', async () => {
+// said at the card's own end, once known (M-16612), and reported. Nothing
+// above it waits: the card's code box comes before its letter has gone.
+test('a letter that never leaves is said on its own card, and reported', async () => {
   let k = await kernel()
   let before = k.reported.length
   let email = `${unique('unsent')}@refused.invalid`
   let card = await form(k, '/login', { email })
   equal(card.status, 200)
-  let seal = parseHTML(await card.text()).document
-    .querySelector('form[action="/login"] input[name="sent"]')
-    ?.getAttribute('value') ?? ''
-  ok(seal, 'the card carries a seal')
-  await k.deliveries()
-  let said = async (path: string, fields: Record<string, string>) =>
-    /never left: .*the destination address is not allowed/.test(
-      await (await form(k, path, { email, ...fields })).text(),
-    )
-  let guess = { code: '000000' }
+  let page = card.body!.pipeThrough(new TextDecoderStream()).getReader()
+  let first = (await page.read()).value!
+  let rest = ''
+  for (let part; !(part = await page.read()).done;) rest += part.value
+  let never = /never left: .*the destination address is not allowed/
   equal(
-    [
-      await said('/login/code', { ...guess, sent: seal }),
-      await said('/login/code', guess),
-      await said('/login/code', { ...guess, sent: `${seal}0` }),
-      await said('/login', { sent: seal }),
-    ],
-    [true, false, false, true],
+    [/name="code"/.test(first), never.test(first), never.test(rest)],
+    [true, false, true],
   )
+  let fine = await form(k, '/login', { email: `${unique('sent')}@yaks.app` })
+  ok(!/never left/.test(await fine.text()), 'a letter that left says nothing')
   await k.flushReports()
   ok(
     k.reported.slice(before).some((row) =>

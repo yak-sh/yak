@@ -190,15 +190,13 @@ import {
   mayText,
   type Person,
   personOf,
-  sealed,
   spend,
   stamped,
   texted,
-  unsent,
-  unsentAt,
   visitor,
 } from './signin.ts'
 import { nameOf } from './names.ts'
+import { system } from '@yaks/fp'
 import { textable } from './phones.ts'
 import { RETRY, source, within } from './rate.ts'
 import { type Caller, minted, sessionAt, signedOut } from './session.ts'
@@ -674,9 +672,11 @@ export let met = async (env: Env, email: string) => {
 //
 // One that never leaves is a break for us to read, and the person's to know
 // (M-16612): it is reported, unless a carrier's block (expected until the
-// texting campaign is approved), and said on the code's row (signin.ts
-// `unsent`), which the next card that browser asks for says. A write that
-// fails is reported, and leaves no row to say it on.
+// texting campaign is approved), and answered, why it never left, for the
+// card that said it was sent to say (signin-pages.ts `askCode`). A write that
+// fails is reported, and nothing was sent to say anything about. Answers
+// null for a letter that left, or one never sent because the address had had
+// its letters, which the card says nothing about.
 let send = async (
   env: Env,
   req: Request,
@@ -701,15 +701,15 @@ let send = async (
     q: o.q || undefined,
     back: o.back || undefined,
   }, apex(env))
-  let eid: string | null = null
+  let kept = false
   try {
-    eid = await lodge(meta(env), secret(env), address, ask, o.from)
-    if (!eid) return
+    kept = !!await lodge(meta(env), secret(env), address, ask, o.from)
+    if (!kept) return null
     step(env, 'code_sent', req, { who: address })
     if (text) {
       let { phoneOf } = await import('./phones.ts')
       await (await phoneOf(env)).send({ to: address, text: codeText(ask.code) })
-      return
+      return null
     }
     await mail(env)(
       codeLetter(
@@ -720,19 +720,17 @@ let send = async (
         env,
       ),
     )
+    return null
   } catch (e) {
     if (!(e instanceof Blocked)) fault(env, 'POST /login', e)
-    if (!eid) return
-    let why = e instanceof Error ? e.message : `${e}`
-    await unsent(meta(env), eid, ask, why)
-      .catch((e) => fault(env, 'POST /login (unsent)', e))
+    return kept ? (e instanceof Error ? e.message : `${e}`) : null
   }
 }
 
-// Why the letter a card's seal names never left (signin.ts `unsentAt`), or
-// null, for a card that carries none.
-let lastLetter = async (env: Env, address: string, seal: string) =>
-  seal ? await unsentAt(meta(env), secret(env), address, seal) : null
+// How long a code's card waits to say what became of its letter, which has
+// always gone or failed well within it: after it, the card ends saying
+// nothing.
+let LETTER = 10_000
 
 /**
  * Signing up by a letter whose domain vouched for its sender (inbox.ts,
@@ -922,9 +920,7 @@ let SAID = 4000
 
 /** A code attempt either signs its person in, answering who that is and
  * whether it is their first time, or returns the same closed sign-in card.
- * `newcomer` is who the browser is signed in as (signin.ts `guess`). The
- * card keeps the seal it came with, `sent`, and says what became of that
- * code's letter (`unsent`), read only when the guess did not open. */
+ * `newcomer` is who the browser is signed in as (signin.ts `guess`). */
 export let codeCheck = async (
   store: Meta,
   address: string,
@@ -933,14 +929,11 @@ export let codeCheck = async (
   back = '',
   env: Host = {},
   newcomer?: string,
-  letter: { sent?: string; unsent?: () => Promise<string | null> } = {},
 ): Promise<Arrived | Response> =>
   await guess(store, address, digest, { newcomer }) ?? askCode({
     address,
     q,
     back,
-    sent: letter.sent,
-    unsent: await letter.unsent?.(),
     why:
       'That code has expired or was mistyped. Type it again, or send a new one.',
     status: 400,
@@ -1360,22 +1353,21 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       ) {
         return signCard(env, { q, back, why: TOO_MANY, status: 429 })
       }
-      // The code is kept and sent behind the answer (`send`). A card asked
-      // for again says what became of the letter the last one said was sent
-      // (signin.ts `unsentAt`), the one read this answer waits on.
+      // The code is kept and sent behind the answer (`send`), and the card
+      // says at its end what became of the letter once it is known, so
+      // nothing waits on a store (T-150301). Apart from this answer's count:
+      // its trips are not this answer's.
       let ask = drawn()
-      // Apart from this answer's count: its trips are not this answer's.
-      background(apart(() => send(env, req, { address, ask, from, q, back })))
-      let [sent, failed] = await Promise.all([
-        sealed(secret(env), address, ask),
-        field('sent')
-          ? c.time('unsent', () => lastLetter(env, address, field('sent')))
-          : null,
-      ])
-      return timed(
-        askCode({ address, q, back, sent, unsent: failed }, env),
-        c,
-      )
+      let sending = apart(() => send(env, req, { address, ask, from, q, back }))
+      background(sending.then(() => {}))
+      let letter = new Promise<string | null>((done) => {
+        let stop = (env.CLOCK ?? system).after(LETTER, () => done(null))
+        sending.then((why) => {
+          stop()
+          done(why)
+        })
+      })
+      return timed(askCode({ address, q, back, letter }, env), c)
     })
   }
 
@@ -1400,10 +1392,6 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
           back,
           env,
           await browser(env, req) ?? undefined,
-          {
-            sent: field('sent'),
-            unsent: () => lastLetter(env, address, field('sent')),
-          },
         ))
       if (arrived instanceof Response) return timed(arrived, c)
       return timed(

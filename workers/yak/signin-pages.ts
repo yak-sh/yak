@@ -181,34 +181,41 @@ export let askEmail = (at: {
 // first step again, without typing it again. A number was texted, and the
 // card says so.
 //
-// `sent` is the seal naming the code this card said was sent (signin.ts
-// `sealed`), carried by both forms, so the card either one answers can say
-// what became of its letter: `unsent`, why it never left (M-16612).
+// `letter` is what became of the letter this card says was sent: why it
+// never left, or null (M-16612). The card is answered before its letter goes
+// (T-149702), so it is said at the card's end once known, everything above it
+// shown and pressable meanwhile (pages.ts `later`): nobody waits on it, and no
+// later card has to ask (T-150301).
 export let askCode = (at: {
   address: string
   q?: string | null
   back?: string | null
   why?: string
   status?: number
-  sent?: string
-  unsent?: string | null
+  letter?: Promise<string | null>
 }, env: Host = {}) => {
   let { address } = at
   let q = at.q ?? null, back = at.back ?? null
   let text = texted(address)
   let to = text ? shown(address) : address
-  let failed = at.unsent
-    ? `The ${text ? 'text' : 'letter'} with your last code to ${to} ` +
-      `never left: ${at.unsent.replace(/\.?$/, '.')} We have been told. `
-    : ''
+  let failed = (why: string | null) =>
+    why
+      ? h(
+        'p',
+        { role: 'alert' },
+        `The ${text ? 'text' : 'letter'} with your code to ${to} ` +
+          `never left: ${why.replace(/\.?$/, '.')} We have been told.`,
+      )
+      : null
   return page(
     env,
     {
       title: text ? 'Check your texts' : 'Check your email',
-      lead: failed + (at.why ??
+      lead: at.why ??
         `We ${text ? 'texted' : 'sent'} a six-digit code to ${to}. ` +
-          'It lasts ten minutes.'),
+          'It lasts ten minutes.',
       status: at.status ?? 200,
+      later: at.letter?.then(failed),
     },
     h(
       'form',
@@ -224,7 +231,6 @@ export let askCode = (at: {
           : 'Enter it to land on your own space.',
       ),
       held('address', address),
-      held('sent', at.sent),
       h(Field, {
         class: 'Code',
         name: 'code',
@@ -243,7 +249,6 @@ export let askCode = (at: {
       { class: 'Again', method: 'post', action: '/login' },
       carried(q, back),
       held('address', address),
-      held('sent', at.sent),
       h(Button, { type: 'submit' }, 'Send a new code'),
     ),
     home(env),
