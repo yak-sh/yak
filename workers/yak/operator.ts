@@ -867,6 +867,34 @@ export let operating = (
     options.price && from == provider
       ? Promise.resolve(options.price)
       : listed(model, from).then((info) => info?.price)
+  let catalogue = async <T>(
+    from: string,
+    read: () => T | Promise<T>,
+  ): Promise<T> => {
+    try {
+      return await read()
+    } catch (error) {
+      if (!(error instanceof ModelError)) throw error
+      throw refuse(
+        'unavailable',
+        `${from} model catalogue failed (${error.code}): ${error.message}`,
+      )
+    }
+  }
+  let unknown = async (model: string, from: string) => {
+    let all = await catalogue(from, () => implementations[from].list?.())
+    let names = [...new Set(all?.map((model) => model.name) ?? [])]
+    let choices = all == null
+      ? ''
+      : names.length
+      ? ' Available models: ' + names.slice(0, 20).join(', ') +
+        (names.length > 20 ? ` (and ${names.length - 20} more).` : '.')
+      : ' Its catalogue lists no models.'
+    return refuse(
+      'arguments',
+      `${from} does not list model ${model}.` + choices,
+    )
+  }
   // An explicitly selected provider/model must be available; legacy channels
   // naming an unavailable model of the default provider retain their fallback.
   let chosen = async (model?: string, from = provider) => {
@@ -885,19 +913,10 @@ export let operating = (
     if (!model || (from == provider && model == name)) {
       return { provider: from, model: name }
     }
-    let info
-    try {
-      info = await listed(model, from)
-    } catch (error) {
-      if (!(error instanceof ModelError)) throw error
-      throw refuse(
-        'unavailable',
-        `${from} model catalogue failed (${error.code}): ${error.message}`,
-      )
-    }
+    let info = await catalogue(from, () => listed(model, from))
     if (info) return { provider: from, model }
     if (from != provider) {
-      throw refuse('arguments', `${from} does not list model ${model}.`)
+      throw await unknown(model, from)
     }
     return { provider, model: name }
   }
@@ -1517,10 +1536,7 @@ export let operating = (
         (typeof args.provider == 'string' ? args.provider : undefined),
     )
     if (typeof args.model == 'string' && selected.model != args.model) {
-      throw refuse(
-        'arguments',
-        `${selected.provider} does not list model ${args.model}.`,
-      )
+      throw await unknown(args.model, selected.provider)
     }
     let { task, session, input } = await ask(held, space, args, {
       task: crypto.randomUUID(),

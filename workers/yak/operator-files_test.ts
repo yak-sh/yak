@@ -6,7 +6,12 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { type Item, ModelError, type Request as Ask } from '@yaks/model'
+import {
+  type Item,
+  type Model,
+  ModelError,
+  type Request as Ask,
+} from '@yaks/model'
 import { conversation } from '@yaks/anthropic'
 import { READS } from '@yaks/anthropic/reads'
 import { addressOf } from '@yaks/blob'
@@ -420,20 +425,25 @@ let permission = new ModelError(
     }),
   },
 )
-let unavailable = operatorService(p.env, who, {
-  directory: () => directoryOf(p.env.STORE),
-  name: 'files',
-  model: nativeModel,
-  providers: {
-    openai: Object.assign((request: Ask) => nativeModel(request), {
-      info: () => Promise.reject(permission),
-    }),
-  },
-  price,
-})
-
-test('a provider catalogue permission failure reaches the run HTTP caller with its diagnosis', async () => {
-  let response = await unavailable.binding.get(space.eid).fetch(
+let catalogueAsks = 0
+let catalogueService = (metadata: Pick<Model, 'info' | 'list'>) =>
+  operatorService(p.env, who, {
+    directory: () => directoryOf(p.env.STORE),
+    name: 'files',
+    model: nativeModel,
+    providers: {
+      openai: Object.assign((request: Ask) => {
+        catalogueAsks++
+        return nativeModel(request)
+      }, metadata),
+    },
+    price,
+  })
+let catalogueRun = (
+  service: ReturnType<typeof catalogueService>,
+  model = 'files',
+) =>
+  service.binding.get(space.eid).fetch(
     new Request('https://builder/operator/run', {
       method: 'POST',
       headers: {
@@ -441,16 +451,41 @@ test('a provider catalogue permission failure reaches the run HTTP caller with i
         'x-space-eid': space.eid,
         'x-yak-person': person,
       },
-      body: JSON.stringify({
-        provider: 'openai',
-        model: 'files',
-        say: 'Read it.',
-      }),
+      body: JSON.stringify({ provider: 'openai', model, say: 'Read it.' }),
     }),
   )
-  assertEquals(response.status, 503)
-  assertEquals(await response.json(), {
-    message:
-      'openai model catalogue failed (auth): 401 Missing permissions: api.model.read',
+let unavailable = catalogueService({ info: () => Promise.reject(permission) })
+let unavailableList = catalogueService({
+  info: () => Promise.resolve(undefined),
+  list: () => Promise.reject(permission),
+})
+let choices = ['text-model', 'document-model']
+let missing = catalogueService({
+  info: () => Promise.resolve(undefined),
+  list: () => Promise.resolve(choices.map((name) => ({ name }))),
+})
+
+for (
+  let [source, service] of [['metadata', unavailable], [
+    'listing',
+    unavailableList,
+  ]] as const
+) {
+  test(`a provider catalogue ${source} permission failure reaches the run HTTP caller with its diagnosis`, async () => {
+    let response = await catalogueRun(service)
+    assertEquals(response.status, 503)
+    assertEquals(await response.json(), {
+      message:
+        'openai model catalogue failed (auth): 401 Missing permissions: api.model.read',
+    })
   })
+}
+
+test('an unknown run model names the providers available models without asking for inference', async () => {
+  let response = await catalogueRun(missing, 'unlisted')
+  assertEquals(response.status, 400)
+  let body = await response.json()
+  assertStringIncludes(body.message, 'openai does not list model unlisted.')
+  for (let name of choices) assertStringIncludes(body.message, name)
+  assertEquals(catalogueAsks, 0)
 })
