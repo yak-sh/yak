@@ -40,6 +40,25 @@ test('the texts card names the numbers to text and call, to anyone', () => {
   )
 })
 
+test('a number agreed to changes behind a button; without one the field shows', () => {
+  let at = (agreed: unknown) =>
+    drawn(textsCard('/manage/x/operator', agreed as never))
+  let shown = (doc: Document) =>
+    !doc.querySelector('#texts-number')!.closest('[hidden]')
+  let agreed = at(consent)
+  equal(agreed.querySelector('[data-reveal]')?.textContent, 'Change number')
+  equal(shown(agreed), false)
+  let fresh = at(null)
+  equal(fresh.querySelector('[data-reveal]'), null)
+  equal(shown(fresh), true)
+  equal(
+    fresh.querySelector('[name=agreed] + span')!.textContent!.endsWith(
+      "Agreeing isn't required to use yaks.app.",
+    ),
+    true,
+  )
+})
+
 let on = { DEEPGRAM_API_KEY: 'a', OPENAI_VOICE_KEY: 'b' }
 let card = (
   voice?: string,

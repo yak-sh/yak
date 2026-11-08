@@ -280,26 +280,44 @@ export let textsCard = (
         h(Button, { type: 'submit', name: 'stop', value: '1' }, 'Stop texts'),
       )
       : null,
-    field(
-      'texts-number',
-      consent ? 'Change your mobile number' : 'Mobile number',
-      h(Field, {
-        id: 'texts-number',
-        type: 'tel',
-        name: 'number',
-        autocomplete: 'tel',
-        inputmode: 'tel',
-        placeholder: '269-555-0142',
-      }),
+    consent ? changing(agreeing('Change your mobile number')) : agreeing(
+      'Mobile number',
     ),
-    h(
-      Check,
-      { style: 'align-items:flex-start' },
-      h('input', { type: 'checkbox', name: 'agreed', value: 'yes' }),
-      h('span', null, terms(CONSENT)),
-    ),
-    h('p', null, 'Agreeing is not required to use yaks.app.'),
   )
+
+// The number to text and the words agreed to with it.
+let agreeing = (label: string) => [
+  field(
+    'texts-number',
+    label,
+    h(Field, {
+      id: 'texts-number',
+      type: 'tel',
+      name: 'number',
+      autocomplete: 'tel',
+      inputmode: 'tel',
+      placeholder: '269-555-0142',
+    }),
+  ),
+  h(
+    Check,
+    { style: 'align-items:flex-start' },
+    h('input', { type: 'checkbox', name: 'agreed', value: 'yes' }),
+    h('span', null, terms(CONSENT)),
+  ),
+]
+
+// A number already agreed to changes behind a button, which shows the field
+// in its place (`settingsScript`).
+let changing = (fields: Node) => [
+  h(Button, {
+    type: 'button',
+    'aria-expanded': 'false',
+    'aria-controls': 'texts-change',
+    'data-reveal': '',
+  }, 'Change number'),
+  h('div', { id: 'texts-change', hidden: true }, fields),
+]
 
 // Where a person chooses how their Operators tell them something away from
 // the page (operator-alerts.ts): what they would be told by when they have
@@ -1113,6 +1131,15 @@ let allow = async (offer) => {
   let sub = await worker.pushManager.getSubscription() ?? await worker.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key })
   let response = await fetch(offer.dataset.at, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sub) })
   if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? 'This browser could not be allowed. Try again.')
+}
+for (let reveal of document.querySelectorAll('[data-reveal]')) {
+  reveal.addEventListener('click', () => {
+    let shown = document.getElementById(reveal.getAttribute('aria-controls'))
+    shown.hidden = false
+    reveal.hidden = true
+    reveal.setAttribute('aria-expanded', 'true')
+    shown.querySelector('input')?.focus()
+  })
 }
 for (let form of document.querySelectorAll('#texts, #name, #voice, #alerts')) {
   form.addEventListener('submit', async (e) => {
