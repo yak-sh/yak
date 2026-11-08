@@ -111,3 +111,25 @@ test('a woken store is up for the request behind it, unless it is in the trash',
   assertEquals(await asks(true), [204, 200, false])
   assertEquals(await asks(true, true), [404, 404, false])
 })
+
+test('a read that reaches a store as its wake does joins the one boot', async () => {
+  let name = 'ada/cookbook.abcdef', ctx = state(name), boots = 0
+  // What a boot reads first, once (graph.ts `#start`).
+  let get = ctx.storage.get.bind(ctx.storage)
+  ctx.storage.get = ((key: string) => {
+    if (key == 'expires') boots++
+    return get(key)
+  }) as typeof get
+  let store = new Store(ctx)
+  let send = (path: string) =>
+    store.fetch(
+      new Request(`http://store${path}`, {
+        headers: { ...KERNEL, 'x-store': name },
+      }),
+    ).then((r) => r.status)
+  assertEquals(await Promise.all([send(WAKE), send('/query?q=.doc')]), [
+    204,
+    200,
+  ])
+  assertEquals(boots, 1)
+})

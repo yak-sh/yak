@@ -20,7 +20,6 @@ import {
   listed,
   listing,
   LOGIN,
-  opens,
   remember,
   scope,
   stranger,
@@ -192,27 +191,34 @@ export let kept = (
   // `x.y.yaks.app` is the kernel's to say what it is (route.ts `route`).
   if (host.slice(0, -apex(env).length - 1).includes('.')) return null
   if (spaceDoor(path)) return null
-  return asked(req, env.SITE, host, null, timer(said), (answer, at) => {
-    if (env.VIEWS && isView(answer)) {
-      env.VIEWS.writeDataPoint(pointOf(req as Visited, answer, at))
-    }
-    if (answer.status < 400 && !remembered(at.app)) {
-      ctx.waitUntil(
-        Promise.resolve(env.USES.used(at.app)).catch((e) =>
-          report(e, env, ctx, 'front used', req)
-        ),
-      )
-    }
+  return asked(
+    req,
+    env.SITE,
+    host,
+    null,
+    timer(said),
+    (answer, at) => {
+      if (env.VIEWS && isView(answer)) {
+        env.VIEWS.writeDataPoint(pointOf(req as Visited, answer, at))
+      }
+      if (answer.status < 400 && !remembered(at.app)) {
+        ctx.waitUntil(
+          Promise.resolve(env.USES.used(at.app)).catch((e) =>
+            report(e, env, ctx, 'front used', req)
+          ),
+        )
+      }
+    },
+    session(req),
     // The page's scripts ask its store next, and a store asleep takes longer
     // to start and boot than they take to load (page-cache.ts `shown`).
-    if (at.store && opens(answer)) {
+    (store) =>
       ctx.waitUntil(
-        Promise.resolve(env.USES.wake(at.store)).catch((e) =>
+        Promise.resolve(env.USES.wake(store)).catch((e) =>
           report(e, env, ctx, 'front wake', req)
         ),
-      )
-    }
-  }, session(req))
+      ),
+  )
 }
 
 let report = (

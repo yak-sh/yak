@@ -67,10 +67,11 @@ import { seen, viewed } from './views.ts'
 
 export { KEPT, pageAt, personal, shareable, visitor } from './kept-page.ts'
 
-/** What a page of an app owes as the gateway answers it: its count
+/** What a page of an app owes as the gateway serves it itself: its count
  * (views.ts), and its store booted where a browser goes on to run it, since
- * the page's scripts ask the store next (used.ts `wake`). yak-front does the
- * same for a page it answers from the edge (front.ts `kept`). */
+ * the page's scripts ask the store next (used.ts `wake`). A page answered from
+ * Site's cache, here or by yak-front (front.ts `kept`), is counted the same
+ * and wakes its store as Site is asked (kept-page.ts `asked`). */
 export let shown = (env: Env, req: Request, page: Response, at: Seen) => {
   viewed(env, req, page, at)
   if (at.store && opens(page)) wake(env, at.store)
@@ -224,9 +225,10 @@ export let asked = (
       req.headers.get(MOUNT),
       c,
       (answer, at) => {
-        shown(env, req, answer, at)
+        viewed(env, req, answer, at)
         if (answer.status < 400) scheduleUse(env, at.app)
       },
       session,
+      (store) => wake(env, store),
     )
     : Promise.resolve(null)
