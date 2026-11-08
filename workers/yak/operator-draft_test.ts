@@ -20,7 +20,7 @@ import { openedOf, operatorFrames } from './operator-host.ts'
 import { operatorStore } from './operator-store.ts'
 import { inputOf } from './operator-root.ts'
 import { TOOLS } from './tools.ts'
-import { when } from './public/when.js'
+import { pretty, when } from './public/when.js'
 import * as talk from './operator-rows.ts'
 
 let p = platform('operator-draft')
@@ -234,6 +234,7 @@ let load = async (
     'turnHtml',
     'voice',
     'when',
+    'pretty',
     'setInterval',
     'document',
     'fetch',
@@ -257,6 +258,7 @@ let load = async (
     (o: Parameters<typeof voice>[0]) =>
       voice(talking ? { ...o, platform: talking.platform(Event) as never } : o),
     when,
+    pretty,
     // the stamps' minute, which no test waits for
     () => 0,
     document,
