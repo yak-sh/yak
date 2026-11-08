@@ -165,14 +165,14 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
   }))
   let stored = (h?: Held) => (h?.bytes ?? 0) + (h?.files ?? 0)
   let names = new Map(c.people.map((r) => [r.entity.eid, personName(r)]))
-  // Its latest move live (`deployed`), or before that was kept, its newest
+  // Its latest move live (`last_deploy`), or before that was kept, its newest
   // release.
   let deployed = new Map<string, Stamp>()
   let newer = (app: string, at: Stamp | null) => {
     if (at && at.at > (deployed.get(app)?.at ?? '')) deployed.set(app, at)
   }
   for (let r of c.deploys) newer(idOf(r.deploy!.app), stampOf(r.created))
-  for (let r of c.apps) newer(r.entity.eid, stampOf(r.deployed))
+  for (let r of c.apps) newer(r.entity.eid, stampOf(r.last_deploy))
   let trends = new Map(c.spaces.map((r) => [r.entity.eid, r.trend]))
   let out = new Map<string, Uses>()
   for (let r of c.spaces) {

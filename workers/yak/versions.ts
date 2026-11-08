@@ -328,7 +328,7 @@ export let record = async (
   let eid = target?.eid ?? mint()
   // Who put it live, and when: the agent writing for a person, or the person
   // (M-31958), with its session. The deploy row's `created` says the same of
-  // a new release; `deployed` on the app answers for its latest move.
+  // a new release; `last_deploy` on the app answers for its latest move.
   let { who: actor, rows } = acting(who)
   let at = new Date().toISOString()
   let moved = {
@@ -351,7 +351,7 @@ export let record = async (
           worker,
           ...(app.lenses ? { lenses: app.lenses } : {}),
         },
-        deployed: moved,
+        last_deploy: moved,
         ...seeded ? { seeded: { at, version } } : {},
         $was: {
           app: {

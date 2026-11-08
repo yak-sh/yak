@@ -768,7 +768,7 @@ export type Row = {
   newcomer?: { at?: string }
   visitor_build?: { at?: string }
   created?: { at?: string; by?: Id | null }
-  deployed?: { at?: string; by?: Id | null; via?: Id | null }
+  last_deploy?: { at?: string; by?: Id | null; via?: Id | null }
   acts_for?: { person?: Id | null }
   member?: { space: Id; person: Id; role: Role; own?: boolean }
   grant?: { app: Id; person: Id; access: Role }
@@ -2814,7 +2814,7 @@ export let directoryRows = (rows: {
         .map(deployOf)
         .sort((a, b) => b.version - a.version),
     // When each app was made and last put live, and by whom (T-151161): its
-    // `created` and `deployed`, and for an app last deployed before `deployed`
+    // `created` and `last_deploy`, and for an app last deployed before `last_deploy`
     // was kept, its newest release's `created`. With them, what each writer is
     // called (stamps.ts `writers`), so a page says every one the same way.
     provenance: async (apps: Pick<App, 'eid'>[]) => {
@@ -2822,13 +2822,13 @@ export let directoryRows = (rows: {
       let of = new Map<string, { made: Stamp | null; deployed: Stamp | null }>()
       if (!ids.length) return { of, writers: new Map<string, string>() }
       let rows = await query(
-        `.entity.eid=${ids.join(',')}&?created&?deployed` +
-          '&.fields=created.at,created.by,deployed.at,deployed.by',
+        `.entity.eid=${ids.join(',')}&?created&?last_deploy` +
+          '&.fields=created.at,created.by,last_deploy.at,last_deploy.by',
       )
       for (let r of rows) {
         of.set(r.entity.eid, {
           made: stampOf(r.created),
-          deployed: stampOf(r.deployed),
+          deployed: stampOf(r.last_deploy),
         })
       }
       let before = ids.filter((id) => of.get(id) && !of.get(id)!.deployed)
@@ -2901,7 +2901,7 @@ export let directoryRows = (rows: {
           // without.
           query(`.space&${SPACE_ABOUT}&?trend&?visitor_build&${stamps}`),
           query(
-            `.app&${ABOUT}&?trend&${stamps}&?changed&?errored&?deployed`,
+            `.app&${ABOUT}&?trend&${stamps}&?changed&?errored&?last_deploy`,
           ),
           query('.member'),
           // Only which app, when and by whom: a release's whole row is its

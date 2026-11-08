@@ -676,12 +676,12 @@ The complete list of reserved names:
     call_woken called calls cancel cancelled checkout chosen cites
     code_review comment commit compat completed connection contains content
     cost created credit credit_block delegates delete_upload deliver
-    delivered demo deploy deployed dispatch doc document_extract
-    document_page document_text draft edge effect email entity entry error
-    exception execution failed favorite fee feedback file filed finding
-    fired former gallery gitobj grant grants_listed home hook hostname image
-    inference installed integration integration_install interrupted invite
-    inviting key lease lines listed mail mail_answered mail_dismissed
+    delivered demo deploy dispatch doc document_extract document_page
+    document_text draft edge effect email entity entry error exception
+    execution failed favorite fee feedback file filed finding fired former
+    gallery gitobj grant grants_listed home hook hostname image inference
+    installed integration integration_install interrupted invite inviting
+    key last_deploy lease lines listed mail mail_answered mail_dismissed
     mail_post mail_task member memory meter model model_reservation newcomer
     newcomer_builds notice notice_confirmed notice_letter notice_posted
     notice_subscription notified notify_trash oauth_grant occupancy offer

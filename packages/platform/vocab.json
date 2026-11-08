@@ -144,7 +144,7 @@
         "doc"
       ]
     },
-    "deployed": {
+    "last_deploy": {
       "component": true,
       "type": "object",
       "properties": {

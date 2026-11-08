@@ -29,24 +29,24 @@ test('a deploy is stamped with the person, or the agent writing for them, and wh
       })
       await hand.tool('app_deploy', { app: slug })
       let [row] = await meta(k).query(
-        `.app.slug=${slug}&?created&?deployed`,
+        `.app.slug=${slug}&?created&?last_deploy`,
       )
       return row as {
         entity: { eid: string }
         created?: Stamp
-        deployed?: Stamp
+        last_deploy?: Stamp
       }
     }
     let mine = await made(own)
     assertEquals(idOf(mine.created?.by), owner.person)
-    assertEquals(idOf(mine.deployed?.by), owner.person)
-    assert(mine.deployed?.at && idOf(mine.deployed?.via))
+    assertEquals(idOf(mine.last_deploy?.by), owner.person)
+    assert(mine.last_deploy?.at && idOf(mine.last_deploy?.via))
 
     let theirs = await made(agent)
     let probe = agentEid(owner.person, HELLO.clientInfo.name)
     assertEquals(idOf(theirs.created?.by), probe)
-    assertEquals(idOf(theirs.deployed?.by), probe)
-    assert(theirs.deployed?.at && idOf(theirs.deployed?.via))
+    assertEquals(idOf(theirs.last_deploy?.by), probe)
+    assert(theirs.last_deploy?.at && idOf(theirs.last_deploy?.via))
     let [row] = await meta(k).query(`.entity.eid=${probe}&?doc&?acts_for`) as {
       doc?: { title?: string }
       acts_for?: { person?: unknown }
