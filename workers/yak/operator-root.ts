@@ -12,6 +12,11 @@ type Store = ReturnType<typeof operatorStore>
 export let rootOf = (space: string, person: string) =>
   derivedEid(`operator-root|${space}|${person}`)
 
+/** The line a request's words become in the conversation that takes them
+ * in (operator.ts `ask`): one id, so the request and its line are one. */
+export let inputOf = (request: string) =>
+  derivedEid('operator-input|' + request)
+
 /** The person's one conversation in `store`: the one said to be theirs
  * (`operator_session.conversation`), as a conversation handed to them is
  * (operator-channels.ts `handOver`), else the one `rootOf` begins for them. */

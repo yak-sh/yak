@@ -9,7 +9,7 @@ import { ownerOf, owns } from './operator-access.ts'
 import type { Held } from './build-door.ts'
 import type { Operator } from './operator.ts'
 import type { Request } from './operator-channels.ts'
-import { rootAt, rootOf } from './operator-root.ts'
+import { inputOf, rootAt, rootOf } from './operator-root.ts'
 import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
 import type { operatorStore } from './operator-store.ts'
@@ -722,6 +722,43 @@ export let standingAt = async (
   return standing(drawn, newest.flat())
 }
 
+// The person's words their conversation has not drawn yet: each request of
+// theirs since its lines begin that no other session or task took, and whose
+// line is not among those read, drawn after them as that line, under its id
+// (`inputOf`). A page read while the Operator takes it in shows it, the line
+// put in its place replaces it, and one taken in between the two reads here
+// is still drawn.
+let arriving = async (store: Store, row: Bundle, entries: Bundle[]) => {
+  let own = comp(row, 'operator_session')
+  let person = String(own?.person ?? '')
+  if (
+    !person ||
+    row.entity.eid != await rootAt(store, String(own?.space ?? ''), person)
+  ) return []
+  let drawn = new Set(entries.map((b) => b.entity.eid))
+  let since = String(comp(entries[0], 'created')?.at ?? '')
+  let requests = await store.g.read(
+    `.operator_request.person=${person} ?doc ?created .order=-created.at .limit=20`,
+  )
+  return requests.flatMap((r): Bundle[] => {
+    let asked = comp(r, 'operator_request')!
+    let line = inputOf(r.entity.eid)
+    let at = String(comp(r, 'created')?.at ?? '')
+    let body = String(comp(r, 'doc')?.body ?? '')
+    if (
+      asked.session && asked.session != row.entity.eid || asked.task ||
+      asked.channel == 'error' ||
+      drawn.has(line) || at < since || !body.trim()
+    ) return []
+    return [{
+      entity: { eid: line },
+      content: { body },
+      created: { at },
+      operator_channel: { channel: String(asked.channel) },
+    }]
+  }).reverse()
+}
+
 export let conversationOf = async (
   store: Store,
   at: string,
@@ -763,6 +800,9 @@ export let conversationOf = async (
       ...await namingOf(store, withHelpers(entries, helped.helpers), named),
     }
     let names = namer(seen)
+    let shown = helper
+      ? entries
+      : [...entries, ...await arriving(store, row, entries)]
     return {
       aside: await asideOf(store, entries, seen.helpers, names, opens),
       task: eid,
@@ -774,13 +814,13 @@ export let conversationOf = async (
         : CONVERSATION,
       html: talk(
         { entity: { eid } } as Bundle,
-        entries,
+        shown,
         names,
         filesOf(asked),
         at,
         seen,
       ),
-      lines: wire(drawnLines(entries, names, seen), entries, seen),
+      lines: wire(drawnLines(shown, names, seen), shown, seen),
       now: now(entries, names),
       waiting: [],
       making: making(entries, seen.helpers),

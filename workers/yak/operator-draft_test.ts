@@ -18,6 +18,7 @@ import { voice } from './public/voice.js'
 import { released } from './operator-testing.ts'
 import { openedOf, operatorFrames } from './operator-host.ts'
 import { operatorStore } from './operator-store.ts'
+import { inputOf } from './operator-root.ts'
 import { TOOLS } from './tools.ts'
 import { when } from './public/when.js'
 import * as talk from './operator-rows.ts'
@@ -161,6 +162,12 @@ let load = async (
   // conversation.
   let asked = 0, talks = 0
   let fetch = async (url: string, init?: RequestInit) => {
+    if (url.includes('?talk=') && slow) {
+      let answer = await serve(url, init, as)
+      talks++
+      await slow
+      return answer
+    }
     if (cut && init?.method == 'POST') return new Promise<Response>(() => {})
     if (url.includes('draft=1') && !init?.method) asked++
     if (url.includes('?talk=')) talks++
@@ -350,6 +357,9 @@ let load = async (
 let settle = async () => {
   for (let i = 0; i < 20; i++) await new Promise((ok) => setTimeout(ok, 1))
 }
+// While set, a read of the conversation is answered as the store stood when
+// it was asked, but reaches the page only once this settles.
+let slow: Promise<void> | undefined
 let stored = async (place = 'operator:new') =>
   ((await (await serve(`${base}?draft=1`)).json()).bundles as {
     draft: { place: string; text: string }
@@ -717,6 +727,93 @@ test('opening the chat app reads the conversation once, with the page', async ()
   landed.leave()
   assertEquals([still, landed.talks()], [0, 1])
   assertStringIncludes(box.innerHTML, 'Ask for the north shelter as well')
+})
+
+// The person's words are on the page from the moment they are sent: a read
+// while the Operator has yet to take them in draws them where their line
+// will be, and that line takes their place, once.
+test('words sent are drawn before the Operator takes them in, then once as its line', async () => {
+  let body = new FormData()
+  body.set('say', 'Ask the shelter about tables')
+  body.set('request', crypto.randomUUID())
+  await serve(base, { method: 'POST', body })
+  let read = async () =>
+    (await (await serve(`${base}?talk=${park}`)).json()).html as string
+  let waiting = await read()
+  await p.builder(eid).alarm()
+  await p.settled()
+  let taken = await read()
+  let line = `id="row-${inputOf(String(body.get('request')))}"`
+  assertEquals(
+    [waiting, taken].map((html) => [
+      html.split('Ask the shelter about tables').length - 1,
+      html.includes(line),
+    ]),
+    [[1, true], [1, true]],
+  )
+})
+
+// A read answers the conversation as it stood when asked: a line a step
+// put in place meanwhile is read again, never drawn over.
+test('a line heard while the page reads the conversation stays on it', async () => {
+  let page = await load(storage(), false, park)
+  await page.connect()
+  await settle()
+  let box = page.document.querySelector('[data-conversation]')!
+  let release = () => {}
+  slow = new Promise((ok) => release = ok)
+  page.hear({ ready: true, standing: 'moved' })
+  while (!page.talks()) await settle()
+  slow = undefined
+  await begun('Ask for the lakeside shelter too')
+  await settle()
+  let heard = box.innerHTML.includes('Ask for the lakeside shelter too')
+  release()
+  for (let i = 0; i < 100 && page.talks() < 2; i++) await settle()
+  await settle()
+  page.leave()
+  assertEquals(
+    [heard, box.innerHTML.includes('Ask for the lakeside shelter too')],
+    [true, true],
+  )
+})
+
+// Words of the person the page showed are never taken off it by a read that
+// leaves them out, and the tracker hears of it then.
+test('a read that leaves out words the page showed keeps them and reports it', async () => {
+  let page = await load(storage(), false, park)
+  await page.connect()
+  await settle()
+  let card = page.document.querySelector('[data-task]') as HTMLElement
+  let id = crypto.randomUUID()
+  page.hear({
+    operator: {
+      task: card.dataset.task,
+      lines: {
+        lines: [{ id, uses: [id] }],
+        entries: [{ entity: { eid: id }, content: { body: 'Keep my words' } }],
+        helpers: [],
+        offers: {},
+        tools: {},
+      },
+      now: '',
+    },
+  })
+  let reported: string[] = []
+  let was = globalThis.reportError
+  globalThis.reportError = (e: unknown) => void reported.push(String(e))
+  try {
+    page.hear({ ready: true, standing: 'moved' })
+    for (let i = 0; i < 100 && !page.talks(); i++) await settle()
+    await settle()
+  } finally {
+    globalThis.reportError = was
+    page.leave()
+  }
+  assertStringIncludes(card.ownerDocument.body.innerHTML, 'Keep my words')
+  assertEquals(reported, [
+    `Error: The Operator chat page left out words of the person it had shown: row-${id}`,
+  ])
 })
 
 // A helper's line, drawn under the step that started it, moves where the

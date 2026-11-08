@@ -2298,11 +2298,15 @@ document.addEventListener('click', async (e) => {
 // \`standingAt\`), until a step is heard; the socket says where it stands as
 // it opens, and the page reads it again only when that moved.
 let standing = ${JSON.stringify(standing)}
-// One read at a time; a step heard during one reads once more after it.
+// One read at a time; a step heard during one reads once more after it,
+// since what the read answered may predate the line the step put in place.
 let reading, again = false
+// The person's own words the page shows, each by its row's id.
+let theirs = () => new Map([...box.querySelectorAll('[id^="row-"]')].filter((r) => r.querySelector('.Talk_You')).map((r) => [r.id, r]))
 let read = async () => {
   if (open == 'new') return
   if (reading) return void (again = true)
+  let mine = theirs()
   reading = (async () => {
     do {
       again = false
@@ -2317,6 +2321,15 @@ let read = async () => {
       if (follows && !canvas() && got.making && (follows == 'worked' || got.started)) remake(got.making)
       follow(was)
     } while (again)
+    // Words of theirs the page showed are never taken off it: one a read
+    // left out goes back in its place, and the tracker hears of it at once.
+    let rows = thread()?.querySelector('[data-rows]')
+    let now = theirs()
+    for (let [id, row] of mine) {
+      if (now.has(id) || !rows) continue
+      rows.append(row)
+      globalThis.reportError?.(new Error('The Operator chat page left out words of the person it had shown: ' + id))
+    }
   })()
   try { await reading } finally { reading = undefined }
 }
@@ -2367,6 +2380,7 @@ let hear = (frame) => {
     redraw(at, row.html)
     at.dataset.html = row.html
   }
+  if (reading) again = true
   card.querySelector('[data-now]').textContent = o.now
   doing(o.doing)
   card.toggleAttribute('data-pending', !!o.now)

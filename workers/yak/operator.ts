@@ -85,7 +85,7 @@ import {
   messageReference,
   starting,
 } from './operator-channels.ts'
-import { rootAt } from './operator-root.ts'
+import { inputOf, rootAt } from './operator-root.ts'
 import { textSend } from './operator-texts.ts'
 import { notificationSend } from './operator-alerts.ts'
 import { iconic } from './raster.ts'
@@ -1108,7 +1108,7 @@ export let operating = (
     let given = new Set(turn.given.map((b) => b.entity.eid))
     let requests = (await g.read(
       `.operator_request.session=${session} .order=created.at`,
-    )).filter((r) => given.has(derivedEid('operator-input|' + r.entity.eid)))
+    )).filter((r) => given.has(inputOf(r.entity.eid)))
     let comment = task
       ? derivedEid('operator-answer|' + mark.entity.eid)
       : undefined
@@ -1379,9 +1379,7 @@ export let operating = (
     let named = typeof args.task == 'string' ? args.task : o.task
     if (!text.trim()) throw refuse('arguments', 'say what you want done')
     let by = o.by ?? held.person
-    let input = o.request
-      ? derivedEid('operator-input|' + o.request)
-      : crypto.randomUUID()
+    let input = o.request ? inputOf(o.request) : crypto.randomUUID()
     o = { ...o, ...await readying(held, space, o.model, o.provider) }
     let { reference, file: sourceFile } = await messageReference(
       env,
