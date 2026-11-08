@@ -212,7 +212,7 @@ export let Home = () => (
         <p class='Hello_Kicker'>An Operator that does things for you</p>
         <h1 class='Title Title-hero' id='hello'>
           <label for='say'>
-            Tell your Operator what you need, and watch it build the app.
+            Tell your Operator what you need done.
           </label>
         </h1>
         <form class='Hello_Ask' method='post' action={START}>
@@ -246,21 +246,21 @@ export let Home = () => (
       <h2 class='Title' id='does'>What your Operator does for you</h2>
       <dl class='Yours_List'>
         <div>
-          <dt>It builds the apps you need</dt>
+          <dt>It builds apps</dt>
           <dd>
             Ask for an app, a new feature or a fix, and your Operator does the
             work. Your apps save what people add, on every phone and computer.
           </dd>
         </div>
         <div>
-          <dt>You chat with it, email it, text it or call it</dt>
+          <dt>Chat, email, text or call</dt>
           <dd>
-            Chat with it on yaks.app or email it. Agree to texts on its page,
-            and you can text it or call it from your phone.
+            Chat with it on yaks.app or email it. Give it your mobile number,
+            and you can text it or call it.
           </dd>
         </div>
         <div>
-          <dt>You choose who comes in</dt>
+          <dt>Share anything it does or builds</dt>
           <dd>
             Keep an app to yourself, share it with a link, or invite as many
             people as you like to view or edit it, free.
@@ -279,17 +279,18 @@ export let Home = () => (
           </p>
         </li>
         <li>
-          <h3 class='Step_Name'>Watch it build the app</h3>
+          <h3 class='Step_Name'>Open it anywhere</h3>
           <p class='Note'>
             Your Operator builds it and puts it online. Open it on your phone or
             computer, or send its link to the people it's for.
           </p>
         </li>
         <li>
-          <h3 class='Step_Name'>Keep it with your email</h3>
+          <h3 class='Step_Name'>Sign up free to keep it</h3>
           <p class='Note'>
-            Give your email, and the app and your Operator are yours, at an
-            address like <Yours />.
+            Enter your email, and the app is yours, at your own address like
+            {' '}
+            <Yours />.
           </p>
         </li>
       </ol>

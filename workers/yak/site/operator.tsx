@@ -160,7 +160,7 @@ export let Operator = ({ by }: { by: By }) => {
             </dd>
           </div>
           <div>
-            <dt>You choose who comes in</dt>
+            <dt>Share anything it does or builds</dt>
             <dd>
               Keep an app to yourself, share it with a link, or invite people to
               view or edit it, free.
