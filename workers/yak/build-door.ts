@@ -237,3 +237,26 @@ export let operatorDoor = async (
   if (!response.ok) throw await answered(response)
   return response.json()
 }
+
+/** The kernel has checked the app's public access or the caller's membership. */
+export let resultDoor = async (
+  env: Env,
+  space: Pick<Space, 'eid'>,
+  reader: string,
+  path: string,
+  args: Record<string, unknown>,
+) => {
+  let response = await builderOf(env, space.eid)(() =>
+    new Request(`https://builder/result/${path}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-yak-kernel': '1',
+        [SPACE]: space.eid,
+      },
+      body: JSON.stringify({ ...args, reader }),
+    })
+  )
+  if (!response.ok) throw await answered(response)
+  return response.json()
+}

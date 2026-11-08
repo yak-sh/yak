@@ -36,6 +36,10 @@
         "body": {
           "type": "string",
           "store": "blob"
+        },
+        "reader": {
+          "type": "string",
+          "description": "Caller principal permitted to inspect a snapshot kept by a multi-user host; omitted when the graph itself provides its access boundary."
         }
       }
     }

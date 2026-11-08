@@ -462,6 +462,28 @@ export class Builder {
       await this.wipe()
       return Response.json({ ok: true })
     }
+    if (url.pathname.startsWith('/result/')) {
+      if (
+        request.headers.get('x-yak-kernel') != '1' ||
+        !request.headers.get(SPACE)
+      ) return no(403, NOBODY)
+      let args = await request.json() as Record<string, unknown>
+      if (typeof args.reader != 'string' || !args.reader) return no(403, NOBODY)
+      let { resultRequest } = await import('./result-host.ts')
+      try {
+        return await resultRequest(
+          (await this.#stored()).store.g,
+          url.pathname.slice('/result/'.length),
+          args,
+          args.reader,
+        ) ?? no(404, 'no result route')
+      } catch (error) {
+        return no(
+          refusing(error, { request: 'result' }),
+          error instanceof Error ? error.message : String(error),
+        )
+      }
+    }
     if (url.pathname.startsWith('/operator/')) {
       try {
         // A reply to the Operator's letter is the kernel's to bring (inbox.ts),

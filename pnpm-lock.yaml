@@ -211,6 +211,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20260702.1
         version: 4.20260702.1
+      '@gabrielbryk/jq-ts':
+        specifier: 1.7.0
+        version: 1.7.0(typescript@6.0.3)
       '@huggingface/tokenizers':
         specifier: 0.2.0
         version: 0.2.0
@@ -5369,6 +5372,9 @@ importers:
       '@cloudflare/workers-oauth-provider':
         specifier: 0.10.3
         version: 0.10.3
+      '@gabrielbryk/jq-ts':
+        specifier: 1.7.0
+        version: 1.7.0(typescript@6.0.3)
       '@hyzyla/pdfium':
         specifier: 3.0.0
         version: 3.0.0
@@ -6185,6 +6191,12 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@gabrielbryk/jq-ts@1.7.0':
+    resolution: {integrity: sha512-zGi4yjqLP0XvXRJs/OfQ/EKAk4vJDnV7pq0DMbaiQg3Vfy6LA2tECEiU7STaRH6TbUdAzJZYpldpb0kwsnvCcg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      typescript: ^5.0.0
 
   '@hono/node-server@2.1.6':
     resolution: {integrity: sha512-p/KH9MnfNcsm3sR6x4lNgm5j+QN4Et8srKredl9DZfXiyZ1UQ3aQ2YVpFLbqktYN5JI+DB+VZFKM2PqE5hLKjQ==}
@@ -8160,6 +8172,10 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.2':
     optional: true
+
+  '@gabrielbryk/jq-ts@1.7.0(typescript@6.0.3)':
+    dependencies:
+      typescript: 6.0.3
 
   '@hono/node-server@2.1.6(hono@4.13.16)':
     dependencies:
