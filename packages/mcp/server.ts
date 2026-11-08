@@ -174,11 +174,12 @@ export type Options = {
   answer?: { type: 'object'; [key: string]: unknown }
   /** tools to list beside the generic tier and the graph's plugins' */
   tools?: Tool[]
-  /** whether this server adds the generic tier itself (default: yes). A
+  /** whether this server adds the generic tier itself (default: yes). Supply
+   * tools to replace that tier in the same position in the roster. A
    * calling program that already has the tier in `tools` — one whose CLI runs
    * the same `graph_apply` this server does, out of one list — passes false,
    * so the tier is listed once and is the same tool object either way. */
-  core?: boolean
+  core?: boolean | Tool[]
   /** news for a tool result, given the tool names this server is listing
    * right now: the staleness sentence for a client whose cached tool list has
    * changed under it (roster.ts), or whatever else the host keeps for the
@@ -401,7 +402,7 @@ let spelling = (tool: NamedTool): Record<string, unknown> | undefined => {
  */
 export let listing = (opts: Options): Tool[] =>
   (opts.runner?.registry.list() ?? opts.registry?.list() ?? [
-    ...(opts.core === false ? [] : core({
+    ...(Array.isArray(opts.core) ? opts.core : opts.core === false ? [] : core({
       vocab: opts.graph.vocab,
       guide: opts.guide,
       search: opts.search,

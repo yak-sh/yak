@@ -25,7 +25,7 @@ import {
 } from './operator-browser.ts'
 import { bearerFor, connector, fresh, seed, unique } from './probe.ts'
 import { managePath } from './route.ts'
-import { ai, platform } from './testing.ts'
+import { ai, modelPage, platform } from './testing.ts'
 import type { Env } from './env.ts'
 
 let b64url = (s: string) =>
@@ -140,7 +140,14 @@ let model = ai([
   },
   { text: 'It says hello, and you chose not to order.' },
 ])
-let k = await fresh({ AI: model as Env['AI'] })
+let k = await fresh({
+  AI: model as Env['AI'],
+  OPERATOR_MODEL: '@cf/meta/llama-3.2-11b-vision-instruct',
+  MODEL_FETCH: async () => {
+    let page = modelPage(0.15, 0.5)
+    return new Response(await page.text() + '\n| Vision | Yes |')
+  },
+})
 let slug = unique('lent')
 let { cookie, person, eids } = await seed(k, [{ slug, apps: [] }])
 let bearer = await bearerFor(k, cookie)
@@ -220,6 +227,17 @@ test('the Operator reads the tab as the page’s words, and is shown its screens
   let files = (results[1].operator_files as { files: { mime: string }[] })
     .files
   assertEquals(files.map((f) => f.mime), ['image/png'])
+  let shown = model.asked[2].input.messages as {
+    content: string | { type: string; image_url?: { url: string } }[]
+  }[]
+  assertEquals(
+    shown.flatMap((message) =>
+      Array.isArray(message.content)
+        ? message.content.flatMap((part) => part.image_url?.url ?? [])
+        : []
+    ),
+    [`data:image/png;base64,${PNG}`],
+  )
 })
 
 test('a step the person declined is a refusal the Operator reads', () => {

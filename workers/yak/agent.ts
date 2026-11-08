@@ -606,8 +606,7 @@ export let searching =
  */
 export let connected = (ctx: Ctx, reach: Reach[], graph: Graph) => ({
   graph,
-  core: false,
-  tools: attachmentCore(ctx, {
+  core: attachmentCore(ctx, {
     vocab: graph.vocab,
     search: searching(ctx, reach),
     guide: (comp) => pageFor(comp, ctx.env),
