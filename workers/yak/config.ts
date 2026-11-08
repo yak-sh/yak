@@ -205,13 +205,14 @@ export let directoryConfig: Config = {
     { use: '@yaks/task', facets: ['vocab'], words: ['contains', 'requires'] },
     ...links,
     { use: '@yaks/mail', words: ['notified'] },
-    // A person's mobile number beside their address, and the words they
-    // agreed to before being texted. Texts themselves are kept by the
+    // A person's mobile number beside their address, the words they agreed
+    // to before being texted, and the numbers their own connected phone
+    // account holds (operator-line.ts). Texts themselves are kept by the
     // Operator, not here, so `text` stays free for apps.
     {
       use: '@yaks/phone',
       facets: ['vocab'],
-      words: ['phone', 'sms_consent', 'sender'],
+      words: ['phone', 'own_number', 'sms_consent', 'sender'],
     },
     // The browsers a person allowed notifications on (operator-alerts.ts).
     { use: '@yaks/push', facets: ['vocab'], words: ['push_subscription'] },

@@ -1,5 +1,10 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import type { Item, Request } from '@yaks/model'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
@@ -14,11 +19,23 @@ import { rootOf } from './operator-root.ts'
 import { conversationOf, workOf } from './operator-host.ts'
 import { listed as listing } from './operator-view.ts'
 import { parseHTML } from 'linkedom'
-import { lineDoor, owned, textedFor } from './operator-line.ts'
+import {
+  chosen,
+  lineDoor,
+  numbersOf,
+  owned,
+  phoneNumbers,
+  phoneSend,
+  textedFor,
+} from './operator-line.ts'
+import type { Ctx } from './tool.ts'
 
-// A person connects their own voip.ms number, their Operator texts someone
-// for them from it, and the text back comes into their one conversation
-// (T-137987). voip.ms is faked at the fetch it is called through.
+// A person connects their own voip.ms account, which holds two numbers that
+// text, tells their Operator to text from the church line, their Operator
+// texts someone for them from it, and once the person sends that line's
+// texts to their Operator too, the text back comes into their one
+// conversation (T-137987, T-151703). voip.ms is faked at the fetch it is
+// called through, as an account whose numbers keep what setSMS says.
 let { env } = platform('operator-line', {
   VAULT: d1() as unknown as D1Like,
   VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(7))),
@@ -44,7 +61,37 @@ await dir.apply({
 let space = (await dir.at(eid))!
 let held = { person, role: 'owner' as const, space: eid }
 
-// voip.ms, as an account with one number that texts and mails its texts.
+// voip.ms, as an account with a home number that mails its texts, a church
+// line whose texts go to a URL of the church's own, and a fax that does not
+// text.
+let church = 'https://example.org/sms'
+let dids = [{
+  did: '2695550100',
+  description: 'Home',
+  sms_enabled: '1',
+  sms_email: 'jeff@example.com',
+  sms_email_enabled: '1',
+  sms_forward_enabled: '0',
+  sms_sipaccount: '4931',
+  sms_sipaccount_enabled: '0',
+  sms_url_callback_enabled: '0',
+  sms_url_callback: '',
+}, {
+  did: '2695550111',
+  description: 'Church line',
+  sms_enabled: '1',
+  sms_email: 'office@example.org',
+  sms_email_enabled: '1',
+  sms_forward_enabled: '0',
+  sms_sipaccount: '',
+  sms_sipaccount_enabled: '0',
+  sms_url_callback_enabled: '1',
+  sms_url_callback: church,
+}, {
+  did: '2695550122',
+  description: 'Fax',
+  sms_enabled: '0',
+}] as Record<string, string>[]
 let asked: URLSearchParams[] = []
 let real = globalThis.fetch
 globalThis.fetch = (input, init) => {
@@ -58,21 +105,13 @@ globalThis.fetch = (input, init) => {
     return Promise.resolve(Response.json({ status: 'invalid_credentials' }))
   }
   let method = q.get('method')
-  if (method == 'getDIDsInfo') {
-    return ok({
-      dids: [{
-        did: '2695550100',
-        sms_enabled: '1',
-        sms_email: 'jeff@example.com',
-        sms_email_enabled: '1',
-        sms_forward_enabled: '0',
-        sms_sipaccount: '4931',
-        sms_sipaccount_enabled: '0',
-        sms_url_callback_enabled: '0',
-      }],
-    })
+  if (method == 'getDIDsInfo') return ok({ dids })
+  if (method == 'setSMS') {
+    let did = dids.find((d) => d.did == q.get('did'))!
+    did.sms_url_callback_enabled = q.get('url_callback_enable')!
+    did.sms_url_callback = q.get('url_callback')!
+    return ok({})
   }
-  if (method == 'setSMS') return ok({})
   return ok({ [method == 'sendSMS' ? 'sms' : 'mms']: 9000 + asked.length })
 }
 let of = (method: string) => asked.filter((q) => q.get('method') == method)
@@ -101,8 +140,11 @@ type Said = { say: string; no: boolean }
 let unfilled = await page('jeff@example.com', '') as Said
 let refused = await page('jeff@example.com', 'wrong') as Said
 let connected = await page('jeff@example.com', 'pw') as Said
-let [pointed] = of('setSMS')
-let callback = pointed.get('url_callback')!
+let pointedOnSave = of('setSMS').length
+let [connection] = await ctxOf(env).graph.read(
+  `.connection.integration=voipms&.connection.status=connected&*`,
+)
+let numbers = await numbersOf(env, connection.entity.eid)
 
 let reply = (text: string): Item[] => [{ kind: 'assistant', text }]
 let call = (name: string, args: unknown): Item[] => [{
@@ -147,6 +189,27 @@ let service = operatorService(
 env.BUILDER = service.binding
 let { store } = service
 
+// The Operator's own tools, as its person's turn holds them.
+let ctx = { env, dir, person } as unknown as Ctx
+let numbered = phoneNumbers(env, ctx, space, store)
+let setting = async (args: Record<string, unknown>) => {
+  let listed = JSON.parse(await numbered.run(args) as string)
+  await service.drain()
+  return listed as Record<string, unknown>[]
+}
+let unchosen = await assertRejects(
+  async () =>
+    void await phoneSend(env, ctx, space, store).run({
+      to: '2695550142',
+      name: 'Dr Alvarez',
+      text: 'Hi',
+    }),
+  Error,
+)
+let listedFirst = await setting({})
+let outbound = await setting({ number: 'church line' })
+let pointedOutbound = of('setSMS').length
+
 await receive(
   store,
   { space: eid, person, channel: 'chat' },
@@ -158,13 +221,20 @@ let [kept] = await store.g.read('.operator_text&*')
 let [fork] = await store.g.read(`.spawned.parent=${rootOf(eid, person)}`)
 let ofFork = await conversationOf(store, '/at', fork.entity.eid)
 
+// The church line's texts come to the Operator too.
+let inbound = await setting({ number: '+12695550111', inbound: true })
+let [pointed] = of('setSMS')
+let callback = pointed.get('url_callback')!
+let [keptChurch] = (await numbersOf(env, connection.entity.eid))
+  .filter((n) => n.number == '+12695550111')
+
 // voip.ms calls back the way its SMS URL callback fills its variables in.
 let { voipms } = await owned(env)
 let texted = (id: string, from: string, message: string) =>
   lineDoor(
     new Request(
       callback.replace('{ID}', id).replace('{FROM}', from)
-        .replace('{TO}', '2695550100')
+        .replace('{TO}', '2695550111')
         .replace('{MESSAGE}', encodeURIComponent(message)),
     ),
     env,
@@ -175,6 +245,10 @@ let answered = await texted('77', '2695550142', 'Tuesday at 3 works for us.')
 let stranger = await texted('78', '2695550199', 'Are we still on for golf?')
 await service.drain()
 let root = await conversationOf(store, '/at', rootOf(eid, person))
+
+// And no longer: its callback goes back to the church's own.
+await setting({ number: 'Church line', inbound: false })
+let [, restored] = of('setSMS')
 let forged = await lineDoor(
   new Request('https://yaks.app/voipms/e30.bm90LW91cnM?id=79&from=1&to=2'),
   env,
@@ -182,15 +256,51 @@ let forged = await lineDoor(
   voipms,
 )
 
-test('a voip.ms connection is checked, names the number, and points its callback here, keeping how texts reach the person', () => {
+test('a voip.ms connection is checked and lists every number on the account, changing none', () => {
   assertEquals(unfilled, { say: 'Fill in API password first.', no: true })
   assertEquals(refused.no, true)
   assertStringIncludes(refused.say, 'username or API password')
   assertEquals(connected, {
     say:
-      'Connected +12695550100. Your Operator can text from it, and replies to its texts come back to it.',
+      'Connected +12695550100 (Home), +12695550111 (Church line). Tell your Operator which number to text from, and whether texts to it should come to your Operator. Nothing about a number changes until you do.',
     no: false,
   })
+  assertEquals(pointedOnSave, 0)
+  assertEquals(
+    numbers.map((n) => [n.number, n.label, n.sms, n.callback]).sort(),
+    [
+      ['+12695550100', 'Home', true, undefined],
+      ['+12695550111', 'Church line', true, church],
+      ['+12695550122', 'Fax', false, undefined],
+    ],
+  )
+})
+
+test('the Operator texts from no number until one is chosen, and an outbound one keeps its callback', () => {
+  assertStringIncludes(unchosen.message, 'not chosen which of their numbers')
+  assertEquals(listedFirst.map((n) => [n.number, n.outbound, n.inbound]), [
+    ['+12695550100', false, false],
+    ['+12695550111', false, false],
+    ['+12695550122', false, false],
+  ])
+  assertEquals(
+    outbound.find((n) => n.number == '+12695550111'),
+    {
+      number: '+12695550111',
+      label: 'Church line',
+      sms: true,
+      outbound: true,
+      inbound: false,
+    },
+  )
+  assertEquals(pointedOutbound, 0)
+})
+
+test('an inbound number has its callback pointed here, keeping how texts reach the person, and put back once it is not', () => {
+  assertEquals(
+    inbound.find((n) => n.number == '+12695550111')?.inbound,
+    true,
+  )
   assert(callback.startsWith('https://yaks.app/voipms/'))
   assertStringIncludes(
     callback,
@@ -202,25 +312,44 @@ test('a voip.ms connection is checked, names the number, and points its callback
         'did',
         'email_enabled',
         'email_address',
-        'sms_sipaccount',
         'url_callback_enable',
         'url_callback_retry',
       ]
         .map((k) => [k, pointed.get(k)]),
     ),
     {
-      did: '2695550100',
+      did: '2695550111',
       email_enabled: '1',
-      email_address: 'jeff@example.com',
-      sms_sipaccount: '4931',
+      email_address: 'office@example.org',
       url_callback_enable: '1',
       url_callback_retry: '1',
     },
   )
+  assertEquals(keptChurch.callback, church)
+  assertEquals(
+    [restored.get('did'), restored.get('url_callback_enable')],
+    ['2695550111', '1'],
+  )
+  assertEquals(restored.get('url_callback'), church)
+  assertEquals(of('setSMS').length, 2)
+})
+
+test('a connection saved before numbers were listed is used both ways on the number it took', async () => {
+  let line = { entity: { eid: 'c' }, connection: { account: '+12695550100' } }
+  assertEquals(await chosen({ read: () => Promise.resolve([]) }, line), [
+    { connection: 'c', number: '+12695550100', outbound: true, inbound: true },
+  ])
+  assertEquals(
+    await chosen({ read: () => Promise.resolve([]) }, {
+      entity: { eid: 'c' },
+      connection: { account: 'jeff@example.com' },
+    }),
+    [],
+  )
 })
 
 test("a fork's text goes from the person's own number, signed as their assistant, and is kept", () => {
-  assertEquals(sent.get('did'), '2695550100')
+  assertEquals(sent.get('did'), '2695550111')
   assertEquals(sent.get('dst'), '2695550142')
   assertEquals(sent.get('api_username'), 'jeff@example.com')
   assertEquals(
@@ -236,7 +365,7 @@ test("a fork's text goes from the person's own number, signed as their assistant
     text.to,
   ], [
     person,
-    '+12695550100',
+    '+12695550111',
     '+12695550142',
   ])
   assertStringIncludes(ofFork.html, 'Texted Dr Alvarez')

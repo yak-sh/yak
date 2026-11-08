@@ -11,6 +11,12 @@ that keeps texts in memory.
 
 - `phone{number}` is a number in E.164 form (`+12695550142`) on the entity it
   reaches. On a person it is their mobile.
+- `own_number{connection, number, sms, label, callback}` is a number a person's
+  own account at a provider holds, as the host listed it when they connected it
+  (`Own`): whether it texts, what the account calls it, and the URL its texts
+  went to before the host pointed them at itself, which they go back to when it
+  stops. Its eid is derived from `connection` and `number`, and it goes with its
+  connection.
 - `sms_consent{person, consent, at, space}` records that `person` agreed to be
   texted at their `phone{number}`, in the words `consent` exactly as they were
   shown, at `at`, by the Operator of `space` when one is named. Its eid is
@@ -76,11 +82,12 @@ a person connects a number of their own through, `own`.
 
 A provider's `own` (`Own`) says how: the field of the person's connection each
 setting is read from (`fields`), their `Account` opened with those settings
-alone (a `Sender` with `lines()`, the numbers it holds as `Held`, and
-`point(number, url)`, which sends a number's texts to a URL), the query its
-callback fills in (`callback`), what a callback said (`called(query)`), and the
-words a person is told when their settings open nothing or none of the numbers
-texts (`said`).
+alone (a `Sender` with `lines()`, the numbers it holds as
+`Held{number, sms,
+label, callback}`, and `point(number, url?)`, which sends a
+number's texts to a URL, or to none without one), the query its callback fills
+in (`callback`), what a callback said (`called(query)`), and the words a person
+is told when their settings open nothing or none of the numbers texts (`said`).
 
 `stash()` keeps texts in `sent` with `last()`, and answers receipts `stash-1`,
 `stash-2`, …; `stash({ block })` and `stash({ refuse })` reject every text.

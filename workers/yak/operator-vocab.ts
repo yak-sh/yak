@@ -166,6 +166,37 @@ export let operatorDoc: VocabDoc = {
         },
       },
     },
+    // Which of the person's own numbers the Operator uses, and how: its
+    // own setting, written by phone_numbers or any write to its store
+    // (operator-line.ts).
+    operator_line: {
+      component: true,
+      description:
+        "One of the numbers a person's own connected phone account holds (own_number in the directory), as the person chose for their Operator: outbound, its phone_send texts go from it; inbound, texts that reach it come to the Operator. Each is on only when true, and the two are independent.",
+      properties: {
+        connection: {
+          type: 'string',
+          ref: 'entity',
+          death: 'keep',
+          identity: true,
+          description: 'The connection to the account that holds it.',
+        },
+        number: {
+          type: 'string',
+          identity: true,
+          description: 'The number in E.164 form.',
+        },
+        outbound: {
+          type: 'boolean',
+          description: 'Whether phone_send texts go from it.',
+        },
+        inbound: {
+          type: 'boolean',
+          description:
+            'Whether texts that reach it come to the Operator: on, its SMS callback is pointed at yaks.app; off, its callback is left as the person had it, or put back.',
+        },
+      },
+    },
     operator_answer: {
       component: true,
       description:
@@ -234,6 +265,15 @@ export let operatorDoc: VocabDoc = {
       tries: 3,
       description:
         "Give a fired wake's words to the Operator as a request of the person who set it; for a subscription, only when its query's rows changed.",
+    },
+    operator_line_point: {
+      effect: true,
+      created: ['operator_line'],
+      changed: ['operator_line.inbound'],
+      removed: ['operator_line'],
+      tries: 3,
+      description:
+        "Point the SMS callback of each of a connection's numbers taken inbound at yaks.app, and put back the callback of each that no longer is (operator-line.ts `pointed`).",
     },
     operator_receive: {
       effect: true,

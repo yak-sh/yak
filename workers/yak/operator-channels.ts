@@ -696,6 +696,18 @@ export let handleChannels = (
 ) => {
   let { g, fx } = operator.store
   fx.handle({
+    // How the Operator uses one of the person's own numbers changed: their
+    // callbacks follow it (operator-line.ts `pointed`).
+    operator_line_point: async (event) => {
+      let [row] = await g.get([event.entity.eid])
+      let line = part<{ connection?: string; number?: string } | undefined>(
+        row ?? event.before,
+        'operator_line',
+      )
+      if (!line?.connection) return
+      let { pointed } = await import('./operator-line.ts')
+      await pointed(env, g, line.connection, row ? undefined : line.number)
+    },
     // A wake-up that fired is the words it was set with, once per firing; a
     // subscription's firing is a look at its query, and words only for a
     // change (operator-subscriptions.ts).

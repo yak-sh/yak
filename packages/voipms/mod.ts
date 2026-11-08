@@ -151,6 +151,7 @@ export let voipms = (
     (await dids()).map((d) => ({
       number: e164(String(d.did ?? '')),
       sms: String(d.sms_enabled) == '1',
+      ...d.description ? { label: String(d.description) } : {},
       ...String(d.sms_url_callback_enabled) == '1' && d.sms_url_callback
         ? { callback: String(d.sms_url_callback) }
         : {},
@@ -174,7 +175,8 @@ export let voipms = (
       let did = (await dids()).find((d) => ten(String(d.did ?? '')) == ten(at))
       if (!did) throw new Error(`${at} is not a number on this voip.ms account`)
       // setSMS sets every way a number's texts reach its owner at once, so
-      // each is said again as the account has it.
+      // each is said again as the account has it; no url turns the callback
+      // off.
       await call('setSMS', {
         did: ten(at),
         enable: '1',
@@ -184,9 +186,9 @@ export let voipms = (
         sms_forward: String(did.sms_forward ?? ''),
         sms_sipaccount_enabled: flag(did.sms_sipaccount_enabled),
         sms_sipaccount: String(did.sms_sipaccount ?? ''),
-        url_callback_enable: '1',
-        url_callback: url,
-        url_callback_retry: '1',
+        url_callback_enable: url ? '1' : '0',
+        url_callback: url ?? '',
+        url_callback_retry: url ? '1' : '0',
       })
     },
     send: async ({ to, text, from: given }: Text): Promise<Receipt> => {

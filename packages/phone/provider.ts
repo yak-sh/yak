@@ -22,16 +22,19 @@ export type Held = {
   number: string
   /** whether it sends and receives texts */
   sms: boolean
+  /** what the account calls it, as the person named it there */
+  label?: string
   /** the URL its texts are sent to, when its callback is on */
   callback?: string
 }
 
 /** A person's own account at a provider: a {@link Sender}, the numbers it
- * holds, and `point`, which sends a number's texts to a URL and leaves
- * every other way they reach the person as it was. */
+ * holds, and `point`, which sends a number's texts to a URL, or to none when
+ * `url` is absent, and leaves every other way they reach the person as it
+ * was. */
 export type Account = Sender & {
   lines: () => Promise<Held[]>
-  point: (number: string, url: string) => Promise<void>
+  point: (number: string, url?: string) => Promise<void>
 }
 
 /** How a person connects a number of their own through a provider: their

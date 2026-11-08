@@ -18,6 +18,43 @@
         }
       }
     },
+    "own_number": {
+      "component": true,
+      "type": "object",
+      "description": "a number held by a person's own account at a phone provider, as it was listed when they connected it: what it is called there, whether it texts, and where its texts went before its host pointed them at itself. Its eid is derived from its connection and number",
+      "properties": {
+        "connection": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "identity": true,
+          "description": "the connection to the account that holds it"
+        },
+        "number": {
+          "type": "string",
+          "identity": true,
+          "description": "the number in E.164 form",
+          "examples": [
+            "+12695550100"
+          ]
+        },
+        "sms": {
+          "type": "boolean",
+          "description": "whether it sends and receives texts"
+        },
+        "label": {
+          "type": "string",
+          "description": "what the account calls it, as the person named it there",
+          "examples": [
+            "Church line"
+          ]
+        },
+        "callback": {
+          "type": "string",
+          "description": "the URL its texts were sent to before its host pointed them at itself; absent when none was. They go back there when the number stops taking texts in"
+        }
+      }
+    },
     "sms_consent": {
       "component": true,
       "type": "object",
