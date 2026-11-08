@@ -18,8 +18,8 @@ let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
  * nothing moved since the tag it was asked with, or the refusal and the
  * status it is: 500 where this side cannot set the read up (./remote.ts
  * `Misconfigured`), 503 where the tracker is out of reach or cannot answer
- * for now, 504 where it did not answer in time, and 502 or 404 where it
- * refused what was asked. */
+ * for now, 504 where it did not answer in time, 400 with the tracker's reason
+ * where it refused what was asked, and 502 or 404 where it refused otherwise. */
 export type Read =
   | { ok: true; value: unknown; tag?: string; unchanged?: false }
   | { ok: true; value?: undefined; tag: string; unchanged: true }
@@ -96,6 +96,19 @@ export let read = async (
     return { ok: true, tag: etag, unchanged: true }
   }
   let { status } = response
+  if (status == 400) {
+    // A 400 refuses what was asked, so the reason the tracker's door gives,
+    // its own words in `error`, goes back to whoever asked it; no other
+    // answer's body leaves the read.
+    let said = await response.json().catch(() => null) as
+      | { error?: unknown }
+      | null
+    let why = typeof said?.error == 'string' ? said.error.slice(0, 500) : ''
+    return refused(
+      `Remote tracker refused the read (400)${why ? `: ${why}` : ''}`,
+      400,
+    )
+  }
   if (!response.ok) {
     return refused(
       `Remote tracker refused the read (${status})`,

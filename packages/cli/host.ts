@@ -446,7 +446,22 @@ let composed = async (
       during: { process: selfEid() },
       tags: { step: where },
     })
-  let unfault = faults(caught)
+  // A rejection nobody held is reported where it surfaced, and the host lives
+  // on: one stray promise never ends the process and every request it serves.
+  let stray = (event: PromiseRejectionEvent) => {
+    event.preventDefault()
+    void report(event.reason, {
+      during: { process: selfEid() },
+      mechanism: 'onunhandledrejection',
+      tags: { step: 'unhandled rejection' },
+    })
+  }
+  globalThis.addEventListener('unhandledrejection', stray)
+  let unhooked = faults(caught)
+  let unfault = () => {
+    unhooked()
+    globalThis.removeEventListener('unhandledrejection', stray)
+  }
   try {
     // An existing graph can refuse before any plugin runtime is imported.
     // Keep its connection; absent graphs wait for a valid assembly before

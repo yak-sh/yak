@@ -10,6 +10,7 @@ import { mint } from '@yaks/graph'
 import { service } from '../tracker/service.ts'
 import { comp } from '../tracker/model.ts'
 import { delivery } from '@yaks/tracker/remote'
+import { CallError } from '@yaks/tools/errors'
 import { ram } from '@yaks/ram'
 import { door } from '../../workers/tracker/door.ts'
 import { options, platform, store, vocab } from '../../workers/tracker/core.ts'
@@ -187,4 +188,34 @@ test('relative reporter spool resolves with its config, not process cwd', async 
   } finally {
     await Deno.remove(dir, { recursive: true })
   }
+})
+
+// A rejection nobody held, a refusal's too, answered no one: the host it
+// surfaced in reports it once and goes on answering.
+test('a host reports a stray rejection and lives on', async () => {
+  let dir = await Deno.makeTempDir()
+  let config = { ...trackerConfig(dir), db: ':memory:' }
+  let log = console.error
+  console.error = () => {}
+  let host = await compose(config, ['graph', '@yaks/tracker'], undefined, {})
+  let read
+  try {
+    void Promise.reject(
+      new CallError('remote', 'Remote tracker refused the read (400)'),
+    )
+    await new Promise((done) => setTimeout(done, 0))
+    read = await host.graph.read('.doc .limit=1')
+  } finally {
+    await host.close()
+    console.error = log
+  }
+  let records = await Array.fromAsync(files(config.tracker.spool).source())
+  let thrown = records.flatMap((r) => r.rows).flatMap((row) =>
+    row.exception ? [comp(row, 'exception')] : []
+  )
+  await Deno.remove(dir, { recursive: true })
+  equal(Array.isArray(read), true)
+  equal(thrown.map((e) => [e.value, e.mechanism]), [
+    ['Remote tracker refused the read (400)', 'onunhandledrejection'],
+  ])
 })

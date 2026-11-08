@@ -57,6 +57,7 @@ import type {
   Range,
   Refs,
   Tally,
+  Text,
   Value,
   Walk,
 } from '@yaks/query/core'
@@ -2587,6 +2588,16 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
       )
     }
     return hops.length == 1 ? single(ctx, hops[0], c) : path(ctx, hops, c)
+  }
+  // Words are answered by a search index (@yaks/fts, an extension), which a
+  // store without one cannot consult: the refusal says so, and what does.
+  if ((c as Clause).kind == 'text') {
+    throw new Unsupported(
+      'words',
+      `"${
+        (c as Text).value
+      }" needs a search index, which this store keeps none of; match a property with ~= instead`,
+    )
   }
   throw new Unsupported(`the ${(c as Clause).kind} directive`)
 }

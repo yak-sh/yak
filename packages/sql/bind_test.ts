@@ -313,6 +313,17 @@ test('an unreachable directive throws Unsupported naming the feature', () => {
   assertEquals(e.feature, '.near')
 })
 
+test('words, without a search index to answer them, say what to match instead', () => {
+  let e = assertThrows(
+    () => compile(parse('exists'), v),
+    Unsupported,
+  ) as Unsupported
+  assertEquals(
+    e.message,
+    '@yaks/sql cannot compile words: "exists" needs a search index, which this store keeps none of; match a property with ~= instead',
+  )
+})
+
 // A rule sigil is an instruction to a rule engine, and storage has no engine:
 // compiling one away would answer a question nobody asked.
 test('a rule sigil throws Unsupported rather than compiling', () => {

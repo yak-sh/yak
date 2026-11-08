@@ -261,7 +261,11 @@ export let report = async (error: unknown, context: Context): Promise<void> => {
 let consoleRows: Sink = (rows) => console.error(JSON.stringify(rows))
 export let caught = (error: unknown, context: Context): Promise<void> => {
   try {
-    return refused(error) ? Promise.resolve() : report(error, context)
+    // A refusal is control flow only where someone catches it: one that
+    // escaped as an uncaught error or a rejection nobody held answered no one.
+    let stray = context.mechanism == 'onerror' ||
+      context.mechanism == 'onunhandledrejection'
+    return !stray && refused(error) ? Promise.resolve() : report(error, context)
   } catch {
     return Promise.resolve()
   }

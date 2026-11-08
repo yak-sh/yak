@@ -19,19 +19,26 @@ export let everywhere = async (
   go: typeof fetch = fetch,
 ): Promise<Everywhere> => {
   let unread: string[] = []
-  let [rows, ...theirs] = await Promise.all([
+  // The platform's read and the list of spaces start together, and each is
+  // awaited from the start: the platform's refusal rejects this read while
+  // the list is still on its way, never escaping as a rejection nobody holds.
+  let [rows, theirs] = await Promise.all([
     each('platform'),
-    ...(await spaces(options.remote ?? {}, go).catch((error) => {
-      unread.push(`the list of space trackers: ${(error as Error).message}`)
-      return []
-    })).map((scope) =>
-      each(scope).then(
-        (got) => got.map((row) => ({ ...row, $scope: scope })),
-        (error) => {
-          unread.push(`space ${scope}: ${(error as Error).message}`)
-          return []
-        },
-      )
+    spaces(options.remote ?? {}, go).then(
+      (scopes) =>
+        Promise.all(scopes.map((scope) =>
+          each(scope).then(
+            (got) => got.map((row) => ({ ...row, $scope: scope })),
+            (error) => {
+              unread.push(`space ${scope}: ${(error as Error).message}`)
+              return []
+            },
+          )
+        )),
+      (error) => {
+        unread.push(`the list of space trackers: ${(error as Error).message}`)
+        return []
+      },
     ),
   ])
   return { rows: [...rows, ...theirs.flat()], unread }

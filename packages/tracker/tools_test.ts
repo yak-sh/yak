@@ -17,6 +17,9 @@ import { runs, type ToolOptions } from './tools.ts'
 import { routes } from './routes.ts'
 import { api, asking } from '@yaks/api'
 import { sign } from './ticket.ts'
+import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
+import { CallError } from '@yaks/tools/errors'
 
 let ids = [1, 2, 3, 4, 5, 6].map((n) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -140,6 +143,59 @@ test('a space tracker that cannot be read is said beside every other bug', async
   equal((answer?.rows as Bundle[]).map((b) => b.entity.eid), [ids[1]])
   equal(answer?.unread, [
     `space ${space}: Remote tracker refused the read (403)`,
+  ])
+})
+// The tracker `scope` names kept as the Worker keeps one, over SQLite with no
+// search index, which refuses words (a 400 with its reason); `slow` holds the
+// list of spaces until a turn after the platform has answered.
+let refusing = (refuser: string, slow = false) => {
+  let kept = storage(open(':memory:'), vocab, options)
+  kept.install()
+  let refuses = door(
+    store(kept, { sink: () => {} }),
+    refuser,
+    config.remote.secret,
+  )
+  let answered = Promise.withResolvers<void>()
+  let worker = (async (url: URL, init?: RequestInit) => {
+    let at = new URL(url)
+    if (at.pathname == '/scopes') {
+      if (slow) await answered.promise
+      return Response.json({ scopes: [space] })
+    }
+    let scope = at.searchParams.get('scope') == space ? space : platform
+    let answer = await (
+      scope == refuser ? refuses : scope == space ? spaceDoor : upstream
+    )(new Request(url, init))
+    if (scope == platform) setTimeout(answered.resolve, 0)
+    return answer
+  }) as typeof fetch
+  let listed = Promise.resolve(
+    runs({}, config, worker).bug_list({
+      entity: { eid: ids[4] },
+      call: { args: { source: 'yaks.app', query: 'problem' } },
+    }, box),
+  )
+  return { listed, answered: answered.promise }
+}
+let words =
+  'Unsupported: @yaks/sql cannot compile words: "problem" needs a search index, which this store keeps none of; match a property with ~= instead'
+test("the platform tracker's refusal is the list's, with its reason, while the spaces are still being listed", async () => {
+  let { listed, answered } = refusing(platform, true)
+  let error = await listed.then(() => undefined, (e: Error) => e)
+  await answered
+  ok(error instanceof CallError)
+  equal(error?.message, `Remote tracker refused the read (400): ${words}`)
+})
+test("a space tracker's refusal is said as that space's, with its reason, beside the others' bugs", async () => {
+  let answer = valueIn(await refusing(space).listed)
+  equal((answer?.rows as Bundle[]).map((b) => b.entity.eid), [
+    ids[2],
+    ids[1],
+    ids[0],
+  ])
+  equal(answer?.unread, [
+    `space ${space}: Remote tracker refused the read (400): ${words}`,
   ])
 })
 test("a space's bug shows from its tracker, the scope its letter names", async () => {

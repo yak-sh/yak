@@ -395,7 +395,8 @@
       "description": "List bugs, open by default. Answers source-labelled rows as text and output.value for either store. For yaks.app, every tracker's: the platform's, then each space's, whose rows name the space in $scope, the scope bug_show and the marks take; a space tracker that could not be read is said in unread.",
       "input": {
         "query": {
-          "type": "string"
+          "type": "string",
+          "description": "A yaks query, .bug.status=open by default. The yaks.app trackers keep no search index and refuse bare words: match a property instead, as .doc.title~=exists."
         },
         "limit": {
           "type": "number",
