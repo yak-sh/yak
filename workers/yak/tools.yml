@@ -1187,7 +1187,8 @@ operator_read:
     Read this space's private operator tasks, conversations, replies and native
     session entries. Pass task (a task, or a conversation's session) for its
     lines, a conversation's newest 64, or omit it for the twenty latest tasks and
-    conversations.
+    conversations. While a conversation has lines before those answered, its
+    earlier says how many and the before to pass for the 64 preceding them.
     Model instruction snapshots are omitted unless context is true.
 operator_remove:
   title: Remove your operator's work

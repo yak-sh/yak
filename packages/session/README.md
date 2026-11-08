@@ -534,16 +534,17 @@ const oldest = await transcriptWindow(g, 'session', { edge: 'start' })
 ```
 
 The result is `{ entries, before, after, total, offset }`. Limits count entries,
-are clamped to 1–256, and default to 64. An unknown anchor or one outside the
-fork prefix selects the newest page. A fork never includes parent entries
-written after its `fork.from` boundary. `transcriptPlan()` returns ordinary
-bounded graph queries; it is not a transactionally frozen snapshot, so
-subscriptions must refresh it when membership changes. `transcriptSegments()`
-describes ancestor ranges, and `transcriptUsage()` reads the latest usage
-without transcript text. `before` and `after` indicate unloaded neighbors. Pages
-remain in logical transcript order. A plan reads entry positions first, then
-limits body reads to the selected ranges; it can be used with `@yaks/api`
-subscriptions.
+are clamped to 1–256, and default to 64. `before` names an entry, a page's
+first, for the page ending just before it, so a reader pages back to the start.
+An unknown anchor or one outside the fork prefix selects the newest page. A fork
+never includes parent entries written after its `fork.from` boundary.
+`transcriptPlan()` returns ordinary bounded graph queries; it is not a
+transactionally frozen snapshot, so subscriptions must refresh it when
+membership changes. `transcriptSegments()` describes ancestor ranges, and
+`transcriptUsage()` reads the latest usage without transcript text. `before` and
+`after` indicate unloaded neighbors. Pages remain in logical transcript order. A
+plan reads entry positions first, then limits body reads to the selected ranges;
+it can be used with `@yaks/api` subscriptions.
 
 ## Harness hooks
 

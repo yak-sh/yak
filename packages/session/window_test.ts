@@ -49,6 +49,12 @@ test('transcript windows bound bodies, support both edges and entry anchors', as
     Array.from({ length: 10 }, (_, i) => 'e' + (45 + i)),
   )
   assertEquals([middle.before, middle.after], [true, true])
+  let back = async (before: string) => {
+    let page = await transcriptWindow(g, 's', { limit: 10, before })
+    return [page.entries[0]?.entity.eid, page.entries.length, page.before]
+  }
+  assertEquals(await back('e90'), ['e80', 10, true])
+  assertEquals(await back('e5'), ['e0', 5, false])
 })
 test('nested fork page crosses stable ancestor boundaries without newer parent output', async () => {
   let g = tracked()

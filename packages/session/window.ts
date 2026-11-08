@@ -6,6 +6,9 @@ export type TranscriptWindow = {
   /** Entry identity, not a global entity number. Absent means the newest page. */
   anchor?: Eid
   edge?: 'start' | 'end'
+  /** The page that ends just before this entry, to read back a page at a
+   * time: pass a page's first entry for the one before it. */
+  before?: Eid
   /** Number of entry bodies to load, clamped to 1..256. */
   limit?: number
 }
@@ -90,10 +93,9 @@ export let transcriptPlan = async (
   if (!Number.isFinite(size)) throw new Error('Invalid transcript window limit')
   let segments = await transcriptSegments(g, session)
   let anchor: { segment: number; seq: number } | undefined
-  if (request.anchor && !request.edge) {
-    let [row] = await g.read(
-      '.entity.eid=' + request.anchor + '&.fields=entry.session,entry.seq',
-    )
+  let at = request.before ?? (request.edge ? undefined : request.anchor)
+  if (at) {
+    let [row] = await g.get([at], ['entry'])
     let entry = row?.entry as Comp | undefined
     let segment = segments.findIndex((s) =>
       s.session == entry?.session && Number(entry.seq) <= s.through
@@ -127,7 +129,12 @@ export let transcriptPlan = async (
     return found
   }
   let chosen: Position[], before: boolean, after: boolean
-  if (anchor) {
+  if (anchor && request.before) {
+    chosen = await positions('before', size + 1)
+    before = chosen.length > size
+    after = true
+    chosen = chosen.slice(0, size).reverse()
+  } else if (anchor) {
     let left = await positions('before', Math.floor(size / 2) + 1)
     let right = await positions(
       'after',

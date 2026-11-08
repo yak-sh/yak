@@ -1271,7 +1271,10 @@ export let operatorRequest = async (
         : missing()
     }
     return Response.json(
-      await readOperator(store, read.entity.eid, args.context === true),
+      await readOperator(store, read.entity.eid, {
+        context: args.context === true,
+        before: typeof args.before == 'string' ? args.before : undefined,
+      }),
     )
   }
   return null

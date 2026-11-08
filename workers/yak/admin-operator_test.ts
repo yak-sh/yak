@@ -171,7 +171,7 @@ test("the sessions page lists every space's Operator conversations, each by its 
 
 // operator_read, asked by the admin, finds each conversation as the admin
 // page does: the person's conversation, and a request no session has taken.
-let read = async (task: string) => {
+let read = async (task: string, more = {}) => {
   let out = await service.binding.get(eid).fetch(
     new Request('https://builder/operator/read', {
       method: 'POST',
@@ -180,7 +180,7 @@ let read = async (task: string) => {
         'x-yak-person': root,
         'x-yak-administrative': '1',
       },
-      body: JSON.stringify({ task }),
+      body: JSON.stringify({ task, ...more }),
     }),
   )
   return { status: out.status, value: await out.json() }
@@ -197,4 +197,35 @@ test("operator_read reads any person's conversation for the admin, a request no 
     ['Add a calendar.'],
   )
   assertEquals(nothing.status, 404)
+})
+
+// A long conversation reads back a page at a time from its newest 64, each
+// answer naming the before that reads the page preceding it.
+let long = rootOf(eid, jeff)
+let said = Array.from({ length: 150 }, (_, i) => `said-${i}`)
+let eids = (page: { entries: { entity: { eid: string } }[] }) =>
+  page.entries.map((b) => b.entity.eid)
+let first = eids(talked.value)
+await service.store.g.apply(
+  said.map((eid, i) => ({
+    entity: { eid },
+    entry: { session: long, seq: 1000 + i },
+    content: { body: String(i) },
+  })),
+  { trusted: true },
+)
+let pages = []
+for (let more = {}; more && pages.length < 9;) {
+  let { value } = await read(long, more)
+  pages.push(value)
+  more = value.earlier && { before: value.earlier.before }
+}
+test('operator_read reads a long conversation back to its start, the newest 64 first', () => {
+  let total = first.length + said.length
+  assertEquals(pages.map((p) => [p.entries.length, p.earlier?.count]), [
+    [64, total - 64],
+    [64, total - 128],
+    [total - 128, undefined],
+  ])
+  assertEquals(pages.toReversed().flatMap(eids), [...first, ...said])
 })

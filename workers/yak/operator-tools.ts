@@ -60,6 +60,9 @@ export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
           description:
             'Include the model instruction snapshots beside transcript entries (omitted by default).',
         },
+        before: str(
+          "An entry of the conversation, as an answer's earlier.before names it, to read the 64 lines before it.",
+        ),
       },
     },
     run: (ctx, args) => ask(ctx, args, '/operator/read'),

@@ -438,10 +438,15 @@ export let operatorChoice = (env: Env) => {
   }
 }
 
+/** This space's operator work as operator_read answers it: the latest tasks
+ * and conversations, a task with all its lines, or a conversation's newest
+ * lines, a page at a time back from `before` (an entry), with how many come
+ * before them and the `before` to pass for the page preceding (`earlier`).
+ * Model instruction snapshots are left out unless `context`. */
 export let readOperator = async (
   { g }: Store,
   task?: string,
-  context = false,
+  { context = false, before }: { context?: boolean; before?: string } = {},
 ) => {
   if (!task) {
     return {
@@ -454,8 +459,15 @@ export let readOperator = async (
   let [row] = await g.get([task])
   // A conversation is its session: its newest lines, as a task's are read.
   if (row?.session) {
-    let { entries } = await transcriptWindow(g, task, { limit: LINES })
-    return { sessions: [row], entries: sent(entries, context) }
+    let page = await transcriptWindow(g, task, { limit: LINES, before })
+    let count = page.before ? page.offset ?? 0 : 0
+    return {
+      sessions: [row],
+      entries: sent(page.entries, context),
+      ...count
+        ? { earlier: { count, before: page.entries[0].entity.eid } }
+        : {},
+    }
   }
   if (!row?.task) throw refuse('missing', `no operator task ${task}`)
   let comments = await g.read(`.comment.target=${task} ?doc .order=created.at`)
