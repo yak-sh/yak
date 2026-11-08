@@ -19,12 +19,10 @@ test('a hosted builder keeps independent builds for 50 bindings', async () => {
     },
     build: { builder, match: `["${i}"]`, variant: 'main' },
   })))
-  let rows = JSON.parse(
-    await agent.tool('graph_query', {
-      space,
-      app: 'index',
-      filter: `.build.builder=${builder}&*`,
-    }),
-  ) as unknown[]
-  assertEquals(rows.length, 50)
+  let builds = await agent.narrow('graph_query', {
+    space,
+    app: 'index',
+    filter: `.build.builder=${builder}&*`,
+  }, '.result | length')
+  assertEquals(builds, 50)
 })

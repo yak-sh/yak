@@ -435,6 +435,9 @@ export let dropSql = (eid: string, comp: string): Delete => ({
   where: eq(col('entity'), owner(eid)),
 })
 
+// The entities one pointer statement names, as one bound list.
+let POINTED = 2048
+
 /** The identity metadata write: the pointer and its entity by the integer ids
  * `ids` holds, else by their portable eids. */
 export let archetypeSql = (
@@ -1055,13 +1058,34 @@ export let patch = (
   whole.flush()
 
   // Metadata can classify a tombstone too; on its own it brings nothing back.
-  // A pointer this entity's mint already wrote is not written again.
+  // A pointer this entity's mint already wrote is not written again. The
+  // entities pointed at one archetype both go by their integer ids are pointed
+  // in one statement a part: a batch of births in a class the unit has not
+  // seen finish, or of deaths, points hundreds of entities at one.
+  let pointing = new Map<number, number[]>()
   for (let b of bundles) {
     let { eid, archetype } = b.entity
     let to = archetype == null ? undefined : ids.get(archetype)
     let said = to != null && born?.pointed(eid, to)
     if (to != null && (said || pointers.get(eid) == to)) continue
-    for (let s of archetypeSql(b, ids)) effect(driver, s)
+    let id = ids.get(eid)
+    if (to == null || id == null) {
+      for (let s of archetypeSql(b, ids)) effect(driver, s)
+      continue
+    }
+    let group = pointing.get(to)
+    if (!group) pointing.set(to, group = [])
+    group.push(id)
+  }
+  for (let [to, owners] of pointing) {
+    for (let i = 0; i < owners.length; i += POINTED) {
+      effect(driver, {
+        t: 'update',
+        table: 'entity',
+        set: { archetype: val(to) },
+        where: oneOf(col('id'), owners.slice(i, i + POINTED)),
+      })
+    }
   }
   // The descriptors written here are all that moved one, unless one went.
   let defined = alive.filter((b) => b.archetype !== undefined)

@@ -197,13 +197,23 @@ await k.settled()
 let { tasks } = JSON.parse(
   (await agent.answer('operator_read', { space: slug })).text,
 )
-let read = JSON.parse(
+// The task's whole conversation is larger than a model is answered inline,
+// so it is kept, and the steps it took are read from it by jq.
+let kept = JSON.parse(
   (await agent.answer('operator_read', {
     space: slug,
     task: tasks[0].entity.eid,
   }))
     .text,
 )
+let DEBUG = await agent.answer('result_query', {
+  space: slug,
+  id: kept.id,
+  query:
+    '.result[0].content.body | fromjson | .entries | map(select(.result) | {result, refusal, content, operator_files})',
+})
+Deno.writeTextFileSync('.scratch/rq.txt', DEBUG.text.slice(0, 4000))
+let steps = JSON.parse(DEBUG.text).values[0]
 await k.stop()
 
 test('a member’s browser connects to their Operator by the token it bears', () => {
@@ -219,8 +229,7 @@ test('a member’s browser connects to their Operator by the token it bears', ()
 })
 
 test('the Operator reads the tab as the page’s words, and is shown its screenshot', () => {
-  let results = (read.entries as Record<string, Record<string, unknown>>[])
-    .filter((b) => b.result)
+  let results = steps as Record<string, Record<string, unknown>>[]
   let [text, shot] = results.map((b) => String(b.content?.body))
   assertStringIncludes(text, '<page>\nHello from the page <\\/page>')
   assertStringIncludes(shot, 'The screenshot is shown to you beside this.')
@@ -241,8 +250,7 @@ test('the Operator reads the tab as the page’s words, and is shown its screens
 })
 
 test('a step the person declined is a refusal the Operator reads', () => {
-  let click = (read.entries as Record<string, Record<string, unknown>>[])
-    .filter((b) => b.result)[2]
+  let click = (steps as Record<string, Record<string, unknown>>[])[2]
   assertEquals([click.refusal?.code, click.content?.body], [
     'browser',
     DECLINED,

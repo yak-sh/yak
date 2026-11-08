@@ -25,6 +25,13 @@ let space = async (k: Kernel) => {
     },
     applied: (app: string, entities: object[]) =>
       agent.tool('graph_apply', { app, entities }),
+    // The eid each alias was minted as, read off the batch as applied.
+    minting: (app: string, entities: object[]) =>
+      agent.narrow(
+        'graph_apply',
+        { app, entities },
+        '.result | map({key: .["$alias"], value: .entity.eid}) | from_entries',
+      ) as Promise<Record<string, string>>,
     rows: async (app: string, filter: string) =>
       JSON.parse(await agent.tool('graph_query', { app, filter })) as {
         entity: { eid: string }
@@ -83,18 +90,18 @@ test("a death in one app takes what refers to it in the space's others", async (
 test('the move sweep carries out the deaths a store held before', async () => {
   let k = await kernel()
   try {
-    let { made, applied, rows } = await space(k)
+    let { made, applied, minting, rows } = await space(k)
     await made('folk', PEOPLE)
     // More graves than one page of the walk holds.
     let folk = Array.from({ length: 120 }, (_, i) => `$p${i}`)
-    let said = await applied(
+    let said = await minting(
       'folk',
       folk.map((alias, i) => ({
         entity: { eid: alias },
         individual: { first: `P${i}` },
       })),
     )
-    let gone = folk.map((alias) => minted(said, alias))
+    let gone = folk.map((alias) => said[alias])
     await applied(
       'folk',
       gone.map((eid) => ({ entity: { eid }, tombstone: {} })),

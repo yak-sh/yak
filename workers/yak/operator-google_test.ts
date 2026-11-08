@@ -6,7 +6,7 @@ import { brokerKey, registration } from '@yaks/connections'
 import { d1 } from '../../packages/d1/testing.ts'
 import { platform } from './testing.ts'
 import { directoryOf } from './directory.ts'
-import { CALLBACK, callback, connecting } from './connections.ts'
+import { CALLBACK, callback, connecting, connectionsOf } from './connections.ts'
 import { KERNEL, meta } from './meta.ts'
 import { minted } from './session.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
@@ -305,5 +305,40 @@ test('what Google is asked: an all-day event ends the next day, and a subject be
       },
     }).text,
     'Hello',
+  )
+})
+
+// Nango never sends the person back, so a sign-in finished there shows as
+// connected the next time their connections page is read.
+test('a sign-in finished at Nango is connected on the next read of the page', async () => {
+  let other = crypto.randomUUID()
+  await dir.apply({
+    entities: [
+      { entity: { eid: other }, space: { slug: 'jeffs', store: 'jeffs' } },
+      {
+        entity: { eid: crypto.randomUUID() },
+        member: { person, space: other, role: 'owner' },
+      },
+    ],
+  }, owner)
+  let there = (await dir.at(other))!
+  let form = new FormData()
+  form.set('do', 'add')
+  form.set('integration', 'gmail')
+  let went = await connecting(
+    new Request('https://yaks.app/manage/jeffs/connections'),
+    env,
+    there,
+    { person, role: 'owner' },
+    form,
+  ) as Response
+  assertEquals(
+    went.headers.get('location'),
+    'https://connect.nango.dev/?session_token=s',
+  )
+  let page = await connectionsOf(env, there, person)
+  assertEquals(
+    page.list.filter((c) => c.integration == 'gmail').map((c) => c.status),
+    ['connected'],
   )
 })

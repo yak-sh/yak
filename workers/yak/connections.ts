@@ -295,33 +295,53 @@ export let ctxOf = (env: Partial<Env> & Pick<Env, 'STORE'>, who?: Who): Ctx => {
  * integration (@yaks/connections `settle`), or through `integration` alone:
  * a sign-in that finished at its broker, which never sends the person back to
  * us. Whoever reads a person's connections settles theirs first, so nothing
- * waits on the broker telling us. A broker that fails is ours to hear about,
- * and the connection stays needed for the next read. */
+ * waits on the broker telling us. */
 export let settling = async (
   env: Env,
   owners: string[],
   integration?: string,
 ) => {
-  let c = ctxOf(env)
-  let needed = await c.graph.read(
+  let { read } = ctxOf(env).graph
+  let needed = await read(
     `.${CONNECTION}.owner=${
       owners.filter(Boolean).join(',')
     }&.${CONNECTION}.status=needed${
       integration ? `&.${CONNECTION}.integration=${integration}` : ''
     }&*`,
   )
-  await Promise.all(needed.map(async (b) => {
-    let i = await known(c.graph.read, integrationOf(b))
-    if (!i?.broker) return
+  return await settled(env, needed, (name) => known(read, name))
+}
+
+/** Settle each of `rows` that is a needed connection through a brokered
+ * integration, as `named` reads it → how many it connected. A
+ * broker that fails is ours to hear about, and the connection stays needed
+ * for the next read. */
+let settled = async (
+  env: Env,
+  rows: Bundle[],
+  named: (
+    name: string,
+  ) => Integration | undefined | Promise<Integration | undefined>,
+): Promise<number> => {
+  let c = ctxOf(env)
+  let needed = rows.filter((b) =>
+    b[CONNECTION] && comp(b, CONNECTION).status == 'needed'
+  )
+  let made = await Promise.all(needed.map(async (b) => {
+    let i = await named(integrationOf(b))
+    if (!i?.broker) return 0
     try {
       let apps = await usersOf(env, b.entity.eid)
-      if (!(await settle(c, b.entity.eid)).length) return
+      if (!(await settle(c, b.entity.eid)).length) return 0
       await ready(env, b.entity.eid)
       await rebound(env, apps)
+      return 1
     } catch (e) {
       caught(e, { request: 'settle', integration: i.name })
+      return 0
     }
   }))
+  return made.reduce((n: number, m) => n + m, 0)
 }
 
 /** Whose space each app is in (@yaks/connections `Owners`): what its row in
@@ -579,8 +599,6 @@ export let connectionsOf = async (
   let { enable = [], dir = dirOf(env) } = at
   // Awaited only on the person's own space.
   at.services?.catch(() => {})
-  // A sign-in finished at a broker shows as connected on this very read.
-  await settling(env, [(await space).eid, person])
   let read = readOn(dir)
   let month = monthOf(Date.now())
   // Only what those answers name outside this space is asked after.
@@ -602,6 +620,16 @@ export let connectionsOf = async (
     .map((app) => ({ app: app.eid, title: app.title || app.slug }))
   let listed = new Set(listing.map((b) => b.entity.eid))
   let all = [...held, ...mine]
+  // A sign-in finished at a broker shows as connected on this very read:
+  // settled from the rows just read, and read again only once one connected.
+  let settledHere = await settled(
+    env,
+    all,
+    (name) => knownIn(all, name) ?? built.find((i) => i.name == name),
+  )
+  if (settledHere) {
+    return await connectionsOf(env, here, person, { ...at, by: undefined })
+  }
   let taken = new Set(
     all.filter((b) => b[CONNECTION])
       .map((b) => String(comp(b, CONNECTION).integration)),

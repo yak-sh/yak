@@ -1374,6 +1374,7 @@ export let graph = (opts: Options): Graph => {
         prop: string
         value: string
         kind: string
+        keep: boolean
       }[] = []
       for (let [i, row] of named.entries()) {
         for (let [comp, patch] of comps(row)) {
@@ -1391,18 +1392,34 @@ export let graph = (opts: Options): Graph => {
             if (
               p?.category == 'ref' && typeof value == 'string' &&
               !isAlias(value) && !minted(value)
-            ) refs.push({ i, comp, prop, value, kind: String(p.ref) })
+            ) {
+              refs.push({
+                i,
+                comp,
+                prop,
+                value,
+                kind: String(p.ref),
+                keep: p.death == 'keep',
+              })
+            }
           }
         }
       }
       // Rules admit each output separately. Most outputs need no resolution;
       // scanning the pending batch for each one makes stamping quadratic.
       if (!refs.length) return named
+      let batch = [...pending, ...named]
       let targets = new Set(
-        [...pending, ...named].filter((row) => gives(row) && !dead(row))
+        batch.filter((row) => gives(row) && !dead(row))
           .map((row) => row.entity.eid),
       )
-      let unresolved = refs.filter(({ value }) => !targets.has(value))
+      // A `keep` reference outlives what it names, so any entity the batch
+      // writes is one it may name, one the batch kills too: the effect a death
+      // owes targets the entity that died (@yaks/effects `effect.target`).
+      let written = new Set(batch.map((row) => row.entity.eid))
+      let unresolved = refs.filter(({ value, keep }) =>
+        !targets.has(value) && !(keep && written.has(value))
+      )
       if (!unresolved.length) return named
       return each(
         unresolved,

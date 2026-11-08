@@ -111,6 +111,9 @@ test('the door before anyone signs in', async () => {
       'graph_query',
       'graph_schema',
       'graph_show',
+      // A signed-out answer too large for the reply is kept in the public
+      // catalogue, and its summary says to narrow it here (result-tools.ts).
+      'result_query',
       'search',
     ]
     for (let t of listed.filter((one) => !callable.includes(one.name))) {
@@ -511,6 +514,7 @@ test('signed out: the gallery, the guide, and one public app', async () => {
       'graph_show',
       'guide',
       'integration_list',
+      'result_query',
       'search',
     ])
     for (let t of open) {
@@ -539,8 +543,16 @@ test('signed out: the gallery, the guide, and one public app', async () => {
     }
 
     // The guide, read here instead of fetched off the web.
-    assertStringIncludes(await anon.tool('guide'), '# ')
-    assertStringIncludes(await anon.tool('guide', { page: 'querying' }), '# ')
+    for (let args of [{}, { page: 'querying' }]) {
+      assertEquals(
+        await anon.narrow(
+          'guide',
+          args,
+          '.result[0].content.body | contains("# ")',
+        ),
+        true,
+      )
+    }
 
     // The gallery, and the same list searched — an offer is made to everybody,
     // so browsing it needs nobody.

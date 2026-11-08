@@ -1,6 +1,7 @@
 // The connector through the whole kernel (probe.ts `kernel`), by subject.
 import { listable } from './shelf.ts'
 import { COOKIE as HOME } from './variant.ts'
+import { EXAMPLES } from './site/home.tsx'
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -527,8 +528,10 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     let home = await k.at('yaks.app', '/', {
       headers: { cookie: `${HOME}=ask` },
     }).then((r) => r.text())
-    assertStringIncludes(home, 'A recipe box')
-    assertStringIncludes(home, 'Garden Diary')
+    for (let [slug] of EXAMPLES) {
+      assertStringIncludes(home, `https://yourname.yaks.app/${slug}/`)
+    }
+    assertEquals(home.includes('Somewhere to keep recipes'), false)
 
     // A stranger finds it: no cookie, no bearer, the same answer with the
     // install line on it.

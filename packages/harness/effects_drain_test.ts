@@ -23,6 +23,10 @@ let observed = await (async () => {
     if (String(url).endsWith('/models')) {
       return Response.json({ data: [{ id: 'drain-model' }] })
     }
+    // The model's documentation page, read for its limits: no model request.
+    if (String(url).endsWith('/docs/models/drain-model.md')) {
+      return new Response('Missing', { status: 404 })
+    }
     fetched++
     if (fetched == 1) {
       started.resolve()

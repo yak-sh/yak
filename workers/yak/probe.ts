@@ -18,6 +18,7 @@ import { parse } from 'smol-toml'
 import { endpoints } from './endpoints.ts'
 import { delivered, fakeSub } from '@yaks/stripe/testing'
 import { Ajv } from 'ajv'
+import { run as jq } from '@gabrielbryk/jq-ts'
 
 let logs = new Map<string, string>()
 
@@ -452,7 +453,36 @@ export let connector = (
   }
   let tool = async (name: string, args: unknown = {}) =>
     (await answer(name, args)).text
-  return { call, tool, answer }
+  // A jq filter over an answer's structured content, whole wherever it is:
+  // one too large for the reply was kept (result-tools.ts) and the filter
+  // runs on it there, through result_query; one that fit runs here.
+  let narrow = async (name: string, args: unknown, query: string) => {
+    let out = await call('tools/call', { name, arguments: args })
+    if (out.isError) throw new Error(String(out.content[0].text))
+    let held = out.structuredContent as Record<string, unknown> | undefined
+    if (
+      typeof held?.id != 'string' || typeof held.bytes != 'number' ||
+      !('shape' in held)
+    ) return jq(query, (held ?? null) as Parameters<typeof jq>[1])[0]
+    let { id, space, app, scope } = held
+    let kept = await call('tools/call', {
+      name: 'result_query',
+      arguments: {
+        id,
+        // A tool declaring its own answer keeps it beside its words.
+        query: '(if type == "object" and has("structuredContent") ' +
+          `then .structuredContent else . end) | (${query})`,
+        ...space ? { space } : {},
+        ...app ? { app } : {},
+        ...scope ? { scope } : {},
+      },
+    })
+    if (kept.isError) throw new Error(String(kept.content[0].text))
+    let values = kept.structuredContent?.values
+    if (!Array.isArray(values)) throw new Error(`${query}: too large again`)
+    return values[0]
+  }
+  return { call, tool, answer, narrow }
 }
 
 // Every letter the kernel has sent to an address, oldest first, read off its

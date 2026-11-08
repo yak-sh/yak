@@ -46,3 +46,11 @@ test('snapshot metadata follows its published alias without forwarding credentia
     'https://developers.openai.com/api/docs/models/custom.md',
   ])
 })
+
+test('a model page that fails is a failure that may pass', async () => {
+  let error = await described(
+    { name: 'custom' },
+    () => Promise.resolve(new Response('Busy', { status: 503 })),
+  ).catch((e) => e)
+  equal([error.code, error.retry], ['metadata', {}])
+})

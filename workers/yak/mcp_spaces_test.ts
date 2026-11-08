@@ -81,9 +81,13 @@ test('only a space owner can inspect and retry held store writes', async () => {
       await owner.tool('store_writes', { space: slug, app: 'notes' }),
       'no kept writes',
     )
-    assertStringIncludes(
-      await owner.tool('store_inspect', { space: slug, app: 'notes' }),
-      '"physical"',
+    assertEquals(
+      await owner.narrow(
+        'store_inspect',
+        { space: slug, app: 'notes' },
+        '.result[0].content.body | fromjson | has("physical")',
+      ),
+      true,
     )
   } finally {
     await k.stop()

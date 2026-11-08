@@ -37,9 +37,11 @@ let page = async (name: string, fetcher: typeof fetch): Promise<string> => {
     let alias = name.replace(/-\d{4}-\d{2}-\d{2}$/, '')
     return alias == name ? '' : page(alias, fetcher)
   }
+  // The page is public documentation, not the credential's answer: one that
+  // fails may pass, and meanwhile a session goes on without its limits.
   if (!res.ok) {
     await res.body?.cancel()
-    throw new ModelError('metadata', `OpenAI model page says ${res.status}`)
+    throw new ModelError('metadata', `OpenAI model page says ${res.status}`, {})
   }
   return res.text()
 }

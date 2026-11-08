@@ -1373,14 +1373,12 @@ test('an app declares which of its own properties are searched', async () => {
     // its borrowers declare (agent.ts `spoken`): the schema an agent reads
     // names the borrowed property too, where the home's own manifest alone
     // would have left an app unable to discover a property it deployed itself.
-    let schema = (await agent.call('tools/call', {
-      name: 'graph_schema',
-      arguments: {},
-    })).structuredContent as {
-      $defs: Record<string, { properties: Record<string, unknown> }>
-    }
     assertEquals(
-      Object.keys(schema.$defs.recipe.properties).sort(),
+      await agent.narrow(
+        'graph_schema',
+        {},
+        '.["$defs"].recipe.properties | keys',
+      ),
       ['blurb', 'note', 'serves'],
     )
     await agent.tool('graph_apply', {

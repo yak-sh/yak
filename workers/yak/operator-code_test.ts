@@ -49,7 +49,9 @@ let respond = (req: Request): Item[] => {
       ? say('On it.')
       : call('fork', { prompt: 'Create the app and write its first note.' })
   }
-  if (last.kind != 'result') return call('code_mode', { search: 'app_new' })
+  if (last.kind != 'result') {
+    return call('code_mode', { search: 'app_new', limit: 1 })
+  }
   answers.push(last.output)
   return answers.length == 1
     ? call('code_mode', { script })
