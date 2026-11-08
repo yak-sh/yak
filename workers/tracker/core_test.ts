@@ -264,9 +264,9 @@ test("the platform's resolution archives the space's report of a break in a pers
   let owned = fixture()
   let platformed = store(ram(vocab, options), {
     sink: () => {},
-    settle: (scope, eids, reason) => {
+    settle: (scope, eids, reason, said) => {
       equal(scope, space)
-      return owned.settle(eids, reason)
+      return owned.settle(eids, reason, said)
     },
   })
   let broke = (eid: string, at: string, scope?: string, tags = {}) =>
@@ -297,9 +297,41 @@ test("the platform's resolution archives the space's report of a break in a pers
     (settled.archived as Comp).reason,
     'Fixed by yaks.app: a statement past the step limit',
   )
+  // The space's bug, left with no open occurrence, is resolved as the
+  // platform's was.
+  let mine = async () => (await owned.bugs())[0]
+  let { cause, recur } = (await mine()).resolved as Comp
+  equal([cause, recur], ['a statement past the step limit', 'no'])
   // A break after the resolution is the bug back: the owner hears of it.
   await deliver(owned, [broke(later, new Date().toISOString(), space)])
   equal(await open(), [later])
+  equal((await mine()).resolved, undefined)
+})
+
+test("a platform resolution leaves a space's bug open while it has an open occurrence, or the platform sends no explanation", async () => {
+  let owned = fixture()
+  let a = '00000000-0000-4000-8000-000000000021'
+  let b = '00000000-0000-4000-8000-000000000022'
+  let at = new Date().toISOString()
+  await deliver(
+    owned,
+    [a, b].map((eid) =>
+      capture(Error('broken'), {
+        eid,
+        at,
+        sink: () => {},
+        during: { space, app: other },
+      })
+    ),
+  )
+  let said = { cause: 'c', recur: 'no' }
+  let resolved = async () => !!(await owned.bugs())[0].resolved
+  equal(await owned.settle([a], 'Fixed by yaks.app: c', said), 1)
+  equal(await resolved(), false)
+  equal(await owned.settle([b], 'Fixed by yaks.app: c'), 1)
+  equal(await resolved(), false)
+  equal(await owned.settle([a, b], 'Fixed by yaks.app: c', said), 0)
+  equal(await resolved(), true)
 })
 
 test("a space's tracker on the release before settle waits for it, unreported", async () => {

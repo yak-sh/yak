@@ -15,6 +15,7 @@ import { consume, type Message } from './queue.ts'
 import { json } from './door.ts'
 import { lent } from './mail.ts'
 import type { Settings } from './object.ts'
+import type { Explanation } from '@yaks/tracker/resolution'
 
 export type Stub = {
   fetch: (request: Request) => Promise<Response>
@@ -22,7 +23,11 @@ export type Stub = {
   monitor: () => Promise<void>
   admitTrace: (scope: string, rows: Bundle[]) => Promise<unknown>
   ingestTrace: (rows: Bundle[]) => Promise<boolean>
-  settle: (eids: string[]) => Promise<number>
+  settle: (
+    eids: string[],
+    reason?: string,
+    said?: Explanation,
+  ) => Promise<number>
   enroll: (scope: string) => Promise<void>
 }
 export type Env = Omit<Settings, 'TRACKERS'> & {

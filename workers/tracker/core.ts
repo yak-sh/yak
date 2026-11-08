@@ -297,11 +297,12 @@ export let store = (storage: Storage, config: Config) => {
     },
     // The platform's resolution of a bug these occurrences stand for
     // (@yaks/tracker/effects `settle`): they are archived as their owner's
-    // `fixed` would archive them, for the resolution's reason.
-    settle: async (eids: string[], reason?: string) => {
-      let found = (await g.get(eids)).filter((row) =>
-        row.error && row.during && !row.archived
-      )
+    // `fixed` would archive them, for the resolution's reason, and a bug of
+    // theirs left with no open occurrence is resolved with its explanation.
+    // A platform on the release before passes no explanation.
+    settle: async (eids: string[], reason?: string, said?: Explanation) => {
+      let rows = (await g.get(eids)).filter((row) => row.error && row.during)
+      let found = rows.filter((row) => !row.archived)
       if (found.length) {
         await g.apply(
           found.map((row) => ({
@@ -310,6 +311,16 @@ export let store = (storage: Storage, config: Config) => {
           })),
           { trusted: true },
         )
+      }
+      if (said) {
+        let owners = new Set(rows.map((row) => String((row.error as Comp).bug)))
+        for (let bug of await g.get([...owners])) {
+          if (!bug.bug || bug.resolved || bug.archived) continue
+          let [open] = await g.read(
+            and(eq('error.bug', bug.entity.eid), parse('!archived'), limit(1)),
+          )
+          if (!open) await mark(bug.entity.eid, 'resolved', said)
+        }
       }
       return found.length
     },

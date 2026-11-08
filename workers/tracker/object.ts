@@ -74,7 +74,11 @@ export type Settings = {
       scope: string,
     ) => {
       ingestTrace: (rows: Bundle[]) => Promise<boolean>
-      settle: (eids: string[], reason?: string) => Promise<number>
+      settle: (
+        eids: string[],
+        reason?: string,
+        said?: Explanation,
+      ) => Promise<number>
     }
   }
   TRACKER_SECRET?: string
@@ -105,9 +109,9 @@ let metaDdl = ddl.find((stmt) =>
 // and only a receiver still without it after every try is reported.
 export let settling =
   (trackers: NonNullable<Settings['TRACKERS']>) =>
-  async (scope: string, eids: string[], reason: string) => {
+  async (scope: string, eids: string[], reason: string, said?: Explanation) => {
     try {
-      return await trackers.getByName(scope).settle(eids, reason)
+      return await trackers.getByName(scope).settle(eids, reason, said)
     } catch (error) {
       if (!/does not implement the method/.test(String(error))) throw error
       throw Object.assign(Error(String(error), { cause: error }), {
@@ -296,12 +300,16 @@ export class Tracker {
     }
   }
   // Reached only by the platform tracker's `bug_settle`, never HTTP.
-  settle = (eids: string[], reason?: string): Promise<number> =>
+  settle = (
+    eids: string[],
+    reason?: string,
+    said?: Explanation,
+  ): Promise<number> =>
     this.#run('settle', async () => {
       try {
         let tracker = await this.boot()
         await this.live?.wake()
-        return await tracker.settle(eids, reason)
+        return await tracker.settle(eids, reason, said)
       } catch (error) {
         await this.recover(error, 'Tracker.settle')
         throw error

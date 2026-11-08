@@ -373,7 +373,7 @@
     },
     "bug_settle": {
       "effect": true,
-      "description": "Archive, in a space's tracker, the reports of a person's app that a resolved bug's occurrences stand for, so its owner and Operator stop hearing of a break yaks.app fixed.",
+      "description": "Archive, in a space's tracker, the reports of a person's app that a resolved bug's occurrences stand for, and resolve with the resolution's explanation a bug of the space's they leave with no open occurrence, so its owner and Operator stop hearing of a break yaks.app fixed.",
       "created": [
         "resolved"
       ],
