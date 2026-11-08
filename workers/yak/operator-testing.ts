@@ -96,15 +96,22 @@ export let operatorService = (env: Env, held: Held, options: Options) => {
     }
     assertEquals(req.headers.get('x-yak-person'), held.person)
     try {
+      let args = await req.json()
       let response = await operatorRequest(
         operator,
         held,
         path,
-        await req.json(),
+        args,
         () => undefined,
       )
-      if (!response) throw new Error(`Unhandled Operator route: ${req.url}`)
-      return response
+      if (response) return response
+      if (path == '/operator/run') {
+        let { directoryOf } = await import('./directory.ts')
+        let space = await directoryOf(env.STORE).at(held.space)
+        if (!space) throw new Error('Operator space is missing')
+        return Response.json(await operator.run(held, space, args))
+      }
+      throw new Error(`Unhandled Operator route: ${req.url}`)
     } catch (e) {
       return Response.json({ message: (e as Error).message }, {
         status: refusing(e, { request: 'operator' }),

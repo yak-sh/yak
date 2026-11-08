@@ -4,9 +4,9 @@
 // they are; and drawn in the person's message.
 
 import { test } from '@yaks/testing'
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import type { Item, Request as Ask } from '@yaks/model'
+import { type Item, ModelError, type Request as Ask } from '@yaks/model'
 import { conversation } from '@yaks/anthropic'
 import { READS } from '@yaks/anthropic/reads'
 import { addressOf } from '@yaks/blob'
@@ -377,7 +377,6 @@ test('a later turn whose selected model cannot read an earlier file receives its
 })
 
 test('a run refuses unavailable providers, unlisted models and another persons attachment', async () => {
-  let { assertRejects } = await import('@std/assert')
   await assertRejects(
     () =>
       operator.run(who, space, {
@@ -409,4 +408,49 @@ test('a run refuses unavailable providers, unlisted models and another persons a
     Error,
     'attachment is missing',
   )
+})
+
+let permission = new ModelError(
+  'auth',
+  '401 Missing permissions: api.model.read',
+  undefined,
+  {
+    body: JSON.stringify({
+      error: { message: 'Missing permissions: api.model.read' },
+    }),
+  },
+)
+let unavailable = operatorService(p.env, who, {
+  directory: () => directoryOf(p.env.STORE),
+  name: 'files',
+  model: nativeModel,
+  providers: {
+    openai: Object.assign((request: Ask) => nativeModel(request), {
+      info: () => Promise.reject(permission),
+    }),
+  },
+  price,
+})
+
+test('a provider catalogue permission failure reaches the run HTTP caller with its diagnosis', async () => {
+  let response = await unavailable.binding.get(space.eid).fetch(
+    new Request('https://builder/operator/run', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-space-eid': space.eid,
+        'x-yak-person': person,
+      },
+      body: JSON.stringify({
+        provider: 'openai',
+        model: 'files',
+        say: 'Read it.',
+      }),
+    }),
+  )
+  assertEquals(response.status, 503)
+  assertEquals(await response.json(), {
+    message:
+      'openai model catalogue failed (auth): 401 Missing permissions: api.model.read',
+  })
 })

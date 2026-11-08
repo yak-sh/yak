@@ -29,6 +29,7 @@ import {
   billed,
   type Listed,
   type Model,
+  ModelError,
   modelReads,
   type Price,
 } from '@yaks/model'
@@ -884,9 +885,17 @@ export let operating = (
     if (!model || (from == provider && model == name)) {
       return { provider: from, model: name }
     }
-    if (await listed(model, from).then((info) => !!info, () => false)) {
-      return { provider: from, model }
+    let info
+    try {
+      info = await listed(model, from)
+    } catch (error) {
+      if (!(error instanceof ModelError)) throw error
+      throw refuse(
+        'unavailable',
+        `${from} model catalogue failed (${error.code}): ${error.message}`,
+      )
     }
+    if (info) return { provider: from, model }
     if (from != provider) {
       throw refuse('arguments', `${from} does not list model ${model}.`)
     }
