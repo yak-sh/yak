@@ -41,10 +41,13 @@ export type Row = {
   until?: number
 }
 
-/** The directory as the rows need it: a person's rows, and whether they are
- * whole (`listed`), and a write of rows. */
+/** The directory as the rows need it: a person's rows, whether they are
+ * whole (`listed`) and whether the directory holds the person at all
+ * (`held`), and a write of rows. */
 export type Book = {
-  read: (person: string) => Promise<{ listed: boolean; rows: Row[] }>
+  read: (
+    person: string,
+  ) => Promise<{ listed: boolean; held: boolean; rows: Row[] }>
   write: (bundles: Bundle[]) => Promise<unknown>
 }
 
@@ -182,7 +185,9 @@ let fromKv = async (kv: Kv, person: string): Promise<Row[]> => {
  * standing, in one page. A person whose rows are not yet whole is listed from
  * KV, and `behind` is handed the write of their rows and `grants_listed`,
  * for the caller to run past its answer; so is the removal of rows whose
- * grant KV has let go on its own (a code never exchanged).
+ * grant KV has let go on its own (a code never exchanged). A person the
+ * directory does not hold (one erased while their cookie still verifies) is
+ * written nothing, so no listing brings their row back.
  */
 export let listing = (
   kv: unknown,
@@ -191,9 +196,9 @@ export let listing = (
   now = Date.now,
 ) =>
 async (person: string): Promise<{ items: GrantSummary[] }> => {
-  let { listed, rows } = await book.read(person)
-  if (!listed) {
-    rows = await fromKv(kv as Kv, person)
+  let { listed, held, rows } = await book.read(person)
+  if (!listed) rows = await fromKv(kv as Kv, person)
+  if (!listed && held) {
     let whole = [
       ...rows.map(bundleOf),
       {

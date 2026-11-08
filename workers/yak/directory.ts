@@ -3070,6 +3070,7 @@ export let directoryRows = (rows: {
       ])
       return {
         listed: !!them?.grants_listed,
+        held: !!them,
         rows: rows.flatMap(({ oauth_grant: g }) =>
           g ? [{ ...g, person: idOf(g.person) }] : []
         ),
