@@ -1,3 +1,4 @@
+import { statements } from '@yaks/sqlite/statements'
 import { freshFetch } from '@yaks/process/http'
 import * as process from '@yaks/process/system'
 import * as disk from '@yaks/file/io'
@@ -58,7 +59,15 @@ import { sandboxCapabilities } from './sandboxes.ts'
  */
 
 import { UNNUMBERED } from './init.ts'
-import type { Actor, Bundle, Comp, Eid, Graph, Lent } from '@yaks/graph'
+import type {
+  Actor,
+  Bundle,
+  Comp,
+  Eid,
+  Graph,
+  Lent,
+  Storage,
+} from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { hit } from '@yaks/graph/hit'
 import type { Vocab } from '@yaks/vocab'
@@ -127,6 +136,7 @@ import { files } from '@yaks/tracker/file'
 import type { Traces } from './traces.ts'
 import { traceControl } from './trace_control.ts'
 import { upkeepThread } from './upkeep_thread.ts'
+import { watchRevision } from './watch_revision.ts'
 
 // One carrier per runtime, not per composed graph. Multiple CLI hosts can
 // coexist without replacing one another's async context.
@@ -247,7 +257,7 @@ export type CliFacet = {
 /** An assembled host: everything a plugin factory was given, plus what only
  * the caller of {@link compose} needs. */
 export type Served = Host & {
-  storage: Store
+  storage: Omit<Store, keyof Storage> & Storage
   /** The file's upkeep on this connection. File hosts lend this only to
    * their dedicated upkeep thread; memory has no second connection. */
   upkeep: (
@@ -589,11 +599,12 @@ let composed = async (
     // Refuse again on the retained connection before domain schema or factories.
     migrations(sql).ready()
     part?.('host')
+    let blobs = sqliteBlobs(statements(sql), {}, opts.reader?.statements)
     let chosen = plugins.find(([name]) => name == '@yaks/blob')?.[1].store as
       | Backend
       | undefined
     let selected: { store?: Blobs; waiting?: string } = chosen
-      ? backend(chosen, { blobs: sqliteBlobs(sql) })
+      ? backend(chosen, { blobs })
       : { store: artifactsAt(path) }
     let artifacts = selected.store
     if (!artifacts) throw new Error(`@yaks/blob: ${selected.waiting}`)
@@ -666,7 +677,7 @@ let composed = async (
       host: {
         fetch: freshFetch(),
         vault,
-        blobs: sqliteBlobs(sql),
+        blobs,
         artifacts,
         reader: opts.reader,
         warm,
@@ -830,7 +841,16 @@ let composed = async (
           },
           nudge: opts.thread?.nudge,
           // Runs another process commits wake this one's pool at once.
-          watch: (heard) => store?.watch?.(EFFECT, heard) ?? (() => {}),
+          watch: (heard) =>
+            opts.reader?.storage?.revision
+              ? watchRevision(
+                opts.reader.storage.revision,
+                heard,
+                (error) =>
+                  void report(error, { tags: { step: 'watch effects' } }),
+                clock,
+              )
+              : store?.watch?.(EFFECT, heard) ?? (() => {}),
           report: (error, job) =>
             void report(error, {
               during: {
@@ -1039,7 +1059,7 @@ let composed = async (
       await record([started({ roles: [...roles] })])
     }
     let lifecycle = {
-      storage: store!,
+      storage: g.storage as Served['storage'],
       upkeep,
       graph: g,
       fx,

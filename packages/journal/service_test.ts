@@ -55,3 +55,17 @@ test('a store with no file of pages is not measured', async () => {
   await pass(g, NOON)
   equal(await g.get([keptEid('2026-10-21')], ['kept']), [])
 })
+
+test('a daily measurement awaits its change counts before recording the day', async () => {
+  let { g } = measuring()
+  let counts = Promise.withResolvers<Record<string, number>>()
+  let completed = false
+  let work = pass(g, NOON, undefined, () => counts.promise).then(() =>
+    completed = true
+  )
+  await Promise.resolve()
+  equal(completed, false)
+  counts.resolve({ doc: 7 })
+  await work
+  equal((await kept(g)).changes, { doc: 7 })
+})

@@ -7,6 +7,12 @@ type Owner = { connection: object; active: boolean }
 let owner = new AsyncLocalStorage<Owner[]>()
 let waiting = new WeakMap<object, Promise<void>>()
 
+/** Whether this async context owns the connection's active transaction. */
+export let owned = (driver: Driver): boolean =>
+  !!owner.getStore()?.some((o) =>
+    o.connection === (driver.connection ?? driver) && o.active
+  )
+
 /** Independent asynchronous transactions on one connection take turns.
  * Only calls within the owning body's async context may open savepoints;
  * otherwise an unrelated write could commit inside a transaction that later
@@ -17,7 +23,7 @@ export let exclusive = <R>(
 ): R | Promise<Awaited<R>> => {
   let connection = driver.connection ?? driver
   let held = owner.getStore() ?? []
-  if (held.some((o) => o.connection === connection && o.active)) return body()
+  if (owned(driver)) return body()
   let scope: Owner = { connection, active: true }
   let run = () => owner.run([...held, scope], body)
   let before = waiting.get(connection)

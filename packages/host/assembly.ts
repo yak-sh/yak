@@ -401,7 +401,7 @@ export let assemble = (
           : undefined,
         get storage() {
           if (!store) throw new Error('the store is not open yet')
-          return store
+          return g?.storage ?? store
         },
         get graph() {
           if (!g) throw new Error('the graph is not open yet')

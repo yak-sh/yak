@@ -1,3 +1,4 @@
+import { statements } from '@yaks/sqlite'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { sha256 } from '@yaks/graph'
@@ -23,7 +24,7 @@ test('text round-trips through the byte encoding', () => {
 let store = () => {
   let driver = mem()
   for (let stmt of blobSchema()) driver.query(stmt)
-  return sqliteBlobs(driver)
+  return sqliteBlobs(statements(driver))
 }
 
 test('the sqlite backend stores, finds and answers for what it holds', () => {
@@ -43,7 +44,7 @@ test('a layout points the backend at a table it did not make', () => {
   let driver = mem()
   let layout = { table: 'body_text', key: 'entity', value: 'text' }
   for (let stmt of blobSchema(layout)) driver.query(stmt)
-  let s = sqliteBlobs(driver, layout)
+  let s = sqliteBlobs(statements(driver), layout)
   s.put('abc', encode('hello'))
   assertEquals(
     scan(driver, 'body_text', by({ entity: 'abc' }), ['text']),
@@ -66,4 +67,76 @@ test('hydrate resolves a gathered bundle through any backend', async () => {
   assertEquals((out[0].post as Record<string, unknown>).title, 'one')
   assertEquals((out[1].post as Record<string, unknown>).body, 'deadbeef')
   assertEquals(out[2], { entity: { eid: 't1' }, tag: { label: 'x' } })
+})
+
+// A competing writer controls admission to atomic work. Content writes that
+// bypass that boundary fail, while reads can still inspect committed data.
+let locked = () => {
+  let driver = mem()
+  for (let stmt of blobSchema()) driver.query(stmt)
+  let db = statements(driver)
+  let kept = sqliteBlobs(db)
+  kept.put('old', encode('old'))
+  let release: () => void = () => {}
+  let blocked = new Promise<void>((resolve) => release = resolve)
+  let store = sqliteBlobs({
+    ...db,
+    atomic: <R>(body: () => R | Promise<R>) =>
+      blocked.then(() => db.atomic(body)),
+    query: (s) => {
+      if ((s.t == 'insert' || s.t == 'delete') && !db.inside?.()) {
+        throw Error('the connection is owned by another writer')
+      }
+      return db.query(s)
+    },
+  })
+  return { store, kept, release }
+}
+let waitingPut = locked(), waitingDrop = locked()
+
+test('an independent blob write waits for admission while committed reads answer', async () => {
+  let { store, kept, release } = waitingPut
+  let done = false
+  let put = Promise.resolve(store.put('new', encode('new'))).then(() =>
+    done = true
+  )
+  await Promise.resolve()
+  assertEquals(done, false)
+  assertEquals(kept.has('new'), false)
+  assertEquals(kept.has('old'), true)
+  release()
+  await put
+  assertEquals(decode(kept.get('new') as Uint8Array), 'new')
+})
+
+test('an independent blob expiration waits for admission before removing bytes', async () => {
+  let { store, kept, release } = waitingDrop
+  let drop = store.drop!(['old'], [])
+  assertEquals(kept.has('old'), true)
+  release()
+  await drop
+  assertEquals(kept.has('old'), false)
+})
+
+let transactional = (() => {
+  let driver = mem()
+  for (let stmt of blobSchema()) driver.query(stmt)
+  let db = statements(driver)
+  let store = sqliteBlobs(db, {}, { query: () => Promise.resolve([]) })
+  return { db, store }
+})()
+
+test('blob transaction reads see their own writes while other contexts use committed reads', async () => {
+  let { db, store } = transactional
+  let release: () => void = () => {}
+  let blocked = new Promise<void>((resolve) => release = resolve)
+  let writing = db.atomic(async () => {
+    await store.put('pending', encode('pending'))
+    assertEquals(store.has('pending'), true)
+    assertEquals(decode(store.get('pending') as Uint8Array), 'pending')
+    await blocked
+  })
+  assertEquals(await store.has('pending'), false)
+  release()
+  await writing
 })

@@ -1,3 +1,4 @@
+import { statements } from '@yaks/sqlite'
 // An expired body's bytes go with it, unless another row still names them; a
 // body removed any other way keeps its bytes for history.
 import { equal, test } from '@yaks/testing'
@@ -66,7 +67,7 @@ let driver = mem()
 for (let stmt of blobSchema()) driver.query(stmt)
 driver.query({ t: 'create table', name: 'note', cols: [{ name: 'body' }] })
 driver.query({ t: 'create table', name: 'copy', cols: [{ name: 'sha' }] })
-let bytes = sqliteBlobs(driver)
+let bytes = sqliteBlobs(statements(driver))
 let held: Body[] = [
   { comp: 'note', prop: 'body' },
   { comp: 'copy', prop: 'sha' },

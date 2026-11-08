@@ -1365,7 +1365,7 @@ export class Store {
       return prop ? !!vocab.prop(comp, prop) : !!vocab.comp(comp)
     })
     let drive = this.#sql = driver(ctx.storage, observe, this.#measure)
-    let bytes = sqliteBlobs(drive)
+    let bytes = sqliteBlobs(statements(drive))
     let store!: ReturnType<typeof sqliteStorage>
     this.#texts = {
       get statements() {

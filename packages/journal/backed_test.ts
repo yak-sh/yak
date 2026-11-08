@@ -1,3 +1,4 @@
+import { statements } from '@yaks/sqlite'
 /// <reference lib="deno.ns" />
 // The journal read as entities: `_tx` and `_change` answer the same query
 // grammar as anything else, from the journal's own rows, and are never
@@ -48,7 +49,7 @@ let build = (
     vocab,
     plugins: [
       journal(log({ rows: (s) => db.query(s) }), vocab, { now: () => NOW }),
-      blobs(vocab, sqliteBlobs(db)),
+      blobs(vocab, sqliteBlobs(statements(db))),
     ],
   })
   let apply = (bundles: Bundle[]) => sync(g.apply(bundles))

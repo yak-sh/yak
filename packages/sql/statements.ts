@@ -9,6 +9,8 @@ export type Statements = {
   query: (statement: Stmt) => Row[]
   /** Whether other hosts can write this storage. */
   ownership: 'exclusive' | 'shared'
+  /** Whether this async context owns the active transaction on this connection. */
+  inside?: () => boolean
   /** Compound-select limit of the adapter's statement engine. */
   arms?: number
   /** Entity rows point at the standard archetype table. A null pointer still

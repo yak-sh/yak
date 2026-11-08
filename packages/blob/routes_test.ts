@@ -59,7 +59,7 @@ let host = () => {
   for (let stmt of [...db.ddl(), ...blobSchema()]) sql.query(stmt)
   return {
     driver: sql,
-    blobs: sqliteBlobs(sql),
+    blobs: sqliteBlobs(db.statements),
     graph: graph({ storage: db, vocab, plugins: [representations()] }),
   }
 }

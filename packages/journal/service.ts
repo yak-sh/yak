@@ -16,6 +16,7 @@ import { sleep } from '@yaks/fp'
 import { onDisk } from '@yaks/file/local'
 import { CHANGES } from './kept.ts'
 import { type Bound, logFor } from './graph.ts'
+import { heldRows, heldSql } from './held.ts'
 
 /** How long a pass waits for the next, in milliseconds: an hour. */
 export let EVERY = 60 * 60 * 1000
@@ -92,7 +93,7 @@ export let pass = async (
   g: Graph,
   now: number = Date.now(),
   signal?: AbortSignal,
-  held?: () => Record<string, number>,
+  held?: () => Record<string, number> | Promise<Record<string, number>>,
 ): Promise<void> => {
   if (!g.storage.measure) return
   let day = new Date(now).toISOString().slice(0, 10)
@@ -102,7 +103,7 @@ export let pass = async (
   let m = await g.storage.measure(signal)
   if (!m) return
   let file = path ? await onDisk(g, path) : []
-  let changes = m.tables[CHANGES] ? held?.() : undefined
+  let changes = m.tables[CHANGES] ? await held?.() : undefined
   await g.apply(
     measured(day, new Date().toISOString(), m, file, changes),
     { trusted: true },
@@ -124,7 +125,10 @@ export let service = async (
 ): Promise<void> => {
   // The log the journal writes through on this host, where it keeps one.
   let bound = host.storage?.statements ? host as Bound : undefined
-  let held = bound && (() => logFor(bound).held())
+  let read = host.reader?.statements?.query
+  let held = read
+    ? async () => heldRows(await read(heldSql()))
+    : bound && (() => logFor(bound).held())
   for (;;) {
     try {
       await pass(

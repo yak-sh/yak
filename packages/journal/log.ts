@@ -75,6 +75,7 @@ import {
 } from '@yaks/sql'
 import type { Batch, Delta, Entry, Patch } from './batch.ts'
 import { dec, enc } from './value.ts'
+import { heldRows, heldSql } from './held.ts'
 
 /** A statement, run for its rows: the whole of what the caller has to supply.
  * A write goes through it too — `insert … returning id` returns a row. */
@@ -878,14 +879,7 @@ export let log = (opts: LogOpts): Log => {
 
   /** The changes the log holds per component: one pass over the index on
    * `component`, reading no change row. A deletion counts under `entity`. */
-  let held = (): Record<string, number> =>
-    Object.fromEntries(
-      rows(select({
-        cols: [as(col('component'), 'c'), as(fn('count', lit('*')), 'n')],
-        from: table('journal_change'),
-        group: [col('component')],
-      })).map((r) => [String(r.c), num(r.n)]),
-    )
+  let held = (): Record<string, number> => heldRows(rows(heldSql()))
 
   /** Has anything touched this entity since `seq`? The coarse "something
    * changed" question an undo asks where there is no property to put a

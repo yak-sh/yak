@@ -168,7 +168,7 @@ export let wikiLog = (components?: string[]): {
   let db = preparedDriver(empty)
   let store = storage(db, wiki, base)
   actors(graph({ storage: store, vocab: wiki }))
-  let texts = blobs(wiki, sqliteBlobs(db))
+  let texts = blobs(wiki, sqliteBlobs(statements(db)))
   let held = { statements: statements(db) }
   let host = () => {
     let bound = { storage: held, derived }

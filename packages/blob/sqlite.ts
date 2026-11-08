@@ -21,18 +21,19 @@
 // readable as they stand.
 
 import type { Vocab } from '@yaks/vocab'
+import type { Statements } from '@yaks/sql'
+import { after } from '@yaks/fp'
 import {
   among,
   and,
   array,
-  catalogue,
   col,
   type Derived,
-  type Driver,
   eq,
   type Expr,
   field,
   not,
+  type Row,
   select,
   type Stmt,
   sub,
@@ -129,43 +130,61 @@ export let dropSql = (
 }
 
 /**
- * A {@link Blobs} over a SQLite table. Synchronous, so a graph writing through
- * it stays synchronous end to end; `put` is `insert or ignore`, because writing
- * the same address twice is writing the same bytes twice.
+ * A {@link Blobs} over a SQLite table. Writes use the store's atomic boundary:
+ * nested writes share the graph's transaction; independent writes await a
+ * competing writer without holding their thread. Writing one address twice
+ * keeps one copy of its bytes. An optional reader answers committed reads;
+ * reads inside the owning transaction stay on its connection.
  */
-export let sqliteBlobs = (driver: Driver, layout: Layout = {}): Blobs => {
+export let sqliteBlobs = (
+  db: Statements,
+  layout: Layout = {},
+  read?: { query: (statement: Stmt) => Row[] | Promise<Row[]> },
+): Blobs => {
   let l = named(layout)
   let row = (sha: string) =>
-    driver.query(select({
-      cols: [col(l.value)],
-      from: table(l.table),
-      where: eq(col(l.key), val(sha)),
-    }))[0]?.[l.value]
+    after(
+      (db.inside && !db.inside() && read ? read : db).query(select({
+        cols: [col(l.value)],
+        from: table(l.table),
+        where: eq(col(l.key), val(sha)),
+      })),
+      (rows) => rows[0]?.[l.value],
+    )
   return {
     transactional: true,
-    has: (sha) => row(sha) != null,
-    get: (sha) => {
-      let found = row(sha)
-      return found == null ? undefined : encode(String(found))
-    },
+    has: (sha) => after(row(sha), (value) => value != null),
+    get: (sha) =>
+      after(
+        row(sha),
+        (found) => found == null ? undefined : encode(String(found)),
+      ),
     put: (sha, bytes) => {
-      driver.query({
-        t: 'insert',
-        or: 'ignore',
-        into: l.table,
-        cols: [l.key, l.value],
-        rows: [[val(sha), val(asText(bytes))]],
+      let text = asText(bytes)
+      return db.atomic(() => {
+        db.query({
+          t: 'insert',
+          or: 'ignore',
+          into: l.table,
+          cols: [l.key, l.value],
+          rows: [[val(sha), val(text)]],
+        })
       })
     },
     drop: (shas, held) => {
       if (!shas.length) return
-      // A component a store holds no table for yet (@yaks/sqlite raises one
-      // on its first write) names no object.
-      let tables = new Set(
-        catalogue(driver).filter((o) => o.type == 'table').map((o) => o.name),
-      )
-      let named = held.filter(({ comp }) => tables.has(comp))
-      driver.query(dropSql(shas, named, layout))
+      return db.atomic(() => {
+        // Tables are raised by their first write, so an absent one holds no bytes.
+        let tables = new Set(
+          db.query(select({
+            cols: [col('name')],
+            from: table('sqlite_master'),
+            where: eq(col('type'), val('table')),
+          })).map((r) => String(r.name)),
+        )
+        let named = held.filter(({ comp }) => tables.has(comp))
+        db.query(dropSql(shas, named, layout))
+      })
     },
   }
 }

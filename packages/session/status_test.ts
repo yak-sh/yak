@@ -1,3 +1,4 @@
+import { statements } from '@yaks/sqlite'
 // The status rule over bundles, and the same rule as SQL through a real SQLite
 // store: every shape a transcript can be in answers the same word both ways.
 
@@ -855,7 +856,7 @@ for (let typed of [false, true]) {
   let g = graph({
     storage: storage1,
     vocab: v,
-    plugins: [blobs(v, sqliteBlobs(d))],
+    plugins: [blobs(v, sqliteBlobs(statements(d)))],
   })
   g.apply([{ entity: { eid: M }, model: { name: 'fake' } }, {
     entity: { eid: T },

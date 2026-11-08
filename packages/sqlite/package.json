@@ -17,6 +17,7 @@
     "./owe": "./owe.ts",
     "./survey": "./survey.ts",
     "./read-store": "./read-store.ts",
+    "./statements": "./statements.ts",
     "./testing": "./testing.ts"
   },
   "license": "Apache-2.0",

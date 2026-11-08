@@ -1,3 +1,4 @@
+import { statements } from '@yaks/sqlite'
 // The space's private work stays beside its builder, outside app restores.
 import { type Graph, graph, type Plugin, type Storage } from '@yaks/graph'
 import { driver, type DurableStorage } from '@yaks/durable-object/sql'
@@ -117,7 +118,7 @@ export let operatorStore = (
 ): OperatorStore => {
   let vocab = operatorVocab
   let sql = driver(durable)
-  let kept = sqliteBlobs(sql)
+  let kept = sqliteBlobs(statements(sql))
   let stood = false
   let store = storage(durable, vocab, {
     derived,

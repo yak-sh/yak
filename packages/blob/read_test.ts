@@ -1,3 +1,4 @@
+import { statements } from '@yaks/sqlite'
 // A component called doc is ordinary storage too. No adapter-owned doc_value
 // view participates: the registry is the sole truth for a swapped read.
 import { test } from '@yaks/testing'
@@ -145,7 +146,7 @@ test('immutable admission content observes blob commits by another file connecti
     let g = graph({
       storage: s,
       vocab: blog,
-      plugins: [blobs(blog, sqliteBlobs(a))],
+      plugins: [blobs(blog, sqliteBlobs(statements(a)))],
     })
     g.apply([{ entity: { eid: 'p' }, post: { body: 'first' } }])
     let get = async () =>

@@ -81,7 +81,7 @@ export let sqliteApp = (
       plugins: [
         keys(vocab),
         aliases(),
-        blobs(vocab, sqliteBlobs(driver)),
+        blobs(vocab, sqliteBlobs(rows.statements)),
         personal(vocab, {}, { document_page: 'document' }),
       ],
     })

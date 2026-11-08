@@ -1,3 +1,4 @@
+import { statements } from '@yaks/sqlite'
 // The store mover (mover.ts) through a Store's own doors: rows moved from the
 // alarm after boot, a rehearsal that moves nothing, and a failing batch that
 // leaves the store serving until fixed code arrives.
@@ -106,7 +107,7 @@ let movingStore = async (
       )
       let g = graph({
         vocab,
-        plugins: [blobs(vocab, sqliteBlobs(driver(ctx.storage)))],
+        plugins: [blobs(vocab, sqliteBlobs(statements(driver(ctx.storage))))],
         storage: sqliteStorage(driver(ctx.storage), vocab, {
           derived: blobRead(vocab),
         }),

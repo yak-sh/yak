@@ -1,3 +1,4 @@
+import { statements } from '@yaks/sqlite'
 // Shared test fixtures (not part of the published package — see deno.json): a
 // blog, written as a vocabulary. A post has a short title kept in the row and a
 // long body kept in the blob store, which is the whole distinction this package
@@ -67,7 +68,7 @@ export let fixture = (
   store?: Blobs,
 ): { g: Graph; db: Store; driver: Driver; blobs: Blobs } => {
   let driver = mem()
-  let bytes = store ?? sqliteBlobs(driver)
+  let bytes = store ?? sqliteBlobs(statements(driver))
   let db = storage(driver, blog, { derived: blobRead(blog) })
   for (let stmt of [...db.ddl(), ...blobSchema()]) driver.query(stmt)
   return {

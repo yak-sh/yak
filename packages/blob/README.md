@@ -57,8 +57,8 @@ let post = {
 let vocab = loadVocab([{ $defs: { post } }], [blobKeywords])
 equal(bodies(vocab), [{ comp: 'post', prop: 'body' }])
 let driver = open(':memory:')
-let bytes = sqliteBlobs(driver)
 let store = storage(driver, vocab, { derived: blobRead(vocab) })
+let bytes = sqliteBlobs(store.statements)
 for (let statement of [...store.ddl(), ...blobSchema()]) {
   driver.query(statement)
 }
@@ -191,18 +191,22 @@ addresses, while `blobRead()` resolves the keys in its Layout.
 Methods can return values or promises. Synchronous storage preserves synchronous
 graph writes; an asynchronous backend makes those writes asynchronous.
 
-| Backend                        | Storage                                       | Return style |
-| ------------------------------ | --------------------------------------------- | ------------ |
-| `sqliteBlobs(driver, layout?)` | A SQL table, default `blob_text(sha, value)`  | Synchronous  |
-| `fileBlobs(dir)`               | One file per address at `<dir>/<sha>`         | Asynchronous |
-| `objectBlobs(bucket, prefix?)` | Objects accessed through `head`, `get`, `put` | Asynchronous |
-| `memoryBlobs()`                | This process's memory, while it runs          | Synchronous  |
+| Backend                            | Storage                                       | Return style  |
+| ---------------------------------- | --------------------------------------------- | ------------- |
+| `sqliteBlobs(statements, layout?)` | A SQL table, default `blob_text(sha, value)`  | Sync or async |
+| `fileBlobs(dir)`                   | One file per address at `<dir>/<sha>`         | Asynchronous  |
+| `objectBlobs(bucket, prefix?)`     | Objects accessed through `head`, `get`, `put` | Asynchronous  |
+| `memoryBlobs()`                    | This process's memory, while it runs          | Synchronous   |
 
 `sqliteBlobs` stores text and rejects bytes that are not valid UTF-8. Its
-inserts use `insert or ignore`. `blobSchema(layout?)` returns its DDL
-statements. A **Layout** names the SQL table and columns holding body text. It
-can rename `table`, `key` and `value`, whose defaults are `blob_text`, `sha` and
-`value`. Existing tables must have the matching shape.
+inserts use `insert or ignore`. Writes use the SQL store's atomic boundary,
+sharing the graph's transaction or waiting asynchronously for another writer.
+`sqliteBlobs(statements, layout, reader)` can send committed reads to another
+connection; `statements.inside()` keeps transaction reads on their owner.
+`blobSchema(layout?)` returns its DDL statements. A **Layout** names the SQL
+table and columns holding body text. It can rename `table`, `key` and `value`,
+whose defaults are `blob_text`, `sha` and `value`. Existing tables must have the
+matching shape.
 
 `fileBlobs` comes from `@yaks/blob/file`, which imports `@yaks/file/io`, so a
 Worker or a browser tab never loads it. It creates the directory on the first
@@ -357,11 +361,12 @@ import { equal } from '@yaks/testing'
 import { address, blobSchema, encode, sqliteBlobs } from '@yaks/blob'
 import { open } from '@yaks/sqlite/db'
 import { val } from '@yaks/sql'
+import { statements } from '@yaks/sqlite'
 
 let driver = open(':memory:')
 for (let stmt of blobSchema()) driver.query(stmt)
 driver.query({ t: 'create table', name: 'copy', cols: [{ name: 'sha' }] })
-let store = sqliteBlobs(driver)
+let store = sqliteBlobs(statements(driver))
 for (let text of ['lone', 'kept']) store.put(address(text), encode(text))
 let kept = val(address('kept'))
 driver.query({ t: 'insert', into: 'copy', cols: ['sha'], rows: [[kept]] })
@@ -450,7 +455,7 @@ for (let statement of schema(fields(vocab), blobRead(vocab))) {
 let g = graph({
   storage: db,
   vocab,
-  plugins: [blobs(vocab, sqliteBlobs(driver))],
+  plugins: [blobs(vocab, sqliteBlobs(db.statements))],
 })
 g.apply([{ entity: { eid: 'p1' }, post: { body: 'orchard' } }])
 equal(find(driver, fields(vocab), 'orchard').map((hit) => hit.entity), ['p1'])
@@ -696,7 +701,7 @@ artifact store use their `store` option or the host's blob store. Routes require
 The routes use these backends:
 
 - `{ "via": "sqlite" }`: the host's blob store (`host.blobs`). A host using
-  `sqliteBlobs(driver)` lends the text table, which rejects invalid UTF-8
+  `sqliteBlobs(statements)` lends the text table, which rejects invalid UTF-8
   uploads.
 - `{ "via": "file", "dir": "..." }`: a directory for binary or text uploads.
 - `{ via: 'object', bucket, prefix? }`: an object-store binding supplied in

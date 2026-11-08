@@ -52,7 +52,15 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { beside, BRANCH, FROM, keeps, TO, upsertSql } from '@yaks/sqlite'
+import {
+  beside,
+  BRANCH,
+  FROM,
+  keeps,
+  statements,
+  TO,
+  upsertSql,
+} from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 
 let [db] = Deno.args.filter((a) => !a.startsWith('--'))
@@ -159,7 +167,8 @@ let buried = (id: number) =>
 // A body is kept as a blob, under its hash. An old journal recorded some as a
 // reference to an entity named by that hash, and recorded one written before
 // the store kept bodies as blobs as its text.
-let blobs = sqliteBlobs(d)
+let sql = statements(d)
+let blobs = sqliteBlobs(sql)
 let SHA = /^[0-9a-f]{64}$/
 let addressed = (text: string): string => {
   let sha = sha256(text)
@@ -314,56 +323,56 @@ let STEP = 20_000
 t0 = performance.now()
 for (let lo = 0; lo <= span; lo += STEP) {
   let rows = d.query(recorded(lo, lo + STEP))
-  d.query({ t: 'begin', mode: 'immediate' })
-  let i = 0
-  while (i < rows.length) {
-    let id = num(rows[i].id), eid = String(rows[i].eid)
-    let changes: Change[] = []
-    while (i < rows.length && num(rows[i].id) == id) {
-      let r = rows[i]
-      let ch: Change = {
-        tx: num(r.tx),
-        ts: String(r.ts),
-        comp: String(r.comp),
-        op: String(r.op),
-        value: {},
+  await sql.atomic(() => {
+    let i = 0
+    while (i < rows.length) {
+      let id = num(rows[i].id), eid = String(rows[i].eid)
+      let changes: Change[] = []
+      while (i < rows.length && num(rows[i].id) == id) {
+        let r = rows[i]
+        let ch: Change = {
+          tx: num(r.tx),
+          ts: String(r.ts),
+          comp: String(r.comp),
+          op: String(r.op),
+          value: {},
+        }
+        while (i < rows.length && rows[i].change == r.change) {
+          let f = rows[i++]
+          if (f.prop == null) continue
+          let prop = String(f.prop), v = dec(f.value)
+          ch.value[prop] = f.address != null
+            ? String(f.address)
+            : typeof v == 'string' && !SHA.test(v) &&
+                isBody(vocab.prop(ch.comp, prop))
+            ? addressed(v)
+            : v
+        }
+        changes.push(ch)
       }
-      while (i < rows.length && rows[i].change == r.change) {
-        let f = rows[i++]
-        if (f.prop == null) continue
-        let prop = String(f.prop), v = dec(f.value)
-        ch.value[prop] = f.address != null
-          ? String(f.address)
-          : typeof v == 'string' && !SHA.test(v) &&
-              isBody(vocab.prop(ch.comp, prop))
-          ? addressed(v)
-          : v
+      count.entities++
+      count.changes += changes.length
+      let { ended, held, last } = walk(changes)
+      for (let v of ended) {
+        d.query(keep(eid, id, v))
+        by.set(v.comp, (by.get(v.comp) ?? 0) + 1)
       }
-      changes.push(ch)
-    }
-    count.entities++
-    count.changes += changes.length
-    let { ended, held, last } = walk(changes)
-    for (let v of ended) {
-      d.query(keep(eid, id, v))
-      by.set(v.comp, (by.get(v.comp) ?? 0) + 1)
-    }
-    count.ended += ended.length
-    for (let [comp, o] of held) {
-      if (run(begin(comp, id, o.from))) count.begun++
-      else {
-        if (comp == TOMBSTONE) count.unseenBurial++
-        else count.unseenEnd++
-        let at = comp == TOMBSTONE ? null : buried(id)
-        let to = at != null && num(at) > o.from ? num(at) : tip
-        if (o.from < to) d.query(keep(eid, id, { comp, ...o, to }))
+      count.ended += ended.length
+      for (let [comp, o] of held) {
+        if (run(begin(comp, id, o.from))) count.begun++
+        else {
+          if (comp == TOMBSTONE) count.unseenBurial++
+          else count.unseenEnd++
+          let at = comp == TOMBSTONE ? null : buried(id)
+          let to = at != null && num(at) > o.from ? num(at) : tip
+          if (o.from < to) d.query(keep(eid, id, { comp, ...o, to }))
+        }
+      }
+      for (let [comp, to] of last) {
+        if (!held.has(comp) && run(begin(comp, id, to))) count.unseenStart++
       }
     }
-    for (let [comp, to] of last) {
-      if (!held.has(comp) && run(begin(comp, id, to))) count.unseenStart++
-    }
-  }
-  d.query({ t: 'commit' })
+  })
   if ((lo / STEP) % 25 == 0) say(lo, count)
 }
 // What the journal never saw begin, of an entity made since it began, starts

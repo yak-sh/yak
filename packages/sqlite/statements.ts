@@ -2,7 +2,7 @@ import { build } from '@yaks/process/platform'
 // SQL-backed storage's statement capability. The connection and native
 // libraries stay here; indexes receive only statements and coherent units.
 import { type Driver, revision, type Statements } from '@yaks/sql'
-import { exclusive, unit } from './unit.ts'
+import { exclusive, owned, unit } from './unit.ts'
 import { enter } from '@yaks/graph/enter'
 
 let held = new WeakMap<Driver, Statements>()
@@ -13,7 +13,9 @@ let platform = {
   ] ?? build.arch,
 }
 /** The platform library's path, only when the name resolves to a local file. */
-export let vectorPath = (resolve = import.meta.resolve): string | undefined => {
+export let vectorPath = (
+  resolve: (specifier: string) => string = import.meta.resolve,
+): string | undefined => {
   let names: Record<string, string> = {
     'linux-x86_64': '@sqliteai/sqlite-vector-linux-x86_64',
     'linux-aarch64': '@sqliteai/sqlite-vector-linux-arm64',
@@ -55,6 +57,7 @@ export let statements = (driver: Driver): Statements => {
       return driver.query(s)
     },
     ownership: driver.file ? 'shared' : 'exclusive',
+    inside: () => owned(driver),
     arms: driver.arms,
     revision: (scope) => revision(driver, scope),
     atomic: (body) =>

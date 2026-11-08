@@ -36,7 +36,7 @@
  * let driver = open(':memory:')
  * let db = storage(driver, vocab, { derived: blobRead(vocab) })
  * for (let s of [...db.ddl(), ...blobSchema()]) driver.query(s)
- * let store = sqliteBlobs(driver)
+ * let store = sqliteBlobs(db.statements)
  * let g = graph({ storage: db, vocab, plugins: [blobs(vocab, store)] })
  *
  * g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay…' } }])

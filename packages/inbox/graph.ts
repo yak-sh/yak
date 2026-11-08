@@ -100,7 +100,7 @@ export let plugins = (
         dependencies: dependencies.filter((c) => !!v.comp(c)),
         expand: async () => {
           if (host.reader) return host.reader.read(original)
-          let revision = host.graph.storage.revision?.()
+          let revision = await host.graph.storage.revision?.()
           let key = JSON.stringify(asked)
           let cached = kept.get(key)
           if (revision !== undefined && cached?.revision === revision) {
@@ -151,7 +151,7 @@ export let plugins = (
             let value = await work
             if (
               revision !== undefined &&
-              host.graph.storage.revision?.() === revision
+              await host.graph.storage.revision?.() === revision
             ) {
               let size = JSON.stringify(value).length * 2
               let old = kept.get(key)
