@@ -119,10 +119,6 @@ export let seconds = (s: Spend, now = Date.now()) =>
  * it costs anything anybody would notice. */
 export let BUDGET = 600
 
-/** The most output one command hands back. A compiler that failed says why in
- * its first lines; the rest is the same warning again. */
-export let CAP = 8_000
-
 /** Where the `yaks` CLI and `curl` inside the container aim: this platform as
  * a whole origin, since what a script pastes into curl is `$YAKS_HOST/mcp`. */
 export let sandboxHost = (env: Host = {}) => url(env)

@@ -46,6 +46,7 @@ import { runs as memoryRuns } from '@yaks/memory/tools'
 import { taskDoc } from '@yaks/task/vocab'
 import { runs as taskRuns } from '@yaks/task/tools'
 import { worded } from '@yaks/tools'
+import { retainAnswer } from './results.ts'
 import type { Handlers } from '@yaks/effects'
 import {
   type Directory,
@@ -309,7 +310,8 @@ export let operatorRoster = async (
       if (fault) throw fault
       // Applied tools already wrote through their own store; generic writes
       // return patches and use the same graph application as the connector.
-      return worded(out) || JSON.stringify(out)
+      let kept = await retainAnswer(work.g, out, t, call, ctx.person)
+      return kept ? JSON.stringify(kept) : worded(out) || JSON.stringify(out)
     }
   let shaped = (t: NamedTool) => ({
     name: t.name,
@@ -322,11 +324,15 @@ export let operatorRoster = async (
   // Every tool the connector lists for the person (agent.ts `connected`), to
   // the conversation and each of its forks alike: the list heads the request,
   // so one list keeps the conversation's cached prefix for every fork.
-  let apps = listing(coded({
-    ...connected(ctx, reach, g),
-    calls: ledger(g, work.g),
-    report: (e) => caught(e, { request: 'operator code mode' }),
-  }, ctx)).map(namedTool)
+  let apps = listing(coded(
+    {
+      ...connected(ctx, reach, g),
+      calls: ledger(g, work.g),
+      report: (e) => caught(e, { request: 'operator code mode' }),
+    },
+    ctx,
+    { graph: work.g, person: ctx.person, space },
+  )).map(namedTool)
     .filter((t) => !ownNamed.has(t.name))
   return [
     ...apps.map((t): Tool => {

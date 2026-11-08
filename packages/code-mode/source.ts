@@ -8,10 +8,8 @@ export let TOO = {
   args: 'tool arguments exceed 64 KiB; split the rows across several calls',
   calls: 'execution allows 16 tool calls; write many rows in one call ' +
     '(graph_apply takes many bundles), or continue in another code_mode call',
-  read: 'tool results passed 4 MiB in one execution; ask each read for ' +
-    'fewer rows (limit, offset) or split the reads across code_mode calls',
-  output: 'return value exceeds 256 KiB; return a summary or only the ' +
-    'fields you need, not whole tool results',
+  system: 'result exceeds the 32 MiB system safety limit; this is likely an ' +
+    'accidental result, so narrow the query or calculation',
 }
 
 /** User code lives in its own module, its TypeScript read as JavaScript by
@@ -26,7 +24,7 @@ export let source = async (
 ): Promise<Record<string, string>> => ({
   'user.js': await strip(
     'user.ts',
-    `export default async function execute(tools) {\n${script}\n}`,
+    `export default async function execute(tools, results) {\n${script}\n}`,
   ),
   'script.js': `import { WorkerEntrypoint } from 'cloudflare:workers';
 const wait = scheduler.wait.bind(scheduler);
@@ -53,12 +51,12 @@ export default class extends WorkerEntrypoint {
       }
       let work = async () => {
         let {default: execute} = await import('./user.js');
-        let value = await execute(tools);
+        let value = await execute(tools, {read: (id) => bridge.read(id)});
         return {value: value === undefined ? null : value};
       };
       let text = stringify(await race([work(), deadline]));
       if (encode(text).length > ${most}) throw new Error(${
-    JSON.stringify(TOO.output)
+    JSON.stringify(TOO.system)
   });
       return text;
     } catch (error) {

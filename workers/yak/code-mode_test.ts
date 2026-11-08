@@ -1,7 +1,14 @@
 import { clock, equal, match, ok, test, throws } from '@yaks/testing'
 import { connector, fresh, meta, seed } from './probe.ts'
 import { evaluate } from '../../packages/code-mode/testing.ts'
-import { catalog, declarations, execute, LIMITS, TOO } from '@yaks/code-mode'
+import {
+  catalog,
+  declarations,
+  execute,
+  type Kept,
+  LIMITS,
+  TOO,
+} from '@yaks/code-mode'
 import { source } from '@yaks/code-mode/source'
 import { strip } from '@yaks/esbuild/strip'
 import { compiler } from './testing.ts'
@@ -149,8 +156,31 @@ test('code mode caps calls, arguments and script', async () => {
 })
 
 let reads = fixture([big])
+let stored = new Map<string, { value: unknown; source: Bundle }>()
+let kept: Kept = {
+  keep: (value, source) => {
+    let id = mint()
+    stored.set(id, { value, source })
+    return Promise.resolve({ kept: id })
+  },
+  read: (id) => {
+    let row = stored.get(id)
+    if (!row) throw new Error('kept result not found')
+    return Promise.resolve(row.value)
+  },
+}
 let run = (script: string) =>
-  execute(script, reads.catalog, reads.run, reads.asked, evaluate, strip)
+  execute(
+    script,
+    reads.catalog,
+    reads.run,
+    reads.asked,
+    evaluate,
+    strip,
+    undefined,
+    undefined,
+    kept,
+  )
 test('the answer is the return value; inner results stay in the sandbox', async () => {
   let out = await run(`let n = 0
     for (let i = 0; i < 4; i++) {
@@ -162,7 +192,7 @@ test('the answer is the return value; inner results stay in the sandbox', async 
   equal(out.calls.length, 4)
   ok(JSON.stringify(out).length < 1024)
 })
-test('each result counts once toward the read budget, and each limit says what to do', async () => {
+test('each result counts once toward the read budget, then stays whole in the graph', async () => {
   let kib = 1400
   equal(
     (await run(
@@ -170,13 +200,47 @@ test('each result counts once toward the read budget, and each limit says what t
     )).error,
     undefined,
   )
-  equal(
-    (await run(
-      `for (let i = 0; i < 3; i++) await tools.yaks.big({kib: ${kib}})`,
-    )).error,
-    TOO.read,
+  let out = await run(`let result
+    for (let i = 0; i < 3; i++) result = await tools.yaks.big({kib: ${kib}})
+    let kept = await results.read(result.structuredContent.kept)
+    return {length: kept.structuredContent.result[0].content.body.length,
+      wholeText: kept.content.some(c => c.text.includes(kept.structuredContent.result[0].content.body)),
+      id: result.structuredContent.kept}`)
+  equal(out.error, undefined)
+  equal((out.value as { length: number }).length, kib * 1024)
+  equal((out.value as { wholeText: boolean }).wholeText, true)
+  equal(out.calls.map((c) => c.error), [undefined, undefined, undefined])
+  let id = (out.value as { id: string }).id
+  equal(who(stored.get(id)!.source), reads.actor)
+  equal((stored.get(id)!.source.call as Comp).source, reads.asked.entity.eid)
+})
+
+test('large return values are kept whole and can be narrowed in a later execution', async () => {
+  let out = await run('return "x".repeat(300000)')
+  equal(out.error, undefined)
+  let id = (out.value as { kept: string }).kept
+  equal(stored.get(id)!.value, 'x'.repeat(300000))
+  equal(stored.get(id)!.source, reads.asked)
+  let narrowed = await run(
+    `return (await results.read(${JSON.stringify(id)})).slice(-3)`,
   )
-  equal((await run('return "x".repeat(300000)')).error, TOO.output)
+  equal(narrowed.value, 'xxx')
+  equal(narrowed.calls, [])
+})
+
+test('only accidental output beyond the system safety bound is refused', async () => {
+  let out = await execute(
+    '',
+    reads.catalog,
+    reads.run,
+    reads.asked,
+    () => Promise.resolve('x'.repeat(LIMITS.systemBytes + 1)),
+    strip,
+    undefined,
+    undefined,
+    kept,
+  )
+  equal(out.error, TOO.system)
 })
 
 let three = fixture([echo])
@@ -204,6 +268,7 @@ test('deadline revokes bridge; completed scripts cannot leave new calls behind',
     () => bridge!.call('yaks', 'echo', JSON.stringify({ text: 'late' })),
     'ended',
   )
+  await throws(() => bridge!.read('result'), 'ended')
   equal((await three.g.read('.call')).length, 0)
 })
 
@@ -398,7 +463,18 @@ test('one connector call creates, writes and deploys a mockup through the shared
     name: 'code_mode',
     arguments: { search: 'app_new' },
   })
-  ok(discovered.structuredContent.declarations.includes('"app_new"'))
+  let found = discovered.structuredContent
+  if (found.id) {
+    let narrowed = await agent.call('tools/call', {
+      name: 'result_query',
+      arguments: {
+        space: found.space,
+        id: found.id,
+        query: '.structuredContent.declarations | contains("app_new")',
+      },
+    })
+    equal(narrowed.structuredContent.values, [true])
+  } else ok(found.declarations.includes('"app_new"'))
   let result = await agent.call('tools/call', {
     name: 'code_mode',
     arguments: {

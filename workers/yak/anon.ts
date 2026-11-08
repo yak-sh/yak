@@ -94,7 +94,8 @@ export let READS = ['graph_query', 'graph_show', 'graph_schema', 'search']
  * and its challenge, whether it exists or not — so nothing here says which
  * tools a signed-in person would have. */
 export let anonymous = (name: string) =>
-  READS.includes(name) || TOOLS.some((t) => t.name == name && openly(t))
+  name == 'result_query' || READS.includes(name) ||
+  TOOLS.some((t) => t.name == name && openly(t))
 
 // What a signed-out read is scoped by, said on every read (@yaks/mcp
 // `Options.scope`). The tools never look at these: the door reads them off the

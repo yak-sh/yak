@@ -7,8 +7,8 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { saying } from '@yaks/tools/schema'
-import { ROWS } from './agent.ts'
+import { toolCheck } from '@yaks/vocab/tools'
+import { resultSummary } from './result-view.ts'
 
 import {
   connector,
@@ -192,25 +192,44 @@ test(
         openWorldHint: false,
       })
       assertEquals(hints('store_mail_send')?.openWorldHint, true)
-      // And every one of them promises the same answer (T-37852): bundles,
-      // under `result`, which is what each tool returns as structured content.
-      // The shape is the generic one with this platform's row words declared
-      // (agent.ts `ROWS`), with the `said` beside them that every listed
-      // answer declares (@yaks/tools/schema `saying`), and not the vocabulary
-      // typed out per tool, which would be megabytes of listing. graph_schema
-      // answers a vocabulary document instead (T-37998); code_mode answers declarations or a script's
-      // value and receipts, rather than graph rows.
-      for (let t of tools as { name: string; outputSchema?: unknown }[]) {
-        if (['graph_schema', 'code_mode'].includes(t.name)) continue
-        assertEquals(t.outputSchema, saying(ROWS), `${t.name}'s answer`)
-      }
-      let schema = (tools as { name: string; outputSchema?: unknown }[])
-        .find((t) => t.name == 'graph_schema')!.outputSchema as {
-          title?: string
-          required?: string[]
+      // A client accepts both an ordinary row (including this platform's
+      // kind/space words) and a summary of an answer kept in the graph.
+      // Compile each distinct shape once, as a client does for its catalog.
+      let shapes = new Map<string, Record<string, unknown>>()
+      for (
+        let t of tools as {
+          name: string
+          outputSchema: Record<string, unknown>
+        }[]
+      ) {
+        assert(t.outputSchema, `${t.name} declares its answer`)
+        if (['graph_schema', 'code_mode', 'result_query'].includes(t.name)) {
+          continue
         }
-      assertEquals(schema.title, 'yaks vocab file')
-      assertEquals(schema.required, ['$defs'])
+        shapes.set(JSON.stringify(t.outputSchema), t.outputSchema)
+      }
+      let summary = resultSummary('r1', { rows: [{ title: 'Dune' }] })
+      for (let shape of shapes.values()) {
+        let fits = toolCheck(shape)
+        assertEquals(
+          fits({
+            result: [{
+              entity: { eid: 'b1' },
+              kind: 'book',
+              space: 'shelf',
+              book: { title: 'Dune' },
+            }],
+          }),
+          [],
+        )
+        assertEquals(fits(summary), [])
+      }
+      let schema = tools.find((t: { name: string }) =>
+        t.name == 'graph_schema'
+      )!
+        .outputSchema
+      assertEquals(toolCheck(schema)({ $defs: {} }), [])
+      assertEquals(toolCheck(schema)(summary), [])
 
       // What a model reads before anything else: the address, the four
       // steps, and the store a page writes to — enough to build the first
@@ -333,25 +352,65 @@ test(
       // the tool list.
       let guide = tools.find((t: { name: string }) => t.name == 'guide')
       assertEquals(guide.annotations.readOnlyHint, true)
-      // What it answers is the page itself, which the two reads below check
-      // byte for byte against what the web serves — there is no second schema
-      // saying so, because an answer is bundles now.
       for (let p of PAGES) assertStringIncludes(guide.description, p.slug)
-      let map = await agent.tool('guide')
-      assertEquals(map, await (await k.at('yaks.app', '/docs.md')).text())
-      assertStringIncludes(map, '# ')
-      // A page, byte for byte what the web serves at its own address.
+      // Public documentation needs no account or space. A large page stays
+      // in the public catalogue; the tool can check its length and passages
+      // through jq while its resource still serves the complete source.
+      let docs = connector(k, undefined, undefined, '/mcp?auth=mixed')
+      let excerpt = (text: string, checks: string[] = []) => ({
+        length: text.length,
+        start: text.slice(0, 120),
+        end: text.slice(-120),
+        checks: checks.map((check) => text.includes(check)),
+      })
+      let guideRead = async (page?: string, checks: string[] = []) => {
+        let reply = await docs.call('tools/call', {
+          name: 'guide',
+          arguments: page ? { page } : {},
+        })
+        assert(!reply.isError, reply.content[0].text)
+        let kept = reply.structuredContent
+        if (!kept.id) return excerpt(reply.content[0].text, checks)
+        assertEquals(kept.scope, 'catalogue')
+        let narrowed = await docs.call('tools/call', {
+          name: 'result_query',
+          arguments: {
+            scope: kept.scope,
+            id: kept.id,
+            query: '.result[0].content.body | {' +
+              'length: length, start: .[:120], "end": .[-120:], checks: [' +
+              checks.map((check) => `contains(${JSON.stringify(check)})`).join(
+                ',',
+              ) +
+              ']}',
+          },
+        })
+        assert(!narrowed.isError, narrowed.content[0].text)
+        return narrowed.structuredContent.values[0]
+      }
+      let map = await guideRead(undefined, ['# '])
       assertEquals(
-        await agent.tool('guide', { page: 'mail' }),
-        await (await k
-          .at('yaks.app', '/docs/mail.md')).text(),
+        map,
+        excerpt(
+          await (await k.at('yaks.app', '/docs.md')).text(),
+          ['# '],
+        ),
+      )
+      assertEquals(
+        await guideRead('mail'),
+        excerpt(
+          await (await k.at('yaks.app', '/docs/mail.md')).text(),
+        ),
       )
       // A name that is no page is a typo, not a refusal: the map, with one
       // line above it naming what there is.
-      let missed = await agent.tool('guide', { page: 'nope' })
-      assertStringIncludes(missed, 'There is no guide page `nope`')
-      assertStringIncludes(missed, 'querying')
-      assertStringIncludes(missed, map)
+      let missed = await guideRead('nope', [
+        'There is no guide page `nope`',
+        'querying',
+      ])
+      assertEquals(missed.checks, [true, true])
+      assertEquals(missed.end, map.end)
+      assert(missed.length > map.length)
 
       // The platform draws nothing of its own (T-37572): no `ui://` view of
       // its own on the resource list, and no tool naming one. A page a host

@@ -41,7 +41,7 @@ let WHOLE = 32 * 1024 * 1024
 // How many documents one call adds, and how many it fetches at once.
 let MANY = 20
 let AT_ONCE = 4
-// How much text one library_read answers.
+// Select complete pages up to this size; a larger first page is kept whole.
 let READ = 60_000
 
 // The extension a document's name needs to be read as one, by its type, for a
@@ -618,7 +618,7 @@ export let libraryTools: Row[] = [
       for (let p of pages) {
         let said = `## ${p.location}\n\n${p.text}`
         if (out.length && size + said.length > READ) break
-        out.push(said.slice(0, READ))
+        out.push(said)
         size += said.length
         last = Number(p.page)
       }

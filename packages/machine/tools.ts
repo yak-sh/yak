@@ -39,7 +39,7 @@ export type MachineOpts = {
   budget?: number
   /** how long `stop` gives SIGTERM before SIGKILL (ms, default 2000) */
   grace?: number
-  /** how many lines of output an answer carries (default 40) */
+  /** how many lines of output an answer carries (default all) */
   lines?: number
   /** where every command starts, and what a relative file path is read from */
   cwd?: (ctx?: ToolContext) => string | undefined | Promise<string | undefined>
@@ -108,8 +108,8 @@ export let machineDeclared = (o: MachineOpts = {}): MachineTool[] => [{
   name: 'wait',
   waits: true,
   description:
-    'Wait for a process to exit. Returns its exit code and the last lines ' +
-    'of its output, or reports that it is still running when the timeout ' +
+    'Wait for a process to exit. Returns its exit code and output, ' +
+    'or reports that it is still running when the timeout ' +
     'passes.',
   parameters: {
     type: 'object',
@@ -193,7 +193,7 @@ export let machineTools = (
     }))
   }
   let m = source
-  let lines = o.lines ?? 40
+  let lines = o.lines ?? Number.MAX_SAFE_INTEGER
   let here = async (ctx?: ToolContext) => await o.cwd?.(ctx)
 
   let told = async (id: string, head: string) =>

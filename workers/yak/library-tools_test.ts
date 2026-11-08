@@ -11,6 +11,7 @@ import { embeds } from './model-probe.ts'
 import { connector, fresh, meta, seed, signIn } from './probe.ts'
 import { sha256 } from './versions.ts'
 import type { Env } from './env.ts'
+import { libraryTools } from './library-tools.ts'
 
 let SITE = 'https://library.test'
 let ROBOTS = 'User-agent: *\nDisallow: /private\n'
@@ -214,5 +215,41 @@ test('the library tools add, list, read and remove an app’s documents', async 
   } finally {
     globalThis.fetch = real
     await k.stop()
+  }
+})
+
+let widePage = 'Start of document. ' + 'page text '.repeat(6_100) +
+  'Final words.'
+let wideLibrary = await (async () => {
+  let env: Env | undefined
+  let k = await fresh({ AI } as never, (e) => void (env = e))
+  let who = await seed(k, [{ slug: 'wide', apps: [] }])
+  let agent = connector(k, who.cookie)
+  let at = { space: 'wide', app: 'library' }
+  await agent.tool('app_new', { ...at, slug: 'library', title: 'Library' })
+  await agent.tool('app_deploy', at)
+  let added = await agent.answer('library_add', {
+    ...at,
+    documents: [{ base64: btoa(widePage), name: 'Wide page.txt' }],
+  })
+  await k.settled()
+  return {
+    k,
+    ctx: { env: env!, dir: k.dir, person: who.person },
+    args: { ...at, document: (added.value!.added as { eid: string }[])[0].eid },
+  }
+})()
+
+test('library_read preserves a page larger than its page selection budget', async () => {
+  try {
+    let read = await libraryTools.find((t) => t.name == 'library_read')!.run(
+      wideLibrary.ctx,
+      wideLibrary.args,
+    )
+    assertEquals(read.text, '## Document\n\n' + widePage)
+    assertEquals(read.value?.to, 1)
+    assertEquals(read.value?.next, undefined)
+  } finally {
+    await wideLibrary.k.stop()
   }
 })

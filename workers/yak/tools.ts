@@ -208,7 +208,6 @@ import { asset, EITHER, NO_ARGS, PUBLIC, publics, what } from './preauth.ts'
 import {
   awake,
   BUDGET,
-  CAP,
   CWD,
   paid,
   seconds,
@@ -2564,18 +2563,10 @@ let bench = async <T>(
   }
 }
 
-// What a tool hands back of a command's output. A compiler that failed says
-// why in its first lines; past that it is the same warning again, and a model
-// paying by the token should not read it twice.
-let capped = (said: string) =>
-  said.length > CAP
-    ? `${said.slice(0, CAP)}\n… and ${said.length - CAP} more characters`
-    : said
-
 // The machine tools (@yaks/harness), declared there once and listed here as
 // sandbox_<name>, run on this space's container (sandbox.ts
 // `workbench`). The door adds the space to each one's arguments, says
-// what each may do to the world, and caps what it hands back.
+// what each may do to the world. The result boundary retains large answers.
 let HINTS: Record<
   string,
   Pick<Row, 'readOnly' | 'destructive' | 'idempotent' | 'openWorld' | 'slots'>
@@ -2643,7 +2634,7 @@ let SANDBOX: Row[] = machineDeclared().map((t) => {
           return `wrote ${file.path}`
         },
       )
-      return { text: capped(said), space }
+      return { text: said, space }
     },
   }
 })
@@ -3967,15 +3958,15 @@ let OURS: Row[] = [
       return {
         text: `shipped ${paths.length} ${
           paths.length == 1 ? 'file' : 'files'
-        } → ${url(space, app, ctx.env)}: ${capped(paths.join(', '))}${
+        } → ${url(space, app, ctx.env)}: ${paths.join(', ')}${
           already.length
             ? `; ${already.length} of them the draft already held as built, ` +
-              `so they did not go up again: ${capped(already.join(', '))}`
+              `so they did not go up again: ${already.join(', ')}`
             : ''
         }${
           gone.length
             ? `; deleted ${gone.length} the build no longer makes: ${
-              capped(gone.join(', '))
+              gone.join(', ')
             }`
             : ''
         }; staged for app_deploy`,

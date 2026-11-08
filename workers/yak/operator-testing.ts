@@ -86,6 +86,16 @@ export let operatorService = (env: Env, held: Held, options: Options) => {
     let path = new URL(req.url).pathname
     // A reply to the Operator's letter, which the kernel brings for nobody.
     if (req.headers.get('x-yak-kernel') == '1') {
+      if (path.startsWith('/result/')) {
+        let { resultRequest } = await import('./result-host.ts')
+        let args = await req.json() as Record<string, unknown>
+        return await resultRequest(
+          store.g,
+          path.slice('/result/'.length),
+          args,
+          String(args.reader),
+        ) ?? new Response(null, { status: 404 })
+      }
       return operatorReply(
         operator,
         held.space,

@@ -622,21 +622,42 @@ test('graph_schema answers the index, a word whole, and a kind', async () => {
       tools.find((t: { name: string }) => t.name == 'graph_schema')
         .outputSchema,
     )
-    let said = async (args: Record<string, unknown>) => {
+    let said = async (args: Record<string, unknown>, query = '.') => {
       let reply = await agent.call('tools/call', {
         name: 'graph_schema',
         arguments: args,
       })
       assert(fits(reply.structuredContent), JSON.stringify(fits.errors))
+      let data = reply.structuredContent
+      if (data.id) {
+        let narrowed = await agent.call('tools/call', {
+          name: 'result_query',
+          arguments: {
+            id: data.id,
+            query:
+              '(.structuredContent + {said: (.content | map(.text) | join("\\n"))}) | (' +
+              query + ')',
+          },
+        })
+        assert(!narrowed.isError, narrowed.content[0].text)
+        assert(narrowed.structuredContent.values, 'the requested part fits')
+        data = narrowed.structuredContent.values[0]
+      }
       return {
-        text: String(reply.content[0].text),
-        defs: reply.structuredContent.$defs as Record<string, Entry>,
+        text: String(data.said ?? reply.content[0].text),
+        defs: data.$defs as Record<string, Entry>,
       }
     }
 
     // The index: every word the caller can reach, what it is, each property's
     // type — the app's own word among the platform's.
-    let index = await said({})
+    let index = await said(
+      {},
+      `{
+      "$defs": {recipe: .["$defs"].recipe, mail: .["$defs"].mail, doc: .["$defs"].doc},
+      said: ("## recipe" + (.said | split("## recipe")[1] | split("## ")[0]))
+    }`,
+    )
     assert(index.defs.recipe, 'the app own word is in the index')
     assert(index.defs.mail)
     assertEquals(index.defs.doc.properties, {
@@ -702,14 +723,23 @@ test('graph_schema answers every word whole within its output schema', async () 
       content: vocabFile({ recipe: { serves: { ...num, minimum: 1 } } }),
     })
     await agent.tool('app_deploy', { app: 'cookbook' })
-    let words = async (args: Record<string, unknown>) =>
-      (await agent.call('tools/call', {
+    let namesOf = async (args: Record<string, unknown>) => {
+      let reply = await agent.call('tools/call', {
         name: 'graph_schema',
         arguments: args,
-      })).structuredContent.$defs as Record<string, unknown>
-    let names = Object.keys(await words({}))
+      })
+      let data = reply.structuredContent
+      if (!data.id) return Object.keys(data.$defs).sort()
+      let narrowed = await agent.call('tools/call', {
+        name: 'result_query',
+        arguments: { id: data.id, query: '.structuredContent["$defs"] | keys' },
+      })
+      assert(!narrowed.isError, narrowed.content[0].text)
+      return narrowed.structuredContent.values[0] as string[]
+    }
+    let names = await namesOf({})
     assert(names.includes('recipe'))
-    assertEquals(Object.keys(await words({ component: names })), names)
+    assertEquals(await namesOf({ component: names }), names)
     assertEquals(unfit(k), [])
   } finally {
     await k.stop()

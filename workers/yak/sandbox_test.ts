@@ -271,6 +271,38 @@ test('sandbox_exec, as the directory listed it, runs its cmd and answers as sand
   ])
 })
 
+let fullOutput = Array.from(
+  { length: 80 },
+  (_, n) => `${n}: ${'wide output '.repeat(20)}`,
+).join('\n')
+let fullSandbox = await bench(() => ({
+  stdout: fullOutput,
+  stderr: 'last error',
+}))
+let fullShell = await tool('sandbox_shell').run(fullSandbox.ctx, {
+  command: 'print all output',
+})
+let fullProcess = fullShell.text.match(/^process (\S+)/)![1]
+fullSandbox.box.files.set('/workspace/output.txt', fullOutput)
+
+test('sandbox_shell preserves every output line and wide text', () => {
+  assertStringIncludes(fullShell.text, fullOutput + '\nlast error')
+})
+
+test('sandbox_wait preserves every output line and wide text', async () => {
+  let out = await tool('sandbox_wait').run(fullSandbox.ctx, {
+    process: fullProcess,
+  })
+  assertStringIncludes(out.text, fullOutput + '\nlast error')
+})
+
+test('sandbox_read preserves the complete file text', async () => {
+  let out = await tool('sandbox_read').run(fullSandbox.ctx, {
+    path: 'output.txt',
+  })
+  assertEquals(out.text, fullOutput)
+})
+
 test('a ship that matches nothing says what to look at', async () => {
   let { ctx } = await bench((cmd) =>
     cmd.startsWith('find ') ? { stdout: '', exitCode: 1 } : {}

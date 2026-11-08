@@ -239,7 +239,7 @@ sandbox_shell:
     destroys the container when it ends; separate MCP calls reuse it until
     five idle minutes put it to sleep, and its files are temporary. A
     command ending within timeout milliseconds returns its exit code and
-    last 40 lines of output, stdout then stderr, cut after 8,000 characters;
+    output, stdout then stderr;
     one still running keeps running for at most 240 seconds, and the answer
     gives its process id for sandbox_wait and sandbox_stop. What a command
     did through these tools to apps is not undone by discarding the
@@ -252,7 +252,7 @@ sandbox_wait:
   description: >-
     Wait for a command sandbox_shell left running in the person's sandbox
     in this space, by the process id its answer gave. Returns the exit code
-    and the last 40 lines of output, stdout then stderr, or says it is still
+    and output, stdout then stderr, or says it is still
     running when timeout milliseconds pass (default 60000). Waiting keeps
     the sandbox awake, metered by the second as with sandbox_shell.
     Documentation: https://yaks.app/docs/sandbox.
@@ -311,9 +311,8 @@ sandbox_read:
     Read one file out of the person's sandbox in this space: a script's
     output, a generated source, a log, whatever the last command left
     behind. Waking the sandbox is metered by the second, as with
-    sandbox_shell. Pass a path relative to /workspace. Returns file text,
-    truncated after 8,000 characters; sandbox_shell can inspect a large or
-    binary file with a command.
+    sandbox_shell. Pass a path relative to /workspace. Returns the complete
+    file text; sandbox_shell can inspect a binary file with a command.
     Documentation: https://yaks.app/docs/sandbox.
 sandbox_ship:
   title: Copy sandbox files into the app

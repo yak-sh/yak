@@ -3,7 +3,10 @@ import { evaluator, type Loader } from './code-runtime.ts'
 import type { Evaluate } from '@yaks/code-mode'
 
 type Bridge = Parameters<Evaluate>[1]
-let bridge: Bridge = { call: () => Promise.resolve({ content: [] }) }
+let bridge: Bridge = {
+  call: () => Promise.resolve({ content: [] }),
+  read: (id) => Promise.resolve({ id }),
+}
 let fixture = (run: (bridge: Bridge) => Promise<string>) => {
   let disposed = 0
   let loader: Loader = {
@@ -31,6 +34,14 @@ test('evaluator runs through non-disposable loader handles and disposes the RPC 
   equal(f.disposed(), 1)
   abort.abort()
   equal(f.disposed(), 1)
+})
+
+test('evaluator forwards kept result reads through its scoped bridge', async () => {
+  let f = fixture(async (bridge) => JSON.stringify(await bridge.read('result')))
+  equal(
+    await f.evaluate({}, bridge, new AbortController().signal),
+    '{"id":"result"}',
+  )
 })
 
 test('evaluator disposes the pending RPC on abort and removes its listener', async () => {

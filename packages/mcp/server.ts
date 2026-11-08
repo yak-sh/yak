@@ -49,7 +49,7 @@ import { inputSchema } from './schema.ts'
 import { protocol, ProtocolError, type Server } from './protocol.ts'
 
 // A tool's answer, as MCP sends it.
-type CallToolResult = {
+export type CallToolResult = {
   content: (
     | { type: 'text'; text: string }
     | { type: 'image'; data: string; mimeType: string }
@@ -106,6 +106,17 @@ export type Options = {
    * for a request that asks (./mount.ts), so every other client reads the
    * reply it always did. */
   text?: (answer: Bundle[], tool: Tool) => Promise<string>
+  /** Keep an answer outside the model's reply before rendering can shorten
+   * it. Return its summary, or undefined to send the ordinary answer. The
+   * summary's schema is listed beside each tool's own output schema. */
+  retain?: {
+    schema: Record<string, unknown>
+    result: (
+      answer: Bundle[],
+      tool: Tool,
+      call: Bundle,
+    ) => Promise<CallToolResult | undefined>
+  }
   /** Optional local file input: callers opt in with `_files: true`. Hosted
    * servers without a reader keep literal inputs and their exact schemas. */
   readFile?: ReadFile
@@ -501,7 +512,20 @@ export let server = (
     ...opts.reply ? { reply: opts.reply } : {},
   })
   let answer = opts.answer ?? answerSchema
-  let schemaOf = (t: NamedTool) => saying(t.outputSchema ?? answer)
+  let schemas = new WeakMap<Tool, Record<string, unknown>>()
+  let schemaOf = (t: NamedTool) => {
+    let schema = schemas.get(t)
+    if (!schema) {
+      let ordinary = saying(t.outputSchema ?? answer)
+      // Decorate each branch: properties on the union would leave a closed
+      // branch unable to accept the words added beside its own result.
+      schema = opts.retain
+        ? { type: 'object', anyOf: [ordinary, saying(opts.retain.schema)] }
+        : ordinary
+      schemas.set(t, schema)
+    }
+    return schema
+  }
   // The check a client makes of every answer, made here first, against the
   // schema the tool is listed with. A client refuses an answer that does not
   // fit after this server has answered, so nothing here would ever hear of
@@ -556,8 +580,11 @@ export let server = (
       if (!t.readOnly) await admitted.ensure()
       let landed = await (t.readOnly ? admitted.read() : admitted.call())
       let answer = answerOf(landed, id)
-      out = said(t, answer, faulted(landed, id))
-      if (opts.text) {
+      let isError = faulted(landed, id)
+      let retained = await opts.retain?.result(answer, t, asked)
+      out = retained ?? said(t, answer, isError)
+      if (isError) out = { ...out, isError: true }
+      if (!retained && opts.text) {
         out = {
           ...out,
           content: [{ type: 'text', text: await opts.text(answer, t) }],

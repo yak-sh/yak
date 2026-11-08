@@ -51,6 +51,9 @@ let agentEnv = async () => {
             call(set: string, name: string, args: string) {
               return bridge.call(set, name, args)
             }
+            read(id: string) {
+              return bridge.read(id)
+            }
           }()),
       }
       : {}),

@@ -84,6 +84,7 @@ export {
   annotated,
   answerSchema,
   answerWith,
+  type CallToolResult,
   COMMAND,
   type Exchange,
   instructed,
