@@ -85,14 +85,22 @@ test('the move sweep carries out the deaths a store held before', async () => {
   try {
     let { made, applied, rows } = await space(k)
     await made('folk', PEOPLE)
-    let ada = minted(
-      await applied('folk', [
-        { entity: { eid: '$ada' }, individual: { first: 'Ada' } },
-      ]),
-      '$ada',
+    // More graves than one page of the walk holds.
+    let folk = Array.from({ length: 120 }, (_, i) => `$p${i}`)
+    let said = await applied(
+      'folk',
+      folk.map((alias, i) => ({
+        entity: { eid: alias },
+        individual: { first: `P${i}` },
+      })),
     )
-    await applied('folk', [{ entity: { eid: ada }, tombstone: {} }])
+    let gone = folk.map((alias) => minted(said, alias))
+    await applied(
+      'folk',
+      gone.map((eid) => ({ entity: { eid }, tombstone: {} })),
+    )
     await k.settled()
+    let ada = gone[110]
     await made('notes', MESSAGES)
     await applied('notes', [
       { entity: { eid: '$m' }, membership: { person: ada, group: 'choir' } },
@@ -105,11 +113,11 @@ test('the move sweep carries out the deaths a store held before', async () => {
         headers: { cookie: k.owner.cookie },
       })).json()
     let listed = await sweep() as { store: string; at: string }[]
-    let folk = listed.find((s) =>
+    let held = listed.find((s) =>
       s.at.endsWith('/folk') &&
       listed.some((n) => n.at == s.at.replace(/folk$/, 'notes'))
     )!
-    let woken = `?store=${encodeURIComponent(folk.store)}`
+    let woken = `?store=${encodeURIComponent(held.store)}`
     assertEquals((await sweep(woken)).mourned, null)
     await k.settled()
     assertEquals(await rows('notes', '.membership'), [])
