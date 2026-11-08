@@ -311,9 +311,17 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
           class: 'Desk_Back',
           href: chatPath(at.space),
           title: `Back to ${back}`,
+          'aria-label': `Back to ${back}`,
         },
         glyph('chevron-left'),
-        worded(`Back to ${back}`),
+        // The Operator's name, and before it "Back to" where the button has
+        // room for both on its one line (pages.css `.Desk_Way`).
+        h(
+          'span',
+          { class: 'Desk_Label Desk_Way' },
+          h('span', { class: 'Desk_To' }, back),
+          h('span', null, 'Back to'),
+        ),
       ),
       fold(!!at.collapsed, managePath(view, at.space), 'Desk-rail'),
     ],
@@ -510,9 +518,13 @@ export let choice = (
     { class: 'Desk_Pick', 'data-menu': '' },
     h(
       'summary',
-      { class: 'Desk_Space', title: named(here) },
+      {
+        class: 'Desk_Space',
+        title: `Change space: ${named(here)}`,
+        'aria-label': `Change space: ${named(here)}`,
+      },
       box(here),
-      h('span', { class: 'Desk_Change' }, 'Change', glyph('chevrons-up-down')),
+      h('span', { class: 'Desk_Change' }, glyph('chevrons-up-down')),
     ),
     h(
       'div',

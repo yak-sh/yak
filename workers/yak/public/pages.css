@@ -411,7 +411,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: .5rem;
   }
   .Desk_Close,
   .Desk_Bar {
@@ -420,8 +420,33 @@
   /* The way back to the Operator's chat, over everything the side manages
      (pages.ts `navigation`). */
   .Desk_Back {
+    flex: 0 1 auto;
     gap: .4rem;
     min-width: 0;
+  }
+  /* Its words hold one line, never wrapped or clipped: "Back to" and the
+     Operator's name where both fit, else the name alone, cut with an
+     ellipsis only where it alone does not fit. The name comes first in the
+     markup and the row runs right to left, so "Back to" is what wraps, onto
+     a line the box does not show; the button's own label says it whole. */
+  .Desk_Way {
+    display: flex;
+    flex-flow: row-reverse wrap;
+    justify-content: flex-end;
+    column-gap: .25em;
+    min-width: 0;
+    height: 1.25em;
+    overflow: hidden;
+    line-height: 1.25;
+  }
+  .Desk_To {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .Desk_Way > :not(.Desk_To) {
+    white-space: nowrap;
   }
   .Desk_Title {
     margin: 0 .8rem;
@@ -572,7 +597,6 @@
   .Desk_Change {
     display: inline-flex;
     align-items: center;
-    gap: .15rem;
     color: var(--accent);
     font-size: var(--fine);
     font-weight: 700;

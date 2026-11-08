@@ -53,6 +53,49 @@ let sides = (html: string) => {
 // A space of Dana's whose Operator is Pip.
 let pip = [{ slug: 'dana', title: '', owner: true, own: true, operator: 'Pip' }]
 
+// The top of the side on one line (T-151731): the way back says "Back to"
+// and the Operator's name, the name first so "Back to" is what gives way
+// where both do not fit, and says it whole as its name and tooltip; the
+// space selector is its tile, its name and a chevron, with no "Change".
+test('the side’s top keeps its words to one line, and the selector has no Change', async () => {
+  let { document } = parseHTML(
+    await block({
+      spaces: [
+        {
+          slug: 'dana',
+          title: 'Loch Lomond Allotments',
+          owner: true,
+          own: true,
+          operator: 'Menno',
+        },
+        { slug: 'grove', title: 'Grove', owner: true, own: false },
+      ],
+    }),
+  )
+  let back = document.querySelector('.Desk_Back')!
+  assertEquals(
+    [back.getAttribute('aria-label'), back.getAttribute('title')],
+    ['Back to Menno', 'Back to Menno'],
+  )
+  assertEquals(
+    [...back.querySelectorAll('.Desk_Way > span')].map((s) => s.textContent),
+    ['Menno', 'Back to'],
+  )
+  assertEquals(back.querySelector('.Desk_To')?.textContent, 'Menno')
+  let pick = document.querySelector('.Desk_Pick > summary')!
+  assertEquals(
+    pick.getAttribute('aria-label'),
+    'Change space: Loch Lomond Allotments',
+  )
+  assertEquals(
+    pick.getAttribute('title'),
+    'Change space: Loch Lomond Allotments',
+  )
+  assertEquals(pick.querySelector('.Desk_Change')?.textContent, '')
+  assert(pick.querySelector('.Desk_Change .Icon'))
+  assert(!pick.textContent!.includes('Change'))
+})
+
 test('Manage is one side: back to the Operator, the space you manage, then your account', async () => {
   let page = await block({
     apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
@@ -60,7 +103,7 @@ test('Manage is one side: back to the Operator, the space you manage, then your 
   })
   assertStringIncludes(page, 'href="https://dana.yaks.app/recipes/"')
   let { document, account, space, back } = sides(page)
-  assertEquals(back?.textContent, 'Back to Pip')
+  assertEquals(back?.getAttribute('aria-label'), 'Back to Pip')
   assertEquals(back?.getAttribute('href'), '/manage/dana')
   assertEquals(document.querySelector('.Desk_Title')?.textContent, 'Manage')
   assertEquals(account, [
@@ -93,7 +136,10 @@ test('Manage is one side: back to the Operator, the space you manage, then your 
     assertEquals(document.querySelector('h1')?.textContent, title)
   }
   // Where the space's Operator has no name, it is yours.
-  assertEquals(sides(await block()).back?.textContent, 'Back to your Operator')
+  assertEquals(
+    sides(await block()).back?.getAttribute('aria-label'),
+    'Back to your Operator',
+  )
   assertStringIncludes(page, 'Connect your agent')
   assertEquals(
     document.querySelector('.Desk_Connect .Button')?.getAttribute('href'),
@@ -170,7 +216,7 @@ test('the selector names the space, not its address, and keeps the page when ano
   let page = await block({ view: 'billing', space: 'grove', spaces })
   assertEquals(
     parseHTML(page).document.querySelector('summary.Desk_Space')?.textContent,
-    'LLocust GroveChange',
+    'LLocust Grove',
   )
   assertEquals(rows(page), [
     {
