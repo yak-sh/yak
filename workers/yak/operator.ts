@@ -951,6 +951,8 @@ export let operating = (
         (dir) => space ? dir.at(space) : Promise.resolve(null),
         base,
         () => Promise.resolve(price),
+        undefined,
+        from,
       )({
         ...req,
         ...kept ? { cacheRetention: kept } : {},

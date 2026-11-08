@@ -538,6 +538,9 @@ export let directoryDoc: VocabDoc = {
         texts: num,
         seconds: num,
         visitors: num,
+        // What its dollars bought (meter.ts `SOURCES`), kept by the day in
+        // the space's `trend.sources`.
+        source: text,
         refunded: owned(num),
         why: owned(text),
         bought: owned(num),

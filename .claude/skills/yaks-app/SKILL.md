@@ -98,7 +98,12 @@ and setup; this is the map and the feel.
 - **The connector**: `mcp.ts` and `tools.ts`, the tools Claude and ChatGPT call;
   `prompts/` and `public/docs/` are what those assistants read.
 - **Spending**: `models.ts` and `meter.ts`, one model and voice budget per
-  space (D-131886). An app's builders are `builders-and-builds`.
+  space (D-131886). A spend names its source (a provider, `voice`, `texts`,
+  `browser`; meter.ts `SOURCES`), which the space's `trend` keeps by the day
+  beside what a paying plan covered; /admin/spending (admin-spending.ts)
+  reads those and each Operator's ask rows (operator-spending.ts). A new
+  thing that costs money names its source too. An app's builders are
+  `builders-and-builds`.
 - **Drawing**: yak-raster (`raster/`), the Worker behind RASTER, draws an app's
   icon.svg as the icon.png a home screen reads (`raster.ts`). It is its own
   Worker because resvg is 2.4 MB of WebAssembly, which every isolate of the

@@ -374,6 +374,7 @@ export let asking = (at: Stored): Handlers => {
       model,
       price,
       visitorOf(at),
+      name,
     )
   }
   let first = names(at.env, serving)[0]

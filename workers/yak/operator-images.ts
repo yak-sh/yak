@@ -97,6 +97,9 @@ export let imageNew = (env: Env, space: Space): Tool => ({
           }
         }, { room: mediaRoom(env, space) }),
       }), providing)[images.provider],
+      undefined,
+      undefined,
+      images.provider,
     )
     let reply = await make({
       model: String(model),

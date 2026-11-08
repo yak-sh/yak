@@ -593,17 +593,58 @@ export let added = (
   return out
 }
 
+/** What a dollar is spent on, as the admin's spending page tells them
+ * apart: each model provider by the name its plug serves under (config.ts),
+ * a voice (an app's or an Operator's call, and speech), texts and numbers,
+ * and the browser that renders a preview. A spend that names none is said
+ * by what it buys (`sourceOf`). */
+export let SOURCES: Record<string, string> = {
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+  'workers-ai': 'Workers AI',
+  openrouter: 'OpenRouter',
+  voice: 'Voice',
+  texts: 'Texts',
+  browser: 'Browser',
+  models: 'Other models',
+}
+
+/** The source a spend is kept under: the one it names, else what it buys. */
+export let sourceOf = (spend: Record<string, unknown>) =>
+  typeof spend.source == 'string' && spend.source
+    ? spend.source
+    : Number(spend.realtime ?? 0)
+    ? 'voice'
+    : Number(spend.texts ?? 0)
+    ? 'texts'
+    : 'models'
+
 /**
- * The patch a spend makes to a space's `trend`: what it cost, on its day. A
- * letter or a spend of nothing costs nothing and leaves the days as they are.
+ * The patch a spend makes to a space's `trend`: what it cost on its day, in
+ * all and under its source (`sourceOf`), and under `paid` too when the space
+ * pays for a plan, so a day's dollars say who covered them: the space's own
+ * plan, or the platform. A letter or a spend of nothing costs nothing and
+ * leaves the days as they are.
  *
  * ```ts
  * import { trended } from './meter.ts'
  * import { equal } from '@yaks/testing'
  *
  * let now = Date.parse('2026-10-31T12:00:00Z')
- * equal(trended({ spend: { '2026-10-31': 1 } }, { models: 0.5 }, now), {
- *   spend: { '2026-10-31': 1.5 },
+ * equal(
+ *   trended({ spend: { '2026-10-31': 1 } }, {
+ *     models: 0.5,
+ *     source: 'anthropic',
+ *   }, now),
+ *   {
+ *     spend: { '2026-10-31': 1.5 },
+ *     sources: { anthropic: { '2026-10-31': 0.5 } },
+ *   },
+ * )
+ * equal(trended({}, { texts: 0.25 }, now, true), {
+ *   spend: { '2026-10-31': 0.25 },
+ *   sources: { texts: { '2026-10-31': 0.25 } },
+ *   paid: { '2026-10-31': 0.25 },
  * })
  * equal(trended({}, { emails: 1 }, now), {})
  * ```
@@ -612,9 +653,17 @@ export let trended = (
   trend: Record<string, unknown> | undefined,
   spend: Record<string, unknown>,
   now: number,
+  paying = false,
 ): Record<string, unknown> => {
-  let cost = Number(spend.models ?? 0)
-  return cost ? { spend: kept(trend?.spend as ByDay, cost, now) } : {}
+  let cost = DOLLARS.reduce((sum, k) => sum + Number(spend[k] ?? 0), 0)
+  if (!cost) return {}
+  let source = sourceOf(spend)
+  let sources = (trend?.sources ?? {}) as Record<string, ByDay>
+  return {
+    spend: kept(trend?.spend as ByDay, cost, now),
+    sources: { ...sources, [source]: kept(sources[source], cost, now) },
+    ...paying ? { paid: kept(trend?.paid as ByDay, cost, now) } : {},
+  }
 }
 
 /** A ceiling a space answers to: what it has used and what it is allowed. */
@@ -971,7 +1020,7 @@ export let tooManySpaces = (held: Space[], env: Host = {}) => {
 let spending = async (
   env: { STORE: Namespace },
   space: Pick<Space, 'eid'>,
-  spend: Partial<Record<Spend, number>>,
+  spend: Partial<Record<Spend, number>> & { source?: string },
   now: Date,
 ) =>
   await stamp(env, {
@@ -1061,9 +1110,15 @@ export let countedSpend = async (
   cost: number,
   seconds: number,
   now = new Date(),
+  source?: string,
 ) => {
   if (cost <= 0 && seconds <= 0) return
-  await spending(env, space, { models: cost, seconds }, now)
+  await spending(
+    env,
+    space,
+    { models: cost, seconds, ...source ? { source } : {} },
+    now,
+  )
 }
 
 /** The original media call and its spend commit together, once. A crash after
@@ -1228,6 +1283,7 @@ export let accounted = (
   model: Model,
   price?: (name: string) => Promise<Price | undefined>,
   visiting?: (req: Parameters<Model>[0]) => Promise<string | undefined>,
+  source?: string,
 ): Model =>
   Object.assign(
     async (req: Parameters<Model>[0]) => {
@@ -1275,7 +1331,7 @@ export let accounted = (
           return req.questions && quote?.tokens != output ? null : quote
         },
         call,
-        { visitor },
+        { visitor, source },
       )
       reached('reserved', hold)
       let submitted = false

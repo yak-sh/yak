@@ -11,6 +11,9 @@ export let docs: VocabDoc[] = [{
         month: { type: 'string' },
         dollars: { type: 'number' },
         what: { type: 'string', enum: ['models', 'realtime', 'texts'] },
+        // What the dollars buy, for the admin's spend by source (meter.ts
+        // `SOURCES`): a model provider, voice, texts or the browser.
+        source: { type: 'string' },
         visitor: { type: 'boolean' },
       },
     },

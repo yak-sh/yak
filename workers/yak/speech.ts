@@ -409,7 +409,7 @@ let charged = async <T extends { dollars: number }>(
     let done = await work()
     spent(done.dollars)
     return done
-  })
+  }, 'voice')
 }
 
 /** `text` spoken for `space` through `provider` (the platform's by

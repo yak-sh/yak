@@ -40,6 +40,7 @@ import {
   idOf,
   META,
   newcomerIs,
+  paid,
   type Row,
   type Space,
   spaceOf,
@@ -84,6 +85,8 @@ import { ADMIN, managePath } from './route.ts'
 import { admin } from './tool.ts'
 import { adminWho } from './asking.ts'
 import { Idle } from './mascot.ts'
+import { type Asked, type Counted, spendingBody } from './admin-spending.ts'
+import type { Spending } from './operator-spending.ts'
 
 export let PATH = ADMIN
 
@@ -490,7 +493,14 @@ let tested = (d: Reading) => d.tests ? '?tests=1' : ''
 let desk = (
   d: Reading,
   title: string,
-  current: List | 'sessions' | 'funnel' | 'invites' | 'builds' | null,
+  current:
+    | List
+    | 'sessions'
+    | 'spending'
+    | 'funnel'
+    | 'invites'
+    | 'builds'
+    | null,
   body: ComponentChildren,
   kicker: ComponentChildren = null,
   status = 200,
@@ -530,6 +540,12 @@ let desk = (
       `${PATH}/sessions${tested(d)}`,
       'message-square',
       'Sessions',
+    ),
+    link(
+      'spending',
+      `${PATH}/spending${tested(d)}`,
+      'receipt',
+      'Spending',
     ),
     link(
       'funnel',
@@ -857,6 +873,43 @@ let sessionsPage = async (d: Reading, env: Env, person: string) => {
   )
 }
 
+// How many of the spaces that spent most the Spending page asks.
+let SPENDERS = 30
+
+// Where the platform's dollars went over the last thirty days
+// (admin-spending.ts): every space's days from the directory, and the
+// conversations and requests of the Operators of the spaces that spent most.
+// Every space counts, a test one too: its dollars were spent all the same.
+let spendingPage = async (d: Reading, env: Env, person: string) => {
+  let now = Date.now()
+  let spaces: Counted[] = d.census.spaces.map((r) => ({
+    eid: r.entity.eid,
+    slug: r.space!.slug,
+    test: !!d.uses.get(r.entity.eid)?.test,
+    paying: paid(r.plan?.tier),
+    month: budget(spaceOf(r)).spent,
+    trend: r.trend,
+  }))
+  let spent = (s: Counted) =>
+    series(s.trend?.spend, DAYS, now).values.reduce((a, b) => a + b, 0)
+  let asked: Asked[] = await Promise.all(
+    spaces.filter((s) => spent(s) > 0)
+      .sort((a, b) => spent(b) - spent(a))
+      .slice(0, SPENDERS)
+      .map(async (space) => ({
+        space,
+        spending: await asking(
+          env,
+          d.spaces.get(space.eid)!,
+          person,
+          'spending',
+          { everyone: true },
+        ) as Spending | Error,
+      })),
+  )
+  return desk(d, 'Spending', 'spending', spendingBody(spaces, asked, PATH, now))
+}
+
 let pct = (share: number) => `${Math.round(share * 100)}%`
 
 // How far strangers got, a line a stage, and where most of them stop.
@@ -1058,6 +1111,7 @@ export let answer = async (
   if (rest == 'invites') return invitesPage(d)
   if (rest == 'builds') return buildsPage(d, await opened(dir))
   if (rest == 'sessions') return await sessionsPage(d, env, who)
+  if (rest == 'spending') return await spendingPage(d, env, who)
   if (rest == 'funnel') {
     let days = Number(asked.searchParams.get('days')) || 7
     let f = await funnel(env, days).catch((e) => {

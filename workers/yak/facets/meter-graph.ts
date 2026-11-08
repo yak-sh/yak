@@ -4,7 +4,7 @@ import type { Options } from './store.ts'
 import type { Env } from '../env.ts'
 import { reporting } from '../wake.ts'
 import { added, credited, trended, unaffordable } from '../meter.ts'
-import { idOf, type Row, spaceOf, stamp } from '../directory.ts'
+import { idOf, paid, type Row, spaceOf, stamp } from '../directory.ts'
 import { monthOf } from '../meter.ts'
 import { Refused } from '@yaks/graph/errors'
 
@@ -45,7 +45,14 @@ let spending = (row: Bound) => {
     credited(space, next, Number(bought ?? 0), now)
   return {
     meter: drew ? { ...next, credit: drew.drawn } : next,
-    trend: trended(props(trend), spent, Date.parse(Now.at)),
+    // A space paying for its plan covers its dollars; every other's are the
+    // platform's to give (a comp, the free plan, a starter, a newcomer's).
+    trend: trended(
+      props(trend),
+      spent,
+      Date.parse(Now.at),
+      paid(space?.plan?.tier),
+    ),
     ...drew ? { credit: drew.credit } : {},
     spend: null,
   }

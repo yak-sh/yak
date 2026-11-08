@@ -263,7 +263,15 @@
         },
         "spend": {
           "type": "object",
-          "description": "Dollars spent on models, builds and generated media by day, YYYY-MM-DD, added as each is spent."
+          "description": "Dollars spent from the space's budget by day, YYYY-MM-DD, added as each is spent: models, builds, generated media, voice and texts."
+        },
+        "sources": {
+          "type": "object",
+          "description": "The same dollars by what sold them, each a day map like `spend`: a model provider (`anthropic`, `openai`, `workers-ai`, `openrouter`), `voice`, `texts`, `browser`, or `models` for a model call that named no provider."
+        },
+        "paid": {
+          "type": "object",
+          "description": "The part of `spend` a space paying for its plan covered, by day; the rest the platform gave."
         }
       }
     },

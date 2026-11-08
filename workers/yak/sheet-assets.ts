@@ -69,6 +69,7 @@ export let WORN = [
   'Empty',
   'Report',
   'Chart',
+  'Table',
   'Tabs',
   'Icon',
   'SideNav',

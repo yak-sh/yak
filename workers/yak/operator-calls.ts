@@ -1009,7 +1009,14 @@ export let calling = async (
     hello: opens.hello,
     minutes: opens.minutes,
     charge: ({ seconds, heard }: Parameters<Around['charge']>[0]) =>
-      countedSpend(env, space, heard + seconds / 60 * o.perMinute, 0),
+      countedSpend(
+        env,
+        space,
+        heard + seconds / 60 * o.perMinute,
+        0,
+        new Date(),
+        'voice',
+      ),
     done: ({ seconds, turns, ended }: Parameters<Around['done']>[0]) => {
       if (live.get(key) == call) live.delete(key)
       // How long each turn waited, for comparing providers, models and

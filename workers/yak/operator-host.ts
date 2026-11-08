@@ -31,6 +31,7 @@ import {
   type Worked,
 } from './operator-view.ts'
 import { type Aside, type HelperLine, ordered } from './operator-aside.ts'
+import { type Spending, spent } from './operator-spending.ts'
 import {
   type Helper,
   type Lines,
@@ -533,6 +534,84 @@ export let workOf = async (
     ...talking,
     ...[...waiting, ...work, ...drawn].sort((a, b) => b.at.localeCompare(a.at)),
   ]
+}
+
+// How far back the Spending page reads, the days a request's split is kept
+// (@yaks/session `context_parts`), and the most helpers it names.
+let SPENT_DAYS = 30
+let NAMED = 200
+
+/**
+ * What this space's Operator spent over the last thirty days, for the
+ * platform's admin (`everyone`): every conversation and task with its helpers
+ * rolled up into it, each day's dollars by provider, and what each piece of
+ * its requests cost (operator-spending.ts `spent`). It reads only the
+ * properties it counts, never what a request was sent.
+ */
+export let spendingOf = async (
+  store: Store,
+  space: string,
+  person: string,
+  everyone: Named,
+  now = Date.now(),
+): Promise<Spending> => {
+  let since = new Date(now - SPENT_DAYS * 86_400_000).toISOString()
+  let [asks, sessions, tasks, edges, prices, providers, conversations] =
+    await Promise.all([
+      store.g.read(
+        `.ask .created.at>=${JSON.stringify(since)} .fields=` +
+          'ask.to,entry.session,using.provider,usage.input_tokens,' +
+          'usage.cached_tokens,usage.output_tokens,cost.dollars,' +
+          'context_parts.parts,created.at,updated.at',
+      ),
+      store.g.read('.session .fields=spawned.parent,fixed.parts'),
+      store.g.read('.task .fields=doc.title'),
+      store.g.read('.contains .fields=edge.from,edge.to'),
+      store.g.read(
+        '.price .fields=price.input,price.output,price.cached,' +
+          'price.cache_write',
+      ),
+      store.g.read('.provider .fields=provider.name'),
+      conversationsOf(store, space, person, everyone),
+    ])
+  let titled = new Map(
+    tasks.map((t) => [t.entity.eid, String(comp(t, 'doc')?.title ?? '')]),
+  )
+  let carried = new Map<string, string>()
+  for (let e of edges) {
+    let { from, to } = comp(e, 'edge') ?? {}
+    if (titled.has(String(from))) carried.set(String(to), String(from))
+  }
+  let spawned = new Set(
+    sessions.filter((s) => s.spawned).map((s) => s.entity.eid),
+  )
+  let helpers = [
+    ...new Set(
+      asks.map((a) => String(comp(a, 'entry')?.session ?? ''))
+        .filter((s) => spawned.has(s) && !carried.has(s)),
+    ),
+  ].slice(0, NAMED)
+  let titles = new Map([
+    ...conversations.map(({ root, title }) => [root, title] as const),
+    ...titled,
+    ...await Promise.all(
+      helpers.map(async (h) =>
+        [h, askedOf(await openingOf(store, h))] as const
+      ),
+    ),
+  ])
+  return spent({
+    asks,
+    sessions,
+    tasks: carried,
+    titles,
+    prices: new Map(
+      prices.map((p) => [p.entity.eid, comp(p, 'price') ?? {}]),
+    ),
+    providers: new Map(
+      providers.map((p) => [p.entity.eid, String(comp(p, 'provider')?.name)]),
+    ),
+  })
 }
 
 // The files sent with each request, to link beside the conversation.
@@ -1204,6 +1283,12 @@ export let operatorRequest = async (
   }
   if (path == '/operator/work') {
     return Response.json(await workOf(store, spaceId, person, everyone))
+  }
+  // What its Operator spent, for the platform's admin alone.
+  if (path == '/operator/spending') {
+    return everyone
+      ? Response.json(await spendingOf(store, spaceId, person, everyone))
+      : missing()
   }
   // Their Updates from the Operator, and what they do there.
   if (path == '/operator/updates') {

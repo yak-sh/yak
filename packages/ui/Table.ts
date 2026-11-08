@@ -170,8 +170,8 @@ let branch = (
   )
 
 /** A table sorted by one column, with the keyboard on a row and one under
- * the pointer; a column too narrow for what it holds; a tree; and a table of
- * pairs. */
+ * the pointer; a column too narrow for what it holds, sorted the other way;
+ * a tree; and a table of pairs. */
 export let specimens = (): Specimen[] => [
   [
     'Table, Heading-sorts, Heading-desc, Heading-num, Row-picks, Row-focus, ' +
@@ -214,13 +214,24 @@ export let specimens = (): Specimen[] => [
     ),
   ],
   [
-    'Table, Cell cut short',
+    'Table, Heading-asc, Cell cut short',
     h(
       'div',
       narrow,
       h(
         Table,
         { cols: [null, null, 'num'] },
+        h(
+          Head,
+          {},
+          h(
+            Row,
+            {},
+            h(Heading, { mod: ['sorts', 'asc'] }, 'id'),
+            h(Heading, {}, 'title'),
+            h(Heading, { mod: 'num' }, 'comments'),
+          ),
+        ),
         h(
           Body,
           {},

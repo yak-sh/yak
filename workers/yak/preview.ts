@@ -542,6 +542,7 @@ export let preview = async (ctx: Ctx, args: Args) => {
         spent(duration / 1000 * RATE)
         return Promise.resolve()
       }, { space: space.slug, app: app.slug }),
+    'browser',
   ).catch((e) => {
     throw e instanceof ModelError && e.code == 'limit'
       ? refuse('limit', e.message)

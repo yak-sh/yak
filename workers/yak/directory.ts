@@ -842,7 +842,12 @@ export type Row = {
     submitted?: boolean | null
   }
   meter?: Partial<Meter>
-  trend?: { requests?: ByDay; spend?: ByDay }
+  trend?: {
+    requests?: ByDay
+    spend?: ByDay
+    sources?: Record<string, ByDay>
+    paid?: ByDay
+  }
   notified?: Record<string, unknown> | null
   tunnel?: {
     id?: string | null

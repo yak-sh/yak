@@ -16,13 +16,21 @@ export type Hold = {
   month: string
   dollars: number
   what: Kind
+  /** what the dollars buy (meter.ts `SOURCES`) */
+  source?: string
   /** a visitor's call, held against their share of the budget as well */
   visitor?: boolean
 }
-/** Who a hold is spent for: what it buys, and the visitor who asked, named by
- * who they are (their person, else their address or transcript); none is a
- * member's. */
-export type Paying = { what?: Kind; visitor?: string; now?: Date }
+/** Who a hold is spent for: what it buys, the source that sells it (a model
+ * provider, voice, texts; meter.ts `SOURCES`), and the visitor who asked,
+ * named by who they are (their person, else their address or transcript);
+ * none is a member's. */
+export type Paying = {
+  what?: Kind
+  source?: string
+  visitor?: string
+  now?: Date
+}
 
 export let receiptEid = (call: string) =>
   derivedEid('generated-media-spend|' + call)
@@ -101,6 +109,7 @@ export let settled = async (
         spend: {
           month: hold.month,
           [hold.what]: delta,
+          ...hold.source ? { source: hold.source } : {},
           ...hold.visitor ? { visitors: delta } : {},
         },
       }]
@@ -136,7 +145,7 @@ export let reserved = async <T extends { dollars: number }>(
   space: Space,
   quote: (remaining: number) => T | null,
   call = mint(),
-  { what = 'models', visitor, now = new Date() }: Paying = {},
+  { what = 'models', source, visitor, now = new Date() }: Paying = {},
 ): Promise<
   { value: T; settle(dollars: number, reported?: boolean): Promise<boolean> }
 > => {
@@ -181,6 +190,7 @@ export let reserved = async <T extends { dollars: number }>(
               month,
               dollars: value!.dollars,
               what,
+              ...source ? { source } : {},
               ...visitor ? { visitor: true } : {},
             },
           },
@@ -190,6 +200,7 @@ export let reserved = async <T extends { dollars: number }>(
             spend: {
               month,
               [what]: value!.dollars,
+              ...source ? { source } : {},
               ...visitor ? { visitors: value!.dollars } : {},
               held: true,
             },
@@ -229,13 +240,14 @@ export let onHold = async <T>(
   most: number,
   what: Kind,
   work: (spent: (dollars: number) => void) => Promise<T>,
+  source?: string,
 ): Promise<T> => {
   let hold = await reserved(
     env,
     space,
     (left) => most <= left ? { dollars: most } : null,
     mint(),
-    { what },
+    { what, source },
   )
   let cost = 0
   try {
@@ -246,7 +258,11 @@ export let onHold = async <T>(
       await stamp(env, {
         entities: [{
           entity: { eid: space.eid },
-          spend: { month: monthOf(new Date()), [what]: cost - most },
+          spend: {
+            month: monthOf(new Date()),
+            [what]: cost - most,
+            ...source ? { source } : {},
+          },
         }],
       })
     }
