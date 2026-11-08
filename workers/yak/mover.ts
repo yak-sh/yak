@@ -55,7 +55,6 @@ import { phoneRule } from './phone-move.ts'
 import { operatorNameRule } from './operator-name.ts'
 import { sellerRule } from './seller-move.ts'
 import { describedRule } from './described-move.ts'
-import { directoryPhoneRule } from './directory-phone-move.ts'
 export type MoveContext = { store: string; app?: string; space?: string }
 
 export type Rule = {
@@ -184,7 +183,6 @@ export let RULES: Rule[] = [
   phoneRule,
   sellerRule,
   describedRule,
-  directoryPhoneRule,
 ]
 
 /** The store as the mover reaches it, all of it synchronous: a batch is one

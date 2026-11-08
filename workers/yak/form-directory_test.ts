@@ -5,8 +5,7 @@ import { kernelDoc } from '@yaks/kernel/vocab'
 import { formsDoc } from '@yaks/forms/vocab'
 import { phoneDoc } from '@yaks/phone'
 import { equal, test } from '@yaks/testing'
-import { directoryForms } from './form-directory.ts'
-import { directoryPhoneMove } from './directory-phone-move.ts'
+import { directoryForms, directoryPhone } from './form-directory.ts'
 
 let text = { type: 'string' }
 let vocab = loadVocab([kernelDoc, formsDoc, phoneDoc, {
@@ -193,9 +192,9 @@ test('clearing a directory phone removes its matchable number', async () => {
 })
 
 test('the phone repair is idempotent and keeps the typed source intact', () => {
-  let [patch] = directoryPhoneMove(fixture)
+  let patch = directoryPhone(fixture)
   equal(patch.phone, { number: '+12695550142' })
-  equal(directoryPhoneMove({ ...fixture, ...patch }), [])
+  equal(directoryPhone(patch), patch)
   equal(fixture.individual.phone, '(269) 555-0142')
 })
 
