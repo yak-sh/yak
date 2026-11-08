@@ -92,9 +92,13 @@ import { json, kernels, moved, redirect, shelf } from './apps.ts'
 // call. Nothing above the owner block below asks for it, so nothing else pays.
 let identity = () => import('./identity.ts')
 
-// The agents a person has connected (connected.ts `agentsOf`).
-let agentsOf = (env: Env, person: string) =>
-  identity().then((part) => part.agents(env, person))
+// The agents a person has connected (connected.ts `agentsOf`), asked in the
+// page's directory trip.
+let agentsOf = (
+  env: Env,
+  person: string,
+  dir: ReturnType<typeof directory>,
+) => identity().then((part) => part.agents(env, person, dir))
 
 // What a read has answered by now, or nothing while it is still out: a page
 // that shows it only when it is in hand never waits on it.
@@ -352,7 +356,7 @@ let rowsAhead = (
   let walk = walkTo(at.slug, at.space.then((s) => s?.eid ?? ''))
   // The person's own agents, which the page shows only if they are in hand
   // by the time it is drawn (`desk`).
-  if (view == 'apps' || view == 'new') return [agentsOf(at.env, person)]
+  if (view == 'apps' || view == 'new') return [agentsOf(at.env, person, dir)]
   if (view == 'people') return [dir.people(walk), dir.admits(walk)]
   if (view == 'operator') {
     return [
@@ -367,7 +371,7 @@ let rowsAhead = (
   return [
     // The outside services holding a grant from the person, shown only on
     // their own space, asked before the page knows whether it is.
-    identity().then((part) => part.services(at.env, person)),
+    identity().then((part) => part.services(at.env, person, dir)),
     connectionsAsked(
       at.env,
       at.space.then((s) => s ?? Promise.reject(new Error('no space here'))),
@@ -500,12 +504,13 @@ let desk = async (
   let shelved = dir.apps(space).then((apps) => shelf(apps, space, who))
   // Whether an agent is connected, for the pages that say how to make an app
   // with one. They are drawn with it only if it is in hand once everything
-  // else is, since the provider's first read of a person's grants takes
-  // longer than the rest of the page (T-149703), and the page's script
+  // else is, since a person whose grants are not yet in the directory has
+  // them read from the provider's KV, which takes longer than the rest of
+  // the page (T-149703, grant-rows.ts), and the page's script
   // settles what depends on it (pages.ts `state`). A read that fails is
   // reported and left to the script too.
   let agents = view == 'apps' || view == 'new'
-    ? agentsOf(env, owner).catch((e) => {
+    ? agentsOf(env, owner, dir).catch((e) => {
       caught(e, { request: 'read agents', space: space.slug })
       return undefined
     })
@@ -562,7 +567,7 @@ let desk = async (
           seats.some((s) => s.own && s.space.eid == space.eid)
         ),
         // Asked beside the directory's reads, and kept only on their own.
-        services: identity().then((part) => part.services(env, owner)),
+        services: identity().then((part) => part.services(env, owner, dir)),
         enable: enabled(req),
         add: q.get('add') ?? undefined,
       })
@@ -679,7 +684,7 @@ let mine = async (
     dir.seats(person).then((seats) => pickable(dir, seats)),
     dir.nameAt(person),
     view == 'profile' ? dir.emailAt(person) : undefined,
-    view == 'agents' ? agentsOf(env, person) : [],
+    view == 'agents' ? agentsOf(env, person, dir) : [],
     view == 'shared' ? shared(dir, person) : undefined,
     view == 'invite' ? invitation(env, dir, person) : undefined,
     dir.own(person),

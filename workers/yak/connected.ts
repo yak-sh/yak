@@ -1,4 +1,5 @@
-// Connected agents are a view of the OAuth provider's surviving grants.
+// Connected agents are a view of the person's surviving OAuth grants, as
+// the directory lists them beside the provider's KV (grant-rows.ts).
 // Callback hosts identify web clients; local and older clients use the name
 // their grant kept at consent, else their registered one. Multiple
 // installations of one agent share one entry. A grant a re-authorization

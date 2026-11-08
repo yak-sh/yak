@@ -66,6 +66,7 @@ import { nameOf } from './names.ts'
 import type { Texting } from './operator-texts.ts'
 import type { Alerting } from './operator-alerts.ts'
 import type { Subscription } from '@yaks/push'
+import type { Row as GrantRow } from './grant-rows.ts'
 
 // The slugs no space or app may take, because at `<slug>.yaks.app` and at
 // `<slug>@yaks.app` (post.ts `mailFrom`) they would read as the platform
@@ -807,6 +808,8 @@ export type Row = {
     p256dh: string
     auth: string
   }
+  oauth_grant?: Omit<GrantRow, 'person'> & { person: Id }
+  grants_listed?: { at: string }
   signed_in?: { at?: string | null; via?: string | null }
   used?: { at?: string | null }
   changed?: { at?: string | null }
@@ -3043,6 +3046,20 @@ export let directoryRows = (rows: {
           }]
           : []
       ),
+    // The OAuth grants this person holds, as their agents are listed
+    // (grant-rows.ts), and whether those rows are whole.
+    grants: async (person: string) => {
+      let [them, rows] = await Promise.all([
+        one(`.entity.eid=${person}`),
+        theirs(person, `.oauth_grant.person=${person}`),
+      ])
+      return {
+        listed: !!them?.grants_listed,
+        rows: rows.flatMap(({ oauth_grant: g }) =>
+          g ? [{ ...g, person: idOf(g.person) }] : []
+        ),
+      }
+    },
     // What to call this person anywhere their address must not go: the name
     // they chose in their settings or were invited under, else the front of
     // their address (signin.ts `nameOf`). An app's store is written this and never the address, so a

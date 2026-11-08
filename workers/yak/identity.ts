@@ -109,7 +109,15 @@ import {
 export { HANDOFF } from './handoff.ts'
 import { planCard } from './billing.ts'
 import { payments } from './payments.ts'
-import { daysLeft, directory, META, RESERVED, type Space } from './directory.ts'
+import {
+  daysLeft,
+  type Directory,
+  directory,
+  META,
+  RESERVED,
+  type Space,
+} from './directory.ts'
+import { type Book, listing, through } from './grant-rows.ts'
 import {
   doomed,
   erase,
@@ -215,7 +223,27 @@ export type { Caller }
 // The provider's helpers over this env: parsing an authorize request,
 // naming a client, writing a grant, unwrapping a token. `opts` is the same
 // configuration `fetch` runs, so the two never disagree.
-let api = (env: Env) => getOAuthApi<Env>(opts(env), env)
+let api = (env: Env) => getOAuthApi<Env>(opts(env), provided(env))
+
+// The person's grants as the directory lists them (grant-rows.ts): read
+// through `dir`, so a page's own directory client asks them in its trip.
+let book = (dir: Directory): Book => ({
+  read: (person) => dir.grants(person),
+  write: (entities) => dir.apply({ entities }, KERNEL),
+})
+
+// The env the provider is handed: its KV writes each grant's row as it
+// writes the grant (grant-rows.ts `through`).
+let provided = (env: Env): Env =>
+  env.OAUTH_KV
+    ? Object.create(env, {
+      OAUTH_KV: {
+        value: through(env.OAUTH_KV as object, {
+          write: (entities) => book(dirOf(env)).write(entities),
+        }),
+      },
+    })
+    : env
 
 /** The person an OAuth access token was granted for, and when it ends
  * (asking.ts `asking`). */
@@ -229,7 +257,7 @@ export let unwrapped = async (env: Env, token: string) => {
 // links. An erased account's token otherwise outlives it (T-144541): a grant
 // never expires, and the next call as it wrote the dead row back.
 export let unheld = async (env: Env, person: string) => {
-  await disconnectAll(api(env), person)
+  await disconnectAll(grants(env), person)
   let granted = ledger(env.OAUTH_KV)
   if (granted) await revokeGrants(granted, person, '')
   let standing = links(env.OAUTH_KV)
@@ -271,20 +299,28 @@ let addressIn = (row?: Record<string, unknown>) =>
   (row?.email as { address?: string } | undefined)?.address ?? null
 
 // The provider as connected.ts reads it, each wait on it an `oauth_wait`
-// (timing.ts). A person's grants and each client are read once a request
-// (hops.ts `recall`), so a page can ask them ahead of knowing whether it shows
-// them (manage.ts `foresee`), until a grant is revoked. A client whose
-// metadata document cannot be fetched just now is unknown, not gone: its
-// grants still stand.
-let grants = (env: Env) => {
+// (timing.ts). A person's grants are their directory rows (grant-rows.ts
+// `listing`), read through `dir`; theirs and each client are read once a
+// request (hops.ts `recall`), so a page can ask them ahead of knowing whether
+// it shows them (manage.ts `foresee`), until a grant is revoked. A client
+// whose metadata document cannot be fetched just now is unknown, not gone:
+// its grants still stand.
+let grants = (env: Env, dir = dirOf(env)) => {
   let oauth = api(env)
   let waiting = <T>(work: () => Promise<T>) => elapsed('oauth_wait', work)
+  let listed = listing(env.OAUTH_KV, book(dir), (work) =>
+    background(
+      apart(work).then(
+        () => {},
+        (e) => caught(e, { request: 'grants_listed' }),
+      ),
+    ))
   return {
-    listUserGrants: (person: string, options?: ListOptions) =>
+    listUserGrants: (person: string, _?: ListOptions) =>
       recall(
         'oauth',
-        `grants ${person} ${JSON.stringify(options ?? {})}`,
-        () => waiting(() => oauth.listUserGrants(person, options)),
+        `grants ${person}`,
+        () => waiting(() => listed(person)),
       ),
     revokeGrant: (id: string, person: string) =>
       writing('oauth', () => waiting(() => oauth.revokeGrant(id, person))),
@@ -301,11 +337,14 @@ let grants = (env: Env) => {
   }
 }
 
-export let agents = (env: Env, person: string) => agentsOf(grants(env), person)
+/** The agents a person has connected (connected.ts), read through `dir`
+ * when a page holds one, so they come in its trip. */
+export let agents = (env: Env, person: string, dir?: Directory) =>
+  agentsOf(grants(env, dir), person)
 
 /** The outside services holding a grant from this person (connected.ts). */
-export let services = (env: Env, person: string) =>
-  servicesOf(grants(env), person)
+export let services = (env: Env, person: string, dir?: Directory) =>
+  servicesOf(grants(env, dir), person)
 
 // Who is asking, out of the platform session cookie and nothing else. It is
 // deliberately not `withAuth` above, which also answers an agent's bearer:
@@ -441,12 +480,16 @@ let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
   let who = await withAuth(env, req)
   if (!who) return redirect('/login?return=%2Fconnect', undefined, 303)
   let dir = dirOf(env)
-  let space = await dir.own(who.person)
-  let provider = await payments(env)
+  // Their agents asked beside their space, in the same directory trip.
+  let [space, theirAgents, provider] = await Promise.all([
+    dir.own(who.person),
+    agents(env, who.person, dir),
+    payments(env),
+  ])
   return connect(
     {
       slug: space.slug,
-      agents: await agents(env, who.person),
+      agents: theirAgents,
       said,
       say,
       no: !!say,
@@ -1507,7 +1550,7 @@ let opts = (env: Env): OAuthProviderOptions<Env> => ({
   // now, when the client holds the new grant (connected.ts `replace`).
   tokenExchangeCallback: async (o) => {
     if (o.grantType == 'authorization_code') {
-      await replace(api(env), o.userId, o.grantId)
+      await replace(grants(env), o.userId, o.grantId)
     }
   },
   scopesSupported: [OAUTH.scope],
@@ -1661,7 +1704,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   let sent = await plain(req, env)
   let res = await new OAuthProvider<Env>(opts(env))
-    .fetch(sent, env, context() as never)
+    .fetch(sent, provided(env), context() as never)
   // The provider owns all its metadata; add only the account-discovery door
   // it does not offer a configuration field for.
   if (

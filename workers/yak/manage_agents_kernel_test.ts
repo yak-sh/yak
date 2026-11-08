@@ -1,8 +1,9 @@
-// The Apps page says whether an agent is connected, which only the OAuth
-// provider's grants know, and its first read of them takes longer than the
-// rest of the page (T-149703). So the page is drawn with them only when they
-// are in hand, and otherwise leaves what depends on them for its script to
-// settle (connected_ui.ts `agentLive`).
+// The Apps page says whether an agent is connected, which only the person's
+// OAuth grants know, and a person whose grants are not yet in the directory
+// has them read from the provider's KV, which takes longer than the rest of
+// the page (T-149703, grant-rows.ts). So the page is drawn with them only
+// when they are in hand, and otherwise leaves what depends on them for its
+// script to settle (connected_ui.ts `agentLive`).
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -20,12 +21,17 @@ let k = await fresh({}, (env) => {
       ? new Promise((go) => waiting.push(() => go(list(o))))
       : list(o)
 })
-let slug = unique('agents')
-let { cookie } = await seed(k, [{ slug, apps: ['recipes'] }])
+// A person with an app, whose grants nothing has read yet.
+let person = async () => {
+  let slug = unique('agents')
+  let { cookie } = await seed(k, [{ slug, apps: ['recipes'] }])
+  return { slug, cookie }
+}
+let [listed, unlisted] = [await person(), await person()]
 
 // The Apps page's connect card: whether it is shown, and whether the page
 // left it for its script.
-let card = async () => {
+let card = async ({ slug, cookie }: { slug: string; cookie: string }) => {
   let page = await k.at('yaks.app', managePath('apps', slug), {
     headers: { cookie },
   })
@@ -39,13 +45,13 @@ let card = async () => {
 
 // The person has connected no agent, so the card asks them to.
 test('the Apps page draws the connect card from grants already in hand', async () => {
-  assertEquals(await card(), { shown: true, unsettled: false })
+  assertEquals(await card(listed), { shown: true, unsettled: false })
 })
 
 test('the Apps page answers without waiting on the grants, leaving the card to its script', async () => {
   held = true
   try {
-    assertEquals(await card(), { shown: false, unsettled: true })
+    assertEquals(await card(unlisted), { shown: false, unsettled: true })
   } finally {
     held = false
     for (let go of waiting.splice(0)) go()

@@ -199,6 +199,33 @@ export let directoryDoc: VocabDoc = {
         channel: { type: 'string', enum: ['push', 'text', 'email', 'updates'] },
       },
     },
+    // One OAuth grant a person holds, as their agents and services are listed
+    // (grant-rows.ts): written as the provider writes the grant to KV, gone
+    // when it deletes it, and holding none of its secrets. Its eid is derived
+    // from the grant's id. Times are unix seconds; `until` is when KV lets a
+    // grant whose code was never exchanged go.
+    oauth_grant: {
+      component: true,
+      type: 'object',
+      properties: {
+        person: owned(ref('cascade')),
+        id: owned(text),
+        client: owned(text),
+        created: owned(num),
+        redirect: owned(text),
+        name: owned(text),
+        scope: owned(text),
+        expires: owned(num),
+        until: owned(num),
+      },
+    },
+    // On a person's row: their `oauth_grant` rows are whole, every grant they
+    // held before the rows began copied in from KV since `at`.
+    grants_listed: {
+      component: true,
+      type: 'object',
+      properties: { at: owned(time) },
+    },
     // A file an app published at a path of its address (public-files.ts):
     // served to anyone there, before the app runs, whatever its access. Its
     // eid is derived from the app and the path, so an address holds one file.
