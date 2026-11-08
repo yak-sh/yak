@@ -1,6 +1,6 @@
 // A registration and the directory changes it entails settle in one write.
 import { answered, type Answers, type Form, type Question } from '@yaks/forms'
-import { after } from '@yaks/fp'
+import { after, same } from '@yaks/fp'
 import {
   type Bundle,
   type Comp,
@@ -50,6 +50,17 @@ let fill = (
 let guest = (registration: string, path: (string | number)[]) =>
   derivedEid(JSON.stringify(['registration-person', registration, path]))
 
+// Only a guest entirely represented by these answers is disposable. An editor
+// may have added directory details or notes while the sign-up was unfinished.
+let captured = (row: Bundle, values: Record<string, unknown>) =>
+  Object.keys(row).every((name) =>
+    ['entity', 'individual', 'phone', 'created', 'updated'].includes(name)
+  ) && Object.entries(fields(row, 'individual')).every(([prop, value]) =>
+    prop == 'status' ? value == 'guest' : same(value, values[prop])
+  ) && Object.entries(fields(row, 'phone')).every(([prop, value]) =>
+    prop == 'number' && same(value, number(values.phone))
+  )
+
 export let directoryForms = (vocab: Vocab): Plugin => ({
   name: 'yak/form-directory',
   admission: () => true,
@@ -61,7 +72,7 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
           .map((b) => [b.entity.eid, directoryPhone(b)]),
       )
       let person = async (eid: string): Promise<Bundle | undefined> => {
-        let [held] = await tx.get([eid], ['individual', 'phone'])
+        let [held] = await tx.get([eid])
         let patch = written.get(eid)
         return patch
           ? {
@@ -172,7 +183,7 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                 fields(r, 'relation').kind == 'parent' &&
                   fields(r, 'relation').a == eid
               )
-              if (owned) {
+              if (owned && captured(held, values)) {
                 out.push(
                   ...refs.filter((r) => r.relation).map((r) => ({
                     entity: r.entity,

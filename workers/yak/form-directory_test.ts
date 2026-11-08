@@ -21,6 +21,7 @@ let vocab = loadVocab([kernelDoc, formsDoc, phoneDoc, {
         status: text,
       },
     },
+    doc: { component: true, properties: { body: text } },
     relation: {
       component: true,
       properties: {
@@ -237,3 +238,26 @@ test('a partial guest resolves to a member when contact arrives and keeps its ch
   equal((await partial.get([String(provisional)]))[0]?.individual, undefined)
   equal(((await partial.read('.relation'))[0].relation as Comp).a, 'member')
 })
+
+for (
+  let [name, patch] of [
+    ['directory field', { individual: { last: 'Editor supplied' } }],
+    ['notes', { doc: { body: 'Editor supplied' } }],
+  ] as const
+) {
+  let g = await setup([fixture])
+  await g.apply(sign({ first: 'Different' }))
+  let guest = String(((await g.get(['signup']))[0].registration as Comp).person)
+  await g.apply([{ entity: { eid: guest }, ...patch }])
+  test(`a provisional guest keeps editor-added ${name} when matched`, async () => {
+    await g.apply(sign({ first: 'Different', phone: '+12695550142' }))
+    let [kept] = await g.get([guest])
+    equal(!!kept?.individual, true)
+    for (let [comp, value] of Object.entries(patch)) {
+      for (let [prop, field] of Object.entries(value)) {
+        equal((kept[comp] as Comp)[prop], field)
+      }
+    }
+    equal(((await g.get(['signup']))[0].registration as Comp).person, 'member')
+  })
+}
