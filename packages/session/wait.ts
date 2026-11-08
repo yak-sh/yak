@@ -28,7 +28,7 @@ export async function* changes(
   let first = true, prior: unknown
   for (;;) {
     let done = !!options.signal?.aborted || clock.now() >= end
-    let revision = graph.storage.revision?.()
+    let revision = await graph.storage.revision?.()
     if (first || done || revision === undefined || revision !== prior) {
       prior = revision
       first = false

@@ -18,6 +18,7 @@
     "./call": "./tool.ts",
     "./declared": "./declared.ts",
     "./guard": "./guard.ts",
+    "./enter": "./enter.ts",
     "./held": "./held.ts",
     "./hit": "./hit.ts",
     "./asker": "./asker.ts"

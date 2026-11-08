@@ -12,7 +12,7 @@
 // may be a network call. Everything a query touches stays synchronous.
 
 import type { Eid } from '@yaks/graph'
-import { type Clock, system } from '@yaks/fp'
+import { after, type Clock, system } from '@yaks/fp'
 import {
   and,
   as,
@@ -302,10 +302,9 @@ export let remodel = (
   db: Statements,
   fields: Field[],
   model: string,
-): boolean => {
+): boolean | Promise<boolean> => {
   if (!moved(db, model)) return false
-  owe(db, fields)
-  return true
+  return after(owe(db, fields), () => true)
 }
 
 // The vectors for a batch of texts, asked for together; a text the embedder
@@ -359,10 +358,10 @@ export let sweep = async (
   let { model } = embedder
   // A host may have just read the first batch to decide whether to start.
   // Trigger changes can queue more text, so only reuse it while they stood.
-  let moved = watch(db, fields)
-  if (!moved) fill(db, present(db, fields))
+  let moved = await watch(db, fields)
+  if (!moved) await fill(db, present(db, fields))
   let owed = !moved && queued?.length ? queued : due(db, limit)
-  if (!owed.length && !filling(db) && remodel(db, fields, model)) {
+  if (!owed.length && !filling(db) && await remodel(db, fields, model)) {
     owed = due(db, limit)
   }
   let by = new Map(
@@ -375,24 +374,26 @@ export let sweep = async (
   let got = await embedAll(embedder, todo.map(({ s }) => s.text))
   let refused: Swept['refused'] = []
   let fresh = 0
-  let shape = got.find((v) => v instanceof Float32Array)
-  if (shape instanceof Float32Array) prepare(db, shape.length)
-  todo.forEach(({ d, s }, i) => {
-    let v = got[i]
-    if (v instanceof Refused) {
-      refused.push({ entity: s.entity, error: v })
-      drop(db, d.owner)
-    } else if (put(db, s, model, v)) fresh++
-    paid(db, d)
+  await db.atomic(() => {
+    let shape = got.find((v) => v instanceof Float32Array)
+    if (shape instanceof Float32Array) prepare(db, shape.length)
+    todo.forEach(({ d, s }, i) => {
+      let v = got[i]
+      if (v instanceof Refused) {
+        refused.push({ entity: s.entity, error: v })
+        drop(db, d.owner)
+      } else if (put(db, s, model, v)) fresh++
+      paid(db, d)
+    })
+    // What was queued and has nothing to embed: no text, deleted, or no longer
+    // wearing a field. What has text that did not change is settled as it is.
+    let taken = new Set(todo.map((t) => t.d))
+    for (let d of owed) {
+      if (taken.has(d)) continue
+      if (!by.has(d.owner)) drop(db, d.owner)
+      paid(db, d)
+    }
   })
-  // What was queued and has nothing to embed: no text, deleted, or no longer
-  // wearing a field. What has text that did not change is settled as it is.
-  let taken = new Set(todo.map((t) => t.d))
-  for (let d of owed) {
-    if (taken.has(d)) continue
-    if (!by.has(d.owner)) drop(db, d.owner)
-    paid(db, d)
-  }
   return { fresh, left: left(db), refused }
 }
 
@@ -433,11 +434,11 @@ export let drain = async (
     queued = undefined
     done.fresh += swept.fresh
     done.refused.push(...swept.refused)
-    prepare(db)
+    await db.atomic(() => prepare(db))
     absorb(db)
     if (opts.signal?.aborted) return done
     if (!swept.left) {
-      while (heal(db) && !opts.signal?.aborted) await pause(time)
+      while (await heal(db) && !opts.signal?.aborted) await pause(time)
       return done
     }
     await pause(time)

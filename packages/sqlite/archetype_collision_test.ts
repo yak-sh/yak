@@ -125,7 +125,9 @@ for (let backend of ['ram', 'sqlite']) {
       ...addresses.values(),
     ].map((eid) => [eid, get(eid)]))
     g.apply(ownerDeletes)
-    let after = new Map(protectedSets.map(({ eid }) => [eid, get(eid)]))
+    let after = new Map(
+      protectedSets.map(({ eid }) => [eid, get(eid)]),
+    )
     let refused = protectedSets.flatMap(({ eid }) =>
       [{ entity: { eid }, $delete: true }, { entity: { eid }, archetype: null }]
         .map((bundle) => {
@@ -156,7 +158,7 @@ for (let backend of ['ram', 'sqlite']) {
   }
 }
 
-let reopened = [true, false].map((first) => {
+let reopened = await Promise.all([true, false].map(async (first) => {
   let path = Deno.makeTempFileSync({ suffix: '.sqlite' })
   let db = open(path)
   try {
@@ -164,7 +166,7 @@ let reopened = [true, false].map((first) => {
     s.install()
     let batches = [blobs, owners]
     for (let bundles of first ? batches : batches.reverse()) {
-      s.tx((tx) => tx.patch(bundles)) // legacy/unclassified physical rows
+      await s.tx((tx) => tx.patch(bundles)) // legacy/unclassified physical rows
     }
     // As a file an older build wrote: no mark this vocabulary installed.
     meta(db).del(SCHEMA)
@@ -191,7 +193,7 @@ let reopened = [true, false].map((first) => {
     db.close()
     Deno.removeSync(path)
   }
-})
+}))
 test('archetype/blob: file backfill and reopen preserve text in both insertion orders', () => {
   for (let fixture of reopened) {
     assertEquals(fixture.filled, { entities: 0, archetypes: 0, retired: 0 })
@@ -202,7 +204,7 @@ test('archetype/blob: file backfill and reopen preserve text in both insertion o
   }
 })
 
-test('archetype: migrate legacy SHA descriptors in place, references and retirement survive', () => {
+test('archetype: migrate legacy SHA descriptors in place, references and retirement survive', async () => {
   let d = mem()
   let s = storage(d, vocab)
   s.install()
@@ -223,14 +225,16 @@ test('archetype: migrate legacy SHA descriptors in place, references and retirem
       { eid: r.eid, num: r.num },
     ])
   }
-  let get = (eid: string) => s.tx((tx) => tx.get([eid]))[0]
-  assertEquals(get('reference').link, { to: eidOf([]) })
-  assertEquals(get(eidOf(['gone'])).retired, {})
-  assertEquals(get('empty').entity.archetype, eidOf([]))
+  let get = async (eid: string) => (await s.tx((tx) => tx.get([eid])))[0]
+  assertEquals((await get('reference')).link, { to: eidOf([]) })
+  assertEquals((await get(eidOf(['gone']))).retired, {})
+  assertEquals((await get('empty')).entity.archetype, eidOf([]))
   assertEquals(backfill(d), { entities: 0, archetypes: 0, retired: 0 })
   g = graph({ storage: s, vocab, plugins: [archetypes()] })
   g.apply(texts.map(blob)) // Old descriptor addresses are now free for blobs.
-  for (let text of texts) assertEquals(get(sha256(text)).blob_text, { text })
+  for (let text of texts) {
+    assertEquals((await get(sha256(text))).blob_text, { text })
+  }
   assertThrows(() => g.apply([{ entity: { eid: eidOf([]) }, $delete: true }]))
 })
 
@@ -265,7 +269,7 @@ for (let fault of ['occupied', 'invalid']) {
   })
 }
 
-test('archetype: migration never steals content from a shared legacy blob spine', () => {
+test('archetype: migration never steals content from a shared legacy blob spine', async () => {
   let d = mem()
   let s = storage(d, vocab)
   s.install()
@@ -275,7 +279,7 @@ test('archetype: migration never steals content from a shared legacy blob spine'
   }
   // Old writers could attach a blob to an already-minted descriptor. The bytes
   // must stay at their SHA, not migrate with the descriptor to a UUID.
-  s.tx((tx) => tx.patch([blob('')]))
+  await s.tx((tx) => tx.patch([blob('')]))
   let before = spine(d)
   assertThrows(
     () => backfill(d),

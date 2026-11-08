@@ -1037,8 +1037,10 @@ equal(writing(stmt), false)
 A **statement capability** runs SQL AST statements over a host's storage without
 exposing its driver, connection or files. `Statements` offers `query`, coherent
 `revision` tokens, `ownership`, the engine's compound-select limit `arms`, and
-`atomic` for a synchronous unit of work. `statements(storage)` requires the
-optional capability on a storage adapter; it refuses if none is offered.
+`atomic` for a unit of work. Await its result: an adapter may wait
+asynchronously for another writer before entering the body.
+`statements(storage)` requires the optional capability on a storage adapter; it
+refuses if none is offered.
 
 `ownership: 'shared'` means other hosts can write this storage. Revision tokens
 include their commits, schema changes and rollback. `atomic` participates in the

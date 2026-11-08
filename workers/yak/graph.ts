@@ -3134,12 +3134,12 @@ export class Store {
   #installDeployment = async (): Promise<void> => {
     this.#graph.storage.install()
     this.#unanalyzed = null
-    watchEmbedding(statements(this.#sql), this.#texts.fields)
+    await watchEmbedding(statements(this.#sql), this.#texts.fields)
     // A deploy is where the model can change: where a stored vector was made
     // by another, every text owes its vector again (`#embedding` below).
     let model = this.#embedder()
     if (model) {
-      remodel(this.#texts.statements, this.#texts.fields, model.model)
+      await remodel(this.#texts.statements, this.#texts.fields, model.model)
     }
     // The platform's own stores keep their schema pages as ordinary
     // entities, made by the package that owns their identities (an app's

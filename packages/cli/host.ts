@@ -126,6 +126,7 @@ import { type Clock, system } from '@yaks/fp'
 import { files } from '@yaks/tracker/file'
 import type { Traces } from './traces.ts'
 import { traceControl } from './trace_control.ts'
+import { upkeepThread } from './upkeep_thread.ts'
 
 // One carrier per runtime, not per composed graph. Multiple CLI hosts can
 // coexist without replacing one another's async context.
@@ -247,6 +248,12 @@ export type CliFacet = {
  * the caller of {@link compose} needs. */
 export type Served = Host & {
   storage: Store
+  /** The file's upkeep on this connection. File hosts lend this only to
+   * their dedicated upkeep thread; memory has no second connection. */
+  upkeep: (
+    signal: AbortSignal,
+    report: (error: unknown, work: string) => void,
+  ) => Promise<void>
   /** the text half of {@link Host.search}: the best `count` text hits for the
    * words, read here, where the search tool searches at all */
   hits?: (words: string, count: number) => Hit[]
@@ -282,6 +289,7 @@ export type ComposeOpts = {
   /** The read door of a web or worker; this host closes an owned reader
    * before telemetry. */
   reader?: Lent & {
+    statements?: NonNullable<Host['reader']>['statements']
     search?: Search
     meaning?: Meaning
     close?: () => void | Promise<void>
@@ -913,27 +921,35 @@ let composed = async (
     // index holds every row, refilling in windows one that drifted. Between
     // them it makes the pieces of the texts longer than a substring index
     // holds (@yaks/fts `pieces`), a window each.
+    let upkeep: Served['upkeep'] = (signal, report) =>
+      tend(sql, {
+        signal,
+        daily: text.length
+          ? [{
+            name: 'heal',
+            run: (d) => void heal(d, text, { derived, fill: filler(d) }),
+          }]
+          : [],
+        chores: text.length
+          ? [{ name: 'pieces', run: (d) => pieces(d, text, derived) }]
+          : [],
+        report,
+      })
+    let tending: Served['upkeep'] = sql.file
+      ? (signal, tell) => upkeepThread(config, signal, tell)
+      : upkeep
     let duties = effecting && !opts.readOnly
       ? [...built.services, {
         name: SCHEMA_DUTY,
         run: (signal: AbortSignal) =>
-          tend(sql, {
+          tending(
             signal,
-            daily: text.length
-              ? [{
-                name: 'heal',
-                run: (d) => void heal(d, text, { derived, fill: filler(d) }),
-              }]
-              : [],
-            chores: text.length
-              ? [{ name: 'pieces', run: (d) => pieces(d, text, derived) }]
-              : [],
-            report: (error, work) =>
+            (error, work) =>
               void report(error, {
                 during: { process: selfEid() },
                 tags: { step: 'schema', work },
               }),
-          }),
+          ),
       }, {
         name: '@yaks/effects',
         run: (signal: AbortSignal) =>
@@ -1024,6 +1040,7 @@ let composed = async (
     }
     let lifecycle = {
       storage: store!,
+      upkeep,
       graph: g,
       fx,
       hits,

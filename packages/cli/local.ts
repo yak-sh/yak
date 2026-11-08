@@ -84,8 +84,9 @@ export let dutiesOf = (
 // A process that stays up answers its committed reads in a read thread beside
 // it (./read_thread.ts), lent to its graph (@yaks/graph `Lent`): a slow read,
 // whoever asked it, holds a worker's lane and never the thread its requests,
-// duties, leases and sockets run on. A write, and the reads in its own
-// transaction, still run here, and a read sent after a write commits sees it.
+// duties, leases and sockets run on. Committed preflight, address and journal
+// reads use it too. A write and its transaction reads stay on their owner.
+// A read sent after a write commits sees it.
 // A passing command opens none; it would wait on the workers starting.
 let HOUR = 60 * 60 * 1000
 
@@ -108,8 +109,8 @@ let open = async (
   // A web listens first and warms after, when its server asks (@yaks/api
   // `serve`): its reader's workers start, so a read is as fast as the next,
   // its main thread is watched ({@link watched}), and then workers start for
-  // the duty roles nothing covers. Until then its reads run on the graph's
-  // own connection, and the CPU goes to answering. Warming settles once the
+  // the duty roles nothing covers. An earlier read starts its worker itself
+  // and waits asynchronously for it. Warming settles once the
   // workers it started for uncovered duty roles are ready, so a server's
   // `--ready` says every module it runs is loaded. A warming that fails
   // rejects, and the server ends.
@@ -298,7 +299,7 @@ export let work = async (
   let host = await opening
   // A worker's thread is watched as a web's is, once its reader has started:
   // a stall says what held it. A reader that cannot start is reported, and
-  // its reads stay here.
+  // its callers hear the failure without falling back to blocking SQL here.
   let started = reader?.ready().catch((error) =>
     host.report?.(error, { tags: { step: 'read' } })
   )

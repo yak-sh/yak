@@ -1,7 +1,7 @@
 /// <reference lib="deno.ns" />
 // Storage's byte contract, exercised unchanged by RAM and SQLite.
 import { test } from '@yaks/testing'
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Binding, Bundle, Match } from '@yaks/graph'
 import { match, reads } from '@yaks/graph/declared'
 import { loadVocab } from '@yaks/vocab'
@@ -33,18 +33,23 @@ type Store = {
   get: (eids: string[]) => Bundle[]
   read: (query: string) => Bundle[]
   rows: (query: string) => Record<string, unknown>[]
-  tx: <R>(body: (tx: Tx) => R) => R
+  tx: <R>(body: (tx: Tx) => R) => R | Promise<Awaited<R>>
 }
 let bytes = (b: Bundle): Uint8Array | undefined =>
   (b.document as { bytes?: Uint8Array }).bytes
-let put = (s: Store, eid: string, value: Uint8Array | null) =>
-  s.tx((tx) => tx.patch([{ entity: { eid }, document: { bytes: value } }]))
+let put = async (
+  s: Store,
+  eid: string,
+  value: Uint8Array | null,
+) => (await s.tx((tx) =>
+  tx.patch([{ entity: { eid }, document: { bytes: value } }])
+))
 let ids = (s: Store, query: string) => s.read(query).map((b) => b.entity.eid)
 
-export let binaryCases = (make: () => Store): void => {
+export let binaryCases = async (make: () => Store): Promise<void> => {
   let roundtrip = make()
   let input = Uint8Array.of(99, 0, 255, 128, 42, 99).subarray(1, 5)
-  put(roundtrip, 'bytes', input)
+  await put(roundtrip, 'bytes', input)
   input.fill(17)
   test('binary storage copies the byte view, not its surrounding buffer', () => {
     assertEquals(
@@ -61,10 +66,10 @@ export let binaryCases = (make: () => Store): void => {
   })
 
   let changed = make()
-  put(changed, 'bytes', Uint8Array.of(1, 2))
-  test('binary patches replace the value and preserve it when omitted', () => {
-    put(changed, 'bytes', Uint8Array.of(255, 0, 128))
-    changed.tx((tx) =>
+  await put(changed, 'bytes', Uint8Array.of(1, 2))
+  test('binary patches replace the value and preserve it when omitted', async () => {
+    await put(changed, 'bytes', Uint8Array.of(255, 0, 128))
+    await changed.tx((tx) =>
       tx.patch([{
         entity: { eid: 'bytes' },
         document: { title: 'kept' },
@@ -74,17 +79,17 @@ export let binaryCases = (make: () => Store): void => {
   })
 
   let cleared = make()
-  put(cleared, 'bytes', Uint8Array.of(0, 255))
-  test('a null patch clears previously stored bytes', () => {
-    put(cleared, 'bytes', null)
+  await put(cleared, 'bytes', Uint8Array.of(0, 255))
+  test('a null patch clears previously stored bytes', async () => {
+    await put(cleared, 'bytes', null)
     assertEquals(bytes(cleared.get(['bytes'])[0]), undefined)
     assertEquals(ids(cleared, '.document.bytes'), [])
   })
 
   let empty = make()
-  put(empty, 'empty', new Uint8Array())
-  put(empty, 'null', null)
-  put(empty, 'full', Uint8Array.of(0, 255, 128))
+  await put(empty, 'empty', new Uint8Array())
+  await put(empty, 'null', null)
+  await put(empty, 'full', Uint8Array.of(0, 255, 128))
   test('zero bytes remain a BLOB, distinct from a cleared property', () => {
     assertEquals(bytes(empty.get(['empty'])[0]), new Uint8Array())
     assertEquals(bytes(empty.get(['null'])[0]), undefined)
@@ -93,11 +98,11 @@ export let binaryCases = (make: () => Store): void => {
   })
 
   let filters = make()
-  put(filters, 'a', Uint8Array.of(0, 255, 128))
-  put(filters, 'b', Uint8Array.of(0, 255))
-  put(filters, 'c', Uint8Array.of(255))
-  put(filters, 'empty', new Uint8Array())
-  put(filters, 'null', null)
+  await put(filters, 'a', Uint8Array.of(0, 255, 128))
+  await put(filters, 'b', Uint8Array.of(0, 255))
+  await put(filters, 'c', Uint8Array.of(255))
+  await put(filters, 'empty', new Uint8Array())
+  await put(filters, 'null', null)
   for (
     let [operand, expected] of [
       ['AP+A', ['a']],
@@ -140,11 +145,11 @@ export let binaryCases = (make: () => Store): void => {
   }
 
   let aggregates = make()
-  put(aggregates, 'a', Uint8Array.of(255))
-  put(aggregates, 'b', Uint8Array.of(0, 255))
-  put(aggregates, 'c', Uint8Array.of(0, 255))
-  put(aggregates, 'empty', new Uint8Array())
-  put(aggregates, 'null', null)
+  await put(aggregates, 'a', Uint8Array.of(255))
+  await put(aggregates, 'b', Uint8Array.of(0, 255))
+  await put(aggregates, 'c', Uint8Array.of(0, 255))
+  await put(aggregates, 'empty', new Uint8Array())
+  await put(aggregates, 'null', null)
   test('binary ordering retains byte values and content identity', () => {
     assertEquals(ids(aggregates, '.document .order=document.bytes'), [
       'null',
@@ -170,7 +175,7 @@ export let binaryCases = (make: () => Store): void => {
   })
 
   let isolated = make()
-  put(isolated, 'a', Uint8Array.of(0, 255))
+  await put(isolated, 'a', Uint8Array.of(0, 255))
   test('mutating bytes returned by get, read or projection cannot change storage', () => {
     bytes(isolated.get(['a'])[0])!.fill(1)
     bytes(isolated.read('.document')[0])!.fill(2)
@@ -180,14 +185,14 @@ export let binaryCases = (make: () => Store): void => {
   })
 
   let joins = make()
-  put(joins, 'a', Uint8Array.of(0, 255))
-  put(joins, 'b', Uint8Array.of(0, 255))
-  put(joins, 'c', Uint8Array.of(255, 0))
+  await put(joins, 'a', Uint8Array.of(0, 255))
+  await put(joins, 'b', Uint8Array.of(0, 255))
+  await put(joins, 'c', Uint8Array.of(255, 0))
   let joined = match(
     '$left .document.bytes=$bytes; $right .document.bytes=$bytes',
   )
-  test('rule joins compare independently held bytes by content', () => {
-    let [found] = joins.tx((tx) =>
+  test('rule joins compare independently held bytes by content', async () => {
+    let [found] = await joins.tx((tx) =>
       tx.bindings([joined], [], reads(joined, binaryVocab))
     )
     assertEquals(found.map((b) => b.entities.join(':')).sort(), [
@@ -204,9 +209,9 @@ export let binaryCases = (make: () => Store): void => {
   })
 
   let visible = make()
-  put(visible, 'a', Uint8Array.of(0, 255))
-  test('binary writes are visible in their transaction', () => {
-    visible.tx((tx) => {
+  await put(visible, 'a', Uint8Array.of(0, 255))
+  test('binary writes are visible in their transaction', async () => {
+    await visible.tx((tx) => {
       tx.patch([{
         entity: { eid: 'a' },
         document: { bytes: Uint8Array.of(128) },
@@ -217,17 +222,16 @@ export let binaryCases = (make: () => Store): void => {
   })
 
   let rollback = make()
-  put(rollback, 'a', Uint8Array.of(0, 255))
-  test('binary writes roll back on failure', () => {
-    assertThrows(
-      () =>
-        rollback.tx((tx) => {
-          tx.patch([{
-            entity: { eid: 'a' },
-            document: { bytes: Uint8Array.of(128) },
-          }])
-          throw new Error('rollback bytes')
-        }),
+  await put(rollback, 'a', Uint8Array.of(0, 255))
+  test('binary writes roll back on failure', async () => {
+    await assertRejects(
+      async () => (await rollback.tx((tx) => {
+        tx.patch([{
+          entity: { eid: 'a' },
+          document: { bytes: Uint8Array.of(128) },
+        }])
+        throw new Error('rollback bytes')
+      })),
       Error,
       'rollback bytes',
     )

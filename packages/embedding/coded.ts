@@ -27,6 +27,7 @@ import {
   val,
 } from '@yaks/sql'
 import { CODE, TABLE } from './ddl.ts'
+import { after } from '@yaks/fp'
 import { coded, floats } from './vector.ts'
 
 let tally = (db: Statements, name: string): number =>
@@ -65,33 +66,39 @@ export let put = (db: Statements, owner: number, vec: Float32Array): void => {
 }
 
 // Where the last heal stopped, so a pass reads each vector at most once.
-let after = new WeakMap<Statements, number>()
+let cursors = new WeakMap<Statements, number>()
 
 /** Code up to `limit` stored vectors that have no codes, in owner order from
  * where the last call stopped, and say how many it coded. Nothing to code
  * costs two counts. */
-export let heal = (db: Statements, limit = 2048): number => {
+export let heal = (db: Statements, limit = 2048): number | Promise<number> => {
   if (!has(db) || complete(db)) return 0
-  let from = after.get(db) ?? 0
-  let rows = db.query(select({
-    cols: [col('owner', 'e'), col('vec', 'e')],
-    from: table(TABLE, 'e'),
-    where: and(
-      gt(col('owner', 'e'), val(from)),
-      not(exists(select({
-        cols: [lit(1)],
-        from: table(CODE, 'c'),
-        where: eq(col('owner', 'c'), col('owner', 'e')),
-      }))),
-    ),
-    order: [col('owner', 'e')],
-    limit: val(limit),
-  }))
-  after.set(db, rows.length < limit ? 0 : Number(rows.at(-1)!.owner))
-  db.atomic(() => {
-    for (let r of rows) {
-      put(db, Number(r.owner), floats(r.vec as Uint8Array))
-    }
-  })
-  return rows.length
+  return after(
+    db.atomic(() => {
+      let from = cursors.get(db) ?? 0
+      let rows = db.query(select({
+        cols: [col('owner', 'e'), col('vec', 'e')],
+        from: table(TABLE, 'e'),
+        where: and(
+          gt(col('owner', 'e'), val(from)),
+          not(exists(select({
+            cols: [lit(1)],
+            from: table(CODE, 'c'),
+            where: eq(col('owner', 'c'), col('owner', 'e')),
+          }))),
+        ),
+        order: [col('owner', 'e')],
+        limit: val(limit),
+      }))
+
+      for (let r of rows) {
+        put(db, Number(r.owner), floats(r.vec as Uint8Array))
+      }
+      return rows
+    }),
+    (rows) => {
+      cursors.set(db, rows.length < limit ? 0 : Number(rows.at(-1)!.owner))
+      return rows.length
+    },
+  )
 }

@@ -9,6 +9,7 @@ import { compose, facet, type Served } from './host.ts'
 import type { Heard, Said } from './read_thread.ts'
 import { thread } from './stall.ts'
 import { readActivity, readOperations } from './read_activity.ts'
+import { statements } from '@yaks/sql'
 
 let host: Promise<Served> | undefined
 let activity: ReturnType<typeof readActivity> | undefined
@@ -61,6 +62,26 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
       let call = data
       let query = () => {
         switch (call.op) {
+          case 'rawRead':
+            return graph.storage.read(call.query, call.opts, call.comps)
+          case 'rawRows':
+            return graph.storage.rows(call.query, call.opts)
+          case 'rawGet':
+            return graph.storage.get(call.eids, call.comps, call.opts)
+          case 'revision':
+            return graph.storage.revision?.()
+          case 'buried':
+            return graph.storage.buried?.(call.before, call.page) ??
+              { eids: [] }
+          case 'bindings': {
+            if (!graph.storage.bindings) {
+              throw new Error('this storage evaluates no bindings')
+            }
+            return graph.storage.bindings(...call.args)
+          }
+          case 'statement':
+            return statements(served.storage).query(call.stmt)
+
           case 'get':
             return graph.get(call.eids, call.comps, call.opts)
           case 'read':

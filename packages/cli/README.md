@@ -520,6 +520,14 @@ it. Each service runs under a lease named for its owning package, so only one
 process over a graph runs it at a time, and a process takes only the leases of
 the roles it serves.
 
+File hosts answer committed reads in read workers, including preflight, address
+resolution, revision checks and journal polling. A first read starts its worker
+and waits asynchronously. Writes and their transaction reads stay on the owning
+connection; lock acquisition waits between attempts on timers. The schema duty
+runs file upkeep, including planner statistics and index maintenance, on a
+separate thread and connection. Shutdown drains its current window before ending
+that thread.
+
 ```ts ignore
 await host.duties() // Run until the host shuts down.
 await host.duties(AbortSignal.abort()) // Run one pass, then release leases.

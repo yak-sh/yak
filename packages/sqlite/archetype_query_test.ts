@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { type Bundle, graph } from '@yaks/graph'
 import {
@@ -395,7 +395,7 @@ test('archetype query/gather see new sets, rollback and reused descriptor ids', 
   assertEquals(ids('.marker'), ['doc'])
 })
 
-test('archetype plans and gathers observe commits from another SQLite handle', () => {
+test('archetype plans and gathers observe commits from another SQLite handle', async () => {
   let dir = Deno.makeTempDirSync({ prefix: 'archetype-read-' })
   let first = open(`${dir}/graph.sqlite`)
   let second = open(`${dir}/graph.sqlite`)
@@ -433,7 +433,7 @@ test('archetype plans and gathers observe commits from another SQLite handle', (
     assertEquals(reader.read('.marker'), [])
     assertEquals(reader.read('.doc').map((b) => b.entity.eid), ['new'])
     // A raw writer has not yet classified its row: fallback remains exact.
-    writer.tx((tx) => tx.patch([{ entity: { eid: 'raw' }, marker: {} }]))
+    await writer.tx((tx) => tx.patch([{ entity: { eid: 'raw' }, marker: {} }]))
     assertEquals(reader.read('.marker').map((b) => b.entity.eid), ['raw'])
     backfill(d1)
     assertEquals(reader.read('.marker').map((b) => b.entity.eid), ['raw'])
@@ -441,23 +441,27 @@ test('archetype plans and gathers observe commits from another SQLite handle', (
     // after planning. A stale catalog with a fresh entity scan would return
     // two matches: neither the old (one) nor the new (three) snapshot.
     afterCatalog = () => {
-      writer.tx((tx) => {
+      let out = writer.tx((tx) => {
+        let raw = reader.tx((tx) => tx.get(['raw']))
+        assert(!(raw instanceof Promise))
         tx.patch([{
-          entity: {
-            eid: 'same-set',
-            archetype: reader.tx((tx) => tx.get(['raw']))[0].entity.archetype,
-          },
+          entity: { eid: 'same-set', archetype: raw[0].entity.archetype },
           marker: {},
         }])
         g.apply([{ entity: { eid: 'new-set' }, marker: {}, product: {} }])
       })
+      // The staged commit must land before the planner resumes its snapshot.
+      assert(!(out instanceof Promise))
     }
     assertEquals(reader.rows('.marker .count'), [{ value: '', n: 1 }])
     assertEquals(reader.rows('.marker .count'), [{ value: '', n: 3 }])
     first.query({ t: 'drop', kind: 'table', name: 'marker' })
     let smaller = loadVocab([...shop.docs, archetypeDoc])
     storage(d1, smaller).install()
-    assertEquals(reader.tx((tx) => tx.get(['raw']))[0].marker, undefined)
+    assertEquals(
+      (await reader.tx((tx) => tx.get(['raw'])))[0].marker,
+      undefined,
+    )
   } finally {
     first.close()
     second.close()
@@ -580,7 +584,7 @@ test('a screened page answers alike with the catalog cold or held', () => {
 // A class first worn mints its descriptor in the write's own transaction. The
 // catalog in memory takes it in rather than reading every descriptor again,
 // and is read again after a transaction that rolls back.
-test('a descriptor a write mints joins the catalog held, unless it rolls back', () => {
+test('a descriptor a write mints joins the catalog held, unless it rolls back', async () => {
   let ran: string[] = []
   let s = storage(spy(mem(), (sql) => void ran.push(sql)), vocab)
   s.install()
@@ -599,12 +603,10 @@ test('a descriptor a write mints joins the catalog held, unless it rolls back', 
   assertEquals(ask(), { rows: ['a'], read: true })
   g.apply([{ entity: { eid: 'b' }, doc: {}, marker: {} }])
   assertEquals(ask(), { rows: ['a', 'b'], read: false })
-  assertThrows(() =>
-    s.tx(() => {
-      g.apply([{ entity: { eid: 'c' }, marker: {} }])
-      throw new Error('no')
-    })
-  )
+  await assertRejects(async () => (await s.tx(() => {
+    g.apply([{ entity: { eid: 'c' }, marker: {} }])
+    throw new Error('no')
+  })))
   assertEquals(ask(), { rows: ['a', 'b'], read: true })
   g.apply([{ entity: { eid: 'c' }, marker: {} }])
   assertEquals(ask(), { rows: ['a', 'b', 'c'], read: false })

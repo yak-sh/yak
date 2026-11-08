@@ -485,6 +485,15 @@ export let subscriptions = (graph: Graph, opts: {
     get: (ids, comps, opts) => base.get(ids, comps, readingOpts(opts)),
   }
   let revision = opts.revision?.()
+  let knownRevision = after(revision, (value) => {
+    revision = value
+  })
+  if (isPromise(knownRevision)) {
+    knownRevision = knownRevision.catch((error) => {
+      revision = undefined
+      fault(error, 'store revision')
+    })
+  }
   let held = new Map<Sink, Map<string, Sub>>()
   let all = () =>
     [...held.values()].flatMap((m) => [...m.values()].filter((s) => !s.loading))
@@ -2433,10 +2442,12 @@ export let subscriptions = (graph: Graph, opts: {
   // authoritative reset and retained answers let go.
   let check = (): void | Promise<void> => {
     if (ending.signal.aborted || !opts.revision) return
-    let next = opts.revision()
-    if (Object.is(next, revision)) return
-    revision = next
-    return resync()
+    return after(knownRevision, () =>
+      after(opts.revision!(), (next) => {
+        if (Object.is(next, revision)) return
+        revision = next
+        return resync()
+      }))
   }
   let resync = (): void | Promise<void> => {
     if (ending.signal.aborted) return

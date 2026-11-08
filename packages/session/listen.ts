@@ -700,7 +700,7 @@ export let listen = async (
   while (!ear.stop?.aborted) {
     // Sample before reading: a commit during hear must be read next beat.
     // SQLite revisions include other processes' commits; watch does not.
-    let revision = graph.storage?.revision?.()
+    let revision = await graph.storage?.revision?.()
     if (first || revision === undefined || revision !== prior) {
       first = false
       prior = revision

@@ -2,7 +2,8 @@ import { build } from '@yaks/process/platform'
 // SQL-backed storage's statement capability. The connection and native
 // libraries stay here; indexes receive only statements and coherent units.
 import { type Driver, revision, type Statements } from '@yaks/sql'
-import { unit } from './unit.ts'
+import { exclusive, unit } from './unit.ts'
+import { enter } from '@yaks/graph/enter'
 
 let held = new WeakMap<Driver, Statements>()
 let platform = {
@@ -56,7 +57,19 @@ export let statements = (driver: Driver): Statements => {
     ownership: driver.file ? 'shared' : 'exclusive',
     arms: driver.arms,
     revision: (scope) => revision(driver, scope),
-    atomic: (body) => unit(driver, body),
+    atomic: (body) =>
+      exclusive(driver, () =>
+        enter((begun) =>
+          unit(
+            driver,
+            () => {
+              begun()
+              return body()
+            },
+            'write',
+            { wait: false },
+          )
+        )),
     ...vector
       ? { facilities: { vector: () => driver.extension!(vector) } }
       : {},

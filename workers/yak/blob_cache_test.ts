@@ -146,7 +146,7 @@ test('an anonymous blob read revives a removed immutable representation', async 
   // Older storage operations could remove rows without the current blob
   // immutability guard. The read must heal those graves, not rename them.
   let rows = storage(ctx.storage, appVocab(words))
-  rows.tx((tx) => tx.remove([{ eid: rep }]))
+  await rows.tx((tx) => tx.remove([{ eid: rep }]))
   let inspected = await store(`/inspect?eid=${rep}`, {}, KERNEL)
   let buried = await inspected.json()
   assertEquals(buried.identity.tombstoned, true)
@@ -159,7 +159,7 @@ test('an anonymous blob read revives a removed immutable representation', async 
   let served = await apps.fetch(visit(file.url), env)
   assertEquals(served.status, 200)
   assertEquals(new Uint8Array(await served.arrayBuffer()), body)
-  assertEquals(rows.tx((tx) => tx.get([rep]))[0].tombstone, undefined)
+  assertEquals((await rows.tx((tx) => tx.get([rep])))[0].tombstone, undefined)
   let live = await (await store(`/inspect?eid=${rep}`, {}, KERNEL)).json()
   assertEquals(live.identity.tombstoned, false)
   assertEquals(live.identity.tables.includes('representation'), true)

@@ -20,7 +20,7 @@
 // since last time"; the loop that asks it lives where a process keeps its
 // timers (./graph.ts `feed`).
 
-import { after } from '@yaks/fp'
+import { after, isPromise } from '@yaks/fp'
 import type { Bundle, Plugin } from '@yaks/graph'
 import { composed, comps, dead } from '@yaks/graph/bundle'
 import {
@@ -33,6 +33,7 @@ import {
   iff,
   lit,
   lt,
+  type Row,
   select,
   type Stmt,
   sub,
@@ -184,7 +185,11 @@ let named = (w: Wrote): Wrote =>
   ) as Wrote
 
 /** The feed bound to one store, as one host. */
-export type Feed = {
+export type FeedRows = Row[] | Promise<Row[]>
+type Answer<T, V> = T extends Promise<unknown> ? Promise<V> : V
+type Page = { seq: number; wrote?: Wrote[] }[]
+
+export type Feed<T extends FeedRows = FeedRows> = {
   /** who this feed writes as: the one host (a graph opened by one process or
    * thread) whose commits it records, so a follower can skip its own */
   host: string
@@ -192,16 +197,19 @@ export type Feed = {
    * what has been kept long enough */
   write: (wrote: Wrote[]) => void
   /** the newest commit's seq, or 0 */
-  tip: () => number
+  tip: () => Answer<T, number>
   /** the commits after a cursor, oldest first, at most `n`; one this host
    * made comes without what it wrote */
-  since: (cursor: number, n: number) => { seq: number; wrote?: Wrote[] }[]
+  since: (cursor: number, n: number) => Answer<T, Page>
 }
 
 /** How a feed is bound to a store. */
-export type FeedOpts = {
+export type FeedOpts<T extends FeedRows = Row[]> = {
   /** the statement runner, over the graph's own transaction */
   rows: Rows
+  /** committed reads, where another connection answers them; writes stay on
+   * `rows`, inside the committing transaction */
+  read?: (statement: Stmt) => T
   /** the host it writes as (default: a fresh id) */
   host?: string
   /** how long a commit is kept, in ms (default {@link KEEP}) */
@@ -211,8 +219,9 @@ export type FeedOpts = {
 }
 
 /** Bind the feed to a store: `feedOf({ rows: (s) => db.query(s) })`. */
-export let feedOf = (o: FeedOpts): Feed => {
+export let feedOf = <T extends FeedRows = Row[]>(o: FeedOpts<T>): Feed<T> => {
   let { rows } = o
+  let read = o.read ?? rows
   let host = o.host ?? crypto.randomUUID()
   let keep = o.keep ?? KEEP
   let now = o.now ?? Date.now
@@ -243,31 +252,36 @@ export let feedOf = (o: FeedOpts): Feed => {
     })
   }
   let tip = () =>
-    Number(
-      rows(select({
+    after(
+      read(select({
         cols: [col('id')],
         from: table(FEED),
         order: [desc(col('id'))],
         limit: lit(1),
-      }))[0]?.id ?? 0,
+      })),
+      (rows) => Number(rows[0]?.id ?? 0),
     )
   let since = (cursor: number, n: number) =>
-    rows(select({
-      cols: [
-        col('id'),
-        as(iff(eq(col('host'), val(host)), lit(null), col('applied')), 'out'),
-      ],
-      from: table(FEED),
-      where: gt(col('id'), val(cursor)),
-      order: [col('id')],
-      limit: val(n),
-    })).map((r) => ({
-      seq: Number(r.id),
-      ...r.out == null
-        ? {}
-        : { wrote: (JSON.parse(String(r.out)) as Wrote[]).map(named) },
-    }))
-  return { host, write, tip, since }
+    after(
+      read(select({
+        cols: [
+          col('id'),
+          as(iff(eq(col('host'), val(host)), lit(null), col('applied')), 'out'),
+        ],
+        from: table(FEED),
+        where: gt(col('id'), val(cursor)),
+        order: [col('id')],
+        limit: val(n),
+      })),
+      (rows) =>
+        rows.map((r) => ({
+          seq: Number(r.id),
+          ...r.out == null
+            ? {}
+            : { wrote: (JSON.parse(String(r.out)) as Wrote[]).map(named) },
+        })),
+    )
+  return { host, write, tip, since } as Feed<T>
 }
 
 /** The plugin that writes each commit into the feed, as the last thing inside
@@ -303,25 +317,52 @@ export type FollowOpts = {
  * read: a read that fails ends the call with what came before it, and the next
  * call starts again at the one that failed, throwing if it still fails.
  */
-export let follow = (f: Feed, opts: FollowOpts = {}): () => Heard[] => {
-  let cursor = opts.from ?? f.tip()
+export let follow = <T extends FeedRows>(
+  f: Feed<T>,
+  opts: FollowOpts = {},
+): () => Answer<T, Heard[]> => {
+  let cursor = opts.from
+  let initial = cursor === undefined ? f.tip() : undefined
+  // Capture the tip when following starts, even if no poll asks for it yet.
+  // A failed opening read belongs to that poll, rather than an unhandled task.
+  if (isPromise(initial)) void initial.catch(() => {})
   let page = opts.page ?? 100
-  return (): Heard[] => {
+  return (() => {
     let out: Heard[] = []
-    try {
-      for (;;) {
-        let seen = f.since(cursor, page)
-        let first = seen[0]?.seq
-        if (first > cursor + 1) opts.missed?.(first - cursor - 1)
-        for (let { seq, wrote } of seen) {
-          if (wrote) out.push({ seq, wrote })
-          cursor = seq
-        }
-        if (seen.length < page) return out
+    let accept = (seen: Page) => {
+      let first = seen[0]?.seq
+      if (first > cursor! + 1) opts.missed?.(first - cursor! - 1)
+      for (let { seq, wrote } of seen) {
+        if (wrote) out.push({ seq, wrote })
+        cursor = seq
       }
-    } catch (err) {
+      return seen.length < page
+    }
+    let pages = (): Heard[] | Promise<Heard[]> => {
+      for (;;) {
+        let seen = f.since(cursor!, page)
+        if (isPromise(seen)) {
+          return seen.then((rows) => accept(rows) ? out : pages())
+        }
+        if (accept(seen)) return out
+      }
+    }
+    let failed = (err: unknown) => {
       if (out.length) return out
       throw err
     }
-  }
+    try {
+      let start = initial
+      initial = undefined
+      let result = cursor === undefined
+        ? after(start ?? f.tip(), (tip) => {
+          cursor = tip
+          return pages()
+        })
+        : pages()
+      return isPromise(result) ? result.catch(failed) : result
+    } catch (err) {
+      return failed(err)
+    }
+  }) as () => Answer<T, Heard[]>
 }

@@ -6,7 +6,7 @@ SQLite storage for [@yaks/graph](../graph/README.md). It builds a schema from a
 [bundles](../graph/README.md#data-model), and applies transactional
 [patches](../graph/README.md#data-model).
 
-A **store** (`Store`) is the synchronous SQLite implementation of
+A **store** (`Store`) is the SQLite implementation of
 [Storage](../graph/README.md#data-model), bound to a
 [driver](../sql/README.md#driver) and a vocabulary by `storage()`. The **spine**
 is the `entity` table's identity for an entity: its integer `id`, public `eid`,
@@ -89,7 +89,7 @@ try {
   ])
   equal((await g.read('.post.published=1')).map((b) => b.entity.eid), ['p1'])
   equal((await g.read('.post'))[0].post, { published: true, author: 'kate' })
-  equal(store.tx((tx) => tx.doom(['kate'])).loose, [{
+  equal((await store.tx((tx) => tx.doom(['kate']))).loose, [{
     eid: 'p1',
     comp: 'post',
     prop: 'author',
@@ -128,8 +128,14 @@ examples. See [mod.ts](./mod.ts) for the root export list.
 Applications normally write through `graph.apply()`, which checks admission and
 preconditions, runs plugins, and plans cascading deletion. The storage adapter
 implements the resulting row changes and transaction. Low-level callers can use
-`store.tx(tx => tx.patch(bundles))`, but that bypasses graph validation and
-plugins.
+`await store.tx(tx => tx.patch(bundles))`, but that bypasses graph validation
+and plugins.
+
+Reads are synchronous. Transactions return synchronously when uncontended, or
+wait asynchronously for an independent transaction on the same connection. An
+asynchronous body retains its transaction until it settles. Only calls in that
+body's async context can nest savepoints; unrelated writes take turns. Keep
+external work before the transaction so its write lock stays short.
 
 The complete example opens and installs its own database. Its checks run in
 [`readme_test.ts`](./readme_test.ts), with private stores prepared before each
@@ -1399,6 +1405,10 @@ store. Both participate in the driver's current transaction; `atomic` uses the
 same nested units as graph writes. Transaction-control statements are refused at
 this door. The adapter loads its named vector facility, never a path supplied by
 a plugin.
+
+`await sql.atomic(body)` retries a busy file before entering `body`, with its
+busy timeout disabled for that entry. The wait uses timers; the body and an
+uncertain commit are never retried. Complete external work before entering it.
 
 ```ts
 import { open } from '@yaks/sqlite/db'

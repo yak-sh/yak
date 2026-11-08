@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { type Bundle, graph, Refused } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { archetypeDoc } from '@yaks/archetype'
@@ -29,12 +29,12 @@ let vocab = loadVocab([{
     },
   },
 }])
-let fixture = (d = mem()) => {
+let fixture = async (d = mem()) => {
   let s = storage(d, vocab)
   s.install()
   // What these measure is memory, not a first write's tables (./raise.ts).
   s.raise()
-  s.tx((tx) =>
+  await s.tx((tx) =>
     tx.patch([{ entity: { eid: 'hero' }, player: { active: true } }])
   )
   let query = d.query, calls = 0
@@ -42,7 +42,8 @@ let fixture = (d = mem()) => {
     calls++
     return query(stmt)
   }
-  let get = () => s.tx((tx) => tx.get(['hero']), { admission: true })[0]
+  let get = async () =>
+    (await s.tx((tx) => tx.get(['hero']), { admission: true }))[0]
   return {
     d,
     s,
@@ -54,17 +55,17 @@ let fixture = (d = mem()) => {
   }
 }
 
-test('certified admission reuses bounded authoritative reads and returns deep copies', () => {
-  let f = fixture(), first = f.get()
+test('certified admission reuses bounded authoritative reads and returns deep copies', async () => {
+  let f = await fixture(), first = await f.get()
   assertEquals(first.player, { active: true })
   f.reset()
   for (let i = 0; i < 10; i++) {
-    let b = f.get()
+    let b = await f.get()
     ;(b.player as { active: boolean }).active = false
   }
   // Only transaction boundaries, no SQL get or catalog validation.
   assertEquals(f.calls(), 20)
-  assertEquals(f.get().player, { active: true })
+  assertEquals((await f.get()).player, { active: true })
 })
 
 let recipes = loadVocab([...vocab.docs, ...kitchen.docs])
@@ -93,10 +94,12 @@ test('whole and narrowed cache reads isolate nested JSON values', () => {
 })
 
 let pending = preparedStore(kitchen)
-pending.tx((tx) => tx.patch([{ entity: { eid: 'cake' }, recipe: RECIPE }]))
-test('pending partial cache reads isolate nested JSON values', () => {
+await pending.tx((tx) =>
+  tx.patch([{ entity: { eid: 'cake' }, recipe: RECIPE }])
+)
+test('pending partial cache reads isolate nested JSON values', async () => {
   using s = pending
-  s.tx((tx) => {
+  await s.tx((tx) => {
     let meta = { oven: 200, steps: [{ mix: false }] }
     tx.patch([{ entity: { eid: 'cake' }, recipe: { meta } }])
     let b = tx.get(['cake'], ['recipe'])[0]
@@ -123,33 +126,31 @@ test('cache copies retain aliases between flat component objects', () => {
   assertEquals(read().player, {})
 })
 
-test('admission snapshot follows durable changes, temporary rows and rollback', () => {
-  let f = fixture()
-  f.get()
-  assertThrows(() =>
-    f.s.tx((tx) => {
-      tx.patch([{ entity: { eid: 'hero' }, player: { active: false } }])
-      assertEquals(f.get().player, { active: false })
-      throw new Error('rollback')
-    })
-  )
-  assertEquals(f.get().player, { active: true })
-  f.s.tx((tx) =>
+test('admission snapshot follows durable changes, temporary rows and rollback', async () => {
+  let f = await fixture()
+  await f.get()
+  await assertRejects(async () => (await f.s.tx(async (tx) => {
+    tx.patch([{ entity: { eid: 'hero' }, player: { active: false } }])
+    assertEquals((await f.get()).player, { active: false })
+    throw new Error('rollback')
+  })))
+  assertEquals((await f.get()).player, { active: true })
+  await f.s.tx((tx) =>
     tx.patch([{ entity: { eid: 'hero' }, player: { active: false } }])
   )
-  assertEquals(f.get().player, { active: false })
+  assertEquals((await f.get()).player, { active: false })
   f.d.query({
     t: 'alter table',
     table: 'player',
     add: { name: 'name', type: 'text' },
   })
   f.reset()
-  f.get()
+  await f.get()
   assert(f.calls() > 2)
 })
 
-test('cached admission reads never cache standing or rules', () => {
-  let f = fixture(), standing = true, checked = 0
+test('cached admission reads never cache standing or rules', async () => {
+  let f = await fixture(), standing = true, checked = 0
   let g = graph({
     vocab,
     storage: f.s,
@@ -177,14 +178,14 @@ test('cached admission reads never cache standing or rules', () => {
   assertEquals((g.get(['hero']) as Bundle[])[0].position, undefined)
 })
 
-test('admission snapshots observe another file connection commit', () => {
+test('admission snapshots observe another file connection commit', async () => {
   let dir = Deno.makeTempDirSync({ prefix: 'T-65691-memo-' })
   let a = open(`${dir}/test.db`), b = open(`${dir}/test.db`)
   try {
-    let f = fixture(a)
-    assertEquals(f.get().player, { active: true })
+    let f = await fixture(a)
+    assertEquals((await f.get()).player, { active: true })
     b.query({ t: 'update', table: 'player', set: { active: val(false) } })
-    assertEquals(f.get().player, { active: false })
+    assertEquals((await f.get()).player, { active: false })
   } finally {
     a.close()
     b.close()
@@ -192,31 +193,32 @@ test('admission snapshots observe another file connection commit', () => {
   }
 })
 
-test('admission memo refreshes dynamic components without rereading static state', () => {
+test('admission memo refreshes dynamic components without rereading static state', async () => {
   let d = mem()
   let s = storage(d, vocab, {
     derived: { 'position.x': { tag: 'number', expr: () => fn('random') } },
   })
   s.install()
-  s.tx((tx) =>
+  await s.tx((tx) =>
     tx.patch([{
       entity: { eid: 'hero' },
       player: { active: true },
       position: { x: 0 },
     }])
   )
-  let get = () => s.tx((tx) => tx.get(['hero']), { admission: true })[0]
-  let first = get().position as { x: number }
-  let second = get().position as { x: number }
+  let get = async () =>
+    (await s.tx((tx) => tx.get(['hero']), { admission: true }))[0]
+  let first = (await get()).position as { x: number }
+  let second = (await get()).position as { x: number }
   assert(first.x != second.x)
-  assertEquals(get().player, { active: true })
+  assertEquals((await get()).player, { active: true })
 })
 
-test('real member standing and stored revocations govern every memoized admission', () => {
+test('real member standing and stored revocations govern every memoized admission', async () => {
   let s = storage(mem(), club)
   s.install()
   setMode(s, ids.notes, 'private')
-  s.tx((tx) =>
+  await s.tx((tx) =>
     tx.patch([{ entity: { eid: ids.kim }, person: { name: 'Kim' } }])
   )
   let level: 'editor' | null | undefined = 'editor'
@@ -244,123 +246,129 @@ test('real member standing and stored revocations govern every memoized admissio
   level = undefined
   g.admit([b])
   g.admit([b])
-  s.tx((tx) => tx.remove([{ eid: 'standing' }]))
+  await s.tx((tx) => tx.remove([{ eid: 'standing' }]))
   assertThrows(() => g.admit([b]), Denied)
 })
 
-test('raw SQL on the owning driver invalidates warmed admission values', () => {
-  let f = fixture()
-  assertEquals(f.get().player, { active: true })
+test('raw SQL on the owning driver invalidates warmed admission values', async () => {
+  let f = await fixture()
+  assertEquals((await f.get()).player, { active: true })
   f.d.query({ t: 'update', table: 'player', set: { active: val(false) } })
-  assertEquals(f.get().player, { active: false })
+  assertEquals((await f.get()).player, { active: false })
 })
 
-test('dynamic component appearance and disappearance invalidate whole admission snapshots', () => {
+test('dynamic component appearance and disappearance invalidate whole admission snapshots', async () => {
   let d = mem()
   let s = storage(d, vocab, {
     derived: { 'position.x': { tag: 'number', expr: () => val(5) } },
   })
   s.install()
-  s.tx((tx) =>
+  await s.tx((tx) =>
     tx.patch([{ entity: { eid: 'hero' }, player: { active: true } }])
   )
-  let get = () => s.tx((tx) => tx.get(['hero']), { admission: true })[0]
-  assertEquals(get().position, undefined)
-  s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }]))
-  assertEquals(get().position, { x: 5 })
-  s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: null }]))
-  assertEquals(get().position, undefined)
+  let get = async () =>
+    (await s.tx((tx) => tx.get(['hero']), { admission: true }))[0]
+  assertEquals((await get()).position, undefined)
+  await s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }])
+  )
+  assertEquals((await get()).position, { x: 5 })
+  await s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: null }]))
+  assertEquals((await get()).position, undefined)
 })
 
-test('ordinary transactions reuse authoritative reads while pending component images bypass reuse', () => {
-  let f = fixture()
-  f.get()
+test('ordinary transactions reuse authoritative reads while pending component images bypass reuse', async () => {
+  let f = await fixture()
+  await f.get()
   f.reset()
-  assertEquals(f.s.tx((tx) => tx.get(['hero']))[0].player, { active: true })
+  assertEquals((await f.s.tx((tx) => tx.get(['hero'])))[0].player, {
+    active: true,
+  })
   assertEquals(f.calls(), 2)
-  f.s.tx((tx) => {
+  await f.s.tx((tx) => {
     tx.patch([{ entity: { eid: 'hero' }, position: { x: 3 } }])
     assertEquals(tx.get(['hero'])[0].position, { x: 3 })
     tx.patch([{ entity: { eid: 'hero' }, position: null }])
     assertEquals(tx.get(['hero'])[0].position, undefined)
   })
-  assertEquals(f.get().position, undefined)
+  assertEquals((await f.get()).position, undefined)
 })
 
 // Statements a read costs, transaction boundaries aside.
-let reads = (f: ReturnType<typeof fixture>, read: () => unknown) => {
+let reads = async (
+  f: Awaited<ReturnType<typeof fixture>>,
+  read: () => unknown,
+) => {
   let query = f.d.query, n = 0
   f.d.query = (stmt) => {
     if (!['savepoint', 'release', 'begin', 'commit'].includes(stmt.t)) n++
     return query(stmt)
   }
   try {
-    read()
+    await read()
   } finally {
     f.d.query = query
   }
   return n
 }
 
-test('an entity is read once until a write names it, whoever else is written', () => {
-  let f = fixture()
-  f.s.tx((tx) =>
+test('an entity is read once until a write names it, whoever else is written', async () => {
+  let f = await fixture()
+  await f.s.tx((tx) =>
     tx.patch([{ entity: { eid: 'other' }, player: { active: false } }])
   )
   assertEquals(f.s.get(['hero'])[0].player, { active: true })
-  assertEquals(reads(f, () => f.s.get(['hero'])), 0)
-  assertEquals(reads(f, () => f.get()), 0)
-  f.s.tx((tx) =>
+  assertEquals(await reads(f, () => f.s.get(['hero'])), 0)
+  assertEquals(await reads(f, async () => (await f.get())), 0)
+  await f.s.tx((tx) =>
     tx.patch([{ entity: { eid: 'other' }, player: { active: true } }])
   )
-  assertEquals(reads(f, () => f.s.get(['hero'])), 0)
-  f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 2 } }]))
+  assertEquals(await reads(f, () => f.s.get(['hero'])), 0)
+  await f.s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'hero' }, position: { x: 2 } }])
+  )
   assertEquals(f.s.get(['hero'])[0].position, { x: 2 })
-  f.s.tx((tx) => tx.remove([{ eid: 'hero' }]))
+  await f.s.tx((tx) => tx.remove([{ eid: 'hero' }]))
   assertEquals('tombstone' in f.s.get(['hero'])[0], true)
 })
 
-test('a rolled-back write is read again; what it never wrote stays held', () => {
-  let f = fixture()
-  f.s.tx((tx) =>
+test('a rolled-back write is read again; what it never wrote stays held', async () => {
+  let f = await fixture()
+  await f.s.tx((tx) =>
     tx.patch([{ entity: { eid: 'other' }, player: { active: false } }])
   )
   f.s.get(['hero', 'other'])
-  assertThrows(() =>
-    f.s.tx((tx) => {
-      tx.patch([{ entity: { eid: 'hero' }, player: { active: false } }])
-      assertEquals(tx.get(['hero'])[0].player, { active: false })
-      assertEquals(f.s.get(['hero'])[0].player, { active: false })
-      throw new Error('rollback')
-    })
-  )
+  await assertRejects(async () => (await f.s.tx((tx) => {
+    tx.patch([{ entity: { eid: 'hero' }, player: { active: false } }])
+    assertEquals(tx.get(['hero'])[0].player, { active: false })
+    assertEquals(f.s.get(['hero'])[0].player, { active: false })
+    throw new Error('rollback')
+  })))
   assertEquals(f.s.get(['hero'])[0].player, { active: true })
-  assertEquals(reads(f, () => f.s.get(['other'])), 0)
+  assertEquals(await reads(f, () => f.s.get(['other'])), 0)
   // A write it cannot name keeps nothing until its transaction ends.
-  assertThrows(() =>
-    f.s.tx(() => {
-      f.d.query({ t: 'update', table: 'player', set: { active: val(true) } })
-      assertEquals(f.s.get(['other'])[0].player, { active: true })
-      throw new Error('rollback')
-    })
-  )
+  await assertRejects(async () => (await f.s.tx(() => {
+    f.d.query({ t: 'update', table: 'player', set: { active: val(true) } })
+    assertEquals(f.s.get(['other'])[0].player, { active: true })
+    throw new Error('rollback')
+  })))
   assertEquals(f.s.get(['hero', 'other']).map((b) => b.player), [
     { active: true },
     { active: false },
   ])
 })
 
-test('a transaction that moved one entity still reads others from memory', () => {
+test('a transaction that moved one entity still reads others from memory', async () => {
   let d = mem(), s = storage(d, loadVocab([archetypeDoc, ...vocab.docs]))
   s.install()
-  s.tx((tx) =>
+  await s.tx((tx) =>
     tx.patch([{ entity: { eid: 'hero' }, player: { active: true } }])
   )
-  let f = { ...fixture(), d, s }
+  let f = { ...(await fixture()), d, s }
   f.s.get(['hero'])
-  f.s.tx((tx) => {
+  await f.s.tx(async (tx) => {
     tx.patch([{ entity: { eid: 'fresh' }, player: { active: false } }])
-    assertEquals(reads(f, () => tx.get(['hero'])), 0)
+    assertEquals(await reads(f, () => tx.get(['hero'])), 0)
     assertEquals(tx.get(['fresh', 'hero']).map((b) => b.player), [
       { active: false },
       { active: true },
@@ -368,11 +376,16 @@ test('a transaction that moved one entity still reads others from memory', () =>
   })
 })
 
-test('a get naming components is cut from the whole entity held', () => {
-  let f = fixture()
-  f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }]))
+test('a get naming components is cut from the whole entity held', async () => {
+  let f = await fixture()
+  await f.s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }])
+  )
   f.s.get(['hero', 'nobody'])
-  assertEquals(reads(f, () => f.s.get(['hero', 'nobody'], ['position'])), 0)
+  assertEquals(
+    await reads(f, () => f.s.get(['hero', 'nobody'], ['position'])),
+    0,
+  )
   assertEquals(f.s.get(['hero', 'nobody'], ['position']), [{
     entity: { eid: 'hero' },
     position: { x: 1 },
@@ -380,9 +393,11 @@ test('a get naming components is cut from the whole entity held', () => {
   assertEquals(f.s.get(['hero'], []), [{ entity: { eid: 'hero' } }])
 })
 
-test('a get naming components keeps what it read for one naming no others', () => {
-  let f = fixture()
-  f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }]))
+test('a get naming components keeps what it read for one naming no others', async () => {
+  let f = await fixture()
+  await f.s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }])
+  )
   // A store bound afresh has kept nothing of what was written.
   let s = storage(f.d, vocab)
   s.install()
@@ -392,34 +407,36 @@ test('a get naming components keeps what it read for one naming no others', () =
     entity: { eid: 'hero' },
     position: { x: 1 },
   })
-  assertEquals(reads(g, () => hero(['position'])), 0)
+  assertEquals(await reads(g, () => hero(['position'])), 0)
   assertEquals(hero(['position']).position, { x: 1 })
-  assertEquals(reads(g, () => hero([])), 0)
+  assertEquals(await reads(g, () => hero([])), 0)
   assertEquals(hero([]), { entity: { eid: 'hero' } })
   // What it did not ask, or all there is, is read.
-  assert(reads(g, () => hero(['player'])) > 0)
+  assert((await reads(g, () => hero(['player']))) > 0)
   assertEquals(hero(['player']).player, { active: true })
   assertEquals(hero(['position']).position, { x: 1 })
   // What each read is held beside the other.
   assertEquals(
-    reads(g, () => [hero(['player']), hero(['position', 'player'])]),
+    await reads(g, () => [hero(['player']), hero(['position', 'player'])]),
     0,
   )
-  assert(reads(g, () => hero()) > 0)
+  assert((await reads(g, () => hero())) > 0)
   assertEquals(hero(), {
     entity: { eid: 'hero' },
     player: { active: true },
     position: { x: 1 },
   })
   // A write names it.
-  f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 2 } }]))
+  await f.s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'hero' }, position: { x: 2 } }])
+  )
   assertEquals(hero(['position']).position, { x: 2 })
-  f.s.tx((tx) => tx.remove([{ eid: 'hero' }]))
+  await f.s.tx((tx) => tx.remove([{ eid: 'hero' }]))
   assertEquals('tombstone' in hero(['position']), true)
 })
 
-test('text the blob table adds leaves what memory holds standing', () => {
-  let f = fixture()
+test('text the blob table adds leaves what memory holds standing', async () => {
+  let f = await fixture()
   f.d.query({
     t: 'create table',
     name: 'blob_text',
@@ -436,64 +453,68 @@ test('text the blob table adds leaves what memory holds standing', () => {
     cols: ['sha', 'value'],
     rows: [[val('a'), val('words')]],
   })
-  assertEquals(reads(f, () => f.s.get(['hero'])), 0)
+  assertEquals(await reads(f, () => f.s.get(['hero'])), 0)
   // Text taken away may be text an entity reads.
   f.d.query({ t: 'delete', from: 'blob_text', where: eq(col('sha'), val('a')) })
-  assert(reads(f, () => f.s.get(['hero'])) > 0)
+  assert((await reads(f, () => f.s.get(['hero']))) > 0)
 })
 
-let selects = (f: ReturnType<typeof fixture>, body: () => unknown) => {
+let selects = async (
+  f: Awaited<ReturnType<typeof fixture>>,
+  body: () => unknown,
+) => {
   let query = f.d.query, n = 0
   f.d.query = (stmt) => {
     if (stmt.t == 'select') n++
     return query(stmt)
   }
   try {
-    body()
+    await body()
   } finally {
     f.d.query = query
   }
   return n
 }
 
-test('a transaction asks about a spine once, however many patches name it', () => {
-  let f = fixture()
-  let write = () =>
-    f.s.tx((tx) => {
-      tx.patch([{ entity: { eid: 'mob' }, player: { active: true } }])
-      tx.patch([{ entity: { eid: 'mob' }, position: { x: 1 } }])
-      tx.patch([{ entity: { eid: 'mob' }, position: { x: 2 } }])
-    })
-  assertEquals(selects(f, write), 1)
-  assertEquals(selects(f, write), 0)
+test('a transaction asks about a spine once, however many patches name it', async () => {
+  let f = await fixture()
+  let write = async () => (await f.s.tx((tx) => {
+    tx.patch([{ entity: { eid: 'mob' }, player: { active: true } }])
+    tx.patch([{ entity: { eid: 'mob' }, position: { x: 1 } }])
+    tx.patch([{ entity: { eid: 'mob' }, position: { x: 2 } }])
+  }))
+  assertEquals(await selects(f, write), 1)
+  assertEquals(await selects(f, write), 0)
   assertEquals(f.s.get(['mob'])[0].position, { x: 2 })
 })
 
-test('a removal lets go of the spines it buried, and of no other', () => {
-  let f = fixture()
-  let mob = (x: number) =>
-    f.s.tx((tx) => tx.patch([{ entity: { eid: 'mob' }, position: { x } }]))
-  mob(1)
-  assertEquals(selects(f, () => mob(2)), 0)
-  f.s.tx((tx) => tx.remove([{ eid: 'hero' }]))
-  assertEquals(selects(f, () => mob(3)), 0)
+test('a removal lets go of the spines it buried, and of no other', async () => {
+  let f = await fixture()
+  let mob = async (
+    x: number,
+  ) => (await f.s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'mob' }, position: { x } }])
+  ))
+  await mob(1)
+  assertEquals(await selects(f, async () => (await mob(2))), 0)
+  await f.s.tx((tx) => tx.remove([{ eid: 'hero' }]))
+  assertEquals(await selects(f, async () => (await mob(3))), 0)
   // The buried one's spine is read again, and says it is dead.
   assertEquals(
-    selects(
+    await selects(
       f,
-      () =>
-        f.s.tx((tx) =>
-          tx.patch([{ entity: { eid: 'hero' }, player: { active: false } }])
-        ),
+      async () => (await f.s.tx((tx) =>
+        tx.patch([{ entity: { eid: 'hero' }, player: { active: false } }])
+      )),
     ),
     1,
   )
   assertEquals(f.s.get(['hero'])[0].player, undefined)
 })
 
-test('an answer stands through a removal of what it never selected', () => {
-  let f = fixture()
-  f.s.tx((tx) =>
+test('an answer stands through a removal of what it never selected', async () => {
+  let f = await fixture()
+  await f.s.tx((tx) =>
     tx.patch([
       { entity: { eid: 'mob' }, player: { active: true } },
       { entity: { eid: 'rock' }, position: { x: 1 } },
@@ -502,9 +523,9 @@ test('an answer stands through a removal of what it never selected', () => {
   let active = () => f.s.rows('.player.active=true').map((r) => r.eid)
   let still = () => f.s.rows('!position').map((r) => r.eid)
   active(), active(), still(), still()
-  f.s.tx((tx) => tx.remove([{ eid: 'rock' }]))
-  assertEquals(reads(f, active), 0)
-  f.s.tx((tx) => tx.remove([{ eid: 'mob' }]))
+  await f.s.tx((tx) => tx.remove([{ eid: 'rock' }]))
+  assertEquals(await reads(f, active), 0)
+  await f.s.tx((tx) => tx.remove([{ eid: 'mob' }]))
   assertEquals(active(), ['hero'])
   assertEquals(still(), ['hero'])
 })
@@ -531,110 +552,114 @@ let native = () => {
 for (
   let [name, driver] of [['savepoints', mem], ['its own', native]] as const
 ) {
-  test(`spines a rolled-back transaction minted or buried are let go, transactions ${name}`, () => {
-    let f = fixture(driver())
+  test(`spines a rolled-back transaction minted or buried are let go, transactions ${name}`, async () => {
+    let f = await fixture(driver())
     let mob = (comps: Omit<Bundle, 'entity'>) => [{
       entity: { eid: 'mob' },
       ...comps,
     }]
-    let fail = (
+    let fail = async (
       body: (tx: Parameters<Parameters<typeof f.s.tx>[0]>[0]) => void,
-    ) =>
-      assertThrows(() =>
-        f.s.tx((tx) => {
-          body(tx)
-          throw new Error('no')
-        })
-      )
-    fail((tx) => tx.patch(mob({ player: { active: true } })))
-    f.s.tx((tx) => tx.patch(mob({ position: { x: 1 } })))
+    ) => (await assertRejects(async () => (await f.s.tx((tx) => {
+      body(tx)
+      throw new Error('no')
+    }))))
+    await fail(async (tx) => tx.patch(await mob({ player: { active: true } })))
+    await f.s.tx(async (tx) => tx.patch(await mob({ position: { x: 1 } })))
     assertEquals(f.s.get(['mob'])[0].position, { x: 1 })
-    fail((tx) => {
+    await fail(async (tx) => {
       tx.remove([{ eid: 'mob' }])
-      tx.patch(mob({ position: { x: 2 } }))
+      tx.patch(await mob({ position: { x: 2 } }))
     })
-    f.s.tx((tx) => tx.patch(mob({ position: { x: 3 } })))
+    await f.s.tx(async (tx) => tx.patch(await mob({ position: { x: 3 } })))
     assertEquals(f.s.get(['mob'])[0].position, { x: 3 })
     // A buried entity takes no rows until it is brought back.
-    f.s.tx((tx) => tx.remove([{ eid: 'mob' }]))
-    f.s.tx((tx) => tx.patch(mob({ position: { x: 4 } })))
-    f.s.tx((tx) => {
+    await f.s.tx((tx) => tx.remove([{ eid: 'mob' }]))
+    await f.s.tx(async (tx) => tx.patch(await mob({ position: { x: 4 } })))
+    await f.s.tx(async (tx) => {
       tx.revive(['mob'])
-      tx.patch(mob({ player: { active: false } }))
+      tx.patch(await mob({ player: { active: false } }))
     })
     assertEquals(f.s.get(['mob'])[0].position, undefined)
   })
 }
 
-test('a query asked again is kept, and reads nothing until a table it stands on is written', () => {
-  let f = fixture()
+test('a query asked again is kept, and reads nothing until a table it stands on is written', async () => {
+  let f = await fixture()
   let active = () => f.s.rows('.player.active=true').map((r) => r.eid)
   // Asked once, an answer is not kept: most queries are never asked again.
-  assertEquals(reads(f, active), 1)
-  assertEquals(reads(f, active), 1)
-  assertEquals(reads(f, active), 0)
-  f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }]))
-  assertEquals(reads(f, active), 0)
-  f.s.tx((tx) =>
+  assertEquals(await reads(f, active), 1)
+  assertEquals(await reads(f, active), 1)
+  assertEquals(await reads(f, active), 0)
+  await f.s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }])
+  )
+  assertEquals(await reads(f, active), 0)
+  await f.s.tx((tx) =>
     tx.patch([{ entity: { eid: 'mob' }, player: { active: true } }])
   )
   assertEquals(active(), ['hero', 'mob'])
-  f.s.tx((tx) => tx.remove([{ eid: 'hero' }]))
+  await f.s.tx((tx) => tx.remove([{ eid: 'hero' }]))
   assertEquals(active(), ['mob'])
   assertEquals(
-    f.s.tx((tx) => tx.read('.player.active=true')).map((b) => b.entity.eid),
+    (await f.s.tx((tx) => tx.read('.player.active=true'))).map((b) =>
+      b.entity.eid
+    ),
     ['mob'],
   )
 })
 
-test('a read takes its entities from memory', () => {
-  let f = fixture()
+test('a read takes its entities from memory', async () => {
+  let f = await fixture()
   let read = () => f.s.read('.player.active=true')
   read()
   read()
-  assertEquals(reads(f, read), 0)
+  assertEquals(await reads(f, read), 0)
   // What the caller is doing around a read is no part of it: one traced under
   // each request's own activity, or that may stop waiting, asks the same.
   let { signal } = new AbortController()
   for (let o of [{ signal }, { parent: '1' }, { parent: '2' }]) {
-    assertEquals(reads(f, () => f.s.read('.player.active=true', o)), 0)
-    assertEquals(reads(f, () => f.s.get(['hero'], undefined, o)), 0)
+    assertEquals(await reads(f, () => f.s.read('.player.active=true', o)), 0)
+    assertEquals(await reads(f, () => f.s.get(['hero'], undefined, o)), 0)
   }
   // With no policy to apply, who asks reads the same entities.
   let who = { person: null, administrative: false }
-  assertEquals(reads(f, () => f.s.get(['hero'], undefined, who)), 0)
-  f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 3 } }]))
+  assertEquals(await reads(f, () => f.s.get(['hero'], undefined, who)), 0)
+  await f.s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'hero' }, position: { x: 3 } }])
+  )
   assertEquals(read()[0].position, { x: 3 })
   assertEquals(
-    f.s.tx((tx) => tx.read('.player.active=true'))[0].position,
+    (await f.s.tx((tx) => tx.read('.player.active=true')))[0].position,
     { x: 3 },
   )
   assertEquals(
-    reads(f, () => f.s.tx((tx) => tx.read('.player.active=true'))),
+    await reads(
+      f,
+      async () => (await f.s.tx((tx) => tx.read('.player.active=true'))),
+    ),
     0,
   )
 })
 
-test('an answer that requires no row takes in every new entity', () => {
-  let f = fixture()
+test('an answer that requires no row takes in every new entity', async () => {
+  let f = await fixture()
   let still = () => f.s.rows('!position').map((r) => r.eid)
   assertEquals(still(), ['hero'])
-  f.s.tx((tx) =>
+  await f.s.tx((tx) =>
     tx.patch([{ entity: { eid: 'mob' }, player: { active: false } }])
   )
   assertEquals(still(), ['hero', 'mob'])
 })
 
-test('an answer kept inside a rolled-back transaction goes with it', () => {
-  let f = fixture()
+test('an answer kept inside a rolled-back transaction goes with it', async () => {
+  let f = await fixture()
   let active = () => f.s.rows('.player.active=true').map((r) => r.eid)
-  assertThrows(() =>
-    f.s.tx((tx) => {
-      tx.patch([{ entity: { eid: 'mob' }, player: { active: true } }])
-      assertEquals(active(), ['hero', 'mob'])
-      throw new Error('no')
-    })
-  )
+  await assertRejects(async () => (await f.s.tx((tx) => {
+    tx.patch([{ entity: { eid: 'mob' }, player: { active: true } }])
+    assertEquals(active(), ['hero', 'mob'])
+    throw new Error('no')
+  })))
   assertEquals(active(), ['hero'])
 })
 
@@ -650,26 +675,28 @@ test('what memory cannot follow is read every time', () => {
   ) assertEquals(basis(vocab, parse(q)), undefined, q)
 })
 
-test('a scan does not push out what is read again', () => {
-  let f = fixture()
+test('a scan does not push out what is read again', async () => {
+  let f = await fixture()
   f.s.get(['hero'])
   let many = Array.from({ length: 2100 }, (_, i) => `mob-${i}`)
-  f.s.tx((tx) =>
+  await f.s.tx((tx) =>
     tx.patch(many.map((eid) => ({ entity: { eid }, position: { x: 1 } })))
   )
   assertEquals(f.s.get(many).length, 2100)
-  assertEquals(reads(f, () => f.s.get(['hero'])), 0)
+  assertEquals(await reads(f, () => f.s.get(['hero'])), 0)
 })
 
-test('an entity a transaction patched is known without reading it back', () => {
-  let f = fixture()
+test('an entity a transaction patched is known without reading it back', async () => {
+  let f = await fixture()
   f.s.get(['hero'])
-  f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 2 } }]))
-  f.s.tx((tx) =>
+  await f.s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'hero' }, position: { x: 2 } }])
+  )
+  await f.s.tx((tx) =>
     tx.patch([{ entity: { eid: 'mob' }, player: { active: false } }])
   )
   assertEquals(
-    reads(f, () =>
+    await reads(f, () =>
       assertEquals(f.s.get(['hero', 'mob']), [
         {
           entity: { eid: 'hero' },
@@ -683,7 +710,7 @@ test('an entity a transaction patched is known without reading it back', () => {
 })
 
 // How many statements `body` writes to `table` through `d`.
-let writes = (
+let writes = async (
   d: ReturnType<typeof mem>,
   table: string,
   body: () => unknown,
@@ -697,50 +724,57 @@ let writes = (
     return query(stmt)
   }
   try {
-    body()
+    await body()
   } finally {
     d.query = query
   }
   return n
 }
 
-test('a component an entity is known to lack is written in one statement', () => {
-  let f = fixture()
+test('a component an entity is known to lack is written in one statement', async () => {
+  let f = await fixture()
   f.s.get(['hero'])
-  let move = (x: number) =>
-    f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x } }]))
-  assertEquals(writes(f.d, 'position', () => move(1)), 1)
-  assertEquals(writes(f.d, 'position', () => move(2)), 1)
+  let move = async (
+    x: number,
+  ) => (await f.s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'hero' }, position: { x } }])
+  ))
+  assertEquals(await writes(f.d, 'position', async () => (await move(1))), 1)
+  assertEquals(await writes(f.d, 'position', async () => (await move(2))), 1)
   // What it is known to hold already is not written again.
-  assertEquals(writes(f.d, 'position', () => move(2)), 0)
+  assertEquals(await writes(f.d, 'position', async () => (await move(2))), 0)
   assertEquals(f.s.get(['hero'])[0].position, { x: 2 })
 })
 
-test('drivers sharing a connection share what memory keeps of it', () => {
+test('drivers sharing a connection share what memory keeps of it', async () => {
   let d = mem()
   let other = { ...d, connection: d }
   let s = storage(d, vocab), t = storage(other, vocab)
   s.install()
-  s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }]))
+  await s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }])
+  )
   assertEquals(s.get(['hero'])[0].position, { x: 1 })
-  t.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 2 } }]))
+  await t.tx((tx) =>
+    tx.patch([{ entity: { eid: 'hero' }, position: { x: 2 } }])
+  )
   assertEquals(s.get(['hero'])[0].position, { x: 2 })
-  t.tx((tx) => tx.remove([{ eid: 'hero' }]))
+  await t.tx((tx) => tx.remove([{ eid: 'hero' }]))
   assertEquals('tombstone' in s.get(['hero'])[0], true)
 })
 
-test('a patch after another connection commits builds on what it committed', () => {
+test('a patch after another connection commits builds on what it committed', async () => {
   let dir = Deno.makeTempDirSync({ prefix: 'T-65275-memo-' })
   let a = open(`${dir}/test.db`), b = open(`${dir}/test.db`)
   try {
-    let f = fixture(a)
+    let f = await fixture(a)
     f.s.get(['hero'])
     b.query({ t: 'update', table: 'player', set: { active: val(false) } })
-    f.s.tx((tx) => {
+    await f.s.tx((tx) => {
       tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }])
       tx.get(['other'])
     })
-    assertEquals(f.s.get(['hero']), get(a, vocab, ['hero']))
+    assertEquals(f.s.get(['hero']), await get(a, vocab, ['hero']))
   } finally {
     a.close()
     b.close()
@@ -770,21 +804,21 @@ let wide = loadVocab([{
   },
 }])
 
-test('a component whose values memory cannot say is still known to be held', () => {
+test('a component whose values memory cannot say is still known to be held', async () => {
   let d = mem(), s = storage(d, vocab)
   s.install()
   s.raise()
-  let moved = s.tx((tx) => {
+  let moved = await s.tx(async (tx) => {
     // A number into a boolean column is storage's to say.
     tx.patch([{ entity: { eid: 'a' }, player: { active: 1 } }])
     let move = () => tx.patch([{ entity: { eid: 'a' }, position: { x: 1 } }])
-    return writes(d, 'position', move)
+    return (await writes(d, 'position', move))
   })
   assertEquals(moved, 1)
-  assertEquals(s.get(['a']), get(d, vocab, ['a']))
+  assertEquals(s.get(['a']), await get(d, vocab, ['a']))
 })
 
-test('what memory says a patched entity holds, and what it answers, is what storage reads', () => {
+test('what memory says a patched entity holds, and what it answers, is what storage reads', async () => {
   let d = mem(), s = storage(d, wide, { number: true })
   s.install()
   let eids = ['a', 'b', 'c', 'd'], all = eids
@@ -838,7 +872,7 @@ test('what memory says a patched entity holds, and what it answers, is what stor
     for (let q of queries) s.read(q)
     let batch = Array.from({ length: 1 + rand(3) }, bundle)
     try {
-      s.tx((tx) => {
+      await s.tx((tx) => {
         tx.patch(batch)
         if (rand(5) == 0) tx.patch([bundle()])
         if (rand(7) == 0) throw new Error('rolled back')
@@ -846,7 +880,7 @@ test('what memory says a patched entity holds, and what it answers, is what stor
     } catch (e) {
       if ((e as Error).message != 'rolled back') throw e
     }
-    assertEquals(s.get(all), get(d, wide, all), `round ${round}`)
+    assertEquals(s.get(all), await get(d, wide, all), `round ${round}`)
     for (let q of queries) {
       assertEquals(
         eidsOf(s.read(q)),
@@ -857,22 +891,26 @@ test('what memory says a patched entity holds, and what it answers, is what stor
   }
 })
 
-test('an answer stands through a write that moves nothing it selects', () => {
-  let f = fixture()
+test('an answer stands through a write that moves nothing it selects', async () => {
+  let f = await fixture()
   let ask = () => f.s.read('.player.active=true').map((b) => b.entity.eid)
   assertEquals(ask(), ['hero'])
   assertEquals(ask(), ['hero'])
-  let player = (eid: string, active: boolean) =>
-    f.s.tx((tx) => tx.patch([{ entity: { eid }, player: { active } }]))
-  player('mob', false)
-  assertEquals(reads(f, ask), 0)
-  player('mob', true)
+  let player = async (
+    eid: string,
+    active: boolean,
+  ) => (await f.s.tx((tx) =>
+    tx.patch([{ entity: { eid }, player: { active } }])
+  ))
+  await player('mob', false)
+  assertEquals(await reads(f, ask), 0)
+  await player('mob', true)
   assertEquals(ask(), ['hero', 'mob'])
-  player('hero', false)
+  await player('hero', false)
   assertEquals(ask(), ['mob'])
   // Another store's writes are its own to account for.
   let other = storage(f.d, vocab)
-  other.tx((tx) =>
+  await other.tx((tx) =>
     tx.patch([{ entity: { eid: 'imp' }, player: { active: true } }])
   )
   assertEquals(ask(), ['mob', 'imp'])

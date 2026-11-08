@@ -22,13 +22,16 @@ let ear = () => {
     take: () => frames.splice(0),
   }
 }
-let fixture = () => {
+let fixture = (async = false) => {
   let store = ram(vocab)
   let writer = graph({ vocab, storage: store })
   let reader = graph({ vocab, storage: store })
   writer.apply([{ entity: { eid: 'job' }, job: {} }])
   let version = 0
-  let options = { activity: reader, revision: () => version }
+  let options = {
+    activity: reader,
+    revision: () => async ? Promise.resolve(version) : version,
+  }
   let subs = subscriptions(reader, options)
   let first = ear()
   subs.open(first.sink, 'jobs', query)
@@ -100,8 +103,10 @@ let polling = (() => {
   let time = clock(), stopping = new AbortController()
   let reads = 0
   handler({
-    graph: graph({ vocab, storage: ram(vocab) }),
-    storage: { revision: () => ++reads },
+    graph: graph({
+      vocab,
+      storage: { ...ram(vocab), revision: () => ++reads },
+    }),
     stopping: stopping.signal,
     who: () => null,
     routes: [],
@@ -120,8 +125,10 @@ test('a host without a commit feed checks store revisions until it stops', async
 let fed = (() => {
   let time = clock(), reads = 0
   handler({
-    graph: graph({ vocab, storage: ram(vocab) }),
-    storage: { revision: () => ++reads },
+    graph: graph({
+      vocab,
+      storage: { ...ram(vocab), revision: () => ++reads },
+    }),
     who: () => null,
     routes: [],
     feed: () => () => {},
@@ -152,4 +159,13 @@ test('the host releases its commit feed without a store revision door', () => {
   equal(feedOnly.feeds(), 1)
   feedOnly.stopping.abort()
   equal(feedOnly.feeds(), 0)
+})
+
+let asynchronous = fixture(true)
+asynchronous.change()
+test('subscription revisions await their values before comparing and refreshing', async () => {
+  await asynchronous.subs.check()
+  equal(asynchronous.first.take()[0].bundles?.[0].resolved, {})
+  await asynchronous.subs.check()
+  equal(asynchronous.first.take(), [])
 })

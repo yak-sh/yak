@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { archetypeDoc, archetypes, eidOf } from '@yaks/archetype'
 import { after } from '@yaks/fp'
 import { type Bundle, detached, graph, type Plugin, token } from '@yaks/graph'
@@ -90,7 +90,7 @@ let setup = (extra: Plugin[] = []) => {
   let store = storage(driver, vocab)
   store.install()
   let g = graph({ storage: store, vocab, plugins: [archetypes(), ...extra] })
-  let get = (eid: string) => store.tx((tx) => tx.get([eid]))[0]
+  let get = async (eid: string) => (await store.tx((tx) => tx.get([eid])))[0]
   return { driver, store, g, get }
 }
 
@@ -104,36 +104,42 @@ test('archetype: non-opt-in schema adapters can reinstall over a legacy spine', 
   assert(indexes(d, 'entity').includes('entity_archetype'))
 })
 
-test('archetype: two writers, create, value-only, add/remove, same-batch net move', () => {
+test('archetype: two writers, create, value-only, add/remove, same-batch net move', async () => {
   let { g, store, driver, get } = setup()
   let a = g.apply([{
     entity: { eid: 'a', archetype: 'forged' },
     doc: { title: 'A' },
   }]) as Bundle[]
-  assertEquals(get('a').entity.archetype, eidOf(['doc']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['doc']))
   assertEquals(
     a.find((b) => b.entity.eid == 'a')!.entity.archetype,
     eidOf(['doc']),
   )
   let other = graph({ storage: store, vocab, plugins: [archetypes()] })
   other.apply([{ entity: { eid: 'b' }, doc: {} }])
-  assertEquals(get('b').entity.archetype, get('a').entity.archetype)
+  assertEquals(
+    (await get('b')).entity.archetype,
+    (await get('a')).entity.archetype,
+  )
   assertEquals(tally(driver, 'archetype', by({ tables: '["doc"]' })), 1)
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'B' } }])
-  assertEquals(get('a').entity.archetype, eidOf(['doc']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['doc']))
   g.apply([{ entity: { eid: 'a' }, task: {} }])
-  assertEquals(get('a').entity.archetype, eidOf(['doc', 'task']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['doc', 'task']))
   g.apply([{ entity: { eid: 'a' }, doc: null }])
-  assertEquals(get('a').entity.archetype, eidOf(['task']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['task']))
   g.apply([{ entity: { eid: 'a' }, doc: {} }, {
     entity: { eid: 'a' },
     doc: null,
   }])
-  assertEquals(get('a').entity.archetype, eidOf(['task']))
-  assertEquals(get(eidOf(['archetype'])).entity.archetype, eidOf(['archetype']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['task']))
+  assertEquals(
+    (await get(eidOf(['archetype']))).entity.archetype,
+    eidOf(['archetype']),
+  )
 })
 
-test('archetype: reference-only births, release/cascade and tombstones', () => {
+test('archetype: reference-only births, release/cascade and tombstones', async () => {
   let { g, get } = setup()
   // A generated eid is an identity even before it has a component; a word
   // would have to name a live target instead of bringing this stub into being.
@@ -142,15 +148,15 @@ test('archetype: reference-only births, release/cascade and tombstones', () => {
     { entity: { eid: 'ref' }, link: { to: bare } },
     { entity: { eid: 'child' }, child: { of: bare } },
   ])
-  assertEquals(get(bare).entity.archetype, eidOf([]))
+  assertEquals((await get(bare)).entity.archetype, eidOf([]))
   g.apply([{ entity: { eid: bare }, $delete: true }])
-  assertEquals(get(bare).entity.archetype, eidOf(['tombstone']))
-  assertEquals(get('child').entity.archetype, eidOf(['tombstone']))
-  assertEquals(get('ref').entity.archetype, eidOf([]))
-  assertEquals(get('ref').link, undefined)
+  assertEquals((await get(bare)).entity.archetype, eidOf(['tombstone']))
+  assertEquals((await get('child')).entity.archetype, eidOf(['tombstone']))
+  assertEquals((await get('ref')).entity.archetype, eidOf([]))
+  assertEquals((await get('ref')).link, undefined)
 })
 
-test('identity reads see pending component changes before classification', () => {
+test('identity reads see pending component changes before classification', async () => {
   for (let count of [3, 40]) {
     let { g, store } = setup()
     let stable = Array.from({ length: count }, (_, i) => `stable${i}`)
@@ -159,7 +165,7 @@ test('identity reads see pending component changes before classification', () =>
       { entity: { eid: 'changed' }, doc: { title: 'before' } },
       { entity: { eid: 'emptied' }, task: {} },
     ])
-    store.tx((tx) => {
+    await store.tx(async (tx) => {
       tx.patch([
         { entity: { eid: 'changed' }, doc: null, task: {} },
         { entity: { eid: 'emptied' }, task: null },
@@ -187,19 +193,22 @@ test('identity reads see pending component changes before classification', () =>
       ])
       let ids = ['new', ...stable, 'changed', 'emptied', 'missing', 'changed']
       let read = (names?: string[]) => tx.get(ids, names) as Bundle[]
-      assertEquals(read().map((b) => [b.entity.eid, b.doc, b.task]), [
+      assertEquals((await read()).map((b) => [b.entity.eid, b.doc, b.task]), [
         ['new', { title: 'new' }, undefined],
         ...stable.map((eid) => [eid, { title: eid }, undefined]),
         ['changed', undefined, {}],
         ['emptied', undefined, undefined],
         ['changed', undefined, {}],
       ])
-      assertEquals(read(['task']).map((b) => [b.entity.eid, b.doc, b.task]), [
-        ...['new', ...stable].map((eid) => [eid, undefined, undefined]),
-        ['changed', undefined, {}],
-        ['emptied', undefined, undefined],
-        ['changed', undefined, {}],
-      ])
+      assertEquals(
+        (await read(['task'])).map((b) => [b.entity.eid, b.doc, b.task]),
+        [
+          ...['new', ...stable].map((eid) => [eid, undefined, undefined]),
+          ['changed', undefined, {}],
+          ['emptied', undefined, undefined],
+          ['changed', undefined, {}],
+        ],
+      )
       tx.remove([{ eid: 'changed' }])
       assert((tx.get(['changed']) as Bundle[])[0].tombstone)
       tx.revive(['changed'])
@@ -224,24 +233,24 @@ test('classification begins the next presence comparison in a ledger', () => {
   assertEquals(l.owed(), [])
 })
 
-test('archetype: a removal past the graph leaves its archetype, and its tombstone still swallows a racing write', () => {
+test('archetype: a removal past the graph leaves its archetype, and its tombstone still swallows a racing write', async () => {
   let { g, store, driver, get } = setup()
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' }, task: {} }])
-  store.tx((tx) => tx.remove([{ eid: 'a' }]))
-  assertEquals(get('a').entity.archetype, eidOf(['tombstone']))
+  await store.tx((tx) => tx.remove([{ eid: 'a' }]))
+  assertEquals((await get('a')).entity.archetype, eidOf(['tombstone']))
   assertEquals(drift(driver).drifted, 0)
   g.apply([{
     entity: { eid: 'a' },
     doc: { title: 'B' },
     $was: { doc: { title: token('A') } },
   }])
-  assert(get('a').tombstone)
-  assertEquals(get('a').entity.archetype, eidOf(['tombstone']))
+  assert((await get('a')).tombstone)
+  assertEquals((await get('a')).entity.archetype, eidOf(['tombstone']))
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'C' } }])
-  assertEquals(get('a').entity.archetype, eidOf(['doc']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['doc']))
 })
 
-test('archetype: a write past the graph keeps its pointer in step, by every door', () => {
+test('archetype: a write past the graph keeps its pointer in step, by every door', async () => {
   // An effect hook writes through the detached transaction, as an audit row,
   // a lease reaped at boot or an effect's own write does.
   let { g, store, driver, get } = setup([{
@@ -254,42 +263,42 @@ test('archetype: a write past the graph keeps its pointer in step, by every door
     },
   }])
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
-  assertEquals(get('a').entity.archetype, eidOf(['doc', 'task']))
-  store.tx((tx) => tx.patch([{ entity: { eid: 'a' }, task: null }]))
-  assertEquals(get('a').entity.archetype, eidOf(['doc']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['doc', 'task']))
+  await store.tx((tx) => tx.patch([{ entity: { eid: 'a' }, task: null }]))
+  assertEquals((await get('a')).entity.archetype, eidOf(['doc']))
   detached(store).patch([{ entity: { eid: 'b' }, link: { to: 'c' } }])
-  assertEquals(get('b').entity.archetype, eidOf(['link']))
-  assertEquals(get('c').entity.archetype, eidOf([]))
-  store.tx((tx) => tx.remove([{ eid: 'b' }]))
-  store.tx((tx) => tx.revive(['b']))
-  assertEquals(get('b').entity.archetype, eidOf([]))
+  assertEquals((await get('b')).entity.archetype, eidOf(['link']))
+  assertEquals((await get('c')).entity.archetype, eidOf([]))
+  await store.tx((tx) => tx.remove([{ eid: 'b' }]))
+  await store.tx((tx) => tx.revive(['b']))
+  assertEquals((await get('b')).entity.archetype, eidOf([]))
   // ... and in one unit, the dead brought back and given a row.
-  store.tx((tx) => {
+  await store.tx((tx) => {
     tx.remove([{ eid: 'b' }])
     tx.revive(['b'])
     tx.patch([{ entity: { eid: 'b' }, task: {} }])
   })
-  assertEquals(get('b').entity.archetype, eidOf(['task']))
+  assertEquals((await get('b')).entity.archetype, eidOf(['task']))
   // An inner unit's writes are not in its parent's birth ledger.
-  store.tx((tx) => {
+  await store.tx(async (tx) => {
     tx.patch([{ entity: { eid: 'nested' }, doc: {} }])
-    store.tx((inner) => inner.patch([{ entity: { eid: 'nested' }, task: {} }]))
-  })
-  assertEquals(get('nested').entity.archetype, eidOf(['doc', 'task']))
-  store.tx((tx) => {
-    tx.patch([{ entity: { eid: 'rolled' }, doc: {} }])
-    assertThrows(() =>
-      store.tx((inner) => {
-        inner.patch([{ entity: { eid: 'rolled' }, task: {} }])
-        throw new Error('rollback')
-      })
+    await store.tx((inner) =>
+      inner.patch([{ entity: { eid: 'nested' }, task: {} }])
     )
   })
-  assertEquals(get('rolled').entity.archetype, eidOf(['doc']))
+  assertEquals((await get('nested')).entity.archetype, eidOf(['doc', 'task']))
+  await store.tx(async (tx) => {
+    tx.patch([{ entity: { eid: 'rolled' }, doc: {} }])
+    await assertRejects(async () => (await store.tx((inner) => {
+      inner.patch([{ entity: { eid: 'rolled' }, task: {} }])
+      throw new Error('rollback')
+    })))
+  })
+  assertEquals((await get('rolled')).entity.archetype, eidOf(['doc']))
   assertEquals(drift(driver), { checked: 5, drifted: 0, sample: [] })
 })
 
-test('archetype: dry run and late rollback cannot poison cached sets', () => {
+test('archetype: dry run and late rollback cannot poison cached sets', async () => {
   let fail = false
   let { driver, g, get } = setup([{
     name: 'late',
@@ -301,14 +310,14 @@ test('archetype: dry run and late rollback cannot poison cached sets', () => {
     },
   }])
   g.apply([{ entity: { eid: 'a' }, task: {} }], { check: true })
-  assertEquals(get('a'), undefined)
+  assertEquals(await get('a'), undefined)
   assertEquals(tally(driver, 'archetype'), 0)
   fail = true
   assertThrows(() => g.apply([{ entity: { eid: 'a' }, task: {} }]))
   fail = false
   g.apply([{ entity: { eid: 'a' }, task: {} }])
-  assertEquals(get('a').entity.archetype, eidOf(['task']))
-  assert(get(eidOf(['task'])).archetype)
+  assertEquals((await get('a')).entity.archetype, eidOf(['task']))
+  assert((await get(eidOf(['task']))).archetype)
   assertThrows(() =>
     g.apply([{ entity: { eid: eidOf(['task']) }, $delete: true }])
   )
@@ -372,8 +381,8 @@ test('archetype: traced flushes cover classification around commit hooks', async
     g,
     () => g.apply([{ entity: { eid: 'a' }, task: {} }]),
   )
-  assertEquals(get('a').entity.archetype, eidOf(['doc']))
-  assertEquals(get('late').entity.archetype, eidOf(['task']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['doc']))
+  assertEquals((await get('late')).entity.archetype, eidOf(['task']))
   assertEquals(tasks(await g.read('.task') as Bundle[]), ['late'])
   assertEquals(drift(driver).drifted, 0)
   // Pointer writes from both drains must belong to named flush phases,
@@ -393,7 +402,7 @@ test('archetype: traced flushes cover classification around commit hooks', async
   assertEquals(drains.size, 2)
 })
 
-test('archetype: additive boot, physical hidden table, idempotent backfill, retirement', () => {
+test('archetype: additive boot, physical hidden table, idempotent backfill, retirement', async () => {
   let d = mem()
   d.query(OLD_SPINE)
   d.query(HIDDEN)
@@ -401,20 +410,20 @@ test('archetype: additive boot, physical hidden table, idempotent backfill, reti
   d.query(insert('hidden', { entity: 1 }))
   let s = storage(d, vocab)
   s.install()
-  let read = () => s.tx((tx) => tx.get(['old']))[0]
-  assertEquals(read().entity.archetype, eidOf(['hidden']))
+  let read = async () => (await s.tx((tx) => tx.get(['old'])))[0]
+  assertEquals((await read()).entity.archetype, eidOf(['hidden']))
   assert(componentTables(d).includes('hidden'))
   assertEquals(backfill(d), { entities: 0, archetypes: 0, retired: 0 })
   let g = graph({ storage: s, vocab, plugins: [archetypes()] })
   g.apply([{ entity: { eid: 'old' }, doc: {} }])
-  assertEquals(read().entity.archetype, eidOf(['hidden', 'doc']))
+  assertEquals((await read()).entity.archetype, eidOf(['hidden', 'doc']))
   g.apply([{ entity: { eid: 'old' }, doc: null }])
-  assertEquals(read().entity.archetype, eidOf(['hidden']))
+  assertEquals((await read()).entity.archetype, eidOf(['hidden']))
   let count = tally(d, 'archetype')
   d.query({ t: 'drop', kind: 'table', name: 'hidden' })
   s.install()
-  assertEquals(read().entity.archetype, eidOf([]))
-  let old = s.tx((tx) => tx.get([eidOf(['hidden'])]))[0]
+  assertEquals((await read()).entity.archetype, eidOf([]))
+  let old = (await s.tx((tx) => tx.get([eidOf(['hidden'])])))[0]
   assertEquals(old.retired, {})
   assertEquals(old.entity.archetype, eidOf(['archetype', 'retired']))
   assertEquals(old.tombstone, undefined)
@@ -423,7 +432,7 @@ test('archetype: additive boot, physical hidden table, idempotent backfill, reti
   assert(indexes(d, 'entity').includes('entity_archetype'))
 })
 
-test('archetype: a table rekeyed away from entity leaves every set that named it', () => {
+test('archetype: a table rekeyed away from entity leaves every set that named it', async () => {
   let d = mem()
   d.query(OLD_SPINE)
   d.query(HIDDEN)
@@ -431,41 +440,41 @@ test('archetype: a table rekeyed away from entity leaves every set that named it
   d.query(insert('hidden', { entity: 1 }))
   let s = storage(d, vocab)
   s.install()
-  let read = () => s.tx((tx) => tx.get(['old']))[0]
-  assertEquals(read().entity.archetype, eidOf(['hidden']))
+  let read = async () => (await s.tx((tx) => tx.get(['old'])))[0]
+  assertEquals((await read()).entity.archetype, eidOf(['hidden']))
   d.query({
     t: 'alter table',
     table: 'hidden',
     rename: { column: 'entity', to: 'owner' },
   })
   assertEquals(backfill(d).retired, 1)
-  assertEquals(read().entity.archetype, eidOf([]))
+  assertEquals((await read()).entity.archetype, eidOf([]))
   assertEquals(drift(d).drifted, 0)
 })
 
-test('archetype: pre-existing reference stub can become a descriptor', () => {
+test('archetype: pre-existing reference stub can become a descriptor', async () => {
   let { g, get } = setup()
   g.apply([
     { entity: { eid: 'ref' }, link: { to: eidOf(['task']) } },
     { entity: { eid: 'task' }, task: {} },
   ])
-  let descriptor = get(eidOf(['task']))
+  let descriptor = await get(eidOf(['task']))
   assertEquals(descriptor.archetype, { tables: '["task"]' })
   assertEquals(descriptor.entity.archetype, eidOf(['archetype']))
 })
 
-test('archetype: explicit content aliases canonicalize the stored list', () => {
+test('archetype: explicit content aliases canonicalize the stored list', async () => {
   let { g, get } = setup()
   g.apply([{
     entity: { eid: '$set' },
     archetype: { tables: '["task","doc","task"]' },
   }])
-  assertEquals(get(eidOf(['doc', 'task'])).archetype, {
+  assertEquals((await get(eidOf(['doc', 'task']))).archetype, {
     tables: '["doc","task"]',
   })
 })
 
-test('archetype: stamps join the final set and value-only writes do not assign again', () => {
+test('archetype: stamps join the final set and value-only writes do not assign again', async () => {
   let v = loadVocab([archetypeDoc, domain, {
     $defs: {
       created: {
@@ -501,14 +510,14 @@ test('archetype: stamps join the final set and value-only writes do not assign a
   }))
   let updates = () => pointed.filter((p) => p == 'a' || p == id).length
   assertEquals(
-    s.tx((tx) => tx.get(['a']))[0].entity.archetype,
+    (await s.tx((tx) => tx.get(['a'])))[0].entity.archetype,
     eidOf(['doc', 'task', 'created']),
   )
   assertEquals(updates(), 1)
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'B' } }])
   assertEquals(updates(), 2) // First later touch adds updated.
   assertEquals(
-    s.tx((tx) => tx.get(['a']))[0].entity.archetype,
+    (await s.tx((tx) => tx.get(['a'])))[0].entity.archetype,
     eidOf(['doc', 'task', 'created', 'updated']),
   )
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'C' } }])
@@ -517,23 +526,23 @@ test('archetype: stamps join the final set and value-only writes do not assign a
   assertEquals(updates(), 3)
   // A birth in a shape seen finishing is minted in the class it finished in,
   // and one finishing elsewhere is pointed where it did.
-  let born = (eid: string, opts = {}) => {
+  let born = async (eid: string, opts = {}) => {
     let was = pointed.length
     g.apply([{ entity: { eid }, doc: { title: eid }, task: {} }], opts)
     return [
-      s.tx((tx) => tx.get([eid]))[0].entity.archetype,
+      (await s.tx((tx) => tx.get([eid])))[0].entity.archetype,
       pointed.length - was,
     ]
   }
   let stamped = eidOf(['doc', 'task', 'created'])
-  assertEquals(born('c'), [stamped, 0])
-  let unstamped = born('d', { stamp: false, trusted: true })
+  assertEquals(await born('c'), [stamped, 0])
+  let unstamped = await born('d', { stamp: false, trusted: true })
   assertEquals(unstamped, [eidOf(['doc', 'task']), 1])
-  assertEquals(born('e'), [stamped, 1])
-  assertEquals(born('f'), [stamped, 0])
+  assertEquals(await born('e'), [stamped, 1])
+  assertEquals(await born('f'), [stamped, 0])
 })
 
-test('archetype: backfill classifies a future descriptor stub in either order', () => {
+test('archetype: backfill classifies a future descriptor stub in either order', async () => {
   for (let first of [true, false]) {
     let d = mem()
     let s = storage(d, vocab)
@@ -542,26 +551,26 @@ test('archetype: backfill classifies a future descriptor stub in either order', 
       { entity: { eid: eidOf(['task']) } },
       { entity: { eid: 'owner' }, task: {} },
     ]
-    s.tx((tx) => tx.patch(first ? rows : rows.reverse()))
+    await s.tx((tx) => tx.patch(first ? rows : rows.reverse()))
     backfill(d)
     assertEquals(
-      s.tx((tx) => tx.get([eidOf(['task'])]))[0].entity.archetype,
+      (await s.tx((tx) => tx.get([eidOf(['task'])])))[0].entity.archetype,
       eidOf(['archetype']),
     )
     assertEquals(backfill(d), { entities: 0, archetypes: 0, retired: 0 })
   }
 })
 
-test('archetype: deletion removes physical facets outside the writer vocabulary', () => {
+test('archetype: deletion removes physical facets outside the writer vocabulary', async () => {
   let { driver, store, g, get } = setup()
   driver.query(HIDDEN)
-  store.tx((tx) => tx.patch([{ entity: { eid: 'old' }, task: {} }]))
+  await store.tx((tx) => tx.patch([{ entity: { eid: 'old' }, task: {} }]))
   // A raw writer names the owners it wrote, as every writer must.
   driver.query(insert('hidden', { entity: idOf(driver, 'old') }))
   reclassify(driver, ['old'])
   store.install()
   g.apply([{ entity: { eid: 'old' }, $delete: true }])
-  assertEquals(get('old').entity.archetype, eidOf(['tombstone']))
+  assertEquals((await get('old')).entity.archetype, eidOf(['tombstone']))
   assertEquals(tally(driver, 'hidden'), 0)
   assertEquals(backfill(driver), { entities: 0, archetypes: 0, retired: 0 })
 })
@@ -570,7 +579,7 @@ test('archetype: deletion removes physical facets outside the writer vocabulary'
 let holding = (d: Driver, eid: string) =>
   componentTables(d).filter((t) => tally(d, t, by({ entity: idOf(d, eid) })))
 
-test('archetype: a delete clears every row its entity holds, however its pointer stands', () => {
+test('archetype: a delete clears every row its entity holds, however its pointer stands', async () => {
   let point = (d: Driver, to: number | null) =>
     d.query({
       t: 'update',
@@ -583,17 +592,15 @@ test('archetype: a delete clears every row its entity holds, however its pointer
   let deletes: Record<string, (s: ReturnType<typeof setup>) => unknown> = {
     classified: ({ g }) => g.apply(gone),
     // Rows written in the deleting unit, before any pointer named them.
-    unit: ({ store }) =>
-      store.tx((tx) => {
-        tx.patch(task)
-        tx.remove([{ eid: 'a' }])
-      }),
+    unit: async ({ store }) => (await store.tx((tx) => {
+      tx.patch(task)
+      tx.remove([{ eid: 'a' }])
+    })),
     // ... in a unit around the one that deletes.
-    nested: ({ store, g }) =>
-      store.tx((tx) => {
-        tx.patch(task)
-        g.apply(gone)
-      }),
+    nested: async ({ store, g }) => (await store.tx((tx) => {
+      tx.patch(task)
+      g.apply(gone)
+    })),
     // ... by the batch whose cascade deletes it.
     cascade: ({ g }) =>
       g.apply([{ entity: { eid: 'a' }, child: { of: 'p' } }, {
@@ -602,9 +609,9 @@ test('archetype: a delete clears every row its entity holds, however its pointer
       }]),
     // A pointer never written, or naming no descriptor.
     unclassified: ({ driver, g }) => (point(driver, null), g.apply(gone)),
-    dangling: ({ driver, store }) => (
+    dangling: async ({ driver, store }) => (
       point(driver, idOf(driver, 'p')),
-        store.tx((tx) => tx.remove([{ eid: 'a' }]))
+        (await store.tx((tx) => tx.remove([{ eid: 'a' }])))
     ),
   }
   for (let [name, remove] of Object.entries(deletes)) {
@@ -613,9 +620,9 @@ test('archetype: a delete clears every row its entity holds, however its pointer
       { entity: { eid: 'p' }, doc: {} },
       { entity: { eid: 'a' }, doc: { title: 'A' }, link: { to: 'p' } },
     ])
-    remove(s)
+    await remove(s)
     assertEquals([name, holding(s.driver, 'a')], [name, ['tombstone']])
-    assertEquals([name, s.get('a').entity.archetype], [
+    assertEquals([name, (await s.get('a')).entity.archetype], [
       name,
       eidOf(['tombstone']),
     ])
@@ -723,34 +730,37 @@ test('one-archetype paged reads use the compound ordering index', async () => {
   assert(!indexes(d, 'entity').includes('entity_archetype'))
 })
 
-test('archetype: reclassify classifies rows written past the graph, no triggers', () => {
+test('archetype: reclassify classifies rows written past the graph, no triggers', async () => {
   let { driver, store, g, get } = setup()
   store.raise(['task'])
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
-  assertEquals(get('a').entity.archetype, eidOf(['doc']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['doc']))
   let id = idOf(driver, 'a')
   driver.query(insert('task', { entity: id }))
-  assertEquals(get('a').entity.archetype, eidOf(['doc']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['doc']))
   let echoes = reclassify(driver, ['a'])
   assertEquals(echoes.at(-1), {
     entity: { eid: 'a', archetype: eidOf(['doc', 'task']) },
   })
   assertEquals(echoes[0].archetype, { tables: '["doc","task"]' })
-  assertEquals(get('a').entity.archetype, eidOf(['doc', 'task']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['doc', 'task']))
   assertEquals(reclassify(driver, ['a']), [])
   driver.query({ t: 'delete', from: 'doc', where: by({ entity: id }) })
   let moved = reclassify(driver, ['a', 'a', 'nobody'])
   assertEquals(moved.length, 2) // The {task} descriptor is born here.
   assertEquals(moved[1], { entity: { eid: 'a', archetype: eidOf(['task']) } })
   assertEquals(reclassify(driver, [eidOf(['task']), eidOf(['archetype'])]), [])
-  assertEquals(get(eidOf(['task'])).entity.archetype, eidOf(['archetype']))
+  assertEquals(
+    (await get(eidOf(['task']))).entity.archetype,
+    eidOf(['archetype']),
+  )
   // A table raised after the first call is seen: the facet list follows the
   // schema version, not the first look.
   driver.query(HIDDEN)
   driver.query(insert('hidden', { entity: id }))
-  assertEquals(get('a').entity.archetype, eidOf(['task']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['task']))
   reclassify(driver, ['a'])
-  assertEquals(get('a').entity.archetype, eidOf(['hidden', 'task']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['hidden', 'task']))
   assertEquals(backfill(driver), { entities: 0, archetypes: 0, retired: 0 })
 })
 
@@ -791,11 +801,11 @@ test('archetype: drift finds the pointer a raw writer left behind', () => {
   assertEquals(drift(driver), { checked: 2, drifted: 0, sample: [] })
 })
 
-test('archetype: patches and deletes discover no unchanged physical schema', () => {
+test('archetype: patches and deletes discover no unchanged physical schema', async () => {
   let { driver, store: s, g } = setup()
   // A first write's tables move the schema; these writes are later ones.
   s.raise()
-  s.tx((tx) =>
+  await s.tx((tx) =>
     tx.patch([{ entity: { eid: 'same' }, doc: { title: 'before' } }])
   )
   let query = driver.query, calls = 0
@@ -806,7 +816,7 @@ test('archetype: patches and deletes discover no unchanged physical schema', () 
     return query(stmt)
   }
   for (let i = 0; i < 5; i++) {
-    s.tx((tx) =>
+    await s.tx((tx) =>
       tx.patch([{ entity: { eid: 'same' }, task: i % 2 ? null : {} }])
     )
     // A delete asks the cascade who goes with it.
@@ -816,19 +826,21 @@ test('archetype: patches and deletes discover no unchanged physical schema', () 
   assertEquals(calls, 0)
 })
 
-test('archetype: physical discovery follows same-length table swaps and rollback', () => {
+test('archetype: physical discovery follows same-length table swaps and rollback', async () => {
   let { driver: d, store, get } = setup()
-  store.tx((tx) => tx.patch([{ entity: { eid: 'a' }, doc: { title: 'a' } }]))
+  await store.tx((tx) =>
+    tx.patch([{ entity: { eid: 'a' }, doc: { title: 'a' } }])
+  )
   d.query(HIDDEN)
   d.query(insert('hidden', { entity: idOf(d, 'a') }))
   reclassify(d, ['a'])
-  assertEquals(get('a').entity.archetype, eidOf(['doc', 'hidden']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['doc', 'hidden']))
   d.query({ t: 'savepoint', name: 'swap' })
   d.query({ t: 'alter table', table: 'hidden', rename: 'secret' })
   reclassify(d, ['a'])
-  assertEquals(get('a').entity.archetype, eidOf(['doc', 'secret']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['doc', 'secret']))
   d.query({ t: 'rollback', to: 'swap' })
   d.query({ t: 'release', name: 'swap' })
   reclassify(d, ['a'])
-  assertEquals(get('a').entity.archetype, eidOf(['doc', 'hidden']))
+  assertEquals((await get('a')).entity.archetype, eidOf(['doc', 'hidden']))
 })

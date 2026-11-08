@@ -64,9 +64,13 @@ export let filling = (db: Statements): boolean =>
 /** Queue at most `limit` candidate rows, including rows without eligible
  * text. Applying the keyset window before eligibility also bounds a long
  * excluded tail. Advancing the cursor and queueing its owners commit together. */
-export let fill = (db: Statements, fields: Field[], limit = 256): void => {
+export let fill = (
+  db: Statements,
+  fields: Field[],
+  limit = 256,
+): void | Promise<void> => {
   if (!filling(db)) return
-  db.atomic(() => {
+  return db.atomic(() => {
     let names = tablesIn(db)
     while (limit > 0) {
       let [job] = db.query(select({

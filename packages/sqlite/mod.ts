@@ -66,7 +66,7 @@ import type {
   Measure,
   ReadOpts,
 } from '@yaks/graph'
-import { after, isPromise } from '@yaks/fp'
+import { after, type Clock, isPromise, sleep } from '@yaks/fp'
 import { context, scope } from '@yaks/trace'
 import type { Query } from './read.ts'
 import {
@@ -100,7 +100,8 @@ import {
   screened,
 } from './read.ts'
 import { doom } from './doom.ts'
-import { unit, unwaiting } from './unit.ts'
+import { exclusive, unit, unwaiting } from './unit.ts'
+import { enter } from '@yaks/graph/enter'
 import { busy } from './error.ts'
 import { options } from './reader.ts'
 import {
@@ -307,10 +308,9 @@ export type Tx = {
 }
 
 /**
- * A bound store: @yaks/graph's {@link Storage}, implemented synchronously. It
- * is the same five members, each narrowed to what an embedded database can
- * guarantee — so it satisfies `Storage` wherever one is wanted, and a caller
- * holding a `Store` directly never has to await a row.
+ * A bound store: @yaks/graph's {@link Storage}, with synchronous reads. Its
+ * transactions stay synchronous when uncontended; an independent transaction
+ * waits for an asynchronous body already using its connection to finish.
  */
 // A read here takes the compiler's whole options, not just @yaks/graph's
 // `ReadOpts`: a caller of this package may pass a query a derived-property
@@ -320,6 +320,8 @@ export type Tx = {
 // signature still satisfies `Storage` wherever the generic contract is what is
 // wanted.
 export type Store = {
+  /** Matches evaluated against committed rows without a write transaction. */
+  bindings?: Tx['bindings']
   /** Current committed-data invalidation token, including external WAL writes. */
   revision?: () => unknown
   /** Call `heard` soon after another connection commits a new row of
@@ -387,7 +389,7 @@ export type Store = {
   tx: <R>(
     body: (tx: Tx) => R,
     opts?: { admission?: boolean; wait?: boolean },
-  ) => R
+  ) => R | Promise<Awaited<R>>
 }
 
 /**
@@ -398,6 +400,8 @@ export type Store = {
  * as text through `doc_value`.
  */
 export type Opts = BindOpts & {
+  /** Timers used while transaction entry waits for another writer. */
+  clock?: Clock
   /** Maintain global populations after the first unscoped aggregate (default).
    * Stores that need counts immediately may seed them during installation;
    * other stores never pay for upkeep until a count actually asks for it. */
@@ -1389,41 +1393,50 @@ export let storage = (
     tx: <R>(
       body: (tx: Tx) => R,
       { wait }: { admission?: boolean; wait?: boolean } = {},
-    ): R => {
-      if (base.mode && 'at' in base.mode) {
-        throw new Refused(
-          `as of transaction ${base.mode.at} the graph is read only`,
-        )
-      }
-      ensure()
-      return unit(
-        driver,
-        (): R =>
-          within(driver, (clock) => {
-            let cached = (t: Tx): Tx => ({
-              ...t,
-              get: (eids, comps) => kept(t.get, eids, comps),
-              ...base.history ? { clock } : {},
-            })
-            if (!classified) return body(cached(tx))
-            let { tx: t, settle, close } = tracked()
-            let tracing = context()
-            // An async body settles what it owes before the unit closes, as the
-            // unit waits for it (./unit.ts).
-            return lastly(
-              () =>
-                after(body(base.history ? { ...t, clock } : t), (out) => {
-                  if (tracing) scope(tracing, settle)
-                  else settle()
-                  return out
-                }) as R,
-              close,
-            )
-          }),
-        'write',
-        { wait },
-      )
-    },
+    ): R | Promise<Awaited<R>> =>
+      exclusive(driver, () => {
+        if (base.mode && 'at' in base.mode) {
+          throw new Refused(
+            `as of transaction ${base.mode.at} the graph is read only`,
+          )
+        }
+        ensure()
+        let run = (begun: () => void) =>
+          unit(
+            driver,
+            (): R => {
+              begun()
+              return within(driver, (clock) => {
+                let cached = (t: Tx): Tx => ({
+                  ...t,
+                  get: (eids, comps) => kept(t.get, eids, comps),
+                  ...base.history ? { clock } : {},
+                })
+                if (!classified) return body(cached(tx))
+                let { tx: t, settle, close } = tracked()
+                let tracing = context()
+                // An async body settles what it owes before the unit closes, as the
+                // unit waits for it (./unit.ts).
+                return lastly(
+                  () =>
+                    after(body(base.history ? { ...t, clock } : t), (out) => {
+                      if (tracing) scope(tracing, settle)
+                      else settle()
+                      return out
+                    }) as R,
+                  close,
+                )
+              })
+            },
+            'write',
+            { wait: false },
+          )
+        return wait === false
+          ? run(() => {})
+          : enter(run, (ms) => sleep(ms, undefined, base.clock)) as
+            | R
+            | Promise<Awaited<R>>
+      }),
   }
 }
 

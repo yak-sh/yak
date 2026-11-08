@@ -223,7 +223,7 @@ export type Storage = {
   /** A connection-local token invalidated by every committed data/schema
    * change, including other connections. Optional: read-result memoization
    * must not survive a call when the store cannot prove this token. */
-  revision?: () => unknown
+  revision?: () => unknown | Promise<unknown>
   /** Whether a value this store reads for the property means its entity
    * wears the component. A stored property's does; a computed one's may be
    * answered from elsewhere (@yaks/sql `worn`). */
@@ -257,6 +257,8 @@ export type Storage = {
     before: string,
     page: { after?: string; limit: number },
   ) => Graves | Promise<Graves>
+  /** Evaluate matches against committed data without opening a write unit. */
+  bindings?: Tx['bindings']
   /** The absolute path of the file it keeps its pages in, on the computer
    * that opened it. A store kept in memory or elsewhere leaves it out. */
   file?: string
@@ -281,6 +283,45 @@ export type Storage = {
   }) => R | Promise<Awaited<R>>
 }
 
+/** Raw committed reads a graph can lend to another connection. */
+export type Committed = Pick<
+  Storage,
+  'read' | 'rows' | 'get' | 'revision' | 'buried' | 'bindings'
+>
+
+/** Keep write transactions on their owner while lending committed reads. */
+export let lending = (
+  owner: Storage,
+  reader?: { storage?: Committed; answering?: () => boolean },
+): Storage => {
+  if (!reader?.storage) return owner
+  let by = () =>
+    !reader.answering || reader.answering() ? reader.storage! : owner
+  let read = reader.storage
+  return Object.assign(Object.create(owner), {
+    read: (...args: Parameters<Storage['read']>) => by().read(...args),
+    rows: (...args: Parameters<Storage['rows']>) => by().rows(...args),
+    get: (...args: Parameters<Storage['get']>) => by().get(...args),
+    revision: () => by().revision?.(),
+    ...read.buried
+      ? {
+        buried: (...args: Parameters<NonNullable<Storage['buried']>>) =>
+          by().buried!(...args),
+      }
+      : {},
+    ...read.bindings
+      ? {
+        bindings: (...args: Parameters<NonNullable<Storage['bindings']>>) => {
+          let store = by()
+          return store.bindings
+            ? store.bindings(...args)
+            : detached(owner).bindings!(...args)
+        },
+      }
+      : {},
+  })
+}
+
 /**
  * A `Tx` that is not a transaction: each call is its own unit of work against
  * the storage. This is what a hook receives in the phases that run outside the
@@ -300,7 +341,7 @@ export let detached = (storage: Storage): Tx => ({
   // throws when it is asked rather than omitting the method, because whether
   // it can is not known until a transaction is open.
   bindings: (matches, bundles, covers) =>
-    storage.tx((tx) => {
+    storage.bindings?.(matches, bundles, covers) ?? storage.tx((tx) => {
       if (!tx.bindings) {
         throw new Error(
           'this storage evaluates no bindings — a match is a ' +

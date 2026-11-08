@@ -5,7 +5,7 @@ import { loadVocab } from '@yaks/vocab'
 import { mem, seed, shop, spy, unit } from './testing.ts'
 import { get, storage } from './mod.ts'
 
-test('transaction gather observes writes and rollback', () => {
+test('transaction gather observes writes and rollback', async () => {
   let driver = mem()
   let opts: BindOpts = {
     derived: { 'doc.body': { tag: 'text', expr: () => lit('hydrated body') } },
@@ -21,9 +21,9 @@ test('transaction gather observes writes and rollback', () => {
     },
   ])
   let before = get(driver, shop, ['product'], opts)
-  assertEquals(s.tx((tx) => tx.get(['product'])), before)
+  assertEquals(await s.tx((tx) => tx.get(['product'])), before)
   try {
-    s.tx((tx) => {
+    await s.tx((tx) => {
       tx.patch([{ entity: { eid: 'product' }, product: { price: 20 } }])
       assertEquals(tx.get(['product']), get(driver, shop, ['product'], opts))
       tx.remove([{ eid: 'product' }])
@@ -33,16 +33,16 @@ test('transaction gather observes writes and rollback', () => {
   } catch (e) {
     assertEquals((e as Error).message, 'rollback')
   }
-  assertEquals(s.tx((tx) => tx.get(['product'])), before)
-  assertEquals(s.tx((tx) => tx.get(['absent'])), [])
-  assertEquals(s.tx((tx) => tx.get([])), [])
+  assertEquals(await s.tx((tx) => tx.get(['product'])), before)
+  assertEquals(await s.tx((tx) => tx.get(['absent'])), [])
+  assertEquals(await s.tx((tx) => tx.get([])), [])
   assertEquals(
-    s.tx((tx) => tx.get(['maker', 'absent', 'product', 'maker'])),
+    await s.tx((tx) => tx.get(['maker', 'absent', 'product', 'maker'])),
     get(driver, shop, ['maker', 'absent', 'product', 'maker'], opts),
   )
 })
 
-test('singleton gather reads a wide sparse vocabulary in one probe', () => {
+test('singleton gather reads a wide sparse vocabulary in one probe', async () => {
   let vocab = loadVocab({
     $defs: {
       entity: {
@@ -75,7 +75,7 @@ test('singleton gather reads a wide sparse vocabulary in one probe', () => {
   let cold = storage(driver, vocab, { number: false })
   cold.install()
   queries.length = 0
-  assertEquals(cold.tx((tx) => tx.get(['sparse'])), [{
+  assertEquals(await cold.tx((tx) => tx.get(['sparse'])), [{
     entity: { eid: 'sparse' },
     data: { present: 'kept' },
     tag0: {},
@@ -85,13 +85,13 @@ test('singleton gather reads a wide sparse vocabulary in one probe', () => {
   // A new facet is visible immediately: only SQL shapes are cached, not rows
   // or presence. An absent entity must not be cached across a later birth.
   seed(s, [{ entity: { eid: 'sparse' }, tag1: {} }])
-  assertEquals(s.tx((tx) => tx.get(['sparse']))[0].tag1, {})
-  assertEquals(s.tx((tx) => tx.get(['later'])), [])
+  assertEquals((await s.tx((tx) => tx.get(['sparse'])))[0].tag1, {})
+  assertEquals(await s.tx((tx) => tx.get(['later'])), [])
   seed(s, [{ entity: { eid: 'later' }, tag1: {} }])
-  assertEquals(s.tx((tx) => tx.get(['later']))[0].tag1, {})
+  assertEquals((await s.tx((tx) => tx.get(['later'])))[0].tag1, {})
 })
 
-test('projected identities read only named facets and preserve projection/rollback truth', () => {
+test('projected identities read only named facets and preserve projection/rollback truth', async () => {
   let driver = mem()
   let queries: string[] = []
   let opts: BindOpts = {
@@ -112,15 +112,18 @@ test('projected identities read only named facets and preserve projection/rollba
   let cold = storage(spied, shop, opts)
   cold.install()
   queries.length = 0
-  let product = cold.tx((tx) => tx.get(['p'], ['product']))
+  let product = await cold.tx((tx) => tx.get(['p'], ['product']))
   assertEquals(queries.length, 1)
-  let whole = s.tx((tx) => tx.get(['p']))[0]
+  let whole = (await s.tx((tx) => tx.get(['p'])))[0]
   assertEquals(product, [{ entity: whole.entity, product: whole.product }])
-  assertEquals(s.tx((tx) => tx.get(['p'], ['doc']))[0].doc, whole.doc)
-  assertEquals(s.tx((tx) => tx.get(['p'], ['review']))[0].review, undefined)
-  assertEquals(s.tx((tx) => tx.get(['absent'], ['doc'])), [])
+  assertEquals((await s.tx((tx) => tx.get(['p'], ['doc'])))[0].doc, whole.doc)
+  assertEquals(
+    (await s.tx((tx) => tx.get(['p'], ['review'])))[0].review,
+    undefined,
+  )
+  assertEquals(await s.tx((tx) => tx.get(['absent'], ['doc'])), [])
   try {
-    s.tx((tx) => {
+    await s.tx((tx) => {
       tx.patch([{ entity: { eid: 'p' }, product: { price: 9 } }])
       assertEquals(
         (tx.get(['p'], ['product'])[0].product as { price: number }).price,
@@ -134,7 +137,7 @@ test('projected identities read only named facets and preserve projection/rollba
     assertEquals((e as Error).message, 'rollback')
   }
   assertEquals(
-    s.tx((tx) => tx.get(['p'], ['product']))[0].product,
+    (await s.tx((tx) => tx.get(['p'], ['product'])))[0].product,
     whole.product,
   )
 })

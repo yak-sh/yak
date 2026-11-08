@@ -77,7 +77,13 @@ import {
   gives,
 } from './bundle.ts'
 import type { ReadTx, Row, Storage, Tx } from './storage.ts'
-import { detached, type Query, type ReadOpts } from './storage.ts'
+import {
+  type Committed,
+  detached,
+  lending as lentStorage,
+  type Query,
+  type ReadOpts,
+} from './storage.ts'
 import type {
   Hook,
   Phase,
@@ -296,7 +302,8 @@ export type Options = {
   /** where this graph's committed reads are answered (default: here). A web
    * or worker host's reads run beside the thread its requests and duties run
    * on (@yaks/cli `readThread`), so no read holds it; a write, and the reads
-   * it makes in its own transaction, still run here. One with `answering`
+   * it makes in its own transaction, still run here. A reader's raw `storage`
+   * also answers committed preflight, addressing and observer reads. One with `answering`
    * takes them only once it says it answers, and they are answered here until
    * then: the read workers start beside the host, and nothing waits on them. */
   reader?: Lent
@@ -304,6 +311,8 @@ export type Options = {
 
 /** Reads answered on another connection, lent to a graph. */
 export type Lent = Pick<Graph, 'read' | 'rows' | 'get'> & {
+  /** Raw storage reads: no graph addressing, projections or hooks applied. */
+  storage?: Committed
   /** whether it answers yet; absent, it always does */
   answering?: () => boolean
 }
@@ -497,7 +506,8 @@ let declaredIn = (vocab: Vocab) => {
  * storage, then hand the same plugins here — see `vocabOf` in ./plugin.ts).
  */
 export let graph = (opts: Options): Graph => {
-  let { storage, vocab } = opts
+  let { vocab } = opts
+  let storage = lentStorage(opts.storage, opts.reader)
   let plugins = [...(opts.plugins ?? [])]
   let report = opts.report ?? failed
   let mint = opts.mint ?? (() => fresh() as Eid)

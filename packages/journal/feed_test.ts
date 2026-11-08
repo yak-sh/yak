@@ -5,11 +5,20 @@
 // times only the commits and the hearing.
 
 import { clock, test } from '@yaks/testing'
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Bundle, News } from '@yaks/graph'
-import { feedDdl, feedOf, filled, follow, wrote } from './feed.ts'
+import { type Feed, feedDdl, feedOf, filled, follow, wrote } from './feed.ts'
+import type { Row } from '@yaks/sql'
 import { ddl } from './log.ts'
-import { type Each, feed, logFor, plugins, schema, TRIES } from './graph.ts'
+import {
+  type Bound,
+  type Each,
+  feed,
+  logFor,
+  plugins,
+  schema,
+  TRIES,
+} from './graph.ts'
 import { mem } from '../sqlite/testing.ts'
 import { add, statements } from '@yaks/sqlite'
 import { sync, wiki, wikiLog } from './testing.ts'
@@ -30,7 +39,7 @@ let hosts = (opts: { page?: number } = {}) => {
   let follower = follow(w.f, opts)
   // What was heard, its values read from the graph as a host's feed reads them.
   let next = () => {
-    let heard = follower()
+    let heard = sync(follower())
     let applied = sync(filled(heard.map((h) => h.wrote), w.read))
     return heard.map((h, i) => ({ seq: h.seq, applied: applied[i] }))
   }
@@ -103,6 +112,85 @@ test('a follower pages through a burst without losing any of it', () => {
   assertEquals(eids, ['p1', 'p2', 'p3', 'p4', 'p5'])
 })
 
+let asyncDb = mem()
+for (let statement of feedDdl()) asyncDb.query(statement)
+let asyncFeed = feedOf({
+  rows: (statement) => {
+    if (statement.t == 'select') throw new Error('read on writer')
+    return asyncDb.query(statement)
+  },
+  read: (statement) => Promise.resolve(asyncDb.query(statement)),
+  host: 'reader',
+})
+let asyncWriter = feedOf({ rows: (statement) => asyncDb.query(statement) })
+
+test('a feed writes on its transaction and reads on its supplied connection', async () => {
+  let cursor = await asyncFeed.tip()
+  asyncFeed.write(wrote([page('mine')('mine')]))
+  asyncWriter.write(wrote([page('theirs')('theirs')]))
+  assertEquals(await asyncFeed.since(cursor, 10), [
+    { seq: cursor + 1 },
+    {
+      seq: cursor + 2,
+      wrote: [{ entity: { eid: 'theirs' }, page: ['title'] }],
+    },
+  ])
+})
+
+test('an asynchronous follower waits for its tip and pages, and retries the failed cursor', async () => {
+  let tip = Promise.withResolvers<number>()
+  type Page = Awaited<ReturnType<Feed['since']>>
+  let first = Promise.withResolvers<Page>()
+  let calls: number[] = []
+  let reads: (() => Promise<Page>)[] = [
+    () => first.promise,
+    () => Promise.reject(new Error('busy')),
+    () => Promise.resolve([{ seq: 3, wrote: [{ entity: { eid: 'later' } }] }]),
+  ]
+  let source: Feed<Promise<Row[]>> = {
+    host: 'reader',
+    write: () => {},
+    tip: () => tip.promise,
+    since: (cursor) => {
+      calls.push(cursor)
+      return reads.shift()!()
+    },
+  }
+  let next = follow(source, { page: 2 })
+  let pending = next()
+  assertEquals(calls, [])
+  tip.resolve(0)
+  await tip.promise
+  first.resolve([
+    { seq: 1 },
+    { seq: 2, wrote: [{ entity: { eid: 'first' } }] },
+  ])
+  assertEquals(await pending, [{
+    seq: 2,
+    wrote: [{ entity: { eid: 'first' } }],
+  }])
+  assertEquals(calls, [0, 2])
+  assertEquals(await next(), [{
+    seq: 3,
+    wrote: [{ entity: { eid: 'later' } }],
+  }])
+  assertEquals(calls, [0, 2, 2])
+})
+
+test('an asynchronous follower reports a read failure before any commit and tries again', async () => {
+  let tries = 0
+  let source: Feed<Promise<Row[]>> = {
+    host: 'reader',
+    write: () => {},
+    tip: () => Promise.resolve(0),
+    since: () =>
+      ++tries == 1 ? Promise.reject(new Error('busy')) : Promise.resolve([]),
+  }
+  let next = follow(source)
+  await assertRejects(next, Error, 'busy')
+  assertEquals(await next(), [])
+})
+
 // Two feeds over a bare table, on a clock of their own.
 let clocked = () => {
   let db = mem()
@@ -172,7 +260,7 @@ test('a journal requires storage that offers statements', () => {
 // A host's feed loop over a bare feed table another host writes, its consumer
 // `each`, looking each time the test advances its clock. It has looked once
 // already, so a case pays for no first read.
-let looping = async (each: Each) => {
+let looping = async (each: Each, reader?: Bound['reader']) => {
   let db = mem()
   for (let s of feedDdl()) db.query(s)
   let theirs = feedOf({ rows: (s) => db.query(s) })
@@ -180,6 +268,7 @@ let looping = async (each: Each) => {
   let told: unknown[] = []
   let host = {
     storage: { statements: statements(db), get: () => [] },
+    reader,
     stopping: new AbortController().signal,
     report: (e: unknown) => void told.push(e),
   }
@@ -189,6 +278,65 @@ let looping = async (each: Each) => {
   return { write, told, look: (n = 1) => time.advance(n) }
 }
 let firsts = (news: News) => news.applied.map((tx) => tx[0].entity.eid)
+
+let optionalNews: News[] = []
+let optionalReader = await looping((news) => void optionalNews.push(news), {})
+test('a custom reader without SQL or raw storage uses the host feed connection', async () => {
+  optionalReader.write('fallback')
+  await optionalReader.look()
+  assertEquals(optionalNews.map(firsts), [['fallback']])
+})
+
+let threaded = (() => {
+  let db = mem()
+  for (let statement of feedDdl()) db.query(statement)
+  let theirs = feedOf({ rows: (statement) => db.query(statement) })
+  let time = clock()
+  let news: News[] = []
+  let host = {
+    storage: {
+      statements: {
+        ...statements(db),
+        query: (statement: Parameters<typeof db.query>[0]) => {
+          if (statement.t == 'select') throw new Error('read on writer')
+          return db.query(statement)
+        },
+      },
+      get: () => {
+        throw new Error('get on writer')
+      },
+    },
+    reader: {
+      statements: {
+        query: (s: Parameters<typeof db.query>[0]) =>
+          Promise.resolve(db.query(s)),
+      },
+      storage: {
+        get: (eids: string[]) => Promise.resolve(eids.map(page('remote'))),
+      },
+      answering: () => false,
+    },
+    stopping: new AbortController().signal,
+    report: (error: unknown) => {
+      throw error
+    },
+  }
+  let start = () =>
+    feed(host, { every: 1, timer: (fn, ms) => time.after(ms, fn) })(
+      (heard) => void news.push(heard),
+    )
+  return { theirs, time, news, start }
+})()
+
+test('a host follows and fills through its reader from the first read', async () => {
+  threaded.start()
+  threaded.theirs.write(wrote([page('theirs')('remote')]))
+  await threaded.time.advance(1)
+  assertEquals(threaded.news, [{
+    applied: [[{ entity: { eid: 'remote' }, page: { title: 'remote' } }]],
+    missed: false,
+  }])
+})
 
 let gate = Promise.withResolvers<void>()
 let handed = Promise.withResolvers<void>()

@@ -8,7 +8,7 @@ let flush = async () => {
 
 test('unchanged revisions skip expensive reads until the timeout final read', async () => {
   let time = clock(), checks = 0, reads = 0
-  let g = { storage: { revision: () => (checks++, 1) } }
+  let g = { storage: { revision: () => Promise.resolve((checks++, 1)) } }
   let wait = (async () => {
     for await (let done of changes(g, { every: 5, timeout: 45, clock: time })) {
       reads++

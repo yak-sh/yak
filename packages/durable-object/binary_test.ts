@@ -4,7 +4,7 @@ import { binaryCases, binaryVocab } from '../sqlite/binary_cases.ts'
 import { storage } from './store.ts'
 import { durable } from './testing.ts'
 
-binaryCases(() => {
+await binaryCases(() => {
   let s = storage(durable(), binaryVocab)
   s.install()
   // Prepare the read plan with the adapter fixture; transaction visibility

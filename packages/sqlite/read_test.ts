@@ -254,7 +254,7 @@ test('a gathered bundle carries the entity number storage minted', () => {
   assertEquals(s.read('.product.price=2')[0].entity, { eid: 'p2', num: 2 })
 })
 
-test('whole-set gathers are bounded by vocabulary, not the 100 entities; get preserves identity order', () => {
+test('whole-set gathers are bounded by vocabulary, not the 100 entities; get preserves identity order', async () => {
   let queries = 0
   let s = storage(spy(mem(), () => void queries++), vocab)
   s.install()
@@ -271,16 +271,16 @@ test('whole-set gathers are bounded by vocabulary, not the 100 entities; get pre
   assertEquals(all.length, 100)
   assert(queries <= vocab.all.length + 1, `query count ${queries}`)
   let ids = all.map((b) => b.entity.eid).reverse()
-  let fetched = s.tx((tx) => tx.get([...ids, 'absent', ids[0]]))
+  let fetched = await s.tx((tx) => tx.get([...ids, 'absent', ids[0]]))
   assertEquals(fetched.map((b) => b.entity.eid), [...ids, ids[0]])
   assertEquals(c(fetched[0], 'doc'), c(all.at(-1)!, 'doc'))
-  s.tx((tx) => tx.remove([all[0].entity]))
-  let dead = s.tx((tx) => tx.get([all[0].entity.eid]))[0]
+  await s.tx((tx) => tx.remove([all[0].entity]))
+  let dead = (await s.tx((tx) => tx.get([all[0].entity.eid])))[0]
   assertEquals(dead.tombstone, {})
   assertEquals(dead.product, undefined)
 })
 
-test('wide sparse gathers cross owner and vocabulary chunks without stale occupancy', () => {
+test('wide sparse gathers cross owner and vocabulary chunks without stale occupancy', async () => {
   let driver = mem()
   let vocab = loadVocab({
     $defs: {
@@ -308,18 +308,21 @@ test('wide sparse gathers cross owner and vocabulary chunks without stale occupa
     insert('entity', ...ids.map((eid, i) => ({ id: i + 1, eid, num: i + 1 }))),
   )
   driver.query(insert('facet404', { entity: 4101, value: 'last chunk' }))
-  let fetched = s.tx((tx) => tx.get([...ids, 'absent', ids[0]]))
+  let fetched = await s.tx((tx) => tx.get([...ids, 'absent', ids[0]]))
   assertEquals(fetched.map((b) => b.entity.eid), [...ids, ids[0]])
   assertEquals(fetched[0], { entity: { eid: ids[0], num: 1 } })
   assertEquals(fetched[4100].facet404, { value: 'last chunk' })
   // Another writer can fill or clear a table between reads. The empty-table
   // shortcut must be a live query, never a vocabulary/connection-wide cache.
   driver.query(insert('facet0', { entity: 1, value: 'newly populated' }))
-  assertEquals(s.tx((tx) => tx.get(ids.slice(0, 2)))[0].facet0, {
+  assertEquals((await s.tx((tx) => tx.get(ids.slice(0, 2))))[0].facet0, {
     value: 'newly populated',
   })
   driver.query({ t: 'delete', from: 'facet0' })
-  assertEquals(s.tx((tx) => tx.get(ids.slice(0, 2)))[0].facet0, undefined)
+  assertEquals(
+    (await s.tx((tx) => tx.get(ids.slice(0, 2))))[0].facet0,
+    undefined,
+  )
 })
 
 test('numeric gather ownership stays internal; present is an ordinary property', () => {
@@ -361,7 +364,7 @@ test('numeric gather ownership stays internal; present is an ordinary property',
 // plugin was opt in (T-37831). One shape: what the vocabulary declares is what
 // a row comes back wearing, so the same store cannot answer a number for an
 // old row and none for a new one.
-test('a store with no number in its vocabulary shows none it has', () => {
+test('a store with no number in its vocabulary shows none it has', async () => {
   let driver = mem()
   let vocab = loadVocab({
     $defs: {
@@ -383,12 +386,12 @@ test('a store with no number in its vocabulary shows none it has', () => {
     sample: { present: 'stored' },
   }])
   // The identity read of one entity is the same answer.
-  assertEquals(s.tx((tx) => tx.get(['was-numbered']))[0].entity, {
+  assertEquals((await s.tx((tx) => tx.get(['was-numbered'])))[0].entity, {
     eid: 'was-numbered',
   })
 })
 
-test('a wide gather avoids compound SELECT limits', () => {
+test('a wide gather avoids compound SELECT limits', async () => {
   // Workerd refuses a sixth compound SELECT arm. Presence is one VALUES
   // statement even on a driver that reports no compound width.
   let asked: string[] = []
@@ -424,16 +427,21 @@ test('a wide gather avoids compound SELECT limits', () => {
   ])
   asked.length = 0
   // One or several eids take the same set gather.
-  assertEquals(s.tx((tx) => tx.get(['a'])), [{
+  assertEquals(await s.tx((tx) => tx.get(['a'])), [{
     entity: { eid: 'a', num: 1 },
     facet0: { value: 'first' },
     facet19: { value: 'last' },
   }])
-  assertEquals(s.tx((tx) => tx.get(['a', 'b'])).map((b) => b.entity.eid), [
-    'a',
-    'b',
-  ])
-  assertEquals(s.tx((tx) => tx.get(['a', 'b']))[1].facet7, { value: 'middle' })
+  assertEquals(
+    (await s.tx((tx) => tx.get(['a', 'b']))).map((b) => b.entity.eid),
+    [
+      'a',
+      'b',
+    ],
+  )
+  assertEquals((await s.tx((tx) => tx.get(['a', 'b'])))[1].facet7, {
+    value: 'middle',
+  })
   for (let sql of asked) {
     let terms = sql.split(/\bunion\b/i).length
     assert(terms <= ARMS, `${terms} compound terms:\n${sql}`)

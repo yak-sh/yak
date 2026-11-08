@@ -110,3 +110,32 @@ test('shared statement revisions observe another host committing', () => {
     Deno.removeSync(dir, { recursive: true })
   }
 })
+
+// A refused BEGIN is controlled at the driver boundary: no wall clock or
+// second process decides whether the writer gets the lock.
+test('statement units await refused entry without replaying their callback', async () => {
+  let base = open(':memory:')
+  let locked = true
+  let bodies = 0
+  let driver = {
+    ...base,
+    file: true,
+    query: (s: Parameters<typeof base.query>[0]) => {
+      if (s.t == 'begin' && locked) throw new Error('database is locked')
+      return base.query(s)
+    },
+  }
+  try {
+    let sql = statements(driver)
+    let pending = sql.atomic(() => ++bodies)
+    ok(pending instanceof Promise)
+    equal(bodies, 0)
+    locked = false
+    equal(await pending, 1)
+    equal(bodies, 1)
+    // A plain callback still answers in the same turn once entry is free.
+    equal(sql.atomic(() => 42), 42)
+  } finally {
+    base.close()
+  }
+})

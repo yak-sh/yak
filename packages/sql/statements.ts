@@ -16,8 +16,9 @@ export type Statements = {
   archetypes?: boolean
   /** Invalidation tokens include writes, DDL and rollback, and other hosts. */
   revision: (scope: 'schema' | 'catalog' | 'data') => number
-  /** A synchronous unit on the adapter's transaction, nested where needed. */
-  atomic: <R>(body: () => R) => R
+  /** A unit on the adapter's transaction, nested where needed. A held writer
+   * is awaited before the body starts, without blocking the calling thread. */
+  atomic: <R>(body: () => R | Promise<R>) => R | Promise<R>
   /** Named engine facilities; only the adapter knows how to load them. */
   facilities?: { vector?: () => void }
   /** What this connection reads, where it is not main as it stands: main as

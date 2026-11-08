@@ -42,6 +42,7 @@ import {
   val,
 } from '@yaks/sql'
 import type { Statements } from '@yaks/sql'
+import { after } from '@yaks/fp'
 import type { Bundle } from '@yaks/graph'
 import { type Field, present } from './fields.ts'
 import { fill, filling, queue, schedule } from './fill.ts'
@@ -241,36 +242,54 @@ export let moves = (have: Standing[], want: CreateTrigger[]): Moves => {
  * missed ({@link moves}). Returns whether it changed anything. A second call
  * with the same fields and schema reads and writes nothing.
  */
-export let watch = (db: Statements, wanted: Field[]): boolean => {
+export let watch = (
+  db: Statements,
+  wanted: Field[],
+): boolean | Promise<boolean> => {
   let version = db.revision('schema')
   let fields = present(db, wanted)
   let definitions = triggers(fields)
   let key = JSON.stringify(definitions)
   let kept = watched.get(db)
   if (kept?.version == version && kept.fields == key) return false
-  let have = db.query(
-    select({
-      cols: [col('name'), as(col('tbl_name'), 'on'), col('sql')],
-      from: table('sqlite_master'),
-      where: and(
-        eq(col('type'), val('trigger')),
-        op('glob', col('name'), val(`${OWED}_*`)),
-      ),
-    }),
-  ).map((r) => ({ name: String(r.name), on: String(r.on), sql: String(r.sql) }))
-  let { drop, make, owed } = moves(have, definitions)
-  if (drop.length || make.length) {
+  return after(
     db.atomic(() => {
+      // Entry can wait for another host, whose transaction may change the schema.
+      fields = present(db, wanted)
+      definitions = triggers(fields)
+      key = JSON.stringify(definitions)
+      let have = db.query(
+        select({
+          cols: [col('name'), as(col('tbl_name'), 'on'), col('sql')],
+          from: table('sqlite_master'),
+          where: and(
+            eq(col('type'), val('trigger')),
+            op('glob', col('name'), val(`${OWED}_*`)),
+          ),
+        }),
+      ).map((r) => ({
+        name: String(r.name),
+        on: String(r.on),
+        sql: String(r.sql),
+      }))
+      let { drop, make, owed } = moves(have, definitions)
+      if (!drop.length && !make.length) return false
       for (let name of drop) {
         db.query({ t: 'drop', kind: 'trigger', name, ifExists: true })
       }
       for (let t of make) db.query(t)
-      if (owed === true) owe(db, fields)
-      else if (owed.size) owe(db, fields, owed)
-    })
-  }
-  watched.set(db, { version: db.revision('schema'), fields: key })
-  return drop.length + make.length > 0
+      let queued = owed === true
+        ? owe(db, fields)
+        : owed.size
+        ? owe(db, fields, owed)
+        : undefined
+      return after(queued, () => true)
+    }),
+    (changed) => {
+      watched.set(db, { version: db.revision('schema'), fields: key })
+      return changed
+    },
+  )
 }
 
 /** Schedule every entity wearing a field or holding a vector — or, given
@@ -280,11 +299,11 @@ export let owe = (
   db: Statements,
   wanted: Field[],
   tables?: Set<string>,
-): void => {
+): void | Promise<void> => {
   let fields = present(db, wanted)
-  db.atomic(() => {
+  return db.atomic(() => {
     schedule(db, tables ?? [...fields.map((f) => f.comp), TABLE])
-    fill(db, fields)
+    return fill(db, fields)
   })
 }
 

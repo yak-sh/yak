@@ -13,6 +13,7 @@ import { unit } from './unit.ts'
 import { plan } from './plan.ts'
 import { burying } from './buried.ts'
 import { measure } from './measure.ts'
+import { bindings } from './rules.ts'
 
 /** Bind every committed-store capability without admitting write callbacks.
  * Index plugins receive the same statement, revision and schema descriptions
@@ -47,6 +48,16 @@ export let storage = (
     grown: () => grown(vocab, standing(driver, vocab)),
     print: () => plan(vocab, base.derived, !!driver.file).print,
     screen: (q, o) => screened(driver, vocab, q, { ...opts(), ...o }),
+    bindings: (matches, bundles, covers) =>
+      unit(
+        driver,
+        () =>
+          bindings(driver, vocab, matches, bundles, covers, {
+            ...base,
+            ...opts(),
+          }),
+        'read',
+      ),
     buried: (before, page) => unit(driver, () => graves(before, page), 'read'),
     measure: (signal) => measure(driver, signal),
     install: refuse,

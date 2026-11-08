@@ -6,7 +6,18 @@ import * as disk from '@yaks/file/io'
 // day as tabs navigated (T-130803). A cancelled read is answered at once, and
 // its worker finishes the synchronous SQL unheard, then takes the next read.
 import { mask, parse, stringify } from '@yaks/query'
-import type { Bundle, Eid, Graph, Query, ReadOpts, Row } from '@yaks/graph'
+import type {
+  Binding,
+  Bundle,
+  Committed,
+  Eid,
+  Graph,
+  Graves,
+  Query,
+  ReadOpts,
+  Row,
+  Tx,
+} from '@yaks/graph'
 import type { Search } from '@yaks/graph/tools'
 import { type Asker, asker } from '@yaks/graph/asker'
 import type { Meaning, MeaningHit } from '@yaks/host'
@@ -15,15 +26,25 @@ import { how, own, since, type Spent, spent } from './stall.ts'
 import { readActivity } from './read_activity.ts'
 import { type Found, searching } from './searching.ts'
 import type { Hit } from '@yaks/fts'
+import type { Stmt } from '@yaks/sql'
 
 /** Everything a web host asks of its store that only reads it: the graph's
  * reads, ranked text search and search by meaning. */
 export type Reader = Pick<Graph, 'read' | 'rows' | 'get'> & {
   search: Search
   meaning: Meaning
+  storage: Committed
+  statements: { query: (stmt: Stmt) => Promise<Row[]> }
 }
 
 type Call =
+  | { op: 'rawRead'; query: Query; opts?: ReadOpts; comps?: string[] }
+  | { op: 'rawRows'; query: Query; opts?: ReadOpts }
+  | { op: 'rawGet'; eids: Eid[]; comps?: string[]; opts?: ReadOpts }
+  | { op: 'revision' }
+  | { op: 'buried'; before: string; page: { after?: string; limit: number } }
+  | { op: 'bindings'; args: Parameters<NonNullable<Tx['bindings']>> }
+  | { op: 'statement'; stmt: Stmt }
   | { op: 'read' | 'rows'; query: Query; opts?: ReadOpts }
   | { op: 'get'; eids: Eid[]; comps?: string[]; opts?: ReadOpts }
   | {
@@ -61,10 +82,12 @@ let later = (fn: () => void, ms: number) => {
 
 /** What a read asked, as a trace keeps it: every value masked, bounded. */
 let asked = (call: Call): string =>
-  call.op == 'get'
+  call.op == 'get' || call.op == 'rawGet'
     ? `get of ${call.eids.length} entities`
     : 'words' in call
     ? `${call.op} of ${call.words.length} characters`
+    : !('query' in call)
+    ? call.op
     : mask(typeof call.query == 'string' ? call.query : stringify(call.query))
       .slice(0, 512)
 
@@ -109,10 +132,6 @@ export let readThread = (
   } = {},
 ): Reader & {
   ready: () => Promise<void>
-  /** whether `ready` has settled: until it has, the graph lent this reader
-   * answers its reads on its own connection (@yaks/graph `Lent`), so no read
-   * waits on a worker starting */
-  answering: () => boolean
   close: () => Promise<void>
   /** where a read that runs past `slow` is told, with who asked it */
   overrun: (tell: (error: Error, asker?: Asker) => void) => void
@@ -143,9 +162,9 @@ export let readThread = (
     /** where its worker's thread is, once the worker has said */
     thread?: string
     activity: ReturnType<typeof readActivity>
+    key: string
   }
   let told: (error: Error, asker?: Asker) => void = () => {}
-  let up = false
   let lanes = new Set<Lane>()
   let waiting: Job[] = []
   let next = 0
@@ -181,7 +200,15 @@ export let readThread = (
       )
       error.name = answer.error.name
       job.reject(error)
-    } else job.resolve(answer.value)
+    } else {
+      job.resolve(
+        // Revision tokens belong to one connection: equal numbers from two
+        // lanes need not describe the same committed state.
+        job.call.op == 'revision' && answer.value !== undefined
+          ? JSON.stringify([lane.key, answer.value])
+          : answer.value,
+      )
+    }
     drain()
   }
   let start = () => {
@@ -190,7 +217,7 @@ export let readThread = (
     })
     let activity = readActivity()
     activity.say('waiting for the worker to receive its configuration')
-    let lane: Lane = { worker, activity }
+    let lane: Lane = { worker, activity, key: crypto.randomUUID() }
     lanes.add(lane)
     worker.onmessage = ({ data }: MessageEvent<Heard>) => finish(lane, data)
     worker.onerror = (event) => {
@@ -277,7 +304,7 @@ export let readThread = (
   }
   let ask = (call: Call): Promise<unknown> => {
     if (closed) return Promise.reject(new Error('the reader is closed'))
-    let { signal, ...opts } = call.opts ?? {}
+    let { signal, ...opts } = ('opts' in call ? call.opts : undefined) ?? {}
     if (signal?.aborted) return Promise.reject(signal.reason)
     return new Promise((resolve, reject) => {
       let cancel = () => {
@@ -295,7 +322,7 @@ export let readThread = (
       }
       let job: Job = {
         id: ++next,
-        call: { ...call, opts } as Call,
+        call: { ...call, ...('opts' in call ? { opts } : {}) } as Call,
         resolve,
         reject,
         trace: context(),
@@ -308,6 +335,27 @@ export let readThread = (
     })
   }
   return {
+    storage: {
+      read: (query, opts, comps) =>
+        ask({ op: 'rawRead', query, opts, comps }).then((value) =>
+          value as Bundle[]
+        ),
+      rows: (query, opts) =>
+        ask({ op: 'rawRows', query, opts }).then((value) => value as Row[]),
+      get: (eids, comps, opts) =>
+        ask({ op: 'rawGet', eids, comps, opts }).then((value) =>
+          value as Bundle[]
+        ),
+      revision: () => ask({ op: 'revision' }),
+      buried: (before, page) =>
+        ask({ op: 'buried', before, page }).then((value) => value as Graves),
+      bindings: (...args) =>
+        ask({ op: 'bindings', args }).then((value) => value as Binding[][]),
+    },
+    statements: {
+      query: (stmt) =>
+        ask({ op: 'statement', stmt }).then((value) => value as Row[]),
+    },
     read: (query, opts) =>
       ask({ op: 'read', query, opts }).then((value) => value as Bundle[]),
     rows: (query, opts) =>
@@ -339,8 +387,7 @@ export let readThread = (
     ready: () =>
       Promise.all(
         [1, 2].map(() => ask({ op: 'read', query: parse('.limit=1') })),
-      ).then(() => void (up = true)),
-    answering: () => up,
+      ).then(() => {}),
     overrun: (tell) => void (told = tell),
     close: () => {
       closed = true

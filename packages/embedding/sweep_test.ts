@@ -10,6 +10,7 @@ import {
   fn,
   insert,
   scan,
+  type Statements,
   type Stmt,
   tally,
   val,
@@ -384,4 +385,28 @@ test('a carried queue generation cannot settle a newer write', () => {
 test('the pass after a carried generation embeds the newer text', () => {
   assertEquals([resumed.fresh, resumed.left], [1, 0])
   assertEquals(resumedHash, latestHash)
+})
+
+let delayedBase = shelf()
+let queuedEntry = Promise.withResolvers<void>()
+let delayed = true
+let delayedDb: Statements = {
+  ...delayedBase,
+  atomic: (body) => {
+    if (!delayed) return delayedBase.atomic(body)
+    delayed = false
+    return queuedEntry.promise.then(() => delayedBase.atomic(body))
+  },
+}
+
+test('a sweep waits for queue reconciliation before reading what is owed', async () => {
+  let work = sweep(delayedDb, text, embedder)
+  assertEquals(due(delayedDb, 10), [])
+  queuedEntry.resolve()
+  let answer = await work
+  assertEquals({ fresh: answer.fresh, left: answer.left }, {
+    fresh: 4,
+    left: 0,
+  })
+  assertEquals(count(delayedDb), 4)
 })

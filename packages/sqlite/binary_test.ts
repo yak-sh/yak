@@ -5,7 +5,7 @@ import { binaryCases, binaryVocab } from './binary_cases.ts'
 import { storage } from './mod.ts'
 import { mem } from './testing.ts'
 
-binaryCases(() => {
+await binaryCases(() => {
   let s = storage(mem(), binaryVocab)
   s.install()
   return s
@@ -14,7 +14,7 @@ binaryCases(() => {
 let driver = mem()
 let s = storage(driver, binaryVocab)
 s.install()
-s.tx((tx) =>
+await s.tx((tx) =>
   tx.patch([
     { entity: { eid: 'empty' }, document: { bytes: new Uint8Array() } },
     { entity: { eid: 'full' }, document: { bytes: Uint8Array.of(0, 255) } },

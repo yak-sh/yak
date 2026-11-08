@@ -18,6 +18,7 @@ import {
   fn,
   type History,
   NOW,
+  type Row,
   select,
   type Statements,
   statements,
@@ -50,7 +51,14 @@ let feeds = new WeakMap<object, Feed>()
 /** What a log is bound to: the host's storage, and the read overrides
  * its store was opened with, so a value the store keeps in another form reads
  * back the way the graph reads it (./log.ts `LogOpts.derived`). */
-export type Bound = { storage: { statements?: Statements }; derived?: Derived }
+export type Bound = {
+  storage: { statements?: Statements }
+  derived?: Derived
+  reader?: {
+    statements?: { query: (statement: Stmt) => Row[] | Promise<Row[]> }
+    storage?: { get: Read }
+  }
+}
 
 let rowsOf = (host: Bound): Rows => {
   let sql = statements(host.storage)
@@ -73,7 +81,15 @@ export let feedFor = (host: Bound): Feed => {
   let found = feeds.get(host)
   if (!found) {
     let rows = rowsOf(host)
-    feeds.set(host, found = feedOf({ rows, host: logFor(host).host }))
+    let read = host.reader?.statements
+    feeds.set(
+      host,
+      found = feedOf({
+        rows,
+        read: read && ((s) => read.query(s)),
+        host: logFor(host).host,
+      }),
+    )
   }
   return found
 }
@@ -228,7 +244,13 @@ export let feed = (
       heard = []
       missed = false
       try {
-        let applied = await filled(said, (e, c) => host.storage.get(e, c))
+        let applied = await filled(
+          said,
+          (e, c) =>
+            host.reader?.storage
+              ? host.reader.storage.get(e, c)
+              : host.storage.get(e, c),
+        )
         await each({ applied, missed: was })
         tries = 0
       } catch (err) {
@@ -245,9 +267,9 @@ export let feed = (
   }
   // A read that fails is tried again at the next look, since the cursor moves
   // only past what was read.
-  let look = () => {
+  let look = async () => {
     try {
-      heard.push(...next().map((h) => h.wrote))
+      heard.push(...(await next()).map((h) => h.wrote))
     } catch (err) {
       told(err)
     }

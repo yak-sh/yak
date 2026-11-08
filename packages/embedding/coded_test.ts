@@ -1,6 +1,7 @@
 // On shared storage a native search scans each vector's int8 codes once every
 // vector has them, and answers what reading every float answers.
 import { equal, ok, test } from '@yaks/testing'
+import { assertThrows } from '@std/assert'
 import { col, eq, insert, select, type Statements, table, val } from '@yaks/sql'
 import { open } from '@yaks/sqlite/db'
 import { statements } from '@yaks/sqlite'
@@ -105,4 +106,45 @@ test('a changed or deleted vector loses its codes, and the sweep codes its own',
 test('the test database is removed', () => {
   driver.close()
   Deno.removeSync(dir, { recursive: true })
+})
+
+let retryDriver = open(':memory:')
+let retryBase = statements(retryDriver)
+for (let s of [SPINE, TOMBSTONE, ...schema('shared')]) retryBase.query(s)
+for (let id of [1, 2, 3]) {
+  retryBase.query(insert('entity', { id, eid: `retry-${id}` }))
+  retryBase.query(insert(TABLE, {
+    owner: id,
+    model,
+    hash: '',
+    vec: pack(vecs.get(id)!),
+  }))
+}
+let refused = true
+let retryDb: Statements = {
+  ...retryBase,
+  atomic: (body) => {
+    if (refused) {
+      refused = false
+      throw new Error('entry refused')
+    }
+    return retryBase.atomic(body)
+  },
+}
+
+test('a refused coding pass leaves its source cursor at the uncommitted rows', () => {
+  try {
+    assertThrows(() => heal(retryDb, 2), Error, 'entry refused')
+    equal(heal(retryDb, 2), 2)
+    equal(
+      retryDb.query(select({
+        cols: [col('owner')],
+        from: table(CODE),
+        order: [col('owner')],
+      })),
+      [{ owner: 1 }, { owner: 2 }],
+    )
+  } finally {
+    retryDriver.close()
+  }
 })

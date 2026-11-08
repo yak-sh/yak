@@ -48,7 +48,7 @@ await overviewGraph.apply([
 // Warm immutable read plans; the answers still come from the store under test.
 overviewGraph.read('.post.published=1')
 overviewGraph.read('.post')
-overviewStore.tx((tx) => tx.doom(['kate']))
+await overviewStore.tx((tx) => tx.doom(['kate']))
 test('README graph selects a published post', async () =>
   equal(
     (await overviewGraph.read('.post.published=1')).map((b) => b.entity.eid),
@@ -61,8 +61,8 @@ test('README graph reads a post reference', async () =>
     published: true,
     author: 'kate',
   }))
-test('README storage plans a detached reference', () =>
-  equal(overviewStore.tx((tx) => tx.doom(['kate'])).loose, [{
+test('README storage plans a detached reference', async () =>
+  equal((await overviewStore.tx((tx) => tx.doom(['kate']))).loose, [{
     eid: 'p1',
     comp: 'post',
     prop: 'author',
@@ -91,42 +91,40 @@ test('README graph reads a post after its author is deleted', async () => {
 
 let writes = open(':memory:')
 let writeStore = storage(writes, loadVocab(docDoc))
-writeStore.tx((tx) =>
+await writeStore.tx((tx) =>
   tx.patch([
     { entity: { eid: 'p1' }, doc: { title: 'Hello', body: 'First' } },
   ])
 )
-test('README patch clears a property without clearing its sibling', () => {
-  writeStore.tx((tx) =>
+test('README patch clears a property without clearing its sibling', async () => {
+  await writeStore.tx((tx) =>
     tx.patch([{ entity: { eid: 'p1' }, doc: { title: null } }])
   )
   equal(writeStore.get(['p1'])[0].doc, { body: 'First' })
 })
 // Compile the removal and read paths against a rollback before timing them.
 try {
-  writeStore.tx((tx) => {
+  await writeStore.tx((tx) => {
     tx.patch([{ entity: { eid: 'p1' }, doc: null }])
     throw new Error('abort')
   })
 } catch { /* the fixture deliberately leaves its document intact */ }
 writeStore.read('.doc')
 test('README failed transaction restores a removed component', async () => {
-  await throws(() =>
-    writeStore.tx((tx) => {
-      tx.patch([{ entity: { eid: 'p1' }, doc: null }])
-      throw new Error('abort')
-    })
-  )
+  await throws(async () => (await writeStore.tx((tx) => {
+    tx.patch([{ entity: { eid: 'p1' }, doc: null }])
+    throw new Error('abort')
+  })))
   equal(writeStore.read('.doc').length, 1)
 })
-test('README removing an entity preserves its tombstone', () => {
-  writeStore.tx((tx) => tx.remove([{ eid: 'p1' }]))
+test('README removing an entity preserves its tombstone', async () => {
+  await writeStore.tx((tx) => tx.remove([{ eid: 'p1' }]))
   equal(writeStore.read('.doc'), [])
   equal('tombstone' in writeStore.get(['p1'])[0], true)
 })
 let revived = open(':memory:')
 let revivedStore = storage(revived, loadVocab(docDoc))
-revivedStore.tx((tx) => {
+await revivedStore.tx((tx) => {
   tx.patch([{ entity: { eid: 'p1' }, doc: { body: 'First' } }])
   tx.remove([{ eid: 'p1' }])
   tx.revive(['p1'])
@@ -141,7 +139,7 @@ test('README reviving an entity keeps only its newly written properties', () => 
 
 let reading = open(':memory:')
 let readStore = storage(reading, loadVocab(docDoc))
-readStore.tx((tx) =>
+await readStore.tx((tx) =>
   tx.patch([
     { entity: { eid: 'a' }, doc: { title: 'A' } },
     { entity: { eid: 'b' }, doc: { title: 'B' } },

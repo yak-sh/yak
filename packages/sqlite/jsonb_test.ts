@@ -21,9 +21,9 @@ let kitchenStore = () => {
   return { driver, s }
 }
 
-test('an object and an array are written and read back as values', () => {
+test('an object and an array are written and read back as values', async () => {
   let { driver, s } = kitchenStore()
-  s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
+  await s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   assertEquals(
     driver.query(select({
       cols: [as(fn('typeof', col('meta')), 't')],
@@ -32,18 +32,21 @@ test('an object and an array are written and read back as values', () => {
     [{ t: 'blob' }],
   )
   assertEquals(recipe((s.read('.recipe') as Bundle[])[0]), RECIPE)
-  assertEquals(recipe(s.tx((tx) => tx.get(['r1']))[0]), RECIPE)
+  assertEquals(recipe((await s.tx((tx) => tx.get(['r1'])))[0]), RECIPE)
   // A patch replaces a value whole, and a null clears it.
-  s.tx((tx) =>
+  await s.tx((tx) =>
     tx.patch([{ entity: { eid: 'r1' }, recipe: { tags: [], meta: null } }])
   )
   let { meta: _meta, ...rest } = RECIPE
-  assertEquals(recipe(s.tx((tx) => tx.get(['r1']))[0]), { ...rest, tags: [] })
+  assertEquals(recipe((await s.tx((tx) => tx.get(['r1'])))[0]), {
+    ...rest,
+    tags: [],
+  })
 })
 
-test('a projected boolean reads back as true or false', () => {
+test('a projected boolean reads back as true or false', async () => {
   let { s } = kitchenStore()
-  s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
+  await s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   assertEquals(s.rows(PROJECTED), [PROJECTED_ROW])
 })
 
@@ -63,9 +66,9 @@ test('a string property holds what it was sent as a string', () => {
   )
 })
 
-test('a JSON property answers presence, and refuses a filter by name', () => {
+test('a JSON property answers presence, and refuses a filter by name', async () => {
   let { s } = kitchenStore()
-  s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
+  await s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   assertEquals((s.read('.recipe.tags') as Bundle[]).length, 1)
   for (
     let q of ['.recipe.tags=sweet', '.order=recipe.meta', '.tally=recipe.tags']
@@ -74,9 +77,9 @@ test('a JSON property answers presence, and refuses a filter by name', () => {
   }
 })
 
-test('a batch reads its JSON values the way the store will', () => {
+test('a batch reads its JSON values the way the store will', async () => {
   let { driver, s } = kitchenStore()
-  s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
+  await s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   let over = overlay(driver, kitchen, [
     { entity: { eid: 'r1' }, recipe: { title: 'Pie' } },
     { entity: { eid: 'r2' }, recipe: { tags: ['new'] } },
@@ -100,7 +103,7 @@ test('a batch reads its JSON values the way the store will', () => {
 })
 
 let sparse = kitchenStore()
-sparse.s.tx((tx) =>
+await sparse.s.tx((tx) =>
   tx.patch([
     {
       entity: { eid: 'sparse' },

@@ -146,9 +146,11 @@ let vectored = async (
     ),
   )
   let have = new Set(made.filter((s) => !owed.includes(s)).map((s) => s.entity))
-  owed.forEach((s, i) => {
-    let v = got[i]
-    if (v && put(db, s, embedder.model, v)) have.add(s.entity)
+  await db.atomic(() => {
+    owed.forEach((s, i) => {
+      let v = got[i]
+      if (v && put(db, s, embedder.model, v)) have.add(s.entity)
+    })
   })
   return have
 }

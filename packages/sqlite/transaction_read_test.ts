@@ -19,7 +19,7 @@ let s = storage(preparedDriver(snapshot(vocab)), vocab, {
   schemaReady: () => true,
   derived: { 'summary.value': { tag: 'number', expr: () => val(7) } },
 })
-s.tx((tx) =>
+await s.tx((tx) =>
   tx.patch([{
     entity: { eid: 'one' },
     doc: { title: 'One' },
@@ -27,26 +27,26 @@ s.tx((tx) =>
   }])
 )
 
-test('transaction read projections retain full matching', () => {
-  s.tx((tx) => {
+test('transaction read projections retain full matching', async () => {
+  await s.tx((tx) => {
     let [row] = tx.read('.doc.title=One', undefined, ['summary'])
     assertEquals(row.summary, { value: 7 })
     assertEquals(row.doc, undefined)
   })
 })
 
-test('transaction reads can select identity alone', () => {
+test('transaction reads can select identity alone', async () => {
   assertEquals(
-    s.tx((tx) => tx.read('.doc', undefined, []))[0].summary,
+    (await s.tx((tx) => tx.read('.doc', undefined, [])))[0].summary,
     undefined,
   )
 })
 
-test('transaction reads retain whole bundles by default', () => {
-  assertEquals(s.tx((tx) => tx.read('.doc'))[0].doc, { title: 'One' })
+test('transaction reads retain whole bundles by default', async () => {
+  assertEquals((await s.tx((tx) => tx.read('.doc')))[0].doc, { title: 'One' })
 })
 
-let pendingRows = s.tx((tx) => {
+let pendingRows = await s.tx((tx) => {
   tx.patch([{
     entity: { eid: 'fresh' },
     doc: { title: 'Fresh' },
@@ -60,9 +60,9 @@ test('transaction read projections see pending writes without exposing other com
   assertEquals(pendingRows[0].doc, undefined)
 })
 
-test('transaction read projections preserve visibility', () => {
+test('transaction read projections preserve visibility', async () => {
   assertEquals(
-    s.tx((tx) =>
+    await s.tx((tx) =>
       tx.read('.doc', { visibility: { entity: '.entity.eid=missing' } }, [])
     ),
     [],

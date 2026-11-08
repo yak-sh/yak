@@ -100,7 +100,14 @@ let fakes = () => {
   class Fake {
     onmessage: ((event: { data: unknown }) => void) | null = null
     onerror = null
-    jobs: { id: number; query?: string; opts?: object }[] = []
+    jobs: {
+      id: number
+      op?: string
+      query?: string
+      opts?: object
+      comps?: string[]
+      observed?: boolean
+    }[] = []
     ended = false
     constructor() {
       workers.push(this)
@@ -296,4 +303,47 @@ test('a slow read is told with who asked it', async () => {
   let who = { door: '/ws', page: '/P-19', session: 's' }
   let [told] = await watching(who, ['10000 9 0', '11000 9.5 0'])
   assertEquals(told.split(' asked by ')[1], JSON.stringify(who))
+})
+
+// Read projections and raw storage requests share scheduling but stay distinct
+// across the thread boundary, including raw component selections.
+test('raw storage reads keep their arguments and connection-local revisions distinct', async () => {
+  let { workers, restore } = fakes()
+  let reader = readThread('unused.json')
+  let reply = (worker: typeof workers[number], value: unknown) => {
+    let job = worker.jobs.at(-1)!
+    worker.onmessage?.({ data: { id: job.id, value } })
+  }
+  try {
+    let found = reader.storage.read('.doc', { native: true }, ['doc'])
+    let job = workers[0].jobs[0]
+    assertEquals(job, {
+      id: 1,
+      op: 'rawRead',
+      query: '.doc',
+      opts: { native: true },
+      comps: ['doc'],
+      observed: false,
+    })
+    reply(workers[0], [{ entity: { eid: 'x' } }])
+    assertEquals(await found, [{ entity: { eid: 'x' } }])
+    let first = reader.storage.revision!()
+    let occupied = reader.read('.slow')
+    reply(workers[0], 1)
+    let token = await first
+    let second = reader.storage.revision!()
+    reply(workers[0], 1)
+    assertEquals(await second, token)
+    let busy = reader.read('.busy')
+    let next = reader.storage.revision!()
+    reply(workers[1], [])
+    await occupied
+    reply(workers[1], 1)
+    assertEquals((await next) === token, false)
+    reply(workers[0], [])
+    await busy
+  } finally {
+    await reader.close()
+    restore()
+  }
 })

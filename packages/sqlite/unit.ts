@@ -1,6 +1,45 @@
 import type { Driver, Stmt } from '@yaks/sql'
 import { context, scope } from '@yaks/trace'
 import { busy } from './error.ts'
+import { AsyncLocalStorage } from 'node:async_hooks'
+
+type Owner = { connection: object; active: boolean }
+let owner = new AsyncLocalStorage<Owner[]>()
+let waiting = new WeakMap<object, Promise<void>>()
+
+/** Independent asynchronous transactions on one connection take turns.
+ * Only calls within the owning body's async context may open savepoints;
+ * otherwise an unrelated write could commit inside a transaction that later
+ * rolls back. The uncontended synchronous path stays synchronous. */
+export let exclusive = <R>(
+  driver: Driver,
+  body: () => R,
+): R | Promise<Awaited<R>> => {
+  let connection = driver.connection ?? driver
+  let held = owner.getStore() ?? []
+  if (held.some((o) => o.connection === connection && o.active)) return body()
+  let scope: Owner = { connection, active: true }
+  let run = () => owner.run([...held, scope], body)
+  let before = waiting.get(connection)
+  let out: R | Promise<Awaited<R>>
+  try {
+    out = before ? before.then(run) as Promise<Awaited<R>> : run()
+  } catch (error) {
+    scope.active = false
+    throw error
+  }
+  if (!(out instanceof Promise)) {
+    scope.active = false
+    return out
+  }
+  let done = out.finally(() => {
+    scope.active = false
+    if (waiting.get(connection) === tail) waiting.delete(connection)
+  })
+  let tail = done.then(() => {}, () => {})
+  waiting.set(connection, tail)
+  return done
+}
 
 // SQLite has one transaction per connection, so nesting is done with
 // SAVEPOINTs: a store used inside a transaction the caller already opened (an

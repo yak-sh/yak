@@ -168,28 +168,29 @@ export let reader = (opts: {
     if (!ids.length || !plugins.some((p) => p.address) && !ids.some(handled)) {
       return new Map<string, Eid>()
     }
-    let at = storage.revision?.()
-    if (at === undefined) return resolve(ids, kind, readOpts)
-    if (answered?.at !== at || answered.ids.size > ANSWERED) {
-      answered = { at, ids: new Map() }
-    }
-    let held = answered.ids
-    // The call's own cancellation and trace parent change no answer.
-    let { signal: _signal, parent: _parent, ...asking } = readOpts ?? {}
-    let as = JSON.stringify([kind ?? null, asking]) + '\n'
-    let fresh = [...new Set(ids.filter((id) => !held.has(as + id)))]
-    return continuing(
-      fresh.length ? resolve(fresh, kind, readOpts) : new Map<string, Eid>(),
-      (found) => {
-        for (let id of fresh) held.set(as + id, found.get(id) ?? id)
-        let out = new Map<string, Eid>()
-        for (let id of ids) {
-          let eid = held.get(as + id)!
-          if (eid != id) out.set(id, eid)
-        }
-        return out
-      },
-    )
+    return continuing(storage.revision?.(), (at) => {
+      if (at === undefined) return resolve(ids, kind, readOpts)
+      if (answered?.at !== at || answered.ids.size > ANSWERED) {
+        answered = { at, ids: new Map() }
+      }
+      let held = answered.ids
+      // The call's own cancellation and trace parent change no answer.
+      let { signal: _signal, parent: _parent, ...asking } = readOpts ?? {}
+      let as = JSON.stringify([kind ?? null, asking]) + '\n'
+      let fresh = [...new Set(ids.filter((id) => !held.has(as + id)))]
+      return continuing(
+        fresh.length ? resolve(fresh, kind, readOpts) : new Map<string, Eid>(),
+        (found) => {
+          for (let id of fresh) held.set(as + id, found.get(id) ?? id)
+          let out = new Map<string, Eid>()
+          for (let id of ids) {
+            let eid = held.get(as + id)!
+            if (eid != id) out.set(id, eid)
+          }
+          return out
+        },
+      )
+    })
   }
   // Every address plugin asked about `ids`, then the bare handles.
   let resolve = (

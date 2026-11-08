@@ -103,7 +103,9 @@ export let handler = (host: Hosting, options: {
   // A commit feed already carries every commit, this process's and others',
   // as precise patches. The revision is for a store without one: it moves on
   // any write, so polling it beside a feed would reset every query each time.
-  let revision = host.feed ? undefined : host.storage?.revision
+  let revision = host.feed
+    ? undefined
+    : graph.storage.revision ?? host.storage?.revision
   let subs = subscriptions(graph, { revision })
   let stopFeed = host.feed?.(subs.hear)
   let cancel = () => {}

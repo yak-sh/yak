@@ -4,7 +4,7 @@
 // decision, held in ./graph_test.ts.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertIsError, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertIsError, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from './bundle.ts'
 import { mem, shop, spy, store } from './testing.ts'
 import { storage } from './mod.ts'
@@ -15,12 +15,14 @@ import { loadVocab } from '@yaks/vocab'
 let c = (b: Bundle, name: string): Comp => b[name] as Comp
 
 // A batch through the store's transaction — what a graph does for real.
-let write = (s: ReturnType<typeof store>, bundles: Bundle[]) =>
-  s.tx((tx) => tx.patch(bundles))
+let write = async (
+  s: ReturnType<typeof store>,
+  bundles: Bundle[],
+) => (await s.tx((tx) => tx.patch(bundles)))
 
-test('a bundle creates an entity wearing its components', () => {
+test('a bundle creates an entity wearing its components', async () => {
   let s = store()
-  write(s, [{
+  await write(s, [{
     entity: { eid: 'p1' },
     doc: { title: 'Mug' },
     product: { price: 12, status: 'live' },
@@ -32,46 +34,52 @@ test('a bundle creates an entity wearing its components', () => {
   assertEquals(c(got[0], 'doc').title, 'Mug')
 })
 
-test('a patch mints identity once and reports the number', () => {
+test('a patch mints identity once and reports the number', async () => {
   let s = store()
-  let born = write(s, [{ entity: { eid: 'p1' }, product: { price: 12 } }])
+  let born = await write(s, [{ entity: { eid: 'p1' }, product: { price: 12 } }])
   assertEquals(born.length, 1)
   assertEquals(born[0].eid, 'p1')
   assertEquals(born[0].num, 1)
   // a second touch of the same eid is no birth
   assertEquals(
-    write(s, [{ entity: { eid: 'p1' }, product: { price: 13 } }]),
+    await write(s, [{ entity: { eid: 'p1' }, product: { price: 13 } }]),
     [],
   )
 })
 
-test('a patch touches only the properties it names', () => {
+test('a patch touches only the properties it names', async () => {
   let s = store()
-  write(s, [{ entity: { eid: 'p1' }, product: { price: 12, status: 'live' } }])
-  write(s, [{ entity: { eid: 'p1' }, product: { price: 15 } }])
+  await write(s, [{
+    entity: { eid: 'p1' },
+    product: { price: 12, status: 'live' },
+  }])
+  await write(s, [{ entity: { eid: 'p1' }, product: { price: 15 } }])
   let [p] = s.read('.kind=product') as Bundle[]
   assertEquals(c(p, 'product').price, 15)
   assertEquals(c(p, 'product').status, 'live') // untouched
 })
 
-test('a null property clears it, its siblings untouched', () => {
+test('a null property clears it, its siblings untouched', async () => {
   let s = store()
-  write(s, [{ entity: { eid: 'p1' }, product: { price: 12, status: 'live' } }])
-  write(s, [{ entity: { eid: 'p1' }, product: { status: null } }])
+  await write(s, [{
+    entity: { eid: 'p1' },
+    product: { price: 12, status: 'live' },
+  }])
+  await write(s, [{ entity: { eid: 'p1' }, product: { status: null } }])
   let [p] = s.read('.kind=product') as Bundle[]
   assertEquals(c(p, 'product').status, undefined)
   assertEquals(c(p, 'product').price, 12)
 })
 
 let dropped = store()
-write(dropped, [{
+await write(dropped, [{
   entity: { eid: 'p1' },
   doc: { title: 'Mug' },
   product: { price: 12 },
 }])
-test('a null component drops the row, the entity survives', () => {
+test('a null component drops the row, the entity survives', async () => {
   let s = dropped
-  write(s, [{ entity: { eid: 'p1' }, product: null }])
+  await write(s, [{ entity: { eid: 'p1' }, product: null }])
   let [p] = s.get(['p1'])
   assert(p)
   assertEquals(p.product, undefined)
@@ -79,7 +87,7 @@ test('a null component drops the row, the entity survives', () => {
 })
 
 let booleans = store()
-write(booleans, [
+await write(booleans, [
   { entity: { eid: 'p1' }, product: { available: true } },
   { entity: { eid: 'p2' }, product: { available: false } },
 ])
@@ -91,9 +99,9 @@ test('a boolean round-trips through integer storage', () => {
   assertEquals(read('.product.available=0'), [false])
 })
 
-test('a reference may name a target minted later in the same batch', () => {
+test('a reference may name a target minted later in the same batch', async () => {
   let s = store()
-  write(s, [
+  await write(s, [
     { entity: { eid: 'r1' }, review: { stars: 5, product: 'p1' } },
     { entity: { eid: 'p1' }, product: { price: 12 } },
   ])
@@ -101,67 +109,67 @@ test('a reference may name a target minted later in the same batch', () => {
   assertEquals(c(r, 'review').product, 'p1')
 })
 
-test('remove drops every component row and tombstones the identity', () => {
+test('remove drops every component row and tombstones the identity', async () => {
   let s = store()
-  write(s, [{ entity: { eid: 'p1' }, doc: { title: 'Mug' } }])
-  s.tx((tx) => tx.remove([{ eid: 'p1' }]))
+  await write(s, [{ entity: { eid: 'p1' }, doc: { title: 'Mug' } }])
+  await s.tx((tx) => tx.remove([{ eid: 'p1' }]))
   assertEquals(s.read('.doc.title~=mug'), [])
-  let [b] = s.tx((tx) => tx.get(['p1'])) as Bundle[]
+  let [b] = (await s.tx((tx) => tx.get(['p1']))) as Bundle[]
   assertEquals(b.tombstone, {}) // still an identity, just a dead one
   assertEquals(b.doc, undefined)
 })
 
-test('a tombstoned entity takes no patch until it is revived', () => {
+test('a tombstoned entity takes no patch until it is revived', async () => {
   let s = store()
-  write(s, [{ entity: { eid: 'p1' }, doc: { title: 'Mug' } }])
-  s.tx((tx) => tx.remove([{ eid: 'p1' }]))
+  await write(s, [{ entity: { eid: 'p1' }, doc: { title: 'Mug' } }])
+  await s.tx((tx) => tx.remove([{ eid: 'p1' }]))
   assertEquals(
-    write(s, [{ entity: { eid: 'p1' }, doc: { title: 'back' } }]),
+    await write(s, [{ entity: { eid: 'p1' }, doc: { title: 'back' } }]),
     [],
   )
-  let [b] = s.tx((tx) => tx.get(['p1'])) as Bundle[]
+  let [b] = (await s.tx((tx) => tx.get(['p1']))) as Bundle[]
   assertEquals(b.doc, undefined)
-  s.tx((tx) => tx.revive(['p1']))
+  await s.tx((tx) => tx.revive(['p1']))
   assertEquals(
-    write(s, [{ entity: { eid: 'p1' }, doc: { title: 'back' } }]),
+    await write(s, [{ entity: { eid: 'p1' }, doc: { title: 'back' } }]),
     [],
   )
-  let [back] = s.tx((tx) => tx.get(['p1'])) as Bundle[]
+  let [back] = (await s.tx((tx) => tx.get(['p1']))) as Bundle[]
   assertEquals(back.entity, { eid: 'p1', num: 1 })
   assertEquals(back.tombstone, undefined)
   assertEquals(c(back, 'doc').title, 'back')
 })
 
-test('get answers by identity, and says nothing about an unknown eid', () => {
+test('get answers by identity, and says nothing about an unknown eid', async () => {
   let s = store()
-  write(s, [{ entity: { eid: 'p1' }, product: { price: 12 } }])
-  let got = s.tx((tx) => tx.get(['p1', 'nope'])) as Bundle[]
+  await write(s, [{ entity: { eid: 'p1' }, product: { price: 12 } }])
+  let got = (await s.tx((tx) => tx.get(['p1', 'nope']))) as Bundle[]
   assertEquals(got.length, 1)
   assertEquals(got[0].entity.num, 1)
 })
 
-test('a declared unique refuses the second writer of the value', () => {
+test('a declared unique refuses the second writer of the value', async () => {
   let s = store()
-  write(s, [{ entity: { eid: 'p1' }, product: { sku: 'MUG-1' } }])
+  await write(s, [{ entity: { eid: 'p1' }, product: { sku: 'MUG-1' } }])
   let threw = false
   try {
-    write(s, [{ entity: { eid: 'p2' }, product: { sku: 'MUG-1' } }])
+    await write(s, [{ entity: { eid: 'p2' }, product: { sku: 'MUG-1' } }])
   } catch {
     threw = true
   }
   assert(threw)
   // The loser wrote nothing at all — the batch's transaction went with it.
-  assertEquals(s.tx((tx) => tx.get(['p2'])), [])
+  assertEquals(await s.tx((tx) => tx.get(['p2'])), [])
 })
 
-test('a composite unique refuses only the whole pair', () => {
+test('a composite unique refuses only the whole pair', async () => {
   let s = store()
-  write(s, [{ entity: { eid: 's1' }, shelf: { aisle: 'A', slot: 1 } }])
+  await write(s, [{ entity: { eid: 's1' }, shelf: { aisle: 'A', slot: 1 } }])
   // The same aisle in another slot is fine.
-  write(s, [{ entity: { eid: 's2' }, shelf: { aisle: 'A', slot: 2 } }])
+  await write(s, [{ entity: { eid: 's2' }, shelf: { aisle: 'A', slot: 2 } }])
   let threw = false
   try {
-    write(s, [{ entity: { eid: 's3' }, shelf: { aisle: 'A', slot: 1 } }])
+    await write(s, [{ entity: { eid: 's3' }, shelf: { aisle: 'A', slot: 1 } }])
   } catch {
     threw = true
   }
@@ -176,7 +184,7 @@ test('a composite unique refuses only the whole pair', () => {
 // about identity: which of the named eids are already in the grave. It does not
 // multiply with the batch, and an eid the connection holds the spine of is not
 // asked about again.
-test('a patch asks once about identity, whatever the batch is', () => {
+test('a patch asks once about identity, whatever the batch is', async () => {
   let seen: string[] = []
   let driver = spy(mem(), (sql) => void seen.push(sql))
   let s = storage(driver, shop)
@@ -190,10 +198,13 @@ test('a patch asks once about identity, whatever the batch is', () => {
   }
 
   asked() // forget what install() asked
-  write(s, [{ entity: { eid: 'p1' }, product: { price: 12, maker: 'm1' } }])
+  await write(s, [{
+    entity: { eid: 'p1' },
+    product: { price: 12, maker: 'm1' },
+  }])
   assertEquals(asked(), 1)
 
-  write(s, [
+  await write(s, [
     { entity: { eid: 'p2' }, doc: { title: 'Mug' }, product: { price: 1 } },
     { entity: { eid: 'r1' }, review: { stars: 5, product: 'p2' } },
     { entity: { eid: 'p1' }, product: { price: 9 } },
@@ -201,21 +212,21 @@ test('a patch asks once about identity, whatever the batch is', () => {
   assertEquals(asked(), 1)
 
   // A batch of entities already asked about asks nothing.
-  write(s, [{ entity: { eid: 'p1' }, product: { price: 3 } }])
+  await write(s, [{ entity: { eid: 'p1' }, product: { price: 3 } }])
   assertEquals(asked(), 0)
 
-  s.tx((tx) => tx.remove([{ eid: 'p1' }]))
+  await s.tx((tx) => tx.remove([{ eid: 'p1' }]))
   assertEquals(asked(), 0)
 })
 
 // Prepare the nested store rollback once, including its transaction bookkeeping.
 let rollback = store()
-write(rollback, [{ entity: { eid: 'p1' }, product: { price: 12 } }])
+await write(rollback, [{ entity: { eid: 'p1' }, product: { price: 12 } }])
 let rollbackError: unknown
 try {
-  rollback.tx((tx) => {
+  await rollback.tx(async (tx) => {
     tx.patch([{ entity: { eid: 'p2' }, product: { price: 1 } }])
-    rollback.tx((inner) =>
+    await rollback.tx((inner) =>
       inner.patch([{ entity: { eid: 'p3' }, product: {} }])
     )
     throw new Error('no')
@@ -223,14 +234,14 @@ try {
 } catch (error) {
   rollbackError = error
 }
-test('a transaction rolls back on a throw, and nests', () => {
+test('a transaction rolls back on a throw, and nests', async () => {
   assertIsError(rollbackError)
   assertEquals(rollbackError.message, 'no')
-  assertEquals(rollback.tx((tx) => tx.get(['p2', 'p3'])), [])
-  assertEquals(rollback.tx((tx) => tx.get(['p1'])).length, 1)
+  assertEquals(await rollback.tx((tx) => tx.get(['p2', 'p3'])), [])
+  assertEquals((await rollback.tx((tx) => tx.get(['p1']))).length, 1)
 })
 
-test('numbering exceptions ask once across tables and entities', () => {
+test('numbering exceptions ask once across tables and entities', async () => {
   let selects = 0
   let driver = spy(mem(), (sql, params) => {
     if (/^select .* from "entity"/.test(sql.trimStart())) selects++
@@ -246,7 +257,7 @@ test('numbering exceptions ask once across tables and entities', () => {
     entity: { eid: `p${i}` },
     product: { price: i },
   }))
-  write(s, [
+  await write(s, [
     ...products,
     { entity: { eid: 's' }, shelf: { aisle: 'A', slot: 1 } },
     { entity: { eid: 'r' }, review: { stars: 5 } },
@@ -255,17 +266,17 @@ test('numbering exceptions ask once across tables and entities', () => {
   // of what they wear.
   s = open()
   selects = 0
-  write(s, [
+  await write(s, [
     ...products,
     { entity: { eid: 's' }, doc: { title: 'Shelf' } },
     { entity: { eid: 'r' }, doc: { title: 'Review' } },
   ])
   assertEquals(selects, 1) // Exception presence, for the batch; identity held.
-  let rows = s.tx((tx) => tx.get(['p0', 'p149', 's', 'r']))
+  let rows = await s.tx((tx) => tx.get(['p0', 'p149', 's', 'r']))
   assertEquals(rows.map((b) => b.entity.num ?? null), [1, 150, null, null])
 })
 
-test('a patch asks about numbering exceptions only where they decide a number', () => {
+test('a patch asks about numbering exceptions only where they decide a number', async () => {
   let asked = 0
   let driver = spy(mem(), (sql) => {
     if (/^(select|update "entity")/.test(sql.trimStart())) asked++
@@ -273,35 +284,35 @@ test('a patch asks about numbering exceptions only where they decide a number', 
   let s = storage(driver, shop, { number: { except: ['shelf'] } })
   s.install()
   s.raise()
-  write(s, [
+  await write(s, [
     { entity: { eid: 's' }, shelf: { aisle: 'A', slot: 1 } },
     { entity: { eid: 'p' }, product: { price: 1 } },
   ])
-  let cost = (bundles: Bundle[]) => {
+  let cost = async (bundles: Bundle[]) => {
     asked = 0
-    write(s, bundles)
+    await write(s, bundles)
     return asked
   }
   // Nothing is read: the bundle names the exception, or gives nothing, and
   // the identity is held.
-  assertEquals(cost([{ entity: { eid: 's' }, shelf: { slot: 2 } }]), 0)
-  assertEquals(cost([{ entity: { eid: 's' }, doc: null }]), 0)
+  assertEquals(await cost([{ entity: { eid: 's' }, shelf: { slot: 2 } }]), 0)
+  assertEquals(await cost([{ entity: { eid: 's' }, doc: null }]), 0)
   // Memory knows what an entity it wrote wholly wears.
-  assertEquals(cost([{ entity: { eid: 'p' }, doc: { title: 'Mug' } }]), 0)
+  assertEquals(await cost([{ entity: { eid: 'p' }, doc: { title: 'Mug' } }]), 0)
   // A numbered entity given the exception keeps its existing address.
-  write(s, [{ entity: { eid: 'p' }, shelf: { aisle: 'B', slot: 1 } }])
+  await write(s, [{ entity: { eid: 'p' }, shelf: { aisle: 'B', slot: 1 } }])
   assertEquals(
-    s.tx((tx) => tx.get(['s', 'p'])).map((b) => b.entity.num ?? null),
+    (await s.tx((tx) => tx.get(['s', 'p']))).map((b) => b.entity.num ?? null),
     [null, 1],
   )
 })
 
-test('number:false reports explicit unnumbered births without consuming numbers', () => {
+test('number:false reports explicit unnumbered births without consuming numbers', async () => {
   let driver = mem()
   let s = storage(driver, shop, { number: false })
   s.install()
   assertEquals(
-    s.tx((tx) =>
+    await s.tx((tx) =>
       tx.patch([{
         entity: { eid: 'p' },
         product: { maker: 'm' },
@@ -310,17 +321,19 @@ test('number:false reports explicit unnumbered births without consuming numbers'
     [{ eid: 'p', num: null }, { eid: 'm', num: null }],
   )
   assertEquals(
-    s.tx((tx) => tx.patch([{ entity: { eid: 'p' }, product: { price: 3 } }])),
+    await s.tx((tx) =>
+      tx.patch([{ entity: { eid: 'p' }, product: { price: 3 } }])
+    ),
     [],
   )
   let numbered = storage(driver, shop, { number: true })
   assertEquals(
-    numbered.tx((tx) => tx.patch([{ entity: { eid: 'n' }, doc: {} }])),
+    await numbered.tx((tx) => tx.patch([{ entity: { eid: 'n' }, doc: {} }])),
     [{ eid: 'n', num: 1 }],
   )
 })
 
-test('partial updates and bare tags respect required columns and SQL defaults', () => {
+test('partial updates and bare tags respect required columns and SQL defaults', async () => {
   let d = mem(), s = storage(d, shop)
   s.install()
   s.raise(['doc'])
@@ -339,25 +352,24 @@ test('partial updates and bare tags respect required columns and SQL defaults', 
       { name: 'body', type: 'text', notNull: true },
     ],
   })
-  write(s, [{ entity: { eid: 'a' }, doc: { body: 'body' } }])
-  write(s, [{ entity: { eid: 'a' }, doc: { title: 'changed' } }])
-  write(s, [{ entity: { eid: 'a' }, doc: {} }])
-  let get = () => s.tx((tx) => tx.get(['a']))[0]
-  assertEquals(get().doc, { title: 'changed', body: 'body' })
-  assertThrows(
-    () =>
-      write(s, [
-        { entity: { eid: 'a' }, doc: { title: 'rolled back' } },
-        { entity: { eid: 'bad' }, doc: { title: 'missing body' } },
-      ]),
+  await write(s, [{ entity: { eid: 'a' }, doc: { body: 'body' } }])
+  await write(s, [{ entity: { eid: 'a' }, doc: { title: 'changed' } }])
+  await write(s, [{ entity: { eid: 'a' }, doc: {} }])
+  let get = async () => (await s.tx((tx) => tx.get(['a'])))[0]
+  assertEquals((await get()).doc, { title: 'changed', body: 'body' })
+  await assertRejects(
+    async () => (await write(s, [
+      { entity: { eid: 'a' }, doc: { title: 'rolled back' } },
+      { entity: { eid: 'bad' }, doc: { title: 'missing body' } },
+    ])),
     Error,
     'NOT NULL',
   )
-  assertEquals(get().doc, { title: 'changed', body: 'body' })
-  assertEquals(s.tx((tx) => tx.get(['bad'])), [])
+  assertEquals((await get()).doc, { title: 'changed', body: 'body' })
+  assertEquals(await s.tx((tx) => tx.get(['bad'])), [])
 })
 
-test('a table is asked what it requires once while its schema stands', () => {
+test('a table is asked what it requires once while its schema stands', async () => {
   let asked = 0
   let d = spy(mem(), (sql) => {
     if (sql.includes('table_info')) asked++
@@ -365,15 +377,15 @@ test('a table is asked what it requires once while its schema stands', () => {
   let s = storage(d, shop)
   s.install()
   s.raise()
-  let cost = (bundles: Bundle[]) => {
+  let cost = async (bundles: Bundle[]) => {
     asked = 0
-    write(s, bundles)
+    await write(s, bundles)
     return asked
   }
-  assertEquals(cost([{ entity: { eid: 'a' }, product: { price: 1 } }]), 1)
-  assertEquals(cost([{ entity: { eid: 'b' }, product: { price: 2 } }]), 0)
+  assertEquals(await cost([{ entity: { eid: 'a' }, product: { price: 1 } }]), 1)
+  assertEquals(await cost([{ entity: { eid: 'b' }, product: { price: 2 } }]), 0)
   d.query({ t: 'create table', name: 'aside', cols: [{ name: 'x' }] })
-  assertEquals(cost([{ entity: { eid: 'c' }, product: { price: 3 } }]), 1)
+  assertEquals(await cost([{ entity: { eid: 'c' }, product: { price: 3 } }]), 1)
 })
 
 // A Durable Object's SQLite binds at most 100 parameters per statement, so a
@@ -400,8 +412,8 @@ test('a batch past 100 entities binds under the Durable Object limit', async () 
   assertEquals((s.read('.product.price=2') as Bundle[]).length, 150)
 })
 
-test('a batch writes each table in one statement, however many entities it gives', () => {
-  let written = (n: number) => {
+test('a batch writes each table in one statement, however many entities it gives', async () => {
+  let written = async (n: number) => {
     let seen: string[] = []
     let s = storage(spy(mem(), (sql) => void seen.push(sql)), shop, {
       number: true,
@@ -418,7 +430,7 @@ test('a batch writes each table in one statement, however many entities it gives
       doc: { title: `Mug ${i}` },
       product: { price: i + 0.1 },
     }))
-    let born = write(s, [...reviews, ...products])
+    let born = await write(s, [...reviews, ...products])
     assertEquals(
       born.map((e) => e.num),
       Array.from({ length: 2 * n }, (_, i) => i + 1),
@@ -429,25 +441,25 @@ test('a batch writes each table in one statement, however many entities it gives
     assertEquals(c(p, 'product').price, n - 0.9)
     return seen.filter((q) => /^\s*insert/.test(q)).length
   }
-  assertEquals(written(150), written(3))
+  assertEquals(await written(150), await written(3))
 })
 
-test('a value written whole reads back as a bound value does', () => {
+test('a value written whole reads back as a bound value does', async () => {
   let s = store()
   let title = 'a\ud800b \u0000 😀'
-  write(s, [
+  await write(s, [
     { entity: { eid: 'p1' }, doc: { title }, product: { price: 0.1 + 0.2 } },
     { entity: { eid: 'p2' }, doc: { title: 'x' } },
   ])
-  write(s, [{ entity: { eid: 'p2' }, doc: { title } }])
+  await write(s, [{ entity: { eid: 'p2' }, doc: { title } }])
   let [p1, p2] = s.get(['p1', 'p2'])
   assertEquals(c(p1, 'doc').title, c(p2, 'doc').title)
   assertEquals(c(p1, 'product').price, 0.30000000000000004)
 })
 
-test("each entity's writes land in the order a batch gives them", () => {
+test("each entity's writes land in the order a batch gives them", async () => {
   let s = store()
-  write(s, [
+  await write(s, [
     { entity: { eid: 'p1' }, product: { price: 1 }, doc: { title: 'a' } },
     { entity: { eid: 'p2' }, doc: { title: 'b' }, product: { price: 2 } },
     { entity: { eid: 'p1' }, product: null },

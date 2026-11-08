@@ -194,9 +194,9 @@ test('only survivors let go', () => {
   assertEquals(dead(out), ['a', 'b', 'c'])
 })
 
-test('the closure carries the rung it fell on', () => {
+test('the closure carries the rung it fell on', async () => {
   let s = db()
-  s.tx((tx) =>
+  await s.tx((tx) =>
     tx.patch([
       { entity: { eid: 'a' }, node: { name: 'a' } },
       { entity: { eid: 'b' }, node: { name: 'b', of: 'a' } },
@@ -205,7 +205,7 @@ test('the closure carries the rung it fell on', () => {
     ])
   )
   assertEquals(
-    s.tx((tx) => tx.doom(['a'])),
+    await s.tx((tx) => tx.doom(['a'])),
     {
       gone: [
         { eid: 'a', depth: 0 },
@@ -217,12 +217,12 @@ test('the closure carries the rung it fell on', () => {
   )
 })
 
-test('a chain longer than the rung count still falls whole', () => {
+test('a chain longer than the rung count still falls whole', async () => {
   // Past @yaks/sql's deep the rung number saturates rather than climbing — the
   // count is what stops, never the walk. A chain twice that long proves it.
   let s = db()
   let n = 80
-  s.tx((tx) =>
+  await s.tx((tx) =>
     tx.patch(
       Array.from({ length: n }, (_, i) => ({
         entity: { eid: `n${i}` },
@@ -230,7 +230,7 @@ test('a chain longer than the rung count still falls whole', () => {
       })),
     )
   )
-  let gone = s.tx((tx) => tx.doom(['n0'])).gone
+  let gone = (await s.tx((tx) => tx.doom(['n0']))).gone
   assertEquals(gone.length, n)
   assertEquals(gone.at(-1)?.eid, `n${n - 1}`)
 })
@@ -276,23 +276,23 @@ test('a wide vocabulary asks no statement more than it may carry', () => {
   assert(narrow(words) && !narrow(wide))
 })
 
-test('an engine that carries every term is asked the whole cascade at once', () => {
-  let asked = (arms?: number) => {
+test('an engine that carries every term is asked the whole cascade at once', async () => {
+  let asked = async (arms?: number) => {
     let counting = false, n = 0
     let driver = spy(mem(), () => void (counting && n++))
     if (arms) driver.arms = arms
     let s = storage(driver, wide)
     s.install()
     s.raise()
-    s.tx((tx) => {
+    await s.tx((tx) => {
       counting = true
       tx.doom(['k'])
       counting = false
     })
     return n
   }
-  assertEquals(asked(), 2)
-  assert(asked(ARMS) > 2)
+  assertEquals(await asked(), 2)
+  assert((await asked(ARMS)) > 2)
 })
 
 test('a large delete stays atomic within the host bind limit', () => {
@@ -322,7 +322,7 @@ test('a large delete stays atomic within the host bind limit', () => {
   }
 })
 
-test('a grave is not a casualty twice', () => {
+test('a grave is not a casualty twice', async () => {
   let s = db()
   let g = graph({ storage: s, vocab: words })
   g.apply([
@@ -331,7 +331,10 @@ test('a grave is not a casualty twice', () => {
   ], { now: AT })
   g.apply([{ entity: { eid: 'b' }, $delete: true }], { now: AT })
   // b is already in its grave: deleting a finds nothing to take with it.
-  assertEquals(s.tx((tx) => tx.doom(['a'])).gone, [{ eid: 'a', depth: 0 }])
+  assertEquals((await s.tx((tx) => tx.doom(['a']))).gone, [{
+    eid: 'a',
+    depth: 0,
+  }])
 })
 
 // A file behind its vocabulary, as a process running newer code finds it

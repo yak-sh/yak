@@ -11,7 +11,7 @@ import type {
 } from '@yaks/graph'
 import type { Search } from '@yaks/graph/tools'
 import type { Vocab } from '@yaks/vocab'
-import type { Derived, Raw, Statements } from '@yaks/sql'
+import type { Derived, Raw, Row, Statements, Stmt } from '@yaks/sql'
 import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
 import type { Anatomy, AnatomyObserver } from '@yaks/code/anatomy'
 import type { Contributions } from '@yaks/ui/contributions'
@@ -128,6 +128,8 @@ export interface Host {
    * `graph`'s reads, `search` and `meaning` go through it, the reads once it
    * is `answering` (@yaks/graph `Lent`). */
   reader?: Lent & {
+    /** Committed SQL reads on the reader's connection, when it offers SQL. */
+    statements?: { query: (statement: Stmt) => Row[] | Promise<Row[]> }
     search?: Search
     meaning?: Meaning
   }
