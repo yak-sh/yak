@@ -75,6 +75,7 @@ import {
 import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
 import { type Changed, talks, type Underway } from './operator-view.ts'
+import { Aside, type Aside as Asided } from './operator-aside.ts'
 import {
   attached,
   type Lines,
@@ -839,6 +840,7 @@ export let operatorAnswer = async (
       making: ours(space, talked.making),
       started: !!talked.making?.started,
       standing: talked.standing,
+      ...talked.aside ? { aside: talked.aside } : {},
     }, { headers: { 'cache-control': 'private, no-store' } })
   }
   // An app beside the chat drawn again as the Operator works on it, and the
@@ -923,6 +925,7 @@ export let conversationOf = async (
     waiting,
     making,
     standing,
+    aside,
     updates: read,
   } = await operatorDoor(
     env,
@@ -951,6 +954,7 @@ export let conversationOf = async (
     waiting: Bundle[]
     making: Underway | null
     standing: string
+    aside?: Asided
     updates?: Updates
   }
   return {
@@ -964,6 +968,7 @@ export let conversationOf = async (
     now,
     making,
     standing,
+    aside,
   }
 }
 
@@ -1801,6 +1806,9 @@ export let chatPage = async (
       // `talk`), and what needs the person by Updates (updates.ts).
       newcomer ? keepCard(here) : null,
       talked.html ? column(talked.html) : column('', greeting),
+      // What it is doing now and the helpers it set going, in the margin
+      // (operator-aside.ts).
+      talked.aside ? h(Aside, { aside: talked.aside, now: Date.now() }) : null,
       landing
         ? h(
           'div',
@@ -1988,7 +1996,7 @@ let chatScript = (
   `<script type="module">
 import { browserDrafts } from '/_draft.js'
 import { redraw } from '/redraw.js'
-import { rowsOf } from '/_talk.js'
+import { asideHtml, helperHtml, lasted, rowsOf, turnHtml } from '/_talk.js'
 import { voice } from '/voice.js'
 import { when } from '/when.js'
 let open = ${JSON.stringify(open)}
@@ -2134,6 +2142,40 @@ let said = (e) => { status.textContent = e.message }
 let speech = form && voice({ button: form.querySelector('[data-voice]'), form, say: form.elements.say, at: '${at}', paid: ${paid}, said })
 let thread = () => box.querySelector('[data-task]')
 let working = () => !!box.querySelector('[data-pending]')
+// The aside in the margin (operator-aside.ts): the turn under way and the
+// helpers, each put in place as a frame tells it, shown while either is
+// there, and how long each has lasted kept current every second.
+let aside = () => document.querySelector('[data-aside]')
+let drawn = (html) => {
+  let made = document.createElement('template')
+  made.innerHTML = html
+  return made.content.firstElementChild
+}
+let shown = () => {
+  let a = aside()
+  if (!a) return
+  let helping = !!a.querySelector('[data-helping]').children.length
+  a.querySelector('[data-helpers]').hidden = !helping
+  a.hidden = !helping && !a.querySelector('[data-turn] time')
+}
+let turning = (turn) => {
+  let at = aside()?.querySelector('[data-turn]')
+  if (at) at.replaceWith(drawn(turnHtml(turn ?? null)))
+  shown()
+}
+let helped = (helper) => {
+  let list = aside()?.querySelector('[data-helping]')
+  if (!list) return
+  let row = drawn(helperHtml(helper))
+  let at = document.getElementById(row.id)
+  if (at) at.replaceWith(row)
+  else list.prepend(row)
+  shown()
+}
+let lasting = () => {
+  for (let t of document.querySelectorAll('[data-since]')) t.textContent = lasted(t.dataset.since, t.dataset.until)
+}
+setInterval(lasting, 1000)
 // The yak beside the box shows what the Operator is doing (mascot.ts
 // \`MOVES\`): a loop over and over while it lasts, one played once as the
 // work ends, and his waiting otherwise (idle.js).
@@ -2177,6 +2219,7 @@ document.addEventListener('click', async (e) => {
   card.removeAttribute('data-pending')
   card.querySelector('[data-now]').textContent = 'Stopped.'
   doing('idle')
+  turning(null)
   try {
     let response = await fetch('${at}?stop=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task: card.dataset.task }) })
     if (!response.ok) throw new Error('It could not be stopped. Try again.')
@@ -2204,6 +2247,7 @@ let read = async () => {
       standing = got.standing
       let was = near()
       if (got.html) redraw(box, got.html), redrawn()
+      if (got.aside && aside()) aside().replaceWith(drawn(asideHtml(got.aside))), shown()
       if (got.title) heading.textContent = got.title
       if (follows && !canvas() && got.making && (follows == 'worked' || got.started)) remake(got.making)
       follow(was)
@@ -2226,6 +2270,8 @@ let hear = (frame) => {
   let card = thread()
   if (!card) return void read().catch(said)
   if (card.dataset.task != o.task) return
+  if ('turn' in o) turning(o.turn)
+  if (o.helping) helped(o.helping)
   if (o.said) speech?.tell(o.said)
   standing = undefined
   let was = near()

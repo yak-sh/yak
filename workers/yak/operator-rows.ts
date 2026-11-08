@@ -17,3 +17,6 @@ export let drawn = ({ id, node }: Pick<Line, 'id' | 'node'>): Row => ({
 
 /** Each line sent, drawn as HTML. */
 export let rowsOf = (sent: Lines): Row[] => drawLines(sent).map(drawn)
+
+// The aside beside the lines, drawn the same way (operator-aside.ts).
+export { asideHtml, helperHtml, lasted, turnHtml } from './operator-aside.ts'

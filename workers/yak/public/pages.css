@@ -1416,6 +1416,49 @@
   .Talk_Needs:empty {
     display: none;
   }
+  /* What the conversation is doing now and the helpers it set going
+     (operator-aside.ts): at the reading width over the box, and in the
+     margin to the right of the conversation, held in view as it scrolls,
+     where the page is wide enough. */
+  .Talk_Main {
+    position: relative;
+  }
+  .Talk_Aside {
+    width: 100%;
+    max-width: 46rem;
+    margin: 0 auto;
+    padding-inline: 1.25rem;
+  }
+  .Talk_Aside[hidden],
+  .Talk_Aside [hidden] {
+    display: none;
+  }
+  .Talk_AsideIn {
+    display: grid;
+    gap: .75rem;
+    padding-bottom: .75rem;
+  }
+  .Talk_Turn {
+    margin: 0;
+  }
+  .Talk_Aside time {
+    font-variant-numeric: tabular-nums;
+  }
+  @container talk (min-width: 76rem) {
+    .Talk_Aside {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(22rem, calc((100cqw - 46rem) / 2));
+      max-width: none;
+      padding: 4.5rem 1.25rem 1.25rem 0;
+    }
+    .Talk_AsideIn {
+      position: sticky;
+      top: 4.5rem;
+    }
+  }
   /* Updates from the Operator (updates.ts): a card for each, what needs the
      person first, then what happened, newest first. */
   .Updates {

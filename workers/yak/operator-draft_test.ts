@@ -16,10 +16,11 @@ import type { Who } from './session.ts'
 import { redraw } from './public/redraw.js'
 import { voice } from './public/voice.js'
 import { released } from './operator-testing.ts'
-import { openedOf } from './operator-host.ts'
+import { openedOf, operatorFrames } from './operator-host.ts'
 import { operatorStore } from './operator-store.ts'
 import { TOOLS } from './tools.ts'
 import { when } from './public/when.js'
+import * as talk from './operator-rows.ts'
 
 let p = platform('operator-draft')
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
@@ -217,6 +218,11 @@ let load = async (
   new Function(
     'browserDrafts',
     'redraw',
+    'rowsOf',
+    'asideHtml',
+    'helperHtml',
+    'lasted',
+    'turnHtml',
     'voice',
     'when',
     'setInterval',
@@ -232,6 +238,11 @@ let load = async (
   )(
     opened,
     redraw,
+    talk.rowsOf,
+    talk.asideHtml,
+    talk.helperHtml,
+    talk.lasted,
+    talk.turnHtml,
     (o: Parameters<typeof voice>[0]) =>
       voice(talking ? { ...o, platform: talking.platform(Event) as never } : o),
     when,
@@ -739,6 +750,91 @@ test('a helper’s line landing before the socket opens is read, once', async ()
   landed.leave()
   assertEquals([still, landed.talks()], [0, 1])
   assertStringIncludes(box.innerHTML, 'Find the north shelter’s June dates too')
+})
+
+// The aside in the margin (operator-aside.ts), kept live from the graph: a
+// helper's own page shows its turn under way as each of its steps lands, and
+// the conversation that started it lists it with how it stands, linked to
+// its run.
+test('a helper’s page and its conversation’s aside follow its steps as they land', async () => {
+  let store = operatorStore(p.states.get(`builder ${eid}`)!.storage)
+  let { g } = store
+  let { session } = await openedOf(store, park)
+  let parent = session!.entity.eid
+  let call = crypto.randomUUID(), helper = crypto.randomUUID()
+  let step = (b: object) =>
+    g.apply([{
+      entity: { eid: crypto.randomUUID() },
+      entry: { session: helper },
+      ...b,
+    }], { trusted: true })
+  await g.apply([
+    {
+      entity: { eid: call },
+      entry: { session: parent },
+      call: { to: crypto.randomUUID(), args: {} },
+    },
+    { entity: { eid: helper }, session: {}, spawned: { parent, call } },
+  ], { trusted: true })
+  await step({ content: { body: 'Import the people CSV' }, using: {} })
+  let own = await load(storage(), false, helper)
+  let theirs = await load(storage(), false, park)
+  let text = (page: typeof own, at: string) =>
+    page.document.querySelector(at)?.textContent ?? ''
+  let row = `#help-${helper}`
+  let drawn = () => [
+    text(own, '[data-turn]').replace(/\d+s$/, 'Ns'),
+    text(theirs, row).replace(/\d+s$/, 'Ns'),
+  ]
+  let first = drawn()
+  let link = theirs.document.querySelector(`${row} a`)?.getAttribute('href')
+  // The Builder object's frames, to both pages' sockets.
+  let frames = operatorFrames(store, () =>
+    [own, theirs].map((page) => ({
+      send: (data: string) => page.sockets[0].onmessage!({ data }),
+      deserializeAttachment: () => ({
+        operator: true,
+        lines: true,
+        person,
+        space: eid,
+        opens: link?.replace(/\/[^/]+$/, ''),
+      }),
+    })))
+  await frames.tell(helper)
+  let tool = crypto.randomUUID()
+  await step({ ask: {}, using: {} })
+  await step({
+    entity: { eid: tool },
+    call: { to: crypto.randomUUID(), args: {} },
+  })
+  await frames.tell(helper)
+  let running = drawn()
+  await step({ result: { call: tool }, content: { body: 'ok' } })
+  await step({ output: {}, content: { body: 'Imported 100 people.' } })
+  await frames.tell(helper)
+  let ended = drawn()
+  own.leave()
+  theirs.leave()
+  assertEquals(first, [
+    'Thinking · Ns',
+    'Import the people CSVRunning · Thinking · Ns',
+  ])
+  assertEquals(
+    link?.endsWith(`/${helper}`),
+    true,
+    'the helper links to its run',
+  )
+  assertEquals(
+    running[0].startsWith('Thinking'),
+    false,
+    'its tool, not thinking',
+  )
+  assertStringIncludes(running[1], 'Running · ')
+  assertEquals(ended, ['Nothing running', 'Import the people CSVDone · Ns'])
+  assertEquals(
+    theirs.document.querySelector(`${row} a`)?.getAttribute('href'),
+    link,
+  )
 })
 
 test('a page reads its draft only as it opens and as its socket opens, never on a timer', async () => {

@@ -221,7 +221,8 @@ test('live transcript and typing frames go only to the conversation’s owner', 
     await frames.tell(session)
     await frames.typing(session, secret)
   }
-  assertEquals(own.sent.length, 6)
+  // each a step and typing, and the helper's step on its own page as well
+  assertEquals(own.sent.length, 7)
   assertStringIncludes(own.sent.join(''), secret)
   assertEquals(other.sent, [])
   assertEquals(elsewhere.sent, [])

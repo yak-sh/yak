@@ -14,24 +14,30 @@ import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
 import type { operatorStore } from './operator-store.ts'
 import { transcript } from '@yaks/session/transcript'
+import { dispatchStatus } from '@yaks/session/admission'
 import type { Tool } from '@yaks/model'
 import {
   frame,
   helperFrame,
+  helping,
   making,
   now,
+  type Place,
   stateOf,
   talk,
+  turnOf,
   type Underway,
   withRows,
   type Worked,
 } from './operator-view.ts'
+import { type Aside, type HelperLine, ordered } from './operator-aside.ts'
 import {
   type Helper,
   type Lines,
   lines as drawnLines,
   type Named as ToolNamed,
   namer,
+  type Names,
   type Naming,
   type Offers,
   wire,
@@ -88,6 +94,12 @@ let namingOf = async (
     person: await personOf(store, entries, named),
   }
 }
+
+// A conversation's lines and its helpers', whose steps it names too.
+let withHelpers = (entries: Bundle[], helpers: Helper[]) => [
+  ...entries,
+  ...helpers.flatMap((h) => h.entries),
+]
 
 // A task's sessions, oldest first.
 let sessionsOf = async (store: Store, task: string) => {
@@ -179,6 +191,48 @@ let helpersBy = async (store: Store, calls: Set<string>): Promise<Helper[]> =>
 // What a helper was started with: its first lines.
 let openingOf = (store: Store, session: string) =>
   store.g.read(`.entry.session=${session}&.order=entry.seq&.limit=3&*`)
+// A helper as the conversation's aside lists it (operator-view.ts
+// `helping`), from its own lines: what it was asked, when it began, its
+// place to run, and its run's page under `opens`.
+let listedOf = async (
+  store: Store,
+  helper: Helper,
+  names: Names,
+  opens?: string,
+): Promise<HelperLine | null> => {
+  let session = helper.session
+  if (!session) return null
+  let [[row], opening] = await Promise.all([
+    store.g.get([session]),
+    openingOf(store, session),
+  ])
+  if (!row) return null
+  return helping({
+    session,
+    title: askedOf(opening),
+    since: String(comp(row, 'created')?.at ?? ''),
+    entries: helper.entries,
+    place: (dispatchStatus(row) ?? null) as Place,
+    ...opens ? { href: `${opens}/${session}` } : {},
+  }, names)
+}
+
+// The aside a conversation draws (operator-aside.ts): its turn under way,
+// and its helpers, those at work first.
+let asideOf = async (
+  store: Store,
+  entries: Bundle[],
+  helpers: Helper[],
+  names: Names,
+  opens?: string,
+): Promise<Aside> => ({
+  turn: turnOf(entries, names),
+  helpers: ordered(
+    (await Promise.all(helpers.map((h) => listedOf(store, h, names, opens))))
+      .filter((h): h is HelperLine => !!h),
+  ),
+})
+
 // The newest lines a conversation draws: a long one is read from its end.
 let SHOWN = 300
 // The newest lines that say what a session is doing, and what a step changed.
@@ -607,6 +661,7 @@ export let conversationOf = async (
   waiting: Bundle[]
   making: Underway | null
   standing: string
+  aside?: Aside
 }> => {
   let found = await openedOf(store, open)
   if (found.session) {
@@ -621,14 +676,16 @@ export let conversationOf = async (
     let calls = new Set(
       entries.flatMap((b) => b.call ? [b.entity.eid] : []),
     )
+    let helped = await seenOf(store, [row], entries, calls)
     let seen = {
-      ...await seenOf(store, [row], entries, calls),
+      ...helped,
       called,
       opens,
-      ...await namingOf(store, entries, named),
+      ...await namingOf(store, withHelpers(entries, helped.helpers), named),
     }
     let names = namer(seen)
     return {
+      aside: await asideOf(store, entries, seen.helpers, names, opens),
       task: eid,
       begun: open,
       title: helper
@@ -679,14 +736,16 @@ export let conversationOf = async (
       String(comp(b, 'created')?.at ?? ''),
     )
   )
+  let helped = await seenOf(store, sessions, entries)
   let seen = {
-    ...await seenOf(store, sessions, entries),
+    ...helped,
     called,
     opens,
-    ...await namingOf(store, entries, named),
+    ...await namingOf(store, withHelpers(entries, helped.helpers), named),
   }
   let names = namer(seen)
   return {
+    aside: await asideOf(store, entries, seen.helpers, names, opens),
     task,
     begun: asked[0]?.entity.eid ?? task,
     title: String(comp(held, 'doc')?.title ?? 'A request'),
@@ -703,9 +762,11 @@ export let conversationOf = async (
  * What a session's step changed, as its conversation's frame for the page's
  * socket: the lines past `from` (by `entry.seq`, the last 30 when unknown),
  * and the newest seq it covers, to start the next from. A helper's step
- * shows in the conversation that started it, and `opens` is where a
- * conversation opens by its id. Only a step past a known `from` says
- * anything aloud: the lines drawn when it is unknown are old news.
+ * shows in the conversation that started it (`frame`), with the helper as
+ * that conversation's aside lists it, and on the helper's own page (`own`);
+ * `opens` is where a conversation opens by its id. Only a step past a known
+ * `from` says anything aloud: the lines drawn when it is unknown are old
+ * news.
  */
 export let frameOf = async (
   store: Store,
@@ -726,11 +787,10 @@ export let frameOf = async (
     0,
     ...entries.map((b) => Number(comp(b, 'entry')?.seq ?? 0)),
   )
-  let parent = String(comp(row, 'spawned')?.parent ?? '')
-  if (!parent) {
+  // The session's own conversation: the steps it changed that started
+  // helpers are drawn with what each was told inside.
+  let own = async () => {
     let since = from ?? seq - 30
-    // The steps it changed that started helpers are drawn with what each was
-    // told inside.
     let calls = new Set(
       entries.filter((b) => Number(comp(b, 'entry')?.seq ?? 0) > since)
         .flatMap((b) =>
@@ -743,23 +803,19 @@ export let frameOf = async (
     )
     let helpers = await helpersBy(store, calls)
     let naming = await namingOf(store, entries, named)
-    return {
-      seq,
-      frame: hushed(
-        from,
-        frame(await keyOf(store, session), entries, namer(naming), since, {
-          helpers,
-          offers: await offersOf(store, [
-            ...entries,
-            ...helpers.flatMap((h) => h.entries),
-          ]),
-          called,
-          opens,
-          ...naming,
-        }),
-      ),
-    }
+    return hushed(
+      from,
+      frame(await keyOf(store, session), entries, namer(naming), since, {
+        helpers,
+        offers: await offersOf(store, withHelpers(entries, helpers)),
+        called,
+        opens,
+        ...naming,
+      }),
+    )
   }
+  let parent = String(comp(row, 'spawned')?.parent ?? '')
+  if (!parent) return { seq, frame: await own() }
   let call = comp(row, 'spawned')?.call as string | undefined
   // What a helper was told changes only at an ask: only then is the step
   // that started it drawn again, from as many of its lines as a
@@ -781,6 +837,7 @@ export let frameOf = async (
   }
   // its own steps named as well as the one that started it
   let naming = await namingOf(store, [...started, ...helper.entries], named)
+  let names = namer(naming)
   return {
     seq,
     frame: hushed(
@@ -789,7 +846,7 @@ export let frameOf = async (
         await keyOf(store, parent),
         helper,
         started,
-        namer(naming),
+        names,
         from ?? 0,
         {
           offers: await offersOf(store, helper.entries),
@@ -797,8 +854,10 @@ export let frameOf = async (
           opens,
           ...naming,
         },
+        await listedOf(store, helper, names, opens) ?? undefined,
       ),
     ),
+    own: await own(),
   }
 }
 
@@ -868,12 +927,16 @@ export let operatorFrames = (
       told.set(session, made.seq)
       // A page that asked for lines as data draws them itself; one opened
       // before they were is sent them drawn (operator-view.ts `withRows`).
+      // Each page keeps the frame for the conversation it shows: a helper's
+      // step goes to the conversation that started it and to its own.
       let drawing = pages.filter((ws) =>
         (ws.deserializeAttachment() as { lines?: boolean }).lines
       )
       let older = pages.filter((ws) => !drawing.includes(ws))
-      if (drawing.length) send(drawing, made.frame)
-      if (older.length) send(older, withRows(made.frame))
+      for (let frame of made.own ? [made.frame, made.own] : [made.frame]) {
+        if (drawing.length) send(drawing, frame)
+        if (older.length) send(older, withRows(frame))
+      }
     },
     typing: async (session: string, text: string) => {
       let pages = await watching(session)

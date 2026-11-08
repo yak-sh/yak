@@ -33,6 +33,7 @@ import {
   wire,
 } from './operator-draw.ts'
 import { drawn, type Row, rowsOf } from './operator-rows.ts'
+import type { HelperLine, Standing, Turn } from './operator-aside.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -184,6 +185,118 @@ export let now = (entries: Bundle[], names: Names) => {
     : 'Thinking…'
 }
 
+let at = (b: Bundle | undefined) => String(comp(b, 'created')?.at ?? '')
+
+/**
+ * The turn a session has under way, for the aside (operator-aside.ts): the
+ * tools it waits on, from the first one called, or its model thinking, from
+ * the line it answers; none once it ended.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { turnOf } from './operator-view.ts'
+ * let names = (to: string) => ({ doing: `Running ${to}…`, done: '' })
+ * let line = (seq: number, b: object) => ({
+ *   entity: { eid: `e${seq}` }, entry: { session: 's', seq },
+ *   created: { at: `2026-11-08T15:00:0${seq}.000Z` }, ...b,
+ * })
+ * let asked = [
+ *   line(1, { content: { body: 'Sort my people' }, using: {} }),
+ *   line(2, { ask: {}, using: {} }),
+ * ]
+ * equal(turnOf(asked.slice(0, 1), names), {
+ *   what: 'Thinking…', since: '2026-11-08T15:00:01.000Z',
+ * })
+ * equal(turnOf([...asked, line(3, { call: { to: 'shell' } })], names), {
+ *   what: 'Running shell…', since: '2026-11-08T15:00:03.000Z',
+ * })
+ * equal(turnOf([...asked, line(3, { output: {}, content: { body: 'Done.' } })], names), null)
+ * ```
+ */
+export let turnOf = (entries: Bundle[], names: Names): Turn | null => {
+  let what = now(entries, names)
+  if (!what) return null
+  let open = unanswered(entries)
+  return { what, since: at(open[0] ?? entries.at(-1)) }
+}
+
+/** Where a helper stands for a place to run (@yaks/session/admission
+ * `dispatchStatus`): queued behind others, or stepped aside while its own
+ * helpers work. */
+export type Place = 'queued' | 'waiting' | 'active' | null
+
+// How a session that ended stands, by its status.
+let STANDING: Record<string, Standing> = {
+  settled: 'done',
+  failed: 'failed',
+  stopped: 'stopped',
+}
+
+/**
+ * A helper as the aside lists it, from its newest lines: how it stands, its
+ * step under way (or, once it failed, why), when it began and, once it ended,
+ * when.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { helping } from './operator-view.ts'
+ * let names = (to: string) => ({ doing: `Running ${to}…`, done: '' })
+ * let line = (seq: number, b: object) => ({
+ *   entity: { eid: `e${seq}` }, entry: { session: 'h', seq },
+ *   created: { at: `2026-11-08T15:00:0${seq}.000Z` }, ...b,
+ * })
+ * let begun = [line(1, { content: { body: 'Import the CSV' }, using: {} }), line(2, { ask: {}, using: {} })]
+ * let of = { session: 'h', title: 'Import the CSV', since: '2026-11-08T15:00:00.000Z' }
+ * equal(helping({ ...of, entries: [...begun, line(3, { call: { to: 'shell' } })] }, names), {
+ *   ...of, standing: 'running', step: 'Running shell…',
+ * })
+ * equal(helping({ ...of, entries: begun, place: 'queued' }, names), {
+ *   ...of, standing: 'waiting', step: 'Waiting for a place to run',
+ * })
+ * equal(helping({ ...of, entries: [...begun, line(3, { output: {}, content: { body: 'Imported.' } })] }, names), {
+ *   ...of, standing: 'done', step: '', until: '2026-11-08T15:00:03.000Z',
+ * })
+ * equal(helping({ ...of, entries: [...begun, line(3, { exception: {}, content: { body: 'The sandbox stopped.\nat …' } })] }, names).step,
+ *   'The sandbox stopped.')
+ * ```
+ */
+export let helping = (
+  helper: {
+    session: string
+    title: string
+    since: string
+    entries: Bundle[]
+    place?: Place
+    href?: string
+  },
+  names: Names,
+): HelperLine => {
+  let { entries, place, ...of } = helper
+  let status = statusOf(entries)
+  let [standing, step]: [Standing, string] = status == 'empty'
+    ? ['waiting', 'Waiting to start']
+    : !atWork(entries)
+    ? [
+      STANDING[status] ?? 'done',
+      status == 'failed'
+        ? String(comp(entries.at(-1), 'content')?.body ?? '').split('\n')[0]
+          .slice(0, 120)
+        : '',
+    ]
+    : place == 'queued'
+    ? ['waiting', 'Waiting for a place to run']
+    : place == 'waiting'
+    ? ['waiting', 'Waiting on its helpers']
+    : ['running', now(entries, names)]
+  let ended = !['running', 'waiting'].includes(standing)
+  return {
+    ...of,
+    standing,
+    step,
+    ...ended ? { until: at(entries.at(-1)) } : {},
+  }
+}
+
 /** What the session is doing as its yak shows it (mascot.ts `MOVES`):
  * thinking or using a tool while it works, done or failed as it ends, and
  * idle once stopped or before it starts. Writing is heard only as it is
@@ -194,10 +307,12 @@ export let doingOf = (entries: Bundle[]): Doing => {
   return status == 'settled' ? 'done' : status == 'failed' ? 'failed' : 'idle'
 }
 
-// What it is doing now, in words and as the yak shows it.
+// What it is doing now, in words, as the yak shows it, and as the aside
+// shows its turn.
 let doingNow = (entries: Bundle[], names: Names) => ({
   now: now(entries, names),
   doing: doingOf(entries),
+  turn: turnOf(entries, names),
 })
 
 /** An app a step put out a new version of: the space its call named ('' for
@@ -402,7 +517,8 @@ export let frame = (
  * that started it (that step drawn again) or, for a helper no step drawn
  * started, on its own; the apps it changed, worked on and started, and the
  * changes it landed said aloud, never its replies, which are the Operator's
- * to hear; and what the Operator that started it is doing now. */
+ * to hear; what the Operator that started it is doing now; and the helper
+ * as the aside lists it (`helping`). */
 export let helperFrame = (
   task: string,
   helper: Helper,
@@ -410,6 +526,7 @@ export let helperFrame = (
   names: Names,
   from: number,
   seen: Seen = {},
+  listed?: HelperLine,
 ) => {
   let seq = (id: string) =>
     Number(
@@ -433,6 +550,7 @@ export let helperFrame = (
       started: started(helper.entries, from),
       said: aloud(helper.entries.filter((b) => !b.output), names, from),
       ...doingNow(entries, names),
+      ...listed ? { helping: listed } : {},
     },
   }
 }
