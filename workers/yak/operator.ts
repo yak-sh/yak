@@ -22,7 +22,14 @@ import {
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
 import { LIMIT } from '@yaks/session/status'
-import { CALLED, channelOf, HEARD, paged, stoppedBy } from './operator-view.ts'
+import {
+  CALLED,
+  channelOf,
+  HEARD,
+  paged,
+  STOPPED,
+  stoppedBy,
+} from './operator-view.ts'
 import { building } from './made.ts'
 import { listing } from '@yaks/mcp'
 import {
@@ -1648,11 +1655,14 @@ export let operating = (
     if (!busy.length) {
       return { task: open, session, stopped: false }
     }
-    // A helper the person stopped is theirs to start again: the session that
-    // started it and the conversation it works for hear it from them, in the
-    // same write, before the helper's report reaches either.
+    // A helper the person stopped is theirs to start again. The session that
+    // started it reads so in the helper's report, as from them
+    // (@yaks/session `deliverChild`); the conversation it works for, when
+    // that is further up, hears it from them here.
+    let helper = !!row?.spawned
     let parent = String(comp(row, 'spawned')?.parent ?? '')
-    let heard = parent ? [...new Set([parent, await topOf(store, parent)])] : []
+    let top = helper ? await topOf(store, parent) : ''
+    let heard = helper && top != parent ? [top] : []
     let asked = heard.length ? await askedAt(store, session) : ''
     // One waiting on a helper stops too, so the helper's report does not
     // wake it again (@yaks/session children.ts `deliverChild`).
@@ -1669,7 +1679,11 @@ export let operating = (
           entity: { eid: crypto.randomUUID() },
           entry: { session: s },
           stop: {},
-          content: { body: 'Stopped by the person watching.' },
+          content: {
+            body: helper && s == session
+              ? STOPPED
+              : 'Stopped by the person watching.',
+          },
           $actor: { by, via: s },
         })),
       ],

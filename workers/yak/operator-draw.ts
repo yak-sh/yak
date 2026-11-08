@@ -717,6 +717,21 @@ let line = (
   if (called && b.notice && body) {
     return is(said(b, called.said ? reply(spoken(b, body)) : input(b, body)))
   }
+  // A helper the person stopped (operator.ts `stop`, the only stop here),
+  // told to the session that started it in its report or, up the
+  // conversation, in a line of theirs.
+  let stopped = comp(b, 'operator_stopped')?.helper ??
+    (comp(b, 'delivery')?.outcome == 'stopped'
+      ? comp(b, 'delivery')?.child
+      : undefined)
+  if (stopped && !b.result) {
+    let helper = opens
+      ? h('a', { href: `${opens}/${stopped}` }, 'a helper')
+      : 'a helper'
+    return is(
+      said(b, h('p', { class: 'Talk_Note' }, 'You stopped ', helper, '.')),
+    )
+  }
   if (told(b, body)) return is(helper(b, body))
   if (b.failed || b.exception) {
     return is(trouble(
@@ -725,15 +740,6 @@ let line = (
     ))
   }
   if (b.system && body) return is(system(b, body))
-  let stopped = comp(b, 'operator_stopped')?.helper
-  if (stopped) {
-    let helper = opens
-      ? h('a', { href: `${opens}/${stopped}` }, 'a helper')
-      : 'a helper'
-    return is(
-      said(b, h('p', { class: 'Talk_Note' }, 'You stopped ', helper, '.')),
-    )
-  }
   if (b.stop || b.interrupted || b.cancel) {
     return is(h('p', { class: 'Talk_Note' }, 'Stopped.'))
   }

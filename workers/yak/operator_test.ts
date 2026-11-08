@@ -5,6 +5,7 @@ import { rootOf } from './operator-root.ts'
 import type { Item, Model, Request } from '@yaks/model'
 import { comp } from '../../packages/graph/testing.ts'
 import { kindOf } from '@yaks/session'
+import { STOPPED } from './operator-view.ts'
 import { platform } from './directory-rows-probe.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { appStore } from './directory.ts'
@@ -709,27 +710,19 @@ await watched.g.apply([
 ], { trusted: true })
 let helperStop = await watcher.stop(below, roundsHeld.person)
 let heard = await watched.g.read('.operator_stopped&.entry ?created ?content')
-test('Stop on a helper is told to the session that started it and the conversation, as the person’s', async () => {
+test('Stop on a nested helper stops it alone, and the conversation it works for hears it from the person', async () => {
   assertEquals(helperStop.stopped, true)
-  assertEquals(
-    (await watched.g.read('.stop&.entry')).map((b) => comp(b, 'entry').session),
-    [below],
-  )
-  assertEquals(
-    new Set(heard.map((b) => comp(b, 'entry').session)),
-    new Set([middle, root]),
-  )
-  for (let b of heard) {
-    let body = String(comp(b, 'content').body)
-    assertEquals(kindOf(b), 'input')
-    assertEquals(comp(b, 'created').by, roundsHeld.person)
-    assertEquals(comp(b, 'operator_stopped').helper, below)
-    assertStringIncludes(body, '"Check the draft."')
-    assertStringIncludes(
-      body,
-      'until you have talked with them',
-    )
-  }
+  let stops = await watched.g.read('.stop&.entry ?content')
+  assertEquals(stops.map((b) => comp(b, 'entry').session), [below])
+  assertEquals(comp(stops[0], 'content').body, STOPPED)
+  // The session that started it hears it in its report; the conversation
+  // above, which no report reaches, in a line of theirs.
+  assertEquals(heard.map((b) => comp(b, 'entry').session), [root])
+  let [b] = heard
+  assertEquals(kindOf(b), 'input')
+  assertEquals(comp(b, 'created').by, roundsHeld.person)
+  assertEquals(comp(b, 'operator_stopped').helper, below)
+  assertStringIncludes(String(comp(b, 'content').body), '"Check the draft."')
 })
 
 test('a helper’s page says it is one, where its parent opens, and how it stands', async () => {
@@ -757,11 +750,80 @@ test('a helper’s page says it is one, where its parent opens, and how it stand
     '/chat',
   )
   assertEquals(parent.helper?.parent, { href: `/chat/${root}` })
+  let conversation = await conversationOf(
+    watched,
+    '/chat',
+    root,
+    undefined,
+    undefined,
+    undefined,
+    '/chat',
+  )
+  assertEquals(conversation.helper, undefined)
   assertStringIncludes(
-    parent.html,
+    conversation.html,
     `You stopped <a href="/chat/${below}">a helper</a>.`,
   )
-  assertEquals((await conversationOf(watched, '/chat', root)).helper, undefined)
+})
+
+// What the person's conversation hears when they stop a helper: on its own,
+// a turn whose model reads the stop as the person's, by name, with the
+// helper left stopped until they talk.
+let heldBack = operatorMemory()
+let rootAsks: Request[] = []
+let holder = operate(
+  heldBack,
+  roundsPlatform,
+  operatorModel((req) => {
+    rootAsks.push(req)
+    return Promise.resolve({
+      id: crypto.randomUUID(),
+      model: req.model,
+      items: [{ kind: 'assistant', text: 'Left it stopped.' }],
+      cost: 0.001,
+    })
+  }),
+)
+let opened = await holder.run(roundsHeld, roundsSpace, { say: 'Hello.' })
+let started = crypto.randomUUID()
+await heldBack.g.apply([
+  {
+    entity: { eid: started },
+    session: { id: started },
+    spawned: { parent: opened.session },
+  },
+  line(started),
+], { trusted: true })
+let asked0 = rootAsks.length
+await holder.stop(started, roundsHeld.person)
+await drain(heldBack)
+let after = rootAsks.slice(asked0)
+let read = (r: Request) => (r.items.at(-1) as { text?: string }).text ?? ''
+test('a stopped helper reaches its conversation once, from the person, telling it to leave the helper stopped until they talk', () => {
+  // One turn, on the helper's report, and no second from the system.
+  assertEquals(after.length, 1)
+  let said = read(after[0])
+  // Their own words carry the same label: the source is theirs.
+  let theirs = read(rootAsks[0]).split('; sent')[0]
+  assertEquals(said.split('; sent')[0], theirs)
+  assertStringIncludes(theirs, '[From #')
+  assertStringIncludes(said, `child ${started} stopped\n${STOPPED}`)
+})
+
+test('the conversation draws the helper’s report as the person’s stop', async () => {
+  let drawn = await conversationOf(
+    heldBack,
+    '/chat',
+    opened.session,
+    undefined,
+    undefined,
+    undefined,
+    '/chat',
+  )
+  assertStringIncludes(
+    drawn.html,
+    `You stopped <a href="/chat/${started}">a helper</a>.`,
+  )
 })
 
 test('another model working for a person is offered the tools their conversation is, and runs them through the same reach', async () => {
