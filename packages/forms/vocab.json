@@ -1,0 +1,187 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/kernel": true
+  },
+  "title": "forms",
+  "$defs": {
+    "form": {
+      "component": true,
+      "type": "object",
+      "description": "a sign-up form, with its title and introduction in doc",
+      "properties": {
+        "opens": {
+          "type": "string",
+          "format": "date-time",
+          "description": "first instant that takes sign-ups; absent means no opening limit"
+        },
+        "closes": {
+          "type": "string",
+          "format": "date-time",
+          "description": "first instant that no longer takes sign-ups; absent means no closing limit"
+        },
+        "capacity": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "maximum accepted registrations; absent means unlimited"
+        },
+        "thanks": {
+          "type": "string",
+          "description": "confirmation shown after a sign-up"
+        },
+        "notify": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "entity ids to notify of a sign-up"
+        }
+      }
+    },
+    "question": {
+      "component": true,
+      "type": "object",
+      "description": "one question belonging to a form; repeat children point at their containing question",
+      "required": [
+        "form",
+        "label",
+        "kind"
+      ],
+      "properties": {
+        "form": {
+          "type": "string",
+          "ref": "form",
+          "death": "cascade",
+          "description": "the form asking this question"
+        },
+        "label": {
+          "type": "string",
+          "description": "the words asking the question"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "line",
+            "lines",
+            "choose",
+            "choices",
+            "check",
+            "date",
+            "email",
+            "phone",
+            "address",
+            "file",
+            "repeat"
+          ],
+          "description": "the answer shape"
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "the offered values for choose or choices"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "whether completion needs an answer"
+        },
+        "hint": {
+          "type": "string",
+          "description": "help shown beside the question"
+        },
+        "within": {
+          "type": "string",
+          "ref": "question",
+          "death": "cascade",
+          "description": "the repeat question containing this question"
+        },
+        "when": {
+          "type": "object",
+          "properties": {
+            "question": {
+              "type": "string"
+            },
+            "is": {}
+          },
+          "required": [
+            "question",
+            "is"
+          ],
+          "additionalProperties": false,
+          "description": "show only when an earlier answer matches; look in the nearest repeat entry, then outer answers"
+        },
+        "fills": {
+          "type": "string",
+          "description": "directory property filled by this answer, such as individual.born"
+        },
+        "order": {
+          "type": "number",
+          "description": "question order; absent is zero and ties sort by entity id"
+        }
+      }
+    },
+    "registration": {
+      "component": true,
+      "type": "object",
+      "description": "one sign-up; answers are keyed by question id, with repeat groups holding arrays of answer objects",
+      "status": {
+        "cancelled": "cancelled",
+        "waitlisted": "waitlisted",
+        "completed": "done",
+        "default": "open"
+      },
+      "properties": {
+        "form": {
+          "type": "string",
+          "ref": "form",
+          "death": "keep",
+          "description": "the form signed up through, retained as history"
+        },
+        "person": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the person signing up, when identified"
+        },
+        "answers": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "answers keyed by question id; null skips an optional question; repeat answers are arrays of answer objects"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when this sign-up began"
+        }
+      }
+    },
+    "waitlisted": {
+      "component": true,
+      "type": "object",
+      "description": "this registration is waiting for a place",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it joined the waitlist"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "who put it on the waitlist",
+          "stamped": true
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the session or client that wrote the mark",
+          "stamped": true
+        }
+      }
+    }
+  }
+}

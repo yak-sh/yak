@@ -24,6 +24,7 @@ that did not arrive through an authenticated HTTP or MCP request.
 | **`opened`**      | Somebody looked at the entity.                                                                                                            |
 | **`archived`**    | Hidden from ordinary listings, without deleting history or stopping execution.                                                            |
 | **`completed`**   | The work was finished; removing the mark reopens it.                                                                                      |
+| **`cancelled`**   | Called off; records an optional reason.                                                                                                   |
 | **`failed`**      | The work was tried and given up on; `reason` records why. Removing it permits another attempt.                                            |
 | **`broken`**      | Something outside the graph stopped honoring the entity; `code` records the other side's answer. Removing it says the entity holds again. |
 | **`interrupted`** | A request or call was cut off before finishing; `code` records why. Removing it allows a deliberate retry.                                |

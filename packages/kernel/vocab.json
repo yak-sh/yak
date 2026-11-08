@@ -608,6 +608,37 @@
         }
       },
       "description": "A request or call was cut off before it finished. Removing the mark allows a deliberate retry; its code records why it was interrupted."
+    },
+    "cancelled": {
+      "component": true,
+      "type": "object",
+      "description": "the mark on something that was called off",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when it was called off",
+          "stamped": true
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "who called it off — kept as history when that entity is deleted",
+          "stamped": true
+        },
+        "reason": {
+          "type": "string",
+          "description": "why it was called off"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "what the write came in through — the session or client that made it"
+        }
+      }
     }
   }
 }

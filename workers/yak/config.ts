@@ -59,6 +59,7 @@ export let appConfig: Config = {
         ...marks,
         'comment',
         'completed',
+        'cancelled',
         'favorite',
       ],
     },
@@ -73,7 +74,7 @@ export let appConfig: Config = {
     {
       use: '@yaks/task',
       facets: ['vocab'],
-      words: ['contains', 'requires', 'cancelled', 'task'],
+      words: ['contains', 'requires', 'task'],
     },
     { use: '@yaks/project', facets: ['vocab'], words: ['filed', 'project'] },
     ...links,

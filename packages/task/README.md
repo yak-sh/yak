@@ -27,7 +27,6 @@ The package declares these stored components:
 | ------------------------------------------ | ----------------------------------------------------------------- |
 | `decision{question, choices, recommended}` | A task asking for a listed or custom answer.                      |
 | `task{}`                                   | Identifies an entity as a task.                                   |
-| `cancelled{at, by, via, reason}`           | Records cancellation and an optional reason.                      |
 | `blocked{on, since}`                       | Describes an external obstacle; `since` is declared server-owned. |
 | `accept{body}`                             | Describes the conditions for completion.                          |
 | `requires{}`, `contains{}`                 | Relation components on an `edge{from, to}` entity.                |
@@ -35,10 +34,11 @@ The package declares these stored components:
 `task.status` is computed from component presence; it is never stored. The first
 mark the task wears, in the order its `status` ladder declares, wins:
 `cancelled` means `cancelled`, otherwise `completed` means `done`, otherwise a
-task is `open`. `completed{at, by, via}` is [@yaks/kernel](../kernel)'s mark,
-shared with anything else that finishes, so a graph of tasks loads the kernel's
-words beside these. An entity without `task` has no task status. If both
-completion and cancellation are present, cancellation takes precedence.
+task is `open`. `completed{at, by, via}` and `cancelled{at, by, via, reason}`
+are [@yaks/kernel](../kernel)'s marks, shared with anything that finishes or is
+called off, so a graph of tasks loads the kernel's words beside these. An entity
+without `task` has no task status. If both completion and cancellation are
+present, cancellation takes precedence.
 
 This package does not open or own storage. The graph's storage adapter keeps
 these components, using memory, SQLite or another supported backend. References

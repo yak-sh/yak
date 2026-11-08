@@ -43,14 +43,14 @@ let doc: VocabDoc = {
   },
 }
 
-/** The team's vocabulary: this package's components, the kernel's `completed`
- * mark, the portfolio they are filed in (@yaks/project), `doc`, edges, and
+/** The team's vocabulary: this package's components, the kernel's completion and cancellation
+ * marks, the portfolio they are filed in (@yaks/project), `doc`, edges, and
  * their own. */
 export let team: Vocab = loadVocab(
   [
     docDoc,
     edgeDoc,
-    pick(kernelDoc, ['completed', 'decided']),
+    pick(kernelDoc, ['completed', 'cancelled', 'decided']),
     taskDoc,
     projectDoc,
     doc,

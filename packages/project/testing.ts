@@ -36,11 +36,18 @@ let doc = {
 }
 
 /** The team's vocabulary: the portfolio, the tasks in it, the kernel's
- * `completed` mark, `doc` and edges. The kernel keywords are registered too,
+ * completion and cancellation marks, `doc` and edges. The kernel keywords are registered too,
  * because a task declares `governed` — the keyword meaning a project answers
  * for it. */
 export let team: Vocab = loadVocab(
-  [docDoc, edgeDoc, pick(kernelDoc, ['completed']), taskDoc, projectDoc, doc],
+  [
+    docDoc,
+    edgeDoc,
+    pick(kernelDoc, ['completed', 'cancelled']),
+    taskDoc,
+    projectDoc,
+    doc,
+  ],
   [edgeKeywords, kernelKeywords],
 )
 

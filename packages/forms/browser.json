@@ -1,0 +1,4 @@
+{
+  "compilerOptions": { "lib": ["dom", "es2023"], "strict": true },
+  "entries": [".", "./vocab"]
+}

@@ -5,7 +5,10 @@ import { words } from './words.ts'
 import type { Config } from './config.ts'
 
 let config = {
-  plugins: [{ use: '@yaks/task', words: ['task', 'cancelled', 'task_new'] }],
+  plugins: [
+    { use: '@yaks/task', words: ['task', 'task_new'] },
+    { use: '@yaks/kernel', words: ['cancelled'] },
+  ],
 }
 let selected = await words(config)
 let discovered = await derive(config)

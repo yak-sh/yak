@@ -21,10 +21,10 @@ let pick = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
   $defs: Object.fromEntries(names.map((name) => [name, doc.$defs![name]])),
 })
 let vocab = loadVocab([
-  pick(kernelDoc, 'entity', 'completed', 'about', 'archived'),
+  pick(kernelDoc, 'entity', 'completed', 'cancelled', 'about', 'archived'),
   edgeDoc,
   pick(docDoc, 'doc'),
-  pick(taskDoc, 'task', 'cancelled'),
+  pick(taskDoc, 'task'),
   pick(projectDoc, 'project', 'filed'),
   mailDoc,
 ], [kernelKeywords, edgeKeywords])

@@ -511,7 +511,7 @@ let spine: VocabDoc = {
 }
 let todo: Vocab = loadVocab([
   taskDoc,
-  pick(kernelDoc, ['completed']),
+  pick(kernelDoc, ['completed', 'cancelled']),
   projectDoc,
   spine,
 ])

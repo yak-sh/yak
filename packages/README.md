@@ -46,6 +46,9 @@ grouped approximately by function, **not** by dependency order.
 
 ## Package index
 
+- **[@yaks/forms](./forms)** — Form, question and registration rows, with pure
+  functions for question progress and sign-up availability.
+
 - **[@yaks/code-mode](./code-mode)** — Typed tool objects from a scoped registry
   and bounded short JS/TS executions through an isolated evaluator.
 

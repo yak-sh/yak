@@ -1,0 +1,21 @@
+{
+  "name": "@yaks/forms",
+  "version": "0.2.33",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Form, question and registration rows, with pure functions for the next question, missing required answers and sign-up availability.",
+  "dependencies": {
+    "@yaks/fp": "0.2.23",
+    "@yaks/vocab": "0.2.32"
+  },
+  "devDependencies": {
+    "@yaks/graph": "0.2.33",
+    "@yaks/kernel": "0.2.28",
+    "@yaks/ram": "0.2.24",
+    "@yaks/testing": "0.2.30"
+  }
+}
