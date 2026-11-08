@@ -100,7 +100,17 @@ export let FITTED = 'operator:fitted'
 // with them the schema's print (`operatorStore`).
 let derived = { ...blobRead(operatorVocab), ...sessionDerived(operatorVocab) }
 let text = indexed(operatorVocab)
+// The search indexes and their triggers, kept over component tables: each is
+// made with the last table it rests on, by the write that first names that
+// component (@yaks/sqlite `over`), as an app's store makes its own. A store
+// fitted before any entry was written holds no `entry` table to index then.
+let searching = ftsSchema(text, derived)
 let print: string | undefined
+
+/** The revision of how the file is fitted, part of its print: a file fitted
+ * when its search indexes were made only by the fitting holds no index over a
+ * table a later write made, so this code fits it again and makes them. */
+let FITTING = 2
 
 /**
  * The Operator's store over its object's storage. Its schema is the code's,
@@ -123,11 +133,12 @@ export let operatorStore = (
   let store = storage(durable, vocab, {
     derived,
     extend: [search(text, sql)],
+    over: () => searching,
     schemaReady: () => stood,
   })
-  print ??= printOf(`operator:${store.print()}`, [
+  print ??= printOf(`operator:${FITTING}:${store.print()}`, [
     ...blobSchema(),
-    ...ftsSchema(text, derived),
+    ...searching,
   ])
   stood = installed(sql) != null && meta(sql).get(FITTED) == print
   if (!stood) {

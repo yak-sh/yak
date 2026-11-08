@@ -151,3 +151,43 @@ test('a wake whose schema its store was fitted to runs no DDL and writes nothing
   assertEquals(written('v2').length > 0, true)
   assertEquals(written('v3'), [])
 })
+
+// The Operator's `search` tool reads a bare word through the search indexes.
+// A store fitted before any entry was written holds no `entry` table then; the
+// first entry's write makes the index over it, and a file whose fitting made
+// none heals on its next wake.
+let said = (body: string) => {
+  let session = crypto.randomUUID()
+  return [{ entity: { eid: session }, session: { id: session } }, {
+    entity: { eid: crypto.randomUUID() },
+    entry: { session, seq: 1 },
+    content: { body },
+  }]
+}
+let found = async (g: ReturnType<typeof operatorStore>['g'], word: string) =>
+  (await g.read(word)).map((b) => (b.content as { body: string }).body)
+
+test('a word is found in an entry written after its store was fitted', async () => {
+  let { g } = operatorStore(durable())
+  await g.apply(said('the wyrmling hatched'), { trusted: true })
+  assertEquals(await found(g, 'wyrmling'), ['the wyrmling hatched'])
+})
+
+test('a file fitted with no index over its entries makes and fills one on its next wake', async () => {
+  let file = durable()
+  let { g } = operatorStore(file)
+  await g.apply(said('the wyrmling hatched'), { trusted: true })
+  for (
+    let [type, name] of file.sql.exec(
+      `select type, name from sqlite_schema where name like 'entry\\_%' escape '\\' and type in ('trigger', 'view', 'table') and name not in ('entry')`,
+    ).toArray().map((r) => [r.type, r.name])
+  ) {
+    if (!String(name).startsWith('entry_fts_')) {
+      file.sql.exec(`drop ${type} if exists "${name}"`)
+    }
+  }
+  file.sql.exec(`update server_meta set v = 'before' where k = '${FITTED}'`)
+  assertEquals(await found(operatorStore(file).g, 'wyrmling'), [
+    'the wyrmling hatched',
+  ])
+})
