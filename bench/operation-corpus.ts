@@ -30,6 +30,7 @@ export let populate = async (
     {
       entity: { eid: PERSONA },
       persona: {},
+      filed: { project: PROJECT },
       doc: {
         title: 'Operation persona',
         body: 'operation persona instructions',

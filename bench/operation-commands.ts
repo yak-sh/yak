@@ -4,7 +4,6 @@
  * to this collection; no duties, providers, external connections or live writes.
  */
 import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
-import type { Bundle } from '@yaks/graph'
 import { sessionEnv } from '@yaks/session'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
@@ -16,6 +15,8 @@ import { settled } from './settled.ts'
 import { runtimeCache } from './runtime.ts'
 import { selected } from './selected.ts'
 import { fixture } from './fixture.ts'
+import { cliAnswer, fault } from './operation-answer.ts'
+export { fault } from './operation-answer.ts'
 import {
   PERSON,
   PERSONA,
@@ -141,20 +142,6 @@ export type Operation = {
   prepare?: () => Promise<void>
   verify: (text: string, args: Record<string, unknown>) => Promise<void> | void
 }
-/// fault('{"result":[{"entity":{"eid":"$fault"},"content":{"body":"no"}}]}') -> 'no'
-/// fault('{"content":[{"type":"text","text":"no"}],"isError":true}') -> 'no'
-/// fault(' plain words\n') -> 'plain words'
-/** What a failed call said: the fault in a CLI's `--json` answer or a
- * connector's text, else the words as they came. */
-export let fault = (text: string): string => {
-  let said: { result?: Bundle[]; content?: { text?: string }[] } = {}
-  try {
-    said = JSON.parse(text)
-  } catch { /* not JSON: the words are the account */ }
-  let body = said.result?.find((b) => b.entity.eid == '$fault' || b.refusal)
-    ?.content as { body?: string } | undefined
-  return (body?.body ?? said.content?.[0]?.text ?? text).trim()
-}
 let includes = (text: string, mark: string) => {
   if (!text.includes(mark)) {
     throw new Error(`missing ${mark}: ${text.slice(0, 800)}`)
@@ -261,14 +248,12 @@ async function collect(
         stdout: 'piped',
         stderr: 'piped',
       }).output()
-      if (!out.success) {
-        throw new Error(
-          `${operation.tool}: ${
-            fault(decode.decode(out.stdout)) || fault(decode.decode(out.stderr))
-          }`,
-        )
-      }
-      return decode.decode(out.stdout)
+      return cliAnswer(
+        operation,
+        out.code,
+        decode.decode(out.stdout),
+        decode.decode(out.stderr),
+      )
     }
     if (!host.handler) throw new Error('missing HTTP handler')
     server = Deno.serve(
