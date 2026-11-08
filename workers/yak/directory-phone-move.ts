@@ -13,7 +13,8 @@ export let directoryPhoneMove = (row: Bundle): Bundle[] => {
 
 export let directoryPhoneRule: Rule = {
   mark: 'yak/store/directory-phone/1',
-  stores: 'apps',
+  stores: ['locustgrove/directory.c9f0fc'],
+  live: 'apps',
   find: '.individual.phone&?phone',
   move: directoryPhoneMove,
 }
