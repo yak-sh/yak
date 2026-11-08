@@ -47,3 +47,13 @@ test('text: the words stay, a link keeps its address', () => {
   assertEquals(text('# Potluck\n\n- bread'), 'Potluck\n\n- bread')
   assertEquals(text('<b>hi</b>'), '<b>hi</b>')
 })
+
+test('an underscore inside a word is never emphasis', () => {
+  let url = 'https://connect.nango.dev/?session_token=nango_connect_session_a1'
+  assertEquals(html(url), `<p>${url}</p>`)
+  assertEquals(text(url), url)
+  assertEquals(
+    html('snake_case and _this_'),
+    '<p>snake_case and <em>this</em></p>',
+  )
+})

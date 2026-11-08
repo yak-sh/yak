@@ -33,9 +33,10 @@ export type Token = {
 }
 
 // Links first (their text may hold anything), then code (which consumes its
-// content whole), then the two emphases.
+// content whole), then the two emphases. An underscore inside a word is never
+// emphasis, so `session_token=nango_connect` keeps its underscores.
 let INLINE =
-  /\[([^\]]*)\]\(([^)\s]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|\*([^*\n]+)\*|_([^_\n]+)_/g
+  /\[([^\]]*)\]\(([^)\s]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|\*([^*\n]+)\*|(?<![\p{L}\p{N}_])_([^_\n]+)_(?![\p{L}\p{N}_])/gu
 
 /** A line of markdown → the tokens it is made of, in order. */
 export let tokens = (line: string): Token[] => {
