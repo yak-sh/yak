@@ -1,6 +1,19 @@
 import type { Strip } from './mod.ts'
 import type { Entry } from './types.ts'
 
+/** What each limit says, with what to do instead. */
+export let TOO = {
+  script: 'script exceeds 64 KiB; read large data with a tool inside the ' +
+    'script, or split the work across code_mode calls',
+  args: 'tool arguments exceed 64 KiB; split the rows across several calls',
+  calls: 'execution allows 16 tool calls; write many rows in one call ' +
+    '(graph_apply takes many bundles), or continue in another code_mode call',
+  read: 'tool results passed 4 MiB in one execution; ask each read for ' +
+    'fewer rows (limit, offset) or split the reads across code_mode calls',
+  output: 'return value exceeds 256 KiB; return a summary or only the ' +
+    'fields you need, not whole tool results',
+}
+
 /** User code lives in its own module, its TypeScript read as JavaScript by
  * the host's `strip`. The trusted entrypoint loads it inside its catch, with
  * no bindings and no lexical access to the bridge. */
@@ -32,7 +45,9 @@ export default class extends WorkerEntrypoint {
         tools[set] ??= Object.create(null);
         tools[set][name] = (args) => {
           let text = JSON.stringify(args);
-          if (new TextEncoder().encode(text).length > 65536) throw new Error('tool arguments exceed 64 KiB');
+          if (new TextEncoder().encode(text).length > 65536) throw new Error(${
+    JSON.stringify(TOO.args)
+  });
           return bridge.call(set, name, text);
         };
       }
@@ -42,7 +57,9 @@ export default class extends WorkerEntrypoint {
         return {value: value === undefined ? null : value};
       };
       let text = stringify(await race([work(), deadline]));
-      if (encode(text).length > ${most}) throw new Error('script return exceeds output limit');
+      if (encode(text).length > ${most}) throw new Error(${
+    JSON.stringify(TOO.output)
+  });
       return text;
     } catch (error) {
       return stringify({error: String(error?.message ?? error).slice(0,1024)});

@@ -1,7 +1,7 @@
 import { clock, equal, match, ok, test, throws } from '@yaks/testing'
 import { connector, fresh, meta, seed } from './probe.ts'
 import { evaluate } from '../../packages/code-mode/testing.ts'
-import { catalog, declarations, execute, LIMITS } from '@yaks/code-mode'
+import { catalog, declarations, execute, LIMITS, TOO } from '@yaks/code-mode'
 import { source } from '@yaks/code-mode/source'
 import { strip } from '@yaks/esbuild/strip'
 import { compiler } from './testing.ts'
@@ -54,6 +54,22 @@ let echo: Tool = {
     }]
   },
 }
+// Answers `kib` KiB of text, as a read of many rows would.
+let big: Tool = {
+  name: 'big',
+  description: 'Answer kib KiB',
+  readOnly: true,
+  inputSchema: {
+    type: 'object',
+    properties: { kib: { type: 'integer' } },
+    required: ['kib'],
+    additionalProperties: false,
+  },
+  run: (call) => [{
+    entity: { eid: mint() },
+    content: { body: 'x'.repeat(Number(argsOf(call).kib) * 1024) },
+  }],
+}
 let one = fixture([echo])
 test('code mode compiles TS, preserves identity, records calls and validates each input', async () => {
   let out = await execute(
@@ -80,11 +96,12 @@ test('code mode compiles TS, preserves identity, records calls and validates eac
     strip,
   )
   match(bad.value, { isError: true })
+  equal(bad.calls.map((c) => [c.isError, typeof c.error]), [[true, 'string']])
   equal(echoed.length, 1)
 })
 
 let two = fixture([echo])
-test('code mode caps calls, arguments, script and combined output', async () => {
+test('code mode caps calls, arguments and script', async () => {
   let many = await execute(
     'for(let i=0;i<17;i++) await tools.yaks.echo({text:"x"})',
     two.catalog,
@@ -117,19 +134,37 @@ test('code mode caps calls, arguments, script and combined output', async () => 
       ),
     '64 KiB',
   )
-  let large = await execute(
-    'for(let i=0;i<4;i++) await tools.yaks.echo({text:"x".repeat(60000)}); return "x".repeat(240000)',
-    two.catalog,
-    two.run,
-    two.asked,
-    evaluate,
-    strip,
+})
+
+let reads = fixture([big])
+let run = (script: string) =>
+  execute(script, reads.catalog, reads.run, reads.asked, evaluate, strip)
+test('the answer is the return value; inner results stay in the sandbox', async () => {
+  let out = await run(`let n = 0
+    for (let i = 0; i < 4; i++) {
+      n += (await tools.yaks.big({kib: 200})).structuredContent.result[0].content.body.length
+    }
+    return n`)
+  equal(out.error, undefined)
+  equal(out.value, 4 * 200 * 1024)
+  equal(out.calls.length, 4)
+  ok(JSON.stringify(out).length < 1024)
+})
+test('each result counts once toward the read budget, and each limit says what to do', async () => {
+  let kib = 1400
+  equal(
+    (await run(
+      `for (let i = 0; i < 2; i++) await tools.yaks.big({kib: ${kib}})`,
+    )).error,
+    undefined,
   )
-  ok(
-    new TextEncoder().encode(JSON.stringify(large)).length <=
-      LIMITS.outputBytes,
+  equal(
+    (await run(
+      `for (let i = 0; i < 3; i++) await tools.yaks.big({kib: ${kib}})`,
+    )).error,
+    TOO.read,
   )
-  ok(large.calls.some((c) => c.error))
+  equal((await run('return "x".repeat(300000)')).error, TOO.output)
 })
 
 let three = fixture([echo])
@@ -196,9 +231,8 @@ test('nested calls discover new app vocabulary and data without naming a store',
   })).structuredContent
   equal(out.error, undefined)
   equal(
-    out.calls.filter((c: { result?: { isError?: boolean } }) =>
-      c.result?.isError
-    ).map((c: { result: { content: unknown } }) => c.result.content),
+    out.calls.filter((c: { isError?: boolean }) => c.isError)
+      .map((c: { error: string }) => c.error),
     [],
   )
   match(out.value.rows, {
@@ -252,7 +286,7 @@ test('one connector call creates, writes and deploys a mockup through the shared
   equal(out.error, undefined)
   equal(out.calls.length, 3)
   equal(
-    out.calls.map((c: { result: { isError?: boolean } }) => c.result.isError),
+    out.calls.map((c: { isError?: boolean }) => c.isError),
     [undefined, undefined, undefined],
   )
   let page = await k.at(k.owner.name + '.' + k.host, '/code-proof/')

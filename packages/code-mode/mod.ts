@@ -14,8 +14,9 @@ import {
   toolEid,
 } from '@yaks/tools'
 import { catalog, declarations } from './types.ts'
-import { source } from './source.ts'
+import { source, TOO } from './source.ts'
 export { catalog, declarations, type Entry } from './types.ts'
+export { TOO } from './source.ts'
 
 export let LIMITS = {
   wallMs: 30_000,
@@ -23,6 +24,7 @@ export let LIMITS = {
   memoryMiB: 128,
   calls: 16,
   outputBytes: 262_144,
+  readBytes: 4_194_304,
   scriptBytes: 65_536,
 }
 export type Result = {
@@ -30,10 +32,13 @@ export type Result = {
   structuredContent?: Record<string, unknown>
   isError?: boolean
 }
+/** One nested call as the answer reports it: the script holds its result,
+ * and only a failure's words come back, so the model reads what the script
+ * returns rather than every row a read handed the sandbox. */
 export type Receipt = {
   id: string
   path: [string, string]
-  result?: Result
+  isError?: boolean
   error?: string
   pending?: boolean
 }
@@ -57,18 +62,14 @@ let finished = (value: unknown, calls: Receipt[], error?: string): Answer => {
   }
   if (bytes(out) > LIMITS.outputBytes) {
     out.value = null
-    out.error = 'return value and tool results exceed 256 KiB output limit'
-  }
-  for (let receipt of [...out.calls].reverse()) {
-    if (bytes(out) <= LIMITS.outputBytes) break
-    delete receipt.result
-    receipt.error = 'tool result omitted to fit output limit'
-  }
-  if (bytes(out) > LIMITS.outputBytes) {
-    throw new CallError('limit', 'receipts exceed output limit')
+    out.error = TOO.output
   }
   return out
 }
+// A result's size, counted once: its structured form where it has one, which
+// its text repeats.
+let size = (r: Result) => bytes(r.structuredContent ?? r.content)
+let said = (r: Result) => r.content.map((c) => c.text).join('\n').slice(0, 1024)
 
 /** All nested calls use admitted registry implementations, the outer caller's
  * stamps and the ordinary runner. Arguments cannot select an actor or session. */
@@ -85,7 +86,7 @@ export let execute = async (
   if (
     script.length > LIMITS.scriptBytes || bytes(script) > LIMITS.scriptBytes
   ) {
-    throw new CallError('limit', 'script exceeds 64 KiB')
+    throw new CallError('limit', TOO.script)
   }
   let entries = catalog(registry).filter((e) => e.name != 'code_mode')
   let allowed = new Map(entries.map((e) => [JSON.stringify(e.path), e]))
@@ -108,7 +109,7 @@ export let execute = async (
       args.length > LIMITS.scriptBytes ||
       new TextEncoder().encode(args).length > LIMITS.scriptBytes
     ) {
-      throw new CallError('limit', 'tool arguments exceed 64 KiB')
+      throw new CallError('limit', TOO.args)
     }
     let input: unknown
     try {
@@ -121,7 +122,7 @@ export let execute = async (
       throw new CallError('tool', 'tool is outside this execution scope')
     }
     if (calls.length >= LIMITS.calls) {
-      throw new CallError('limit', 'execution allows 16 tool calls')
+      throw new CallError('limit', TOO.calls)
     }
     if (!input || typeof input != 'object' || Array.isArray(input)) {
       throw new CallError('args', 'tool arguments must be an object')
@@ -153,11 +154,9 @@ export let execute = async (
           : {}),
         ...(failed ? { isError: true } : {}),
       }
-      used += bytes(result)
-      if (used > LIMITS.outputBytes - 16_384) {
-        throw new CallError('limit', 'tool results exceed 256 KiB output limit')
-      }
-      receipt.result = result
+      used += size(result)
+      if (used > LIMITS.readBytes) throw new CallError('limit', TOO.read)
+      if (failed) Object.assign(receipt, { isError: true, error: said(result) })
       return result
     })()
     pending.add(work)
@@ -192,7 +191,7 @@ export let execute = async (
     if (
       typeof text != 'string' || text.length > LIMITS.outputBytes ||
       new TextEncoder().encode(text).length > LIMITS.outputBytes
-    ) throw new CallError('limit', 'script return exceeds output limit')
+    ) throw new CallError('limit', TOO.output)
     let answer = JSON.parse(text)
     return finished(
       answer.value ?? null,
@@ -221,7 +220,7 @@ export let tool = (
   name: 'code_mode',
   title: 'Run code',
   description:
-    'Run a short JS/TS function body with return and await. tools[set][name](args) calls the same scoped tools, returning MCP content and structuredContent. Omit script to read generated TypeScript declarations; search narrows discovery by tool name/description; offset/limit page it (at most 20). No ambient network, secrets or other bindings. 30s wall, 100ms CPU, 128MiB isolate, 16 calls, 64KiB script, 256KiB combined answer. Started writes may complete after a script fails or times out; pending receipts mean the outcome is still unknown. Durable workflows and human waits are separate.',
+    'Run a short JS/TS function body with return and await. tools[set][name](args) calls the same scoped tools, returning MCP content and structuredContent. Read, filter and join inside the script: the answer is only your return value, plus a receipt per call (its id and path, and the error words of a call that failed). Return a summary or the fields you need, never whole results. Omit script to read generated TypeScript declarations; search narrows discovery by tool name/description; offset/limit page it (at most 20). No ambient network, secrets or other bindings. 30s wall, 100ms CPU, 128MiB isolate, 16 calls, 64KiB script and arguments, 4MiB of tool results, 256KiB returned. Started writes may complete after a script fails or times out; pending receipts mean the outcome is still unknown. Durable workflows and human waits are separate.',
   inputSchema: {
     type: 'object',
     properties: {
