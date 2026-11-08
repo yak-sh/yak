@@ -10,7 +10,7 @@ import { ownerOf, owns } from './operator-access.ts'
 import type { Held } from './build-door.ts'
 import type { Operator } from './operator.ts'
 import type { Request } from './operator-channels.ts'
-import { inputOf, rootAt, rootOf } from './operator-root.ts'
+import { askedAt, inputOf, rootAt, rootOf } from './operator-root.ts'
 import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
 import type { operatorStore } from './operator-store.ts'
@@ -190,9 +190,6 @@ let helpersBy = async (store: Store, calls: Set<string>): Promise<Helper[]> =>
       ),
     )
     : []
-// What a helper was started with: its first lines.
-let openingOf = (store: Store, session: string) =>
-  store.g.read(`.entry.session=${session}&.order=entry.seq&.limit=3&*`)
 // A helper as the conversation's aside lists it (operator-view.ts
 // `helping`), from its own lines: what it was asked, when it began, its
 // place to run, and its run's page under `opens`.
@@ -204,19 +201,50 @@ let listedOf = async (
 ): Promise<HelperLine | null> => {
   let session = helper.session
   if (!session) return null
-  let [[row], opening] = await Promise.all([
+  let [[row], title] = await Promise.all([
     store.g.get([session]),
-    openingOf(store, session),
+    askedAt(store, session),
   ])
   if (!row) return null
   return helping({
     session,
-    title: askedOf(opening),
+    title,
     since: String(comp(row, 'created')?.at ?? ''),
     entries: helper.entries,
     place: (dispatchStatus(row) ?? null) as Place,
     ...opens ? { href: `${opens}/${session}` } : {},
   }, names)
+}
+
+/** What a helper's own page says of it: where the session that started it
+ * opens and, when that is a helper too, what it was asked (else it is the
+ * person's conversation), and the helper as the aside lists it, whose
+ * standing says whether it can still be stopped. */
+export type HelperPage = {
+  parent: { href: string; asked?: string }
+  line: HelperLine | null
+}
+
+// A helper's page's word on it (`HelperPage`).
+let helperPage = async (
+  store: Store,
+  row: Bundle,
+  entries: Bundle[],
+  names: Names,
+  opens: string,
+): Promise<HelperPage> => {
+  let parent = String(comp(row, 'spawned')?.parent ?? '')
+  let [[above], line] = await Promise.all([
+    store.g.get([parent], ['spawned']),
+    listedOf(store, { session: row.entity.eid, entries }, names, opens),
+  ])
+  return {
+    parent: {
+      href: `${opens}/${parent}`,
+      ...above?.spawned ? { asked: await askedAt(store, parent) } : {},
+    },
+    line,
+  }
 }
 
 // The aside a conversation draws (operator-aside.ts): its turn under way,
@@ -358,12 +386,6 @@ let taken = (requests: Bundle[]) =>
     !comp(r, 'operator_request')?.session && !comp(r, 'operator_answer')?.task
   )
 
-// What a helper was asked, in a line: the words it was started with.
-let askedOf = (entries: Bundle[]) =>
-  String(
-    comp(entries.find((b) => !b.prompt && b.content), 'content')?.body ?? '',
-  ).split('\n')[0].slice(0, 80) || 'A piece of work'
-
 /** What the chat app calls a person's conversation with the Operator. */
 export let CONVERSATION = 'Conversation'
 
@@ -411,7 +433,7 @@ let helperOf = async (store: Store, helper: Bundle) => {
   let state = stateOf(lines, true)
   let worked: Worked = {
     open: eid,
-    title: askedOf(await openingOf(store, eid)),
+    title: await askedAt(store, eid),
     state,
     at: String(
       comp(lines.at(-1), 'created')?.at ?? comp(helper, 'created')?.at ?? '',
@@ -596,9 +618,7 @@ export let spendingOf = async (
     ...conversations.map(({ root, title }) => [root, title] as const),
     ...titled,
     ...await Promise.all(
-      helpers.map(async (h) =>
-        [h, askedOf(await openingOf(store, h))] as const
-      ),
+      helpers.map(async (h) => [h, await askedAt(store, h)] as const),
     ),
   ])
   return spent({
@@ -779,6 +799,7 @@ export let conversationOf = async (
   making: Underway | null
   standing: string
   aside?: Aside
+  helper?: HelperPage
 }> => {
   let found = await openedOf(store, open)
   if (found.session) {
@@ -805,11 +826,14 @@ export let conversationOf = async (
       ? entries
       : [...entries, ...await arriving(store, row, entries)]
     return {
+      ...helper
+        ? { helper: await helperPage(store, row, entries, names, opens) }
+        : {},
       aside: await asideOf(store, entries, seen.helpers, names, opens),
       task: eid,
       begun: open,
       title: helper
-        ? askedOf(await openingOf(store, eid))
+        ? await askedAt(store, eid)
         : everyone
         ? await whose(row, everyone)
         : CONVERSATION,

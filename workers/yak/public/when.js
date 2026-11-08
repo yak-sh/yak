@@ -20,9 +20,25 @@ export function when(iso, now = Date.now()) {
   if (Number.isNaN(at.getTime())) return ''
   let minutes = Math.floor((now - at.getTime()) / 60_000)
   if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes} min ago`
+  if (minutes < 60) return `${minutes}m ago`
   let hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours} h ago`
+  if (hours < 24) return `${hours}h ago`
   return (at.getFullYear() == new Date(now).getFullYear() ? dated : yeared)
     .format(at)
+}
+
+let full = new Intl.DateTimeFormat('en-GB', {
+  dateStyle: 'full',
+  timeStyle: 'short',
+})
+
+/**
+ * When a message was sent in full, the tooltip over `when`: its day, date and
+ * time.
+ *
+ * @param {string} iso
+ */
+export function pretty(iso) {
+  let at = new Date(iso)
+  return Number.isNaN(at.getTime()) ? '' : full.format(at)
 }

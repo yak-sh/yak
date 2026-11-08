@@ -1377,6 +1377,7 @@
   }
   /* The conversation, at a reading width in the middle of the page. */
   .Talk_Column,
+  .Talk_Helper,
   .Talk_Keep,
   .Talk_Needs,
   .Talk_Box,
@@ -1451,6 +1452,14 @@
     padding-block: 1rem .25rem;
   }
   .Talk_Needs:empty {
+    display: none;
+  }
+  /* Over a helper's conversation, what it is and where words go
+     (operator-page.ts `helperCard`). */
+  .Talk_Helper {
+    padding-top: 1rem;
+  }
+  .Talk_Helper [data-helper-said]:empty {
     display: none;
   }
   /* What the conversation is doing now and the helpers it set going

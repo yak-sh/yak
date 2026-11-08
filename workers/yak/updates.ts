@@ -6,6 +6,7 @@
 // button for each choice, then what happened, newest first. A choice, or
 // words about one, go into their conversation, and the chat they went to
 // opens.
+import { pretty, when } from './public/when.js'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
@@ -37,18 +38,6 @@ export let updatesOf = (
  * box. */
 export let needing = ({ updates }: Updates): Update | undefined =>
   updates.find((u) => u.needs)
-
-// How long ago, in words: the server knows no person's clock, so no time of
-// day.
-let ago = (at: string, now = Date.now()) => {
-  let minutes = Math.round((now - Date.parse(at)) / 60_000)
-  if (!(minutes >= 1)) return 'just now'
-  if (minutes < 60) return `${minutes} minute${minutes == 1 ? '' : 's'} ago`
-  let hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours} hour${hours == 1 ? '' : 's'} ago`
-  let days = Math.round(hours / 24)
-  return days == 1 ? 'yesterday' : `${days} days ago`
-}
 
 /** The apps an update can be about, by eid, where they open. */
 export type Apps = { eid: string; slug: string; title: string }[]
@@ -94,8 +83,12 @@ let words = (text: string) =>
   h('div', { class: 'Update_Words' }, markdown(text))
 
 // When it happened, said the human way.
-let when = (u: Update) =>
-  h('time', { class: 'Update_When', datetime: u.at }, ago(u.at))
+let stamp = (u: Update) =>
+  h(
+    'time',
+    { class: 'Update_When', datetime: u.at, title: pretty(u.at) },
+    when(u.at),
+  )
 
 /** What needs a person: the Operator's question, its choices, a button for
  * each (the one it recommends first and filled), and `ask` below them, a way
@@ -107,7 +100,7 @@ export let needsCard = (space: Space, u: Update, ask: ComponentChildren) => {
   return h(
     Card,
     { class: 'Update Update-needs', id: `u-${u.eid}` },
-    h(Card.Head, null, h(State, { mod: 'negative' }, 'Needs you'), when(u)),
+    h(Card.Head, null, h(State, { mod: 'negative' }, 'Needs you'), stamp(u)),
     words(u.words),
     choices.length
       ? h(
@@ -170,7 +163,7 @@ let card = (env: Env, space: Space, u: Update, apps: Apps) => {
     h(
       'p',
       { class: 'Update_Meta' },
-      when(u),
+      stamp(u),
       lead ? [' · ', lead] : null,
       u.unread ? [' · ', h(State, { mod: 'positive' }, 'New')] : null,
     ),

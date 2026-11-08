@@ -22,7 +22,7 @@ import {
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
 import { LIMIT } from '@yaks/session/status'
-import { CALLED, channelOf, HEARD, paged } from './operator-view.ts'
+import { CALLED, channelOf, HEARD, paged, stoppedBy } from './operator-view.ts'
 import { building } from './made.ts'
 import { listing } from '@yaks/mcp'
 import {
@@ -88,7 +88,7 @@ import {
   messageReference,
   starting,
 } from './operator-channels.ts'
-import { inputOf, rootAt } from './operator-root.ts'
+import { askedAt, inputOf, rootAt } from './operator-root.ts'
 import { textSend } from './operator-texts.ts'
 import { notificationSend } from './operator-alerts.ts'
 import { iconic } from './raster.ts'
@@ -1648,20 +1648,35 @@ export let operating = (
     if (!busy.length) {
       return { task: open, session, stopped: false }
     }
+    // A helper the person stopped is theirs to start again: the session that
+    // started it and the conversation it works for hear it from them, in the
+    // same write, before the helper's report reaches either.
+    let parent = String(comp(row, 'spawned')?.parent ?? '')
+    let heard = parent ? [...new Set([parent, await topOf(store, parent)])] : []
+    let asked = heard.length ? await askedAt(store, session) : ''
     // One waiting on a helper stops too, so the helper's report does not
     // wake it again (@yaks/session children.ts `deliverChild`).
     await g.apply(
-      [...busy, ...idle].map((s) => ({
-        entity: { eid: crypto.randomUUID() },
-        entry: { session: s },
-        stop: {},
-        content: { body: 'Stopped by the person watching.' },
-        $actor: { by, via: s },
-      })),
+      [
+        ...heard.map((s) => ({
+          entity: { eid: crypto.randomUUID() },
+          entry: { session: s },
+          content: { body: stoppedBy(asked, session) },
+          operator_stopped: { helper: session },
+          $actor: { by, via: s },
+        })),
+        ...[...busy, ...idle].map((s) => ({
+          entity: { eid: crypto.randomUUID() },
+          entry: { session: s },
+          stop: {},
+          content: { body: 'Stopped by the person watching.' },
+          $actor: { by, via: s },
+        })),
+      ],
       { trusted: true },
     )
     if (busy.includes(session)) await answered(session)
-    options.tell?.(session)
+    for (let s of [session, ...heard]) options.tell?.(s)
     return { task: open, session, stopped: true }
   }
 

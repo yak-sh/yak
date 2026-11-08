@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Check,
+  Chip,
   Drop,
   Empty,
   Field,
@@ -19,7 +20,7 @@ import { reachOf } from './operator-reach.ts'
 import { builderOf, carried, operatorDoor, seated } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
-import { esc, type Picked, script, shell } from './pages.ts'
+import { esc, heading, type Picked, script, shell } from './pages.ts'
 import { choice as spaceChoice, fold, worded } from './desk-pages.ts'
 import { spaceHost, url } from './host.ts'
 import {
@@ -76,7 +77,8 @@ import {
 import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
 import { type Changed, talks, type Underway } from './operator-view.ts'
-import { Aside, type Aside as Asided } from './operator-aside.ts'
+import type { HelperPage } from './operator-host.ts'
+import { Aside, type Aside as Asided, going, Stands } from './operator-aside.ts'
 import {
   attached,
   type Lines,
@@ -965,6 +967,7 @@ export let conversationOf = async (
     making,
     standing,
     aside,
+    helper,
     updates: read,
   } = await operatorDoor(
     env,
@@ -994,6 +997,7 @@ export let conversationOf = async (
     making: Underway | null
     standing: string
     aside?: Asided
+    helper?: HelperPage
     updates?: Updates
   }
   return {
@@ -1008,6 +1012,7 @@ export let conversationOf = async (
     making,
     standing,
     aside,
+    helper,
   }
 }
 
@@ -1786,6 +1791,47 @@ let starts = (operator: string, apps: Beside['apps'] = []) =>
     [`What can ${operator} do?`, 'What can you do for me?'],
   ].map(([label, say]) => h(Button, { type: 'button', 'data-say': say }, label))
 
+// Over a helper's conversation, what it is: a helper, what it was asked and
+// how it stands, the conversation that started it, where words written
+// below go (the person's conversation, never the helper), and, while it
+// works, Stop, which that conversation hears as the person's own
+// (operator.ts `stop`).
+let helperCard = ({ parent, line }: HelperPage, operator: string) =>
+  h(
+    'div',
+    { class: 'Talk_Helper', 'data-helper': line?.session ?? '' },
+    h(
+      Card,
+      null,
+      heading(
+        line?.title ?? 'A piece of work',
+        {
+          mark: h(Chip, null, 'Helper'),
+          status: line ? h(Stands, { standing: line.standing }) : null,
+          actions: line && going(line)
+            ? h(
+              Button,
+              { type: 'button', 'data-stop-helper': '' },
+              'Stop this helper',
+            )
+            : null,
+        },
+      ),
+      h(
+        'p',
+        null,
+        'Started by ',
+        h(
+          'a',
+          { href: parent.href },
+          parent.asked ? `the helper “${parent.asked}”` : 'your conversation',
+        ),
+        `. What you write below goes to your conversation with ${operator}, not to this helper.`,
+      ),
+      h('p', { role: 'status', 'data-helper-said': '' }),
+    ),
+  )
+
 // What a chat says before anything is in it: what it is for, in a heading
 // and a line.
 /** A conversation as its pages draw it, the chat app and the admin's: the
@@ -1885,6 +1931,7 @@ export let chatPage = async (
       // The conversation is drawn by the Builder object (operator-view.ts
       // `talk`), and what needs the person by Updates (updates.ts).
       newcomer ? keepCard(here) : null,
+      talked.helper ? helperCard(talked.helper, operator) : null,
       talked.html ? column(talked.html) : column('', greeting),
       landing
         ? h(
@@ -1909,7 +1956,9 @@ export let chatPage = async (
             : null,
         )
         : null,
-      fresh || talked.title ? composer(env, at, here, operator, app) : null,
+      fresh || talked.title
+        ? composer(env, at, here, operator, app, !!talked.helper)
+        : null,
       fresh && !app
         ? h(
           'div',
@@ -1985,8 +2034,13 @@ let composer = (
   here: string,
   operator: string,
   app?: Shown,
+  helper = false,
 ) => {
-  let asked = app
+  // On a helper's page the words still go to the person's conversation,
+  // never the helper, and the box says so.
+  let asked = helper
+    ? `Message ${operator} in your conversation`
+    : app
     ? `What should change in ${app.title || app.slug}?`
     : `Message ${operator}`
   return h(
@@ -2083,7 +2137,7 @@ import { browserDrafts } from '/_draft.js'
 import { redraw } from '/redraw.js'
 import { asideHtml, glanceHtml, helperHtml, lasted, ordered, rowsOf, turnHtml } from '/_talk.js'
 import { voice } from '/voice.js'
-import { when } from '/when.js'
+import { pretty, when } from '/when.js'
 let open = ${JSON.stringify(open)}
 let root = ${JSON.stringify(root)}
 let chats = ${JSON.stringify(chatPath(space.slug, ''))}
@@ -2264,7 +2318,14 @@ let turning = (turn) => {
   if (at) at.replaceWith(drawn(turnHtml(happening.turn)))
   shown()
 }
+// The helper this page shows (\`helperCard\`): Stop goes once it ends.
+let ended = (helper) => {
+  let card = document.querySelector('[data-helper]')
+  if (card?.dataset.helper != helper.session || ['running', 'waiting'].includes(helper.standing)) return
+  card.querySelector('[data-stop-helper]')?.remove()
+}
 let helped = (helper) => {
+  ended(helper)
   happening.helpers = ordered([helper, ...happening.helpers.filter((h) => h.session != helper.session)])
   let list = aside()?.querySelector('[data-helping]')
   if (!list) return
@@ -2323,6 +2384,28 @@ document.addEventListener('click', (e) => {
   say.dispatchEvent(new Event('input', { bubbles: true }))
   say.focus()
   say.setSelectionRange(say.value.length, say.value.length)
+})
+// Stop on a helper's page stops that helper, and the conversation that
+// started it hears that the person did (operator.ts \`stop\`).
+document.addEventListener('click', async (e) => {
+  let button = e.target.closest?.('[data-stop-helper]')
+  if (!button) return
+  let card = button.closest('[data-helper]'), told = card.querySelector('[data-helper-said]')
+  button.disabled = true
+  try {
+    let response = await fetch('${at}?stop=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task: card.dataset.helper }) })
+    if (!response.ok) throw new Error('It could not be stopped. Try again.')
+    let { stopped } = await response.json()
+    button.remove()
+    told.textContent = stopped ? ${
+    script(
+      `Stopped. ${space.operator} hears that you stopped it, and leaves it stopped until you talk.`,
+    )
+  } : 'It had already finished.'
+  } catch (error) {
+    button.disabled = false
+    told.textContent = error.message
+  }
 })
 // Stop takes effect on the page at once; the Operator's own word follows.
 document.addEventListener('click', async (e) => {
@@ -2480,7 +2563,10 @@ form?.addEventListener('submit', async (e) => {
 })
 // When each message was sent, in the person's own time, kept current.
 let stamps = () => {
-  for (let t of box.querySelectorAll('time[datetime]')) t.textContent = when(t.dateTime)
+  for (let t of box.querySelectorAll('time[datetime]')) {
+    t.textContent = when(t.dateTime)
+    t.title = pretty(t.dateTime)
+  }
 }
 stamps()
 setInterval(stamps, 60_000)

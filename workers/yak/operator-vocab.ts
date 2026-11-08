@@ -125,6 +125,19 @@ export let operatorDoc: VocabDoc = {
         },
       },
     },
+    operator_stopped: {
+      component: true,
+      description:
+        'That the person stopped a helper from its page: a line of theirs in the session that started it and in the conversation it works for (operator.ts `stop`), which the model reads as from them and which tells it to leave the helper stopped until they have talked. The page draws it as their act, not its words.',
+      properties: {
+        helper: {
+          type: 'string',
+          ref: 'session',
+          death: 'keep',
+          description: 'The helper session they stopped.',
+        },
+      },
+    },
     operator_letter: {
       component: true,
       description:

@@ -31,3 +31,16 @@ export let rootAt = async (store: Store, space: string, person: string) => {
     ? held[0].entity.eid
     : mine
 }
+
+/** What the helper `session` was asked, in a line: the first words it was
+ * started with, from its first lines. */
+export let askedAt = async (store: Store, session: string) => {
+  let opening = await store.g.read(
+    `.entry.session=${session}&.order=entry.seq&.limit=3&*`,
+  )
+  let first = opening.find((b) => !b.prompt && b.content)?.content as
+    | { body?: unknown }
+    | undefined
+  return String(first?.body ?? '').split('\n')[0].slice(0, 80) ||
+    'A piece of work'
+}

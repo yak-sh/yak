@@ -15,7 +15,7 @@ import { blocks, parse } from '@yaks/markdown/structural'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import { Body, Drop, Icon } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
-import { when } from './public/when.js'
+import { pretty, when } from './public/when.js'
 import { PART } from '@yaks/persona/part'
 import { sourceWords } from './operator-source.ts'
 
@@ -35,6 +35,7 @@ let cut = (text: string, most: number) =>
   text.length > most ? text.slice(0, most) + '…' : text
 
 let NOT_INPUT = [
+  'operator_stopped',
   'output',
   'result',
   'refusal',
@@ -106,7 +107,9 @@ let yours = (b: Bundle, text: string) =>
 let stamp = (b: Bundle) => {
   let at = String(comp(b, 'created')?.at ?? '')
   let said = when(at)
-  return said ? h('time', { class: 'Talk_When', datetime: at }, said) : null
+  return said
+    ? h('time', { class: 'Talk_When', datetime: at, title: pretty(at) }, said)
+    : null
 }
 
 type Sent = { name: string; mime?: string }
@@ -622,7 +625,7 @@ export let lines = (
           ],
           node: tool(b, names, result, under(id)),
         }]
-        : line(b, id, body)
+        : line(b, id, body, opens)
       before = sources.get(id) ?? before
       let at = inside.get(id)
       if (!at) return drawn
@@ -690,7 +693,12 @@ let Asked = ({ nodes }: { nodes: Node[] }) =>
 
 // Any other line: a refusal, a reply, a helper's end, a failure, a stop, or a
 // person's words.
-let line = (b: Bundle, id: string, body: string): Line[] => {
+let line = (
+  b: Bundle,
+  id: string,
+  body: string,
+  opens?: string,
+): Line[] => {
   let is = (node: Node) => [{ id, node, uses: [id] }]
   // A provider's refusal (its own response kept beside it) is said in plain
   // words; its error waits in Details.
@@ -717,6 +725,15 @@ let line = (b: Bundle, id: string, body: string): Line[] => {
     ))
   }
   if (b.system && body) return is(system(b, body))
+  let stopped = comp(b, 'operator_stopped')?.helper
+  if (stopped) {
+    let helper = opens
+      ? h('a', { href: `${opens}/${stopped}` }, 'a helper')
+      : 'a helper'
+    return is(
+      said(b, h('p', { class: 'Talk_Note' }, 'You stopped ', helper, '.')),
+    )
+  }
   if (b.stop || b.interrupted || b.cancel) {
     return is(h('p', { class: 'Talk_Note' }, 'Stopped.'))
   }

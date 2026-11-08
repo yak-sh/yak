@@ -109,13 +109,18 @@ export let TurnNow = ({ turn, now }: { turn: Turn | null; now: number }) =>
       : h(State, null, 'Nothing running'),
   )
 
+/** How a helper stands, in a word in its tone. */
+export let Stands = ({ standing }: { standing: Standing }) => {
+  let [word, tone] = WORD[standing]
+  return h(State, { mod: tone }, word)
+}
+
 /** A helper as a row: what it was asked, linked to its run, over how it
  * stands, its step and how long it took. */
 export let Helper = (
   { helper: x, now }: { helper: HelperLine; now: number },
-) => {
-  let [word, tone] = WORD[x.standing]
-  return h(
+) =>
+  h(
     Rows.Item,
     { id: `help-${x.session}`, 'data-going': going(x) ? '' : undefined },
     h(
@@ -125,14 +130,13 @@ export let Helper = (
       h(
         Rows.Meta,
         null,
-        h(State, { mod: tone }, word),
+        h(Stands, { standing: x.standing }),
         x.step ? ` · ${x.step.replace(/…$/, '')}` : null,
         ' · ',
         h(For, { since: x.since, until: x.until, now }),
       ),
     ),
   )
-}
 
 /** How many dots the summary draws before it says how many more. */
 export let DOTS = 4

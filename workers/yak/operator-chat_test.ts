@@ -714,6 +714,48 @@ test('the Voice card shows back the voice, speed and model each save picked', as
   })
 })
 
+test('a helper’s page says it is a helper, whose, where words go, and offers Stop while it works', async () => {
+  let helper = crypto.randomUUID()
+  await service.store.g.apply([
+    {
+      entity: { eid: helper },
+      session: { id: helper },
+      spawned: { parent: task },
+      operator_session: { space: eid, person },
+    },
+    {
+      entity: { eid: crypto.randomUUID() },
+      entry: { session: helper },
+      content: { body: 'Import the CSV' },
+    },
+  ], { trusted: true })
+  let { document } = await sided('owner', helper)
+  let card = document.querySelector('[data-helper]')!
+  assertEquals(card.getAttribute('data-helper'), helper)
+  assertStringIncludes(
+    card.querySelector('.Card_Head')!.textContent!,
+    'HelperImport the CSV',
+  )
+  assertEquals(
+    card.querySelector('a')!.getAttribute('href'),
+    `${managePath('operator', space.slug)}/${task}`,
+  )
+  assertStringIncludes(card.textContent!, 'goes to your conversation with')
+  assertEquals(
+    card.querySelector('[data-stop-helper]')?.textContent,
+    'Stop this helper',
+  )
+  assertStringIncludes(
+    document.querySelector('#ask [name=say]')!.getAttribute('placeholder')!,
+    'in your conversation',
+  )
+  // Their conversation draws no such card.
+  assertEquals(
+    (await sided('owner')).document.querySelector('[data-helper]'),
+    null,
+  )
+})
+
 // Last, since it adds to the conversation every test above reads.
 test('a chat in which the Operator changed an app opens with no app beside it', async () => {
   let call = crypto.randomUUID()

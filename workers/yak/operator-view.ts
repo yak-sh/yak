@@ -65,6 +65,13 @@ export let HEARD = 'By phone: '
  * it, which the conversation leaves out. */
 export let CALLED = 'They called you, and your voice on the call answered.'
 
+/** What a session hears when the person stops a helper it started, or one
+ * working for their conversation (operator.ts `stop`), as a line of theirs
+ * (`operator_stopped`): which helper, and that it stays stopped until they
+ * have talked. The page draws it as their act, not these words. */
+export let stoppedBy = (asked: string, helper: string) =>
+  `On the chat page, they pressed Stop on the helper "${asked}" (${helper}). Leave it stopped, and don't start its work again another way, until you have talked with them about it.`
+
 /** How words came (`operator_channel`): their channel, and the framing the
  * model reads before them, which the conversation leaves out. */
 export let channelOf = (channel: string, framing = '') => ({
