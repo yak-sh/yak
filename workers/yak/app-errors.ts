@@ -5,7 +5,7 @@ import { sign } from '@yaks/tracker/ticket'
 import type { App, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
-import { recall, writing } from './lib/hops.ts'
+import { elapsed, recall, writing } from './lib/hops.ts'
 
 /** One decoded tracker request. The transport owns credentials, HTTP and its deadline. */
 export type Send = (path: string, init: RequestInit) => Promise<unknown>
@@ -71,16 +71,19 @@ let sent = async (
   let token = await ticket(env, space, who, init.method == 'POST')
   let url = new URL(`https://tracker.internal${path}`)
   url.searchParams.set('scope', space.eid)
-  let response = await env.TRACKER.fetch(
-    new Request(url, {
-      ...init,
-      headers: {
-        authorization: `Bearer ${token}`,
-        'content-type': 'application/json',
-      },
-      signal: AbortSignal.timeout(15_000),
-    }),
-  )
+  let tracker = env.TRACKER
+  // Named on the request's Server-Timing as `tracker_wait` (timing.ts).
+  let response = await elapsed('tracker_wait', () =>
+    tracker.fetch(
+      new Request(url, {
+        ...init,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        signal: AbortSignal.timeout(15_000),
+      }),
+    ))
   if (!response.ok) {
     throw Error(`tracker refused app errors (${response.status})`)
   }

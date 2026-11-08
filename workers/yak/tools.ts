@@ -2782,6 +2782,47 @@ let holdingIn = (listing: Listing, app: string) =>
     )
   )
 
+// The spaces a person's last listing read the trackers of, with the living
+// apps it listed in each, kept by this isolate beside the tracker that
+// answered. A tracker is asked by the space's eid, which only the directory's
+// answer tells, so the next listing asks these again beside its directory
+// read (`trackAhead`), and each space it still lists is answered from that
+// reading (hops.ts `recall`). One it no longer lists, or no longer seats the
+// person in, is read and never said.
+type Tracked = { space: Space; role: Who['role']; apps: string[] }
+let trackers = new WeakMap<object, Map<string, Tracked[]>>()
+
+let tracking = (ctx: Ctx, listing: Listing) => {
+  let tracker = ctx.env.TRACKER
+  if (!tracker) return
+  let by = trackers.get(tracker) ?? new Map<string, Tracked[]>()
+  trackers.set(tracker, by)
+  if (by.size > 1000) by.clear()
+  by.set(
+    ctx.person,
+    listing.seats.flatMap(({ space, role }) => {
+      let apps = listing.apps.filter((a) => a.space == space.eid && !a.trashed)
+      return apps.length && !space.trashed
+        ? [{ space, role, apps: apps.map((a) => a.slug) }]
+        : []
+    }),
+  )
+}
+
+// Begin the tracker reads this listing is likely to make: of the space named,
+// of the spaces holding the app named, or of every space last listed.
+let trackAhead = (ctx: Ctx, space: string | null, app: string | null) => {
+  let last = ctx.env.TRACKER && trackers.get(ctx.env.TRACKER)?.get(ctx.person)
+  for (let at of last ?? []) {
+    let likely = space != null
+      ? at.space.slug == space
+      : app == null || at.apps.includes(app)
+    if (!likely) continue
+    void trackedIn(ctx.env, at.space, asCaller(ctx, at.role), true)
+      .catch(() => {})
+  }
+}
+
 /** Someone in a space or an app, as app_list answers them (people.ts). */
 type Someone = ReturnType<typeof shown>
 
@@ -4947,8 +4988,9 @@ let OURS: Row[] = [
     // The listing is one question, so it is asked as one: the caller's
     // seats, every app across them, everything bound to those apps, who is
     // in the spaces they own and what to call them come from one directory
-    // snapshot (directory.ts `listing`), then one parallel wave for what each
-    // space's tracker holds.
+    // snapshot (directory.ts `listing`), and what each space's tracker holds
+    // is asked beside it of the spaces the last listing tracked
+    // (`trackAhead`), and after it of any other.
     // Asked space by space and app by app it was eleven reads before the
     // first app and three more per app, in turn (T-35431), and asked kind by
     // kind it was five to eight in turn (T-148244).
@@ -4956,17 +4998,21 @@ let OURS: Row[] = [
       // One app asked about is listed alone, in full and with its people
       // named; naming the app names its space, as every other tool reads it.
       let named = args.app == null ? null : text(args.app, 'app')
-      let listing = await ctx.dir.listing(ctx.person)
+      let namedSpace = args.space == null ? null : text(args.space, 'space')
+      let reading = ctx.dir.listing(ctx.person)
+      trackAhead(ctx, namedSpace, named)
+      let listing = await reading
       // An account with no space gains its own. A narrowed credential's
       // `own` names its scope instead, so standing still comes from a seat.
       // Naming an app finds its space as every tool does (tool.ts
       // `ownSpace`), which gains it the same way.
-      if (!listing.seats.length && args.space == null && named == null) {
+      if (!listing.seats.length && namedSpace == null && named == null) {
         await ctx.dir.own(ctx.person)
         listing = await ctx.dir.listing(ctx.person)
       }
-      let seats = args.space != null
-        ? await seatAmong(ctx, listing, text(args.space, 'space'))
+      tracking(ctx, listing)
+      let seats = namedSpace != null
+        ? await seatAmong(ctx, listing, namedSpace)
         : named != null
         ? await seatAmong(
           ctx,
@@ -4993,7 +5039,8 @@ let OURS: Row[] = [
       let gathered = peopleOwned(listing, seats, living)
       let bound = boundOf(listing.bound).filter((b) => alive.has(b.app))
       // What is broken in each app, as each space's tracker holds it: one read
-      // a space, all at once, and no app's store woken to list it (T-123502).
+      // a space, all at once, and no app's store woken to list it (T-123502),
+      // each begun already where the last listing tracked it (`trackAhead`).
       // A space with no app to list has nothing broken to say.
       let tracked = seats.filter(({ space }) =>
         living.some((a) => a.space == space.eid)

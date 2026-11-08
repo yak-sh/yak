@@ -32,7 +32,8 @@
 // (build-door.ts `builderOf`), `copy_wait` on the serving copy (directory-copy.ts),
 // `r2_wait` on the bucket, `analytics_wait` on Cloudflare's SQL API for visit
 // counts (views.ts), `oauth_wait` on the OAuth provider's grants and clients
-// (identity.ts `grants`), `vault_wait` on the vault's database (vault.ts).
+// (identity.ts `grants`), `vault_wait` on the vault's database (vault.ts),
+// `tracker_wait` on a space's tracker (app-errors.ts).
 import { counts, type Tally, tallying } from './lib/hops.ts'
 
 export type Clock = ReturnType<typeof clock>

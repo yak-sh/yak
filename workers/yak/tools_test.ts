@@ -804,6 +804,59 @@ test('a listing asks the tracker only of spaces with an app to list', async () =
   assertEquals(asked, [ada])
 })
 
+// A tracker is asked by the space's eid, which the directory's answer tells,
+// so a listing asks again the trackers its last listing read beside that
+// answer, not after it, and says how long it waited on them.
+test('a listing asks the trackers it last read beside the directory', async () => {
+  let { env } = rows('listing-ahead-secret')
+  let ADA = 'a0000000-0000-4000-8000-0000000000ad'
+  let plain = directory({ fetch: (r) => dirPart.fetch(r, env) })
+  let setup: Ctx = { env, dir: plain, person: ADA }
+  await call(setup, 'space_new', { slug: 'ada', title: 'Ada' })
+  await call(setup, 'app_new', { space: 'ada', slug: 'recipes', title: 'R' })
+  let said: string[] = []
+  let asked = Promise.withResolvers<void>()
+  let tracker = env.TRACKER!
+  env.TRACKER = {
+    fetch: (r: Request) => {
+      said.push('tracker')
+      asked.resolve()
+      return tracker.fetch(r)
+    },
+  } as typeof tracker
+  // The directory holds its answer until the tracker is asked, or a moment.
+  let held = async (r: Request) => {
+    let res = await dirPart.fetch(r, env)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    await Promise.race([
+      asked.promise,
+      new Promise((done) => timer = setTimeout(done, 50)),
+    ]).finally(() => clearTimeout(timer))
+    said.push('directory')
+    return res
+  }
+  let list = async (args: Record<string, unknown>) => {
+    let c = clock()
+    said = []
+    asked = Promise.withResolvers<void>()
+    let dir = directory({ fetch: held })
+    await c.counting(() =>
+      call({ env, dir, person: ADA, clock: c }, 'app_list', args)
+    )
+    return { said, waited: 'tracker_wait' in stages(c.header()) }
+  }
+  assertEquals(await list({}), { said: ['directory', 'tracker'], waited: true })
+  for (let args of [{}, { space: 'ada' }, { app: 'recipes' }]) {
+    assertEquals(await list(args), {
+      said: ['tracker', 'directory'],
+      waited: true,
+    })
+  }
+  // A space the last listing did not track is not read ahead.
+  await assertRejects(() => list({ space: 'nowhere' }))
+  assertEquals(said.includes('tracker'), false)
+})
+
 test('free custom domains return plan settings before provisioning', async () => {
   const { env } = rows('domain-plan-test', { APEX: 'yaks.fyi' })
   const dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
