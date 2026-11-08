@@ -1723,7 +1723,35 @@
     max-width: 100%;
     overflow-x: auto;
   }
-  /* A step the Operator took, as one quiet line that opens on what it asked
+  /* A conversation's lines flow: the steps one after another are one line
+     that wraps, each its own small item, and everything else (words, a
+     reply, an opened step, a step with the files it brought back) takes a
+     line of its own. A line's margins and the gap add to the space between
+     lines a conversation always had. */
+  .Talk_Said[data-rows],
+  .Talk_Inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .35rem .9rem;
+  }
+  .Talk_Said[data-rows] > :not(:has(> .Talk_Step:only-child)),
+  .Talk_Said[data-rows] > :has(> .Talk_Step[open]) {
+    flex-basis: 100%;
+    margin-block: .325rem;
+  }
+  .Talk_Inner > :not(.Talk_Step),
+  .Talk_Inner > .Talk_Step[open] {
+    flex-basis: 100%;
+    margin-block: .125rem;
+  }
+  :is(.Talk_Said[data-rows], .Talk_Inner) > :first-child {
+    margin-top: 0;
+  }
+  :is(.Talk_Said[data-rows], .Talk_Inner) > :last-child {
+    margin-bottom: 0;
+  }
+  /* A step the Operator took, as one quiet item that opens on what it asked
      for and what came back. */
   .Talk_Step > summary {
     display: inline-flex;
