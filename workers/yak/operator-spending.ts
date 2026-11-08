@@ -36,8 +36,9 @@ export type Run = Ran & { helpers: Ran[] }
 
 /** A piece of what requests carry, over all of them: how many carried it,
  * its tokens as they were paid (read from the provider's cache, written to
- * it, sent fresh, generated), and its dollars for those read and written
- * (`cached`) and for those sent fresh and generated (`uncached`). */
+ * it, sent fresh, generated), and its dollars for those read from the cache
+ * (`cached`), those written to it (`written`), and those sent fresh and
+ * generated (`uncached`). */
 export type Part = {
   sends: number
   read: number
@@ -45,6 +46,7 @@ export type Part = {
   fresh: number
   generated: number
   cached: number
+  written: number
   uncached: number
 }
 
@@ -92,7 +94,8 @@ let n = (v: unknown) => Number(v ?? 0) || 0
 let stamp = (b: Bundle, name: 'created' | 'updated') =>
   String(comp(b, name)?.at ?? '')
 
-let none = (): Usage => ({
+/** Nothing spent yet. */
+export let none = (): Usage => ({
   cost: 0,
   turns: 0,
   input: 0,
@@ -142,6 +145,7 @@ let nothing = (): Part => ({
   fresh: 0,
   generated: 0,
   cached: 0,
+  written: 0,
   uncached: 0,
 })
 
@@ -158,8 +162,8 @@ export let priced = (
     write,
     fresh,
     generated,
-    cached: (read * (price?.cached ?? input) +
-      write * (price?.cache_write ?? input)) / m,
+    cached: read * (price?.cached ?? input) / m,
+    written: write * (price?.cache_write ?? input) / m,
     uncached: (fresh * input + generated * n(price?.output)) / m,
   }
 }
@@ -172,6 +176,7 @@ export let joined = (a: Part, b: Part): Part => ({
   fresh: a.fresh + b.fresh,
   generated: a.generated + b.generated,
   cached: a.cached + b.cached,
+  written: a.written + b.written,
   uncached: a.uncached + b.uncached,
 })
 

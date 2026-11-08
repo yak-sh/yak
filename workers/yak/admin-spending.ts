@@ -14,7 +14,9 @@ import { count, dollars, SOURCES } from './meter.ts'
 import { day, moment } from './html.ts'
 import {
   joined,
+  none,
   type Part,
+  plus,
   type Ran,
   type Run,
   type Spending,
@@ -39,6 +41,8 @@ export type Asked = { space: Counted; spending: Spending | Error }
 let DAYS = 30
 let DAY = 86_400_000
 let SHOWN = 100
+// The newest helpers listed under each conversation; the rest are one line.
+let HELPERS = 5
 let TOP = 10
 
 let total = (byDay: ByDay | undefined, now: number, days = DAYS) =>
@@ -323,7 +327,7 @@ let sessions = (runs: Placed[], base: string) => {
       ['Conversation or helper', 'Space', ...USED, 'Last'],
       shown.flatMap((r) => [
         line(r, link(opens(base, r), r.title)),
-        ...r.helpers.map((helper) =>
+        ...r.helpers.slice(0, HELPERS).map((helper) =>
           line(
             { ...helper, space: r.space },
             indented(
@@ -332,6 +336,18 @@ let sessions = (runs: Placed[], base: string) => {
             'quiet',
           )
         ),
+        ...r.helpers.length > HELPERS
+          ? [line(
+            {
+              ...r.helpers.slice(HELPERS).reduce(plus, none()),
+              open: '',
+              title: '',
+              space: r.space,
+            },
+            indented(`${count(r.helpers.length - HELPERS)} more helpers`),
+            'quiet',
+          )]
+          : [],
       ]),
     )
     : h(Empty, null, h('h2', null, 'No Operator has spent anything yet'))
@@ -379,11 +395,12 @@ let grouped = (all: Part[]) => ({
   ...all.reduce(joined),
   sends: Math.max(...all.map((p) => p.sends)),
 })
-let costOf = (p: Part) => p.cached + p.uncached
+let costOf = (p: Part) => p.cached + p.written + p.uncached
 let sentOf = (p: Part) => p.read + p.write + p.fresh + p.generated
 
-// A piece's line: tokens a request, how many carried it, its dollars cached
-// and not, and what that comes to a month at this rate.
+// A piece's line: tokens a request, how many carried it, its dollars read
+// from the provider's cache, written to it and sent fresh, and what that
+// comes to a month at this rate.
 let partLine = (
   said: ComponentChildren,
   p: Part,
@@ -394,6 +411,7 @@ let partLine = (
     tokens(sentOf(p) / Math.max(1, p.sends)),
     count(p.sends),
     dollars(p.cached),
+    dollars(p.written),
     dollars(p.uncached),
     dollars(costOf(p) * month),
   ], mod)
@@ -415,8 +433,16 @@ let partsTable = (
     sum: grouped(all.map(([, p]) => p)),
   })).sort((a, b) => costOf(b.sum) - costOf(a.sum))
   return table(
-    [null, 'num', 'num', 'num', 'num', 'num'],
-    [title, 'Tokens a request', 'Requests', 'Cached', 'Uncached', 'A month'],
+    [null, 'num', 'num', 'num', 'num', 'num', 'num'],
+    [
+      title,
+      'Tokens a request',
+      'Requests',
+      'Cache reads',
+      'Cache writes',
+      'Uncached',
+      'A month',
+    ],
     lines.flatMap(({ group, all, sum }) =>
       all.length == 1 ? [partLine(nameOf(all[0][0]), all[0][1], month)] : [
         partLine(`${nameOf(group)} (${all.length})`, sum, month),
