@@ -48,7 +48,7 @@ export type Bucket = {
   /** one page of the objects whose keys start with `prefix`, each with the
    * moment it landed and its size in bytes; `cursor` continues a truncated
    * page */
-  list: (opts: { prefix: string; cursor?: string }) => Promise<{
+  list: (opts: { prefix: string; cursor?: string; limit?: number }) => Promise<{
     objects: { key: string; uploaded: Date; size: number }[]
     truncated: boolean
     cursor?: string

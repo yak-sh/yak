@@ -1,12 +1,13 @@
 // OpenRouter's own listing, in the provider-neutral model row shape.
 import type { Listed } from '@yaks/model'
+import { reads } from './reads.ts'
 
 type Row = {
   id: string
   name?: string
   context_length?: number
   top_provider?: { max_completion_tokens?: number | null }
-  architecture?: { output_modalities?: string[] }
+  architecture?: { output_modalities?: string[]; input_modalities?: string[] }
   pricing?: {
     prompt?: string
     completion?: string
@@ -53,14 +54,30 @@ export let listed = (r: Row): Listed => ({
     : {},
 })
 
-export let listing = async (
+/** A provider catalogue keeps runtime input limits separate from graph model rows. */
+export type Catalogue = {
+  models: Listed[]
+  reads: Map<string, Record<string, number>>
+}
+
+export let catalogue = async (
   fetcher: typeof fetch = fetch,
-): Promise<Listed[]> => {
+): Promise<Catalogue> => {
   let res = await fetcher('https://openrouter.ai/api/v1/models')
   if (!res.ok) throw new Error(`OpenRouter models says ${res.status}`)
   let body: { data: Row[] } = await res.json()
-  return body.data.map(listed)
+  return {
+    models: body.data.map(listed),
+    reads: new Map(
+      body.data.map((
+        r,
+      ) => [r.id, reads(r.architecture?.input_modalities ?? [])]),
+    ),
+  }
 }
+
+export let listing = async (fetcher: typeof fetch = fetch): Promise<Listed[]> =>
+  (await catalogue(fetcher)).models
 
 /** Speech is a provider endpoint capability, not a list kept in code. */
 export let speechModels = async (

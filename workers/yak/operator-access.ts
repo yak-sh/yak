@@ -8,6 +8,7 @@ type Owner = Pick<Held, 'person' | 'space'>
 // is computed over its transcript.
 const OWNING = [
   'spawned',
+  'entry',
   'operator_session',
   'operator_request',
   'operator_ask',
@@ -31,6 +32,13 @@ export let ownerOf = async (
     return ownerOf(
       store,
       String((row.spawned as { parent: string }).parent),
+      seen,
+    )
+  }
+  if (row.entry) {
+    return ownerOf(
+      store,
+      String((row.entry as { session: string }).session),
       seen,
     )
   }

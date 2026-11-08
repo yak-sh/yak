@@ -27,12 +27,14 @@ import { building } from './made.ts'
 import { listing } from '@yaks/mcp'
 import {
   billed,
-  type Item,
   type Listed,
   type Model,
+  modelReads,
   type Price,
 } from '@yaks/model'
-import { provided, ready } from './providers.ts'
+import { platform, ready, served } from './providers.ts'
+import { attachmentRows } from './operator-attachments.ts'
+import { attached, fileContext } from './operator-inputs.ts'
 import { agents, providing } from './config.ts'
 import { inputSchemaOf } from '@yaks/tools/schema'
 import { CallError, invoke } from '@yaks/tools'
@@ -76,12 +78,9 @@ import {
 } from './lib/hops.ts'
 import { drain, type operatorStore } from './operator-store.ts'
 import {
-  asIs,
-  attachmentId,
   type File,
   mailSend,
   messageReference,
-  SHOWN,
   starting,
 } from './operator-channels.ts'
 import { rootAt } from './operator-root.ts'
@@ -115,6 +114,7 @@ type Store = ReturnType<typeof operatorStore>
 export type Options = {
   directory?: () => Directory
   model?: Model
+  providers?: Record<string, Model>
   name?: string
   price?: Price
   tools?: (ctx: Ctx, files: File[]) => Tool[]
@@ -822,141 +822,118 @@ export let operating = (
   let delegate = choice.delegate
   let spawn = sessionTools(g, { childProperties: { topic: TOPIC } })
     .find((t) => t.name == 'spawn')!
-  let delegated: Tool = {
+  let delegated = (same: boolean): Tool => ({
     ...spawn,
     description:
       `${spawn.description} To consult an app or space oracle, supply topic from the Oracles map and the question as prompt. Its answer comes back automatically.` +
-      (delegate
+      (same && delegate
         ? ` For writing or fixing code, or work that needs careful reasoning, use spawn with model ${delegate} and a prompt that carries everything it needs; its answer comes back to you.`
         : ''),
-  }
+  })
   // The model an input asks for, once its provider lists it (`chosen`).
-  let usingOf = (model = name) => ({
-    provider: identityEid('provider', [provider]),
+  let usingOf = (model = name, from = provider) => ({
+    provider: identityEid('provider', [from]),
     model: identityEid('model', [model]),
   })
   let using = usingOf()
-  let base = options.model ?? provided(env, provider)
-  let reads = base.reads ?? {}
-  // A file's key is the digest of its bytes, so the bytes the last step
-  // showed are kept for the next, which shows them again: a wake reads each
-  // file once, and the files of one step all at once.
-  let bytes = new Map<string, Promise<Uint8Array>>()
-  let bytesOf = (file: File) => {
-    let held = bytes.get(file.key) ?? env.BLOBS.get(file.key).then((kept) => {
-      if (!kept) throw new Error('Operator attachment is missing: ' + file.name)
-      return kept.arrayBuffer().then((b) => new Uint8Array(b))
-    })
-    bytes.set(file.key, held)
-    held.catch(() => bytes.delete(file.key))
-    return held
+  let implementations = {
+    ...options.model
+      ? { [provider]: options.model }
+      : served(env, () => platform(env)),
+    ...options.providers,
   }
-  // The files the model reads as they are, shown beside the words they came
-  // with: the newest first, until SHOWN bytes are in the request; one past
-  // that is named instead, and its words still say what it held.
-  let shown = async (window: Bundle[]) => {
-    let out = new Map<string, Item[]>()
-    let room = SHOWN
-    let wanted: File[] = []
-    let placed: [string, (File | Item)[]][] = []
-    for (let entry of [...window].reverse()) {
-      let files = (comp(entry, 'operator_files')?.files ?? []) as File[]
-      let items: (File | Item)[] = []
-      for (let file of files.filter((f) => asIs(reads, f))) {
-        if (file.size! > room) {
-          items.push({
-            kind: 'user',
-            text:
-              `${file.name} was attached earlier, and is not shown again beside the newer files.`,
-          })
-          continue
-        }
-        room -= file.size!
-        wanted.push(file)
-        items.push(file)
-      }
-      if (items.length) placed.push([entry.entity.eid, items])
-    }
-    let read = new Map(
-      await Promise.all(
-        wanted.map(async (f) => [f.key, await bytesOf(f)] as const),
-      ),
-    )
-    for (let key of bytes.keys()) if (!read.has(key)) bytes.delete(key)
-    for (let [eid, items] of placed) {
-      out.set(
-        eid,
-        items.map((i): Item =>
-          'key' in i
-            ? {
-              kind: i.mime == 'application/pdf' ? 'document' : 'image',
-              bytes: read.get(i.key)!,
-              mediaType: i.mime,
-              label: `Attached: ${i.name} (attachment ${attachmentId(i)})`,
-            }
-            : i
-        ),
-      )
-    }
-    return out
+  let reads = async (model?: string, from?: string) => {
+    let selected = await chosen(model, from)
+    return modelReads(implementations[selected.provider], selected.model)
   }
+  let shown = fileContext(store, env, async (session) => {
+    let space = (await workingOf(store, session))?.space
+    let at = space ? await dir().at(space) : undefined
+    if (!at) throw new Error('Operator attachment has no space')
+    return at
+  })
   // A model's price, from what its provider lists, asked once per name.
   let infos = new Map<string, Promise<Listed | undefined>>()
-  let listed = (model: string) => {
-    let held = infos.get(model) ?? Promise.resolve(base.info?.(model))
-    infos.set(model, held)
-    held.catch(() => infos.delete(model))
+  let listed = (model: string, from = provider) => {
+    let key = from + ':' + model
+    let held = infos.get(key) ??
+      Promise.resolve(implementations[from]?.info?.(model))
+    infos.set(key, held)
+    held.catch(() => infos.delete(key))
     return held
   }
-  let priced = (model: string) =>
-    options.price
+  let priced = (model: string, from = provider) =>
+    options.price && from == provider
       ? Promise.resolve(options.price)
-      : listed(model).then((info) => info?.price)
-  // The model an input asks for where its provider lists it, else the
-  // Operator's own.
-  let chosen = async (model?: string) =>
-    model && model != name &&
-      await listed(model).then((info) => !!info, () => false)
-      ? model
-      : name
+      : listed(model, from).then((info) => info?.price)
+  // An explicitly selected provider/model must be available; legacy channels
+  // naming an unavailable model of the default provider retain their fallback.
+  let chosen = async (model?: string, from = provider) => {
+    if (!implementations[from]) {
+      throw refuse(
+        'arguments',
+        `The Operator has no available ${from} provider.`,
+      )
+    }
+    if (from != provider && !model) {
+      throw refuse(
+        'arguments',
+        'Name a model when selecting an Operator provider.',
+      )
+    }
+    if (!model || (from == provider && model == name)) {
+      return { provider: from, model: name }
+    }
+    if (await listed(model, from).then((info) => !!info, () => false)) {
+      return { provider: from, model }
+    }
+    if (from != provider) {
+      throw refuse('arguments', `${from} does not list model ${model}.`)
+    }
+    return { provider, model: name }
+  }
   // Each ask is charged to the space of the session asking, at the price of
   // the model it asks.
-  let model: Model = Object.assign(async (req: Parameters<Model>[0]) => {
-    reached('request', req)
-    let [price, [ask], space] = await Promise.all([
-      priced(req.model),
-      req.call ? g.get([req.call]) : [],
-      payerOf(store, req.call),
-    ])
-    if (!options.model && !price) {
-      throw new Error(`No catalogue price for operator model ${req.model}`)
-    }
-    reached('payer', space)
-    // The space may ask its provider to keep the cached prefix longer than
-    // the default (`operator{cache_retention}`).
-    let kept = space ? (await dir().at(space))?.cache_retention : undefined
-    let session = comp(ask, 'entry')?.session
-    let reply = await accounted(
-      env,
-      (dir) => space ? dir.at(space) : Promise.resolve(null),
-      base,
-      () => Promise.resolve(price),
-    )({
-      ...req,
-      ...kept ? { cacheRetention: kept } : {},
-      onSubmit: async () => {
-        await req.onSubmit?.()
-        reached('submit', null)
-      },
-      onFirst: () => {
-        reached('first_token', null)
-        req.onFirst?.()
-      },
-    }).finally(() => asked(session ? String(session) : undefined))
-    if (session && req.onText) options.stepped?.(String(session))
-    let cost = billed(reply, price)
-    return { ...reply, cost: cost?.dollars, costReported: cost?.reported }
-  }, base)
+  let accounting = (base: Model, from: string): Model =>
+    Object.assign(async (req: Parameters<Model>[0]) => {
+      reached('request', req)
+      let [price, [ask], space] = await Promise.all([
+        priced(req.model, from),
+        req.call ? g.get([req.call]) : [],
+        payerOf(store, req.call),
+      ])
+      if (!options.model && !price) {
+        throw new Error(`No catalogue price for operator model ${req.model}`)
+      }
+      reached('payer', space)
+      // The space may ask its provider to keep the cached prefix longer than
+      // the default (`operator{cache_retention}`).
+      let kept = space ? (await dir().at(space))?.cache_retention : undefined
+      let session = comp(ask, 'entry')?.session
+      let reply = await accounted(
+        env,
+        (dir) => space ? dir.at(space) : Promise.resolve(null),
+        base,
+        () => Promise.resolve(price),
+      )({
+        ...req,
+        ...kept ? { cacheRetention: kept } : {},
+        onSubmit: async () => {
+          await req.onSubmit?.()
+          reached('submit', null)
+        },
+        onFirst: () => {
+          reached('first_token', null)
+          req.onFirst?.()
+        },
+      }).finally(() => asked(session ? String(session) : undefined))
+      if (session && req.onText) options.stepped?.(String(session))
+      let cost = billed(reply, price)
+      return { ...reply, cost: cost?.dollars, costReported: cost?.reported }
+    }, base)
+  let models = Object.fromEntries(
+    Object.entries(implementations).map(([p, m]) => [p, accounting(m, p)]),
+  )
   // The base persona as this code declares it, written once per wake; one
   // that could not be written is reported and tried again on the next ask,
   // while the Operator wears the base the directory holds.
@@ -982,44 +959,47 @@ export let operating = (
   // none, so a transcript compacts at its share of the model's own window
   // rather than of @yaks/session's default `CONTEXT`.
   let seeded = new Map<string, Promise<void>>()
-  let seedOf = (m: string) => {
-    let held = seeded.get(m) ?? (async () => {
-      Promise.all([priced(m), listed(m).catch(() => undefined)]).then(
-        async ([price, info]) => {
-          let eid = identityEid('model', [m])
-          let [row] = await g.get([eid])
-          let own = Number((row?.model as Comp | undefined)?.context) > 0
-          let context = !own && info?.context
-          let output = info?.output
-          if (!price && !context && !output) return
-          await g.apply([{
-            entity: { eid },
-            ...price ? { price } : {},
-            ...context || output
-              ? {
-                model: {
-                  name: m,
-                  ...context ? { context } : {},
-                  ...output ? { output } : {},
-                },
-              }
-              : {},
-          }], { trusted: true })
-        },
-        () => {},
-      ).catch((e) => caught(e, { request: 'operator model price' }))
-      await g.apply(seed({ provider, model: m }), { trusted: true })
+  let seedOf = (m: string, from = provider) => {
+    let key = from + ':' + m
+    let held = seeded.get(key) ?? (async () => {
+      Promise.all([priced(m, from), listed(m, from).catch(() => undefined)])
+        .then(
+          async ([price, info]) => {
+            let eid = identityEid('model', [m])
+            let [row] = await g.get([eid])
+            let own = Number((row?.model as Comp | undefined)?.context) > 0
+            let context = !own && info?.context
+            let output = info?.output
+            if (!price && !context && !output) return
+            await g.apply([{
+              entity: { eid },
+              ...price ? { price } : {},
+              ...context || output
+                ? {
+                  model: {
+                    name: m,
+                    ...context ? { context } : {},
+                    ...output ? { output } : {},
+                  },
+                }
+                : {},
+            }], { trusted: true })
+          },
+          () => {},
+        ).catch((e) => caught(e, { request: 'operator model price' }))
+      await g.apply(seed({ provider: from, model: m }), { trusted: true })
     })()
-    seeded.set(m, held)
-    held.catch(() => seeded.delete(m))
+    seeded.set(key, held)
+    held.catch(() => seeded.delete(key))
     return held
   }
-  let seeding = (model: string) =>
-    Promise.all(
-      [...new Set([name, delegate, model])]
+  let seeding = (model: string, from = provider) =>
+    Promise.all([
+      ...[...new Set([name, delegate])]
         .filter((m): m is string => !!m)
-        .map(seedOf),
-    )
+        .map((m) => seedOf(m)),
+      seedOf(model, from),
+    ])
 
   // The session's answer, once its turn ends: an answer to each request the
   // turn answers, which its channel delivers (operator_deliver), and on a
@@ -1167,11 +1147,14 @@ export let operating = (
   // The tools a session of this Operator is offered beside its own: the
   // person's apps through their reach, and the Operator's own doors.
   let roster = async (session: string): Promise<Tool[]> => {
-    let [{ space, ctx, files }, task, [row]] = await Promise.all([
+    let [{ space, ctx, files }, task, [row], [using]] = await Promise.all([
       working(env, store, session, options.directory),
       taskOf(store, session),
       g.read(
         `.entity.eid=${session}&.fields=spawned.parent,fork.from,session.topic`,
+      ),
+      g.read(
+        `.entry.session=${session} .using .order=-entry.seq .limit=1 .fields=using.provider`,
       ),
     ])
     reached('working', space)
@@ -1190,7 +1173,14 @@ export let operating = (
     return [
       // A conversation and its forks hand coding and careful reasoning
       // to the stronger model in a fresh helper, which starts no other.
-      ...!(row?.spawned && !row.fork && !topicOf(row)) ? [delegated] : [],
+      ...!(row?.spawned && !row.fork && !topicOf(row))
+        ? [
+          delegated(
+            comp(using, 'using')?.provider ==
+              identityEid('provider', [provider]),
+          ),
+        ]
+        : [],
       ...roster,
       platformBug(ctx, space),
       textSend(env, ctx, space),
@@ -1219,7 +1209,7 @@ export let operating = (
     g,
     lend({
       h: { g, fx, vocab, me, gone },
-      model,
+      providers: models,
       name,
       provider,
       // Its text is shown as it is written, once it is stored, so a reset
@@ -1309,15 +1299,15 @@ export let operating = (
     entity: { eid: input },
     entry: { session },
     content: { body },
-    ...o.request && o.files?.length
-      ? { operator_files: { request: o.request, files: o.files } }
+    ...o.files?.length
+      ? { operator_files: { request: o.request ?? input, files: o.files } }
       : {},
     ...o.channel ? { operator_channel: channelOf(o.channel, o.framing) } : {},
     ...o.call ? { operator_call: { call: o.call, asked: true } } : {},
     // An error the platform asks the Operator to fix is its own words, not
     // the person's it is said for (unseen.ts).
     ...o.channel == 'error' ? { system: {} } : {},
-    using: usingOf(o.model),
+    using: usingOf(o.model, o.provider),
     $actor: { by, via: session },
   })
   let started = (session: string, by: string, space: Space) =>
@@ -1331,14 +1321,19 @@ export let operating = (
 
   // What any words given need first: the model and persona rows, the space
   // and the person.
-  let readying = async (held: Asker, space: Space, asked?: string) => {
-    let model = await chosen(asked)
-    await Promise.all([seeding(model), basing()])
+  let readying = async (
+    held: Asker,
+    space: Space,
+    asked?: string,
+    from?: string,
+  ) => {
+    let selected = await chosen(asked, from)
+    await Promise.all([seeding(selected.model, selected.provider), basing()])
     await g.apply([
       ...await spaced(g.storage, space),
       { entity: { eid: held.person }, person: {} },
     ], { trusted: true })
-    return model
+    return selected
   }
 
   let ask: Operator['ask'] = async (held, space, args, o = {}) => {
@@ -1349,8 +1344,8 @@ export let operating = (
     let input = o.request
       ? derivedEid('operator-input|' + o.request)
       : crypto.randomUUID()
-    o = { ...o, model: await readying(held, space, o.model) }
-    let reference = await messageReference(
+    o = { ...o, ...await readying(held, space, o.model, o.provider) }
+    let { reference, file: sourceFile } = await messageReference(
       env,
       space,
       o.source ?? String(args.say ?? ''),
@@ -1366,6 +1361,10 @@ export let operating = (
       await g.apply([
         await carrying(session, held, space, o, true),
         given(session, input, text + reference, by, o),
+        ...attachmentRows(o.request ?? input, [
+          ...o.files ?? [],
+          ...sourceFile ? [sourceFile] : [],
+        ]),
       ], { trusted: true })
       options.tell?.(session)
       return { task: '', session, input }
@@ -1413,6 +1412,10 @@ export let operating = (
           $actor: { by },
         }]
         : [],
+      ...attachmentRows(o.request ?? input, [
+        ...o.files ?? [],
+        ...sourceFile ? [sourceFile] : [],
+      ]),
       given(
         session,
         input,
@@ -1472,7 +1475,7 @@ export let operating = (
   let tools: Operator['tools'] = async (held, space) => {
     let { session, fresh } = await conversing(held, space)
     if (fresh) await g.apply([fresh], { trusted: true })
-    let offered = (await roster(session)).filter((t) => t != delegated)
+    let offered = (await roster(session)).filter((t) => t.name != spawn.name)
     let named = new Map(offered.map((t) => [t.name, t]))
     return {
       tools: offered.map(({ name, description, parameters }) => ({
@@ -1498,8 +1501,22 @@ export let operating = (
   // An agent asking through operator_run waits on one answer, so its words
   // are a task of their own rather than a person's conversation.
   let run: Operator['run'] = async (held, space, args, o = {}) => {
+    let files = await attached(store, held, space, args.attachments)
+    let selected = await chosen(
+      o.model ?? (typeof args.model == 'string' ? args.model : undefined),
+      o.provider ??
+        (typeof args.provider == 'string' ? args.provider : undefined),
+    )
+    if (typeof args.model == 'string' && selected.model != args.model) {
+      throw refuse(
+        'arguments',
+        `${selected.provider} does not list model ${args.model}.`,
+      )
+    }
     let { task, session, input } = await ask(held, space, args, {
       task: crypto.randomUUID(),
+      ...selected,
+      ...files.length ? { files } : {},
       ...o,
     })
     let entries = await transcript(g, session)
@@ -1521,7 +1538,7 @@ export let operating = (
         (sum, b) => sum + Number(comp(b, 'cost')?.dollars ?? 0),
         0,
       ),
-      model: name,
+      model: selected.model,
     }
   }
 
@@ -1611,12 +1628,13 @@ export type Asking = {
   // call's, speech.ts `setupOf`); one its provider does not serve is
   // answered by the Operator's own.
   model?: string
+  provider?: string
 }
 type Asker = Pick<Held, 'person' | 'administrative'>
 export type Operator = {
   store: Store
   /** What its model reads as it is, beside text (@yaks/model `Model.reads`). */
-  reads: Record<string, number>
+  reads: (model?: string, provider?: string) => Promise<Record<string, number>>
   /** Words given: the next input of the person's conversation, or on a task
    * a new task and session or the next input of the task's newest session.
    * Answers at once with where they went (`task` is '' in a conversation). */

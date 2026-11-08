@@ -311,6 +311,7 @@ export type Deps = {
   contextItems?: (
     window: Bundle[],
     entries: Bundle[],
+    current: { session: Eid; model: Model; name: string },
   ) => Promise<Map<Eid, Item[]>>
   /** Dynamic provider-neutral context after the exact tool offer is resolved.
    * Unlike contextItems, these items have no transcript/media source. */
@@ -1468,7 +1469,11 @@ export let react = async (
   let dynamic: Item[]
   try {
     media = deps.contextItems
-      ? await deps.contextItems(window, entries)
+      ? await deps.contextItems(window, entries, {
+        session,
+        model: providerModel,
+        name: spelled,
+      })
       : undefined
     dynamic = deps.requestItems
       ? await deps.requestItems(window, entries, { session, tools }) ?? []

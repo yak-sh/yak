@@ -1142,6 +1142,23 @@ export let operatorRequest = async (
   }
   // A file sent with a request, or brought back by a step of a session the
   // asker owns (an image the Operator made), to open from the conversation.
+  if (path == '/operator/attachments') {
+    let { attachmentQuery } = await import('./attachment-query.ts')
+    let { conjoin } = await import('@yaks/query/core')
+    let q = conjoin(
+      String(args.q ?? '.attachment&*'),
+      ...(Array.isArray(args.filters) ? args.filters.map(String) : []),
+      ...(typeof args.limit == 'number' ? [`.limit=${args.limit}`] : []),
+    )
+    return Response.json(
+      await attachmentQuery(
+        store,
+        held,
+        q,
+        args.queryCall ? String(args.queryCall) : undefined,
+      ),
+    )
+  }
   if (path == '/operator/attachment') {
     let [row] = await store.g.get([String(args.id ?? '')])
     let sent = (row?.operator_request ?? row?.operator_files) as

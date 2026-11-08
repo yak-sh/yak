@@ -763,7 +763,23 @@ export class Builder {
     await this.#wake(async () => {
       this.#draining = true
       try {
-        return await drain(store, this.#until = Date.now() + SLICE)
+        let { attachmentBackfill } = await import('./attachment-move.ts')
+        let more = false
+        let retry: number | undefined
+        try {
+          more = await attachmentBackfill(store, this.#env)
+        } catch (e) {
+          caught(e, { request: 'operator attachment backfill' })
+          retry = Date.now() + 60_000
+        }
+        let next = await drain(store, this.#until = Date.now() + SLICE)
+        return more
+          ? Date.now()
+          : retry == null
+          ? next
+          : next == null
+          ? retry
+          : Math.min(next, retry)
       } finally {
         this.#draining = false
       }

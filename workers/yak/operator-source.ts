@@ -6,12 +6,16 @@ let AFTER =
 
 export let sourceReference = (id: string) => BEFORE + id + AFTER
 
-/** Remove only the final generated note, preserving the original words. */
-export let sourceWords = (body: string) => {
+/** The exact final generated source note, never text merely quoting one. */
+export let sourceId = (body: string) => {
   let at = body.lastIndexOf(BEFORE)
-  if (at < 0) return body
+  if (at < 0) return undefined
   let id = body.slice(at + BEFORE.length, at + BEFORE.length + 64)
   return /^[0-9a-f]{64}$/.test(id) && body.slice(at) == sourceReference(id)
-    ? body.slice(0, at)
-    : body
+    ? id
+    : undefined
 }
+
+/** Remove only the final generated note, preserving the original words. */
+export let sourceWords = (body: string) =>
+  sourceId(body) ? body.slice(0, body.lastIndexOf(BEFORE)) : body

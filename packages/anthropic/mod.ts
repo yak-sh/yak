@@ -115,7 +115,14 @@ let blocks = (i: Item): ['user' | 'assistant', Block[]] | undefined => {
           ? { type: 'image', source: { ...source, media_type: i.mediaType } }
           : {
             type: 'document',
-            source: { ...source, media_type: i.mediaType },
+            ...i.filename ? { title: i.filename } : {},
+            source: i.mediaType == 'text/plain'
+              ? {
+                type: 'text',
+                media_type: 'text/plain',
+                data: new TextDecoder().decode(i.bytes),
+              }
+              : { ...source, media_type: i.mediaType },
           },
       ]]
     }
@@ -381,6 +388,7 @@ export let messages = (options: Options): Model => {
     }
   }
   return Object.assign(model, {
+    reads: READS,
     info,
     list,
     vocab: anthropicDoc,

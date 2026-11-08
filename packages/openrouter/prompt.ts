@@ -1,12 +1,13 @@
 /** Stable tool declarations and append-only provider cache boundaries. */
-import { type Item, ModelError, type Request, type Tool } from '@yaks/model'
+import { type Item, type Request, type Tool } from '@yaks/model'
 import { input, type ResponseRequest } from '@yaks/openai'
 import { encoded } from './bytes.ts'
 
 type Part = {
-  type: 'text' | 'image_url'
+  type: 'text' | 'image_url' | 'file'
   text?: string
   image_url?: { url: string }
+  file?: { filename: string; file_data: string }
   cache_control?: { type: 'ephemeral' }
 }
 type Message = {
@@ -55,15 +56,23 @@ export let alibabaCache = (model: string) => alibaba.has(model.split(':')[0])
 export let explicit = (model: string) =>
   model.startsWith('anthropic/') || alibabaCache(model)
 
-let unread = (): never => {
-  throw new ModelError(
-    'document',
-    'OpenRouter chat models are sent no documents',
-  )
-}
 let text = (value: string): Part[] => [{ type: 'text', text: value }]
 let message = (item: Item): Message =>
-  item.kind == 'document' ? unread() : item.kind == 'call'
+  item.kind == 'document'
+    ? {
+      role: 'user',
+      content: [
+        ...text(item.label),
+        {
+          type: 'file',
+          file: {
+            filename: item.filename ?? item.label,
+            file_data: `data:${item.mediaType};base64,${encoded(item.bytes)}`,
+          },
+        },
+      ],
+    }
+    : item.kind == 'call'
     ? {
       role: 'assistant',
       tool_calls: [{
@@ -103,7 +112,8 @@ let boundaries = (items: Item[]) => {
   let first = items.findIndex((i) => i.kind != 'instruction')
   let stable = (first < 0 ? items.length : first) - 1
   let ends = items.flatMap((i, at) =>
-    (i.kind == 'user' || i.kind == 'image' || i.kind == 'result') &&
+    (i.kind == 'user' || i.kind == 'image' || i.kind == 'document' ||
+        i.kind == 'result') &&
       (!items[at + 1] || items[at + 1].kind == 'assistant' ||
         items[at + 1].kind == 'call' || items[at + 1].kind == 'instruction')
       ? [at]

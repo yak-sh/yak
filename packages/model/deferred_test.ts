@@ -2,7 +2,7 @@
 // requests and metadata calls share the same provider and retain its recorders.
 import { equal, test } from '@yaks/testing'
 import type { Model, Request } from '@yaks/model'
-import { deferredModel } from './mod.ts'
+import { deferredModel, modelReads } from './mod.ts'
 
 let request: Request = { model: 'fake', items: [], tools: [] }
 let reply = { id: 'reply', model: 'fake', items: [] }
@@ -41,4 +41,29 @@ test('concurrent requests and discovery share one deferred provider', () => {
 test('deferring a provider does not invent optional preparation or recovery', () => {
   equal(plain.info, undefined)
   equal(plain.recover, undefined)
+})
+
+test('lazy native-input discovery shares the provider and selects its requested model', async () => {
+  let loads = 0
+  let model = deferredModel(() => {
+    loads++
+    return Promise.resolve(Object.assign(
+      () => Promise.resolve(reply),
+      {
+        reads: (name: string): Record<string, number> =>
+          name == 'vision' ? { 'image/png': 12 } : {},
+      },
+    ))
+  }, { reads: true })
+  equal(loads, 0)
+  equal(await modelReads(model, 'vision'), { 'image/png': 12 })
+  equal(await modelReads(model, 'text'), {})
+  equal(loads, 1)
+  equal(
+    await modelReads(
+      deferredModel(() => Promise.resolve(provider), {}),
+      'fake',
+    ),
+    {},
+  )
 })

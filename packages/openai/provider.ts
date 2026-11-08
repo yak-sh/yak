@@ -24,6 +24,7 @@ import type { ImageGeneration, Images } from './images.ts'
 import { generations, image, imageListed, imageQuote } from './generations.ts'
 import type { TransportCredential } from './transport.ts'
 import { openaiDoc } from './vocab.ts'
+import { reads } from './reads.ts'
 
 /** How the harness signs in to OpenAI over what it was lent. */
 export type SignedIn = {
@@ -173,6 +174,7 @@ export let providers = (
       anchor: () => undefined,
       lateResults: true,
       recover: true,
+      reads,
     },
   )
   let pictures = generations({

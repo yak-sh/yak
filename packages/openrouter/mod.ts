@@ -1,4 +1,4 @@
-import { listing, speechModels } from './list.ts'
+import { catalogue, speechModels } from './list.ts'
 export { listed, listing } from './list.ts'
 /** OpenRouter's stateless OpenResponses adapter. */
 import {
@@ -46,7 +46,8 @@ export let responses = (options: Options): Model => {
       shape: req ? (body) => responseBody(req, body) : undefined,
     })
   let speechNames: Promise<string[]> | undefined
-  let models: ReturnType<typeof listing> | undefined
+  let models: ReturnType<typeof catalogue> | undefined
+  let described = () => models ??= catalogue(options.fetch)
   let model: Model = async (request) => {
     await options.key()
     let audio = request.modalities?.includes('audio')
@@ -67,12 +68,11 @@ export let responses = (options: Options): Model => {
   return Object.assign(
     model,
     {
-      list: () => models ??= listing(options.fetch),
+      list: async () => (await described()).models,
+      reads: async (name: string) => (await described()).reads.get(name) ?? {},
       info: async (name: string) => {
         await options.key()
-        return (await (models ??= listing(options.fetch))).find((m) =>
-          m.name == name
-        )
+        return (await described()).models.find((m) => m.name == name)
       },
       vocab: openrouterDoc,
       recover: (id: string) =>

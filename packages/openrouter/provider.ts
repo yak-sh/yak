@@ -40,6 +40,7 @@ export let providers = (lent: Lent): Record<string, Model> => ({
         },
       }),
       recover: true,
+      reads: true,
     },
   ),
 })

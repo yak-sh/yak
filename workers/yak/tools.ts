@@ -1,3 +1,4 @@
+import { base64 } from './bytes.ts'
 import { groupBy } from '@yaks/fp'
 import { tell } from './operator-updates.ts'
 import { operatorTools } from './operator-tools.ts'
@@ -3859,7 +3860,15 @@ let OURS: Row[] = [
     readOnly: true,
     input: {
       type: 'object',
-      properties: { space: SPACE, attachment: ATTACHMENT },
+      properties: {
+        space: SPACE,
+        attachment: ATTACHMENT,
+        encoding: {
+          type: 'string',
+          enum: ['utf8', 'base64'],
+          description: 'Read text as UTF-8, or original file bytes as base64.',
+        },
+      },
       required: ['attachment'],
     },
     run: async (ctx, args) => {
@@ -3870,9 +3879,13 @@ let OURS: Row[] = [
         text(args.attachment, 'attachment'),
       )
       return {
-        text: `Read ${bytes.byteLength} bytes of UTF-8 text.`,
+        text: `Read ${bytes.byteLength} bytes${
+          args.encoding == 'base64' ? '' : ' of UTF-8 text'
+        }.`,
         space,
-        value: { text: attachmentText(bytes) },
+        value: args.encoding == 'base64'
+          ? { base64: base64(bytes) }
+          : { text: attachmentText(bytes) },
       }
     },
   },

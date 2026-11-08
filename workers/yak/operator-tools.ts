@@ -41,6 +41,14 @@ export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
         task: str(
           'The id of an existing operator task to continue. Omit for a new request.',
         ),
+        provider: str('The configured model provider to use for this run.'),
+        model: str('The model the selected provider lists for this run.'),
+        attachments: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'SHA-256 addresses of files already sent to your Operator, as attachment.artifact names them.',
+        },
       },
     },
     run: (ctx, args) => ask(ctx, args, '/operator/run'),

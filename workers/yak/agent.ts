@@ -77,6 +77,7 @@ import { inReach } from './declared.ts'
 import { NARROW, pageFor, UNDO } from './guide.ts'
 import { caught } from './defects.ts'
 import { outlasted } from './outlast.ts'
+import { attachmentCore } from './attachment-core.ts'
 
 // Keep the declared JSON Schema whole; converting through a partial Zod
 // vocabulary lost unions, integer types and constraints before tools/list.
@@ -605,6 +606,14 @@ export let searching =
  */
 export let connected = (ctx: Ctx, reach: Reach[], graph: Graph) => ({
   graph,
+  core: false,
+  tools: attachmentCore(ctx, {
+    vocab: graph.vocab,
+    search: searching(ctx, reach),
+    guide: (comp) => pageFor(comp, ctx.env),
+    undo: UNDO,
+    narrow: NARROW,
+  }),
   search: searching(ctx, reach),
   // Where a component is documented at length, so graph_schema hands over the
   // page beside the properties (guide.ts `pageFor`).

@@ -13,7 +13,12 @@ type Base64 = { type: 'base64'; media_type: string; data: string }
 /** A block of a message sent. */
 export type Block =
   | { type: 'text'; text: string }
-  | { type: 'image' | 'document'; source: Base64 }
+  | { type: 'image'; source: Base64 }
+  | {
+    type: 'document'
+    source: Base64 | { type: 'text'; media_type: 'text/plain'; data: string }
+    title?: string
+  }
   | { type: 'tool_use'; id: string; name: string; input: unknown }
   | { type: 'tool_result'; tool_use_id: string; content: string }
 

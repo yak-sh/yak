@@ -180,7 +180,14 @@ export type Item =
   | { kind: 'image'; bytes: Uint8Array; mediaType: string; label: string }
   /** a document the model reads as it is, such as a PDF; a provider that
    * reads none refuses the request */
-  | { kind: 'document'; bytes: Uint8Array; mediaType: string; label: string }
+  | {
+    kind: 'document'
+    bytes: Uint8Array
+    mediaType: string
+    label: string
+    /** Original filename, including its extension, separate from display text. */
+    filename?: string
+  }
   | { kind: 'instruction'; text: string }
   | { kind: 'user'; text: string }
   | { kind: 'assistant'; text: string; id?: string }
@@ -325,8 +332,14 @@ export type Model = ((req: Request) => Promise<Reply>) & {
    * a call that finishes after its first output is told as user text. */
   lateResults?: true
   /** The media types it reads as they are, beside text, each with the most
-   * bytes of one file it takes. Without it, a file is read as its text. */
-  reads?: Record<string, number>
+   * raw bytes of one file it takes, or Infinity for no published byte cap.
+   * A function selects the requested model's capabilities. Request-wide limits
+   * still apply. Without it, a file is read as its text. */
+  reads?:
+    | Record<string, number>
+    | ((
+      name: string,
+    ) => Record<string, number> | Promise<Record<string, number>>)
   /** What a request priced by the call rather than by its tokens (a track of
    * music) would cost within `remaining` dollars, null where it would not
    * fit; undefined for a request its tokens price. */
@@ -335,6 +348,13 @@ export type Model = ((req: Request) => Promise<Reply>) & {
    * to one request, which a meter reserves beside the request's own bound. */
   hosted?: Hosted
 }
+
+/** Native file inputs for the selected model, including a provider's lazy lookup. */
+export let modelReads = async (
+  model: Model,
+  name: string,
+): Promise<Record<string, number>> =>
+  typeof model.reads == 'function' ? await model.reads(name) : model.reads ?? {}
 
 /** What a model's provider-run tools may add to one request: at most
  * `searches` web searches, billed at {@link Price} `web_search`, and `input`

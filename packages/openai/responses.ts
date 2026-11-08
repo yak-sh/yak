@@ -1,4 +1,5 @@
 import { listing } from './list.ts'
+import { reads } from './reads.ts'
 import { generatedImages, type Images } from './images.ts'
 // Provider-neutral model items in and out; transport.ts alone owns the HTTP
 // calls to the Responses API.
@@ -84,7 +85,11 @@ let shape: Record<Item['kind'], (item: Item) => unknown> = {
       role: 'user',
       content: [
         { type: 'input_text', text: doc.label },
-        { type: 'input_file', filename: doc.label, file_data: dataUrl(doc) },
+        {
+          type: 'input_file',
+          filename: doc.filename ?? doc.label,
+          file_data: dataUrl(doc),
+        },
       ],
     }
   },
@@ -226,6 +231,7 @@ export let items = (done: Frame[]): Item[] => {
  */
 export let responses = (opts: Options): Model =>
   Object.assign(ask(opts), {
+    reads,
     lateResults: true as const,
     list: async () =>
       listing(await opts.credential(), opts.fetch, opts.refresh, opts.headers),

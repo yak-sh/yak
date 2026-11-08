@@ -26,6 +26,7 @@ export let operatorDoc: VocabDoc = {
             'The phone transport a text arrived on, used for its reply.',
         },
         files: { type: 'array', items: { type: 'object' } },
+        provider: { type: 'string' },
         model: {
           type: 'string',
           description:

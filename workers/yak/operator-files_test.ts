@@ -275,3 +275,138 @@ test('a file over the size the box takes is left out, and the box says so', () =
   assertEquals(b.sending(), ['note.txt'])
   assertEquals(b.said(), 'scan.tiff is larger than 16 MB, so it was left out.')
 })
+
+// A model choice applies to file admission as well as the generated answer.
+let { operating } = await import('./operator.ts')
+let { operatorMemory } = await import('./operator-testing.ts')
+let { keepFile } = await import('./operator-channels.ts')
+let { drain } = await import('./operator-store.ts')
+let store = operatorMemory()
+let nativeAsks: Ask[] = []
+let docxType =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+let nativeModel = Object.assign((req: Ask) => {
+  nativeAsks.push(req)
+  return Promise.resolve({
+    id: crypto.randomUUID(),
+    model: req.model,
+    items: [{ kind: 'assistant', text: 'Read the file.' } as Item],
+    usage: { input_tokens: 10, output_tokens: 0 },
+  })
+}, {
+  info: (name: string) =>
+    Promise.resolve(
+      ['files', 'text-only'].includes(name)
+        ? { name, price, context: 200_000, output: 2048 }
+        : undefined,
+    ),
+  reads: (name: string): Record<string, number> =>
+    name == 'files' ? { [docxType]: 1024, 'text/plain': 1024 } : {},
+})
+let operator = operating(store, p.env, {
+  directory: () => directoryOf(p.env.STORE),
+  name: 'files',
+  model: nativeModel,
+  providers: { openai: nativeModel },
+  price,
+})
+let docxBytes = new TextEncoder().encode(
+  'A document handled natively does not need conversion.',
+)
+let docx = await keepFile(p.env, space, 'minutes.docx', docxType, docxBytes)
+let textBytes = new TextEncoder().encode(
+  'Project selection follows the current model.',
+)
+let note = await keepFile(p.env, space, 'note.txt', 'text/plain', textBytes)
+await operator.ask(who, space, { say: 'Keep these files.' }, {
+  files: [docx, note],
+})
+await drain(store)
+let fileRun = await operator.run(who, space, {
+  provider: 'openai',
+  model: 'files',
+  say: 'Read the document.',
+  attachments: [docx.key.split('/').at(-1)],
+})
+let fileAsk = nativeAsks.at(-1)!
+let noteRun = await operator.run(who, space, {
+  provider: 'openai',
+  model: 'files',
+  say: 'Keep this note.',
+  attachments: [note.key.split('/').at(-1)],
+})
+let textRun = await operator.run(who, space, {
+  task: noteRun.task,
+  provider: 'openai',
+  model: 'text-only',
+  say: 'Read the earlier note.',
+})
+let textAsk = nativeAsks.at(-1)!
+
+test('a run on another provider sends its DOCX as a document with its original filename', async () => {
+  assertEquals(fileRun.status, 'settled', fileRun.text)
+  let document = fileAsk.items.find((i) => i.kind == 'document')!
+  assertEquals(document, {
+    kind: 'document',
+    filename: 'minutes.docx',
+    mediaType: docxType,
+    label: `Attached: minutes.docx (attachment ${docx.key.split('/').at(-1)})`,
+    bytes: docxBytes,
+  })
+  assertEquals(fileRun.model, 'files')
+  let [input] = await store.g.read(
+    `.entry.session=${fileRun.session}&.using&.order=entry.seq&.limit=1`,
+  )
+  let [provider] = await store.g.get([
+    String((input.using as { provider: string }).provider),
+  ])
+  assertEquals(provider.provider, { name: 'openai' })
+})
+
+test('a later turn whose selected model cannot read an earlier file receives its extracted text', () => {
+  assertEquals(textRun.status, 'settled', textRun.text)
+  assertEquals(textRun.model, 'text-only')
+  assertEquals(
+    textAsk.items.some((i) => i.kind == 'document' || i.kind == 'image'),
+    false,
+  )
+  assertStringIncludes(
+    JSON.stringify(textAsk.items),
+    new TextDecoder().decode(textBytes),
+  )
+})
+
+test('a run refuses unavailable providers, unlisted models and another persons attachment', async () => {
+  let { assertRejects } = await import('@std/assert')
+  await assertRejects(
+    () =>
+      operator.run(who, space, {
+        provider: 'missing',
+        model: 'files',
+        say: 'Read it.',
+      }),
+    Error,
+    'no available missing provider',
+  )
+  await assertRejects(
+    () =>
+      operator.run(who, space, {
+        provider: 'openai',
+        model: 'missing',
+        say: 'Read it.',
+      }),
+    Error,
+    'does not list model missing',
+  )
+  await assertRejects(
+    () =>
+      operator.run({ person: crypto.randomUUID() }, space, {
+        provider: 'openai',
+        model: 'files',
+        say: 'Read it.',
+        attachments: [docx.key.split('/').at(-1)],
+      }),
+    Error,
+    'attachment is missing',
+  )
+})

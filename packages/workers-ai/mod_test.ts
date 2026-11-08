@@ -161,7 +161,7 @@ test('a rate limit, a timeout, spent credits, an unaccepted license and an unkno
   assertEquals(other, broken)
 })
 
-test('images and cancelled requests are never sent', async () => {
+test('images are sent as native image parts and cancelled requests are never sent', async () => {
   let { asked, model } = binding({ response: 'ok' })
   let image: Item = {
     kind: 'image',
@@ -169,9 +169,43 @@ test('images and cancelled requests are never sent', async () => {
     mediaType: 'image/png',
     label: 'x',
   }
-  await assertRejects(() => model(ask([image])), ModelError)
+  await model(ask([image]))
+  assertEquals(asked[0].input, {
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'text', text: 'x' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,AQ==' } },
+      ],
+    }],
+  })
   await assertRejects(() => model(ask([], { signal: AbortSignal.abort() })))
-  assertEquals(asked, [])
+  assertEquals(asked.length, 1)
+})
+
+test('structured models receive native images beside their state', async () => {
+  let { asked, model } = binding({ answers: { see: { choice: 'yes' } } })
+  let questions = {
+    see: {
+      type: 'choice' as const,
+      instructions: 'What?',
+      criteria: { yes: 'yes' },
+    },
+  }
+  await model(ask([
+    { kind: 'user', text: 'What is shown?' },
+    {
+      kind: 'image',
+      bytes: new Uint8Array([1]),
+      mediaType: 'image/png',
+      label: 'Picture',
+    },
+  ], { questions }))
+  assertEquals(asked[0].input, {
+    state: [{ role: 'user', content: 'What is shown?' }],
+    questions,
+    images: ['data:image/png;base64,AQ=='],
+  })
 })
 
 test('typed questions go as state and come back answered by name', async () => {

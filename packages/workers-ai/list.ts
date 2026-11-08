@@ -1,6 +1,7 @@
 // Workers AI's binding listing and published model page, never a code catalogue.
 import type { Listed, Price } from '@yaks/model'
 import { type Clock, system } from '@yaks/fp'
+import { pageReads } from './reads.ts'
 
 export type Listing = {
   name: string
@@ -44,10 +45,12 @@ export let pagePrice = (body: string): Price | undefined => {
     : undefined
 }
 
+type Info = { model: Listed; reads: Record<string, number> }
+
 let readInfo = async (
   name: string,
   fetcher: typeof fetch = fetch,
-): Promise<Listed> => {
+): Promise<Info> => {
   let slug = name.split('/').at(-1)
   let res = await fetcher(
     `https://developers.cloudflare.com/workers-ai/models/${slug}/index.md`,
@@ -64,9 +67,12 @@ let readInfo = async (
   let context = body.match(/Context Window[^\n]*?([\d,]+) tokens/i)
   let price = pagePrice(body)
   return {
-    name,
-    ...context ? { context: Number(context[1].replaceAll(',', '')) } : {},
-    ...price ? { price } : {},
+    reads: pageReads(body),
+    model: {
+      name,
+      ...context ? { context: Number(context[1].replaceAll(',', '')) } : {},
+      ...price ? { price } : {},
+    },
   }
 }
 
@@ -74,15 +80,15 @@ let readInfo = async (
 // so a stored offering never freezes an old price; a failed fetch is retried.
 let pages = new WeakMap<
   typeof fetch,
-  Map<string, { until: number; read: Promise<Listed> }>
+  Map<string, { until: number; read: Promise<Info> }>
 >()
 
 /** Published metadata, read once per model and fetch binding each hour. */
-export let modelInfo = (
+let described = (
   name: string,
   fetcher: typeof fetch = fetch,
   clock: Clock = system,
-): Promise<Listed> => {
+): Promise<Info> => {
   let held = pages.get(fetcher) ?? new Map()
   pages.set(fetcher, held)
   let found = held.get(name)
@@ -98,6 +104,19 @@ export let modelInfo = (
   }
   return read
 }
+
+/** Published model metadata, without runtime capabilities in graph model rows. */
+export let modelInfo = async (
+  name: string,
+  fetcher: typeof fetch = fetch,
+  clock: Clock = system,
+): Promise<Listed> => (await described(name, fetcher, clock)).model
+
+/** Native input types from the same cached model page. */
+export let nativeReads = async (
+  name: string,
+  fetcher: typeof fetch = fetch,
+): Promise<Record<string, number>> => (await described(name, fetcher)).reads
 
 export let listing = async (
   ai: {

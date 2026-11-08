@@ -1,4 +1,5 @@
-import { type Listing, listing, modelInfo } from './list.ts'
+import { type Listing, listing, modelInfo, nativeReads } from './list.ts'
+import { toBase64 } from '@yaks/fp'
 export { listed, listing, modelInfo, pagePrice } from './list.ts'
 /**
  * @yaks/workers-ai implements @yaks/model's {@link Model} over Cloudflare
@@ -101,7 +102,10 @@ type Call = {
 // One chat message, as the binding takes it.
 type Message = {
   role: 'system' | 'user' | 'assistant' | 'tool'
-  content: string
+  content: string | (
+    | { type: 'text'; text: string }
+    | { type: 'image_url'; image_url: { url: string } }
+  )[]
   tool_calls?: Call[]
   name?: string
   tool_call_id?: string
@@ -117,6 +121,9 @@ let at = (v: unknown, ...path: (string | number)[]): unknown =>
 let str = (v: unknown) => typeof v == 'string' ? v : ''
 
 let count = (v: unknown) => typeof v == 'number' && v >= 0 ? v : undefined
+
+let imageUrl = (image: Extract<Item, { kind: 'image' }>): string =>
+  `data:${image.mediaType};base64,${toBase64(image.bytes)}`
 
 /**
  * What a model said, out of the envelope AI Gateway puts a third-party
@@ -156,7 +163,18 @@ let messages = (req: Request): Message[] => {
   for (let i of req.items) {
     let last = out.at(-1)
     if (i.kind == 'image') {
-      throw new ModelError('image', 'Workers AI models are sent no images')
+      out.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: i.label },
+          {
+            type: 'image_url',
+            image_url: {
+              url: imageUrl(i),
+            },
+          },
+        ],
+      })
     } else if (i.kind == 'document') {
       throw new ModelError(
         'document',
@@ -332,18 +350,29 @@ export let unfit = (e: unknown): boolean =>
 // What the binding is asked: a chat, or a structured model's questions about
 // the same conversation.
 let input = (req: Request) =>
-  req.questions ? { state: messages(req), questions: req.questions } : {
-    messages: messages(req),
-    ...req.tools.length
-      ? {
-        tools: [...req.tools].sort((a, b) =>
-          a.name < b.name ? -1 : a.name > b.name ? 1 : 0
-        ).map((f) => ({ type: 'function', function: f })),
-      }
-      : {},
-    ...req.tokens ? { max_tokens: req.tokens } : {},
-    ...req.effort ? { reasoning_effort: req.effort } : {},
-  }
+  req.questions
+    ? {
+      state: messages({
+        ...req,
+        items: req.items.filter((i) => i.kind != 'image'),
+      }),
+      questions: req.questions,
+      ...req.items.some((i) => i.kind == 'image')
+        ? { images: req.items.filter((i) => i.kind == 'image').map(imageUrl) }
+        : {},
+    }
+    : {
+      messages: messages(req),
+      ...req.tools.length
+        ? {
+          tools: [...req.tools].sort((a, b) =>
+            a.name < b.name ? -1 : a.name > b.name ? 1 : 0
+          ).map((f) => ({ type: 'function', function: f })),
+        }
+        : {},
+      ...req.tokens ? { max_tokens: req.tokens } : {},
+      ...req.effort ? { reasoning_effort: req.effort } : {},
+    }
 
 // Gateway errors keep the useful validation reason outside Error.message.
 // Retain it on the same error, so host trackers storing message/stack see it.
@@ -692,6 +721,7 @@ export let workersAi = (
     recover: (call: string) => recoveredMedia(call, options.receipts, deliver),
     list: () => listing(ai),
     info: (name: string) => modelInfo(name, options.fetch),
+    reads: (name: string) => nativeReads(name, options.fetch),
     quote: (req: Request, remaining: number) =>
       music(req.model)
         ? musicQuote(req.model, req.input ?? {}, remaining)

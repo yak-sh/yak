@@ -2,6 +2,58 @@
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { modelInfo, pagePrice } from './list.ts'
+import { modelReads } from '@yaks/model'
+import { workersAi } from './mod.ts'
+
+test('vision input follows the selected model page without an inference call', async () => {
+  let model = workersAi({
+    run: () => {
+      throw new Error('No inference for metadata')
+    },
+  }, {
+    fetch: (url) =>
+      Promise.resolve(
+        new Response(
+          String(url).includes('/vision/')
+            ? '| Vision | Yes |'
+            : '| Vision | No |',
+        ),
+      ),
+  })
+  assertEquals(
+    Object.keys(await modelReads(model, '@cf/vendor/vision')).sort(),
+    [
+      'image/jpeg',
+      'image/png',
+    ],
+  )
+  assertEquals(await modelReads(model, '@cf/vendor/text'), {})
+  assertEquals(await model.info?.('@cf/vendor/vision'), {
+    name: '@cf/vendor/vision',
+  })
+})
+
+test('documented model image types and limits do not become graph model properties', async () => {
+  let model = workersAi({
+    run: () => {
+      throw new Error('No inference for metadata')
+    },
+  }, {
+    fetch: () =>
+      Promise.resolve(
+        new Response(`| Vision | Yes |
+Optional embedded PNG, JPEG, or WebP images placed before the state (max 4; 4 MiB and 16 megapixels each, 8 MiB total decoded).`),
+      ),
+  })
+  assertEquals(await modelReads(model, '@cf/cloudflare/clef'), {
+    'image/png': 4 * 1024 * 1024,
+    'image/jpeg': 4 * 1024 * 1024,
+    'image/webp': 4 * 1024 * 1024,
+  })
+  assertEquals(await model.info?.('@cf/cloudflare/clef'), {
+    name: '@cf/cloudflare/clef',
+  })
+})
 
 test('embedding pages price input tokens without charging for the vector output', async () => {
   let info = await modelInfo(
