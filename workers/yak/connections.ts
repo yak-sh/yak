@@ -37,6 +37,7 @@ import {
   begin,
   bindingOf,
   borrowed,
+  brokerOf,
   carry,
   connect,
   connectable,
@@ -46,11 +47,14 @@ import {
   envOf,
   type Field,
   fieldsOf,
+  find,
   type Given,
   installed,
   type Integration,
   integrationEid,
   keyed,
+  kind,
+  kinds,
   known,
   knownIn,
   lend,
@@ -58,6 +62,7 @@ import {
   LISTED,
   namesOf,
   need,
+  type Offer,
   type Owners,
   type Path,
   type Read,
@@ -97,6 +102,7 @@ import { domainOf, vouched, type Who, whoIs } from './session.ts'
 import { type Ctx as Asking, refuse } from './tool.ts'
 import { vaulted, vaultOf } from './vault.ts'
 import { drawn } from './theirs.ts'
+import { adopting, BROKER, LOGOS, offersOf } from './catalog.ts'
 
 /** Where a service sends a person back after they sign in there. */
 export let CALLBACK = '/connections/callback'
@@ -131,6 +137,9 @@ export type Face = {
   site: string
   /** an SVG document, drawn as an image */
   logo: string
+  /** where its logo is served from, for a service with no SVG kept here (a
+   * catalog's, catalog.ts `logoDoor`) */
+  image: string
   /** how a person gets its key, drawn from its markdown as HTML, its links
    * marked as the writer's (theirs.ts) */
   instructions: string
@@ -141,13 +150,19 @@ export type Face = {
   fields: Field[]
 }
 
-/** The face of an integration, called by its name where it has no title. */
-export let faceOf = async (name: string, i?: Integration): Promise<Face> => ({
+/** The face of an integration, or of a catalog's offer, called by its name
+ * where it has no title. A card in a grid says no instructions (`brief`). */
+export let faceOf = async (
+  name: string,
+  i?: Integration & { image?: string },
+  brief = false,
+): Promise<Face> => ({
   title: i?.title || name,
   tagline: i?.tagline ?? '',
   site: i?.site ?? '',
   logo: i?.logo ?? '',
-  instructions: await drawn(i?.instructions),
+  image: !i?.logo && i?.image ? `${LOGOS}${encodeURIComponent(name)}` : '',
+  instructions: brief ? '' : await drawn(i?.instructions),
   theirs: !i?.built,
   fields: fieldsOf(i),
 })
@@ -250,6 +265,28 @@ export type Borrowed = {
   app: Using
 }
 
+/** A service the page offers to connect, as a card draws it. */
+export type Offered = { name: string; keyed: boolean; face: Face }
+
+/** The catalog, as the page shows it. */
+export type Catalog = {
+  /** what the page was asked to find (`?q=`) */
+  q: string
+  featured: Offered[]
+  /** what the search found, best first, at most `SHOWN` */
+  found: Offered[]
+  /** how many it found in all */
+  matched: number
+  /** how many services the catalog holds */
+  total: number
+  /** the kinds of service it holds, the most common first, each by its
+   * name and as a person reads it */
+  kinds: { name: string; label: string }[]
+}
+
+/** The most a search shows at once. */
+export let SHOWN = 48
+
 /** What the connections page is drawn from. */
 export type Connections = {
   /** whether this deploy can keep a key at all */
@@ -261,13 +298,21 @@ export type Connections = {
   /** the built integrations nothing here is connected to yet, and this deploy
    * can connect: one reached by OAuth needs the client it names kept in the
    * vault (@yaks/connections `registration`) */
-  built: { name: string; keyed: boolean; face: Face }[]
+  built: Offered[]
   /** the testing integrations the page was opened for (`enabled`), which its
    * forms carry */
   enable?: string[]
-  /** the integration the page was opened to add (`?add=<name>`, from the
-   * integration directory), while this space has none through it */
-  asked?: { name: string; keyed: boolean; face: Face }
+  /** the integration the page was opened to add (`?add=<name>`, from a
+   * card's Connect or the integration directory), while this space has none
+   * through it */
+  asked?: Offered
+  /** the catalog (catalog.ts): what is featured, and what the page's search
+   * found, of everything nothing here is connected to yet and this deploy can
+   * connect */
+  catalog?: Catalog
+  /** the connection the page was opened on (`?connect=<eid>`), shown whole
+   * where the rest are cards */
+  open?: string
   /** what the apps of this space borrow from another space's lend */
   borrowed: Borrowed[]
 }
@@ -525,6 +570,11 @@ type Asked = {
    * connected is asked beside the rest and kept only if it is */
   own?: boolean | Promise<boolean>
   add?: string
+  /** what the page's search asks the catalog for (`?q=`) */
+  find?: string
+  /** the connection the page was opened on, to connect or manage
+   * (`?connect=<eid>`) */
+  open?: string
   /** the request's directory, so these reads travel with what it asks */
   dir?: ReturnType<typeof dirOf>
   /** the walk to the space, `.space.slug=ada`, while its eid is still being
@@ -638,16 +688,40 @@ export let connectionsOf = async (
   let offered = async (i: Integration) =>
     !taken.has(i.name) && (!i.testing || enable.includes(i.name)) &&
     connectable(i, vaulted(env) && await signsInWith(vaultOf(env), read, i))
+  let card = async (i: Integration, brief = true): Promise<Offered> => ({
+    name: i.name,
+    keyed: keyed(i),
+    face: await faceOf(i.name, i, brief),
+  })
   // What is offered, each client read from the vault at once and beside the
   // reads below.
   let offers = Promise.all(
-    built.map(async (i) =>
-      await offered(i)
-        ? [{ name: i.name, keyed: keyed(i), face: await faceOf(i.name, i) }]
-        : []
-    ),
+    built.map(async (i) => await offered(i) ? [await card(i, false)] : []),
   ).then((each) => each.flat().sort((a, b) => a.name.localeCompare(b.name)))
   offers.catch(() => {})
+  // The catalog, beside them: a built one is offered as above, and one only
+  // the catalog lists where its broker or the vault can take it.
+  let catalog = (async (): Promise<[Catalog, Offer[]]> => {
+    let all = await offersOf(env, built)
+    let ready = new Set((await offers).map((b) => b.name))
+    let brokered = vaulted(env) && !!await brokerOf(vaultOf(env), BROKER)
+    let can = all.filter((o) =>
+      o.built ? ready.has(o.name) : !taken.has(o.name) &&
+        (o.broker ? brokered : vaulted(env))
+    )
+    let found = at.find?.trim() ? find(can, at.find) : []
+    return [{
+      q: at.find?.trim() ?? '',
+      featured: await Promise.all(
+        can.filter((o) => o.featured).map((o) => card(o)),
+      ),
+      found: await Promise.all(found.slice(0, SHOWN).map((o) => card(o))),
+      matched: found.length,
+      total: can.length,
+      kinds: kinds(can).map((name) => ({ name, label: kind(name) })),
+    }, can]
+  })()
+  catalog.catch(() => {})
   let links = all.filter((b) => b[USES])
   // Each app's space and name: this space's from its roster, and an app
   // elsewhere borrowing from it, or lending to it, from the directory.
@@ -734,17 +808,21 @@ export let connectionsOf = async (
       }
     }),
   )
-  // The one the page was opened to add, from the integration directory: a
-  // built one offered here, or a custom one its owner listed.
-  let asked = wanted && !taken.has(wanted.name) &&
-      (wanted.built
-        ? await offered(wanted)
-        : listed.has(integrationEid(wanted.name)) && connectable(wanted))
-    ? {
-      name: wanted.name,
-      keyed: keyed(wanted),
-      face: await faceOf(wanted.name, wanted),
-    }
+  // The one the page was opened to add, from a card's Connect or the
+  // integration directory: a built one offered here, a custom one its owner
+  // listed, or one the catalog offers here.
+  let [shelf, can] = await catalog
+  let listedHere = wanted && !taken.has(wanted.name) &&
+    (wanted.built
+      ? await offered(wanted)
+      : listed.has(integrationEid(wanted.name)) && connectable(wanted))
+  let fromCatalog = !wanted && at.add
+    ? can.find((o) => o.name == at.add)
+    : undefined
+  let asked = listedHere
+    ? await card(wanted!, false)
+    : fromCatalog
+    ? await card(fromCatalog, false)
     : undefined
   return {
     on: vaulted(env),
@@ -769,6 +847,11 @@ export let connectionsOf = async (
       }),
     ),
     built: (await offers).filter((b) => b.name != asked?.name),
+    catalog: {
+      ...shelf,
+      featured: shelf.featured.filter((b) => b.name != asked?.name),
+    },
+    ...at.open ? { open: at.open } : {},
     enable,
     ...asked ? { asked } : {},
   }
@@ -1085,6 +1168,16 @@ export let connecting = async (
       if (!name) return no('Give the service a name.')
       if (hosts.some((h) => !HOST.test(h))) {
         return no('A host is an address like api.example.com.')
+      }
+      // A card's Connect names a service the catalog may only offer yet,
+      // which is written as an integration first; a key for a service of
+      // the space's own names its hosts.
+      if (!hosts.length && !await known(c.graph.read, name)) {
+        await adopting(
+          env,
+          await offersOf(env, await installed(c.graph.read)),
+          name,
+        )
       }
       let made = await c.graph.apply(
         await need(c.graph.read, {

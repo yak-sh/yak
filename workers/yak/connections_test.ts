@@ -10,7 +10,13 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { envOf, integrationEid, need, registration } from '@yaks/connections'
+import {
+  brokerKey,
+  envOf,
+  integrationEid,
+  need,
+  registration,
+} from '@yaks/connections'
 import { link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
 import type { D1Like } from '@yaks/d1'
@@ -302,7 +308,8 @@ test('the owner can attach a connected space key to a live app from the page', a
     space: s.space.slug,
     apps: [],
     view: 'connections',
-    connections: before,
+    // What acts on a connection is behind its Manage, on the page opened on it.
+    connections: { ...before, open: connected.eid },
   })).text()
   assertStringIncludes(page, 'Let an app use it')
   assertStringIncludes(page, 'Only its members can call out through it')
@@ -344,7 +351,7 @@ test('a key added on the page is attached to an app under the name its code read
       space: s.space.slug,
       apps: [],
       view: 'connections',
-      connections: await s.shown(),
+      connections: { ...await s.shown(), open: esv.eid },
     })).text(),
     'name="binding"',
   )
@@ -991,4 +998,132 @@ test('connection_list reads the directory in one trip, whatever the space holds'
     })).list.map((c) => c.integration),
     ['W0', 'W1', 'W2', 'W3'],
   )
+})
+
+// Nango as far as the catalog asks it: its providers, its integrations, a
+// connect session, and the logos it names.
+let PROVIDERS = [
+  {
+    name: 'hubspot',
+    display_name: 'HubSpot',
+    logo_url: 'https://logos.test/hubspot.svg',
+    categories: ['crm', 'popular'],
+    auth_mode: 'OAUTH2',
+    proxy: { base_url: 'https://api.hubapi.com' },
+  },
+  {
+    name: 'abyssale',
+    display_name: 'Abyssale',
+    logo_url: 'https://logos.test/abyssale.svg',
+    categories: ['design'],
+    auth_mode: 'API_KEY',
+    proxy: { base_url: 'https://api.abyssale.com' },
+    credentials: {
+      apiKey: { title: 'API Key', description: 'Your workspace API key.' },
+    },
+  },
+  // Gmail is built, and stands in for Nango's own listing of it.
+  {
+    name: 'google-mail',
+    display_name: 'Gmail',
+    categories: ['popular'],
+    auth_mode: 'OAUTH2',
+    proxy: { base_url: 'https://gmail.googleapis.com' },
+  },
+]
+
+test('the catalog offers what its broker lists, a search finds it, and Connect makes it an integration', async () => {
+  let s = await setup()
+  await s.at.apply([brokerKey('nango', 'nk')], KERNEL)
+  let asked: string[] = []
+  let real = globalThis.fetch
+  globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    let u = new URL(input instanceof Request ? input.url : String(input))
+    let said = `${init?.method ?? 'GET'} ${u.host}${u.pathname}`
+    asked.push(said)
+    let answer = (body: unknown, status = 200) =>
+      Promise.resolve(Response.json(body, { status }))
+    if (u.host == 'logos.test') {
+      return Promise.resolve(
+        new Response('<svg xmlns="http://www.w3.org/2000/svg"/>'),
+      )
+    }
+    if (said == 'GET api.nango.dev/providers') {
+      return answer({ data: PROVIDERS })
+    }
+    if (said == 'GET api.nango.dev/integrations/hubspot') return answer({}, 404)
+    if (said == 'POST api.nango.dev/integrations') return answer({ data: {} })
+    if (said == 'POST api.nango.dev/connect/sessions') {
+      return answer({ data: { connect_link: 'https://connect.test/?s=1' } })
+    }
+    return real(input, init)
+  }
+  try {
+    let found = await connectionsOf(s.p.env, s.space, s.person, {
+      find: 'hub',
+    })
+    assertEquals(
+      found.catalog!.found.map((o) => [o.name, o.face.title, o.face.image]),
+      [['hubspot', 'HubSpot', '/connections/logo/hubspot']],
+    )
+    let page = await connectionsOf(s.p.env, s.space, s.person)
+    let featured = page.catalog!.featured.map((o) => o.name)
+    assert(featured.includes('hubspot'))
+    assertEquals(featured.includes('google-mail'), false)
+    assertEquals(page.catalog!.found, [])
+    // The broker is asked once, and the list kept for the next page.
+    assertEquals(asked.filter((a) => a.endsWith('/providers')).length, 1)
+    // Opened to add one only the catalog lists, it says how to get its key.
+    let adding = await connectionsOf(s.p.env, s.space, s.person, {
+      add: 'abyssale',
+    })
+    assertEquals([adding.asked?.name, adding.asked?.keyed], ['abyssale', true])
+    assertStringIncludes(adding.asked!.face.instructions, 'workspace API key')
+    // Connect makes it ready at Nango, writes it as an integration with its
+    // logo, and sends the person to sign in there.
+    let sent = await s.post({ do: 'add', integration: 'hubspot' })
+    assert(sent instanceof Response)
+    assertEquals(sent.headers.get('location'), 'https://connect.test/?s=1')
+    assert(asked.includes('POST api.nango.dev/integrations'))
+    let [hub] = await s.at.query(
+      `.entity.eid=${integrationEid('hubspot')}&.integration`,
+    )
+    let i = hub.integration as Record<string, unknown>
+    assertEquals(
+      [i.title, i.hosts, i.broker, i.built, i.logo],
+      [
+        'HubSpot',
+        ['api.hubapi.com'],
+        { name: 'nango', integration: 'hubspot' },
+        true,
+        '<svg xmlns="http://www.w3.org/2000/svg"/>',
+      ],
+    )
+    // A key is kept here, sent only to its hosts, and Nango never asked.
+    let before = asked.length
+    assertEquals(
+      await s.post({ do: 'add', integration: 'abyssale', key: 'a-key' }),
+      { say: 'Saved. The key is kept safe and never shown again.', no: false },
+    )
+    assertEquals(asked.slice(before).filter((a) => a.includes('nango')), [])
+    let [aby] = await s.at.query(
+      `.entity.eid=${integrationEid('abyssale')}&.integration`,
+    )
+    assertEquals(
+      (aby.integration as { hosts: string[] }).hosts,
+      ['api.abyssale.com'],
+    )
+    // Both are connected here now, and offered no more.
+    let after = await connectionsOf(s.p.env, s.space, s.person, { find: 'a' })
+    assertEquals(
+      after.catalog!.found.some((o) =>
+        ['hubspot', 'abyssale'].includes(o.name)
+      ),
+      false,
+    )
+    assertStringIncludes(s.dump(), 'abyssale')
+    assertEquals(s.dump().includes('a-key'), false)
+  } finally {
+    globalThis.fetch = real
+  }
 })

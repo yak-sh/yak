@@ -29,6 +29,7 @@ import * as empty from './Empty.ts'
 import * as field from './Field.ts'
 import * as form from './Form.ts'
 import * as gallery from './Gallery.ts'
+import * as grid from './Grid.ts'
 import { halved } from './halved.ts'
 import * as group from './Group.ts'
 import * as head from './Head.ts'
@@ -153,6 +154,7 @@ let modules = {
     Palette: palette,
     Catalog: catalog,
     Gallery: gallery,
+    Grid: grid,
   },
 }
 

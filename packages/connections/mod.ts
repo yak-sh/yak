@@ -82,8 +82,18 @@ export {
   brokerOf,
   BROKERS,
   type Grant,
+  type Listing,
   nango,
 } from './brokers.ts'
+export {
+  adopted,
+  catalogue,
+  find,
+  kind,
+  kinds,
+  type Offer,
+  offerOf,
+} from './catalog.ts'
 export {
   accountCredential,
   AccountError,

@@ -21,6 +21,7 @@ import { isListing, listed } from './kept-page.ts'
 import { sprite } from './icons.ts'
 import { lost } from './pages.ts'
 import { callback } from './connections.ts'
+import { logoDoor } from './catalog.ts'
 import { answer as seo } from './seo.ts'
 import { LOGOUT, MANAGE } from './route.ts'
 import { START } from './newcomer.ts'
@@ -164,9 +165,11 @@ let atApex = async (req: Request, env: Env, path: string) => {
       { headers: { 'content-type': 'text/plain; charset=utf-8' } },
     )
   }
-  // Crawlers and connection callbacks are the apex's own doors.
+  // Crawlers, connection callbacks and the catalog's logos are the apex's
+  // own doors.
   let said = await seo(req, path, env) ??
-    await callback({ env, req, path, space: null })
+    await callback({ env, req, path, space: null }) ??
+    await logoDoor(env, path)
   if (said) return said
   // The apex's public pages are cached behind a separate entrypoint; only
   // these paths reach it, without credentials or unbounded query strings.

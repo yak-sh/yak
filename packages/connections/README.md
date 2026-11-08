@@ -36,7 +36,8 @@ them.
   made through a broker (see Brokers below) and what the broker calls it; none
   is direct. `hosts` are the only API hosts its credential may be sent to, and
   `signature` is the [@yaks/hook](../hook) scheme its webhooks are signed with.
-  `built` is server-owned: it marks one this package builds. `instructions` is
+  `built` is server-owned: it marks one this package builds, or one the host
+  wrote from a broker's catalog (see The catalog below). `instructions` is
   markdown saying how a person gets the credential (where to sign up, which page
   issues the key, what to paste), written for them and for the agent helping
   them; a host shows it wherever the integration is met. `owner` is the space or
@@ -275,6 +276,37 @@ Nango is the one implemented (`BROKERS`). Its key is the secret `broker nango`
 Changing an integration's `broker`, or removing it, sends only new connections
 another way. Each connection keeps working through the broker it was made
 through, until its person signs in again.
+
+## The catalog
+
+Every service a person can be offered, connected or not, is one list of offers
+(./catalog.ts): the built integrations, and every service a broker lists.
+`Broker.catalog()` answers the broker's list as
+`Listing{name, title, logo,
+categories, hosts, connects, fields, instructions, popular}`,
+`logo` the address of an SVG. Nango's comes from its provider list
+(`listingOf`): a service it signs in to with an OAuth app of its own (`signin`),
+one the person brings an OAuth client for (`client`), or a key (`key`), whose
+`fields` and `instructions` come from Nango's credential schema. A way to
+connect that hands back no access token is left out.
+
+- `catalogue(built, listings, broker)` merges them, direct first: a built
+  integration stands in for the listing of the same name or the one its broker
+  names (Gmail for Nango's google-mail), takes that listing's kinds, and is
+  featured. A listing reached with a key is direct too: it becomes a pasted key
+  kept here and sent only to the listing's hosts, so the broker is never asked.
+  Only `signin` and `client` listings are brokered. A listing whose hosts depend
+  on the account (`${connectionConfig.subdomain}`) names none and is left out.
+- An `Offer` is the integration it would be, plus its `categories`, its logo's
+  address (`image`) and whether it is `featured`. `find(offers, words)` ranks a
+  title starting with each word first, then a word of the title, then its name
+  or kinds, then featured. `kinds` lists the kinds by how many hold them.
+- `Broker.enable(integration, connects)` makes the broker ready to sign people
+  in to one service: for Nango, an integration made once, through its own app
+  for a sign-in.
+- `adopted(offer, logo)` is the integration an offer is written as once someone
+  connects it: `built`, since only the host writes it, its logo the SVG fetched.
+  From then on it is an integration like any other.
 
 ## Hosting it
 

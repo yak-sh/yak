@@ -586,6 +586,8 @@ let desk = async (
         services: identity().then((part) => part.services(env, owner, dir)),
         enable: enabled(req),
         add: q.get('add') ?? undefined,
+        find: q.get('q') ?? undefined,
+        open: q.get('connect') ?? undefined,
       })
       : undefined,
     // Every space this person may work in, which the side's selector offers.

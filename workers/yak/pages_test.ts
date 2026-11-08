@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { KEY } from '@yaks/connections'
+import { KEY, type Status } from '@yaks/connections'
 import { type DeskPage, lost, spaceBinned, spaceIndex } from './pages.ts'
 import { askCode, askConnect, askEmail, connect } from './signin-pages.ts'
 import { desk } from './desk-pages.ts'
@@ -14,6 +14,7 @@ let named = (title: string) => ({
   tagline: '',
   site: '',
   logo: '',
+  image: '',
   instructions: '',
   theirs: false,
   fields: [KEY],
@@ -23,6 +24,7 @@ let CAL = {
   tagline: 'Your calendar.',
   site: 'https://cal.test/',
   logo: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+  image: '',
   instructions: '',
   theirs: false,
   fields: [KEY],
@@ -177,9 +179,11 @@ test('connections: the space’s ask of each person offers nothing to connect, a
         }],
         services: [],
         built: [],
+        open: 'c',
       },
     }, env).text()
-  // Only the connection's own card, not the page's box for a new key.
+  // Only the connection's own card, opened on it, not the page's box for a
+  // new key.
   let card = async (own: boolean) =>
     parseHTML(await drawn(own)).document
       .querySelector('[data-connection="c"]')!
@@ -199,14 +203,14 @@ test('connections: the space’s ask of each person offers nothing to connect, a
   assertEquals(own.textContent!.includes('Open to anyone'), false)
 })
 
-test('connections: on the person’s own space, theirs and then the space’s with what it could add; elsewhere, only the space’s', async () => {
-  let shown = (integration: string, own = false) => ({
+test('connections: first a grid of cards, theirs on their own space and then the space’s, each opening the rest behind its button', async () => {
+  let shown = (integration: string, own = false, status = 'connected') => ({
     eid: integration,
     integration,
     face: named(integration),
     own,
     each: false,
-    status: 'connected' as const,
+    status: status as Status,
     account: '',
     keyed: true,
     hosts: [],
@@ -215,61 +219,94 @@ test('connections: on the person’s own space, theirs and then the space’s wi
     scopes: [],
     available: [],
     binding: integration.toUpperCase(),
-    apps: [],
+    apps: status == 'needed' ? [used()] : [],
     saving: '',
     instructions: '',
     failed: '',
   })
-  let drawn = (enable?: string[], own = true) =>
+  let drawn = (enable?: string[], own = true, open?: string) =>
     desk({
       ...page,
       view: 'connections',
       connections: {
         on: true,
         borrowed: [],
-        list: [...own ? [shown('Mail', true)] : [], shown('Weather')],
+        list: [
+          ...own ? [shown('Mail', true)] : [],
+          shown('Weather'),
+          shown('Maps', false, 'needed'),
+        ],
         services: [],
         built: [{ name: 'openrouter', keyed: true, face: named('OpenRouter') }],
         enable,
+        open,
       },
     }, env).text()
   let { document } = parseHTML(await drawn())
   let groups = [...document.querySelectorAll('.Group')]
-  assertEquals(groups.map((g) => g.textContent), ['Yours', 'ada.yaks.fyi'])
-  let under = (i: number) => {
-    let names = []
-    for (
-      let at = groups[i].nextElementSibling;
-      at && !at.classList.contains('Group');
-      at = at.nextElementSibling
-    ) names.push(at.querySelector('h2')?.textContent)
-    return names
-  }
-  assertEquals(under(0), ['Mail'])
-  assertEquals(under(1), ['Weather', 'OpenRouter', 'Add a key'])
-  // Elsewhere the page is the space's alone, under no heading.
-  let other = parseHTML(await drawn(undefined, false)).document
-  assertEquals(other.querySelectorAll('.Group').length, 0)
+  assertEquals(groups.map((g) => g.textContent), [
+    'Requested by agents',
+    'Yours',
+    'Connected for ada.yaks.fyi',
+    'All services',
+  ])
+  // Each group's cards, and the one link each card's button follows.
+  let under = (g: Element) =>
+    [...g.nextElementSibling!.querySelectorAll('.Card')].map((c) => [
+      c.querySelector('h2')?.textContent,
+      c.querySelector('.Card_Actions a')?.textContent,
+      c.querySelector('.Card_Actions a')?.getAttribute('href'),
+    ])
+  assertEquals(under(groups[0]), [
+    ['Maps', 'Connect', '/manage/ada/connections?connect=Maps#connect'],
+  ])
+  assertEquals(under(groups[1]), [
+    ['Mail', 'Manage', '/manage/ada/connections?connect=Mail#connect'],
+  ])
+  assertEquals(under(groups[2]), [
+    ['Weather', 'Manage', '/manage/ada/connections?connect=Weather#connect'],
+  ])
   assertEquals(
-    [...other.querySelectorAll('.Desk_Content > .Card h2')]
+    [...document.querySelectorAll('[data-found] .Card h2')]
       .map((h) => h.textContent),
-    ['Weather', 'OpenRouter', 'Add a key'],
+    ['OpenRouter'],
   )
-  // Every card posts to the page it is on.
-  let actions = [...document.querySelectorAll('form')].filter((f) =>
+  // Nothing on the first visit asks for a key but the fold for a service
+  // nobody lists.
+  assertEquals(
+    [...document.querySelectorAll('input[type="password"]')]
+      .map((i) => i.closest('details')?.querySelector('summary')?.textContent),
+    ['Add a key for a service not listed'],
+  )
+  // Elsewhere the page is the space's alone.
+  let other = parseHTML(await drawn(undefined, false)).document
+  assertEquals(
+    [...other.querySelectorAll('.Group')].map((g) => g.textContent),
+    ['Requested by agents', 'Connected', 'All services'],
+  )
+  // Opened on one, it is drawn whole at the top, saying which space it is
+  // connected for, and every form there posts to the page it is on.
+  let opened = parseHTML(await drawn(undefined, true, 'Weather')).document
+  let top = opened.querySelector('#connect')!
+  assertStringIncludes(top.textContent!, 'Connected for ada.yaks.fyi')
+  assert(top.querySelector('[data-connection="Weather"]'))
+  let actions = [...opened.querySelectorAll('form')].filter((f) =>
     f.querySelector('input[name="connection"]')
   ).map((f) => f.getAttribute('action'))
   assertEquals(new Set(actions), new Set(['/manage/ada/connections']))
-  // A page opened with `?enable=` posts every form with it, so the page a
-  // post draws again still offers the testing integration.
-  let kept = parseHTML(await drawn(['google-calendar'])).document
-  let posts = [...kept.querySelectorAll('form')].map((f) =>
-    new URL(f.getAttribute('action')!, 'https://yaks.fyi')
-  ).filter((to) => to.pathname == '/manage/ada/connections')
-  assertEquals(
-    posts.length,
-    document.querySelectorAll('form[action^="/manage/ada/connections"]').length,
-  )
+  // A page opened with `?enable=` posts every form and links every card
+  // with it, so the page a post draws again still offers the testing
+  // integration.
+  let kept = parseHTML(await drawn(['google-calendar'], true, 'Weather'))
+    .document
+  let posts = [
+    ...[...kept.querySelectorAll('form[method="post"]')]
+      .map((f) => f.getAttribute('action')!),
+    ...[...kept.querySelectorAll('.Card_Actions a')]
+      .map((a) => a.getAttribute('href')!),
+  ].map((at) => new URL(at, 'https://yaks.fyi'))
+    .filter((to) => to.pathname == '/manage/ada/connections')
+  assert(posts.length > 3)
   assertEquals(
     new Set(posts.map((to) => to.searchParams.get('enable'))),
     new Set(['google-calendar']),
@@ -320,6 +357,7 @@ let listing = (
       services: [],
       built: [],
       asked,
+      open: asked ? undefined : 'w',
     },
   }, env).text()
 
@@ -383,14 +421,10 @@ test('connections: a page opened to add one from the directory offers it first, 
       theirs: true,
     },
   })
-  let cards = [
-    ...parseHTML(html).document.querySelectorAll('.Desk_Content > .Card'),
-  ]
-  assertEquals(
-    cards.map((c) => c.querySelector('h2')?.textContent),
-    ['ESV API', 'Weather', 'Add a key'],
-  )
-  let card = cards[0]
+  let top = parseHTML(html).document.querySelector('#connect')!
+  let card = top.querySelector('.Card')!
+  assertEquals(card.querySelector('h2')?.textContent, 'Connect ESV API')
+  assertStringIncludes(top.textContent!, 'It will be connected to ada.yaks.fyi')
   assertEquals(how(card), { open: true, says: HOW })
   // Its site is its maker's word, linked as theirs.
   let site = card.querySelector('.Card_Sub a')!
@@ -426,7 +460,11 @@ let used = (over: Partial<Using> = {}): Using => ({
 // Each button on the first card matching `at`, read off its markup (a
 // document costs a millisecond to parse): its label, its `do`, and the app and
 // cap its form posts, the form a `form` attribute names or the one around it.
-let buttons = async (at: string, connections: Partial<Connections>) => {
+let buttons = async (
+  at: string,
+  connections: Partial<Connections>,
+  open: string,
+) => {
   let html = await desk({
     ...page,
     view: 'connections',
@@ -436,6 +474,7 @@ let buttons = async (at: string, connections: Partial<Connections>) => {
       list: [],
       services: [],
       built: [],
+      open,
       ...connections,
     },
   }, env).text()
@@ -476,7 +515,7 @@ test('connections: a lent connection names each copy borrowing it, recalls one, 
         used({ lends: 5 }),
       ],
     }],
-  })
+  }, 'w')
   assertStringIncludes(text, 'Lent to installed copies, 5 calls a month each')
   assertStringIncludes(text, 'SamTheir copy of Notes · 3 of 5 calls this month')
   assertEquals(
@@ -503,7 +542,7 @@ test('connections: a borrowed connection says whose it is, and gives way to a ke
     let { text, pressed } = await buttons('data-borrowed=', {
       borrowed: [borrowed],
       list,
-    })
+    }, 'lent')
     assertStringIncludes(text, 'Borrowed from Jeff')
     assertStringIncludes(
       text,
@@ -566,7 +605,7 @@ test('askConnect: the app, the service, the one form, and the way back', async (
 })
 
 test('connections: a built integration is offered by its face, and a site is linked only at https', async () => {
-  let offered = async (site: string) =>
+  let offered = async (site: string, asked = false) =>
     await desk({
       ...page,
       view: 'connections',
@@ -576,13 +615,28 @@ test('connections: a built integration is offered by its face, and a site is lin
         list: [],
         services: [],
         built: [{ name: 'cal', keyed: false, face: { ...CAL, site } }],
+        ...asked
+          ? { asked: { name: 'cal', keyed: false, face: { ...CAL, site } } }
+          : {},
       },
     }, env).text()
-  let card = parseHTML(await offered(CAL.site)).document
-    .querySelector('.Desk_Content > .Card')!
-  assertEquals(card.querySelector('h2')!.textContent, 'Cal')
+  // A card in the grid: its logo, name and line, and Connect.
+  let tile = parseHTML(await offered(CAL.site)).document
+    .querySelector('[data-found] .Card')!
+  assertEquals(tile.querySelector('h2')!.textContent, 'Cal')
+  assertEquals(
+    tile.querySelector('.Card_Actions a')!.getAttribute('href'),
+    '/manage/ada/connections?add=cal#connect',
+  )
+  // Pressed, the page draws it whole: its site linked by its host.
+  let card = parseHTML(await offered(CAL.site, true)).document
+    .querySelector('#connect .Card')!
+  assertEquals(card.querySelector('h2')!.textContent, 'Connect Cal')
   assertEquals(faced(card), drawn)
-  assertEquals((await offered('javascript:alert(1)')).includes('alert'), false)
+  assertEquals(
+    (await offered('javascript:alert(1)', true)).includes('alert'),
+    false,
+  )
 })
 
 test('paid plan settings describe unlimited apps', async () => {

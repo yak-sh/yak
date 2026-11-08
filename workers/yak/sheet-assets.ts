@@ -30,6 +30,7 @@ export let FILES = [
   'chart.js',
   'menu.js',
   'side.js',
+  'find.js',
   'cta.js',
   'carousel.js',
   'wander.js',
@@ -76,6 +77,7 @@ export let WORN = [
   'Check',
   'Catalog',
   'Gallery',
+  'Grid',
 ]
 
 /** What yaks.app wears of the kit. */

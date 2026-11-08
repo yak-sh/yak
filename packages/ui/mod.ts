@@ -13,7 +13,7 @@
  *   `Panes`, `Head`, `Metrics`, `Spark`, `Notes`,
  *   `Chips`, `Address`, `Icon`, `Copy`, `Card`, `Report`, `Group`, `Empty`,
  *   `State`, `Loading`, `Sparkline`, `Columns`,
- *   `Say`, `Index`, `SideNav`, `Catalog`, `Gallery`: the parts (`TabSet`
+ *   `Say`, `Index`, `SideNav`, `Catalog`, `Gallery`, `Grid`: the parts (`TabSet`
  *   is `Tabs` holding their panels); `groups`, the parts by
  *   what they are for, and `kit`, all of them (kit.ts).
  * - `Float`, `place`, `placeAt`, `usePlaceAt`, `tips`: what floats above a
@@ -65,6 +65,7 @@ export { Icon, type IconProps } from './Icon.ts'
 export { Edit } from './Edit.ts'
 export { Empty } from './Empty.ts'
 export { Gallery } from './Gallery.ts'
+export { Grid } from './Grid.ts'
 export { Group } from './Group.ts'
 export { Head } from './Head.ts'
 export { Index } from './Index.ts'

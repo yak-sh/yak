@@ -6,9 +6,12 @@ import { agentSetup, pasteLink } from './signin-pages.ts'
 import {
   Button,
   Card,
+  Chip,
+  Chips,
   Empty,
   Field,
   Form,
+  Grid,
   Group,
   Icon,
   More,
@@ -19,7 +22,14 @@ import {
   TabSet,
 } from '@yaks/ui/parts'
 import { h, type VNode } from 'preact'
-import type { Borrowed, Connections, Shown, Using } from './connections.ts'
+import type {
+  Borrowed,
+  Connections,
+  Face,
+  Offered,
+  Shown,
+  Using,
+} from './connections.ts'
 import { INTEGRATIONS } from './integrations.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { type IconName, icons } from './icons.ts'
@@ -1558,11 +1568,42 @@ let borrowing = (
   )
 }
 
-// The page: one space's connections — what its apps asked for, what is
-// connected and what they borrow — then what it could connect next and a box
-// for a key no app asked for yet. On the person's own space, what is theirs
-// comes first: what they connected for apps that ask each person, and the
-// services that hold a grant from them.
+// A connection, a service or a loan as a card in a grid: its logo, name and
+// one line, how it stands where it is connected, and the one link that opens
+// the rest. What it asks for and how to get it are behind that link, drawn
+// whole at the top of the page (`setup`).
+let card = (
+  env: Host,
+  face: Face,
+  line: Kids,
+  go: Kids,
+  stands: Kids = null,
+) =>
+  h(
+    Card,
+    null,
+    heading(face.title, { mark: logo(face, env), status: stands }),
+    line ? h(Card.Sub, null, line) : null,
+    go ? h(Card.Actions, null, go) : null,
+  )
+
+// The link a card's button follows: this page, opened on one thing.
+let openedOn = (action: string, key: string, value: string) => {
+  let to = new URL(action, 'https://page.invalid')
+  to.searchParams.set(key, value)
+  return `${to.pathname}${to.search}#connect`
+}
+
+// The page: one space's connections, short on first visit. Each thing is a
+// card in a grid, and what it asks for (a key, a sign-in, how to get one) is
+// behind its button: Connect, or Manage for one already connected, which
+// opens the page on it (`?connect=<eid>`, `?add=<name>`) with it drawn whole
+// at the top, saying which space it goes to. Under that, what agents asked
+// this space for and nobody has connected yet, then what is connected (on the
+// person's own space, theirs too: what they connected for apps that ask each
+// person, and the services holding a grant from them), then the catalog:
+// featured services, or what a search found, every service a broker lists
+// among them, and a key for a service nobody lists.
 let connections = (at: DeskPage, env: Host) => {
   let c: Connections = at.connections ?? {
     on: false,
@@ -1571,20 +1612,17 @@ let connections = (at: DeskPage, env: Host) => {
     built: [],
     borrowed: [],
   }
-  let first = [...c.list].sort((a, b) =>
-    Number(a.status == 'connected' && !a.failed) -
-    Number(b.status == 'connected' && !b.failed)
-  )
+  let host = spaceHost(env, at.space)
   let action = enabling(managePath('connections', at.space), c.enable)
-  // A built service nothing here is connected to yet: a key to paste, or a
-  // sign-in to start from its head.
-  let offer = (i: Connections['built'][number]) =>
+  // The service the page was opened to add: a key to paste, or a sign-in to
+  // start, and which space it goes to.
+  let offer = (i: Offered) =>
     h(
       Card,
       { as: 'form', method: 'post', action },
       held('integration', i.name),
-      heading(i.face.title, {
-        mark: logo(i.face),
+      heading(`Connect ${i.face.title}`, {
+        mark: logo(i.face, env),
         actions: i.keyed ? null : press('add', 'Connect', false),
       }),
       about(i.face),
@@ -1602,11 +1640,10 @@ let connections = (at: DeskPage, env: Host) => {
   let add = h(
     Card,
     { as: 'form', method: 'post', action },
-    heading('Add a key'),
     h(
       Card.Sub,
       null,
-      "For a service your apps call that isn't listed above. Services others have added are in the ",
+      "For a service your apps call that isn't listed. Services others have added are in the ",
       h('a', { href: url(env, INTEGRATIONS.path) }, 'integration directory'),
       '.',
     ),
@@ -1654,7 +1691,6 @@ let connections = (at: DeskPage, env: Host) => {
           lines: true,
           id: 'new-instructions',
           name: 'instructions',
-          rows: 3,
           placeholder:
             'Where to sign up, which page gives the key, and what to paste',
         }),
@@ -1662,44 +1698,191 @@ let connections = (at: DeskPage, env: Host) => {
       h(Form.Actions, null, press('add', 'Save key', false)),
     ),
   )
-  // The service the page was opened to add comes first under its space.
-  let group = (title: string, cards: Kids[], lead: Kids = null) =>
-    lead || cards.length ? [h(Group, null, title), lead, cards] : null
-  let yours = [
-    ...first.filter((one) => one.own).map((one) =>
-      connection(one, c.on, action)
-    ),
-    ...c.services.map((s) =>
-      h(
-        Card,
-        null,
-        heading(s.name, { status: status('Connected', 'positive') }),
-        h(
-          Card.Sub,
-          null,
-          `Signed in with your yaks.app account on ${
-            day(new Date(s.connectedAt * 1000).toISOString())
-          }.`,
-        ),
-      )
-    ),
-  ]
   // What the space holds already that could replace a loan: a connected
   // connection through the same service.
   let mine = (b: Borrowed) =>
-    first.find((one) =>
+    c.list.find((one) =>
       !one.own && one.integration == b.integration &&
       one.status == 'connected' && !one.failed && !one.each
     )
-  let here = [
-    ...first.filter((one) => !one.own).map((one) =>
-      connection(one, c.on, action)
+  // What agents asked for and nobody connected: an app's ask, never the
+  // space's side of an ask each person answers with their own.
+  let asks = c.list.filter((one) =>
+    one.status == 'needed' && !one.own && !one.each
+  )
+  let rest = c.list.filter((one) => !asks.includes(one))
+  // The one the page was opened on, drawn whole: a connection, a loan, or a
+  // service to add.
+  let open = c.open ? c.list.find((one) => one.eid == c.open) : undefined
+  let loan = c.open ? c.borrowed.find((b) => b.eid == c.open) : undefined
+  let manage = (eid: string, label: string) =>
+    h(Button, { href: openedOn(action, 'connect', eid) }, label)
+  let shown = (one: Shown) =>
+    card(
+      env,
+      one.face,
+      one.each && !one.own
+        ? `Each person connects their own, from ${
+          one.apps.map((a) => a.title).join(', ') || 'the app'
+        }.`
+        : one.apps.length
+        ? `For ${one.apps.map((a) => a.title).join(', ')}`
+        : one.face.tagline,
+      manage(
+        one.eid,
+        one.status == 'needed'
+          ? 'Connect'
+          : one.status == 'broken' || one.failed
+          ? 'Reconnect'
+          : 'Manage',
+      ),
+      one.status == 'needed' ? null : status(
+        one.failed ? 'Not saved' : STATUS[one.status],
+        one.status == 'connected' && !one.failed ? 'positive' : 'negative',
+      ),
+    )
+  let grid = (cards: Kids[]) => cards.length ? h(Grid, null, cards) : null
+  let group = (title: Kids, ...kids: Kids[]) =>
+    kids.some(Boolean) ? [h(Group, null, title), kids] : null
+  let yours = [
+    ...rest.filter((one) => one.own).map(shown),
+    ...c.services.map((s) =>
+      card(
+        env,
+        { title: s.name, logo: '', image: '' } as Face,
+        `Signed in with your yaks.app account on ${
+          day(new Date(s.connectedAt * 1000).toISOString())
+        }.`,
+        null,
+        status('Connected', 'positive'),
+      )
     ),
-    ...c.borrowed.map((b) => borrowing(b, c.on, action, mine(b))),
-    ...c.built.map(offer),
-    ...c.on ? [add] : [],
   ]
-  let asked = c.asked ? offer(c.asked) : null
+  let here = [
+    ...rest.filter((one) => !one.own).map(shown),
+    ...c.borrowed.map((b) =>
+      card(
+        env,
+        b.face,
+        `${b.app.title} borrows ${b.lender}’s`,
+        manage(b.eid, 'Manage'),
+        status('Borrowed', 'positive'),
+      )
+    ),
+  ]
+  // The catalog: a search box over every service, what it found or the
+  // featured ones, and the kinds to look through.
+  let cat = c.catalog
+  let tile = (i: Offered) =>
+    card(
+      env,
+      i.face,
+      i.face.tagline,
+      h(Button, { href: openedOn(action, 'add', i.name) }, 'Connect'),
+    )
+  let finding = cat
+    ? h(
+      Form,
+      {
+        method: 'get',
+        action: managePath('connections', at.space),
+        role: 'search',
+        'data-find': '',
+      },
+      c.enable?.length ? held('enable', c.enable.join(',')) : null,
+      h(
+        Form.Line,
+        null,
+        h(Field, {
+          type: 'search',
+          name: 'q',
+          value: cat.q,
+          placeholder: `Search ${count(cat.total)} services`,
+          'aria-label': 'Search services',
+          autocomplete: 'off',
+        }),
+        h(Button, { type: 'submit' }, 'Search'),
+      ),
+    )
+    : null
+  let browse = (k: { name: string; label: string }) =>
+    h(Chip, {
+      as: 'a',
+      href: `${managePath('connections', at.space)}?q=${
+        encodeURIComponent(k.name)
+      }#find`,
+    }, k.label)
+  let found = cat?.q
+    ? [
+      h(
+        Card.Sub,
+        null,
+        cat.matched
+          ? cat.matched > cat.found.length
+            ? `The first ${cat.found.length} of ${
+              count(cat.matched)
+            } services matching “${cat.q}”.`
+            : `${
+              cat.matched == 1
+                ? 'One service matches'
+                : `${cat.matched} services match`
+            } “${cat.q}”.`
+          : `No service matches “${cat.q}”. Add a key for it below.`,
+      ),
+      grid(cat.found.map(tile)),
+    ]
+    : cat
+    ? [
+      grid(cat.featured.map(tile)),
+      cat.kinds.length
+        ? h(Chips, null, cat.kinds.slice(0, 16).map(browse))
+        : null,
+    ]
+    : grid(c.built.map(tile))
+  // At the top, the one the page was opened on, saying where it goes, and
+  // the other spaces it could go to instead.
+  let elsewhere = (at.spaces ?? []).filter((s) => s.owner && s.slug != at.space)
+  let to = (what: string, other?: (slug: string) => string) =>
+    h(
+      Card.Sub,
+      null,
+      `${what} ${host}, for its apps to use.`,
+      other && elsewhere.length
+        ? [
+          ' Connect it to another space instead: ',
+          elsewhere.flatMap((s, i) => [
+            i ? ', ' : '',
+            h('a', { href: other(s.slug) }, s.title || s.slug),
+          ]),
+          '.',
+        ]
+        : null,
+    )
+  let addTo = (name: string) => (slug: string) =>
+    openedOn(managePath('connections', slug), 'add', name)
+  let setup = c.asked
+    ? [to('It will be connected to', addTo(c.asked.name)), offer(c.asked)]
+    : open
+    ? [
+      open.own ? null : to(
+        open.status == 'needed' ? 'It will be connected to' : 'Connected for',
+      ),
+      connection(open, c.on, action),
+    ]
+    : loan
+    ? [borrowing(loan, c.on, action, mine(loan))]
+    : null
+  let back = setup
+    ? h(
+      'p',
+      null,
+      h(
+        'a',
+        { href: managePath('connections', at.space) },
+        'Back to all connections',
+      ),
+    )
+    : null
   return [
     c.on ? null : h(
       Card,
@@ -1711,17 +1894,29 @@ let connections = (at: DeskPage, env: Host) => {
         'This server has nowhere safe to keep a key, so connecting is switched off.',
       ),
     ),
+    setup ? h('div', { id: 'connect' }, setup, back) : null,
+    group('Requested by agents', grid(asks.map(shown))),
+    group('Yours', grid(yours)),
+    group(yours.length ? `Connected for ${host}` : 'Connected', grid(here)),
     c.list.length || c.services.length || c.borrowed.length ? null : empty(
       'No connections yet',
       h(
         'p',
         null,
-        'When an app needs an outside service, like a calendar or an API key, it shows up here for you to connect.',
+        'Connect a service below, or ask an agent to build an app that uses one: what it asks for shows up here.',
       ),
     ),
-    yours.length
-      ? [group('Yours', yours), group(spaceHost(env, at.space), here, asked)]
-      : [asked, here],
+    h(Group, { id: 'find' }, 'All services'),
+    finding,
+    h('div', { 'data-found': '' }, found),
+    c.on
+      ? h(
+        More,
+        null,
+        h('summary', null, 'Add a key for a service not listed'),
+        h(More.Body, null, add),
+      )
+      : null,
   ]
 }
 

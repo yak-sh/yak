@@ -209,6 +209,13 @@ signal to give it a row instead.
   integration's `hosts`. Its key is the secret `broker <name>`, kept on yaks.app
   with `yak admin broker <name> <op://…>` (packages/connections/README.md,
   "Brokers").
+- **The catalog** is every service a person can be offered: the built
+  integrations and every service Nango lists, as data (`Broker.catalog()`,
+  kept on yaks.app in the bucket and refreshed daily, workers/yak/catalog.ts).
+  Direct comes first: a Nango service reached with a key becomes a pasted key
+  kept here; only a sign-in goes through Nango. A service is written as a
+  built integration the first time someone connects it, and the page never
+  names the broker (packages/connections/README.md, "The catalog").
 - **On the box**, the harness's sign-ins (OpenAI, OpenRouter, MCP servers) are
   connections in the box's vault; `yak auth` lists them and signs in. Nothing on
   the box swaps a sentinel for an agent's own fetch yet (T-39537).

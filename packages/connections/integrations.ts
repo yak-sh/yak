@@ -115,8 +115,9 @@ let SEEDS: Integration[] = [
   voipms,
 ]
 
-/** Whether a person connects it by pasting a key rather than signing in. */
-export let keyed = (i: Integration): boolean => !i.token
+/** Whether a person connects it by pasting a key rather than signing in:
+ * one with no token endpoint and no broker to sign in through. */
+export let keyed = (i: Integration): boolean => !i.token && !i.broker
 
 /** Whether a person can connect it here: by pasting a key, through a sign-in
  * that answers a key to any caller (OpenRouter), or through what it signs in

@@ -217,6 +217,10 @@ ${links(env, 'pages.css')}${
     main.includes('data-side')
       ? `<script src="${asset(env, 'side.js')}" defer></script>`
       : ''
+  }${
+    main.includes('data-find')
+      ? `<script src="${asset(env, 'find.js')}" defer></script>`
+      : ''
   }<script src="${asset(env, 'drop.js')}" defer></script>${deployed(env)}</body>
 </html>`
   return new Response(
@@ -922,15 +926,20 @@ export let sentence = (text: string) =>
   (/[.!?]$/.test(text) ? '' : '.')
 
 // A service's logo, drawn as an image of its own SVG and never as markup: an
-// SVG an <img> loads runs no script and fetches nothing.
-export let logo = (f: Face) =>
-  f.logo
+// SVG an <img> loads runs no script and fetches nothing. A catalog's service
+// with none kept here is drawn from our own door at the apex (catalog.ts
+// `logoDoor`), once it scrolls near.
+export let logo = (f: Face, env: Host = {}) =>
+  f.logo || f.image
     ? h(Card.Mark, {
       as: 'img',
-      src: `data:image/svg+xml,${encodeURIComponent(f.logo)}`,
+      src: f.logo
+        ? `data:image/svg+xml,${encodeURIComponent(f.logo)}`
+        : url(env, f.image),
       alt: '',
       width: 24,
       height: 24,
+      ...f.logo ? {} : { loading: 'lazy', decoding: 'async' },
     })
     : null
 

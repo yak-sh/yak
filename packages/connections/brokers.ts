@@ -14,6 +14,7 @@
 
 import { reveal, sealed, type Vault } from '@yaks/secrets'
 import type { Bundle } from '@yaks/graph'
+import type { Field } from './integrations.ts'
 
 /** What a broker answers for a connection: its access token, when it
  * expires (epoch milliseconds), what it grants, and an id token or address
@@ -41,9 +42,35 @@ export class BrokerError extends Error {
   }
 }
 
+/** A service a broker can connect, as its catalog lists it: what the broker
+ * calls it, what a person calls it, the address of its logo (an SVG), the
+ * kinds of service it is, and the API hosts a credential for it goes to
+ * (none where they depend on the account). `connects` is how: signing in
+ * through the broker's own app with the service, giving the broker an OAuth
+ * client of the person's own, or a key, as the `fields` it names (none is
+ * one key). `instructions` say, in markdown, what each field is. `popular` is
+ * one the broker features. */
+export type Listing = {
+  name: string
+  title: string
+  logo: string
+  categories: string[]
+  hosts: string[]
+  connects: 'signin' | 'client' | 'key'
+  fields?: Field[]
+  instructions?: string
+  popular?: boolean
+}
+
 /** One broker, for the integration it calls `integration`, and our
  * connection's eid as the tag it finds a sign-in by. */
 export type Broker = {
+  /** every service it can connect: one it signs in to and hands back an
+   * access token for, or one reached with a plain key */
+  catalog(): Promise<Listing[]>
+  /** make ready to sign people in to the service it calls `integration`, as
+   * `listing` says it connects; one already ready is left as it is */
+  enable(integration: string, connects: Listing['connects']): Promise<void>
   /** the link a person follows to sign in for connection `eid` */
   begin(integration: string, eid: string): Promise<string>
   /** the broker's own id for the sign-in made for `eid`, once one finished */
@@ -58,6 +85,68 @@ export type Broker = {
 type Fetch = typeof fetch
 
 let NANGO = 'https://api.nango.dev'
+
+// How Nango says a service is reached, as what a connection through it is:
+// a sign-in its own app makes (a Nango-managed OAuth app), one with the
+// person's own OAuth client, or a key. Nango hands back an access token for
+// the first two, and a key is ours to keep. Any other way is left out.
+let CONNECTS: Record<string, Listing['connects']> = {
+  OAUTH2: 'signin',
+  OAUTH2_CC: 'client',
+  API_KEY: 'key',
+  BASIC: 'key',
+}
+
+// Nango's own categories that say nothing of what a service is.
+let UNSAID = new Set(['popular', 'other', 'mcp'])
+
+// A credential's name as a field's: Nango's apiKey is api_key.
+let snake = (name: string) =>
+  name.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`).replace(/^_/, '')
+
+// A field typed in the open, where its name and its label both say so.
+let OPEN = /^(username|user|email|region|account|subdomain)$/
+
+type Provider = {
+  name: string
+  display_name: string
+  logo_url?: string
+  categories?: string[]
+  auth_mode?: string
+  proxy?: { base_url?: string }
+  credentials?: Record<string, { title?: string; description?: string }>
+}
+
+/** A Nango provider (GET /providers) as the listing it is, or none where
+ * Nango hands back nothing a connection here can use. Its hosts are its API's,
+ * none where the account names them (`${connectionConfig.subdomain}`). */
+export let listingOf = (p: Provider): Listing | undefined => {
+  let connects = CONNECTS[p.auth_mode ?? '']
+  if (!connects || !p.name || !p.display_name) return undefined
+  let base = p.proxy?.base_url ?? ''
+  let host = !base.includes('${') && URL.canParse(base)
+    ? new URL(base).hostname
+    : ''
+  let given = connects == 'key' ? Object.entries(p.credentials ?? {}) : []
+  let fields = given.map(([name, f]): Field => {
+    let label = f.title || name
+    let shown = OPEN.test(name) && !/key|secret|token|password/i.test(label)
+    return { name: snake(name), label, ...shown ? { shown } : {} }
+  })
+  let said = given.filter(([, f]) => f.description)
+    .map(([name, f]) => `- **${f.title || name}**: ${f.description}`)
+  return {
+    name: p.name,
+    title: p.display_name,
+    logo: p.logo_url ?? '',
+    categories: (p.categories ?? []).filter((c) => !UNSAID.has(c)),
+    hosts: host ? [host] : [],
+    connects,
+    ...fields.length > 1 ? { fields } : {},
+    ...said.length ? { instructions: said.join('\n') } : {},
+    ...p.categories?.includes('popular') ? { popular: true } : {},
+  }
+}
 
 let strs = (v: unknown): string[] =>
   Array.isArray(v)
@@ -97,6 +186,31 @@ export let nango = (key: string, fetcher: Fetch = fetch): Broker => {
   let of = (integration: string) =>
     `provider_config_key=${encodeURIComponent(integration)}`
   return {
+    catalog: async () => {
+      let { data } = await ask('/providers') as { data?: Provider[] }
+      return (data ?? []).flatMap((p) => listingOf(p) ?? [])
+    },
+    enable: async (integration, connects) => {
+      let at = `/integrations/${encodeURIComponent(integration)}`
+      try {
+        await ask(at)
+        return
+      } catch (e) {
+        if (!(e instanceof BrokerError && e.status == 404)) throw e
+      }
+      // A sign-in goes through Nango's own app with the service; a client
+      // of the person's own, or a key, is given when they connect.
+      await ask('/integrations', {
+        method: 'POST',
+        body: JSON.stringify({
+          unique_key: integration,
+          provider: integration,
+          ...connects == 'signin'
+            ? { credentials: { type: 'NANGO_MANAGED' } }
+            : {},
+        }),
+      })
+    },
     begin: async (integration, eid) => {
       let made = await ask('/connect/sessions', {
         method: 'POST',
