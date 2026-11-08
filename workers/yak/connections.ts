@@ -38,7 +38,6 @@ import {
   bindingOf,
   borrowed,
   carry,
-  clientOf,
   connect,
   connectable,
   CONNECTION,
@@ -64,6 +63,8 @@ import {
   type Read,
   recall,
   set,
+  settle,
+  signsInWith,
   type Status,
   USES,
   using,
@@ -286,7 +287,41 @@ export let ctxOf = (env: Partial<Env> & Pick<Env, 'STORE'>, who?: Who): Ctx => {
     },
     vault: vaultOf(env),
     redirect: url(env, CALLBACK),
+    report: (e) => caught(e, { request: 'connections' }),
   }
+}
+
+/** Settle each needed connection `owners` hold through a brokered
+ * integration (@yaks/connections `settle`), or through `integration` alone:
+ * a sign-in that finished at its broker, which never sends the person back to
+ * us. Whoever reads a person's connections settles theirs first, so nothing
+ * waits on the broker telling us. A broker that fails is ours to hear about,
+ * and the connection stays needed for the next read. */
+export let settling = async (
+  env: Env,
+  owners: string[],
+  integration?: string,
+) => {
+  let c = ctxOf(env)
+  let needed = await c.graph.read(
+    `.${CONNECTION}.owner=${
+      owners.filter(Boolean).join(',')
+    }&.${CONNECTION}.status=needed${
+      integration ? `&.${CONNECTION}.integration=${integration}` : ''
+    }&*`,
+  )
+  await Promise.all(needed.map(async (b) => {
+    let i = await known(c.graph.read, integrationOf(b))
+    if (!i?.broker) return
+    try {
+      let apps = await usersOf(env, b.entity.eid)
+      if (!(await settle(c, b.entity.eid)).length) return
+      await ready(env, b.entity.eid)
+      await rebound(env, apps)
+    } catch (e) {
+      caught(e, { request: 'settle', integration: i.name })
+    }
+  }))
 }
 
 /** Whose space each app is in (@yaks/connections `Owners`): what its row in
@@ -544,6 +579,8 @@ export let connectionsOf = async (
   let { enable = [], dir = dirOf(env) } = at
   // Awaited only on the person's own space.
   at.services?.catch(() => {})
+  // A sign-in finished at a broker shows as connected on this very read.
+  await settling(env, [(await space).eid, person])
   let read = readOn(dir)
   let month = monthOf(Date.now())
   // Only what those answers name outside this space is asked after.
@@ -572,7 +609,7 @@ export let connectionsOf = async (
   // A client is kept in the vault, so a deploy with none has no client either.
   let offered = async (i: Integration) =>
     !taken.has(i.name) && (!i.testing || enable.includes(i.name)) &&
-    connectable(i, vaulted(env) && await clientOf(vaultOf(env), read, i))
+    connectable(i, vaulted(env) && await signsInWith(vaultOf(env), read, i))
   // What is offered, each client read from the vault at once and beside the
   // reads below.
   let offers = Promise.all(
@@ -957,6 +994,10 @@ let signingIn = async (
   app?: string,
 ): Promise<Response> => {
   let { url: to, attempt } = await begin(c, eid)
+  // A brokered sign-in returns to its broker, and is settled from there.
+  if (!attempt) {
+    return new Response(null, { status: 303, headers: { location: to } })
+  }
   let held: Held = {
     space: space.slug,
     connection: eid,

@@ -8,24 +8,26 @@
 // Each tool is offered only while its connection is connected. What is
 // connected, and where the person connects what is not, is said to the
 // Operator on every ask (`googleTold`), so it offers to connect one when a
-// request needs it. Reading mail is offered only once the integration asks
-// for a scope that reads it (`READS`): asking for one is a change to gmail's
-// data alone.
+// request needs it. Reading mail is offered only once the connection was
+// granted a scope that reads it (`READS`), or, for one that does not say, its
+// integration asks for one. Gmail is brokered by Nango (D-151626), whose
+// verified Google app grants reading; a connection made directly keeps
+// working as it was made.
 import { toBase64, toBase64url } from '@yaks/fp'
 import type { Bundle, Comp } from '@yaks/graph'
 import {
   call,
-  clientOf,
   connectable,
   CONNECTION,
   type Integration,
   known,
+  signsInWith,
 } from '@yaks/connections'
 import type { Tool } from '@yaks/session'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { type Ctx, refuse } from './tool.ts'
-import { addingAt, ctxOf, ownConnection } from './connections.ts'
+import { addingAt, ctxOf, ownConnection, settling } from './connections.ts'
 import { vaulted, vaultOf } from './vault.ts'
 import { recall } from './lib/hops.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -230,6 +232,8 @@ let accounts = (env: Env, ctx: Ctx, space: Space) =>
     `operator google ${ctx.person} ${space.eid}`,
     () =>
       Promise.all([CALENDAR, GMAIL].map(async (name) => {
+        // A sign-in finished at a broker is theirs from this ask on.
+        await settling(env, [ctx.person, space.eid], name)
         let [i, held] = await Promise.all([
           known(ctxOf(env).graph.read, name),
           ownConnection(env, ctx, space, name),
@@ -249,7 +253,13 @@ export let googleTools = async (
     ctx,
     space,
   )
-  let reads = !!(mail && gmail?.scopes?.some((s) => READS.includes(s)))
+  // What reads mail is what the connection was granted, where it says;
+  // else what its integration asks for.
+  let granted = mail && comp(mail, CONNECTION).scopes
+  let scopes = Array.isArray(granted) && granted.length
+    ? granted.map(String)
+    : gmail?.scopes
+  let reads = !!(mail && scopes?.some((s) => READS.includes(s)))
   return [
     ...calendar ? calendarTools(env, calendar) : [],
     ...mail ? [gmailSend(env, ctx, space, mail)] : [],
@@ -269,7 +279,7 @@ export let googleTold = async (env: Env, ctx: Ctx, space: Space) => {
         let account = str(comp(held, CONNECTION).account)
         return [`- ${titled(i)}: connected${account ? ` as ${account}` : ''}`]
       }
-      let client = vaulted(env) && await clientOf(vaultOf(env), read, i)
+      let client = vaulted(env) && await signsInWith(vaultOf(env), read, i)
       if (!connectable(i, client)) return []
       return [
         `- ${titled(i)}: not connected. They connect it at ${

@@ -76,6 +76,15 @@ export {
   registration,
 } from './clients.ts'
 export {
+  type Broker,
+  BrokerError,
+  brokerKey,
+  brokerOf,
+  BROKERS,
+  type Grant,
+  nango,
+} from './brokers.ts'
+export {
   accountCredential,
   AccountError,
   accountOf,
@@ -103,6 +112,8 @@ export {
   refresh,
   resolve,
   type Resolved,
+  settle,
+  signsInWith,
   type Status,
   toAccount,
   used,

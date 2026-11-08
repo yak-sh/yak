@@ -20,8 +20,8 @@ them.
 ## Stored data
 
 - `integration{name, title, tagline, site, logo, authorize, token, scopes,
-  params, auth, refresh_encoding, client, client_id, hosts, signature, testing,
-  built, instructions, owner}`
+  params, auth, refresh_encoding, client, client_id, broker, hosts, signature,
+  testing, built, instructions, owner}`
   is an outside service. `name` is its identity, so one name is one integration.
   `title`, `tagline`, `site` and `logo` are how a page shows it: what a person
   calls it, one line saying what it is, its address on the web, and its mark as
@@ -32,29 +32,33 @@ them.
   each `{name, label, shown}`: S3's access key ID, secret key and region. The
   connections page asks for each by its label, masked unless `shown`. None is
   one key, the field `key`; fields are said when the integration is made and
-  never change. `hosts` are the only API hosts its credential may be sent to,
-  and `signature` is the [@yaks/hook](../hook) scheme its webhooks are signed
-  with. `built` is server-owned: it marks one this package builds.
-  `instructions` is markdown saying how a person gets the credential (where to
-  sign up, which page issues the key, what to paste), written for them and for
-  the agent helping them; a host shows it wherever the integration is met.
-  `owner` is the space or person that made a custom integration, and the only
-  one who may change its `title`, `tagline`, `site` or `instructions`. Its
-  `hosts` may wait until it is used: a key kept with none is sent nowhere, and
-  its owner names them once, after which nobody changes them. A built
-  integration has no owner, and one whose owner is gone is nobody's to change.
+  never change. `broker{name, integration}` says new connections through it are
+  made through a broker (see Brokers below) and what the broker calls it; none
+  is direct. `hosts` are the only API hosts its credential may be sent to, and
+  `signature` is the [@yaks/hook](../hook) scheme its webhooks are signed with.
+  `built` is server-owned: it marks one this package builds. `instructions` is
+  markdown saying how a person gets the credential (where to sign up, which page
+  issues the key, what to paste), written for them and for the agent helping
+  them; a host shows it wherever the integration is met. `owner` is the space or
+  person that made a custom integration, and the only one who may change its
+  `title`, `tagline`, `site` or `instructions`. Its `hosts` may wait until it is
+  used: a key kept with none is sent nowhere, and its owner names them once,
+  after which nobody changes them. A built integration has no owner, and one
+  whose owner is gone is nobody's to change.
 - `listed{at, by, via}` marks a custom integration its owner listed in the
   **integration directory**, which anyone may read and add to a space of their
   own apart from any app; taking the mark off takes it out. Every built
   integration is in the directory without it.
-- `connection{integration, owner, account, scopes, status}` names its
+- `connection{integration, owner, account, scopes, status, broker}` names its
   integration, the space or person that `owner`s it (and is deleted with them),
   the outside account, the scopes asked for or granted, and `status`: `needed`
   (no credential yet), `connected`, or `broken` (the service refused it). The
   same entity wears `secret{name, value}`: its name is `connection:` and a
   random id, and the entity id is derived from it. Its value is the handle of a
   pasted key, of its several fields kept as a JSON object by name, or of the
-  OAuth tokens kept as a JSON record.
+  OAuth tokens kept as a JSON record. `broker` names the broker it was made
+  through; its record then holds the broker's id for it, what the broker calls
+  its integration, and the current access token.
 - `uses{anyone, each, binding, direct, cap}` is the relation on an
   [@yaks/edge](../edge) link from an app to the connection it calls out through.
   Only a caller holding a level on the app may call out through it, unless
@@ -92,12 +96,13 @@ needs narrower, asks Google for offline access so the grant can be refreshed,
 and sends its token to `www.googleapis.com` alone. It is `testing: true` while
 Google's app is in testing mode, where only the people Google lists may sign in,
 so yaks.app offers it only on a connections page opened with
-`?enable=google-calendar`. `gmail` is built the same way, signing in as the same
-`google` client: it asks for `gmail.send` alone, so the mail it sends goes out
-from the person's own address, and sends its token to `gmail.googleapis.com`
-alone. Reading mail is a scope added to its `scopes`, a change of data. `openai`
-is built for the native harness's ChatGPT sign-in; it uses a public OAuth
-client, asks for a refreshable grant, and sends its bearer to `chatgpt.com`.
+`?enable=google-calendar`. `gmail` is brokered by Nango's CASA-verified Google
+app (`broker: {name: 'nango', integration: 'google-mail'}`, D-151626), whose
+grant reads and sends mail, and it sends its token to `gmail.googleapis.com`
+alone. A gmail connection made earlier, directly as the `google` client asking
+for `gmail.send`, keeps signing in that way. `openai` is built for the native
+harness's ChatGPT sign-in; it uses a public OAuth client, asks for a refreshable
+grant, and sends its bearer to `chatgpt.com`.
 
 An integration reached by OAuth signs in as the client it names
 (`client: 'google'`), registered once with the service and shared by every
@@ -243,6 +248,33 @@ its vault, and the redirect):
   the credential as its bearer: over https to a host its integration names and
   no other, following no redirect, and once more with a refreshed token when the
   service answers 401.
+
+## Brokers
+
+A broker signs a person in through its own app with a service, keeps the refresh
+token, and hands back the current access token (./brokers.ts). It is a source of
+credentials, never a proxy: the egress and `call` still send the token straight
+to the integration's `hosts`, so who brokers an integration changes no caller.
+Nango is the one implemented (`BROKERS`). Its key is the secret `broker nango`
+(`brokerKey`), which yaks.app keeps with `yak admin broker nango <op://…>`.
+
+- `begin` on a brokered integration answers the broker's sign-in link and no
+  attempt: the sign-in returns to the broker, not to us.
+- `settle(ctx, connection)` asks the broker whether a sign-in finished for a
+  needed connection, found by the connection's eid, and connects it with its
+  account and granted scopes. Whoever reads a person's connections settles them
+  first, so nothing waits on the broker telling us.
+- `credential` answers the kept token while it is good for a minute more, and
+  otherwise the broker's. `refresh` asks the broker for a new one. A broker that
+  says the grant is gone marks the connection `broken`.
+- `disconnect` ends the broker's connection after ours. A failure there goes to
+  `ctx.report`.
+- `signsInWith(vault, read, i)` is what `connectable` is asked with: the broker
+  once its key is kept, else the OAuth client.
+
+Changing an integration's `broker`, or removing it, sends only new connections
+another way. Each connection keeps working through the broker it was made
+through, until its person signs in again.
 
 ## Hosting it
 

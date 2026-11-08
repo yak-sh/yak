@@ -21,7 +21,7 @@ import * as systemProcess from '@yaks/process/system'
 import { sleep } from '@yaks/fp'
 import { type Bundle, type Comp, minted } from '@yaks/graph'
 import { timed } from '@yaks/api/timing'
-import { type Registered, registration } from '@yaks/connections'
+import { brokerKey, type Registered, registration } from '@yaks/connections'
 
 import { CallError } from '@yaks/tools/errors'
 import { valueIn } from '@yaks/tools/value'
@@ -664,6 +664,11 @@ export let keepClient = (
   name: string,
   client: Registered,
 ) => storeApply(session, PLATFORM_STORE, [registration(name, client)])
+
+// Keep a broker's key in the platform store the same way (@yaks/connections
+// `brokerKey`).
+export let keepBroker = (session: string, name: string, key: string) =>
+  storeApply(session, PLATFORM_STORE, [brokerKey(name, key)])
 
 // An app's `/me` (workers/yak/apps.ts) is deliberately absent from this file.
 // It answers for ONE app's store, so asking it a question about the person —

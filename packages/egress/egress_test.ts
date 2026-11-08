@@ -401,8 +401,8 @@ test(
       [200, { items: [] }],
     )
     await connect(signing, gcal, {
-      attempt,
-      callback: `${signing.redirect}?code=C&state=${attempt.state}`,
+      attempt: attempt!,
+      callback: `${signing.redirect}?code=C&state=${attempt!.state}`,
     })
     let connected = (await resolve(c, 'app', 'google-calendar'))!
     assertEquals(

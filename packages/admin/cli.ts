@@ -74,4 +74,35 @@ export let commands: CliCommand[] = [{
   },
   run: async (args, host, context) =>
     (await import('./client.ts')).client()(args, host, context),
+}, {
+  noun: 'admin',
+  verb: 'broker',
+  title: 'Keep a broker’s key',
+  description:
+    "Keep the key yaks.app asks a broker with (@yaks/connections brokers: nango), sealed in the platform's vault; every integration naming that broker signs people in through it. The key is an op:// reference read only by this terminal command and never printed.\n\n  yak admin broker nango 'op://Yak Shaving LLC/nango dev/password' --as admin@bot.yak.sh",
+  positional: ['name', 'key'],
+  name: 'admin_broker',
+  globals: ['as'],
+  inputSchema: {
+    type: 'object',
+    properties: {
+      name: {
+        type: 'string',
+        description: "the broker's name, as an integration's `broker` names it",
+      },
+      key: {
+        type: 'string',
+        description: "an op:// reference to the broker's key",
+      },
+      as: {
+        type: 'string',
+        description:
+          'the owner’s yaks.app connection, matched by whole address or the part before @. Default is your own email, else the oldest connection',
+      },
+    },
+    required: ['name', 'key'],
+    additionalProperties: false,
+  },
+  run: async (args, host, context) =>
+    (await import('./client.ts')).broker()(args, host, context),
 }]

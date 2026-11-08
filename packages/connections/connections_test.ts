@@ -28,6 +28,7 @@ import {
   secretsDoc,
   sentinelOf,
 } from '@yaks/secrets'
+import { brokerKey } from './brokers.ts'
 import {
   AccountError,
   accountOf,
@@ -59,6 +60,7 @@ import {
   registration,
   resolve,
   set,
+  settle,
   through,
   using,
 } from './mod.ts'
@@ -521,6 +523,7 @@ test('the integration directory: every built one but those in testing, and each 
     'Anthropic',
     'calendar',
     'ESV API',
+    'Gmail',
     'OpenAI',
     'OpenRouter',
     'texts',
@@ -623,8 +626,8 @@ test(
     let { url, attempt } = await begin(c, eid)
     assertEquals(new URL(url).searchParams.get('scope'), 'events.read')
     await connect(c, eid, {
-      attempt,
-      callback: `${REDIRECT}?code=C&state=${attempt.state}`,
+      attempt: attempt!,
+      callback: `${REDIRECT}?code=C&state=${attempt!.state}`,
     })
     let b = await at(g, eid)
     assertEquals(seen[0].get('code'), 'C')
@@ -642,7 +645,7 @@ test(
     let { c, needs } = await setup([200, { key: 'sk-or' }])
     let eid = await needs({ integration: 'openrouter' })
     let { attempt } = await begin(c, eid)
-    await connect(c, eid, { attempt, callback: `${REDIRECT}?code=C` })
+    await connect(c, eid, { attempt: attempt!, callback: `${REDIRECT}?code=C` })
     assertEquals(await credential(c, eid), 'sk-or')
   },
 )
@@ -1293,8 +1296,8 @@ test('signing in patches the grant without replaying read decorations, and respe
     }
     let finish = () =>
       connect(c, eid, {
-        attempt,
-        callback: `${REDIRECT}?state=${attempt.state}&code=one`,
+        attempt: attempt!,
+        callback: `${REDIRECT}?state=${attempt!.state}&code=one`,
       })
     if (stale) {
       await assertRejects(finish, Stale)
@@ -1339,8 +1342,8 @@ test('signing in to another account preserves the held grant, and the same accou
   let finish = async (eid: string) => {
     let { attempt } = await begin(c, eid)
     return connect(c, eid, {
-      attempt,
-      callback: `${REDIRECT}?state=${attempt.state}&code=one`,
+      attempt: attempt!,
+      callback: `${REDIRECT}?state=${attempt!.state}&code=one`,
     })
   }
   await finish(first)
@@ -1529,4 +1532,133 @@ test('fields are said once, when a custom integration is made, and never for one
       need(g.read, { owner: 'space', app: 'app', ...a })
     )
   }
+})
+
+// A brokered integration, and Nango as far as the broker asks it: each
+// request is answered by the first route its method and path start with.
+let MAIL: Integration = {
+  name: 'mail',
+  authorize: 'https://auth.example/authorize',
+  token: 'https://auth.example/token',
+  client: 'example',
+  broker: { name: 'nango', integration: 'google-mail' },
+  hosts: ['mail.example'],
+}
+let nangoAt = (routes: Record<string, () => [number, unknown]>) => {
+  let asked: string[] = []
+  let fetch = (url: RequestInfo | URL, init?: RequestInit) => {
+    let u = new URL(String(url))
+    let said = `${init?.method ?? 'GET'} ${u.pathname}${u.search}`
+    asked.push(said)
+    let route = Object.keys(routes).find((r) => said.startsWith(r))
+    let [status, body] = route ? routes[route]() : [404, {}]
+    return Promise.resolve(Response.json(body, { status }))
+  }
+  return { fetch: fetch as typeof globalThis.fetch, asked }
+}
+
+test('a brokered sign-in is settled at its broker, and its token is the broker’s', async () => {
+  let { g, c, needs } = await setup()
+  await g.apply(await install(g.read, [MAIL]), { trusted: true })
+  let eid = await needs({ integration: 'mail' })
+  // Until its key is kept the broker is nobody's to sign in through.
+  await assertRejects(() => begin(c, eid), Error, 'no key is kept')
+  await g.apply([brokerKey('nango', 'nk')])
+  let token = 'T1'
+  let nango = nangoAt({
+    'POST /connect/sessions': () => [201, {
+      data: { connect_link: 'https://connect.nango.dev/?session_token=s' },
+    }],
+    'GET /connections?': () => [200, {
+      connections: [{
+        connection_id: 'n1',
+        provider_config_key: 'google-mail',
+        tags: { end_user_id: eid },
+      }],
+    }],
+    'GET /connections/n1': () => [200, {
+      connection_config: { emailAddress: 'Ann@Example.com' },
+      credentials: {
+        access_token: token,
+        expires_at: new Date(NOW + 3_600_000).toISOString(),
+        raw: { scope: 'https://mail.google.com/ openid' },
+      },
+    }],
+    'DELETE /connections/n1': () => [204, {}],
+  })
+  c.fetch = nango.fetch
+  assertEquals(await begin(c, eid), {
+    url: 'https://connect.nango.dev/?session_token=s',
+  })
+  await settle(c, eid)
+  let b = await at(g, eid)
+  assertEquals(of(b, 'connection').status, 'connected')
+  assertEquals(of(b, 'connection').broker, 'nango')
+  assertEquals(of(b, 'connection').account, 'ann@example.com')
+  assertEquals(of(b, 'connection').scopes, [
+    'https://mail.google.com/',
+    'openid',
+  ])
+  // Kept while it is good; asked again of the broker once it is refused.
+  assertEquals(await credential(c, eid), 'T1')
+  let asked = nango.asked.length
+  assertEquals(await credential(c, eid), 'T1')
+  assertEquals(nango.asked.length, asked)
+  token = 'T2'
+  assertEquals(await refresh(c, eid, 'T1'), 'T2')
+  assertEquals(
+    nango.asked.at(-1),
+    'GET /connections/n1?provider_config_key=google-mail&force_refresh=true',
+  )
+  // The integration may name another broker, or none: this connection is
+  // still asked of the one it was made through.
+  await g.apply([{
+    entity: { eid: integrationEid('mail') },
+    integration: { broker: null },
+  }], { trusted: true })
+  token = 'T3'
+  assertEquals(await refresh(c, eid, 'T2'), 'T3')
+  await disconnect(c, eid)
+  assertEquals(
+    nango.asked.at(-1),
+    'DELETE /connections/n1?provider_config_key=google-mail',
+  )
+})
+
+test('a connection its broker no longer holds is broken', async () => {
+  let { g, c, needs } = await setup()
+  await g.apply([...await install(g.read, [MAIL]), brokerKey('nango', 'nk')], {
+    trusted: true,
+  })
+  let eid = await needs({ integration: 'mail' })
+  let gone = false
+  c.fetch = nangoAt({
+    'GET /connections?': () => [200, {
+      connections: [{
+        connection_id: 'n1',
+        provider_config_key: 'google-mail',
+        tags: { end_user_id: eid },
+      }],
+    }],
+    'GET /connections/n1': () =>
+      gone
+        ? [424, { error: { code: 'invalid_credentials' } }]
+        : [200, { credentials: { access_token: 'T1' } }],
+  }).fetch
+  // Nothing finished yet is no failure: a sign-in not made is not settled.
+  let none = await setup()
+  await none.g.apply([
+    ...await install(none.g.read, [MAIL]),
+    brokerKey('nango', 'nk'),
+  ], { trusted: true })
+  let waiting = await none.needs({ integration: 'mail' })
+  none.c.fetch =
+    nangoAt({ 'GET /connections?': () => [200, { connections: [] }] }).fetch
+  assertEquals(await settle(none.c, waiting), [])
+  await settle(c, eid)
+  // No expiry said: every call asks the broker.
+  assertEquals(await credential(c, eid), 'T1')
+  gone = true
+  await assertRejects(() => credential(c, eid), Error, 'invalid_credentials')
+  assertEquals(of(await at(g, eid), 'connection').status, 'broken')
 })

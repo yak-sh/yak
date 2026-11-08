@@ -93,6 +93,7 @@ import {
 import { CONNECTION, INTEGRATION, integrationEid, USES } from './identity.ts'
 import { through } from './graph.ts'
 import { clientOf } from './clients.ts'
+import { type Broker, BrokerError, brokerOf, type Grant } from './brokers.ts'
 
 let SECRET = 'secret'
 let EDGE = 'edge'
@@ -139,6 +140,9 @@ export type Ctx = {
   redirect?: string
   fetch?: typeof fetch
   now?: () => number
+  /** where a failure is reported that the verb answering is not stopped by:
+   * a broker's connection left behind by a disconnect */
+  report?: (e: unknown) => void
 }
 
 /** Whose space each app is in, by its eid: who is asked for what it needs. The
@@ -162,6 +166,9 @@ export type Given = { key: string } | { fields: Record<string, string> } | {
   callback: string | URL
   /** A website session obtained alongside a bot OAuth sign-in, kept only in the vault. */
   session?: string
+} | {
+  /** the broker's own id for a sign-in that finished there (`settle`) */
+  brokered: string
 }
 
 let comp = (b: Bundle | undefined, name: string): Comp =>
@@ -968,9 +975,53 @@ let signIn = async (c: Ctx, b: Bundle, staged?: Tokens): Promise<Client> => {
 export let begin = async (
   c: Ctx,
   connection: Eid,
-): Promise<{ url: string; attempt: Attempt & { verifier: string } }> => {
+): Promise<{ url: string; attempt?: Attempt & { verifier: string } }> => {
+  let b = await held(c.graph.read, connection)
+  let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
+  if (i?.broker) {
+    // A broker's sign-in returns to the broker, not to us: `settle` finds
+    // it there afterwards by the connection's eid.
+    return {
+      url: await (await brokering(c, i.broker.name))
+        .begin(i.broker.integration, connection),
+    }
+  }
   if (!c.redirect) throw new Error('signing in needs a redirect')
-  return (await signIn(c, await held(c.graph.read, connection))).begin()
+  return (await signIn(c, b)).begin()
+}
+
+/** What an integration signs in with, where it is kept: its broker, when it
+ * names one, else the OAuth client it names. `connectable` says whether
+ * either is enough. */
+export let signsInWith = (
+  vault: Vault,
+  read: Read,
+  i: Integration,
+): Promise<unknown> =>
+  i.broker ? brokerOf(vault, i.broker.name) : clientOf(vault, read, i)
+
+// The broker named `name`, or a failure saying its key is not kept.
+let brokering = async (c: Ctx, name: string): Promise<Broker> => {
+  let broker = await brokerOf(c.vault, name, c.fetch)
+  if (!broker) throw new Error(`no key is kept for the ${name} broker`)
+  return broker
+}
+
+/** Connect a connection whose sign-in finished at its integration's broker,
+ * once it has; nothing while it has not, or for one that is not needed or
+ * not brokered. A broker's sign-in never returns to us, so whoever reads a
+ * needed connection settles it: nothing waits on the broker telling us. */
+export let settle = async (
+  c: Ctx,
+  connection: Eid,
+): Promise<Bundle[]> => {
+  let b = await held(c.graph.read, connection)
+  if (comp(b, CONNECTION).status == 'connected') return []
+  let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
+  if (!i?.broker) return []
+  let broker = await brokerOf(c.vault, i.broker.name, c.fetch)
+  let id = await broker?.found(i.broker.integration, connection)
+  return id ? connect(c, connection, { brokered: id }) : []
 }
 
 /** Keep a connection's credential — a pasted key, or the grant a finished
@@ -998,13 +1049,27 @@ export let connect = async (
       [CONNECTION]: now,
     }])
   }
-  let tokens: Tokens = {}
-  await (await signIn(c, b, tokens)).complete(given.attempt, given.callback)
-  if (given.session) Object.assign(tokens, { website_session: given.session })
   let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
-  account = i
-    ? await accountOf(i, tokens, c.fetch ?? fetch) ?? account
-    : account
+  let tokens: Tokens & Kept = {}
+  let made: Comp = {}
+  if ('brokered' in given) {
+    if (!i?.broker) throw new Error(`${i?.name} is not brokered`)
+    let { name, integration } = i.broker
+    let g = await (await brokering(c, name)).grant(integration, given.brokered)
+    Object.assign(tokens, keptGrant(name, integration, given.brokered, g))
+    account = g.account ??
+      await accountOf(i, g, c.fetch ?? fetch).catch(() => undefined) ??
+      account
+    made = { broker: name, ...g.scopes ? { scopes: g.scopes } : {} }
+  } else {
+    await (await signIn(c, b, tokens)).complete(given.attempt, given.callback)
+    if (given.session) {
+      Object.assign(tokens, { website_session: given.session })
+    }
+    account = i
+      ? await accountOf(i, tokens, c.fetch ?? fetch) ?? account
+      : account
+  }
   let grant = comp(b, CONNECTION)
   let existing = account
     ? (await c.graph.read(`.${CONNECTION}.owner=${grant.owner}${ALL}`))
@@ -1035,6 +1100,7 @@ export let connect = async (
       [SECRET]: { name: nameOf(target), value: JSON.stringify(tokens) },
       [CONNECTION]: {
         ...comp(target, CONNECTION),
+        ...made,
         status: 'connected',
         ...account ? { account } : {},
       },
@@ -1098,10 +1164,20 @@ export let disconnect = async (
   let b = await held(c.graph.read, connection)
   let was = (await links(c.graph.read, 'to', connection))
     .filter((l) => !comp(l, USES).each)
-  return c.graph.apply([
+  let brokered = comp(b, CONNECTION).broker ? await keptBy(c, b) : undefined
+  let out = await c.graph.apply([
     { entity: { eid: connection }, tombstone: {} },
     ...await reasked(b, was, owners),
   ])
+  // The broker's own connection ends too, after ours: a broker that fails
+  // here leaves one behind for its sweep, never a person still connected.
+  let { broker, integration, id } = brokered ?? {}
+  if (broker && integration && id) {
+    await brokerOf(c.vault, broker, c.fetch)
+      .then((at) => at?.forget(integration, id))
+      .catch((e) => c.report?.(e))
+  }
+  return out
 }
 
 // A step against the service's token endpoint. A grant the service refuses
@@ -1114,7 +1190,10 @@ let marking = async (
   try {
     return await step()
   } catch (e) {
-    if (e instanceof OAuthError && !e.code.startsWith('http_')) {
+    if (
+      e instanceof OAuthError && !e.code.startsWith('http_') ||
+      e instanceof BrokerError && e.refused
+    ) {
       await c.graph.apply([{
         entity: { eid: connection },
         [CONNECTION]: { status: 'broken' satisfies Status },
@@ -1198,9 +1277,61 @@ export let credential = async (
     return raw ? (await fieldsKept(c, b, fields, raw))[field] : undefined
   }
   if (field != null && field != fieldsOf()[0].name) return undefined
+  if (comp(b, CONNECTION).broker) {
+    return marking(c, connection, () => brokered(c, b))
+  }
   if (raw && !raw.trimStart().startsWith('{')) return raw
   let oauth = await signIn(c, b)
   return marking(c, connection, oauth.token)
+}
+
+/** What the vault keeps for a brokered connection, beside its access token:
+ * the broker it was made through, the broker's id for it, and what the broker
+ * calls its integration. */
+type Kept = { broker?: string; id?: string; integration?: string }
+
+let keptGrant = (
+  broker: string,
+  integration: string,
+  id: string,
+  g: Grant,
+): Tokens & Kept => ({
+  broker,
+  integration,
+  id,
+  access_token: g.access_token,
+  ...g.expires_at ? { expires_at: g.expires_at } : {},
+})
+
+// A brokered connection's record, as the vault keeps it.
+let keptBy = (c: Ctx, b: Bundle) =>
+  records<Tokens & Kept>(c.graph, c.vault, '').read(nameOf(b))
+
+// A brokered connection's access token: the one kept while it is good for a
+// minute more, else the broker's, which the broker refreshes when it is due;
+// with `stale`, a new one unless another caller already replaced it. The
+// connection is asked of the broker it was made through, by what that broker
+// called its integration then, whatever its integration names now.
+let brokered = (c: Ctx, b: Bundle, stale?: string) => {
+  let now = (c.now ?? Date.now)()
+  return records<Tokens & Kept>(c.graph, c.vault, '').update(
+    nameOf(b),
+    async (r) => {
+      let good = r.access_token &&
+        (stale
+          ? r.access_token != stale
+          : r.expires_at && r.expires_at - now > 60_000)
+      if (good) return r.access_token
+      let { broker, integration, id } = r
+      if (!broker || !integration || !id) {
+        throw new Error(`${nameOf(b)} names no connection at its broker`)
+      }
+      let g = await (await brokering(c, broker)).grant(integration, id, !!stale)
+      if (!g.expires_at) delete r.expires_at
+      Object.assign(r, keptGrant(broker, integration, id, g))
+      return g.access_token
+    },
+  )
 }
 
 /** A new access token behind the same handle, after the service refused
@@ -1211,7 +1342,11 @@ export let refresh = async (
   connection: Eid,
   stale: string,
 ): Promise<string | undefined> => {
-  let oauth = await signIn(c, await held(c.graph.read, connection))
+  let b = await held(c.graph.read, connection)
+  if (comp(b, CONNECTION).broker) {
+    return marking(c, connection, () => brokered(c, b, stale))
+  }
+  let oauth = await signIn(c, b)
   return marking(c, connection, () => oauth.refresh(stale))
 }
 

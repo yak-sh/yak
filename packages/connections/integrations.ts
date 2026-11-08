@@ -65,6 +65,9 @@ export type Integration = {
   client?: string
   /** a public OAuth client's id; no secret or registration is needed */
   client_id?: string
+  /** the broker new connections through it are made through (./brokers.ts),
+   * and what the broker calls it; none is direct */
+  broker?: { name: string; integration: string }
   /** the API hosts its credential may be sent to, and no others */
   hosts: string[]
   /** what a person gives to connect a pasted-key one, when it is more than
@@ -116,10 +119,11 @@ let SEEDS: Integration[] = [
 export let keyed = (i: Integration): boolean => !i.token
 
 /** Whether a person can connect it here: by pasting a key, through a sign-in
- * that answers a key to any caller (OpenRouter), or through the OAuth client
- * it names, once that client is kept (./clients.ts). */
-export let connectable = (i: Integration, client?: unknown): boolean =>
-  keyed(i) || i.answers == 'key' || !!i.client_id || !!client
+ * that answers a key to any caller (OpenRouter), or through what it signs in
+ * with once that is kept (`kept`): its broker, when it names one
+ * (./brokers.ts), else the OAuth client it names (./clients.ts). */
+export let connectable = (i: Integration, kept?: unknown): boolean =>
+  i.broker ? !!kept : keyed(i) || i.answers == 'key' || !!i.client_id || !!kept
 
 /** An integration by name, as the graph holds it. */
 export let known = async (

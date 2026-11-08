@@ -7,6 +7,10 @@
   "authorize": "https://accounts.google.com/o/oauth2/v2/auth",
   "token": "https://oauth2.googleapis.com/token",
   "client": "google",
+  "broker": {
+    "name": "nango",
+    "integration": "google-mail"
+  },
   "scopes": [
     "openid",
     "email",
@@ -19,6 +23,5 @@
   "hosts": [
     "gmail.googleapis.com"
   ],
-  "testing": true,
   "userinfo": "https://openidconnect.googleapis.com/v1/userinfo"
 }

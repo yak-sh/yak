@@ -93,6 +93,24 @@
           "type": "string",
           "description": "a public OAuth client's id, shipped with a built integration"
         },
+        "broker": {
+          "type": "object",
+          "required": [
+            "name",
+            "integration"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "the broker, by the name @yaks/connections implements it under: nango"
+            },
+            "integration": {
+              "type": "string",
+              "description": "what the broker calls this integration: Nango's google-mail"
+            }
+          },
+          "description": "the broker new connections through it are made through: a service that signs a person in through its own app and hands back a fresh access token, which still goes only to `hosts`. None is direct. Changing it moves no connection: each keeps the broker it was made through"
+        },
         "hosts": {
           "type": "array",
           "items": {
@@ -225,6 +243,10 @@
             "broken"
           ],
           "description": "needed: no credential yet; connected: one is kept; broken: the service refused it"
+        },
+        "broker": {
+          "type": "string",
+          "description": "the broker it was made through, by name; none is made directly. It keeps working through it whatever its integration names later"
         }
       }
     },

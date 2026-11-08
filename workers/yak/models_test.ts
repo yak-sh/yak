@@ -271,7 +271,7 @@ let hosted = async () => {
   c.fetch = () => Promise.resolve(Response.json({ key }))
   let { attempt } = await begin(c, connection.entity.eid)
   await connect(c, connection.entity.eid, {
-    attempt,
+    attempt: attempt!,
     callback: 'https://yaks.app/connections/callback?code=probe',
   })
   let builder = crypto.randomUUID(), build = crypto.randomUUID()

@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { Item, Request as Asked } from '@yaks/model'
 import type { D1Like } from '@yaks/d1'
-import { integrationEid, registration } from '@yaks/connections'
+import { brokerKey, registration } from '@yaks/connections'
 import { d1 } from '../../packages/d1/testing.ts'
 import { platform } from './testing.ts'
 import { directoryOf } from './directory.ts'
@@ -23,8 +23,9 @@ import {
 
 // A person connects their Google Calendar and Gmail from their connections
 // page, and their Operator reads their calendar, adds to it and sends mail
-// from their address in a conversation (T-138751). Google is faked at the
-// fetch it is called through.
+// from their address in a conversation (T-138751). Gmail is signed in through
+// Nango (D-151626), and its token still goes straight to Google. Google and
+// Nango are faked at the fetch they are called through.
 let SECRET = 'operator-google'
 let { env } = platform(SECRET, {
   VAULT: d1() as unknown as D1Like,
@@ -49,7 +50,10 @@ await dir.apply({
   ],
 }, owner)
 await meta(env).apply(
-  [registration('google', { id: 'yaks', secret: 's' })],
+  [
+    registration('google', { id: 'yaks', secret: 's' }),
+    brokerKey('nango', 'nk'),
+  ],
   KERNEL,
 )
 let space = (await dir.at(eid))!
@@ -61,9 +65,39 @@ let real = globalThis.fetch
 let id_token = `e30.${
   btoa(JSON.stringify({ email: 'jeff@example.com' })).replace(/=+$/, '')
 }.sig`
+// Nango: the sign-in it was asked for, which the person finished there.
+let signing = ''
+let nango = async (r: Request, url: URL) => {
+  if (r.method == 'POST') {
+    signing = (await r.json()).tags.end_user_id
+    return Response.json({
+      data: { connect_link: 'https://connect.nango.dev/?session_token=s' },
+    })
+  }
+  if (url.pathname == '/connections') {
+    return Response.json({
+      connections: signing
+        ? [{
+          connection_id: 'n1',
+          provider_config_key: 'google-mail',
+          tags: { end_user_id: signing },
+        }]
+        : [],
+    })
+  }
+  return Response.json({
+    connection_config: { emailAddress: 'jeff@example.com' },
+    credentials: {
+      access_token: 'G1',
+      expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+      raw: { scope: `${READS[0]} openid email` },
+    },
+  })
+}
 globalThis.fetch = (input, init) => {
   let r = new Request(input, init)
   let url = new URL(r.url)
+  if (url.host == 'api.nango.dev') return nango(r, url)
   if (!url.host.endsWith('googleapis.com')) return real(r)
   asked.push(r.clone())
   if (url.host == 'oauth2.googleapis.com') {
@@ -92,7 +126,8 @@ globalThis.fetch = (input, init) => {
 }
 let to = (path: string) => asked.filter((r) => r.url.includes(path))
 
-// Connected from the connections page: Connect, then back from Google.
+// Connected from the connections page: Connect, then back from Google, or
+// sent to Nango, which keeps the person.
 let connect = async (integration: string) => {
   let form = new FormData()
   form.set('do', 'add')
@@ -106,6 +141,7 @@ let connect = async (integration: string) => {
     { person, role: 'owner' },
     form,
   ) as Response
+  if (!went.headers.get('set-cookie')) return went
   let state = new URL(went.headers.get('location')!).searchParams.get('state')
   let attempt = went.headers.get('set-cookie')!.split(';')[0]
   let session =
@@ -199,13 +235,10 @@ test('before they connect, the Operator is told where to, and holds no Google to
 })
 
 test('connected from the page, each names its account, and the Operator uses both in a conversation', async () => {
-  assertEquals(
-    back.map((r) => r!.headers.get('location')),
-    [1, 2].map(() =>
-      'https://yaks.app/manage/jeff/connections?enable=google-calendar&connected=1'
-    )
-      .map((u, n) => n ? u.replace('google-calendar', 'gmail') : u),
-  )
+  assertEquals(back.map((r) => r!.headers.get('location')), [
+    'https://yaks.app/manage/jeff/connections?enable=google-calendar&connected=1',
+    'https://connect.nango.dev/?session_token=s',
+  ])
   let fork = requests.find((r) =>
     JSON.stringify(r.items).includes('fork of the')
   )!
@@ -217,7 +250,7 @@ test('connected from the page, each names its account, and the Operator uses bot
     ['calendar_events', 'calendar_add', 'gmail_send', 'gmail_read'].map((n) =>
       names(fork).includes(n)
     ),
-    [true, true, true, false],
+    [true, true, true, true],
   )
   let [read] = to('/calendars/primary/events?')
   assertEquals(read.headers.get('authorization'), 'Bearer A1')
@@ -233,6 +266,7 @@ test('connected from the page, each names its account, and the Operator uses bot
     timeZone: 'America/Detroit',
   })
   let [sent] = to('/gmail/v1/users/me/messages/send')
+  assertEquals(sent.headers.get('authorization'), 'Bearer G1')
   let raw = (await sent.json()).raw as string
   let letter = atob(raw.replaceAll('-', '+').replaceAll('_', '/'))
   assertStringIncludes(
@@ -246,16 +280,10 @@ test('connected from the page, each names its account, and the Operator uses bot
   )
 })
 
-test('reading mail is offered once gmail asks for a scope that reads it, a change of data alone', async () => {
+test('reading mail is offered by what the connection was granted', async () => {
   let ctx = await operatorContext(env, { person }, space)
-  let offered = async () =>
-    (await googleTools(env, ctx, space)).map((t) => t.name)
-  assert(!(await offered()).includes('gmail_read'))
-  await meta(env).apply([{
-    entity: { eid: integrationEid('gmail') },
-    integration: { scopes: ['openid', 'email', READS[2]] },
-  }], KERNEL)
-  assert((await offered()).includes('gmail_read'))
+  let offered = (await googleTools(env, ctx, space)).map((t) => t.name)
+  assert(offered.includes('gmail_read'))
 })
 
 test('what Google is asked: an all-day event ends the next day, and a subject beyond ASCII is encoded', () => {

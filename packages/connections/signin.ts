@@ -7,6 +7,7 @@ import {
   need,
   pick,
   refresh,
+  settle,
 } from './connections.ts'
 import { CONNECTION } from './identity.ts'
 import type { Eid, Graph } from '@yaks/graph'
@@ -51,7 +52,7 @@ export const signins = (h: {
   })
   const pending = new Map<
     string,
-    { eid: Eid; attempt: Attempt; redirect: string }
+    { eid: Eid; attempt?: Attempt; redirect: string }
   >()
   const slot = (owner: Eid, integration: string) =>
     JSON.stringify([owner, integration])
@@ -86,11 +87,17 @@ export const signins = (h: {
       if (!was) {
         throw new Error('Authorization expired or not started; begin again')
       }
-      await connect(ctx(was.redirect), was.eid, {
-        attempt: was.attempt,
-        callback: callback.trim(),
-        session,
-      })
+      // A brokered sign-in returns to its broker, which holds the grant.
+      if (!was.attempt) {
+        let made = await settle(ctx(was.redirect), was.eid)
+        if (!made.length) throw new Error('Finish signing in at the link first')
+      } else {
+        await connect(ctx(was.redirect), was.eid, {
+          attempt: was.attempt,
+          callback: callback.trim(),
+          session,
+        })
+      }
       pending.delete(slot(owner, integration))
     },
     cancel: (owner?: Eid) => {
