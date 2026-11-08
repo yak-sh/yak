@@ -80,6 +80,7 @@ import {
   attachmentId,
   type File,
   mailSend,
+  messageReference,
   SHOWN,
   starting,
 } from './operator-channels.ts'
@@ -176,7 +177,7 @@ export let conversation: Declared = {
   key: 'conversation',
   title: 'Your conversations, and the work they fork',
   body:
-    "You talk with each person in one conversation that lasts for weeks: every message they send you, in the chat app, by email or by text, arrives there, marked with how it came when not by chat. Keep the conversation itself light. For anything that needs a tool (reading or changing apps, rows, files or code), use fork with a short prompt saying what to do, then reply at once in a sentence saying what you are doing, and nothing more; your reply goes to them the way their message came. When a fork comes back, tell them in a few lines what was done or what is needed from them. Answer without a fork only what needs no tool.\n\nWhen a request could mean changing an app the space already has or making a new one, ask the person which they want, naming that app, before doing either.\n\nWhen you were started for a piece of work (a fork, a helper, or a task), do the work with your tools, using the space's existing apps and rows, then end with a short report of what changed and the next step, for the conversation or the task to pass on. If you find an app that already does what was asked and the request did not say whether to change it or make a new one, change nothing: report the app you found and that the person needs to choose.",
+    "You talk with each person in one conversation that lasts for weeks: every message they send you, in the chat app, by email or by text, arrives there, marked with how it came when not by chat. Keep the conversation itself light. For anything that needs a tool (reading or changing apps, rows, files or code), use fork with a short prompt saying what to do, then reply at once in a sentence saying what you are doing, and nothing more; your reply goes to them the way their message came. When a fork comes back, tell them in a few lines what was done or what is needed from them. Answer without a fork only what needs no tool.\n\nWhen a request could mean changing an app the space already has or making a new one, ask the person which they want, naming that app, before doing either.\n\nWhen you were started for a piece of work (a fork, a helper, or a task), do the work with your tools, using the space's existing apps and rows, then end with a short report of what changed and the next step, for the conversation or the task to pass on. If you find an app that already does what was asked and the request did not say whether to change it or make a new one, change nothing: report the app you found and that the person needs to choose.\n\nFor imports, reconciles and other bulk data work, use code_mode. Read schemas and rows there, parse the source, match records, compute changes, write bundles in batches, and verify the stored result inside the script. Return only counts, concise differences and any questions that need your judgment. Whole schemas, rows and write results belong in the script, not your context. Read independent apps together with Promise.all. Use supplied attachment references for pasted text and files: inside code_mode, tools.yaks.attachment_read({attachment: id}) returns the original text in structuredContent.result[0].output.value.text. Parse that text in the script without returning it. For sandbox work, sandbox_write with attachment writes it directly to a file. Never type the source contents back into code. Inspect only a small sample or the specific schema fields you need when deciding how to proceed. Direct graph tools are for small, focused reads or single edits.",
 }
 
 // What a session carrying on a task is told, where it is given the tool that
@@ -229,6 +230,18 @@ export let remembering: Declared = {
   title: 'What you have done, and finding it again',
   body:
     'Everything you have done is kept in your own store: each conversation and every entry in it, your forks and helpers, your memories and your tasks. When something said earlier is not in front of you, find it there: search, graph_query and graph_show with self true (`.entry` rows are what was said, each in a `.session`), and memory_around for what was said around an entry. When someone tells you something worth keeping, memory_save it with on naming the entry they said it in; memory_recall finds it again. What they want every agent working in the space to know, such as how they like their apps built, goes to the space with store_memory_save, and store_memory_recall finds it.',
+}
+
+// Large answers stay inside code_mode; focused direct calls remain useful.
+let BULK: Record<string, string> = {
+  graph_schema:
+    'For bulk work or a schema index, call this inside code_mode and return only the relevant component names and properties. ',
+  graph_query:
+    'For bulk reads, imports or reconciles, call this inside code_mode; filter, join and compare the rows there and return a concise summary. Direct calls are for small, focused answers. ',
+  graph_show:
+    'For many entities or large bodies, call this inside code_mode and return only the fields you need. ',
+  graph_apply:
+    'For bulk changes, imports or reconciles, call this inside code_mode; generate bundles from source data and existing rows in the script, write batches and return counts. Direct calls are for single edits. ',
 }
 
 // Discovery is refreshed before every ask: a deploy may add words and tools.
@@ -301,7 +314,7 @@ export let operatorRoster = async (
     name: t.name,
     ...t.title ? { title: t.title } : {},
     ...t.step ? { step: t.step } : {},
-    description: t.description,
+    description: (BULK[t.name] ?? '') + t.description,
     parameters: inputSchemaOf(t),
     readOnly: t.readOnly,
   })
@@ -1320,14 +1333,19 @@ export let operating = (
   }
 
   let ask: Operator['ask'] = async (held, space, args, o = {}) => {
-    let text = typeof args.say == 'string' ? args.say.trim() : ''
+    let text = typeof args.say == 'string' ? args.say : ''
     let named = typeof args.task == 'string' ? args.task : o.task
-    if (!text) throw refuse('arguments', 'say what you want done')
+    if (!text.trim()) throw refuse('arguments', 'say what you want done')
     let by = o.by ?? held.person
     let input = o.request
       ? derivedEid('operator-input|' + o.request)
       : crypto.randomUUID()
     o = { ...o, model: await readying(held, space, o.model) }
+    let reference = await messageReference(
+      env,
+      space,
+      o.source ?? String(args.say ?? ''),
+    )
     // A person's words with no task are the next input of their one
     // conversation with the Operator.
     if (!named) {
@@ -1338,7 +1356,7 @@ export let operating = (
       }
       await g.apply([
         await carrying(session, held, space, o, true),
-        given(session, input, text, by, o),
+        given(session, input, text + reference, by, o),
       ], { trusted: true })
       options.tell?.(session)
       return { task: '', session, input }
@@ -1389,7 +1407,7 @@ export let operating = (
       given(
         session,
         input,
-        newest ? text : JSON.stringify({ task: row }),
+        (newest ? text : JSON.stringify({ task: row })) + reference,
         by,
         o,
       ),
@@ -1565,6 +1583,8 @@ export type Asking = {
   by?: string
   // The request the words came in, which makes giving them again a no-op.
   request?: string
+  // Exact original words before channel framing or attachment extraction.
+  source?: string
   // The task the words carry on; without one they go to the person's
   // conversation with the Operator (`rootAt`).
   task?: string

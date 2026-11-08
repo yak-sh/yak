@@ -214,7 +214,7 @@ import {
   spending,
   workbench,
 } from './sandbox.ts'
-import { attached } from './attachments.ts'
+import { attachmentBytes, attachmentText } from './attachments.ts'
 import { machineDeclared, machineTools } from '@yaks/harness/machine'
 import {
   connect,
@@ -2596,8 +2596,7 @@ let HINTS: Record<
 let ATTACHMENT = {
   type: 'string',
   description:
-    'an attachment id from the conversation (64 hex characters), in place ' +
-    'of content: writes that attached file, as its bytes',
+    'an attachment id from the conversation (64 hex characters), naming the original message text or file bytes',
 }
 
 // What sandbox_write writes from an attachment, refused where the space keeps
@@ -2608,10 +2607,7 @@ let attachedFile = async (ctx: Ctx, space: Space, args: Args) => {
   }
   if (args.attachment == null) return undefined
   let id = text(args.attachment, 'attachment')
-  let bytes = await attached(ctx.env, space, id)
-  if (!bytes) {
-    throw refuse('missing', `${space.slug} keeps no attachment ${id}`)
-  }
+  let bytes = await attachmentBytes(ctx.env, space, id)
   return { path: text(args.path, 'path'), bytes }
 }
 
@@ -3858,6 +3854,28 @@ let OURS: Row[] = [
   // (builder.ts `roster`), and a person's own agent calls them over the
   // connector.
   ...SANDBOX,
+  {
+    name: 'attachment_read',
+    readOnly: true,
+    input: {
+      type: 'object',
+      properties: { space: SPACE, attachment: ATTACHMENT },
+      required: ['attachment'],
+    },
+    run: async (ctx, args) => {
+      let { space } = await inSpace(ctx, args, true)
+      let bytes = await attachmentBytes(
+        ctx.env,
+        space,
+        text(args.attachment, 'attachment'),
+      )
+      return {
+        text: `Read ${bytes.byteLength} bytes of UTF-8 text.`,
+        space,
+        value: { text: attachmentText(bytes) },
+      }
+    },
+  },
   {
     name: 'sandbox_ship',
     destructive: false,

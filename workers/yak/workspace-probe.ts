@@ -115,7 +115,9 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
       files.set(
         path,
         opts?.encoding == 'base64'
-          ? new TextDecoder().decode(Uint8Array.fromBase64(content))
+          ? new TextDecoder('utf-8', { ignoreBOM: true }).decode(
+            Uint8Array.fromBase64(content),
+          )
           : content,
       )
       return Promise.resolve({ success: true })

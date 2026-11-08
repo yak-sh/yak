@@ -388,6 +388,15 @@ export let WORDS: Record<string, Words> = {
     'description':
       "Stop a command sandbox_shell left running in this space's build sandbox, by the process id its answer gave, and return its exit code. Waking the sandbox is metered by the second, as with sandbox_shell. Nothing to undo: what it already wrote to the sandbox stays, and sandbox_shell runs it again. Documentation: https://yaks.app/docs/code.",
   },
+  'attachment_read': {
+    'title': 'Read source text',
+    'step': {
+      'doing': 'Reading source text…',
+      'done': 'Read source text',
+    },
+    'description':
+      'Read original UTF-8 text from a message or file by its attachment id in this space. Call inside code_mode: structuredContent.result[0].output.value.text contains the complete text, preserving whitespace, with no truncation. Parse, reconcile and verify in the script; return only counts or concise differences. This does not wake a build sandbox. Binary or invalid UTF-8 files are refused; sandbox_write with attachment can write their bytes.',
+  },
   'sandbox_write': {
     'title': 'Write a build file',
     'step': {
@@ -395,7 +404,7 @@ export let WORDS: Record<string, Words> = {
       'done': 'Wrote %{path} for the build',
     },
     'description':
-      "Write one file inside this space's build sandbox: a Cargo.toml, a src/lib.rs, whatever the build needs. These are not the app's files: nothing here is served, and files are temporary, not durable app storage. app_files stages what app_deploy will serve; sandbox_ship copies a built artifact from the sandbox into the app. Waking the sandbox is metered by the second, as with sandbox_shell. Pass a sandbox path and nonempty text, or in place of the text an attachment id from the conversation, which writes that attached file's bytes there for a command to read (a CSV a script parses); this overwrites that path without file history and returns the path written. Nothing to undo: nothing of the app lives here, and only sandbox_ship copies build output into durable app files. Documentation: https://yaks.app/docs/code.",
+      "Write one file inside this space's build sandbox: a Cargo.toml, a src/lib.rs, whatever the build needs. These are not the app's files: nothing here is served, and files are temporary, not durable app storage. app_files stages what app_deploy will serve; sandbox_ship copies a built artifact from the sandbox into the app. Waking the sandbox is metered by the second, as with sandbox_shell. Pass a sandbox path and nonempty text, or in place of the text an attachment id from the conversation (including original message text), which writes its bytes there for a command to read (a CSV a script parses); this overwrites that path without file history and returns the path written. Nothing to undo: nothing of the app lives here, and only sandbox_ship copies build output into durable app files. Documentation: https://yaks.app/docs/code.",
   },
   'sandbox_read': {
     'title': 'Read a build file',

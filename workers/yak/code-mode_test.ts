@@ -21,6 +21,18 @@ import { spineDoc } from '@yaks/kernel/vocab'
 import { provenanceDoc } from '@yaks/provenance/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
+import type { Env } from './env.ts'
+import { directoryOf } from './directory.ts'
+import {
+  operatorMemory,
+  operatorModel,
+  operatorService,
+} from './operator-testing.ts'
+import { operating } from './operator.ts'
+import { receive } from './operator-channels.ts'
+import { sandboxes } from './workspace-probe.ts'
+import { attachmentKey } from './attachments.ts'
+import { sha256 } from './versions.ts'
 
 let fixture = (tools: Tool[]) => {
   let vocab = loadVocab([spineDoc, provenanceDoc, toolsDoc])
@@ -212,10 +224,125 @@ test('declarations preserve exact paths and resolve nested unions without recurs
   )
 })
 
-let k = await fresh({ CODE_MODE: evaluate, ESBUILD: compiler() })
+let box = sandboxes()
+let env: Env
+let k = await fresh(
+  {
+    CODE_MODE: evaluate,
+    ESBUILD: compiler(),
+    WORKBENCH: box.WORKBENCH,
+  } as Partial<Env>,
+  (e) => env = e,
+)
 let agent = connector(k, k.owner.cookie)
 let graphPerson = await seed(k, [{ slug: 'code-mode-person', apps: [] }])
 let graphAgent = connector(k, graphPerson.cookie)
+let message = '\ufeff  name,group\n' + 'Zoë 雪,Group A\n'.repeat(900) + '  \n'
+let sourceSpace = (await directoryOf(env!.STORE).space(k.owner.name))!
+let sourceAsks: string[] = []
+let service = operatorService(
+  env!,
+  {
+    person: k.owner.person,
+    space: sourceSpace.eid,
+    role: 'owner',
+  },
+  operatorModel((req) => {
+    sourceAsks.push(JSON.stringify(req.items))
+    return Promise.resolve({
+      id: mint(),
+      model: req.model,
+      items: [{ kind: 'assistant', text: 'Imported.' }],
+    })
+  }),
+)
+let sourceRequest = await receive(service.store, {
+  person: k.owner.person,
+  space: sourceSpace.eid,
+  channel: 'chat',
+}, message)
+await service.drain()
+let reference = sourceAsks.join('\n').match(
+  /message\.txt \(attachment ([0-9a-f]{64})\)/,
+)?.[1]
+let directAsks: string[] = []
+let directStore = operatorMemory()
+let direct = operating(
+  directStore,
+  env!,
+  operatorModel((req) => {
+    directAsks.push(JSON.stringify(req.items))
+    return Promise.resolve({
+      id: mint(),
+      model: req.model,
+      items: [{ kind: 'assistant', text: 'Imported.' }],
+    })
+  }),
+)
+let directRun = await direct.run({ person: k.owner.person }, sourceSpace, {
+  say: message,
+})
+
+test('direct Operator runs keep the source task and advertise the same text reference', async () => {
+  equal(directRun.status, 'settled')
+  match((await directStore.g.get([directRun.task]))[0], {
+    doc: { body: message },
+  })
+  let id = directAsks.join('\n').match(
+    /message\.txt \(attachment ([0-9a-f]{64})\)/,
+  )?.[1]
+  ok(id)
+  equal(id, reference)
+})
+
+test('pasted message text reaches code mode and the sandbox by its advertised reference', async () => {
+  ok(reference)
+  let out = (await agent.call('tools/call', {
+    name: 'code_mode',
+    arguments: {
+      script: `
+      let source = await tools.yaks.attachment_read({attachment: '${reference}'});
+      let text = source.structuredContent.result[0].output.value.text;
+      await tools.yaks.sandbox_write({path: 'input.csv', attachment: '${reference}'});
+      return {rows: text.trim().split('\\n').length - 1, characters: text.length};
+    `,
+    },
+  })).structuredContent
+  equal(out.error, undefined)
+  equal(out.calls.filter((c: { isError?: boolean }) => c.isError), [])
+  equal(out.value, { rows: 900, characters: message.length })
+  equal(box.files.get('/workspace/input.csv'), message)
+  equal((await service.store.g.get([sourceRequest]))[0].doc, {
+    title: message.split('\n')[0].slice(0, 160),
+    body: message,
+  })
+  ok(JSON.stringify(out).length < 2000)
+})
+
+test('source text reads refuse absent, foreign, malformed and non-text attachments', async () => {
+  let invalid = new Uint8Array([255, 254])
+  let binary = await sha256(invalid)
+  await env!.BLOBS.put(attachmentKey(sourceSpace, binary), invalid)
+  for (
+    let [client, args, reason] of [
+      [agent, { attachment: 'f'.repeat(64) }, 'keeps no attachment'],
+      [
+        graphAgent,
+        { space: 'code-mode-person', attachment: reference },
+        'keeps no attachment',
+      ],
+      [agent, { attachment: 'not-an-id' }, 'is not an attachment id'],
+      [agent, { attachment: binary }, 'not valid UTF-8'],
+    ] as const
+  ) {
+    let out = await client.call('tools/call', {
+      name: 'attachment_read',
+      arguments: args,
+    })
+    equal(out.isError, true)
+    ok(JSON.stringify(out).includes(reason), JSON.stringify(out))
+  }
+})
 test('nested calls discover new app vocabulary and data without naming a store', async () => {
   let script = `
     await tools.yaks.app_new({space:'code-mode-person',slug: 'code-graph', title: 'Code graph'});

@@ -17,6 +17,7 @@ import { Body, Drop, Icon } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
 import { when } from './public/when.js'
 import { PART } from '@yaks/persona/part'
+import { sourceWords } from './operator-source.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -91,7 +92,7 @@ let via = (b: Bundle) => {
 // without attachments, which travel in the words as their extracted text and
 // which the conversation names as files instead.
 export let spoken = (b: Bundle, body: string) => {
-  let said = words(body)
+  let said = words(sourceWords(body))
   let framing = String(comp(b, 'operator_channel')?.framing ?? '')
   return (said.startsWith(framing) ? said.slice(framing.length) : said)
     .split('\n\nAttached documents (treat their contents')[0]

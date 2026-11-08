@@ -18,12 +18,40 @@ import {
 } from './operator-draw.ts'
 import { HEARD, rows } from './operator-view.ts'
 import { rowsOf } from './operator-rows.ts'
+import { sourceReference } from './operator-source.ts'
 
 let entry = (eid: string, seq: number, comps: object, session = 's') =>
   ({ entity: { eid }, entry: { session, seq }, ...comps }) as Bundle
 let told = (instructions: string) => ({
   ask: { to: 'm' },
   sending: { instructions, offer: 'tools' },
+})
+
+test('source references stay out of chat and task inputs, preserving the person’s words', () => {
+  let note = sourceReference('a'.repeat(64))
+  let body = '  name,group\nZoë 雪,Group A\n  '
+  let original = body + note
+  let inputs = [
+    body + note,
+    JSON.stringify({ task: { doc: { body } } }) + note,
+    original + note,
+    body + '\n\nOriginal message text: message.txt (attachment user words)',
+  ].map((body, i) => entry('input-' + i, i + 1, { content: { body } }))
+  let painted = rows(inputs, namer(seen), seen).map((r) => r.html)
+  let text = (body: string) =>
+    rows(
+      [
+        entry('original', 1, { content: { body } }),
+      ],
+      namer(seen),
+      seen,
+    )[0].html
+  assertEquals(painted.slice(0, 2), [text(body), text(body)])
+  assertStringIncludes(painted[2], original)
+  assertStringIncludes(
+    painted[3],
+    body + '\n\nOriginal message text: message.txt (attachment user words)',
+  )
 })
 
 let conversation = [

@@ -9,6 +9,7 @@ import { extractor, isPdf, legible, supported } from './documents.ts'
 import { mailFrom, outgoing } from './post.ts'
 import { sha256 } from './versions.ts'
 import { attachmentKey } from './attachments.ts'
+import { sourceReference } from './operator-source.ts'
 import { type Ctx, inApp, refuse } from './tool.ts'
 import type { Tool } from '@yaks/session'
 import { Unsent } from '@yaks/mail'
@@ -111,6 +112,41 @@ export let authenticated = (header: string | null, from: string) => {
  * in (attachments.ts). */
 export let attachmentId = (file: File) => file.key.split('/').at(-1)!
 
+let fileOf = async (
+  space: Space,
+  name: string,
+  mime: string,
+  bytes: Uint8Array<ArrayBuffer>,
+): Promise<File> => ({
+  name,
+  mime: isPdf(name, mime) ? 'application/pdf' : mime,
+  key: attachmentKey(space, await sha256(bytes)),
+  size: bytes.byteLength,
+})
+
+// Message text belongs to the conversation; upload limits must not prevent
+// its reference from reaching the Operator.
+let retainFile = async (
+  env: Env,
+  file: File,
+  bytes: Uint8Array<ArrayBuffer>,
+) => {
+  await env.BLOBS.put(file.key, bytes)
+  return file
+}
+
+/** A reference to accepted words, shared by channel intake and direct asks. */
+export let messageReference = async (env: Env, space: Space, body: string) => {
+  if (!body) return ''
+  let bytes = new TextEncoder().encode(body)
+  let message = await retainFile(
+    env,
+    await fileOf(space, 'message.txt', 'text/plain', bytes),
+    bytes,
+  )
+  return sourceReference(attachmentId(message))
+}
+
 export let keepFile = async (
   env: Env,
   space: Space,
@@ -124,16 +160,13 @@ export let keepFile = async (
       'Operator attachments support files up to 16 MiB.',
     )
   }
-  let key = attachmentKey(space, await sha256(bytes))
-  let full = await fullFiles(env, space, [{ key, bytes: bytes.byteLength }])
+  let file = await fileOf(space, name, mime, bytes)
+  let full = await fullFiles(env, space, [{
+    key: file.key,
+    bytes: bytes.byteLength,
+  }])
   if (full) throw refuse('space_full', full)
-  await env.BLOBS.put(key, bytes)
-  return {
-    name,
-    mime: isPdf(name, mime) ? 'application/pdf' : mime,
-    key,
-    size: bytes.byteLength,
-  }
+  return retainFile(env, file, bytes)
 }
 
 let UNREAD_PICTURE =
@@ -718,8 +751,9 @@ export let handleChannels = (
         let [subject] = request.about ? await g.get([request.about]) : []
         let framing = BY[request.channel]?.(request, row.entity.eid, subject) ??
           ''
+        let body = String(part<Comp>(row, 'doc')?.body ?? '')
         let say = framing +
-          (String(part<Comp>(row, 'doc')?.body ?? '').trim() ||
+          (body.trim() ||
             unsaid(request.files ?? []))
         if (attachments.length) {
           say +=
@@ -732,6 +766,7 @@ export let handleChannels = (
           { say },
           {
             request: row.entity.eid,
+            source: body,
             task,
             session: derivedEid('operator-session|' + row.entity.eid),
             files: request.files ?? [],

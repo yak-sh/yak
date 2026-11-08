@@ -35,6 +35,7 @@ import { rootOf } from './operator-root.ts'
 import { answering, conversationOf, workOf } from './operator-host.ts'
 import { ANSWERED, ASKED, HELLO, SMALL_TALK } from './operator-calls_fixture.ts'
 import { parseHTML } from 'linkedom'
+import { sourceWords } from './operator-source.ts'
 
 let HI = greeting('Ada', 'Jeff')
 let NUMBER = '+18663141594', JEFF = '+12695550142', ANA = '+12695550143'
@@ -982,7 +983,7 @@ test("a call whose voice spoke after the caller's last words asks the Operator w
   let said = conversation(asked[0]).flatMap((m) =>
     m.content.flatMap((c) =>
       c.type == 'text'
-        ? [`${m.role}: ${c.text.replace(/^\[[^\]]*\]\s*/, '')}`]
+        ? [`${m.role}: ${sourceWords(c.text).replace(/^\[[^\]]*\]\s*/, '')}`]
         : []
     )
   )
