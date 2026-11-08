@@ -47,7 +47,14 @@ export let operatorDoc: VocabDoc = {
           ref: 'entity',
           death: 'keep',
           description:
-            'What the words are about: in their Updates, the update or question they answer; on the wake channel, the wake-up that fired; on the subscription channel, the subscription whose rows changed.',
+            "What the words are about: in their Updates, the update or question they answer; on the wake channel, the wake-up that fired; on the subscription channel, the subscription whose rows changed; on the letter and texted channels, the Operator's letter or text they reply to; on the escalated channel, that reply.",
+        },
+        from: {
+          type: 'string',
+          ref: 'session',
+          death: 'keep',
+          description:
+            "On the escalated channel, the conversation that raised the words: the Operator's own, with the reply's writer and only their permissions, which hears back only what escalation_answer sends it. The words are the Operator's, never the person's they are raised with.",
         },
         signup: {
           type: 'boolean',

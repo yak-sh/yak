@@ -76,6 +76,8 @@ export let VIA: Record<string, [IconName, string]> = {
   voice: ['phone', 'By phone'],
   update: ['bell', 'In Updates'],
   error: ['triangle-alert', 'From an error'],
+  escalated: ['message-circle', 'Raised from another conversation'],
+  escalation: ['message-circle', 'From another conversation'],
 }
 
 let via = (b: Bundle) => {
@@ -758,9 +760,9 @@ let system = (b: Bundle, body: string) => {
       'summary',
       null,
       `${label ?? 'From the system'}: `,
-      cut(body.split('\n')[0], 80),
+      cut(spoken(b, body).split('\n')[0], 80),
     ),
-    written(body),
+    written(spoken(b, body)),
   )
 }
 

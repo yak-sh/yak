@@ -94,8 +94,10 @@ import {
   type File,
   mailSend,
   messageReference,
+  OWN,
   starting,
 } from './operator-channels.ts'
+import { escalate, escalationAnswer, REPLIES } from './operator-escalate.ts'
 import { askedAt, inputOf, rootAt } from './operator-root.ts'
 import { textSend } from './operator-texts.ts'
 import { notificationSend } from './operator-alerts.ts'
@@ -227,7 +229,7 @@ let told = (
 // What the Operator is told when the person it is talking with has no seat
 // in its space to write with: it has only their permissions.
 let outside = (space: Space) =>
-  `The person you are talking with is not a member of ${space.slug}: you have only their permissions, so you see none of the space's apps, rows, conversations or memories, and you can do for them only what they could do themselves. Answer what they ask from what they tell you, and say plainly when something needs one of the space's people.`
+  `The person you are talking with is not a member of ${space.slug}: you have only their permissions, so you see none of the space's apps, rows, conversations or memories, and you can do for them only what they could do themselves. Answer what they ask from what they tell you, and say plainly when something needs one of the space's people. What needs the person you wrote to them for, raise with escalate.`
 
 // What the Operator reads of itself: its own store, where each conversation
 // and every entry in it, its forks and helpers, its memories, its persona and
@@ -1172,12 +1174,12 @@ export let operating = (
     let fixes = space && task
       ? requests.filter((r) => comp(r, 'operator_request')?.channel == 'error')
       : []
-    // A wake-up that fired, or a subscription that saw a change, is told to
-    // whoever set it, in their Updates, as what came of it: the quick word
-    // when the conversation forks, and the outcome in its place when the fork
-    // comes back.
+    // A wake-up that fired, a subscription that saw a change, or what
+    // another conversation raised, is told to the person it is for, in their
+    // Updates, as what came of it: the quick word when the conversation
+    // forks, and the outcome in its place when the fork comes back.
     let woken = requests.filter((r) =>
-      ['wake', 'subscription'].includes(
+      ['wake', 'subscription', 'escalated'].includes(
         String(comp(r, 'operator_request')?.channel),
       )
     )
@@ -1235,13 +1237,21 @@ export let operating = (
     // read through the whole directory, which the Operator's is not.
     let whole = (options.directory ?? opening(env))()
     let member = writes(ctx.role)
-    let [roster, google, platform] = await Promise.all([
+    // Someone who replied to what was sent for a person raises with that
+    // person's conversation what needs them (operator-escalate.ts).
+    let replied = g.read(
+      `.operator_request.person=${ctx.person}&.operator_request.channel=${
+        REPLIES.join(',')
+      }&.limit=1&.fields=entity.eid`,
+    )
+    let [roster, google, platform, [reply]] = await Promise.all([
       operatorRoster(ctx, store, { space: space.eid, tasked: !!task, member })
         .then((r) => reached('roster', r)),
       member
         ? googleTools(env, ctx, space).then((t) => reached('google', t))
         : [],
       admin({ dir: whole, person: ctx.person! }),
+      replied,
     ])
     return [
       // A conversation and its forks hand coding and careful reasoning
@@ -1267,8 +1277,10 @@ export let operating = (
           ...wakeTools(store, space),
           ...subscriptionTools(store, space, watching),
           ...google,
+          escalationAnswer(store, ctx, space),
         ]
         : [],
+      ...reply ? [escalate(store, space)] : [],
       ...platform ? adminTools(env, whole) : [],
       ...options.tools?.(ctx, files) ?? [],
       ...options.browsers
@@ -1385,9 +1397,10 @@ export let operating = (
       : {},
     ...o.channel ? { operator_channel: channelOf(o.channel, o.framing) } : {},
     ...o.call ? { operator_call: { call: o.call, asked: true } } : {},
-    // An error the platform asks the Operator to fix is its own words, not
-    // the person's it is said for (unseen.ts).
-    ...o.channel == 'error' ? { system: {} } : {},
+    // An error the platform asks the Operator to fix, or what another of
+    // its conversations raised, is its own words, not the person's it is
+    // said for (unseen.ts).
+    ...OWN.has(o.channel ?? '') ? { system: {} } : {},
     using: usingOf(o.model, o.provider),
     $actor: { by, via: session },
   })
