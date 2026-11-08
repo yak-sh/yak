@@ -1,6 +1,8 @@
 import { equal, test } from '@yaks/testing'
 import { platform } from './directory-rows-probe.ts'
 import { operatorMemory } from './operator-testing.ts'
+import { operatorVocab } from './operator-store.ts'
+import { ram } from '@yaks/ram'
 import { attachmentBackfill, ATTACHMENTS } from './attachment-move.ts'
 import { attachmentQuery } from './attachment-query.ts'
 import { sourceReference } from './operator-source.ts'
@@ -12,7 +14,15 @@ let spaceId = await p.dir.mint(person, 'attachment-check', 'Attachment check', {
   'x-yak-role': 'owner',
 })
 let space = (await p.dir.at(spaceId))!
-let store = operatorMemory()
+let transcriptReads = 0
+let store = operatorMemory(ram(operatorVocab, {
+  computed: {
+    'session.status': () => {
+      transcriptReads++
+      return 'settled'
+    },
+  },
+}))
 let receipts = new Map<string, string>()
 let marked = {
   ...store,
@@ -68,6 +78,7 @@ p.env.BLOBS.list = async (opts) => {
     cursor: String(at + 1),
   }
 }
+let before = transcriptReads
 let batches = 0
 while (await attachmentBackfill(marked, p.env)) batches++
 let uses = await attachmentQuery(store, {
@@ -104,4 +115,8 @@ test('a completed attachment backfill is a no-op and keeps its durable receipt',
   equal(repeated, false)
   equal(pages.length, reads)
   equal(receipts.get(ATTACHMENTS), 'done')
+})
+
+test('attachment backfill reads file metadata without reading session transcripts', () => {
+  equal(transcriptReads - before, 0)
 })

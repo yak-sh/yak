@@ -48,7 +48,7 @@ export let attachmentBackfill = async (
   let pass: Pass = saved ? JSON.parse(saved) : {}
   if (!pass.space) {
     let [source] = await store.g.read(
-      '(.operator_request.space|.operator_session.space)&.limit=1&*',
+      '(.operator_request.space|.operator_session.space)&.limit=1',
     )
     let eid = (source?.operator_request as Comp | undefined)?.space ??
       (source?.operator_session as Comp | undefined)?.space
@@ -60,7 +60,7 @@ export let attachmentBackfill = async (
     let rows = await store.g.read(
       `( .operator_request|.operator_files|.operator_session|.entry&.content.body~="Original message text: message.txt (attachment " )${
         pass.source ? `&.entity.eid>${pass.source}` : ''
-      }&.order=entity.eid&.limit=50&*`,
+      }&.order=entity.eid&.limit=50`,
     )
     for (let row of rows) {
       let source = (row.operator_request ?? row.operator_files ??
@@ -101,7 +101,7 @@ export let attachmentBackfill = async (
     let rows = await store.g.read(
       `.operator_session${
         pass.sessions ? `&.entity.eid>${pass.sessions}` : ''
-      }&.order=entity.eid&.limit=50&*`,
+      }&.order=entity.eid&.limit=50`,
     )
     for (let row of rows) {
       let files = ((row.operator_session as Comp).files ?? []) as File[]
