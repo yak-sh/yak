@@ -41,6 +41,53 @@ let info = () =>
 let withModel = (space: typeof boundary.space, raw: Model) =>
   accounted(p.env, () => Promise.resolve(space), raw)
 
+for (
+  let [output, requested, expected] of [
+    [32_000, undefined, 32_000],
+    [128_000, undefined, 65_536],
+    [2048, undefined, 2048],
+    [32_000, 8000, 8000],
+    [2048, 8000, 2048],
+    [128_000, 200_000, 65_536],
+    [undefined, undefined, 4096],
+  ]
+) {
+  let { space } = await fixture()
+  test(`hosted output ${output} requested ${requested} reaches the provider as ${expected}`, async () => {
+    let seen: number | undefined
+    let raw: Model = Object.assign(async (ask: Parameters<Model>[0]) => {
+      seen = ask.tokens
+      await ask.onSubmit!()
+      return {
+        id: 'answer',
+        model: ask.model,
+        items: [],
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }
+    }, { info: async () => ({ ...await info(), output }) })
+    await withModel(space, raw)({ ...req, tokens: requested })
+    assertEquals(seen, expected)
+  })
+}
+
+let large = await fixture(0.1985)
+test('a large catalogue output limit still shrinks to the remaining space budget', async () => {
+  let seen = 0
+  let raw: Model = Object.assign(async (ask: Parameters<Model>[0]) => {
+    seen = ask.tokens!
+    await ask.onSubmit!()
+    return {
+      id: 'answer',
+      model: ask.model,
+      items: [],
+      usage: { input_tokens: 1000, output_tokens: ask.tokens },
+    }
+  }, { info: async () => ({ ...await info(), output: 128_000 }) })
+  await withModel(large.space, raw)({ ...req, tokens: undefined })
+  assertEquals(seen > 0 && seen <= 500, true)
+  assertEquals(await large.used() <= 0.2, true)
+})
+
 let rejected = await fixture()
 let checkpoint = await fixture()
 let question = await fixture(0.1985)

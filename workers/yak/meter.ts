@@ -36,6 +36,7 @@ import {
 } from '@yaks/model'
 import { defect } from './defects.ts'
 import { reserved, settled } from './model-spend.ts'
+import { outputTokens } from './model-tokens.ts'
 import { mint } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
@@ -1259,7 +1260,7 @@ export let accounted = (
             (tariff && Object.values(tariff).every((p) => p == 0)
               ? 0
               : undefined)
-          let output = req.questions ? window : req.tokens
+          let output = req.questions ? window : outputTokens(info, req.tokens)
           // What the provider's own tools may add is reserved beside it.
           let extra = model.hosted
           let quote = tariff && window != null

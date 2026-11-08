@@ -977,8 +977,8 @@ export let operating = (
   // Each model's rows, written once per wake: the Operator's own and its
   // delegate's, and one an input asks for when it first does. What its
   // catalogue says is written when it answers, which no turn waits on: its
-  // price (the ask that needs it waits on the same lookup, already in flight,
-  // and refuses if it fails), and the window it reads where its row names
+  // price and output limit (the ask that needs them waits on the same lookup,
+  // already in flight, and refuses if it fails), and the window where its row names
   // none, so a transcript compacts at its share of the model's own window
   // rather than of @yaks/session's default `CONTEXT`.
   let seeded = new Map<string, Promise<void>>()
@@ -990,11 +990,20 @@ export let operating = (
           let [row] = await g.get([eid])
           let own = Number((row?.model as Comp | undefined)?.context) > 0
           let context = !own && info?.context
-          if (!price && !context) return
+          let output = info?.output
+          if (!price && !context && !output) return
           await g.apply([{
             entity: { eid },
             ...price ? { price } : {},
-            ...context ? { model: { name: m, context } } : {},
+            ...context || output
+              ? {
+                model: {
+                  name: m,
+                  ...context ? { context } : {},
+                  ...output ? { output } : {},
+                },
+              }
+              : {},
           }], { trusted: true })
         },
         () => {},

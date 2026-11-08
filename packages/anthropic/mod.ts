@@ -245,6 +245,7 @@ export let listed = (m: ModelInfo): Listed => {
     name: m.id,
     label: m.display_name,
     ...m.max_input_tokens ? { context: m.max_input_tokens } : {},
+    ...m.max_tokens ? { output: m.max_tokens } : {},
     modalities: ['text'],
     ...price ? { price } : {},
   }

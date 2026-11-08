@@ -378,6 +378,7 @@ export type Listed = {
   name: string
   label?: string
   context?: number
+  output?: number
   modalities?: string[]
   price?: Price
 }

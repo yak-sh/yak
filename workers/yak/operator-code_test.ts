@@ -64,8 +64,7 @@ let operator = operating(
       model: req.model,
       items: respond(req),
       cost: 0.001,
-    })
-  ),
+    }), { output: 32_000 }),
 )
 handleChannels(operator, env)
 await receive(store, {
@@ -107,10 +106,12 @@ test('nested Operator calls keep their source and the fork writer', () => {
   }
 })
 
-test('the Operator gives its model row the window its catalogue lists', async () => {
+test('the Operator gives its model row the limits its catalogue lists and uses its output allowance', async () => {
   await until(async () =>
     (await store.g.read('.model.context')).some((b) =>
-      (b.model as Comp).context == 1000
+      (b.model as Comp).context == 1000 && (b.model as Comp).output == 32_000
     )
   )
+  ok(asked.length > 0)
+  ok(asked.every((req) => req.tokens == 32_000))
 })

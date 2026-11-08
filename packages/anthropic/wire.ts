@@ -76,6 +76,7 @@ export type ModelInfo = {
   id: string
   display_name: string
   max_input_tokens?: number | null
+  max_tokens?: number | null
 }
 
 /** One event of a reply's stream. */

@@ -127,6 +127,11 @@
         "offered": {
           "type": "boolean"
         },
+        "output": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "the model's maximum reply length in tokens, including reasoning, as its provider's catalogue lists it"
+        },
         "enforced": {
           "type": "integer",
           "minimum": 1,

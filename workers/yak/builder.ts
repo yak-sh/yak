@@ -121,6 +121,7 @@ export type Model = {
   id: string
   price?: Price
   context?: number
+  output?: number
   info?: () => Promise<Listed>
   quote?: (a: Ask, remaining: number) => Affordable | null
   ask(a: Ask): Promise<Answer>
@@ -164,7 +165,7 @@ export type Opts = {
   id?: string
   /** at most this many model turns (default 12) */
   rounds?: number
-  /** at most this many output tokens per turn (default 4096) */
+  /** at most this many output tokens per turn (default catalogue limit, up to 65536) */
   tokens?: number
   /** at most this long, wall clock, in ms (default 60000) */
   ms?: number
@@ -494,7 +495,7 @@ export let build = async (
   let system = await prompt(env, ctx)
   let conversation = opts.conversation ?? space.eid
   let max = opts.rounds ?? 12
-  let tokens = opts.tokens ?? 4096
+  let tokens = opts.tokens
   let ms = opts.ms ?? 60_000
   let now = opts.now ?? Date.now
   let started = now()

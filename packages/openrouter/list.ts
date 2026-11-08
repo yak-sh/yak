@@ -5,6 +5,7 @@ type Row = {
   id: string
   name?: string
   context_length?: number
+  top_provider?: { max_completion_tokens?: number | null }
   architecture?: { output_modalities?: string[] }
   pricing?: {
     prompt?: string
@@ -23,6 +24,9 @@ export let listed = (r: Row): Listed => ({
   name: r.id,
   ...r.name ? { label: r.name } : {},
   ...r.context_length ? { context: r.context_length } : {},
+  ...r.top_provider?.max_completion_tokens
+    ? { output: r.top_provider.max_completion_tokens }
+    : {},
   ...r.architecture?.output_modalities
     ? {
       modalities: r.architecture.output_modalities.map((m) =>

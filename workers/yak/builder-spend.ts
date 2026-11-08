@@ -4,28 +4,33 @@ import type { Answer, Ask, Model } from './builder.ts'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { reserved } from './model-spend.ts'
+import { outputTokens } from './model-tokens.ts'
 
 export let turn = async (
   env: Env,
   space: Space,
   model: Model,
-  ask: Ask,
+  ask: Omit<Ask, 'tokens'> & { tokens?: number },
 ): Promise<Answer> => {
   let info = await model.info?.()
   let price = info?.price ?? model.price
   let input = info?.context ?? model.context
+  let request: Ask = {
+    ...ask,
+    tokens: outputTokens({ output: info?.output ?? model.output }, ask.tokens),
+  }
   let hold = await reserved(
     env,
     space,
     (remaining) =>
       model.quote
-        ? model.quote(ask, remaining)
+        ? model.quote(request, remaining)
         : price && input != null
         ? affordable(
           price,
           promptBound([ask.system, ask.said], input, ask.fns),
           remaining,
-          ask.tokens,
+          request.tokens,
         )
         : null,
   )
@@ -33,7 +38,7 @@ export let turn = async (
   let answer: Answer
   try {
     answer = await model.ask({
-      ...ask,
+      ...request,
       tokens: hold.value.tokens,
       onSubmit: () => {
         if (submitted) {

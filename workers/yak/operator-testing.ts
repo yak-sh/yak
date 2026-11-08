@@ -5,7 +5,7 @@ import { statusComputed } from '@yaks/session/status'
 import { attemptComputed } from '../../packages/session/attempt.ts'
 import { executionComputed } from '@yaks/tools'
 import { operatorGraph, operatorVocab } from './operator-store.ts'
-import type { Model } from '@yaks/model'
+import type { Listed, Model } from '@yaks/model'
 import { assertEquals } from '@std/assert'
 import { refusing } from './defects.ts'
 import type { Held } from './build-door.ts'
@@ -23,7 +23,10 @@ import { type Ctx, TOOLS } from './tools.ts'
 
 // A test's Operator model, answered by whatever `answer` is when it is asked:
 // one Operator per store, its script changed between requests.
-export let operatorModel = (answer: Model) => {
+export let operatorModel = (
+  answer: Model,
+  limits: Pick<Listed, 'context' | 'output'> = {},
+) => {
   let name = 'test-model'
   let price = { input: 1, output: 0 }
   let model: Model = async (req) => {
@@ -37,7 +40,7 @@ export let operatorModel = (answer: Model) => {
     name,
     price,
     model: Object.assign(model, {
-      info: () => Promise.resolve({ name, price, context: 1000 }),
+      info: () => Promise.resolve({ name, price, context: 1000, ...limits }),
     }),
   }
 }

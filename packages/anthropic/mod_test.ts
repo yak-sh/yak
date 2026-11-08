@@ -304,7 +304,7 @@ test('a refusal is a model error, not an empty reply', async () => {
   equal(e.code, 'refusal')
 })
 
-test('info gives the listed window and the list price; an unknown name is undefined', async () => {
+test('info gives the listed input and output limits and the list price; an unknown name is undefined', async () => {
   let { sent, fetch } = api((url) =>
     url.endsWith('/claude-sonnet-5-5')
       ? Response.json({
@@ -313,6 +313,7 @@ test('info gives the listed window and the list price; an unknown name is undefi
         display_name: 'Claude Sonnet 5.5',
         created_at: '2026-10-01T00:00:00Z',
         max_input_tokens: 1_000_000,
+        max_tokens: 128_000,
       })
       : new Response(JSON.stringify({ error: { message: 'missing' } }), {
         status: 404,
@@ -321,6 +322,7 @@ test('info gives the listed window and the list price; an unknown name is undefi
   let model = messages({ key: () => 'k', fetch })
   let info = await model.info!('claude-sonnet-5-5')
   equal(info?.context, 1_000_000)
+  equal(info?.output, 128_000)
   equal([info?.price?.input, info?.price?.output], [2, 10])
   await model.info!('claude-sonnet-5-5')
   equal(sent.length, 1)

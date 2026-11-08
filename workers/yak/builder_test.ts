@@ -89,6 +89,22 @@ let asked = (text: string) => [{ said: 'person' as const, text }]
 // A space that has never paid, said the way the directory says one.
 let free = (space: Space) => ({ ...space, tier: null })
 
+let long = await seeded()
+test('the builder loop leaves a large reply within its model catalogue allowance', async () => {
+  let model = Object.assign(fake([{ text: 'written' }]), {
+    info: () => Promise.resolve({ name: 'fake', output: 32_000 }),
+  })
+  let result = await build(
+    long.env,
+    owner,
+    long.space,
+    asked('write a large file'),
+    { model },
+  )
+  assertEquals(result.refused, undefined)
+  assertEquals(model.asked[0].tokens, 32_000)
+})
+
 test('the fake model builds an app end to end, and it serves', async () => {
   let { env, space } = await seeded()
   let model = fake([

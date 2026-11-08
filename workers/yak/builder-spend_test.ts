@@ -38,6 +38,30 @@ let model = (run: Model['ask']): Model => ({
   ask: run,
 })
 
+let long = await fixture()
+test('a builder turn defaults to its catalogue output limit before reserving', async () => {
+  let seen = 0
+  let m = model(async (a) => {
+    seen = a.tokens
+    await a.onSubmit!()
+    return {
+      text: 'a large write',
+      calls: [],
+      usage: { input: 0, output: 5000 },
+    }
+  })
+  m.info = () =>
+    Promise.resolve({
+      name: m.id,
+      context: 100_000,
+      output: 32_000,
+      price: { input: 0, output: 1 },
+    })
+  await turn(p.env, long.space, m, { ...ask, tokens: undefined })
+  assertEquals(seen, 32_000)
+  assertAlmostEquals(await long.used(), 0.005)
+})
+
 test('builder turns use fresh provider pricing and context before granting output', async () => {
   let tokens = 0
   let m = model(async (a) => {
