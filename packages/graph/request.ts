@@ -15,10 +15,11 @@
 
 export { requested, REQUESTS } from './bundle.ts'
 
-import { each } from '@yaks/fp'
+import { after, each } from '@yaks/fp'
 import type { Bundle } from './bundle.ts'
 import type { Graph } from './graph.ts'
 import type { Tx } from './storage.ts'
+import { unchanged } from './unchanged.ts'
 
 let unwritten = () => {
   throw new Error('a foresight reads, and writes nothing')
@@ -30,7 +31,9 @@ let unwritten = () => {
  * hooks run over `outside`, as `apply()` runs them over its own transaction,
  * and a hook that writes there throws. It is a foresight, for a caller
  * choosing how to write: the write decides again inside its transaction, and
- * may find otherwise. Bundles no plugin decides come back as they went.
+ * may find otherwise. Bundles no plugin decides come back as they went, and
+ * what holds only what is stored leaves, as it leaves the write
+ * (./unchanged.ts): a hook may say a row as it stands, which is no write.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -54,6 +57,16 @@ let unwritten = () => {
  * equal(await foreseen(g, first), [{ entity: { eid: 'a' }, note: { body: 'first' } }])
  * await g.apply([{ entity: { eid: 'a' }, note: { body: 'mine' } }])
  * equal(await foreseen(g, first), [])
+ * // `$said` says the note as it stands, which writes nothing.
+ * g.use({
+ *   name: 'said',
+ *   requests: ['$said'],
+ *   authorize: hook(['$said'], async ([b], tx) => {
+ *     let [held] = await tx.get([b.entity.eid])
+ *     return [{ entity: b.entity, note: held!.note }]
+ *   }),
+ * })
+ * equal(await foreseen(g, [{ entity: { eid: 'a' }, $said: {} }]), [])
  * ```
  */
 export let foreseen = (
@@ -67,11 +80,12 @@ export let foreseen = (
     remove: unwritten,
     revive: unwritten,
   }
-  return each(g.plugins, bundles, (b, p) => {
+  let decided = each(g.plugins, bundles, (b, p) => {
     let h = p.authorize
     let asked = p.requests?.some((r) => b.some((x) => r in x))
     return h && asked && (!h.keys || b.some((x) => h.keys!.some((k) => k in x)))
       ? h(b, tx, undefined, { graph: g, trusted })
       : b
   })
+  return after(decided, (b) => after(unchanged(b, tx), ({ kept }) => kept))
 }

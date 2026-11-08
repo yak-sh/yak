@@ -36,10 +36,12 @@ export let idle = (patch: Comp | null, held: Comp | undefined): boolean =>
   patch == null ? held == null : !!held &&
     Object.entries(patch).every(([p, v]) => same(v ?? null, held[p] ?? null))
 
-// The keys a bundle carries for the pipeline alone: who wrote it, when, and
-// what they read. Any other `$` key asks a plugin for something (`$num`, a
-// number), so a bundle carrying one stays in the batch, if only as its entity.
-let bookkeeping = new Set(['$actor', '$at', '$was', '$quiet'])
+// The keys a bundle carries for the pipeline alone: who wrote it, when, what
+// they read, and what a phase before this one read for a later one
+// (@yaks/effects rides its reading of every entity on `$before`). Any other
+// `$` key asks a plugin for something (`$num`, a number), so a bundle
+// carrying one stays in the batch, if only as its entity.
+let bookkeeping = new Set(['$actor', '$at', '$was', '$quiet', '$before'])
 let asks = (b: Bundle): boolean =>
   Object.keys(b).some((k) => k[0] == '$' && !bookkeeping.has(k))
 

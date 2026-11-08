@@ -11,7 +11,9 @@ import { browserOf } from './session.ts'
 import { instrumentEid } from './instrument.ts'
 
 /** Register a committed guest write. A durable app effect owes this receipt,
- * so signing in and a reset may happen before the directory learns about it. */
+ * so signing in and a reset may happen before the directory learns about it.
+ * Every registration owes a run (facets/attribution-effects.ts), so the
+ * receipt is touched even where it already stands pending. */
 export let contributed = async (
   env: Pick<Env, 'STORE'>,
   via: string,
@@ -20,7 +22,7 @@ export let contributed = async (
   via = instrumentEid(via)
   await meta(env).apply([
     { entity: { eid: via }, browser: {} },
-    { ...link(via, 'worked', app), completed: null },
+    { ...link(via, 'worked', app), completed: null, $touch: true },
   ], KERNEL)
 }
 
@@ -59,7 +61,9 @@ export let claimed = async (req: Request, env: Env, by: string) => {
         browser: { by },
         $was: { browser: { by: null } },
       })),
-      ...receipts.map((r) => ({ entity: r.entity, worked: {} })),
+      // Touched, since the receipt holds nothing new: the write is what owes
+      // the run (@yaks/graph unchanged.ts).
+      ...receipts.map((r) => ({ entity: r.entity, worked: {}, $touch: true })),
     ], KERNEL)
   } catch (error) {
     // Two sign-ins may race; the first verified claimant keeps the byline.

@@ -1873,9 +1873,18 @@ let paged = (
   }
 }
 
-// A person's seats among the rows one read answered: each space they sit in
-// with their own seat in it and the seat of whoever owns it.
-let seatsOf = (rows: ReadRow[], person: string, role?: Role): Seat[] => {
+/** The line that reads a person's seats: each space they sit in, their seat
+ * in it, and the seat of whoever owns it, so a space they are only a member
+ * of says whose it is. One read, whatever a caller keeps of it
+ * (`seatsOf`). */
+export let seatsLine = (person: string) => {
+  let mine = `.members_space.member.person=${person}`
+  return `(.member.person=${person})|(.space&${mine})|(.member.role=owner&.member.space${mine})&*`
+}
+
+/** A person's seats among the rows `seatsLine` read: each space they sit in
+ * with their own seat in it and the seat of whoever owns it. */
+export let seatsOf = (rows: Row[], person: string, role?: Role): Seat[] => {
   let seats = rows.filter((r) => r.member)
   let held = new Map(
     seats.filter((r) => idOf(r.member!.person) == person)
@@ -1897,6 +1906,12 @@ let seatsOf = (rows: ReadRow[], person: string, role?: Role): Seat[] => {
     }]
   })
 }
+
+/** The space marked a person's own (`own`) among the rows `seatsLine`
+ * read, if one is. */
+export let ownOf = (rows: Row[], person: string): Space | undefined =>
+  seatsOf(rows, person, 'owner')
+    .find((s) => s.own && s.space.slug != META.space)?.space
 
 // Each seat, grant and invitation among the rows, as `held` answers them.
 let heldOf = (rows: ReadRow[]) =>
@@ -3098,13 +3113,7 @@ export let directoryRows = (rows: {
     // `spoken`), which is a seat in `yak` like any other.
     seated: async (person: string, role?: Role): Promise<Seat[]> => {
       if (!person) return []
-      // The owner's seat in each space comes back in the same read, so a
-      // space they are only a member of says whose it is.
-      let mine = `.members_space.member.person=${person}`
-      let rows = await query(
-        `(.member.person=${person})|(.space&${mine})|(.member.role=owner&.member.space${mine})&*`,
-      )
-      return seatsOf(rows, person, role)
+      return seatsOf(await query(seatsLine(person)), person, role)
     },
     // The eid of each space this person sits in, with their role there: all
     // of them whatever a caller goes on to keep, so that every question about

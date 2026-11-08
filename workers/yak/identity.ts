@@ -624,8 +624,14 @@ export let settle = async (
   person: string,
   owning: Promise<Space> = dirOf(env).own(person),
 ): Promise<Space> => {
-  let dir = dirOf(env)
   let own = await owning
+  await founding(env, person)
+  return own
+}
+
+// The first person ever to arrive owns the platform: a seat in its own space.
+let founding = async (env: Env, person: string) => {
+  let dir = dirOf(env)
   let space = await dir.space(META.space)
   if (space && await dir.memberless(space)) {
     await meta(env).apply([{
@@ -633,7 +639,6 @@ export let settle = async (
       member: { space: space.eid, person, role: 'owner' },
     }], KERNEL)
   }
-  return own
 }
 
 // Whoever's invite the words a person signed up with carry is credited with
@@ -773,21 +778,22 @@ export let textedIn = async (
   return { person, space: await settle(env, person) }
 }
 
+// Who is landing: the person, their own space when the write that signed
+// them in found it (signin.ts `Arrived`), and what this visit
+// proved, when it proved anything: a code typed or a link followed (link.ts),
+// already stamped on the person as their last way in (signin.ts `stamped`),
+// and whether it was their first. An already-signed-in browser lands here too
+// and names none, because nothing was proved.
+type Landing = { person: string; own?: Arrived['own']; proved?: Proved }
+
 // The person is known: the cookie, the space that is theirs, the first-owner
 // bootstrap, and wherever they were going.
-//
-// `proved` is what this visit proved, when it proved anything: a code typed
-// or a link followed (link.ts), already stamped on the person as their last
-// way in (signin.ts `stamped`), and whether it was their first. An
-// already-signed-in browser lands here too and names none, because nothing
-// was proved.
 let landed = async (
   req: Request,
   env: Env,
-  person: string,
+  { person, own: home, proved }: Landing,
   q: string,
   back: string,
-  proved?: Proved,
   c: Clock = clock(),
 ) => {
   let dir = dirOf(env)
@@ -796,15 +802,19 @@ let landed = async (
     async () => keep(env, dir, await browser(env, req), person),
   )
   // Their space, and the platform for the first person ever, are settled
-  // behind the answer (T-148852). Their own space is found, or minted in one
-  // write (directory.ts `own`), once, here: one sent nowhere in particular
-  // lands straight on it (T-149706), where /manage was one more trip for the
-  // browser that found it again, and the answer waits on it for nobody else.
+  // behind the answer (T-148852). One sent nowhere in particular lands
+  // straight on their own (T-149706), where /manage was one more trip for the
+  // browser that found it again: the one the code's own write found marked
+  // theirs (T-150300), which a newcomer's handover leaves theirs (newcomer.ts
+  // `keep` marks what it hands over theirs only for somebody with no space),
+  // else found or minted in one write (directory.ts `own`), once, here, after
+  // the handover, and the answer waits on it for nobody else.
   let to = back && onZone(back, env)
-  let own = dir.own(person)
+  let own = home ? null : dir.own(person)
   background(
     apart(() =>
-      settle(env, person, own).then(() => {}, (e) => fault(env, 'settle', e))
+      (own ? settle(env, person, own) : founding(env, person))
+        .then(() => {}, (e) => fault(env, 'settle', e))
     ),
   )
   // A person who has never signed in before is the funnel's sign-up
@@ -844,14 +854,15 @@ let landed = async (
   // A space they can't be given now is the settle's to report, and /manage
   // tries again. Its Operator, which the chat they land on asks first, is
   // woken as they are sent there (build-door.ts `woken`).
+  let land = (space: Pick<Space, 'eid' | 'slug'>) => {
+    woken(env, space.eid)
+    return hostUrl(env, chatPath(space.slug))
+  }
   return redirect(
-    to || await c.time('own', () =>
-      own.then(
-        (space) => {
-          woken(env, space.eid)
-          return hostUrl(env, chatPath(space.slug))
-        },
-        () => hostUrl(env, MANAGE),
+    to ||
+      (home ? land(home) : await c.time(
+        'own',
+        () => own!.then(land, () => hostUrl(env, MANAGE)),
       )),
     set,
     303,
@@ -939,10 +950,11 @@ export let codeCheck = async (
 // first, and the address it is for (funnel.ts `step`).
 type Proved = { first: boolean; who: string | null }
 
-let proving = (arrived: Arrived, address: string) => {
-  let proved: Proved = { first: arrived.first, who: canon(address) }
-  return { person: arrived.person, proved }
-}
+let proving = (arrived: Arrived, address: string): Landing => ({
+  person: arrived.person,
+  own: arrived.own,
+  proved: { first: arrived.first, who: canon(address) },
+})
 
 // A standing link spends no code, so no guess stamps its person: they are
 // read and stamped here, the stamp after the answer, which says nothing that
@@ -1008,9 +1020,8 @@ let followed = async (req: Request, env: Env, pass: Pass | null) => {
       status: 400,
     })
   }
-  let { person, proved } = arrived
   return quiet(
-    await landed(req, env, person, once?.q ?? '', once?.back ?? '', proved),
+    await landed(req, env, arrived, once?.q ?? '', once?.back ?? ''),
   )
 }
 
@@ -1255,7 +1266,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     // a customer's own hostname, follows our zone and refuses a stranger's
     // return, just as it does after a fresh sign-in.
     let who = await withAuth(env, req)
-    if (who) return landed(req, env, who.person, '', back ?? '')
+    if (who) return landed(req, env, { person: who.person }, '', back ?? '')
     return signCard(env, { back })
   }
 
@@ -1395,8 +1406,10 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
           },
         ))
       if (arrived instanceof Response) return timed(arrived, c)
-      let { person, proved } = proving(arrived, address)
-      return timed(await landed(req, env, person, q, back, proved, c), c)
+      return timed(
+        await landed(req, env, proving(arrived, address), q, back, c),
+        c,
+      )
     })
   }
 

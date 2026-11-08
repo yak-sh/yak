@@ -447,14 +447,20 @@ export type Arrival = { newcomer?: string; via?: Via }
 
 export type Via = 'code' | 'link'
 
-/** Who a code signed in, and whether it is the first time they ever got in,
- * which is the funnel's sign-up (funnel.ts). */
-export type Arrived = { person: string; first: boolean }
+/** Who a code signed in, whether it is the first time they ever got in,
+ * which is the funnel's sign-up (funnel.ts), and the space marked their own,
+ * where they land, when they have one (directory.ts `own`). */
+export type Arrived = {
+  person: string
+  first: boolean
+  own?: { eid: string; slug: string }
+}
 
 /** Spend a prepared code digest: one trip, which the store answers with the
  * address's rows buried when it opened (`guessed`), and the person signing
  * in, found or minted (`arriving`) and stamped as signed in (`stamped`), at
- * `$who`; or null when the code did not open. */
+ * `$who`, beside their own space as it stands (facets/signin-graph.ts
+ * `landing`); or null when the code did not open. */
 export let guess = async (
   store: Meta,
   address: string,
@@ -475,7 +481,19 @@ export let guess = async (
       let who = applied.find((b) => b.$alias == '$who')
       if (!who) return null
       let signed = who.signed_in as Person['signed_in']
-      return { person: who.entity.eid, first: !!signed?.first }
+      let own = applied.find((b) => b.space)
+      return {
+        person: who.entity.eid,
+        first: !!signed?.first,
+        ...own
+          ? {
+            own: {
+              eid: own.entity.eid,
+              slug: (own.space as { slug: string }).slug,
+            },
+          }
+          : {},
+      }
     } catch (e) {
       if (e instanceof Stale) continue
       throw e

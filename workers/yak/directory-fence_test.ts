@@ -267,9 +267,10 @@ await proof(
 // burial a right guess writes hold back no serving check. The person a right
 // guess signs in is decided in the same write (T-148969), and fences only
 // when it is minted or named: someone the directory already holds, named,
-// signs in under none. A guess that fences raises its fence before it opens
-// any transaction: one rolled back would hold the fence's ask until storage
-// confirmed it (graph.ts `foreseeing`).
+// signs in under none, and the space they land on is said as it stands,
+// which writes nothing (facets/signin-graph.ts `landing`). A guess that fences
+// raises its fence before it opens any transaction: one rolled back would
+// hold the fence's ask until storage confirmed it (graph.ts `foreseeing`).
 await proof(
   "a sign-in code's whole life leaves serving checks standing",
   async () => {
@@ -279,13 +280,17 @@ await proof(
       let code = (await mint(f.at, 'secret', at))!
       let wrong = code == '000000' ? '000001' : '000000'
       let before = f.begins.length
-      let spent = [
-        await spend(f.at, 'secret', at, wrong),
-        (await spend(f.at, 'secret', at, code))?.person,
-      ]
-      return { spent, fences: f.begins.length - before }
+      let missed = await spend(f.at, 'secret', at, wrong)
+      let opened = await spend(f.at, 'secret', at, code)
+      let spent = [missed, opened?.person]
+      return { spent, own: opened?.own?.slug, fences: f.begins.length - before }
     }
-    let first = await signIn(), again = await signIn()
+    let first = await signIn()
+    await f.at.apply([{
+      entity: { eid: '$own' },
+      $own: { person: first.spent[1]! },
+    }], KERNEL)
+    let again = await signIn()
     let trail = async (code: string) => {
       let from = f.trail.length
       await spend(f.at, 'secret', 'trail@example.com', code)
@@ -298,6 +303,11 @@ await proof(
     ]
     let [person] = await f.at.query(`.person&.email.address=${at}&?doc`)
     let left = (await f.at.query(`.signin.email=${at}`)).length
+    let [seat] = await f.at.query(`.member.person=${person?.entity.eid}`)
+    let [home] = await f.at.query(
+      `.entity.eid=${(seat?.member as { space?: string })?.space}`,
+    )
+    let slug = (home?.space as { slug?: string })?.slug
     return () =>
       equal({
         first,
@@ -306,8 +316,8 @@ await proof(
         title: (person?.doc as { title?: string })?.title,
         trails,
       }, {
-        first: { spent: [null, person?.entity.eid], fences: 1 },
-        again: { spent: [null, person?.entity.eid], fences: 0 },
+        first: { spent: [null, person?.entity.eid], own: undefined, fences: 1 },
+        again: { spent: [null, person?.entity.eid], own: slug, fences: 0 },
         left: 0,
         title: 'fence',
         trails: [['tx'], ['begin', 'tx']],

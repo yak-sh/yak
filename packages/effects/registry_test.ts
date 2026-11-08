@@ -48,6 +48,18 @@ test('a handler registered after an unobserved write sees changes and removal', 
   assertEquals(seen, ['changed', 'removed'])
 })
 
+// The reading every batch carries for its effects asks nothing of the write,
+// so a write of what is stored is still no write (@yaks/graph unchanged.ts).
+test('a write of what is stored stamps nothing where effects run', () => {
+  let { fx, g, seen } = fixture()
+  fx.changed('post', (e) => seen.push(`changed ${e.entity.eid}`))
+  let at = (now: string) => sync(g.apply([post('p1')], { now }))
+  at('2026-01-01T00:00:00.000Z')
+  let [again] = at('2026-01-02T00:00:00.000Z')
+  let [row] = sync(g.get(['p1']))
+  assertEquals([again.updated, row.updated, seen], [undefined, undefined, []])
+})
+
 test('a created handler fires once per new component', () => {
   let { fx, seen, apply } = fixture()
   fx.created(

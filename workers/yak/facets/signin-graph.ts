@@ -8,7 +8,8 @@
 // and the answer says which. A guess is the request `$guess{email | phone,
 // code, via}`, which writes nothing of its own: it becomes a try off every
 // open code, or the burial of every row when it opens one, beside whoever it
-// signs in, stamped as signed in (signin.ts `stamped`).
+// signs in, stamped as signed in (signin.ts `stamped`), and the space they
+// land on, said as it stands (`landing`).
 //
 // Both are the platform's alone. A `signin` is wholly server-stamped, so an
 // ask from anywhere else is refused at admission before it gets here, and a
@@ -36,7 +37,7 @@ import {
   stamped,
   type Via,
 } from '../signin.ts'
-import { newcomerIs, type Row } from '../directory.ts'
+import { newcomerIs, ownOf, type Row, seatsLine } from '../directory.ts'
 
 type Guess = {
   email?: string
@@ -65,20 +66,21 @@ let addressOf = (s: { email?: string; phone?: string }) =>
 // name, and a person found by one is the one wearing it. They are stamped as
 // signed in at `at`, and the stamp says whether it is their first time, so
 // the write that signs them in answers the funnel's question too (T-149011).
+// The person comes first, under the request's `$alias`, then where they land.
 let arrival = (
   tx: Tx,
   address: string,
   eid: string,
   at: string,
   { newcomer, via = 'code' }: Guess,
-) =>
+): Bundle[] | Promise<Bundle[]> =>
   after(tx.read(personLine(address)), ([found]) =>
     after(
       found || !newcomer ? [] : tx.read(`.entity.eid=${newcomer}`),
       ([row]) => {
         let taken = newcomerIs(row as Row | undefined)
         let who = (found ?? (taken ? row : undefined)) as Person | undefined
-        return {
+        let person = {
           ...arriving(
             address,
             called(address),
@@ -87,8 +89,26 @@ let arrival = (
           ),
           signed_in: stamped(who?.signed_in, at, via),
         }
+        return after(landing(tx, who?.entity.eid), (home) => [person, ...home])
       },
     ))
+
+// Where somebody signing in lands: the space marked their own, as the write
+// finds it (directory.ts `own`), so the code and the place it sends them are
+// one trip (T-150300). It is said back as it stands, its address and nothing
+// else, which writes nothing: a bundle holding what is stored leaves the
+// write and comes back in its answer (@yaks/graph unchanged.ts). Somebody
+// minted here, or with no space marked theirs yet, lands nowhere yet, and
+// directory.ts `own` finds or mints theirs.
+let landing = (tx: Tx, person?: string): Bundle[] | Promise<Bundle[]> =>
+  person
+    ? after(tx.read(seatsLine(person)), (rows) => {
+      let own = ownOf(rows as Row[], person)
+      return own
+        ? [{ entity: { eid: own.eid }, space: { slug: own.slug } }]
+        : []
+    })
+    : []
 
 // An ask is a new code: a `signin` carrying one.
 let asking = (b: Bundle) => !!(b.signin as { code?: string } | undefined)?.code
@@ -111,7 +131,9 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
           if (!wrote.some((w) => w.tombstone)) return wrote
           return after(
             arrival(tx, address, b.entity.eid, new Date(now).toISOString(), g),
-            (who) => [...wrote, { ...who, $alias: b.$alias }],
+            (
+              [who, ...home],
+            ) => [...wrote, { ...who, $alias: b.$alias }, ...home],
           )
         })
       }

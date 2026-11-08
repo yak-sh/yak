@@ -1500,6 +1500,35 @@ test("a new person's first page works right after the code", async () => {
   }
 })
 
+// Somebody back lands on their own space by the code's one trip: the write
+// that spends it says where (facets/signin-graph.ts `landing`), renamed or not.
+test('a code lands somebody back on their own space in one trip', async () => {
+  let k = await kernel()
+  let email = `${unique('back')}@yaks.app`
+  let code = async () => {
+    await (await form(k, '/login', { email })).body?.cancel()
+    let inn = await form(k, '/login/code', {
+      email,
+      code: await mailed(k, email),
+    })
+    await inn.body?.cancel()
+    await k.settled()
+    return [
+      inn.headers.get('location'),
+      inn.headers.get('server-timing')!.match(/\bhops;dur=(\d+)/)?.[1],
+    ]
+  }
+  await code()
+  let [them] = await meta(k).query(`.person&.email.address=${email}`)
+  let [space] = await k.dir.spaces(them.entity.eid)
+  let renamed = unique('renamed')
+  await k.dir.rename(space, { slug: renamed }, {
+    'x-yak-person': them.entity.eid,
+    'x-yak-role': 'owner',
+  })
+  equal(await code(), [`https://yaks.app/manage/${renamed}`, '1'])
+})
+
 // One click instead of six digits (link.ts, T-34351), and the standing link an
 // app directory's reviewer is given instead of a mailbox — OpenAI's review
 // refuses any credential that needs one. Both are the same door and the same
