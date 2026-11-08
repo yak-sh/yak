@@ -353,7 +353,7 @@ import {
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { type Mark, type Stamp, type Standing } from '@yaks/platform/mover'
 import { borrows } from '@yaks/reach'
-import { owed, ran, refused, skewed } from './running.ts'
+import { BEAT, owed, ran, refused, skewed } from './running.ts'
 import { type Relocating, relocation } from './relocate.ts'
 import { type Meta, metaOf, minted } from './meta.ts'
 import { caught, defect, refusing } from './defects.ts'
@@ -5179,13 +5179,27 @@ export class Store {
   }
 
   // A refusal of a line this door answered under the same words is the
-  // deploy's, not the caller's (answered.ts), and is reported here.
+  // deploy's, not the caller's (answered.ts), and is reported here. A new
+  // line is kept a beat after its answer was read (running.ts `BEAT`), so the
+  // read never waits for the write to be confirmed.
   #recalled = recalling(
     answers({
       read: () => this.#get('answered'),
       write: (value) => this.#put('answered', value),
     }),
     (error) => defect(error, { request: 'query', store: this.#get('name') }),
+    (work) =>
+      this.#ctx.waitUntil?.(
+        new Promise<void>((done) =>
+          clockOf(this.#time).after(BEAT, () => {
+            try {
+              work()
+            } finally {
+              done()
+            }
+          })
+        ),
+      ),
   )
 
   // The word a row is named by. `kind` is not a property and no client can

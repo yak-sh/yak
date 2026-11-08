@@ -14,7 +14,15 @@
 // them, each by a short hash. New words start it over. It keeps the first
 // REMEMBERED lines; the ones shipped code sends are asked again and again, so
 // they are among the first, and a line typed once may go unkept.
+//
+// A new line is written to the slot behind its answer, once the caller has
+// read it through (`recalling`'s `behind`): a store's answer waits for every
+// write made before it to be confirmed, and that write held each read of a
+// new line 20-30 ms past the store's own work (T-150127). Lines answered
+// together are written together, and an object that stops before the write
+// forgets them, as it forgets a line past REMEMBERED.
 import { sha256 } from '@yaks/graph/sha256'
+import { onceRead } from './running.ts'
 
 /** The names a line is refused with when it does not compile (@yaks/query's
  * parser, @yaks/sql, @yaks/match, @yaks/vocab). */
@@ -61,13 +69,22 @@ export let answers = (slot: Slot) => {
     if (held.words != at) held = { words: at, lines: new Set() }
     return held
   }
+  let unkept = false
   return {
-    answered: (words: string[], line: string) => {
-      let { words: at, lines } = under(words)
+    /** Note a line answered under `words`; true when that is news the slot
+     * does not hold yet (`keep`). */
+    answered: (words: string[], line: string): boolean => {
+      let { lines } = under(words)
       let key = short(line)
-      if (lines.has(key) || lines.size >= REMEMBERED) return
+      if (lines.has(key) || lines.size >= REMEMBERED) return false
       lines.add(key)
-      slot.write(JSON.stringify({ words: at, lines: [...lines] }))
+      return unkept = true
+    },
+    /** Write what was answered since the last write, if anything was. */
+    keep: () => {
+      if (!unkept || !held) return
+      unkept = false
+      slot.write(JSON.stringify({ words: held.words, lines: [...held.lines] }))
     },
     regressed: (words: string[], line: string, name: unknown) =>
       COMPILES.has(String(name)) && under(words).lines.has(short(line)),
@@ -78,13 +95,15 @@ let named = (e: unknown) => e instanceof Error ? e.name : undefined
 let said = (e: unknown) => e instanceof Error ? e.message : String(e)
 
 /** A query door that remembers what it answers: `answer` for `line` under
- * `words`, as it was. An answer is remembered, and a refusal of a line
+ * `words`, as it was. An answer is remembered, kept in the slot by the work
+ * `behind` runs once the caller has read it through, and a refusal of a line
  * remembered is reported to `report`, which also hears a memory that could
  * not be kept. A refusal thrown or answered (a 400 whose body names it) is
  * the same refusal. */
 export let recalling = (
   memory: ReturnType<typeof answers>,
   report: (error: unknown) => void,
+  behind: (work: () => void) => void,
 ) =>
 async (
   words: string[],
@@ -102,10 +121,21 @@ async (
     throw e
   }
   if (got.ok) {
+    let news = false
     try {
-      memory.answered(words, line)
+      news = memory.answered(words, line)
     } catch (e) {
       report(e)
+    }
+    if (news) {
+      let keep = () => {
+        try {
+          memory.keep()
+        } catch (e) {
+          report(e)
+        }
+      }
+      return onceRead(got, () => behind(keep))
     }
   } else if (got.status == 400) {
     let body = await got.clone().json().catch(() => null) as

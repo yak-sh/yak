@@ -46,19 +46,25 @@ let deploy = (slot: Map<string, string>, attempts = true, words = APP) => {
       write: (v) => void slot.set('answered', v),
     }),
     (e) => heard.push(`${(e as Error).name}: ${(e as Error).message}`),
+    (work) => work(),
   )
   let held = [JSON.stringify(words), '']
+  let status = async (r: Response) => (await r.text(), r.status)
   let ask = async (line: string) =>
-    (await recalled(
-      held,
-      line,
-      () =>
-        door(new Request(`http://store/query?q=${encodeURIComponent(line)}`)),
-    )).status
+    status(
+      await recalled(
+        held,
+        line,
+        () =>
+          door(
+            new Request(`http://store/query?q=${encodeURIComponent(line)}`),
+          ),
+      ),
+    )
   let read = (line: string) =>
     recalled(held, line, async () => json(await g.read(line)))
-      .then((r) => r.status, (e: Error) => e.name)
-  return { ask, read, heard }
+      .then(status, (e: Error) => e.name)
+  return { ask, read, heard, recalled, held }
 }
 
 let ATTEMPTS = '.effect.attempts=0'
@@ -96,4 +102,17 @@ test("a line the app's own new words refuse is the app's", async () => {
   let renamed = deploy(slot, true, app('name'))
   equal(await renamed.ask('.recipe.title=soup'), 400)
   equal(renamed.heard, [])
+})
+
+test('a new line is kept once its answer has been read', async () => {
+  let slot = new Map<string, string>()
+  let { recalled, held } = deploy(slot)
+  let answer = await recalled(held, '.recipe', () => json([]))
+  equal(slot.has('answered'), false, 'the answer does not wait on the write')
+  await answer.text()
+  equal(JSON.parse(slot.get('answered')!).lines.length, 1)
+  let again = await recalled(held, '.recipe', () => json([]))
+  slot.delete('answered')
+  await again.text()
+  equal(slot.has('answered'), false, 'a line it holds is not written again')
 })
