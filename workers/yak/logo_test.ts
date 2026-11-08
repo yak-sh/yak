@@ -1,9 +1,17 @@
-// A space's logo (T-140199): its owner chooses a picture in Settings, and the
-// space wears it where its letter stood, served to the space's people alone.
+// A space's logo (T-140199): its owner chooses a picture in Settings, or has
+// its Operator set it with space_set (T-151744), and the space wears it where
+// its letter stood, served to the space's people alone, and as the icon of
+// each of its apps with none of its own.
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
+import { encodeBase64 } from '@std/encoding/base64'
 import { parseHTML } from 'linkedom'
-import { kernel, signIn } from './probe.ts'
+import { connector, kernel, signIn } from './probe.ts'
 import { managePath } from './route.ts'
 import { sha256 } from './versions.ts'
 
@@ -70,6 +78,52 @@ test('a space wears the logo its owner chooses, and its letter without one', asy
     assertEquals((await send(unlogo)).status, 303)
     assertEquals((await tile()).tagName, 'SPAN')
     assertEquals((await get(at)).status, 404)
+  } finally {
+    await k.stop()
+  }
+})
+
+test('space_set sets the logo its Operator is given, and an app with no icon wears it', async () => {
+  let k = await kernel()
+  try {
+    let them = await signIn(k)
+    let slug = them.email.split('@')[0]
+    let agent = connector(k, them.cookie)
+    let set = (args: Record<string, unknown>) =>
+      agent.tool('space_set', { space: slug, ...args })
+    let tile = async () => {
+      let html = await (await k.at('yaks.app', managePath('settings', slug), {
+        headers: { cookie: them.cookie },
+      })).text()
+      return parseHTML(html).document.querySelector('.Desk_Space .Desk_Tile')!
+    }
+    await agent.tool('app_new', { space: slug, slug: 'notes', title: 'Notes' })
+    await agent.tool('app_deploy', { space: slug, app: 'notes' })
+    let icon = async () =>
+      new Uint8Array(
+        await (await k.at(`${slug}.yaks.app`, '/notes/icon.png', {
+          headers: { cookie: them.cookie },
+        })).arrayBuffer(),
+      )
+    let yak = await icon()
+
+    assertStringIncludes(await set({ logo_base64: encodeBase64(PNG) }), 'logo')
+    let at = `/manage/${slug}/logo/${await sha256(PNG)}`
+    assertEquals((await tile()).getAttribute('src'), at)
+    // No RASTER in a test run, so the logo as it is rather than its drawing.
+    assertEquals(await icon(), PNG)
+
+    let no = await assertRejects(
+      () => set({ logo_base64: encodeBase64('<svg/>') }),
+      Error,
+    )
+    assertStringIncludes(no.message, 'a logo is a PNG, JPEG, WebP or GIF')
+    await assertRejects(() => set({ logo: 'f'.repeat(64) }), Error, 'keeps no')
+    assertEquals((await tile()).getAttribute('src'), at)
+
+    assertStringIncludes(await set({ logo: 'none' }), 'logo is off')
+    assertEquals((await tile()).tagName, 'SPAN')
+    assertEquals(await icon(), yak)
   } finally {
     await k.stop()
   }

@@ -2373,6 +2373,7 @@ test('a drawing that fails leaves the app wearing the platform tile', async () =
   let r = (await apps.unwritten(
     new Request('https://ada.yaks.app/cookbook/icon.png'),
     env,
+    { logo: null } as Space,
     { access: 'public' } as App,
     '/icon.png',
     '/cookbook/',

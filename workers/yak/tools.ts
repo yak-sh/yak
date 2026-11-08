@@ -1,4 +1,4 @@
-import { base64 } from './bytes.ts'
+import { base64, unbase64 } from './bytes.ts'
 import { groupBy } from '@yaks/fp'
 import { tell } from './operator-updates.ts'
 import { operatorTools } from './operator-tools.ts'
@@ -215,6 +215,7 @@ import {
   workbench,
 } from './sandbox.ts'
 import { attachmentBytes, attachmentText } from './attachments.ts'
+import { logoed } from './logo.ts'
 import { machineDeclared, machineTools } from '@yaks/harness/machine'
 import {
   connect,
@@ -2582,6 +2583,27 @@ let HINTS: Record<
   write: { destructive: false, idempotent: true },
 }
 
+// What space_set's `logo` takes the logo off with.
+let UNLOGO = 'none'
+
+// The picture space_set's `logo` or `logo_base64` names: its bytes, null to
+// take the logo off, or undefined where neither came.
+let logoSent = async (ctx: Ctx, space: Space, args: Args) => {
+  if (args.logo != null && args.logo_base64 != null) {
+    throw refuse('arguments', 'one of logo or logo_base64')
+  }
+  if (args.logo_base64 != null) {
+    try {
+      return unbase64(text(args.logo_base64, 'logo_base64'))
+    } catch {
+      throw refuse('arguments', 'logo_base64 is not base64')
+    }
+  }
+  if (args.logo == null) return undefined
+  let id = text(args.logo, 'logo')
+  return id == UNLOGO ? null : await attachmentBytes(ctx.env, space, id)
+}
+
 // A file the person attached in a conversation with their Operator, which
 // sandbox_write puts in the sandbox as its bytes in place of written text: a
 // spreadsheet export a script parses, an image a build embeds.
@@ -2997,21 +3019,34 @@ let OURS: Row[] = [
             'the model calls one visitor may ask its apps for in a day (UTC), ' +
             `${VISITOR_CALLS} where never set`,
         },
+        logo: str(
+          "the space's logo: an attachment id from the conversation (64 hex " +
+            'characters) naming a PNG, JPEG, WebP or GIF up to 1 MB, or ' +
+            `"${UNLOGO}" to take the logo off`,
+        ),
+        logo_base64: str(
+          "the logo's bytes, base64-encoded, in place of an attachment: a " +
+            'picture read from a file',
+        ),
       },
     },
     run: async (ctx, args) => {
       let { space, who } = await owns(ctx, args)
+      let logo = await logoSent(ctx, space, args)
       let to = args.slug == null ? null : fresh(args.slug, 'slug')
       let title = args.title == null ? null : titled(args.title)
       let drop = args.forget == null ? null : slug(args.forget, 'forget')
       let share = args.visitors == null ? null : Number(args.visitors)
       let calls = args.visitor_calls == null ? null : Number(args.visitor_calls)
       let welcoming = share != null || calls != null
-      if (to == null && title == null && drop == null && !welcoming) {
+      if (
+        to == null && title == null && drop == null && !welcoming &&
+        logo === undefined
+      ) {
         throw refuse(
           'arguments',
-          'nothing to change: pass slug, title, forget, visitors, or ' +
-            'visitor_calls',
+          'nothing to change: pass slug, title, forget, visitors, ' +
+            'visitor_calls, or logo',
         )
       }
       let moving = to != null && to != space.slug
@@ -3026,6 +3061,13 @@ let OURS: Row[] = [
       if (moving) {
         let taken = await ctx.dir.space(to!)
         if (taken) throw refuse('conflict', `space ${to} is taken`)
+      }
+      // The write the Settings page's Logo card makes (logo.ts `logoed`),
+      // first, so a picture that cannot be a logo changes nothing else.
+      if (logo !== undefined) {
+        let no = await logoed(ctx.env, ctx.dir, space, logo, vouched(who))
+        if (no) throw refuse('arguments', no)
+        space = (await ctx.dir.at(space.eid)) ?? space
       }
       // One directory write and nothing else (directory.ts `rename`): every
       // key the space keeps in the bucket roots at its handle, which a move
@@ -3062,6 +3104,12 @@ let OURS: Row[] = [
               'with the space'
             : '') +
           (drop == null ? '' : ` — ${lost(`${spaceHost(ctx.env, drop)}`)}`) +
+          (logo === undefined
+            ? ''
+            : logo
+            ? ' — it wears the logo now, beside its name and as the icon of ' +
+              'each of its apps with none of its own'
+            : ' — its logo is off, and its first letter stands in its place') +
           (welcoming
             ? ` — its apps' visitors may spend ` +
               `${now.visitors ?? VISITORS}% of its model and voice budget ` +

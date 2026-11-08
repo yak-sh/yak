@@ -4,7 +4,6 @@
 // compiles it (T-148886).
 import { copyOf } from './directory-copy.ts'
 import { spaceHost, url as hostUrl } from './host.ts'
-import { r2RawObjects } from './lib/objects.ts'
 import { browserImmutable } from './cache.ts'
 import {
   type App,
@@ -45,10 +44,10 @@ import {
   refusedSell,
   selling,
 } from './sell.ts'
-import { broken as undecoded, mediaTypeOf } from '@yaks/blob'
 import { type File } from './uploads.ts'
 import { type DeskPage, nothingHere, sentence, type Visits } from './pages.ts'
-import { desk as deskPage, LOGO } from './desk-pages.ts'
+import { desk as deskPage } from './desk-pages.ts'
+import { LOGO, logoBytes, logoed } from './logo.ts'
 import { again } from './invite.ts'
 import { peopleIn } from './people.ts'
 import { CallError } from '@yaks/tools/errors'
@@ -78,7 +77,6 @@ import { caught } from './defects.ts'
 import { woken } from './build-door.ts'
 import { invitation } from './referral.ts'
 import { budget, gauges, spent } from './meter.ts'
-import { sha256 } from './versions.ts'
 import { DAYS, NOT_ON, statsFor } from './views.ts'
 import { refuse } from './tool.ts'
 import { letIn, letOut, reachOf } from './operator-reach.ts'
@@ -1007,7 +1005,20 @@ let saved = async (
   }
   // Settings' Logo: a picture chosen, or Remove.
   if (form.has('logo') || form.has('unlogo')) {
-    let no = await logoed(env, dir, space, who, form.get('logo'))
+    let file = form.get('logo')
+    let no = !file
+      ? await logoed(env, dir, space, null, vouched(who))
+      : !(file instanceof File)
+      ? 'choose a picture for the logo'
+      : file.size > LOGO.size
+      ? 'a logo can be up to 1 MB'
+      : await logoed(
+        env,
+        dir,
+        space,
+        new Uint8Array(await file.arrayBuffer()),
+        vouched(who),
+      )
     if (no) {
       return desk(req, env, dir, space, who, 'settings', { say: no, no: true })
     }
@@ -1064,49 +1075,14 @@ let saved = async (
   return redirect(to.href, 303)
 }
 
-// Where a space's logo is kept: content-addressed in the bucket under the
-// space's handle, so a rename moves none of it and deleting the space sweeps
-// it with the rest (erase.ts `swept`).
-let logoKey = (space: Space, sha: string) => `${space.store}/.logo/${sha}`
-
-// The space wearing the picture `file`, or none where no file came (Remove).
-// Answers why a file cannot be its logo, or nothing once it is. The bytes it
-// wore before are deleted once the row no longer names them.
-let logoed = async (
-  env: Env,
-  dir: ReturnType<typeof directory>,
-  space: Space,
-  who: Owner,
-  file: FormDataEntryValue | null,
-): Promise<string | undefined> => {
-  let blobs = r2RawObjects(env.BLOBS)
-  let logo = null
-  if (file instanceof File) {
-    if (file.size > LOGO.size) return 'a logo can be up to 1 MB'
-    let bytes = new Uint8Array(await file.arrayBuffer())
-    let type = mediaTypeOf(bytes)
-    if (!type || !LOGO.accept.split(',').includes(type)) {
-      return 'a logo is a PNG, JPEG, WebP or GIF picture'
-    }
-    let why = await undecoded(bytes, type)
-    if (why) return `that picture does not open: ${why}`
-    logo = { sha: await sha256(bytes), type }
-    await blobs.put(logoKey(space, logo.sha), bytes)
-  } else if (file != null) return 'choose a picture for the logo'
-  let had = space.logo?.sha
-  await dir.badge(space, logo, vouched(who))
-  if (had && had != logo?.sha) await blobs.delete(logoKey(space, had))
-}
-
 // The bytes of a space's logo, to anyone in the space, at the address only
 // these bytes have (route.ts `logoPath`), so a browser keeps them for good.
 let logoOf = async (env: Env, space: Space, who: Owner, sha: string) => {
-  if (!who.role || space.logo?.sha != sha) return nothingHere(env)
-  let bytes = await r2RawObjects(env.BLOBS).read(logoKey(space, sha))
+  let bytes = who.role ? await logoBytes(env, space, sha) : null
   if (!bytes) return nothingHere(env)
   return new Response(bytes, {
     headers: {
-      'content-type': space.logo.type,
+      'content-type': space.logo!.type,
       'cache-control': browserImmutable,
       'x-content-type-options': 'nosniff',
     },

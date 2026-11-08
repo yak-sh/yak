@@ -24,6 +24,7 @@ import { INTEGRATIONS } from './integrations.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { type IconName, icons } from './icons.ts'
 import { day, fileDrop, raw } from './html.ts'
+import { LOGO } from './logo.ts'
 import { holder, tile } from './render/mod.ts'
 import type { Person } from './people.ts'
 import { type Invitation, qr } from './referral.ts'
@@ -853,12 +854,6 @@ let newSpace = (at: DeskPage, env: Host) =>
 // then deleting it, which asks again on its own page (identity.ts
 // `closing`). A refusal draws the page again with what was typed still in
 // the fields (`at.typed`).
-/** The most bytes a space's logo may be, and the kinds it may be: pictures a
- * browser draws as an image and nothing else, so no SVG with its scripts. */
-export let LOGO = {
-  size: 1_000_000,
-  accept: 'image/png,image/jpeg,image/webp,image/gif',
-}
 
 // Settings' Logo: the space's picture, or its letter, beside a drop zone
 // that sends its own form as soon as a file is chosen, and Remove where there

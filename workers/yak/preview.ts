@@ -689,7 +689,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       req.method,
     )
   if (!worker && res.status == 404) {
-    let generated = await unwritten(req, env, app, path, mount)
+    let generated = await unwritten(req, env, space, app, path, mount)
     if (generated) {
       await res.body?.cancel()
       res = generated

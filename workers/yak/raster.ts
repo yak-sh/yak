@@ -15,13 +15,14 @@ import type { Declared } from './operator-persona.ts'
 export let ICON_SVG = 'icon.svg'
 
 // What an app's icon is to the Operator, declared beside the code that draws
-// it (files.ts `icon`) and falls back to the platform's (apps.ts `unwritten`).
+// it (files.ts `icon`) and falls back to the space's logo or the platform's
+// (apps.ts `unwritten`).
 // The base persona contains it (operator-persona.ts).
 export let iconic: Declared = {
   key: 'icon',
   title: "An app's icon",
   body:
-    "The picture beside an app's name in your page's sidebar, the person's list of apps and a home screen is the app's icon. It is served from the app's icon.png, or drawn from its icon.svg, and an app with neither wears the platform's default yak. To set one, use app_files: op: fetch with path icon.png and the URL of a PNG, or write an icon.svg (a square viewBox, no <text>); then app_deploy, since the icon shows once deployed. A logo can also mean a picture in the app's own pages: work out from the person's words which they mean, and ask when you can't tell.",
+    "The picture beside an app's name in your page's sidebar, the person's list of apps and a home screen is the app's icon. It is served from the app's icon.png, or drawn from its icon.svg, and an app with neither wears its space's logo, or the platform's default yak in a space without one. To set one, use app_files: op: fetch with path icon.png and the URL of a PNG, or write an icon.svg (a square viewBox, no <text>); then app_deploy, since the icon shows once deployed. A space has a logo of its own too, which stands in for its first letter wherever the space shows (the space switcher, the list of spaces, your chat) and is the icon of every app in it without one: when the person asks for the space's icon or logo, or for one picture on all their apps, set it with space_set: logo with the attachment id of a picture they sent (a PNG, JPEG, WebP or GIF up to 1 MB), or logo_base64 with a picture's bytes; logo \"none\" takes it off. Only the space's owner may set it. A logo can also mean a picture in the app's own pages: work out from the person's words which they mean, and ask when you can't tell.",
 }
 
 // The one size drawn: the manifest names the icon at 512 and 192, and iOS

@@ -378,7 +378,9 @@ was deleted.
 The app's icon is the picture beside its name wherever yaks.app lists it (the
 space's apps, the Operator's sidebar) and on a home screen. It is the app's
 `icon.png`, served once the app is deployed. Until the app has one, that address
-serves the platform's default yak.
+serves its space's logo, drawn square on white, or the platform's default yak in
+a space without a logo. The space's owner sets its logo on the space's Settings
+page, or through `space_set` with `logo`.
 
 A PNG on the web is fetched there:
 

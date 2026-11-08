@@ -29,11 +29,11 @@ space_new:
     entity id and URL. Other tools infer the space when only one fits;
     specify space when more than one could match.
 space_set:
-  title: Rename, move or set visitor spending
+  title: Name, address, logo or visitor spending
   description: >-
-    Change a space's name or move it to another address, at any time, or
-    set how much of its monthly model and voice budget its apps' visitors
-    may spend. The
+    Change a space's name or move it to another address, at any time, set
+    its logo, or set how much of its monthly model and voice budget its
+    apps' visitors may spend. The
     title is its name; the slug is its address, so changing the slug moves
     the space to <new>.yaks.app. Every app in it moves with it, files and
     data included, and each app keeps its own path under the new address.
@@ -51,9 +51,16 @@ space_set:
     they answer again on the 1st, and members are not held to it. Pass
     visitor_calls (50 until set) to bound the model calls one visitor may
     ask its apps for in a day (UTC); past it, the apps tell that visitor
-    they answer again tomorrow. Returns
-    the current address and a summary of the changes. Documentation:
-    https://yaks.app/docs/home.
+    they answer again tomorrow. Pass logo with an attachment id from the
+    conversation to make that picture the space's logo (a PNG, JPEG, WebP
+    or GIF up to 1 MB, no SVG), or logo_base64 with a picture's bytes; logo
+    "none" takes it off. The logo stands in for the space's first letter
+    wherever the space shows (its owner's space switcher, its list of
+    spaces, the Operator's chat) and is the icon of every app in it with no
+    icon.png or icon.svg of its own, on a home screen too. It is the logo
+    its owner can choose on the space's Settings page; only the owner may
+    set it. Returns the current address and a summary of the changes.
+    Documentation: https://yaks.app/docs/home.
 space_delete:
   title: Delete a space
   description: >-
@@ -176,7 +183,8 @@ app_files:
     sidebar) and on a home screen, is its icon.png: a PNG fetched there with
     op: fetch, or else an icon.svg written as content (a square viewBox, no
     <text>), which the platform draws as icon.png. An app with neither wears
-    the platform's default yak. It shows once deployed. NOTES.md
+    its space's logo (space_set logo), or the platform's default yak in a
+    space without one. It shows once deployed. NOTES.md
     beside index.html holds the app's notes in the person's words (up to
     4 KB), returned by the about tool; like vocab.json it is never served on
     the web. op: patch with path, find and replace edits one file in place;
