@@ -60,8 +60,9 @@ import {
   type Served,
 } from './host.ts'
 import { readThread } from './read_thread.ts'
-import { stalls } from './stall.ts'
+import { stalls, thread as threadPath } from './stall.ts'
 import { sampler } from './stall_profile.ts'
+import { waitSampler } from './stall_wait.ts'
 import { thread } from '@yaks/threads'
 import { during, peek } from '@yaks/trace'
 import { dutyRoles, rolesOf, workerRoles } from './roles.ts'
@@ -201,19 +202,31 @@ let watched = (
   ready: Promise<unknown> = Promise.resolve(),
 ): Promise<void> => {
   let profile: Awaited<ReturnType<typeof sampler>> | undefined
+  let waiting: ReturnType<typeof waitSampler> | undefined
   let unwatch = () => {}
   let done = (async () => {
     await ready
     let started = profile = await sampler()
+    let observer = waiting = waitSampler(threadPath())
     // Silent once started: its samples are told only in a stall's report.
     unwatch = stalls({
-      sample: (ms, held) =>
-        started.take(ms, held)?.catch((error) => {
+      sample: (ms, held) => {
+        let end = performance.timeOrigin + performance.now()
+        let evidence = held
+          ? [
+            `held interval: ${new Date(end - ms).toISOString()} to ${
+              new Date(end).toISOString()
+            }`,
+            observer.take(ms),
+          ].filter(Boolean).join('\n')
+          : ''
+        return started.take(ms, held)?.catch((error) => {
           void host.report?.(error, {
             tags: { step: 'main thread sampling' },
           })
           return `stack sampling failed: ${String(error)}`
-        }),
+        }).then((stack) => held ? `${evidence}\n${stack}` : undefined)
+      },
       report: (error) =>
         void host.report?.(error, { tags: { step: 'main thread' } }),
     })
@@ -222,6 +235,7 @@ let watched = (
   host.close = async (code) => {
     await done.catch(() => {})
     unwatch()
+    waiting?.close()
     try {
       await profile?.close()
     } finally {

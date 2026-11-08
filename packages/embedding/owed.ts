@@ -24,17 +24,14 @@
 
 import {
   and,
-  ARMS,
   as,
   col,
   count,
   type CreateTrigger,
-  cut,
   desc,
   eq,
   exists,
   type Expr,
-  from,
   type Insert,
   lit,
   not,
@@ -42,22 +39,13 @@ import {
   render,
   select,
   table,
-  union,
   val,
 } from '@yaks/sql'
 import type { Statements } from '@yaks/sql'
 import type { Bundle } from '@yaks/graph'
-import { type Field, present, wearers } from './fields.ts'
+import { type Field, present } from './fields.ts'
+import { fill, filling, queue, schedule } from './fill.ts'
 import { OWED, TABLE } from './ddl.ts'
-
-// Queue the entities `q` selects, or bump the count of those already queued.
-let queue = (rows: Pick<Insert, 'rows' | 'q'>): Insert => ({
-  t: 'insert',
-  into: OWED,
-  cols: ['owner', 'n'],
-  ...rows,
-  upsert: [{ on: [col('owner')], set: { n: op('+', col('n'), lit(1)) } }],
-})
 
 let one = (e: Expr): Insert => queue({ rows: [[e, lit(1)]] })
 
@@ -271,55 +259,33 @@ export let watch = (db: Statements, wanted: Field[]): boolean => {
     }),
   ).map((r) => ({ name: String(r.name), on: String(r.on), sql: String(r.sql) }))
   let { drop, make, owed } = moves(have, definitions)
-  for (let name of drop) {
-    db.query({ t: 'drop', kind: 'trigger', name, ifExists: true })
+  if (drop.length || make.length) {
+    db.atomic(() => {
+      for (let name of drop) {
+        db.query({ t: 'drop', kind: 'trigger', name, ifExists: true })
+      }
+      for (let t of make) db.query(t)
+      if (owed === true) owe(db, fields)
+      else if (owed.size) owe(db, fields, owed)
+    })
   }
-  for (let t of make) db.query(t)
-  if (owed === true) owe(db, fields)
-  else if (owed.size) owe(db, fields, owed)
   watched.set(db, { version: db.revision('schema'), fields: key })
   return drop.length + make.length > 0
 }
 
-/** Queue every entity that wears an embedded field or has a vector — or,
- * given `tables`, only those with a row in one of them. */
+/** Schedule every entity wearing a field or holding a vector — or, given
+ * `tables`, their owners only. Queue a bounded first window now; the sweep
+ * resumes the durable cursors for the rest. */
 export let owe = (
   db: Statements,
   wanted: Field[],
   tables?: Set<string>,
 ): void => {
   let fields = present(db, wanted)
-  // Start at the moved tables: a new exclusion can be empty, and removing one
-  // can reveal text without a vector. All fields are checked for those owners.
-  let candidates = tables
-    ? cut([...tables], db.arms ?? ARMS).map((group) =>
-      union(
-        ...group.map((name) =>
-          select({ cols: [as(col('entity'), 'owner')], from: table(name) })
-        ),
-      )
-    )
-    : [undefined]
-  for (let owners of candidates) {
-    let vectors = select({
-      cols: [col('owner', 'v')],
-      from: owners ? from(owners, 'o') : table(TABLE, 'v'),
-      joins: owners
-        ? [{
-          how: 'cross',
-          src: table(TABLE, 'v'),
-          on: eq(col('owner', 'v'), col('owner', 'o')),
-        }]
-        : [],
-    })
-    for (let q of [...wearers(fields, db.arms, owners), vectors]) {
-      db.query(
-        queue({
-          q: select({ cols: [col('owner'), lit(1)], from: from(q, 'w') }),
-        }),
-      )
-    }
-  }
+  db.atomic(() => {
+    schedule(db, tables ?? [...fields.map((f) => f.comp), TABLE])
+    fill(db, fields)
+  })
 }
 
 /** One queued entity, and the count it was read at. */
@@ -345,6 +311,13 @@ export let paid = (db: Statements, d: Due): void =>
     where: and(eq(col('owner'), val(d.owner)), eq(col('n'), val(d.n))),
   })
 
-/** How many entities are queued. */
+/** How many entities are queued, plus one while reconciliation has more. */
 export let left = (db: Statements): number =>
-  Number(db.query(select({ cols: [as(count(), 'n')], from: table(OWED) }))[0].n)
+  Number(
+    db.query(select({ cols: [as(count(), 'n')], from: table(OWED) }))[0].n,
+  ) +
+  Number(filling(db))
+
+/** Whether queued owners or a reconciliation cursor still need a sweep. */
+export let owing = (db: Statements): boolean =>
+  due(db, 1).length > 0 || filling(db)

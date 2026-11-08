@@ -6,11 +6,10 @@
 // (./ddl.ts). A grave something still names stays: it is that record's
 // target. The walk is in identity order, a page of graves at a time, each probe
 // one index seek. A page is the graves it looks at, not the ones it finds: a
-// long run of named graves costs as many pages, each one statement of bounded
-// work, rather than one statement that probes them all.
+// long run of named or young graves costs as many pages, each one statement
+// of bounded work, rather than one statement that probes them all.
 
 import {
-  and,
   as,
   col,
   type Driver,
@@ -19,6 +18,7 @@ import {
   type Expr,
   field,
   gt,
+  iff,
   join,
   lit,
   lt,
@@ -61,9 +61,10 @@ export let referrers = (driver: Driver, vocab: Vocab): Referrer[] => {
   return [...keyed, ...kept]
 }
 
-/** The statement selecting a page of graves laid before `before`, past the
- * identity `after`: each grave's eid, its integer id, the walk's cursor, and
- * whether it is `free`, named by none of `refs`. */
+/** The statement selecting a page of graves past the identity `after`: each
+ * grave's eid, its integer id, the walk's cursor, and whether it is `free`,
+ * laid before `before` and named by none of `refs`. Age is judged in the
+ * answer, so a page of young graves is bounded too. */
 export let buriedSql = (
   refs: Referrer[],
   before: string,
@@ -80,14 +81,18 @@ export let buriedSql = (
     cols: [
       col('eid', 'e'),
       col('id', 'e'),
-      as(not(or(...refs.map(named))), 'free'),
+      as(
+        iff(
+          lt(col('deleted_at', 't'), val(before)),
+          not(or(...refs.map(named))),
+          lit(false),
+        ),
+        'free',
+      ),
     ],
     from: table(TOMBSTONE, 't'),
     joins: [join(table('entity', 'e'), eq(col('id', 'e'), grave))],
-    where: and(
-      gt(grave, val(page.after ?? 0)),
-      lt(col('deleted_at', 't'), val(before)),
-    ),
+    where: gt(grave, val(page.after ?? 0)),
     order: [grave],
     limit: val(page.limit),
   })

@@ -230,6 +230,7 @@ import {
   type Field as Text,
   type Outage,
   Overdue,
+  owing as owesEmbedding,
   queues,
   remodel,
   type Ride,
@@ -3564,7 +3565,7 @@ export class Store {
   // schema is not standing yet owes nothing: it has no table to owe it in.
   #owes = () =>
     !!this.#texts && !!this.#get('schema') &&
-    unembedded(this.#texts.statements, 1).length > 0
+    owesEmbedding(this.#texts.statements)
 
   #embedding = () => {
     if (this.#dormant) return
@@ -3592,7 +3593,7 @@ export class Store {
     )
     let name = this.#name()
     // Nothing owed waits on the model, whether or not it answers.
-    if (!queued.length) return this.#ride(name, drained)
+    if (!queued.length && !this.#owes()) return this.#ride(name, drained)
     this.#vectorWork = (async () => {
       do {
         this.#vectorAgain = false

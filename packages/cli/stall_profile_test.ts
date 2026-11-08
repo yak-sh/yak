@@ -1,6 +1,6 @@
 import { equal, ok, test } from '@yaks/testing'
 import { type Profiler } from 'node:inspector'
-import { sampler, stacks } from './stall_profile.ts'
+import { coverage, sampler, stacks } from './stall_profile.ts'
 
 let node = (id: number, name: string, children: number[] = []) => ({
   id,
@@ -26,6 +26,21 @@ let profile: Profiler.Profile = {
   samples: [2, 2, 2, 4, 3],
   timeDeltas: [100_000, 100_000, 100_000, 100_000, 500_000],
 }
+
+test('sparse running samples expose the unobserved part of a hold', () => {
+  equal(
+    coverage(profile, 500),
+    'sampling: 1 samples (1 running) in 500 ms; longest gap 400 ms',
+  )
+  equal(
+    coverage({ ...profile, samples: [], timeDeltas: [] }, 500),
+    'sampling: 0 samples (0 running) in 500 ms; longest gap 500 ms',
+  )
+  equal(
+    coverage({ ...profile, samples: [4], timeDeltas: [900_000] }, 500),
+    'sampling: 1 samples (0 running) in 500 ms; longest gap 400 ms',
+  )
+})
 
 test('a held profile names the running leaf and caller, excluding earlier work', () => {
   let said = stacks(profile, 500)

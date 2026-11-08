@@ -12,6 +12,7 @@
 // may be a network call. Everything a query touches stays synchronous.
 
 import type { Eid } from '@yaks/graph'
+import { type Clock, system } from '@yaks/fp'
 import {
   and,
   as,
@@ -38,6 +39,7 @@ import { type Embedder, hash, Refused } from './embedder.ts'
 import { allowed, type Field, present, tablesIn, trimmed } from './fields.ts'
 import { TABLE } from './ddl.ts'
 import { type Due, due, left, owe, paid, watch } from './owed.ts'
+import { fill, filling } from './fill.ts'
 import { pack, unit } from './vector.ts'
 import { prepare } from './native.ts'
 import { absorb } from './held.ts'
@@ -333,7 +335,7 @@ let embedAll = async (
 export type Swept = {
   /** how many entities were (re)embedded */
   fresh: number
-  /** how many were still owed a look when the sweep stopped */
+  /** how many are queued, plus one while reconciliation still has more */
   left: number
   /** the texts the embedder refused: their entities have no vector */
   refused: { entity: Eid; error: Refused }[]
@@ -358,8 +360,11 @@ export let sweep = async (
   // A host may have just read the first batch to decide whether to start.
   // Trigger changes can queue more text, so only reuse it while they stood.
   let moved = watch(db, fields)
-  let owed = !moved && queued ? queued : due(db, limit)
-  if (!owed.length && remodel(db, fields, model)) owed = due(db, limit)
+  if (!moved) fill(db, present(db, fields))
+  let owed = !moved && queued?.length ? queued : due(db, limit)
+  if (!owed.length && !filling(db) && remodel(db, fields, model)) {
+    owed = due(db, limit)
+  }
   let by = new Map(
     sources(db, fields, owed.map((d) => d.owner)).map((s) => [s.owner, s]),
   )
@@ -392,7 +397,7 @@ export let sweep = async (
 }
 
 // A turn for the rest of the thread between batches of codes.
-let pause = () => new Promise((done) => setTimeout(done, 0))
+let pause = (time: Clock) => new Promise<void>((done) => time.after(0, done))
 
 /** What one {@link drain} did: how many vectors it made, and the texts the
  * embedder refused. */
@@ -416,10 +421,13 @@ export let drain = async (
     signal?: AbortSignal
     /** The first batch already read by the host, with its queue generations. */
     queued?: Due[]
+    /** The clock used to yield between bounded passes. */
+    clock?: Clock
   } = {},
 ): Promise<Drained> => {
   let done: Drained = { fresh: 0, refused: [] }
   let queued = opts.queued
+  let time = opts.clock ?? system
   for (;;) {
     let swept = await sweep(db, fields, embedder, opts.batch, queued)
     queued = undefined
@@ -429,8 +437,10 @@ export let drain = async (
     absorb(db)
     if (opts.signal?.aborted) return done
     if (!swept.left) {
-      while (heal(db) && !opts.signal?.aborted) await pause()
+      while (heal(db) && !opts.signal?.aborted) await pause(time)
       return done
     }
+    await pause(time)
+    if (opts.signal?.aborted) return done
   }
 }

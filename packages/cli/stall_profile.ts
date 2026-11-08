@@ -3,6 +3,28 @@
 // are in-process: no debugging port or listener is opened.
 import { type Profiler, Session } from 'node:inspector'
 
+/** Sampling can stop while the kernel holds a thread. A handful of running
+ * stacks is evidence of those calls, not an account of the whole interval. */
+export let coverage = (profile: Profiler.Profile, ms: number): string => {
+  let start = Math.max(profile.startTime, profile.endTime - ms * 1000)
+  let at = profile.startTime, last = start, gap = 0, total = 0, running = 0
+  let names = new Map(
+    profile.nodes.map((n) => [n.id, n.callFrame.functionName]),
+  )
+  for (let [i, id] of (profile.samples ?? []).entries()) {
+    at += profile.timeDeltas?.[i] ?? 0
+    if (at < start || at > profile.endTime) continue
+    gap = Math.max(gap, at - last)
+    last = at
+    total++
+    if (!['(idle)', '(root)'].includes(names.get(id) ?? '')) running++
+  }
+  gap = Math.max(gap, profile.endTime - last)
+  return `sampling: ${total} samples (${running} running) in ${
+    ((profile.endTime - start) / 1000).toFixed(0)
+  } ms; longest gap ${(gap / 1000).toFixed(0)} ms`
+}
+
 /** The hottest sampled stacks within the last `ms` of a profile. Keep caller
  * frames down to the root: native leaves such as JSON serialization don't name
  * the work, and a storage read doesn't name who asked for it. */
@@ -111,7 +133,9 @@ export let sampler = async ({
         since = now()
         return profile
       })().finally(() => pending = undefined)
-      return pending.then((profile) => held ? stacks(profile, ms) : undefined)
+      return pending.then((profile) =>
+        held ? `${coverage(profile, ms)}\n${stacks(profile, ms)}` : undefined
+      )
     },
     close,
   }

@@ -278,15 +278,22 @@ native-installation inspection reuse the statement capability's
 `revision('schema')` token; DDL, rollback, and file-peer schema changes discard
 those decisions.
 
+Reconciliation keeps durable source-table cursors in `embedding_fill`. Each pass
+visits at most 256 candidate rows by primary key before checking their fields or
+exclusions; even an excluded tail advances. The queue and cursor advance in one
+transaction. A restart resumes the cursor, and triggers cover writes made while
+it advances. The service yields to the event loop between passes.
+
 `sweep(db, fields, embedder, limit?)` calls `watch`, then takes the newest
 `limit` (64) queued entities: it embeds those whose text changed, deletes the
 vector of those with no text (emptied, deleted, or no longer wearing a field),
 and settles each unless a write queued it again meanwhile. Source hashes avoid
 model calls for unchanged text. Once the queue is empty, a vector made by
-another model queues everything again. It returns `{ fresh, left, refused }`. A
-text the embedder refuses loses its vector and is reported in `refused`; any
-other embedder failure stops the pass, the caller receives the error, and the
-work stays queued.
+another model queues everything again. It returns `{ fresh, left, refused }`;
+`left` counts queued owners plus one while reconciliation still has candidates
+to visit. A text the embedder refuses loses its vector and is reported in
+`refused`; any other embedder failure stops the pass, the caller receives the
+error, and the work stays queued.
 
 `drain(db, fields, embedder, { batch?, signal? })` sweeps pass after pass until
 nothing is owed, registering the native scan or folding the pass into the

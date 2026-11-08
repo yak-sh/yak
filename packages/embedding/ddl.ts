@@ -33,6 +33,9 @@ export let CODE = 'embedding_code'
  * queued it since it was last settled. */
 export let OWED = 'embedding_owed'
 
+/** Durable cursors of source tables being reconciled into the queue. */
+export let FILL = 'embedding_fill'
+
 // An upsert keeps one notice per owner even when the outer write replaces
 // rows: a trigger's `insert or ignore` inherits the outer conflict policy.
 let triggers = (['insert', 'update', 'delete'] as const).map((
@@ -147,6 +150,16 @@ export let schema = (
     cols: [
       { name: 'owner', type: 'integer', pk: true },
       { name: 'n', type: 'integer', notNull: true },
+    ],
+  },
+  {
+    t: 'create table',
+    name: FILL,
+    ifNot: true,
+    cols: [
+      { name: 'name', type: 'text', pk: true },
+      { name: 'after', type: 'integer', notNull: true },
+      { name: 'last', type: 'integer', notNull: true },
     ],
   },
 ]
