@@ -48,9 +48,19 @@ test('a number agreed to changes behind a button; without one the field shows', 
   let agreed = at(consent)
   equal(agreed.querySelector('[data-reveal]')?.textContent, 'Change number')
   equal(shown(agreed), false)
+  // Enter presses the first submit, so a hidden Save comes before Stop texts.
+  let submits = [...agreed.querySelectorAll('[type=submit]')]
+  equal(
+    submits.map((b) => [b.textContent, b.hasAttribute('hidden')]),
+    [['Save', true], ['Stop texts', false]],
+  )
   let fresh = at(null)
   equal(fresh.querySelector('[data-reveal]'), null)
   equal(shown(fresh), true)
+  equal(
+    [...fresh.querySelectorAll('[type=submit]')].map((b) => b.textContent),
+    ['Save'],
+  )
   equal(
     fresh.querySelector('[name=agreed] + span')!.textContent!.endsWith(
       "Agreeing isn't required to use yaks.app.",

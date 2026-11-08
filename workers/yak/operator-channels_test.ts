@@ -360,6 +360,9 @@ let unticked = await choose({ number: '269-555-0142' })
 let wrong = await choose({ number: '555-0142', agreed: 'yes' })
 let agreed = await choose({ number: '(269) 555-0142', agreed: 'yes' })
 let textsHtml = await operatorBody(f.env, f.space, f.held)
+let blank = await choose({ number: '', agreed: 'yes' })
+let bare = await choose({})
+let still = await directoryOf(f.env.STORE).texting(f.held.person)
 let stopped = await choose({ stop: '1', number: '269-555-0142' })
 let kept = await directoryOf(f.env.STORE).known(f.held.person)
 test('a person agrees to texts with a ticked box and a mobile number, and stops them', () => {
@@ -376,6 +379,11 @@ test('a person agrees to texts with a ticked box and a mobile number, and stops 
     false,
   )
   assertEquals(stopped.said, null)
+})
+test('a Save with no number refuses and never stops texts; only Stop texts does', () => {
+  assertEquals([blank.status, bare.status], [400, 400])
+  assertStringIncludes(blank.said.message, 'Enter a US mobile number')
+  assertEquals(still?.number, '+12695550142')
 })
 test("a person's number stays on them, beside their address, after texts stop", () => {
   assertEquals(kept?.phone, '+12695550142')

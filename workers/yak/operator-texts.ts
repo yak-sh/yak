@@ -60,8 +60,8 @@ export type Texting = {
 
 /**
  * The directory rows that agree to texts at `number` from the Operator of
- * `space`: the person's `phone{number}` and their `sms_consent`. An empty
- * number stops texts and keeps the number.
+ * `space`: the person's `phone{number}` and their `sms_consent`. A number
+ * that is empty or not a US mobile is refused; only `stopping` stops texts.
  *
  * ```ts
  * import { equal, throws } from '@yaks/testing'
@@ -69,6 +69,7 @@ export type Texting = {
  * let [phone] = texts('ana', '(269) 555-0142', true, '2026-11-04T00:00:00Z')
  * equal(phone, { entity: { eid: 'ana' }, phone: { number: '+12695550142' } })
  * throws(() => texts('ana', '555-0142', true))
+ * throws(() => texts('ana', '', true))
  * throws(() => texts('ana', '269-555-0142', false))
  * ```
  */
@@ -79,8 +80,6 @@ export let texts = (
   at = new Date().toISOString(),
   space?: string,
 ): Bundle[] => {
-  let entity = { eid: consentEid(person) }
-  if (!number.trim()) return [{ entity, sms_consent: null }]
   let e164 = mobile(number)
   if (!e164) {
     throw refuse(
@@ -91,13 +90,13 @@ export let texts = (
   if (!agreed) {
     throw refuse(
       'arguments',
-      'Tick the box to agree to texts, or leave the number empty.',
+      'Tick the box to agree to texts.',
     )
   }
   return [
     { entity: { eid: person }, phone: { number: e164 } },
     {
-      entity,
+      entity: { eid: consentEid(person) },
       sms_consent: {
         person,
         consent: CONSENT,
@@ -107,6 +106,11 @@ export let texts = (
     },
   ]
 }
+
+/** The directory row that stops texts to `person`, who keeps their number. */
+export let stopping = (person: string): Bundle[] => [
+  { entity: { eid: consentEid(person) }, sms_consent: null },
+]
 
 import { phoneNamed, phoneOf } from './phones.ts'
 
@@ -237,7 +241,7 @@ export let arrived = async (
     )
   if (word == 'stop') {
     if (person) {
-      await dir.apply({ entities: texts(person, '', false) }, as(person))
+      await dir.apply({ entities: stopping(person) }, as(person))
     }
     return reply(REPLIES.stop)
   }

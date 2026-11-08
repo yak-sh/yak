@@ -45,6 +45,7 @@ import { Idle, MOVES } from './mascot.ts'
 import {
   CONSENT,
   REPLIES,
+  stopping,
   tell,
   type Texting,
   texts,
@@ -119,10 +120,17 @@ let shown = (number: string) =>
   number.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')
 
 // One of the Operator's settings, the way the dashboard draws one (pages.ts):
-// a form around its card, the card's head naming it, and under the card
-// Save, with what saving said beside it (`settingsScript`). `id` names the
-// form and the answer it posts to (`operatorAnswer`).
-let setting = (at: string, id: string, title: string, ...inside: Node[]) =>
+// a form around its card, the card's head naming it, and under the card its
+// actions, with what pressing one said beside them (`settingsScript`). `id`
+// names the form and the answer it posts to (`operatorAnswer`). The first
+// action is the one Enter in a field presses.
+let acting = (
+  at: string,
+  id: string,
+  title: string,
+  actions: Node,
+  ...inside: Node[]
+) =>
   h(
     Form,
     { id, method: 'post', action: `${at}?${id}=1` },
@@ -130,10 +138,17 @@ let setting = (at: string, id: string, title: string, ...inside: Node[]) =>
     h(
       Form.Actions,
       null,
-      h(Button, { mod: 'go', type: 'submit' }, 'Save'),
+      actions,
       h('p', { role: 'status', 'data-status': '' }),
     ),
   )
+
+let save = (also: Record<string, unknown> = {}) =>
+  h(Button, { mod: 'go', type: 'submit', ...also }, 'Save')
+
+// A setting saved by its Save.
+let setting = (at: string, id: string, title: string, ...inside: Node[]) =>
+  acting(at, id, title, save(), ...inside)
 
 // A field under its label.
 let field = (id: string, label: string, control: Node) =>
@@ -237,10 +252,16 @@ export let textsCard = (
   from?: string,
   call?: string,
 ) =>
-  setting(
+  acting(
     at,
     'texts',
     'Texts and calls',
+    consent
+      ? [
+        save({ id: 'texts-save', hidden: true }),
+        h(Button, { type: 'submit', name: 'stop', value: '1' }, 'Stop texts'),
+      ]
+      : save(),
     h(
       'p',
       null,
@@ -276,8 +297,7 @@ export let textsCard = (
             dateStyle: 'long',
             timeZone: 'UTC',
           })
-        }. `,
-        h(Button, { type: 'submit', name: 'stop', value: '1' }, 'Stop texts'),
+        }.`,
       )
       : null,
     consent ? changing(agreeing('Change your mobile number')) : agreeing(
@@ -308,12 +328,13 @@ let agreeing = (label: string) => [
 ]
 
 // A number already agreed to changes behind a button, which shows the field
-// in its place (`settingsScript`).
+// in its place and the Save that changes it (`settingsScript`). Until then
+// Save is hidden, and only Stop texts can be pressed.
 let changing = (fields: Node) => [
   h(Button, {
     type: 'button',
     'aria-expanded': 'false',
-    'aria-controls': 'texts-change',
+    'aria-controls': 'texts-change texts-save',
     'data-reveal': '',
   }, 'Change number'),
   h('div', { id: 'texts-change', hidden: true }, fields),
@@ -576,9 +597,9 @@ export let operatorAnswer = async (
     try {
       let before = await dir.texting(person)
       await dir.apply({
-        entities: texts(
+        entities: form.has('stop') ? stopping(person) : texts(
           person,
-          form.has('stop') ? '' : String(form.get('number') ?? ''),
+          String(form.get('number') ?? ''),
           form.get('agreed') == 'yes',
           undefined,
           space.eid,
@@ -1134,11 +1155,11 @@ let allow = async (offer) => {
 }
 for (let reveal of document.querySelectorAll('[data-reveal]')) {
   reveal.addEventListener('click', () => {
-    let shown = document.getElementById(reveal.getAttribute('aria-controls'))
-    shown.hidden = false
+    let shown = reveal.getAttribute('aria-controls').split(' ').map((id) => document.getElementById(id))
+    for (let s of shown) s.hidden = false
     reveal.hidden = true
     reveal.setAttribute('aria-expanded', 'true')
-    shown.querySelector('input')?.focus()
+    shown[0].querySelector('input')?.focus()
   })
 }
 for (let form of document.querySelectorAll('#texts, #name, #voice, #alerts')) {
