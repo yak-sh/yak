@@ -175,3 +175,17 @@ let named = await (async () => {
 
 test('senders names people, personas and sessions by title and id', () =>
   equal(named.got, [...named.want, undefined]))
+
+test('words the platform wrote are from the system, whoever wrote the row', () => {
+  let names = new Map([['p', 'Jeff (#p)']])
+  let by = { at: '2026-10-16T10:00:20Z', by: 'p', via: 's' }
+  let said = inputText(transcript, names)
+  let line = (rest: Omit<Bundle, 'entity' | 'entry'>) =>
+    said(row('x', 6, { content: { body: 'b' }, created: by, ...rest })).split(
+      ';',
+    )[0]
+  equal(
+    [line({}), line({ system: {} }), line({ delivery: { child: 'c' } })],
+    ['[From Jeff (#p)', '[From the system', '[From the system'],
+  )
+})

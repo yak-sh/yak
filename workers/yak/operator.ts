@@ -21,14 +21,15 @@ import {
   transcriptWindow,
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
+import { human } from '@yaks/id'
 import { LIMIT } from '@yaks/session/status'
 import {
   CALLED,
   channelOf,
   HEARD,
   paged,
-  STOPPED,
   stoppedBy,
+  stoppedHere,
 } from './operator-view.ts'
 import { building } from './made.ts'
 import { listing } from '@yaks/mcp'
@@ -1664,6 +1665,10 @@ export let operating = (
     let top = helper ? await topOf(store, parent) : ''
     let heard = helper && top != parent ? [top] : []
     let asked = heard.length ? await askedAt(store, session) : ''
+    // The person as the model knows them: the id their own words are
+    // labeled with (@yaks/harness `senders`).
+    let [them] = helper ? await g.get([by]) : []
+    let person = helper ? human(g.vocab)(them ?? { entity: { eid: by } }) : ''
     // One waiting on a helper stops too, so the helper's report does not
     // wake it again (@yaks/session children.ts `deliverChild`).
     await g.apply(
@@ -1671,8 +1676,9 @@ export let operating = (
         ...heard.map((s) => ({
           entity: { eid: crypto.randomUUID() },
           entry: { session: s },
-          content: { body: stoppedBy(asked, session) },
+          content: { body: stoppedBy(person, asked, session) },
           operator_stopped: { helper: session },
+          system: {},
           $actor: { by, via: s },
         })),
         ...[...busy, ...idle].map((s) => ({
@@ -1681,7 +1687,7 @@ export let operating = (
           stop: {},
           content: {
             body: helper && s == session
-              ? STOPPED
+              ? stoppedHere(person, session)
               : 'Stopped by the person watching.',
           },
           $actor: { by, via: s },

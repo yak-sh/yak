@@ -578,9 +578,6 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
   // The parent's `using` in force rides on the receipt: it is the request for
   // the turn the receipt calls for (./run.ts).
   let using = await usingOf(g, parent)
-  // A stop is someone's act, so its receipt is theirs: the parent reads who
-  // ended its child, by the stop's own writer.
-  let stopper = status == 'stopped' ? comp(last, 'created')?.by : undefined
   await g.apply([{
     entity: { eid },
     entry: {
@@ -590,8 +587,5 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
     delivery: { child, outcome: status },
     ...open ? { result: { call: link.call } } : {},
     ...using ? { using } : {},
-    ...typeof stopper == 'string'
-      ? { $actor: { by: stopper, via: parent } }
-      : {},
   }], { trusted: true })
 }

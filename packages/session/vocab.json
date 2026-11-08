@@ -417,7 +417,7 @@
       "component": true,
       "type": "object",
       "properties": {},
-      "description": "on an input: words the platform wrote into the transcript, such as a recovery after an interrupted response or an error to fix, never a person's. The model reads it as any input; a conversation draws it as the system's"
+      "description": "on an input: words the platform wrote into the transcript, such as a recovery after an interrupted response or an error to fix, never a person's. The model reads it as any input, labeled as from the system; a conversation draws it as the system's"
     },
     "notice": {
       "component": true,
@@ -580,7 +580,7 @@
     "delivery": {
       "component": true,
       "type": "object",
-      "description": "on a parent's entry, the child session whose end it tells: the receipt deliverChild writes, never words a person wrote",
+      "description": "on a parent's entry, the child session whose end it tells: the receipt deliverChild writes, never words a person wrote, which the model reads labeled as from the system",
       "properties": {
         "child": {
           "type": "string",

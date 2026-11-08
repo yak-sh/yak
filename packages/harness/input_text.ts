@@ -5,10 +5,13 @@ import { attemptState, kindOf, seqOf, textOf } from '@yaks/session'
 let made = (b: Bundle) => (b.created ?? {}) as Comp
 let selfOf = (b: Bundle) => (b.entry as Comp | undefined)?.session
 
-// Who sent an input: the session it came through, when that is another
-// session, else whoever wrote it. A transcript's own inputs come through
-// itself (./agent.ts `through`), so they are named by their writer.
+// Who sent an input: the system for words the platform wrote (`system`, a
+// child's report), whoever's act they tell of; else the session it came
+// through, when that is another session, else whoever wrote it. A
+// transcript's own inputs come through itself (./agent.ts `through`), so
+// they are named by their writer.
 let sender = (entry: Bundle, names: Map<Eid, string>) => {
+  if (entry.system || entry.delivery) return 'the system'
   let { by, via } = made(entry)
   return (via != selfOf(entry) && names.get(String(via))) ||
     names.get(String(by))

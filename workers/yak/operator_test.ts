@@ -5,7 +5,7 @@ import { rootOf } from './operator-root.ts'
 import type { Item, Model, Request } from '@yaks/model'
 import { comp } from '../../packages/graph/testing.ts'
 import { kindOf } from '@yaks/session'
-import { STOPPED } from './operator-view.ts'
+import { stoppedHere } from './operator-view.ts'
 import { platform } from './directory-rows-probe.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { appStore } from './directory.ts'
@@ -709,17 +709,23 @@ await watched.g.apply([
   ...[middle, below].map(line),
 ], { trusted: true })
 let helperStop = await watcher.stop(below, roundsHeld.person)
-let heard = await watched.g.read('.operator_stopped&.entry ?created ?content')
-test('Stop on a nested helper stops it alone, and the conversation it works for hears it from the person', async () => {
+let heard = await watched.g.read(
+  '.operator_stopped&.entry ?created ?content ?system',
+)
+test('Stop on a nested helper stops it alone, and the conversation it works for hears it from the system', async () => {
   assertEquals(helperStop.stopped, true)
   let stops = await watched.g.read('.stop&.entry ?content')
   assertEquals(stops.map((b) => comp(b, 'entry').session), [below])
-  assertEquals(comp(stops[0], 'content').body, STOPPED)
+  assertStringIncludes(
+    String(comp(stops[0], 'content').body),
+    `stopped helper ${below} from the chat page`,
+  )
   // The session that started it hears it in its report; the conversation
   // above, which no report reaches, in a line of theirs.
   assertEquals(heard.map((b) => comp(b, 'entry').session), [root])
   let [b] = heard
   assertEquals(kindOf(b), 'input')
+  assertEquals(b.system, {})
   assertEquals(comp(b, 'created').by, roundsHeld.person)
   assertEquals(comp(b, 'operator_stopped').helper, below)
   assertStringIncludes(String(comp(b, 'content').body), '"Check the draft."')
@@ -799,15 +805,18 @@ await holder.stop(started, roundsHeld.person)
 await drain(heldBack)
 let after = rootAsks.slice(asked0)
 let read = (r: Request) => (r.items.at(-1) as { text?: string }).text ?? ''
-test('a stopped helper reaches its conversation once, from the person, telling it to leave the helper stopped until they talk', () => {
-  // One turn, on the helper's report, and no second from the system.
+test('a stopped helper reaches its conversation once, from the system, saying the person stopped it and to leave it until they talk', () => {
+  // One turn, on the helper's report.
   assertEquals(after.length, 1)
   let said = read(after[0])
-  // Their own words carry the same label: the source is theirs.
-  let theirs = read(rootAsks[0]).split('; sent')[0]
-  assertEquals(said.split('; sent')[0], theirs)
-  assertStringIncludes(theirs, '[From #')
-  assertStringIncludes(said, `child ${started} stopped\n${STOPPED}`)
+  // The person's label stays on the words they typed; the report is the
+  // system's, and names them by that label.
+  let person = read(rootAsks[0]).match(/^\[From (#[0-9a-f]{10});/)![1]
+  assertStringIncludes(said, '[From the system; sent')
+  assertStringIncludes(
+    said,
+    `child ${started} stopped\n${stoppedHere(person, started)}`,
+  )
 })
 
 test('the conversation draws the helper’s report as the person’s stop', async () => {
