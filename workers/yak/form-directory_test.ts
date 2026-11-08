@@ -1,0 +1,240 @@
+import { type Bundle, type Comp, graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { kernelDoc } from '@yaks/kernel/vocab'
+import { formsDoc } from '@yaks/forms/vocab'
+import { phoneDoc } from '@yaks/phone'
+import { equal, test } from '@yaks/testing'
+import { directoryForms } from './form-directory.ts'
+import { directoryPhoneMove } from './directory-phone-move.ts'
+
+let text = { type: 'string' }
+let vocab = loadVocab([kernelDoc, formsDoc, phoneDoc, {
+  $defs: {
+    individual: {
+      component: true,
+      properties: {
+        first: text,
+        last: text,
+        phone: text,
+        email: text,
+        born: text,
+        status: text,
+      },
+    },
+    relation: {
+      component: true,
+      properties: {
+        kind: text,
+        a: { ...text, ref: 'entity' },
+        b: { ...text, ref: 'entity' },
+      },
+    },
+  },
+}])
+let setup = async (seed: Bundle[] = []) => {
+  let g = graph({
+    vocab,
+    storage: ram(vocab),
+    plugins: [directoryForms(vocab)],
+  })
+  await g.apply([
+    { entity: { eid: 'form' }, form: {} },
+    ...['first', 'last', 'phone', 'email', 'born'].map((prop) => ({
+      entity: { eid: prop },
+      question: {
+        form: 'form',
+        label: prop,
+        kind: 'line',
+        fills: `individual.${prop}`,
+      },
+    })),
+    {
+      entity: { eid: 'children' },
+      question: { form: 'form', label: 'Children', kind: 'repeat' },
+    },
+    ...['first', 'born'].map((prop) => ({
+      entity: { eid: 'child-' + prop },
+      question: {
+        form: 'form',
+        label: prop,
+        kind: 'line',
+        fills: `individual.${prop}`,
+        within: 'children',
+      },
+    })),
+    {
+      entity: { eid: 'hidden' },
+      question: {
+        form: 'form',
+        label: 'Hidden',
+        kind: 'line',
+        fills: 'individual.last',
+        when: { question: 'first', is: 'show' },
+      },
+    },
+    ...seed,
+  ])
+  return g
+}
+let sign = (
+  answers: object,
+) => [{ entity: { eid: 'signup' }, registration: { form: 'form', answers } }]
+let fixture = {
+  entity: { eid: 'member' },
+  individual: {
+    first: 'Ann',
+    phone: '(269) 555-0142',
+    email: 'Ann@Example.org',
+    status: 'member',
+  },
+}
+let phoned = await setup([fixture])
+let emailed = await setup([fixture])
+let guests = await setup()
+let retry = await setup([fixture])
+await retry.apply(
+  sign({ phone: '+12695550142', children: [{ 'child-first': 'Bo' }] }),
+)
+let original = (await retry.read('.relation'))[0]
+let phones = await setup([fixture])
+let cleared = await setup([fixture])
+let together = await setup()
+let shared = await setup([fixture])
+await shared.apply([{
+  entity: { eid: 'child-phone' },
+  question: {
+    form: 'form',
+    label: 'Phone',
+    kind: 'phone',
+    fills: 'individual.phone',
+    within: 'children',
+  },
+}])
+let partial = await setup([fixture])
+await partial.apply(
+  sign({ first: 'Different', children: [{ 'child-first': 'Bo' }] }),
+)
+let provisional =
+  ((await partial.get(['signup']))[0].registration as Comp).person
+
+test('a phone match fills blanks and preserves differing answers on the registration', async () => {
+  let answers = {
+    phone: '+1 269 555 0142',
+    first: 'Different',
+    last: 'Smith',
+    hidden: 'stale',
+  }
+  await phoned.apply(sign(answers))
+  let [person] = await phoned.get(['member'])
+  let [registration] = await phoned.get(['signup'])
+  equal((registration.registration as Comp).person, 'member')
+  equal((registration.registration as Comp).answers, answers)
+  equal((person.individual as Comp).first, 'Ann')
+  equal((person.individual as Comp).last, 'Smith')
+  equal(person.phone, { number: '+12695550142' })
+})
+
+test('email matching trims and folds case without a phone', async () => {
+  await emailed.apply(sign({ email: ' ann@example.ORG ', born: '1980-01-02' }))
+  let [row] = await emailed.get(['member'])
+  equal((row.individual as Comp).born, '1980-01-02')
+  equal(
+    ((await emailed.get(['signup']))[0].registration as Comp).person,
+    'member',
+  )
+})
+
+test('an unmatched sign-up creates guests and child-to-parent links', async () => {
+  await guests.apply(
+    sign({
+      first: 'New',
+      children: [{ 'child-first': 'Bo' }, { 'child-first': 'Cy' }],
+    }),
+  )
+  let people = await guests.read('.individual')
+  let links = await guests.read('.relation')
+  let parent = ((await guests.get(['signup']))[0].registration as Comp).person
+  equal(people.length, 3)
+  equal(people.every((p) => (p.individual as Comp).status == 'guest'), true)
+  equal(links.map((l) => (l.relation as Comp).a), [parent, parent])
+  equal(links.every((l) => (l.relation as Comp).kind == 'parent'), true)
+})
+
+test('partial answers reuse a repeat child and fill only its empty fields', async () => {
+  await retry.apply(
+    sign({
+      phone: '+12695550142',
+      children: [{ 'child-first': 'Changed', 'child-born': '2020-03-04' }],
+    }),
+  )
+  let links = await retry.read('.relation')
+  equal(links.length, 1)
+  equal(links[0].entity.eid, original.entity.eid)
+  let child = (await retry.get([String((original.relation as Comp).b)]))[0]
+  equal((child.individual as Comp).first, 'Bo')
+  equal((child.individual as Comp).born, '2020-03-04')
+})
+
+test('ordinary directory phone edits also write the matchable number', async () => {
+  await phones.apply([{
+    entity: { eid: 'member' },
+    individual: { phone: '+44 20 7946 0018' },
+  }])
+  equal((await phones.get(['member']))[0].phone, { number: '+442079460018' })
+})
+
+test('clearing a directory phone removes its matchable number', async () => {
+  await cleared.apply([{
+    entity: { eid: 'member' },
+    individual: { phone: null },
+  }])
+  equal((await cleared.get(['member']))[0].phone, {})
+})
+
+test('the phone repair is idempotent and keeps the typed source intact', () => {
+  let [patch] = directoryPhoneMove(fixture)
+  equal(patch.phone, { number: '+12695550142' })
+  equal(directoryPhoneMove({ ...fixture, ...patch }), [])
+  equal(fixture.individual.phone, '(269) 555-0142')
+})
+
+test('a sign-up matches an individual created in the same transaction', async () => {
+  await together.apply([
+    fixture,
+    ...sign({ phone: '+12695550142', last: 'Smith' }),
+  ])
+  equal(
+    ((await together.get(['signup']))[0].registration as Comp).person,
+    'member',
+  )
+  equal((await together.read('.individual')).length, 1)
+})
+
+test('repeat children stay distinct even when they share the parent contact', async () => {
+  await shared.apply(
+    sign({
+      phone: '+12695550142',
+      children: [{ 'child-first': 'Bo', 'child-phone': '+12695550142' }],
+    }),
+  )
+  let [link] = await shared.read('.relation')
+  equal((link.relation as Comp).a, 'member')
+  equal((link.relation as Comp).b == 'member', false)
+  equal((await shared.read('.individual')).length, 2)
+})
+
+test('a partial guest resolves to a member when contact arrives and keeps its child', async () => {
+  let answers = {
+    first: 'Different',
+    phone: '+12695550142',
+    children: [{ 'child-first': 'Bo' }],
+  }
+  await partial.apply(sign(answers))
+  let registration = (await partial.get(['signup']))[0].registration as Comp
+  equal(registration.person, 'member')
+  equal(registration.answers, answers)
+  equal((await partial.read('.individual')).length, 2)
+  equal((await partial.get([String(provisional)]))[0]?.individual, undefined)
+  equal(((await partial.read('.relation'))[0].relation as Comp).a, 'member')
+})

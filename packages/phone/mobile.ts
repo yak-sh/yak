@@ -4,6 +4,16 @@
 
 import { parsePhoneNumberFromString } from 'libphonenumber-js/mobile'
 
+/** A directory number in E.164 form, including landlines and other countries.
+ * Unqualified numbers are interpreted in the US. */
+/// e164('(269) 555-0142') -> '+12695550142'
+/// e164('+44 20 7946 0018') -> '+442079460018'
+/// e164('555-0142') -> null
+export let e164 = (typed: string): string | null => {
+  let number = parsePhoneNumberFromString(typed, 'US')
+  return number?.isPossible() ? number.number : null
+}
+
 /**
  * A US mobile number in E.164 form, or null when `typed` is not one.
  *

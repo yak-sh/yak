@@ -123,6 +123,34 @@ export let next = (form: Form, answers: Answers): Owed | undefined => {
   return pending.find((q) => q.question.question.required) ?? pending[0]
 }
 
+/** Visible answered questions, retaining their location within repeat entries. */
+export let answered = (
+  form: Form,
+  answers: Answers,
+): (Owed & { value: unknown })[] => {
+  let questions = ordered(form.questions)
+  let walk = (
+    scopes: readonly Answers[],
+    within?: string,
+    path: (string | number)[] = [],
+  ): (Owed & { value: unknown })[] =>
+    questions.filter((q) =>
+      q.question.within == within && visible(q, scopes, questions)
+    ).flatMap((q) => {
+      let value = scopes[0][q.entity.eid], here = [...path, q.entity.eid]
+      return q.question.kind == 'repeat'
+        ? Array.isArray(value)
+          ? value.flatMap((item, i) =>
+            walk([scope(item), ...scopes], q.entity.eid, [...here, i])
+          )
+          : []
+        : filled(value)
+        ? [{ question: q, path: here, value }]
+        : []
+    })
+  return walk([answers])
+}
+
 /** Whether sign-ups are accepted at this instant and registration count.
  * Opening is inclusive, closing exclusive; an invalid date fails closed. */
 export let open = (
