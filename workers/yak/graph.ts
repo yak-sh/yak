@@ -5181,13 +5181,15 @@ export class Store {
   // A refusal of a line this door answered under the same words is the
   // deploy's, not the caller's (answered.ts), and is reported here. A new
   // line is kept a beat after its answer was read (running.ts `BEAT`), so the
-  // read never waits for the write to be confirmed.
+  // read never waits for the write to be confirmed. A keep that fails is
+  // reported in words an object whose storage is gone can still say
+  // (`#name`), since it runs on a timer after the answer.
   #recalled = recalling(
     answers({
       read: () => this.#get('answered'),
       write: (value) => this.#put('answered', value),
     }),
-    (error) => defect(error, { request: 'query', store: this.#get('name') }),
+    (error) => defect(error, { request: 'query', store: this.#name() }),
     (work) =>
       this.#ctx.waitUntil?.(
         new Promise<void>((done) =>

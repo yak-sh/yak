@@ -15,6 +15,7 @@ import { parseTools } from '@yaks/tools/declared'
 import { ADA, ADA_OWNS, platform, seeded } from './serving-probe.ts'
 import type { Dispatch } from './door.ts'
 import { vouched } from './session.ts'
+import { BEAT } from './running.ts'
 
 let SECOND = 'b0000000-0000-4000-8000-000000000002'
 let read = (door: ReturnType<typeof appStore>, line: string, who = ADA_OWNS) =>
@@ -272,7 +273,8 @@ test('a companion works off-page across pause, restart and retry', async () => {
     let dispose = p[Symbol.asyncDispose]().then(() => {
       disposed = true
     })
-    for (let n = 0; !disposed && n < 1000; n++) await time.advance(0)
+    // A Store keeps a new query line a beat after its answer was read.
+    for (let n = 0; !disposed && n < 1000; n++) await time.advance(BEAT)
     assert(disposed, 'Store disposal drains on the controlled clock')
     await dispose
   }
