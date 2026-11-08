@@ -2813,40 +2813,64 @@ export let directoryRows = (rows: {
       (await query(`.deploy.app=${app.eid}&?created`))
         .map(deployOf)
         .sort((a, b) => b.version - a.version),
-    // When each app was made and last put live, and by whom (T-151161): its
-    // `created` and `last_deploy`, and for an app last deployed before `last_deploy`
-    // was kept, its newest release's `created`. With them, what each writer is
-    // called (stamps.ts `writers`), so a page says every one the same way.
-    provenance: async (apps: Pick<App, 'eid'>[]) => {
-      let ids = apps.map((a) => a.eid)
+    // When each app of a space was made and last put live, and by whom
+    // (T-151161): its `created` and `last_deploy`, and for an app last
+    // deployed before `last_deploy` was kept, its newest release's `created`.
+    // With them, what each writer is called (stamps.ts `writers`), so a page
+    // says every one the same way. Asked by the walk to the space, every line
+    // at once, so a page asks it beside the read that learns its space and it
+    // travels in that trip (`walkTo`).
+    provenance: async (space: Walk) => {
+      let apps = `app.space${space.path}`
+      // Each stamp's writer comes back beside the row it stamps, as a bundle
+      // of its own (@yaks/graph projections): their names, and for an agent
+      // the person it writes for and theirs.
+      let names = ['doc.title', 'email.address', 'phone.number']
+      let who = (stamp: string) => [
+        `${stamp}.at`,
+        ...[
+          ...names,
+          'acts_for.person',
+          ...names.map((n) => `acts_for.person.${n}`),
+        ]
+          .map((n) => `${stamp}.by.${n}`),
+      ]
+      let [made, releases] = await Promise.all([
+        query(
+          `.${apps}&?created&?last_deploy` +
+            `&.fields=${[...who('created'), ...who('last_deploy')]}`,
+        ),
+        query(
+          `.deploy.app.${apps}&!deploy.app.last_deploy&?created` +
+            `&.fields=deploy.app,${who('created')}`,
+        ),
+      ])
       let of = new Map<string, { made: Stamp | null; deployed: Stamp | null }>()
-      if (!ids.length) return { of, writers: new Map<string, string>() }
-      let rows = await query(
-        `.entity.eid=${ids.join(',')}&?created&?last_deploy` +
-          '&.fields=created.at,created.by,last_deploy.at,last_deploy.by',
-      )
-      for (let r of rows) {
+      let by = new Set<string>()
+      let stamped = (s: { by?: Id | null } | undefined) => {
+        if (s?.by) by.add(idOf(s.by))
+        return stampOf(s)
+      }
+      for (let r of made) {
+        if (!r.created && !r.last_deploy) continue
         of.set(r.entity.eid, {
-          made: stampOf(r.created),
-          deployed: stampOf(r.last_deploy),
+          made: stamped(r.created),
+          deployed: stamped(r.last_deploy),
         })
       }
-      let before = ids.filter((id) => of.get(id) && !of.get(id)!.deployed)
-      if (before.length) {
-        let releases = await query(
-          `.deploy.app=${before.join(',')}&?created` +
-            '&.fields=deploy.app,created.at,created.by',
-        )
-        for (let r of releases) {
-          let was = of.get(idOf(r.deploy!.app))!, at = stampOf(r.created)
-          if (at && at.at > (was.deployed?.at ?? '')) was.deployed = at
-        }
+      for (let r of releases) {
+        if (!r.deploy) continue
+        let app = idOf(r.deploy.app), at = stamped(r.created)
+        let was = of.get(app) ?? { made: null, deployed: null }
+        if (at && at.at > (was.deployed?.at ?? '')) was.deployed = at
+        of.set(app, was)
       }
-      let by = [...of.values()].flatMap((p) => [p.made?.by, p.deployed?.by])
-      return {
-        of,
-        writers: await self.writers(by.filter((b): b is string => !!b)),
-      }
+      let rows = [...made, ...releases]
+      let theirs = new Set(principals(rows.filter((r) => by.has(r.entity.eid))))
+      let named = rows.filter((r) =>
+        by.has(r.entity.eid) || theirs.has(r.entity.eid)
+      )
+      return { of, writers: writers(named) }
     },
     // What each writer is called (stamps.ts `writers`): a person, or an agent
     // for its person, whose row is read beside it.

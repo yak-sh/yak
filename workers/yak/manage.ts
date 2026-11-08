@@ -355,8 +355,11 @@ let rowsAhead = (
 ): Promise<unknown>[] => {
   let walk = walkTo(at.slug, at.space.then((s) => s?.eid ?? ''))
   // The person's own agents, which the page shows only if they are in hand
-  // by the time it is drawn (`desk`).
-  if (view == 'apps' || view == 'new') return [agentsOf(at.env, person, dir)]
+  // by the time it is drawn (`desk`), and who made and last deployed each app.
+  if (view == 'apps') {
+    return [agentsOf(at.env, person, dir), dir.provenance(walk)]
+  }
+  if (view == 'new') return [agentsOf(at.env, person, dir)]
   if (view == 'people') return [dir.people(walk), dir.admits(walk)]
   if (view == 'operator') {
     return [
@@ -593,7 +596,7 @@ let desk = async (
     // that lists them. A read that fails is reported and the apps are drawn
     // without it.
     view == 'apps'
-      ? shelved.then(({ all }) => dir.provenance(all)).catch((e) => {
+      ? dir.provenance(walkTo(space.slug, space.eid)).catch((e) => {
         caught(e, { request: 'read app provenance', space: space.slug })
         return undefined
       })

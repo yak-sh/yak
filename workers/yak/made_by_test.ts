@@ -70,6 +70,16 @@ test('a deploy is stamped with the person, or the agent writing for them, and wh
       dashboard,
       `Made ${today} by probe for ${owner.name} · Deployed ${today} by probe for ${owner.name}`,
     )
+    // An app last deployed before `last_deploy` was kept says its newest
+    // release's.
+    await meta(k).apply([{
+      entity: { eid: mine.entity.eid },
+      last_deploy: null,
+    }])
+    assertStringIncludes(
+      await page(managePath('apps', owner.name), owner.cookie),
+      `Made ${today} by ${owner.name} · Deployed ${today} by ${owner.name}`,
+    )
     let admin = await page(`/admin/${theirs.entity.eid}`, k.owner.cookie)
     assertStringIncludes(
       admin,
