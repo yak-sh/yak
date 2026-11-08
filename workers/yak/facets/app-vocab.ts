@@ -108,6 +108,14 @@ export let kernelDoc: VocabDoc = {
       removed: ['blob'],
       description: 'delete a deleted upload’s bytes once nothing names them',
     },
+    // Every entity here carries `created`, so its removal is the entity's
+    // death (deaths.ts).
+    notify_deaths: {
+      effect: true,
+      removed: ['created'],
+      description:
+        'tell the space’s other apps an entity here died, so their references to it follow their death rules',
+    },
   },
 }
 

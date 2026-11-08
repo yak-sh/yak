@@ -9,6 +9,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { isPromise } from '@yaks/fp'
 import { Checked, graph } from './graph.ts'
+import { bereft } from './cascade.ts'
 import type { Bundle } from './bundle.ts'
 import type { Plugin } from './plugin.ts'
 import { Stale } from '@yaks/graph/errors'
@@ -699,6 +700,41 @@ test('a detach reference is nulled and the survivor hears it', () => {
   let [b] = one.get(['b1']) as Bundle[]
   assertEquals(comp(b, 'book').publisher, null)
   assertEquals(comp(b, 'book').pages, 412) // the book itself is untouched
+})
+
+test('a death in another store is carried out by the references held here', async () => {
+  let one = graph({ storage: ram(books), vocab: books })
+  let id = (n: string) => `00000000-0000-4000-8000-00000000000${n}`
+  let plain = (b: Bundle): Bundle => ({ ...b, entity: { eid: b.entity.eid } })
+  sync(one.apply([
+    { entity: { eid: id('2') }, book: { pages: 9 } },
+    { entity: { eid: id('b') }, book: { pages: 412, publisher: id('1') } },
+    { entity: { eid: id('c') }, review: { stars: 5, book: id('9') } },
+    {
+      entity: { eid: id('d') },
+      bookmark: { of: id('9') },
+      doc: { title: 'kept' },
+    },
+    { entity: { eid: id('e') }, review: { stars: 1, book: id('2') } },
+  ]))
+  // 1 and 9 died elsewhere. 2 did too, but its book stands here, so what
+  // refers to it stays.
+  let died = [id('1'), id('9'), id('2')]
+  assertEquals(
+    (await bereft(one.outside, books, died)).map(plain),
+    <Bundle[]> [
+      { entity: { eid: id('b') }, book: { publisher: null } },
+      { entity: { eid: id('c') }, tombstone: {} },
+      { entity: { eid: id('d') }, bookmark: null },
+    ],
+  )
+  sync(one.apply(await bereft(one.outside, books, died)))
+  let [b, c, d, e] = one.get([id('b'), id('c'), id('d'), id('e')]) as Bundle[]
+  assertEquals(comp(b, 'book'), { pages: 412 })
+  assert(isDead(c) && !isDead(e))
+  assertEquals(comp(d, 'doc').title, 'kept')
+  // Told again, nothing is left to do.
+  assertEquals(await bereft(one.outside, books, died), [])
 })
 
 test('a patch after its own delete in one batch is dropped', () => {

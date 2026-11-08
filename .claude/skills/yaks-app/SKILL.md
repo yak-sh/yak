@@ -351,6 +351,13 @@ use of those apps, and adds no activity hop to those reads.
   graph boot or SQL, and a dormant fetch answers 404. Restore clears the mark
   and arms the store for owed wakes. Permanent erasure stays reachable while
   dormant.
+- **A death wakes only the stores it can change** (deaths.ts). A store
+  applies a delete to its own rows, so its `notify_deaths` effect tells the
+  space's other apps (`/mourn`), retried until each takes it, and each applies
+  its references' death rules (@yaks/graph `bereft`). Only a sibling whose
+  release declaration (R2) declares a reference that cascades, detaches or
+  releases is told. The move sweep's wake (`/move`) tells the graves a store
+  held before, once (`mourned`).
 - **Discovery leaves stores asleep** (T-65378). An app's accepted vocabulary and
   commands are release metadata in R2 (`declaration.ts`), selected by the
   directory's source and declaration pointers. A deploy writes that snapshot

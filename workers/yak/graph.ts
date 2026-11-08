@@ -252,6 +252,7 @@ import {
 } from '@yaks/trace'
 import { type RequestState, sampleRequest, selectRequest } from '@yaks/timing'
 import { phases } from './store-inspect.ts'
+import { MOURN, MOURNED, mourned } from './deaths.ts'
 import { broadcast, drafted, released as releaseNotice } from './page-notice.ts'
 import { kinded, naming } from './app-subs.ts'
 import type {
@@ -271,6 +272,7 @@ import { hook, type HookContext } from '@yaks/graph/plugin'
 import { doomed } from '@yaks/graph/read'
 import {
   applyOptions,
+  bereft,
   foreseen,
   graph,
   identityEid,
@@ -741,6 +743,7 @@ let routes = new Set([
   '/restore',
   '/writes',
   '/effects',
+  MOURN,
   '/alarm',
   '/expires',
   '/move',
@@ -3372,6 +3375,32 @@ export class Store {
     }
   }
 
+  // The graves this store held before a death here was told to the space's
+  // other apps (deaths.ts), told to them once, a page at a time, behind the
+  // sweep's wake (`/move`). The mark is the hour the walk began, set once it
+  // is through; a walk that fails is reported and taken again at the next.
+  #mourning?: Promise<void>
+  #mourned() {
+    let STORE = this.#bind.STORE, app = this.#get('app')
+    let buried = this.#graph?.outside.buried
+    if (!STORE || !app || !buried || this.#dormant || this.#expires) return
+    let walk = async () => {
+      if (await this.#ctx.storage.get?.(MOURNED)) return
+      let began = new Date(this.#now()).toISOString()
+      let after: string | undefined
+      do {
+        let page = await buried(began, { after, limit: 100 })
+        await mourned({ ...this.#bind, STORE }, app, page.eids)
+        after = page.next
+      } while (after)
+      await this.#ctx.storage.put?.(MOURNED, began)
+    }
+    this.#mourning ??= walk()
+      .catch((e) => defect(e, { request: 'mourn graves', store: this.#name() }))
+      .finally(() => this.#mourning = undefined)
+    this.#ctx.waitUntil?.(this.#mourning)
+  }
+
   // A few batches, yielding the object between them, then the alarm again for
   // whatever is left.
   #moving = (): Promise<void> => this.#maintenance(() => this.#moveRows())
@@ -4862,6 +4891,24 @@ export class Store {
       this.#workingEffects()
       return Response.json({ retried: bundles.length })
     }
+    // Entities that died in another app of the space (deaths.ts): what
+    // refers to them here follows its death rules, as the platform's own
+    // write. Kernel only, like the effect retry.
+    if (path == MOURN && request.method == 'POST') {
+      if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
+      let died: unknown
+      try {
+        died = (JSON.parse(await readBody(request)) as { died?: unknown }).died
+      } catch (e) {
+        return refuse(e, request)
+      }
+      if (!Array.isArray(died) || !died.every((e) => typeof e == 'string')) {
+        return refuse(new Refused('a death names its eids: {died: [eid, …]}'))
+      }
+      let bundles = await bereft(this.#graph.outside, this.#vocab, died)
+      if (bundles.length) await this.#trust(bundles, null)
+      return Response.json({ changed: bundles.length })
+    }
     // The app this store held is gone (tools.ts app_delete, erase.ts
     // `emptied`): everything in it, at once. Kernel only, like the trusted
     // write — a client's request never carries the flag.
@@ -4927,6 +4974,7 @@ export class Store {
         this.#kv.clear()
         return Response.json({ store, rules })
       }
+      this.#mourned()
       if (this.#owing().length) {
         if (this.#dormant) {
           this.#moveOnly = true
@@ -4943,7 +4991,8 @@ export class Store {
       // due and never comes: the mover only moves from it.
       let held = await this.#alarm?.getAlarm()
       let alarm = held == null ? null : new Date(held).toISOString()
-      return Response.json({ store, rules, alarm })
+      let mourned = await this.#ctx.storage.get<string>?.(MOURNED) ?? null
+      return Response.json({ store, rules, alarm, mourned })
     }
     // Only the connector's checked store boundary reaches this runner. The
     // request is recorded here as the caller, just like an app command.

@@ -30,7 +30,7 @@ import type { Death, Vocab } from '@yaks/vocab'
 import { after } from '@yaks/fp'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { comps, dead, tombstoned } from './bundle.ts'
-import type { Doom, Gone, Loose, Tx } from './storage.ts'
+import type { Doom, Gone, Loose, ReadTx, Tx } from './storage.ts'
 import type { State } from './state.ts'
 import { about, gather, holding } from './gather.ts'
 
@@ -164,6 +164,61 @@ let reckon = (
       })
     })
   return tx.doom ? after(tx.doom(killed), (told) => told ?? walked()) : walked()
+}
+
+/**
+ * The batch that carries out this vocabulary's death rules here for entities
+ * that died in another store. Graphs that share eids (a yaks.app space's apps)
+ * each apply a delete only to their own rows, so a store holding a reference
+ * to an entity another store deleted is told of the death and applies this:
+ * each entity a `cascade` reference names one of `died` through is deleted, a
+ * `release` reference's component is removed, and a `detach` reference's
+ * property is cleared. Applied as an ordinary batch, so what it deletes
+ * cascades on here as any delete does. An entity still standing here, a
+ * component of it held in this store, has not died, and what refers to it
+ * stays.
+ */
+export let bereft = (
+  tx: ReadTx,
+  vocab: Vocab,
+  died: Eid[],
+): Bundle[] | Promise<Bundle[]> => {
+  let look = bearing(vocab, ['cascade', ...SOFT])
+  if (!died.length || !look.length) return []
+  return after(tx.get(died), (found) => {
+    // An identity a reference here named holds nothing of the entity: a part
+    // is a component.
+    let standing = new Set(
+      found.filter((b) => !dead(b) && comps(b).length).map((b) => b.entity.eid),
+    )
+    let gone = died.filter((eid) => !standing.has(eid))
+    if (!gone.length) return []
+    return after(about(tx, vocab, gone, look), (owners) => {
+      let out: Bundle[] = []
+      let points = ([comp, prop]: [string, string], b: Bundle) => {
+        let to = at(b, comp, prop)
+        return to != null && gone.includes(to)
+      }
+      for (let b of born(owners)) {
+        if (dead(b)) continue
+        if (vocab.deaths('cascade').some((p) => points(p, b))) {
+          out.push(tombstoned({ eid: b.entity.eid }))
+          continue
+        }
+        let patch: Bundle = { entity: { eid: b.entity.eid } }
+        for (let p of vocab.deaths('release')) {
+          if (points(p, b)) patch[p[0]] = null
+        }
+        for (let p of vocab.deaths('detach')) {
+          let [comp, prop] = p
+          if (patch[comp] === null || !points(p, b)) continue
+          patch[comp] = { ...(patch[comp] as Comp | undefined), [prop]: null }
+        }
+        if (comps(patch).length) out.push(patch)
+      }
+      return out
+    })
+  })
 }
 
 // Clearing a reference: `detach` sets the property to null, `release` removes

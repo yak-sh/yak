@@ -271,7 +271,9 @@ neither.
 A reference declares `ref` and `death`, and `app_deploy` refuses one without
 `death`. `death` sets what happens to the row when the entity it points at is
 deleted: `cascade` deletes the row, `detach` clears the property, `release`
-removes the component, and `keep` leaves the reference as it is. A query path
+removes the component, and `keep` leaves the reference as it is. The rule holds
+across the space's apps: when another app deletes the entity a reference names,
+the rule is carried out in this app too, moments after the delete. A query path
 follows a reference of yours, as it follows the platform's own
 (<https://yaks.app/docs/querying.md>): `.chore.room.doc.title~=Kitchen` for a
 `chore` whose `room` property is a reference.
@@ -673,11 +675,11 @@ The complete list of reserved names:
     inviting key last_deploy lease lines listed mail mail_answered
     mail_dismissed mail_post mail_task member memory meter model
     model_reservation newcomer newcomer_builds notice notice_confirmed
-    notice_letter notice_posted notice_subscription notified notify_trash
-    oauth_grant occupancy offer openai opened openrouter operator
-    operator_alerts operator_reach order output output_of parent pending
-    person persona phone phone_line plan price product project provider
-    provisional public_file published push_subscription quarantined
+    notice_letter notice_posted notice_subscription notified notify_deaths
+    notify_trash oauth_grant occupancy offer openai opened openrouter
+    operator operator_alerts operator_reach order output output_of parent
+    pending person persona phone phone_line plan price product project
+    provider provisional public_file published push_subscription quarantined
     questions reads recalled ref referenced refusal register_writes
     release_remake report repository representation requires restored result
     retired revision rtc rtc_lapse satisfies screen screenshot secret seeded

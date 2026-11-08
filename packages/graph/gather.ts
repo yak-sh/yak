@@ -43,7 +43,7 @@ import type { Vocab } from '@yaks/vocab'
 import { after, groupBy, isPromise } from '@yaks/fp'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { comps, dead } from './bundle.ts'
-import type { Tx } from './storage.ts'
+import type { ReadTx, Tx } from './storage.ts'
 
 /**
  * One read a phase needs taken before it runs. Both directions are optional
@@ -126,7 +126,7 @@ export let pointing = (pairs: [string, string, Eid][]): Ast | null => {
 // single round trip, so every reverse read goes through here rather than
 // `read`. An adapter without `whole` falls back to `read` and gets the same
 // result.
-let seek = (tx: Tx, q: Ast): Bundle[] | Promise<Bundle[]> =>
+let seek = (tx: ReadTx, q: Ast): Bundle[] | Promise<Bundle[]> =>
   (tx.whole ?? tx.read)(q)
 
 // The value of one reference property, as an eid or nothing.
@@ -407,7 +407,7 @@ export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => {
  * through.
  */
 export let about = (
-  tx: Tx,
+  tx: ReadTx,
   vocab: Vocab,
   eids: Eid[],
   names?: string[],

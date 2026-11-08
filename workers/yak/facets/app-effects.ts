@@ -6,6 +6,7 @@ import type { Bundle } from '@yaks/graph'
 import type { Handlers } from '@yaks/effects'
 import type { Options } from './store.ts'
 import { maintenance } from '../used.ts'
+import { mourned } from '../deaths.ts'
 import { blobPrefix, released } from '../blob-key.ts'
 import { r2Objects } from '../lib/objects.ts'
 import { noticePost } from '../notices.ts'
@@ -37,6 +38,21 @@ export let effects = (_host: unknown, options: Options): Handlers => {
     // asked for it at run time, and what names them is read last, after that
     // wait: an upload of the same file meanwhile names them again and keeps
     // them. An app already erased has no bytes left to delete.
+    // A death is the whole space's (deaths.ts). Retried until every sibling
+    // takes it: a sibling still on older code answers it missing for a while.
+    notify_deaths: maintenance(async (event, _tx, _write, attempt) => {
+      let { STORE } = at.env
+      if (!STORE || !at.app || at.context) return
+      try {
+        await mourned({ ...at.env, STORE }, at.app, [event.entity.eid])
+      } catch (error) {
+        await attempt?.progressed()
+        throw Object.assign(
+          error instanceof Error ? error : new Error(String(error)),
+          { retry: { after: 60_000 } },
+        )
+      }
+    }),
     delete_upload: maintenance(async (event) => {
       let sha = event.entity.eid, { STORE, BLOBS } = at.env
       if (!STORE || !BLOBS || !at.app || !/^[0-9a-f]{64}$/.test(sha)) return
