@@ -16,8 +16,11 @@ door with inputs and checks what comes back or what it wrote (M-39441). So it
 fails only when the code is wrong, or when an interface changed on purpose.
 
 The pull is always to check more than that. A test that pins which tools a list
-shows, a constant, generated SQL text or a sentence of prose restates a decision
-the code already states, and goes red every time someone makes a better one. A
+shows, which components a shared vocabulary declares, a constant, generated SQL
+text or a sentence of prose restates a decision the code already states, and
+goes red every time someone makes a better one. A schema door returning every
+component and kind in the vocabulary supplied to it is behavior: compare its
+answer to that input, so an omitted or invented word fails the test. A
 test that polices how agents work is, in the owner's words, "a persona prompt
 wearing test's clothes" (M-37840): a rule for agents belongs in the persona, and
 a test checks what the product does for a person. His warning, verbatim: "y'all

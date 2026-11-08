@@ -431,27 +431,12 @@ test('graph_schema hands over the words of this graph', async () => {
   let out = (await called(client, 'graph_schema')).structuredContent as {
     $defs: Record<string, { kind?: boolean }>
   }
-  assertEquals(Object.keys(out.$defs), [
-    'book',
-    'call',
-    'content',
-    'created',
-    'doc',
-    'entity',
-    'exception',
-    'execution',
-    'finding',
-    'output',
-    'refusal',
-    'result',
-    'review',
-    'tool',
-    'updated',
-  ])
+  assertEquals(Object.keys(out.$defs), shop.all)
   assertEquals(
-    Object.keys(out.$defs).filter((n) => out.$defs[n].kind),
-    ['book', 'doc', 'review', 'tool'],
+    Object.keys(out.$defs).filter((n) => out.$defs[n].kind).sort(),
+    [...shop.kinds].sort(),
   )
+  await client.close()
 })
 
 test('a refusal is the tool error the agent reads, not a broken call', async () => {
