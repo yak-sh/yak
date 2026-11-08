@@ -37,7 +37,7 @@ export let Pricing = () => (
             <li>No payments</li>
             <li>A small “Made with yaks.app” badge</li>
             <li>AI use included</li>
-            <li>You make changes with your assistant</li>
+            <li>Your Operator, or your own assistant, makes the changes</li>
           </ul>{' '}
           <Button mod='go' href='/login'>Start Free</Button>
         </Card>
@@ -59,7 +59,7 @@ export let Pricing = () => (
             <li>Take payments with Stripe</li>
             <li>No yaks.app badge</li>
             <li>AI use included</li>
-            <li>You make changes with your assistant</li>
+            <li>Your Operator, or your own assistant, makes the changes</li>
           </ul>{' '}
           <Button mod='go' href={GET_PLAN}>
             Get Started
@@ -84,7 +84,8 @@ export let Pricing = () => (
             <li>No yaks.app badge</li>
             <li>AI use included</li>
             <li>
-              Your staff ask by email or chat, and yaks.app makes the change
+              Your staff ask the Operator by email or chat, and it makes the
+              change
             </li>
           </ul>{' '}
           <Button mod='go' href={GET_PLAN}>

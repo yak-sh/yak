@@ -39,6 +39,12 @@ stays for people who already know their assistant well, and is no longer the
 center. What the product gives an app that a chat can't: an address, data that
 stays, sign-in, the people it's for, on any phone (M-37845).
 
+The site leads with the Operator. Jeff, 2026-11-08, verbatim: "i think for
+marketing, i'd like to move towards the "operator" pitch. yaks.app does
+everything for you, including building". You get an Operator that does things
+for you: you chat with it, email it, text it or call it, and it builds the
+apps it needs along the way.
+
 The first personas are literal people who use yaks.app, and D-131886 has each
 in full:
 
@@ -170,8 +176,11 @@ assistants' connector directories for those who already use one.
   provider's webhook doors are @yaks/stripe's, served by
   workers/yak/payment-doors.ts. How metering and refusals work is
   `yaks-app`.
-- **The site.** The home page is workers/yak/site/home.tsx (drawn from the
-  kit's parts into public/index.html at deploy), which carries a JSON-LD copy
+- **The site.** There is one home page. Ad tests get landing pages of their
+  own and never split or change the home page (variant.ts shares, with the
+  Operator page at /operator drawn by nobody new). The home page is
+  workers/yak/site/home.tsx (drawn from the kit's parts into public/index.html
+  at deploy), which carries a JSON-LD copy
   of the plans and a card for each of the three, as site/pricing.tsx has; a
   plan on sale is a card on both pages, never a note under them. Next to it
   are site/pricing.tsx, site/help.tsx and the

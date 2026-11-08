@@ -29,7 +29,7 @@ export let OPERATOR = '/operator'
 /** The home pages `/` is split between. */
 export let VARIANTS: Variant[] = [
   { name: 'ask', path: '/', share: 1 },
-  { name: 'operator', path: OPERATOR, share: 1 },
+  { name: 'operator', path: OPERATOR, share: 0 },
 ]
 
 /** The pages Site keeps for the home page (kept-page.ts `LISTINGS`). */

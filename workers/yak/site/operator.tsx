@@ -88,7 +88,7 @@ export let Operator = ({ by }: { by: By }) => {
           <div class='Hello_Yak' data-wander=''>
             <Idle base='.' />
           </div>
-          <p class='Hello_Kicker'>Build, host and share web apps</p>
+          <p class='Hello_Kicker'>An Operator that does things for you</p>
           <h1 class='Title Title-hero' id='hello'>
             <label for='address'>{ask.label}</label>
           </h1>

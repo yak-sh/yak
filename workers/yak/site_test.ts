@@ -652,7 +652,7 @@ test('every public page hands a stranger sign-in, never /connect', () => {
     '/login',
     GET_PLAN,
     GET_PLAN,
-    '/login',
+    '#say',
   ], 'a home-page door misses sign-in')
 })
 

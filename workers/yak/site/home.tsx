@@ -16,7 +16,8 @@ let data = {
       'url': 'https://yaks.app/',
       'name': 'yaks.app',
       'alternateName': 'Yak Shaving',
-      'description': 'Build an app by asking Claude or ChatGPT.',
+      'description':
+        'An Operator that does things for you, and builds the apps it needs.',
       'inLanguage': 'en-US',
       'publisher': {
         '@id': 'https://yaks.app/#organization',
@@ -38,8 +39,10 @@ let data = {
       'applicationCategory': 'DeveloperApplication',
       'operatingSystem': 'Web browser',
       'description':
-        'Ask Claude or ChatGPT for a web app — from a menu for your side business to a recipe box for your family — and yaks.app hosts it at yourname.yaks.app, with its own data store, file uploads, email address and optional custom domain. No install, no build step.',
+        'Get an Operator that does things for you. Chat with it, email it, text it or call it, and it builds the apps it needs, from a menu for your side business to a recipe box for your family, and puts them online at yourname.yaks.app, with their own data, file uploads, email address and optional custom domain.',
       'featureList': [
+        'An Operator you chat with, email, text or call',
+        'Apps your Operator builds for you',
         'Apps built by your own AI assistant over MCP',
         'A graph data store per app, shared across devices',
         'File and photo uploads',
@@ -187,9 +190,9 @@ export let Examples = ({ children }: { children: ComponentChildren }) => (
 
 export let Home = () => (
   <Page
-    name='yaks.app — build an app by asking Claude or ChatGPT'
-    title='yaks.app — build an app by asking Claude or ChatGPT'
-    description='Build an app by asking Claude or ChatGPT. The assistant you already use writes the app, and yaks.app puts it online at your own address.'
+    name='yaks.app — an Operator that does things for you'
+    title='yaks.app — an Operator that does things for you'
+    description='Get an Operator that does things for you. Chat with it, email it, text it or call it, and it builds the apps it needs and puts them online at your own address.'
     path='/'
     kind='Home'
     head={
@@ -206,10 +209,10 @@ export let Home = () => (
         <div class='Hello_Yak' data-wander=''>
           <Idle base='.' />
         </div>
-        <p class='Hello_Kicker'>Build, host and share web apps</p>
+        <p class='Hello_Kicker'>An Operator that does things for you</p>
         <h1 class='Title Title-hero' id='hello'>
           <label for='say'>
-            Say what you need an app for, and watch it being built.
+            Tell your Operator what you need, and watch it build the app.
           </label>
         </h1>
         <form class='Hello_Ask' method='post' action={START}>
@@ -219,16 +222,14 @@ export let Home = () => (
             name='say'
             required
             maxLength={4000}
-            placeholder='What should it do, and who is it for?'
+            placeholder='What do you need, and who is it for?'
           />
           <Button mod='go' type='submit' data-cta='start'>
             Build it
           </Button>
         </form>
         <p class='Note Note-small'>
-          Free, with no sign-up to start. Your app goes online at your own
-          address, for any phone or computer. <a href='#cost'>$9 a month</a>
-          {' '}
+          Free, with no sign-up to start. <a href='#cost'>$9 a month</a>{' '}
           for more.{' '}
           <a href='#examples' data-cta='examples'>
             See examples <span aria-hidden='true'>↓</span>
@@ -237,105 +238,25 @@ export let Home = () => (
       </div>
       <Examples>
         Each of these apps runs on yaks.app. Open one to try it, or get a copy
-        of your own and ask the assistant you use to change the copy.{' '}
+        of your own and ask your Operator to change it.{' '}
         <a href='/gallery'>See more in the gallery</a>.
       </Examples>
     </section>
-    <section class='For' aria-labelledby='for'>
-      <h2 class='Title' id='for'>For your work, your ideas and your home</h2>
-      <ul class='For_List'>
-        <Card as='li'>
-          <Card.Title as='h3'>For your work</Card.Title>
-          <Card.Sub>
-            The lists and records your team keeps, in a tool made for how you
-            work.
-          </Card.Sub>
-          <p class='For_App'>
-            <b>A church directory</b>: members, photos and birthdays, kept by
-            the church office.
-          </p>
-          <p class='For_Doors'>
-            <a href='https://yourname.yaks.app/directory/'>
-              Open it <span aria-hidden='true'>↗</span>
-            </a>{' '}
-            <a href='/install?name=church-directory'>Get a copy</a>
-          </p>
-        </Card>
-        <Card as='li'>
-          <Card.Title as='h3'>For your ideas and side projects</Card.Title>
-          <Card.Sub>
-            An idea, or a small business on the side, running online without
-            hiring anyone.
-          </Card.Sub>
-          <p class='For_App'>
-            <b>A bakery's menu</b>: today's prices, marked sold out from a
-            phone.
-          </p>
-          <p class='For_Doors'>
-            <a href='https://yourname.yaks.app/menu/'>
-              Open it <span aria-hidden='true'>↗</span>
-            </a>{' '}
-            <a href='/install?name=bakery-menu'>Get a copy</a>
-          </p>
-        </Card>
-        <Card as='li'>
-          <Card.Title as='h3'>For home</Card.Title>
-          <Card.Sub>
-            The recipes, chores and plans your family keeps in a dozen places.
-          </Card.Sub>
-          <p class='For_App'>
-            <b>A recipe box</b>: save recipes and share them with family.
-          </p>
-          <p class='For_Doors'>
-            <a href='https://yourname.yaks.app/recipes/'>
-              Open it <span aria-hidden='true'>↗</span>
-            </a>{' '}
-            <a href='/install?name=recipe-box'>Get a copy</a>
-          </p>
-        </Card>
-      </ul>
-    </section>
-    <section class='How' aria-labelledby='how'>
-      <h2 class='Title' id='how'>How yaks.app works</h2>
-      <ol class='Steps'>
-        <li>
-          <h3 class='Step_Name'>Connect the assistant you use</h3>
-          <p class='Note'>
-            Paste <a href='/agent'>yaks.app/agent</a>{' '}
-            into Claude, ChatGPT or the AI assistant you already use.
-          </p>
-        </li>
-        <li>
-          <h3 class='Step_Name'>Ask for the app you want</h3>
-          <p class='Note'>
-            Tell your assistant what you need, like a chore chart for your
-            household. Your assistant builds the app, and yaks.app puts it
-            online.
-          </p>
-        </li>
-        <li>
-          <h3 class='Step_Name'>Open your app on any device</h3>
-          <p class='Note'>
-            Your apps live in your own space at{' '}
-            <Yours />. Open one on your phone or computer, or send its link to
-            the people it's for.
-          </p>
-        </li>
-      </ol>
-    </section>
-    <section class='Yours' aria-labelledby='yours'>
-      <h2 class='Title' id='yours'>Everything you make lives in a space</h2>
-      <p class='Note Note-lead'>
-        A space is an address like{' '}
-        <Yours />, the apps there, their data and the people you invite. Each
-        space is free or on a paid plan.
-      </p>
+    <section class='Yours' aria-labelledby='does'>
+      <h2 class='Title' id='does'>What your Operator does for you</h2>
       <dl class='Yours_List'>
         <div>
-          <dt>It saves what people add</dt>
+          <dt>It builds the apps you need</dt>
           <dd>
-            Recipes, sign-ups, comments, photos and files are saved online, on
-            every phone and computer, for everyone you share with.
+            Ask for an app, a new feature or a fix, and your Operator does the
+            work. Your apps save what people add, on every phone and computer.
+          </dd>
+        </div>
+        <div>
+          <dt>You chat with it, email it, text it or call it</dt>
+          <dd>
+            Chat with it on yaks.app or email it. Agree to texts on its page,
+            and you can text it or call it from your phone.
           </dd>
         </div>
         <div>
@@ -345,44 +266,46 @@ export let Home = () => (
             people as you like to view or edit it, free.
           </dd>
         </div>
-        <div>
-          <dt>Your assistant keeps working on it</dt>
-          <dd>
-            Ask for a new feature or a fix right from the chat. When an app
-            breaks, your assistant is told about the error.
-          </dd>
-        </div>
       </dl>
     </section>
-    <section class='Path' aria-labelledby='path'>
-      <h2 class='Title' id='path'>From a tool for you to a business</h2>
-      <dl class='Yours_List'>
-        <div>
-          <dt>Share it</dt>
-          <dd>
-            Invite your team, your family or your customers. The people you
-            invite are free on every plan.
-          </dd>
-        </div>
-        <div>
-          <dt>Publish it</dt>
-          <dd>
-            Put your app in the{' '}
-            <a href='/gallery'>gallery</a>, and anyone can get a copy of their
-            own, with its own data.
-          </dd>
-        </div>
-        <div>
-          <dt>Sell it</dt>
-          <dd>
-            On the Plus plan, your apps take payments with Stripe and live at
-            your own domain.
-          </dd>
-        </div>
-      </dl>
+    <section class='How' aria-labelledby='how'>
+      <h2 class='Title' id='how'>How yaks.app works</h2>
+      <ol class='Steps'>
+        <li>
+          <h3 class='Step_Name'>Tell your Operator what you need</h3>
+          <p class='Note'>
+            Type it in the box above, like a chore chart for your household.
+            There is nothing to install.
+          </p>
+        </li>
+        <li>
+          <h3 class='Step_Name'>Watch it build the app</h3>
+          <p class='Note'>
+            Your Operator builds it and puts it online. Open it on your phone or
+            computer, or send its link to the people it's for.
+          </p>
+        </li>
+        <li>
+          <h3 class='Step_Name'>Keep it with your email</h3>
+          <p class='Note'>
+            Give your email, and the app and your Operator are yours, at an
+            address like <Yours />.
+          </p>
+        </li>
+      </ol>
+      <p class='Note Note-small'>
+        Already use Claude or ChatGPT? Paste <a href='/agent'>yaks.app/agent</a>
+        {' '}
+        into it, and it can build your apps too.
+      </p>
     </section>
     <section class='Cost' aria-labelledby='cost'>
       <h2 class='Title' id='cost'>Free to start, a plan for more</h2>
+      <p class='Note'>
+        A space is your address, like{' '}
+        <Yours />, with its apps, their data and the people you invite. Your
+        first space is free.
+      </p>
       <div class='Plans'>
         <Card as='div' class='Plan'>
           <h3 class='Plan_Price'>Free</h3>
@@ -429,8 +352,8 @@ export let Home = () => (
             <span class='Plan_Per'>&#32;a month</span>
           </h3>
           <p class='Note Note-small'>
-            The Organization plan, or $490 a year. Your staff ask by email or
-            chat, and yaks.app makes the change.
+            The Organization plan, or $490 a year. Your staff ask the Operator
+            by email or chat, and it makes the change.
           </p>
           <ul class='Plan_List'>
             <li>Unlimited apps</li>
@@ -457,15 +380,11 @@ export let Home = () => (
       </p>
     </section>
     <Card class='Join' aria-labelledby='join'>
-      <h2 class='Title' id='join'>What would you like to make?</h2>
-      <p class='Note'>
-        Paste <a href='/agent'>yaks.app/agent</a>{' '}
-        into the assistant you already use, and describe your first app.
-      </p>
+      <h2 class='Title' id='join'>What would you like your Operator to do?</h2>
       <p class='Join_Doors'>
-        <Button mod='go' href='/login' data-cta='join'>Start free</Button>
+        <Button mod='go' href='#say' data-cta='join'>Tell it</Button>
       </p>
-      <p class='Note Note-small'>Free to start. Setup takes a few minutes.</p>
+      <p class='Note Note-small'>Free to start.</p>
     </Card>
   </Page>
 )

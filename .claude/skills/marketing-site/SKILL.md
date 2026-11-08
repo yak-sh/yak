@@ -199,8 +199,8 @@ Each venture's voice (yaks.app's is "soft and friendly", in
 ## Where to look
 
 - **Who it's for:** the venture's persona design (yaks.app: D-131886).
-- **The one-liner:** the venture's own (yaks.app: M-37845, "Build, host and
-  share web apps"), used as it stands.
+- **The one-liner:** the venture's own (yaks.app: M-37845's "The pitch
+  today"), used as it stands until a better line replaces every copy.
 - **What the product does:** the guide pages and the code. For yaks.app that's
   `workers/yak/public/docs`, and the features the home page names are each
   backed there.

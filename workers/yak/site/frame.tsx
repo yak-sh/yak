@@ -14,7 +14,7 @@ import { Address } from '@yaks/ui'
 import { Idle } from '../mascot.ts'
 
 let SITE = 'https://yaks.app'
-let ALT = 'yaks.app: build an app by asking Claude or ChatGPT'
+let ALT = 'yaks.app: an Operator that does things for you'
 
 /** A space's address, the name in it a person's own:
  * <Yours /> is yourname.yaks.app. */

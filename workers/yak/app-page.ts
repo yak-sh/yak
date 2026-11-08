@@ -84,7 +84,7 @@ export let page = (a: Shown, env: Host = {}) => {
       h(
         'p',
         { class: 'Note Listing_Made' },
-        'Made with yaks.app, where you build an app by asking Claude or ChatGPT. ',
+        'Made with yaks.app, where an Operator builds the apps you need. ',
         h('a', { href: '/' }, 'See how it works'),
       ),
     ),
