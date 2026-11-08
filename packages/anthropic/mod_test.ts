@@ -1,6 +1,6 @@
 import { equal, ok, test } from '@yaks/testing'
 import { ModelError, type Request, type TextDelta } from '@yaks/model'
-import { conversation, messages } from './mod.ts'
+import { conversation, messages, OPENER } from './mod.ts'
 
 // The stream the API sends for one reply: text, then a tool call.
 let reply = (id = 'msg_1') => [
@@ -122,19 +122,32 @@ test('a prefix is kept five minutes, or the hour a request asks for', async () =
   }
 })
 
-test('a request of instructions alone says its last one as the turn', async () => {
+test('a summary stays in the system prompt, so the next request extends this one', async () => {
   let { sent, fetch } = api(() => sse(reply()))
-  await messages({ key: () => 'k', fetch })(ask({
+  let model = messages({ key: () => 'k', fetch })
+  let lead: Request['items'] = [
+    { kind: 'instruction', text: 'You work for ada.' },
+    { kind: 'instruction', text: 'Summary: the yak was found.' },
+  ]
+  await model(ask({ items: lead }))
+  await model(ask({
     items: [
-      { kind: 'instruction', text: 'You work for ada.' },
-      { kind: 'instruction', text: 'Summary: the yak was found.' },
+      ...lead,
+      { kind: 'call', id: 'tu_1', name: 'find', args: '{}' },
+      { kind: 'result', id: 'tu_1', output: 'none' },
     ],
   }))
-  equal(sent[0].body.system, 'Be brief.\n\nYou work for ada.')
-  equal(sent[0].body.messages, [{
+  let [first, next] = sent.map((s) => s.body)
+  equal(
+    first.system,
+    'Be brief.\n\nYou work for ada.\n\nSummary: the yak was found.',
+  )
+  equal(next.system, first.system)
+  equal(first.messages, [{
     role: 'user',
-    content: [{ type: 'text', text: 'Summary: the yak was found.' }],
+    content: [{ type: 'text', text: OPENER }],
   }])
+  equal(next.messages.slice(0, 1), first.messages)
 })
 
 test('a request streams text, returns calls, and counts cache reads as input', async () => {

@@ -73,12 +73,19 @@ let TOKENS = 64_000
 let EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
 
 /** Where the conversation begins: at its first item that is no instruction.
- * A request of instructions alone (a checkpoint that summarized every line)
- * begins at its last one, since the API takes no request without a message. */
+ * Every instruction before it opens the system prompt, whatever follows, so a
+ * checkpoint's summary stays where the last request sent it and the cached
+ * prefix holds. */
 let leadOf = (req: Request) => {
   let lead = req.items.findIndex((i) => i.kind != 'instruction')
-  return lead < 0 ? Math.max(0, req.items.length - 1) : lead
+  return lead < 0 ? req.items.length : lead
 }
+
+/** The turn a conversation opens with where it opens with none of the
+ * person's (a checkpoint that summarized every line, then its replies), since
+ * the API takes a conversation only from a user message. It is the same each
+ * request, so the next request's prefix is this one's. */
+export let OPENER = 'Continue from the instructions above.'
 
 /** Instructions open the system prompt; one met later in the conversation is
  * said as text in the turn it falls in, which every model accepts. */
@@ -145,6 +152,9 @@ export let conversation = (req: Request): Param[] => {
       let at = last.content.findIndex((c) => c.type != 'tool_result')
       last.content.splice(at < 0 ? last.content.length : at, 0, ...content)
     }
+  }
+  if (out[0]?.role != 'user') {
+    out.unshift({ role: 'user', content: [{ type: 'text', text: OPENER }] })
   }
   return out
 }

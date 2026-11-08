@@ -1,4 +1,4 @@
-import { equal, match, ok, test } from '@yaks/testing'
+import { equal, match, ok, test, until } from '@yaks/testing'
 import type { Item, Request } from '@yaks/model'
 import type { Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
@@ -105,4 +105,12 @@ test('nested Operator calls keep their source and the fork writer', () => {
     equal((b.created as Comp).by, space.eid)
     equal((b.created as Comp).via, fork.entity.eid)
   }
+})
+
+test('the Operator gives its model row the window its catalogue lists', async () => {
+  await until(async () =>
+    (await store.g.read('.model.context')).some((b) =>
+      (b.model as Comp).context == 1000
+    )
+  )
 })

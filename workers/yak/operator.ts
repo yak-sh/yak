@@ -941,22 +941,27 @@ export let operating = (
       caught(e, { request: 'operator base persona' })
     })
   // Each model's rows, written once per wake: the Operator's own and its
-  // delegate's, and one an input asks for when it first does. A price is
-  // written when its catalogue answers, which no turn waits on: the ask that
-  // needs it waits on the same lookup, already in flight, and refuses if it
-  // fails.
+  // delegate's, and one an input asks for when it first does. What its
+  // catalogue says is written when it answers, which no turn waits on: its
+  // price (the ask that needs it waits on the same lookup, already in flight,
+  // and refuses if it fails), and the window it reads where its row names
+  // none, so a transcript compacts at its share of the model's own window
+  // rather than of @yaks/session's default `CONTEXT`.
   let seeded = new Map<string, Promise<void>>()
   let seedOf = (m: string) => {
     let held = seeded.get(m) ?? (async () => {
-      priced(m).then(
-        async (price) => {
-          if (!price) return
-          await g.apply(
-            [{ entity: { eid: identityEid('model', [m]) }, price }],
-            {
-              trusted: true,
-            },
-          )
+      Promise.all([priced(m), listed(m).catch(() => undefined)]).then(
+        async ([price, info]) => {
+          let eid = identityEid('model', [m])
+          let [row] = await g.get([eid])
+          let own = Number((row?.model as Comp | undefined)?.context) > 0
+          let context = !own && info?.context
+          if (!price && !context) return
+          await g.apply([{
+            entity: { eid },
+            ...price ? { price } : {},
+            ...context ? { model: { name: m, context } } : {},
+          }], { trusted: true })
         },
         () => {},
       ).catch((e) => caught(e, { request: 'operator model price' }))
