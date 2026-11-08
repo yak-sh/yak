@@ -1,43 +1,25 @@
-# The builder's workbench toolchain (sandbox.ts, T-34264): Cloudflare's own
-# sandbox container, plus the toolchains a build actually reaches for — Rust,
-# Python, Go, Zig, and through `zig cc` a C and C++ path to wasm — plus the
-# Deno the `yak` CLI runs on. ../Dockerfile is the image the sandbox runs: this
-# one, plus the CLI (T-34387).
+# The workbench image: Cloudflare's sandbox control server, language toolchains
+# for app builds, and tools for reading and writing common document formats.
+# CLI sources are fetched from the live Worker's assets on first yak use.
 #
-# It is an image of its own because Workers Builds keeps no layer cache
-# (T-38057). Built in one file, every push to main downloaded each toolchain
-# again and pushed about nine fresh layers of it to the registry, and that is
-# where builds failed: a go.dev 404, registry push timeouts. So this is built
-# and pushed once per version of this file, under a tag that is this file's
-# own hash (../base.ts), and a build of main pulls it and pushes only the
-# layers the CLI adds. Editing this file means pinning ../Dockerfile's FROM to
-# the new tag (sandbox_test.ts says which); the next deploy builds and pushes
-# it. Its build context is this directory, which holds nothing but this file:
-# everything in it is downloaded.
+# Provision with ../base.ts after changing this file, then pin its base-<hash>
+# registry reference in both ../wrangler.toml container configs before landing.
+# Worker deploys only name that prebuilt image; they never build this file.
+# Its build context contains only this Dockerfile, and all tools are downloaded.
 #
-# That list is where the image stops, and it stops there on purpose (T-34516).
-# Anything rarer is installed for the SESSION instead: a command runs as root,
-# so `apt-get install` and a download both work, and the container is thrown
-# away when the build ends — what one build adds costs every other build
-# nothing. An image is the opposite: it is disk on every build, a per-second
-# charge, and it is pulled before the first command of the first one.
+# Less common tools can still be installed for the session: commands run as
+# root, and the container is discarded when the build ends or after idle sleep.
+# An installed tool adds disk to every container and pull time to its first
+# command, so include tools used for common work and measure the added size.
+# standard-2 gives the image and working files 12 GB of disk.
 #
-# Measured unpacked it is about 2.2 GB. Cloudflare caps an image at the disk of
-# its instance type, which for the standard-2 in wrangler.toml is 12 GB — so
-# there is room, and the room is not unlimited.
+# The Cloudflare tag must match @cloudflare/sandbox in ../../package.json: the
+# control server here and the client in the Worker are halves of one release.
+# Keep its ENTRYPOINT, /container-server/sandbox, which serves every sandbox RPC.
+# It already exposes port 3000.
 #
-# The tag MUST match the @cloudflare/sandbox version in package.json: the
-# control server inside the container and the client in the Worker are two
-# halves of one release, and the SDK warns at startup when they disagree.
-#
-# Do not add an ENTRYPOINT, here or in ../Dockerfile. The base's is
-# `/container-server/sandbox`, which is the control server every tool in
-# sandbox.ts speaks to; overriding it turns the container into a box nothing
-# can reach. It already EXPOSEs 3000.
-#
-# Every version below is pinned and every download is checksummed, because a
-# floating toolchain means a build that worked yesterday and does not today,
-# and there is no one here to debug it.
+# Toolchain archives and Python wheels are pinned and checksummed. Apt packages
+# come from the base Ubuntu release, with recommendations and caches omitted.
 FROM docker.io/cloudflare/sandbox:0.12.9
 
 # Rust itself. `--profile minimal` is rustc, cargo and rust-std and none of
@@ -179,3 +161,42 @@ RUN set -eux; \
     unzip -q /tmp/deno.zip -d /usr/local/bin; \
     rm /tmp/deno.zip; \
     deno --version
+
+# Documents: read and edit the original attachment, then write an Office file,
+# a PDF, a table or an image without fetching a tool on the person's clock.
+# Wheels avoid compilers and build dependencies; Pillow supplies image editing.
+RUN python3 -m pip install --no-cache-dir --only-binary=:all: --require-hashes -r /dev/stdin <<'REQUIREMENTS'
+cffi==2.1.1 --hash=sha256:a931079504ecc49efed7744c476a5c343a92fabf66dec2db95edb1b2fdc770e2
+charset-normalizer==3.5.2 --hash=sha256:7218e8f32b0956cfcd048fd42d9d5779809745ca1d86113ca56f66e7ae1549c4
+cryptography==50.0.2 --hash=sha256:630ebfea3bf689d075f82316324ff7433dc447fe6bc1bfc76524b74b4a9567d2
+et-xmlfile==2.0.0 --hash=sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa
+lxml==6.1.3 --hash=sha256:b477912f42c5c33405a10c759d22f80cf5af043ae02d95b9d8e5e5bc555739ed
+numpy==2.5.4 --hash=sha256:6ffa07666f8da0eef81d149934a626d0d95fbd6838432a33e66245423a9062c0
+openpyxl==3.1.5 --hash=sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2
+pandas==3.1.1 --hash=sha256:645fa00fd85cfced2d2c09dc116d3694f578501b1ce4899153fbe64788ecda98
+pdfminer-six==20260107 --hash=sha256:366585ba97e80dffa8f00cebe303d2f381884d8637af4ce422f1df3ef38111a9
+pdfplumber==0.11.10 --hash=sha256:7741ea81bf165b474b153e6789d10d18e06b6ddcf3ec84289c3ef2fed6802580
+pillow==13.0.0 --hash=sha256:5f56499c1a74d2b862beb0c33b8016f99d095858455df9d21583bbbc1c15b582
+pycparser==3.12 --hash=sha256:a076f3f489b39b43ed13563a1dafe42447445bec2e294154ec5c57fcdda4c85e
+pypdf==7.0.0 --hash=sha256:112a2c7cbabefd8dfe498f7a13977e575e762d58cdb0d832acb8886922602c6f
+pypdfium2==5.15.1 --hash=sha256:e479df7f9260865554f301889bf1afcdf9aaf5e2ad98c69797a2ebaa1c5e3a3b
+python-dateutil==4.0.0 --hash=sha256:a5e246f79eb80475e691bf93862cead98decd8a498cf53ba0516fcdc0f50dc1c
+python-docx==1.2.0 --hash=sha256:3fd478f3250fbbbfd3b94fe1e985955737c145627498896a8a6bf81f4baf66c7
+python-pptx==1.0.2 --hash=sha256:160838e0b8565a8b1f67947675886e9fea18aa5e795db7ae531606d68e785cba
+typing-extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+tzdata==2026.6 --hash=sha256:0a10eec6e13ef16b627fabed9a5f2ba61a62b1c67f327305f4e7e412a70b4aec
+xlsxwriter==3.3.1 --hash=sha256:8e2c89e59d733fe59e112317218c64fbbc276d90a8c144ebd6f7fa15e7ab184a
+REQUIREMENTS
+RUN python3 -c 'import pypdf, pdfplumber, docx, openpyxl, pptx, pandas, PIL'
+
+# pandoc converts document formats; Poppler extracts text, inspects and renders
+# PDF pages. LibreOffice runs headless for Office conversion and PDF output;
+# recommended packages are omitted.
+# Liberation supplies metrically compatible Office fonts. Keep apt's downloads
+# and indexes out of the finished layer.
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      pandoc poppler-utils libreoffice-writer libreoffice-calc \
+      libreoffice-impress fonts-liberation \
+ && rm -rf /var/lib/apt/lists/* \
+ && pandoc --version && pdftotext -v && libreoffice --headless --version

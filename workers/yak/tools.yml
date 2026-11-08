@@ -214,12 +214,17 @@ sandbox_shell:
     WebAssembly, build a site with any tool (Vite, Astro, Eleventy,
     SvelteKit), run a generator. An app of html, css and js needs none of
     it. Installed: Rust 1.98.1 with wasm32-unknown-unknown, wasm-bindgen
-    0.2.128 and wasm-opt 132; Python 3.13.15 with pip; Go 1.27.1; Zig
+    0.2.128 and wasm-opt 132; Python 3.13.15 with pip, pypdf, pdfplumber,
+    python-docx, openpyxl, python-pptx, pandas and Pillow; pandoc and
+    poppler-utils (pdftotext, pdftoppm, pdfinfo); LibreOffice Writer, Calc
+    and Impress (`libreoffice --headless`); Go 1.27.1; Zig
     0.16.0, also the C and C++ compiler (`zig cc -target wasm32-freestanding
     -nostdlib -Wl,--no-entry` makes a module a browser loads with no glue
     code, -target wasm32-wasi one a WASI layer runs); Deno 2.9.1, and the
-    image's Node and Bun. The command runs as root, so `apt-get install -y
-    <pkg>`, cargo, pip, npm and go get install anything until the container
+    image's Node and Bun. Read, edit and write PDF, DOCX, XLSX, PPTX, CSV
+    and images with these tools. sandbox_write with an attachment id copies
+    the original file into the sandbox. The command runs as root, so
+    `apt-get install -y <pkg>`, cargo, pip, npm and go get install anything until the container
     goes. Its network reaches the whole internet, so git clone, npm create
     and any API work. sandbox_write puts a file in, sandbox_read reads one
     out, and sandbox_ship copies files into an app. It is signed in as the
@@ -289,8 +294,11 @@ sandbox_write:
     sandbox is metered by the second, as with sandbox_shell. Pass a sandbox
     path and nonempty text, or in place of the text an attachment id from
     the conversation (including original message text), which writes its
-    bytes there for a command to read (a CSV a script parses); this
-    overwrites that path without file history and returns the path written.
+    bytes there for a command to read. This overwrites that path without
+    file history and returns the path written. Python includes pypdf, pdfplumber,
+    python-docx, openpyxl, python-pptx, pandas and Pillow; pandoc and
+    poppler-utils and LibreOffice headless are also installed. Use them to read, edit and write
+    documents, spreadsheets, presentations, CSV and images.
     Nothing to undo: nothing of the app lives here, and only sandbox_ship
     copies sandbox files into durable app files.
     Documentation: https://yaks.app/docs/sandbox.
@@ -1125,6 +1133,9 @@ sandbox_exec:
     command printed. A command can call these tools and change apps, so its
     effects outside the container are not undone by discarding it. New work
     calls sandbox_shell, which can also leave a long command running.
+    Installed document tools: Python with pypdf, pdfplumber, python-docx,
+    openpyxl, python-pptx, pandas and Pillow; pandoc, poppler-utils and
+    LibreOffice headless (Writer, Calc, Impress).
     Documentation: https://yaks.app/docs/sandbox.
 app_secret_set:
   title: Set a worker secret

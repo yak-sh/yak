@@ -300,15 +300,20 @@ Each person also has a sandbox in the space: a private Linux container where
 an agent runs commands and keeps files while it works, for a script over an
 attachment, a CSV, an API call, or what genuinely must be compiled — Rust to
 WebAssembly for a chess engine, an image codec, a solver. sandbox_write puts a
-file in, sandbox_shell runs a command (it has pinned Rust, Python, Go and Zig
-toolchains — zig cc is its C and C++ compiler — plus wasm-bindgen and
-wasm-opt; sandbox_shell names the versions, and anything else installs with
-apt or a package manager), sandbox_read reads a file out, and sandbox_ship
-copies files — pkg/*.wasm, pkg/*.js, or a whole dist folder with its
+file in, sandbox_shell runs a command, sandbox_read reads a file out, and
+sandbox_ship copies files — pkg/*.wasm, pkg/*.js, or a whole dist folder with its
 subfolders — into the app, where they are served beside index.html. Its files
 are temporary; only what you ship survives. Every second the container is
 awake is charged to the space, so plan the commands, run them once, and ship.
-Call guide with page sandbox.
+It has pinned Rust, Python, Go and Zig toolchains — zig cc is its C and C++
+compiler — plus wasm-bindgen and wasm-opt. Python includes pypdf, pdfplumber,
+python-docx, openpyxl, python-pptx, pandas and Pillow for reading, editing and
+writing documents, spreadsheets, presentations, CSV and images. pandoc converts
+document formats; poppler-utils extracts PDF text and renders pages.
+LibreOffice Writer, Calc and Impress run headless for office-file conversion
+and PDF output. sandbox_write with an attachment id copies its original bytes in.
+sandbox_shell names the versions; anything else installs with apt or a package
+manager. Call guide with page sandbox.
 
 Asked to save things from other sites — a recipe, a listing, an article —
 give the app a /clip route on its worker.js: it fetches the address, reads

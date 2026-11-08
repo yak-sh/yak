@@ -1,6 +1,6 @@
 ---
 name: sandbox
-description: "Sandbox (yaks.app). The sandbox: a private Linux container in the space where an agent runs commands and keeps files while it works, through sandbox_write, sandbox_shell, sandbox_wait, sandbox_stop, sandbox_read and sandbox_ship. Its uses (a script over an attachment, a CSV reconciled against an app's data, an API call, compiling to WebAssembly, building a site), the toolchains installed in it, installing more, how long its files last, copying files into an app with sandbox_ship, its network, how many may be awake and the monthly compute time, and the yak CLI and $YAKS_TOKEN it is signed in with."
+description: "Sandbox (yaks.app). The sandbox: a private Linux container in the space where an agent runs commands and keeps files while it works, through sandbox_write, sandbox_shell, sandbox_wait, sandbox_stop, sandbox_read and sandbox_ship. Its uses (a script over an attachment, a CSV reconciled against an app's data, an API call, compiling to WebAssembly, building a site), the installed document tools and toolchains, installing more, how long its files last, copying files into an app with sandbox_ship, its network, how many may be awake and the monthly compute time, and the yak CLI and $YAKS_TOKEN it is signed in with."
 ---
 
 # Sandbox
@@ -26,7 +26,11 @@ Preinstalled:
 
     Rust 1.98.1      with wasm32-unknown-unknown, wasm-bindgen 0.2.128,
                      wasm-opt 132
-    Python 3.13.15   with pip
+    Python 3.13.15   with pip, pypdf, pdfplumber, python-docx, openpyxl,
+                     python-pptx, pandas and Pillow
+    pandoc           document format conversion
+    poppler-utils    pdftotext, pdftoppm, pdfinfo and other PDF utilities
+    LibreOffice      Writer, Calc and Impress, run with --headless
     Go 1.27.1        GOOS=js GOARCH=wasm, and lib/wasm/wasm_exec.js beside it
     Zig 0.16.0       and with it C and C++: `zig cc`, `zig c++`
     Deno 2.9.1       plus the Node and Bun the base image ships
@@ -38,6 +42,50 @@ same flags, with `-fno-exceptions`.
 
 Commands run as root, so `apt-get install -y <package>`, `cargo`, `pip`, `npm`
 and `go get` all work, and nothing installed outlives the container.
+
+## Document files
+
+`sandbox_write` with `attachment` and a path copies an attachment's original
+bytes into the sandbox. Run a script with `sandbox_shell` to read or change the
+file:
+
+| File                                   | Installed tools                                                                                                        |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| PDF                                    | pypdf for pages, merging and writing; pdfplumber for text and tables; pdftotext for text; pdftoppm for rendering pages |
+| Word (.docx)                           | python-docx for reading, editing and writing documents                                                                 |
+| Excel (.xlsx)                          | openpyxl for reading, editing and writing workbooks; pandas for tabular data                                           |
+| PowerPoint (.pptx)                     | python-pptx for reading, editing and writing presentations                                                             |
+| CSV                                    | Python's csv module and pandas                                                                                         |
+| Images                                 | Pillow for reading, resizing, compositing and writing images                                                           |
+| Markdown, HTML and document conversion | pandoc, including DOCX input and output                                                                                |
+| Office rendering and conversion        | LibreOffice Writer, Calc and Impress with --headless, including PDF output                                             |
+
+For example, after copying a PDF to `/workspace/input.pdf` and a workbook to
+`/workspace/input.xlsx`, this Python script reads both and writes a DOCX:
+
+```python
+from pypdf import PdfReader
+from openpyxl import load_workbook
+from docx import Document
+
+document = Document()
+for page in PdfReader('/workspace/input.pdf').pages:
+    document.add_paragraph(page.extract_text() or '')
+workbook = load_workbook('/workspace/input.xlsx', read_only=True, data_only=True)
+for row in workbook.active.iter_rows(values_only=True):
+    document.add_paragraph(' | '.join('' if value is None else str(value) for value in row))
+workbook.close()
+document.save('/workspace/output.docx')
+```
+
+PDF text extraction needs a text layer; scanned pages need OCR. openpyxl reads
+cached formula results with `data_only=True`; it does not calculate formulas.
+`sandbox_read` returns text, so inspect binary output through a command or keep
+it in an app with `sandbox_ship`.
+
+To render an office file as PDF, use
+`libreoffice --headless --convert-to pdf --outdir /workspace/rendered /workspace/output.docx`.
+Fonts and layout can differ from the application that created the original.
 
 ## Files
 

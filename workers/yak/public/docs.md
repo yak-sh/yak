@@ -239,6 +239,14 @@ WebAssembly, a site built with Vite or Astro. `sandbox_write` puts a file in,
 `sandbox_ship` copies files into an app. Its files are temporary: only what
 `sandbox_ship` copied into an app is kept.
 
+Python includes pypdf and pdfplumber for PDFs, python-docx for Word, openpyxl
+for Excel, python-pptx for PowerPoint, pandas for CSV and tabular data, and
+Pillow for images. pandoc converts document formats, and poppler-utils extracts
+PDF text and renders pages. LibreOffice Writer, Calc and Impress run headless
+for office-file conversion and PDF output. Copy an attachment's original bytes
+in with `sandbox_write` and its attachment id, then read, edit or write the file
+with `sandbox_shell`.
+
 Deeper: <https://yaks.app/docs/sandbox.md> — the toolchains installed, how long
 files last, the network, the monthly compute time, and the `yak` CLI it is
 signed in with.

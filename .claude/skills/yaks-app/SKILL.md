@@ -188,14 +188,15 @@ outlasts the retries files under one bug per wording (defects.ts `defect`),
 whichever caller and deploy it names. The tracker's own deploy waits for its object
 (`workers/tracker/deploy.ts`).
 
-The same deploy carries two container images: the sandbox and the app
-compiler (`yak-esbuild`, a Worker in front of native esbuild, built from
-packages/esbuild by workers/yak/esbuild/Dockerfile). Workers Builds has Docker,
-so wrangler builds them, pushes them to Cloudflare's registry and rolls the
-containers out; nothing is pushed by hand. A push that changes packages/esbuild
-rolls the compiler out with it, and one that changes neither its Worker nor its
-image skips it (`wrangler.ts` `images`). A dry run that must not need Docker
-passes `--containers-rollout=none`.
+The sandbox names a prebuilt toolchain image in `sandbox/wrangler.toml`, tagged
+with `sandbox/base/Dockerfile`'s hash. Provision a changed image before landing
+its pin with `deno run -A workers/yak/sandbox/base.ts`; `DOCKER_HOST` can select
+a remote builder. Worker deploys build no sandbox image. The sandbox's `yak`
+downloads its CLI workspace from Worker assets on first use. The app compiler
+(`yak-esbuild`, built from packages/esbuild by workers/yak/esbuild/Dockerfile)
+is separate: a push that changes packages/esbuild rolls it out, and one that
+changes neither its Worker nor its image skips it (`wrangler.ts` `images`).
+A dry run that must not need Docker passes `--containers-rollout=none`.
 
 ## Inside a Durable Object
 
