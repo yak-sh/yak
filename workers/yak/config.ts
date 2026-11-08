@@ -374,13 +374,13 @@ let workersAi: Plug = {
 }
 
 // OpenAI, on the platform's key or through the account's AI Gateway on the
-// gateway's own token. The key is the "yaks.app images" project's, which may
+// gateway's own token. The default key is the "yaks.app images" project's, which may
 // use only the GPT Image models, so OpenAI answers an app's image asks and
 // refuses the rest; no gateway is set (wrangler.toml).
-let openai: Plug = {
+let openai = (key = 'OPENAI_API_KEY'): Plug => ({
   use: '@yaks/openai',
   with: {
-    key: { secret: 'OPENAI_API_KEY' },
+    key: { secret: key },
     base: { binding: 'OPENAI_API' },
     gateway: {
       account: { binding: 'CF_ACCOUNT' },
@@ -390,19 +390,26 @@ let openai: Plug = {
     web: false,
     images: false,
   },
-}
+})
 
 /** The model providers the platform's own layers are lent (providers.ts):
  * each a plugin exporting `./provider` (@yaks/model `ProviderFacet`), with
  * the options it is given. No layer imports one; it asks for a model by the
  * provider name it serves under. */
-export let providing: Config = {
+let supplied = (key: string): Config => ({
   plugins: [
     workersAi,
     { use: '@yaks/anthropic', with: { key: { secret: 'ANTHROPIC_API_KEY' } } },
-    openai,
+    openai(key),
   ],
-}
+})
+
+export let providing: Config = supplied('OPENAI_API_KEY')
+
+/** Operator conversations may use their own scoped key; image generation and
+ * apps retain the platform's existing provider configuration. */
+export let operatorProviders = (separate = false): Config =>
+  separate ? supplied('OPENAI_OPERATOR_API_KEY') : providing
 
 /** What the platform's own agents run on, each a model of a provider
  * `providing` names: the builder's provider, whose models `BUILDER_MODEL_FREE`
@@ -449,7 +456,7 @@ export let images = {
  * Worker holds that is no credential (a setting, a binding), carried as it
  * is. */
 export let serving: Config = {
-  plugins: [workersAi, '@yaks/openrouter', openai],
+  plugins: [workersAi, '@yaks/openrouter', openai()],
 }
 
 /** The embedders a store's vectors may be made by (embedding.ts): each a

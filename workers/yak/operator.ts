@@ -36,7 +36,7 @@ import {
 import { platform, ready, served } from './providers.ts'
 import { attachmentRows } from './operator-attachments.ts'
 import { attached, fileContext } from './operator-inputs.ts'
-import { agents, providing } from './config.ts'
+import { agents, operatorProviders } from './config.ts'
 import { inputSchemaOf } from '@yaks/tools/schema'
 import { CallError, invoke } from '@yaks/tools'
 import { loadTools, textSearch } from '@yaks/graph/tools'
@@ -443,7 +443,8 @@ export let platformBug = (ctx: Ctx, space: Space): Tool => ({
  * without the key GLM on Workers AI. `OPERATOR_MODEL` and
  * `OPERATOR_DELEGATE` name other models of the provider chosen. */
 export let operatorChoice = (env: Env) => {
-  let chosen = agents.operator.find((c) => ready(env, c.provider, providing)) ??
+  let config = operatorProviders(!!env.OPENAI_OPERATOR_API_KEY)
+  let chosen = agents.operator.find((c) => ready(env, c.provider, config)) ??
     agents.operator.at(-1)!
   return {
     provider: chosen.provider,
@@ -840,7 +841,8 @@ export let operating = (
   let implementations = {
     ...options.model
       ? { [provider]: options.model }
-      : served(env, () => platform(env)),
+      : served(env, () =>
+        platform(env), operatorProviders(!!env.OPENAI_OPERATOR_API_KEY)),
     ...options.providers,
   }
   let reads = async (model?: string, from?: string) => {

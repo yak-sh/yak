@@ -280,6 +280,9 @@ export type Env = {
   AI_GATEWAY?: string
   AI_GATEWAY_TOKEN?: string
   OPENAI_API_KEY?: string
+  // Optional key scoped to OpenAI text models for Operator conversations.
+  // The shared OPENAI_API_KEY remains the image service's credential.
+  OPENAI_OPERATOR_API_KEY?: string
   OPENAI_API?: string
   BUILDER_MODEL_FREE?: string
   BUILDER_MODEL_PAID?: string
