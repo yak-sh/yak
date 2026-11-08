@@ -1,7 +1,7 @@
 import { short } from '@yaks/id'
 import { test } from '@yaks/testing'
 import type { Binding } from '@yaks/cloudflare-mail'
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { Item, Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
@@ -15,8 +15,9 @@ import { arrived } from './inbox.ts'
 import type { Inbound } from './env.ts'
 
 // A person asks their Operator to write to someone for them: a fork sends the
-// letter from the Operator's own address with them copied, and the reply
-// comes back into their one conversation (T-137908).
+// letter from the Operator's own address with them copied, and the reply is
+// answered in its writer's own conversation, with only their permissions,
+// and told in the person's (T-137908, D-151808).
 let { env } = platform('operator-mail')
 let dir = directoryOf(env.STORE)
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
@@ -77,7 +78,7 @@ let service = operatorService(
           text: 'Does Tuesday at 3 work for his checkup?',
         })
       : said(req, /By email from alvarez/)
-      ? reply('Dr Alvarez says Tuesday at 3 works.')
+      ? reply('Thank you; I will tell Jeff.')
       : said(req, /Asked Dr Alvarez/)
       ? reply('I asked Dr Alvarez; I will tell you what they say.')
       : last?.kind == 'result'
@@ -133,8 +134,12 @@ await service.drain()
 let [replied] = await store.g.get([request])
 let asking = replied.operator_request as Record<string, unknown>
 let root = await conversationOf(store, '/at', rootOf(eid, person))
+let writer = (await dir.personAt('alvarez@clinic.example'))!
+let theirs = await conversationOf(store, '/at', rootOf(eid, writer))
 let meter = (await dir.at(eid))!.meter!.emails
-let afterReply = letters.length
+let answeredBack = letters.find((l) =>
+  l.to == 'alvarez@clinic.example' && l.text?.includes('Thank you')
+)!
 
 // Writing back in the same thread.
 let ctx = await operatorContext(env, held, space)
@@ -168,21 +173,36 @@ test("a fork's letter goes from the Operator's own address to its recipient, wit
   assertStringIncludes(ofFork.html, 'Emailed Dr Alvarez')
 })
 
-test("a reply to the letter comes back into the person's conversation as its writer's words, and is counted", () => {
-  assertEquals(asking.person, person)
+test("a reply to the letter is answered in its writer's own conversation and in its thread, told in the person's, and counted", () => {
+  assert(writer && writer != person)
+  assertEquals(asking.person, writer)
   assertEquals(asking.channel, 'letter')
+  assertEquals(asking.about, kept.entity.eid)
   assertEquals(
     (replied.mail as Record<string, unknown>).reply_to,
     kept.entity.eid,
   )
-  assertEquals(asking.session, rootOf(eid, person))
-  assertStringIncludes(root.html, 'title="A reply to a letter"')
-  assertEquals(root.html.includes('replying to your letter'), false)
+  assertEquals(asking.session, rootOf(eid, writer))
+  assertStringIncludes(theirs.html, 'Tuesday at 3 works for us.')
+  assertStringIncludes(theirs.html, 'Thank you; I will tell Jeff.')
+  assertEquals(answeredBack.to, 'alvarez@clinic.example')
+  assertEquals(answeredBack.subject, 'Re: Checkup on Tuesday')
+  assertEquals(answeredBack.headers?.['In-Reply-To'], '<alvarez-1>')
+  assertStringIncludes(answeredBack.text!, 'Thank you; I will tell Jeff.')
+  assertEquals(answeredBack.cc, undefined)
+  assertStringIncludes(
+    root.html,
+    'A reply to a letter: alvarez@clinic.example replied',
+  )
   assertStringIncludes(root.html, 'Tuesday at 3 works for us.')
-  assertStringIncludes(root.html, 'Dr Alvarez says Tuesday at 3 works.')
-  // Nothing went back to Dr Alvarez but what the Operator sent.
-  assertEquals(afterReply, 1)
-  assertEquals(meter, 2)
+  assertEquals(root.html.includes('Thank you; I will tell Jeff.'), false)
+  // The letter, its reply, the answer, and Jeff's alert of the reply.
+  assertEquals(
+    letters.filter((l) => l.to == 'jeff@example.com')
+      .some((l) => l.text?.includes('replied to the letter you sent them')),
+    true,
+  )
+  assertEquals(meter, 4)
 })
 
 test('a letter answering the reply threads on it and keeps its subject', () => {

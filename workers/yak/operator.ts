@@ -53,12 +53,15 @@ import {
   directory,
   directoryOf,
   type Reach,
+  type Role,
   type Space,
 } from './directory.ts'
 import * as directoryPart from './directory.ts'
 import { copyOf } from './directory-copy.ts'
 import { narrowed } from './grants.ts'
 import { reachOf } from './operator-reach.ts'
+import { seenBy } from './operator-access.ts'
+import { writes } from '@yaks/member'
 import { inReach } from './declared.ts'
 import { connected, reaching } from './agent.ts'
 import { coded } from './agent-code.ts'
@@ -149,9 +152,14 @@ export let operatorContext = async (
   held: Pick<Held, 'person' | 'administrative'>,
   space: Space,
   open: () => Directory = opening(env),
-  reach: ReturnType<typeof reachOf> = reachOf(open(), space, held.person),
-): Promise<Ctx & { pa: boolean; beyond: Reach[] }> => {
-  let { pa, beyond } = await reach
+  reach: ReturnType<typeof reachOf> = reachOf(
+    open(),
+    space,
+    held.person,
+    held.administrative,
+  ),
+): Promise<Ctx & { role: Role | null; pa: boolean; beyond: Reach[] }> => {
+  let { role, pa, beyond } = await reach
   let reopen = () =>
     narrowed(open(), space.slug, space.eid, held.administrative, beyond)
   return {
@@ -159,6 +167,7 @@ export let operatorContext = async (
     dir: reopen(),
     reopen,
     person: held.person,
+    role,
     pa,
     beyond,
     who: {
@@ -207,6 +216,11 @@ let told = (
     }. Name the space, or the app as space/app, to work in one of them.`
     : ''
 
+// What the Operator is told when the person it is talking with has no seat
+// in its space to write with: it has only their permissions.
+let outside = (space: Space) =>
+  `The person you are talking with is not a member of ${space.slug}: you have only their permissions, so you see none of the space's apps, rows, conversations or memories, and you can do for them only what they could do themselves. Answer what they ask from what they tell you, and say plainly when something needs one of the space's people.`
+
 // What the Operator reads of itself: its own store, where each conversation
 // and every entry in it, its forks and helpers, its memories, its persona and
 // its tasks and requests are kept. The generic reads take `self` to read it
@@ -250,23 +264,30 @@ let BULK: Record<string, string> = {
 export let operatorRoster = async (
   ctx: Ctx,
   work: Store,
-  { space, tasked = false }: { space: string; tasked?: boolean },
+  { space, tasked = false, member = true }: {
+    space: string
+    tasked?: boolean
+    member?: boolean
+  },
 ): Promise<Tool[]> => {
   ctx.dir = ctx.reopen!()
   let reach = reached('reach', await inReach(ctx))
   let g = reached('vocab', await reaching(ctx, reach))
   // A tool's answer in words is the call's own, as at the connector's door:
-  // only what it wrote for an app goes on to the app (ledger.ts).
+  // only what it wrote for an app goes on to the app (ledger.ts). The
+  // Operator's own store is read as the person reads it, and only by someone
+  // who writes in the space: its memories, tasks and conversations are the
+  // space's work, none of a stranger's business (D-151808).
   let landing = ledger(g)
+  let self = seenBy(work.g, ctx.person)
   let own = new Map(
-    [
-      ...listing({
-        graph: work.g,
-        search: textSearch(work.g),
-      }),
-      ...loadTools([memoryDoc], memoryRuns()),
-      ...loadTools([taskDoc], taskRuns()),
-    ].map(namedTool).map((t) => [t.name, t]),
+    member
+      ? [
+        ...listing({ graph: self, search: textSearch(self) }),
+        ...loadTools([memoryDoc], memoryRuns()),
+        ...loadTools([taskDoc], taskRuns()),
+      ].map(namedTool).map((t) => [t.name, t])
+      : [],
   )
   let run =
     (t: NamedTool, host: Graph, target: Graph): Tool['run'] =>
@@ -336,10 +357,10 @@ export let operatorRoster = async (
     .filter((t) => !ownNamed.has(t.name))
   return [
     ...apps.map((t): Tool => {
-      let self = own.get(t.name)
+      let ours = own.get(t.name)
       let there = run(t, g, landing)
-      if (!self) return { ...shaped(t), run: there }
-      let here = run(self, work.g, work.g)
+      if (!ours) return { ...shaped(t), run: there }
+      let here = run(ours, self, self)
       let tool = shaped(t)
       return {
         ...tool,
@@ -360,7 +381,7 @@ export let operatorRoster = async (
         t.name == 'decision_new'
       )
       .map((t) => {
-        let tool = { ...shaped(t), run: run(t, work.g, work.g) }
+        let tool = { ...shaped(t), run: run(t, self, self) }
         if (t.name == 'task_update') {
           return { ...tool, description: t.description + ON_TASK }
         }
@@ -561,7 +582,7 @@ let working = async (
   // and the step's later asks are answered from these (lib/hops.ts
   // `recall`).
   let dir = reading()
-  let reach = reachOf(dir, { eid: o.space }, o.person)
+  let reach = reachOf(dir, { eid: o.space }, o.person, o.administrative)
   let apps = o.administrative ? undefined : dir.reachable(o.person)
   for (let asked of [reach, apps]) asked?.catch(() => {})
   let space = await (open?.() ?? directoryOf(env.STORE)).at(o.space)
@@ -811,7 +832,7 @@ export let operating = (
   // space through their reach, as their graph_query reads it, or over this
   // store (operator-subscriptions.ts).
   let watching: Watching = async (ask, query, mine) => {
-    if (mine) return await g.read(query)
+    if (mine) return await seenBy(g, ask.person).read(query)
     let space = await dir().at(ask.space)
     if (!space || space.trashed) throw refuse('missing', 'That space is gone.')
     let ctx = await operatorContext(
@@ -1183,7 +1204,10 @@ export let operating = (
   }
 
   // The tools a session of this Operator is offered beside its own: the
-  // person's apps through their reach, and the Operator's own doors.
+  // person's apps through their reach, and the Operator's own doors. Every
+  // one of them is the person's to have: the doors that text, mail, wake,
+  // watch, draw, report, and reach their Google are the space's work, offered
+  // to someone who writes in it and to nobody else (D-151808).
   let roster = async (session: string): Promise<Tool[]> => {
     let [{ space, ctx, files }, task, [row], [using]] = await Promise.all([
       working(env, store, session, options.directory),
@@ -1202,10 +1226,13 @@ export let operating = (
     // The platform admin's sessions also read the platform: who they are is
     // read through the whole directory, which the Operator's is not.
     let whole = (options.directory ?? opening(env))()
+    let member = writes(ctx.role)
     let [roster, google, platform] = await Promise.all([
-      operatorRoster(ctx, store, { space: space.eid, tasked: !!task })
+      operatorRoster(ctx, store, { space: space.eid, tasked: !!task, member })
         .then((r) => reached('roster', r)),
-      googleTools(env, ctx, space).then((t) => reached('google', t)),
+      member
+        ? googleTools(env, ctx, space).then((t) => reached('google', t))
+        : [],
       admin({ dir: whole, person: ctx.person! }),
     ])
     return [
@@ -1220,16 +1247,20 @@ export let operating = (
         ]
         : [],
       ...roster,
-      platformBug(ctx, space),
-      textSend(env, ctx, space),
-      notificationSend(ctx, space, store),
-      mailSend(env, ctx, space, store),
-      phoneSend(env, ctx, space, store),
-      phoneNumbers(env, ctx, space, store),
-      imageNew(env, space),
-      ...wakeTools(store, space),
-      ...subscriptionTools(store, space, watching),
-      ...google,
+      ...member
+        ? [
+          platformBug(ctx, space),
+          textSend(env, ctx, space),
+          notificationSend(ctx, space, store),
+          mailSend(env, ctx, space, store),
+          phoneSend(env, ctx, space, store),
+          phoneNumbers(env, ctx, space, store),
+          imageNew(env, space),
+          ...wakeTools(store, space),
+          ...subscriptionTools(store, space, watching),
+          ...google,
+        ]
+        : [],
       ...platform ? adminTools(env, whole) : [],
       ...options.tools?.(ctx, files) ?? [],
       ...options.browsers
@@ -1268,6 +1299,7 @@ export let operating = (
         if (!o) return {}
         if (!args.topic) return { operator_session: o }
         let { ctx } = await working(env, store, parent, options.directory)
+        if (!writes(ctx.role)) return { operator_session: o }
         let topic = await oracleTopic(ctx, g, String(args.topic))
         await oracleContext(ctx, g, topic)
         return {
@@ -1284,6 +1316,8 @@ export let operating = (
           g.read(`.entity.eid=${session}&.fields=session.topic`),
         ])
         let topic = topicOf(row)
+        // Someone who does not write in the space is told none of its work.
+        if (!writes(ctx.role)) return reached('instructions', outside(space))
         let [map, google] = await Promise.all([
           topic ? oracleContext(ctx, g, topic) : oracleMap(ctx, g),
           googleTold(env, ctx, space),

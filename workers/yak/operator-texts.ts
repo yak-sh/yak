@@ -20,7 +20,8 @@ import { directoryOf, type Space } from './directory.ts'
 import { caught } from './defects.ts'
 import { fault } from './unseen.ts'
 import { mint } from './signin.ts'
-import { meta } from './meta.ts'
+import { KERNEL, meta } from './meta.ts'
+import { derivedEid } from '@yaks/graph/identity'
 import { onceLink, relink } from './link.ts'
 import { apex } from './host.ts'
 import { countedTexts } from './meter.ts'
@@ -165,6 +166,24 @@ export let spaceFor = async (
   return (seats.find((s) => s.own) ?? seats[0])?.space ?? null
 }
 
+/**
+ * The person wearing `number`, minted wearing it when nobody does: someone
+ * answering a text an Operator sent for a person (operator-line.ts
+ * `lineArrived`), talked with in their own conversation with only their
+ * permissions (D-151808). They agreed to no texts from yaks.app and are given
+ * no space; texting the platform's number signs them up as it would anyone
+ * (`arrived`).
+ */
+export let phonedIn = async (env: Env, number: string) => {
+  let known = await directoryOf(env.STORE).phoned(number)
+  if (known) return known
+  let person = derivedEid('phoned|' + number)
+  await meta(env).apply([
+    { entity: { eid: person }, person: {}, phone: { number } },
+  ], KERNEL)
+  return person
+}
+
 // A text's pictures, kept as an email's attachments are.
 let pictures = async (env: Env, space: Space, arrival: Arrival) => {
   let { keepFile } = await import('./operator-channels.ts')
@@ -194,13 +213,14 @@ let pictures = async (env: Env, space: Space, arrival: Arrival) => {
 // back, and they are a person wearing the number with their own space
 // (identity.ts `textedIn`). A number that is no US mobile, an RCS sender and
 // a text with no words sign nobody up.
-let signedUp = async (env: Env, arrival: Arrival) => {
+let signedUp = async (env: Env, arrival: Arrival, person?: string) => {
   let number = mobile(arrival.from)
   if (env.TEXT_SIGNUP != 'on' || arrival.rcs || !number) return null
   if (!arrival.text.trim()) return null
   if (arrival.to != await (await phoneOf(env)).from()) return null
   let { textedIn } = await import('./identity.ts')
-  return (await textedIn(env, number, arrival.text.trim(), arrival.at)).person
+  return (await textedIn(env, number, arrival.text.trim(), arrival.at, person))
+    .person
 }
 
 /**
@@ -209,8 +229,8 @@ let signedUp = async (env: Env, arrival: Arrival) => {
  * START gives it again, and both and HELP are answered in the campaign's
  * words; anything else from a person who agreed to texts is a request to
  * their space's Operator, which answers by text. A text from a number
- * nobody wears signs its sender up when that is switched on (`signedUp`),
- * and is not read otherwise.
+ * nobody with a space wears signs its sender up when that is switched on
+ * (`signedUp`), and is not read otherwise.
  */
 export let arrived = async (
   env: Env,
@@ -258,8 +278,13 @@ export let arrived = async (
     }
     return reply(REPLIES.start)
   }
-  if (!person && (person = await signedUp(env, arrival))) {
-    texting = await dir.texting(person)
+  // Someone who only ever answered a text an Operator sent for a person
+  // wears the number with no space and no consent (`phonedIn`), and signs up
+  // as a stranger would. A person who said STOP keeps their space and is not
+  // signed up again.
+  if (!texting && !(person && (await dir.seats(person)).length)) {
+    let signed = await signedUp(env, arrival, person ?? undefined)
+    if (signed) texting = await dir.texting(person = signed)
   }
   if (!person || !texting) return
   if (!arrival.text.trim() && !arrival.media.length) return

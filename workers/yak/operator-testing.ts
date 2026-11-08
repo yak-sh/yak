@@ -84,7 +84,8 @@ export let operatorService = (env: Env, held: Held, options: Options) => {
     assertEquals(req.method, 'POST')
     assertEquals(req.headers.get('x-space-eid'), held.space)
     let path = new URL(req.url).pathname
-    // A reply to the Operator's letter, which the kernel brings for nobody.
+    // A reply to the Operator's letter, which the kernel brings for its
+    // writer.
     if (req.headers.get('x-yak-kernel') == '1') {
       if (path.startsWith('/result/')) {
         let { resultRequest } = await import('./result-host.ts')
@@ -102,6 +103,7 @@ export let operatorService = (env: Env, held: Held, options: Options) => {
         path,
         await req.json(),
         () => undefined,
+        req.headers.get('x-yak-person'),
       )
     }
     assertEquals(req.headers.get('x-yak-person'), held.person)

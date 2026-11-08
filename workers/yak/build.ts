@@ -522,6 +522,7 @@ export class Builder {
             url.pathname,
             await request.json(),
             () => this.#arming,
+            request.headers.get('x-yak-person'),
           )
         }
         return await this.#operate(request)

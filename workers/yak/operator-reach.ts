@@ -5,26 +5,37 @@
 // that role for whoever may ask it at home. The Operator on a person's own
 // space (`member.own`) is their PA (T-136141): every space they sit in lets it
 // in, with their role there. Either way the Operator's directory is narrowed
-// to its space and these (grants.ts `narrowed`).
+// to its space and these (grants.ts `narrowed`). An Operator has only the
+// permissions of the person it is talking with (D-151808): what another space
+// let it into is for whoever writes at home, and someone with no seat here
+// reaches none of it.
+import { writes } from '@yaks/member'
 import type { Directory, Reach, Role, Space, Walk } from './directory.ts'
 import { refuse } from './tool.ts'
 
 let RANK: Role[] = ['viewer', 'editor', 'owner']
 
-/** The spaces this space's Operator reaches for this person, its own left
- * out, and whether it is their PA. Where a seat and an `operator_reach` row
- * both let it into one space, the greater role stands. The space is named by
- * its eid, or by a walk to it (directory.ts `Walk`). */
+/** The person's role in this space (null with no seat; the platform's
+ * admin, `over` it, is its owner), the spaces this space's Operator reaches
+ * for them, its own left out, and whether it is their PA. Where a seat and an
+ * `operator_reach` row both let it into one space, the greater role stands;
+ * neither is anyone's who does not write here. The space is named by its
+ * eid, or by a walk to it (directory.ts `Walk`). */
 export let reachOf = async (
   dir: Directory,
   space: Pick<Space, 'eid'> | Walk,
   person: string,
-): Promise<{ pa: boolean; beyond: Reach[] }> => {
+  over = false,
+): Promise<{ role: Role | null; pa: boolean; beyond: Reach[] }> => {
   let [seats, granted, eid] = await Promise.all([
     person ? dir.seats(person) : [],
     dir.reaches('path' in space ? space : space.eid),
     space.eid,
   ])
+  let role = over
+    ? 'owner'
+    : seats.find((s) => s.space.eid == eid && !s.space.trashed)?.role ?? null
+  if (!writes(role)) return { role, pa: false, beyond: [] }
   let pa = seats.some((s) => s.own && s.role == 'owner' && s.space.eid == eid)
   let all = new Map<string, Reach>()
   let add = (r: Reach) => {
@@ -39,6 +50,7 @@ export let reachOf = async (
   }
   all.delete(eid)
   return {
+    role,
     pa,
     beyond: [...all.values()].filter((r) => !r.space.trashed),
   }

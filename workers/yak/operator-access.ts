@@ -1,3 +1,5 @@
+import type { Graph, ReadOpts } from '@yaks/graph'
+import { absent, and, eq, or } from '@yaks/query/core'
 import type { Held } from './build-door.ts'
 import type { operatorStore } from './operator-store.ts'
 
@@ -76,4 +78,54 @@ let sessionsIn = async (store: Store, task: string) => {
 export let owns = async (store: Store, open: string, who: Owner) => {
   let owner = await ownerOf(store, open)
   return !!owner && owner.person == who.person && owner.space == who.space
+}
+
+// What a person owns in the Operator's store, by the component that names
+// them: their conversations and the sessions working for them, their
+// requests, the wake-ups and subscriptions they set, the letters and texts
+// sent for them, what they were told, and their drafts.
+const OWNED: [string, string][] = [
+  ['operator_session', 'person'],
+  ['operator_request', 'person'],
+  ['operator_ask', 'person'],
+  ['operator_letter', 'person'],
+  ['operator_text', 'person'],
+  ['deliver', 'to'],
+  ['draft', 'by'],
+]
+// And what is theirs by what it hangs on: a helper's session by the session
+// it works for, an entry by its session, the files that came with a request
+// by the request.
+const ON = [
+  'spawned.parent.',
+  'entry.session.',
+  'entry.session.spawned.parent.',
+  'operator_files.request.',
+]
+
+// The entities `person` may read: each names nobody else as its owner, here
+// or on what it hangs on.
+let theirs = (person: string) =>
+  and(
+    ...['', ...ON].flatMap((at) =>
+      OWNED.map(([name, by]) =>
+        or(absent(`${at}${name}`), eq(`${at}${name}.${by}`, person))
+      )
+    ),
+  )
+
+/** The Operator's store as `person` reads it: what is another person's
+ * there is out of sight, wherever a read reaches it from. The memories, tasks
+ * and persona nobody owns stay in view. Only its reads are narrowed; a write
+ * goes to the store as it stands. */
+export let seenBy = (g: Graph, person: string): Graph => {
+  let visibility = { entity: theirs(person) }
+  let narrow = (opts?: ReadOpts): ReadOpts => ({ ...opts, visibility })
+  return {
+    ...g,
+    read: (query, opts) => g.read(query, narrow(opts)),
+    rows: (query, opts) => g.rows(query, narrow(opts)),
+    get: (eids, comps, opts) => g.get(eids, comps, narrow(opts)),
+    view: (query, opts) => g.view(query, narrow(opts)),
+  }
 }

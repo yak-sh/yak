@@ -85,13 +85,13 @@ let seat = (person: string) => ({
 await dir.apply({
   entities: [{ entity: { eid: bea }, person: {} }, seat(bea), seat(ada.person)],
 }, { 'x-yak-person': carl.person, 'x-yak-role': 'owner' })
-let reach = async () => {
-  let ctx = await operatorContext(env, { person: bea }, shopSpace)
+let reach = async (person = bea) => {
+  let ctx = await operatorContext(env, { person }, shopSpace)
   let there = await ctx.dir.space(books)
   return {
     there: there?.slug ?? null,
-    role: there && await ctx.dir.role(there, bea),
-    apps: (await ctx.dir.reachable(bea)).map((r) => r.app.slug),
+    role: there && await ctx.dir.role(there, person),
+    apps: (await ctx.dir.reachable(person)).map((r) => r.app.slug),
     writes: await TOOLS.find((t) => t.name == 'app_new')!
       .run(ctx, { space: books, slug: 'notes', title: 'Notes' })
       .then(() => 'wrote', (e: Error) => e.message),
@@ -103,6 +103,8 @@ let offered = await (await page(people)).text()
 let letIn = await page(people, { operator: shop, role: 'viewer' })
 let listed = await (await page(people)).text()
 let during = await reach()
+// Someone with no seat in the shop, talking with its Operator.
+let outsider = await reach(crypto.randomUUID())
 let stranger = await page(people, { operator: 'nobody-here', role: 'editor' })
 let { eid } = shopSpace
 let out = await page(people, { unreach: eid })
@@ -122,6 +124,12 @@ test('let in from the People page, it works there with the role given, for a wri
   assertEquals(during.role, 'viewer')
   assertEquals(during.apps, ['list'])
   assertStringIncludes(during.writes, `not a writer of ${books}`)
+})
+
+test('someone with no seat at home reaches nothing the Operator was let into', () => {
+  assertEquals(outsider.there, null)
+  assertEquals(outsider.apps, [])
+  assertStringIncludes(outsider.writes, 'does not open that space')
 })
 
 test('only a space its owner sits in is let in, and Remove takes it back out', async () => {

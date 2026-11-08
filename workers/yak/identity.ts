@@ -752,9 +752,10 @@ export let joined = async (
 
 /**
  * Signing up by a text to the platform's number (operator-texts.ts,
- * D-136811): the same sign-up, for a number nobody wears. The person is minted
- * wearing it, with the words they sent kept as their consent to be texted
- * back (`sms_consent`, in one write with them, so no person is left with a
+ * D-136811): the same sign-up, for a number nobody wears, or worn by someone
+ * who has no space and agreed to no texts (operator-texts.ts `phonedIn`).
+ * The person is minted wearing it where nobody does, with the words they sent
+ * kept as their consent to be texted back (`sms_consent`, in one write with them, so no person is left with a
  * number and no consent), whoever's invite those words carry credited, and
  * given their own space.
  */
@@ -763,8 +764,8 @@ export let textedIn = async (
   number: string,
   consent: string,
   at: string,
+  person: string = crypto.randomUUID(),
 ) => {
-  let person = crypto.randomUUID()
   await meta(env).apply([
     { entity: { eid: person }, person: {}, phone: { number } },
     {

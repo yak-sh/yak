@@ -59,7 +59,7 @@ import {
 } from './directory.ts'
 import { bound, type Env, type Inbound } from './env.ts'
 import { signupAddress, url } from './host.ts'
-import { KERNEL, metaOf } from './meta.ts'
+import { KERNEL, meta, metaOf } from './meta.ts'
 import { mailedTo, mailFrom } from './post.ts'
 import { counted } from './meter.ts'
 import { ARRIVAL } from './config.ts'
@@ -323,8 +323,11 @@ let threadOf = (m: Inbound) =>
   ].map((id) => id.replace(/[<>]/g, '').trim()).filter(Boolean)
 
 // A reply to a letter the Operator wrote for a person (operator-channels.ts
-// `mailSend`), from whoever it went to: the kernel brings it to that person's
-// conversation, as the writer's words (operator-host.ts `operatorReply`).
+// `mailSend`), from whoever it went to: the kernel brings it to the writer's
+// own conversation, as the platform's person at their address, with only
+// their permissions, and the person it was written for is told
+// (operator-host.ts `operatorReply`). A machine's reply (an auto-responder, a
+// bounce) is only told: answering it could answer forever.
 let replied = async (
   m: Inbound,
   env: Env,
@@ -350,6 +353,9 @@ let replied = async (
     throw new Error('Operator letter lookup failed: ' + await found.text())
   }
   let { letter } = await found.json() as { letter: string }
+  let machine = automated(from) ||
+    !/^(no)?$/i.test((m.headers.get('auto-submitted') ?? '').trim())
+  let { personOf } = await import('./signin.ts')
   return await asked(
     m,
     env,
@@ -357,6 +363,7 @@ let replied = async (
     '/operator/replied',
     {
       'x-yak-kernel': '1',
+      ...machine ? {} : { 'x-yak-person': await personOf(meta(env), from) },
     },
     { reply: letter },
     { address: from, thread },

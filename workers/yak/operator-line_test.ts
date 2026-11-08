@@ -157,6 +157,8 @@ let said = (r: Request, words: RegExp) => {
   let last = r.items.at(-1)
   return last?.kind == 'user' && words.test(last.text)
 }
+// What the writer of a text back is offered, in their own conversation.
+let offered: Request['tools'] = []
 let service = operatorService(
   env,
   held,
@@ -172,7 +174,7 @@ let service = operatorService(
           text: 'Does Tuesday at 3 work for his checkup?',
         })
       : said(req, /By text from \+12695550142/)
-      ? reply('Dr Alvarez says Tuesday at 3 works.')
+      ? (offered = req.tools, reply('Thank you; I will tell Jeff.'))
       : said(req, /Texted Dr Alvarez/)
       ? reply('I texted Dr Alvarez; I will tell you what they say.')
       : last?.kind == 'result'
@@ -245,6 +247,12 @@ let answered = await texted('77', '2695550142', 'Tuesday at 3 works for us.')
 let stranger = await texted('78', '2695550199', 'Are we still on for golf?')
 await service.drain()
 let root = await conversationOf(store, '/at', rootOf(eid, person))
+let writer = (await dir.phoned('+12695550142'))!
+let theirs = await conversationOf(store, '/at', rootOf(eid, writer))
+let answeredBack = of('sendSMS').find((t) =>
+  t.get('message')?.startsWith('Thank you')
+)!
+let [update] = await store.g.read(`.deliver.to=${person}&*`)
 
 // And no longer: its callback goes back to the church's own.
 await setting({ number: 'Church line', inbound: false })
@@ -398,14 +406,32 @@ test('a helper is listed as one, and the step that started it opens its conversa
   assertEquals(link(admin.html), `/admin/x/operator/${helper}`)
 })
 
-test("a text back comes into the person's conversation as its writer's words; anyone else's stays theirs", async () => {
+test("a text back is answered in its writer's own conversation, with only their permissions, and told to the person it was sent for; anyone else's stays theirs", async () => {
   assertEquals([answered.status, await answered.text()], [200, 'ok'])
   assertEquals([stranger.status, await stranger.text()], [200, 'ok'])
-  assertStringIncludes(root.html, 'title="A reply to a text"')
-  assertStringIncludes(root.html, '</span>Tuesday at 3 works for us.')
-  assertEquals(root.html.includes('replying to your text'), false)
-  assertStringIncludes(root.html, 'Dr Alvarez says Tuesday at 3 works.')
-  assert(!root.html.includes('golf'))
+  assert(writer && writer != person)
+  assertStringIncludes(theirs.html, 'Tuesday at 3 works for us.')
+  assertStringIncludes(theirs.html, 'Thank you; I will tell Jeff.')
+  let names = offered.map((t) => t.name)
+  for (let door of ['phone_send', 'text_send', 'mail_send', 'memory_recall']) {
+    assertEquals(names.includes(door), false, door)
+  }
+  // Its reads reach none of the Operator's own conversations.
+  assert(!JSON.stringify(offered).includes('your conversations'))
+  assertEquals(answeredBack.get('did'), '2695550111')
+  assertEquals(answeredBack.get('dst'), '2695550142')
+  assertEquals(
+    answeredBack.get('message'),
+    `Thank you; I will tell Jeff.\n\n${textedFor(space, 'Jeff Peterson')}`,
+  )
+  assertStringIncludes(root.html, 'A reply to a text: +12695550142 replied')
+  assertStringIncludes(root.html, 'Tuesday at 3 works for us.')
+  assertEquals(root.html.includes('Thank you; I will tell Jeff.'), false)
+  assertStringIncludes(
+    String((update.doc as { body: string }).body),
+    '+12695550142 replied to the text you sent them: Tuesday at 3 works',
+  )
+  assert(!root.html.includes('golf') && !theirs.html.includes('golf'))
   assertEquals(forged.status, 403)
 })
 
