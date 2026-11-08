@@ -107,6 +107,12 @@ ran, which is not an assertion.
 - A helper that stands in for a door behaves like the door. One that skips a
   header or a check the door sends lets the test pass where production fails: a
   store called without its access-mode header once read every app as public.
+- A batching test establishes that its inputs arrived before the work starts;
+  nearby calls alone do not establish that ordering. Await their intake and,
+  for the effects pool, use `fx.work(g, undefined, { passes: 1 })` to settle
+  that intake batch before draining the work it owes. A fixture's sockets and
+  timers belong in `cleanup()`, so a failed assertion closes them too: a stray
+  timeout can otherwise fail whichever later test is running when it fires.
 - An optional driver method changes which path existing helpers choose.
   @yaks/sql's `run` returns an affected count; `query` executes commands too.
   Follow counted writes and resultless batches through their consumers: fewer

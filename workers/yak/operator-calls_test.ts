@@ -1,7 +1,7 @@
 // Calling the Operator (operator-calls.ts): whom a ring on the platform's
 // number answers, the stream door's refusals, the `voice` channel, and one
 // call's conversation with its line, speech and Operator stood in for.
-import { clock, equal, test, until } from '@yaks/testing'
+import { cleanup, clock, equal, test, until } from '@yaks/testing'
 import { CallError } from '@yaks/tools'
 import { line } from '@yaks/telnyx'
 import { consentEid } from '@yaks/phone'
@@ -415,6 +415,10 @@ let calling = (
   })
   let frame = (f: object) =>
     on.message.forEach((h) => h({ data: JSON.stringify(f) }))
+  cleanup(() => {
+    frame({ event: 'stop' })
+    return call.ended
+  })
   let played = () => sent.filter((s) => JSON.parse(s).event == 'media').length
   return {
     call,
@@ -1037,9 +1041,10 @@ test("a call's turns answered together, and the helper they start, are each said
   // As on Jeff's call of 2026-11-05: a request, and a fragment of the next
   // heard before the Operator took the first, so one turn answers both.
   let turn = 0
+  let received: Promise<string>[] = []
   let c = calling(undefined, {
-    ask: (text) =>
-      receive(
+    ask: (text) => {
+      let request = receive(
         store,
         {
           space: space.eid,
@@ -1052,7 +1057,9 @@ test("a call's turns answered together, and the helper they start, are each said
         text,
         { id: requestId(space.eid, `telnyx:c1:${++turn}`) },
       )
-        .then(() => {}),
+      received.push(request)
+      return request.then(() => {})
+    },
   })
   handleChannels(operator, env, {
     voice: (_, answer) => {
@@ -1062,9 +1069,12 @@ test("a call's turns answered together, and the helper they start, are each said
   })
   c.told().end('Can you add a random recipe to my recipe box?')
   c.told().end('I.')
+  await Promise.all(received)
+  // Accept both inputs before running the model: retaining their original
+  // text is asynchronous, so intake can otherwise finish on separate turns.
+  await store.fx.work(store.g, undefined, { passes: 1 })
   await drain(store)
-  await until(() => c.said.length == 3)
-  await new Promise((ok) => setTimeout(ok, 20))
+  await until(() => c.played() >= 3)
   equal(c.said, [
     HI,
     'Adding a recipe now.',
