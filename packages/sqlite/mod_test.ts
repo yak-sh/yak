@@ -1,7 +1,7 @@
 // The store as a whole: bound to a driver and a vocabulary, it installs its
 // schema and speaks bundles — a write in, a read out, over one round trip.
 
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -358,25 +358,34 @@ test('a bundle written and read back is the same entity', () => {
   assertEquals((p.product as Record<string, unknown>).status, 'live')
 })
 
-test('only contention before a write transaction starts is retryable', () => {
+test('only contention before a write transaction starts is retryable', async () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yaks-contention-' })
   let first = open(`${dir}/graph.sqlite`)
   let a = storage(first, shop)
   a.install()
   let second = open(`${dir}/graph.sqlite`)
   try {
-    second.query({ t: 'pragma', name: 'busy_timeout', value: 0 })
-    let b = storage(second, shop), ran = false
-    a.tx(() => {
-      let failure = assertThrows(() => b.tx(() => ran = true), Error)
+    let time = clock()
+    let b = storage(second, shop, { clock: time }), ran = 0
+    let { pending } = await a.tx(() => {
+      let failure = assertThrows(
+        () => b.tx(() => ++ran, { wait: false }),
+        Error,
+      )
       assertEquals('retryable' in failure && failure.retryable, true)
-      assertEquals(ran, false)
+      assertEquals(ran, 0)
+      let pending = b.tx((tx) => {
+        ran++
+        tx.patch([{ entity: { eid: 'kept' }, doc: { title: 'answer' } }])
+        return 42
+      })
+      assert(pending instanceof Promise)
+      assertEquals(ran, 0)
+      return { pending }
     })
-    b.tx((tx) => {
-      ran = true
-      tx.patch([{ entity: { eid: 'kept' }, doc: { title: 'answer' } }])
-    })
-    assertEquals(ran, true)
+    await time.advance(5)
+    assertEquals(await pending, 42)
+    assertEquals(ran, 1)
     assertEquals(b.get(['kept'])[0].doc, { title: 'answer' })
     let failure = assertThrows(
       () =>

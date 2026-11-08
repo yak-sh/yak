@@ -132,9 +132,11 @@ implements the resulting row changes and transaction. Low-level callers can use
 and plugins.
 
 Reads are synchronous. Transactions return synchronously when uncontended, or
-wait asynchronously for an independent transaction on the same connection. An
-asynchronous body retains its transaction until it settles. Only calls in that
-body's async context can nest savepoints; unrelated writes take turns. Keep
+wait asynchronously for another writer, including an independent transaction on
+the same connection. `tx(body, { wait: false })` refuses another connection's
+lock immediately with `retryable: true`. Errors from the body are never retried.
+An asynchronous body retains its transaction until it settles. Only calls in
+that body's async context can nest savepoints; unrelated writes take turns. Keep
 external work before the transaction so its write lock stays short.
 
 The complete example opens and installs its own database. Its checks run in
