@@ -54,6 +54,9 @@ import { type Ctx, TOOLS } from './tools.ts'
 import { PUBLISHED } from './published.ts'
 import type { Who } from './session.ts'
 import { SECONDS } from './meter.ts'
+import { attachmentKey } from './attachments.ts'
+import { sha256 } from './versions.ts'
+import { CallError } from '@yaks/tools/errors'
 
 let SECRET = 'a probe secret'
 // A wasm module's first eight bytes, as escapes — the point of the ship path
@@ -288,6 +291,43 @@ test('a path that is not one is refused before the shell sees it', async () => {
     )
   }
   assertEquals(box.ran, [])
+})
+
+test('an Operator attachment is written into the sandbox as its bytes', async () => {
+  let { ctx, box, env, space } = await bench()
+  let id = await sha256(new TextEncoder().encode(WASM))
+  await env.BLOBS.put(attachmentKey(space, id), WASM)
+  let wrote = await tool('sandbox_write').run(ctx, {
+    path: 'in/people.csv',
+    attachment: id,
+  })
+  assertEquals(wrote.text, 'wrote in/people.csv')
+  assertEquals(box.files.get('/workspace/in/people.csv'), WASM)
+  for (
+    let [args, said] of [
+      [{ attachment: 'f'.repeat(64) }, 'ada keeps no attachment'],
+      [{ attachment: 'ada/.operator/' + id }, 'is not an attachment id'],
+      [{ attachment: id, content: 'both' }, 'one of content or attachment'],
+      [{}, 'one of content or attachment'],
+    ] as const
+  ) {
+    await assertRejects(
+      () => tool('sandbox_write').run(ctx, { path: 'x', ...args }),
+      CallError,
+      said,
+    )
+  }
+})
+
+test('a read of a path that holds no file is refused, for the caller to correct', async () => {
+  let { ctx } = await bench((cmd) =>
+    cmd.includes('k=missing') ? { stdout: 'missing \n' } : {}
+  )
+  await assertRejects(
+    () => tool('sandbox_read').run(ctx, { path: 'people.csv' }),
+    CallError,
+    'No file at /workspace/people.csv: nothing is there',
+  )
 })
 
 test('a command that outlives its call is a process wait and stop reach', async () => {

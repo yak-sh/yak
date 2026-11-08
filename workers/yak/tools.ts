@@ -214,6 +214,7 @@ import {
   spending,
   workbench,
 } from './sandbox.ts'
+import { attached } from './attachments.ts'
 import { machineDeclared, machineTools } from '@yaks/harness/machine'
 import {
   connect,
@@ -2589,25 +2590,61 @@ let HINTS: Record<
   write: { destructive: false, idempotent: true },
 }
 
+// A file the person attached in a conversation with their Operator, which
+// sandbox_write puts in the sandbox as its bytes in place of written text: a
+// spreadsheet export a script parses, an image a build embeds.
+let ATTACHMENT = {
+  type: 'string',
+  description:
+    'an attachment id from the conversation (64 hex characters), in place ' +
+    'of content: writes that attached file, as its bytes',
+}
+
+// What sandbox_write writes from an attachment, refused where the space keeps
+// no file by that id; none where it writes the text sent as content.
+let attachedFile = async (ctx: Ctx, space: Space, args: Args) => {
+  if ((args.content == null) == (args.attachment == null)) {
+    throw refuse('arguments', 'one of content or attachment')
+  }
+  if (args.attachment == null) return undefined
+  let id = text(args.attachment, 'attachment')
+  let bytes = await attached(ctx.env, space, id)
+  if (!bytes) {
+    throw refuse('missing', `${space.slug} keeps no attachment ${id}`)
+  }
+  return { path: text(args.path, 'path'), bytes }
+}
+
 let SANDBOX: Row[] = machineDeclared().map((t) => {
   let shape = t.parameters as Omit<Shape, 'type'>
+  let writes = t.name == 'write'
   return {
     ...HINTS[t.name],
     name: `sandbox_${t.name}`,
     input: {
       type: 'object',
-      properties: { space: SPACE, ...shape.properties },
-      required: shape.required,
+      properties: {
+        space: SPACE,
+        ...shape.properties,
+        ...writes ? { attachment: ATTACHMENT } : {},
+      },
+      required: writes ? ['path'] : shape.required,
     },
     run: async (ctx, args) => {
       let { space } = await inSpace(ctx, args, true)
+      let file = writes ? await attachedFile(ctx, space, args) : undefined
       let said = await bench(
         ctx,
         space,
-        async ({ workspace }) =>
-          await machineTools(workspace, { cwd: () => CWD })
-            .find((m) => m.name == t.name)!
-            .run(args),
+        async ({ workspace, provider, ref }) => {
+          if (!file) {
+            return await machineTools(workspace, { cwd: () => CWD })
+              .find((m) => m.name == t.name)!
+              .run(args)
+          }
+          await provider.put(ref, file)
+          return `wrote ${file.path}`
+        },
       )
       return { text: capped(said), space }
     },

@@ -30,6 +30,7 @@ import { processWorkspace, targetFor, type Workspaces } from './targets.ts'
 
 import type { Machine, Proc } from './mod.ts'
 import { settle } from './workspace.ts'
+import { CallError } from '@yaks/tools/errors'
 
 /** How the machine tools behave, all optional. */
 export type MachineOpts = {
@@ -61,6 +62,14 @@ let under = (dir: string | undefined, path: string) =>
 
 let code = (c: number | null) =>
   c == null ? 'exited, code unknown' : `exited ${c}`
+
+// What a path that is not a file names instead (`Stat`).
+let SAID = {
+  missing: 'nothing is there',
+  dangling: 'it is a link to nothing',
+  directory: 'it is a directory',
+  other: 'it is not a regular file',
+}
 
 let pid = (p: Proc) => p.pid ? ` (pid ${p.pid})` : ''
 
@@ -250,8 +259,18 @@ export let machineTools = (
         ? `process ${id} ${code(p.exit.code)}`
         : `process ${id} signalled, no exit recorded yet`
     },
-    read: async (args, ctx) =>
-      await m.read(under(await here(ctx), String(args.path ?? ''))),
+    read: async (args, ctx) => {
+      let path = under(await here(ctx), String(args.path ?? ''))
+      try {
+        return await m.read(path)
+      } catch (e) {
+        // A path that names no file is the caller's to correct, however the
+        // machine said so; any other failure is the machine's own.
+        let [found] = await m.stat([path]).catch(() => [])
+        if (!found || found.kind == 'file') throw e
+        throw new CallError('path', `No file at ${path}: ${SAID[found.kind]}`)
+      }
+    },
     write: async (args, ctx) => {
       let path = String(args.path ?? '')
       await m.write(under(await here(ctx), path), String(args.content ?? ''))

@@ -1,8 +1,9 @@
 // The machine tools' declarations keep values the operating system cannot
 // receive from reaching a machine and start commands in the bound directory.
 
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { test } from '@yaks/testing'
+import { CallError } from '@yaks/tools/errors'
 import { validateToolInput } from '@yaks/vocab/tools'
 import type { Machine } from '@yaks/machine'
 import { machineDeclared, machineTools } from './machine.ts'
@@ -74,4 +75,29 @@ test('a nul byte is refused before a machine receives it', () => {
     }),
     { path: '/tmp/file', content: 'kept\0whole' },
   )
+})
+
+test('a read of what is not a file is the caller’s to correct; any other failure is the machine’s', async () => {
+  let broken = new Error('connection reset')
+  let read = async (kind: 'missing' | 'directory' | 'file') =>
+    await machineTools({
+      start: () => Promise.resolve('process'),
+      look: () => Promise.resolve(null),
+      tail: () => Promise.resolve([]),
+      kill: () => Promise.resolve(),
+      read: () => Promise.reject(kind == 'file' ? broken : new Error('gone')),
+      stat: () =>
+        Promise.resolve([
+          kind == 'missing' ? { kind } : { kind, canonical: '/w/a.csv' },
+        ]),
+      write: () => Promise.resolve(),
+    }, { cwd: () => '/w' }).find((tool) => tool.name == 'read')!
+      .run({ path: 'a.csv' })
+  for (
+    let [kind, said] of [
+      ['missing', 'No file at /w/a.csv: nothing is there'],
+      ['directory', 'No file at /w/a.csv: it is a directory'],
+    ] as const
+  ) await assertRejects(() => read(kind), CallError, said)
+  assertEquals(await assertRejects(() => read('file')), broken)
 })

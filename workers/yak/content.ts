@@ -395,7 +395,7 @@ export let WORDS: Record<string, Words> = {
       'done': 'Wrote %{path} for the build',
     },
     'description':
-      "Write one file inside this space's build sandbox: a Cargo.toml, a src/lib.rs, whatever the build needs. These are not the app's files: nothing here is served, and files are temporary, not durable app storage. app_files stages what app_deploy will serve; sandbox_ship copies a built artifact from the sandbox into the app. Waking the sandbox is metered by the second, as with sandbox_shell. Pass a sandbox path and nonempty text; this overwrites that path without file history and returns the path written. Nothing to undo: nothing of the app lives here, and only sandbox_ship copies build output into durable app files. Documentation: https://yaks.app/docs/code.",
+      "Write one file inside this space's build sandbox: a Cargo.toml, a src/lib.rs, whatever the build needs. These are not the app's files: nothing here is served, and files are temporary, not durable app storage. app_files stages what app_deploy will serve; sandbox_ship copies a built artifact from the sandbox into the app. Waking the sandbox is metered by the second, as with sandbox_shell. Pass a sandbox path and nonempty text, or in place of the text an attachment id from the conversation, which writes that attached file's bytes there for a command to read (a CSV a script parses); this overwrites that path without file history and returns the path written. Nothing to undo: nothing of the app lives here, and only sandbox_ship copies build output into durable app files. Documentation: https://yaks.app/docs/code.",
   },
   'sandbox_read': {
     'title': 'Read a build file',

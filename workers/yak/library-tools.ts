@@ -11,6 +11,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { CallError } from '@yaks/tools/errors'
 import type { App, Space } from './directory.ts'
 import { DOCUMENTS, supported } from './documents.ts'
+import { attached } from './attachments.ts'
 import { metaOf } from './meta.ts'
 import { allowed, uncopyable } from './robots.ts'
 import { vouched, type Who } from './session.ts'
@@ -274,12 +275,8 @@ let labelOf = (asked: Asked) =>
  * Operator (operator-channels.ts `keepFile`), which it reads as
  * `attachment <sha>`. */
 let fromChat = async (ctx: Ctx, space: Space, sha: string, name: string) => {
-  if (!/^[0-9a-f]{64}$/.test(sha)) {
-    throw refuse('arguments', `attachment: ${sha} is not an attachment id`)
-  }
-  let kept = await ctx.env.BLOBS.get(`${space.store}/.operator/${sha}`)
-  if (!kept) throw new Skipped('no such attachment in this space')
-  let bytes = new Uint8Array(await kept.arrayBuffer())
+  let bytes = await attached(ctx.env, space, sha)
+  if (!bytes) throw new Skipped('no such attachment in this space')
   return named({ bytes, mime: mimeOf(name), name })
 }
 

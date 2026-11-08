@@ -105,10 +105,19 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
       })
     },
     mkdir: () => Promise.resolve({ success: true }),
-    writeFile: (path: string, content: string) => {
+    writeFile: (
+      path: string,
+      content: string,
+      opts?: { encoding?: string },
+    ) => {
       alive.add(name)
       files = state(name).files
-      files.set(path, content)
+      files.set(
+        path,
+        opts?.encoding == 'base64'
+          ? new TextDecoder().decode(Uint8Array.fromBase64(content))
+          : content,
+      )
       return Promise.resolve({ success: true })
     },
     readFile: (path: string, opts?: { encoding?: string }) => {

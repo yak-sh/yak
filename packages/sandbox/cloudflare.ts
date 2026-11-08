@@ -2,7 +2,12 @@
 // deployed image; the host supplies invocation environment and RPC retry policy.
 // Grants, accounts and billing are not container concerns.
 import { shellStat, type Workspace } from '@yaks/machine'
-import type { SandboxProvider, SandboxRef, SandboxRequest } from './provider.ts'
+import type {
+  SandboxFile,
+  SandboxProvider,
+  SandboxRef,
+  SandboxRequest,
+} from './provider.ts'
 
 /** How a command runs in the container: where, for how long at most, and with
  * what beside the container's own environment. */
@@ -86,6 +91,9 @@ export type CloudflareProvider = SandboxProvider & {
   restore(ref: SandboxRef, body: ReadableStream<Uint8Array>): Promise<void>
   active(ref: SandboxRef): Promise<boolean>
   processes(ref: SandboxRef): Promise<BoxProcess[]>
+  /** writes one file's bytes, as `export` reads them: an absolute path is
+   * kept, a relative one is under {@link CWD}, and its directory is made */
+  put(ref: SandboxRef, file: SandboxFile): Promise<void>
 }
 
 /** Process data detached from the SDK's process-control methods. */
@@ -407,6 +415,13 @@ export let cloudflareProvider = (
         ...pid === undefined ? {} : { pid },
         ...exitCode === undefined ? {} : { exitCode },
       })),
+    put: async (ref, { path, bytes }) => {
+      let box = boxOf(ref)
+      let at = path.startsWith('/') ? path : `${CWD}/${path}`
+      let dir = at.slice(0, at.lastIndexOf('/'))
+      if (dir) await box.mkdir(dir, { recursive: true })
+      await box.writeFile(at, base64(bytes), { encoding: 'base64' })
+    },
     export: async function* (ref, paths) {
       // Absolute paths are kept for sandbox_ship's published contract. Relative
       // paths resolve from the deployed image's workspace.
