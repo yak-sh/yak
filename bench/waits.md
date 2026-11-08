@@ -38,11 +38,6 @@ release have separate figures. Each operation checks populated output or its
 committed effect; a successful empty answer is not a stand-in for a write or a
 populated list.
 
-`operation-scale` measures CLI and MCP task lists, filtered queries, history and
-transcript queries independently over 50,000 tasks and 1,000 two-KiB transcript
-entries. This fixed corpus catches scale-dependent work without depending on,
-modifying or claiming to reproduce every shape of the owner's live graph.
-
 `hook-waits` measures the SessionStart, SubagentStart, SessionEnd and
 PostToolUse HTTP handlers in process, without a listener or child process. These
 figures exclude shell/curl transport and are checked against the older
@@ -54,7 +49,6 @@ hook leaves that work pending. UserPromptSubmit remains measured by
 
 ```sh
 deno run -A bench/run.ts accept operation-commands
-deno run -A bench/run.ts check operation-scale
 deno run -A bench/run.ts check hook-waits
 ```
 

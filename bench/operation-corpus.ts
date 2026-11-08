@@ -8,7 +8,6 @@ export let PERSONA = id(5), BOARD = id(6)
 export let populate = async (
   graph: Graph,
   tasks: number,
-  entries = 0,
 ): Promise<void> => {
   await graph.apply([
     {
@@ -51,23 +50,6 @@ export let populate = async (
       filed: { project: PROJECT },
     })),
   ])
-  if (entries) {
-    // The session holds every measured transcript entry.
-    for (let from = 0; from < entries; from += 100) {
-      await graph.apply(
-        Array.from(
-          { length: Math.min(100, entries - from) },
-          (_, i) => ({
-            entity: { eid: crypto.randomUUID() },
-            entry: { session: SESSION },
-            content: {
-              body: `Scale transcript turn ${from + i}: ${'x'.repeat(2048)}`,
-            },
-          }),
-        ),
-      )
-    }
-  }
   // The history read is populated, not the fast empty-log path.
   for (let i = 0; i < 40; i++) {
     await graph.apply([{

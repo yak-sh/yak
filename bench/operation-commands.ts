@@ -1,4 +1,4 @@
-/** Specialized box operations through the registered CLI and real MCP HTTP
+/** Specialized box operations through the registered CLI and MCP HTTP
  * doors. Each metric is one operation family, never an inference from startup
  * or generic graph I/O. SQLite, session state and the HTTP listener are private
  * to this collection; no duties, providers, external connections or live writes.
@@ -14,7 +14,6 @@ import { initialize, rpc } from '../packages/cli/rpc.ts'
 import { settled } from './settled.ts'
 import { runtimeCache } from './runtime.ts'
 import { selected } from './selected.ts'
-import { fixture } from './fixture.ts'
 import { cliAnswer, fault } from './operation-answer.ts'
 export { fault } from './operation-answer.ts'
 import {
@@ -122,18 +121,6 @@ export let inventory = async (
   }
 }
 
-export let SCALE_FAMILIES = [
-  'task-list',
-  'filtered-query',
-  'history',
-  'transcript-query',
-]
-export let OPERATION_SCALE = ['cli', 'connector'].flatMap((door) =>
-  SCALE_FAMILIES.map((family) => `${door}/${family}`)
-)
-export let SCALE_TASKS = 50_000
-export let SCALE_ENTRIES = 1000
-
 export type Operation = {
   family: string
   tool: string
@@ -148,44 +135,17 @@ let includes = (text: string, mark: string) => {
   }
 }
 
-export let scaleFixture = fixture(async (
-  path: string,
-  tasks: number,
-  entries: number,
-) => {
-  let directory = path.slice(0, path.lastIndexOf('/'))
-  await Deno.mkdir(`${directory}/transcripts`)
-  let config = starter(PERSON)
-  config.db = path
-  config.duties = false
-  config.plugins!.push('@yaks/sqlite')
-  config.plugins = config.plugins?.map((plugin) =>
-    plugin == '@yaks/session'
-      ? {
-        use: '@yaks/session',
-        with: { transcripts: `${directory}/transcripts` },
-      }
-      : plugin
-  )
-  let host = await compose(config, ['graph', 'web'])
-  try {
-    await settled(host)
-    await populate(host.graph, tasks, entries)
-  } finally {
-    await host.close()
-  }
-})
-
 async function collect(
   args: string[] = [],
-  scale = false,
 ): Promise<Record<string, Samples>> {
-  let tasks = scale ? SCALE_TASKS : OPERATION_TASKS
+  let tasks = OPERATION_TASKS
   let n = Number(args[0] ?? 1)
   if (!Number.isInteger(n) || n < 1) {
     throw new Error('positive sample count required')
   }
-  let dir = await Deno.makeTempDir({ prefix: 'T-127678-operations-' })
+  let scratch = `${root}.scratch`
+  await Deno.mkdir(scratch, { recursive: true })
+  let dir = await Deno.makeTempDir({ dir: scratch, prefix: 'operations-' })
   let configPath = `${dir}/yak.json`
   // A command's whole environment, as a managed run of SESSION has it
   // (@yaks/spawn): the harness id of whoever launched the bench is gone, or
@@ -213,11 +173,10 @@ async function collect(
         : p
     )
     await Deno.writeTextFile(configPath, JSON.stringify(config))
-    if (scale) await scaleFixture(config.db!, tasks, SCALE_ENTRIES)
     host = await compose(read(configPath), ['graph', 'web'])
     await settled(host)
     let graph = host.graph
-    if (!scale) await populate(graph, tasks)
+    await populate(graph, tasks)
     let cli = async (
       operation: Pick<Operation, 'tool' | 'command'>,
       input: Record<string, unknown>,
@@ -497,38 +456,6 @@ async function collect(
         verify: (text) => includes(text, 'effect'),
       },
     ]
-    if (scale) {
-      operations = [
-        {
-          family: 'task-list',
-          tool: 'task_list',
-          command: ['task', 'list'],
-          args: () => ({ query: `.filed.project=${PROJECT}`, limit: 25 }),
-          verify: (text) => includes(text, 'Operation task'),
-        },
-        {
-          family: 'filtered-query',
-          tool: 'graph_query',
-          command: ['graph', 'query'],
-          args: () => ({ q: `.task .filed.project=${PROJECT} .count` }),
-          verify: (text) => includes(text, String(tasks)),
-        },
-        {
-          family: 'history',
-          tool: 'history',
-          command: ['history'],
-          args: () => ({ entity: TARGET, limit: 25 }),
-          verify: (text) => includes(text, 'History revision 39'),
-        },
-        {
-          family: 'transcript-query',
-          tool: 'graph_query',
-          command: ['graph', 'query'],
-          args: () => ({ q: `.entry.session=${SESSION} ?content .limit=25` }),
-          verify: (text) => includes(text, 'Scale transcript turn'),
-        },
-      ]
-    }
     let filter = args.find((a) => a.startsWith('--family='))?.slice(9)
     if (filter) operations = operations.filter((o) => o.family == filter)
     // The checkout's runtime slot is written by the first command, untimed.
@@ -591,7 +518,7 @@ async function collect(
           samples.push({
             ...reading,
             source: 'end-to-end',
-            counts: { tasks, transcriptEntries: scale ? SCALE_ENTRIES : 0 },
+            counts: { tasks, transcriptEntries: 0 },
             details: {
               fixture: 'starter SQLite; own HTTP; no duties',
               tool: operation.tool,
@@ -611,5 +538,4 @@ async function collect(
   }
 }
 export let measure = (args: string[] = []) => collect(args)
-export let measureScale = (args: string[] = []) => collect(args, true)
 if (import.meta.main) console.log(JSON.stringify(await measure(Deno.args)))

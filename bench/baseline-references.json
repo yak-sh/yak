@@ -262,27 +262,6 @@
     ]
   },
   {
-    "suite": "operation-scale",
-    "baseline": "bench/operation-scale.baseline.json",
-    "groups": [
-      {
-        "reference": "8603ad4f3c01a0cf70e75c52c579b375661211c0",
-        "kind": "derived",
-        "source": "git history of bench/operation-scale.baseline.json: the banking commit introduced all retained medians; no measured product revision is recorded in the baseline, commit message, or inspected task comments",
-        "benches": [
-          "cli/task-list",
-          "cli/filtered-query",
-          "cli/history",
-          "cli/transcript-query",
-          "connector/task-list",
-          "connector/filtered-query",
-          "connector/history",
-          "connector/transcript-query"
-        ]
-      }
-    ]
-  },
-  {
     "suite": "person-commands",
     "baseline": "bench/person-commands.baseline.json",
     "groups": [

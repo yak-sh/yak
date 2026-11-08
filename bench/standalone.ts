@@ -6,7 +6,6 @@ import { RELAY_ENTITIES } from './names.ts'
 import { PERSON_COMMANDS } from './person-commands.ts'
 import { HOOK_WAITS } from './hook-waits.ts'
 import { OPERATION_COMMANDS } from './operation-commands.ts'
-import { OPERATION_SCALE } from './operation-scale.ts'
 import { collector } from './collector.ts'
 
 let deno = (
@@ -91,7 +90,6 @@ export let standalone: Registration[] = [
     'bench/operation-commands.ts',
     OPERATION_COMMANDS,
   ),
-  measured('operation-scale', 'bench/operation-scale.ts', OPERATION_SCALE),
   measured('person-commands', 'bench/person-commands.ts', [...PERSON_COMMANDS]),
   deno('client-frame', 'packages/client/frame_bench.ts', [
     'frame: 50k-entity world, 208 bundles, 3 reads, 40 watches',
