@@ -22,7 +22,7 @@ let unavailable = () =>
 
 let hash = 'a'.repeat(64)
 let fixture = (doors: Partial<Stub> = {}) => {
-  let sent: Bundle[][] = []
+  let sent: Bundle[][] = [], behind: Promise<unknown>[] = []
   let fail = () => Promise.reject(unavailable())
   let stub: Stub = {
     fetch: fail,
@@ -51,7 +51,10 @@ let fixture = (doors: Partial<Stub> = {}) => {
     },
     () => Promise.resolve('scratch-ticket'),
     instant,
+    (work) => behind.push(work),
   )
+  // What the invocations left running once they answered.
+  let settled = () => Promise.all(behind)
   let check = (entrypoint: string) => {
     let [failure, companion] = sent.at(-1)!
     equal((failure.error as Comp).tags, {
@@ -67,7 +70,7 @@ let fixture = (doors: Partial<Stub> = {}) => {
     equal((companion.request as Comp).route, entrypoint)
     return companion.request as Comp
   }
-  return { w, check, sent }
+  return { w, check, sent, settled }
 }
 
 test('caught tracker fetch preserves its scrubbed request and origin', async () => {
@@ -207,7 +210,7 @@ test("the minute's monitor and a queue's intake wait out a moving object, unrepo
 
 test("a space tracker that answers a door or takes intake joins the platform's list once", async () => {
   let enrolled: string[] = []
-  let { w } = fixture({
+  let { w, settled } = fixture({
     fetch: (request) =>
       Promise.resolve(
         Response.json({}, {
@@ -233,12 +236,29 @@ test("a space tracker that answers a door or takes intake joins the platform's l
     ack: () => {},
     retry: () => {},
   }])
+  await settled()
   equal(enrolled, [a, c])
+})
+
+test('a door answers before its space joins the platform list, and reads while it joins call once', async () => {
+  let calls = 0, join = () => {}
+  let { w, settled } = fixture({
+    fetch: () => Promise.resolve(Response.json([])),
+    enroll: () => (calls++, new Promise<void>((go) => join = go)),
+  })
+  let scope = crypto.randomUUID()
+  let ask = () =>
+    w.fetch(new Request(`https://tracker.test/bugs?scope=${scope}`))
+  equal((await Promise.all([ask(), ask()])).map((r) => r.status), [200, 200])
+  equal((await ask()).status, 200)
+  join()
+  await settled()
+  equal(calls, 1)
 })
 
 test('a platform object on the release before enroll is enrolled by a later request, unreported', async () => {
   let behind = true, enrolled: string[] = []
-  let { w, sent } = fixture({
+  let { w, sent, settled } = fixture({
     fetch: () => Promise.resolve(Response.json([])),
     enroll: (scope) =>
       behind
@@ -251,7 +271,9 @@ test('a platform object on the release before enroll is enrolled by a later requ
   let ask = () =>
     w.fetch(new Request(`https://tracker.test/bugs?scope=${scope}`))
   await ask()
+  await settled()
   behind = false
   await ask()
+  await settled()
   equal([enrolled, sent.length], [[scope], 0])
 })

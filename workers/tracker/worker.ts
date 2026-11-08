@@ -189,13 +189,19 @@ export let reporting = (env: Pick<Env, 'ERRORS' | 'CF_VERSION_METADATA'>) =>
     eid,
   })
 }
-// The space trackers this isolate has enrolled in the platform's list.
-let enrolled = new Set<string>()
+// The space trackers this isolate has enrolled in the platform's list, or is
+// enrolling: one call a scope, however many reads arrive while it runs.
+let enrolled = new Map<string, Promise<void>>()
+
+/** Work the invocation keeps running after it answered: the runtime's
+ * `waitUntil` in index.ts. */
+export type Behind = (work: Promise<unknown>) => void
 
 export let worker = (
   env: Env,
   ticket: typeof sign = sign,
   clock: Clock = system,
+  behind: Behind = (work) => void work,
 ) => {
   let now = clock.now
   let wait = jittered(clock)
@@ -216,19 +222,22 @@ export let worker = (
       wait,
     )
   // A space tracker that took intake or answered a door joins the platform's
-  // list of them, which every bug door reads (`/scopes`), once an isolate. A
-  // failed enrolment is tried again by the next request, and reported unless
-  // the platform's object still runs the release before `enroll`, as it does
-  // for minutes after a deploy reaches this Worker.
-  let enroll = async (scope: string) => {
+  // list of them, which every bug door reads (`/scopes`), once an isolate,
+  // behind the answer: it is a second object's call, often 50 ms, that the
+  // answer never needs. A failed enrolment is tried again by the next request,
+  // and reported unless the platform's object still runs the release before
+  // `enroll`, as it does for minutes after a deploy reaches this Worker.
+  let enroll = (scope: string) => {
     if (scope == platform || enrolled.has(scope)) return
-    try {
-      await call(platform, (stub) => stub.enroll(scope))
-      enrolled.add(scope)
-    } catch (error) {
-      if (/does not implement the method/.test(String(error))) return
-      await report(error, 'enroll')
-    }
+    let joining = call(platform, (stub) => stub.enroll(scope)).catch(
+      async (error) => {
+        enrolled.delete(scope)
+        if (/does not implement the method/.test(String(error))) return
+        await report(error, 'enroll')
+      },
+    )
+    enrolled.set(scope, joining)
+    behind(joining)
   }
   // An HTTP door, its body read again by each send. A request without one has
   // nothing a send uses up, so each send takes it as it is: in Deno, copying
@@ -242,7 +251,7 @@ export let worker = (
       scope,
       (stub) => stub.fetch(body ? new Request(request, { body }) : request),
     )
-    if (answer.ok) await enroll(scope)
+    if (answer.ok) enroll(scope)
     return answer
   }
   // Where a receipt stands, asked through the object's stable read doors
@@ -410,7 +419,7 @@ export let worker = (
         (scope) => ({
           ingest: async (rows) => {
             await call(scope, (stub) => stub.ingest(rows))
-            await enroll(scope)
+            enroll(scope)
           },
         }),
         (error) => report(error, 'queue'),

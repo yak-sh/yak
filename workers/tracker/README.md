@@ -89,8 +89,8 @@ report or delivery history.
 `GET /scopes?scope=platform` answers an admin `{scopes: [space eid, …]}`: every
 space tracker the Worker has routed to, which the platform tracker keeps. A
 space's tracker joins it the first time it takes intake or answers a door, once
-an isolate, so every bug door (`bug_list`, `admin_errors`, the heal follower)
-reads each space's bugs beside the platform's.
+an isolate and behind the answer, so every bug door (`bug_list`, `admin_errors`,
+the heal follower) reads each space's bugs beside the platform's.
 
 `GET /bugs?query=<bug-query>&limit=50&app=<global-eid>` returns bug bundles,
 filtered and ordered before its 1–100 limit. Without `query` it includes all bug
