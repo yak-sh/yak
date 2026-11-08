@@ -32,7 +32,8 @@ import type { Role } from './directory.ts'
 import type { Env } from './env.ts'
 import { apex, type Host } from './host.ts'
 import { hostOf } from './route.ts'
-import { instrumentEid } from './instrument.ts'
+import { agentEid, agentRow, instrumentEid } from './instrument.ts'
+import type { Bundle } from '@yaks/graph'
 import { sha256 } from '@yaks/graph/sha256'
 
 export type Who = {
@@ -41,6 +42,9 @@ export type Who = {
   person: string | null
   /** The writer credited for work authorized by this person. */
   actor?: string
+  /** The agent this person's credential is held by (a connector client, the
+   * CLI), by its name; absent for the person at their own browser. */
+  agent?: string
   role: Role | null
   /** The instrument the kernel verified, independent of the person's level. */
   via?: string
@@ -71,6 +75,8 @@ export type Caller = {
   person: string
   /** A kernel-selected writer, separate from the authenticated person. */
   actor?: string
+  /** The agent holding this credential, by its name ({@link Who} `agent`). */
+  agent?: string
   /** A verified instrument, independent of the authentication method below. */
   instrument?: string
   // How they got in. `grant` is the CLI's short-lived bearer (grants.ts),
@@ -147,6 +153,17 @@ export let vouched = (who: Who): Record<string, string> => ({
   ...(who.administrative ? { 'x-yak-administrative': '1' } : {}),
   ...(who.visit ? { 'x-yak-visit': '1' } : {}),
 })
+
+/** The writer a platform record of this caller's act names (M-31958): the
+ * agent holding the person's credential, or the person at their own browser.
+ * `rows` is the agent's directory row, written with the record. */
+export let acting = (who: Who): { who: Who; rows: Bundle[] } =>
+  who.person && who.agent && !who.actor
+    ? {
+      who: { ...who, actor: agentEid(who.person, who.agent) },
+      rows: [agentRow(who.person, who.agent)],
+    }
+    : { who, rows: [] }
 
 // The header a write adds to that vouch: what to call this person, so the
 // store titles the person row it mints beside their rows (graph.ts `#vouching`)

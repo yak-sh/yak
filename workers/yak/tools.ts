@@ -238,7 +238,7 @@ import { globs, platformPath } from './router.ts'
 import { vocabAt } from './reach.ts'
 import { applying, seeding } from './release-seed.ts'
 import { sampled, unsampled } from './sample.ts'
-import { titling, vouched, type Who } from './session.ts'
+import { acting, titling, vouched, type Who } from './session.ts'
 import { type Clock, clock } from './timing.ts'
 import { addressee, canon } from './signin.ts'
 import { nameOf } from './names.ts'
@@ -3284,9 +3284,12 @@ let OURS: Row[] = [
       // order is not a choice anyone made. Said in the answer, because
       // nothing else tells a person the front page is theirs to set. Both
       // are asked at once, as one trip.
+      // Who made it (M-31958): an agent's row is written beside the reads.
+      let maker = acting(who)
       let [had, front] = await Promise.all([
         ctx.dir.apps(space),
         ctx.dir.home(space),
+        maker.rows.length && ctx.dir.stamp({ entities: maker.rows }),
       ])
       let apps = had.filter((a) => !a.trashed)
       if (free?.apps != null && apps.length >= free.apps) {
@@ -3294,7 +3297,7 @@ let OURS: Row[] = [
       }
       let claims = await taking(ctx, space, s, who)
       let entities: Bundle[] = [...claims, row]
-      let applied = await ctx.dir.apply({ entities }, vouched(who))
+      let applied = await ctx.dir.apply({ entities }, vouched(maker.who))
       let eid = applied.find((row) => row.app)?.entity.eid
       if (!eid) throw new Error('app creation returned no identity')
       renew(ctx)
@@ -4124,18 +4127,14 @@ let OURS: Row[] = [
       let moves = await ctx.dir.switches(app)
       let numbers = new Map(all.map((v) => [v.eid, v.version]))
       // Who moved it, as the person reads it: "you", or the name they go by
-      // here. An eid is nobody's name.
+      // here, or an agent's for its person (stamps.ts `writers`). An eid is
+      // nobody's name.
       let movers = new Map(
-        await Promise.all(
-          [...new Set(moves.map((m) => m.switched?.by).filter(Boolean))].map(
-            async (by) =>
-              [
-                by,
-                by == ctx.person ? 'you' : await ctx.dir.nameAt(String(by)),
-              ] as const,
-          ),
+        await ctx.dir.writers(
+          moves.flatMap((m) => m.switched?.by ? [String(m.switched.by)] : []),
         ),
       )
+      if (ctx.person && movers.has(ctx.person)) movers.set(ctx.person, 'you')
       // The newest KEEP, and the count says how many there are: an app keeps
       // every version it ever deployed (versions.ts), so the list is a page
       // and the older ones are still there to roll back to by number.
@@ -5894,7 +5893,8 @@ let OURS: Row[] = [
         { eid: row.entity.eid, slug: s },
         offer.app.eid,
       )
-      let entities = [row, ...claims, ...asked.asks]
+      let maker = acting(who)
+      let entities = [...maker.rows, row, ...claims, ...asked.asks]
       // The visit is taken before the row is written, so two installs never
       // share one store, and given back if the row could not be.
       if (kept) {
@@ -5908,7 +5908,7 @@ let OURS: Row[] = [
           },
         )
       }
-      let applied = await ctx.dir.stamp({ entities }, vouched(who)).catch(
+      let applied = await ctx.dir.stamp({ entities }, vouched(maker.who)).catch(
         async (error) => {
           if (kept) await unadopt(ctx.env, via!, offer.app.eid, row.entity.eid)
           throw error

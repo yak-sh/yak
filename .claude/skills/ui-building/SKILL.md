@@ -239,7 +239,9 @@ and stick to it". A card is flat with a hairline, and its head (`heading()`
 in pages.ts) names it, says how it stands and holds its actions at the
 right; like things are `Rows`; a field sits under its label (`labeled()`),
 never at the end of a sentence; what few people change folds under Advanced
-options with its default in place. A part a page lacks goes into the kit,
+options with its default in place. A stamp is said with its `at` and its `by`
+through stamps.ts `said`, the names coming from the directory's `writers`, so
+every page says a person, or an agent for its person, the same way. A part a page lacks goes into the kit,
 drawn by pencil, with an example in the style guide (site_test checks every
 worn part has one), not into one page's stylesheet.
 

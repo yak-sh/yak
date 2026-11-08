@@ -29,6 +29,7 @@ let EMPTY: Census = {
   seats: [],
   deploys: [],
   referrals: [],
+  agents: [],
 }
 // Sessions as the sign-in mints them, made once.
 let SIGNED_IN = Object.fromEntries(
@@ -163,7 +164,7 @@ test('an app says when it was deployed, changed and broke, and who owns it', () 
   assertEquals(
     [a1.deployed, a1.changed, a1.errored, a1.visits, a1.owners],
     [
-      '2026-10-09T00:00:00Z',
+      { at: '2026-10-09T00:00:00Z', by: null },
       '2026-10-11T00:00:00Z',
       '2026-10-10T00:00:00Z',
       7,

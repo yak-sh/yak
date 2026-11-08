@@ -10,11 +10,14 @@
 // The title is the tile's link, stretched over the whole card, so the error
 // mark can be a link of its own: to where the dashboard says what broke. `editor`
 // asks for one more, to the app's data editor, on a page for who may open it.
+// `made` and `deployed` are when it was made and last deployed and by whom,
+// said as one muted line with the names `writers` gives (stamps.ts).
 
 import { parse } from '@yaks/query'
 import type { ComponentRenderer } from '@yaks/preact'
 import { Card } from '@yaks/ui/parts'
 import { h } from 'preact'
+import { said, type Stamp, type Writers } from '../stamps.ts'
 
 export let app: ComponentRenderer = {
   view: 'Tile',
@@ -24,6 +27,11 @@ export let app: ComponentRenderer = {
     let doc = b.doc as { title?: string } | undefined
     let errors = Number(ctx.errors ?? 0)
     let tag = (text: string) => h('span', { class: 'Apps_Tag' }, text)
+    let names = (ctx.writers ?? new Map()) as Writers
+    let stamp = (what: string, s: unknown) =>
+      s ? `${what} ${said(s as Stamp, names, 'short')}` : ''
+    let made = [stamp('Made', ctx.made), stamp('Deployed', ctx.deployed)]
+      .filter(Boolean).join(' · ')
     return h(
       Card,
       { as: 'div', class: 'Apps_Item' },
@@ -44,6 +52,7 @@ export let app: ComponentRenderer = {
         h('strong', null, doc?.title || a.slug),
       ),
       h('span', { class: 'Apps_Path' }, `${ctx.host ?? ''}/${a.slug}`),
+      made ? h('span', { class: 'Apps_Made' }, made) : null,
       h(
         'span',
         { class: 'Apps_Tags' },

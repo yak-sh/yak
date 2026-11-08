@@ -144,6 +144,48 @@
         "doc"
       ]
     },
+    "deployed": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        }
+      },
+      "description": "who last put a release of this app live, and when: a deploy or a rollback. by is the actor (a person, or an agent writing for one), via its session"
+    },
+    "acts_for": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "properties": {
+        "person": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the person it writes for"
+        }
+      },
+      "description": "an agent writing for a person (a connector client, the CLI), named for itself in doc.title: the actor its deploys and the apps it makes are stamped with, never the person",
+      "before": [
+        "doc"
+      ]
+    },
     "hostname": {
       "component": true,
       "type": "object",

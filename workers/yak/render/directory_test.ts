@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
-import { personName } from './directory.ts'
+import { personName } from '../stamps.ts'
 
 let named = (b: Record<string, unknown>) =>
   personName({ entity: { eid: 'p', num: 7 }, person: {}, ...b })

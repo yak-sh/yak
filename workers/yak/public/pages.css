@@ -818,6 +818,11 @@
     color: var(--muted);
     font-size: var(--fine);
   }
+  .Apps_Made {
+    color: var(--muted);
+    font-size: var(--fine);
+    line-height: 1.4;
+  }
   .Apps_Tags {
     display: flex;
     flex-wrap: wrap;

@@ -49,7 +49,14 @@ import { DAILY, opened, PER_BUILD, PER_SOURCE } from './newcomer.ts'
 import { isTestAddress } from '@yaks/platform/bots'
 import { sessionAt } from './session.ts'
 import { drawn } from './render/mod.ts'
-import { personName, type Ref, type Uses } from './render/directory.ts'
+import { type Ref, type Uses } from './render/directory.ts'
+import {
+  personName,
+  type Stamp,
+  stampOf,
+  type Writers,
+  writers,
+} from './stamps.ts'
 import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
 import {
   Button,
@@ -158,11 +165,14 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
   }))
   let stored = (h?: Held) => (h?.bytes ?? 0) + (h?.files ?? 0)
   let names = new Map(c.people.map((r) => [r.entity.eid, personName(r)]))
-  let deployed = new Map<string, string>()
-  for (let r of c.deploys) {
-    let app = idOf(r.deploy!.app), at = r.created?.at ?? ''
-    if (at > (deployed.get(app) ?? '')) deployed.set(app, at)
+  // Its latest move live (`deployed`), or before that was kept, its newest
+  // release.
+  let deployed = new Map<string, Stamp>()
+  let newer = (app: string, at: Stamp | null) => {
+    if (at && at.at > (deployed.get(app)?.at ?? '')) deployed.set(app, at)
   }
+  for (let r of c.deploys) newer(idOf(r.deploy!.app), stampOf(r.created))
+  for (let r of c.apps) newer(r.entity.eid, stampOf(r.deployed))
   let trends = new Map(c.spaces.map((r) => [r.entity.eid, r.trend]))
   let out = new Map<string, Uses>()
   for (let r of c.spaces) {
@@ -225,6 +235,8 @@ type Reading = {
   env: Host
   census: Census
   uses: Map<string, Uses>
+  /** what each writer a stamp names is called (stamps.ts `writers`) */
+  writers: Writers
   spaces: Map<string, Space>
   apps: Map<string, Row>
   tests: boolean
@@ -234,6 +246,7 @@ export let read = (env: Host, census: Census, tests: boolean): Reading => ({
   env,
   census,
   uses: uses(census),
+  writers: writers([...census.people, ...census.agents]),
   spaces: new Map(census.spaces.map((r) => [r.entity.eid, spaceOf(r)])),
   apps: new Map(census.apps.map((r) => [r.entity.eid, r])),
   tests,
@@ -255,6 +268,7 @@ let around = (d: Reading, r: Row) => {
   return {
     base: PATH,
     uses: d.uses.get(r.entity.eid),
+    writers: d.writers,
     space,
     address: r.space
       ? spaceHost(d.env, r.space.slug)
@@ -682,7 +696,7 @@ export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
     ])
     ctx.home = home ? refOf(d, home) : undefined
     ctx.from = from ? refOf(d, from) : undefined
-    ctx.deploys = { count: deploys.length, at: deploys[0]?.at ?? '' }
+    ctx.deploys = deploys.length
     ctx.visits = visits?.total ?? null
     ctx.visiting = visits?.daily.length
       ? { from: visits.daily[0].day, values: visits.daily.map((d) => d.views) }

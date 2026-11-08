@@ -527,6 +527,9 @@ export let library = (at: DeskPage, env: Host) => {
               at: `https://${spaceHost(env, at.space)}`,
               errors: a.errors?.length,
               editor: true,
+              made: a.made,
+              deployed: a.deployed,
+              writers: at.writers,
             })
           ),
         ),

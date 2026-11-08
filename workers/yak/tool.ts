@@ -112,6 +112,7 @@ export let asCaller = (ctx: Ctx, role: Who['role']): Who => ({
   person: ctx.person,
   role,
   ...(ctx.who?.actor ? { actor: ctx.who.actor } : {}),
+  ...(ctx.who?.agent ? { agent: ctx.who.agent } : {}),
   ...(ctx.who?.instrument ? { via: ctx.who.instrument } : {}),
 })
 

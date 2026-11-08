@@ -34,7 +34,8 @@ import { mint } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import type { App, Directory, Space } from './directory.ts'
 import type { Reload } from '@yaks/platform'
-import { vouched, type Who } from './session.ts'
+import { acting, vouched, type Who } from './session.ts'
+import { instrumentEid } from './instrument.ts'
 import { refuse } from './tool.ts'
 
 // A version's file set: the path the app serves it at, and the name of its
@@ -325,8 +326,19 @@ export let record = async (
   let all = await dir.deploys(app)
   let prior = all.find((v) => v.version == app.version)
   let eid = target?.eid ?? mint()
+  // Who put it live, and when: the agent writing for a person, or the person
+  // (M-31958), with its session. The deploy row's `created` says the same of
+  // a new release; `deployed` on the app answers for its latest move.
+  let { who: actor, rows } = acting(who)
+  let at = new Date().toISOString()
+  let moved = {
+    at,
+    by: actor.actor ?? actor.person ?? null,
+    via: actor.via ? instrumentEid(actor.via) : null,
+  }
   return await dir.stamp({
     entities: [
+      ...rows,
       {
         entity: { eid: app.eid },
         app: {
@@ -339,7 +351,8 @@ export let record = async (
           worker,
           ...(app.lenses ? { lenses: app.lenses } : {}),
         },
-        ...seeded ? { seeded: { at: new Date().toISOString(), version } } : {},
+        deployed: moved,
+        ...seeded ? { seeded: { at, version } } : {},
         $was: {
           app: {
             version: token(app.version),
@@ -376,11 +389,9 @@ export let record = async (
           from: prior?.eid ?? null,
           to: eid,
           source: app.source,
-          at: new Date().toISOString(),
-          by: who.person || null,
-          via: null,
+          ...moved,
         },
       },
     ],
-  }, vouched(who))
+  }, vouched(actor))
 }

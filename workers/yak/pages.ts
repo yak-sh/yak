@@ -14,6 +14,7 @@
 // icon, the yak, a QR code, markdown theirs.ts drew) goes in whole (`raw`),
 // and so does a page's own script.
 
+import type { Stamp, Writers } from './stamps.ts'
 import { type Field as Fielded, KEY } from '@yaks/connections'
 
 import {
@@ -727,8 +728,15 @@ export type DeskPage = {
   /** the space the page is in, or on a page of the person's own, the one the
    * side's selector holds */
   space: string
-  /** each with its open errors, newest first (unseen.ts `plain`) */
-  apps: (Listed & { errors?: Plain[] })[]
+  /** each with its open errors, newest first (unseen.ts `plain`), and when
+   * it was made and last deployed, and by whom, where known */
+  apps: (Listed & {
+    errors?: Plain[]
+    made?: Stamp | null
+    deployed?: Stamp | null
+  })[]
+  /** what each writer those stamps name is called (stamps.ts `writers`) */
+  writers?: Writers
   trash?: { eid: string; slug: string; title: string; days: number }[]
   name?: string
   email?: string

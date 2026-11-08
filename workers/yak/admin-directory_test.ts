@@ -60,6 +60,7 @@ let records: Census = {
   }],
   deploys: [],
   referrals: [],
+  agents: [],
 }
 let dir = {
   space: (slug: string) => Promise.resolve(slug == META.space ? root : null),

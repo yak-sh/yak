@@ -409,6 +409,11 @@ from that:
 - **Access fails closed.** A missing or unknown mode reads as private
   (packages/member/words.ts `mode()`), and the directory reports an app row with
   none. A default that opens something is a leak waiting for a stale row.
+- **An agent is an actor of its own** (M-31958). A connector's token or the
+  CLI's grant is held by an agent writing for the person (mcp.ts sets
+  `agent`, the client's name), so the apps it makes and the deploys it puts
+  live are stamped `by` its `acts_for{person}` row (instrument.ts `agentEid`,
+  session.ts `acting`), its session in `via`, never as the person's own act.
 - **A guest writes through a vouched via**, with no person (`session.ts`). The
   same cookie holds the browser before sign-in and the person after it.
   `attribution.ts` follows directory receipts to fill missing authors in each

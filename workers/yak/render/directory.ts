@@ -13,6 +13,13 @@ import { type Days, sparkline } from '@yaks/ui/chart'
 import type { Child, Context, H, Renderer } from '@yaks/render'
 import { COMPED } from '../directory.ts'
 import { day, moment } from '../html.ts'
+import {
+  personName,
+  said,
+  type Stamp,
+  stampOf,
+  type Writers,
+} from '../stamps.ts'
 import { count, dollars, size } from '../meter.ts'
 
 /** What one row uses, as the page counted it. */
@@ -23,8 +30,8 @@ export type Uses = {
   requests?: number
   /** page views over the last 30 days; null before the first reading */
   visits?: number | null
-  /** when its newest release was deployed */
-  deployed?: string | null
+  /** when it was last deployed, and by whom */
+  deployed?: Stamp | null
   /** when a write last changed its store */
   changed?: string | null
   /** when its code last reported an error */
@@ -61,6 +68,10 @@ let spend = (s?: Uses['spend']) =>
     : `${dollars(s.spent)} of ${dollars(s.limit)}`
 let when = (iso?: string | null, month: 'long' | 'short' = 'long') =>
   iso ? day(iso, month) : 'never'
+// A stamp, when and by whom (stamps.ts `said`): a component on the row, or one
+// the page counted.
+let stamped = (ctx: Context, s: unknown, month: 'long' | 'short' = 'long') =>
+  said(stampOf(s), (ctx.writers ?? new Map()) as Writers, month) || 'never'
 // What a space pays: a paid plan, or the Plus plan given (a comp).
 let plan = (b: Record<string, unknown>) =>
   COMPED.includes(str((b.space as Comp)?.slug))
@@ -162,12 +173,6 @@ let facts = <N>(h: H<N>, all: [string, Child<N>][]) =>
 /** What an admin calls a person: the name they gave, else the front of their
  * address, else their number to text, else the row's own number, which is all
  * an account that kept no address has to tell it apart. */
-export let personName = (b: Record<string, unknown>) =>
-  str((b.doc as Comp)?.title) ||
-  str((b.email as Comp)?.address).split('@')[0] ||
-  str((b.phone as Comp)?.number) ||
-  `Person #${(b.entity as Comp)?.num ?? '?'}`
-
 let personOf = (b: Record<string, unknown>) => ({
   email: str((b.email as Comp)?.address),
   phone: str((b.phone as Comp)?.number),
@@ -243,7 +248,8 @@ let app: Renderer = {
       [`${str(ctx.space)}/${slug}`, ...u.owners ?? []].join(' · '),
       tags(h, b, u, str(a?.access), ...offered(b)),
       [
-        ['Deployed', when(u.deployed, 'short')],
+        ['Made', stamped(ctx, b.created, 'short')],
+        ['Deployed', stamped(ctx, u.deployed, 'short')],
         ['Data changed', when(u.changed, 'short')],
         ['Last active', when(u.active, 'short')],
         ['Last error', when(u.errored, 'short')],
@@ -280,7 +286,7 @@ let referral: Renderer = {
       `invited by ${inviter.name}`,
       [given?.subscription ? tag(h, 'charge moved') : null],
       [
-        ['Signed up', when(stamp(b, 'created'), 'short')],
+        ['Signed up', stamped(ctx, b.created, 'short')],
         ['First app', given ? when(str(given.at), 'short') : 'not yet'],
         ['Month to', given ? str(ctx.space) || 'a space gone' : ''],
         ['Free through', given ? when(str(given.until), 'short') : ''],
@@ -356,7 +362,7 @@ let personPage: Renderer = {
     return facts(h, [
       ['Email', p.email],
       ['Phone', p.phone],
-      ['Joined', day(stamp(b, 'created'))],
+      ['Joined', stamped(ctx, b.created)],
       [
         'Signed in',
         signed?.at
@@ -384,7 +390,7 @@ let spacePage: Renderer = {
       ['Address', h('a', { href: `https://${address}/` }, address)],
       ['Plan', `${plan(b)}${status ? ` · ${status}` : ''}`],
       ['Owners', refs(h, ctx, owners)],
-      ['Made', day(stamp(b, 'created'))],
+      ['Made', stamped(ctx, b.created)],
       ['Last active', when(u.active)],
       ['Spent this month', trended(h, spend(u.spend), u.spending)],
       ['Database', size(num(m.bytes))],
@@ -409,7 +415,7 @@ let appPage: Renderer = {
     let m = (b.meter as Comp) ?? {}
     let address = str(ctx.address)
     let from = ctx.from as Ref | undefined
-    let deploys = ctx.deploys as { count: number; at: string } | undefined
+    let deploys = ctx.deploys as number | undefined
     let visits = ctx.visits as number | null | undefined
     return facts(h, [
       ['Address', h('a', { href: `https://${address}/` }, address)],
@@ -419,8 +425,8 @@ let appPage: Renderer = {
       [
         'Deploys',
         deploys
-          ? `${count(deploys.count)}${
-            deploys.at ? `, the last ${day(deploys.at)}` : ''
+          ? `${count(deploys)}${
+            u.deployed ? `, the last ${stamped(ctx, u.deployed)}` : ''
           }`
           : '',
       ],
@@ -431,7 +437,7 @@ let appPage: Renderer = {
           : '',
       ],
       ['Installed from', from ? link(h, ctx, from) : ''],
-      ['Made', day(stamp(b, 'created'))],
+      ['Made', stamped(ctx, b.created)],
       ['Last active', when(u.active)],
       ['Data changed', when(u.changed)],
       ['Last error', when(u.errored)],

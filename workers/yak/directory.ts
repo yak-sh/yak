@@ -67,6 +67,7 @@ import type { Texting } from './operator-texts.ts'
 import type { Alerting } from './operator-alerts.ts'
 import type { Subscription } from '@yaks/push'
 import type { Row as GrantRow } from './grant-rows.ts'
+import { principals, type Stamp, stampOf, writers } from './stamps.ts'
 
 // The slugs no space or app may take, because at `<slug>.yaks.app` and at
 // `<slug>@yaks.app` (post.ts `mailFrom`) they would read as the platform
@@ -766,7 +767,9 @@ export type Row = {
   started?: { space?: Id | null }
   newcomer?: { at?: string }
   visitor_build?: { at?: string }
-  created?: { at?: string }
+  created?: { at?: string; by?: Id | null }
+  deployed?: { at?: string; by?: Id | null; via?: Id | null }
+  acts_for?: { person?: Id | null }
   member?: { space: Id; person: Id; role: Role; own?: boolean }
   grant?: { app: Id; person: Id; access: Role }
   operator_reach?: { space: Id; operator: Id; role: Role; by?: Id | null }
@@ -2810,6 +2813,53 @@ export let directoryRows = (rows: {
       (await query(`.deploy.app=${app.eid}&?created`))
         .map(deployOf)
         .sort((a, b) => b.version - a.version),
+    // When each app was made and last put live, and by whom (T-151161): its
+    // `created` and `deployed`, and for an app last deployed before `deployed`
+    // was kept, its newest release's `created`. With them, what each writer is
+    // called (stamps.ts `writers`), so a page says every one the same way.
+    provenance: async (apps: Pick<App, 'eid'>[]) => {
+      let ids = apps.map((a) => a.eid)
+      let of = new Map<string, { made: Stamp | null; deployed: Stamp | null }>()
+      if (!ids.length) return { of, writers: new Map<string, string>() }
+      let rows = await query(
+        `.entity.eid=${ids.join(',')}&?created&?deployed` +
+          '&.fields=created.at,created.by,deployed.at,deployed.by',
+      )
+      for (let r of rows) {
+        of.set(r.entity.eid, {
+          made: stampOf(r.created),
+          deployed: stampOf(r.deployed),
+        })
+      }
+      let before = ids.filter((id) => of.get(id) && !of.get(id)!.deployed)
+      if (before.length) {
+        let releases = await query(
+          `.deploy.app=${before.join(',')}&?created` +
+            '&.fields=deploy.app,created.at,created.by',
+        )
+        for (let r of releases) {
+          let was = of.get(idOf(r.deploy!.app))!, at = stampOf(r.created)
+          if (at && at.at > (was.deployed?.at ?? '')) was.deployed = at
+        }
+      }
+      let by = [...of.values()].flatMap((p) => [p.made?.by, p.deployed?.by])
+      return {
+        of,
+        writers: await self.writers(by.filter((b): b is string => !!b)),
+      }
+    },
+    // What each writer is called (stamps.ts `writers`): a person, or an agent
+    // for its person, whose row is read beside it.
+    writers: async (eids: string[]): Promise<Map<string, string>> => {
+      let ids = [...new Set(eids)]
+      if (!ids.length) return new Map()
+      let rows = await query(`.entity.eid=${ids.join(',')}`)
+      let more = principals(rows).filter((p) => !ids.includes(p))
+      return writers([
+        ...rows,
+        ...more.length ? await query(`.entity.eid=${more.join(',')}`) : [],
+      ])
+    },
     // One release of the app, by its version.
     deployAt: async (app: App, version: number) => {
       let row = await one(
@@ -2842,21 +2892,26 @@ export let directoryRows = (rows: {
     // their starter went to, and when they came in by the home page's box.
     census: async () => {
       let stamps = '?created&?used'
-      let [people, spaces, apps, seats, deploys, referrals] = await Promise
-        .all([
+      let [people, spaces, apps, seats, deploys, referrals, agents] =
+        await Promise.all([
           query(
             `.person&?doc&?email&?phone&?signed_in&?started&?newcomer&${stamps}`,
           ),
           // A row's days ride only here: every other read of a row does
           // without.
           query(`.space&${SPACE_ABOUT}&?trend&?visitor_build&${stamps}`),
-          query(`.app&${ABOUT}&?trend&${stamps}&?changed&?errored`),
+          query(
+            `.app&${ABOUT}&?trend&${stamps}&?changed&?errored&?deployed`,
+          ),
           query('.member'),
-          // Only which app and when: a release's whole row is its file list.
-          query('.deploy&.fields=deploy.app,created.at'),
+          // Only which app, when and by whom: a release's whole row is its
+          // file list.
+          query('.deploy&.fields=deploy.app,created.at,created.by'),
           query('.referral&?rewarded&?created'),
+          // The agents a stamp may name (stamps.ts `writers`).
+          query('.acts_for&?doc'),
         ])
-      return { people, spaces, apps, seats, deploys, referrals }
+      return { people, spaces, apps, seats, deploys, referrals, agents }
     },
     // The app that answers the space's bare hostname, if it has one: the one
     // in this space wearing `home` (T-34227). At most one does — `homing`

@@ -526,6 +526,7 @@ let desk = async (
     operator,
     billed,
     provider,
+    made,
   ] = await Promise.all([
     shelved,
     // What is broken in each app (unseen.ts `brokenIn`), read only for the
@@ -588,6 +589,15 @@ let desk = async (
       })
       : undefined,
     payments(env),
+    // Who made each app and who deployed it last (T-151161), for the page
+    // that lists them. A read that fails is reported and the apps are drawn
+    // without it.
+    view == 'apps'
+      ? shelved.then(({ all }) => dir.provenance(all)).catch((e) => {
+        caught(e, { request: 'read app provenance', space: space.slug })
+        return undefined
+      })
+      : undefined,
   ])
   let known = await inHand(agents)
   let page = deskPage({
@@ -604,7 +614,10 @@ let desk = async (
       access: a.access,
       gallery: pilled(standing(a)),
       errors: broken?.get(a.eid),
+      made: made?.of.get(a.eid)?.made,
+      deployed: made?.of.get(a.eid)?.deployed,
     })),
+    writers: made?.writers,
     trash: here.filter((a) => a.trashed).map((a) => ({
       eid: a.eid,
       slug: a.slug,

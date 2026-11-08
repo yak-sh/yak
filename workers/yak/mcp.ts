@@ -827,6 +827,15 @@ let answered = async (
     : req.headers.get('mcp-session-id') ?? ''
   let instrument = await instrumentOf(session, auth.person, env.SESSION_SECRET)
   if (instrument) ctx.who = { ...auth, instrument }
+  // A connector's token or the CLI's grant is held by an agent writing for the
+  // person, named as the client named itself at `initialize` (M-31958); a
+  // browser's cookie is the person's own hand.
+  if (auth.via != 'session') {
+    ctx.who = {
+      ...ctx.who!,
+      agent: clientOf(session) ?? (auth.via == 'grant' ? 'yak' : 'agent'),
+    }
+  }
   // Building the reach and tool schemas is read-only. If a directory commit
   // overtakes it, discard the entire provisional reach, not just its epoch.
   let built: Awaited<ReturnType<typeof door>> | undefined
