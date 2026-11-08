@@ -695,15 +695,24 @@ let TOLD = ' The people who run yaks.app have been told.'
  *   content: { body: "clerk's model and voice budget for this month is spent" },
  * })]), { text: "clerk's model and voice budget for this month is spent" })
  * equal(replyOf([]).fault, 'ended without an answer')
+ * let refused = line(4, {
+ *   result: { call: 'c' }, refusal: { code: 'arguments' },
+ *   content: { body: 'Invalid tool arguments: missing command' },
+ * })
+ * equal(replyOf([said, refused, line(5, { ask: {} })]).fault,
+ *   'ended without an answer')
  * ```
  */
 export let replyOf = (
   entries: Bundle[],
 ): { text: string; fault?: string } => {
+  // A model asked after its calls were answered, a refusal among them, is
+  // where the work stands: what it answered, or that it answered nothing.
   let end = ordered(entries).findLast((b) =>
     b.content && (b.output || b.refusal || b.exception) || b.failed ||
-    kindOf(b) == 'stop'
+    kindOf(b) == 'stop' || kindOf(b) == 'ask'
   )
+  if (end && kindOf(end) == 'ask' && !end.failed) end = undefined
   let said = end ? textOf(end) : ''
   let kind = end && kindOf(end)
   if (kind == 'stop') return { text: said }

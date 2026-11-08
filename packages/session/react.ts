@@ -207,6 +207,13 @@ export type Tool = Declared & {
   readOnly?: boolean
 }
 
+/** What the model is told of a call its reply was cut off writing (`cut`):
+ * nothing ran, and how to fit the call in a reply. */
+export let CUT = 'This call was cut off: your reply reached its output limit ' +
+  'while writing it, so its arguments were incomplete and nothing ran. Make ' +
+  'it again with less in one reply: think less before it, and split a long ' +
+  'script or file across several smaller calls.'
+
 /** How long a background call (`tool_async`) runs before it is given a
  * Pending entry (`tool_progress`), in milliseconds. A model turn starts when
  * there is something new to read: an input, a result, or that Pending, which
@@ -830,6 +837,12 @@ export let react = async (
     if (reply.usage && sent && g.vocab.comp('context_parts')) {
       finalAsk.context_parts = contextParts(sent.fixed, sent.lines, reply.usage)
     }
+    // A reply cut at its output limit before it said or called anything is
+    // an interrupted one: the transcript asks again, as after any other
+    // interruption, until RETRIES in a row leave it failed (./state.ts).
+    if (reply.cut && !reply.items.length) {
+      finalAsk.interrupted = { code: 'cut' }
+    }
     let added: Bundle[] = [finalAsk, ...await carried(g, session, sent)]
     let textIndex = 0
     for (let item of reply.items) {
@@ -855,7 +868,8 @@ export let react = async (
         // the transcript resends it verbatim, and the call is refused (`served`).
         // A background call (`tool_async`) is answered by a Pending the
         // request derives from it (./project.ts), and starts no turn until it
-        // answers or outlasts its patience (`patient`).
+        // answers or outlasts its patience (`patient`). The call a cut reply
+        // was writing is unfinished (`cut`), whatever its text spells.
         let args = objectIn(item.args)
         added.push(line(
           {
@@ -866,6 +880,7 @@ export let react = async (
               source: ask.entity.eid,
             },
             ...deps.asyncTools ? { tool_async: {} } : {},
+            ...reply.cut && item == reply.items.at(-1) ? { cut: {} } : {},
           },
           args ? undefined : item.args,
         ))
@@ -1138,13 +1153,14 @@ export let react = async (
     // carries `content` and `output{source}`, so the answer names the call it
     // came from and the runner lands it like any other. A call carrying text
     // is one whose model text spelled no object: it has no arguments to run
-    // with.
+    // with, and neither has one its reply was cut off writing (`cut`).
     const served = (tool: Tool): GraphTool => ({
       name: tool.name,
       description: tool.description ?? '',
       inputSchema: tool.parameters,
       ...tool.readOnly ? { readOnly: true } : {},
       run: async (call) => {
+        if (call.cut) throw new CallError('cut', CUT)
         if (textOf(call)) {
           throw new CallError(
             'arguments',

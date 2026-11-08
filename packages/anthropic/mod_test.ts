@@ -247,6 +247,36 @@ test('an error event, a stream cut short or a failed connection is busy', async 
   }
 })
 
+test('a reply stopped at its output limit is cut, its last call as far as written', async () => {
+  let stopped = (stop_reason: string, partial: string, ended = true) =>
+    reply().flatMap((e): unknown[] =>
+      e.type == 'message_delta'
+        ? [{ ...e, delta: { stop_reason } }]
+        : e.type == 'content_block_delta' && e.index == 1
+        ? [{ ...e, delta: { type: 'input_json_delta', partial_json: partial } }]
+        : e.type == 'content_block_stop' && e.index == 1 && !ended
+        ? []
+        : [e]
+    )
+  let asked = (events: unknown[]) =>
+    messages({ key: () => 'k', fetch: api(() => sse(events)).fetch })(ask())
+      .catch((e) => e)
+  let call = (args: string) => ({
+    kind: 'call',
+    id: 'tu_1',
+    name: 'find',
+    args,
+  })
+  for (let ended of [true, false]) {
+    let out = await asked(stopped('max_tokens', '{"q":"ya', ended))
+    equal([out.cut, out.items.at(-1)], [true, call('{"q":"ya')])
+  }
+  let whole = await asked(stopped('max_tokens', '{"q":"yak"}'))
+  equal([whole.cut, whole.items.at(-1)], [true, call('{"q":"yak"}')])
+  equal((await asked(reply())).cut, undefined)
+  equal((await asked(stopped('tool_use', '{"q":"ya'))).code, 'malformed_stream')
+})
+
 test('list reads every page the API has', async () => {
   let page = (has_more: boolean, ...ids: string[]) =>
     Response.json({

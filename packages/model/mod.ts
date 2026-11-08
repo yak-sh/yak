@@ -296,6 +296,9 @@ export type Reply = {
   /** False for an adapter-measured tariff; provider-reported by default. */
   costReported?: boolean
   artifacts?: (Artifact & { call: string; revised_prompt?: string })[]
+  /** The reply stopped at its output token limit (`Request.tokens`): what it
+   * was writing last is unfinished, a tool call's arguments included. */
+  cut?: boolean
 }
 
 /** The components a provider writes on the entry that records a reply. */

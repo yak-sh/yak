@@ -34,7 +34,14 @@ import { docDoc } from '@yaks/doc/vocab'
 import { kindOf, statusOf, textOf } from './state.ts'
 import { appendEntry } from './append.ts'
 import { sessions } from './plugin.ts'
-import { type Deps, react, recent, ToolError, transcript } from './react.ts'
+import {
+  CUT,
+  type Deps,
+  react,
+  recent,
+  ToolError,
+  transcript,
+} from './react.ts'
 import { running, runningAt, settle } from './run.ts'
 import { took } from './timing.ts'
 import { GAP } from './compact.ts'
@@ -1481,6 +1488,55 @@ test('a call for a tool this session does not serve is refused, not left open', 
     String((refused.content as Comp).body).includes('no such tool'),
     true,
   )
+})
+
+test('a reply cut at its output limit never ends the run: its unfinished call is refused, an empty one asked again', async () => {
+  let cut = (reply: Reply): Reply => ({ ...reply, cut: true })
+  let g = world()
+  let { model, asked } = scripted([
+    cut({
+      ...calls(['c1', 'a']),
+      items: [...calls(['c1', 'a']).items, {
+        kind: 'call',
+        id: 'c2',
+        name: 'echo',
+        args: '{"text":"a long scr',
+      }],
+    }),
+    cut({ id: 'r2', model: 'fake-1', items: [] }),
+    says('r3', 'done'),
+  ])
+  assertEquals(await rest(g, ids.s, { model, tools: [echo], mint }), 'settled')
+  let entries = await transcript(g, ids.s)
+  assertEquals(entries.map(kindOf), [
+    'input',
+    'ask',
+    'call',
+    'call',
+    'result',
+    'result',
+    'ask',
+    'ask',
+    'output',
+  ])
+  let [ran, refused] = entries.filter((b) => kindOf(b) == 'result')
+  assertEquals(ran.refusal, undefined)
+  assertEquals([refused.refusal, textOf(refused)], [{ code: 'cut' }, CUT])
+  assertEquals((entries[6].interrupted as Comp).code, 'cut')
+  assertEquals(asked.length, 3)
+  // Each reply cut with nothing in it is asked again, RETRIES in a row at most.
+  let { model: quiet, asked: again } = scripted(
+    Array.from(
+      { length: 5 },
+      () => cut({ id: 'r', model: 'fake-1', items: [] }),
+    ),
+  )
+  let h = world()
+  assertEquals(
+    await rest(h, ids.s, { model: quiet, tools: [echo], mint }),
+    'failed',
+  )
+  assertEquals(again.length, 3)
 })
 
 test('a fork must name an entry, a using a model', () => {

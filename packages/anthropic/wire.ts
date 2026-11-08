@@ -196,20 +196,14 @@ export let events = (body: ReadableStream<Uint8Array>) =>
     if (e.type == 'error') throw failure(undefined, JSON.stringify(e))
   }) as AsyncGenerator<Event>
 
-let input = (json: string) => {
-  let v = parse(json)
-  if (v === undefined) {
-    throw fault('malformed_stream', 'a tool call input is not JSON')
-  }
-  return v
-}
-
 let present = <T extends object>(o: T) =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v != null))
 
 /** The message after one more event of its stream: a block begins, grows by
  * its delta (text, a tool call's input, a citation) or ends, or the message
- * says why it stopped and what it used.
+ * says why it stopped and what it used. A tool call's input is parsed as its
+ * block ends; input that spells no JSON keeps its text in `json`, which only
+ * a reply cut at its output limit may hold (@yaks/model `Reply.cut`).
  * Usage is cumulative, so each count the event names replaces the last. */
 export let built = (m: Message, e: Event): Message => {
   let at = e.index ?? 0
@@ -227,7 +221,8 @@ export let built = (m: Message, e: Event): Message => {
     }
   } else if (e.type == 'content_block_stop' && block?.json != null) {
     let { json, ...rest } = block
-    m.content[at] = { ...rest, input: json ? input(json) : rest.input }
+    let input = json ? parse(json) : rest.input
+    m.content[at] = input === undefined ? block : { ...rest, input }
   } else if (e.type == 'message_delta') {
     m.stop_reason = d.stop_reason
     m.stop_details = d.stop_details

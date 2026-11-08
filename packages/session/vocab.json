@@ -992,6 +992,13 @@
       "description": "a native transcript call dispatched by its own durable effect; no session lease waits for it, and a request answers it with a derived Pending until its result lands",
       "properties": {}
     },
+    "cut": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "description": "on a call: the model's reply stopped at its output token limit while writing it, so its arguments are unfinished; it never runs, and its refusal tells the model why",
+      "properties": {}
+    },
     "tool_progress": {
       "component": true,
       "journal": false,

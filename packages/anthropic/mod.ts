@@ -210,7 +210,8 @@ let sources = (cited: Citation[] = [], linked: Set<string>) =>
 
 /** A reply's items in the order the model wrote them. Text runs on across the
  * blocks its citations split it into and the searches and fetches the API ran
- * within it, and each web page it cites is linked after the text citing it. */
+ * within it, and each web page it cites is linked after the text citing it.
+ * A call's arguments are its input, or the text of an input cut short. */
 export let items = (content: Content[]): Item[] => {
   let out: Item[] = []
   let linked = new Set<string>()
@@ -221,7 +222,7 @@ export let items = (content: Content[]): Item[] => {
         kind: 'call',
         id: b.id!,
         name: b.name!,
-        args: JSON.stringify(b.input ?? {}),
+        args: b.json ?? JSON.stringify(b.input ?? {}),
       })
     } else if (b.type == 'text') {
       let last = out.at(-1)
@@ -363,10 +364,16 @@ export let messages = (options: Options): Model => {
         message.stop_details?.explanation ?? 'Claude declined this request',
       )
     }
+    // Only a reply stopped at its output limit leaves a call's input unended.
+    let cut = message.stop_reason == 'max_tokens'
+    if (!cut && message.content.some((b) => b.json != null)) {
+      throw new ModelError('malformed_stream', 'a tool call input is not JSON')
+    }
     return {
       id: message.id,
       model: message.model,
       items: items(message.content),
+      ...cut ? { cut } : {},
       usage: usage(message.usage),
       cacheExpiresAt: new Date(started + (hour(req) ? 3600 : 300) * 1000)
         .toISOString(),
