@@ -56,21 +56,6 @@ let passes = (site: object, keys: string[]) => {
   let held = passing.get(site), now = Date.now()
   return !!held && keys.some((key) => (held.get(key) ?? 0) > now)
 }
-// The store each address's page named as a browser last ran it (`Seen.store`),
-// per binding as `passing` is. A view of that address again starts the store
-// before Site is asked, so the store's start overlaps Site's lookup, and the
-// render behind a miss, rather than following it (`asked`, T-151010).
-let STORES = 1_000
-let naming = new WeakMap<object, Map<string, string>>()
-let named = (site: object, key: string, store: string | null) => {
-  let held = naming.get(site)
-  if (!held) naming.set(site, held = new Map())
-  held.delete(key)
-  if (!store) return
-  held.set(key, store)
-  if (held.size > STORES) held.delete(held.keys().next().value!)
-}
-
 // The addresses one app answers on a hostname: those under its mount, which
 // for a space's front page is every one.
 export let scope = (host: string, mount: string | null, at: string) =>
@@ -195,10 +180,7 @@ let HITS = ['HIT', 'UPDATING', 'STALE']
  * serves it itself. A stranger's page is never a person's: a `session` that
  * names one is answered their own copy (`pageAt`), which Site keeps only
  * while they hold no seat in its space, so a member is always the caller's
- * to serve. A page view is the caller's to count (`count`), and the store a
- * page that `opens` names is the caller's to `wake`: the one this address
- * named last time as Site is asked, and the one its answer names, if another,
- * as it arrives. */
+ * to serve. A page view is the caller's to count (`count`). */
 export let asked = async (
   req: Request,
   site: Pick<Fetcher, 'fetch'>,
@@ -207,7 +189,6 @@ export let asked = async (
   c: Timer,
   count: (answer: Response, at: Seen) => void,
   session: string | null = null,
-  wake: (store: string) => void = () => {},
 ) => {
   let path = new URL(req.url).pathname
   if (!shareable(req, path)) return null
@@ -219,8 +200,6 @@ export let asked = async (
   if (passes(site, [key, ...mounts.map((at) => scope(host, mount, at))])) {
     return null
   }
-  let woken = naming.get(site)?.get(key)
-  if (woken) wake(woken)
   let pick = req.headers.get(PICK)
   // What Site holds at a key, and what it says of it, or null for a pass.
   let held = async (key: string, cookie?: string) => {
@@ -293,9 +272,6 @@ export let asked = async (
   if (!answer.body) await got.body?.cancel()
   if (at.handle) answer = claimed(req, answer, at.handle)
   if (at.app && at.slug && at.space) count(answer, at as Seen)
-  let store = opens(answer) && at.store || null
-  named(site, key, store)
-  if (store && store != woken) wake(store)
   return answer
 }
 

@@ -197,34 +197,6 @@ test('a kept page starts the store its scripts ask next', async () => {
   }
 })
 
-test('a page viewed again wakes the store it named as Site is asked', async () => {
-  let naming = (store?: string) => () =>
-    page({
-      [SEEN]: JSON.stringify({ app: 'a', space: 'ada', slug: 'c', store }),
-    })
-  let answer = naming('ada/c.abc')
-  // What had been woken each time Site was asked.
-  let asking: string[][] = []
-  let f = front(() => (asking.push([...f.warmed]), answer()))
-  let views = async (n: number) => {
-    for (let i = 0; i < n; i++) await f.go(at)
-  }
-  await views(2)
-  answer = naming('ada/c.def')
-  await views(2)
-  answer = naming()
-  await views(2)
-  let [abc, def] = ['ada/c.abc', 'ada/c.def']
-  assertEquals(asking, [
-    [],
-    [abc, abc],
-    [abc, abc, abc],
-    [abc, abc, abc, def, def],
-    [abc, abc, abc, def, def, def],
-    [abc, abc, abc, def, def, def],
-  ])
-})
-
 // A kept forward is kept by its path alone; the visitor's query goes on with
 // them, so an ad's `utm_*` reaches the page it points at.
 test("a kept forward keeps the visitor's query", async () => {
