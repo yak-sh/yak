@@ -854,6 +854,19 @@ export let handleChannels = (
             channel: request.channel,
             ...request.channel == 'signup' ? { signup: request.address } : {},
             framing,
+            from: ({
+              wake: 'the system (your wake-up)',
+              subscription: 'the system (your subscription)',
+              error: 'the system',
+              escalated: `your conversation with ${
+                request.address ?? 'the writer'
+              }`,
+              voice: request.call
+                ? 'your voice on the call'
+                : 'the person on the phone',
+              letter: request.address,
+              texted: request.address,
+            } as Record<string, string | undefined>)[request.channel],
             ...request.call ? { call: request.call } : {},
             ...request.model ? { model: request.model } : {},
             ...request.provider ? { provider: request.provider } : {},

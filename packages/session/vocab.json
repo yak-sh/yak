@@ -352,7 +352,7 @@
           "seq"
         ]
       ],
-      "description": "one entry of a transcript; the component stored beside it is its kind",
+      "description": "one entry of a transcript; the component stored beside it is its kind; every model-bound message names its source independently of its provider turn role. Only the person\u2019s own words are their user input",
       "search": [
         "content.body"
       ],
@@ -367,6 +367,10 @@
         "seq": {
           "type": "number",
           "description": "Positive integer position; omit on append to allocate atomically. Explicit fractional or occupied positions are refused."
+        },
+        "from": {
+          "type": "string",
+          "description": "Who wrote these words, rendered as From <from> by generic prompt assembly for every provider: the system, checkpoint summarizer, parent session, helper, TaskMaster or named person. Set for injected messages; never impersonate the person through created.by. Older rows infer their source from transcript components and writer stamps."
         }
       }
     },
@@ -436,7 +440,7 @@
         },
         "own": {
           "type": "boolean",
-          "description": "the agent's own words, said outside a model turn (by a voice on a call), which the model reads as its own reply"
+          "description": "words spoken outside this model's turn by its voice on a call; prompt assembly labels the voice as their source rather than presenting them as this model's output"
         }
       }
     },

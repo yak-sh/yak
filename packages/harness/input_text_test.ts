@@ -50,7 +50,7 @@ test('model messages distinguish input during a reply from input after its end',
       content: [{
         type: 'input_text',
         text:
-          '[Sent 2026-10-16T10:00:05Z; previous reply ended 2026-10-16T10:00:10Z]\none more thing',
+          'From an unknown sender:\n[Sent 2026-10-16T10:00:05Z; previous reply ended 2026-10-16T10:00:10Z]\none more thing',
       }],
     },
     {
@@ -58,7 +58,7 @@ test('model messages distinguish input during a reply from input after its end',
       content: [{
         type: 'input_text',
         text:
-          '[Sent 2026-10-16T10:00:15Z; previous reply ended 2026-10-16T10:00:10Z]\nhaving read that',
+          'From an unknown sender:\n[Sent 2026-10-16T10:00:15Z; previous reply ended 2026-10-16T10:00:10Z]\nhaving read that',
       }],
     },
   ])
@@ -81,19 +81,20 @@ test('missing completion times are not replaced with reply start times', () => {
   equal(message([first, { ...ask, updated: undefined }, output, during]), {
     kind: 'user',
     text:
-      '[Sent 2026-10-16T10:00:05Z; previous reply ended unknown]\none more thing',
+      'From an unknown sender:\n[Sent 2026-10-16T10:00:05Z; previous reply ended unknown]\none more thing',
   })
   equal(
     message([first, { ...ask, attempt: { by: 'worker' } }, output, during]),
     {
       kind: 'user',
       text:
-        '[Sent 2026-10-16T10:00:05Z; previous reply ended unknown]\none more thing',
+        'From an unknown sender:\n[Sent 2026-10-16T10:00:05Z; previous reply ended unknown]\none more thing',
     },
   )
   equal(message(transcript, first), {
     kind: 'user',
-    text: '[Sent 2026-10-16T10:00:00Z; previous reply ended none]\nbegin',
+    text:
+      'From an unknown sender:\n[Sent 2026-10-16T10:00:00Z; previous reply ended none]\nbegin',
   })
 })
 
@@ -105,8 +106,8 @@ test('notices and imported inputs without sent times keep their prose', () => {
       inputText: inputText(transcript),
     }),
     [
-      { kind: 'user', text: 'one more thing' },
-      { kind: 'user', text: 'having read that' },
+      { kind: 'user', text: 'From the system:\none more thing' },
+      { kind: 'user', text: 'From an unknown sender:\nhaving read that' },
     ],
   )
 })
@@ -119,20 +120,20 @@ let from = (created: Record<string, string>) =>
     new Map([['jeff', 'Jeff (U-1)'], ['S2', 'S-2 wearing Oracle (N-3)']]),
   )(
     { ...first, created: { at: '2026-10-16T10:00:00Z', ...created } },
-  ).split('\n')[0]
+  ).from
 
 test('an input names who sent it, a person or another session', () => {
   equal(
     from({ by: 'jeff', via: 's' }),
-    '[From Jeff (U-1); sent 2026-10-16T10:00:00Z; previous reply ended none]',
+    'Jeff (U-1)',
   )
   equal(
     from({ by: 'oracle', via: 'S2' }),
-    '[From S-2 wearing Oracle (N-3); sent 2026-10-16T10:00:00Z; previous reply ended none]',
+    'S-2 wearing Oracle (N-3)',
   )
   equal(
     from({ by: 'stranger', via: 'stranger' }),
-    '[Sent 2026-10-16T10:00:00Z; previous reply ended none]',
+    'actor stranger',
   )
 })
 
@@ -176,16 +177,14 @@ let named = await (async () => {
 test('senders names people, personas and sessions by title and id', () =>
   equal(named.got, [...named.want, undefined]))
 
-test('words the platform wrote are from the system, whoever wrote the row', () => {
+test('system reports and helpers name their source independently of the row actor', () => {
   let names = new Map([['p', 'Jeff (#p)']])
   let by = { at: '2026-10-16T10:00:20Z', by: 'p', via: 's' }
   let said = inputText(transcript, names)
   let line = (rest: Omit<Bundle, 'entity' | 'entry'>) =>
-    said(row('x', 6, { content: { body: 'b' }, created: by, ...rest })).split(
-      ';',
-    )[0]
+    said(row('x', 6, { content: { body: 'b' }, created: by, ...rest })).from
   equal(
     [line({}), line({ system: {} }), line({ delivery: { child: 'c' } })],
-    ['[From Jeff (#p)', '[From the system', '[From the system'],
+    ['Jeff (#p)', 'the system', 'your helper (c)'],
   )
 })

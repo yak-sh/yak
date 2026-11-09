@@ -5,7 +5,14 @@ import { cleanup, clock, equal, test, until } from '@yaks/testing'
 import { CallError } from '@yaks/tools'
 import { line } from '@yaks/telnyx'
 import { consentEid } from '@yaks/phone'
-import { OPENAI, type Socket, talk, type Talked, type Told } from '@yaks/speech'
+import {
+  OPENAI,
+  type Socket,
+  talk,
+  type Talked,
+  type Told,
+  type Words,
+} from '@yaks/speech'
 import type { Request } from '@yaks/model'
 import { conversation } from '@yaks/anthropic'
 import type { Bundle } from '@yaks/graph'
@@ -37,6 +44,7 @@ import { ANSWERED, ASKED, HELLO, SMALL_TALK } from './operator-calls_fixture.ts'
 import { parseHTML } from 'linkedom'
 import { sourceWords } from './operator-source.ts'
 
+let replyText = (words: Words) => typeof words == 'string' ? words : words.text
 let HI = greeting('Ada', 'Jeff')
 let NUMBER = '+18663141594', JEFF = '+12695550142', ANA = '+12695550143'
 
@@ -679,7 +687,7 @@ test('a recorded call answers small talk itself, keeping it in the conversation,
     item: {
       type: 'function_call_output',
       call_id: 'call_Gx7AcRPt9P8OTiLI',
-      output: 'Mossvale has one open error.',
+      output: 'From the Operator:\nMossvale has one open error.',
     },
   })
   c.tell(ANSWERED)
@@ -714,7 +722,10 @@ test('a talking model hears the call, asks the Operator, and says its answer', a
   equal(c.asked, ['Book the hall'])
   equal(c.call.waiting(), true)
   c.call.answered('**Booked** for Friday: https://hall.yaks.app')
-  equal(await output, 'Booked for Friday: the link')
+  equal(await output, {
+    text: 'Booked for Friday: the link',
+    from: 'the Operator',
+  })
   c.told().audio(new Uint8Array([8]))
   equal(c.played(), 2)
   // An answer nobody is waiting on, such as a helper's, is said as it comes.
@@ -727,7 +738,10 @@ test('a talking model hears the call, asks the Operator, and says its answer', a
   let delegated = c.told().delegate!('Move it to Friday')
   await until(() => c.asked.length == 2)
   c.call.answered('Moved.')
-  equal([c.asked[1], await delegated], ['Move it to Friday', 'Moved.'])
+  equal([c.asked[1], await delegated], ['Move it to Friday', {
+    text: 'Moved.',
+    from: 'the Operator',
+  }])
   c.frame({ event: 'stop' })
   await c.call.ended
   equal(c.done[0].heard, 0.25)
@@ -777,7 +791,7 @@ test('a talking model is told the conversation and the work as the call starts, 
   equal(await c.told().call('apps', '{}'), 'home/recipes')
   // A lookup that fails is reported, and the caller told it failed on our side.
   equal(
-    (await c.told().call('updates', '{}')).startsWith('That failed'),
+    replyText(await c.told().call('updates', '{}')).startsWith('That failed'),
     true,
   )
   equal(failures.map((e) => (e as Error).message), ['the inbox is gone'])
@@ -808,7 +822,7 @@ test("a talking model's backend calls the Operator's own tools: their refusal is
   equal(await c.told().call('graph_apply', '{"app":"list"}'), 'Written.')
   equal(await c.told().call('wake_set', '{}'), 'Say when.')
   equal(
-    (await c.told().call('text_send', '{}')).startsWith('That failed'),
+    replyText(await c.told().call('text_send', '{}')).startsWith('That failed'),
     true,
   )
   equal(ran, [['graph_apply', { app: 'list' }], ['wake_set', {}], [
@@ -917,32 +931,36 @@ test("a recorded call is the caller's conversation: their words theirs, its voic
   ])
   equal(texts('.Talk_Asked .Talk_Reply'), ['Mossvale has one open error.'])
   equal(
-    ['By phone:', 'your voice', 'called you'].map((s) => html.includes(s)),
+    ['By phone:', 'your voice', 'called you'].map((s) =>
+      [...texts(`.Talk_You${open}`), ...texts(`.Talk_Reply${open}`)].some((
+        text,
+      ) => text.includes(s))
+    ),
     [false, false, false],
   )
 
   // What the Operator reads at its next turn: the caller's words as theirs,
-  // and what its voice said as its own, after the call's start.
+  // and what its voice said identified as the voice, after the call's start.
   await operator.ask({ person }, space, { say: 'Any more?' })
   await drain(store)
   equal(asked.length, 2)
   let read = asked[1].items.flatMap((i) =>
     i.kind == 'user' || i.kind == 'assistant'
-      ? [`${i.kind}: ${i.text.replace(/^\[[^\]]*\]\s*/, '')}`]
+      ? [`${i.kind}: ${i.text.replace(/\[Sent [^\]]*\]\s*/, '')}`]
       : []
   )
   equal(read.slice(0, 6), [
-    'user: They called you, and your voice on the call answered.',
-    "assistant: Hi, it's Elihu.",
-    'user: By phone: Hi Ellihu, how are you this evening?',
-    'assistant: Good evening. I’m well, thank you. Ready to assist with anything you need.',
-    'user: By phone: Hi, Ellahu, do any of my apps have errors right now?',
-    'assistant: Certainly, one moment.',
+    'user: From the system:\nThey called you, and your voice on the call answered.',
+    "user: From your voice on the call:\nHi, it's Elihu.",
+    'user: From the person on the phone:\nBy phone: Hi Ellihu, how are you this evening?',
+    'user: From your voice on the call:\nGood evening. I’m well, thank you. Ready to assist with anything you need.',
+    'user: From the person on the phone:\nBy phone: Hi, Ellahu, do any of my apps have errors right now?',
+    'user: From your voice on the call:\nCertainly, one moment.',
   ])
-  equal(read.slice(6, 9).map((r) => r.slice(0, 50)), [
-    'user: On the phone, your voice on the call asks yo',
+  equal(read.slice(6, 9).map((r) => r.split('\n')[0]), [
+    'user: From your voice on the call:',
     'assistant: Mossvale has one open error.',
-    'assistant: You have one open error in Mossvale.',
+    'user: From your voice on the call:',
   ])
 })
 
@@ -987,15 +1005,17 @@ test("a call whose voice spoke after the caller's last words asks the Operator w
   let said = conversation(asked[0]).flatMap((m) =>
     m.content.flatMap((c) =>
       c.type == 'text'
-        ? [`${m.role}: ${sourceWords(c.text).replace(/^\[[^\]]*\]\s*/, '')}`]
+        ? [
+          `${m.role}: ${sourceWords(c.text).replace(/\[Sent [^\]]*\]\s*/, '')}`,
+        ]
         : []
     )
   )
-  equal(said.slice(0, -1), [
-    'user: They called you, and your voice on the call answered.',
-    'user: Add a random recipe.',
-    'user: By phone: Okay.',
-    'assistant: The request is still in progress, so I can’t',
+  equal(said, [
+    'user: From the system:\nThey called you, and your voice on the call answered.',
+    'user: From your voice on the call:\nAdd a random recipe.',
+    'user: From the person on the phone:\nBy phone: Okay.',
+    'user: From your voice on the call:\nThe request is still in progress, so I can’t',
   ])
   // The Operator is asked for its turn, never to finish its voice's words.
   equal(said.at(-1)!.startsWith('user: '), true)

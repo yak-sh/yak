@@ -313,7 +313,8 @@ export let OPENAI: Provider = {
         ...text == undefined && !tools ? {} : {
           response: {
             ...text == undefined ? {} : {
-              instructions: `Say exactly this, and nothing else: ${text}`,
+              instructions:
+                `Say only the message below, without reading its source label aloud:\n${text}`,
             },
             ...tools &&
               { tools: tools.map((t) => ({ type: 'function', ...t })) },

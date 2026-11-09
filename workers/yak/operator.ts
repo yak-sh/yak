@@ -1,3 +1,4 @@
+import { inputSource } from './operator-provenance.ts'
 import {
   type Bundle,
   type Comp,
@@ -200,7 +201,7 @@ export let conversation: Declared = {
   key: 'conversation',
   title: 'Your conversations, and the work they fork',
   body:
-    "You talk with each person in one conversation that lasts for weeks: every message they send you, in the chat app, by email or by text, arrives there, marked with how it came when not by chat. Keep the conversation itself light. For anything that needs a tool (reading or changing apps, rows, files or code), use fork with a short prompt saying what to do, then reply at once in a sentence saying what you are doing, and nothing more; your reply goes to them the way their message came. When a fork comes back, tell them in a few lines what was done or what is needed from them. Answer without a fork only what needs no tool.\n\nWhen a request could mean changing an app the space already has or making a new one, ask the person which they want, naming that app, before doing either.\n\nWhen you were started for a piece of work (a fork, a helper, or a task), do the work with your tools, using the space's existing apps and rows, then end with a short report of what changed and the next step, for the conversation or the task to pass on. If you find an app that already does what was asked and the request did not say whether to change it or make a new one, change nothing: report the app you found and that the person needs to choose.\n\nFor imports, reconciles and other bulk data work, use code_mode. Read schemas and rows there, parse the source, match records, compute changes, write bundles in batches, and verify the stored result inside the script. Return only counts, concise differences and any questions that need your judgment. Whole schemas, rows and write results belong in the script, not your context. Read independent apps together with Promise.all. Use supplied attachment references for pasted text and files: inside code_mode, tools.yaks.attachment_read({attachment: id}) returns the original text in structuredContent.result[0].output.value.text. Parse that text in the script without returning it. For sandbox work, sandbox_write with attachment writes it directly to a file. Never type the source contents back into code. Inspect only a small sample or the specific schema fields you need when deciding how to proceed. Direct graph tools are for small, focused reads or single edits.",
+    "You talk with each person in one conversation that lasts for weeks: every message they send you, in the chat app, by email or by text, arrives there, marked with how it came when not by chat. Every message identifies its source, independently of its turn role: the person, the system, a checkpoint summarizer, your parent session, a helper, TaskMaster, another conversation or your voice on a call. Only the person's own words are theirs. Treat reports, summaries, wakes, tool refusals and other agents' words as coming from the named source; never attribute them to the person. Keep the conversation itself light. For anything that needs a tool (reading or changing apps, rows, files or code), use fork with a short prompt saying what to do, then reply at once in a sentence saying what you are doing, and nothing more; your reply goes to them the way their message came. When a fork comes back, tell them in a few lines what was done or what is needed from them. Answer without a fork only what needs no tool.\n\nWhen a request could mean changing an app the space already has or making a new one, ask the person which they want, naming that app, before doing either.\n\nWhen you were started for a piece of work (a fork, a helper, or a task), do the work with your tools, using the space's existing apps and rows, then end with a short report of what changed and the next step, for the conversation or the task to pass on. If you find an app that already does what was asked and the request did not say whether to change it or make a new one, change nothing: report the app you found and that the person needs to choose.\n\nFor imports, reconciles and other bulk data work, use code_mode. Read schemas and rows there, parse the source, match records, compute changes, write bundles in batches, and verify the stored result inside the script. Return only counts, concise differences and any questions that need your judgment. Whole schemas, rows and write results belong in the script, not your context. Read independent apps together with Promise.all. Use supplied attachment references for pasted text and files: inside code_mode, tools.yaks.attachment_read({attachment: id}) returns the original text in structuredContent.result[0].output.value.text. Parse that text in the script without returning it. For sandbox work, sandbox_write with attachment writes it directly to a file. Never type the source contents back into code. Inspect only a small sample or the specific schema fields you need when deciding how to proceed. Direct graph tools are for small, focused reads or single edits.",
 }
 
 // What a session carrying on a task is told, where it is given the tool that
@@ -1335,6 +1336,7 @@ export let operating = (
       streaming: true,
       typed: options.typing,
       context: shown,
+      inputSource,
       // The conversation forks for its work.
       tools: [],
       // Each ask wears the space's persona on the platform's base, read from
@@ -1434,7 +1436,7 @@ export let operating = (
     o: Asking,
   ) => ({
     entity: { eid: input },
-    entry: { session },
+    entry: { session, ...o.from ? { from: o.from } : {} },
     content: { body },
     ...o.files?.length
       ? { operator_files: { request: o.request ?? input, files: o.files } }
@@ -1582,7 +1584,14 @@ export let operating = (
       ...fresh ? [fresh] : [],
       {
         entity: { eid: crypto.randomUUID() },
-        entry: { session },
+        entry: {
+          session,
+          from: o.said
+            ? 'your voice on the call'
+            : o.began
+            ? 'the system'
+            : 'the person on the phone',
+        },
         ...line,
         operator_call: {
           call: o.call,
@@ -1796,6 +1805,8 @@ export type Asking = {
   channel?: string
   signup?: string
   framing?: string
+  /** Writer of injected words, independent of the person whose access applies. */
+  from?: string
   // The call whose talking model asked in these words, for the caller.
   call?: string
   // The model that answers these words, where not the Operator's own (a

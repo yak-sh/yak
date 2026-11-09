@@ -89,9 +89,9 @@ for (let fork of [false, true]) {
       after = false
       assertEquals(step.status, 'settled')
       assertEquals(asked[0].items, [
-        { kind: 'user', text: 'old exact text' },
-        { kind: 'user', text: 'anchor exact text' },
-        { kind: 'user', text: 'now' },
+        { kind: 'user', text: 'From an unknown sender:\nold exact text' },
+        { kind: 'user', text: 'From an unknown sender:\nanchor exact text' },
+        { kind: 'user', text: 'From an unknown sender:\nnow' },
       ])
       assertEquals((await transcript(g, fork ? 'child' : 'parent'))[0].stop, {})
       assert(
@@ -161,9 +161,12 @@ for (let fork of [false, true]) {
     assertEquals(asked[0].items, [
       ...Array.from(
         { length: 15 },
-        (_, i) => ({ kind: 'user' as const, text: 'exact line ' + (25 + i) }),
+        (_, i) => ({
+          kind: 'user' as const,
+          text: 'From an unknown sender:\nexact line ' + (25 + i),
+        }),
       ),
-      { kind: 'user', text: 'now' },
+      { kind: 'user', text: 'From an unknown sender:\nnow' },
     ])
     assert(bodyRows <= 16, `finite window loaded ${bodyRows} content rows`)
   })
@@ -304,17 +307,22 @@ for (let legacy of [false, true]) {
     assertEquals(requests[1].questions, requests[0].questions)
     assertEquals(requests[1].tools, requests[0].tools)
     assertEquals(requests[1].items, [
-      { kind: 'user', text: 'begin turn' },
+      { kind: 'user', text: 'From an unknown sender:\nbegin turn' },
+      {
+        kind: 'instruction',
+        text:
+          'From the system:\nThe following tool calls were made by your parent session in the inherited conversation.',
+      },
       {
         kind: 'call',
         id: 'c',
         name: 'echo',
         args: '{"text":"exact arguments"}',
       },
-      { kind: 'result', id: 'c', output: 'exact result' },
-      { kind: 'user', text: 'input during tool' },
-      { kind: 'assistant', text: 'reply' },
-      { kind: 'user', text: 'typed current request' },
+      { kind: 'result', id: 'c', output: 'From the echo tool:\nexact result' },
+      { kind: 'user', text: 'From an unknown sender:\ninput during tool' },
+      { kind: 'assistant', text: 'From your parent session:\nreply' },
+      { kind: 'user', text: 'From an unknown sender:\ntyped current request' },
     ])
   })
 }

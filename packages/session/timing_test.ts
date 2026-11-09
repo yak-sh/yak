@@ -53,7 +53,8 @@ test('portable timing survives result bounding without changing raw JSON', () =>
   assertEquals(items.at(-1), {
     kind: 'result',
     id: 'provider-call',
-    output: 'bounded preview\ntook 4m12s — over 60s: report this slow command',
+    output:
+      'From the tool:\nbounded preview\ntook 4m12s — over 60s: report this slow command',
   })
   assertEquals(entries[1].content?.body, '{"ok":true}')
 })

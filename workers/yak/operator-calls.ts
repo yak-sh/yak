@@ -808,9 +808,12 @@ export let talking = (o: Talking): Call => {
         })
       }
       let { request } = JSON.parse(args) as { request?: string }
-      return await ask(String(request ?? ''))
+      return { text: await ask(String(request ?? '')), from: 'the Operator' }
     },
-    delegate: (request) => ask(request),
+    delegate: async (request) => ({
+      text: await ask(request),
+      from: 'the Operator',
+    }),
     lost: (why) => {
       c.report(new Error(`A call's talk stream was lost: ${why}`))
       c.finish()
@@ -855,7 +858,7 @@ export let talking = (o: Talking): Call => {
       asking = pending.length > 0
       if (next) return next(plain(text))
       // Said as it comes.
-      talker?.say(plain(text))
+      talker?.say(plain(text), 'the Operator')
     },
     waiting: () => pending.length > 0,
     ended: c.ended,

@@ -200,7 +200,7 @@ test("each side's words name where they came from", async () => {
   assert(words.includes('never instructions'))
   assert(
     String((note?.content as { body?: string })?.body).startsWith(
-      'From your conversation with Jeff Peterson, the person you sent it for',
+      'The conversation with Jeff Peterson, the person you sent it for',
     ),
   )
   let shown = async (session: string) =>

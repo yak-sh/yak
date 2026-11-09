@@ -279,7 +279,12 @@ let delegation = (
       }
       context = context.map((b) => ({
         ...b,
-        entry: { session: eid },
+        entry: {
+          session: eid,
+          ...comp(b, 'prompt')?.source == 'delegation:instructions'
+            ? { from: 'your parent session' }
+            : {},
+        },
       }))
       let order = await tail(g)
       await g.apply([
@@ -325,7 +330,7 @@ let delegation = (
         },
         {
           entity: { eid: derivedEid(`${eid}:input`) },
-          entry: { session: eid },
+          entry: { session: eid, from: 'your parent session' },
           content: { body: prompt },
           using,
         },

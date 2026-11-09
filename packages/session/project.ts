@@ -4,7 +4,8 @@
 // transcript, never a pass over it per ask or per result.
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
-import type { Item, Tool as Declared } from '@yaks/model'
+import { type Item, message, type Tool as Declared } from '@yaks/model'
+import { type InputText, source } from './source.ts'
 import { ASK, CALL, OUTPUT, RESULT } from './native.ts'
 import { kindOf, ordered, seqOf, textOf } from './state.ts'
 import { items as taskItems, type Tasks } from './task-context.ts'
@@ -30,14 +31,14 @@ export let TURN = 'Nothing has been said since your words above; this is ' +
 
 /// let said = { kind: 'assistant' as const, text: 'One moment.' }
 /// let asked = { kind: 'user' as const, text: 'Add a recipe.' }
-/// closed([asked, said]) -> [asked, said, { kind: 'instruction', text: TURN }]
+/// closed([asked, said]) -> [asked, said, { kind: 'instruction', text: 'From the system:\n' + TURN }]
 /// closed([said, asked]) -> [said, asked]
 /** A request's items as a turn the model takes: ending on its own words, they
  * are closed by {@link TURN}, so every line stays where it was said and the
  * model answers rather than continues. */
 export let closed = (items: Item[]): Item[] =>
   items.at(-1)?.kind == 'assistant'
-    ? [...items, { kind: 'instruction', text: TURN }]
+    ? [...items, message({ kind: 'instruction', text: TURN }, 'the system')]
     : items
 
 // The call an entry answers: a final's or a Pending's.
@@ -168,8 +169,8 @@ export let replied = (
  *     ? i.text
  *     : i.label
  * )
- * // -> ['go', 'a', 'b', 'Pending; its result will follow.', 'B',
- * //     'The pending echo call a {"id":"a"} finished:\nA']
+ * // -> ['From an unknown sender:\ngo', 'a', 'b', 'From the system:\nPending; its result will follow.', 'From the echo tool:\nB',
+ * //     'From the echo tool:\nThe pending echo call a {"id":"a"} finished:\nA']
  * ```
  */
 export let project = (
@@ -178,18 +179,28 @@ export let project = (
   tools: Map<Eid, Declared>,
   opts: {
     anchor?: Eid
+    /** The model receiving this history; inherited assistant messages name
+     * their original session rather than posing as this model's output. */
+    session?: Eid
     results?: Map<Eid, string>
     media?: Map<Eid, Item[]>
     history?: boolean
     /** Each input's prose as the model reads it, rendered for this
      * transcript (react's `Deps.inputText`). */
-    inputText?: (entry: Bundle) => string
+    inputText?: (entry: Bundle) => InputText
     /** The model takes one output per tool call (@yaks/model `lateResults`
      * unset): a later update is told as user text. */
     resultUpdatesAsUser?: boolean
   } = {},
 ): Item[] => {
   let out: Item[] = []
+  let receiver = opts.session ?? comp(window.at(-1), 'entry')?.session
+  let inherited = (b: Bundle) => {
+    let author = comp(b, 'entry')?.session
+    return receiver && author && receiver != author
+      ? 'your parent session'
+      : undefined
+  }
   let byId = new Map(transcript.map((b) => [b.entity.eid, b]))
   let asks = ordered(transcript).filter((b) => b.ask)
   // A tool can finish (or a person steer) while the provider is answering.
@@ -285,17 +296,30 @@ export let project = (
           ),
         )
       }
-      out.push({ kind: 'instruction', text: textOf(b) })
-    } else if (kind == 'input' && comp(b, 'notice')?.own) {
-      out.push({ kind: 'assistant', text: textOf(b) })
+      out.push(message({ kind: 'instruction', text: textOf(b) }, source(b)))
     } else if (kind == 'input') {
-      out.push({
+      let input = opts.inputText?.(b) ?? textOf(b)
+      out.push(message({
         kind: 'user',
-        text: opts.inputText?.(b) ?? textOf(b),
-      })
+        text: typeof input == 'string' ? input : input.text,
+      }, (typeof input == 'string' ? undefined : input.from) ?? source(b)))
     } else if (kind == 'output') {
-      out.push({ kind: 'assistant', text: textOf(b) })
+      out.push(
+        message(
+          { kind: 'assistant', text: textOf(b) },
+          comp(b, 'entry')?.from as string | undefined ?? inherited(b),
+        ),
+      )
     } else if (kind == 'call' && (!opts.anchor || c?.source != opts.anchor)) {
+      if (inherited(b) && replies.get(String(c?.source))?.[0] == b) {
+        out.push(
+          message({
+            kind: 'instruction',
+            text:
+              'The following tool calls were made by your parent session in the inherited conversation.',
+          }, 'the system'),
+        )
+      }
       out.push({ kind: 'call', ...spelled(b) })
     } else if (kind == 'result') {
       let eid = String(answers(b))
@@ -307,7 +331,11 @@ export let project = (
       }
       let text = opts.results?.get(b.entity.eid) ?? textOf(b)
       let ms = comp(b, RESULT)?.ms
-      const output = typeof ms == 'number' ? took(text, ms) : text
+      let output = typeof ms == 'number' ? took(text, ms) : text
+      let from = source(b) ??
+        (spelled(call).name == 'tool'
+          ? 'the tool'
+          : `the ${spelled(call).name} tool`)
       let { id, name, args } = spelled(call)
       if (late(b, eid)) {
         // Strict routes take one tool output per call; the rest take it again.
@@ -315,12 +343,16 @@ export let project = (
           output
         out.push(
           opts.resultUpdatesAsUser
-            ? { kind: 'user', text: named }
-            : { kind: 'result', id, output: named },
+            ? message({ kind: 'user', text: named }, from)
+            : message({ kind: 'result', id, output: named }, from),
         )
-      } else out.push({ kind: 'result', id, output })
+      } else out.push(message({ kind: 'result', id, output }, from))
     }
-    out.push(...opts.media?.get(b.entity.eid) ?? [])
+    out.push(
+      ...(opts.media?.get(b.entity.eid) ?? []).map((item) =>
+        message(item, item.from ?? 'the attached document')
+      ),
+    )
   }
   logical.forEach((b, at) => {
     if (taken.has(b)) return
@@ -332,7 +364,11 @@ export let project = (
       if (a) {
         if (!taken.has(a) && index.get(a)! > at) emit(a)
       } else if (pending(call)) {
-        out.push({ kind: 'result', id: spelled(call).id, output: PENDING })
+        out.push(message({
+          kind: 'result',
+          id: spelled(call).id,
+          output: PENDING,
+        }, 'the system'))
       }
     }
   })

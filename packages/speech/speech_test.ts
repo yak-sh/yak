@@ -13,6 +13,7 @@ import {
   SpeechError,
   talk,
   turns,
+  type Words,
 } from './mod.ts'
 
 // A provider answering every call with `said`, keeping what it was asked.
@@ -230,7 +231,7 @@ test('a μ-law clip comes without the silence its provider padded it with', asyn
 // A talk stream on OpenAI's realtime model, the caller's audio sent and the
 // model's events fired back.
 let talking = (
-  calls: (name: string, args: string) => Promise<string>,
+  calls: (name: string, args: string) => Promise<Words>,
   speed?: number,
 ) => {
   let s = socket()
@@ -317,7 +318,11 @@ test('a tool the model asks for is answered with its output, and it goes on', as
   equal(s.json().slice(1), [
     {
       type: 'conversation.item.create',
-      item: { type: 'function_call_output', call_id: 'c1', output: 'Booked.' },
+      item: {
+        type: 'function_call_output',
+        call_id: 'c1',
+        output: 'From the ask tool:\nBooked.',
+      },
     },
     { type: 'response.create' },
   ])
@@ -334,10 +339,52 @@ test('what the model is told mid-stream is a note it reads, asking no response',
       role: 'system',
       content: [{
         type: 'input_text',
-        text: 'You are building the recipe app.',
+        text: 'From the system:\nYou are building the recipe app.',
       }],
     },
   }])
+})
+
+test('talk streams preserve the source of supplied context, replies and failures', async () => {
+  let cases: [() => Promise<Words>, string][] = [
+    [() => Promise.resolve('No such app.'), 'From the ask tool:\nNo such app.'],
+    [
+      () => Promise.resolve({ text: 'Done.', from: 'the Operator' }),
+      'From the Operator:\nDone.',
+    ],
+    [
+      () => Promise.reject(new Error('Unavailable.')),
+      'From the system:\nThat did not work: Unavailable.',
+    ],
+  ]
+  for (let [answer, output] of cases) {
+    let { s, stream, event } = talking(answer)
+    s.fire('open')
+    stream.tell('A fix is available.', 'TaskMaster')
+    equal(
+      s.json().at(-1).item.content[0].text,
+      'From TaskMaster:\nA fix is available.',
+    )
+    event({
+      type: 'response.function_call_arguments.done',
+      call_id: 'c1',
+      name: 'ask',
+      arguments: '{}',
+    })
+    await until(() => s.sent.length == 4)
+    equal(s.json().at(-2).item.output, output)
+    stream.close()
+  }
+  let { s, stream } = talking(() => Promise.resolve(''))
+  s.fire('open')
+  stream.say('The task is done.', 'the Operator')
+  equal(
+    s.json().at(-1).response.instructions.endsWith(
+      'From the Operator:\nThe task is done.',
+    ),
+    true,
+  )
+  stream.close()
 })
 
 test('a response asked for while one is under way waits for it to be done', async () => {
@@ -508,7 +555,7 @@ test('an answer is not said when the caller stops where a sentence goes on, the 
   equal(s.json().at(-1).item, {
     type: 'function_call_output',
     call_id: 'l1',
-    output: 'Listening.',
+    output: 'From the system:\nListening.',
   })
   // Talking again before it plays: the answer under way is stopped, and the
   // one after their words is said.
@@ -635,7 +682,7 @@ test('GPT-Live is started, takes its own turns, keeps each side’s words as lin
       delegate: (
         request,
       ) => (told.push({ delegate: request }),
-        Promise.resolve('Moved to Friday.')),
+        Promise.resolve({ text: 'Moved to Friday.', from: 'the Operator' })),
     },
   })
   let event = (e: object) => s.fire('message', JSON.stringify(e))
@@ -672,7 +719,7 @@ test('GPT-Live is started, takes its own turns, keeps each side’s words as lin
   equal(s.json().at(-1), {
     type: 'session.commentary.append',
     delegation_id: 'd1',
-    content: 'Moved to Friday.',
+    content: 'From the Operator:\nMoved to Friday.',
   })
   // Priced by the minute of the stream, $0.05.
   equal(stream.close(), { seconds: 0.42, dollars: 0.035 / 100 })
@@ -706,7 +753,7 @@ test('GPT-Live hands its work to a larger model on OpenAI’s side, whose tool c
     type: 'responses',
     responses: {
       model: 'gpt-6-luna',
-      instructions: 'Do the work.',
+      instructions: 'From the system:\nDo the work.',
       tools: [
         { type: 'function', ...tools[0], strict: false },
         { type: 'web_search' },
@@ -742,7 +789,7 @@ test('GPT-Live hands its work to a larger model on OpenAI’s side, whose tool c
     item: {
       type: 'function_call_output',
       call_id: 'c1',
-      output: 'Shopping and Recipes.',
+      output: 'From the apps tool:\nShopping and Recipes.',
     },
   }, { type: 'response.create' }])
   // 1,000 tokens written to the cache, 4,000 read from it, 1,000 new and 100

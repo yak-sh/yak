@@ -1,21 +1,17 @@
+// Input prose, sender identities and timing, kept separate until prompt assembly.
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { human } from '@yaks/id'
-import { attemptState, kindOf, seqOf, textOf } from '@yaks/session'
+import {
+  attemptState,
+  type InputText,
+  kindOf,
+  seqOf,
+  source,
+  textOf,
+} from '@yaks/session'
 
 let made = (b: Bundle) => (b.created ?? {}) as Comp
 let selfOf = (b: Bundle) => (b.entry as Comp | undefined)?.session
-
-// Who sent an input: the system for words the platform wrote (`system`, a
-// child's report), whoever's act they tell of; else the session it came
-// through, when that is another session, else whoever wrote it. A
-// transcript's own inputs come through itself (./agent.ts `through`), so
-// they are named by their writer.
-let sender = (entry: Bundle, names: Map<Eid, string>) => {
-  if (entry.system || entry.delivery) return 'the system'
-  let { by, via } = made(entry)
-  return (via != selfOf(entry) && names.get(String(via))) ||
-    names.get(String(by))
-}
 
 /** Each input of a transcript as it is sent: who sent it, where `names`
  * ({@link senders}) knows them, and its sent time beside completion of the
@@ -25,6 +21,7 @@ let sender = (entry: Bundle, names: Map<Eid, string>) => {
 export let inputText = (
   transcript: Bundle[],
   names = new Map<Eid, string>(),
+  inputSource?: (entry: Bundle) => string | undefined,
 ) => {
   let byId = new Map(transcript.map((b) => [b.entity.eid, b]))
   let replies = transcript.flatMap((b) => {
@@ -33,21 +30,27 @@ export let inputText = (
     let through = ask && byId.get(String((ask.ask as Comp)?.through))
     return ask && through ? [{ ask, through: seqOf(through) }] : []
   })
-  return (entry: Bundle): string => {
+  return (entry: Bundle): Exclude<InputText, string> => {
+    let explicit = (entry.entry as Comp | undefined)?.from
+    let from = typeof explicit == 'string' && explicit.trim()
+      ? explicit
+      : inputSource?.(entry) ?? source(entry, names)
     let sent = made(entry).at
-    if (entry.notice || typeof sent != 'string') return textOf(entry)
+    if (entry.notice || typeof sent != 'string') {
+      return { text: textOf(entry), from }
+    }
     let previous = replies.findLast((r) => r.through < seqOf(entry))
     let ask = previous?.ask
     let ended = ask && attemptState(ask) == 'completed'
       ? (ask.updated as Comp | undefined)?.at
       : undefined
-    let from = sender(entry, names)
-    return `[${
-      from ? `From ${from}; sent` : 'Sent'
-    } ${sent}; previous reply ended ${
-      ended ?? (previous ? 'unknown' : 'none')
-    }]\n` +
-      textOf(entry)
+    return {
+      from,
+      text:
+        `[Sent ${sent}; previous reply ended ${
+          ended ?? (previous ? 'unknown' : 'none')
+        }]\n` + textOf(entry),
+    }
   }
 }
 
@@ -60,7 +63,7 @@ export let senders = async (
 ): Promise<Map<Eid, string>> => {
   let ids = new Set<Eid>()
   for (let b of transcript) {
-    if (kindOf(b) != 'input' || b.notice) continue
+    if (kindOf(b) != 'input') continue
     let { by, via } = made(b)
     if (typeof by == 'string') ids.add(by)
     if (typeof via == 'string' && via != selfOf(b)) ids.add(via)
@@ -70,7 +73,7 @@ export let senders = async (
     g.read(
       `.entity.eid=${
         [...eids].map((e) => JSON.stringify(e)).join(',')
-      } (.person | .persona | .session) ?person ?persona ?session ?doc`,
+      } ?person ?persona ?session ?doc`,
     )
   if (!ids.size) return new Map()
   let rows = await named(ids)

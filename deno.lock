@@ -4537,6 +4537,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@yaks/model@0.2.32",
             "npm:@yaks/testing@0.2.30"
           ]
         }

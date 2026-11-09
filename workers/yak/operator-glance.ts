@@ -11,7 +11,10 @@ import { rootAt } from './operator-root.ts'
 import { type Helping, helpingOf } from './operator-host.ts'
 import type { operatorStore } from './operator-store.ts'
 import { updatesOf } from './operator-updates.ts'
-import { wordsOf } from './operator-view.ts'
+import { message } from '@yaks/model'
+import { kindOf, ordered, source, textOf } from '@yaks/session'
+import type { Comp } from '@yaks/graph'
+import { inputSource } from './operator-provenance.ts'
 
 type Store = ReturnType<typeof operatorStore>
 
@@ -48,7 +51,17 @@ export let recentOf = async (g: Glance, most = RECENT) => {
       g.person,
     )}&.order=-entry.seq&.limit=${most * 8}&*`,
   )
-  return wordsOf(entries).slice(-most).map((line) => cut(line)).join('\n')
+  let names = new Map([[g.person, 'the person']])
+  return ordered(entries).flatMap((entry) => {
+    if (!['input', 'output'].includes(kindOf(entry) ?? '')) return []
+    let text = textOf(entry)
+    if (!text || entry.prompt) return []
+    let from = (entry.entry as Comp).from as string | undefined
+    from ??= inputSource(entry) ?? source(entry, names) ?? 'the Operator'
+    let at = moment(String((entry.created as Comp | undefined)?.at ?? ''))
+    let words = message({ kind: 'user', text: cut(text) }, from).text
+    return [`${at ? at + ', ' : ''}${words}`]
+  }).slice(-most).join('\n\n')
 }
 
 // One piece of work as the voice hears it: what was asked, how it stands and

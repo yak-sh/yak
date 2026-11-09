@@ -223,6 +223,7 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   /** context an ask carries without storing its bytes in entries */
   context?: Deps['contextItems']
   /** Dynamic context independent of source-bound image items. */
+  inputSource?: (entry: Bundle) => string | undefined
   requestItems?: Deps['requestItems']
   /** defects, apart from refusals (default `console.error`) */
   report?: (error: unknown, where: Where) => void
@@ -566,7 +567,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       return [worn?.trimEnd(), added].filter(Boolean).join(PART) || undefined
     },
     inputText: async (transcript) =>
-      inputText(transcript, await senders(h.g, transcript)),
+      inputText(transcript, await senders(h.g, transcript), opts.inputSource),
     contextItems: opts.context,
     requestItems: opts.requestItems,
     resultText: opts.resultText ??

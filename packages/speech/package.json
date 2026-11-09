@@ -10,5 +10,8 @@
   "devDependencies": {
     "@yaks/testing": "0.2.30",
     "@std/assert": "npm:@jsr/std__assert@^1.0.0"
+  },
+  "dependencies": {
+    "@yaks/model": "0.2.32"
   }
 }

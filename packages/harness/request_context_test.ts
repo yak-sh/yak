@@ -73,7 +73,7 @@ test('native sending does not retrieve or persist historical recall', () => {
   equal(observed, {
     recalled: 0,
     searched: 0,
-    items: [[{ kind: 'user', text: 'attachment files' }]],
+    items: [[{ kind: 'user', text: 'From actor person:\nattachment files' }]],
     body: 'attachment files',
     snapshot: undefined,
   })

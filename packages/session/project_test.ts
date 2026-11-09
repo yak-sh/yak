@@ -29,7 +29,7 @@ for (let source of [undefined, 'ask']) {
           name: 'tool',
           args: '{}',
         }],
-        { kind: 'result', id: 'item_0', output: 'done' },
+        { kind: 'result', id: 'item_0', output: 'From the tool:\ndone' },
       ])
     })
   }

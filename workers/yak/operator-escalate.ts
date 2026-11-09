@@ -152,10 +152,10 @@ export let escalationAnswer = (
     let note = once('escalation', context)
     await store.g.apply([{
       entity: { eid: note },
-      entry: { session: request.from },
+      entry: { session: request.from, from: `your conversation with ${name}` },
       content: {
         body:
-          `From your conversation with ${name}, the person you sent it for, answering what you raised (escalation ${
+          `The conversation with ${name}, the person you sent it for, answering what you raised (escalation ${
             short(row.entity.eid)
           }). These are the words that conversation chose to send you, and yours to pass on to ${
             request.address ?? 'the writer'

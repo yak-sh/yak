@@ -5,7 +5,7 @@ import { toolEid } from '@yaks/tools/result'
 import { operatorMemory } from './operator-testing.ts'
 import { rootOf } from './operator-root.ts'
 import { notification } from './operator-updates.ts'
-import { type Glance, glanceOf, looks } from './operator-glance.ts'
+import { type Glance, glanceOf, looks, recentOf } from './operator-glance.ts'
 
 let space = crypto.randomUUID(), person = crypto.randomUUID()
 let root = rootOf(space, person)
@@ -19,7 +19,7 @@ let at = () => ({
 })
 let line = (session: string, b: object) => ({
   entity: { eid: crypto.randomUUID() },
-  entry: { session },
+  entry: { session, from: 'the person' },
   ...at(),
   ...b,
 })
@@ -33,7 +33,11 @@ await store.g.apply([
     content: { body: 'Build me a recipe box' },
     operator_channel: { channel: 'text' },
   }),
-  line(root, { output: {}, content: { body: 'Building it now.' } }),
+  line(root, {
+    entry: { session: root, from: 'the Operator' },
+    output: {},
+    content: { body: 'Building it now.' },
+  }),
   ...[built, building].map((eid) => ({
     entity: { eid },
     session: { id: eid },
@@ -79,9 +83,56 @@ let WORK = [
   '- Check the hall booking: Done, 6 Nov 2026, 20:05 UTC',
 ].join('\n')
 let SAID = [
-  '6 Nov 2026, 20:00 UTC, they, by text: Build me a recipe box',
-  '6 Nov 2026, 20:01 UTC, you: Building it now.',
-].join('\n')
+  '6 Nov 2026, 20:00 UTC, From the person:\nBuild me a recipe box',
+  '6 Nov 2026, 20:01 UTC, From the Operator:\nBuilding it now.',
+].join('\n\n')
+
+let sources = operatorMemory(), sourcePerson = crypto.randomUUID()
+let sourceRoot = rootOf(space, sourcePerson), helper = crypto.randomUUID()
+await sources.g.apply([
+  { entity: { eid: sourceRoot }, session: { id: sourceRoot } },
+  { entity: { eid: helper }, session: { id: helper } },
+  ...[
+    {
+      entry: { session: sourceRoot, from: 'the person' },
+      content: { body: 'My words.' },
+    },
+    {
+      operator_channel: { channel: 'wake' },
+      content: { body: 'Check it now.' },
+    },
+    { notice: { own: true }, content: { body: 'One moment.' } },
+    {
+      delivery: { child: helper, outcome: 'settled' },
+      content: { body: 'The work finished.' },
+    },
+    {
+      entry: { session: sourceRoot, from: 'TaskMaster' },
+      notice: {},
+      content: { body: 'The fix is live.' },
+    },
+  ].map((b) => ({
+    entity: { eid: crypto.randomUUID() },
+    entry: { session: sourceRoot },
+    ...b,
+  })),
+], { trusted: true })
+
+test('a voice receives recent history with each writer preserved, including legacy wakes and other models', async () => {
+  let text = await recentOf({ ...g, store: sources, person: sourcePerson })
+  for (
+    let from of [
+      'the person',
+      'the system (your wake-up)',
+      'your voice on the call',
+      `your helper (${helper})`,
+      'TaskMaster',
+    ]
+  ) {
+    equal(text.includes(`From ${from}:\n`), true)
+  }
+  equal(text.includes('From the person:\nCheck it now.'), false)
+})
 
 test("a call's voice is told the time, the newest of the conversation, and the work under way with its step and how far it got", async () => {
   let glance = glanceOf(g)

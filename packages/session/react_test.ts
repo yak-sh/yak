@@ -194,7 +194,8 @@ test('an input is asked, a tool call is run, the transcript settles', async () =
   assertEquals(asked[1].items, [{
     kind: 'result',
     id: 'c1',
-    output: took('echo: hi', Number((entries[3].result as Comp).ms)),
+    output: 'From the echo tool:\n' +
+      took('echo: hi', Number((entries[3].result as Comp).ms)),
   }])
 })
 
@@ -298,8 +299,8 @@ test('an anchored ask can include a late result from an earlier call', async () 
   assertEquals(await rest(g, ids.s, { model, tools: [echo] }), 'settled')
   assertEquals(asked[0].anchor, 'anchor')
   assertEquals(asked[0].items, [
-    { kind: 'result', id: 'c1', output: 'echo: hi' },
-    { kind: 'user', text: 'Continue.' },
+    { kind: 'result', id: 'c1', output: 'From the echo tool:\necho: hi' },
+    { kind: 'user', text: 'From an unknown sender:\nContinue.' },
   ])
 })
 
@@ -482,7 +483,7 @@ test('a stop is obeyed: nothing is asked or run after it', async () => {
   }
 })
 
-test('a fork continues from its anchor with only what followed', async () => {
+test('a fork replays visible history instead of inheriting its parent’s hidden provider state', async () => {
   let g = world()
   let { model, asked } = scripted([says('r1', 'done'), says('r2', 'again')])
   let deps = { model, tools: [echo], mint }
@@ -504,8 +505,14 @@ test('a fork continues from its anchor with only what followed', async () => {
   // the fork's transcript is the parent's prefix through the anchor, then its own
   assertEquals(await kinds(g, ids.f), ['input', 'ask', 'input'])
   assertEquals(await rest(g, ids.f, deps), 'settled')
-  assertEquals(asked[1].anchor, 'r1')
-  assertEquals(asked[1].items, [{ kind: 'user', text: 'and once more' }])
+  assertEquals(asked[1].anchor, undefined)
+  assertEquals(asked[1].items, [{
+    kind: 'user',
+    text: 'From an unknown sender:\necho hi, then say done',
+  }, {
+    kind: 'user',
+    text: 'From an unknown sender:\nand once more',
+  }])
   // the parent is untouched
   assertEquals(statusOf(await transcript(g, ids.s)), 'settled')
 })
@@ -552,9 +559,15 @@ test('an imported compaction resumes from its summary and later entries', async 
   let { model, asked } = scripted([says('r1', 'Keep the blue bridge.')])
   assertEquals(await rest(g, ids.s, { model, tools: [] }), 'settled')
   assertEquals(asked[0].items, [
-    { kind: 'instruction', text: 'The plan is to keep the bridge.' },
-    { kind: 'user', text: 'The bridge must be blue.' },
-    { kind: 'user', text: 'What is the plan and color?' },
+    {
+      kind: 'instruction',
+      text: 'From the checkpoint summarizer:\nThe plan is to keep the bridge.',
+    },
+    { kind: 'user', text: 'From an unknown sender:\nThe bridge must be blue.' },
+    {
+      kind: 'user',
+      text: 'From an unknown sender:\nWhat is the plan and color?',
+    },
   ])
 })
 
@@ -601,16 +614,19 @@ test('a checkpoint keeps a call whose result followed an input', async () => {
   )
   assertEquals(runs, 0)
   assertEquals(asked[0].items, [
-    { kind: 'instruction', text: 'The user asked to echo hi.' },
+    {
+      kind: 'instruction',
+      text: 'From the checkpoint summarizer:\nThe user asked to echo hi.',
+    },
     { kind: 'call', id: 'c1', name: 'echo', args: '{"text":"hi"}' },
-    { kind: 'result', id: 'c1', output: 'echo: hi' },
-    { kind: 'user', text: 'One more thing.' },
+    { kind: 'result', id: 'c1', output: 'From the echo tool:\necho: hi' },
+    { kind: 'user', text: 'From an unknown sender:\nOne more thing.' },
   ])
 })
 
 test('a long native transcript writes a checkpoint before continuing', async () => {
   let g = world()
-  await windowed(g, 20)
+  await windowed(g, 60)
   await g.apply([{ entity: { eid: ids.m }, model: { efforts: 'low high' } }])
   await g.apply([{
     entity: { eid: 'later' },
@@ -639,7 +655,7 @@ test('a long native transcript writes a checkpoint before continuing', async () 
   assertEquals([asked[0].effort, asked[0].tokens], ['low', undefined])
   assertEquals(asked[1].items, [{
     kind: 'instruction',
-    text: 'Keep the blue bridge.',
+    text: 'From the checkpoint summarizer:\nKeep the blue bridge.',
   }])
   await g.apply([
     { entity: { eid: 'later' }, $delete: true },
@@ -660,7 +676,7 @@ test('a long native transcript writes a checkpoint before continuing', async () 
   )
   assertEquals(resumed.asked[0].items[0], {
     kind: 'instruction',
-    text: 'Keep the blue bridge.',
+    text: 'From the checkpoint summarizer:\nKeep the blue bridge.',
   })
 })
 
@@ -872,7 +888,7 @@ test('a length refusal bypasses GAP, compacts deeply and retries once', async ()
   assertEquals(summarizer.asked.length, 1)
   assertEquals(asked[1].items, [{
     kind: 'instruction',
-    text: 'Short summary.',
+    text: 'From the checkpoint summarizer:\nShort summary.',
   }])
   assertEquals(asked[1].instructions, asked[0].instructions)
   assertEquals(asked[1].tools, asked[0].tools)
@@ -892,7 +908,7 @@ test('a length refusal bypasses GAP, compacts deeply and retries once', async ()
   assertEquals(asked.length, 2 + GAP + 1)
   assertEquals(asked.at(-1)!.items, [{
     kind: 'instruction',
-    text: 'Later summary.',
+    text: 'From the checkpoint summarizer:\nLater summary.',
   }])
 })
 
@@ -1008,13 +1024,18 @@ test('compaction restores admitted persona, skills and claimed tasks verbatim', 
   assertEquals(compacted.includes(body), false)
   assertEquals(compacted.includes('Progress: the draft is synced.'), true)
   assertEquals(worker.asked[0].items, [
-    { kind: 'instruction', text: persona },
-    { kind: 'instruction', text: skill },
+    { kind: 'instruction', text: 'From the system:\n' + persona },
+    { kind: 'instruction', text: 'From the system:\n' + skill },
     {
       kind: 'instruction',
-      text: 'Claimed task held-task\n' + title + '\n\n' + body,
+      text:
+        'From the system (claimed task specification):\nClaimed task held-task\n' +
+        title + '\n\n' + body,
     },
-    { kind: 'instruction', text: summary },
+    {
+      kind: 'instruction',
+      text: 'From the checkpoint summarizer:\n' + summary,
+    },
   ])
   // Two cuts still keep the original instruction text, not its summary.
   for (let i = 0; i < GAP; i++) {
@@ -1037,14 +1058,19 @@ test('compaction restores admitted persona, skills and claimed tasks verbatim', 
   assertEquals(JSON.stringify(second.asked[0].items).includes(skill), false)
   assertEquals(JSON.stringify(second.asked[0].items).includes(body), false)
   assertEquals(next.asked[0].items.slice(0, 4), [
-    { kind: 'instruction', text: persona },
-    { kind: 'instruction', text: skill },
+    { kind: 'instruction', text: 'From the system:\n' + persona },
+    { kind: 'instruction', text: 'From the system:\n' + skill },
     {
       kind: 'instruction',
-      text: 'Claimed task held-task\n' + title +
+      text:
+        'From the system (claimed task specification):\nClaimed task held-task\n' +
+        title +
         '\n\nUpdated task: preserve edits while offline.',
     },
-    { kind: 'instruction', text: 'Offline recovery remains.' },
+    {
+      kind: 'instruction',
+      text: 'From the checkpoint summarizer:\nOffline recovery remains.',
+    },
   ])
   // A release appends a correction without changing the frozen prefix.
   await g.apply([{ entity: { eid: 'held-task' }, claim: null }])
@@ -1201,8 +1227,11 @@ test('a forced overflow cut also restores admitted context above the summary', a
     false,
   )
   assertEquals(requests[1].items, [
-    { kind: 'instruction', text: 'Keep me verbatim.' },
-    { kind: 'instruction', text: 'Short summary.' },
+    { kind: 'instruction', text: 'From the system:\nKeep me verbatim.' },
+    {
+      kind: 'instruction',
+      text: 'From the checkpoint summarizer:\nShort summary.',
+    },
   ])
 })
 
@@ -1949,7 +1978,10 @@ test('typed questions are asked once and answered one entry each', async () => {
   await appendEntry(g, ids.s, 'what did you decide?')
   await rest(g, ids.s, { model, tools: [], mint })
   assertEquals(asked[1].questions, undefined)
-  assertEquals(asked[1].items, [{ kind: 'user', text: 'what did you decide?' }])
+  assertEquals(asked[1].items, [{
+    kind: 'user',
+    text: 'From an unknown sender:\nwhat did you decide?',
+  }])
 })
 
 test('questions are not asked of a model a later line chose', async () => {
@@ -2058,16 +2090,16 @@ test("a window counts the conversation, never a wake's typed questions", async (
     await say(eid, 'A while passes.', { questions: go })
   }
   let conversation: Item[] = [
-    { kind: 'user', text: 'echo hi, then say done' },
+    { kind: 'user', text: 'From an unknown sender:\necho hi, then say done' },
     { kind: 'assistant', text: 'hello' },
   ]
   assertEquals(await say('w3', 'A while passes.', { questions: go }), [
     ...conversation,
-    { kind: 'user', text: 'A while passes.' },
+    { kind: 'user', text: 'From an unknown sender:\nA while passes.' },
   ])
   assertEquals(await say('e2', 'and now?'), [
     ...conversation,
-    { kind: 'user', text: 'and now?' },
+    { kind: 'user', text: 'From an unknown sender:\nand now?' },
   ])
 })
 
@@ -2353,13 +2385,14 @@ test('an anchored continuation includes a tool final committed during its preced
   assertEquals(asked[0].items, [
     {
       kind: 'user',
-      text: 'The pending echo call async-c1 {"text":"hi"} finished:\n' +
+      text:
+        'From the echo tool:\nThe pending echo call async-c1 {"text":"hi"} finished:\n' +
         'FINAL_DURING_ANCHORED_ASK',
     },
     { kind: 'assistant', text: 'held reply' },
     {
       kind: 'instruction',
-      text: TURN,
+      text: 'From the system:\n' + TURN,
     },
   ])
 })
@@ -2415,8 +2448,8 @@ let pendingSent = await resend('fast-progress')
 let finalFirst = await resend('fast-final')
 
 test('a Pending is resent only when an earlier request sent it', () => {
-  assertEquals(pendingSent, ['Pending.'])
-  assertEquals(finalFirst, ['FAST'])
+  assertEquals(pendingSent, ['From an unknown sender:\nPending.'])
+  assertEquals(finalFirst, ['From the echo tool:\nFAST'])
 })
 
 const pendingSession = world()
@@ -2449,7 +2482,7 @@ test('an async call is answered by a Pending paired with it', () => {
   assertEquals(req.items.filter((item) => item.kind == 'result'), [{
     kind: 'result',
     id: 'pending-c1',
-    output: PENDING,
+    output: 'From the system:\n' + PENDING,
   }])
 })
 

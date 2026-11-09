@@ -811,8 +811,8 @@ test('a stopped helper reaches its conversation once, from the system, saying th
   let said = read(after[0])
   // The person's label stays on the words they typed; the report is the
   // system's, and names them by that label.
-  let person = read(rootAsks[0]).match(/^\[From (#[0-9a-f]{10});/)![1]
-  assertStringIncludes(said, '[From the system; sent')
+  let person = read(rootAsks[0]).match(/^From (#[0-9a-f]{10}):/)![1]
+  assertStringIncludes(said, 'From the system:\n[Sent')
   assertStringIncludes(
     said,
     `child ${started} stopped\n${stoppedHere(person, started)}`,

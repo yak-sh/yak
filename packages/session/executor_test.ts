@@ -256,7 +256,10 @@ await scenario(
     }])
     await react(p.g, 'session', p.r)
     equal(p.submitted.map((req) => req.call), ['ask'])
-    equal(p.submitted[0].items, [{ kind: 'user', text: 'hello' }])
+    equal(p.submitted[0].items, [{
+      kind: 'user',
+      text: 'From an unknown sender:\nhello',
+    }])
     equal(p.inline(), 0)
   },
 )
@@ -473,10 +476,16 @@ for (let hosted of [false, true]) {
       await react(p.g, 'session', p.r)
       let req = (hosted ? p.submitted : requests)[0]
       equal(req.items, [
-        { kind: 'instruction', text: 'Available skills' },
-        { kind: 'user', text: 'hello' },
-        { kind: 'user', text: 'Explicit source-bound context' },
-        { kind: 'instruction', text: 'Deliberately admitted topic context' },
+        { kind: 'instruction', text: 'From the system:\nAvailable skills' },
+        { kind: 'user', text: 'From an unknown sender:\nhello' },
+        {
+          kind: 'user',
+          text: 'From the attached document:\nExplicit source-bound context',
+        },
+        {
+          kind: 'instruction',
+          text: 'From the system:\nDeliberately admitted topic context',
+        },
       ])
       equal((await p.g.get(['input']))[0].input_context, recalled)
     },

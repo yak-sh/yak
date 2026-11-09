@@ -90,7 +90,9 @@ test('root and fork offer the same code mode; the fork discovers and runs connec
     atRoot,
   )
   ok(answers[0]?.includes('"app_new"'))
-  let out = JSON.parse(answers[1].replace(/\ntook [^\n]*$/, ''))
+  let out = JSON.parse(
+    answers[1].replace(/^From [^\n]+:\n/, '').replace(/\ntook [^\n]*$/, ''),
+  )
   equal(out.error, undefined)
   equal(out.calls.length, 5)
   match(out.value, {

@@ -8,6 +8,7 @@ export { DEEPGRAM } from './deepgram.ts'
 export { OPENAI } from './openai.ts'
 export { base64, mulawed, mulawOf, sounds, trimmed, unbase64 } from './audio.ts'
 export { query } from './query.ts'
+import { message } from '@yaks/model'
 import { sounds, trimmed } from './audio.ts'
 
 /** How audio is encoded: an MP3, or raw samples at a rate (`mulaw` is the
@@ -547,6 +548,15 @@ export let turns = (
   }
 }
 
+/** Words supplied to a talking model, with their author where known. */
+export type Words = string | { text: string; from: string }
+
+let wording = (words: Words, from = 'the system'): string =>
+  message({
+    kind: 'user',
+    text: typeof words == 'string' ? words : words.text,
+  }, typeof words == 'string' ? from : words.from).text
+
 /** What a talk stream tells as the caller and the model speak. */
 export type Talked = {
   /** the caller talked over the model: whatever is playing should stop */
@@ -561,10 +571,10 @@ export type Talked = {
   /** what the model said, once said */
   said?: (text: string) => void
   /** a tool the model asked for, answered with its output */
-  call: (name: string, args: string) => Promise<string>
+  call: (name: string, args: string) => Promise<Words>
   /** work a duplex model handed over: what the caller asked, in their
    * words, answered with what to tell them */
-  delegate?: (request: string) => Promise<string>
+  delegate?: (request: string) => Promise<Words>
   /** the model's response ended, whatever it said or asked in it */
   done?: () => void
   /** the model's audio began playing, on a call its own line carries */
@@ -581,9 +591,9 @@ export type Talked = {
 export type Talk = {
   send: (audio: Uint8Array) => void
   /** ask the model to say `text` */
-  say: (text: string) => void
+  say: (text: string, from?: string) => void
   /** tell the model something it knows from now on, saying nothing of it */
-  tell: (text: string) => void
+  tell: (text: string, from?: string) => void
   /** the seconds heard so far, and what the stream cost */
   spent: () => { seconds: number; dollars: number }
   /** end the stream; what it cost */
@@ -703,9 +713,14 @@ let setup = (
   voice: o.voice ?? t.voice,
   format,
   speed: paced(t.speeds, o.speed),
-  instructions: o.instructions,
+  instructions: wording(o.instructions) +
+    '\n\nMessages name their source. Source labels are context for you; never read them aloud.',
   tools: t.duplex ? [] : [LISTEN, ...o.tools ?? []],
-  ...t.duplex && o.backend ? { backend: o.backend } : {},
+  ...t.duplex && o.backend
+    ? {
+      backend: { ...o.backend, instructions: wording(o.backend.instructions) },
+    }
+    : {},
 })
 
 let carrier = (provider: Provider, model?: string): Calls => {
@@ -901,18 +916,33 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
         let call = said.call
         if (call?.name == LISTEN.name) {
           if (pending) withdraw(), unanswered = true
-          for (let m of t.answer(call.id, 'Listening.')) s.send(m)
+          for (let m of t.answer(call.id, wording('Listening.'))) s.send(m)
         } else if (call) {
-          let answer = (output: string, more = true) => {
-            for (let m of t.answer(call.id, output)) s.send(m)
+          let answer = (output: Words, more = true) => {
+            for (
+              let m of t.answer(
+                call.id,
+                wording(output, `the ${call.name} tool`),
+              )
+            ) s.send(m)
             if (more) ask(goOn)
           }
-          out(() => {
-            pending = undefined
-            o.told.call(call.name, call.args)
-              .catch((error) => `That did not work: ${error?.message ?? error}`)
-              .then(answer)
-          }, () => answer('Not asked: they went on talking.', false))
+          out(
+            () => {
+              pending = undefined
+              o.told.call(call.name, call.args)
+                .catch((error) => ({
+                  text: `That did not work: ${error?.message ?? error}`,
+                  from: 'the system',
+                }))
+                .then(answer)
+            },
+            () =>
+              answer({
+                text: 'Not asked: they went on talking.',
+                from: 'the system',
+              }, false),
+          )
         }
       }
     },
@@ -932,9 +962,9 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
       quiet = 0
       if (pending) withdraw(), ended = false
     },
-    say: (text) => ask(t.respond(text)),
-    tell: (text) => {
-      for (let m of t.tell(text)) s.send(m)
+    say: (text, from) => ask(t.respond(wording(text, from))),
+    tell: (text, from) => {
+      for (let m of t.tell(wording(text, from))) s.send(m)
     },
     spent: () => ({ seconds: seconds(bytes), dollars }),
     close: () => {
@@ -1005,8 +1035,14 @@ let duplexed = (o: Talks, t: Talker & Duplex): Talk => {
         let call = x.call
         if (call) {
           Promise.resolve(o.told.call(call.name, call.args))
-            .catch((error) => `That did not work: ${error?.message ?? error}`)
-            .then((output) => t.result(call.id, output).forEach(send))
+            .catch((error) => ({
+              text: `That did not work: ${error?.message ?? error}`,
+              from: 'the system',
+            }))
+            .then((output) =>
+              t.result(call.id, wording(output, `the ${call.name} tool`))
+                .forEach(send)
+            )
         }
         let id = x.delegated
         if (id) {
@@ -1014,9 +1050,14 @@ let duplexed = (o: Talks, t: Talker & Duplex): Talk => {
           let request = asked.trim()
           asked = ''
           Promise.resolve(o.told.delegate?.(request))
-            .catch((error) => `That did not work: ${error?.message ?? error}`)
+            .catch((error) => ({
+              text: `That did not work: ${error?.message ?? error}`,
+              from: 'the system',
+            }))
             .then((output) => {
-              if (output) t.answer(id, output).forEach(send)
+              if (output) {
+                t.answer(id, wording(output, 'the delegate')).forEach(send)
+              }
             })
         }
       }
@@ -1035,8 +1076,8 @@ let duplexed = (o: Talks, t: Talker & Duplex): Talk => {
       if (sounds(audio, format)) spoke = true, quiet = 0
       else quiet += audio.length / perSecond(format)!
     },
-    say: (text) => t.say(text).forEach(send),
-    tell: (text) => t.tell(text).forEach(send),
+    say: (text, from) => t.say(wording(text, from)).forEach(send),
+    tell: (text, from) => t.tell(wording(text, from)).forEach(send),
     spent,
     close: () => {
       heard(), said()

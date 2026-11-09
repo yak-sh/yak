@@ -63,6 +63,7 @@ import type { MediaReceipt } from './media.ts'
 import { listPrice } from './prices.ts'
 export { listPrice } from './prices.ts'
 export { deferredModel } from './deferred.ts'
+export { message } from './message.ts'
 export type { Lent, Native, ProviderFacet, Spending } from './provider.ts'
 export {
   type Executor,
@@ -177,24 +178,31 @@ export let models = (): Plugin => ({
 
 /** One line of a conversation as a model sees it. */
 export type Item =
-  | { kind: 'image'; bytes: Uint8Array; mediaType: string; label: string }
-  /** a document the model reads as it is, such as a PDF; a provider that
-   * reads none refuses the request */
-  | {
-    kind: 'document'
-    bytes: Uint8Array
-    mediaType: string
-    label: string
-    /** Original filename, including its extension, separate from display text. */
-    filename?: string
+  & (
+    | { kind: 'image'; bytes: Uint8Array; mediaType: string; label: string }
+    /** a document the model reads as it is, such as a PDF; a provider that
+     * reads none refuses the request */
+    | {
+      kind: 'document'
+      bytes: Uint8Array
+      mediaType: string
+      label: string
+      /** Original filename, including its extension, separate from display text. */
+      filename?: string
+    }
+    | { kind: 'instruction'; text: string }
+    | { kind: 'user'; text: string }
+    | { kind: 'assistant'; text: string; id?: string }
+    /** a tool call the model asked for: its id, the tool, the arguments as JSON */
+    | { kind: 'call'; id: string; name: string; args: string }
+    /** what the tool answered, by the call's id */
+    | { kind: 'result'; id: string; output: string }
+  )
+  & {
+    /** Who supplied these words, independent of the provider's turn role.
+     * Prompt assembly renders this before handing items to any provider. */
+    from?: string
   }
-  | { kind: 'instruction'; text: string }
-  | { kind: 'user'; text: string }
-  | { kind: 'assistant'; text: string; id?: string }
-  /** a tool call the model asked for: its id, the tool, the arguments as JSON */
-  | { kind: 'call'; id: string; name: string; args: string }
-  /** what the tool answered, by the call's id */
-  | { kind: 'result'; id: string; output: string }
 
 /** A tool as it is declared to the model. */
 export type Tool = {

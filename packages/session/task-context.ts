@@ -2,7 +2,7 @@
 // changes are appended as context, never rewritten into the cached prefix.
 
 import type { Bundle, Comp } from '@yaks/graph'
-import type { Item } from '@yaks/model'
+import { type Item, message } from '@yaks/model'
 import { seqOf } from './state.ts'
 
 export type Tasks = Record<string, { title?: string; body?: string }>
@@ -24,10 +24,12 @@ export let spec = (doc: Tasks[string]): string =>
   [doc.title, doc.body].filter((v) => v != null).join('\n\n')
 
 export let items = (tasks: Tasks): Item[] =>
-  Object.entries(tasks).map(([eid, doc]) => ({
-    kind: 'instruction',
-    text: 'Claimed task ' + eid + '\n' + spec(doc),
-  }))
+  Object.entries(tasks).map(([eid, doc]) =>
+    message({
+      kind: 'instruction',
+      text: 'Claimed task ' + eid + '\n' + spec(doc),
+    }, 'the system (claimed task specification)')
+  )
 
 /** The newest admitted task set since this checkpoint, not live graph rows. */
 export let admitted = (entries: Bundle[], checkpoint: Bundle): Tasks => {

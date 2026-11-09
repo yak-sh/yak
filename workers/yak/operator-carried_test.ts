@@ -121,7 +121,10 @@ test('a carried call says hello on the line, times its turns by when the model s
   let c = carried()
   equal(c.sent, [{
     type: 'response.create',
-    response: { instructions: 'Say exactly this, and nothing else: Hi.' },
+    response: {
+      instructions:
+        'Say only the message below, without reading its source label aloud:\nFrom the system:\nHi.',
+    },
   }])
   c.tell(
     { type: 'input_audio_buffer.speech_started' },

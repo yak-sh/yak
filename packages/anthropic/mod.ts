@@ -29,6 +29,7 @@ import {
   type Item,
   type Listed,
   listPrice,
+  message,
   type Model,
   ModelError,
   type Request,
@@ -85,7 +86,10 @@ let leadOf = (req: Request) => {
  * person's (a checkpoint that summarized every line, then its replies), since
  * the API takes a conversation only from a user message. It is the same each
  * request, so the next request's prefix is this one's. */
-export let OPENER = 'Continue from the instructions above.'
+export let OPENER: string = message(
+  { kind: 'user', text: 'Continue from the instructions above.' },
+  'the system',
+).text
 
 /** Instructions open the system prompt; one met later in the conversation is
  * said as text in the turn it falls in, which every model accepts. */
