@@ -598,8 +598,8 @@ let empty = (title: string, ...says: Kids[]) =>
 let sharedWith = (at: DeskPage, env: Host) =>
   at.shared?.length
     ? h(
-      'div',
-      { class: 'Apps' },
+      Cards,
+      null,
       at.shared.map((a) => {
         let host = spaceHost(env, a.space)
         return tile(a, { at: `https://${host}`, host, editor: true })
@@ -623,8 +623,8 @@ export let library = (at: DeskPage, env: Host) => {
     at.apps.length
       ? [
         h(
-          'div',
-          { class: 'Apps' },
+          Cards,
+          null,
           at.apps.map((a) =>
             tile(a, {
               at: `https://${spaceHost(env, at.space)}`,

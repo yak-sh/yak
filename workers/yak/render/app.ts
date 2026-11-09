@@ -1,4 +1,4 @@
-// The app library's Tile, the kit's Card worn as the library's item.
+// The app library's Tile, drawn from the kit's card and its parts.
 // Gallery wording is page context because its visibility depends on the viewer,
 // and so is `at`, the space's own address, on a page that is not there,
 // `host`, the space's own host, said before the app's path on a page that is
@@ -7,15 +7,14 @@
 // for a viewer the app's own would be refused to (a private app, before they
 // are in).
 //
-// The title is the tile's link, stretched over the whole card, so the error
-// mark can be a link of its own: to where the dashboard says what broke. `editor`
+// The title opens the app; the error mark links to what broke. `editor`
 // asks for one more, to the app's data editor, on a page for who may open it.
 // `made` and `deployed` are when it was made and last deployed and by whom,
 // said as one muted line with the names `writers` gives (stamps.ts).
 
 import { parse } from '@yaks/query'
 import type { ComponentRenderer } from '@yaks/preact'
-import { Card } from '@yaks/ui/parts'
+import { Button, Card, Chip, Chips, State } from '@yaks/ui/parts'
 import { h } from 'preact'
 import { said, type Stamp, type Writers } from '../stamps.ts'
 
@@ -26,7 +25,9 @@ export let app: ComponentRenderer = {
     let a = b.app as { slug: string; access?: string | null }
     let doc = b.doc as { title?: string } | undefined
     let errors = Number(ctx.errors ?? 0)
-    let tag = (text: string) => h('span', { class: 'Apps_Tag' }, text)
+    let tags = [b.home ? 'Homepage' : null, a.access, ctx.gallery].filter(
+      Boolean,
+    )
     let names = (ctx.writers ?? new Map()) as Writers
     let stamp = (what: string, s: unknown) =>
       s ? `${what} ${said(s as Stamp, names, 'short')}` : ''
@@ -34,47 +35,50 @@ export let app: ComponentRenderer = {
       .filter(Boolean).join(' · ')
     return h(
       Card,
-      { as: 'div', class: 'Apps_Item' },
-      h('img', {
-        src: ctx.icon ?? `${ctx.at ?? ''}/${a.slug}/icon.png`,
-        width: 44,
-        height: 44,
-        alt: '',
-      }),
+      null,
       h(
-        'a',
-        {
-          class: 'Apps_Open',
-          href: `${ctx.at ?? ''}/${a.slug}/`,
-          target: '_blank',
-          rel: 'noopener',
-        },
-        h('strong', null, doc?.title || a.slug),
-      ),
-      h('span', { class: 'Apps_Path' }, `${ctx.host ?? ''}/${a.slug}`),
-      made ? h('span', { class: 'Apps_Made' }, made) : null,
-      h(
-        'span',
-        { class: 'Apps_Tags' },
+        Card.Head,
+        null,
+        h(Card.Mark, {
+          as: 'img',
+          src: ctx.icon ?? `${ctx.at ?? ''}/${a.slug}/icon.png`,
+          width: 24,
+          height: 24,
+          alt: '',
+        }),
+        h(
+          Card.Title,
+          null,
+          h('a', {
+            href: `${ctx.at ?? ''}/${a.slug}/`,
+            target: '_blank',
+            rel: 'noopener',
+          }, doc?.title || a.slug),
+        ),
         errors
           ? h(
-            'a',
-            { class: 'Apps_Tag Apps_Tag-warn', href: `#fix-${a.slug}` },
+            State,
+            { mod: 'negative', href: `#fix-${a.slug}` },
             `${errors} ${errors == 1 ? 'error' : 'errors'}`,
           )
           : null,
         ctx.editor
-          ? h('a', {
-            class: 'Apps_Tag Apps_Tag-link',
-            href: `${ctx.at ?? ''}/${a.slug}/_web/data`,
-            target: '_blank',
-            rel: 'noopener',
-          }, 'Edit data')
+          ? h(
+            Card.Actions,
+            null,
+            h(Button, {
+              href: `${ctx.at ?? ''}/${a.slug}/_web/data`,
+              target: '_blank',
+              rel: 'noopener',
+            }, 'Edit data'),
+          )
           : null,
-        b.home ? tag('Homepage') : null,
-        a.access ? tag(a.access) : null,
-        ctx.gallery ? tag(String(ctx.gallery)) : null,
       ),
+      h(Card.Sub, null, `${ctx.host ?? ''}/${a.slug}`),
+      made ? h(Card.Sub, null, made) : null,
+      tags.length
+        ? h(Chips, null, tags.map((t) => h(Chip, null, String(t))))
+        : null,
     )
   },
 }

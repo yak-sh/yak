@@ -393,7 +393,7 @@ test("the admin's Visitor builds page says today's builds against the day's, and
   assertEquals([facts['Opened today'], facts.Kept], [`4 of ${DAILY}`, '2 of 3'])
   let rows = [...builds.querySelectorAll('.Directory_Row')].map((row) => [
     row.querySelector('strong')!.textContent,
-    [...row.querySelectorAll('.Apps_Tag')].map((t) => t.textContent).join(),
+    [...row.querySelectorAll('.Chips > *')].map((t) => t.textContent).join(),
     said(row)['Kept by'],
     said(row)['Spent this month'].replace(/^\$[\d.]+ of /, ''),
   ])

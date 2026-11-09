@@ -6,6 +6,7 @@
 import {
   Button,
   Card,
+  Cards,
   Copy,
   Field,
   Form,
@@ -385,8 +386,8 @@ export let invited = (o: Offer, env: Host = {}) => {
     },
     o.app
       ? h(
-        'div',
-        { class: 'Apps Apps-one' },
+        Cards,
+        { class: 'Identity_Cards' },
         tile(o.app, {
           at: `https://${host}`,
           host,

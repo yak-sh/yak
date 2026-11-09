@@ -1,10 +1,6 @@
+import { parseHTML } from 'linkedom'
 import { test } from '@yaks/testing'
-import {
-  assert,
-  assertEquals,
-  assertMatch,
-  assertStringIncludes,
-} from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { App } from './directory.ts'
 import { markup } from './html.ts'
 import { fixing, operated } from './pages.ts'
@@ -41,12 +37,14 @@ let reports = [report('1'), report('2')]
 let errors = folds(reports).map(plain)
 page([])
 test('an app that throws is marked on the dashboard, with what to ask', () => {
-  let html = page(errors)
-  // One mark, on the app that broke, linking to what to do about it.
-  assertEquals(html.match(/Apps_Tag-warn[^>]*>[^<]*/g)?.length, 1)
-  assertMatch(
-    html,
-    /<strong>chores<\/strong>.*?<a class="Apps_Tag Apps_Tag-warn" href="#fix-chores">1 error<\/a>/s,
+  let { document } = parseHTML(page(errors))
+  let marks = [...document.querySelectorAll('a[href^="#fix-"]')]
+  assertEquals(marks.length, 1)
+  assertEquals(marks[0].textContent, '1 error')
+  assertEquals(marks[0].getAttribute('href'), '#fix-chores')
+  assertEquals(
+    marks[0].closest('.Card')?.querySelector('h2')?.textContent,
+    'chores',
   )
 })
 
@@ -63,7 +61,7 @@ test('a dashboard error names the break, its recurrence and what to ask', () => 
 })
 
 test('a fixed app has no dashboard error mark or repair request', () => {
-  assert(!/Apps_Tag-warn|id="fix-/.test(page([])))
+  assert(!/href="#fix-|id="fix-/.test(page([])))
 })
 
 // What the space's Operator made of a break stands beside it (T-136297):

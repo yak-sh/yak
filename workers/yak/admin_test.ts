@@ -426,7 +426,7 @@ let page = async (path: string) => {
       row.querySelector('.Directory_Open')?.getAttribute('href'),
       row.querySelector('strong')?.textContent,
       row.querySelector('.Directory_Sub')?.textContent,
-      ...[...row.querySelectorAll('.Apps_Tag, .Directory_Uses dd')]
+      ...[...row.querySelectorAll('.Chips > *, .Directory_Uses dd')]
         .map((t) => t.textContent),
     ])
   }

@@ -15,7 +15,8 @@ import { registry, tile, vocab } from './mod.ts'
 
 let card = (node: ComponentChildren) => {
   let { document } = parseHTML(typeof node == 'string' ? node : markup(node))
-  return document.querySelector('.Apps_Item')!
+  return (document.querySelector('.Cards > .Card') ??
+    document.querySelector('.Card'))!
 }
 let signature = (root: Element): unknown => [
   root.localName,
@@ -30,7 +31,7 @@ let bundle = {
   home: {},
 }
 
-test('app Tile resolves by component and keeps the library card DOM', async () => {
+test('app Tile resolves by component and keeps its links in served and mounted pages', async () => {
   assertEquals(resolve(registry, bundle, 'List.Tile', vocab()), app)
   assertEquals(
     resolve(
@@ -53,10 +54,18 @@ test('app Tile resolves by component and keeps the library card DOM', async () =
     }],
     view: 'apps',
   }).text()
-  let expected = card(
-    `<div class="Card Apps_Item"><img src="https://ada.yaks.app/recipes/icon.png" width="44" height="44" alt=""><a class="Apps_Open" href="https://ada.yaks.app/recipes/" target="_blank" rel="noopener"><strong>Recipes</strong></a><span class="Apps_Path">/recipes</span><span class="Apps_Tags"><a class="Apps_Tag Apps_Tag-link" href="https://ada.yaks.app/recipes/_web/data" target="_blank" rel="noopener">Edit data</a><span class="Apps_Tag">Homepage</span><span class="Apps_Tag">private</span><span class="Apps_Tag">gallery: waiting</span></span></div>`,
+  let expected = card(html)
+  assertEquals(expected.querySelector('h2')?.textContent, 'Recipes')
+  assertEquals(
+    [...expected.querySelectorAll('a')].map((
+      a,
+    ) => [a.textContent, a.getAttribute('href')]),
+    [
+      ['Recipes', 'https://ada.yaks.app/recipes/'],
+      ['Edit data', 'https://ada.yaks.app/recipes/_web/data'],
+    ],
   )
-  assertEquals(signature(card(html)), signature(expected))
+  assertEquals(expected.querySelector('a a'), null)
 
   let Entity = entity({ registry, vocab: vocab(), store: () => bundle })
   let mounted = mount(h(Entity, {
@@ -76,7 +85,7 @@ test('app Tile resolves by component and keeps the library card DOM', async () =
   }
 })
 
-test('app Tile preserves title fallback, empty tags and badge order', () => {
+test('app Tile preserves title fallback and badge order', () => {
   for (let home of [false, true]) {
     for (let access of [null, 'public', 'open', 'private']) {
       for (let gallery of [undefined, 'in the gallery', 'gallery: waiting']) {
@@ -88,10 +97,13 @@ test('app Tile preserves title fallback, empty tags and badge order', () => {
           access,
           gallery,
         }))
-        assertEquals(root.querySelector('strong')?.textContent, 'recipes')
-        assertEquals(root.querySelectorAll('.Apps_Tags').length, 1)
+        assertEquals(root.querySelector('h2')?.textContent, 'recipes')
         assertEquals(
-          [...root.querySelectorAll('.Apps_Tag')].map((t) => t.textContent),
+          root.querySelectorAll('.Chips').length,
+          Number(home || !!access || !!gallery),
+        )
+        assertEquals(
+          [...root.querySelectorAll('.Chip')].map((t) => t.textContent),
           [home ? 'Homepage' : null, access, gallery].filter(Boolean),
         )
       }
@@ -112,22 +124,22 @@ test('app Tile escapes every label and attribute once', () => {
     { errors: 2 },
   ))
   assertEquals(
-    root.querySelector('.Apps_Open')?.getAttribute('href'),
+    root.querySelector('h2 a')?.getAttribute('href'),
     `/${text}/`,
   )
   assertEquals(
-    root.querySelector('.Apps_Tag-warn')?.getAttribute('href'),
+    root.querySelector('[href^="#fix-"]')?.getAttribute('href'),
     `#fix-${text}`,
   )
   assertEquals(
     root.querySelector('img')?.getAttribute('src'),
     `/${text}/icon.png`,
   )
-  assertEquals(root.querySelector('strong')?.textContent, text)
-  assertEquals(root.querySelector('.Apps_Path')?.textContent, `/${text}`)
+  assertEquals(root.querySelector('h2')?.textContent, text)
+  assertEquals(root.querySelector('.Card_Sub')?.textContent, `/${text}`)
   assertEquals(
-    [...root.querySelectorAll('.Apps_Tag')].map((t) => t.textContent),
-    ['2 errors', text, text],
+    [...root.querySelectorAll('.Chip')].map((t) => t.textContent),
+    [text, text],
   )
   assertEquals(root.querySelector('script'), null)
 })

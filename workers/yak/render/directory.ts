@@ -92,7 +92,12 @@ let trended = <N>(h: H<N>, value: string, days?: Days, noun?: string) =>
     : value
 
 let tag = <N>(h: H<N>, text: string, warn = false) =>
-  h('span', { class: `Apps_Tag${warn ? ' Apps_Tag-warn' : ''}` }, text)
+  h(
+    'span',
+    { class: warn ? 'State State-negative' : 'Chip' },
+    warn ? h('span', { class: 'Dot Dot-negative' }) : null,
+    text,
+  )
 let tags = <N>(
   h: H<N>,
   b: Record<string, unknown>,
@@ -141,7 +146,7 @@ let row = <N>(
         h('strong', null, name),
       ),
       h('span', { class: 'Directory_Sub' }, sub),
-      h('span', { class: 'Apps_Tags' }, ...marks),
+      h('div', { class: 'Chips' }, ...marks),
     ),
     h(
       'dl',
