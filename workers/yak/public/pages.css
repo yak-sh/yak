@@ -1079,6 +1079,11 @@
   .Talk_Page {
     display: block;
   }
+  /* The app is a window onto another site. Keep the page's grain below
+     its column, including when that column fills the screen on a phone. */
+  html:has(.Talk_Page)::after {
+    z-index: 0;
+  }
   .Talk_PageMain {
     max-width: none;
     padding: 0;
@@ -1446,6 +1451,7 @@
   .Talk_App {
     position: sticky;
     top: 0;
+    z-index: 1;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
     height: 100dvh;
@@ -1485,7 +1491,8 @@
     height: 100%;
     border: 0;
     border-radius: .75rem;
-    background: var(--card);
+    background: white;
+    color-scheme: normal;
     box-shadow: 0 0 0 1px var(--border2);
   }
   /* What it is made of, a tab each over one sheet that fills the column
