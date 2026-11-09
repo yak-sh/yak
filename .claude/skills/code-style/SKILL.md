@@ -66,4 +66,18 @@ its callers, never by adding a hop between them.
   default here, and `const` is for true module constants.
 - Doctests and fenced examples run with the package's tests (`testing`).
 
+## Component CSS
+
+Each styled part has a class rendered by its component: `.Check_Input`,
+`.Desk_Input`, `.Card_Link`. Component styles target those part classes, never
+descendant or child element selectors such as `.Check input` or `.Card > a`.
+This includes nested rules and selectors inside `:is()` or `:where()`. A part's
+style belongs to that part, so embedding another component cannot restyle its
+elements by accident. Keep state and relationship selectors on classes too.
+
+The owner, verbatim (T-152387):
+
+> btw, things like ".Check input" in components is banned. `.Check_Input` only.
+> ditto with `.Desk input` and `.Card input`
+
 When this skill is wrong or missing something, fix it in the same change.
