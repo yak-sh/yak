@@ -17,7 +17,9 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import { signal } from '@preact/signals'
 import { equal, ok, test, until } from '@yaks/testing'
+import { bindSave } from '@yaks/ux/save'
 import { challenge } from '@yaks/oauth'
 import {
   allowed,
@@ -1167,6 +1169,53 @@ test('Profile saves the name, and Settings the address', async () => {
     )
   let read = async (path: string, cookie: string) =>
     await (await k.at('yaks.app', path, { headers: { cookie } })).text()
+  let save = async (
+    html: string,
+    name: string,
+    value: string,
+    cookie: string,
+  ) => {
+    let { document, window } = parseHTML(html)
+    let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+    Object.defineProperty(globalThis, 'document', {
+      value: document,
+      configurable: true,
+    })
+    let drafts = signal<Record<string, string>>({})
+    let sent: Promise<Response> | undefined
+    let binding = bindSave(document, {
+      drafts: {
+        text: (place) => drafts.value[place] ?? '',
+        type: (place, text) => {
+          drafts.value = { ...drafts.value, [place]: text }
+        },
+      },
+      save: (form, body) => {
+        sent = k.at('yaks.app', form.getAttribute('action')!, {
+          method: 'POST',
+          redirect: 'manual',
+          headers: { cookie },
+          body,
+        })
+        return sent
+      },
+    })
+    try {
+      let field = document.querySelector<HTMLInputElement>(`[name="${name}"]`)!
+      field.value = value
+      field.dispatchEvent(new window.Event('input', { bubbles: true }))
+      let button = [...document.querySelectorAll<HTMLButtonElement>('button')]
+        .find((b) => b.textContent == 'Save')
+      assert(button && !button.disabled, 'the changed page offers Save')
+      button.click()
+      assert(sent, 'Save sends the changed form')
+      return await sent
+    } finally {
+      binding.close()
+      if (prior) Object.defineProperty(globalThis, 'document', prior)
+      else Reflect.deleteProperty(globalThis, 'document')
+    }
+  }
   try {
     let { cookie, email, person } = await signIn(k)
     let slug = email.split('@')[0]
@@ -1191,7 +1240,12 @@ test('Profile saves the name, and Settings the address', async () => {
 
     // Naming themselves: written on their own person row, so every byline an
     // app writes says it (T-32654).
-    let named = await post(null, { name: 'Dana' }, cookie)
+    let named = await save(
+      await read(managePath('profile'), cookie),
+      'name',
+      'Dana',
+      cookie,
+    )
     assertEquals(named.status, 303)
     await named.body?.cancel()
     assertEquals(
@@ -1217,11 +1271,6 @@ test('Profile saves the name, and Settings the address', async () => {
     let again = await taken.text()
     assertMatch(again, /is taken/)
     assertMatch(again, new RegExp(`name="space"[^>]*value="${other}"`))
-    assertEquals(
-      [...parseHTML(again).document.querySelectorAll('button[type="submit"]')]
-        .filter((b) => b.textContent == 'Save').length,
-      1,
-    )
 
     // A badly shaped one says what an address is.
     let bad = await post(slug, { space: 'Not An Address' }, cookie)
@@ -1231,7 +1280,7 @@ test('Profile saves the name, and Settings the address', async () => {
     // And a free one moves the space — and the page that named it by its old
     // address names it by the new one.
     let want = `dana-${uniq()}`
-    let moved = await post(slug, { space: want }, cookie)
+    let moved = await save(again, 'space', want, cookie)
     assertEquals(moved.status, 303)
     await moved.body?.cancel()
     assertEquals(
