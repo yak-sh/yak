@@ -7,7 +7,7 @@ guide:
   description: >-
     The frontend data API, ./api/client.js, in full: every function it
     exports; apply, query, search, subscribe, upload, digest, me, the outbox of
-    unsaved writes and store(base) for another app's store; the bundle of
+    unsaved writes, qr for SVG QR codes and store(base) for another app's store; the bundle of
     components a write sends;
     patching and deleting; compare-and-set with $was so two writers cannot
     both spend one value; read and write access; the created.by author stamp
@@ -49,7 +49,7 @@ at `../api/client.js`.
 
 ## Exports of `client.js`
 
-`client.js` exports fifteen names. These eleven are bound to the app's own
+`client.js` exports sixteen names. These eleven are bound to the app's own
 store:
 
 - the functions `apply`, `query`, `search`, `subscribe`, `upload` and `me`, and
@@ -59,13 +59,14 @@ store:
 - `publish`, `unpublish` and `publicFiles`, which put a file on the public web
   at a path of the app's address ([Files and Uploads](./files.md)).
 
-These four functions need no store:
+These five functions need no store:
 
 - `was(value)`, the hash a compare-and-set write names, documented under
   Compare-and-set with `$was` below.
 - `digest(file)`, the SHA-256 of a file, documented below.
 - `draftEid(by, place)`, the eid of a person's draft at a place
   ([Components and vocab.json](./components.md)).
+- `qr(text, label)`, an inline SVG QR code, documented below.
 - `store(base)`, described next.
 
 `store(base)` returns an object holding the eleven names bound to a store
@@ -88,6 +89,29 @@ and returns a function that cancels it, so a test of a page moves the store's
 time itself.
 
 ## Client functions
+
+### qr(text, label)
+
+Returns an SVG string synchronously, without a network request. `text` is
+encoded exactly as supplied; `label` is the SVG's escaped accessible name. Use
+an absolute URL for a printed code, so a phone can open it independently of the
+page that made it. The destination is an ordinary app page, including a form's
+permanent link.
+
+    import { qr } from './api/client.js'
+
+    let link = new URL(form.link, document.baseURI).href
+    document.querySelector('#form-code').innerHTML = qr(link, 'Open the form')
+
+The same helper encodes an `sms:` link carrying a form's keyword. Build the link
+from the destination number and keyword your form uses; `?&body=` works on iOS
+and Android:
+
+    let sms = `sms:${number}?&body=${encodeURIComponent(form.keyword)}`
+    document.querySelector('#text-code').innerHTML = qr(sms, 'Text to sign up')
+
+The SVG has class `Qr`, a square `viewBox`, black modules and a white quiet
+zone, so it can be sized with CSS and printed on a dark page.
 
 ### apply(bundles)
 

@@ -7,13 +7,12 @@
 // Not a seat: invite.ts offers a seat in a space to an address, and this
 // offers yaks.app itself to whoever is standing in front of you.
 import { identityEid } from '@yaks/graph/identity'
-import { encode } from 'uqr'
 import { caught } from './defects.ts'
 import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
-import { esc } from './html.ts'
 import { signupAddress } from './host.ts'
 import { phoneOf, textable } from './phones.ts'
+export { qr } from './qr.ts'
 
 // Letters and digits a person can read off a screen without mistaking one
 // for another: no 0 or o, no 1, i or l.
@@ -61,36 +60,6 @@ export let mailed = (address: string, said: string) =>
   `mailto:${address}?subject=${encodeURIComponent('Sign me up')}&body=${
     encodeURIComponent(said)
   }`
-
-/**
- * `text` as a QR code, an inline SVG a module to a unit: each row's runs of
- * dark modules are one path, a few kilobytes where a square a module is
- * fifteen. The quiet zone is drawn white, so the code reads on a dark page.
- *
- * ```ts
- * import { ok } from '@yaks/testing'
- * import { qr } from './referral.ts'
- * let svg = qr('sms:+18885550100?&body=Hi', 'Scan to text yaks.app')
- * ok(svg.startsWith('<svg') && svg.includes('aria-label="Scan to text yaks.app"'))
- * ```
- */
-export let qr = (text: string, label: string) => {
-  let { data, size } = encode(text, { ecc: 'M', border: 3 })
-  let d = data.flatMap((row, y) => {
-    let runs: string[] = []
-    for (let x = 0; x < size; x++) {
-      if (!row[x]) continue
-      let n = 1
-      while (row[x + n]) n++
-      runs.push(`M${x} ${y}h${n}v1h-${n}z`)
-      x += n
-    }
-    return runs
-  }).join('')
-  return `<svg class="Qr" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" role="img" aria-label="${
-    esc(label)
-  }" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/><path fill="#000" d="${d}"/></svg>`
-}
 
 /** How many times a fresh code is tried before minting gives up: two
  * collisions in a row among 28 million codes is already a bug. */

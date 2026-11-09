@@ -172,7 +172,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'store',
     'title': 'Frontend Data',
     'description':
-      "The frontend data API, ./api/client.js, in full: every function it exports; apply, query, search, subscribe, upload, digest, me, the outbox of unsaved writes and store(base) for another app's store; the bundle of components a write sends; patching and deleting; compare-and-set with $was so two writers cannot both spend one value; read and write access; the created.by author stamp on a row; seed.json seed data and store_load imports; and the HTTP endpoints underneath.",
+      "The frontend data API, ./api/client.js, in full: every function it exports; apply, query, search, subscribe, upload, digest, me, the outbox of unsaved writes, qr for SVG QR codes and store(base) for another app's store; the bundle of components a write sends; patching and deleting; compare-and-set with $was so two writers cannot both spend one value; read and write access; the created.by author stamp on a row; seed.json seed data and store_load imports; and the HTTP endpoints underneath.",
     'brief': 'reading and writing the store from a page with ./api/client.js',
   },
   'tools': {

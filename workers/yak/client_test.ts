@@ -72,6 +72,10 @@ test('the served client: a page saves, lists and watches', async () => {
 
     Deno.writeTextFileSync(`${dir}/client.js`, source)
     let mod = await import(`file://${dir}/client.js`)
+    assertStringIncludes(
+      mod.qr(`${mine.origin}/recipes/`, 'Scan to open Recipes'),
+      'aria-label="Scan to open Recipes"',
+    )
     let store = mod.store(`${mine.origin}/recipes/api/`)
 
     // Who is looking, asked before anything is asked of them (T-32679): the

@@ -5,6 +5,7 @@ import { Drop } from '@yaks/ui/parts'
 import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
 import { jsxTemplate } from 'preact/jsx-runtime'
 import { renderToString } from 'preact-render-to-string'
+export { esc } from './escape.ts'
 
 /** A page's tree, or a run of them, as the HTML it sends, rendered once at
  * the page's edge: every string in it is text, escaped by Preact. */
@@ -18,10 +19,6 @@ export let markup = (nodes: ComponentChildren): string =>
 /// import { h } from 'preact'
 /// markup(h('p', null, raw('<b>a</b>'), ' & ', '<b>')) -> '<p><b>a</b> &amp; &lt;b></p>'
 export let raw = (html: string): VNode => jsxTemplate([html])
-
-export let esc = (s: string) =>
-  s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;').replaceAll("'", '&#39;')
 
 // A formatter is made the first time a page formats with it, then reused for
 // every cell after: making one loads ICU's data, about 16 ms of a new
