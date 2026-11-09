@@ -568,6 +568,10 @@ test('what the app beside the chat is made of is drawn again as the Operator wor
   assertEquals(frames(), ['draft', 'live'])
   // The next leaves both frames as they are.
   let screens = document.querySelector('[data-frame]')
+  let address = document.querySelector('[data-address=draft]')!
+  let navigated = address.getAttribute('href')! + 'notices?q=tea#today'
+  address.setAttribute('href', navigated)
+  address.textContent = navigated
   await wrote({ posted: { type: 'string' }, title: { type: 'string' } })
   assert(
     await until(() =>
@@ -576,6 +580,9 @@ test('what the app beside the chat is made of is drawn again as the Operator wor
     ),
   )
   assert(document.querySelector('[data-frame]') === screens)
+  assertEquals(document.querySelector('[data-address=draft]'), address)
+  assertEquals(address.getAttribute('href'), navigated)
+  assertEquals(address.textContent, navigated)
   assertEquals(page.loads, { app: 0, page: 0 })
   page.leave()
 })

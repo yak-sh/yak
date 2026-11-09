@@ -1496,6 +1496,17 @@
     min-height: 0;
     padding: 0 1rem 1rem;
   }
+  .Talk_Address {
+    flex: 0 0 auto;
+    min-width: 0;
+    padding: .25rem .5rem;
+    overflow: auto;
+    white-space: nowrap;
+    font-family: var(--mono);
+    font-size: var(--small);
+    color: var(--text);
+    user-select: all;
+  }
   .Talk_Frame {
     display: block;
     width: 100%;

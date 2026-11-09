@@ -1,5 +1,6 @@
 // The platform's own script in every page an app serves: the reporter
-// (public/report.js) and the release listener (public/release.js), the
+// (public/report.js), the release listener (public/release.js), the framed
+// address reporter (public/location.js), the
 // badge (public/badge.js) in a page of a space on the free plan, and the
 // visitor's bar (public/visit.js) in a page served to a stranger from a
 // published app's sample or their own store of it (visit.ts), woven into
@@ -27,11 +28,17 @@ import type { Bar } from './visit.ts'
 type Assets = { fetch: (req: Request) => Promise<Response> }
 type Script = { text: string; hash: string }
 
-let FILES = ['/report.js', '/release.js', '/badge.js', '/visit.js']
+let FILES = [
+  '/report.js',
+  '/release.js',
+  '/badge.js',
+  '/visit.js',
+  '/location.js',
+]
 
 /** The platform's scripts a page wears beyond the reporter and the release
  * listener: the badge, opening `badge` unless it is null; a draft's preview
- * link it follows, which wears the release listener alone; the visitor's bar. */
+ * link it follows, which wears the release and address listeners; the visitor's bar. */
 export type Scripts = {
   badge: string | null
   draft?: string
@@ -71,7 +78,7 @@ let scripts = (assets: Assets) => {
 
 /** The tags for a page mounted at `at`, of release `version`, wearing
  * `worn`, and the hashes a policy needs to admit them. A page of a draft's
- * preview link (preview.ts) carries the release listener alone, told the
+ * preview link (preview.ts) carries the release and address listeners, told the
  * `draft` it follows (`data-yak-draft`). A page whose scripts could not be
  * read is served without them, and the failure is reported: a page that
  * paints without its reporter beats one that fails. */
@@ -82,16 +89,16 @@ export let pageScript = async (
   { badge, draft, bar }: Scripts,
 ) => {
   try {
-    let [report, release, badged, barred] = await scripts(assets)
+    let [report, release, badged, barred, location] = await scripts(assets)
     let tag = ({ text }: Script, more = '') =>
       `<script data-yak-at="${at}" data-yak-version="${version}"${more}>${text}</script>`
     if (draft) {
       return {
-        tags: tag(release, ` data-yak-draft="${esc(draft)}"`),
-        hashes: [release.hash],
+        tags: tag(location) + tag(release, ` data-yak-draft="${esc(draft)}"`),
+        hashes: [location.hash, release.hash],
       }
     }
-    let worn: [Script, string][] = [[report, ''], [release, '']]
+    let worn: [Script, string][] = [[report, ''], [release, ''], [location, '']]
     if (badge != null) worn.push([badged, ` data-yak-badge="${esc(badge)}"`])
     if (bar) {
       worn.push([

@@ -166,7 +166,7 @@ test('a page is served with its base and its reporter', async () => {
   assertEquals(page.status, 200)
   let html = await page.text()
   assert(html.includes('<base href="/cookbook/">'), html)
-  assertEquals(woven(html).length, 3, html)
+  assertEquals(woven(html).length, 4, html)
   assertStringIncludes(html, 'data-yak-at="/cookbook/" data-yak-version="1"')
   // And the client an app imports is the platform's own, beside the doors it
   // wraps.
@@ -1392,8 +1392,8 @@ test('worker HTML carries its reporter without changing its page or headers', as
       )
       let body = await page.text()
       let scripts = woven(body)
-      assertEquals(scripts.length, 3)
-      assertEquals(body.split(`data-yak-at="${at}"`).length - 1, 3)
+      assertEquals(scripts.length, 4)
+      assertEquals(body.split(`data-yak-at="${at}"`).length - 1, 4)
       assertEquals(unwoven(body), html)
       // The worker's own policy still holds, and lets the platform's inline
       // scripts run by their hashes and nothing else.
@@ -1408,7 +1408,7 @@ test('worker HTML carries its reporter without changing its page or headers', as
     })
     let page = await k.at('/cookbook/menu')
     let body = await page.text()
-    assertEquals(body.split('data-yak-at="/cookbook/"').length - 1, 3)
+    assertEquals(body.split('data-yak-at="/cookbook/"').length - 1, 4)
     assertEquals(unwoven(body), html)
   }
 })
@@ -2382,7 +2382,7 @@ test("a visitor's page wears the bar that keeps what they made", async () => {
     tags,
     'data-yak-keep="https://yaks.app/install?name=notes" data-yak-keep-says="Keep it"',
   )
-  assertEquals(hashes.length, 3)
+  assertEquals(hashes.length, 4)
 })
 
 // The badge is a door (T-131901): a published app's opens its own page on

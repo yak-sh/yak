@@ -1465,7 +1465,16 @@ let stageOf = ({ made, live, draft }: Making) =>
 // is what is changing.
 let screens = (app: Making, operator: string) => {
   let { live, draft } = app
-  let frame = (which: 'draft' | 'live', at: string) =>
+  let frame = (which: 'draft' | 'live', at: string) => [
+    h('a', {
+      class: 'Talk_Address',
+      href: at,
+      target: '_blank',
+      rel: 'noopener',
+      title: 'Preview address, opens in a new tab',
+      'data-address': which,
+      'data-screen': which,
+    }, at),
     h('iframe', {
       class: 'Talk_Frame',
       src: at,
@@ -1474,7 +1483,8 @@ let screens = (app: Making, operator: string) => {
       'data-frame': which,
       'data-screen': which,
       ...which == 'live' && draft ? { loading: 'lazy' } : {},
-    })
+    }),
+  ]
   let note = (which: string, said: string) =>
     h('p', { class: 'Talk_MadeNote', 'data-screen': which }, said)
   if (!live && !draft) {
@@ -2171,6 +2181,7 @@ let chatScript = (
   `<script type="module">
 import { browserDrafts } from '/_draft.js'
 import { follow } from '/follow.js'
+import { frames } from '/frames.js'
 import { redraw } from '/redraw.js'
 import { asideHtml, glanceHtml, helperHtml, lasted, menus, ordered, rowsOf, turnHtml } from '/_talk.js'
 import { voice } from '/voice.js'
@@ -2189,6 +2200,12 @@ let form = document.querySelector('#ask')
 let here = ${JSON.stringify(space.slug)}
 let follows = ${JSON.stringify(follows)}
 let canvas = () => document.querySelector('[data-app]')
+frames(globalThis, document)
+let painted = new WeakMap()
+let remember = (app) => {
+  for (let part of app?.querySelectorAll('[data-part]') ?? []) painted.set(part, part.outerHTML)
+}
+remember(canvas())
 let ours = (apps = []) => apps.filter((c) => !c.space || c.space == here).map((c) => c.app)
 let changing = (o) => {
   let app = canvas(), shown = app?.querySelector('[data-frame=live]')
@@ -2210,6 +2227,7 @@ let put = (drawn) => {
     let page = document.querySelector('.Talk')
     page.classList.add('Talk-app')
     page.append(next)
+    remember(next)
     made.innerHTML = drawn.show
     let bar = document.querySelector('.Talk_Bar')
     bar.insertBefore(made.content.firstElementChild, bar.querySelector('[data-aside]'))
@@ -2218,7 +2236,10 @@ let put = (drawn) => {
   if (was.dataset.app != next.dataset.app) return
   for (let part of next.querySelectorAll('[data-part]')) {
     let at = was.querySelector('[data-part="' + part.dataset.part + '"]')
-    if (at && at.outerHTML != part.outerHTML) at.replaceWith(part)
+    if (at && painted.get(at) != part.outerHTML) {
+      painted.set(part, part.outerHTML)
+      at.replaceWith(part)
+    }
   }
   if (next.dataset.stage == was.dataset.stage) return
   was.dataset.stage = next.dataset.stage
