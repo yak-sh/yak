@@ -28,7 +28,6 @@ test('remote trace doors preserve pages and use a platform-admin ticket the Work
       )
       ok(access)
       equal(access?.admin, true)
-      equal(init?.redirect, 'error')
       calls.push(u.pathname + u.search)
       return Response.json({ rows: [{ entity: { eid: id } }], next: id })
     }) as typeof fetch,

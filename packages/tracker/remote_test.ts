@@ -107,3 +107,18 @@ test('a delivery the tracker could not answer for now is unavailable, and any ot
     ],
   )
 })
+
+test('a redirect is answered as a refusal and never followed with the ticket', async () => {
+  let asked: string[] = []
+  let server = Deno.serve(
+    { port: 0, hostname: '127.0.0.1', onListen() {} },
+    (r) => {
+      asked.push(new URL(r.url).pathname)
+      return new Response(null, { status: 302, headers: { location: '/away' } })
+    },
+  )
+  let at = { ...remote, url: `http://127.0.0.1:${server.addr.port}` }
+  let response = await request(at, 'bugs', new URLSearchParams())
+  await server.shutdown()
+  equal([response.status, asked], [302, ['/bugs']])
+})

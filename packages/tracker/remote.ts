@@ -1,5 +1,8 @@
 // The box shares one signed tracker transport for reads, intake and bug marks.
-// Credentials are read at use time and never reach redirects or error text.
+// Credentials are read at use time and never reach redirects or error text:
+// a redirect is answered as the refusal it is, never followed. `manual` says
+// so on every host; workerd refuses `redirect: 'error'` as it builds the
+// request, which made every Operator read on yaks.app an outage.
 //
 // The path to the Worker can go bad for one connection while a new one is
 // fine: each connection from the box lands in one of several Cloudflare
@@ -131,7 +134,7 @@ export let request = async (
       return await attempt(go, url, {
         ...init,
         headers,
-        redirect: 'error',
+        redirect: 'manual',
         signal: init.signal ? AbortSignal.any([init.signal, wait]) : wait,
       })
     } catch (error) {
