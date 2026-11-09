@@ -6,6 +6,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { PART } from '@yaks/persona/part'
 import { h } from 'preact'
+import { parseHTML } from 'linkedom'
 import { type Box, look as kit, mount, type Node } from '@yaks/native'
 import type { Colors } from '@yaks/ui'
 import {
@@ -38,15 +39,9 @@ test('source references stay out of chat and task inputs, preserving the personâ
     body + '\n\nOriginal message text: message.txt (attachment user words)',
   ].map((body, i) => entry('input-' + i, i + 1, { content: { body } }))
   let painted = rows(inputs, namer(seen), seen).map((r) => r.html)
-  let text = (body: string) =>
-    rows(
-      [
-        entry('original', 1, { content: { body } }),
-      ],
-      namer(seen),
-      seen,
-    )[0].html
-  assertEquals(painted.slice(0, 2), [text(body), text(body)])
+  let words = (html: string) =>
+    parseHTML(html).document.querySelector('.Talk_You')!.textContent
+  assertEquals(painted.slice(0, 2).map(words), [body, body])
   assertStringIncludes(painted[2], original)
   assertStringIncludes(
     painted[3],
@@ -168,7 +163,7 @@ test('the lines sent paint natively, each step one line until pressed', async ()
   )
   await new Promise((r) => setTimeout(r))
   let main = (painted as unknown as Box).children[0] as Box
-  let words = main.children.map(said)
+  let words = main.children.map(said).map((s) => s.replace(/\|Archive$/, ''))
   assertEquals(words[0], 'Make me a notes app')
   assertEquals(words[2], 'Read notes for Jeff')
   assertEquals(

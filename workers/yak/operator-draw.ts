@@ -13,7 +13,7 @@ import type { Style } from '@yaks/native'
 import { type Step, stepOf, type Steps } from '@yaks/tools/title'
 import { blocks, parse } from '@yaks/markdown/structural'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
-import { Body, Drop, Icon } from '@yaks/ui/parts'
+import { Body, Button, Drop, Icon, Rows } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
 import { pretty, when } from './public/when.js'
 import { PART } from '@yaks/persona/part'
@@ -565,6 +565,38 @@ export let helped = (h: Helper, offers?: Offers, page?: Drawn) =>
 
 /** Every line of a transcript worth showing, in order, what each helper was
  * told inside the step that started it. */
+let archivable = (line: Line, entries: Bundle[]): Line => {
+  let rows = entries.filter((b) => line.uses.includes(b.entity.eid) && b.entry)
+  if (!rows.length) return line
+  let archived = rows.filter((b) => b.archived).map((b) => b.entity.eid)
+  let ids = archived.length ? archived : [line.id]
+  return {
+    ...line,
+    node: h(
+      Rows,
+      { mod: archived.length ? 'quiet' : undefined },
+      h(
+        Rows.Item,
+        null,
+        h(Rows.Main, null, line.node),
+        h(
+          Rows.Actions,
+          null,
+          h(Button, {
+            type: 'button',
+            mod: 'quiet',
+            'data-archive-entries': ids.join(','),
+            'data-restore': String(archived.length > 0),
+            title: archived.length
+              ? 'Include these words in the model context again'
+              : 'Keep these words in history, outside the model context',
+          }, archived.length ? 'Restore' : 'Archive'),
+        ),
+      ),
+    ),
+  }
+}
+
 export let lines = (
   entries: Bundle[],
   names: Names,
@@ -628,6 +660,7 @@ export let lines = (
           node: tool(b, names, result, under(id)),
         }]
         : line(b, id, body, opens)
+      drawn = drawn.map((line) => archivable(line, result ? [b, result] : [b]))
       before = sources.get(id) ?? before
       let at = inside.get(id)
       if (!at) return drawn

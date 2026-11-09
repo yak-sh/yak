@@ -40,6 +40,7 @@ type Frame = {
     lines?: Lines
     typing?: string
     now?: string
+    refresh?: boolean
   }
 }
 
@@ -69,6 +70,7 @@ let Talk = ({ space }: { space: Space }) => {
     let down = 0, tries = 0, told = false
     let hear = (frame: Frame) => {
       let o = frame.operator
+      if (o?.refresh) return void read().catch((e) => setTrouble(e.message))
       if (!o || (mine && o.task != mine)) return
       if (o.typing) return void setTyping((was) => was + o.typing)
       setTyping('')
@@ -123,7 +125,29 @@ let Talk = ({ space }: { space: Space }) => {
   }
   return h(
     'main',
-    { class: 'Talk_Said' },
+    {
+      class: 'Talk_Said',
+      onClick: async (e: Event) => {
+        let button = (e.target as Element).closest?.('[data-archive-entries]')
+        if (!button) return
+        try {
+          let response = await fetch(`${at}?archive=1`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              ids: button.getAttribute('data-archive-entries')!.split(','),
+              restore: button.getAttribute('data-restore') == 'true',
+            }),
+          })
+          if (!response.ok) {
+            throw new Error('These entries could not be changed. Try again.')
+          }
+          await read()
+        } catch (e) {
+          setTrouble((e as Error).message)
+        }
+      },
+    },
     [...lines].map(([id, node]) => h('div', { key: id }, node)),
     typing ? h('p', { class: 'Talk_Reply' }, typing) : null,
     now ? h('p', { class: 'Talk_Now' }, now) : null,

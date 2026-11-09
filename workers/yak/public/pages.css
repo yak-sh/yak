@@ -1726,7 +1726,7 @@
     height: .95em;
     vertical-align: -.1em;
   }
-  .Talk_Said > div:has(> .Talk_You) {
+  .Talk_Said div:has(> .Talk_You) {
     display: grid;
   }
   /* When each message was sent, quiet under it: the person's to the right. */
@@ -1736,7 +1736,7 @@
     color: var(--muted);
     font-size: var(--fine);
   }
-  .Talk_Said > div:has(> .Talk_You, > .Talk_Files) > .Talk_When {
+  .Talk_Said div:has(> .Talk_You, > .Talk_Files) > .Talk_When {
     justify-self: end;
   }
   .Talk_Reply {

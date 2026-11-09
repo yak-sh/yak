@@ -7,6 +7,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { ANSWER, QUESTIONS } from '@yaks/model'
 import { USING } from './native.ts'
 import { kindOf, newestAsk, seqOf } from './state.ts'
+import { checkpointOf, unarchived } from './pruning.ts'
 
 let callOf = (b: Bundle): string | undefined => {
   let call = ((b.result ?? b.tool_progress) as Comp | undefined)?.call
@@ -39,13 +40,14 @@ export let suffix = (entries: Bundle[], from: number): Bundle[] =>
  * kept verbatim. Ordinary file reads and tool results are history, not a way
  * to admit instructions. */
 export let retained = (entries: Bundle[]): Bundle[] =>
-  entries.filter((b) => b.prompt)
+  entries.filter((b) => b.prompt && !b.archived)
 
 export let history = (entries: Bundle[]): Bundle[] =>
   entries.filter((b) => !b.prompt && !b.task_context)
 
 export let context = (entries: Bundle[]): Bundle[] => {
-  let mark = entries.filter((b) => b.checkpoint).at(-1)
+  let mark = checkpointOf(entries)
+  entries = unarchived(entries)
   if (!mark) return entries
   let through = (mark.checkpoint as Comp).through
   let boundary = through ? entries.find((b) => b.entity.eid == through) : mark

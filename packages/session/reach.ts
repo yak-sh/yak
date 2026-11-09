@@ -51,6 +51,7 @@
 import type { Bundle, Comp, Eid, Graph, Row } from '@yaks/graph'
 import { stoppedNotice } from './claude-control.ts'
 import { askingOf, lines } from './compact.ts'
+import { checkpointOf } from './pruning.ts'
 import { ASK, CALL, CONTENT, ENTRY, OUTPUT, RESULT, USING } from './native.ts'
 import {
   attemptState,
@@ -182,7 +183,9 @@ let gathered = async (r: Read, owners: Row[]): Promise<Bundle[]> => {
         }
       }
       if (keys.every((key) => r.shapes.has(String(key)))) {
-        let present = new Set(keys.flatMap((key) => r.shapes.get(String(key))!))
+        let present = new Set(
+          keys.flatMap((key) => r.shapes.get(String(key))!),
+        )
         names = names.filter((n) => present.has(n))
       }
     }
@@ -703,6 +706,24 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
 }> => {
   let r = await chain(g, session, o)
   let held = await named(r, o)
+  // Archive membership changes without appending a line. Read its metadata
+  // afresh, including below checkpoints, without loading the archived prose.
+  if (o.turn && g.vocab.comp('archived')) {
+    let marks = await selected(
+      {
+        ...r,
+        names: [ENTRY, 'archived', CALL, RESULT, PROGRESS].filter((n) =>
+          g.vocab.comp(n)
+        ),
+      },
+      ...r.segs.map((s) => within(s) + '&.archived'),
+    )
+    for (let b of marks) {
+      let found = held.find((h) => h.entity.eid == b.entity.eid)
+      if (found) Object.assign(found, b)
+      else held.push(b)
+    }
+  }
   let rows: Bundle[] = []
   let find = (eid: Eid) =>
     rows.find((b) => b.entity.eid == eid) ??
@@ -792,7 +813,7 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
     return ordered([...rows, ...held].flatMap((b) => {
       if (seen.has(b.entity.eid)) return []
       seen.add(b.entity.eid)
-      return [looked.get(b.entity.eid) ?? b]
+      return [{ ...b, ...looked.get(b.entity.eid) }]
     }))
   }
   await fill(false)
@@ -800,7 +821,7 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
   // its calls, settled, stopped or failed is sent nothing, so its reading is
   // what a tool call's is.
   if (o.turn && statusOf(await gather()) == 'pending') {
-    let mark = held.filter((b) => b.checkpoint).at(-1)
+    let mark = checkpointOf(ordered(held))
     if (mark) {
       let through = comp(mark, 'checkpoint')?.through
       let boundary = through == null

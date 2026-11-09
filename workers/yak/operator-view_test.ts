@@ -234,7 +234,7 @@ test("a call's turn draws the caller's words and what they heard, the request an
   )
   let texts = (q: string) =>
     [...document.querySelectorAll(q)].map((e) => e.textContent!.trim())
-  assertEquals(texts('main > p.Talk_You, main > .Talk_You'), [
+  assertEquals(texts('.Talk_You:not(.Talk_Asked *)'), [
     'Any errors?',
     'Thanks',
   ])

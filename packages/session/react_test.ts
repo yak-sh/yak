@@ -2008,10 +2008,16 @@ test('a request refused at its limit is not retried', async () => {
   let asked = 0
   let model: Model = () => {
     asked++
-    return Promise.reject(new ModelError('limit', 'This space is at its limit'))
+    return Promise.reject(
+      new ModelError('limit', 'This space is at its limit'),
+    )
   }
   assertEquals(await rest(g, ids.s, { model, tools: [], mint }), 'failed')
-  assertEquals([asked, await kinds(g, ids.s)], [1, ['input', 'ask', 'refusal']])
+  assertEquals([asked, await kinds(g, ids.s)], [1, [
+    'input',
+    'ask',
+    'refusal',
+  ]])
   await appendEntry(g, ids.s, 'and now?')
   assertEquals(statusOf(await transcript(g, ids.s)), 'pending')
 })
@@ -2448,7 +2454,7 @@ let pendingSent = await resend('fast-progress')
 let finalFirst = await resend('fast-final')
 
 test('a Pending is resent only when an earlier request sent it', () => {
-  assertEquals(pendingSent, ['From an unknown sender:\nPending.'])
+  assertEquals(pendingSent, ['From the system:\nPending.'])
   assertEquals(finalFirst, ['From the echo tool:\nFAST'])
 })
 

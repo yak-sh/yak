@@ -65,6 +65,10 @@
           "ref": "entry",
           "death": "keep",
           "description": "the last entry of the prefix it was asked with"
+        },
+        "pruning": {
+          "type": "string",
+          "description": "archive-mark fingerprint of the context sent or summarized; a changed archive or restore invalidates this snapshot"
         }
       }
     },
@@ -218,6 +222,10 @@
             "additionalProperties": false
           },
           "description": "claimed task specifications frozen at this boundary, keyed by entity id"
+        },
+        "pruning": {
+          "type": "string",
+          "description": "archive-mark fingerprint of the context sent or summarized; a changed archive or restore invalidates this snapshot"
         }
       },
       "description": "everything through this entry is settled: a compaction boundary"

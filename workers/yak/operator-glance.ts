@@ -53,7 +53,10 @@ export let recentOf = async (g: Glance, most = RECENT) => {
   )
   let names = new Map([[g.person, 'the person']])
   return ordered(entries).flatMap((entry) => {
-    if (!['input', 'output'].includes(kindOf(entry) ?? '')) return []
+    if (
+      entry.archived || entry.checkpoint ||
+      !['input', 'output'].includes(kindOf(entry) ?? '')
+    ) return []
     let text = textOf(entry)
     if (!text || entry.prompt) return []
     let from = (entry.entry as Comp).from as string | undefined

@@ -1050,6 +1050,32 @@ export let operatorFrames = (
       }
     }
   }
+  // Marks edit old rows, which the step cursor does not cover. Ask every
+  // page watching their conversation to read it again when those marks change.
+  store.g.use({
+    name: 'operator-entry-marks',
+    hooks: {
+      effect: async (bundles) => {
+        let ids = bundles.filter((b) => 'archived' in b).map((b) =>
+          b.entity.eid
+        )
+        if (ids.length) {
+          let entries = await store.g.get(ids, ['entry'])
+          let sessions = new Set(
+            entries.flatMap((b) =>
+              b.entry ? [String(comp(b, 'entry')!.session)] : []
+            ),
+          )
+          for (let session of sessions) {
+            send(await watching(session), {
+              operator: { task: await keyOf(store, session), refresh: true },
+            })
+          }
+        }
+        return bundles
+      },
+    },
+  })
   return {
     /** A person's drafts as they now stand, to every page they have open, so
      * words typed on one show on the others as they land. */
@@ -1267,7 +1293,9 @@ export let operatorRequest = async (
   let access = held
   let own = (id: string) => owns(store, id, held)
   let missing = () =>
-    Response.json({ message: 'That conversation is missing.' }, { status: 404 })
+    Response.json({ message: 'That conversation is missing.' }, {
+      status: 404,
+    })
   let allowedDrafts = async (bundles: Bundle[]) => {
     let allowed = await Promise.all(bundles.map(async (b) => {
       let place = placeOf(b)
@@ -1289,6 +1317,26 @@ export let operatorRequest = async (
   ) return missing()
   if (path == '/operator/stop') {
     return Response.json(await operator.stop(String(args.task ?? ''), person))
+  }
+  if (path == '/operator/archive') {
+    let ids = Array.isArray(args.ids) ? args.ids.map(String) : []
+    if (!ids.length) {
+      throw refuse('arguments', 'Name the entries to archive or restore.')
+    }
+    let rows = await store.g.get(ids, ['entry'])
+    if (rows.length != ids.length || rows.some((b) => !b.entry)) {
+      return missing()
+    }
+    if (!(await Promise.all(ids.map(own))).every(Boolean)) return missing()
+    await store.g.apply(
+      ids.map((eid) => ({
+        entity: { eid },
+        archived: args.restore === true ? null : {},
+        $actor: { by: person },
+      })),
+      { trusted: true },
+    )
+    return Response.json({ entries: ids, restored: args.restore === true })
   }
   if (path == '/operator/draft') {
     if (Array.isArray(args.bundles)) {
@@ -1502,7 +1550,9 @@ export let operatorRequest = async (
     if (!open) {
       let { tasks = [], conversations = [] } = await readOperator(store)
       let mine = async (rows: Bundle[]) => {
-        let allowed = await Promise.all(rows.map((r) => readable(r.entity.eid)))
+        let allowed = await Promise.all(
+          rows.map((r) => readable(r.entity.eid)),
+        )
         return rows.filter((_, i) => allowed[i])
       }
       return Response.json({

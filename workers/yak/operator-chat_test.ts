@@ -217,7 +217,7 @@ test('a conversation opens in the chat app: its words, each step in plain words,
   assertEquals(text('.Talk_Reply li'), ['Thursday at 7'])
   // Each message says when it was sent, under it: the person's words and
   // the reply, not the steps between.
-  assertEquals(text('.Talk_Said > div > .Talk_When'), ['just now', 'just now'])
+  assertEquals(text('.Talk_Said .Talk_When'), ['just now', 'just now'])
   // A step opens on what it asked for in words; what its error said shows
   // only inside its closed Details, and what the model was told only in its
   // own frame.
@@ -268,7 +268,10 @@ test("the chat app installs to a home screen as its Operator's web app", () => {
     manifest: true,
   })
   assertEquals(attr('link[rel=manifest]', 'crossorigin'), 'use-credentials')
-  assertEquals(attr('link[rel=apple-touch-icon]', 'href'), '/connector-512.png')
+  assertEquals(
+    attr('link[rel=apple-touch-icon]', 'href'),
+    '/connector-512.png',
+  )
   assertEquals(
     [...document.querySelectorAll('meta[name=theme-color]')]
       .map((m) => [m.getAttribute('media'), m.getAttribute('content')]),
@@ -703,7 +706,11 @@ test('the Voice card shows back the voice, speed and model each save picked', as
     })
   }
   // A voice the talking model cannot speak is refused, and the last save stays.
-  let kept = { voice: 'marin', model: 'gpt-realtime-2.1-mini', speed: 'normal' }
+  let kept = {
+    voice: 'marin',
+    model: 'gpt-realtime-2.1-mini',
+    speed: 'normal',
+  }
   assertEquals(await voiced('fable', 'gpt-realtime-2.1'), {
     status: 400,
     ...kept,

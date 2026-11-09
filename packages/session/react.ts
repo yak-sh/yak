@@ -1,4 +1,5 @@
 import { compactAsk } from './compact_ask.ts'
+import { checkpointOf, pruning } from './pruning.ts'
 import { entryStatus, reach } from './reach.ts'
 import { actionable, exceptionOf } from '@yaks/tools/fault'
 import { UnfinishedCall } from '@yaks/tools/errors'
@@ -552,7 +553,7 @@ let compaction = async (o: {
       .map((i) => tokens(JSON.stringify(i).length))
     return { sizes, results }
   }
-  let mark = o.entries.filter((b) => b.checkpoint).at(-1)
+  let mark = checkpointOf(o.entries)
   let asks = o.entries.filter((b) =>
     kindOf(b) == 'ask' && (!mark || seqOf(b) > seqOf(mark))
   )
@@ -846,7 +847,11 @@ export let react = async (
     // Like `fixed`, a word a host may leave out: a yaks.app store keeps
     // usage, never its split.
     if (reply.usage && sent && g.vocab.comp('context_parts')) {
-      finalAsk.context_parts = contextParts(sent.fixed, sent.lines, reply.usage)
+      finalAsk.context_parts = contextParts(
+        sent.fixed,
+        sent.lines,
+        reply.usage,
+      )
     }
     // A reply cut at its output limit before it said or called anything is
     // an interrupted one: the transcript asks again, as after any other
@@ -1257,7 +1262,9 @@ export let react = async (
         `.ask&.entry.session=${session} .order=-entry.seq .limit=1 ` +
           '.fields=entity.eid',
       )
-      if (newest?.entity.eid != comp(call, CALL)?.source || pending.late) return
+      if (newest?.entity.eid != comp(call, CALL)?.source || pending.late) {
+        return
+      }
       pending.at = 'writing'
       await g.apply([{
         ...line({ tool_progress: { call: call.entity.eid } }, PENDING),
@@ -1417,8 +1424,9 @@ export let react = async (
   asked = newestAsk(
     entries.filter((b) => attemptState(b) == 'completed'),
   )
-  let checkpoint = entries.filter((b) => b.checkpoint).at(-1)
+  let checkpoint = checkpointOf(entries)
   const sameModel = asked &&
+    comp(asked, ASK)?.pruning === pruning(entries) &&
     (!checkpoint || seqOf(asked) > seqOf(checkpoint)) &&
     comp(asked, 'entry')?.session === session &&
     comp(asked, ASK)?.to === modelEid &&
@@ -1631,6 +1639,7 @@ export let react = async (
             checkpoint: {
               through: through.entity.eid,
               seq: seqOf(through),
+              pruning: pruning(entries),
               tasks: snapshot(held),
             },
             notice: {},
@@ -1652,7 +1661,11 @@ export let react = async (
             ? line(
               passing(e)
                 ? {
-                  [ASK]: { to: modelEid, through: newest.entity.eid },
+                  [ASK]: {
+                    to: modelEid,
+                    through: newest.entity.eid,
+                    pruning: pruning(entries),
+                  },
                   attempt: {},
                   interrupted: { code: e.code },
                 }
@@ -1688,7 +1701,11 @@ export let react = async (
   // reader sees exactly what the model was offered.
   let offer = req.tools.length ? sha256(JSON.stringify(req.tools)) : ''
   let ask = unfinished && executor ? unfinished : line({
-    [ASK]: { to: modelEid, through: newest.entity.eid },
+    [ASK]: {
+      to: modelEid,
+      through: newest.entity.eid,
+      pruning: pruning(entries),
+    },
     ...using
       ? {
         [USING]: {
@@ -1905,6 +1922,7 @@ export let react = async (
                 checkpoint: {
                   through: through.entity.eid,
                   seq: seqOf(through),
+                  pruning: pruning(entries),
                   overflow: ask.entity.eid,
                   tasks: snapshot(held),
                 },

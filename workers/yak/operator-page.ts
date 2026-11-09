@@ -768,6 +768,11 @@ export let operatorAnswer = async (
       { headers: { 'cache-control': 'private, no-store' } },
     )
   }
+  if (q.has('archive') && req.method == 'POST') {
+    return Response.json(
+      await operatorDoor(env, space, who, 'archive', await req.json()),
+    )
+  }
   if (q.has('stop') && req.method == 'POST') {
     let { task } = await req.json() as { task?: string }
     return Response.json(
@@ -915,7 +920,9 @@ let socketTo = (
     out.headers.delete('authorization')
     if (protocolled(req)) out.headers.set('sec-websocket-protocol', PROTOCOL)
     else out.headers.delete('sec-websocket-protocol')
-    for (let [h, v] of Object.entries(seated(space, who))) out.headers.set(h, v)
+    for (let [h, v] of Object.entries(seated(space, who))) {
+      out.headers.set(h, v)
+    }
     return out
   })
 
@@ -2390,6 +2397,17 @@ document.addEventListener('click', (e) => {
   say.focus()
   say.setSelectionRange(say.value.length, say.value.length)
 })
+// Archive and restore change marks, keeping the words on the page and in search.
+document.addEventListener('click', async (e) => {
+  let button = e.target.closest?.('[data-archive-entries]')
+  if (!button) return
+  button.disabled = true
+  try {
+    let response = await fetch('${at}?archive=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: button.dataset.archiveEntries.split(','), restore: button.dataset.restore == 'true' }) })
+    if (!response.ok) throw new Error('These entries could not be changed. Try again.')
+    await read()
+  } catch (error) { said(error); button.disabled = false }
+})
 // Stop on a helper's page stops that helper, and the conversation that
 // started it hears that the person did (operator.ts \`stop\`).
 document.addEventListener('click', async (e) => {
@@ -2475,12 +2493,13 @@ let read = async () => {
 let live = false, opened = false
 let hear = (frame) => {
   if (frame.drafts) for (let heard of hearing) heard(frame.drafts)
-  if (frame.ready && (frame.standing == null || frame.standing !== standing)) read().catch(said)
+  if (frame.ready) read().catch(said)
   let o = frame.operator
   if (!o) return
   changing(o)
   let card = thread()
   if (!card) return void read().catch(said)
+  if (o.refresh) return void read().catch(said)
   if (card.dataset.task != o.task) return
   if ('turn' in o) turning(o.turn)
   if (o.helping) helped(o.helping)
