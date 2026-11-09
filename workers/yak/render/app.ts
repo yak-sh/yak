@@ -41,7 +41,7 @@ export let app: ComponentRenderer = {
         null,
         h(Card.Mark, {
           as: 'img',
-          src: ctx.icon ?? `${ctx.at ?? ''}/${a.slug}/icon.png`,
+          src: ctx.icon ?? `${ctx.at ?? ''}/${a.slug}/icon.png?display`,
           width: 24,
           height: 24,
           alt: '',

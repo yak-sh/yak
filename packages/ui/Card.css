@@ -20,7 +20,7 @@
 }
 .Card_Head {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--half-gap);
   margin: calc(-1 * var(--card-pad)) calc(-1 * var(--card-pad)) 0;
@@ -32,6 +32,7 @@
   border-bottom: 0;
 }
 .Card_Title {
+  flex: 1;
   min-width: 0;
   margin: 0;
   color: var(--heading);
@@ -52,8 +53,10 @@
   width: 1.5em;
   height: 1.5em;
   text-align: center;
+  object-fit: contain;
 }
 .Card_Actions {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: center;

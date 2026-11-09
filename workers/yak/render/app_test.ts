@@ -133,7 +133,7 @@ test('app Tile escapes every label and attribute once', () => {
   )
   assertEquals(
     root.querySelector('img')?.getAttribute('src'),
-    `/${text}/icon.png`,
+    `/${text}/icon.png?display`,
   )
   assertEquals(root.querySelector('h2')?.textContent, text)
   assertEquals(root.querySelector('.Card_Sub')?.textContent, `/${text}`)

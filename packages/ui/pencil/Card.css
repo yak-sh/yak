@@ -27,15 +27,14 @@
 
 /* The head: a mark, the title, how it stands, and then whatever acts on
    the whole card, pushed to the right. Its controls are a size down, so a
-   head is one compact line however many it holds; it wraps on a phone. */
+   head keeps its actions beside the title, whose words can wrap. */
 .Card_Head {
   --control-height: 2rem;
   --control-pad-inline: 0.7rem;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0.5rem 0.75rem;
-  min-height: 3rem;
   position: relative;
   margin: calc(-1 * var(--pad-block)) calc(-1 * var(--pad-inline)) 0;
   padding: 0.5rem var(--pad-inline);
@@ -56,6 +55,7 @@
   content: none;
 }
 .Card_Title {
+  flex: 1;
   min-width: 0;
   margin: 0;
   color: var(--text);
@@ -75,8 +75,10 @@
   flex: none;
   width: 1.5rem;
   height: 1.5rem;
+  object-fit: contain;
 }
 .Card_Actions {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: center;

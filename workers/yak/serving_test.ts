@@ -510,6 +510,16 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
   )
   assertEquals(new Uint8Array(await icon.arrayBuffer()), tile)
 
+  // Lists wear a transparent display mark; installers keep the opaque tile.
+  let mark = await apps.fetch(visit('/cookbook/icon.png?display'), env)
+  assertEquals(mark.headers.get('content-type'), 'image/webp')
+  assertEquals(
+    new Uint8Array(await mark.arrayBuffer()),
+    await Deno.readFile(new URL('./public/yak.webp', import.meta.url)),
+  )
+  let installed = await apps.fetch(visit('/cookbook/icon.png'), env)
+  assertEquals(new Uint8Array(await installed.arrayBuffer()), tile)
+
   // And the manifest, generated from the app: no colour of its own set
   // through `app_set`, so the platform's own answers rather than a guess off
   // the page (T-33055) — the page's own theme-color meta is about the page,
@@ -540,8 +550,43 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
   )
   let own = await apps.fetch(visit('/cookbook/icon.png'), env)
   assertEquals(await own.text(), 'mine')
+  let ownMark = await apps.fetch(visit('/cookbook/icon.png?display'), env)
+  assertEquals(await ownMark.text(), 'mine')
   let theirs = await apps.fetch(visit('/cookbook/manifest.webmanifest'), env)
   assertEquals(await theirs.json(), { name: 'Ours' })
+})
+
+test('a display mark uses the space logo before its opaque installer drawing', async () => {
+  let original = new Uint8Array([1, 2, 3])
+  let drawn = new Uint8Array([4, 5, 6])
+  let blobs = bucket()
+  blobs.held.set('space/.logo/sha', original)
+  blobs.held.set('space/.logo/sha.icon.png', drawn)
+  let env = { BLOBS: blobs.r2 } as unknown as Env
+  let space = {
+    store: 'space',
+    logo: { sha: 'sha', type: 'image/webp' },
+  } as Space
+  for (let display of [false, true, false]) {
+    let response = (await apps.unwritten(
+      new Request(
+        `https://ada.yaks.app/notes/icon.png${display ? '?display' : ''}`,
+      ),
+      env,
+      space,
+      { access: 'public' } as App,
+      '/icon.png',
+      '/notes/',
+    ))!
+    assertEquals(
+      response.headers.get('content-type'),
+      display ? 'image/webp' : 'image/png',
+    )
+    assertEquals(
+      new Uint8Array(await response.arrayBuffer()),
+      display ? original : drawn,
+    )
+  }
 })
 
 test('an app that wrote an icon.svg and no icon.png is served the svg drawn', async () => {

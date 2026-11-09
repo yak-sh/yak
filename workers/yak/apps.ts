@@ -32,7 +32,7 @@ import { copyOf } from './directory-copy.ts'
 // signed-out visitor sent to sign in is the platform working.
 import { apex, type Host, url as hostUrl } from './host.ts'
 import { r2Objects } from './lib/objects.ts'
-import { logoIcon } from './logo.ts'
+import { logoBytes, logoIcon } from './logo.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build-door.ts'
 import { browserImmutable, immutable } from './cache.ts'
 import { client } from './sheets.ts'
@@ -840,7 +840,8 @@ let media = async (
 // one, the platform's connector tile — opaque, square, 512 (site_test) — so
 // an app on a home screen wears the platform's face rather than the browser's
 // blank sheet. iOS fills a transparent icon with black, which is why the tile
-// that carries its own ground is the right one to fall back to.
+// that carries its own ground is the right one to fall back to. A display
+// mark (?display) keeps the original logo's alpha, or the transparent yak.
 export let unwritten = async (
   req: Request,
   env: Env,
@@ -850,18 +851,29 @@ export let unwritten = async (
   at: string,
 ) => {
   if (path == '/icon.png') {
-    let logo = await logoIcon(env, space, app.eid)
+    let display = new URL(req.url).searchParams.has('display')
+    let bytes = display && space.logo
+      ? await logoBytes(env, space, space.logo.sha)
+      : null
+    let logo = display
+      ? bytes ? { bytes, type: space.logo!.type } : null
+      : await logoIcon(env, space, app.eid)
     if (logo) {
       return new Response(logo.bytes as Uint8Array<ArrayBuffer>, {
         headers: { 'content-type': logo.type, 'cache-control': keeping(app) },
       })
     }
     let tile = await env.ASSETS.fetch(
-      new Request(new URL('/connector-512.png', req.url)),
+      new Request(
+        new URL(display ? '/yak.webp' : '/connector-512.png', req.url),
+      ),
     )
     if (!tile.ok) return null
     return new Response(tile.body, {
-      headers: { 'content-type': 'image/png', 'cache-control': keeping(app) },
+      headers: {
+        'content-type': display ? 'image/webp' : 'image/png',
+        'cache-control': keeping(app),
+      },
     })
   }
   if (path != '/manifest.webmanifest') return null
