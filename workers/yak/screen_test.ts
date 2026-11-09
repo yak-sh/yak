@@ -275,7 +275,7 @@ let watch = async (tvPage: Document, url: string) => {
   let { document } = parseHTML(
     await (await handler.fetch(new Request(url), env)).text(),
   )
-  let tag = script(document, 'data-yak-at')
+  let tag = script(document, 'data-yak-draft')
   Object.defineProperty(document, 'currentScript', { value: tag })
   Object.defineProperty(document, 'baseURI', { value: url })
   Object.defineProperty(document, 'readyState', { value: 'complete' })
