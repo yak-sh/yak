@@ -1,12 +1,11 @@
 ---
 name: yaks-app-business
 description: >
-  Use for yaks.app pricing, plans, meter.ts allowances/limits,
-  upgrade/refusal text, marketing pages, sign-up/onboarding, billing,
-  gallery, homepage examples or audience decisions. Covers its customers,
-  spaces and plans. Business principles are business-model; how any
-  marketing page's copy is written is marketing-site; platform mechanics
-  are yaks-app.
+  Use for yaks.app pricing, plans, meter.ts allowances/limits, upgrade/refusal
+  text, marketing pages, sign-up/onboarding, billing, gallery, homepage examples
+  or audience decisions. Covers its customers, spaces and plans. Business
+  principles are business-model; how any marketing page's copy is written is
+  marketing-site; platform mechanics are yaks-app.
 ---
 
 # yaks.app's business
@@ -127,7 +126,7 @@ the pricing page hold what each one carries:
   files, 2,500 emails a month, a custom domain, payments with Stripe and no
   badge. Whether a Plus space can pay for model use past its budget is
   T-131904.
-- **The Organization plan** is $49 a month or $490 a year, since an
+- **The Pro plan** is $49 a month or $490 a year, since an
   organization budgets by the year (D-134567, T-135234). It carries the Plus
   plan's allowances and adds the Operator built in, so staff ask by email or
   chat and yaks.app makes the change, a larger model budget and support.
@@ -135,7 +134,6 @@ the pricing page hold what each one carries:
   before it is spent, up to a monthly cap they set on the plan card: $0
   until they choose one, and nothing is ever charged past it (meter.ts
   `creditOf`, billing.ts `buy`).
-  Jeff on its name: "just call it the organization plan" (T-139983).
 
 Copy is written for a stranger. "Each space is free or on a paid plan"
 passes; "Free allowances are yours, not each space's" doesn't. How a marketing
@@ -150,7 +148,7 @@ docs are the place for explicitness and technicality!"
 (`writing-documentation`).
 
 - Define "space" before you use it.
-- Say "the Plus plan" (M-37846) and "the Organization plan".
+- Say "the Plus plan" (M-37846) and "the Pro plan".
 - Use the one-liner as it stands (M-37845).
 - Show live apps from the yourname space (M-37804).
 - Let prompts start from the person's own situation (M-37856).
@@ -167,7 +165,7 @@ assistants' connector directories for those who already use one.
 
 ## Where it lives
 
-- **The numbers.** workers/yak/meter.ts (`FREE`, `PLUS`, `ORGANIZATION`,
+- **The numbers.** workers/yak/meter.ts (`FREE`, `PLUS`, `PRO`,
   `LETTERS`, `BUDGET`, `PRICE`, `YEARLY`, `SPACES`), and site_test.ts holds the pages to them. The plan is
   `plan{tier, customer, subscription, status, until, ending, at}` on the space
   (packages/platform/vocab.json), and its AI credit is `credit{cap, bought,
