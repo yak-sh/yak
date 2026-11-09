@@ -11,7 +11,9 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { front } from '@yaks/yaml'
 import { storable } from '@yaks/vocab'
-import { fixedStep, ownerOf } from '@yaks/game'
+import { strip } from '@yaks/esbuild/strip'
+import { importing } from '@yaks/fp/imports'
+import { pageModule } from './page-module-probe.ts'
 import { coreDocs, reserved, wordOf } from './vocab.ts'
 import { upload } from './dispatch.ts'
 import type { Env } from './env.ts'
@@ -481,16 +483,17 @@ let holdfastDependencies = JSON.parse(Deno.readTextFileSync(
   new URL('../../apps/holdfast/package.json', import.meta.url),
 ))
 let gameRulesExample = /```ts\n([\s\S]*?)\n```/.exec(gameText)![1]
-  .replace(/^import .* from .*\n/gm, '')
-  .replace(' as const', '')
-let runGameRulesExample = new Function(
-  'fixedStep',
-  'ownerOf',
-  'equal',
-  gameRulesExample,
-)
+let runGameRulesExample = async () =>
+  pageModule(await strip('example.ts', gameRulesExample), {
+    at: new URL('./public/docs/games.md', import.meta.url).href,
+    resolve: (specifier, from) =>
+      /^(?:\.{0,2}\/)/.test(specifier)
+        ? new URL(specifier, from).href
+        : import.meta.resolve(specifier),
+    read: (url) => importing(url),
+  })
 
-test('the games page uses Holdfast dependencies and runnable rules', () => {
+test('the games page uses Holdfast dependencies and runnable rules', async () => {
   assertEquals(gameDependencies, holdfastDependencies)
-  runGameRulesExample(fixedStep, ownerOf, assertEquals)
+  await runGameRulesExample()
 })

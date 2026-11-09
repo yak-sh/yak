@@ -11,7 +11,7 @@ import { bundle } from '@yaks/cli/page'
 import { written } from './sheet-assets.ts'
 import { written as pages } from './site/mod.ts'
 
-let parts = {
+export let parts = {
   '_draft.js': '../../packages/draft/browser.ts',
   '_outbox.js': '../../packages/sync/outbox.ts',
   '_wire.js': '../../packages/vocab/wire.ts',

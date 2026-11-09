@@ -8,21 +8,18 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import type { Stash } from '@yaks/draft'
-import { browserDrafts } from '../../packages/draft/browser.ts'
+import { imported } from '@yaks/fp/imports'
+import { parts } from './client-assets.ts'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import { type Beside, chatPage, operatorAnswer } from './operator-page.ts'
 import type { Who } from './session.ts'
-import { follow } from './public/follow.js'
-import { redraw } from './public/redraw.js'
-import { voice } from './public/voice.js'
+import { pageModule } from './page-module-probe.ts'
 import { released } from './operator-testing.ts'
 import { openedOf, operatorFrames } from './operator-host.ts'
 import { operatorStore } from './operator-store.ts'
 import { inputOf } from './operator-root.ts'
 import { TOOLS } from './tools.ts'
-import { pretty, when } from './public/when.js'
-import * as talk from './operator-rows.ts'
 
 let p = platform('operator-draft')
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
@@ -149,9 +146,14 @@ let load = async (
       }
     }
   }
+  let left = false
   let timers = new Set<ReturnType<typeof setTimeout>>()
   let after = (fn: () => void, ms: number) => {
-    let t = setTimeout(() => (timers.delete(t), fn()), network ? ms / 1000 : ms)
+    if (left) return 0
+    let t = setTimeout(
+      () => (timers.delete(t), fn()),
+      network || ms < 1000 ? ms / 1000 : ms,
+    )
     timers.add(t)
     return t
   }
@@ -167,6 +169,7 @@ let load = async (
       let answer = await serve(url, init, as)
       talks++
       await slow
+      if (left) return new Promise<Response>(() => {})
       return answer
     }
     if (cut && init?.method == 'POST') return new Promise<Response>(() => {})
@@ -187,16 +190,11 @@ let load = async (
       )
     }
     let answer = await serve(url, init, as)
+    if (left) return new Promise<Response>(() => {})
     if (url.includes('draft=1') && !init?.method) {
       queueMicrotask(() => void reads++)
     }
     return answer
-  }
-  let kept: ReturnType<typeof browserDrafts>[] = []
-  let opened: typeof browserDrafts = (client, scope, opts) => {
-    let d = browserDrafts(client, scope, { ...opts, stash, pace: 0 })
-    kept.push(d)
-    return d
   }
   // linkedom keeps no focus or selection: the box records being given it.
   let say = document.querySelector('[name=say]') as HTMLTextAreaElement
@@ -221,79 +219,52 @@ let load = async (
   }
   let sockets: Page[] = []
   let source = document.querySelector('script[type=module]')!.textContent!
-    .replace(/^import .*$/gm, '')
-  let talking = speaking
-  let place = { reload: () => void loads.page++, origin: 'https://yaks.app' }
-  // A window that lays nothing out: the page's place in its conversation
-  // (public/follow.js) is follow_script_test's.
-  let win = Object.assign(Object.create(globalThis), {
-    location: place,
-    scrollTo: () => {},
-    addEventListener: () => {},
-  })
-  new Function(
-    'globalThis',
-    'browserDrafts',
-    'follow',
-    'redraw',
-    'rowsOf',
-    'asideHtml',
-    'glanceHtml',
-    'helperHtml',
-    'ordered',
-    'lasted',
-    'turnHtml',
-    'voice',
-    'when',
-    'pretty',
-    'setInterval',
-    'document',
-    'fetch',
-    'location',
-    'setTimeout',
-    'clearTimeout',
-    'FormData',
-    'WebSocket',
-    'Event',
-    source,
-  )(
-    win,
-    opened,
-    follow,
-    redraw,
-    talk.rowsOf,
-    talk.asideHtml,
-    talk.glanceHtml,
-    talk.helperHtml,
-    talk.ordered,
-    talk.lasted,
-    talk.turnHtml,
-    (o: Parameters<typeof voice>[0]) =>
-      voice(talking ? { ...o, platform: talking.platform(Event) as never } : o),
-    when,
-    pretty,
-    // the stamps' minute, which no test waits for
-    () => 0,
-    document,
-    fetch,
-    place,
-    after,
-    clearTimeout,
-    FormOf,
-    // A socket that never opens: the page polls, as with none.
-    class {
-      onopen?: () => void
-      onmessage?: () => void
-      onclose?: () => void
-      constructor(public url: string) {
-        sockets.push(this)
-      }
-      close() {
-        queueMicrotask(() => this.onclose?.())
-      }
-    },
-    Event,
+  // Generated bundles still depend on the source graph that builds them.
+  imported(
+    Object.values(parts).map((from) => new URL(from, import.meta.url).href),
   )
+  let place = { reload: () => void loads.page++, origin: 'https://yaks.app' }
+  // The browser's interfaces belong to this load, including those used inside
+  // imported modules: storage, speech, timers and the page's socket.
+  await pageModule(source, {
+    at: base,
+    read: async (url) => {
+      let response = await p.env.ASSETS.fetch(new Request(url))
+      if (!response.ok) throw new Error(`${url}: ${response.status}`)
+      return response.text()
+    },
+    globals: {
+      document,
+      fetch,
+      location: place,
+      localStorage: stash,
+      setInterval: () => 0,
+      setTimeout: after,
+      clearTimeout,
+      FormData: FormOf,
+      Event,
+      scrollTo: () => {},
+      addEventListener: () => {},
+      ...speaking
+        ? {
+          SpeechRecognition: speaking.platform(Event).Recognition,
+          speechSynthesis: speaking.platform(Event).synthesis,
+          SpeechSynthesisUtterance: speaking.platform(Event).Utterance,
+        }
+        : {},
+      WebSocket: class {
+        onopen?: () => void
+        onmessage?: () => void
+        onclose?: () => void
+        constructor(public url: string) {
+          sockets.push(this)
+        }
+        close() {
+          queueMicrotask(() => this.onclose?.())
+        }
+      },
+    },
+  })
   return {
     say,
     focused,
@@ -364,8 +335,8 @@ let load = async (
       form.dispatchEvent(new Event('submit', { cancelable: true }))
     },
     leave: () => {
+      left = true
       for (let t of timers) clearTimeout(t)
-      for (let d of kept) d.close()
     },
   }
 }
