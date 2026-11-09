@@ -40,13 +40,14 @@ let vocab = loadVocab([{
 
 let T = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 let P = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+let deadline = '2026-09-29T19:12:21.000Z'
 let task = (): Bundle => ({
   entity: { eid: T, num: 1 },
   doc: { title: 'Fix the map', body: 'Stored body' },
   task: {
     status: 'open',
     owner: P,
-    due: '2026-09-29T19:12:21.000Z',
+    due: deadline,
     prio: 3,
     site: 'https://yak.sh/',
     urgent: true,
@@ -176,8 +177,10 @@ test("a value's face follows its type", () => {
     face('site').querySelector('a')?.getAttribute('href'),
     'https://yak.sh/',
   )
-  assertEquals(face('due').textContent, 'when 2026-09-29T19:12:21.000Z')
-  assert(face('due').querySelector('[data-tip]'))
+  let due = face('due').querySelector('time')!
+  assert(due?.textContent)
+  assertEquals(due.getAttribute('datetime'), deadline)
+  assert(due.hasAttribute('data-tip'))
   assertEquals(face('owner').textContent, 'Draw the map')
   assertEquals(face('domain').textContent, '—')
   assertEquals(p.root.querySelector('.Prop-live'), null)
