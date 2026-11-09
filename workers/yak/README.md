@@ -603,10 +603,10 @@ anything. Submitting grants no read access; the app’s existing access policy
 still applies.
 
 `GET ./api/form/<form>` shows the form, so a page in any app can draw one kept
-in another, private one. It answers anyone, as POST does,
-`cache-control:
-no-store`, with the form's own rows and nothing else in the
-store:
+in another, private one. It answers anyone, as POST does, from the app's own
+store: a stranger served a published app's sample (visit.ts) still meets the
+app's forms. It answers `cache-control: no-store`, with the form's own rows and
+nothing else in the store:
 
 ```json
 {

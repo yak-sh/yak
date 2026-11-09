@@ -239,6 +239,75 @@ test('a public app keeps its sign-ups from visitors holding no level', async () 
   }
 })
 
+// A stranger at a private published app is served its sample (visit.ts), and
+// still meets the app's own forms at its form door.
+let gallery = `formsdemo${crypto.randomUUID().slice(0, 6)}`
+await agent.answer('app_new', {
+  slug: gallery,
+  title: 'Directory',
+  access: 'private',
+})
+await agent.tool('app_files', {
+  app: gallery,
+  files: [
+    { path: 'index.html', content: '<h1>Directory</h1>' },
+    {
+      path: 'seed.json',
+      content: JSON.stringify([{
+        entity: { eid: '$a' },
+        doc: { title: 'Sample' },
+      }]),
+    },
+  ],
+})
+await agent.tool('app_deploy', { app: gallery })
+let welcome = crypto.randomUUID(), named = crypto.randomUUID()
+await agent.tool('graph_apply', {
+  app: gallery,
+  entities: [
+    { entity: { eid: welcome }, alias: { name: 'contact' }, form: {} },
+    {
+      entity: { eid: named },
+      question: { form: welcome, kind: 'line', label: 'Name' },
+    },
+  ],
+})
+await agent.tool('app_publish', { app: gallery, name: gallery })
+let visitor = await signIn(k)
+let visits = await Promise.all(
+  [undefined, visitor.cookie].flatMap((cookie) =>
+    ['contact', welcome].map(async (name) => {
+      let r = await k.at(host, `/${gallery}/api/form/${name}`, {
+        headers: cookie ? { cookie } : {},
+      })
+      return [r.status, r.ok ? (await r.json()).entity.eid : await r.text()]
+    })
+  ),
+)
+let signed = await k.at(host, `/${gallery}/api/form/contact`, {
+  method: 'POST',
+  headers: { cookie: visitor.cookie },
+  body: JSON.stringify({ answers: { [named]: 'Ruth' } }),
+})
+let page = await k.at(host, `/${gallery}/form/contact`, {
+  headers: { cookie: visitor.cookie },
+})
+await k.settled()
+
+test("a stranger at a published app's sample meets the app's own forms", async () => {
+  equal(visits, Array(4).fill([200, welcome]))
+  equal(page.status, 200)
+  ok((await page.text()).includes('Directory'))
+  equal(signed.status, 204)
+  let rows = (await agent.answer('graph_query', {
+    app: gallery,
+    query: `.registration.form=${welcome}`,
+  })).rows
+  equal(rows.map((r) => (r.registration as Comp).answers), [{
+    [named]: 'Ruth',
+  }])
+})
+
 test('the app owner reads the sign-ups of a public app', async () => {
   for (let live of [false, true]) {
     let [status, text] = await asked('.registration', owner.cookie, live)

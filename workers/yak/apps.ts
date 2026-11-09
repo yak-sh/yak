@@ -259,6 +259,8 @@ let DOORS = new Map<string, () => Promise<Answer>>([
   ['notices', async () => (await import('./notices.ts')).notices],
   ['form', async () => (await import('./forms.ts')).forms],
 ])
+// The form door's paths, whose forms are the app's own whoever asks.
+let formPath = (path: string) => path.startsWith('/api/form/')
 
 // A refusal is read — by the page that catches it, and by the person's agent
 // after that — so it answers a sentence beside its code (C-32574 item 2, where
@@ -2926,10 +2928,12 @@ let served = async (
   // or from a store of their own once they have written (visit.ts, D-134327),
   // unless the owner already let them in: then their way through is the
   // click in the letter, as it was. Never the app's own worker coming back,
-  // nor a sandboxed app, whose page tokens each open one store.
+  // nor a sandboxed app, whose page tokens each open one store, nor the form
+  // door: a form is the app's own, shown and filled by anyone (forms.ts), and
+  // a sample or a copy holds none of the app's forms.
   let visit: Visiting | null = null
   let stranger = { app, who, release: null as Release | null }
-  if (!itself && !walls && visitable(app, who)) {
+  if (!itself && !walls && !formPath(path) && visitable(app, who)) {
     let [own, release, invited] = await c.time('visit', () =>
       Promise.all([
         ownOf(env, visitor, who.via!, app!.eid),
@@ -3127,8 +3131,9 @@ let served = async (
     let name = decodedPath(path.slice('/form/'.length))
     if (!name) return json(404, 'not_found')
     // The store shows a form it holds (an empty 204 on code from before it
-    // did), and only that it holds one matters here.
-    let found = await appStore(env.STORE, space, app, env).consume(
+    // did), and only that it holds one matters here. The form is the app's
+    // own, whatever store a stranger's visit serves the page from.
+    let found = await appStore(env.STORE, space, stranger.app, env).consume(
       `/form?${new URLSearchParams({ name })}`,
       async (r) => {
         await r.body?.cancel()
