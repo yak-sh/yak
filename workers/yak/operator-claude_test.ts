@@ -62,11 +62,11 @@ let id = await dir.mint(owner, 'claude', 'Claude', {
 let space = (await dir.at(id))!
 let store = operatorMemory()
 let out = await operating(store, env, { model, name: SONNET })
-  .run({ person: owner }, space, {
+  .ask({ person: owner }, space, {
     say: 'The page is broken; fix it.',
   })
 await drain(store)
-let [child] = await store.g.read('.spawned&*')
+let [child] = await store.g.read(`.spawned.parent=${out.session}&*`)
 let entries = async (session: string) =>
   (await transcript(store.g, session)).flatMap((b) =>
     b.cost ? [(b.cost as { dollars: number }).dollars] : []
@@ -101,7 +101,7 @@ test('the conversation shows the context the Operator and each helper were given
   let { html } = await conversationOf(
     store,
     '/manage/claude/operator',
-    out.task,
+    out.session,
     undefined,
     undefined,
     space.operator,
@@ -177,7 +177,7 @@ test('the conversation shows the context the Operator and each helper were given
   let words = document.querySelectorAll('.Talk_You, .Talk_Reply, .Talk_Trouble')
   for (let w of words) assertEquals(w.querySelector('.Talk_Told'), null)
   let live = await frameOf(store, child.entity.eid)
-  assertEquals(live!.frame.operator.task, out.task)
+  assertEquals(live!.frame.operator.task, out.session)
   // A helper's step brings the page that step, live, its context inside.
   let rows = rowsOf(live!.frame.operator.lines)
   assertEquals(rows.map((r) => `row-${r.id}`), [
@@ -199,10 +199,10 @@ let talked = async (refused: boolean) => {
         : model(req),
     { info: model.info },
   )
-  let { task } = await operating(store, env, { model: opus, name: SONNET })
-    .run({ person: owner }, space, { say: 'The page is broken; fix it.' })
+  let { session } = await operating(store, env, { model: opus, name: SONNET })
+    .ask({ person: owner }, space, { say: 'The page is broken; fix it.' })
   await drain(store)
-  let { html } = await conversationOf(store, '/manage/claude/operator', task)
+  let { html } = await conversationOf(store, '/manage/claude/operator', session)
   let { document } = parseHTML(`<main>${html}</main>`)
   let all = (s: string) =>
     [...document.querySelectorAll(s)].map((e) => e.textContent?.trim())
@@ -283,7 +283,7 @@ test('the Operator hears helpers refused while it prepares, and answers once', a
     { info: model.info },
   )
   let { session } = await operating(store, env, { model: three, name: SONNET })
-    .run({ person: owner }, space, { say: 'Fix every app with errors.' })
+    .ask({ person: owner }, space, { say: 'Fix every app with errors.' })
   await drain(store)
   assertEquals(
     (await transcript(store.g, session)).flatMap((b) =>
