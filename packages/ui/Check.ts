@@ -8,7 +8,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
+import { type ComponentChildren, h } from 'preact'
 import { el, type Part } from './el.ts'
 import type { Colors, Native, Specimen } from './theme.ts'
 
@@ -29,7 +29,7 @@ export let native = (c: Colors): Native => ({
 })
 
 let check = (
-  words: string,
+  words: ComponentChildren,
   { type = 'checkbox', checked = false, disabled = false, name = '' } = {},
 ) =>
   h(
@@ -52,6 +52,7 @@ export let specimens = (): Specimen[] => [
       {},
       check('Show completed apps', { checked: true }),
       check('Send reminders'),
+      check(h('span', {}, 'Email reminders', h('br', {}), 'Before each event')),
       check('Unavailable option', { checked: true, disabled: true }),
     ),
   ],
@@ -62,6 +63,13 @@ export let specimens = (): Specimen[] => [
       {},
       check('Only me', { type: 'radio', name: 'check-who', checked: true }),
       check('Everyone', { type: 'radio', name: 'check-who' }),
+      check(
+        h('span', {}, 'Invited people', h('br', {}), 'Only people you choose'),
+        {
+          type: 'radio',
+          name: 'check-who',
+        },
+      ),
       check('Team', { type: 'radio', name: 'check-who', disabled: true }),
     ),
   ],

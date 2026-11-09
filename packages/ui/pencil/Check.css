@@ -3,7 +3,7 @@
    paper's colour, as tall as a press beside it (--control-height). */
 .Check {
   display: inline-flex;
-  align-items: center;
+  align-items: first baseline;
   gap: .5rem;
   min-height: var(--control-height);
   line-height: 1.4;

@@ -2,7 +2,7 @@
    the accent once checked. Pressing the words presses the box. */
 .Check {
   display: inline-flex;
-  align-items: center;
+  align-items: first baseline;
   gap: var(--half-gap);
   min-height: var(--tap);
   cursor: pointer;
