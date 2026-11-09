@@ -168,6 +168,7 @@ export let search = (
   // it reaches (`reach`), and whether the ranking is being read.
   let page: number | null = null
   let ranking = false
+  let aspects: ReturnType<typeof screens> = {}
   // The fields whose index stands: one over a component no table stands for
   // yet (@yaks/sql `Site.absent`) holds nothing, and has no index to ask, and
   // nobody wears such a component to be left out by it.
@@ -178,12 +179,19 @@ export let search = (
       ? fields.filter((f) => !gone.has(f.comp) && !(f.on && gone.has(f.on)))
         .map((f) => trim(f, (comp) => !gone.has(comp)))
       : fields
+    aspects = screens(live, site.vocab, {
+      visibility: { components: site.visibility?.components },
+      absent: site.absent,
+    })
   }
   let rank = (): number[] => {
     if (held) return held
+    let screen = asked?.() ?? undefined
     let stmt = ranked(live, words.join(' '), {
-      screen: asked?.() ?? undefined,
-      screens: sources,
+      screen,
+      // The query's screen already admits the owner through entity visibility.
+      // Repeating it for each text source multiplies the ranking's VM program.
+      screens: screen ? aspects : sources,
       limit: page ?? RANKED,
       plan: db!.file ? 'sort' : 'index',
       name: named(said.join(' ')),
