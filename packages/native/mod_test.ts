@@ -77,7 +77,7 @@ test('a press, a field and a toggle deliver what the person did to the app', asy
         h(
           Check,
           { key: i },
-          h('input', {
+          h(Check.Input, {
             type: 'checkbox',
             checked: item.on,
             onChange: () =>

@@ -24,7 +24,11 @@ let Source = (
   { eid, text, ready }: { eid: string; text: string; ready: boolean },
 ): JSX.Element =>
   ready
-    ? h(ui.Body, { mod: 'source', 'data-markdown': eid }, h('pre', {}, text))
+    ? h(
+      ui.Body,
+      { mod: 'source', 'data-markdown': eid },
+      h(ui.Body.Source, {}, text),
+    )
     : h(ui.Loading, {})
 
 /** A persona's whole text, as an agent wearing it is given it. */

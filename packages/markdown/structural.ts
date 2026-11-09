@@ -74,6 +74,38 @@ export let safeHref = (href: string): string | undefined => {
   return href
 }
 
+let parts: Record<string, string> = {
+  p: 'Paragraph',
+  h1: 'Heading',
+  h2: 'Heading',
+  h3: 'Heading',
+  h4: 'Heading',
+  h5: 'Heading',
+  h6: 'Heading',
+  strong: 'Strong',
+  em: 'Emphasis',
+  del: 'Deleted',
+  code: 'Code',
+  pre: 'Source',
+  br: 'Break',
+  hr: 'Rule',
+  blockquote: 'Quote',
+  ol: 'Ordered',
+  ul: 'Unordered',
+  li: 'Item',
+  a: 'Link',
+  table: 'Table',
+  thead: 'Head',
+  tbody: 'Rows',
+  tr: 'Row',
+  th: 'HeadingCell',
+  td: 'Cell',
+}
+
+let bodyClass = (tag: string) =>
+  `Body_${parts[tag]}` +
+  (/^h[1-6]$/.test(tag) ? ` Body_Heading-${tag.slice(1)}` : '')
+
 /** The same semantic elements can be used outside a Markdown document. */
 /** The parsed tree's blocks through any @yaks/render host (including
  * Preact), for a caller that holds them in an element of its own, such as a
@@ -87,38 +119,10 @@ export let blocks = <Node>(tokens: Token[], host: H<Node>): Child<Node>[] => {
     props: Record<string, unknown> | null,
     ...children: Child<Node>[]
   ) => {
-    let part = {
-      p: 'Paragraph',
-      h1: 'Heading',
-      h2: 'Heading',
-      h3: 'Heading',
-      h4: 'Heading',
-      h5: 'Heading',
-      h6: 'Heading',
-      strong: 'Strong',
-      em: 'Emphasis',
-      del: 'Deleted',
-      code: 'Code',
-      pre: 'Source',
-      br: 'Break',
-      hr: 'Rule',
-      blockquote: 'Quote',
-      ol: 'Ordered',
-      ul: 'Unordered',
-      li: 'Item',
-      a: 'Link',
-      table: 'Table',
-      thead: 'Head',
-      tbody: 'Rows',
-      tr: 'Row',
-      th: 'HeadingCell',
-      td: 'Cell',
-    }[tag]
     return host(tag, {
       ...props,
       class: [
-        'Body_' + part,
-        /^h[1-6]$/.test(tag) ? 'Body_Heading-' + tag.slice(1) : undefined,
+        bodyClass(tag),
         props?.class,
       ].filter(Boolean).join(' '),
     }, ...children)
