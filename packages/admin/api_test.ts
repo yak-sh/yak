@@ -148,6 +148,26 @@ test('admin query reaches the platform directory by its space or store name', as
   }
 })
 
+test('an answer without bundles says what the connector sent', async () => {
+  let old = globalThis.fetch
+  globalThis.fetch = (() =>
+    Promise.resolve(Response.json({
+      result: {
+        content: [{ type: 'text', text: 'kept as r1' }],
+        structuredContent: { id: 'r1', bytes: 48742 },
+      },
+    }))) as typeof fetch
+  try {
+    await assertRejects(
+      () => storeQuery('session', 'jeff/recipes', ['.alias']),
+      Error,
+      'graph_query answered no bundles: {"id":"r1","bytes":48742}',
+    )
+  } finally {
+    globalThis.fetch = old
+  }
+})
+
 test('a session says whose it is without the secret', () => {
   let body = btoa(JSON.stringify({ person: 'p-1', space: null, exp: 42 }))
     .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')

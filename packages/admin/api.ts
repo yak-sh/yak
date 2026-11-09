@@ -582,11 +582,15 @@ let graphed = async (
     name: tool,
     arguments: args,
   })
-  saidBy(answer)
+  let words = saidBy(answer)
   let result = (answer.structuredContent as { result?: unknown } | undefined)
     ?.result
   if (!Array.isArray(result)) {
-    throw new Error(`${tool} answered without a structured result`)
+    throw new Error(
+      `${tool} answered no bundles: ${
+        shortBody(answer.structuredContent ?? words) || 'nothing'
+      }`,
+    )
   }
   return result
 }
