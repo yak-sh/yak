@@ -91,47 +91,50 @@ let operator = `<html><body>${
     alertsCard('/manage/ada/operator', 'updates', null, 'ada@example.test'),
   )
 }</body></html>`
-let connections = await desk({
-  space: 'ada',
-  apps: [],
-  view: 'connections',
-  connections: {
-    on: true,
-    list: [{
-      eid: 'weather',
-      integration: 'Weather',
-      own: false,
-      each: false,
-      status: 'connected',
-      account: '',
-      keyed: true,
-      hosts: ['api.weather.test'],
-      face: {
-        title: 'Weather',
-        tagline: '',
-        site: '',
-        logo: '',
-        image: '',
+let connectionPage = (open?: string) =>
+  desk({
+    space: 'ada',
+    apps: [],
+    view: 'connections',
+    connections: {
+      on: true,
+      list: [{
+        eid: 'weather',
+        integration: 'Weather',
+        own: false,
+        each: false,
+        status: 'connected',
+        account: '',
+        keyed: true,
+        hosts: ['api.weather.test'],
+        face: {
+          title: 'Weather',
+          tagline: '',
+          site: '',
+          logo: '',
+          image: '',
+          instructions: '',
+          fields: [KEY],
+          theirs: false,
+        },
+        about: { title: 'Weather', tagline: '', site: '', instructions: '' },
+        listed: false,
+        scopes: [],
+        available: [],
+        binding: 'WEATHER',
+        apps: [],
+        saving: '',
+        failed: '',
         instructions: '',
-        fields: [KEY],
-        theirs: false,
-      },
-      about: { title: 'Weather', tagline: '', site: '', instructions: '' },
-      listed: false,
-      scopes: [],
-      available: [],
-      binding: 'WEATHER',
-      apps: [],
-      saving: '',
-      failed: '',
-      instructions: '',
-    }],
-    services: [],
-    built: [],
-    borrowed: [],
-    open: 'weather',
-  },
-}).text()
+      }],
+      services: [],
+      built: [],
+      borrowed: [],
+      open,
+    },
+  }).text()
+
+let connections = await connectionPage('weather')
 
 test('profile and space settings save their changed fields from the page bar', async () => {
   for (
@@ -199,4 +202,46 @@ test('connection key and description edits keep their form actions in one Save',
     equal(writes[0].body.key, 'new-key')
     equal(writes[1].body.tagline, 'The forecast')
   })
+})
+
+test('connection forms bind their drafts before opening from a hash and keep them across closing', async () => {
+  await editing(
+    await connectionPage(),
+    async ({ document, input, save, writes }) => {
+      let dialog = document.querySelector('dialog')!
+      Object.assign(dialog, {
+        close: () => dialog.removeAttribute('open'),
+        showModal: () => dialog.setAttribute('open', ''),
+      })
+      let location = new URL('https://yaks.app/manage/ada/connections#weather')
+      let code = await Deno.readTextFile(
+        new URL('./public/modal.js', import.meta.url),
+      )
+      new Function('document', 'globalThis', 'location', 'fetch', code)(
+        document,
+        document.defaultView,
+        location,
+        () => {
+          throw new Error('The connection should be ready')
+        },
+      )
+      input('key', 'draft key')
+      equal(save.count, 1)
+      let field = dialog.querySelector('[name=key]')!
+      for (let hash of ['', '#weather']) {
+        location.hash = hash
+        document.defaultView!.dispatchEvent(
+          new document.defaultView!.Event('hashchange'),
+        )
+      }
+      equal(dialog.querySelector('[name=key]'), field)
+      equal(save.count, 1)
+      await save.save()
+      equal(writes.map((w) => [w.body.do, w.body.connection, w.body.key]), [[
+        'key',
+        'weather',
+        'draft key',
+      ]])
+    },
+  )
 })

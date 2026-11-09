@@ -317,16 +317,15 @@ export type Connections = {
   /** the testing integrations the page was opened for (`enabled`), which its
    * forms carry */
   enable?: string[]
-  /** the integration the page was opened to add (`?add=<name>`, from a
-   * card's Connect or the integration directory), while this space has none
-   * through it */
+  /** the integration whose hash was opened (`?detail=<name>` when fetched),
+   * while this space has none through it */
   asked?: Offered
   /** the catalog (catalog.ts): what is featured, and what the page's search
    * found, of everything nothing here is connected to yet and this deploy can
    * connect */
   catalog?: Catalog
-  /** the connection the page was opened on (`?connect=<eid>`), shown whole
-   * where the rest are cards */
+  /** the connection whose hash was opened (`?detail=<eid>` when fetched),
+   * shown whole where the rest are cards */
   open?: string
   /** what the apps of this space borrow from another space's lend */
   borrowed: Borrowed[]
@@ -588,7 +587,7 @@ type Asked = {
   /** what the page's search asks the catalog for (`?q=`) */
   find?: string
   /** the connection the page was opened on, to connect or manage
-   * (`?connect=<eid>`) */
+   * (`?detail=<eid>`) */
   open?: string
   /** the request's directory, so these reads travel with what it asks */
   dir?: ReturnType<typeof dirOf>
@@ -1070,7 +1069,7 @@ export let pageOf = (env: Env, space: string) =>
  * it is in its service's testing mode (`enabled`). */
 export let addingAt = (env: Env, space: string, i: Integration) =>
   enabling(
-    `${pageOf(env, space)}?add=${encodeURIComponent(i.name)}`,
+    `${pageOf(env, space)}#${encodeURIComponent(i.name)}`,
     i.testing ? [i.name] : [],
   )
 

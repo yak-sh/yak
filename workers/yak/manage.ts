@@ -191,6 +191,7 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     for (let [k, v] of url.searchParams) {
       if (k != 'space') to.searchParams.append(k, v)
     }
+    to.hash = url.hash
     return 'first' in at ? redirect(to.href) : moved(req, to.href)
   }
   if ('account' in at) {
@@ -217,7 +218,7 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
           slug: at.space,
           // A page read that fails is the page's to meet, below.
           space: paged.then((p) => p.space, () => null),
-          add: url.searchParams.get('add'),
+          add: url.searchParams.get('detail'),
         }
         : undefined,
     )
@@ -298,6 +299,15 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
   }
   if (req.method == 'POST') return saved(req, env, dir, space, who, view)
   if (req.method != 'GET' && req.method != 'HEAD') return nothingHere(env)
+  if (view == 'connections') {
+    let old = url.searchParams.get('add') ?? url.searchParams.get('connect')
+    if (old) {
+      url.searchParams.delete('add')
+      url.searchParams.delete('connect')
+      url.hash = encodeURIComponent(old)
+      return redirect(url.href, 303)
+    }
+  }
   return desk(req, env, dir, space, who, view)
 }
 
@@ -589,9 +599,9 @@ let desk = async (
         // Asked beside the directory's reads, and kept only on their own.
         services: identity().then((part) => part.services(env, owner, dir)),
         enable: enabled(req),
-        add: q.get('add') ?? undefined,
+        add: q.get('detail') ?? undefined,
         find: q.get('q') ?? undefined,
-        open: q.get('connect') ?? undefined,
+        open: q.get('detail') ?? undefined,
       })
       : undefined,
     // Every space this person may work in, which the side's selector offers.

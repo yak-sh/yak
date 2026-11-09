@@ -4,6 +4,7 @@ import { assertEquals } from '@std/assert'
 import {
   aimedAt,
   askable,
+  enabling,
   foreign,
   guarded,
   hostOf,
@@ -363,4 +364,15 @@ test('paged: the token segment, where an app path starts', () => {
     ['/~/api/query', false],
   ]
   for (let [path, want] of paths) assertEquals(paged(path), want, path)
+})
+
+test('testing integration context stays in the query before the modal hash', () => {
+  assertEquals(
+    enabling('/manage/ada/connections#google-calendar', ['google-calendar']),
+    '/manage/ada/connections?enable=google-calendar#google-calendar',
+  )
+  assertEquals(
+    enabling('/manage/ada/connections?q=crm#hubspot', ['hubspot']),
+    '/manage/ada/connections?q=crm&enable=hubspot#hubspot',
+  )
 })

@@ -257,13 +257,13 @@ test('connections: first a grid of cards, theirs on their own space and then the
       c.getAttribute('href'),
     ])
   assertEquals(under(groups[0]), [
-    ['Maps', '/manage/ada/connections?connect=Maps#connect'],
+    ['Maps', '/manage/ada/connections#Maps'],
   ])
   assertEquals(under(groups[1]), [
-    ['Mail', '/manage/ada/connections?connect=Mail#connect'],
+    ['Mail', '/manage/ada/connections#Mail'],
   ])
   assertEquals(under(groups[2]), [
-    ['Weather', '/manage/ada/connections?connect=Weather#connect'],
+    ['Weather', '/manage/ada/connections#Weather'],
   ])
   assertEquals(
     [...document.querySelectorAll('[data-found] .Card h2')]
@@ -278,6 +278,7 @@ test('connections: first a grid of cards, theirs on their own space and then the
   // nobody lists.
   assertEquals(
     [...document.querySelectorAll('input[type="password"]')]
+      .filter((input) => !input.closest('[hidden]'))
       .map((i) => i.closest('details')?.querySelector('summary')?.textContent),
     ['Add a key for a service not listed'],
   )
@@ -624,7 +625,7 @@ test('connection dialogs have one card, with their title and controls in its hea
     assertEquals(close.textContent, '')
     assertEquals(close.getAttribute('data-tip'), 'Close')
     assertEquals(close.getAttribute('aria-label'), 'Close connection details')
-    assertEquals(close.getAttribute('href'), '/manage/ada/connections')
+    assertEquals(close.getAttribute('href'), '/manage/ada/connections#')
   }
 })
 
@@ -690,7 +691,7 @@ test('connections: a built integration is offered by its face, and a site is lin
   )
   assertEquals(
     tile.getAttribute('href'),
-    '/manage/ada/connections?add=cal#connect',
+    '/manage/ada/connections#cal',
   )
   // Pressed, the page draws it whole: its site linked by its host.
   let card = parseHTML(await offered(CAL.site, true)).document
@@ -907,11 +908,11 @@ test('a service detail URL is a server-open modal with its pitch, access, provid
     assertEquals(form.getAttribute('action'), back)
     assertEquals(
       modal.querySelector('[data-modal-close]')?.getAttribute('href'),
-      back,
+      `${back}#`,
     )
     assertEquals(
       modal.querySelector('.Modal_Backdrop')?.getAttribute('href'),
-      back,
+      `${back}#`,
     )
     assert(document.querySelector('[data-connections]')?.hasAttribute('inert'))
     assert(!modal.closest('[inert]'))
@@ -949,4 +950,43 @@ test('a catalog service without a connectable host still opens its details', asy
   assert(modal.querySelector('a[href="https://cal.test/docs"]'))
   assertEquals(modal.querySelector('button[disabled]')?.textContent, 'Connect')
   assertEquals(modal.querySelector('form'), null)
+})
+
+test('the connections page opens a built service from its hash without fetching or leaving the page', async () => {
+  let html = await desk({
+    ...page,
+    view: 'connections',
+    connections: {
+      on: true,
+      list: [],
+      services: [],
+      borrowed: [],
+      built: [{ name: 'cal', keyed: true, face: CAL }],
+    },
+  }, env).text()
+  let { document, window } = parseHTML(html)
+  let dialog = document.querySelector('dialog')!
+  Object.assign(dialog, {
+    close: () => dialog.removeAttribute('open'),
+    showModal: () => dialog.setAttribute('open', ''),
+  })
+  let location = new URL('https://yaks.fyi/manage/ada/connections#cal')
+  let code = await Deno.readTextFile(
+    new URL('./public/modal.js', import.meta.url),
+  )
+  new Function('document', 'globalThis', 'location', 'fetch', code)(
+    document,
+    window,
+    location,
+    () => {
+      throw new Error('The service should already be in the page')
+    },
+  )
+  assert(dialog.hasAttribute('open'))
+  assertEquals(
+    dialog.querySelector('input[name=integration]')?.getAttribute('value'),
+    'cal',
+  )
+  assert(dialog.querySelector('input[type=password]'))
+  assertStringIncludes(dialog.textContent!, 'Connect Cal')
 })

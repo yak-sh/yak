@@ -1626,15 +1626,11 @@ let card = (
   )
 
 // The link a card's button follows: this page, opened on one thing.
-let openedOn = (action: string, key: string, value: string) => {
-  let to = new URL(action, 'https://page.invalid')
-  to.searchParams.set(key, value)
-  return `${to.pathname}${to.search}#connect`
-}
+let openedOn = (action: string, value: string) =>
+  `${action}#${encodeURIComponent(value)}`
 
-// One space's connections and catalog. Each card opens a server-rendered
-// dialog at ?connect=<eid> or ?add=<name>; the ordinary links and forms work
-// before JavaScript, which adds the browser's modal focus and Escape behavior.
+// One persistent dialog follows the hash; templates keep forms ready without
+// another page request, and a service outside them is fetched into the dialog.
 let connections = (at: DeskPage, env: Host) => {
   let c: Connections = at.connections ?? {
     on: false,
@@ -1653,7 +1649,7 @@ let connections = (at: DeskPage, env: Host) => {
   // The service the page was opened to add: a key to paste, or a sign-in to
   // start, and which space it goes to.
   let close = h(Button, {
-    href: action,
+    href: `${action}#`,
     mod: 'quiet',
     'data-modal-close': '',
     'data-tip': 'Close',
@@ -1769,9 +1765,15 @@ let connections = (at: DeskPage, env: Host) => {
   let rest = c.list.filter((one) => !asks.includes(one))
   // The one the page was opened on, drawn whole: a connection, a loan, or a
   // service to add.
-  let open = c.open ? c.list.find((one) => one.eid == c.open) : undefined
+  let open = c.open
+    ? c.list.find((one) => one.eid == c.open || one.integration == c.open)
+    : undefined
   let loan = c.open ? c.borrowed.find((b) => b.eid == c.open) : undefined
-  let manage = (eid: string) => openedOn(action, 'connect', eid)
+  let keyOf = (one: Shown) =>
+    c.list.filter((c) => c.integration == one.integration).length > 1
+      ? one.eid
+      : one.integration
+  let manage = (key: string) => openedOn(action, key)
   let shown = (one: Shown) =>
     card(
       env,
@@ -1783,7 +1785,7 @@ let connections = (at: DeskPage, env: Host) => {
         : one.apps.length
         ? `For ${one.apps.map((a) => a.title).join(', ')}`
         : one.face.tagline,
-      manage(one.eid),
+      manage(keyOf(one)),
       one.status == 'needed' ? null : status(
         one.failed ? 'Not saved' : STATUS[one.status],
         one.status == 'connected' && !one.failed ? 'positive' : 'negative',
@@ -1828,7 +1830,7 @@ let connections = (at: DeskPage, env: Host) => {
       env,
       i.face,
       i.face.tagline,
-      openedOn(action, 'add', i.name),
+      openedOn(action, i.name),
     )
   let finding = cat
     ? h(
@@ -1909,39 +1911,67 @@ let connections = (at: DeskPage, env: Host) => {
         : null,
     )
   let addTo = (name: string) => (slug: string) =>
-    openedOn(managePath('connections', slug), 'add', name)
-  let setup = c.asked ? offer(c.asked) : open
-    ? connection(
-      open,
+    openedOn(managePath('connections', slug), name)
+  let contents = (one: Shown) =>
+    connection(
+      one,
       c.on,
       action,
       close,
-      open.own ? null : to(
-        open.status == 'needed' ? 'It will be connected to' : 'Connected for',
+      one.own ? null : to(
+        one.status == 'needed' ? 'It will be connected to' : 'Connected for',
       ),
     )
+  let key = c.asked?.name ?? (open ? keyOf(open) : loan?.eid)
+  let setup = c.asked
+    ? offer(c.asked)
+    : open
+    ? contents(open)
     : loan
     ? borrowing(loan, c.on, action, close, mine(loan))
     : null
-  let modal = setup
-    ? h(
-      Modal,
-      {
-        open: true,
-        'aria-modal': true,
-        id: 'connect',
-        'aria-label': c.asked
-          ? `Connect ${c.asked.face.title}`
-          : 'Manage connection',
-      },
-      h(Modal.Backdrop, {
-        href: action,
-        tabIndex: -1,
-        'aria-label': 'Close connection details',
-      }),
-      setup,
-    )
-    : null
+  let template = (name: string, kids: Kids, offered = false, alias?: string) =>
+    name == key ? null : h(offered ? 'template' : 'div', {
+      hidden: !offered,
+      'data-modal-key': name,
+      'data-modal-alias': alias,
+    }, kids)
+  let modal = h(
+    Modal,
+    {
+      open: !!setup,
+      'aria-modal': true,
+      id: 'connect',
+      'data-modal-key': key,
+      'aria-label': c.asked
+        ? `Connect ${c.asked.face.title}`
+        : 'Manage connection',
+    },
+    h(Modal.Backdrop, {
+      href: `${action}#`,
+      'data-modal-close': '',
+      tabIndex: -1,
+      'aria-label': 'Close connection details',
+    }),
+    setup,
+    h(
+      'template',
+      { 'data-modal-loading': '' },
+      h(
+        Modal.Body,
+        null,
+        heading('Connection details', { actions: close }),
+        h('p', { role: 'status' }, 'Loading connection…'),
+      ),
+    ),
+  )
+  let templates = [
+    ...c.list.map((one) => template(keyOf(one), contents(one), false, one.eid)),
+    ...c.borrowed.map((b) =>
+      template(b.eid, borrowing(b, c.on, action, close, mine(b)))
+    ),
+    ...c.built.map((i) => template(i.name, offer(i), true)),
+  ]
   return [
     h('div', {
       class: 'Desk_Connections',
@@ -1982,6 +2012,7 @@ let connections = (at: DeskPage, env: Host) => {
         : null,
     ]),
     modal,
+    templates,
   ]
 }
 

@@ -568,7 +568,7 @@ test('the integration directory is a page of this site, saying what each service
   let add = esv.querySelector('.Card_Actions .Button')!
   assertEquals(
     [add.textContent, add.getAttribute('href')],
-    ['Add to a space', 'https://yaks.app/manage/connections?add=ESV'],
+    ['Add to a space', 'https://yaks.app/manage/connections#ESV'],
   )
   assertEquals((one.match(/<h1[\s>]/g) ?? []).length, 1)
   assertEquals(links(one.split('<footer')[1]), FOOT)

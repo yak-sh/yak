@@ -14,7 +14,7 @@
 // a gallery listing is: an entry is a few lines of text and the hosts its key
 // may go to, and what its owner wrote is drawn as theirs, its links marked
 // rel="nofollow ugc" (theirs.ts). Each entry adds it to a space of the
-// reader's own: the connections page opened with `?add=<name>`, which offers
+// reader's own: the connections page opened with `#<name>`, which offers
 // it ready to paste a key or sign in (connections.ts `connectionsOf`).
 import type { Listed } from '@yaks/connections'
 import { keyed } from '@yaks/connections'
@@ -39,7 +39,7 @@ export let INTEGRATIONS = {
 /** Where a person adds an integration to a space of their own: their
  * connections page, offering it. */
 export let addAt = (env: Host, name: string) =>
-  url(env, `${managePath('connections')}?add=${encodeURIComponent(name)}`)
+  url(env, `${managePath('connections')}#${encodeURIComponent(name)}`)
 
 // A site is linked only at https; a custom one is its owner's word, not ours.
 let site = (i: Listed) =>

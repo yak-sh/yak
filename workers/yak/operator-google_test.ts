@@ -228,7 +228,7 @@ test('before they connect, the Operator is told where to, and holds no Google to
   let [first] = before
   assertStringIncludes(
     first.instructions!,
-    '- Google Calendar: not connected. They connect it at https://yaks.app/manage/jeff/connections?add=google-calendar&enable=google-calendar',
+    '- Google Calendar: not connected. They connect it at https://yaks.app/manage/jeff/connections?enable=google-calendar#google-calendar',
   )
   assertStringIncludes(first.instructions!, '- Gmail: not connected.')
   assert(!names(first).some((n) => /^(calendar|gmail)_/.test(n)))

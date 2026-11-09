@@ -436,3 +436,28 @@ test('billing shows the space’s allowances', async () => {
     ]
   ) assertStringIncludes(html, text)
 })
+
+test('old connection detail links redirect to hashes without losing search or testing context', async () => {
+  for (let key of ['add', 'connect']) {
+    let response = await get(
+      `${managePath('connections', slug)}?${key}=hubspot&enable=hubspot&q=crm`,
+    )
+    assertEquals(response.status, 303)
+    assertEquals(
+      response.headers.get('location'),
+      to(`${managePath('connections', slug)}?enable=hubspot&q=crm#hubspot`),
+    )
+  }
+})
+
+test('a connection detail fetch returns the service modal at the existing page door', async () => {
+  let response = await get(
+    `${managePath('connections', slug)}?detail=openrouter`,
+  )
+  assertEquals(response.status, 200)
+  let { document } = parseHTML(await response.text())
+  let dialog = document.querySelector('dialog[data-modal-key="openrouter"]')!
+  assert(dialog)
+  assert(dialog.querySelector('.Modal_Body'))
+  assertStringIncludes(dialog.textContent!, 'OpenRouter')
+})
