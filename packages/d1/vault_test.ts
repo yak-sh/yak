@@ -42,6 +42,32 @@ let setup = (db = d1()) => {
   return { db, g, vault }
 }
 
+test('a vault read does not wait on another invocation’s unfinished setup', async () => {
+  let db = d1()
+  let first = Promise.withResolvers<void>()
+  let batches = 0
+  let vault = d1Vault({
+    ...db,
+    batch: async (statements) => {
+      if (++batches == 1) await first.promise
+      return db.batch(statements)
+    },
+  }, key())
+  let abandoned = vault.read('gone')
+  let next = vault.read('next')
+  try {
+    // Each invocation reaches D1 with work of its own, even while the first
+    // has no answer. A cancelled Worker would never settle that first batch.
+    assertEquals(batches, 2)
+    assertEquals(await next, undefined)
+    await vault.read('again')
+    assertEquals(batches, 2)
+  } finally {
+    first.resolve()
+    await Promise.all([abandoned, next])
+  }
+})
+
 test('a secret sealed through the graph is ciphertext in D1', async () => {
   let { db, g, vault } = setup()
   await g.apply([sealed('A', 'plain-value')])

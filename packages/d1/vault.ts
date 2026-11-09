@@ -179,17 +179,16 @@ export let d1Vault = <S extends Prepared<S>>(
   db: D1Like<S>,
   key: CryptoKey | Promise<CryptoKey>,
 ): D1Vault => {
-  // Made once per vault, and asked again after a failure rather than failing
-  // every call after it.
-  let ready: Promise<unknown> | undefined
+  // Keep only completed setup. An invocation cancelled during D1's batch
+  // can leave its promise pending forever; another invocation must not wait
+  // on that work. Concurrent setup is safe: both tables use ifNot.
+  let ready = false
   let run = async (s: Stmt) => {
     try {
-      await (ready ??= db.batch(SCHEMA.map((s) => prepare(db, s))).catch(
-        (e) => {
-          ready = undefined
-          throw e
-        },
-      ))
+      if (!ready) {
+        await db.batch(SCHEMA.map((s) => prepare(db, s)))
+        ready = true
+      }
       return (await prepare(db, s).all<Record<string, string>>()).results
     } catch (e) {
       throw flagged(e)
