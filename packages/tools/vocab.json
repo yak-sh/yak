@@ -55,6 +55,10 @@
           "ref": "call",
           "death": "keep",
           "description": "the call it is the result of"
+        },
+        "value": {
+          "type": "object",
+          "description": "what the tool answered as data, the `output{value}` beside its words, kept on the result where a reader of the transcript finds it"
         }
       }
     },

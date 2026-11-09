@@ -27,15 +27,17 @@ export const outputView = async (
     throw new Error('output limit must be an integer >= 512')
   }
   let text = String((entry.content as Comp | undefined)?.body ?? '')
-  let value = (entry.output as Comp | undefined)?.value ?? outputValue(text)
+  // A result keeps its tool's answer as data in `result{value}`; an answer
+  // not yet landed carries it in `output{value}`.
+  let kept = (entry.result as Comp | undefined)?.value ??
+    (entry.output as Comp | undefined)?.value
+  let value = kept ?? outputValue(text)
   if (
     resultBytes(value) <= limit &&
     new TextEncoder().encode(text).length <= limit
   ) return text
   if (keep) return JSON.stringify(await keep(value, entry))
-  let body = (entry.output as Comp | undefined)?.value == null
-    ? text
-    : JSON.stringify(value)
+  let body = kept == null ? text : JSON.stringify(value)
   let revision = (await snapshot(body, entry.entity.eid)).revision
   let handle = derivedEid('output:' + entry.entity.eid + ':' + revision)
   let [existing] = await g.get([handle], ['context_output'])

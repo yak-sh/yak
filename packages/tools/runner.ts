@@ -228,7 +228,8 @@ export type Runner = {
  * call `made` and how its result `end`s in those words: a lone refusal rides
  * on the result and keeps no entity, and a lone `$said` answer's components
  * beside its words and source move onto the result, where a reader of the
- * transcript's entries finds them.
+ * transcript's entries finds them. Its value as data rides as `result{value}`:
+ * `output` on an entry says the model spoke it, and a result is the tool's.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -241,6 +242,11 @@ export type Runner = {
  * assertEquals(ridden([{ ...words, files: { n: 1 } }], 'done', end), [
  *   [{ entity: { eid: 'r' }, result: { call: 'c' }, files: { n: 1 } }],
  *   [words],
+ * ])
+ * let valued = { ...words, output: { source: 'c', value: { n: 1 } } }
+ * assertEquals(ridden([valued], 'done', end), [
+ *   [{ entity: { eid: 'r' }, result: { call: 'c', value: { n: 1 } } }],
+ *   [valued],
  * ])
  * ```
  */
@@ -260,13 +266,10 @@ export let ridden = (
       !['entity', 'content', 'output'].includes(k) && !k.startsWith('$')
     )
     : []
-  let output = one.output as Comp | undefined
-  let payload = one.entity.eid == '$said' && output
-    ? Object.fromEntries(
-      Object.entries(output).filter(([key]) => key != 'source' && key != 'id'),
-    )
-    : {}
-  if (!carried.length && !Object.keys(payload).length) return [end(made), made]
+  let value = one.entity.eid == '$said'
+    ? (one.output as Comp | undefined)?.value
+    : undefined
+  if (!carried.length && value === undefined) return [end(made), made]
   let words = Object.fromEntries(
     Object.entries(one).filter(([k]) => !carried.includes(k)),
   ) as Bundle
@@ -276,7 +279,9 @@ export let ridden = (
       {
         ...result,
         ...Object.fromEntries(carried.map((k) => [k, one[k]])),
-        ...Object.keys(payload).length ? { output: payload } : {},
+        ...value === undefined
+          ? {}
+          : { result: { ...result.result as Comp, value } },
       },
       ...rest,
     ],

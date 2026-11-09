@@ -197,22 +197,12 @@ await k.settled()
 let { tasks } = JSON.parse(
   (await agent.answer('operator_read', { space: slug })).text,
 )
-// The task's whole conversation is larger than a model is answered inline,
-// so it is kept, and the steps it took are read from it by jq.
-let kept = JSON.parse(
-  (await agent.answer('operator_read', {
-    space: slug,
-    task: tasks[0].entity.eid,
-  }))
-    .text,
+// The steps it took, read from the task's whole conversation by jq.
+let steps = await agent.narrow(
+  'operator_read',
+  { space: slug, task: tasks[0].entity.eid },
+  '.result[0].content.body | fromjson | .entries | map(select(.result) | {result, refusal, content, operator_files})',
 )
-let read = await agent.answer('result_query', {
-  space: slug,
-  id: kept.id,
-  query:
-    '.result[0].content.body | fromjson | .entries | map(select(.result) | {result, refusal, content, operator_files})',
-})
-let steps = JSON.parse(read.text).values[0]
 await k.stop()
 
 test('a member’s browser connects to their Operator by the token it bears', () => {
