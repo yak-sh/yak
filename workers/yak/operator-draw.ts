@@ -25,8 +25,15 @@ let comp = (b: Bundle | undefined, name: string) =>
 
 /** A line before it is drawn: its parts, under the id it is put by, the
  * entries it draws when it draws more than its own (`of`), and every entry
- * it reads to draw them (`uses`), which is what the socket sends of it. */
-export type Line = { id: string; node: Node; of?: string[]; uses: string[] }
+ * it reads to draw them (`uses`), which is what the socket sends of it.
+ * `text` replaces source content when the line displays different words. */
+export type Line = {
+  id: string
+  node: Node
+  text?: string
+  of?: string[]
+  uses: string[]
+}
 /** How a call reads to the person, by its tool's eid (`call.to`) and its
  * arguments: what it is doing while it runs and what it did once it answered
  * (@yaks/tools `stepOf`). */
@@ -287,8 +294,10 @@ let tool = (
   let said = names(String(c.to), c.args as Record<string, unknown>)
   let ok = result ? !comp(result, 'refusal') && !result.exception : null
   let files = (comp(result, 'operator_files')?.files ?? []) as Sent[]
+  let name = ok == null ? said.doing : ok ? said.done : tried(said.doing)
+  let problem = 'This step did not work, so the Operator went on without it.'
   let drawn = step(
-    ok == null ? said.doing : ok ? said.done : tried(said.doing),
+    name,
     ok == null ? 'on' : ok ? '' : 'no',
     h('p', { class: 'Talk_DetailLabel' }, 'What it asked for'),
     readable(c.args ?? {}),
@@ -299,14 +308,17 @@ let tool = (
         readable(String(comp(result, 'content')?.body ?? '')),
       ]
       : trouble(
-        'This step did not work, so the Operator went on without it.',
+        problem,
         comp(result, 'content')?.body ?? result!.exception ??
           comp(result, 'refusal'),
       ),
   )
-  return files.length
-    ? h(Fragment, null, drawn, attached(result!.entity.eid, files))
-    : drawn
+  return {
+    node: files.length
+      ? h(Fragment, null, drawn, attached(result!.entity.eid, files))
+      : drawn,
+    text: ok === false ? `${name}\n\n${problem}` : undefined,
+  }
 }
 
 // A helper session's end, told to the Operator (@yaks/session `deliverChild`):
@@ -318,21 +330,26 @@ export let told = (b: Bundle, body: string) =>
 let helper = (b: Bundle, body: string) => {
   let outcome = comp(b, 'delivery')?.outcome ?? body.match(LEGACY)?.[1]
   let said = body.replace(/^.*\n/, '')
+  let name = 'A helper could not finish'
+  let problem =
+    'A helper the Operator started could not finish, so the Operator went on without it.'
   return outcome == 'settled'
-    ? step(
-      'Heard back from a helper',
-      '',
-      h('p', { class: 'Talk_DetailLabel' }, 'What came back'),
-      readable(said),
-    )
-    : step(
-      'A helper could not finish',
-      'no',
-      trouble(
-        'A helper the Operator started could not finish, so the Operator went on without it.',
-        said,
+    ? {
+      node: step(
+        'Heard back from a helper',
+        '',
+        h('p', { class: 'Talk_DetailLabel' }, 'What came back'),
+        readable(said),
       ),
-    )
+    }
+    : {
+      node: step(
+        name,
+        'no',
+        trouble(problem, said),
+      ),
+      text: `${name}\n\n${problem}`,
+    }
 }
 
 // What a model was told before anything was said to it, closed until
@@ -590,8 +607,9 @@ let archivable = (line: Line, entries: Bundle[]): Line => {
   if (!rows.length) return line
   let archived = rows.filter((b) => b.archived).map((b) => b.entity.eid)
   let ids = archived.length ? archived : [line.id]
-  let text = rows.map((b) => spoken(b, String(comp(b, 'content')?.body ?? '')))
-    .filter(Boolean).join('\n\n')
+  let text = line.text ??
+    rows.map((b) => spoken(b, String(comp(b, 'content')?.body ?? '')))
+      .filter(Boolean).join('\n\n')
   let menu = 'entry-menu-' + line.id
   return {
     ...line,
@@ -712,7 +730,7 @@ export let lines = (
             id,
             ...result ? [result.entity.eid] : [],
           ],
-          node: tool(b, names, result, under(id)),
+          ...tool(b, names, result, under(id)),
         }]
         : line(b, id, body, opens)
       drawn = drawn.map((line) => archivable(line, result ? [b, result] : [b]))
@@ -790,14 +808,19 @@ let line = (
   body: string,
   opens?: string,
 ): Line[] => {
-  let is = (node: Node) => [{ id, node, uses: [id] }]
+  let is = (node: Node, text?: string) => [{ id, node, text, uses: [id] }]
   // A provider's refusal (its own response kept beside it) is said in plain
   // words; its error waits in Details.
   if (b.refusal && !b.result && (b.response || !b.output)) {
-    return is(trouble(
-      'The Operator could not get an answer from its model, so it stopped before replying. Send your message again to try once more.',
-      body || comp(b, 'response')?.body || comp(b, 'refusal'),
-    ))
+    let said =
+      'The Operator could not get an answer from its model, so it stopped before replying. Send your message again to try once more.'
+    return is(
+      trouble(
+        said,
+        body || comp(b, 'response')?.body || comp(b, 'refusal'),
+      ),
+      said,
+    )
   }
   if (b.output && body) return is(reply(body))
   // A line of a call its talking model hears and speaks: theirs, or its own
@@ -823,12 +846,17 @@ let line = (
       h('p', { class: 'Talk_Note' }, 'You stopped ', helper, '.'),
     )
   }
-  if (told(b, body)) return is(helper(b, body))
+  if (told(b, body)) return [{ id, uses: [id], ...helper(b, body) }]
   if (b.failed || b.exception) {
-    return is(trouble(
-      'Something went wrong, and the Operator stopped before it finished. Send your message again to try once more.',
-      body || b.exception || b.failed,
-    ))
+    let said =
+      'Something went wrong, and the Operator stopped before it finished. Send your message again to try once more.'
+    return is(
+      trouble(
+        said,
+        body || b.exception || b.failed,
+      ),
+      said,
+    )
   }
   if (b.system && body) return is(system(b, body))
   if (b.stop || b.interrupted || b.cancel) {

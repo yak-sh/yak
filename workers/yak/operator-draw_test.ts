@@ -49,6 +49,25 @@ test('source references stay out of chat and task inputs, preserving the personâ
   )
 })
 
+test('entry actions copy the personâ€™s displayed words and preserve reply Markdown', () => {
+  let input = 'Please check **these notes**.'
+  let output = 'Done.\n\n- Read [the notes](/notes)'
+  let entries = [
+    entry('input', 1, {
+      content: { body: HEARD + input + sourceReference('a'.repeat(64)) },
+      operator_channel: { channel: 'voice', framing: HEARD },
+    }),
+    entry('output', 2, { output: {}, content: { body: output } }),
+  ]
+  assertEquals(
+    rows(entries, namer({})).map((r) =>
+      parseHTML(r.html).document.querySelector('[data-entry-text]')!
+        .getAttribute('data-entry-text')
+    ),
+    [input, output],
+  )
+})
+
 let conversation = [
   entry('in', 1, { content: { body: 'Make me a notes app' } }),
   entry('fork', 2, {

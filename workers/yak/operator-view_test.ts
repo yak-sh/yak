@@ -38,7 +38,10 @@ let entries = [
     result: { call: 'call' },
     refusal: { code: 'missing' },
   }),
-  entry('crash', 6, { failed: { message: 'Worker exceeded its CPU time' } }),
+  entry('crash', 6, {
+    failed: { message: 'Worker exceeded its CPU time' },
+    content: { body: 'Worker exceeded its CPU time' },
+  }),
   // A helper's end as Jeff's conversation 68fd688b recorded it, before the
   // receipt carried `delivery`.
   entry('helper', 7, {
@@ -75,6 +78,22 @@ test('an error reads as words, its detail only inside a closed disclosure', () =
   )
   assertStringIncludes(details[2].textContent!, 'CPU time')
   assertStringIncludes(details[3].textContent!, 'no verified cost bound')
+  for (let p of doc.querySelectorAll('.Talk_Trouble > p')) {
+    let text = p.closest('.Talk_Entry')!
+      .querySelector('[data-entry-text]')!.getAttribute('data-entry-text')!
+    assertStringIncludes(text, p.textContent!)
+  }
+  for (let d of details) d.remove()
+  for (
+    let detail of [
+      'invalid_request_error',
+      'no such app',
+      'CPU time',
+      'no verified cost bound',
+    ]
+  ) {
+    assertEquals(doc.querySelector('main')!.innerHTML.includes(detail), false)
+  }
   // Nothing of an error is drawn as a reply, or as the person's words.
   assertEquals(doc.querySelectorAll('.Talk_Reply').length, 0)
   assertEquals(
