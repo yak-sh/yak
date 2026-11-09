@@ -87,7 +87,7 @@ let data = {
         },
         {
           '@type': 'Offer',
-          'name': 'Organization',
+          'name': 'Pro',
           'price': '49',
           'priceCurrency': 'USD',
           'url': 'https://yaks.app/pricing',
@@ -347,14 +347,14 @@ export let Home = () => (
             Get Started
           </Button>
         </Card>
-        <Card as='div' class='Plan Plan-organization'>
+        <Card as='div' class='Plan Plan-pro'>
           <h3 class='Plan_Price'>
             $49
             <span class='Plan_Per'>&#32;a month</span>
           </h3>
           <p class='Note Note-small'>
-            The Organization plan, or $490 a year. Your staff ask the Operator
-            by email or chat, and it makes the change.
+            The Pro plan, or $490 a year. Your staff ask the Operator by email
+            or chat, and it makes the change.
           </p>
           <ul class='Plan_List'>
             <li>Unlimited apps</li>
@@ -368,7 +368,7 @@ export let Home = () => (
           <Button
             mod='go'
             href={GET_PLAN}
-            data-cta='organization'
+            data-cta='pro'
           >
             Get Started
           </Button>

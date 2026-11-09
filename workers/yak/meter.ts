@@ -113,16 +113,16 @@ export let PLUS = {
   bytes: 10 * GB,
   files: 50 * GB,
 }
-// The Organization plan (D-134567) carries the Plus plan's allowances; what it
+// The Pro plan (D-134567) carries the Plus plan's allowances; what it
 // adds is a bigger model budget, the operator and support.
-export let ORGANIZATION = PLUS
+export let PRO = PLUS
 
 // Photos and files, including on comped spaces (only apps/data are exempt).
 // Free: proposed 1 GB allowance (T-37149), pending owner feedback.
 export let FILES: Record<Tier, number> = {
   free: FREE.files,
   plus: PLUS.files,
-  organization: ORGANIZATION.files,
+  pro: PRO.files,
 }
 
 // Where the warning line sits, as a fraction of a ceiling.
@@ -132,8 +132,8 @@ export let WARN = 0.8
 export let ceilings = (tier: Tier | null, slug = '') =>
   COMPED.includes(slug)
     ? null
-    : tier == 'organization'
-    ? ORGANIZATION
+    : tier == 'pro'
+    ? PRO
     : tier == 'plus'
     ? PLUS
     : FREE
@@ -146,7 +146,7 @@ export let ceilings = (tier: Tier | null, slug = '') =>
 export let LETTERS: Record<Tier, number> = {
   free: 100,
   plus: 2_500,
-  organization: 2_500,
+  pro: 2_500,
 }
 
 export let letters = (tier: Tier | null): number => LETTERS[tier ?? 'free']
@@ -156,7 +156,7 @@ export let letters = (tier: Tier | null): number => LETTERS[tier ?? 'free']
 export let BUILDS: Record<Tier, number> = {
   free: 5,
   plus: 100,
-  organization: 100,
+  pro: 100,
 }
 
 export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
@@ -170,7 +170,7 @@ export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
 export let BUDGET: Record<Tier, number> = {
   free: 20,
   plus: 30,
-  organization: 60,
+  pro: 60,
 }
 
 // The dollars a person's first space holds once, spent before its monthly
@@ -189,7 +189,7 @@ export let STARTER = 100
 export let SECONDS: Record<Tier, number> = {
   free: 3_600,
   plus: 36_000,
-  organization: 36_000,
+  pro: 36_000,
 }
 
 // What a tier costs a month, in whole dollars (D-32751). The number is
@@ -201,12 +201,12 @@ export let SECONDS: Record<Tier, number> = {
 // engine shows beside the result. A price change also updates the site's pages
 // (site/home.tsx and site/pricing.tsx), billing_kernel_test.ts, and
 // bin/verify-deploy{,_test}.ts. site_test.ts holds the pages to this number.
-export let PRICE: Record<Tier, number> = { free: 0, plus: 9, organization: 49 }
+export let PRICE: Record<Tier, number> = { free: 0, plus: 9, pro: 49 }
 
-// What a year costs, for a plan sold by the year as well (D-134567: an
-// organization budgets by the year). The payment provider holds it as the
+// What a year costs, for a plan sold by the year as well (D-134567: organizations
+// budget by the year). The payment provider holds it as the
 // tier's yearly price in config.ts `payments`.
-export let YEARLY: Partial<Record<Tier, number>> = { organization: 490 }
+export let YEARLY: Partial<Record<Tier, number>> = { pro: 490 }
 
 export let CURRENCY = 'USD'
 
@@ -296,7 +296,7 @@ export let limitOf = (space: Space, now = new Date()) =>
 
 // ---- credit (D-134567) ------------------------------------------------------
 //
-// Past its monthly budget, a space on the Organization plan spends credit its
+// Past its monthly budget, a space on the Pro plan spends credit its
 // owner bought in blocks, before it is spent, up to a monthly cap they set:
 // $0 until they choose one, so a space with no credit spends what it always
 // has. The cap bounds both what the space spends past its budget in a month
@@ -307,7 +307,7 @@ export let limitOf = (space: Space, now = new Date()) =>
 // began is a subtraction, and the draw is kept in the directory's own
 // transaction with the spend that made it (meter-graph.ts `spend`).
 //
-// Only the Organization plan buys it (D-134567 answers T-131904 for that
+// Only the Pro plan buys it (D-134567 answers T-131904 for that
 // plan); credit already bought is spent on whatever plan the space is on.
 // There is no top-up that buys a block when the budget runs out: that is a
 // charge with nobody at the page, and Managed Payments, which sells every
@@ -317,7 +317,7 @@ export let limitOf = (space: Space, now = new Date()) =>
 export let BLOCK = 10
 
 /** The plans that may buy credit. */
-export let CREDITED: Tier[] = ['organization']
+export let CREDITED: Tier[] = ['pro']
 
 /** What this month has drawn from the space's credit. */
 export let drawnOf = (space: Space, now = new Date()) =>
@@ -357,7 +357,7 @@ export let buyable = (space: Space, now = new Date()) =>
  * import { equal } from '@yaks/testing'
  *
  * let now = new Date('2026-11-07T12:00:00Z')
- * let base = { tier: 'organization', budget: 60, starter: 0, meter: null }
+ * let base = { tier: 'pro', budget: 60, starter: 0, meter: null }
  * let space = { ...base, credit: { cap: 20, bought: 10, spent: 0 } } as never
  * equal(credited(space, { month: '2026-11', models: 65 }, 0, now), {
  *   credit: { cap: 20, bought: 10, spent: 5 },

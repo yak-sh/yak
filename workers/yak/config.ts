@@ -358,9 +358,9 @@ export let payments: Config & { via: string } = {
       clock: { binding: 'CLOCK' },
       prices: {
         plus: { month: { secret: 'STRIPE_PRICE' } },
-        organization: {
-          month: { secret: 'STRIPE_PRICE_ORGANIZATION' },
-          year: { secret: 'STRIPE_PRICE_ORGANIZATION_YEAR' },
+        pro: {
+          month: { secret: 'STRIPE_PRICE_PRO' },
+          year: { secret: 'STRIPE_PRICE_PRO_YEAR' },
         },
       },
       doors: {

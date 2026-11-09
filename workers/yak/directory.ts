@@ -202,12 +202,12 @@ export type Meter = {
   credit?: number
   at: string
 }
-export type Tier = 'free' | 'plus' | 'organization'
+export type Tier = 'free' | 'plus' | 'pro'
 
-/** Whether a tier is paid for: the Plus plan or the Organization plan
+/** Whether a tier is paid for: the Plus plan or the Pro plan
  * (D-134567). Every paid feature asks this, never one plan's name. */
 export let paid = (tier: Tier | null | undefined) =>
-  tier == 'plus' || tier == 'organization'
+  tier == 'plus' || tier == 'pro'
 
 // Spaces the platform comps. `yak` holds its own directory, whose requests
 // serve every space. `yourname` is its shopfront, with the example apps every

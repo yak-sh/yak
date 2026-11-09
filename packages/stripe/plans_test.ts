@@ -14,10 +14,10 @@ import {
 } from './plans.ts'
 
 let PERIOD = 1_790_000_000
-let ORG = ['price_org_month', 'price_org_year']
+let PRO = ['price_pro_month', 'price_pro_year']
 let PRICES = {
   plus: { month: 'price_plus' },
-  organization: { month: ORG[0], year: ORG[1] },
+  pro: { month: PRO[0], year: PRO[1] },
 }
 let sub = (over: Partial<Sub> = {}): Sub => ({
   id: 'sub_1',
@@ -78,13 +78,13 @@ test('a paying status keeps the plan, and the rest do not', () => {
 })
 
 test('the tier is read off the price, the first tier where none is listed', () => {
-  for (let price of [...ORG, { id: ORG[1] }]) {
-    equal(read(priced(price), PRICES).tier, 'organization')
+  for (let price of [...PRO, { id: PRO[1] }]) {
+    equal(read(priced(price), PRICES).tier, 'pro')
   }
   equal(read(priced('price_plus'), PRICES).tier, 'plus')
   equal(read(priced('price_old'), PRICES).tier, 'plus')
   equal(read(sub(), PRICES).tier, 'plus')
-  equal(read(priced(ORG[0]), { plus: {} }).tier, 'plus')
+  equal(read(priced(PRO[0]), { plus: {} }).tier, 'plus')
 })
 
 test('cancelled but paid through says both', () => {
@@ -104,7 +104,7 @@ test('a tier is on sale where its price is, and nothing is without a key', () =>
     [
       lent.offers('plus', 'month'),
       lent.offers('plus', 'year'),
-      lent.offers('organization', 'year'),
+      lent.offers('pro', 'year'),
     ],
     [true, false, true],
   )
@@ -126,7 +126,7 @@ test('checkout is a Managed Payments subscription carrying the tags and the tria
   using s = stripe(() => Response.json({ url: 'https://checkout' }))
   let url = await lent.checkout({
     payer: 'cus_1',
-    tier: 'organization',
+    tier: 'pro',
     per: 'year',
     done: 'https://yes',
     cancel: 'https://no',
@@ -140,7 +140,7 @@ test('checkout is a Managed Payments subscription carrying the tags and the tria
   equal(body, {
     mode: 'subscription',
     customer: 'cus_1',
-    'line_items[0][price]': ORG[1],
+    'line_items[0][price]': PRO[1],
     'line_items[0][quantity]': '1',
     success_url: 'https://yes',
     cancel_url: 'https://no',

@@ -1,4 +1,4 @@
-// The paid tiers (D-32751, T-33125; the Organization plan, D-134567): what a
+// The paid tiers (D-32751, T-33125; the Pro plan, D-134567): what a
 // space pays, its two doors — checkout and the customer portal — and what a
 // subscription changing, as the payment provider heard it at its webhook door
 // (payment-doors.ts), does to a space's plan. The provider is the plans
@@ -239,20 +239,21 @@ let payerFor = async (
 // ---- what is for sale -----------------------------------------------------
 
 /** A plan a person can buy, and how often it is paid for. */
-export type Want = { tier: 'plus' | 'organization'; per: Per }
+export type Want = { tier: 'plus' | 'pro'; per: Per }
 
-/** What a checkout form asks for: `plan=organization` and `per=year`, each
- * optional, so a form that names neither buys the Plus plan by the month as
- * it always has. */
+/** What a checkout form asks for: `plan=pro` and `per=year`, each
+ * optional. A page kept from before the rename still buys the same plan. */
 export let wanted = (form: FormData | null): Want => ({
-  tier: form?.get('plan') == 'organization' ? 'organization' : 'plus',
+  tier: ['pro', 'organization'].includes(String(form?.get('plan')))
+    ? 'pro'
+    : 'plus',
   per: form?.get('per') == 'year' ? 'year' : 'month',
 })
 
 /** What the signed-in plan card shows (pages.ts `plan`): the space's tier,
  * the day it lapses if it is leaving, whether the provider has ever known it
  * — which is what makes the manage door worth offering — and how the
- * Organization plan is sold here: by the month, by the year, or not yet at
+ * Pro plan is sold here: by the month, by the year, or not yet at
  * all. */
 export type Card = {
   tier: Tier
@@ -260,7 +261,7 @@ export type Card = {
   known: boolean
   /** the day the Plus plan given free runs through, while it does */
   free?: string
-  organization?: Want['per'][]
+  pro?: Want['per'][]
   /** its AI credit, where its plan buys credit or it holds some: the cap,
    * what is left to spend this month, what this month drew, and whether a
    * block may be bought now */
@@ -286,9 +287,7 @@ export let planCard = (lent: Plans, space: Space, now = new Date()): Card => {
     ends: space.plan?.ending ?? '',
     known: !!space.plan?.customer,
     ...(free ? { free } : {}),
-    organization: (['month', 'year'] as const).filter((per) =>
-      lent.offers('organization', per)
-    ),
+    pro: (['month', 'year'] as const).filter((per) => lent.offers('pro', per)),
     ...credits
       ? {
         credit: {
@@ -319,8 +318,8 @@ export let billedTo = async (
 
 /** A tier as its plan is said: "the Plus plan", never bare "Plus". */
 export let planName = (tier: Tier) =>
-  tier == 'organization'
-    ? 'the Organization plan'
+  tier == 'pro'
+    ? 'the Pro plan'
     : tier == 'plus'
     ? 'the Plus plan'
     : 'the free plan'
@@ -425,7 +424,7 @@ export let setCap = async (
     return `Only ${space.slug}'s owner may set its cap`
   }
   if (!CREDITED.includes(space.tier ?? 'free')) {
-    return `AI credit comes with ${planName('organization')}`
+    return `AI credit comes with ${planName('pro')}`
   }
   let bad = badCap(dollars)
   if (bad) return bad
@@ -458,7 +457,7 @@ export let buy = async (env: Env, req: Request, at?: Space) => {
     return json(
       409,
       'not_credited',
-      `AI credit comes with ${planName('organization')}`,
+      `AI credit comes with ${planName('pro')}`,
     )
   }
   if (!buyable(space)) {

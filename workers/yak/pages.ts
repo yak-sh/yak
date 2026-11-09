@@ -1571,7 +1571,7 @@ export let MOVES =
 // The plan card, for a person who is signed in (T-33125). One card: the paid
 // plans when they are free, manage-billing when they are paying. Each button
 // POSTs to billing.ts and follows the URL the payment provider answers, so no
-// provider's address is written into this page and nothing here knows a key. The Organization
+// provider's address is written into this page and nothing here knows a key. The Pro
 // plan (D-134567) is offered only where its prices exist (billing.ts `Card`).
 //
 // A day, not a timestamp: "runs until 14 October 2026" is what somebody wants
@@ -1590,7 +1590,7 @@ export let plan = (
   let allowance = `${
     limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`
   }, unlimited visitors, ${size(limits.bytes)} of app data${
-    tier == 'organization' ? `, AI use included, and email support` : ''
+    tier == 'pro' ? `, AI use included, and email support` : ''
   }`
   let host = spaceHost(env, y.slug)
   let head = tier == 'free'
@@ -1635,20 +1635,18 @@ export let plan = (
     ...(tier == 'free' || y.plan.free
       ? [
         buy({ tier: 'plus', per: 'month' }),
-        ...(y.plan.organization ?? []).map((per) =>
-          buy({ tier: 'organization', per })
-        ),
+        ...(y.plan.pro ?? []).map((per) => buy({ tier: 'pro', per })),
       ]
       : []),
     y.plan.known ? billButton('portal', 'Manage billing', target) : null,
   ].filter(Boolean)
-  // Where the Organization plan has no price yet, a free space still hears
+  // Where the Pro plan has no price yet, a free space still hears
   // how to get it: the pricing page offers it everywhere.
-  let ask = tier == 'free' && !y.plan.organization?.length
+  let ask = tier == 'free' && !y.plan.pro?.length
     ? h(
       Form.Hint,
       null,
-      'The Organization plan is not on sale here yet. Email ',
+      'The Pro plan is not on sale here yet. Email ',
       h('a', { href: 'mailto:hello@yaks.app' }, 'hello@yaks.app'),
       ' to start on it.',
     )
@@ -1659,7 +1657,7 @@ export let plan = (
     heading('Plan', {
       status: tier == 'free'
         ? status('Free')
-        : status(tier == 'plus' ? 'Plus' : 'Organization', 'positive'),
+        : status(tier == 'plus' ? 'Plus' : 'Pro', 'positive'),
       actions: doors.length ? doors : null,
     }),
     head,
@@ -1746,7 +1744,7 @@ let billedLine = (card: Billed, payer?: Payer | null, provider?: string) => {
 }
 
 // A paid plan as it is said: "the Plus plan", never bare "Plus" (M-37846).
-let NAMES = { plus: 'the Plus plan', organization: 'the Organization plan' }
+let NAMES = { plus: 'the Plus plan', pro: 'the Pro plan' }
 
 // Connector forms do not ask the same questions. Keep each answer beside the
 // provider step that asks for it, so a person never has to work out whether a

@@ -167,10 +167,10 @@ PHONE_SENDER = { via = "telnyx", number = "+18663141594" }
 # spend $5 of it until Jeff has seen what speech buys.
 SPEECH_FLOOR = "195"
 
-# The Organization plan's live prices (billing.ts, T-135234): $49 a month and
+# The Pro plan's live prices (billing.ts, T-135234): $49 a month and
 # $490 a year. Staging has none, so its checkout for the plan stays off.
-STRIPE_PRICE_ORGANIZATION = "price_1UXaBQITlUS6lUlgf2JQems1"
-STRIPE_PRICE_ORGANIZATION_YEAR = "price_1UXaBRITlUS6lUlg1fWc2Bdv"
+STRIPE_PRICE_PRO = "price_1UXaBQITlUS6lUlgf2JQems1"
+STRIPE_PRICE_PRO_YEAR = "price_1UXaBRITlUS6lUlg1fWc2Bdv"
 
 # The per-deploy version id (stream.ts, T-33013): Cloudflare mints a fresh id on
 # every `wrangler deploy`, so it is the marker a resumed MCP stream compares to

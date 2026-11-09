@@ -6,7 +6,7 @@ import { Page, Yours } from './frame.tsx'
 export let Pricing = () => (
   <Page
     name='Pricing: your first space is free, and the Plus plan is $9 a month'
-    description='You pay for a space, not for people, and invite as many as you like on any plan. Your first space is free. The Plus plan is $9 a month for a space, and the Organization plan $49.'
+    description='You pay for a space, not for people, and invite as many as you like on any plan. Your first space is free. The Plus plan is $9 a month for a space, and the Pro plan $49.'
     path='/pricing'
     kind='Pricing'
   >
@@ -65,12 +65,12 @@ export let Pricing = () => (
             Get Started
           </Button>
         </Card>
-        <Card as='div' class='Plan Plan-organization'>
+        <Card as='div' class='Plan Plan-pro'>
           <h3 class='Plan_Price'>
             $49
             <span class='Plan_Per'>&#32;a month</span>
           </h3>
-          <p class='Note Note-small'>The Organization plan. Or $490 a year.</p>
+          <p class='Note Note-small'>The Pro plan. Or $490 a year.</p>
           <ul class='Plan_List'>
             <li>Unlimited apps</li>
             <li>Unlimited visitors</li>
@@ -122,9 +122,9 @@ export let Pricing = () => (
           </dt>
           <dd>
             You can own one free space. Every other space you make is on the
-            Plus plan or the Organization plan. Spaces other people invite you
-            into never count toward yours. If you already own more than one free
-            space, they all stay free.
+            Plus plan or the Pro plan. Spaces other people invite you into never
+            count toward yours. If you already own more than one free space,
+            they all stay free.
           </dd>
         </div>
         <div>
@@ -190,7 +190,7 @@ export let Pricing = () => (
               <td />
               <th scope='col'>Free</th>
               <th scope='col'>Plus</th>
-              <th scope='col'>Organization</th>
+              <th scope='col'>Pro</th>
             </tr>
           </thead>
           <tbody>
@@ -329,9 +329,9 @@ export let Pricing = () => (
     <section aria-labelledby='selling'>
       <h2 class='Title' id='selling'>Sell from your apps on a paid plan</h2>
       <p class='Note'>
-        Take payments on the Plus plan or the Organization plan. Connect your
-        Stripe account to receive payments, and handle refunds and disputes
-        there. <a href='/terms'>Selling terms</a>.
+        Take payments on the Plus plan or the Pro plan. Connect your Stripe
+        account to receive payments, and handle refunds and disputes there.{' '}
+        <a href='/terms'>Selling terms</a>.
       </p>
     </section>
     <Card class='Join' aria-labelledby='start'>

@@ -76,8 +76,8 @@ let stamped = (ctx: Context, s: unknown, month: 'long' | 'short' = 'long') =>
 let plan = (b: Record<string, unknown>) =>
   COMPED.includes(str((b.space as Comp)?.slug))
     ? 'Plus, comped'
-    : str((b.plan as Comp)?.tier) == 'organization'
-    ? 'Organization'
+    : str((b.plan as Comp)?.tier) == 'pro'
+    ? 'Pro'
     : str((b.plan as Comp)?.tier) == 'plus'
     ? 'Plus'
     : 'Free'

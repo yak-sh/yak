@@ -20,9 +20,9 @@ import {
   FILES,
   FREE,
   LETTERS,
-  ORGANIZATION,
   PLUS,
   PRICE,
+  PRO,
   SECONDS,
   size,
   YEARLY,
@@ -328,8 +328,8 @@ test('the frame is asked for on the body, above what it frames', () => {
 let flat = (html: string) => html.replace(/\s{2,}|[^\S ]/g, ' ')
 
 // The plans in the order every page shows them, and what each holds a space to.
-let TIERS = ['free', 'plus', 'organization'] as const
-let LIMITS = { free: FREE, plus: PLUS, organization: ORGANIZATION }
+let TIERS = ['free', 'plus', 'pro'] as const
+let LIMITS = { free: FREE, plus: PLUS, pro: PRO }
 
 // The copy each tier's allowances should read as, off the meter's own numbers.
 let allowance = (tier: Tier) => {
@@ -366,9 +366,7 @@ let CARDS: Record<string, Tier[]> = {
   'pricing.html': [...TIERS],
 }
 let cardOf = (tier: Tier) =>
-  tier == 'free'
-    ? '.Plan:not(.Plan-plus):not(.Plan-organization)'
-    : `.Plan-${tier}`
+  tier == 'free' ? '.Plan:not(.Plan-plus):not(.Plan-pro)' : `.Plan-${tier}`
 
 test('the plan cards and every offer carry the meter allowances', () => {
   for (let [page, tiers] of Object.entries(CARDS)) {
@@ -385,7 +383,7 @@ test('the plan cards and every offer carry the meter allowances', () => {
   let app = doc['@graph'].find((n: { '@type': string }) =>
     n['@type'] == 'SoftwareApplication'
   )
-  for (let name of ['Free', 'Plus', 'Organization']) {
+  for (let name of ['Free', 'Plus', 'Pro']) {
     let offer = app.offers.find((o: { name: string }) => o.name == name)
     for (let text of Object.values(allowances[name.toLowerCase() as Tier])) {
       assertStringIncludes(
@@ -448,7 +446,7 @@ test('the pricing page tabulates the limits the code holds a space to', () => {
   let table = pricing().querySelector('.Limits table')!
   assertEquals(
     [...table.querySelectorAll('thead th')].map((th) => th.textContent),
-    ['Free', 'Plus', 'Organization'],
+    ['Free', 'Plus', 'Pro'],
   )
   assertEquals(
     [...table.querySelectorAll('tbody tr')].map((tr) => [
@@ -816,7 +814,7 @@ test('the home page describes itself at the prices the code charges', () => {
     assertEquals(offers[tier].priceCurrency, CURRENCY, tier)
     assertEquals(offers[tier]['@type'], 'Offer', tier)
   }
-  for (let tier of ['plus', 'organization'] as const) {
+  for (let tier of ['plus', 'pro'] as const) {
     let { priceSpecification } = offers[tier]
     assertEquals(priceSpecification.price, String(PRICE[tier]), tier)
     assertEquals(priceSpecification.valueAddedTaxIncluded, true, tier)
@@ -828,8 +826,8 @@ test('the plan pages quote the prices the offers name, and no other', () => {
   for (let page of ['index.html', 'pricing.html']) {
     let html = flat(parseHTML(read(page)).document.body.textContent!)
     assertStringIncludes(html, `$${PRICE.plus} a month`)
-    assertStringIncludes(html, `$${PRICE.organization} a month`)
-    assertStringIncludes(html, `$${YEARLY.organization} a year`)
+    assertStringIncludes(html, `$${PRICE.pro} a month`)
+    assertStringIncludes(html, `$${YEARLY.pro} a year`)
     for (let [, n] of html.matchAll(/\$(\d+) a (?:month|year)/g)) {
       assert(charged.has(Number(n)), `${page} quotes $${n}`)
     }

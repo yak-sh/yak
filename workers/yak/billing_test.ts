@@ -16,6 +16,7 @@ import {
   planCard,
   planOf,
   stale,
+  wanted,
 } from './billing.ts'
 import { plans } from './payments.ts'
 import { type Plan, tierOf } from './directory.ts'
@@ -25,12 +26,12 @@ import { type Plan, tierOf } from './directory.ts'
 let AT = '2026-09-03T12:00:00.000Z'
 let LATER = '2026-09-03T13:00:00.000Z'
 let UNTIL = '2026-09-21T14:13:20.000Z'
-let ORG = ['price_org_month', 'price_org_year']
+let PRO = ['price_pro_month', 'price_pro_year']
 let ENV = {
   STRIPE_KEY: 'sk',
   STRIPE_PRICE: 'price_plus',
-  STRIPE_PRICE_ORGANIZATION: ORG[0],
-  STRIPE_PRICE_ORGANIZATION_YEAR: ORG[1],
+  STRIPE_PRICE_PRO: PRO[0],
+  STRIPE_PRICE_PRO_YEAR: PRO[1],
 }
 let lent = await plans(ENV)
 let { standing } = lent
@@ -48,9 +49,21 @@ let sub = (over: Partial<Subscription> = {}): Subscription => ({
 let plan = (over: Partial<Subscription> = {}, at = AT) =>
   planOf(sub(over), at, standing)
 
+test('checkout keeps the plan and cadence requested by current and kept pages', () => {
+  for (let name of ['pro', 'organization']) {
+    let form = new FormData()
+    form.set('plan', name)
+    form.set('per', 'year')
+    assertEquals(wanted(form), { tier: 'pro', per: 'year' })
+    form.delete('per')
+    assertEquals(wanted(form), { tier: 'pro', per: 'month' })
+  }
+  assertEquals(wanted(null), { tier: 'plus', per: 'month' })
+})
+
 test('a paying subscription keeps the tier its price buys, and the rest are free', () => {
   for (let status of ['active', 'trialing', 'past_due']) {
-    assertEquals(plan({ status, tier: 'organization' }).tier, 'organization')
+    assertEquals(plan({ status, tier: 'pro' }).tier, 'pro')
   }
   for (let status of ['canceled', 'unpaid', 'incomplete', 'paused']) {
     assertEquals(plan({ status }).tier, 'free', status)
@@ -66,14 +79,14 @@ test('a paying subscription keeps the tier its price buys, and the rest are free
   })
 })
 
-test('the plan card offers the Organization plan by what is priced', async () => {
+test('the plan card offers the Pro plan by what is priced', async () => {
   let space = { tier: null, plan: null } as never
   let card = async (env: Record<string, string | undefined>) =>
-    planCard(await plans(env), space).organization
-  assertEquals(planCard(lent, space).organization, ['month', 'year'])
+    planCard(await plans(env), space).pro
+  assertEquals(planCard(lent, space).pro, ['month', 'year'])
   assertEquals(await card({ ...ENV, STRIPE_KEY: undefined }), [])
   assertEquals(
-    await card({ ...ENV, STRIPE_PRICE_ORGANIZATION_YEAR: undefined }),
+    await card({ ...ENV, STRIPE_PRICE_PRO_YEAR: undefined }),
     ['month'],
   )
   assertEquals(planCard(lent, space).tier, 'free')
@@ -88,7 +101,7 @@ let paying = plan()
 test('a space given the Plus plan free is on it through that day, unless Stripe bills it', () => {
   assertEquals(tierOf('ana', null, COMP, NOW), 'plus')
   assertEquals(tierOf('ana', 'free', COMP, Date.parse(COMP) + 1), 'free')
-  assertEquals(tierOf('ana', 'organization', COMP, NOW), 'organization')
+  assertEquals(tierOf('ana', 'pro', COMP, NOW), 'pro')
   assertEquals(freeThrough({ plan: null, comped: COMP }, NOW), COMP)
   assertEquals(
     freeThrough({ plan: null, comped: COMP }, Date.parse(COMP)),
@@ -156,7 +169,7 @@ test('a plan is bought when a space moves onto a paid plan, and only then', () =
   )
   assert(!bought(row(), plan({}, LATER)), 'a renewal')
   assert(
-    !bought(row(), plan({ tier: 'organization' }, LATER)),
+    !bought(row(), plan({ tier: 'pro' }, LATER)),
     'a change of plan',
   )
   assert(!bought(row(), free), 'a cancellation')

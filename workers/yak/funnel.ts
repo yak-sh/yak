@@ -85,7 +85,7 @@ export let CTAS = [
   { name: 'start', say: 'Start free, the code or Build it, in the hero' },
   { name: 'examples', say: 'See examples' },
   { name: 'plus', say: "The Plus plan's Get Started" },
-  { name: 'organization', say: "The Organization plan's Get Started" },
+  { name: 'pro', say: "The Pro plan's Get Started" },
   { name: 'join', say: 'Start, in the closing card' },
 ] as const
 

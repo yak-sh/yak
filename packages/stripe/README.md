@@ -25,7 +25,7 @@ each webhook door's signing secret by its name.
     "key": { "secret": "STRIPE_KEY" },
     "prices": {
       "plus": { "month": "price_plus" },
-      "organization": { "month": "price_org", "year": "price_org_year" }
+      "pro": { "month": "price_pro", "year": "price_pro_year" }
     },
     "doors": {
       "webhook": { "secret": "STRIPE_WEBHOOK_SECRET" },

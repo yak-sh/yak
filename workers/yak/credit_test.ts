@@ -37,7 +37,7 @@ test('a block is credited once, spent past the budget up to the cap, and carried
     await stamp(env, {
       entities: [{
         entity: { eid },
-        plan: { tier: 'organization' },
+        plan: { tier: 'pro' },
         budget: { dollars: 1 },
         starter: { dollars: 0 },
       }],
@@ -109,7 +109,7 @@ test('a space with no credit is billed and limited as before', async () => {
   equal([creditOf(none), capped(none), buyable(none)], [0, null, false])
   equal(limitOf(none), 30)
   equal(planCard(await plans({}), none).credit, undefined)
-  equal(planCard(await plans({}), { ...none, tier: 'organization' }).credit, {
+  equal(planCard(await plans({}), { ...none, tier: 'pro' }).credit, {
     cap: 0,
     left: 0,
     drawn: 0,

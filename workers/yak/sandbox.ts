@@ -162,7 +162,7 @@ export let NO_BOX =
 /** How many sandboxes one space may hold awake at once, by its plan
  * (D-131886). A sandbox is keyed per person and space (`named`), so each
  * member working in a space wakes one of the space's. */
-export let AWAKE: Record<Tier, number> = { free: 1, plus: 2, organization: 2 }
+export let AWAKE: Record<Tier, number> = { free: 1, plus: 2, pro: 2 }
 
 /** How long one call keeps a sandbox awake, in seconds: the longest command,
  * then the nap before it sleeps on its own. */
@@ -187,8 +187,8 @@ export let tooAwake = (space: Space, awake: number, env: Host = {}) =>
   `${space.slug} already has ${awake} sandbox${
     awake == 1 ? '' : 'es'
   } awake for other members, and the ${
-    space.tier == 'organization'
-      ? 'Organization plan'
+    space.tier == 'pro'
+      ? 'Pro plan'
       : space.tier == 'plus'
       ? 'Plus plan'
       : 'free tier'

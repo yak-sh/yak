@@ -640,7 +640,7 @@ test('connections: a built integration is offered by its face, and a site is lin
 })
 
 test('paid plan settings describe unlimited apps', async () => {
-  for (let tier of ['plus', 'organization'] as const) {
+  for (let tier of ['plus', 'pro'] as const) {
     const html = await desk({
       ...page,
       view: 'billing',
@@ -667,26 +667,26 @@ test('a space on the Plus plan free says through when, and offers to keep it aft
   assertStringIncludes(html, 'Keep the Plus plan for ada — $9 a month')
 })
 
-test('the plan card offers the Organization plan only where it is on sale', async () => {
-  let card = (organization: ('month' | 'year')[]) =>
+test('the plan card offers the Pro plan only where it is on sale', async () => {
+  let card = (pro: ('month' | 'year')[]) =>
     desk({
       ...page,
       view: 'billing',
-      plan: { tier: 'free', ends: '', known: false, organization },
+      plan: { tier: 'free', ends: '', known: false, pro },
     }, env).text()
   let none = await card([])
   assertStringIncludes(none, 'Get the Plus plan for ada — $9 a month')
-  assertEquals(none.includes('data-plan="organization"'), false)
-  assertStringIncludes(none, 'The Organization plan is not on sale here yet')
+  assertEquals(none.includes('data-plan="pro"'), false)
+  assertStringIncludes(none, 'The Pro plan is not on sale here yet')
   let both = await card(['month', 'year'])
   assertStringIncludes(
     both,
-    'Get the Organization plan for ada — $49 a month',
+    'Get the Pro plan for ada — $49 a month',
   )
-  assertStringIncludes(both, 'data-plan="organization" data-per="year"')
+  assertStringIncludes(both, 'data-plan="pro" data-per="year"')
   assertStringIncludes(
     both,
-    'Get the Organization plan for ada — $490 a year',
+    'Get the Pro plan for ada — $490 a year',
   )
   assertEquals(both.includes('not on sale'), false)
 })
