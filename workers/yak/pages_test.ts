@@ -675,7 +675,7 @@ test('a space on the Plus plan free says through when, and offers to keep it aft
       free: '2026-12-05T15:00:00.000Z',
     },
   }, env).text()
-  assertStringIncludes(html, 'free through 5 December 2026')
+  assertStringIncludes(html, 'free through Dec 5th, 2026')
   assertStringIncludes(html, 'Keep the Plus plan for ada — $9 a month')
 })
 

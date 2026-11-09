@@ -465,8 +465,8 @@ test('who visited: a bar per day and three lists, no script', async () => {
   assertStringIncludes(page, '/dinner')
   assertStringIncludes(page, 'news.example.com')
   assertStringIncludes(page, '>US<')
-  assertStringIncludes(page, '4 Sep')
-  assertStringIncludes(page, '6 Sep')
+  assertStringIncludes(page, 'Sep 4th, 2026')
+  assertStringIncludes(page, 'Sep 6th, 2026')
   // Nothing here runs: the chart is markup, not a canvas somebody paints.
   assertStringIncludes(page, 'class="Chart Chart-bars"')
 
