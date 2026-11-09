@@ -70,7 +70,7 @@ test('what the Operator is doing is words a screen reader hears, and the yak bes
     ] as const
   ) {
     let thread = parseHTML(
-      `<main>${talk(task, entries, names, [], '/chat')}</main>`,
+      `<main>${talk(task, entries, names)}</main>`,
     )
       .document.querySelector('[data-task]')!
     assertEquals(

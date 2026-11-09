@@ -569,22 +569,14 @@ export let helperFrame = (
   }
 }
 
-/** A task as its conversation draws it: every line, what it is doing now,
- * and the files sent with it. */
+/** A task as its conversation draws it: its lines and what it is doing now. */
 export let talk = (
   task: Bundle,
   entries: Bundle[],
   names: Names,
-  files: { request: string; name: string; index: number }[],
-  at: string,
   seen: Seen = {},
 ) => {
   let working = now(entries, names)
-  // Files drawn under the words they came with are not listed again.
-  let sent = new Set(
-    entries.map((b) => comp(b, 'operator_files')?.request).filter(Boolean),
-  )
-  let rest = files.filter((f) => !sent.has(f.request))
   let first = comp(entries.find((b) => b.entry), 'entry')?.seq
   return renderToString(h(
     'div',
@@ -608,22 +600,6 @@ export let talk = (
       { class: 'Talk_Now' },
       h('span', { 'data-now': '' }, working),
     ),
-    rest.length
-      ? h(
-        'p',
-        { class: 'Talk_Files' },
-        rest.map((f) =>
-          h(
-            'a',
-            {
-              class: 'Talk_FilesLink',
-              href: `${at}?attachment=${f.request}&file=${f.index}`,
-            },
-            f.name,
-          )
-        ),
-      )
-      : null,
   ))
 }
 

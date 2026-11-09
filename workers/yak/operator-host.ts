@@ -636,13 +636,6 @@ export let spendingOf = async (
   })
 }
 
-// The files sent with each request, to link beside the conversation.
-let filesOf = (asked: Bundle[]) =>
-  asked.flatMap((r) =>
-    ((comp(r, 'operator_request')?.files ?? []) as { name: string }[])
-      .map((f, index) => ({ request: r.entity.eid, name: f.name, index }))
-  )
-
 /**
  * What an id opens, found one way for the chat app, the admin page and
  * operator_read: a conversation's session (a request's, when a session took
@@ -830,10 +823,6 @@ export let conversationOf = async (
     let eid = row.entity.eid
     let helper = !!row.spawned
     let entries = await linesOf(store, eid, SHOWN, from)
-    let asked = helper ? [] : await requested(
-      store,
-      `.operator_request.session=${eid} ?doc .order=created.at .limit=100`,
-    )
     let calls = new Set(
       entries.flatMap((b) => b.call ? [b.entity.eid] : []),
     )
@@ -864,8 +853,6 @@ export let conversationOf = async (
         { entity: { eid } } as Bundle,
         shown,
         names,
-        filesOf(asked),
-        at,
         seen,
       ),
       lines: wire(drawnLines(shown, names, seen), shown, seen),
@@ -916,7 +903,7 @@ export let conversationOf = async (
     task,
     begun: asked[0]?.entity.eid ?? task,
     title: String(comp(held, 'doc')?.title ?? 'A request'),
-    html: talk(held, entries, names, filesOf(asked), at, seen),
+    html: talk(held, entries, names, seen),
     lines: wire(drawnLines(entries, names, seen), entries, seen),
     now: now(entries, names),
     waiting: [],
