@@ -151,6 +151,16 @@ covered entry. Delivery marks the child `completed{}`; a host clears that mark
 when accepting another input and schedules only children without it. Continuing
 the child refreshes that same notice after it closes again.
 
+Helpers spawned by a passive child inherit `spawned.notice`, report to their
+immediate parent, and their reports are included in that parent's closing
+notice. Failures also send one passive notice to the main thread above that
+chain. `noticeParent(g, child)` finds that thread;
+`raiseNotice(g, child, body,
+eid)` builds a passive notice bundle for
+exceptional work needing it. `spawnChild(g, parent, {prompt, model?})` submits
+helper work through the same admission path as the model's spawn tool, without
+inventing a model call in the parent's transcript.
+
 Session status is derived from entries rather than stored. `statusOf()` returns
 `empty`, `pending`, `running`, `settled`, `stopped`, or `failed`.
 `sessionDerived` exposes the corresponding `session.status` SQL-derived

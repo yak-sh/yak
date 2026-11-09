@@ -57,6 +57,21 @@ export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
   chat,
   { ...chat, name: 'operator_run' },
   {
+    name: 'helper_spawn',
+    destructive: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        task: str('The private task or session returned by operator_chat.'),
+        brief: str('The work for the helper to do, with the context it needs.'),
+        model: str('The model to use. Omit for the Operator’s default model.'),
+      },
+      required: ['task', 'brief'],
+    },
+    run: (ctx, args) => ask(ctx, args, '/operator/helper'),
+  },
+  {
     name: 'operator_read',
     readOnly: true,
     input: {

@@ -117,6 +117,7 @@ let delegation = (
   limits: ChildLimits,
   fork: boolean,
   minted?: Bundle,
+  submitted = false,
 ): Tool => ({
   name: fork ? 'fork' : 'spawn',
   step: { doing: 'Starting a helper…', done: 'Started a helper' },
@@ -325,7 +326,10 @@ let delegation = (
           native: {},
           spawned: {
             parent: ctx.session,
-            ...minted ? {} : { call: ctx.call.entity.eid },
+            ...comp(await row(g, ctx.session, ['spawned']), 'spawned')?.notice
+              ? { notice: true }
+              : {},
+            ...minted || submitted ? {} : { call: ctx.call.entity.eid },
           },
           ...fork && anchor ? { fork: { from: anchor.entity.eid } } : {},
         },
@@ -340,6 +344,23 @@ let delegation = (
     })
   },
 })
+
+/** Submit helper work from an outside caller, without inventing a model tool
+ * call in the parent's transcript. It shares the model's admission path. */
+export let spawnChild = async (
+  g: Graph,
+  session: Eid,
+  args: Record<string, unknown>,
+  limits: ChildLimits = {},
+  source: Eid = crypto.randomUUID(),
+): Promise<Eid> =>
+  wordsOf(
+    await delegation(g, limits, false, undefined, true).run(args, {
+      session,
+      call: { entity: { eid: source } },
+      entries: await transcript(g, session),
+    }),
+  )
 
 /** Submit a microtask under the session's claimed work (or the session when
  * it holds no task). The task, containment, child and claim commit together:

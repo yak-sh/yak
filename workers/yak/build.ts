@@ -649,7 +649,12 @@ export class Builder {
     if (response) return response
     // Its steps run on the pool, as every other Operator session's do: words
     // given while it works land in it.
-    return Response.json(await (await this.#work()).run(held, space, args))
+    let operator = await this.#work()
+    return Response.json(
+      await (new URL(request.url).pathname == '/operator/helper'
+        ? operator.helper(held, space, args)
+        : operator.run(held, space, args)),
+    )
   }
 
   // The Operator's store, what to call a person, and what the pages watching

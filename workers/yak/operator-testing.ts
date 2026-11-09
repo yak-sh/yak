@@ -117,11 +117,15 @@ export let operatorService = (env: Env, held: Held, options: Options) => {
         () => undefined,
       )
       if (response) return response
-      if (path == '/operator/run') {
+      if (path == '/operator/run' || path == '/operator/helper') {
         let { directoryOf } = await import('./directory.ts')
         let space = await directoryOf(env.STORE).at(held.space)
         if (!space) throw new Error('Operator space is missing')
-        return Response.json(await operator.run(held, space, args))
+        return Response.json(
+          await (path == '/operator/helper'
+            ? operator.helper(held, space, args)
+            : operator.run(held, space, args)),
+        )
       }
       throw new Error(`Unhandled Operator route: ${req.url}`)
     } catch (e) {

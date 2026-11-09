@@ -218,7 +218,7 @@ await store.g.apply([
   {
     entity: { eid: helper },
     session: { id: helper },
-    spawned: { parent: waiting.session },
+    spawned: { parent: waiting.session, notice: true },
   },
   {
     entity: { eid: helperInput },
@@ -250,7 +250,7 @@ let mainDeliveries = (await transcript(store.g, main.session)).filter((b) =>
 test('helpers report to the outside chat and hold its closing notice until they finish', () => {
   assertEquals(whileHelping.length, 0)
   assertEquals(helperParent.length, 1)
-  assertEquals(helperParent[0].notice, undefined)
+  assertEquals((helperParent[0].notice as Comp).child, helper)
   assertEquals(
     mainDeliveries.some((b) => (b.delivery as Comp).child == helper),
     false,
@@ -259,6 +259,11 @@ test('helpers report to the outside chat and hold its closing notice until they 
     mainDeliveries.filter((b) => (b.delivery as Comp).child == waiting.session)
       .length,
     1,
+  )
+  assertStringIncludes(
+    (mainDeliveries.find((b) => (b.delivery as Comp).child == waiting.session)!
+      .content as Comp).body as string,
+    'Helper checked the note.',
   )
 })
 

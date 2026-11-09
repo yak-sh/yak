@@ -1,5 +1,6 @@
 import { inputSource } from './operator-provenance.ts'
 import { chatFork } from './operator-chat.ts'
+import { helperParent, questionNotice } from './operator-helpers.ts'
 import {
   type Bundle,
   type Comp,
@@ -15,6 +16,7 @@ import {
   ordered,
   running,
   sessionTools,
+  spawnChild,
   statusOf,
   textOf,
   type Tool,
@@ -264,6 +266,7 @@ let ownNamed = new Set([
   'operator_chat',
   'operator_run',
   'operator_read',
+  'helper_spawn',
 ])
 // Where the Operator finds what it no longer holds in front of it, declared
 // beside the code that gives it `self` and the memory loop. The base persona
@@ -429,11 +432,18 @@ export let operatorRoster = async (
           ...tool,
           description: t.description + ASKING,
           parameters: { ...parameters, properties: rest },
-          run: (args, context) =>
-            tool.run(
+          run: async (args, context) => {
+            let answer = await tool.run(
               { ...args, assignee: ctx.person, project: space },
               context,
-            ),
+            )
+            await questionNotice(
+              work,
+              context,
+              String(args.question),
+            )
+            return answer
+          },
         } as Tool
       }),
   ]
@@ -675,7 +685,7 @@ let asked = (session?: string) => {
 let topOf = async (store: Store, session: string): Promise<string> => {
   let [row] = await store.g.get([session], ['spawned'])
   let parent = comp(row, 'spawned')?.parent
-  if (comp(row, 'spawned')?.notice) return session
+  if (comp(row, 'spawned')?.quiet != null) return session
   return parent ? topOf(store, String(parent)) : session
 }
 // The task a session (or the session its helper works for) carries on, or ''
@@ -1154,7 +1164,7 @@ export let operating = (
     ])
     let { entries, calls, whole } = await ending(
       session,
-      !!row?.spawned && !comp(row, 'spawned')?.notice,
+      !!row?.spawned && comp(row, 'spawned')?.quiet == null,
     )
     let reply = replyOf(turnOf(entries))
     if (row?.operator_work) {
@@ -1163,7 +1173,7 @@ export let operating = (
     }
     // A fork or helper that could not finish reaches the tracker as it ends;
     // what it ended with goes to the session that started it (M-37965).
-    if (row?.spawned && !comp(row, 'spawned')?.notice) {
+    if (row?.spawned && comp(row, 'spawned')?.quiet == null) {
       if (reply.fault) await unfinished(session, reply.fault, 'operator fork')
       return
     }
@@ -1777,6 +1787,48 @@ export let operating = (
     }
   }
 
+  let helper: Operator['helper'] = async (held, space, args) => {
+    let parent = await helperParent(
+      store,
+      { ...held, space: space.eid },
+      String(args.task ?? ''),
+    )
+    let brief = typeof args.brief == 'string' ? args.brief : ''
+    if (!brief.trim()) throw refuse('arguments', 'Give the helper a brief.')
+    let [scope] = await g.get([parent], ['operator_session'])
+    // The same person may have used the admin door earlier; a connector
+    // helper must not borrow that authority from an older chat.
+    if (
+      comp(scope, 'operator_session')?.administrative && !held.administrative
+    ) {
+      throw refuse(
+        'access',
+        'Start a chat with your current permissions first.',
+      )
+    }
+    let selected = await readying(
+      held,
+      space,
+      typeof args.model == 'string' ? args.model : undefined,
+    )
+    if (typeof args.model == 'string' && selected.model != args.model) {
+      throw await unknown(args.model, selected.provider)
+    }
+    let session = await spawnChild(g, parent, {
+      prompt: brief,
+      model: selected.model,
+    })
+    await g.apply([{ entity: { eid: parent }, completed: null }], {
+      trusted: true,
+    })
+    options.tell?.(parent)
+    return {
+      session,
+      parent,
+      text: `Helper ${session} started. Its report goes to chat ${parent}.`,
+    }
+  }
+
   // The harness's interrupt (runtime.ts): a stop that withdraws the step in
   // flight, its model request or tool call, and that no step goes on past
   // (@yaks/session run.ts `withdrawn`). A person's conversation stops with
@@ -1869,6 +1921,7 @@ export let operating = (
     note,
     tools,
     run,
+    helper,
     stop,
     named,
     watching,
@@ -1954,6 +2007,12 @@ export type Operator = {
     status: string
     cost: number
     model: string
+  }>
+  /** Queue a helper under the caller's private chat and answer immediately. */
+  helper: (held: Asker, space: Space, args: Args) => Promise<{
+    session: string
+    parent: string
+    text: string
   }>
   /** What to call a person, as the page names them (directory `nameAt`). */
   named: (person: string) => Promise<string | null>

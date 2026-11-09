@@ -995,8 +995,19 @@ or failing closes it immediately. The notice starts no model turn. The quiet
 interval is recorded as `spawned.quiet` in milliseconds; the object's alarm
 reconstructs its deadline from the newest input's timestamp after a reset.
 Closing marks the chat `completed{}` so later alarms skip it. A new input clears
-that mark; closing again updates its existing notice. Helpers report to the fork
-that started them. Each turn uses the caller's current permissions.
+that mark; closing again updates its existing notice. Each turn uses the
+caller's current permissions.
+
+`helper_spawn({space, task, brief, model?})` queues a helper under the private
+chat named by `task` (its task or session id), and returns
+`{session, parent,
+text}` immediately. The helper uses the caller's permissions
+and the space's shared budget. `operator_read` and `operator_stop` accept its
+session id. Helpers report by passive notice to the thread that started them;
+their results are included in that chat's closing notice. A failure also reaches
+the main thread immediately, and a question filed with `decision_new` sends a
+passive notice there pointing to the choices in Updates. Routine helper
+completions start no model turn in either thread.
 
 `operator_retry({space, request})` runs a request that could not finish again,
 as itself, once its cause is fixed: its failure and the answer that told of it

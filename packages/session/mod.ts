@@ -86,6 +86,7 @@ export * from './lines.ts'
 export * from './readers.ts'
 
 export * from './children.ts'
+export { noticeParent, raiseNotice } from './child-notice.ts'
 
 export { appendEntry } from './append.ts'
 export * from './timing.ts'

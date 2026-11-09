@@ -273,21 +273,23 @@ test('a read so long that compacting summarizes every line still leaves the mode
   ])
 })
 
-test('a fork that cannot finish reaches the tracker', async () => {
+test('a helper that cannot finish reaches the tracker', async () => {
   answer = (body) => {
-    let said = JSON.stringify(body.messages)
-    return said.includes('You are a fork of the conversation')
+    let said = JSON.stringify(body.messages.at(-1))
+    return said.includes('HELPER_FAILURE')
       ? Response.json({
         type: 'error',
         error: { type: 'invalid_request_error', message: 'messages: forked' },
       }, { status: 400 })
-      : said.includes('tool_result') || said.includes('failed')
+      : body.messages.at(-1)?.content.some((b: Event) =>
+          b.type == 'tool_result'
+        )
       ? text('The work could not be done.')
       : reply('tool_use', {
         type: 'tool_use',
         id: 'tu_' + crypto.randomUUID().slice(0, 8),
-        name: 'fork',
-        input: { prompt: 'Read the mail guide' },
+        name: 'spawn',
+        input: { prompt: 'HELPER_FAILURE: Read the mail guide' },
       })
   }
   let out = await ask('Read the mail guide')
