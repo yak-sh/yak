@@ -3,7 +3,12 @@ import { parseHTML } from 'linkedom'
 import type { Bundle, Comp } from '@yaks/graph'
 import { operatorStore } from './operator-store.ts'
 import { durable } from '../../packages/durable-object/testing.ts'
-import { operatorFrames, operatorRequest } from './operator-host.ts'
+import {
+  conversationOf,
+  operatorFrames,
+  operatorRequest,
+  standingAt,
+} from './operator-host.ts'
 import { rows } from './operator-view.ts'
 import { namer } from './operator-draw.ts'
 import { recentOf } from './operator-glance.ts'
@@ -49,7 +54,10 @@ let edit = (ids: string[], restore = false) =>
     { ids, restore },
     () => undefined,
   )
+let before = await standingAt(store, root, held)
 let response = await edit(ids)
+let after = await standingAt(store, root, held)
+let shown = await conversationOf(store, '/operator', root)
 let archived = await store.g.get(ids)
 let doc =
   parseHTML(rows(archived, namer({})).map((r) => r.html).join('')).document
@@ -60,6 +68,7 @@ let refused = await edit([ids[0], foreign], true)
 let unchanged = await store.g.get(ids)
 await edit(ids, true)
 let restored = await store.g.get(ids)
+let restoredAt = await standingAt(store, root, held)
 let restoredDoc =
   parseHTML(rows(restored, namer({})).map((r) => r.html).join('')).document
 
@@ -96,4 +105,10 @@ test('an archive span cannot include another person’s entry, and old-row edits
   equal(refused!.status, 404)
   equal(unchanged.every((b) => !!b.archived), true)
   equal(heard.filter((s) => JSON.parse(s).operator?.refresh).length, 2)
+})
+
+test('archive and restore change the reconnect cursor without adding a transcript line', () => {
+  equal(after == before, false)
+  equal(shown.standing, after)
+  equal(restoredAt, before)
 })

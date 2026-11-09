@@ -2493,7 +2493,7 @@ let read = async () => {
 let live = false, opened = false
 let hear = (frame) => {
   if (frame.drafts) for (let heard of hearing) heard(frame.drafts)
-  if (frame.ready) read().catch(said)
+  if (frame.ready && (frame.standing == null || frame.standing !== standing)) read().catch(said)
   let o = frame.operator
   if (!o) return
   changing(o)

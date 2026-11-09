@@ -5,6 +5,7 @@ import { remove } from './operator-remove.ts'
 import { draftEid } from '@yaks/draft'
 import { enqueue } from '@yaks/effects'
 import { derivedEid } from '@yaks/graph/identity'
+import { sha256 } from '@yaks/graph/sha256'
 import { short } from '@yaks/id'
 import { ownerOf, owns } from './operator-access.ts'
 import type { Held } from './build-door.ts'
@@ -691,23 +692,41 @@ const NONE = {
 }
 
 // Where a conversation stands: each session it draws, its own and the
-// helpers they started, by the newest of its lines drawn, so a page drawn with
-// it can tell whether one landed since (`standingAt`).
-let standing = (sessions: string[], entries: Bundle[]) =>
+// helpers they started, by their newest lines and archive membership, so a
+// reconnect reads again only when a line landed or an archive mark changed.
+let standing = (sessions: string[], entries: Bundle[], archived: Bundle[]) =>
   sessions.map((eid) => {
     let seqs = entries.filter((b) => comp(b, 'entry')?.session == eid)
       .map((b) => Number(comp(b, 'entry')?.seq ?? 0))
     return `${eid}:${Math.max(0, ...seqs)}`
-  }).join(',')
+  }).join(',') + (archived.length
+    ? '/' + sha256(JSON.stringify(
+      archived.map((b) => b.entity.eid).sort(),
+    ))
+    : '')
+let archivesOf = (store: Store, sessions: string[]) =>
+  sessions.length
+    ? store.g.read(
+      `.entry.session=${sessions.join(',')}&.archived .fields=entry.session`,
+    )
+    : Promise.resolve([])
 // The standing of these sessions and the helpers drawn with them.
-let standingOf = (sessions: Bundle[], entries: Bundle[], helpers: Helper[]) =>
-  standing(
-    [
-      ...sessions.map((b) => b.entity.eid),
-      ...helpers.flatMap((h) => h.session ? [h.session] : []),
-    ],
+let standingOf = async (
+  store: Store,
+  sessions: Bundle[],
+  entries: Bundle[],
+  helpers: Helper[],
+) => {
+  let ids = [
+    ...sessions.map((b) => b.entity.eid),
+    ...helpers.flatMap((h) => h.session ? [h.session] : []),
+  ]
+  return standing(
+    ids,
     [...entries, ...helpers.flatMap((h) => h.entries)],
+    await archivesOf(store, ids),
   )
+}
 
 /** Where the conversation `open` stands now, as {@link conversationOf} drew
  * it, when it is `who`'s: a page's socket opening asks it for the one the
@@ -735,12 +754,15 @@ export let standingAt = async (
       : undefined,
   )
   let drawn = [...sessions, ...helpers].map((b) => b.entity.eid)
-  let newest = await Promise.all(drawn.map((eid) =>
-    store.g.read(
-      `.entry.session=${eid}&.order=-entry.seq&.limit=1&.fields=entry.session,entry.seq`,
-    )
-  ))
-  return standing(drawn, newest.flat())
+  let [newest, archived] = await Promise.all([
+    Promise.all(drawn.map((eid) =>
+      store.g.read(
+        `.entry.session=${eid}&.order=-entry.seq&.limit=1&.fields=entry.session,entry.seq`,
+      )
+    )),
+    archivesOf(store, drawn),
+  ])
+  return standing(drawn, newest.flat(), archived)
 }
 
 // The person's words their conversation has not drawn yet: each request of
@@ -849,7 +871,7 @@ export let conversationOf = async (
       now: now(entries, names),
       waiting: [],
       making: making(entries, seen.helpers),
-      standing: standingOf([row], entries, seen.helpers),
+      standing: await standingOf(store, [row], entries, seen.helpers),
     }
   }
   if (found.waiting) {
@@ -898,7 +920,7 @@ export let conversationOf = async (
     now: now(entries, names),
     waiting: [],
     making: making(entries, seen.helpers),
-    standing: standingOf(sessions, entries, seen.helpers),
+    standing: await standingOf(store, sessions, entries, seen.helpers),
   }
 }
 

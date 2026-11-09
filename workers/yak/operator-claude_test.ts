@@ -180,7 +180,9 @@ test('the conversation shows the context the Operator and each helper were given
   assertEquals(live!.frame.operator.task, out.task)
   // A helper's step brings the page that step, live, its context inside.
   let rows = rowsOf(live!.frame.operator.lines)
-  assertEquals(rows.map((r) => `row-${r.id}`), [step.parentElement!.id])
+  assertEquals(rows.map((r) => `row-${r.id}`), [
+    step.closest('[id^="row-"]')!.id,
+  ])
   assertStringIncludes(rows[0].html, 'The context the helper was given')
 })
 
@@ -229,6 +231,32 @@ test("a helper's end is the Operator's step in the conversation, never the perso
 // their refusals were in, then that none had run (T-137585).
 test('the Operator hears helpers refused while it prepares, and answers once', async () => {
   let store = operatorMemory()
+  let parent: string | undefined
+  let delivered = new Set<string>()
+  let ready = Promise.withResolvers<void>()
+  let read = store.g.read
+  let apply = store.g.apply
+  // Hold the parent's tool preparation until every helper's refusal is in
+  // its transcript. Their preparation speed must not determine this race.
+  store.g.read = async (query, options) => {
+    let rows = await read(query, options)
+    if (
+      parent && typeof query == 'string' &&
+      query.startsWith(`.entity.eid=${parent}&.fields=spawned.parent`)
+    ) await ready.promise
+    return rows
+  }
+  store.g.apply = async (bundles, options) => {
+    let rows = await apply(bundles, options)
+    for (let row of rows) {
+      if (
+        (row.entry as { session?: string } | undefined)?.session == parent &&
+        (row.content as { body?: string } | undefined)?.body?.endsWith(REFUSED)
+      ) delivered.add(row.entity.eid)
+    }
+    if (delivered.size == 3) ready.resolve()
+    return rows
+  }
   let heard = (r: Request) =>
     r.items.filter((i) => i.kind == 'user' && i.text.endsWith(REFUSED)).length
   let three: Model = Object.assign(
@@ -236,6 +264,7 @@ test('the Operator hears helpers refused while it prepares, and answers once', a
       if (req.model == OPUS) {
         return Promise.reject(new ModelError('limit', REFUSED))
       }
+      parent = req.conversation
       let items: Item[] = req.items.some((i) => i.kind == 'result')
         ? [{ kind: 'assistant', text: `${heard(req)} of 3 were refused.` }]
         : [1, 2, 3].map(() => ({

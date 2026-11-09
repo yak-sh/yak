@@ -715,6 +715,33 @@ test('opening the chat app reads the conversation once, with the page', async ()
   assertStringIncludes(box.innerHTML, 'Ask for the north shelter as well')
 })
 
+test('archive and restore while disconnected refresh the conversation once on reconnect', async () => {
+  let store = operatorStore(p.states.get(`builder ${eid}`)!.storage)
+  let id = ''
+  for (let archived of [true, false]) {
+    let page = await load(storage(), false, park)
+    try {
+      id ||= page.document.querySelector('[data-archive-entries]')!
+        .getAttribute('data-archive-entries')!
+      await store.g.apply([{
+        entity: { eid: id },
+        archived: archived ? {} : null,
+      }], { trusted: true })
+      await page.connect()
+      let button = () =>
+        page.document.querySelector(`[data-archive-entries="${id}"]`)
+      for (let i = 0; i < 200; i++) {
+        if (button()?.getAttribute('data-restore') == String(archived)) break
+        await settle()
+      }
+      assertEquals(page.talks(), 1)
+      assertEquals(button()?.getAttribute('data-restore'), String(archived))
+    } finally {
+      page.leave()
+    }
+  }
+})
+
 // The person's words are on the page from the moment they are sent: a read
 // while the Operator has yet to take them in draws them where their line
 // will be, and that line takes their place, once.
