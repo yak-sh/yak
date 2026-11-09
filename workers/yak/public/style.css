@@ -1201,7 +1201,8 @@
   .Docs_Nav {
     --nav-panel: transparent;
     --nav-edge: transparent;
-    --nav-shut: var(--graphite);
+    --nav-shut: var(--stroke);
+    --nav-tip: var(--radius);
   }
 
   .Docs_Contents {

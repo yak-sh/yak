@@ -3,13 +3,14 @@
    tab drawn in pencil and filled with the panel, and it covers the edge, so
    it opens into the panel, which is what makes it read as the page you are
    on. A nav with no panel beside it points --nav-edge and --nav-panel at
-   nothing, and --nav-shut at graphite to close the tab's open side, so its
+   nothing, and --nav-shut at --stroke to close the tab's open side, so its
    current link is a pencil box (every nav on a phone, and any page's that
    says so). */
 .SideNav {
   --nav-panel: var(--card);
   --nav-edge: var(--graphite);
-  --nav-shut: transparent;
+  --nav-shut: 0;
+  --nav-tip: 0;
   position: relative;
   display: grid;
   gap: .15rem;
@@ -58,10 +59,10 @@
 .SideNav_Link-on::after {
   content: '';
   position: absolute;
-  inset: -1px 0 -1px -1px;
+  inset: -1px;
   border: var(--stroke) solid var(--graphite);
-  border-right-color: var(--nav-shut);
-  border-radius: var(--radius);
+  border-right-width: var(--nav-shut);
+  border-radius: var(--radius) var(--nav-tip) var(--nav-tip) var(--radius);
   filter: var(--drawn);
   pointer-events: none;
 }
@@ -85,7 +86,8 @@
   .SideNav {
     --nav-panel: transparent;
     --nav-edge: transparent;
-    --nav-shut: var(--graphite);
+    --nav-shut: var(--stroke);
+    --nav-tip: var(--radius);
     display: flex;
     flex-wrap: wrap;
   }
