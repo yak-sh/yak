@@ -1,6 +1,7 @@
 // The hosted settings door: fields use the kit's Save behavior, and write
 // through the same forms as the settings pages and their existing tools.
 import { bindSave, type SaveBinding } from '@yaks/ux/save'
+import { tips } from '@yaks/ui/parts'
 import { CallError } from '@yaks/tools/errors'
 import { settingsDrafts } from './settings-draft-browser.ts'
 
@@ -65,6 +66,7 @@ let refused = async (response: Response) => {
 export let settings = (root: Document = document) => {
   let forms = root.querySelectorAll<HTMLFormElement>('form[data-save]')
   if (!forms.length) return
+  tips(root)
   let by = root.querySelector<HTMLElement>('[data-save-person]')?.dataset
     .savePerson
   let destination = ''

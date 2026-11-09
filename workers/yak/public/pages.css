@@ -76,6 +76,12 @@
 }
 
 @layer sections {
+  .Voices_Row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .75rem;
+  }
   .Code {
     letter-spacing: .5em;
     font-size: 1.4rem;

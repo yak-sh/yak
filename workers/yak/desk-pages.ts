@@ -273,15 +273,6 @@ let picked = (at: DeskPage) =>
 
 let named = (s: Pick<Picked, 'slug' | 'title'>) => s.title || s.slug
 
-// The space's Operator as the side and its page name it ("Pip, your
-// Operator"), and as the way back to its chat names it ("Pip").
-let yourOperator = (at: DeskPage) => {
-  let name = picked(at).operator
-  return name
-    ? { title: `${name}, your Operator`, back: name }
-    : { title: 'Your Operator', back: 'your Operator' }
-}
-
 // The settings' one side, Manage (T-136122, T-140507): the way back to the
 // Operator's chat on top, then the space being managed, chosen in place, with
 // its pages under it on one sheet (T-140072), then what is the person's own
@@ -309,8 +300,8 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
         : null,
     )
   }
-  let { title, back } = yourOperator(at)
-  let operator = link('operator', title)
+  let back = picked(at).operator || 'your Operator'
+  let operator = link('operator', 'Operator')
   let host = spaceHost(env, at.space)
   let rail = at.collapsed ? 'rail' : undefined
   return {
@@ -2190,7 +2181,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     agents: 'Agents',
     shared: 'Shared with you',
     space: 'New space',
-    operator: yourOperator(at).title,
+    operator: 'Operator',
     updates: 'Updates',
     apps: 'Apps',
     people: 'People',

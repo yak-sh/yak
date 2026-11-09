@@ -477,7 +477,8 @@ export let voiceCard = (
             type: 'button',
             'data-sample': `${at}?sample=${v.id}`,
             'aria-label': `Play ${v.name}`,
-          }, 'Play'),
+            'data-tip': `Play ${v.name}`,
+          }, h(Icon, { of: icons.play })),
         )
       ),
     ),

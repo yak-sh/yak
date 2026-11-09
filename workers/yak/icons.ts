@@ -58,6 +58,8 @@ import TriangleAlert from 'lucide/dist/esm/icons/triangle-alert.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Plug from 'lucide/dist/esm/icons/plug.mjs'
 // @ts-types="@yaks/ui/lucide"
+import Play from 'lucide/dist/esm/icons/play.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Plus from 'lucide/dist/esm/icons/plus.mjs'
 // @ts-types="@yaks/ui/lucide"
 import QrCode from 'lucide/dist/esm/icons/qr-code.mjs'
@@ -89,6 +91,7 @@ export let icons = {
   'sliders-horizontal': SlidersHorizontal,
   shield: Shield,
   plug: Plug,
+  play: Play,
   users: Users,
   user: User,
   'share-2': Share2,

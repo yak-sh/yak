@@ -116,7 +116,7 @@ test('Manage is one side: back to the Operator, the space you manage, then your 
   assertEquals(space, [
     { label: 'Apps', href: '/manage/dana/apps' },
     { label: 'People', href: '/manage/dana/people' },
-    { label: 'Pip, your Operator', href: '/manage/dana/operator' },
+    { label: 'Operator', href: '/manage/dana/operator' },
     { label: 'Connections', href: '/manage/dana/connections' },
     { label: 'Visits', href: '/manage/dana/visits' },
     { label: 'Billing', href: '/manage/dana/billing' },
@@ -126,7 +126,7 @@ test('Manage is one side: back to the Operator, the space you manage, then your 
   // Each page is titled as the side names it.
   for (
     let [view, title] of [
-      ['operator', 'Pip, your Operator'],
+      ['operator', 'Operator'],
       ['connections', 'Connections'],
       ['settings', 'Space settings'],
       ['invite', 'Invite a friend'],
@@ -260,14 +260,14 @@ test('the Operator page is drawn beside the side, which a member sees with only 
   let owner = sides(
     await block({ view: 'operator', operator: '<p id="ask">Ask</p>' }),
   )
-  assertEquals(owner.current, 'Your Operator')
+  assertEquals(owner.current, 'Operator')
   assertEquals(owner.space.length > 1, true)
   assertStringIncludes(
     owner.document.querySelector('#content')!.innerHTML,
     '<p id="ask">Ask</p>',
   )
   let member = sides(await block({ view: 'operator', member: true }))
-  assertEquals(member.space.map((l) => l.label), ['Your Operator'])
+  assertEquals(member.space.map((l) => l.label), ['Operator'])
   assertEquals(member.back?.getAttribute('href'), '/manage/dana')
   assertEquals(member.account.length, 4)
   // On the person's own space it is the Operator too.
@@ -277,7 +277,7 @@ test('the Operator page is drawn beside the side, which a member sees with only 
       spaces: [{ slug: 'dana', title: 'Dana', owner: true, own: true }],
     }),
   )
-  assertEquals(own.current, 'Your Operator')
+  assertEquals(own.current, 'Operator')
 })
 
 test('on a phone, Menu opens the same side', async () => {
