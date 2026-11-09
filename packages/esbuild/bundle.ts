@@ -14,6 +14,7 @@
 // for ./compile.ts to judge.
 import * as esbuild from 'esbuild'
 import { legacy, resolve } from 'resolve.exports'
+import { owner } from './common.ts'
 import { packageOf, TRIES } from './graph.ts'
 import { moved as rewrite } from './platform.ts'
 
@@ -124,6 +125,84 @@ export let packaged = (files: Source, spec: string) => {
   )
 }
 
+// esbuild types a `.js`, `.jsx`, `.ts` or `.tsx` file by the `type` of the
+// package.json above it only when its own resolver found the file; a file a
+// plugin found it types by its extension alone. The type decides what an ES
+// module's default import of CommonJS reads: `module.exports` from a module
+// Node types as an ES module, as Node reads it, and otherwise the
+// `exports.default` that CommonJS transpiled from an ES module claims with
+// `__esModule`, often nothing. tslib's ES module entry, `modules/index.js`
+// under `"type": "module"`, imports `../tslib.js` by default and destructures
+// it. So a package file Node types as an ES module is named to esbuild with
+// `.mjs` after its path, and every path esbuild hands back is its own again.
+// An app's own files keep the reading they were written for.
+let TYPED = /\.(?:js|jsx|ts|tsx)$/
+let MJS = '.mjs'
+
+/** The name esbuild reads a package's file by: its path, with `.mjs` after it
+ * when the nearest package.json within the package says `"type": "module"`.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let files = {
+ *   'package.json': '{"type":"module"}',
+ *   'node_modules/tslib/package.json': '{}',
+ *   'node_modules/tslib/modules/package.json': '{"type":"module"}',
+ *   'node_modules/@yaks/kit/package.json': '{"type":"module"}',
+ * }
+ * let fs = { read: (path: string) => files[path as keyof typeof files] ?? null }
+ * let names = (paths: string[]) => paths.map((path) => typedName(fs, path))
+ * assertEquals(
+ *   names([
+ *     'node_modules/tslib/modules/index.js',
+ *     'node_modules/tslib/tslib.js',
+ *     'node_modules/@yaks/kit/a/mod.ts',
+ *     'node_modules/@yaks/kit/style.css',
+ *     'node_modules/@yaks/kit/b.cjs',
+ *     'main.js',
+ *   ]),
+ *   [
+ *     'node_modules/tslib/modules/index.js.mjs',
+ *     'node_modules/tslib/tslib.js',
+ *     'node_modules/@yaks/kit/a/mod.ts.mjs',
+ *     'node_modules/@yaks/kit/style.css',
+ *     'node_modules/@yaks/kit/b.cjs',
+ *     'main.js',
+ *   ],
+ * )
+ * assertEquals(
+ *   plain(fs, 'node_modules/tslib/modules/index.js.mjs'),
+ *   'node_modules/tslib/modules/index.js',
+ * )
+ * assertEquals(plain(fs, 'node_modules/tslib/x.mjs'), 'node_modules/tslib/x.mjs')
+ * ```
+ */
+export let typedName = (files: Source, path: string): string => {
+  let name = owner(path)
+  if (!name || !TYPED.test(path)) return path
+  let top = `node_modules/${name}`
+  for (
+    let dir = path.slice(0, path.lastIndexOf('/'));
+    dir.startsWith(top);
+    dir = dir.slice(0, dir.lastIndexOf('/'))
+  ) {
+    let manifest = files.read(`${dir}/package.json`)
+    if (manifest == null) continue
+    try {
+      return JSON.parse(manifest).type == 'module' ? path + MJS : path
+    } catch {
+      return path
+    }
+  }
+  return path
+}
+
+/** The path a name esbuild reads by stands for ({@link typedName}). */
+export let plain = (files: Source, name: string): string => {
+  let path = name.slice(0, -MJS.length)
+  return name.endsWith(MJS) && typedName(files, path) == name ? path : name
+}
+
 let loader = (path: string): esbuild.Loader =>
   /\.[mc]?ts$/.test(path)
     ? 'ts'
@@ -143,11 +222,15 @@ let virtual = (
 ): esbuild.Plugin => ({
   name: 'virtual-fs',
   setup(build) {
-    let found = (path: string) => ({ path, namespace: 'virtual' })
+    let found = (path: string) => ({
+      path: typedName(files, path),
+      namespace: 'virtual',
+    })
     let left = (path: string) => ({ path, external: true })
     build.onResolve(
       { filter: /.*/ },
-      ({ kind, path, resolveDir, importer }) => {
+      ({ kind, path, resolveDir, importer: name }) => {
+        let importer = plain(files, name)
         if (kind == 'entry-point') return found(path)
         let other = alias?.(path, importer)
         if (other) return found(other)
@@ -176,7 +259,8 @@ let virtual = (
         return left(path)
       },
     )
-    build.onLoad({ filter: /.*/, namespace: 'virtual' }, ({ path }) => {
+    build.onLoad({ filter: /.*/, namespace: 'virtual' }, (args) => {
+      let path = plain(files, args.path)
       let contents = files.read(path)
       if (contents == null) {
         return { errors: [{ text: `File not found: ${path}` }] }
@@ -253,7 +337,11 @@ let built = async (
     logLevel: 'silent',
     metafile: graph,
     ...define ? { define } : {},
+  }).catch((e) => {
+    for (let m of [...e?.errors ?? [], ...e?.warnings ?? []]) placed(files, m)
+    throw e
   })
+  out.warnings.forEach((w) => placed(files, w))
   return {
     code: out.outputFiles[0].text,
     files: Object.fromEntries(
@@ -262,7 +350,7 @@ let built = async (
     warnings: out.warnings.map((w) => w.text),
     ...out.metafile
       ? {
-        inputs: inputs(out.metafile),
+        inputs: inputs(files, out.metafile),
         exports: Object.fromEntries(
           Object.entries(out.metafile.outputs).map((
             [path, { exports }],
@@ -273,13 +361,25 @@ let built = async (
   }
 }
 
-// The metafile's paths without the `virtual:` namespace every file is read in.
-let bare = (path: string) => path.replace(/^virtual:/, '')
-let inputs = (meta: esbuild.Metafile) =>
+// A path esbuild names, in the `virtual:` namespace every file is read in,
+// as the path it stands for.
+let bare = (files: Source, path: string) =>
+  plain(files, path.replace(/^virtual:/, ''))
+
+// A message's file as the path it stands for, keeping its namespace for
+// ./said.ts.
+let placed = (files: Source, message: esbuild.Message) => {
+  let at = message.location
+  if (at?.file.startsWith('virtual:')) {
+    at.file = `virtual:${bare(files, at.file)}`
+  }
+}
+
+let inputs = (files: Source, meta: esbuild.Metafile) =>
   Object.fromEntries(
-    Object.entries(meta.inputs).map(([path, input]) => [bare(path), {
+    Object.entries(meta.inputs).map(([path, input]) => [bare(files, path), {
       format: input.format,
-      imports: input.imports.map((i) => ({ ...i, path: bare(i.path) })),
+      imports: input.imports.map((i) => ({ ...i, path: bare(files, i.path) })),
     }]),
   )
 

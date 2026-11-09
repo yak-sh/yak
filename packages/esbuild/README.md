@@ -242,6 +242,14 @@ load (text, WebAssembly) are named in `carry` for the host to upload beside it.
 An import esbuild could not resolve is an error naming the package to add to
 `package.json`, never a module left missing.
 
+A package's file is an ES module or not as Node reads it: by its extension, or
+for `.js`, `.jsx`, `.ts` and `.tsx`, by the `type` of the nearest package.json
+within its package. That decides what an ES module's default import of CommonJS
+reads, and it is `module.exports` from a package file typed as an ES module, as
+in Node (tslib's `modules/index.js` imports `../tslib.js` that way). An app's
+own files keep esbuild's reading, `exports.default` where CommonJS claims
+`__esModule`.
+
 ## The installer
 
 The compile installs what `package.json` names and what each package depends on,
