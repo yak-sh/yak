@@ -8,6 +8,12 @@ import { Refused } from '@yaks/graph/errors'
 let comp = (row: Bundle | undefined, name: string): Comp =>
   row?.[name] as Comp ?? {}
 let quote = (value: unknown) => JSON.stringify(value)
+/** A form's accepted registrations, read only as far as its capacity, which
+ * is all `open` needs of the count. */
+export let accepted = (id: string, capacity: number) =>
+  `.registration.form=${quote(id)}&.completed&!cancelled&!waitlisted&.limit=${
+    Math.max(1, capacity)
+  }`
 export let formRules = (
   now: () => number,
 ): Plugin => ({
@@ -42,15 +48,9 @@ export let formRules = (
                   throw new Refused('Answer every required question.')
                 }
                 return after(
-                  form.form.capacity == null ? [] : tx.read(
-                    `.registration.form=${
-                      quote(id)
-                    }&.completed&!cancelled&!waitlisted&.limit=${
-                      Math.max(1, form.form.capacity)
-                    }`,
-                    undefined,
-                    [],
-                  ),
+                  form.form.capacity == null
+                    ? []
+                    : tx.read(accepted(id, form.form.capacity), undefined, []),
                   (held) => {
                     let count = counts.get(id) ?? held.length
                     if (!open(form, now(), count)) {

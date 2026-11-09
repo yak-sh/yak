@@ -43,7 +43,7 @@ await agent.tool('graph_apply', {
       entity: { eid: form },
       alias: { name: 'tea' },
       form: { capacity: 1, thanks: 'See you at tea.', notify: [notify] },
-      doc: { title: 'Tea' },
+      doc: { title: 'Tea', body: 'Bring a cup.' },
     },
     {
       entity: { eid: question },
@@ -73,6 +73,8 @@ let submit = (answers: object, extra = {}) =>
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ answers, ...extra }),
   })
+let show = (name: string) => k.at(host, `/${app}/api/form/${name}`)
+let unfilled = await show('tea')
 let invalid = await submit({})
 let accepted = await submit({ [question]: 'ann@example.com' }, {
   person: notify,
@@ -108,6 +110,7 @@ let raced = await Promise.all([post(race), post(race)])
 let shut = await post(closed)
 let phoned = await post(contact, { [phone]: '+12695550142' })
 await k.settled()
+let filled = await show('tea')
 let rows = (await agent.answer('graph_query', {
   app,
   query: `.registration.form=${form}&*`,
@@ -119,12 +122,33 @@ test('a private form accepts a visitor without handing back data or read access'
   equal(invalid.status, 400)
   equal([accepted.status, await accepted.clone().text()], [204, ''])
   equal(await accepted.text(), '')
-  equal((await k.at(host, `/${app}/api/form/tea`)).status, 405)
   ok((await k.at(host, `/${app}/api/query?q=.registration`)).status >= 400)
   equal(rows.length, 1)
   equal((rows[0].registration as Comp)?.person, member)
   ok(rows[0].completed)
   equal((rows[0].completed as Comp)?.by, made.value?.eid)
+})
+
+test('a private form shows a visitor its definition and nothing else', async () => {
+  equal(unfilled.headers.get('cache-control'), 'no-store')
+  equal(await unfilled.json(), {
+    entity: { eid: form },
+    doc: { title: 'Tea', body: 'Bring a cup.' },
+    form: { capacity: 1, thanks: 'See you at tea.' },
+    open: true,
+    questions: [{
+      entity: { eid: question },
+      question: {
+        form,
+        kind: 'email',
+        label: 'Email',
+        required: true,
+        fills: 'individual.email',
+      },
+    }],
+  })
+  equal((await filled.json()).open, false)
+  equal((await show('missing')).status, 404)
 })
 
 test('completed sign-ups fill capacity and queue notifications and a confirmation', () => {

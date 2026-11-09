@@ -602,6 +602,27 @@ refuses missing required answers and closed or full forms without writing
 anything. Submitting grants no read access; the app’s existing access policy
 still applies.
 
+`GET ./api/form/<form>` shows the form, so a page in any app can draw one kept
+in another, private one. It answers anyone, as POST does,
+`cache-control:
+no-store`, with the form's own rows and nothing else in the
+store:
+
+```json
+{
+  "entity": { "eid": "<form>" },
+  "doc": { "title": "Tea", "body": "Bring a cup." },
+  "form": { "opens": "…", "closes": "…", "capacity": 20, "thanks": "…" },
+  "open": true,
+  "questions": [{ "entity": { "eid": "<question>" }, "question": { … } }]
+}
+```
+
+`doc` and `form` carry only the properties shown, those the form has, never
+`form.notify`. `open` is @yaks/forms `open` now, over the count of accepted
+registrations. The answer is a @yaks/forms `Form` (`form` and `questions`), so
+`next` and `missing` take it as it comes. A missing form answers 404.
+
 `<app>/form/<alias>` resolves the alias to a form and serves the app’s ordinary
 page at that path. The app supplies its page and form rendering. A completed
 registration owes `form_post`: durable email to `form.notify` recipients and a

@@ -3126,16 +3126,18 @@ let served = async (
     if (edge) return passed()
     let name = decodedPath(path.slice('/form/'.length))
     if (!name) return json(404, 'not_found')
+    // The store shows a form it holds (an empty 204 on code from before it
+    // did), and only that it holds one matters here.
     let found = await appStore(env.STORE, space, app, env).consume(
       `/form?${new URLSearchParams({ name })}`,
       async (r) => {
         await r.body?.cancel()
-        return r.status
+        return r.ok ? null : r.status
       },
       {},
       KERNEL,
     )
-    if (found != 204) return json(found, 'not_found')
+    if (found) return json(found, 'not_found')
   }
   let door = pageDoor(app.access, who, !!itself)
   let mayRead = door == 'page'
