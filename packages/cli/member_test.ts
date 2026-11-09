@@ -35,7 +35,9 @@ let hosts = () => [
   },
 ]
 
-let fan = reach({ core: shop })
+// Hosts share no core: every word is one a host declares, so `book` is the
+// shop's, its first declarer, though the lender speaks it too.
+let fan = reach({ core: loadVocab([]) })
 let dune = { eid: crypto.randomUUID() }
 
 test('a write across two hosts lands each component where its word lives, and reads back as one bundle', async () => {

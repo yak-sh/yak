@@ -648,7 +648,11 @@ export let reach = (words: Words): Reach => {
 
   /** Which members declare which word, in member order, so the first
    * declarer is the word's home; the words two spaces mean two things by
-   * (`apart`); and the union of every member's words (`vocab`). */
+   * (`apart`); and the union of every member's words (`vocab`).
+   *
+   * A core word is nobody's: a member that held it before the core said it
+   * keeps it in its own graph, but every other member speaks the core's, so
+   * it is not that member's to home. */
   let spoken = async (members: Member[]): Promise<Spoken> => {
     let own = await Promise.all(
       members.map(async (m) => ({ m, doc: await m.vocab() })),
@@ -656,6 +660,7 @@ export let reach = (words: Words): Reach => {
     let words = new Map<string, Member[]>()
     for (let { m, doc } of own) {
       for (let w of Object.keys(doc.$defs ?? {})) {
+        if (core.all.includes(w)) continue
         words.set(w, [...(words.get(w) ?? []), m])
       }
     }
@@ -842,9 +847,14 @@ export let reach = (words: Words): Reach => {
     bundles: Bundle[],
     key?: string,
   ): Promise<Routed> => {
-    // A sandboxed copy owns only writes aimed at it. Every routing decision
-    // chooses from the same eligible members.
-    members = members.filter((m) => !m.sandboxed || m == named)
+    // A sandboxed copy owns only writes aimed at it, and a write aimed at a
+    // member stays in its space: spaces share no home, so another space's
+    // declarer, holder or mate is never where a part goes. Every routing
+    // decision chooses from the same eligible members.
+    members = members.filter((m) =>
+      (!m.sandboxed || m == named) &&
+      (!named || spaceOf(m) == spaceOf(named))
+    )
     let { words, apart, vocab } = await spoken(members)
     let { entities, eids, aliases } = minted(bundles, vocab, key)
     // Where the entity already lives, read only when the answer depends on

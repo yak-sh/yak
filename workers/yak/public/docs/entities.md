@@ -48,8 +48,10 @@ it goes. `book` is the reading list's component wherever it is written; `loan`
 is the lending app's. A write is split up by component and each part is sent to
 the app that owns that component.
 
-The platform's shared components (`doc`, `comment`, `task`, `image`, `archived`)
-belong to no app, so each one goes to the first of these that applies:
+The platform's shared components (`doc`, `comment`, `task`, `image`, `archived`,
+`event`, `form`, `question` and the rest of the reserved names) belong to no
+app, even one that declared the name before the platform did, so each one goes
+to the first of these that applies:
 
 1. the app the bundle names, where it sets `"$app": "<slug>"`;
 2. the app where that entity already has that component;
@@ -135,7 +137,9 @@ not its files.
 
 Within one space a component has one home. Spaces share no home, so the same
 component name may describe two different shapes in two spaces, and the answer
-says which space each row comes from.
+says which space each row comes from. A write that names an app, on the call or
+with `$app`, stays in that app's space: no part of it goes to another space,
+whatever that space declares or holds.
 
 **When the shapes agree**, the name means one component and the entity comes
 back as one bundle. A property only one space declares never conflicts, since a

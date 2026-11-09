@@ -117,3 +117,39 @@ test('a remote member says where each piece lives, and whose number the row is',
   })
   assertEquals((await homes([books, loans])).kim, undefined)
 })
+
+// Where each part of one bundle goes, as `at: components`, aimed at `named`.
+let parts = async (members: Member[], named: Member | undefined, b: Bundle) =>
+  Object.fromEntries(
+    (await reach({ core: loadVocab([core]) }).routed(members, named, [b]))
+      .parts.map((p) => [p.member.at, Object.keys(p.entities[0]).slice(1)]),
+  )
+
+test('a core word is nobody’s, and a write aimed at a member stays in its space', async () => {
+  // `town` held `doc` as its own before the core said it, and declares `loan`.
+  let town: Member = {
+    ...member('town/hall', {}),
+    space: 'town',
+    vocab: () =>
+      Promise.resolve({
+        $defs: {
+          doc: core.$defs!.doc,
+          loan: { component: true, properties: { to: text } },
+        },
+      }),
+  }
+  let grove: Member = {
+    ...member('grove/church', {
+      $defs: { sermon: { component: true, properties: { text } } },
+    }),
+    space: 'grove',
+  }
+  let at = (named: Member | undefined, comps: Record<string, unknown>) =>
+    parts([town, grove], named, { entity: { eid: 'e' }, ...comps } as Bundle)
+  assertEquals(await at(grove, { doc: {} }), { 'grove/church': ['doc'] })
+  assertEquals(await at(undefined, { doc: {}, sermon: {} }), {
+    'grove/church': ['sermon', 'doc'],
+  })
+  assertEquals(await at(grove, { loan: {} }), { 'grove/church': ['loan'] })
+  assertEquals(await at(undefined, { loan: {} }), { 'town/hall': ['loan'] })
+})

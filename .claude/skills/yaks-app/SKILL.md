@@ -379,7 +379,10 @@ use of those apps, and adds no activity hop to those reads.
 A store's vocabulary is the platform's core documents plus the app's own
 `vocab.json` (`vocab.ts` `appVocab`), and today they share one namespace. A new
 manifest can't declare a platform word (`RESERVED`, `unsaid`); a word the app
-held before the platform took it stays the app's in its own store (`beneath`).
+held before the platform took it stays the app's in its own store (`beneath`),
+and only there: across stores it is still the platform's, so a write or read
+spanning apps routes it as nobody's (@yaks/reach `spoken`), and a write naming
+an app never leaves that app's space (`routed`).
 
 So the platform taking a word reaches into everyone's apps, and a collision
 breaks that app's store and every door that reads it. `deno task app-grep`

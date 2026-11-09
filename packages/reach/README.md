@@ -80,7 +80,10 @@ for all of them, so a bundle landing in two members lands under one eid. A
 component goes to the member that declares its word (the one already holding it,
 else the named one, else the first declarer). A word no member declares goes to
 the named member, the one already holding it, or the member whose own words are
-in the same bundle. A death goes to every member holding the entity.
+in the same bundle. A core word is one no member declares, even a member that
+held it before the core said it. A death goes to every member holding the
+entity. A write aimed at a named member stays in that member's space: no part
+goes to a member of another space, whatever it declares or holds.
 
 `written` rehearses every part, then commits them. A refusal in the rehearsal
 leaves every member unwritten; one after it is marked `partial`, because another
