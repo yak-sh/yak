@@ -12,7 +12,7 @@
 export { block, el, type Part, type Props, Surround } from './el.ts'
 export { Address } from './Address.ts'
 export { At } from './At.ts'
-export { Body } from './Body.ts'
+export { Body, bodyClass } from './Body.ts'
 export { Button } from './Button.ts'
 export { Card } from './Card.ts'
 export { Modal } from './Modal.ts'

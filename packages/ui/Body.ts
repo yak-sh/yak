@@ -12,11 +12,65 @@
 
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
-import { el, type Part } from './el.ts'
+import { block, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 
+let tags = {
+  Paragraph: 'p',
+  Ordered: 'ol',
+  Unordered: 'ul',
+  Item: 'li',
+  Source: 'pre',
+  Heading: 'h1',
+  Table: 'table',
+  Head: 'thead',
+  Rows: 'tbody',
+  Row: 'tr',
+  HeadingCell: 'th',
+  Cell: 'td',
+  Link: 'a',
+  Image: 'img',
+  Quote: 'blockquote',
+  Code: 'code',
+  Rule: 'hr',
+  Strong: 'strong',
+  Emphasis: 'em',
+}
+
 /** A body of text. */
-export let Body: Part = el('div', 'Body')
+export let Body:
+  & Part
+  & Record<
+    | 'Paragraph'
+    | 'Ordered'
+    | 'Unordered'
+    | 'Item'
+    | 'Source'
+    | 'Heading'
+    | 'Table'
+    | 'Head'
+    | 'Rows'
+    | 'Row'
+    | 'HeadingCell'
+    | 'Cell'
+    | 'Link'
+    | 'Image'
+    | 'Quote'
+    | 'Code'
+    | 'Rule'
+    | 'Strong'
+    | 'Emphasis',
+    Part
+  > = block('div', 'Body', tags)
+
+let names: Record<string, string> = Object.fromEntries(
+  Object.entries(tags).map(([part, tag]) => [tag, `Body_${part}`]),
+)
+
+/** The part class for an element in rendered prose. A markup renderer adds
+ * this beside its own classes where it emits the element. */
+export let bodyClass = (tag: string): string | undefined =>
+  /^h[1-6]$/.test(tag) ? `Body_Heading Body_Heading-${tag[1]}` : names[tag]
 
 /** What it is, in a line. */
 export let description = 'The text of a thing, to be read, at its measure.'
@@ -55,7 +109,7 @@ export let specimens = (): Specimen[] => [
       Body,
       { mod: 'source' },
       h(
-        'pre',
+        Body.Source,
         null,
         '# N-1 reviewer\n\nCheck changes against the tests, and say which ' +
           'test catches each one.\n\n---\n\n# M-2 tests never share a lock',

@@ -72,7 +72,7 @@
   display: inline-flex;
   color: var(--muted);
 }
-.Shell_Icon > svg {
+.Shell_Glyph {
   width: 16px;
   height: 16px;
 }

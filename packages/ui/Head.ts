@@ -17,6 +17,7 @@ import { Button } from './Button.ts'
 
 let Base = block('header', 'Head', {
   Title: 'h1',
+  Link: 'a',
   Id: 'span',
   Kind: 'span',
   Sub: 'p',
@@ -29,19 +30,20 @@ let { Facts: Line, Sep } = Base
 /** A page's head. */
 export let Head:
   & Part
-  & Record<'Title' | 'Id' | 'Kind' | 'Sub' | 'Facts', Part> = Object.assign(
-    Base,
-    {
-      Facts: ({ children, ...p }: Props) =>
-        h(
-          Line,
-          p,
-          toChildArray(children).flatMap((kid, i) =>
-            i ? [h(Sep, { key: `sep${i}` }, '·'), kid] : [kid]
+  & Record<'Title' | 'Link' | 'Id' | 'Kind' | 'Sub' | 'Facts', Part> = Object
+    .assign(
+      Base,
+      {
+        Facts: ({ children, ...p }: Props) =>
+          h(
+            Line,
+            p,
+            toChildArray(children).flatMap((kid, i) =>
+              i ? [h(Sep, { key: `sep${i}` }, '·'), kid] : [kid]
+            ),
           ),
-        ),
-    },
-  )
+      },
+    )
 
 /** What it is, in a line. */
 export let description =

@@ -6,6 +6,6 @@
 }
 .Report_Unit,
 .Report_Span,
-.Report_Column h3 {
+.Report_Heading {
   font-size: var(--fine, var(--small));
 }

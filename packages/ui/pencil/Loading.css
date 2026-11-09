@@ -6,7 +6,7 @@
   gap: 0.5rem;
 }
 .Loading_Mark,
-.Loading_Mark img {
+.Loading_Image {
   display: block;
   flex: none;
   width: 40px;

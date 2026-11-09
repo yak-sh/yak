@@ -23,7 +23,7 @@
 .Tabs_Item {
   display: contents;
 }
-.Tabs_Item > input {
+.Tabs_Input {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -86,7 +86,7 @@
   z-index: 1;
 }
 .Tabs_Tab-on,
-.Tabs_Item > input:checked ~ .Tabs_Tab {
+.Tabs_Input:checked ~ .Tabs_Tab {
   margin-top: 0;
   padding-top: .9rem;
   background: var(--card);
@@ -97,7 +97,7 @@
    tab's sides, so they meet the line, and the first tab's meets the panel's
    corner. */
 .Tabs_Tab-on::before,
-.Tabs_Item > input:checked ~ .Tabs_Tab::before {
+.Tabs_Input:checked ~ .Tabs_Tab::before {
   content: '';
   position: absolute;
   inset: auto 2px calc(-1.5 * var(--room));
@@ -106,13 +106,13 @@
 }
 /* Only the checked radio's panel shows. Hiding the rest outranks a card's
    own display, wherever the card's rule comes. */
-.Tabs_Item > input:not(:checked) ~ .Tabs_Panel {
+.Tabs_Input:not(:checked) ~ .Tabs_Panel {
   display: none;
 }
-.Tabs_Item > input:checked ~ .Tabs_Panel {
+.Tabs_Input:checked ~ .Tabs_Panel {
   display: grid;
 }
-.Tabs_Item > input:focus-visible ~ .Tabs_Tab {
+.Tabs_Input:focus-visible ~ .Tabs_Tab {
   outline: 3px solid var(--accent);
   outline-offset: -5px;
 }

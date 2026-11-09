@@ -35,7 +35,7 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.5rem;
 }
-.Report_Column h3 {
+.Report_Heading {
   margin: 0 0 0.5rem;
   color: var(--muted);
   font-size: var(--small);
@@ -53,17 +53,17 @@
   list-style: none;
   font-size: var(--small);
 }
-.Report_List li {
+.Report_Item {
   display: flex;
   justify-content: space-between;
   gap: 0.75rem;
 }
-.Report_List span {
+.Report_Label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.Report_List b {
+.Report_Value {
   flex: none;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;

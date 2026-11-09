@@ -1,6 +1,6 @@
 /**
- * Nothing here yet: what will be, and how to start. `<Empty><h2>No apps
- * yet</h2><p>…</p></Empty>`: its heading says what is missing, and what
+ * Nothing here yet: what will be, and how to start. `<Empty><Empty.Title>No apps
+ * yet</Empty.Title><p>…</p></Empty>`: its heading says what is missing, and what
  * follows it how to make the first. It is a place for something rather
  * than a thing, so its edge is dashed.
  *
@@ -9,11 +9,13 @@
 
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
-import { el, type Part } from './el.ts'
+import { block, type Part } from './el.ts'
 import type { Colors, Native, Specimen } from './theme.ts'
 
 /** Nothing here yet. */
-export let Empty: Part = el('section', 'Empty')
+export let Empty: Part & Record<'Title', Part> = block('section', 'Empty', {
+  Title: 'h2',
+})
 
 /** What it is, in a line. */
 export let description = 'Nothing here yet: what will be, and how to start.'
@@ -41,7 +43,7 @@ export let specimens = (): Specimen[] => [
     h(
       Empty,
       {},
-      h('h2', null, 'No apps yet'),
+      h(Empty.Title, null, 'No apps yet'),
       h('p', null, 'Ask your assistant to make one, and it shows here.'),
     ),
   ],

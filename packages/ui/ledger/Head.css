@@ -23,12 +23,12 @@
   overflow-wrap: anywhere;
 }
 a.Head_Title,
-.Head_Title > a {
+.Head_Link {
   color: inherit;
   text-decoration: none;
 }
 a.Head_Title:hover,
-.Head_Title > a:hover {
+.Head_Link:hover {
   text-decoration: underline;
 }
 .Head_Id,

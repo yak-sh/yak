@@ -13,9 +13,14 @@ import type { Colors, Specimen } from './theme.ts'
 import { Field } from './Field.ts'
 
 /** A fold and what it holds. */
-export let More: Part & Record<'Body', Part> = block('details', 'More', {
-  Body: 'div',
-})
+export let More: Part & Record<'Summary' | 'Body', Part> = block(
+  'details',
+  'More',
+  {
+    Summary: 'summary',
+    Body: 'div',
+  },
+)
 
 /** What it is, in a line. */
 export let description =
@@ -30,7 +35,7 @@ let fold = (open: boolean) =>
   h(
     More,
     { open },
-    h('summary', null, 'Advanced options'),
+    h(More.Summary, null, 'Advanced options'),
     h(
       More.Body,
       {},

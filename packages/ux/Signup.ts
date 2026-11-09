@@ -390,7 +390,7 @@ let drawn = (
             h(
               Check,
               { key: c },
-              h('input', {
+              h(Check.Input, {
                 type: many ? 'checkbox' : 'radio',
                 name,
                 value: c,
@@ -419,7 +419,7 @@ let drawn = (
           h(
             Check,
             {},
-            h('input', {
+            h(Check.Input, {
               id,
               type: 'checkbox',
               name,

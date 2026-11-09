@@ -29,17 +29,19 @@ export let Tabs: Part & Record<'Tab' | 'Badge', Part> = block('div', 'Tabs', {
  * a fieldset, each tab the label of its radio. */
 export let TabSet:
   & Part
-  & Record<'Legend' | 'Item' | 'Tab' | 'Badge' | 'Panel', Part> = block(
-    'fieldset',
-    'Tabs',
-    {
-      Legend: 'legend',
-      Item: 'div',
-      Tab: 'label',
-      Badge: 'span',
-      Panel: 'section',
-    },
-  )
+  & Record<'Legend' | 'Item' | 'Input' | 'Tab' | 'Badge' | 'Panel', Part> =
+    block(
+      'fieldset',
+      'Tabs',
+      {
+        Legend: 'legend',
+        Item: 'div',
+        Input: 'input',
+        Tab: 'label',
+        Badge: 'span',
+        Panel: 'section',
+      },
+    )
 
 /** What it is, in a line. */
 export let description = 'A row of tabs, one of them on.'
@@ -66,7 +68,7 @@ let item = (id: string, tab: string, panel: string, checked = false) =>
   h(
     Item,
     {},
-    h('input', { type: 'radio', name: 'tabs-specimen', id, checked }),
+    h(TabSet.Input, { type: 'radio', name: 'tabs-specimen', id, checked }),
     h(TabSet.Tab, { for: id }, tab),
     h(Panel, {}, panel),
   )

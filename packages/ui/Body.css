@@ -22,7 +22,7 @@
 }
 /* A document's source: its lines kept and wrapped at the measure, every
    character where it stands, smaller, in the face of what is typed. */
-.Body-source > pre {
+.Body-source > .Body_Source {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;

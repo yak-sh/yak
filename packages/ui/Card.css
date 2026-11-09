@@ -40,11 +40,11 @@
   font-weight: 700;
   line-height: 1.3;
 }
-.Card_Title a {
+.Card_Link {
   color: inherit;
   text-decoration: none;
 }
-.Card_Title a:hover {
+.Card_Link:hover {
   color: var(--link);
   text-decoration: underline;
 }
@@ -63,7 +63,7 @@
   gap: var(--half-gap);
   margin-left: auto;
 }
-.Card_Actions form {
+.Card_Form {
   display: contents;
 }
 .Card_Sub {

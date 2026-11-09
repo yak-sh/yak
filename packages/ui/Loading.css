@@ -8,6 +8,6 @@
   margin-inline-end: var(--half-gap);
   vertical-align: middle;
 }
-.Loading_Mark img {
+.Loading_Image {
   display: block;
 }

@@ -32,6 +32,7 @@ export let Shell:
     | 'Find'
     | 'Item'
     | 'Icon'
+    | 'Glyph'
     | 'Label'
     | 'Count'
     | 'Shade'
@@ -48,6 +49,7 @@ export let Shell:
     Find: 'div',
     Item: 'a',
     Icon: 'span',
+    Glyph: 'svg',
     Label: 'span',
     Count: 'span',
     Shade: 'button',
@@ -86,7 +88,7 @@ export let sheet = (c: Colors): Sheet => ({
 
 let { Side, Brand, Find, Item, Icon, Label, Count, Main, Bar, Title, Body } =
   Shell
-let dot = h('svg', { width: 16, height: 16, viewBox: '0 0 16 16' }, [
+let dot = h(Shell.Glyph, { width: 16, height: 16, viewBox: '0 0 16 16' }, [
   h('circle', { cx: 8, cy: 8, r: 5, fill: 'none', stroke: 'currentColor' }),
 ])
 let place = (label: string, on?: boolean, count?: string) =>

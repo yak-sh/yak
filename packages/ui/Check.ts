@@ -1,7 +1,7 @@
 /**
  * A check box or a radio and the words it answers to, the label around
  * both, so pressing the words presses the box:
- * `<Check><input type="checkbox" />Send reminders</Check>`. Which are
+ * `<Check><Check.Input type="checkbox" />Send reminders</Check>`. Which are
  * checked, and what checking one does, are the caller's.
  *
  * @module
@@ -9,11 +9,13 @@
 
 import type { Sheet } from '@yaks/tui/theme'
 import { type ComponentChildren, h } from 'preact'
-import { el, type Part } from './el.ts'
+import { block, type Part } from './el.ts'
 import type { Colors, Native, Specimen } from './theme.ts'
 
 /** A box or a radio and its words. */
-export let Check: Part = el('label', 'Check')
+export let Check: Part & Record<'Input', Part> = block('label', 'Check', {
+  Input: 'input',
+})
 
 /** What it is, in a line. */
 export let description = 'A check box or a radio, and its words.'
@@ -38,7 +40,7 @@ let check = (
     h(
       Check,
       {},
-      h('input', { type, checked, disabled, name: name || undefined }),
+      h(Check.Input, { type, checked, disabled, name: name || undefined }),
       words,
     ),
   )

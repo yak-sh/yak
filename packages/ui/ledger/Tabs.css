@@ -6,7 +6,7 @@
   font-family: var(--mono);
 }
 .Tabs_Tab-on,
-.Tabs_Item > input:checked ~ .Tabs_Tab {
+.Tabs_Input:checked ~ .Tabs_Tab {
   color: var(--accent);
   background: var(--card);
   border-color: var(--border2);

@@ -39,7 +39,8 @@ export let Rows:
     | 'Main'
     | 'Name'
     | 'Meta'
-    | 'Actions',
+    | 'Actions'
+    | 'Form',
     Part
   > = block(
     'div',
@@ -56,6 +57,7 @@ export let Rows:
       Name: 'strong',
       Meta: 'span',
       Actions: 'div',
+      Form: 'form',
     },
   )
 

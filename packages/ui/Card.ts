@@ -19,13 +19,18 @@ import type { Colors, Native, Specimen } from './theme.ts'
 /** A card. */
 export let Card:
   & Part
-  & Record<'Head' | 'Mark' | 'Title' | 'Actions' | 'Sub', Part> = block(
+  & Record<
+    'Head' | 'Mark' | 'Title' | 'Link' | 'Actions' | 'Form' | 'Sub',
+    Part
+  > = block(
     'section',
     'Card',
     {
       Head: 'header',
       Mark: 'span',
       Title: 'h2',
+      Link: 'a',
+      Form: 'form',
       Actions: 'div',
       Sub: 'p',
     },

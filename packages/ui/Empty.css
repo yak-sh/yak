@@ -14,7 +14,7 @@
   max-width: var(--measure);
   margin: 0;
 }
-.Empty h2 {
+.Empty_Title {
   color: var(--text);
   font-size: var(--h3);
   font-weight: 700;

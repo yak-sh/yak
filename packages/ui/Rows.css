@@ -20,9 +20,10 @@
 /* What is kept but no longer live: every word in it muted, links too. */
 .Rows-quiet {
   --text: var(--muted);
+  --link: var(--muted);
 }
 .Rows-quiet,
-.Rows-quiet :is(a, .Tile_Title, .Body) {
+.Rows-quiet :is(.Rows_Link, .Tile_Title, .Body) {
   color: var(--muted);
 }
 
@@ -135,6 +136,6 @@
   gap: var(--half-gap);
   margin-left: auto;
 }
-.Rows_Actions form {
+.Rows_Form {
   display: contents;
 }

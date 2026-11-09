@@ -11,11 +11,13 @@
 
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
-import { el, type Part } from './el.ts'
+import { block, el, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 
 /** A value, typed over where it stands. */
-export let Edit: Part = el('span', 'Edit')
+export let Edit: Part & Record<'Option', Part> = block('span', 'Edit', {
+  Option: 'option',
+})
 
 /** What it is, in a line. */
 export let description =
@@ -42,7 +44,7 @@ export let specimens = (): Specimen[] => [
     h(
       Select,
       { value: 'open' },
-      ['—', 'open', 'done'].map((v) => h('option', { value: v }, v)),
+      ['—', 'open', 'done'].map((v) => h(Edit.Option, { value: v }, v)),
     ),
   ],
   [
@@ -50,7 +52,7 @@ export let specimens = (): Specimen[] => [
     h(
       Select,
       { mod: 'fit', value: '' },
-      h('option', { value: '' }, '+ component'),
+      h(Edit.Option, { value: '' }, '+ component'),
     ),
   ],
 ]

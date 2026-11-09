@@ -21,7 +21,17 @@ import type { Colors, Specimen } from './theme.ts'
 export let Report:
   & Part
   & Record<
-    'Total' | 'Unit' | 'Plot' | 'Span' | 'Tops' | 'Column' | 'List',
+    | 'Total'
+    | 'Unit'
+    | 'Plot'
+    | 'Span'
+    | 'Tops'
+    | 'Column'
+    | 'List'
+    | 'Heading'
+    | 'Item'
+    | 'Label'
+    | 'Value',
     Part
   > = block(Card, 'Report', {
     Total: 'p',
@@ -31,6 +41,10 @@ export let Report:
     Tops: 'div',
     Column: 'div',
     List: 'ul',
+    Heading: 'h3',
+    Item: 'li',
+    Label: 'span',
+    Value: 'b',
   })
 
 /** What it is, in a line. */
@@ -51,12 +65,17 @@ let column = (head: string, rows: [string, number][]) =>
   h(
     Column,
     {},
-    h('h3', null, head),
+    h(Report.Heading, null, head),
     h(
       List,
       {},
       rows.map(([name, n]) =>
-        h('li', { key: name }, h('span', null, name), h('b', null, n))
+        h(
+          Report.Item,
+          { key: name },
+          h(Report.Label, null, name),
+          h(Report.Value, null, n),
+        )
       ),
     ),
   )

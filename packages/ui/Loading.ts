@@ -14,12 +14,16 @@ import type { Colors, Specimen } from './theme.ts'
 
 let Frame = el('div', 'Loading')
 let Mark = el('span', 'Loading_Mark')
+let Image = el('img', 'Loading_Image')
 
 let Say: Part = ({ children = 'Loading…', ...props }) =>
   h(Frame, { role: 'status', 'aria-live': 'polite', ...props }, children)
 
 /** Announce a pending read without hiding rows already on screen. */
-export let Loading: Part & { Mark: Part } = Object.assign(Say, { Mark })
+export let Loading: Part & { Mark: Part; Image: Part } = Object.assign(Say, {
+  Mark,
+  Image,
+})
 
 export let description = 'A read is in progress, not empty.'
 /** A terminal has no animation to show, so the mark takes no room. */

@@ -1,7 +1,7 @@
 /* Pencil's fold: yaks.app's spacing, and markdown someone wrote in it (a
    Body, theirs.ts in yaks.app), such as how to get a key, set close and
    ending where the body does. */
-.More > summary {
+.More_Summary {
   display: inline-flex;
   align-items: center;
   gap: .45rem;
@@ -11,10 +11,10 @@
   cursor: pointer;
   list-style: none;
 }
-.More > summary::-webkit-details-marker {
+.More_Summary::-webkit-details-marker {
   display: none;
 }
-.More > summary::before {
+.More_Summary::before {
   content: '';
   flex: none;
   width: .4rem;
@@ -24,7 +24,7 @@
   transform: rotate(-45deg);
   transition: transform .15s;
 }
-.More[open] > summary::before {
+.More[open] > .More_Summary::before {
   transform: rotate(45deg);
 }
 .More_Body {
@@ -40,25 +40,25 @@
   display: grid;
   gap: .625rem;
 }
-.More_Body > .Body :is(p, ol, ul, pre) {
+.More_Body > .Body :is(.Body_Paragraph, .Body_Ordered, .Body_Unordered, .Body_Source) {
   margin: 0;
 }
-.More_Body > .Body :is(ol, ul) {
+.More_Body > .Body :is(.Body_Ordered, .Body_Unordered) {
   display: grid;
   gap: .375rem;
   padding-inline-start: 1.4rem;
 }
-.More_Body > .Body li {
+.More_Body > .Body .Body_Item {
   display: grid;
   gap: .375rem;
 }
-.More_Body > .Body ol {
+.More_Body > .Body .Body_Ordered {
   list-style: decimal;
 }
-.More_Body > .Body ul {
+.More_Body > .Body .Body_Unordered {
   list-style: disc;
 }
-.More_Body > .Body pre {
+.More_Body > .Body .Body_Source {
   padding: .6rem .8rem;
   background: var(--card);
   white-space: pre-wrap;

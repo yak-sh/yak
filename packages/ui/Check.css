@@ -7,13 +7,13 @@
   min-height: var(--tap);
   cursor: pointer;
 }
-.Check input {
+.Check_Input {
   flex: none;
   margin: 0;
   accent-color: var(--accent);
   cursor: inherit;
 }
-.Check:has(input:disabled) {
+.Check:has(.Check_Input:disabled) {
   opacity: .55;
   cursor: not-allowed;
 }
