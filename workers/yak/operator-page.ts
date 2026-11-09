@@ -1332,17 +1332,22 @@ let side = (
         ),
     ),
     h(
-      SideNav,
-      { class: 'Talk_Foot', 'aria-label': 'Settings', mod: rail },
-      link(
-        managePath(owner ? 'apps' : 'operator', space.slug),
-        false,
-        h(Icon, { of: icons['sliders-horizontal'] }),
-        'Manage',
+      'div',
+      { class: 'Talk_Foot' },
+      h(SideNav.Rule, null),
+      h(
+        SideNav,
+        { 'aria-label': 'Settings', mod: rail },
+        link(
+          managePath(owner ? 'apps' : 'operator', space.slug),
+          false,
+          h(Icon, { of: icons['sliders-horizontal'] }),
+          'Manage',
+        ),
+        beside.admin
+          ? link(ADMIN, false, h(Icon, { of: icons.shield }), 'Admin')
+          : null,
       ),
-      beside.admin
-        ? link(ADMIN, false, h(Icon, { of: icons.shield }), 'Admin')
-        : null,
     ),
   )
 }

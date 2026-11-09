@@ -699,16 +699,6 @@
     color: var(--muted);
     font-size: var(--fine);
   }
-  .Desk_Out {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--link, var(--accent));
-    font: inherit;
-    text-align: left;
-    text-decoration: underline;
-    cursor: pointer;
-  }
   .Desk_Danger .Card_Title {
     color: var(--negative);
   }
@@ -719,20 +709,10 @@
   }
   .Desk_Foot {
     margin-top: auto;
-    display: grid;
-    gap: .5rem;
-    padding: .5rem .8rem;
-    font-size: var(--fine);
   }
   .Desk .SideNav {
     --nav-edge: transparent;
     margin-right: -1.25rem;
-    gap: .15rem;
-  }
-  /* The links you are not on sit close; the current one keeps its room. */
-  .Desk .SideNav_Link:not(.SideNav_Link-on),
-  .Talk_Side .SideNav_Link:not(.SideNav_Link-on) {
-    padding-block: .4rem;
   }
   .Desk .Desk_Here .SideNav {
     margin-right: 0;
@@ -998,10 +978,6 @@
     }
     .Desk .SideNav {
       margin-right: 0;
-      gap: .4rem;
-    }
-    .Desk .SideNav_Link:not(.SideNav_Link-on) {
-      padding-block: .6rem;
     }
     .Desk_Here {
       margin-right: 0;
@@ -1256,7 +1232,6 @@
     --nav-panel: var(--bg);
     flex: none;
     margin-right: -.75rem;
-    gap: .15rem;
   }
   .Talk_Top {
     display: flex;
@@ -1318,9 +1293,11 @@
     color: var(--muted);
     font-size: var(--fine);
   }
-  .Talk_Side .Talk_Foot {
-    padding-top: .5rem;
-    border-top: 1px solid var(--border2);
+  .Talk_Foot {
+    flex: none;
+  }
+  .Talk_Foot > .SideNav_Rule {
+    margin-block: calc(.375rem - var(--room));
   }
   .Talk_Close,
   .Talk_Menu,
@@ -2141,10 +2118,6 @@
     }
     .Talk_Side .SideNav {
       margin-right: 0;
-      gap: .4rem;
-    }
-    .Talk_Side .SideNav_Link:not(.SideNav_Link-on) {
-      padding-block: .6rem;
     }
     .Talk_Close {
       display: inline-flex;
@@ -2199,12 +2172,6 @@
   }
   .Desk_Unshut {
     display: none;
-  }
-  .Desk_Foot a,
-  .Desk_Out {
-    display: inline-flex;
-    align-items: center;
-    gap: .4rem;
   }
   @media (min-width: 701px) {
     .Desk-rail .Desk_Shut,
@@ -2277,11 +2244,6 @@
     }
     .Desk-rail .Desk_Here > :is(.Desk_Space, .Desk_Pick, .Desk_New) {
       margin-right: .75rem;
-    }
-    .Desk-rail .Desk_Foot {
-      justify-items: center;
-      padding-inline: 0;
-      font-size: 1rem;
     }
     /* The chat app's side (operator-page.ts `side`). */
     .Talk_Page-rail .Talk {

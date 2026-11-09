@@ -238,7 +238,7 @@ test('the side collapses to its icons on every page, and opens again', async () 
     assert(links.length > 3, path)
     for (let a of links) {
       let label = a.querySelector('.SideNav_Label')?.textContent
-      assert(a.parentElement!.classList.contains('SideNav-rail'), label)
+      assert(a.closest('.SideNav')!.classList.contains('SideNav-rail'), label)
       assert(a.querySelector('.Icon, img'), `${label} has an icon`)
       assertEquals(a.getAttribute('title'), label)
     }

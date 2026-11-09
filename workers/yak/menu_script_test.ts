@@ -26,7 +26,11 @@ let page = async () => {
     (type: string, fn: (e: unknown) => void) => on[type] = fn,
   )
   let menu = document.querySelector('details[data-menu]') as HTMLDetailsElement
-  let at = (q: string) => document.querySelector(q)!
+  let at = (q: string) => {
+    let node = document.querySelector(q)
+    assert(node, q)
+    return node
+  }
   let focused: Element | null = null
   ;(menu.querySelector('summary') as HTMLElement).focus = function () {
     focused = this
@@ -69,7 +73,7 @@ test('focus moving outside the open menu closes it', async () => {
   reflect(p.opened())
   p.focus('.Desk_Row')
   assertEquals(p.isOpen(), true)
-  p.focus('.Desk_Out')
+  p.focus('.Desk_Foot button[type="submit"]')
   assertEquals(p.isOpen(), false)
 })
 

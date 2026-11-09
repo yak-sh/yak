@@ -378,10 +378,10 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
         ),
       ),
       h(
-        'div',
-        { class: 'Desk_Foot' },
+        SideNav,
+        { class: 'Desk_Foot', 'aria-label': 'Help and account', mod: rail },
         h(
-          'a',
+          SideNav.Link,
           {
             href: `https://${host}/`,
             target: '_blank',
@@ -389,10 +389,10 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
             title: `Open ${host}`,
           },
           glyph('external-link'),
-          worded(`Open ${host}`),
+          h(SideNav.Label, null, `Open ${host}`),
         ),
         h(
-          'a',
+          SideNav.Link,
           {
             href: url(env, '/help'),
             target: '_blank',
@@ -400,16 +400,16 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
             title: 'Help',
           },
           glyph('circle-question-mark'),
-          worded('Help'),
+          h(SideNav.Label, null, 'Help'),
         ),
         h(
           'form',
           { method: 'post', action: url(env, LOGOUT) },
           h(
-            'button',
-            { class: 'Desk_Out', type: 'submit', title: 'Sign out' },
+            SideNav.Link,
+            { as: 'button', type: 'submit', title: 'Sign out' },
             glyph('log-out'),
-            worded('Sign out'),
+            h(SideNav.Label, null, 'Sign out'),
           ),
         ),
       ),

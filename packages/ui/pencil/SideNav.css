@@ -12,7 +12,7 @@
   --nav-shut: transparent;
   position: relative;
   display: grid;
-  gap: .4rem;
+  gap: .15rem;
 }
 .SideNav::after {
   content: '';
@@ -25,27 +25,34 @@
   pointer-events: none;
 }
 .SideNav_Link {
+  box-sizing: border-box;
   position: relative;
   display: flex;
   align-items: center;
   gap: .65rem;
-  padding: .6rem .8rem;
+  padding: .45rem .6rem;
   border: 1px solid transparent;
   border-radius: var(--radius);
-  color: var(--muted);
-  font-size: .95rem;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
   -webkit-user-select: none;
   user-select: none;
 }
-.SideNav_Link:hover,
-.SideNav_Link-hover {
-  color: var(--text);
+.SideNav_Link:where(button) {
+  width: 100%;
+}
+.SideNav_Link:hover:not(.SideNav_Link-on),
+.SideNav_Link-hover:not(.SideNav_Link-on) {
+  background: color-mix(in srgb, var(--card) 60%, transparent);
 }
 .SideNav_Link-on {
   background: var(--nav-panel);
   color: var(--text);
-  font-weight: 800;
   z-index: 1;
 }
 .SideNav_Link-on::after {
@@ -69,7 +76,7 @@
 /* A rule between groups of links, stopping short of the edge. */
 .SideNav_Rule {
   height: calc(var(--stroke) + 2 * var(--room));
-  margin: calc(1rem - var(--room)) .8rem;
+  margin: calc(1rem - var(--room)) .6rem;
   border: 0;
   background: var(--rule);
   filter: var(--drawn);
