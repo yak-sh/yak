@@ -569,6 +569,65 @@ test('connections: a borrowed connection says whose it is, and gives way to a ke
   ])
 })
 
+test('connection dialogs have one card, with their title and controls in its head', async () => {
+  let cases: Partial<Connections>[] = [
+    ...(['connected', 'needed'] as const).map((status) => ({
+      list: [{ ...added(status), face: CAL }],
+      open: 'w',
+    })),
+    {
+      borrowed: [{
+        eid: 'lent',
+        integration: 'Weather',
+        face: CAL,
+        keyed: true,
+        hosts: ['api.weather.test'],
+        lender: 'Jeff',
+        app: used(),
+      }],
+      open: 'lent',
+    },
+    ...[true, false].map((keyed) => ({
+      asked: { name: 'cal', keyed, face: CAL },
+    })),
+  ]
+  for (let over of cases) {
+    let html = await desk({
+      ...page,
+      view: 'connections',
+      connections: {
+        on: true,
+        list: [],
+        borrowed: [],
+        services: [],
+        built: [],
+        ...over,
+      },
+    }, env).text()
+    let { document } = parseHTML(html)
+    let modal = document.querySelector('dialog[open]')!
+    assertEquals(modal.querySelectorAll('.Card').length, 1)
+    let body = modal.querySelector('.Modal_Body.Card')!
+    let head = body.firstElementChild!
+    assert(head.matches('.Card_Head'))
+    assertEquals(
+      head.querySelector('.Card_Title')?.textContent,
+      over.asked ? 'Connect Cal' : 'Cal',
+    )
+    assert(head.querySelector('.Card_Mark'))
+    if (!over.asked) assert(head.querySelector('.State'))
+    if (over.list?.[0].status == 'connected') {
+      assertEquals(pressed(head, 'disconnect'), 'Disconnect')
+    }
+    let close = head.querySelector('.Card_Actions [data-modal-close]')!
+    assert(close.querySelector('svg.Icon'))
+    assertEquals(close.textContent, '')
+    assertEquals(close.getAttribute('data-tip'), 'Close')
+    assertEquals(close.getAttribute('aria-label'), 'Close connection details')
+    assertEquals(close.getAttribute('href'), '/manage/ada/connections')
+  }
+})
+
 test('askConnect: how to get the key, above the box it is pasted in', async () => {
   let html = await askConnect({
     app: 'Notes',

@@ -1163,7 +1163,13 @@ let any = (...kids: Kids[]) => kids.some(Boolean) ? kids : null
 // listed. The space's side of an app that asks each person to connect
 // their own is only the ask: nothing here connects it, and it stays while
 // the app asks. Its forms post to the page it is on, `action`.
-let connection = (c: Shown, on: boolean, action: string) => {
+let connection = (
+  c: Shown,
+  on: boolean,
+  action: string,
+  close: Kids,
+  context: Kids,
+) => {
   let ask = c.each && !c.own
   let id = (what: string) => `${what}-${c.eid}`
   let form = (kids: Kids, at: Record<string, unknown> = {}) =>
@@ -1465,9 +1471,14 @@ let connection = (c: Shown, on: boolean, action: string) => {
     : []
   let folded = any(...lent, named, replace, reached, listing, told)
   return h(
-    Card,
+    Modal.Body,
     { 'data-connection': c.eid },
-    heading(c.face.title, { mark: logo(c.face), status: stands, actions }),
+    heading(c.face.title, {
+      mark: logo(c.face),
+      status: stands,
+      actions: [actions, close],
+    }),
+    context,
     detail(c.face, c.keyed),
     notice,
     howTo(c.face, open && !ask),
@@ -1494,6 +1505,7 @@ let borrowing = (
   b: Borrowed,
   on: boolean,
   action: string,
+  close: Kids,
   mine?: Shown,
 ) => {
   let form = (kids: Kids, connection = b.eid, edit = false) =>
@@ -1539,12 +1551,12 @@ let borrowing = (
     )
     : null
   return h(
-    Card,
+    Modal.Body,
     { 'data-borrowed': b.eid },
     heading(b.face.title, {
       mark: logo(b.face),
       status: status(`Borrowed from ${b.lender}`, 'positive'),
-      actions,
+      actions: [actions, close],
     }),
     detail(b.face, b.keyed),
     h(
@@ -1624,42 +1636,47 @@ let connections = (at: DeskPage, env: Host) => {
   let action = `${context.pathname}${context.search}`
   // The service the page was opened to add: a key to paste, or a sign-in to
   // start, and which space it goes to.
-  let offer = (i: Offered) => [
-    heading(`Connect ${i.face.title}`, {
-      mark: logo(i.face, env),
-      actions: h(Button, {
-        href: action,
-        'data-modal-close': '',
-        autofocus: true,
-      }, 'Close'),
-    }),
-    detail(i.face, i.keyed),
-    to('It will be connected to', addTo(i.name)),
-    i.available === false
-      ? [
-        h(
-          Notice,
-          null,
-          'This service is in the catalog, but connecting through this provider is not available yet.',
+  let close = h(Button, {
+    href: action,
+    mod: 'quiet',
+    'data-modal-close': '',
+    'data-tip': 'Close',
+    'aria-label': 'Close connection details',
+    autofocus: true,
+  }, h(Icon, { of: icons.x }))
+  let offer = (i: Offered) =>
+    h(Modal.Body, null, [
+      heading(`Connect ${i.face.title}`, {
+        mark: logo(i.face, env),
+        actions: close,
+      }),
+      detail(i.face, i.keyed),
+      to('It will be connected to', addTo(i.name)),
+      i.available === false
+        ? [
+          h(
+            Notice,
+            null,
+            'This service is in the catalog, but connecting through this provider is not available yet.',
+          ),
+          h(Button, { type: 'button', disabled: true }, 'Connect'),
+        ]
+        : h(
+          Form,
+          { method: 'post', action },
+          held('integration', i.name),
+          howTo(i.face, true),
+          i.keyed
+            ? keyBox(
+              `add-${i.name}`,
+              'Paste the key',
+              press('add', 'Connect', false),
+              '',
+              i.face.fields,
+            )
+            : h(Form.Actions, null, press('add', 'Connect', false)),
         ),
-        h(Button, { type: 'button', disabled: true }, 'Connect'),
-      ]
-      : h(
-        Form,
-        { method: 'post', action },
-        held('integration', i.name),
-        howTo(i.face, true),
-        i.keyed
-          ? keyBox(
-            `add-${i.name}`,
-            'Paste the key',
-            press('add', 'Connect', false),
-            '',
-            i.face.fields,
-          )
-          : h(Form.Actions, null, press('add', 'Connect', false)),
-      ),
-  ]
+    ])
   let add = h(
     Card,
     { as: 'form', method: 'post', action },
@@ -1877,14 +1894,17 @@ let connections = (at: DeskPage, env: Host) => {
   let addTo = (name: string) => (slug: string) =>
     openedOn(managePath('connections', slug), 'add', name)
   let setup = c.asked ? offer(c.asked) : open
-    ? [
+    ? connection(
+      open,
+      c.on,
+      action,
+      close,
       open.own ? null : to(
         open.status == 'needed' ? 'It will be connected to' : 'Connected for',
       ),
-      connection(open, c.on, action),
-    ]
+    )
     : loan
-    ? [borrowing(loan, c.on, action, mine(loan))]
+    ? borrowing(loan, c.on, action, close, mine(loan))
     : null
   let modal = setup
     ? h(
@@ -1902,20 +1922,7 @@ let connections = (at: DeskPage, env: Host) => {
         tabIndex: -1,
         'aria-label': 'Close connection details',
       }),
-      h(
-        Modal.Body,
-        null,
-        c.asked ? null : h(
-          Card.Actions,
-          null,
-          h(
-            Button,
-            { href: action, 'data-modal-close': '', autofocus: true },
-            'Close',
-          ),
-        ),
-        setup,
-      ),
+      setup,
     )
     : null
   return [

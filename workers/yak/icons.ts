@@ -79,6 +79,8 @@ import Trash2 from 'lucide/dist/esm/icons/trash-2.mjs'
 import User from 'lucide/dist/esm/icons/user.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Users from 'lucide/dist/esm/icons/users.mjs'
+// @ts-types="@yaks/ui/lucide"
+import X from 'lucide/dist/esm/icons/x.mjs'
 
 export let icons = {
   eye: Eye,
@@ -118,6 +120,7 @@ export let icons = {
   'log-out': LogOut,
   'panel-left-close': PanelLeftClose,
   'panel-left-open': PanelLeftOpen,
+  x: X,
 }
 export type IconName = keyof typeof icons
 
