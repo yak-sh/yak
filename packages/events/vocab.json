@@ -10,7 +10,7 @@
       "properties": {
         "starts": {
           "type": "string",
-          "description": "ISO date-time with UTC offset, or YYYY-MM-DD for an all-day event"
+          "description": "ISO date-time with UTC offset, a local date-time when zone is set, or YYYY-MM-DD for an all-day event"
         },
         "ends": {
           "type": "string",
@@ -18,11 +18,15 @@
         },
         "repeats": {
           "type": "string",
-          "description": "RFC 5545 RRULE, such as FREQ=WEEKLY;BYDAY=SU; timed recurrences repeat in UTC"
+          "description": "RFC 5545 RRULE, such as FREQ=WEEKLY;BYDAY=SU; timed recurrences follow zone"
         },
         "place": {
           "type": "string",
           "description": "where the event takes place"
+        },
+        "zone": {
+          "type": "string",
+          "description": "IANA time zone for this event's local times and recurrence, such as America/Detroit; absent means UTC"
         }
       }
     }

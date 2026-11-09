@@ -9,6 +9,7 @@
   "license": "Apache-2.0",
   "description": "Calendar event rows, pure occurrence expansion and iCalendar feeds.",
   "dependencies": {
+    "@date-fns/tz": "1.5.0",
     "@yaks/vocab": "0.2.32",
     "rrule": "2.8.1"
   },

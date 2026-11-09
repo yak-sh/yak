@@ -1,6 +1,7 @@
 // Dates and recurrence rules interpreted identically by expansion and feeds.
 import * as rrule from 'rrule'
 import type { RRule } from 'rrule'
+import { floating, zone, zoned } from './zone.ts'
 
 // The package's Node entry is CommonJS; bundlers select its ESM entry.
 let library: { RRule: typeof RRule; default?: { RRule: typeof RRule } } = rrule
@@ -12,12 +13,14 @@ export type Event = {
   ends?: string
   repeats?: string
   place?: string
+  zone?: string
 }
 
 export let day = (date: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(date)
 
-export let instant = (date: string): number => {
-  let ms = Date.parse(date)
+export let instant = (date: string, name?: string): number => {
+  let local = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(date)
+  let ms = Date.parse(local && name ? `${date}Z` : date)
   let calendar = date.slice(0, 10), midnight = Date.parse(calendar)
   if (
     !Number.isFinite(ms) ||
@@ -25,16 +28,18 @@ export let instant = (date: string): number => {
     new Date(midnight).toISOString().slice(0, 10) != calendar ||
     (day(date)
       ? new Date(ms).toISOString().slice(0, 10) != date
-      : !/T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/.test(date))
+      : !(local && name) &&
+        !/T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/.test(date))
   ) throw new RangeError(`Invalid event date: ${date}`)
-  return ms
+  return local && name ? zoned(ms, name) : ms
 }
 
 export let span = (event: Event): [number, number] => {
-  let starts = instant(event.starts)
+  zone(event.zone)
+  let starts = instant(event.starts, event.zone)
   let ends = event.ends == null
     ? starts + (day(event.starts) ? 86400000 : 0)
-    : instant(event.ends)
+    : instant(event.ends, event.zone)
   if (
     (event.ends != null && ends <= starts) ||
     (event.ends != null && day(event.starts) != day(event.ends))
@@ -50,7 +55,9 @@ export let repeats = (text: string): string => {
   return rule
 }
 
-export let rule = (event: Event): RRule | undefined => {
+export type Series = { rule: RRule; until?: number }
+
+export let rule = (event: Event): Series | undefined => {
   if (event.repeats == null) return undefined
   let options = Rule.parseString(repeats(event.repeats))
   if (
@@ -61,10 +68,18 @@ export let rule = (event: Event): RRule | undefined => {
       'Recurrence interval and count must be positive integers',
     )
   }
-  return new Rule(
-    { ...options, dtstart: new Date(instant(event.starts)) },
-    true,
-  )
+  let { until, ...parts } = options
+  let starts = instant(event.starts, event.zone)
+  return {
+    rule: new Rule({
+      ...parts,
+      dtstart: new Date(
+        day(event.starts) ? starts : floating(starts, zone(event.zone)),
+      ),
+      tzid: 'UTC',
+    }, true),
+    until: until?.getTime(),
+  }
 }
 
 export let iso = (ms: number, date: boolean): string =>

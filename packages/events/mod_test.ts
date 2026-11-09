@@ -96,12 +96,56 @@ test('point events include the start boundary and invalid windows are empty', ()
   equal(occurrences(point, 2, 1), [])
 })
 
+for (
+  let [starts, ends, from, until, expected] of [
+    [
+      '2026-10-25T10:00:00-04:00',
+      '2026-10-25T11:00:00-04:00',
+      '2026-10-25',
+      '2026-11-09',
+      [
+        '2026-10-25T14:00:00.000Z',
+        '2026-11-01T15:00:00.000Z',
+        '2026-11-08T15:00:00.000Z',
+      ],
+    ],
+    [
+      '2027-03-07T10:00:00-05:00',
+      '2027-03-07T11:00:00-05:00',
+      '2027-03-07',
+      '2027-03-22',
+      [
+        '2027-03-07T15:00:00.000Z',
+        '2027-03-14T14:00:00.000Z',
+        '2027-03-21T14:00:00.000Z',
+      ],
+    ],
+  ] as const
+) {
+  test(`a weekly Detroit service stays at 10:00 through ${from} DST`, () => {
+    let weekly = {
+      starts,
+      ends,
+      zone: 'America/Detroit',
+      repeats: 'FREQ=WEEKLY;COUNT=3',
+    }
+    equal(times(weekly, from, until), [...expected])
+    equal(inWindow(weekly, from, until).map((o) => ms(o.ends) - ms(o.starts)), [
+      3600000,
+      3600000,
+      3600000,
+    ])
+  })
+}
+
 test('malformed event dates, ends and recurrence rules throw', async () => {
   for (
     let e of [
       { starts: '2026-02-30' },
       { starts: '2026-02-30T10:00:00Z' },
       { starts: '2026-11-08T10:00:00' },
+      { starts: event.starts, zone: 'Not/AZone' },
+      { starts: event.starts, zone: 'America/Detroit\r\nSUMMARY:Injected' },
       { ...event, ends: '2026-11-08' },
       { ...event, ends: '2026-11-08T14:00Z' },
       { ...event, ends: event.starts },
@@ -112,4 +156,47 @@ test('malformed event dates, ends and recurrence rules throw', async () => {
       { ...event, repeats: 'FREQ=DAILY\r\nSUMMARY:Injected' },
     ]
   ) await throws(() => inWindow(e, '2026-01-01', '2027-01-01'))
+})
+
+test('zoned local inputs honor UTC UNTIL and exact instant window boundaries', () => {
+  let weekly = {
+    starts: '2026-10-25T10:00:00',
+    ends: '2026-10-25T11:00:00',
+    zone: 'America/Detroit',
+    repeats: 'FREQ=WEEKLY;UNTIL=20261101T150000Z',
+  }
+  equal(inWindow(weekly, '2026-11-01T15:30Z', '2026-11-09'), [{
+    starts: '2026-11-01T15:00:00.000Z',
+    ends: '2026-11-01T16:00:00.000Z',
+  }])
+  equal(inWindow(weekly, '2026-11-01T16:00Z', '2026-11-09'), [])
+  equal(inWindow(weekly, '2026-11-01', '2026-11-01T15:00Z'), [])
+  equal(
+    times(
+      { ...weekly, repeats: 'FREQ=WEEKLY;UNTIL=20261101T145959Z' },
+      '2026-11-01',
+      '2026-11-09',
+    ),
+    [],
+  )
+})
+
+test('each event can choose its own time zone and all-day dates stay dates', () => {
+  let local = { starts: '2026-11-08T10:00:00', repeats: 'FREQ=WEEKLY;COUNT=1' }
+  equal(
+    times({ ...local, zone: 'America/Detroit' }, '2026-11-08', '2026-11-09'),
+    ['2026-11-08T15:00:00.000Z'],
+  )
+  equal(
+    times({ ...local, zone: 'America/Chicago' }, '2026-11-08', '2026-11-09'),
+    ['2026-11-08T16:00:00.000Z'],
+  )
+  equal(
+    times(
+      { starts: '2026-11-08', zone: 'America/Detroit' },
+      '2026-11-08',
+      '2026-11-09',
+    ),
+    ['2026-11-08'],
+  )
 })

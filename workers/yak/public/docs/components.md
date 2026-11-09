@@ -55,19 +55,24 @@ These components mean the same thing in every store on the platform. Each entry
 lists the properties you may write; a few components also have server-set
 properties you can read but never write, and those are named in the entry.
 
-**`event`** — `starts`, `ends`, `repeats`, `place` (text). Add
-`doc{title, body}` for its title and description. `starts` is an ISO date-time
-with `Z` or a numeric offset, or `YYYY-MM-DD` for an all-day event. `ends` is
-exclusive and uses the same form; absent means one day for an all-day event, or
-a point in time. `repeats` is an RFC 5545 rule such as `FREQ=WEEKLY;BYDAY=SU`,
-optionally ending with `COUNT=12` or `UNTIL=20261225T235959Z`. Timed recurrence
-follows UTC. Each recurring series is one row.
+**`event`** — `starts`, `ends`, `repeats`, `place`, `zone` (text). Add
+`doc{title, body}` for its title and description. Set `zone` to the event's IANA
+time zone, such as `America/Detroit`; each event can use its own zone. `starts`
+is an ISO date-time with `Z` or a numeric offset, a local date-time when `zone`
+is set, or `YYYY-MM-DD` for an all-day event. `ends` is exclusive and uses the
+same form; absent means one day for an all-day event, or a point in time.
+`repeats` is an RFC 5545 rule such as `FREQ=WEEKLY;BYDAY=SU`, optionally ending
+with `COUNT=12` or `UNTIL=20261225T235959Z`. Timed recurrence follows the
+event's zone, preserving local wall time through daylight saving changes. An
+absent zone means UTC. Each recurring series is one row.
 
 Public and open apps serve their events at `./calendar.ics`. Add that URL to
 Google Calendar using “From URL”; the calendar provider refreshes it on its own
-schedule. The feed reads as an anonymous visitor, excluding person-owned rows
-and rows carrying `cancelled{at, by, via, reason}`. A private app has no public
-feed. Event expansion and feed serialization live in `@yaks/events`.
+schedule. Timed events with a zone use matching `TZID` values on `DTSTART` and
+`DTEND`; all-day events stay dates. The feed reads as an anonymous visitor,
+excluding person-owned rows and rows carrying `cancelled{at, by, via, reason}`.
+A private app has no public feed. Event expansion and feed serialization live in
+`@yaks/events`.
 
 **`doc`** — `title` (text), `body` (text). The text a person reads, and what
 `search` searches, along with any declared property marked searchable (below).

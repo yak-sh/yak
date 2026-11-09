@@ -3464,6 +3464,7 @@
       "packages/events": {
         "packageJson": {
           "dependencies": [
+            "npm:@date-fns/tz@1.5.0",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/vocab@0.2.32",
             "npm:rrule@2.8.1"

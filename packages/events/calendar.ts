@@ -1,5 +1,6 @@
 // RFC 5545 text output, independent of HTTP and graph reads.
 import { day, type Event, instant, iso, repeats, rule, span } from './time.ts'
+import { floating, zone } from './zone.ts'
 
 /** An event's graph identity, calendar aspect, cover and modification stamps. */
 export type Entry = {
@@ -31,9 +32,13 @@ let fold = (line: string) => {
 
 let utc = (ms: number) =>
   iso(ms, false).replace(/[-:]/g, '').replace(/\.\d+/, '')
-let date = (name: string, text: string) =>
+let date = (name: string, text: string, timeZone?: string) =>
   day(text)
     ? `${name};VALUE=DATE:${text.replace(/-/g, '')}`
+    : timeZone
+    ? `${name};TZID=${zone(timeZone)}:${
+      utc(floating(instant(text, timeZone), timeZone)).slice(0, -1)
+    }`
     : `${name}:${utc(instant(text))}`
 
 let entry = (row: Entry) => {
@@ -46,9 +51,9 @@ let entry = (row: Entry) => {
     `UID:${escape(row.entity.eid)}@yaks.app`,
     `DTSTAMP:${utc(instant(changed))}`,
     `LAST-MODIFIED:${utc(instant(changed))}`,
-    date('DTSTART', row.event.starts),
+    date('DTSTART', row.event.starts, row.event.zone),
     ...(row.event.ends != null || day(row.event.starts)
-      ? [date('DTEND', iso(ends, day(row.event.starts)))]
+      ? [date('DTEND', iso(ends, day(row.event.starts)), row.event.zone)]
       : []),
     `SUMMARY:${escape(row.doc?.title ?? '')}`,
     ...(row.doc?.body ? [`DESCRIPTION:${escape(row.doc.body)}`] : []),

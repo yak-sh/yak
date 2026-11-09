@@ -35,6 +35,7 @@ let event = {
   ends: '2026-11-08T16:00:00Z',
   repeats: 'FREQ=WEEKLY',
   place: 'Church',
+  zone: 'America/Detroit',
 }
 await agent.tool('graph_apply', {
   app: slug,
@@ -114,6 +115,8 @@ test('calendar.ics serves current graph events without cookies or a login', () =
   ok(text.includes(`UID:${eid}@yaks.app`))
   ok(text.includes('SUMMARY:Sunday service\r\n'))
   ok(text.includes('RRULE:FREQ=WEEKLY\r\n'))
+  ok(text.includes('DTSTART;TZID=America/Detroit:20261108T100000\r\n'))
+  ok(text.includes('DTEND;TZID=America/Detroit:20261108T110000\r\n'))
   ok(text.includes('DESCRIPTION:Welcome\r\n'))
   ok(changed.includes('SUMMARY:Updated service\r\n'))
 })

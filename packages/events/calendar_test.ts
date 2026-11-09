@@ -64,3 +64,28 @@ test('empty feeds are valid calendars and row order does not change the feed', (
   let other = { ...row, entity: { eid: '1' } }
   equal(calendar([row, other]), calendar([other, row]))
 })
+
+test('calendar recurrence carries each event time zone and local start and end', () => {
+  let text = calendar(['America/Detroit', 'America/Chicago'].map((zone) => ({
+    ...row,
+    entity: { eid: zone },
+    event: {
+      starts: '2026-10-25T10:00:00',
+      ends: '2026-10-25T11:00:00',
+      repeats: 'FREQ=WEEKLY;COUNT=3',
+      zone,
+    },
+  })))
+  for (let zone of ['America/Detroit', 'America/Chicago']) {
+    ok(text.includes(`DTSTART;TZID=${zone}:20261025T100000\r\n`))
+    ok(text.includes(`DTEND;TZID=${zone}:20261025T110000\r\n`))
+  }
+  equal(text.match(/RRULE:FREQ=WEEKLY;COUNT=3/g)?.length, 2)
+  let allDay = calendar([{
+    ...row,
+    event: { starts: '2026-11-08', zone: 'America/Detroit' },
+  }])
+  ok(allDay.includes('DTSTART;VALUE=DATE:20261108\r\n'))
+  ok(allDay.includes('DTEND;VALUE=DATE:20261109\r\n'))
+  equal(allDay.includes('TZID'), false)
+})
