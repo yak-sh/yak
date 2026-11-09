@@ -754,7 +754,7 @@
       min-width: 0;
       max-width: none;
     }
-    .Menu_List {
+    .Menu-below .Menu_List {
       max-height: none;
     }
     .Desk_Close {
