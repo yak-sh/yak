@@ -793,41 +793,59 @@ test('a line heard while the page reads the conversation stays on it', async () 
 
 // Words of the person the page showed are never taken off it by a read that
 // leaves them out, and the tracker hears of it then.
-test('a read that leaves out words the page showed keeps them and reports it', async () => {
-  let page = await load(storage(), false, park)
-  await page.connect()
-  await settle()
-  let card = page.document.querySelector('[data-task]') as HTMLElement
-  let id = crypto.randomUUID()
-  page.hear({
-    operator: {
-      task: card.dataset.task,
-      lines: {
-        lines: [{ id, uses: [id] }],
-        entries: [{ entity: { eid: id }, content: { body: 'Keep my words' } }],
-        helpers: [],
-        offers: {},
-        tools: {},
-      },
-      now: '',
-    },
-  })
-  let reported: string[] = []
-  let was = globalThis.reportError
-  globalThis.reportError = (e: unknown) => void reported.push(String(e))
-  try {
-    page.hear({ ready: true, standing: 'moved' })
-    for (let i = 0; i < 100 && !page.talks(); i++) await settle()
+test(
+  'a read that leaves out words the page showed keeps their order and reports it',
+  async () => {
+    let page = await load(storage(), false, park)
+    await page.connect()
     await settle()
-  } finally {
-    globalThis.reportError = was
-    page.leave()
-  }
-  assertStringIncludes(card.ownerDocument.body.innerHTML, 'Keep my words')
-  assertEquals(reported, [
-    `Error: The Operator chat page left out words of the person it had shown: row-${id}`,
-  ])
-})
+    let card = page.document.querySelector('[data-task]') as HTMLElement
+    let ids = [crypto.randomUUID(), crypto.randomUUID()]
+    let words = ['Keep my first words', 'Keep my next words']
+    page.hear({
+      operator: {
+        task: card.dataset.task,
+        lines: {
+          lines: ids.map((id) => ({ id, uses: [id] })),
+          entries: ids.map((id, i) => ({
+            entity: { eid: id },
+            content: { body: words[i] },
+          })),
+          helpers: [],
+          offers: {},
+          tools: {},
+        },
+        now: '',
+      },
+    })
+    let rows = card.querySelector('[data-rows]')!
+    // The omitted words were older than the surviving conversation, as in a
+    // refresh whose displayed range starts too late.
+    rows.prepend(...ids.map((id) => page.document.getElementById('row-' + id)!))
+    let reported: string[] = []
+    let was = globalThis.reportError
+    globalThis.reportError = (e: unknown) => void reported.push(String(e))
+    try {
+      page.hear({ ready: true, standing: 'moved' })
+      await until(() => reported.length == 2)
+      assertEquals(
+        [...page.document.querySelectorAll('[data-rows] > *')]
+          .slice(0, 2).map((r) => r.textContent),
+        words,
+      )
+      assertEquals(
+        reported.sort(),
+        ids.map((id) =>
+          `Error: The Operator chat page left out words of the person it had shown: row-${id}`
+        ).sort(),
+      )
+    } finally {
+      globalThis.reportError = was
+      page.leave()
+    }
+  },
+  { tags: ['window'] },
+)
 
 // A helper's line, drawn under the step that started it, moves where the
 // conversation stands as the conversation's own lines do.
@@ -1096,3 +1114,62 @@ test('words said to the chat are its draft as they are heard, and once sent, wha
   assertEquals(t.spoken, ['Released notes', 'Done. The date is on it.'])
   page.leave()
 })
+
+// A refresh keeps the range this page opened with even after enough new
+// steps would move the latest-entry window past its oldest words.
+let growingStore = operatorStore(p.states.get(`builder ${eid}`)!.storage)
+let growing = crypto.randomUUID()
+let oldWords = ['Book the pavilion', 'And the north shelter']
+let growingEntry = (text: string, output = false) => ({
+  entity: { eid: crypto.randomUUID() },
+  entry: { session: growing },
+  content: { body: text },
+  ...output ? { output: {} } : {},
+})
+await growingStore.g.apply([
+  {
+    entity: { eid: growing },
+    session: {},
+    operator_session: { space: eid, person },
+  },
+  ...Array.from(
+    { length: 5 },
+    (_, i) => growingEntry(`Earlier step ${i}`, true),
+  ),
+  ...oldWords.map((text) => growingEntry(text)),
+  ...Array.from({ length: 298 }, (_, i) => growingEntry(`Step ${i}`, true)),
+], { trusted: true })
+
+test(
+  'a growing conversation keeps its oldest displayed words in order across refresh and reconnect',
+  async () => {
+    let page = await load(storage(), false, growing)
+    let reported: string[] = []
+    let was = globalThis.reportError
+    globalThis.reportError = (e: unknown) => void reported.push(String(e))
+    let words = () =>
+      [...page.document.querySelectorAll('.Talk_You')]
+        .map((r) => r.textContent)
+    try {
+      await growingStore.g.apply([
+        ...Array.from(
+          { length: 20 },
+          (_, i) => growingEntry(`Later step ${i}`, true),
+        ),
+        growingEntry('The newest request'),
+      ], { trusted: true })
+      page.hear({ ready: true, standing: 'changed' })
+      await until(() => words().includes('The newest request'))
+      assertEquals(words(), [...oldWords, 'The newest request'])
+      page.hear({ ready: true, standing: 'reconnected' })
+      await until(() => page.talks() == 2)
+      await settle()
+      assertEquals(words(), [...oldWords, 'The newest request'])
+      assertEquals(reported, [])
+    } finally {
+      globalThis.reportError = was
+      page.leave()
+    }
+  },
+  { tags: ['window'] },
+)

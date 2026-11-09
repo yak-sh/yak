@@ -585,11 +585,13 @@ export let talk = (
     entries.map((b) => comp(b, 'operator_files')?.request).filter(Boolean),
   )
   let rest = files.filter((f) => !sent.has(f.request))
+  let first = comp(entries.find((b) => b.entry), 'entry')?.seq
   return renderToString(h(
     'div',
     {
       class: 'Talk_Thread',
       'data-task': task.entity.eid,
+      'data-from': first == null ? undefined : Number(first) - 1,
       'data-pending': working ? '' : undefined,
       'data-doing': working ? doingOf(entries) : undefined,
     },

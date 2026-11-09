@@ -810,6 +810,7 @@ export let conversationOf = async (
   everyone?: Named,
   called?: string,
   opens = at,
+  from?: number,
 ): Promise<{
   task: string
   begun: string
@@ -828,7 +829,7 @@ export let conversationOf = async (
     let row = found.session
     let eid = row.entity.eid
     let helper = !!row.spawned
-    let entries = await linesOf(store, eid, SHOWN)
+    let entries = await linesOf(store, eid, SHOWN, from)
     let asked = helper ? [] : await requested(
       store,
       `.operator_request.session=${eid} ?doc .order=created.at .limit=100`,
@@ -1542,6 +1543,9 @@ export let operatorRequest = async (
       everyone,
       held.called,
       typeof args.opens == 'string' ? args.opens : undefined,
+      typeof args.from == 'number' && Number.isFinite(args.from)
+        ? args.from
+        : undefined,
     )
     // Its lines as data only for a reader that draws them (the iOS shell).
     return Response.json({

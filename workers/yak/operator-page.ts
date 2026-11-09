@@ -885,6 +885,7 @@ export let operatorAnswer = async (
     let open = q.get('talk')!
     let talked = await conversationOf(env, space, who, at, open, {
       lines: q.has('lines'),
+      ...q.has('from') ? { from: Number(q.get('from')) } : {},
     })
     if (!talked.title) {
       return Response.json({ message: 'That conversation is missing.' }, {
@@ -945,18 +946,19 @@ let socketTo = (
  * titled by whose it is, `opens` is where its helpers' conversations open,
  * by their id (the chat app's unless the admin's), `lines` answers its lines
  * as data, and `updates` the person's Updates beside it, in the same
- * request. */
+ * request. `from` keeps entries past the initial page's oldest sequence. */
 export let conversationOf = async (
   env: Env,
   space: Space,
   who: Who,
   at: string,
   open: string,
-  { everyone = false, opens, lines: drawing = false, updates = false }: {
+  { everyone = false, opens, lines: drawing = false, updates = false, from }: {
     everyone?: boolean
     opens?: string
     lines?: boolean
     updates?: boolean
+    from?: number
   } = {},
 ) => {
   let none = {
@@ -1001,6 +1003,7 @@ export let conversationOf = async (
       ...opens ? { opens } : {},
       ...drawing ? { lines: true } : {},
       ...updates ? { updates } : {},
+      ...from != null ? { from } : {},
     },
   ).catch((e) => {
     if (e.status != 404) throw e
@@ -2472,20 +2475,25 @@ let standing = ${JSON.stringify(standing)}
 // One read at a time; a step heard during one reads once more after it,
 // since what the read answered may predate the line the step put in place.
 let reading, again = false
+// Keep reading from where this page began, so a growing transcript never
+// slides its oldest displayed entries out of the next read.
+let from = thread()?.dataset.from
 // The person's own words the page shows, each by its row's id.
 let theirs = () => new Map([...box.querySelectorAll('[id^="row-"]')].filter((r) => r.querySelector('.Talk_You')).map((r) => [r.id, r]))
 let read = async () => {
   if (open == 'new') return
   if (reading) return void (again = true)
   let mine = theirs()
+  let before = [...box.querySelectorAll('[id^="row-"]')]
   reading = (async () => {
     do {
       again = false
-      let response = await ask('${at}?talk=' + encodeURIComponent(open))
+      let response = await ask('${at}?talk=' + encodeURIComponent(open) + (from == null ? '' : '&from=' + encodeURIComponent(from)))
       if (!response.ok) throw new Error('This page could not be brought up to date. Your conversation is saved; reload to try again.')
       let got = await response.json()
       standing = got.standing
       if (got.html) redraw(box, got.html), redrawn()
+      from ??= thread()?.dataset.from
       if (got.aside && aside()) happening = got.aside, aside().replaceWith(drawn(asideHtml(happening, unfolded()))), shown()
       if (got.title) heading.textContent = got.title
       if (follows && !canvas() && got.making && (follows == 'worked' || got.started)) remake(got.making)
@@ -2494,9 +2502,15 @@ let read = async () => {
     // left out goes back in its place, and the tracker hears of it at once.
     let rows = thread()?.querySelector('[data-rows]')
     let now = theirs()
-    for (let [id, row] of mine) {
+    for (let [id, row] of [...mine].reverse()) {
       if (now.has(id) || !rows) continue
-      rows.append(row)
+      let index = before.indexOf(row)
+      let next = before.slice(index + 1).map((r) => document.getElementById(r.id)).find((r) => rows.contains(r))
+      let prior = before.slice(0, index).reverse().map((r) => document.getElementById(r.id)).find((r) => rows.contains(r))
+      if (next) next.before(row)
+      else if (prior) prior.after(row)
+      else rows.prepend(row)
+      now.set(id, row)
       globalThis.reportError?.(new Error('The Operator chat page left out words of the person it had shown: ' + id))
     }
   })()
