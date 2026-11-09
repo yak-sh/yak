@@ -137,16 +137,28 @@ export let offersOf = async (
 
 type Fetch = typeof fetch
 
+// A body that is only another SVG's file name: a link, as GitHub serves a
+// symbolic link in a repository (Nango's airtable-pat.svg says airtable.svg).
+let LINK = /^[\w.-]+\.svg$/
+
 // The first of `sources` that answers an SVG document small enough to keep,
-// or what each answered instead.
+// a link followed once, or what each answered instead.
 let fetched = async (sources: string[], fetcher: Fetch) => {
   let answers: string[] = []
+  let ask = async (
+    at: string,
+    follow: boolean,
+  ): Promise<string | undefined> => {
+    let res = await fetcher(at, { signal: AbortSignal.timeout(5_000) })
+    let text = res.ok ? (await res.text()).trim() : ''
+    if (text.length <= LOGO_ROOM && isSvg(text)) return text
+    if (follow && LINK.test(text)) return ask(new URL(text, at).href, false)
+    answers.push(`${at}: ${res.status} ${res.headers.get('content-type')}`)
+  }
   for (let at of sources.filter((at) => /^https:\/\//.test(at))) {
     try {
-      let res = await fetcher(at, { signal: AbortSignal.timeout(5_000) })
-      let text = res.ok ? await res.text() : ''
-      if (text.length <= LOGO_ROOM && isSvg(text)) return { svg: text }
-      answers.push(`${at}: ${res.status} ${res.headers.get('content-type')}`)
+      let svg = await ask(at, true)
+      if (svg) return { svg }
     } catch (e) {
       answers.push(`${at}: ${e}`)
     }
