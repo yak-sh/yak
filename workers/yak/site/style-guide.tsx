@@ -664,7 +664,9 @@ export let StyleGuide = () => (
         <div class='Prose'>
           <div class='Prose_Head'>
             <h3 class='Title Title-page'>Cookies</h3>
-            <p class='Prose_When Prose_Text'>Last updated {day('2026-09-03', 'UTC')}</p>
+            <p class='Prose_When Prose_Text'>
+              Last updated {day('2026-09-03', 'UTC')}
+            </p>
           </div>
           <section class='Prose_Section'>
             <h2 class='Prose_Heading'>What Prose styles</h2>

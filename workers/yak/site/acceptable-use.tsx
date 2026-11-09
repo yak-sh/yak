@@ -13,7 +13,9 @@ export let AcceptableUse = () => (
       <p class='Prose_When Prose_Text'>
         Last updated <Time written timeZone='UTC' at='2026-11-01T00:00:00Z' />
       </p>
-      <p class='Prose_Text'>This policy lists what you may not do on yaks.app.</p>
+      <p class='Prose_Text'>
+        This policy lists what you may not do on yaks.app.
+      </p>
     </div>
     <section class='Prose_Section'>
       <h2 class='Prose_Heading'>Prohibited uses</h2>
