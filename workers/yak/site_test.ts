@@ -213,7 +213,7 @@ test('the connector icon is square, self-contained and on the ground', () => {
 // An extensionless link: the assets door serves `terms.html` for `/terms`
 // and redirects the other spelling, so the pages link the short one.
 let links = (html: string) =>
-  [...html.matchAll(/<a href="(\/[a-z-]+)">/g)].map((m) => m[1])
+  [...html.matchAll(/<a\b[^>]*href="(\/[a-z-]+)"[^>]*>/g)].map((m) => m[1])
 
 // The seven places the footer names, on every page of this site and on every
 // page the worker draws (shell.ts `foot`).
@@ -898,17 +898,15 @@ test('the terms say who the merchant is, and what follows from it', () => {
 test('the terms leave every price to the pricing page', () => {
   let html = flat(read('terms.html'))
   assert(!/\$\s?\d/.test(html), 'the terms quote a price of their own')
-  assertStringIncludes(html, '<a href="/pricing">')
+  assert(parseHTML(html).document.querySelector('a[href="/pricing"]'))
   // And the section that would carry one says no number and no "free" of its
   // own: what it costs is a question the pricing page answers.
-  let costs = flat(
-    read('terms.html').split('<h2>Fees and payment</h2>')[1].split(
-      '</section>',
-    )[0],
-  )
+  let fees = [...parseHTML(read('terms.html')).document.querySelectorAll('h2')]
+    .find((h) => h.textContent == 'Fees and payment')!
+  let costs = flat(fees.parentElement!.textContent ?? '')
   assert(!/\d/.test(costs), `a figure in: ${costs}`)
   assert(!/\bnothing\b/i.test(costs), 'the terms still say it costs nothing')
-  assertStringIncludes(costs, '/pricing')
+  assert(fees.parentElement!.querySelector('a[href="/pricing"]'))
 })
 
 // "This policy lists all of it", so everything the code sends off this box is
@@ -953,7 +951,7 @@ test('the help page answers its own questions in JSON-LD', () => {
   let html = read('help.html')
   let [faq] = ld(html)
   assertEquals(faq['@type'], 'FAQPage')
-  let headings = [...html.matchAll(/<h2>([^<]+)<\/h2>/g)].map((m) =>
+  let headings = [...html.matchAll(/<h2\b[^>]*>([^<]+)<\/h2>/g)].map((m) =>
     m[1].trim()
   )
   assert(headings.length > 0)

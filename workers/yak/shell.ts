@@ -54,11 +54,11 @@ export let top = `<header class="Top">
   idle('Yak Yak-small')
 }<span>yaks.app</span></a>
 <nav class="Nav" aria-label="Site">
-<a href="/#how">How it works</a>
-<a href="/gallery">Gallery</a>
-<a href="/pricing">Pricing</a>
-<a href="/docs">Documentation</a>
-<a class="Nav_SignIn" href="/login">Sign in</a>
+<a class="Nav_Link" href="/#how">How it works</a>
+<a class="Nav_Link" href="/gallery">Gallery</a>
+<a class="Nav_Link" href="/pricing">Pricing</a>
+<a class="Nav_Link" href="/docs">Documentation</a>
+<a class="Nav_Link Nav_SignIn" href="/login">Sign in</a>
 ${signedIn}
 </nav>
 </header>`
@@ -67,13 +67,13 @@ export let foot = `<footer class="Foot">
 ${idle('Yak Yak-small')}
 <p>yaks.app · Yak Shaving LLC</p>
 <ul class="Foot_Links">
-<li><a href="/help">Help</a></li>
-<li><a href="/docs">Documentation</a></li>
-<li><a href="/pricing">Pricing</a></li>
-<li><a href="/terms">Terms</a></li>
-<li><a href="/privacy">Privacy</a></li>
-<li><a href="/acceptable-use">Acceptable use</a></li>
-<li><a href="/cookies">Cookies</a></li>
+<li><a class="Foot_Link" href="/help">Help</a></li>
+<li><a class="Foot_Link" href="/docs">Documentation</a></li>
+<li><a class="Foot_Link" href="/pricing">Pricing</a></li>
+<li><a class="Foot_Link" href="/terms">Terms</a></li>
+<li><a class="Foot_Link" href="/privacy">Privacy</a></li>
+<li><a class="Foot_Link" href="/acceptable-use">Acceptable use</a></li>
+<li><a class="Foot_Link" href="/cookies">Cookies</a></li>
 </ul>
 </footer>`
 

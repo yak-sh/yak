@@ -10,7 +10,8 @@ export let WHO = '/login/who'
  * which opens on a chat with its Operator (route.ts `chatPath`). Said here
  * once; a drawn page's nav wears it (shell.ts `top`), and a file page is
  * given it beside its Sign in as it leaves (sheets.ts `sheeted`). */
-export let signedIn = '<a class="Nav_Open" href="/manage">Open yaks.app</a>'
+export let signedIn =
+  '<a class="Nav_Link Nav_Open" href="/manage">Open yaks.app</a>'
 
 /** The head's script: the remembered answer first, then the one asked for. */
 export let island = `<script>(() => {

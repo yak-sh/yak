@@ -86,11 +86,15 @@ let Top = ({ path }: { path: string }) => {
       </a>
       <nav class='Nav' aria-label='Site'>
         {NAV.map(([href, said]) => (
-          <a href={href} aria-current={href == path ? 'page' : undefined}>
+          <a
+            class='Nav_Link'
+            href={href}
+            aria-current={href == path ? 'page' : undefined}
+          >
             {home && href == '/#how' ? 'How yaks.app works' : said}
           </a>
         ))}
-        <a class='Nav_SignIn' href='/login'>Sign in</a>
+        <a class='Nav_SignIn Nav_Link' href='/login'>Sign in</a>
       </nav>
     </header>
   )
@@ -113,7 +117,7 @@ let Foot = () => (
     <ul class='Foot_Links'>
       {FOOT.map(([href, said]) => (
         <li>
-          <a href={href}>{said}</a>
+          <a class='Foot_Link' href={href}>{said}</a>
         </li>
       ))}
     </ul>

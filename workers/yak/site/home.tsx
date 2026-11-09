@@ -155,9 +155,9 @@ export let Examples = ({ children }: { children: ComponentChildren }) => (
         <Card as='li' class='Make_Card'>
           <Card.Head>
             <Card.Title as='h3'>
-              <a href={`https://yourname.yaks.app/${slug}/`}>
+              <Card.Link href={`https://yourname.yaks.app/${slug}/`}>
                 {title} <span aria-hidden='true'>↗</span>
-              </a>
+              </Card.Link>
             </Card.Title>
           </Card.Head>
           <Card.Sub>{sub}</Card.Sub>
@@ -207,7 +207,7 @@ export let Home = () => (
     <section class='Hello' aria-labelledby='hello'>
       <div class='Hello_Copy'>
         <div class='Hello_Yak' data-wander=''>
-          <Idle base='.' />
+          <Idle class='Wander_Image' base='.' />
         </div>
         <p class='Hello_Kicker'>An Operator that does things for you</p>
         <h1 class='Title Title-hero' id='hello'>
@@ -217,6 +217,7 @@ export let Home = () => (
         </h1>
         <form class='Hello_Ask' method='post' action={START}>
           <Field
+            class='Hello_Field'
             lines
             id='say'
             name='say'
@@ -246,22 +247,22 @@ export let Home = () => (
       <h2 class='Title' id='does'>What your Operator does for you</h2>
       <dl class='Yours_List'>
         <div>
-          <dt>It builds apps</dt>
-          <dd>
+          <dt class='Yours_Term'>It builds apps</dt>
+          <dd class='Yours_Detail'>
             Ask for an app, a new feature or a fix, and your Operator does the
             work. Your apps save what people add, on every phone and computer.
           </dd>
         </div>
         <div>
-          <dt>Chat, email, text or call</dt>
-          <dd>
+          <dt class='Yours_Term'>Chat, email, text or call</dt>
+          <dd class='Yours_Detail'>
             Chat with it on yaks.app or email it. Give it your mobile number,
             and you can text it or call it.
           </dd>
         </div>
         <div>
-          <dt>Share anything it does or builds</dt>
-          <dd>
+          <dt class='Yours_Term'>Share anything it does or builds</dt>
+          <dd class='Yours_Detail'>
             Keep an app to yourself, share it with a link, or invite as many
             people as you like to view or edit it, free.
           </dd>
@@ -271,21 +272,21 @@ export let Home = () => (
     <section class='How' aria-labelledby='how'>
       <h2 class='Title' id='how'>How yaks.app works</h2>
       <ol class='Steps'>
-        <li>
+        <li class='Steps_Item'>
           <h3 class='Step_Name'>Tell your Operator what you need</h3>
           <p class='Note'>
             Type it in the box above, like a chore chart for your household.
             There is nothing to install.
           </p>
         </li>
-        <li>
+        <li class='Steps_Item'>
           <h3 class='Step_Name'>Open it anywhere</h3>
           <p class='Note'>
             Your Operator builds it and puts it online. Open it on your phone or
             computer, or send its link to the people it's for.
           </p>
         </li>
-        <li>
+        <li class='Steps_Item'>
           <h3 class='Step_Name'>Sign up free to keep it</h3>
           <p class='Note'>
             Enter your email, and the app is yours, at your own address like
@@ -312,11 +313,13 @@ export let Home = () => (
           <h3 class='Plan_Price'>Free</h3>
           <p class='Note Note-small'>Your first space.</p>
           <ul class='Plan_List'>
-            <li>5 apps</li>
-            <li>Unlimited visitors</li>
-            <li>1 GB of app data, 1 GB of photos and files</li>
-            <li>100 emails a month</li>
-            <li>
+            <li class='Plan_Item'>5 apps</li>
+            <li class='Plan_Item'>Unlimited visitors</li>
+            <li class='Plan_Item'>
+              1 GB of app data, 1 GB of photos and files
+            </li>
+            <li class='Plan_Item'>100 emails a month</li>
+            <li class='Plan_Item'>
               An address like <Yours />
             </li>
           </ul>{' '}
@@ -331,11 +334,13 @@ export let Home = () => (
             The Plus plan, for each space. Take payments with Stripe.
           </p>
           <ul class='Plan_List'>
-            <li>Unlimited apps</li>
-            <li>Unlimited visitors</li>
-            <li>10 GB of app data, 50 GB of photos and files</li>
-            <li>2,500 emails a month</li>
-            <li>
+            <li class='Plan_Item'>Unlimited apps</li>
+            <li class='Plan_Item'>Unlimited visitors</li>
+            <li class='Plan_Item'>
+              10 GB of app data, 50 GB of photos and files
+            </li>
+            <li class='Plan_Item'>2,500 emails a month</li>
+            <li class='Plan_Item'>
               Your own domain, like <b>ourbookclub.com</b>
             </li>
           </ul>{' '}
@@ -357,11 +362,13 @@ export let Home = () => (
             or chat, and it makes the change.
           </p>
           <ul class='Plan_List'>
-            <li>Unlimited apps</li>
-            <li>Unlimited visitors</li>
-            <li>10 GB of app data, 50 GB of photos and files</li>
-            <li>2,500 emails a month</li>
-            <li>
+            <li class='Plan_Item'>Unlimited apps</li>
+            <li class='Plan_Item'>Unlimited visitors</li>
+            <li class='Plan_Item'>
+              10 GB of app data, 50 GB of photos and files
+            </li>
+            <li class='Plan_Item'>2,500 emails a month</li>
+            <li class='Plan_Item'>
               Your own domain, like <b>ourtownship.org</b>
             </li>
           </ul>{' '}

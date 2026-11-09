@@ -110,54 +110,57 @@ export let Help = () => (
   >
     <div class='Prose_Head'>
       <h1 class='Title Title-page'>Help</h1>
-      <p>
+      <p class='Prose_Text'>
         yaks.app gives you an Operator that does things for you and builds the
         apps it needs. You can also build apps by asking Claude or ChatGPT. This
         page covers setup, sharing, exports, and support. For anything else,
-        email <a href='mailto:hello@yaks.app'>hello@yaks.app</a>.
+        email{' '}
+        <a class='Prose_Link' href='mailto:hello@yaks.app'>hello@yaks.app</a>.
       </p>
       <Chips as='ul'>
-        <li>
-          <Chip href='#make'>What can I make?</Chip>
+        <li class='Prose_Item'>
+          <Chip class='Prose_Link' href='#make'>What can I make?</Chip>
         </li>
-        <li>
-          <Chip href='#start'>How do I start?</Chip>
+        <li class='Prose_Item'>
+          <Chip class='Prose_Link' href='#start'>How do I start?</Chip>
         </li>
-        <li>
-          <Chip href='#ask'>How do I request changes?</Chip>
+        <li class='Prose_Item'>
+          <Chip class='Prose_Link' href='#ask'>How do I request changes?</Chip>
         </li>
-        <li>
-          <Chip href='#where'>Where are my apps and data?</Chip>
+        <li class='Prose_Item'>
+          <Chip class='Prose_Link' href='#where'>
+            Where are my apps and data?
+          </Chip>
         </li>
-        <li>
-          <Chip href='#who'>Who can see them?</Chip>
+        <li class='Prose_Item'>
+          <Chip class='Prose_Link' href='#who'>Who can see them?</Chip>
         </li>
-        <li>
-          <Chip href='#invite'>Inviting people</Chip>
+        <li class='Prose_Item'>
+          <Chip class='Prose_Link' href='#invite'>Inviting people</Chip>
         </li>
-        <li>
-          <Chip href='#broken'>Something's broken</Chip>
+        <li class='Prose_Item'>
+          <Chip class='Prose_Link' href='#broken'>Something's broken</Chip>
         </li>
-        <li>
-          <Chip href='#out'>Exporting and deleting</Chip>
+        <li class='Prose_Item'>
+          <Chip class='Prose_Link' href='#out'>Exporting and deleting</Chip>
         </li>
-        <li>
-          <Chip href='#people'>Contact support</Chip>
+        <li class='Prose_Item'>
+          <Chip class='Prose_Link' href='#people'>Contact support</Chip>
         </li>
       </Chips>
     </div>
-    <section id='make'>
-      <h2>What can I make?</h2>
-      <p>
+    <section class='Prose_Section' id='make'>
+      <h2 class='Prose_Heading'>What can I make?</h2>
+      <p class='Prose_Text'>
         yaks.app supports personal and shared web apps: a recipe box, garden
         diary, book club schedule, potluck signup sheet, running log, or
         birthday guestbook.
       </p>
-      <p>
+      <p class='Prose_Text'>
         Start with one or two sentences. Ask for a basic version first, then
         request changes as you use it.
       </p>
-      <p>
+      <p class='Prose_Text'>
         You can also ask{' '}
         <q class='Said'>has somebody already made one of these?</q>{' '}
         If someone has published a suitable app, your assistant can install a
@@ -165,25 +168,25 @@ export let Help = () => (
         it does not give the publisher access to your space.
       </p>
     </section>
-    <section id='start'>
-      <h2>How do I start?</h2>
-      <p>
-        <a href='/login'>Sign in</a>{' '}
+    <section class='Prose_Section' id='start'>
+      <h2 class='Prose_Heading'>How do I start?</h2>
+      <p class='Prose_Text'>
+        <a class='Prose_Link' href='/login'>Sign in</a>{' '}
         with your email. We send a six-digit code; yaks.app does not use
         passwords. You land on your own space, and the steps for Claude or
         ChatGPT are there. After connecting, ask your assistant to build an app.
       </p>
     </section>
-    <section id='ask'>
-      <h2>How do I request an app or a change?</h2>
-      <p>
+    <section class='Prose_Section' id='ask'>
+      <h2 class='Prose_Heading'>How do I request an app or a change?</h2>
+      <p class='Prose_Text'>
         Describe what you want in your own words:{' '}
         <q class='Said'>
           Could you make me a recipe box? Something I can share with my sister.
         </q>{' '}
         Your assistant builds the app and gives you its link.
       </p>
-      <p>
+      <p class='Prose_Text'>
         Request changes the same way.{' '}
         <q class='Said'>Put the newest ones first.</q>{' '}
         <q class='Said'>Let Ana leave a note on each one.</q>{' '}
@@ -191,68 +194,68 @@ export let Help = () => (
         You do not need to specify every detail before the first version is
         built.
       </p>
-      <p>
+      <p class='Prose_Text'>
         To undo a change, ask to restore an earlier version. The last twenty
         versions are kept. Restoring one changes the app's files, not its saved
         data.
       </p>
     </section>
-    <section id='where'>
-      <h2>Where are my apps and data?</h2>
-      <p>
+    <section class='Prose_Section' id='where'>
+      <h2 class='Prose_Heading'>Where are my apps and data?</h2>
+      <p class='Prose_Text'>
         Your apps are hosted under a name you choose. For example, a recipe box
         can use{' '}
-        <code>
+        <code class='Prose_Code'>
           <Yours path='/recipes' />
         </code>. Ask your assistant to choose which app opens at{' '}
-        <code>
+        <code class='Prose_Code'>
           <Yours />
         </code>. Visitors open the URL in a browser and do not need to install
         anything.
       </p>
-      <p>
+      <p class='Prose_Text'>
         Your space starts with a name from your email address. Change it at any
         time in your space settings, or ask your assistant to move your space.
         Every app moves with it, and old links keep working until someone else
         takes the old name.
       </p>
-      <p>
+      <p class='Prose_Text'>
         Each app stores its own recipes, notes, photos, and other data. Changes
         are available on any device. Ask your assistant{' '}
         <q class='Said'>what apps have I made?</q>{' '}
         to list your apps and their links.
       </p>
     </section>
-    <section id='who'>
-      <h2>Who can see them?</h2>
-      <p>
+    <section class='Prose_Section' id='who'>
+      <h2 class='Prose_Heading'>Who can see them?</h2>
+      <p class='Prose_Text'>
         Set access separately for each app. You can change it later. There are
         three options:
       </p>
-      <ul>
-        <li>
+      <ul class='Prose_List'>
+        <li class='Prose_Item'>
           <b>Anyone with the link can read it.</b>{' '}
           This is the default. Only you and invited members can make changes.
         </li>
-        <li>
+        <li class='Prose_Item'>
           <b>Anyone with the link can write in it too.</b>{' '}
           For a vote, a signup sheet, or guestbook. Visitors can contribute
           without signing in.
         </li>
-        <li>
+        <li class='Prose_Item'>
           <b>Only you and the people you invite.</b>{' '}
           Other visitors cannot open the app.
         </li>
       </ul>
-      <p>
+      <p class='Prose_Text'>
         Tell your assistant which option to use:{' '}
         <q class='Said'>let anyone sign up on the potluck list</q>,{' '}
         <q class='Said'>keep the diary private</q>.
       </p>
     </section>
-    <section id='invite'>
-      <h2>How do invitations work?</h2>
-      <p>
+    <section class='Prose_Section' id='invite'>
+      <h2 class='Prose_Heading'>How do invitations work?</h2>
+      <p class='Prose_Text'>
         Tell your assistant who, and why:{' '}
         <q class='Said'>
           invite ana@example.com to the recipe box, and say it's for Saturday.
@@ -261,77 +264,82 @@ export let Help = () => (
         shared with them until they click it, signed in with the same email
         address. No prior account or installation is required.
       </p>
-      <p>
+      <p class='Prose_Text'>
         Choose whether the person can edit, only view, or invite other people.
         Membership applies to every app under{' '}
-        <code>
+        <code class='Prose_Code'>
           <Yours />
         </code>, not to a single app. Invite only people who should have access
         to the whole space.
       </p>
-      <p>
+      <p class='Prose_Text'>
         To remove access, ask <q class='Said'>remove Ana from my space.</q>{' '}
         They can still sign in to yaks.app, but they lose access to your space.
         Their previous contributions are not deleted.
       </p>
     </section>
-    <section id='broken'>
-      <h2>What should I do when an app breaks?</h2>
-      <p>
+    <section class='Prose_Section' id='broken'>
+      <h2 class='Prose_Heading'>What should I do when an app breaks?</h2>
+      <p class='Prose_Text'>
         Tell your assistant what you saw:{' '}
         <q class='Said'>the photo on the pancakes won't load.</q>{' '}
         You do not need to diagnose the problem first.
       </p>
-      <p>
+      <p class='Prose_Text'>
         Apps record errors automatically. Your assistant receives those errors
         the next time you use it. You can also ask{' '}
         <q class='Said'>are there any errors in the recipe box?</q>{' '}
         and ask it to make a fix.
       </p>
-      <p>
+      <p class='Prose_Text'>
         If a recent change caused the problem, ask to restore an earlier
         version. Restoring app files does not change saved data.
       </p>
     </section>
-    <section id='out'>
-      <h2>How do I export or delete an app?</h2>
-      <p>
+    <section class='Prose_Section' id='out'>
+      <h2 class='Prose_Heading'>How do I export or delete an app?</h2>
+      <p class='Prose_Text'>
         Ask your assistant to export the app:{' '}
         <q class='Said'>give me everything in the recipe box as a file.</q>{' '}
         It can return the app's data as a list or spreadsheet and provide the
         app files.
       </p>
-      <p>
+      <p class='Prose_Text'>
         To delete it, ask <q class='Said'>delete the recipe box.</q>{' '}
         Deleted apps stay in the trash for 30 days. You can restore them during
         that time; after 30 days, they are permanently erased.
       </p>
-      <p>
+      <p class='Prose_Text'>
         To ask for a copy of everything we hold about you, or for your account
         to be closed, write to{' '}
-        <a href='mailto:hello@yaks.app'>hello@yaks.app</a>. The{' '}
-        <a href='/privacy'>privacy page</a> says what we keep and for how long.
+        <a class='Prose_Link' href='mailto:hello@yaks.app'>hello@yaks.app</a>.
+        The <a class='Prose_Link' href='/privacy'>privacy page</a>{' '}
+        says what we keep and for how long.
       </p>
     </section>
-    <section id='people'>
-      <h2>How do I contact support?</h2>
-      <p>
-        Email <a href='mailto:hello@yaks.app'>hello@yaks.app</a>{' '}
+    <section class='Prose_Section' id='people'>
+      <h2 class='Prose_Heading'>How do I contact support?</h2>
+      <p class='Prose_Text'>
+        Email{' '}
+        <a class='Prose_Link' href='mailto:hello@yaks.app'>hello@yaks.app</a>
+        {' '}
         for help from a person.
       </p>
-      <p>You can also ask your assistant to report a problem for you.</p>
-      <p>
+      <p class='Prose_Text'>
+        You can also ask your assistant to report a problem for you.
+      </p>
+      <p class='Prose_Text'>
         Found a security problem? Email{' '}
-        <a href='mailto:hello@yaks.app'>hello@yaks.app</a>.
+        <a class='Prose_Link' href='mailto:hello@yaks.app'>hello@yaks.app</a>.
       </p>
     </section>
-    <section id='under'>
-      <h2>Where are the technical details?</h2>
-      <p>
-        The <a href='/docs'>documentation</a>{' '}
+    <section class='Prose_Section' id='under'>
+      <h2 class='Prose_Heading'>Where are the technical details?</h2>
+      <p class='Prose_Text'>
+        The <a class='Prose_Link' href='/docs'>documentation</a>{' '}
         covers app data, files, sharing, invitations, errors, and the tools
         available to an assistant. Its{' '}
-        <a href='/docs/technical'>technical details</a>{' '}
+        <a class='Prose_Link' href='/docs/technical'>technical details</a>{' '}
         page covers hosting, data storage, limits, and current limitations.
       </p>
     </section>

@@ -265,7 +265,7 @@
     gap: 0.375rem;
   }
 
-  .Window_List li {
+  .Window_Item {
     padding: 0.5rem 0.875rem;
     background: var(--bg);
   }
@@ -291,8 +291,8 @@
   }
 
   /* A page of plain prose — help, and the legal pages: the same column and
-     voice, nothing boxed. Prose dresses the elements you did NOT name; a
-     list that carries a component class keeps its component. They are read
+     voice, nothing boxed. Each paragraph, heading and list names its prose
+     part; a list drawn as another component keeps that component. They are read
      on a phone more often than not, so nothing is wider than the column and
      a long link breaks rather than scrolls. */
   .Prose {
@@ -305,7 +305,7 @@
      as wide as its longest unbreakable word unless it is told it may be
      narrower, and one URL in one paragraph was enough to push a phone's whole
      page sideways — the opposite of what break-word above is for. What must
-     not shrink says so itself: a code block scrolls (.Docs pre). */
+     not shrink says so itself: a code block scrolls (.Docs_Pre). */
   .Prose :where(*) {
     min-width: 0;
   }
@@ -320,40 +320,40 @@
     font-size: var(--small);
   }
 
-  .Prose section {
+  .Prose_Section {
     display: grid;
     gap: 0.75rem;
   }
 
-  .Prose h2 {
+  .Prose_Heading {
     font-size: 1.25rem;
     font-weight: 800;
     text-wrap: balance;
   }
 
-  .Prose p,
-  .Prose li {
+  .Prose_Text,
+  .Prose_Item {
     color: var(--muted);
     text-wrap: pretty;
   }
 
-  .Prose ul:not([class]) {
+  .Prose_List {
     display: grid;
     gap: var(--half-gap);
     padding-inline-start: 1.25rem;
     list-style: disc;
   }
 
-  .Prose a {
+  .Prose_Link {
     color: var(--accent);
   }
 
-  .Prose address {
+  .Prose_Address {
     font-style: normal;
     color: var(--muted);
   }
 
-  .Prose code {
+  .Prose_Code {
     padding: 0.1rem 0.4rem;
     background: var(--card);
     font-family: var(--mono);
@@ -421,13 +421,13 @@
     font-weight: 700;
   }
 
-  .Nav a {
+  .Nav_Link {
     color: var(--muted);
     text-decoration: none;
   }
 
-  .Nav a:hover,
-  .Nav a[aria-current='page'] {
+  .Nav_Link:hover,
+  .Nav_Link[aria-current='page'] {
     color: var(--text);
   }
 
@@ -613,8 +613,7 @@
     margin-left: -1.15rem;
   }
 
-  .Hello_Yak img,
-  .Wander img {
+  .Wander_Image {
     display: block;
     width: 100%;
     height: 100%;
@@ -653,7 +652,7 @@
     overflow: hidden;
   }
 
-  .Wander_Strip img {
+  .Wander_StripImage {
     width: 600%;
     max-width: none;
   }
@@ -669,7 +668,7 @@
     max-width: 36rem;
   }
 
-  .Hello_Ask textarea.Field {
+  .Hello_Field {
     width: 100%;
     min-height: 6.5rem;
     font-size: var(--size);
@@ -699,7 +698,7 @@
       margin-left: -0.85rem;
     }
 
-    .Hello_Ask textarea.Field {
+    .Hello_Field {
       min-height: 4.5rem;
     }
   }
@@ -738,7 +737,7 @@
     display: none;
   }
 
-  .Demo_Slides > li {
+  .Demo_Slides > .Make_Card {
     scroll-snap-align: start;
   }
 
@@ -837,7 +836,7 @@
     counter-reset: step;
   }
 
-  .Steps li {
+  .Steps_Item {
     position: relative;
     display: grid;
     grid-template-columns: 2rem 1fr;
@@ -847,7 +846,7 @@
   }
 
   /* Each step's number, circled by hand. */
-  .Steps li::before {
+  .Steps_Item::before {
     content: counter(step);
     grid-row: span 2;
     display: grid;
@@ -859,7 +858,7 @@
     font-weight: 800;
   }
 
-  .Steps li::after {
+  .Steps_Item::after {
     content: '';
     position: absolute;
     inset: -0.35rem auto auto -0.4rem;
@@ -925,7 +924,7 @@
     border-radius: 0 0 var(--radius) var(--radius);
   }
 
-  .Make_Shot img {
+  .Make_Image {
     display: block;
     width: 100%;
     height: 100%;
@@ -957,7 +956,7 @@
     gap: var(--gap);
   }
 
-  .Listing_Doors form {
+  .Listing_Form {
     display: contents;
   }
 
@@ -1016,12 +1015,12 @@
     margin: 0;
   }
 
-  .Yours_List dt {
+  .Yours_Term {
     color: var(--accent);
     font-weight: 700;
   }
 
-  .Yours_List dd {
+  .Yours_Detail {
     margin: var(--quarter-gap) 0 0;
     color: var(--muted);
     text-wrap: pretty;
@@ -1109,7 +1108,7 @@
     text-wrap: pretty;
   }
 
-  .Plan_List li::marker {
+  .Plan_Item::marker {
     color: var(--accent);
   }
 
@@ -1125,28 +1124,28 @@
     overflow-x: auto;
   }
 
-  .Limits table {
+  .Limits_Grid {
     width: 100%;
     min-width: 32rem;
     border-collapse: collapse;
   }
 
-  .Limits :is(th, td) {
+  .Limits_Cell {
     padding: var(--half-gap);
     border-bottom: 1px solid var(--border);
     text-align: left;
     vertical-align: top;
   }
 
-  .Limits thead th {
+  .Limits_Plan {
     color: var(--accent);
   }
 
-  .Limits tbody th {
+  .Limits_Name {
     width: 50%;
   }
 
-  .Limits small {
+  .Limits_Note {
     display: block;
     margin-top: var(--quarter-gap);
     color: var(--muted);
@@ -1155,7 +1154,7 @@
     text-wrap: pretty;
   }
 
-  .Limits td {
+  .Limits_Value {
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
@@ -1177,15 +1176,14 @@
     gap: var(--half-gap) 1.25rem;
   }
 
-  .Foot_Links a {
+  .Foot_Link {
     color: var(--muted);
   }
 
-  /* The documentation (docs.ts): the guide's markdown drawn as a page. The
-     renderer names no classes — it emits the plain elements the markdown
-     asked for — so everything here dresses those, and .Prose above already
-     dresses the rest. Each rendered block is its own grid so paragraphs sit
-     closer together than sections do.
+  /* The documentation (docs.ts): the guide's markdown drawn as a page. Its
+     renderer names the prose and documentation parts on each element. Each
+     rendered block is its own grid so paragraphs sit closer together than
+     sections do.
 
      It is the first page kind to use both .Page slots: the list of pages in
      the sidebar, what is on this page in the gutter, and the document itself
@@ -1217,7 +1215,7 @@
     font-weight: 800;
   }
 
-  .Docs_Contents ul {
+  .Docs_ContentsList {
     display: grid;
     gap: 0.35rem;
     margin: 0;
@@ -1225,12 +1223,12 @@
     list-style: none;
   }
 
-  .Docs_Jump a {
+  .Docs_JumpLink {
     color: var(--muted);
     text-decoration: none;
   }
 
-  .Docs_Jump a:hover {
+  .Docs_JumpLink:hover {
     color: var(--text);
     text-decoration: underline;
   }
@@ -1245,7 +1243,7 @@
       position: static;
     }
 
-    .Docs_Contents ul {
+    .Docs_ContentsList {
       grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
     }
   }
@@ -1255,13 +1253,13 @@
     gap: 0.75rem;
   }
 
-  .Docs h3 {
+  .Docs_Subheading {
     margin-top: 0.75rem;
     font-size: 1.05rem;
     font-weight: 800;
   }
 
-  .Docs ol:not([class]) {
+  .Docs_List {
     display: grid;
     gap: var(--half-gap);
     padding-inline-start: 1.4rem;
@@ -1270,20 +1268,20 @@
 
   /* Code blocks are the one thing wider than the column, and they scroll
      rather than push the page sideways. */
-  .Docs pre {
+  .Docs_Pre {
     margin: 0;
     padding: var(--half-gap) 0.75rem;
     background: var(--card);
     overflow-x: auto;
   }
 
-  .Docs pre code {
+  .Docs_Pre .Body_Code {
     padding: 0;
     background: none;
     font-size: var(--small);
   }
 
-  .Docs blockquote {
+  .Docs_Quote {
     margin: 0;
     padding-inline-start: 0.75rem;
     border-inline-start: 2px solid var(--border);
@@ -1297,7 +1295,7 @@
     background: var(--card);
   }
 
-  .Docs_Pages ul {
+  .Docs_PagesList {
     display: grid;
     gap: var(--half-gap);
     margin: 0;
@@ -1305,7 +1303,7 @@
     list-style: disc;
   }
 
-  .Docs_Pages li {
+  .Docs_PagesItem {
     color: var(--muted);
   }
 

@@ -409,12 +409,12 @@ export let card = (a: Shown) =>
     h(
       Card.Head,
       null,
-      h(Card.Title, { as: 'h3' }, h('a', { href: a.at }, a.title)),
+      h(Card.Title, { as: 'h3' }, h(Card.Link, { href: a.at }, a.title)),
       h(
         Card.Actions,
         null,
         h(
-          'form',
+          Card.Form,
           {
             method: 'post',
             action: `/install?name=${encodeURIComponent(a.name)}`,
@@ -434,6 +434,7 @@ export let card = (a: Shown) =>
       { class: 'Make_Shot', href: a.at, tabindex: -1, 'aria-hidden': 'true' },
       a.shot
         ? h('img', {
+          class: 'Make_Image',
           src: a.shot,
           alt: '',
           loading: 'lazy',
@@ -441,7 +442,7 @@ export let card = (a: Shown) =>
           height: 630,
         })
         : h('img', {
-          class: 'Make_Shot-none',
+          class: 'Make_Image Make_Shot-none',
           src: '/yak.webp',
           alt: '',
           loading: 'lazy',

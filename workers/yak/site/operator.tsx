@@ -86,7 +86,7 @@ export let Operator = ({ by }: { by: By }) => {
       <section class='Hello' aria-labelledby='hello'>
         <div class='Hello_Copy'>
           <div class='Hello_Yak' data-wander=''>
-            <Idle base='.' />
+            <Idle class='Wander_Image' base='.' />
           </div>
           <p class='Hello_Kicker'>An Operator that does things for you</p>
           <h1 class='Title Title-hero' id='hello'>
@@ -117,21 +117,21 @@ export let Operator = ({ by }: { by: By }) => {
       <section class='How' aria-labelledby='how'>
         <h2 class='Title' id='how'>From your first step to your first app</h2>
         <ol class='Steps'>
-          <li>
+          <li class='Steps_Item'>
             <h3 class='Step_Name'>{ask.first[0]}</h3>
             <p class='Note'>
               {ask.first[1]}{' '}
               There is no password to make and nothing to install.
             </p>
           </li>
-          <li>
+          <li class='Steps_Item'>
             <h3 class='Step_Name'>You meet your Operator</h3>
             <p class='Note'>
               You land in your own space, an address like <Yours />{' '}
               where your apps live, in a chat with your Operator.
             </p>
           </li>
-          <li>
+          <li class='Steps_Item'>
             <h3 class='Step_Name'>Ask for the app you want</h3>
             <p class='Note'>
               Like a chore chart for your household. Your Operator builds it and
@@ -145,23 +145,23 @@ export let Operator = ({ by }: { by: By }) => {
         <h2 class='Title' id='does'>What your Operator does for you</h2>
         <dl class='Yours_List'>
           <div>
-            <dt>It changes and fixes your apps</dt>
-            <dd>
+            <dt class='Yours_Term'>It changes and fixes your apps</dt>
+            <dd class='Yours_Detail'>
               Ask for a new feature or a fix any time, and your Operator makes
               the change.
             </dd>
           </div>
           <div>
-            <dt>You can text it or call it</dt>
-            <dd>
+            <dt class='Yours_Term'>You can text it or call it</dt>
+            <dd class='Yours_Detail'>
               Agree to texts in its settings, then text or call your Operator
               from your phone. It texts you when it finishes a change or needs
               an answer from you.
             </dd>
           </div>
           <div>
-            <dt>Share anything it does or builds</dt>
-            <dd>
+            <dt class='Yours_Term'>Share anything it does or builds</dt>
+            <dd class='Yours_Detail'>
               Keep an app to yourself, share it with a link, or invite people to
               view or edit it, free.
             </dd>

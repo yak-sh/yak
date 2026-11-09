@@ -51,7 +51,8 @@ export let sheeted = (html: string, env: Host, names = NAMES) =>
   html.replace(
     /<link rel="stylesheet" href="style\.css"\s*\/?>/,
     () => `${links(env, 'style.css', names)}\n${island}`,
-  ).replace(/<a class="Nav_SignIn"[^>]*>Sign in<\/a>/, (a) => a + signedIn)
+  ).replace(/<a class="[^"]*\bNav_SignIn\b[^"]*"[^>]*>Sign in<\/a>/, (a) =>
+    a + signedIn)
     .replace(NAMING, (whole, attr, quote, name) =>
       names[name]
         ? `${attr}=${quote}${asset(env, name, names)}${quote}`

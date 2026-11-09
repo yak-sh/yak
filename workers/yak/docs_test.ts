@@ -48,23 +48,30 @@ test('/docs draws the guide with a link to every page', async () => {
     html,
     '<link rel="canonical" href="https://yaks.app/docs">',
   )
+  let document = parseHTML(html).document
   // The guide's own heading, drawn rather than written here, and only one.
   // It wears the anchor the renderer names it by, like every heading here.
-  assertStringIncludes(
-    html,
-    '<h1 id="building-a-yaks-app">Building a yaks app</h1>',
+  assertEquals(
+    document.querySelector('h1#building-a-yaks-app')?.textContent,
+    'Building a yaks app',
   )
   assertEquals((html.match(/<h1[\s>]/g) ?? []).length, 1)
   for (let p of CONTENTS) {
-    assertStringIncludes(
-      html,
-      `<a href="${pathOf(p.slug)}">${esc(p.title)}</a>`,
+    assertEquals(
+      document.querySelector(`a[href="${pathOf(p.slug)}"]`)?.textContent,
+      p.title,
     )
   }
   // The technical page is one of them, and the one rule is said at the foot
   // for the reader who wants the file rather than the page.
-  assertStringIncludes(html, '<a href="/docs/technical">Technical Details</a>')
-  assertStringIncludes(html, '<a href="/docs.md">/docs.md</a>')
+  assertEquals(
+    document.querySelector('a[href="/docs/technical"]')?.textContent,
+    'Technical Details',
+  )
+  assertEquals(
+    document.querySelector('a[href="/docs.md"]')?.textContent,
+    '/docs.md',
+  )
   // A guide page is linked at the page beside this one, never at its .md.
   assertStringIncludes(html, 'href="/docs/querying"')
   assertEquals(html.includes('https://yaks.app/docs/querying.md'), false)
@@ -92,7 +99,10 @@ test('every guide page draws under its own heading', async () => {
       html.split('<article')[1].slice(0, 160),
       `>${esc(name)}</h1>`,
     )
-    assertStringIncludes(html, '<a href="/docs">← Documentation</a>')
+    assertEquals(
+      parseHTML(html).document.querySelector('.Docs_Back a')?.textContent,
+      '← Documentation',
+    )
     assertStringIncludes(html, '<nav class="Nav"')
   }
 })
@@ -132,6 +142,7 @@ let sourceOf = (path: string) => front(fileAt(path), path).body
 test('a page lists its own sections, and every one of them is there', async () => {
   for (let p of CONTENTS) {
     let html = await read(pathOf(p.slug))
+    let document = parseHTML(html).document
     let toc = html.split('<nav class="Page_Aside')[1].split('</nav>')[0]
     let inside = headings(parse(sourceOf(`/docs/${p.slug}.md`)))
       .filter((v) => v.depth == 2 || v.depth == 3)
@@ -143,7 +154,9 @@ test('a page lists its own sections, and every one of them is there', async () =
     )
     // And the headings themselves wear those ids.
     for (let v of inside) {
-      assertStringIncludes(html, `<h${v.depth} id="${v.id}">`)
+      assert(
+        parseHTML(html).document.querySelector(`h${v.depth}[id="${v.id}"]`),
+      )
     }
   }
 })

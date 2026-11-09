@@ -106,6 +106,7 @@
       let span = document.createElement('span')
       span.className = 'Wander_Strip'
       let img = document.createElement('img')
+      img.className = 'Wander_Image Wander_StripImage'
       let file = (d) => new URL(`mascot/wander-${name}-128${d}.webp`, base).href
       img.srcset = `${file('-1x')} 1x, ${file('')} 2x, ${file('-3x')} 3x`
       img.src = file('')
@@ -117,6 +118,7 @@
     await Promise.all(
       Object.entries(strips).map(([name, s]) => ready(s.firstChild, name)),
     )
+    still.classList.add('Wander_Image')
     yak.append(still, ...Object.values(strips))
     slot.append(yak)
 

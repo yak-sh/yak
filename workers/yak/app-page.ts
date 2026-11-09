@@ -64,7 +64,13 @@ export let page = (a: Shown, env: Host = {}) => {
               tabindex: -1,
               'aria-hidden': 'true',
             },
-            h('img', { src: shot, alt: '', width: 1200, height: 630 }),
+            h('img', {
+              class: 'Make_Image',
+              src: shot,
+              alt: '',
+              width: 1200,
+              height: 630,
+            }),
           )
           : null,
         h(
@@ -73,7 +79,11 @@ export let page = (a: Shown, env: Host = {}) => {
           opened ? h(Button, { mod: 'go', href: a.at }, 'Open the app') : null,
           h(
             'form',
-            { method: 'post', action: installAt(a.name) },
+            {
+              class: 'Listing_Form',
+              method: 'post',
+              action: installAt(a.name),
+            },
             h(Button, { type: 'submit' }, 'Make your own copy'),
           ),
         ),

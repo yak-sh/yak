@@ -28,6 +28,7 @@ import type { Token } from '@yaks/markdown'
 import { front } from '@yaks/yaml'
 import { Body, SideNav } from '@yaks/ui/parts'
 import { type ComponentChildren, h } from 'preact'
+import type { H } from '@yaks/render'
 import type { Env } from './env.ts'
 import { type Page, PAGES } from './guide.ts'
 import { type Host, hosted, url } from './host.ts'
@@ -128,8 +129,29 @@ let titled = (tokens: Token[]) => {
 let marked = () => import('@yaks/markdown')
 type Md = Awaited<ReturnType<typeof marked>>
 
+let PARTS: Record<string, string> = {
+  section: 'Prose_Section',
+  h2: 'Prose_Heading',
+  h3: 'Docs_Subheading',
+  p: 'Prose_Text',
+  li: 'Prose_Item',
+  ul: 'Prose_List',
+  ol: 'Docs_List',
+  a: 'Prose_Link',
+  address: 'Prose_Address',
+  code: 'Prose_Code',
+  pre: 'Docs_Pre',
+  blockquote: 'Docs_Quote',
+}
+
+let prose: H<ComponentChildren> = (tag, props, ...children) =>
+  h(tag, {
+    ...props,
+    class: [PARTS[tag], props?.class].filter(Boolean).join(' '),
+  }, ...children)
+
 let said = (md: Md, tokens: Token[]) =>
-  tokens.length ? h(Body, {}, ...md.blocks(tokens, h)) : null
+  tokens.length ? h(Body, {}, ...md.blocks(tokens, prose)) : null
 
 // The contents: every subject with the phrase it is offered by, and the one
 // rule at the foot of it, since a reader who wants the file rather than the
@@ -138,15 +160,15 @@ let contents = () =>
   h(
     'nav',
     { class: 'Docs_Pages', 'aria-label': 'Contents' },
-    h('h2', null, 'The pages'),
+    h('h2', { class: 'Prose_Heading' }, 'The pages'),
     h(
       'ul',
-      null,
+      { class: 'Docs_PagesList' },
       CONTENTS.map((p) =>
         h(
           'li',
-          { key: p.slug },
-          h('a', { href: pathOf(p.slug) }, p.title),
+          { key: p.slug, class: 'Prose_Item Docs_PagesItem' },
+          h('a', { class: 'Prose_Link', href: pathOf(p.slug) }, p.title),
           ' — ',
           p.brief,
         )
@@ -154,19 +176,19 @@ let contents = () =>
     ),
     h(
       'p',
-      { class: 'Note Note-small' },
+      { class: 'Prose_Text Note Note-small' },
       'Add ',
-      h('code', null, '.md'),
+      h('code', { class: 'Prose_Code' }, '.md'),
       " to any page's address for the markdown an assistant reads: ",
-      h('a', { href: `${PATH}.md` }, `${PATH}.md`),
+      h('a', { class: 'Prose_Link', href: `${PATH}.md` }, `${PATH}.md`),
       '.',
     ),
   )
 
 let back = h(
   'p',
-  { class: 'Docs_Back' },
-  h('a', { href: PATH }, '← Documentation'),
+  { class: 'Prose_Text Docs_Back' },
+  h('a', { class: 'Prose_Link', href: PATH }, '← Documentation'),
 )
 
 // The sidebar every page of the documentation wears: the whole list, in the
@@ -204,7 +226,7 @@ let onPage = (md: Md, tokens: Token[]) => {
     h('p', { class: 'Docs_Label' }, 'On this page'),
     h(
       'ul',
-      null,
+      { class: 'Docs_ContentsList' },
       rows.map((v) =>
         h(
           'li',
@@ -212,7 +234,7 @@ let onPage = (md: Md, tokens: Token[]) => {
             key: v.id,
             class: v.depth == 3 ? 'Docs_Jump Docs_Jump-sub' : 'Docs_Jump',
           },
-          h('a', { href: `#${v.id}` }, v.text),
+          h('a', { class: 'Docs_JumpLink', href: `#${v.id}` }, v.text),
         )
       ),
     ),

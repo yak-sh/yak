@@ -552,7 +552,7 @@ export let StyleGuide = () => (
         <div class='Voices'>
           <div class='Voices_Row'>
             <Check>
-              <input type='radio' name='demo-voice' checked />
+              <Check.Input type='radio' name='demo-voice' checked />
               <span>
                 <b>Draco</b>{' '}
                 <span class='Note Note-small'>Calm and measured</span>
@@ -562,7 +562,7 @@ export let StyleGuide = () => (
           </div>
           <div class='Voices_Row'>
             <Check>
-              <input type='radio' name='demo-voice' />
+              <Check.Input type='radio' name='demo-voice' />
               <span>
                 <b>Thalia</b>{' '}
                 <span class='Note Note-small'>Bright and quick</span>
@@ -622,8 +622,8 @@ export let StyleGuide = () => (
           <div class='Window_Body'>
             <p class='Window_Heading'>Our recipe box</p>
             <ul class='Window_List'>
-              <li>Grandma's lemon cake</li>
-              <li>Tuesday soup</li>
+              <li class='Window_Item'>Grandma's lemon cake</li>
+              <li class='Window_Item'>Tuesday soup</li>
             </ul>
             <p class='Note Note-small'>
               A note on{' '}
@@ -664,22 +664,23 @@ export let StyleGuide = () => (
         <div class='Prose'>
           <div class='Prose_Head'>
             <h3 class='Title Title-page'>Cookies</h3>
-            <p class='Prose_When'>Last updated {day('2026-09-03', 'UTC')}</p>
+            <p class='Prose_When Prose_Text'>Last updated {day('2026-09-03', 'UTC')}</p>
           </div>
-          <section>
-            <h2>What Prose styles</h2>
-            <p>
-              Prose styles unclassed paragraphs, lists, links,{' '}
-              <code>code</code>, and addresses. Elements with a component class
-              keep their component styles.
+          <section class='Prose_Section'>
+            <h2 class='Prose_Heading'>What Prose styles</h2>
+            <p class='Prose_Text'>
+              Prose styles its named paragraphs, lists, links,{' '}
+              <code class='Prose_Code'>code</code>, and addresses. Elements with
+              a component class keep their component styles.
             </p>
-            <ul>
-              <li>Plain paragraphs go quiet, in --muted.</li>
-              <li>
-                A <a href='#components'>link</a> takes the accent.
+            <ul class='Prose_List'>
+              <li class='Prose_Item'>Plain paragraphs go quiet, in --muted.</li>
+              <li class='Prose_Item'>
+                A <a class='Prose_Link' href='#components'>link</a>{' '}
+                takes the accent.
               </li>
             </ul>
-            <address>Yak Shaving LLC</address>
+            <address class='Prose_Address'>Yak Shaving LLC</address>
           </section>
         </div>
       </Card>
