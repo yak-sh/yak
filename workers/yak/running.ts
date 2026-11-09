@@ -256,8 +256,8 @@ export let onceRead = (answer: Response, gone: () => void): Response => {
   let read = new ReadableStream<Uint8Array>({
     async pull(into) {
       try {
-        let { done, value } = await reader.read()
-        if (!done) return into.enqueue(value)
+        let next = await reader.read()
+        if (!next.done) return into.enqueue(next.value)
         into.close()
         go()
       } catch (e) {

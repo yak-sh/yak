@@ -282,8 +282,25 @@ type Platform = {
   examples: boolean
 }
 
+/// namespace('/// <reference no-default-lib="true" />\ndeclare namespace Deno { a }\n/// <reference no-default-lib="true" />\ninterface Console {}\n/// <reference no-default-lib="true" />\n/// <reference lib="deno.ns" />\ndeclare namespace Deno { b }\n') -> '/// <reference no-default-lib="true" />\ndeclare namespace Deno { a }\n'
+/**
+ * Of every lib `deno types` prints, those `deno.ns` names: Deno's namespace
+ * and the `deno.net` it references, each declaring `namespace Deno` without
+ * building on `deno.ns` as `deno.unstable` does. Deno's own web globals are
+ * left to the config's `dom` libs, as Deno's check leaves them; both at once
+ * merge into wider signatures than Deno's check allows.
+ */
+export let namespace = (types: string) =>
+  types.split(/^(?=\/\/\/ <reference no-default-lib="true" \/>$)/m)
+    .filter((lib) =>
+      /^declare namespace Deno \{/m.test(lib) &&
+      !lib.includes('/// <reference lib="deno.ns" />')
+    ).join('')
+
 let deno = (): Platform => {
   let { lib, ...options } = config.compilerOptions
+  let other = lib.filter((l) => l.startsWith('deno.') && l != 'deno.ns')
+  if (other.length) throw new Error(`deno.json: no program for ${other}`)
   return {
     name: 'deno',
     dir: DIR,
@@ -291,7 +308,9 @@ let deno = (): Platform => {
       ...options,
       lib: [...lib.filter((l) => !l.startsWith('deno.')), 'esnext'],
     },
-    globals: async () => ({ 'deno.d.ts': (await output(['types'])).out }),
+    globals: async () => ({
+      'deno.d.ts': namespace((await output(['types'])).out),
+    }),
     hosted: false,
     examples: true,
   }
