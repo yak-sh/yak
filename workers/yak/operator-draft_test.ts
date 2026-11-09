@@ -13,6 +13,7 @@ import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import { type Beside, chatPage, operatorAnswer } from './operator-page.ts'
 import type { Who } from './session.ts'
+import { follow } from './public/follow.js'
 import { redraw } from './public/redraw.js'
 import { voice } from './public/voice.js'
 import { released } from './operator-testing.ts'
@@ -222,8 +223,18 @@ let load = async (
   let source = document.querySelector('script[type=module]')!.textContent!
     .replace(/^import .*$/gm, '')
   let talking = speaking
+  let place = { reload: () => void loads.page++, origin: 'https://yaks.app' }
+  // A window that lays nothing out: the page's place in its conversation
+  // (public/follow.js) is follow_script_test's.
+  let win = Object.assign(Object.create(globalThis), {
+    location: place,
+    scrollTo: () => {},
+    addEventListener: () => {},
+  })
   new Function(
+    'globalThis',
     'browserDrafts',
+    'follow',
     'redraw',
     'rowsOf',
     'asideHtml',
@@ -246,7 +257,9 @@ let load = async (
     'Event',
     source,
   )(
+    win,
     opened,
+    follow,
     redraw,
     talk.rowsOf,
     talk.asideHtml,
@@ -263,7 +276,7 @@ let load = async (
     () => 0,
     document,
     fetch,
-    { reload: () => void loads.page++, origin: 'https://yaks.app' },
+    place,
     after,
     clearTimeout,
     FormOf,

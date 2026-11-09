@@ -1993,6 +1993,17 @@
     padding-block: .5rem 1rem;
     background: linear-gradient(transparent, var(--bg) 1rem);
   }
+  /* Back to the newest entry, over the middle of the box while the person
+     has scrolled up from it (public/follow.js). */
+  .Talk_Jump {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    translate: -50% 0;
+  }
+  .Talk_Jump[hidden] {
+    display: none;
+  }
   .Talk_Write {
     display: grid;
     gap: .5rem;

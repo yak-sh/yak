@@ -2052,6 +2052,14 @@ let composer = (
       action: at,
       enctype: 'multipart/form-data',
     },
+    // Shown while the person has scrolled up from the newest entry, and
+    // takes them back to it (public/follow.js).
+    h(Button, {
+      type: 'button',
+      class: 'Talk_Jump',
+      'data-jump': '',
+      hidden: true,
+    }, '↓ Newest'),
     h('input', { type: 'hidden', name: 'request', value: crypto.randomUUID() }),
     h('input', { type: 'hidden', name: 'page', value: here }),
     app ? h('input', { type: 'hidden', name: 'app', value: app.slug }) : null,
@@ -2134,6 +2142,7 @@ let chatScript = (
 ) =>
   `<script type="module">
 import { browserDrafts } from '/_draft.js'
+import { follow } from '/follow.js'
 import { redraw } from '/redraw.js'
 import { asideHtml, glanceHtml, helperHtml, lasted, ordered, rowsOf, turnHtml } from '/_talk.js'
 import { voice } from '/voice.js'
@@ -2366,10 +2375,6 @@ let doing = (now = 'idle') => {
 }
 let redrawn = () => doing(thread()?.dataset.doing)
 redrawn()
-// The page follows the conversation down as it grows, unless the person has
-// scrolled up to read.
-let near = () => !globalThis.innerHeight || globalThis.innerHeight + globalThis.scrollY >= document.body.scrollHeight - 120
-let follow = (was) => { if (was) globalThis.scrollTo?.(0, document.body.scrollHeight) }
 // Enter sends, Shift+Enter starts a new line.
 form?.elements.say.addEventListener('keydown', (e) => {
   if (e.key == 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit?.() }
@@ -2445,12 +2450,10 @@ let read = async () => {
       if (!response.ok) throw new Error('This page could not be brought up to date. Your conversation is saved; reload to try again.')
       let got = await response.json()
       standing = got.standing
-      let was = near()
       if (got.html) redraw(box, got.html), redrawn()
       if (got.aside && aside()) happening = got.aside, aside().replaceWith(drawn(asideHtml(happening, unfolded()))), shown()
       if (got.title) heading.textContent = got.title
       if (follows && !canvas() && got.making && (follows == 'worked' || got.started)) remake(got.making)
-      follow(was)
     } while (again)
     // Words of theirs the page showed are never taken off it: one a read
     // left out goes back in its place, and the tracker hears of it at once.
@@ -2483,7 +2486,6 @@ let hear = (frame) => {
   if (o.helping) helped(o.helping)
   if (o.said) speech?.tell(o.said)
   standing = undefined
-  let was = near()
   let rows = card.querySelector('[data-rows]')
   // A reply as it is written, until the step that wrote it lands.
   let typing = card.querySelector('[data-typing]')
@@ -2497,7 +2499,7 @@ let hear = (frame) => {
     typing.textContent += o.typing
     card.querySelector('[data-now]').textContent = 'Typing…'
     doing('writing')
-    return follow(was)
+    return
   }
   typing?.remove()
   for (let row of o.lines ? rowsOf(o.lines) : o.rows) {
@@ -2515,7 +2517,6 @@ let hear = (frame) => {
   card.querySelector('[data-now]').textContent = o.now
   doing(o.doing)
   card.toggleAttribute('data-pending', !!o.now)
-  follow(was)
 }
 let listen = () => {
   let socket = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1&lines=1' + (open == 'new' ? '' : '&talk=' + encodeURIComponent(open)))
@@ -2553,6 +2554,7 @@ form?.addEventListener('submit', async (e) => {
     if (!saved) throw new Error('Your message could not be confirmed. Your words are kept; try sending again.')
     form.elements.file.value = ''; form.elements.file.dispatchEvent(new Event('change', { bubbles: true })); form.elements.request.value = crypto.randomUUID()
     status.textContent = ''
+    reader.newest()
     // Words go to the person's conversation, which opens to show them when
     // another page sent them.
     let app = canvas()
@@ -2570,6 +2572,8 @@ let stamps = () => {
 }
 stamps()
 setInterval(stamps, 60_000)
-follow(true)
+// The page opens at the newest entry and follows the conversation down as it
+// grows, unless the person has scrolled up to read (public/follow.js).
+let reader = follow(globalThis, box, document.querySelector('[data-jump]'))
 listen()
 </script>`

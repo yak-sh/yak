@@ -137,6 +137,7 @@ let browser = (
       clock = end
     },
     hide: () => opts.hidden = true,
+    restoration: () => w.history.scrollRestoration,
   }
 }
 
@@ -232,4 +233,23 @@ test('coming back into view asks at most once a minute, and a hidden page moves 
   b.hide()
   await b.fire('visibilitychange')
   assertEquals(b.reloads(), 1)
+})
+
+test('the moved page gives the browser back the scroll restoring the page had', async () => {
+  for (let had of ['manual', undefined]) {
+    let kept = new Map([[
+      'yak-deploy:/manage/ada/operator',
+      JSON.stringify({
+        x: 0,
+        y: 0,
+        bottom: true,
+        open: [],
+        fields: [],
+        restoration: had,
+      }),
+    ]])
+    let b = browser({ kept })
+    await b.fire('load')
+    assertEquals(b.restoration(), had ?? 'auto')
+  }
 })

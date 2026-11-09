@@ -98,12 +98,15 @@
         kept.x,
         kept.bottom ? document.documentElement.scrollHeight : kept.y,
       )
+    // The browser goes back to restoring places as the page had it (the
+    // Operator's chat keeps its own, public/follow.js).
+    let restored = () => history.scrollRestoration = kept.restoration ?? 'auto'
     scroll()
-    if (document.readyState == 'complete') history.scrollRestoration = 'auto'
+    if (document.readyState == 'complete') restored()
     else {
       addEventListener('load', () => {
         scroll()
-        history.scrollRestoration = 'auto'
+        restored()
       }, { once: true })
     }
   }
@@ -139,6 +142,7 @@
           y: scrollY,
           bottom: scrollY > 0 &&
             innerHeight + scrollY >= root.scrollHeight - 40,
+          restoration: history.scrollRestoration,
           open: entries().map(([key, d]) => [key, d.open]),
           fields: fields().filter(([, el]) => changed(el))
             .map(([key, el]) => [key, el.value, el.checked]),
