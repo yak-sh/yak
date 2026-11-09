@@ -184,7 +184,9 @@ let documented = (
   layout = '',
   head = '',
   later?: Promise<string>,
+  assets?: string,
 ) => {
+  let file = (name: string) => asset(env, name, undefined, assets)
   let open = `<!doctype html>
 <html lang="en">
 <head>
@@ -192,40 +194,38 @@ let documented = (
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>${title} · yaks.app</title>
-${links(env, 'pages.css')}${
+${links(env, 'pages.css', undefined, assets)}${
     head.includes('rel="apple-touch-icon"')
       ? ''
-      : `\n<link rel="apple-touch-icon" href="${
-        asset(env, 'apple-touch-icon.png')
-      }">`
+      : `\n<link rel="apple-touch-icon" href="${file('apple-touch-icon.png')}">`
   }${head ? `\n${head}` : ''}
 </head>
 <body${layout ? ` class="${layout}"` : ''}><main>${main}`
   let close = `</main>${
     main.includes('data-chart')
-      ? `<script src="${asset(env, 'chart.js')}" defer></script>`
+      ? `<script src="${file('chart.js')}" defer></script>`
       : ''
   }${
     main.includes('data-menu')
-      ? `<script src="${asset(env, 'menu.js')}" defer></script>`
+      ? `<script src="${file('menu.js')}" defer></script>`
       : ''
   }${
     main.includes('data-idle')
-      ? `<script src="${asset(env, 'idle.js')}" defer></script>`
+      ? `<script src="${file('idle.js')}" defer></script>`
       : ''
   }${
     main.includes('data-side')
-      ? `<script src="${asset(env, 'side.js')}" defer></script>`
+      ? `<script src="${file('side.js')}" defer></script>`
       : ''
   }${
     main.includes('data-modal-close')
-      ? `<script src="${asset(env, 'modal.js')}" defer></script>`
+      ? `<script src="${file('modal.js')}" defer></script>`
       : ''
   }${
     main.includes('data-find')
-      ? `<script src="${asset(env, 'find.js')}" defer></script>`
+      ? `<script src="${file('find.js')}" defer></script>`
       : ''
-  }<script src="${asset(env, 'drop.js')}" defer></script>${deployed(env)}</body>
+  }<script src="${file('drop.js')}" defer></script>${deployed(env)}</body>
 </html>`
   return new Response(
     later
@@ -267,6 +267,8 @@ export type Said = {
   headers?: Record<string, string>
   layout?: string
   head?: string
+  /** Same-origin mount for the sheet and its SVG filters, fonts and scripts. */
+  assets?: string
   /** what the page says once it knows: drawn after its parts when it
    * settles, and everything before it shown meanwhile, so nothing a person
    * can already read or press waits on it */
@@ -288,6 +290,7 @@ export let page = (env: Host, at: Said, ...parts: Kids[]) =>
     at.layout,
     at.head,
     at.later?.then(markup),
+    at.assets,
   )
 
 /** The same page written as markup, for the pages that still are (admin.ts,
@@ -1031,6 +1034,7 @@ export let editor = (
         'x-robots-tag': 'noindex',
       },
       layout: 'Data',
+      assets: `${at.at}/_web/assets/`,
     },
     h(
       'header',

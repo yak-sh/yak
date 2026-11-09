@@ -11,8 +11,12 @@ let NAMES = typeof YAK_NAMED == 'undefined' ? {} : YAK_NAMED
 
 /** Where a page fetches one of the site's files: its content-made address,
  * which the browser keeps for good, or its source's where none was made. */
-export let asset = (env: Host, name: string, names = NAMES) =>
-  url(env, `/${names[name] ?? name}`)
+export let asset = (
+  env: Host,
+  name: string,
+  names = NAMES,
+  base = url(env, '/'),
+) => base + (names[name] ?? name)
 
 /** The store client's content-made name below an app's `api/` (apps.ts
  * `api`), or null where none was made. */
@@ -26,8 +30,8 @@ let FONT = 'nunito-latin.woff2'
  * (page-report.ts), which runs before any of the page's own scripts so a
  * break in them reaches the tracker, and the site's favicon, which every page
  * wears from here so none goes without it. */
-export let links = (env: Host, sheet: string, names = NAMES) => {
-  let at = (name: string) => asset(env, name, names)
+export let links = (env: Host, sheet: string, names = NAMES, base?: string) => {
+  let at = (name: string) => asset(env, name, names, base)
   return `<script src="${at('report.js')}" data-yak-at="${
     url(env, '/')
   }"></script>

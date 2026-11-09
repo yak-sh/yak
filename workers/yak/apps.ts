@@ -137,7 +137,15 @@ import {
   vocabulary,
 } from './page-graph.ts'
 import { pageSocket } from './page-socket.ts'
-import { DATA_SCRIPT, dataPath, webAsset, webPage, webPath } from './web.ts'
+import {
+  DATA_ASSETS,
+  DATA_SCRIPT,
+  dataAsset,
+  dataPath,
+  webAsset,
+  webPage,
+  webPath,
+} from './web.ts'
 import { admitted, pageScript, type Scripts } from './page-script.ts'
 import type { Bundle } from '@yaks/graph'
 import { Refused, Stale } from '@yaks/graph/errors'
@@ -2974,7 +2982,8 @@ let served = async (
         return nothingHere(env)
       }
       if (path == DATA_SCRIPT) return platformFile(req, env, '/data.js')
-      let at = url.pathname.slice(0, -path.length)
+      if (path.startsWith(DATA_ASSETS)) return dataAsset(req, env, path)
+      let at = bare.replace(/\/$/, '')
       return await reported(
         env,
         at || '/',

@@ -2,13 +2,35 @@
 // this door only mounts that page onto the app's existing API and identity.
 import type { Env } from './env.ts'
 import type { Hosting } from '../../packages/browse/hosting.ts'
+import { named } from './sheets.ts'
+import { ADDRESS } from './route.ts'
 
 export let webPath = (path: string) =>
   path == '/_web' || path.startsWith('/_web/')
 // The app's data editor (pages.ts `editor`, public/data.js), and its script.
 export let DATA = '/_web/data'
 export let DATA_SCRIPT = '/_web/data.js'
-export let dataPath = (path: string) => path == DATA || path == DATA_SCRIPT
+export let DATA_ASSETS = '/_web/assets/'
+export let dataPath = (path: string) =>
+  path == DATA || path == DATA_SCRIPT || path.startsWith(DATA_ASSETS)
+
+/** The shared page skin beside the page: SVG filters must share its origin. */
+export let dataAsset = async (
+  req: Request,
+  env: Pick<Env, 'ASSETS'>,
+  path: string,
+) => {
+  let name = path.slice(DATA_ASSETS.length)
+  let response = await env.ASSETS.fetch(
+    new Request(new URL('/' + name, req.url), req),
+  )
+  let was = response.status == 404 ? named('/' + name) : null
+  if (!was) return response
+  await response.body?.cancel()
+  let at = new URL(req.headers.get(ADDRESS) ?? req.url)
+  at.pathname = at.pathname.slice(0, -name.length) + was.slice(1)
+  return Response.redirect(at.href, 302)
+}
 export let webHost = (at: string): Hosting => ({
   page: at + '/_web',
   api: at + '/api',

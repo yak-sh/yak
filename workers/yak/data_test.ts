@@ -9,6 +9,7 @@ import {
   browser,
   connector,
   kernel,
+  meta,
   seed,
   signIn,
   unique,
@@ -21,6 +22,14 @@ let k = await kernel()
 let space = unique('township')
 let them = await seed(k, [{ slug: space, apps: ['site', 'recipes'] }])
 let host = `${space}.yaks.app`
+let custom = `${space}.example`
+await meta(k).apply([{
+  hostname: {
+    name: custom,
+    serves: them.eids[`${space}/site`],
+    stage: 'active',
+  },
+}])
 let agent = connector(k, them.cookie)
 
 let file = { type: 'string', ref: 'blob', death: 'keep' }
@@ -187,6 +196,65 @@ test('the page carries what the deployed words keep, escaped, and the script is 
   assertEquals(script.status, 200)
   await script.body?.cancel()
 })
+
+for (let [origin, mount] of [[host, '/site'], [custom, '']]) {
+  test(`the editor wears the portal skin on ${mount ? 'a space' : 'a custom domain'}`, async () => {
+    let at = `https://${origin}${mount}/_web/data`
+    let headers = { cookie: them.cookie }
+    let get = (at: URL | string) => {
+      let url = new URL(at)
+      return k.at(url.host, url.pathname, { headers })
+    }
+    let html = await (await get(at)).text()
+    assertStringIncludes(html, `${mount}/_web/data.js?v=`)
+    assertStringIncludes(html, `${mount}/api/client.js`)
+    assertStringIncludes(html, `files: "${mount}/api/blob/"`)
+    let { document } = parseHTML(html)
+    let href = document.querySelector('link[rel="stylesheet"]')!.getAttribute(
+      'href',
+    )!
+    let sheet = new URL(href, at)
+    assertEquals(sheet.origin, new URL(at).origin)
+    let styles: string[] = []
+    let pencil: URL | undefined
+    let read = async (at: URL): Promise<void> => {
+      let res = await get(at)
+      assertEquals(res.status, 200, at.href)
+      let css = await res.text()
+      styles.push(css)
+      for (let [, href] of css.matchAll(/@import url\(['"]([^'"]+)['"]\)/g)) {
+        await read(new URL(href, at))
+      }
+      let drawn = css.match(/--drawn:\s*url\(['"]?([^'"\s)]+)/)?.[1]
+      if (drawn) pencil = new URL(drawn, at)
+    }
+    await read(sheet)
+    assert(pencil)
+    assertEquals(pencil.origin, new URL(at).origin)
+    let svg = await get(pencil)
+    assertEquals(svg.status, 200)
+    assertStringIncludes(await svg.text(), '<filter id="line"')
+    let css = styles.join('\n')
+    assertStringIncludes(css, '--hatch:')
+    assertStringIncludes(css, '--hollow:')
+    assertStringIncludes(css, '--grain:')
+    assertStringIncludes(css, 'filter: var(--drawn)')
+    assertStringIncludes(
+      css,
+      ':where(.Button, .Card, a.Chip, .Empty, .Drop_Zone)::after',
+    )
+    let p = page(them.cookie)
+    try {
+      await p.start()
+      await p.go('#announcement/new')
+      for (let name of ['Card', 'Card_Head', 'Field', 'Button']) {
+        assert(p.root.querySelector(`.${name}`), name)
+      }
+    } finally {
+      p.stop()
+    }
+  })
+}
 
 test('a row is added, listed, edited, linked, given a file and removed', async () => {
   let p = page(them.cookie)

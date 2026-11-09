@@ -14,6 +14,7 @@ import { parseHTML } from 'linkedom'
 import { FILES, from, plan } from './sheet-assets.ts'
 import { asset, client, links, named, sheeted } from './sheets.ts'
 import { direct } from './wrangler.ts'
+import { dataAsset } from './web.ts'
 
 let PUBLIC = new URL('./public/', import.meta.url).pathname
 let { files, names } = plan(await from(PUBLIC))
@@ -75,6 +76,54 @@ test('sheets: a head names one sheet, on this site, with the font preloaded', ()
   assertEquals(blocking(links(env, 'pages.css', names)), [
     `https://yaks.fyi/${names['pages.css']}`,
   ])
+})
+
+test('sheets: a mounted skin keeps content-named filters on a space or custom origin', async () => {
+  let env = {
+    ASSETS: {
+      fetch: (req: Request) => {
+        let bytes = files.get(new URL(req.url).pathname.slice(1))
+        return Promise.resolve(
+          new Response(bytes ? new Uint8Array(bytes) : null, {
+            status: bytes ? 200 : 404,
+          }),
+        )
+      },
+    },
+  }
+  for (
+    let [origin, mount] of [
+      ['https://ada.yaks.app', '/recipes/_web/assets/'],
+      ['https://recipes.example', '/_web/assets/'],
+    ]
+  ) {
+    let head = links({}, 'pages.css', names, mount)
+    let sheet = new URL(blocking(head)[0], origin)
+    assertEquals(sheet.pathname, mount + names['pages.css'])
+    let get = (at: URL) =>
+      dataAsset(
+        new Request(at),
+        env,
+        at.pathname.slice(mount.indexOf('/_web/')),
+      )
+    let res = await get(sheet)
+    assertEquals(res.status, 200)
+    let css = await res.text()
+    assertEquals(css, new TextDecoder().decode(files.get(names['pages.css'])!))
+    let drawn = css.match(/--drawn:\s*url\(['"]?([^'"\s)]+)/)![1]
+    let pencil = new URL(drawn, sheet)
+    assertEquals(pencil.origin, origin)
+    let svg = await get(pencil)
+    assertEquals(svg.status, 200)
+    assertStringIncludes(await svg.text(), '<filter id="line"')
+    let past = new URL(mount + '_yak/pages.0000000000.css', origin)
+    let redirected = await get(past)
+    assertEquals(redirected.status, 302)
+    assertEquals(
+      redirected.headers.get('location'),
+      origin + mount + 'pages.css',
+    )
+  }
 })
 
 test('sheets: a static page, the home page and a kernel page wait on no other site, and wear the favicon', async () => {
