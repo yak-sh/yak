@@ -25,6 +25,12 @@ export let DB = 'x-yak-db'
  * every client. */
 export let TEXT = 'x-yak-text'
 
+/** The header a program asks for each tool's answer whole in: a server that
+ * keeps a large answer and replies with its summary for a model to narrow
+ * (@yaks/mcp `Options.retain`) answers this request as it is instead, since a
+ * program reads the whole answer and has no context to spare it. */
+export let WHOLE = 'x-yak-whole'
+
 /** Where a client on this machine reaches the server a config serves: its
  * port, else {@link PORT}, at its hostname, or this machine's own address
  * where it names none or every interface.
