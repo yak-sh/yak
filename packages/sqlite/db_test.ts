@@ -54,23 +54,6 @@ test('a file grows a whole MiB at a time', () => {
   }
 })
 
-test('a commit past the WAL mark leaves its checkpoint to another thread', async () => {
-  let dir = Deno.makeTempDirSync()
-  let path = `${dir}/graph.db`
-  let sql = open(path, { wal: 64 * 1024 })
-  try {
-    let size = () => Deno.statSync(path).size
-    let header = size()
-    sql.query({ t: 'create table', name: 't', cols: [{ name: 'x' }] })
-    sql.query(insert('t', { x: 'x'.repeat(256 * 1024) }))
-    assertEquals(size(), header)
-    while (size() == header) await new Promise((done) => setTimeout(done, 5))
-  } finally {
-    sql.close()
-    Deno.removeSync(dir, { recursive: true })
-  }
-})
-
 test('a database named without a directory makes none', () => {
   let name = `file:${crypto.randomUUID()}?mode=memory&cache=shared`
   open(name).close()

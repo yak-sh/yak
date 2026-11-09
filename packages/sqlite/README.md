@@ -580,16 +580,18 @@ one that exits mid-checkpoint leaves the WAL for the next commit past the mark
 to ask again. The busy timeout sleeps the thread that asked, so a graph's write
 asks the store's `tx` with `wait: false`: a lock another connection holds
 refuses at once, `retryable: true`, and @yaks/graph waits for that writer
-between tries, the same minute, with the thread free. A connection closes
-without checkpointing, so a command ends without syncing and the next one
-appends to the log it left, and a copy of the file takes its `-wal` beside it,
-or is a `.backup` inside one read transaction (`bin/copy-db`): a bare `.backup`
-starts over whenever another connection commits, and on a busy file never ends.
-A new file starts in incremental auto-vacuum mode, so the pages a delete frees
-can be given back (`reclaim`, under Owed work). A file made before keeps its
-mode until a `VACUUM`. It honors `DENO_SQLITE_PATH`, otherwise selecting the
-platform's system library. This module uses Deno environment/FFI APIs. The root
-adapter can instead receive another runtime's synchronous SQLite driver.
+between tries, the same minute, with the thread free. Closing a connection
+cancels its queued checkpoints immediately and waits only for a checkpoint
+already running to close its own handle. Close starts no checkpoint, so the next
+command appends to the log it left. A copy of the file takes its `-wal` beside
+it, or is a `.backup` inside one read transaction (`bin/copy-db`): a bare
+`.backup` starts over whenever another connection commits, and on a busy file
+never ends. A new file starts in incremental auto-vacuum mode, so the pages a
+delete frees can be given back (`reclaim`, under Owed work). A file made before
+keeps its mode until a `VACUUM`. It honors `DENO_SQLITE_PATH`, otherwise
+selecting the platform's system library. This module uses Deno environment/FFI
+APIs. The root adapter can instead receive another runtime's synchronous SQLite
+driver.
 
 A file driver also has `watch`: every 5 ms it reads the file's `data_version`,
 which moves when another connection commits, and calls back when it moved. A

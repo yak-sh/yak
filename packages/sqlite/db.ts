@@ -114,16 +114,21 @@ export let open = (
     // ./checkpoint.ts's thread once the WAL holds what it is kept to.
     if (d.file) {
       let mark = wal / Number(page_size)
+      let checkpoints = checkpoint(path)
       let hook: { close(): void } | undefined = walHook(
         db,
-        (pages) => pages >= mark && checkpoint(path),
+        (pages) => pages >= mark && checkpoints.run(),
       )
       let close = d.close
-      d.close = () => {
-        close()
-        hook?.close()
-        hook = undefined
-      }
+      d.close = () =>
+        checkpoints.close(() => {
+          try {
+            close()
+          } finally {
+            hook?.close()
+            hook = undefined
+          }
+        })
     }
   }
   return Object.assign(d, {
