@@ -13,9 +13,10 @@ import type { Style } from '@yaks/native'
 import { type Step, stepOf, type Steps } from '@yaks/tools/title'
 import { blocks, parse } from '@yaks/markdown/structural'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
-import { Body, Button, Drop, Icon } from '@yaks/ui/parts'
+import { Body, Drop, Icon, Menu } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
 import { Time } from '@yaks/ui/parts'
+import { pretty } from '@yaks/ui/relative'
 import { PART } from '@yaks/persona/part'
 import { sourceWords } from './operator-source.ts'
 
@@ -108,7 +109,7 @@ let yours = (b: Bundle, text: string) =>
 // again in the person's own time.
 let stamp = (b: Bundle) => {
   let at = String(comp(b, 'created')?.at ?? '')
-  return h(Time, { at, class: 'Talk_When' })
+  return h(Time, { at, class: 'Talk_When', tabindex: -1 })
 }
 
 type Sent = { name: string; mime?: string }
@@ -589,6 +590,9 @@ let archivable = (line: Line, entries: Bundle[]): Line => {
   if (!rows.length) return line
   let archived = rows.filter((b) => b.archived).map((b) => b.entity.eid)
   let ids = archived.length ? archived : [line.id]
+  let text = rows.map((b) => spoken(b, String(comp(b, 'content')?.body ?? '')))
+    .filter(Boolean).join('\n\n')
+  let menu = 'entry-menu-' + line.id
   return {
     ...line,
     node: h(
@@ -600,16 +604,49 @@ let archivable = (line: Line, entries: Bundle[]): Line => {
       h(
         'div',
         { class: 'Talk_Meta' },
-        h(Button, {
+        h(Menu.Trigger, {
           type: 'button',
-          mod: 'quiet',
-          class: 'Talk_Hide',
-          'data-archive-entries': ids.join(','),
-          'data-restore': String(archived.length > 0),
-          'data-tip': archived.length ? 'Restore' : 'Hide',
-          'aria-label': archived.length ? 'Restore' : 'Hide',
-        }, h(Icon, { of: icons[archived.length ? 'eye' : 'eye-off'] })),
-        stamp(rows[0]),
+          'data-menu-trigger': menu,
+          'aria-controls': menu,
+          'aria-haspopup': 'menu',
+          'aria-expanded': 'false',
+          'aria-label': 'Entry actions',
+          'data-tip': pretty(String(comp(rows[0], 'created')?.at ?? '')),
+        }, stamp(rows[0])),
+        h(
+          Menu,
+          {
+            id: menu,
+            role: 'menu',
+            hidden: true,
+            mod: 'float',
+            'aria-label': 'Entry actions',
+            'data-entry-text': text,
+          },
+          h(Menu.Item, {
+            type: 'button',
+            role: 'menuitem',
+            'data-entry-copy': '',
+          }, 'Copy'),
+          h(Menu.Item, {
+            type: 'button',
+            role: 'menuitem',
+            'data-entry-quote': '',
+            'data-entry-id': line.id,
+          }, 'Quote'),
+          h(Menu.Item, {
+            type: 'button',
+            role: 'menuitem',
+            'data-entry-link': line.id,
+          }, 'Copy link'),
+          h(Menu.Rule, {}),
+          h(Menu.Item, {
+            type: 'button',
+            role: 'menuitem',
+            'data-archive-entries': ids.join(','),
+            'data-restore': String(archived.length > 0),
+          }, archived.length ? 'Restore' : 'Hide'),
+        ),
       ),
     ),
   }

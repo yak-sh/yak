@@ -34,3 +34,33 @@
   border: 0;
   border-top: 1px solid var(--border);
 }
+
+.Menu[hidden] {
+  display: none;
+}
+.Menu-float {
+  position: fixed;
+  z-index: 100;
+  max-width: calc(100vw - 12px);
+  max-height: calc(100dvh - 12px);
+  overflow-y: auto;
+}
+.Menu_Trigger {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  padding: .25em;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: .2em;
+}
+.Menu_Trigger:hover,
+.Menu_Trigger[aria-expanded='true'] {
+  color: var(--link);
+  background: var(--soft);
+}
+.Menu_Item:focus-visible {
+  background: var(--soft);
+}

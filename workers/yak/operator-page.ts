@@ -2172,11 +2172,12 @@ let chatScript = (
 import { browserDrafts } from '/_draft.js'
 import { follow } from '/follow.js'
 import { redraw } from '/redraw.js'
-import { asideHtml, glanceHtml, helperHtml, lasted, ordered, rowsOf, turnHtml } from '/_talk.js'
+import { asideHtml, glanceHtml, helperHtml, lasted, menus, ordered, rowsOf, turnHtml } from '/_talk.js'
 import { voice } from '/voice.js'
 let open = ${JSON.stringify(open)}
 let root = ${JSON.stringify(root)}
 let chats = ${JSON.stringify(chatPath(space.slug, ''))}
+menus(document)
 let box = document.querySelector('[data-conversation]')
 let heading = document.querySelector('[data-title]')
 let form = document.querySelector('#ask')
@@ -2416,6 +2417,26 @@ document.addEventListener('click', (e) => {
   say.dispatchEvent(new Event('input', { bubbles: true }))
   say.focus()
   say.setSelectionRange(say.value.length, say.value.length)
+})
+// Entry actions share the kit menu; quoting goes through the same input
+// event as typing, so the draft keeps it across reloads and devices.
+document.addEventListener('click', async (e) => {
+  let action = e.target.closest?.('[data-entry-copy], [data-entry-quote], [data-entry-link]')
+  if (!action) return
+  let text = action.closest('[data-entry-text]').dataset.entryText
+  let id = action.dataset.entryId ?? action.dataset.entryLink
+  let link = new URL(location.href ?? '${at}', location.origin)
+  if (id) link.hash = 'row-' + id
+  try {
+    if ('entryQuote' in action.dataset && form) {
+      let say = form.elements.say
+      let quote = '> [Quoted entry](' + link.href + ')\\n' + text.split('\\n').map((line) => '> ' + line).join('\\n')
+      say.value = [say.value, quote].filter(Boolean).join('\\n\\n') + '\\n\\n'
+      say.dispatchEvent(new Event('input', { bubbles: true }))
+      say.focus()
+      say.setSelectionRange(say.value.length, say.value.length)
+    } else await navigator.clipboard.writeText('entryCopy' in action.dataset ? text : link.href)
+  } catch (error) { said(error) }
 })
 // Archive and restore change marks, keeping the words on the page and in search.
 document.addEventListener('click', async (e) => {

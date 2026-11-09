@@ -68,6 +68,7 @@ export let WORN = [
   'At',
   'Drop',
   'More',
+  'Menu',
   'Body',
   'Notice',
   'Loading',

@@ -12,10 +12,15 @@ import { block, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 
 /** A menu. */
-export let Menu: Part & Record<'Item' | 'Rule', Part> = block('div', 'Menu', {
-  Item: 'button',
-  Rule: 'hr',
-})
+export let Menu: Part & Record<'Trigger' | 'Item' | 'Rule', Part> = block(
+  'div',
+  'Menu',
+  {
+    Trigger: 'button',
+    Item: 'button',
+    Rule: 'hr',
+  },
+)
 
 /** What it is, in a line. */
 export let description =
@@ -23,21 +28,31 @@ export let description =
 
 /** An item is a row of its own, as it is in a browser. */
 export let sheet = (c: Colors): Sheet => ({
+  Menu_Trigger: { fg: c.muted, underline: true },
   Menu_Item: { block: true },
   'Menu_Item-hover': { bg: c.card },
   'Menu_Item-danger': { fg: c.negative },
   Menu_Rule: { fg: c.border2 },
 })
 
-let { Item, Rule } = Menu
+let { Trigger, Item, Rule } = Menu
 
 /** Two groups, one item under the pointer, and a dangerous one. */
 export let specimens = (): Specimen[] => [
   [
-    'Menu, Item, Item-hover, Rule, Item-danger',
+    'Menu-float',
+    h(
+      Menu,
+      { mod: 'float', style: 'position:static' },
+      h(Item, { type: 'button' }, 'Copy'),
+    ),
+  ],
+  [
+    'Menu, Trigger, Item, Item-hover, Rule, Item-danger',
     h(
       Menu,
       {},
+      h(Trigger, { type: 'button' }, 'a moment ago'),
       h(Item, { type: 'button' }, 'open here'),
       h(Item, { type: 'button', mod: 'hover' }, 'copy link'),
       h(Rule, {}),

@@ -9,7 +9,11 @@ let at = '2026-11-06T15:42:00Z'
 let now = Date.parse('2026-11-09T15:42:00Z')
 let { document } = parseHTML(`<html><body>${
   markup([
-    h(Time, { at, now: Date.parse(at), timeZone: 'UTC' }),
+    h(
+      'button',
+      { 'data-menu-trigger': 'entry' },
+      h(Time, { at, now: Date.parse(at), timeZone: 'UTC' }),
+    ),
     h(Time, { at: '2026-11-06', written: true, timeZone: 'UTC' }),
   ])
 }</body></html>`)
@@ -19,6 +23,10 @@ test('the hosted page refreshes ages and keeps written calendar dates and explic
   let [ago, written] = document.querySelectorAll('time')
   equal(ago.textContent, '3 days ago')
   equal(ago.getAttribute('data-tip'), 'Nov 6th, 2026, 3:42 PM')
+  equal(
+    ago.parentElement!.getAttribute('data-tip'),
+    ago.getAttribute('data-tip'),
+  )
   equal(written.textContent, 'Nov 6th, 2026')
   equal(written.getAttribute('data-tip'), 'Nov 6th, 2026, 12:00 AM')
 })

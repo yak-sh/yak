@@ -48,3 +48,6 @@ export { type Col, Table, type TableProps } from './Table.ts'
 export { Tabs, TabSet } from './Tabs.ts'
 
 export { Time, time, type TimeProps } from './Time.ts'
+
+export { menus } from './menus.ts'
+export { Menu } from './Menu.ts'

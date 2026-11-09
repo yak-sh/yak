@@ -1613,8 +1613,7 @@
   .Talk_Entry:has(> .Talk_You) {
     display: grid;
   }
-  /* Each entry keeps its quiet controls beside the time. Opacity leaves the
-     action in the keyboard tab order while the pointer is elsewhere. */
+  /* The timestamp opens the entry’s actions. */
   .Talk_Meta {
     display: flex;
     align-items: center;
@@ -1625,20 +1624,6 @@
   }
   .Talk_Entry:has(> .Talk_You, > .Talk_Files) > .Talk_Meta {
     justify-content: end;
-  }
-  .Talk_Entry:not(:has(> .Talk_You, > .Talk_Files)) > .Talk_Meta > .Talk_Hide {
-    order: 1;
-  }
-  .Talk_Hide {
-    --control-height: 1.4rem;
-    --button-ink: var(--muted);
-    opacity: 0;
-    pointer-events: none;
-  }
-  .Talk_Entry:hover > .Talk_Meta > .Talk_Hide,
-  .Talk_Entry:focus-within > .Talk_Meta > .Talk_Hide {
-    opacity: 1;
-    pointer-events: auto;
   }
   .Talk_Entry-hidden {
     opacity: .5;

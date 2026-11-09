@@ -20,6 +20,8 @@ export let dates = (doc: Document, now = Date.now()): void => {
     let at = time.getAttribute('datetime') ?? ''
     if (time.hasAttribute('data-relative')) time.textContent = relative(at, now)
     time.dataset.tip = pretty(at, time.dataset.zone)
+    let trigger = time.closest<HTMLElement>('[data-menu-trigger]')
+    if (trigger) trigger.dataset.tip = time.dataset.tip
   }
   tips(doc)
 }

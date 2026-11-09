@@ -32,7 +32,7 @@ export let time = <N>(
       class: ['Time', props.class].filter(Boolean).join(' '),
       datetime: at,
       'data-zone': timeZone,
-      tabindex: 0,
+      tabindex: props.tabindex ?? 0,
       'data-tip': full,
       'data-relative': written ? undefined : '',
     }, written ? day(at, timeZone) : relative(at, now))

@@ -83,26 +83,30 @@ test('a person archives a span in one write without losing its words or search h
   equal(glance.includes('Pruning canary'), false)
 })
 
-test('entries keep an icon action before their timestamp, and hiding preserves readable words and restoration', () => {
+test('timestamps offer entry actions, and hiding preserves readable words and restoration', () => {
   equal(doc.querySelectorAll('.Talk_Entry-hidden').length, 2)
   equal(restored.every((b) => !b.archived && !!b.content), true)
   equal(restoredDoc.querySelectorAll('.Talk_Entry-hidden').length, 0)
   for (
-    let [page, label, restore] of [
-      [doc, 'Restore', 'true'],
-      [restoredDoc, 'Hide', 'false'],
-    ] as const
+    let [page, label, restore] of [[doc, 'Restore', 'true'], [
+      restoredDoc,
+      'Hide',
+      'false',
+    ]] as const
   ) {
-    let actions = [...page.querySelectorAll('.Talk_Meta > .Button')]
+    let actions = [...page.querySelectorAll('[data-archive-entries]')]
     equal(actions.length, 2)
     for (let button of actions) {
-      equal(button.textContent, '')
-      equal(button.getAttribute('aria-label'), label)
-      equal(button.getAttribute('data-tip'), label)
+      equal(button.textContent, label)
       equal(button.getAttribute('data-restore'), restore)
-      equal(button.hasAttribute('title'), false)
-      equal(!!button.querySelector('svg'), true)
-      equal(button.nextElementSibling?.tagName, 'TIME')
+      let menu = button.closest('[role=menu]')!
+      equal(menu.hasAttribute('hidden'), true)
+      equal(
+        [...menu.querySelectorAll('[role=menuitem]')].map((b) => b.textContent),
+        ['Copy', 'Quote', 'Copy link', label],
+      )
+      let trigger = page.querySelector('[aria-controls="' + menu.id + '"]')!
+      equal(!!trigger.querySelector('time[data-tip][data-relative]'), true)
     }
   }
 })

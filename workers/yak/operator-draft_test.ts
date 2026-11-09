@@ -122,6 +122,12 @@ let load = async (
   let html = await (await chatPage(p.env, space, as, open, beside, app))
     .text()
   let { document, Event } = parseHTML(html)
+  for (
+    let trigger of document.querySelectorAll<HTMLElement>('[data-menu-trigger]')
+  ) {
+    trigger.getBoundingClientRect =
+      () => ({ left: 20, top: 20, bottom: 40, width: 80 } as DOMRect)
+  }
   // What linkedom's forms lack: their fields by name, their action, and a
   // FormData of them.
   for (let form of document.querySelectorAll('form')) {
@@ -223,7 +229,12 @@ let load = async (
   imported(
     Object.values(parts).map((from) => new URL(from, import.meta.url).href),
   )
-  let place = { reload: () => void loads.page++, origin: 'https://yaks.app' }
+  let place = {
+    reload: () => void loads.page++,
+    origin: 'https://yaks.app',
+    href: base + '/' + open,
+  }
+  let copied: string[] = []
   // The browser's interfaces belong to this load, including those used inside
   // imported modules: storage, speech, timers and the page's socket.
   await pageModule(source, {
@@ -237,6 +248,13 @@ let load = async (
       document,
       fetch,
       location: place,
+      navigator: {
+        clipboard: {
+          writeText: (text: string) => Promise.resolve(void copied.push(text)),
+        },
+      },
+      innerWidth: 320,
+      innerHeight: 600,
       localStorage: stash,
       setInterval: () => 0,
       setTimeout: after,
@@ -268,6 +286,7 @@ let load = async (
   return {
     say,
     focused,
+    copied,
     loads,
     document,
     sockets,
@@ -759,7 +778,9 @@ test('words sent are drawn before the Operator takes them in, then once as its l
   let line = `id="row-${inputOf(String(body.get('request')))}"`
   assertEquals(
     [waiting, taken].map((html) => [
-      html.split('Ask the shelter about tables').length - 1,
+      [...parseHTML(html).document.querySelectorAll('.Talk_You')].filter((
+        node,
+      ) => node.textContent == 'Ask the shelter about tables').length,
       html.includes(line),
     ]),
     [[1, true], [1, true]],
@@ -1173,3 +1194,51 @@ test(
   },
   { tags: ['window'] },
 )
+
+test('entry actions copy the source and its link, quote into the existing composer and save the draft', async () => {
+  let entryActions = await load(storage(), false, park)
+  await entryActions.heard()
+  entryActions.type('Keep this draft')
+  let actionTrigger = entryActions.document.querySelector<HTMLElement>(
+    '[data-menu-trigger]',
+  )!
+  let actionMenu = entryActions.document.getElementById(
+    actionTrigger.dataset.menuTrigger!,
+  )!
+  let copiedText = actionMenu.getAttribute('data-entry-text')!
+  entryActions.press(actionTrigger)
+  entryActions.press(actionMenu.querySelector('[data-entry-copy]')!)
+  await settle()
+  entryActions.press(actionTrigger)
+  entryActions.press(actionMenu.querySelector('[data-entry-link]')!)
+  await settle()
+  entryActions.press(actionTrigger)
+  entryActions.press(actionMenu.querySelector('[data-entry-quote]')!)
+  await settle()
+  let quotedDraft = entryActions.say.value
+  entryActions.leave()
+  let quotedAgain = await load(storage(), false, park)
+  await quotedAgain.heard()
+  let quoteAfterReload = quotedAgain.say.value
+  quotedAgain.leave()
+
+  assertEquals(entryActions.copied[0], copiedText)
+  assertStringIncludes(entryActions.copied[1], '/' + park + '#row-')
+  let copiedLink = new URL(entryActions.copied[1])
+  let linkedPage = parseHTML(
+    await (await chatPage(
+      p.env,
+      space,
+      who,
+      copiedLink.pathname.split('/').at(-1)!,
+    )).text(),
+  ).document
+  assert(!!linkedPage.getElementById(copiedLink.hash.slice(1)))
+  assertEquals(actionMenu.hidden, true)
+  assertStringIncludes(quotedDraft, 'Keep this draft\n\n> [Quoted entry](')
+  assertStringIncludes(
+    quotedDraft,
+    copiedText.split('\n').map((line) => '> ' + line).join('\n'),
+  )
+  assertEquals(quoteAfterReload, quotedDraft)
+})
