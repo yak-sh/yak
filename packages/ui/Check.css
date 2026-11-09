@@ -2,14 +2,17 @@
    the accent once checked. Pressing the words presses the box. */
 .Check {
   display: inline-flex;
-  align-items: first baseline;
+  align-items: flex-start;
   gap: var(--half-gap);
   min-height: var(--tap);
   cursor: pointer;
 }
 .Check_Input {
+  font: inherit;
   flex: none;
   margin: 0;
+  /* Half the first line minus half the control, whatever its native size. */
+  transform: translateY(calc(.5lh - 50%));
   accent-color: var(--accent);
   cursor: inherit;
 }

@@ -3,13 +3,14 @@
    paper's colour, as tall as a press beside it (--control-height). */
 .Check {
   display: inline-flex;
-  align-items: first baseline;
+  align-items: flex-start;
   gap: .5rem;
   min-height: var(--control-height);
   line-height: 1.4;
   cursor: pointer;
 }
 .Check_Input {
+  font: inherit;
   appearance: none;
   display: grid;
   place-content: center;
@@ -18,6 +19,8 @@
   height: 1.125rem;
   flex: none;
   margin: 0;
+  /* Half the first line minus half the control, whatever its drawn size. */
+  transform: translateY(calc(.5lh - 50%));
   border: var(--stroke) solid var(--graphite);
   background: var(--card);
   cursor: inherit;
