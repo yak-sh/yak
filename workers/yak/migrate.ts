@@ -357,6 +357,8 @@ export let BOUNDARIES = [
   'yak/store/hold-empty/1',
   // Every space's connected account is `seller`, not `stripe` (T-142134).
   'yak/store/seller/1',
+  // Every space's $49 plan is Pro (T-151637).
+  'yak/store/pro-plan/1',
 ]
 
 /** A column dropped from a table. */

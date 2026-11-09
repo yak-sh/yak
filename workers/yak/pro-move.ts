@@ -18,6 +18,7 @@ export let proRule: Rule = {
   mark: 'yak/store/pro-plan/1',
   stores: [PLATFORM_STORE],
   core: ['plan'],
+  live: 'all',
   find: '.plan.tier=organization&*',
   move: proMove,
 }
