@@ -1,5 +1,6 @@
 import { test, until } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import { CallError } from '@yaks/tools'
 import { rootOf } from './operator-root.ts'
 import type { Item, Model, Request } from '@yaks/model'
@@ -193,10 +194,22 @@ test('the Operator page lists its work in plain words, each opening on a page of
   ])
 })
 test("a piece of the Operator's work draws its task as its session ran: the words, each tool with what it sent and got in words, and the reply", () => {
+  let { document } = parseHTML(drawn.html)
+  let summaries = [...document.querySelectorAll('summary')]
+    .map((summary) => summary.textContent ?? '')
   assertStringIncludes(drawn.html, 'Talk_You">Post a special meeting')
-  assertStringIncludes(drawn.html, '<summary>Read the schema')
-  assertStringIncludes(drawn.html, '<summary>Listed the files of notices')
-  assertStringIncludes(drawn.html, '<dt>Component</dt><dd><span>doc</span>')
+  assertEquals(
+    summaries.some((text) => text.startsWith('Read the schema')),
+    true,
+  )
+  assertEquals(
+    summaries.some((text) => text.startsWith('Listed the files of notices')),
+    true,
+  )
+  let component = [...document.querySelectorAll('dt')]
+    .find((key) => key.textContent == 'Component')
+  assertEquals(component?.nextElementSibling?.tagName, 'DD')
+  assertEquals(component?.nextElementSibling?.textContent, 'doc')
   assertStringIncludes(drawn.html, 'notice is posted')
   assertEquals(drawn.html.includes('data-pending'), false)
   assertEquals(drawn.task, out.task)

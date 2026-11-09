@@ -71,11 +71,12 @@ test('the apex answers the crawler and the model', async () => {
     // map, one subject, the technical page beside them, and the 301s the
     // addresses they moved from answer.
     let map2 = await (await k.at('yaks.app', '/docs')).text()
-    assertStringIncludes(
-      map2,
-      '<h1 id="building-a-yaks-app">Building a yaks app</h1>',
+    let mapDoc = parseHTML(map2).document
+    assertEquals(
+      mapDoc.querySelector('h1#building-a-yaks-app')?.textContent,
+      'Building a yaks app',
     )
-    assertStringIncludes(map2, '<a href="/docs/querying">')
+    assert(mapDoc.querySelector('a[href="/docs/querying"]'))
     let onePage = await k.at('yaks.app', '/docs/querying')
     let one = await onePage.text()
     assertStringIncludes(
@@ -86,13 +87,20 @@ test('the apex answers the crawler and the model', async () => {
     // drawn page also beside its own sections, linked by the ids the renderer
     // put on those headings (T-37774).
     let nav = (html: string) =>
-      parseHTML(html).document.querySelector('nav.Page_Side.SideNav')
+      parseHTML(html).document.querySelector('nav[aria-label="Documentation"]')
     assert(nav(one), 'the documentation beside the page')
-    assertStringIncludes(one, '<nav class="Page_Aside Docs_Contents"')
-    let jump = /<a href="#([^"]+)">/.exec(one)![1]
-    assertStringIncludes(one, ` id="${jump}">`)
+    let oneDoc = parseHTML(one).document
+    let sections = oneDoc.querySelector('nav[aria-label="On this page"]')
+    assert(sections, 'the page’s own sections')
+    let jump = sections.querySelector('a[href^="#"]')?.getAttribute('href')
+    assert(jump, 'a link to a section')
+    assert(oneDoc.querySelector(jump), 'the section linked from the contents')
     let tech = await (await k.at('yaks.app', '/docs/technical')).text()
-    assertStringIncludes(tech, '<h1 id="technical-details">Technical Details')
+    assertEquals(
+      parseHTML(tech).document.querySelector('h1#technical-details')
+        ?.textContent,
+      'Technical Details',
+    )
     let here = nav(tech)?.querySelector('[aria-current="page"]')
     assertEquals(here?.getAttribute('href'), '/docs/technical')
     assertEquals(here?.textContent, 'Technical Details')
@@ -158,11 +166,8 @@ test('the apex answers the crawler and the model', async () => {
         `${at}.md`,
       )
       let lead = /^# (.+)$/m.exec(await file.text())![1]
-      assertStringIncludes(
-        await (await k.at('yaks.app', at)).text(),
-        `>${lead}</h1>`,
-        at,
-      )
+      let { document } = parseHTML(await (await k.at('yaks.app', at)).text())
+      assertEquals(document.querySelector('h1')?.textContent, lead, at)
     }
 
     for (

@@ -196,7 +196,10 @@ test('management separates app creation from agent setup', async () => {
     200,
   )
   let setup = await (await at('agents')).text()
-  assertStringIncludes(setup, '<h1>Agents</h1>')
+  assertEquals(
+    parseHTML(setup).document.querySelector('h1')?.textContent,
+    'Agents',
+  )
   assertStringIncludes(setup, 'Connect another agent')
   assertStringIncludes(setup, 'name="agent"')
   assert(!setup.includes('<textarea'), setup)
@@ -487,8 +490,8 @@ test("the selector names whose space each one you're a member of is", async () =
     let page = await k.at('yaks.app', managePath('profile'), {
       headers: { cookie },
     })
-    return [...(await page.text()).matchAll(/<small>([^<]*)<\/small>/g)]
-      .map((m) => m[1])
+    return [...parseHTML(await page.text()).document.querySelectorAll('small')]
+      .map((note) => note.textContent ?? '')
   }
   let owner = them.email.split('@')[0]
   // The owner's own row says nothing under its name; the member's names the
