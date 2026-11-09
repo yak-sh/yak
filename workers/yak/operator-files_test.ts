@@ -95,11 +95,15 @@ test('a picture and a PDF sent from the page reach Claude as they are', () => {
   assertEquals(
     media.map((i) => [i.kind, i.mediaType, i.label]),
     [
-      ['image', 'image/png', `Attached: flyer.png (attachment ${pngId})`],
+      [
+        'image',
+        'image/png',
+        `From the attached document:\nAttached: flyer.png (attachment ${pngId})`,
+      ],
       [
         'document',
         'application/pdf',
-        `Attached: agenda.pdf (attachment ${pdfId})`,
+        `From the attached document:\nAttached: agenda.pdf (attachment ${pdfId})`,
       ],
     ],
   )
@@ -355,7 +359,9 @@ test('a run on another provider sends its DOCX as a document with its original f
     kind: 'document',
     filename: 'minutes.docx',
     mediaType: docxType,
-    label: `Attached: minutes.docx (attachment ${docx.key.split('/').at(-1)})`,
+    label: `From the attached document:\nAttached: minutes.docx (attachment ${
+      docx.key.split('/').at(-1)
+    })`,
     bytes: docxBytes,
   })
   assertEquals(fileRun.model, 'files')

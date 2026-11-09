@@ -36,6 +36,8 @@ let lines = [
     system: {},
   }),
   line('voice', { notice: { own: true } }),
+  line('progress', { tool_progress: { call: 'progress-call' } }),
+  line('progress-call', { call: { id: 'p', to: 'echo', args: {} } }),
   line('call', { call: { id: 'c', to: 'echo', args: {} } }),
   line('refused', { result: { call: 'call' }, refusal: { code: 'arguments' } }),
 ]
@@ -73,6 +75,7 @@ let expected = [
   ['TaskMaster', 'TaskMaster'],
   ['your conversation with Ana', 'escalation'],
   ['your voice on the call', 'voice'],
+  ['the system', 'progress'],
   ['the echo tool', 'refused'],
   ['the attached document', 'source file'],
 ]

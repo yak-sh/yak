@@ -95,7 +95,10 @@ test('file import snapshots bytes; attach is user-only; explicit view projects b
 // the model was sent names its call on a line before it.
 let finalOf = (item: Item) =>
   item.kind == 'result'
-    ? item.output.replace(/^The pending [^\n]* finished:\n/, '')
+    ? item.output.replace(/^From [^\n]*:\n/, '').replace(
+      /^The pending [^\n]* finished:\n/,
+      '',
+    )
     : ''
 
 test('tool-driven vision reaches the next model request and survives database reopen', async () => {
@@ -205,7 +208,13 @@ test('tool-driven vision reaches the next model request and survives database re
       entries,
       h.artifacts,
     )).values()].flat()
-    assertEquals(restored, images)
+    assertEquals(
+      images,
+      restored.map((item) => {
+        assert(item.kind == 'image')
+        return { ...item, label: 'From the attached document:\n' + item.label }
+      }),
+    )
     h.close()
   } finally {
     await a.close()

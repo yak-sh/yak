@@ -20,7 +20,7 @@ let echo: Model = (req) =>
       text: req.items.at(-1)?.kind == 'user'
         ? `heard: ${
           (req.items.at(-1) as { text: string }).text.replace(
-            /^\[Sent [^\n]*\]\n/,
+            /^From [^\n]*:\n\[Sent [^\n]*\]\n/,
             '',
           )
         }`
@@ -489,7 +489,8 @@ test('send commits during a provider turn and unserved input reaches the next an
     )!
     assertEquals(user, {
       kind: 'user',
-      text: `[Sent ${sent}; previous reply ended ${ended}]\nwhile waiting`,
+      text:
+        `From an unknown sender:\n[Sent ${sent}; previous reply ended ${ended}]\nwhile waiting`,
     })
     await a.send(s, 'after reading')
     await a.idle(s)
@@ -506,7 +507,9 @@ test('send commits during a provider turn and unserved input reaches the next an
       ),
       {
         kind: 'user',
-        text: `[Sent ${(after.created as Comp).at}; previous reply ended ${
+        text: `From an unknown sender:\n[Sent ${
+          (after.created as Comp).at
+        }; previous reply ended ${
           (lastReply.updated as Comp).at
         }]\nafter reading`,
       },

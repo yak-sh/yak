@@ -111,12 +111,15 @@ let outputs = admins.at(-1)!.items.flatMap((i) =>
 test("the admin's Operator reads any space's budget", () => {
   assertMatch(
     outputs[0],
-    /^adas: \$\d+\.\d\d a month \(its plan's\)\nspent {4}\$0\.00 this month/,
+    /^From the admin_budget tool:\nadas: \$\d+\.\d\d a month \(its plan's\)\nspent {4}\$0\.00 this month/,
   )
 })
 
 test("the admin's Operator reads the bugs of the platform tracker and of each space's", () => {
-  assertMatch(outputs[1], /^Tracker: 0 unresolved bugs/)
+  assertMatch(
+    outputs[1],
+    /^From the admin_errors tool:\nTracker: 0 unresolved bugs/,
+  )
   assertEquals(
     reads.map((u) => `${u.pathname} ${u.searchParams.get('scope')}`).sort(),
     [

@@ -77,7 +77,10 @@ for (let kind of ['fork', 'spawn']) {
     let [child] = await a.children(parent)
     assertEquals((child.spawned as Comp).parent, parent)
     assertEquals('fork' in child, kind == 'fork')
-    assertEquals(req.items[0], { kind: 'instruction', text: 'shared snapshot' })
+    assertEquals(req.items[0], {
+      kind: 'instruction',
+      text: 'From the system:\nshared snapshot',
+    })
     assertEquals(
       req.items.some((i) =>
         i.kind == 'instruction' &&
@@ -89,12 +92,13 @@ for (let kind of ['fork', 'spawn']) {
     assertEquals(req.effort, 'high')
     assert(
       req.items.some((i) =>
-        i.kind == 'instruction' && i.text == 'child instructions'
+        i.kind == 'instruction' &&
+        i.text == 'From your parent session:\nchild instructions'
       ),
     )
     assertEquals(
       req.items.filter((i) => i.kind == 'user').map((i) =>
-        i.text.replace(/^\[Sent [^\n]*\]\n/, '')
+        i.text.replace(/^From [^\n]*:\n\[Sent [^\n]*\]\n/, '')
       ),
       kind == 'fork' ? ['parent context', 'child work'] : ['child work'],
     )
@@ -146,12 +150,13 @@ test('wait resolves while child completion waits behind the parent tool', async 
     // final has arrived, paired or (when late) naming its call first.
     let late = 'The pending spawn call spawn '
     let result = req.items.findLast((i) =>
-      i.kind == 'result' && i.id == 'spawn' && i.output != PENDING ||
-      i.kind == 'user' && i.text.startsWith(late)
+      i.kind == 'result' && i.id == 'spawn' && !i.output.endsWith(PENDING) ||
+      i.kind == 'user' && i.text.includes(late)
     )
     if (!waited && result) {
       assert(result.kind == 'result' || result.kind == 'user')
       let lines = (result.kind == 'result' ? result.output : result.text)
+        .replace(/^From [^\n]*:\n/, '')
         .split('\n')
       waited = true
       return Promise.resolve(call('wait', {

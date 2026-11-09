@@ -202,9 +202,9 @@ let continued = await (async () => {
 test('a later line inherits using and gets exactly one model turn', () => {
   assertEquals(continued.asked.length, 2)
   assertEquals(continued.asked[1].items, [
-    { kind: 'user', text: 'say done' },
+    { kind: 'user', text: 'From an unknown sender:\nsay done' },
     { kind: 'assistant', text: 'done' },
-    { kind: 'user', text: 'and again' },
+    { kind: 'user', text: 'From an unknown sender:\nand again' },
   ])
   assertEquals(continued.entries.map(kindOf), [
     'input',

@@ -136,7 +136,7 @@ test('passive model controls do not add invented user text to the next request',
     await a.idle(s)
     assertEquals(
       seen[1].items.filter((i) => i.kind == 'user').map((i) =>
-        i.text.replace(/^\[Sent [^\n]*\]\n/, '')
+        i.text.replace(/^From [^\n]*:\n\[Sent [^\n]*\]\n/, '')
       ),
       ['first', 'second'],
     )

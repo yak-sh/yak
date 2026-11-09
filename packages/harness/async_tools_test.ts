@@ -115,8 +115,8 @@ await observed(
       // asked the model again; that request answered both calls as pending.
       ok(progress.some((b) => b.tool_progress))
       equal(requests[1].items.filter((item) => item.kind == 'result'), [
-        { kind: 'result', id: 'slow', output: PENDING },
-        { kind: 'result', id: 'fast', output: PENDING },
+        { kind: 'result', id: 'slow', output: 'From the system:\n' + PENDING },
+        { kind: 'result', id: 'fast', output: 'From the system:\n' + PENDING },
       ])
       equal(progress.filter((b) => b.result).length, 0)
 

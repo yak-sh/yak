@@ -140,7 +140,7 @@ test('model receives bounded tool result, UI keeps original and prompt/user stay
     assert(output.includes('graph_value_read'))
     assertEquals(
       requests[0].items.find((i) => i.kind == 'user')?.text.replace(
-        /^\[Sent [^\n]*\]\n/,
+        /^From [^\n]*:\n\[Sent [^\n]*\]\n/,
         '',
       ),
       user,

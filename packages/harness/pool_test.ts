@@ -53,8 +53,10 @@ test('shared FIFO pool admits IDs before preparation and never over-admits acros
     ...bound,
     model: (req) => {
       let text = req.items.find((i) => i.kind == 'user') as { text: string }
-      starts.push(text.text.replace(/^\[Sent [^\n]*\]\n/, ''))
-      return replies[Number(text.text.replace(/^\[Sent [^\n]*\]\n/, ''))]
+      starts.push(text.text.replace(/^From [^\n]*:\n\[Sent [^\n]*\]\n/, ''))
+      return replies[
+        Number(text.text.replace(/^From [^\n]*:\n\[Sent [^\n]*\]\n/, ''))
+      ]
         .promise
     },
   })
@@ -152,7 +154,7 @@ test('cap one nested delegated wait releases and reacquires its slot', async () 
     maxChildren: 1,
     model: (req) => {
       let name = (req.items.find((i) => i.kind == 'user') as { text: string })
-        .text.replace(/^\[Sent [^\n]*\]\n/, '')
+        .text.replace(/^From [^\n]*:\n\[Sent [^\n]*\]\n/, '')
       let n = turns.get(name) ?? 0
       turns.set(name, n + 1)
       let call = (tool: string, args: unknown): Reply => ({
@@ -177,7 +179,9 @@ test('cap one nested delegated wait releases and reacquires its slot', async () 
         }
         return Promise.resolve(
           call('wait', {
-            children: [result.output.split('\n')[0]],
+            children: [
+              result.output.replace(/^From [^\n]*:\n/, '').split('\n')[0],
+            ],
             timeout: 5000,
           }),
         )

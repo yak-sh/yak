@@ -413,7 +413,9 @@ test('task mode paints claimed work and subagent, then its delivered result with
       if (
         req.items.some((i) =>
           i.kind == 'user' &&
-          i.text.replace(/^\[Sent [^\n]*\]\n/, '').startsWith('microtask')
+          i.text.replace(/^From [^\n]*:\n\[Sent [^\n]*\]\n/, '').startsWith(
+            'microtask',
+          )
         )
       ) {
         childAsked.resolve()
@@ -461,6 +463,7 @@ test('task mode paints claimed work and subagent, then its delivered result with
     await a.idle(parent.entity.eid)
     await settle() // no keys after the submit
     assert(ui.text().includes('microtask final'), ui.text())
+    assert(!ui.text().includes('From '), ui.text())
     assert(ui.text().includes('done'), ui.text())
   } finally {
     ui.free()

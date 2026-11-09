@@ -185,7 +185,7 @@ test('root admission is snapshotted and explicit later context is an instruction
       requests[0].items.filter((i) => i.kind == 'instruction').map((i) =>
         i.text
       ),
-      ['shared rule'],
+      ['From the system:\nshared rule'],
     )
     await Deno.writeTextFile(dir + '/AGENTS.md', 'changed rule')
     await a.instruct(id, 'additional rule', 'test')
@@ -194,7 +194,7 @@ test('root admission is snapshotted and explicit later context is an instruction
       requests.at(-1)!.items.filter((i) => i.kind == 'instruction').map((i) =>
         i.text
       ),
-      ['shared rule', 'additional rule'],
+      ['From the system:\nshared rule', 'From the system:\nadditional rule'],
     )
   } finally {
     await a.close()
@@ -237,7 +237,10 @@ test('a native session carries its chosen graph persona into the model request',
       requests[0].items.filter((i) => i.kind == 'instruction').map((i) =>
         i.text
       ),
-      ['Repository guidance.', expected],
+      [
+        'From the system:\nRepository guidance.',
+        'From the system:\n' + expected,
+      ],
     )
     let [session] = await h.g.get([id])
     assertEquals((session.session as Comp).persona, persona)
@@ -279,7 +282,7 @@ test('retired CLI instructions are omitted on future asks without rewriting hist
       requests[0].items.filter((i) => i.kind == 'instruction').map((i) =>
         i.text
       ),
-      ['Keep repository guidance.'],
+      ['From the system:\nKeep repository guidance.'],
     )
     let history = await a.transcript(id)
     let ask = history.find((b) => b.ask)!

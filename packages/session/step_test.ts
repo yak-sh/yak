@@ -172,17 +172,28 @@ test('calls that answer within their patience start no turn while they run', () 
     'ask',
     'output',
   ])
-  equal(answers(s.next), [['FINAL_1'], ['FINAL_2']])
+  equal(answers(s.next), [['From the read tool:', 'FINAL_1'], [
+    'From the read tool:',
+    'FINAL_2',
+  ]])
 })
 
 test('calls that outlast their patience get a Pending, and the model goes on', () => {
   equal([q.running, q.finished], [2, 3])
   equal(q.kinds.filter((k) => k == 'result').length, 4)
   equal(answers(q.next), [
-    [PENDING],
-    [PENDING],
-    ['The pending read call call1 {"n":1} finished:', 'FINAL_1'],
-    ['The pending read call call2 {"n":2} finished:', 'FINAL_2'],
+    ['From the system:', PENDING],
+    ['From the system:', PENDING],
+    [
+      'From the read tool:',
+      'The pending read call call1 {"n":1} finished:',
+      'FINAL_1',
+    ],
+    [
+      'From the read tool:',
+      'The pending read call call2 {"n":2} finished:',
+      'FINAL_2',
+    ],
   ])
 })
 

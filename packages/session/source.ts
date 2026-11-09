@@ -18,7 +18,9 @@ export let source = (
       ? 'the system'
       : `your helper (${delivery.child})`
   }
-  if (entry.system || entry.woken || entry.attention) return 'the system'
+  if (entry.system || entry.woken || entry.attention || entry.tool_progress) {
+    return 'the system'
+  }
   if (entry.checkpoint) return 'the checkpoint summarizer'
   if (entry.prompt) {
     return comp(entry, 'prompt').source == 'delegation:instructions'

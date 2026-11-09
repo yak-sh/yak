@@ -108,7 +108,7 @@ let again = (await store.g.read('.operator_request.channel=wake')).length
 
 await ask('Check my mail every morning')
 await ask('What wake-ups do I have?')
-let listed = JSON.parse(results.at(-1)!.split('\n')[0])
+let listed = JSON.parse(results.at(-1)!.split('\n')[1])
 let [daily] = await store.g.read(`.operator_ask.person=${person} .wake.every`)
 await ask(`Cancel ${short(daily.entity.eid)}`)
 let gone = await store.g.get([daily.entity.eid])
