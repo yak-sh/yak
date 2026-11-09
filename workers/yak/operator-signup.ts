@@ -2,7 +2,7 @@ import type { Tool } from '@yaks/session'
 import type { Arrival } from '@yaks/phone'
 import { Blocked, keyword } from '@yaks/phone'
 import { type Bundle, derivedEid, type Graph } from '@yaks/graph'
-import { appStore, directoryOf, type Space } from './directory.ts'
+import { appStore, directoryOf, type Space, url as urlOf } from './directory.ts'
 import type { Env } from './env.ts'
 import { KERNEL } from './meta.ts'
 import { refuse } from './tool.ts'
@@ -35,9 +35,17 @@ export let textStopped = async (
 ) => !!(await g.get([consentAt(arrival)], ['cancelled']))[0]?.cancelled
 
 export let SIGNUP =
-  'You are helping this person sign up by text. Only use the sign-up tools, directly. List the open forms and their own registrations to find what they want or resume where they stopped. The registration is the whole progress of the conversation: read it each turn, even if the transcript says something different. Ask only the question returned by next, in its own words, with its choices and hint. Required questions come first. Tell them each optional question can be skipped by replying skip, and record that as null. Record an answer only when the person gave it; never infer agreement to announcements or other text consent. Repeat groups take arrays of answer objects; ask how many entries, then their questions as next returns them. After required answers are complete, explain that they are signed up and offer the remaining optional questions. Once next is null, give the form’s thanks. Reply briefly in plain text. You only answer the text you received; never start a text, delegate, set a wake-up, subscribe, or change anything outside this registration.'
+  'You are helping this person sign up by text. Only use the sign-up tools, directly. List the open forms and their own registrations to find what they want or resume where they stopped. The registration is the whole progress of the conversation: read it each turn, even if the transcript says something different. Ask only the question returned by next, in its own words, with its choices and hint. Required questions come first. Tell them each optional question can be skipped by replying skip, and record that as null. Record an answer only when the person gave it; never infer agreement to announcements or other text consent. Repeat groups take arrays of answer objects; ask how many entries, then their questions as next returns them. After required answers are complete, explain that they are signed up and offer the remaining optional questions. Once next is null, give the form’s thanks. Reply briefly in plain text. You only answer the text you received; never start a text, delegate, set a wake-up, subscribe, or change anything outside their own registrations and private calendar link.'
 
-/** Only the four form operations, bound to the vouched person's identity. */
+let linked = (value: unknown, root: string): unknown => {
+  if (Array.isArray(value)) return value.map((row) => linked(row, root))
+  return value && typeof value == 'object' && 'calendar' in value &&
+      typeof value.calendar == 'string'
+    ? { ...value, calendar: new URL(value.calendar, root).href }
+    : value
+}
+
+/** Form operations, bound to the vouched person's identity. */
 export let signupTools = (
   env: Env,
   space: Space,
@@ -75,7 +83,7 @@ export let signupTools = (
         },
         KERNEL,
       )
-      return { app: app.slug, result: value }
+      return { app: app.slug, result: linked(value, urlOf(space, app, env)) }
     }))
     return JSON.stringify(
       out.filter(({ result }) => !Array.isArray(result) || result.length > 0),
@@ -117,7 +125,13 @@ export let signupTools = (
     ),
     tool(
       'mine',
-      'Show only this person’s registrations and the next question each still owes.',
+      'Show only this person’s registrations, their private calendar link and the next question each still owes.',
+    ),
+    tool(
+      'calendar',
+      'Get the person’s private calendar link for their registrations, including website sign-ups matched by their verified phone. A registration id is optional. Set replace to true only when they ask for a new link; the previous link then stops working.',
+      { app: string, registration: string, replace: { type: 'boolean' } },
+      ['app'],
     ),
   ]
 }

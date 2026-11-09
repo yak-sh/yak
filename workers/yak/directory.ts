@@ -3109,6 +3109,10 @@ export let directoryRows = (rows: {
     // person — the letter's envelope, and nothing else (T-32629).
     emailAt: async (person: string): Promise<string | null> =>
       (await self.known(person))?.email ?? null,
+    // Text-only people have no email, so `known` cannot supply their number.
+    phoneAt: async (person: string): Promise<string | null> =>
+      (await one(`.entity.eid=${person}&.person&.phone`))?.phone?.number ??
+        null,
     // The number a person agreed to be texted at, in the words they agreed
     // to (@yaks/phone), or null when they have not agreed. Read off their
     // row rather than through `known`: a person who signed up by text has a

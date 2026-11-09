@@ -284,6 +284,7 @@ import { DELIVER, MAIL } from '@yaks/mail'
 import { subscription } from './notices.ts'
 import { formIn } from './forms.ts'
 import { signupIn } from './signup.ts'
+import { calendarIn } from './calendar.ts'
 import {
   Denied,
   edits,
@@ -4560,6 +4561,9 @@ export class Store {
     if (path == WAKE && kernel) return new Response(null, { status: 204 })
     if (path == '/signup' && kernel) {
       return signupIn(request, this.#stored(this.#graph))
+    }
+    if (path == '/calendar' && kernel) {
+      return calendarIn(request, this.#stored(this.#graph))
     }
     if (path == '/form' && kernel) {
       return formIn(request, this.#stored(this.#graph))

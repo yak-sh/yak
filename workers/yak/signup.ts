@@ -6,6 +6,7 @@ import { consentEid } from '@yaks/phone'
 import { Refused } from '@yaks/graph/errors'
 import type { Stored } from './graph.ts'
 import { accepted } from './form-rules.ts'
+import { calendarScope, personalFeed } from './calendar.ts'
 
 let comp = (row: Bundle | undefined, name: string): Comp =>
   row?.[name] as Comp ?? {}
@@ -40,13 +41,22 @@ let available = async (at: Stored, row: Bundle) => {
   return open({ form }, at.now(), held.length)
 }
 
-let progress = (row: Bundle, form: Form) => ({
+let link = async (at: Stored, person: string, replace = false) =>
+  `calendar/${(await personalFeed(at, person, replace)).feed.token}.ics`
+
+let progress = async (
+  at: Stored,
+  row: Bundle,
+  form: Form,
+  person: string,
+) => ({
   registration: row.entity.eid,
   form: comp(row, 'registration').form,
   answers: comp(row, 'registration').answers ?? {},
   completed: !!row.completed,
   next: next(form, comp(row, 'registration').answers as Answers ?? {}) ?? null,
   thanks: form.form.thanks,
+  calendar: await link(at, person),
 })
 
 // A path comes only from next(), never from a model-supplied property name.
@@ -92,6 +102,7 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
     registration?: string
     path?: (string | number)[]
     value?: unknown
+    replace?: boolean
   }
   if (!at.app || !args.person || !args.phone) {
     return Response.json({ message: 'No sign-up identity.' }, { status: 400 })
@@ -121,7 +132,7 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
             at,
             String(comp(row, 'registration').form),
           )
-          return progress(row, form)
+          return progress(at, row, form, args.person)
         })),
       )
     }
@@ -132,7 +143,9 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
           quoted(source.entity.eid)
         }&!cancelled&?completed&.limit=1`,
       )
-      if (held) return Response.json(progress(held, form))
+      if (held) {
+        return Response.json(await progress(at, held, form, args.person))
+      }
       if (!await available(at, source)) {
         throw new Refused('This form is closed or full.')
       }
@@ -149,9 +162,22 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
         ...missing(form, answers).length ? {} : { completed: {} },
       }], { by: at.app }))
       let [row] = await at.graph.get([id])
-      return Response.json(progress(row, form))
+      return Response.json(await progress(at, row, form, args.person))
     }
-    if (args.op != 'answer') throw new Refused('No such sign-up operation.')
+    if (args.op != 'answer' && args.op != 'calendar') {
+      throw new Refused('No such sign-up operation.')
+    }
+    if (args.op == 'calendar') {
+      let [row] = await at.graph.read(
+        `${await calendarScope(at, args.person)}${
+          args.registration ? `&.entity.eid=${quoted(args.registration)}` : ''
+        }&.limit=1`,
+      )
+      if (!row) throw new Refused('No such registration.')
+      return Response.json({
+        calendar: await link(at, args.person, args.replace === true),
+      })
+    }
     let [row] = await at.graph.read(
       `${mine}&.entity.eid=${
         quoted(args.registration ?? '')
@@ -161,7 +187,7 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
     let { form } = await definition(at, String(comp(row, 'registration').form))
     let answers = comp(row, 'registration').answers as Answers ?? {}
     let owed = next(form, answers)
-    if (!owed) return Response.json(progress(row, form))
+    if (!owed) return Response.json(await progress(at, row, form, args.person))
     if (quoted(args.path) != quoted(owed.path)) {
       throw new Refused(
         'That question has changed. Read your registration again.',
@@ -205,14 +231,21 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
         ? {}
         : { completed: {} },
     }, ...consent], { by: at.app }))
-    return Response.json(progress({
-      ...row,
-      registration: {
-        ...comp(row, 'registration'),
-        answers: updated,
-      },
-      ...missing(form, updated).length ? {} : { completed: {} },
-    }, form))
+    return Response.json(
+      await progress(
+        at,
+        {
+          ...row,
+          registration: {
+            ...comp(row, 'registration'),
+            answers: updated,
+          },
+          ...missing(form, updated).length ? {} : { completed: {} },
+        },
+        form,
+        args.person,
+      ),
+    )
   } catch (error) {
     if (!(error instanceof Refused)) throw error
     return Response.json({ message: error.message }, { status: 400 })

@@ -1,7 +1,30 @@
 {
-  "$vocabulary": { "https://yak.sh/vocab/core": true },
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/member": true
+  },
   "title": "events",
   "$defs": {
+    "feed": {
+      "component": true,
+      "type": "object",
+      "readers": "viewer",
+      "floor": "editor",
+      "description": "one person's private calendar subscription; its token opens only this feed",
+      "required": ["person", "token"],
+      "properties": {
+        "person": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "description": "the person whose accepted registrations select the events"
+        },
+        "token": {
+          "type": "string",
+          "description": "unguessable, replaceable capability for this calendar alone"
+        }
+      }
+    },
     "event": {
       "component": true,
       "type": "object",

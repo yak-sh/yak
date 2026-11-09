@@ -63,6 +63,16 @@ excluding person-owned rows and rows carrying `cancelled{at, by, via, reason}`.
 A private app has no public feed. Event expansion and feed serialization live in
 `@yaks/events`.
 
+**`feed`** — `person` (eid), `token` (text). A person's private calendar
+subscription, served at `./calendar/<token>.ics`, including on private apps. It
+includes events with that person's completed registrations, excluding cancelled
+and waitlisted registrations and cancelled events. Every event keeps its own
+time zone. The token opens only that calendar and grants no access to app data
+or APIs. Feed rows require a viewer to read and an editor to write. The Operator
+returns the link with the person's own registrations; `signup_calendar`
+retrieves or replaces it after checking the registration's vouched submitter.
+Replacement revokes the previous link immediately.
+
 **`doc`** — `title` (text), `body` (text). The text a person reads, and what
 `search` searches, along with any declared property marked searchable (below).
 Nearly every entity your app saves should have one: a row with no `doc` has no
@@ -704,7 +714,7 @@ The complete list of reserved names:
     cost created credit credit_block delegates delete_upload deliver
     delivered demo deploy desk_sidebar dispatch doc document_extract
     document_page document_text draft edge effect email entity entry error
-    event exception execution failed favorite fee feedback file filed
+    event exception execution failed favorite fee feed feedback file filed
     finding fired form form_post former gallery gitobj grant grants_listed
     home hook hostname image inference installed integration
     integration_install interrupted invite inviting key last_deploy lease

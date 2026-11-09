@@ -1,5 +1,6 @@
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { formsDoc } from '@yaks/forms/vocab'
+import { eventsDoc } from '@yaks/events/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { docDoc } from '@yaks/doc'
 import { consentEid, phoneDoc } from '@yaks/phone'
@@ -11,7 +12,7 @@ import { formRules } from './form-rules.ts'
 import { directoryForms } from './form-directory.ts'
 import type { Stored } from './graph.ts'
 
-let vocab = loadVocab([kernelDoc, formsDoc, docDoc, phoneDoc, {
+let vocab = loadVocab([kernelDoc, formsDoc, eventsDoc, docDoc, phoneDoc, {
   $defs: {
     individual: {
       component: true,
@@ -61,7 +62,7 @@ let fixture = async (questions: Bundle[], extras: Bundle[] = []) => {
           ...args,
         }),
       }),
-      { graph: reopen(), app: 'app', now: () => 1000 } as Stored,
+      { graph: reopen(), app: 'app', env: {}, now: () => 1000 } as Stored,
     )
     return { status: r.status, value: await r.json() }
   }
