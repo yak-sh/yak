@@ -259,6 +259,26 @@ to the integration's `hosts`, so who brokers an integration changes no caller.
 Nango is the one implemented (`BROKERS`). Its key is the secret `broker nango`
 (`brokerKey`), which yaks.app keeps with `yak admin broker nango <op://…>`.
 
+Nango's key selects its environment. Keep a dedicated, scoped **prod** key in
+yaks.app's platform vault; keep **dev** for local development and manual checks.
+Automated tests supply an in-memory vault and a fetcher, and use no live key.
+The platform's `broker nango` secret is independent of a local graph's secret
+with the same name. Changing one does not change the other.
+
+Create the prod key in Nango's **Environment Settings → API Keys**, and save it
+in 1Password before copying it with `yak admin broker`. Environment keys cannot
+mint another key or change environment settings: those operations require an
+Account API key or a signed-in dashboard. The runtime needs integration read and
+create, connect-session write, and connection list, read-credentials and delete
+permissions. It needs no account, deploy, sync, action or proxy access.
+
+Each environment has its own integrations and connections. Before replacing a
+key, configure the same integrations in the destination and inventory the people
+whose grants stay behind. Preserve those grants. Nango-managed OAuth apps retain
+Nango's callback URL; a custom callback requires an OAuth app of your own.
+yaks.app settles brokered sign-ins when it reads connections, so it does not
+require a Nango webhook URL.
+
 - `begin` on a brokered integration answers the broker's sign-in link and no
   attempt: the sign-in returns to the broker, not to us.
 - `settle(ctx, connection)` asks the broker whether a sign-in finished for a
