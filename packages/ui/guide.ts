@@ -6,27 +6,34 @@ import type { Props } from './el.ts'
 import { Gallery } from './Gallery.ts'
 import { Head } from './Head.ts'
 import { Index } from './Index.ts'
-import { composition, groups, kit, parts } from './kit.ts'
+import { composition, groups, kit, rendering } from './kit.ts'
 import type { Composition, Piece } from './theme.ts'
 
 export let title = '@yaks/ui'
 type Entry = Pick<Piece, 'description' | 'specimens'> & {
   title?: string
   part?: string
+  kit?: string
 }
 type Entries = Record<string, Entry>
 
+let uiEntries = (kit: string, pieces: Entries, base = false): Entries =>
+  Object.fromEntries(
+    Object.entries(pieces).map(([part, entry]) => [
+      base ? part : `ui/${kit}/${part}`,
+      { ...entry, title: part, part, kit },
+    ]),
+  )
+
 /** The base retains its familiar groups; other kits carry their own names. */
 export let sections = (c: Composition): Record<string, Entries> => {
-  parts(c)
   let out: Record<string, Entries> = {}
   for (let [name, pieces] of Object.entries(c.kits)) {
-    if (pieces == kit) Object.assign(out, groups)
-    else {out[`ui/${name}`] = Object.fromEntries(
-        Object.entries(pieces).map((
-          [part, entry],
-        ) => [`ui/${name}/${part}`, { ...entry, title: part, part }]),
-      )}
+    if (pieces == kit) {
+      for (let [group, parts] of Object.entries(groups)) {
+        out[group] = uiEntries(name, parts, true)
+      }
+    } else out[`ui/${name}`] = uiEntries(name, pieces)
   }
   for (let [name, ux] of Object.entries(c.ux ?? {})) {
     out[`ux/${name}`] = Object.fromEntries(
@@ -74,7 +81,7 @@ export let Specimens = (
   let part = entries(c)[name]
   if (!part) throw new Error(`unknown guide entry: ${name}`)
   let uiName = part.part ?? (!part.title ? name : undefined)
-  let skinned = !!uiName && !!c.skin?.[uiName]
+  let skinned = !!uiName && !!part.kit && !!rendering(c, part.kit, uiName)
   return h(
     Catalog.Entry,
     { id: name, 'data-skin': skinned ? 'skin' : 'kit' },
@@ -109,7 +116,8 @@ let Group = (
 
 // An entry is of a part the host wears, by the part's name.
 let worn = (id: string, entry: Entry, only?: string[]) =>
-  !only || only.includes(entry.part ?? id)
+  !only || only.includes(entry.part ?? id) ||
+  (!!entry.kit && only.includes(`${entry.kit}/${entry.part ?? id}`))
 
 /** The parts a host wears, under the groups the guide shows them in, as its
  * composition draws them: a site's own style guide shows these beside what

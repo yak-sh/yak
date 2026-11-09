@@ -7,7 +7,15 @@ import { print } from '@yaks/tui/print'
 let plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
 import { el } from './el.ts'
 import { Guide, Page, stopsOf, Worn } from './guide.ts'
-import { gather, kits, native, sheet, stylesheet } from './kit.ts'
+import {
+  gather,
+  kits,
+  native,
+  parts,
+  sheet,
+  sheets,
+  stylesheet,
+} from './kit.ts'
 import { everforest } from './everforest.ts'
 import type { Composition, Kit } from './theme.ts'
 
@@ -133,11 +141,6 @@ test('installed facets gather all four contribution kinds and reject ambiguous n
   assertEquals(all.ux, ux)
   assertEquals(all.skins!.custom, c.skin)
   assertThrows(() => gather([{ kits }, { kits }]), Error, 'duplicate UI kits')
-  assertThrows(
-    () => sheet({ ...c, kits: { a: external, b: external } }),
-    Error,
-    'duplicate UI part',
-  )
 })
 
 test('missing external CSS is a composition failure, not an undressed page', async () => {
@@ -205,4 +208,110 @@ test('inlined external styles retain their own relative asset and import address
   } finally {
     await Deno.remove(dir, { recursive: true })
   }
+})
+
+let shared = (name: string): Kit => ({
+  Grid: {
+    ...external.Extra,
+    css: css(`.${name} { color: red }`),
+    sheet: () => ({ [name]: { bold: true } }),
+    native: () => ({ [name]: { color: 'red' } }),
+    specimens: () => [['grid', h(Extra, {}, name)]],
+  },
+})
+let collision: Composition = {
+  kits: { first: shared('First'), second: shared('Second') },
+  theme: everforest,
+}
+
+test('shared part names retain both kits in browser, terminal, native and guide output', async () => {
+  let all = parts(collision)
+  assertEquals(all['first/Grid'], collision.kits.first.Grid)
+  assertEquals(all['second/Grid'], collision.kits.second.Grid)
+  assertEquals(parts(c).Extra, external.Extra)
+  let css = await sheets(collision)
+  assertEquals(css.map(([name]) => name), [
+    'theme',
+    'first/Grid',
+    'second/Grid',
+  ])
+  assert(css[1][1].includes('.First'))
+  assert(css[2][1].includes('.Second'))
+  assertEquals(sheet(collision), {
+    First: { bold: true },
+    Second: { bold: true },
+  })
+  assertEquals(native(collision), {
+    First: { color: 'red' },
+    Second: { color: 'red' },
+  })
+  let html = renderToString(h(Guide, { composition: collision }))
+  for (let kit of ['first', 'second']) {
+    assert(stopsOf(collision).includes(`ui/${kit}/Grid`))
+    assert(html.includes(`id="ui/${kit}/Grid"`))
+  }
+  assert(html.includes('First'))
+  assert(html.includes('Second'))
+})
+
+test('scoped skins target one shared name and override bare skin entries in every renderer', async () => {
+  let dressed: Composition = {
+    ...collision,
+    skin: {
+      Grid: {
+        css: css('.Legacy { color: blue }'),
+        sheet: () => ({ Legacy: { inverse: true } }),
+        native: () => ({ Legacy: { color: 'blue' } }),
+      },
+      'second/Grid': {
+        css: css('.Scoped { color: green }'),
+        sheet: () => ({ Scoped: { dim: true } }),
+        native: () => ({ Scoped: { color: 'green' } }),
+      },
+    },
+  }
+  let dressedCss = await sheets(dressed)
+  assert(dressedCss[1][1].includes('.Legacy'))
+  assert(dressedCss[2][1].includes('.Scoped'))
+  assertEquals(sheet(dressed), {
+    Legacy: { inverse: true },
+    Scoped: { dim: true },
+  })
+  assertEquals(native(dressed), {
+    Legacy: { color: 'blue' },
+    Scoped: { color: 'green' },
+  })
+  let targeted = {
+    ...dressed,
+    skin: { 'second/Grid': dressed.skin!['second/Grid'] },
+  }
+  let html = renderToString(h(Guide, { composition: targeted }))
+  assert(html.includes('id="ui/first/Grid" data-skin="kit"'))
+  assert(html.includes('id="ui/second/Grid" data-skin="skin"'))
+  let worn = renderToString(
+    h(Worn, { parts: ['second/Grid'], composition: targeted }),
+  )
+  assert(!worn.includes('id="ui/first/Grid"'))
+  assert(worn.includes('id="ui/second/Grid"'))
+  // Scoped names also work before another kit contributes the same part name.
+  let unique = { ...targeted, kits: { second: collision.kits.second } }
+  assertEquals(sheet(unique), { Scoped: { dim: true } })
+  assertEquals(parts(unique).Grid, collision.kits.second.Grid)
+})
+
+test('a published alias keeps the same skin rendering as its part', async () => {
+  let dressed: Composition = {
+    kits,
+    theme: everforest,
+    skin: { Cards: { css: css('.Cards { color: blue }') } },
+  }
+  let out = await sheets(dressed)
+  assertEquals(
+    out.find(([name]) => name == 'Cards')?.[1],
+    '.Cards { color: blue }',
+  )
+  assertEquals(
+    out.find(([name]) => name == 'Grid')?.[1],
+    '.Cards { color: blue }',
+  )
 })

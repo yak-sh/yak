@@ -3,7 +3,8 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { print } from '@yaks/tui/print'
-import { parts, sheet, stylesheet } from '@yaks/ui'
+import { Cards, Grid, Guide, parts, sheet, stylesheet } from '@yaks/ui'
+import { Grid as BareGrid } from '@yaks/ui/parts'
 import { h } from 'preact'
 import { render } from 'preact-render-to-string'
 import {
@@ -124,4 +125,19 @@ test('orb and compass display supplied meaning without game or input state', () 
   let terminal = plain(print(compass, 40, sheet(composition)))
   assert(terminal.includes('270°'))
   assert(terminal.includes('◆'))
+})
+
+test('Vale combines the published base and game Grids without losing either name', async () => {
+  let all = parts(composition)
+  assertEquals(Grid, Cards)
+  assertEquals(BareGrid, Grid)
+  assertEquals(all['game/Grid'], composition.kits.game.Grid)
+  assertEquals(all['base/Grid'], composition.kits.base.Grid)
+  let css = await stylesheet(composition)
+  assert(css.includes('.Grid_Cell'))
+  assert(css.includes('.Cards'))
+  assert(sheet(composition).Grid_Cell)
+  let html = render(h(Guide, { composition }))
+  assert(html.includes('id="ui/game/Grid"'))
+  assert(html.includes('id="Grid"'))
 })

@@ -321,12 +321,14 @@ retain the kit's rendering.
 
 A **composition** supplies `{ kits, theme, skin?, ux? }` to render a page and
 its guide (`Composition`). `composition` is the base kits in `gouache` and
-`paper`; a host that names no theme wears it. `parts` flattens its kits and
-refuses duplicate piece names. `stylesheet` loads the theme, then one CSS
-rendering per piece in kit order; it resolves relative CSS `url()` and quoted
-`@import` addresses against each CSS URL. `sheet` combines the selected terminal
-entries, including the base entries for [@yaks/tui](../tui/README.md)'s widgets,
-and `native` combines the native ones.
+`paper`; a host that names no theme wears it. `parts` flattens its kits, keeping
+unique names bare and qualifying shared names as `kit/name`. A skin can target
+one kit with `kit/name`; a bare skin key matches every kit, with scoped entries
+taking precedence. `stylesheet` loads the theme, then one CSS rendering per
+piece in kit order; it resolves relative CSS `url()` and quoted `@import`
+addresses against each CSS URL. `sheet` combines the selected terminal entries,
+including the base entries for [@yaks/tui](../tui/README.md)'s widgets, and
+`native` combines the native ones.
 
 ```ts
 import { composition, ledger, native, sheet, stylesheet } from '@yaks/ui'
@@ -337,7 +339,10 @@ const css = await stylesheet(dressed)
 equal(css.includes('.Button'), true)
 equal(sheet(dressed).Button.bold, true)
 equal(sheet(dressed).Field.fg, dressed.theme.colors.text)
-equal(native(dressed)['Button-go'].backgroundColor, dressed.theme.colors.accent)
+equal(
+  native(dressed)['Button-go'].backgroundColor,
+  dressed.theme.colors.accent,
+)
 ```
 
 ## Contributions
@@ -363,9 +368,9 @@ const all = gather([{ kits, themes, skins }, {
 const c: Composition = { kits: all.kits!, theme: all.themes!.rosepine }
 equal(parts(c).Extra.Component, extra.Component)
 await throws(() => gather([{ kits }, { kits }]))
-await throws(() =>
-  parts({ ...c, kits: { first: kits.base, second: kits.base } })
-)
+const shared = parts({ ...c, kits: { first: kits.base, second: kits.base } })
+equal(shared['first/Button'], kits.base.Button)
+equal(shared['second/Button'], kits.base.Button)
 ```
 
 ## Style guide

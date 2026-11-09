@@ -106,10 +106,11 @@ export type Piece = {
   specimens: () => Specimen[]
 }
 
-/** A kit names a set of parts, not one part. Names are shared with skins. */
+/** A kit names a set of parts. Skin keys are bare names or kit/name. */
 export type Kit = Record<string, Piece>
 
-/** Another rendering of just the parts it changes. An entry's `css` replaces
+/** Another rendering of just the parts it changes, keyed by kit/name or a bare
+ * name matching every kit. An entry's `css` replaces
  * the part's own, and its `over` (one sheet or several, in order) is laid on
  * top of whichever the part wears, so a skin can add to a part without
  * copying it, and two skins can share what they lay. Missing entries fall back

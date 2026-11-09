@@ -85,6 +85,7 @@ import type {
   Kit,
   Native,
   Piece,
+  Skin,
   Theme,
 } from './theme.ts'
 
@@ -173,6 +174,9 @@ export let groups: Record<string, Kit> = Object.fromEntries(
   ]),
 )
 
+// Grid is a published name for Cards; both carry the same rendering.
+groups.Page.Grid = groups.Page.Cards
+
 /** Every base part, document defaults first. */
 export let kit: Kit = Object.assign({}, ...Object.values(groups))
 export let kits: Record<string, Kit> = { base: kit }
@@ -192,27 +196,49 @@ export let composition: Composition = { kits, theme: gouache, skin: paper }
 
 export { gather } from './contributions.ts'
 
-/** Parts may only have one home in a composition. */
-export let parts = ({ kits }: Composition): Kit => {
-  let out: Kit = {}
-  for (let kit of Object.values(kits)) {
-    for (let [name, part] of Object.entries(kit)) {
-      if (Object.hasOwn(out, name)) {
-        throw new Error(`duplicate UI part: ${name}`)
-      }
-      out[name] = part
+/** A scoped skin entry changes one kit's part; bare names dress every match. */
+export let rendering = (
+  c: Composition,
+  kit: string,
+  name: string,
+): Skin[string] | undefined => {
+  let names = [
+    name,
+    ...Object.keys(c.kits[kit]).filter((alias) =>
+      alias != name && c.kits[kit][alias] == c.kits[kit][name]
+    ),
+  ]
+  return names.map((name) => c.skin?.[`${kit}/${name}`] ?? c.skin?.[name])
+    .find((skin) => skin != undefined)
+}
+
+let pieces = (c: Composition) => {
+  let counts = new Map<string, number>()
+  for (let kit of Object.values(c.kits)) {
+    for (let name of Object.keys(kit)) {
+      counts.set(name, (counts.get(name) ?? 0) + 1)
     }
   }
-  return out
+  return Object.entries(c.kits).flatMap(([kit, parts]) =>
+    Object.entries(parts).map(([name, part]) => ({
+      name: counts.get(name) == 1 ? name : `${kit}/${name}`,
+      part,
+      skin: rendering(c, kit, name),
+    }))
+  )
 }
+
+/** Unique names retain their spelling; shared names are qualified by kit. */
+export let parts = (c: Composition): Kit =>
+  Object.fromEntries(pieces(c).map(({ name, part }) => [name, part]))
 
 /** Theme colours, each kit's entries, and the skin's replacement entries. */
 export let sheet = (c: Composition): Sheet =>
   Object.freeze(
     Object.assign(
       {},
-      ...Object.entries(parts(c)).map(([name, part]) =>
-        (c.skin?.[name]?.sheet ?? part.sheet)(c.theme.colors)
+      ...pieces(c).map(({ part, skin }) =>
+        (skin?.sheet ?? part.sheet)(c.theme.colors)
       ),
     ),
   )
@@ -223,8 +249,8 @@ export let native = (c: Composition): Native =>
   Object.freeze(
     Object.assign(
       {},
-      ...Object.entries(parts(c)).map(([name, part]) =>
-        (c.skin?.[name]?.native ?? part.native)?.(c.theme.colors)
+      ...pieces(c).map(({ part, skin }) =>
+        (skin?.native ?? part.native)?.(c.theme.colors)
       ),
     ),
   )
@@ -261,8 +287,8 @@ export let sheets = async (c: Composition): Promise<[string, string][]> => {
       'theme',
       css.join('\n'),
     ]),
-    ...Object.entries(parts(c)).map(([name, part]) => {
-      let { css = part.css, over = [] } = c.skin?.[name] ?? {}
+    ...pieces(c).map(({ name, part, skin }) => {
+      let { css = part.css, over = [] } = skin ?? {}
       return each([css, ...[over].flat()]).then((
         css,
       ): [string, string] => [name, css.join('\n')])
