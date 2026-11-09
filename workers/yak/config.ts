@@ -70,6 +70,7 @@ export let appConfig: Config = {
     ...addressed,
     '@yaks/doc',
     '@yaks/forms',
+    '@yaks/events',
     '@yaks/draft',
     { use: '@yaks/member', with: { through: { document_page: 'document' } } },
     {

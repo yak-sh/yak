@@ -1,0 +1,30 @@
+{
+  "$vocabulary": { "https://yak.sh/vocab/core": true },
+  "title": "events",
+  "$defs": {
+    "event": {
+      "component": true,
+      "type": "object",
+      "description": "a calendar event or recurring series, with its title and description in doc",
+      "required": ["starts"],
+      "properties": {
+        "starts": {
+          "type": "string",
+          "description": "ISO date-time with UTC offset, or YYYY-MM-DD for an all-day event"
+        },
+        "ends": {
+          "type": "string",
+          "description": "exclusive end, in the same date or date-time form as starts; absent means one day for an all-day event, or a point in time"
+        },
+        "repeats": {
+          "type": "string",
+          "description": "RFC 5545 RRULE, such as FREQ=WEEKLY;BYDAY=SU; timed recurrences repeat in UTC"
+        },
+        "place": {
+          "type": "string",
+          "description": "where the event takes place"
+        }
+      }
+    }
+  }
+}

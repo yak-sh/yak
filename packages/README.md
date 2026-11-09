@@ -46,6 +46,9 @@ grouped approximately by function, **not** by dependency order.
 
 ## Package index
 
+- **[@yaks/events](./events)** — Calendar event rows, pure occurrence expansion
+  and iCalendar feeds.
+
 - **[@yaks/forms](./forms)** — Form, question and registration rows, with pure
   functions for question progress and sign-up availability.
 

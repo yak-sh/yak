@@ -2787,6 +2787,11 @@ let served = async (
   // nothing of for a while.
   if (edge && !keeps(app, path)) return passed()
   if (!edge && !keepable(app)) unkept(req, env, bare, c)
+  if (path == '/calendar.ics') {
+    if (edge) return passed()
+    let { calendarOut } = await import('./calendar.ts')
+    return calendarOut(req, env, space, app)
+  }
   let paper = tokenOf(path)
   if (paper) {
     let reads = req.method == 'GET' || req.method == 'HEAD'

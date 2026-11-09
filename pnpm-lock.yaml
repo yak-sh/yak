@@ -1824,6 +1824,19 @@ importers:
         specifier: 0.2.30
         version: link:../testing
 
+  packages/events:
+    dependencies:
+      '@yaks/vocab':
+        specifier: 0.2.32
+        version: link:../vocab
+      rrule:
+        specifier: 2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@yaks/testing':
+        specifier: 0.2.30
+        version: link:../testing
+
   packages/extension:
     dependencies:
       '@yaks/fp':
@@ -5487,6 +5500,9 @@ importers:
       '@yaks/esbuild':
         specifier: 0.2.27
         version: link:../../packages/esbuild
+      '@yaks/events':
+        specifier: 0.2.33
+        version: link:../../packages/events
       '@yaks/extension':
         specifier: 0.2.30
         version: link:../../packages/extension
@@ -7594,6 +7610,9 @@ packages:
     resolution: {integrity: sha512-nLTrUKm2UyiL7rlhapu/Zl45FwNgkZGaCpZbIHajDYgwlJCOzLSk+cIPAnsEqV955GjILJnKbdQC1nVPz+gAYQ==}
     engines: {node: '>= 18'}
 
+  rrule@2.8.1:
+    resolution: {integrity: sha512-hM3dHSBMeaJ0Ktp7W38BJZ7O1zOgaFEsn41PDk+yHoEtfLV+PoJt9E9xAlZiWgf/iqEqionN0ebHFZIDAp+iGw==}
+
   rrweb-cssom@0.8.0:
     resolution: {integrity: sha512-guoltQEx+9aMf2gDZ0s62EcV8lsXR+0w8915TC3ITdn2YueuNjdAYh/levpU9nFaoChh9RUS5ZdQMrKfVEN9tw==}
 
@@ -9516,6 +9535,10 @@ snapshots:
       path-to-regexp: 8.4.2
     transitivePeerDependencies:
       - supports-color
+
+  rrule@2.8.1:
+    dependencies:
+      tslib: 2.9.1
 
   rrweb-cssom@0.8.0: {}
 

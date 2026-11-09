@@ -55,6 +55,20 @@ These components mean the same thing in every store on the platform. Each entry
 lists the properties you may write; a few components also have server-set
 properties you can read but never write, and those are named in the entry.
 
+**`event`** — `starts`, `ends`, `repeats`, `place` (text). Add
+`doc{title, body}` for its title and description. `starts` is an ISO date-time
+with `Z` or a numeric offset, or `YYYY-MM-DD` for an all-day event. `ends` is
+exclusive and uses the same form; absent means one day for an all-day event, or
+a point in time. `repeats` is an RFC 5545 rule such as `FREQ=WEEKLY;BYDAY=SU`,
+optionally ending with `COUNT=12` or `UNTIL=20261225T235959Z`. Timed recurrence
+follows UTC. Each recurring series is one row.
+
+Public and open apps serve their events at `./calendar.ics`. Add that URL to
+Google Calendar using “From URL”; the calendar provider refreshes it on its own
+schedule. The feed reads as an anonymous visitor, excluding person-owned rows
+and rows carrying `cancelled{at, by, via, reason}`. A private app has no public
+feed. Event expansion and feed serialization live in `@yaks/events`.
+
 **`doc`** — `title` (text), `body` (text). The text a person reads, and what
 `search` searches, along with any declared property marked searchable (below).
 Nearly every entity your app saves should have one: a row with no `doc` has no
@@ -680,17 +694,17 @@ The complete list of reserved names:
     cost created credit credit_block delegates delete_upload deliver
     delivered demo deploy desk_sidebar dispatch doc document_extract
     document_page document_text draft edge effect email entity entry error
-    exception execution failed favorite fee feedback file filed finding
-    fired form form_post former gallery gitobj grant grants_listed home hook
-    hostname image inference installed integration integration_install
-    interrupted invite inviting key last_deploy lease lines listed mail
-    mail_answered mail_dismissed mail_post mail_task member memory meter
-    model model_reservation newcomer newcomer_builds notice notice_confirmed
-    notice_letter notice_posted notice_subscription notified notify_deaths
-    notify_trash oauth_grant occupancy offer openai opened openrouter
-    operator operator_alerts operator_reach order output output_of
-    own_number parent pending person persona phone phone_line plan price
-    product project provider provisional public_file published
+    event exception execution failed favorite fee feedback file filed
+    finding fired form form_post former gallery gitobj grant grants_listed
+    home hook hostname image inference installed integration
+    integration_install interrupted invite inviting key last_deploy lease
+    lines listed mail mail_answered mail_dismissed mail_post mail_task
+    member memory meter model model_reservation newcomer newcomer_builds
+    notice notice_confirmed notice_letter notice_posted notice_subscription
+    notified notify_deaths notify_trash oauth_grant occupancy offer openai
+    opened openrouter operator operator_alerts operator_reach order output
+    output_of own_number parent pending person persona phone phone_line plan
+    price product project provider provisional public_file published
     push_subscription quarantined question questions reads recalled ref
     referenced refusal register_writes registration release_remake report
     repository representation requires restored result retired revision rtc
