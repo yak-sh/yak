@@ -10,6 +10,7 @@ import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
 import { block, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
+import { Time } from './Time.ts'
 import { Chip } from './Chip.ts'
 import { Value } from './Value.ts'
 
@@ -45,7 +46,15 @@ export let specimens = (): Specimen[] => [
       h(
         Item,
         {},
-        h(When, {}, '5 minutes ago'),
+        h(
+          When,
+          {},
+          h(Time, {
+            at: '2026-11-06T15:42:00Z',
+            now: 1794238920000,
+            timeZone: 'UTC',
+          }),
+        ),
         h(Who, {}, 'S-45466'),
         h(
           What,
@@ -58,7 +67,15 @@ export let specimens = (): Specimen[] => [
       h(
         Item,
         {},
-        h(When, {}, '2 hours ago'),
+        h(
+          When,
+          {},
+          h(Time, {
+            at: '2026-11-06T13:42:00Z',
+            now: 1794238920000,
+            timeZone: 'UTC',
+          }),
+        ),
         h(Who, {}, 'Jeff'),
         h(What, {}, h(Chip, { mod: '0' }, 'doc'), ' ', h(Value, {}, 'created')),
       ),

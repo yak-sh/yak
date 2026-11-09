@@ -1,3 +1,4 @@
+import { Time } from '@yaks/ui/parts'
 /** @jsxImportSource preact */
 import { Page } from './frame.tsx'
 
@@ -9,7 +10,9 @@ export let Terms = () => (
   >
     <div class='Prose_Head'>
       <h1 class='Title Title-page'>Terms of service</h1>
-      <p class='Prose_When'>Last updated 5 November 2026</p>
+      <p class='Prose_When'>
+        Last updated <Time written timeZone='UTC' at='2026-11-05T00:00:00Z' />
+      </p>
       <p>
         These terms govern your use of yaks.app. By signing in or using the
         site, you agree to them.

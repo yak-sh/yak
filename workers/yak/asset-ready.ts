@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url'
 import { Buffer } from 'node:buffer'
 import { join } from 'node:path'
 import { from, plan, ui } from './sheet-assets.ts'
+import { parts } from './client-assets.ts'
 import { PAGES } from './site/mod.ts'
 
 let hash = (bytes: Uint8Array) =>
@@ -64,7 +65,7 @@ export let assetInputs = (paths: string[]) =>
     /^(?:packages\/|workers\/yak\/(?:public|site)\/)/.test(path) ||
     /^(?:deno\.(?:jsonc?|lock)|bin\/compiler-packages\.ts)$/.test(path) ||
     // `_talk.js` is built from operator-rows.ts and what it imports here.
-    /^workers\/yak\/(?:wrangler\.ts|asset-ready\.ts|client-assets\.ts|sheet-assets\.ts|settings(?:-draft(?:-browser)?)?\.ts|operator-(?:rows|draw|aside)\.ts|icons\.ts|sandbox\/(?:cli-assets|launch)\.ts|package(?:-lock)?\.json|deno\.json)$/
+    /^workers\/yak\/(?:wrangler\.ts|asset-ready\.ts|client-assets\.ts|sheet-assets\.ts|(?:chart|data-editor)\.js|dates(?:-browser)?\.ts|when\.ts|settings(?:-draft(?:-browser)?)?\.ts|operator-(?:rows|draw|aside)\.ts|icons\.ts|sandbox\/(?:cli-assets|launch)\.ts|package(?:-lock)?\.json|deno\.json)$/
       .test(path)
   ).filter((path) =>
     !/(^|\/)(?:node_modules|\.wrangler|fixtures?|tests?)(\/|$)/.test(path) &&
@@ -94,11 +95,7 @@ let outputs = async (root: string) => {
     ...[
       '_compiler/packages.json',
       '_compiler/toolkit.json',
-      '_draft.js',
-      '_outbox.js',
-      '_wire.js',
-      '_talk.js',
-      '_settings.js',
+      ...Object.keys(parts),
       '_client.js',
       ...(await ui()).keys(),
       ...Object.keys(PAGES),

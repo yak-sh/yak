@@ -24,6 +24,7 @@ let DIR = '_yak'
  * here (sheets.ts `client`), since it finds the app's doors beside itself. */
 export let FILES = [
   'report.js',
+  '_dates.js',
   'deploy.js',
   'drop.js',
   'idle.js',
@@ -78,6 +79,7 @@ export let WORN = [
   'Tabs',
   'Icon',
   'Tip',
+  'Time',
   'Overlay',
   'SideNav',
   'Check',

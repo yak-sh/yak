@@ -16,7 +16,7 @@ import { parse } from '@yaks/query'
 import type { ComponentRenderer } from '@yaks/preact'
 import { Button, Card, Chip, Chips, State } from '@yaks/ui/parts'
 import { h } from 'preact'
-import { said, type Stamp, type Writers } from '../stamps.ts'
+import { type Stamp, stamped, type Writers } from '../stamps.ts'
 
 export let app: ComponentRenderer = {
   view: 'Tile',
@@ -30,9 +30,9 @@ export let app: ComponentRenderer = {
     )
     let names = (ctx.writers ?? new Map()) as Writers
     let stamp = (what: string, s: unknown) =>
-      s ? `${what} ${said(s as Stamp, names, 'short')}` : ''
+      s ? [what, ' ', stamped(h, s as Stamp, names)] : null
     let made = [stamp('Made', ctx.made), stamp('Deployed', ctx.deployed)]
-      .filter(Boolean).join(' · ')
+      .filter(Boolean).flatMap((part, i) => i ? [' · ', part] : [part])
     return h(
       Card,
       null,
@@ -75,7 +75,7 @@ export let app: ComponentRenderer = {
           : null,
       ),
       h(Card.Sub, null, `${ctx.host ?? ''}/${a.slug}`),
-      made ? h(Card.Sub, null, made) : null,
+      made.length ? h(Card.Sub, null, made) : null,
       tags.length
         ? h(Chips, null, tags.map((t) => h(Chip, null, String(t))))
         : null,

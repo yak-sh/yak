@@ -6,7 +6,7 @@
  * @yaks/tui alike.
  *
  * - `el`, `block`: the builders every part is made from (el.ts).
- * - `Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `At`, `Check`,
+ * - `Dot`, `Id`, `Stamp`, `Time`, `Tabs`, `Menu`, `Tip`, `Field`, `At`, `Check`,
  *   `Form`, `Drop`, `Notice`, `More`, `Choices`, `Button`,
  *   `Chip`, `Match`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`,
  *   `Turns`, `Passage`, `Body`, `Doc`, `Quote`, `Edit`, `Prop`, `Overlay`, `Peek`, `Table`, `Pager`, `Shell`,
@@ -40,7 +40,7 @@ export { Id } from './Id.ts'
 export { Menu } from './Menu.ts'
 export { Stamp } from './Stamp.ts'
 export { State } from './State.ts'
-export { relative } from './relative.ts'
+export { day, pretty, relative } from './relative.ts'
 export { half, halved } from './halved.ts'
 export { Tabs, TabSet } from './Tabs.ts'
 export { Tip } from './Tip.ts'
@@ -146,3 +146,5 @@ export { Loading } from './Loading.ts'
 export { Palette } from './Palette.ts'
 export { Peek } from './Peek.ts'
 export { Save } from './Save.ts'
+
+export { Time, time, type TimeProps } from './Time.ts'

@@ -6,7 +6,7 @@
 // button for each choice, then what happened, newest first. A choice, or
 // words about one, go into their conversation, and the chat they went to
 // opens.
-import { pretty, when } from './public/when.js'
+import { Time } from '@yaks/ui/parts'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
@@ -83,12 +83,7 @@ let words = (text: string) =>
   h('div', { class: 'Update_Words' }, markdown(text))
 
 // When it happened, said the human way.
-let stamp = (u: Update) =>
-  h(
-    'time',
-    { class: 'Update_When', datetime: u.at, title: pretty(u.at) },
-    when(u.at),
-  )
+let stamp = (u: Update) => h(Time, { at: u.at, class: 'Update_When' })
 
 /** What needs a person: the Operator's question, its choices, a button for
  * each (the one it recommends first and filled), and `ask` below them, a way

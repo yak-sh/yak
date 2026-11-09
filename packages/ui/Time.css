@@ -1,0 +1,5 @@
+/* Dates inherit the line they describe. */
+.Time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

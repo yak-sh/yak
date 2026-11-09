@@ -1,3 +1,4 @@
+import { Time } from '@yaks/ui/parts'
 // The kernel's own pages, in the home page's voice (workers/yak/public): what
 // a person sees when there is nothing at an address, when an app broke, and
 // where they sign in. One shell, three sentences, and an optional card of
@@ -201,9 +202,11 @@ ${links(env, 'pages.css', undefined, assets)}${
   }${head ? `\n${head}` : ''}
 </head>
 <body${layout ? ` class="${layout}"` : ''}><main>${main}`
-  let close = `</main>${
+  let close = `</main><script type="module" src="${
+    file('_dates.js')
+  }"></script>${
     main.includes('data-chart')
-      ? `<script src="${file('chart.js')}" defer></script>`
+      ? `<script type="module" src="${file('chart.js')}"></script>`
       : ''
   }${
     main.includes('data-menu')
@@ -902,11 +905,10 @@ export let fixing = (a: DeskPage['apps'][number], space: string) => {
               null,
               `${e.where ? `${e.where} · ` : ''}${
                 e.times == 1 ? 'once' : `${e.times} times`
-              }${
-                day(e.at)
-                  ? `, ${e.times == 1 ? '' : 'last '}on ${day(e.at)}`
-                  : ''
               }`,
+              e.at
+                ? [`, ${e.times == 1 ? '' : 'last '}`, h(Time, { at: e.at })]
+                : null,
             ),
             operated(e, space),
           ),
@@ -1402,7 +1404,7 @@ export let pairing = (
                   Rows.Meta,
                   null,
                   s.at
-                    ? `Paired ${day(s.paired)}`
+                    ? ['Paired ', h(Time, { at: s.paired })]
                     : 'Waiting for the screen to show it',
                 ),
               ),

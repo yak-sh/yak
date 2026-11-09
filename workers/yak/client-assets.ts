@@ -12,6 +12,10 @@ import { written } from './sheet-assets.ts'
 import { written as pages } from './site/mod.ts'
 
 export let parts = {
+  'chart.js': './chart.js',
+  'data.js': './data-editor.js',
+  'when.js': './when.ts',
+  '_dates.js': './dates-browser.ts',
   '_draft.js': '../../packages/draft/browser.ts',
   '_outbox.js': '../../packages/sync/outbox.ts',
   '_wire.js': '../../packages/vocab/wire.ts',

@@ -4,7 +4,7 @@ import type { JSX } from 'preact'
 // The composer is a Say line with a Field; its words are durable drafts.
 import { useRef, useState } from 'preact/hooks'
 import type { Bundle, Comp } from '@yaks/graph'
-import { Button, Choices, Field, Notes, Say, Stamp } from '@yaks/ui'
+import { Button, Choices, Field, Notes, Say, Time } from '@yaks/ui'
 import { drafts, useDraft } from '@yaks/draft/input'
 import { commentHost } from './comment-host.ts'
 import { type Branch, branches, type CommentRow, writers } from './comments.ts'
@@ -229,8 +229,8 @@ export let Note = (
         <Notes.Who>· via {host.render(instrument, 'Inline')}</Notes.Who>
       )}
       {!!verdict && <span>{String(verdict).replaceAll('_', ' ')}</span>}
-      <a {...host.link(c)} title={host.timestamp(stamp?.at as string)}>
-        <Stamp>{host.when(stamp?.at as string)}</Stamp>
+      <a {...host.link(c)}>
+        <Time at={stamp?.at as string} />
       </a>
       {host.pending(c) ? <Notes.Text>…</Notes.Text> : c.commit
         ? (

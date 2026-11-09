@@ -279,11 +279,10 @@ let plain = (v: unknown) =>
   v == null || v === '' ? null : h(Fragment, null, String(v))
 
 // A stamp in full, the way this machine's locale writes one.
-let pretty = (iso: string) => new Date(iso).toLocaleString()
+import { Time } from '@yaks/ui/parts'
 
 /** A timestamp's face: the host's words for it, the full stamp on hover. */
-export let TimeVal = ({ v }: { v: string }): JSX.Element =>
-  h('span', { 'data-tip': pretty(v) }, useHost().when(v))
+export let TimeVal = ({ v }: { v: string }): JSX.Element => h(Time, { at: v })
 
 /** A url's face: a link out. Following it is the face's own click. */
 export let UrlVal = (v: unknown): JSX.Element | null =>

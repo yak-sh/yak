@@ -9,7 +9,7 @@ import type { ComponentRenderer } from '@yaks/preact'
 import type { Context } from '@yaks/render'
 import { Rows } from '@yaks/ui/parts'
 import { type ComponentChildren, h } from 'preact'
-import { day } from '../html.ts'
+import { Time } from '@yaks/ui/parts'
 
 // A row's main part: the name, then one line of where they stand, their
 // address first.
@@ -44,7 +44,7 @@ export let invitation: ComponentRenderer = {
       h(
         'span',
         { class: 'People_Waiting' },
-        i.sent ? `invited ${day(i.sent)}, ` : 'invited, ',
+        i.sent ? ['invited ', h(Time, { at: i.sent }), ', '] : 'invited, ',
         'not accepted yet',
       ),
     )

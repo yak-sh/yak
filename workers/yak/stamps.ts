@@ -1,9 +1,10 @@
+import { time } from '@yaks/ui/parts'
+import type { H } from '@yaks/render'
 // A stamp as a person reads it: when, and who (T-151161). Every page of
-// yaks.app and /admin that shows one says it through `said`, with the names
+// yaks.app and /admin that shows one says it through `stamped`, with the names
 // `writers` gives the rows its writers are, so each says the same of it: a
 // person by the name they go by, an agent as itself for the person it writes
 // for (M-31958), and only the day where who wrote it is not known.
-import { day } from './html.ts'
 
 /** When something was written, and the actor who wrote it, where known. */
 export type Stamp = { at: string; by: string | null }
@@ -52,15 +53,13 @@ export let writers = (rows: Row[]): Map<string, string> => {
   ])
 }
 
-/// said({ at: '2026-11-05T06:09:38Z', by: 'a' }, new Map([['a', 'yak for Jeffrey']])) -> '5 November 2026 by yak for Jeffrey'
-/// said({ at: '2026-11-05T06:09:38Z', by: 'a' }, new Map(), 'short') -> '5 Nov 2026'
-/// said(null, new Map()) -> ''
-export let said = (
+/** A written moment and its writer, drawn through the kit's date face. */
+export let stamped = <N>(
+  h: H<N>,
   s: Stamp | null | undefined,
   names: Writers,
-  month: 'long' | 'short' = 'long',
-) => {
-  if (!s) return ''
+): N | null => {
+  if (!s) return null
   let who = s.by ? names.get(s.by) : undefined
-  return who ? `${day(s.at, month)} by ${who}` : day(s.at, month)
+  return h('span', null, time(h, { at: s.at }), who ? ` by ${who}` : null)
 }

@@ -15,7 +15,7 @@ import { blocks, parse } from '@yaks/markdown/structural'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import { Body, Button, Drop, Icon } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
-import { pretty, when } from './public/when.js'
+import { Time } from '@yaks/ui/parts'
 import { PART } from '@yaks/persona/part'
 import { sourceWords } from './operator-source.ts'
 
@@ -108,14 +108,7 @@ let yours = (b: Bundle, text: string) =>
 // again in the person's own time.
 let stamp = (b: Bundle) => {
   let at = String(comp(b, 'created')?.at ?? '')
-  let said = when(at)
-  return said
-    ? h(
-      'time',
-      { class: 'Talk_When', datetime: at, 'data-tip': pretty(at) },
-      said,
-    )
-    : null
+  return h(Time, { at, class: 'Talk_When' })
 }
 
 type Sent = { name: string; mime?: string }

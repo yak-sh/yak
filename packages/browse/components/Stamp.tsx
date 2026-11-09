@@ -4,19 +4,11 @@
 // minute tick, so an open card never fossilizes at the age it rendered, and
 // the full stamps ride the tooltips.
 import type { ComponentChildren } from 'preact'
-import { signal } from '@preact/signals'
 import * as ui from '@yaks/ui'
 import { relative } from '@yaks/ui'
-import { pretty } from '../time.ts'
 
-let tick = signal(Date.now())
-if (globalThis.document) setInterval(() => (tick.value = Date.now()), 60_000)
-
-/** How long ago `iso` is; the minute tick refreshes mounted views. */
-export let ago = (iso?: string | null, now = Date.now()) => {
-  tick.value
-  return relative(iso, now)
-}
+/** How long ago a timestamp is, for plain text descriptions. */
+export let ago = (iso?: string | null, now = Date.now()) => relative(iso, now)
 
 export let Stamp = (
   { e, at, label, by }: {
@@ -36,14 +28,14 @@ export let Stamp = (
   let edited = at == null ? e?.updated?.at : undefined
   return (
     <ui.Stamp>
-      <span data-tip={pretty(born)}>
+      <span>
         {label && `${label} `}
-        {ago(born)}
+        <ui.Time at={born} />
         {by && e?.created?.by && <>{' by '}{by('created')}</>}
       </span>
       {edited && (
-        <span data-tip={pretty(edited)}>
-          · edited {ago(edited)}
+        <span>
+          · edited <ui.Time at={edited} />
           {by && e?.updated?.by && <>{' by '}{by('updated')}</>}
         </span>
       )}

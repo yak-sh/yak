@@ -24,5 +24,5 @@ export let sheet = (c: Colors): Sheet => ({
 
 /** One tip. */
 export let specimens = (): Specimen[] => [
-  ['Tip', h(Tip, {}, '2026-09-29 19:12:21')],
+  ['Tip', h(Tip, {}, 'Sep 29th, 2026, 7:12 PM')],
 ]

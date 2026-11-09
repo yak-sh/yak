@@ -46,3 +46,5 @@ export { SideNav } from './SideNav.ts'
 export { State } from './State.ts'
 export { type Col, Table, type TableProps } from './Table.ts'
 export { Tabs, TabSet } from './Tabs.ts'
+
+export { Time, time, type TimeProps } from './Time.ts'

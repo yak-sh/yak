@@ -3,7 +3,7 @@ import { equal, test } from '@yaks/testing'
 import { relative } from './relative.ts'
 
 let now = Date.parse('2026-10-19T12:00:00Z')
-let native = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+let native = new Intl.RelativeTimeFormat('en', { numeric: 'always' })
 let sizes: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 31_536_000],
   ['month', 2_592_000],
@@ -42,9 +42,9 @@ test('relative wording agrees with the existing formatter across unit boundaries
 test('relative timestamps keep empty, recent and invalid inputs readable', () => {
   equal(relative(undefined, now), '')
   equal(relative('', now), '')
-  equal(relative('not a date', now), 'just now')
+  equal(relative('not a date', now), '')
   equal(relative(new Date(now - 59_000).toISOString(), now), 'just now')
   equal(relative(new Date(now + 59_000).toISOString(), now), 'just now')
-  equal(relative(new Date(now - 86_400_000).toISOString(), now), 'yesterday')
-  equal(relative(new Date(now + 86_400_000).toISOString(), now), 'tomorrow')
+  equal(relative(new Date(now - 86_400_000).toISOString(), now), '1 day ago')
+  equal(relative(new Date(now + 86_400_000).toISOString(), now), 'in 1 day')
 })

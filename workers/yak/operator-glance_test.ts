@@ -77,14 +77,14 @@ let g: Glance = {
 }
 
 let WORK = [
-  '- Build a recipe box app: Working on it, 6 Nov 2026, 20:08 UTC',
+  '- Build a recipe box app: Working on it, Nov 6th, 2026, 8:08 PM UTC',
   '  doing now: Writing files…',
   '  latest it wrote: Writing its files.',
-  '- Check the hall booking: Done, 6 Nov 2026, 20:05 UTC',
+  '- Check the hall booking: Done, Nov 6th, 2026, 8:05 PM UTC',
 ].join('\n')
 let SAID = [
-  '6 Nov 2026, 20:00 UTC, From the person:\nBuild me a recipe box',
-  '6 Nov 2026, 20:01 UTC, From the Operator:\nBuilding it now.',
+  'Nov 6th, 2026, 8:00 PM UTC, From the person:\nBuild me a recipe box',
+  'Nov 6th, 2026, 8:01 PM UTC, From the Operator:\nBuilding it now.',
 ].join('\n\n')
 
 let sources = operatorMemory(), sourcePerson = crypto.randomUUID()
@@ -138,7 +138,7 @@ test("a call's voice is told the time, the newest of the conversation, and the w
   let glance = glanceOf(g)
   equal(
     await glance.recent(),
-    'It is 6 Nov 2026, 21:04 UTC.\n' +
+    'It is Nov 6th, 2026, 9:04 PM UTC.\n' +
       `The newest of your conversation with them, oldest first:\n${SAID}`,
   )
   equal(
@@ -164,7 +164,7 @@ test("a call's voice looks up its work, their Updates, their apps and more of th
   equal(read, {
     work: WORK,
     updates:
-      '- Unread, 6 Nov 2026, 20:09 UTC: Your recipe box has a new version.',
+      '- Unread, Nov 6th, 2026, 8:09 PM UTC: Your recipe box has a new version.',
     apps: '- home/recipes: Recipe Box',
     conversation: SAID,
   })

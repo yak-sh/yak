@@ -162,6 +162,7 @@ export let Page = (
       <Top path={path} />
       <main class={kind ? 'Page' : 'Page Prose'}>{children}</main>
       <Foot />
+      <script type='module' src='_dates.js' />
       {after}
     </body>
   </html>

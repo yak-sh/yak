@@ -1,3 +1,4 @@
+import { day } from '@yaks/ui/relative'
 /** @jsxImportSource preact */
 import {
   Button,
@@ -83,7 +84,7 @@ export let StyleGuide = () => (
     after={
       <>
         <script dangerouslySetInnerHTML={{ __html: PICK }} />
-        <script src='chart.js' defer />
+        <script type='module' src='chart.js' />
         <script src='drop.js' defer />
       </>
     }
@@ -663,7 +664,7 @@ export let StyleGuide = () => (
         <div class='Prose'>
           <div class='Prose_Head'>
             <h3 class='Title Title-page'>Cookies</h3>
-            <p class='Prose_When'>Last updated 3 September 2026</p>
+            <p class='Prose_When'>Last updated {day('2026-09-03', 'UTC')}</p>
           </div>
           <section>
             <h2>What Prose styles</h2>

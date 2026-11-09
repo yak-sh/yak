@@ -1,3 +1,4 @@
+import { Time } from '@yaks/ui/parts'
 /** @jsxImportSource preact */
 import { Page } from './frame.tsx'
 
@@ -9,7 +10,9 @@ export let AcceptableUse = () => (
   >
     <div class='Prose_Head'>
       <h1 class='Title Title-page'>Acceptable use policy</h1>
-      <p class='Prose_When'>Last updated 1 November 2026</p>
+      <p class='Prose_When'>
+        Last updated <Time written timeZone='UTC' at='2026-11-01T00:00:00Z' />
+      </p>
       <p>This policy lists what you may not do on yaks.app.</p>
     </div>
     <section>

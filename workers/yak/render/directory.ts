@@ -12,11 +12,11 @@ import { parse } from '@yaks/query'
 import { type Days, sparkline } from '@yaks/ui/chart'
 import type { Child, Context, H, Renderer } from '@yaks/render'
 import { COMPED } from '../directory.ts'
-import { day, moment } from '../html.ts'
+import { time } from '@yaks/ui/parts'
 import {
   personName,
-  said,
   type Stamp,
+  stamped as saying,
   stampOf,
   type Writers,
 } from '../stamps.ts'
@@ -66,12 +66,14 @@ let spend = (s?: Uses['spend']) =>
     : s.limit == null
     ? dollars(s.spent)
     : `${dollars(s.spent)} of ${dollars(s.limit)}`
-let when = (iso?: string | null, month: 'long' | 'short' = 'long') =>
-  iso ? day(iso, month) : 'never'
-// A stamp, when and by whom (stamps.ts `said`): a component on the row, or one
-// the page counted.
-let stamped = (ctx: Context, s: unknown, month: 'long' | 'short' = 'long') =>
-  said(stampOf(s), (ctx.writers ?? new Map()) as Writers, month) || 'never'
+let when = <N>(h: H<N>, iso?: string | null) =>
+  iso ? time(h, { at: iso }) : 'never'
+let stamped = <N>(
+  h: H<N>,
+  ctx: Context,
+  s: unknown,
+  _month?: 'long' | 'short',
+) => saying(h, stampOf(s), (ctx.writers ?? new Map()) as Writers) || 'never'
 // What a space pays: a paid plan, or the Plus plan given (a comp).
 let plan = (b: Record<string, unknown>) =>
   COMPED.includes(str((b.space as Comp)?.slug))
@@ -201,7 +203,7 @@ let person: Renderer = {
         ['Spent this month', trended(h, spend(u.spend), u.spending)],
         ['Storage', size(u.storage ?? 0)],
         ['Apps', count(u.apps ?? 0)],
-        ['Last active', when(u.active, 'short')],
+        ['Last active', when(h, u.active)],
       ],
     )
   },
@@ -224,7 +226,7 @@ let space: Renderer = {
         ['Spent this month', trended(h, spend(u.spend), u.spending)],
         ['Storage', size(u.storage ?? 0)],
         ['Apps', count(u.apps ?? 0)],
-        ['Last active', when(u.active, 'short')],
+        ['Last active', when(h, u.active)],
       ],
     )
   },
@@ -253,11 +255,11 @@ let app: Renderer = {
       [`${str(ctx.space)}/${slug}`, ...u.owners ?? []].join(' · '),
       tags(h, b, u, str(a?.access), ...offered(b)),
       [
-        ['Made', stamped(ctx, b.created, 'short')],
-        ['Deployed', stamped(ctx, u.deployed, 'short')],
-        ['Data changed', when(u.changed, 'short')],
-        ['Last active', when(u.active, 'short')],
-        ['Last error', when(u.errored, 'short')],
+        ['Made', stamped(h, ctx, b.created)],
+        ['Deployed', stamped(h, ctx, u.deployed)],
+        ['Data changed', when(h, u.changed)],
+        ['Last active', when(h, u.active)],
+        ['Last error', when(h, u.errored)],
         [
           'Requests this month',
           trended(h, count(u.requests ?? 0), u.requesting, 'request'),
@@ -291,10 +293,10 @@ let referral: Renderer = {
       `invited by ${inviter.name}`,
       [given?.subscription ? tag(h, 'charge moved') : null],
       [
-        ['Signed up', stamped(ctx, b.created, 'short')],
-        ['First app', given ? when(str(given.at), 'short') : 'not yet'],
+        ['Signed up', stamped(h, ctx, b.created)],
+        ['First app', given ? when(h, str(given.at)) : 'not yet'],
         ['Month to', given ? str(ctx.space) || 'a space gone' : ''],
-        ['Free through', given ? when(str(given.until), 'short') : ''],
+        ['Free through', given ? when(h, str(given.until)) : ''],
       ],
     )
   },
@@ -318,7 +320,7 @@ let starter: Renderer = {
       p.email || p.phone,
       tags(h, b, u),
       [
-        ['Given', at ? day(at, 'short') : 'unknown'],
+        ['Given', at ? time(h, { at }) : 'unknown'],
         ['Space', str(ctx.space) || 'gone'],
         ['Starter left', dollars(num(ctx.left))],
         ['Spent this month', trended(h, spend(u.spend), u.spending)],
@@ -348,7 +350,7 @@ let build: Renderer = {
         ctx.trashed ? tag(h, 'in the trash', true) : null,
       ],
       [
-        ['Opened', moment(stamp(b, 'visitor_build')) || 'unknown'],
+        ['Opened', time(h, { at: stamp(b, 'visitor_build') }) || 'unknown'],
         ['Spent this month', trended(h, spend(u.spend), u.spending)],
         ['Apps', count(u.apps ?? 0)],
         ['Kept by', keeper || 'not yet'],
@@ -367,14 +369,17 @@ let personPage: Renderer = {
     return facts(h, [
       ['Email', p.email],
       ['Phone', p.phone],
-      ['Joined', stamped(ctx, b.created)],
+      ['Joined', stamped(h, ctx, b.created)],
       [
         'Signed in',
         signed?.at
-          ? `${day(str(signed.at))}${signed.via ? ` by ${signed.via}` : ''}`
+          ? [
+            time(h, { at: str(signed.at) }),
+            signed.via ? ` by ${signed.via}` : '',
+          ]
           : 'never',
       ],
-      ['Last active', when(u.active)],
+      ['Last active', when(h, u.active)],
       ['Spent this month', trended(h, spend(u.spend), u.spending)],
       ['Storage', size(u.storage ?? 0)],
       ['Apps', count(u.apps ?? 0)],
@@ -395,8 +400,8 @@ let spacePage: Renderer = {
       ['Address', h('a', { href: `https://${address}/` }, address)],
       ['Plan', `${plan(b)}${status ? ` · ${status}` : ''}`],
       ['Owners', refs(h, ctx, owners)],
-      ['Made', stamped(ctx, b.created)],
-      ['Last active', when(u.active)],
+      ['Made', stamped(h, ctx, b.created)],
+      ['Last active', when(h, u.active)],
       ['Spent this month', trended(h, spend(u.spend), u.spending)],
       ['Database', size(num(m.bytes))],
       ['Files', size(num(m.files))],
@@ -405,7 +410,10 @@ let spacePage: Renderer = {
       ['Rows written', count(num(m.rows_written))],
       ['Compute seconds', count(num(m.seconds))],
       ['Letters', count(num(m.emails))],
-      ['Metered', m.at ? `${str(m.month)}, read ${day(str(m.at))}` : 'never'],
+      [
+        'Metered',
+        m.at ? [`${str(m.month)}, read `, time(h, { at: str(m.at) })] : 'never',
+      ],
     ])
   },
 }
@@ -430,9 +438,10 @@ let appPage: Renderer = {
       [
         'Deploys',
         deploys
-          ? `${count(deploys)}${
-            u.deployed ? `, the last ${stamped(ctx, u.deployed)}` : ''
-          }`
+          ? [
+            count(deploys),
+            u.deployed ? [', the last ', stamped(h, ctx, u.deployed)] : null,
+          ]
           : '',
       ],
       [
@@ -442,10 +451,10 @@ let appPage: Renderer = {
           : '',
       ],
       ['Installed from', from ? link(h, ctx, from) : ''],
-      ['Made', stamped(ctx, b.created)],
-      ['Last active', when(u.active)],
-      ['Data changed', when(u.changed)],
-      ['Last error', when(u.errored)],
+      ['Made', stamped(h, ctx, b.created)],
+      ['Last active', when(h, u.active)],
+      ['Data changed', when(h, u.changed)],
+      ['Last error', when(h, u.errored)],
       [
         'Visits, 30 days',
         visits === undefined
@@ -466,7 +475,10 @@ let appPage: Renderer = {
       ['Rows read this month', count(num(m.rows_read))],
       ['Rows written this month', count(num(m.rows_written))],
       ['Database', size(num(m.bytes))],
-      ['Metered', m.at ? `${str(m.month)}, read ${day(str(m.at))}` : 'never'],
+      [
+        'Metered',
+        m.at ? [`${str(m.month)}, read `, time(h, { at: str(m.at) })] : 'never',
+      ],
     ])
   },
 }

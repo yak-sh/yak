@@ -1,3 +1,4 @@
+import { Time } from '@yaks/ui/parts'
 /** @jsxImportSource preact */
 import { Page } from './frame.tsx'
 
@@ -9,7 +10,9 @@ export let Privacy = () => (
   >
     <div class='Prose_Head'>
       <h1 class='Title Title-page'>Privacy policy</h1>
-      <p class='Prose_When'>Last updated 6 November 2026</p>
+      <p class='Prose_When'>
+        Last updated <Time written timeZone='UTC' at='2026-11-06T00:00:00Z' />
+      </p>
       <p>
         We collect as little information as we can. This policy lists all of it.
       </p>

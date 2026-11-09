@@ -1,3 +1,4 @@
+import { Time } from '@yaks/ui/parts'
 // The dashboard's pages (manage.ts, admin.ts, operator-page.ts): a space's
 // desk and each of its pages, the side that picks a space, and the person's
 // own. Apart from pages.ts, so a page that only serves a space never compiles
@@ -115,14 +116,7 @@ let chat = (env: Host, to: string) =>
 // in — as tables, because a table reads on a phone and needs no script.
 //
 // Short enough for the ends of an axis: "7 Aug".
-let axisDay = (iso: string) => {
-  let at = new Date(`${iso}T00:00:00Z`)
-  return Number.isNaN(at.getTime()) ? '' : at.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  })
-}
+let axisDay = (iso: string) => day(iso)
 
 let chart = (days: { day: string; views: number }[]) =>
   h(
@@ -1772,9 +1766,11 @@ let connections = (at: DeskPage, env: Host) => {
       card(
         env,
         { title: s.name, logo: '', image: '' } as Face,
-        `Signed in with your yaks.app account on ${
-          day(new Date(s.connectedAt * 1000).toISOString())
-        }.`,
+        [
+          'Signed in with your yaks.app account ',
+          h(Time, { at: new Date(s.connectedAt * 1000).toISOString() }),
+          '.',
+        ],
         undefined,
         status('Connected', 'positive'),
       )

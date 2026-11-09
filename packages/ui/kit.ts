@@ -70,6 +70,7 @@ import * as tabs from './Tabs.ts'
 import * as tile from './Tile.ts'
 import * as timeline from './Timeline.ts'
 import * as tip from './Tip.ts'
+import * as time from './Time.ts'
 import * as turns from './Turns.ts'
 import * as value from './Value.ts'
 import { everforest } from './everforest.ts'
@@ -112,6 +113,7 @@ let modules = {
     Spark: spark,
     Chart: chart,
     Tip: tip,
+    Time: time,
   },
   Controls: {
     Button: button,

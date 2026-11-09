@@ -1,3 +1,5 @@
+import type { ComponentChildren } from 'preact'
+import { Time } from '@yaks/ui'
 /** @jsxImportSource preact */
 import { domainBundle } from '../../domain-host.tsx'
 import { useJob, useModel, useReference, useRepoUrl } from '../subscriptions.ts'
@@ -17,7 +19,6 @@ import { linkProps, screenTarget } from '../nav.tsx'
 import { Id } from './Inline.tsx'
 import { block } from '@yaks/ui'
 import { ago, Stamp } from '../Stamp.tsx'
-import { pretty } from '../../time.ts'
 import { Dot } from '../Dot.tsx'
 import { Twig } from '@yaks/kernel/Comments'
 import { branches } from '@yaks/kernel/comments'
@@ -147,7 +148,7 @@ let squeeze = (entries: Entry[]) => {
 }
 
 // ISO in the db; a local clock is what a human reads.
-let when = (t?: string | null) => t ? new Date(t).toLocaleString() : null
+let when = (at?: string | null) => <Time at={at} />
 
 let lineLabel = (text: string) => {
   let n = text.replace(/\n$/, '').split('\n').length
@@ -304,7 +305,7 @@ export let doing = (r?: LogRow, turn?: string | null, starting = false) =>
     : 'working…'
 
 // A named fact, present only when there IS one — absence says enough.
-let Fact = ({ k, v }: { k: string; v?: string | null }) =>
+let Fact = ({ k, v }: { k: string; v?: ComponentChildren }) =>
   v
     ? (
       <>
@@ -391,11 +392,8 @@ export let SessionTime = ({ x }: { x: Entry }) => {
   let at = x.row?.at
   if (!at) return null
   return (
-    <When
-      data-tip={pretty(at)}
-      {...(x.eid ? linkProps(ent(x.eid)) : {})}
-    >
-      {ago(at)}
+    <When {...(x.eid ? linkProps(ent(x.eid)) : {})}>
+      <Time at={at} />
     </When>
   )
 }

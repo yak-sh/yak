@@ -5,8 +5,7 @@ import { type Ent } from '../../types.ts'
 import { ent } from '../../live.ts'
 import { wakeTitle } from '../../title.ts'
 import { block } from '@yaks/ui'
-import { ago } from '../Stamp.tsx'
-import { pretty } from '../../time.ts'
+import { Time } from '@yaks/ui'
 import { Dot } from '../Dot.tsx'
 import { Entity } from '../Entity.tsx'
 import { Id } from './Inline.tsx'
@@ -47,13 +46,12 @@ export let Wake = ({ e }: { e: Ent }) => {
   return (
     <Frame>
       <Frame.Moment mod={status}>
-        <Frame.Relative>{ago(at)}</Frame.Relative>
-        <Frame.Exact dateTime={at}>{pretty(at)}</Frame.Exact>
+        <Frame.Relative>
+          <Time at={at} />
+        </Frame.Relative>
         <Frame.Outcome>
           <Frame.Status>{status}</Frame.Status>
-          {outcome?.at && (
-            <span data-tip={pretty(outcome.at)}>{ago(outcome.at)}</span>
-          )}
+          {outcome?.at && <Time at={outcome.at} />}
           {e.delivered?.via && (
             <Frame.Detail>via {e.delivered.via}</Frame.Detail>
           )}

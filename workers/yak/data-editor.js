@@ -1,3 +1,5 @@
+import { day } from '@yaks/ui/relative'
+import { stamp } from './dates.ts'
 // An app's data editor (apps.ts serves it at `<app>/_web/data`): its rows
 // listed, added, edited and removed, generated from the words its vocab.json
 // declares, through the same `./api/*` doors its own pages use. Nothing here
@@ -92,17 +94,22 @@ export let patch = (kind, row, typed) => {
 /// title({ notice: { posted: null, text: 'Road closed' } }, 'notice') -> 'Road closed'
 /// title({ attachment: { name: 'a.pdf' } }) -> 'a.pdf'
 /// title({ entity: {} }) -> 'Untitled'
-export let title = (row, name) => {
+export let title = (row, name, fields = []) => {
   let own = row[name] ?? {}
+  let [key, value] =
+    Object.entries(own).find(([, v]) => typeof v == 'string' && v) ?? []
+  let date = fields.some((f) =>
+    f.comp == name && f.prop == key && f.control == 'time'
+  )
   let text = row.doc?.title || own.title || own.name ||
     row.attachment?.name || row.doc?.body ||
-    Object.values(own).find((v) => typeof v == 'string' && v)
+    (date ? day(value) : value)
   return text ? String(text).split('\n')[0].slice(0, 120) : 'Untitled'
 }
 
-let says = (f, raw) => {
+let says = (doc, f, raw) => {
   if (raw == null || raw === '') return null
-  if (f.control == 'time') return new Date(raw).toLocaleString()
+  if (f.control == 'time') return stamp(doc, raw)
   if (f.control == 'bool') return raw ? f.label : null
   if (['pick', 'file', 'json'].includes(f.control)) return null
   return `${raw}`.split('\n')[0].slice(0, 60)
@@ -110,11 +117,15 @@ let says = (f, raw) => {
 
 // What a row's line adds under its name: the kind's first few plain values
 // beside what the name already said.
-let described = (kind, row) => {
-  let name = title(row, kind.name)
+let described = (doc, kind, row) => {
+  let name = title(row, kind.name, kind.fields)
   return kind.fields.filter((f) => f.comp != 'doc')
-    .map((f) => says(f, row[f.comp]?.[f.prop]))
-    .filter((s) => s && !name.startsWith(s)).slice(0, 3).join(' · ')
+    .map((f) => says(doc, f, row[f.comp]?.[f.prop]))
+    .filter((s) => s && (typeof s != 'string' || !name.startsWith(s))).slice(
+      0,
+      3,
+    )
+    .flatMap((part, i) => i ? [' · ', part] : [part])
 }
 
 let el = (doc) => (tag, attrs = {}, ...kids) => {
@@ -133,7 +144,8 @@ let el = (doc) => (tag, attrs = {}, ...kids) => {
 
 /** Draw the editor in `root`. `view` holds the route in its location's hash. */
 export let open = ({ root, client, kinds: all, accepts, view, files }) => {
-  let h = el(root.ownerDocument)
+  let doc = root.ownerDocument
+  let h = el(doc)
   let me = client.me()
   let drafts = me.then((m) => m.person ? client.drafts({ by: m.person }) : null)
   let drawn = 0
@@ -226,9 +238,9 @@ export let open = ({ root, client, kinds: all, accepts, view, files }) => {
               h(
                 'a',
                 { class: 'Rows_Name', href: `#${kind.name}/${r.entity.eid}` },
-                title(r, kind.name),
+                title(r, kind.name, kind.fields),
               ),
-              h('span', { class: 'Rows_Meta' }, described(kind, r)),
+              h('span', { class: 'Rows_Meta' }, ...described(doc, kind, r)),
             ),
           )
         ),
@@ -281,7 +293,12 @@ export let open = ({ root, client, kinds: all, accepts, view, files }) => {
     let seen = new Set()
     return [...held, ...rows].filter((r) =>
       !seen.has(r.entity.eid) && seen.add(r.entity.eid)
-    ).map((r) => [r.entity.eid, title(r, f.ref)])
+    ).map((
+      r,
+    ) => [
+      r.entity.eid,
+      title(r, f.ref, all.find((k) => k.name == f.ref)?.fields),
+    ])
   }
 
   // A file's name and whether it is a picture, from its attachment row.
@@ -378,11 +395,13 @@ export let open = ({ root, client, kinds: all, accepts, view, files }) => {
     if (raw == null || raw === '') return none
     if (f.control == 'pick') {
       let [to] = await client.query(`id=${raw}&*`)
-      return h('p', { class: 'Form_Value' }, to ? title(to, f.ref) : raw)
+      return h(
+        'p',
+        { class: 'Form_Value' },
+        to ? title(to, f.ref, all.find((k) => k.name == f.ref)?.fields) : raw,
+      )
     }
-    let text = f.control == 'time'
-      ? new Date(raw).toLocaleString()
-      : valued(f, raw)
+    let text = f.control == 'time' ? stamp(doc, raw) : valued(f, raw)
     return text ? h('p', { class: 'Form_Value' }, text) : none
   }
 
@@ -594,7 +613,9 @@ export let open = ({ root, client, kinds: all, accepts, view, files }) => {
           h(
             'h2',
             { class: 'Card_Title' },
-            row ? title(row, kind.name) : `New: ${kind.label.toLowerCase()}`,
+            row
+              ? title(row, kind.name, kind.fields)
+              : `New: ${kind.label.toLowerCase()}`,
           ),
         ],
         page,

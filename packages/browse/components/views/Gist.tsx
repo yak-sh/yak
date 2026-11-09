@@ -1,6 +1,6 @@
 /** @jsxImportSource preact */
 import { type Ent } from '../../types.ts'
-import { ago } from '../Stamp.tsx'
+import { Time } from '@yaks/ui'
 import { title } from '../title.tsx'
 
 /** The first line of a text that says something, its heading marks gone. */
@@ -20,7 +20,7 @@ export let Gist = ({ e }: { e: Ent }) => {
   let parts = [
     e.kind && <span key='kind'>{e.kind}</span>,
     said && <span key='said' {...title(said)} />,
-    at && <time key='at' dateTime={at}>{ago(at)}</time>,
+    at && <Time key='at' at={at} />,
   ].filter(Boolean)
   return parts.length
     ? <span>{parts.flatMap((p, i) => i ? [' · ', p] : [p])}</span>

@@ -9,6 +9,7 @@
  * @module
  */
 
+import { day } from './relative.ts'
 import type { Sheet } from '@yaks/tui/theme'
 import { cloneElement, type FunctionComponent, h, type VNode } from 'preact'
 import { columns, type Series, sparkline } from './chart-marks.ts'
@@ -46,7 +47,7 @@ export let specimens = (): Specimen[] => [
       h(
         'span',
         { class: 'Chart_Tip', style: 'position: static' },
-        '4 Oct: 3 visits',
+        `${day('2026-10-04', 'UTC')}: 3 visits`,
       ),
     ),
   ],

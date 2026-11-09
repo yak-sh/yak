@@ -9,6 +9,7 @@
  * @module
  */
 
+import { Time } from './Time.ts'
 import type { Sheet } from '@yaks/tui/theme'
 import { h, type VNode } from 'preact'
 import { Card } from './Card.ts'
@@ -79,7 +80,12 @@ export let specimens = (): Specimen[] => [
         Plot,
         {},
         h(Columns, week) as VNode,
-        h(Span, {}, h('span', null, '1 Sept'), h('span', null, '7 Sept')),
+        h(
+          Span,
+          {},
+          h(Time, { at: '2026-09-01', written: true, timeZone: 'UTC' }),
+          h(Time, { at: '2026-09-07', written: true, timeZone: 'UTC' }),
+        ),
       ),
       h(
         Tops,

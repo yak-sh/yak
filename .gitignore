@@ -85,3 +85,9 @@ node_modules
 
 # Temporary JSR publication workspace config.
 .publish-*.json
+
+/workers/yak/public/when.js
+/workers/yak/public/_dates.js
+
+/workers/yak/public/data.js
+/workers/yak/public/chart.js

@@ -138,7 +138,10 @@ test('wake shows its relative and exact time and addressed people', () => {
   try {
     render(<Wake e={ent('wake')} />, root)
     assertEquals(root.querySelector('.Wake_Relative')?.textContent, ago(at))
-    assertEquals(root.querySelector('.Wake_Exact')?.textContent, pretty(at))
+    assertEquals(
+      root.querySelector('.Wake_Relative time')?.getAttribute('data-tip'),
+      pretty(at),
+    )
     assertEquals(
       [...root.querySelectorAll('.Wake_Label')].map((x) => x.textContent),
       ['deliver to', 'created by'],

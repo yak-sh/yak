@@ -1,3 +1,4 @@
+import { pretty } from '@yaks/ui/relative'
 /** @jsxImportSource preact */
 // A session row names the work and shows its latest activity and model.
 import { test, tick, until } from '../../testing.ts'
@@ -579,7 +580,7 @@ test('session Tile names its work, model, and last activity without IDs', () => 
       head.querySelector('.SessionRow_Meta [data-tip]')?.getAttribute(
         'data-tip',
       ),
-      new Date(lastAt).toLocaleString(),
+      pretty(lastAt),
     )
     assertEquals(
       head.querySelector('.SessionRow_Title')?.textContent?.trim(),

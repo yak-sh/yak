@@ -16,7 +16,7 @@ import {
 } from './probe.ts'
 import type { PropSchema } from '@yaks/vocab'
 import { fields, kinds } from './data.ts'
-import { open, patch, title } from './public/data.js'
+import { open, patch, title } from './data-editor.js'
 
 let k = await kernel()
 let space = unique('township')
@@ -447,5 +447,14 @@ test('words become controls, and the rest is left out', () => {
   assertEquals(
     patch(kind, { entity: { eid: 'a' }, m: { on: false } }, { 'm.on': '' }),
     null,
+  )
+})
+
+test('an unnamed row with only a timestamp uses the shared written date in its title', () => {
+  assertEquals(
+    title({ meeting: { held: '2026-11-06T15:42:00Z' } }, 'meeting', [
+      { comp: 'meeting', prop: 'held', control: 'time' },
+    ]),
+    'Nov 6th, 2026',
   )
 })

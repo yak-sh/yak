@@ -1,3 +1,4 @@
+import { Time } from '@yaks/ui/parts'
 // What the Operator's chat app shows of its work (operator-page.ts
 // `chatPage`): each task as one conversation, its lines drawn by
 // operator-draw.ts under a line for what it is doing now, and the list of
@@ -13,7 +14,7 @@ import type { H } from '@yaks/render'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { Button, Card, Loading, Rows } from '@yaks/ui/parts'
-import { day, moment } from './html.ts'
+import { moment } from './html.ts'
 import { chatPath } from './route.ts'
 import type { Declared } from './operator-persona.ts'
 import type { Doing } from './mascot.ts'
@@ -126,10 +127,10 @@ export let rows = (entries: Bundle[], names: Names, seen: Seen = {}): Row[] =>
  *     content: { body: 'Nearly there.' },
  *   }),
  * ]), [
- *   '6 Nov 2026, 21:04 UTC, they, by text: Build me a recipe box',
- *   '6 Nov 2026, 21:04 UTC, you: On it.',
- *   '6 Nov 2026, 21:04 UTC, they, by phone: Is it done?',
- *   '6 Nov 2026, 21:04 UTC, you, by phone: Nearly there.',
+ *   'Nov 6th, 2026, 9:04 PM UTC, they, by text: Build me a recipe box',
+ *   'Nov 6th, 2026, 9:04 PM UTC, you: On it.',
+ *   'Nov 6th, 2026, 9:04 PM UTC, they, by phone: Is it done?',
+ *   'Nov 6th, 2026, 9:04 PM UTC, you, by phone: Nearly there.',
  * ])
  * ```
  */
@@ -652,8 +653,8 @@ let meta = (w: Listed) =>
     w.where,
     w.from && `Helper of the ${w.from[0].toLowerCase()}${w.from.slice(1)}`,
     w.state,
-    w.where ? moment(w.at) : day(w.at, 'short'),
-  ].filter(Boolean).join(' · ')
+    h(Time, { at: w.at }),
+  ].filter(Boolean).flatMap((part, i) => i ? [' · ', part] : [part])
 
 /** The Operator's conversations as rows, newest first, each a link to the
  * page `href` gives it. */

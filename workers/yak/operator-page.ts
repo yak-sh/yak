@@ -1,3 +1,4 @@
+import { Time } from '@yaks/ui/parts'
 import type { Bundle } from '@yaks/graph'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -294,12 +295,9 @@ export let textsCard = (
           from
             ? ''
             : '; to text your Operator, reply to the number your welcome text came from',
-          `. You agreed on ${
-            new Date(consent.at).toLocaleDateString('en-US', {
-              dateStyle: 'long',
-              timeZone: 'UTC',
-            })
-          }.`,
+          '. You agreed ',
+          h(Time, { at: consent.at }),
+          '.',
         )
         : null,
       consent ? changing(agreeing('Change your mobile number')) : agreeing(
@@ -2159,10 +2157,8 @@ let chatScript = (
 import { browserDrafts } from '/_draft.js'
 import { follow } from '/follow.js'
 import { redraw } from '/redraw.js'
-import { asideHtml, glanceHtml, helperHtml, lasted, ordered, rowsOf, tips, turnHtml } from '/_talk.js'
+import { asideHtml, glanceHtml, helperHtml, lasted, ordered, rowsOf, turnHtml } from '/_talk.js'
 import { voice } from '/voice.js'
-import { pretty, when } from '/when.js'
-tips()
 let open = ${JSON.stringify(open)}
 let root = ${JSON.stringify(root)}
 let chats = ${JSON.stringify(chatPath(space.slug, ''))}
@@ -2591,15 +2587,6 @@ form?.addEventListener('submit', async (e) => {
   } catch (error) { said(error) }
   finally { button.disabled = false; form.removeAttribute('aria-busy') }
 })
-// When each message was sent, in the person's own time, kept current.
-let stamps = () => {
-  for (let t of box.querySelectorAll('time[datetime]')) {
-    t.textContent = when(t.dateTime)
-    t.dataset.tip = pretty(t.dateTime)
-  }
-}
-stamps()
-setInterval(stamps, 60_000)
 // The page opens at the newest entry and follows the conversation down as it
 // grows, unless the person has scrolled up to read (public/follow.js).
 let reader = follow(globalThis, box, document.querySelector('[data-jump]'))

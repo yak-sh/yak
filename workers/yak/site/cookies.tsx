@@ -1,3 +1,4 @@
+import { Time } from '@yaks/ui/parts'
 /** @jsxImportSource preact */
 import { Page } from './frame.tsx'
 
@@ -9,7 +10,9 @@ export let Cookies = () => (
   >
     <div class='Prose_Head'>
       <h1 class='Title Title-page'>Cookies</h1>
-      <p class='Prose_When'>Last updated 6 November 2026</p>
+      <p class='Prose_When'>
+        Last updated <Time written timeZone='UTC' at='2026-11-06T00:00:00Z' />
+      </p>
       <p>
         yaks.app sets one cookie, and a second one when an ad or a campaign link
         brought you. This page explains what they do.

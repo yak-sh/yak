@@ -7,6 +7,7 @@
  * @module
  */
 
+import { Time } from './Time.ts'
 import type { Sheet } from '@yaks/tui/theme'
 import { h, toChildArray } from 'preact'
 import { block, type Part, type Props } from './el.ts'
@@ -62,7 +63,7 @@ export let specimens = (): Specimen[] => [
         By,
         {},
         h('span', {}, 'Jeff'),
-        h('span', {}, '27 Aug'),
+        h(Time, { at: '2026-08-27', written: true, timeZone: 'UTC' }),
         h('a', { href: '#s' }, 'S-21436'),
       ),
       h(Note, {}, 'the agent kept reporting the port was not running'),

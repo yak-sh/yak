@@ -8,6 +8,7 @@
 
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
+import { Time } from './Time.ts'
 import { el, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 
@@ -24,14 +25,38 @@ export let sheet = (c: Colors): Sheet => ({
 
 /** One moment, and one with a second part. */
 export let specimens = (): Specimen[] => [
-  ['Stamp', h(Stamp, {}, '5 minutes ago')],
+  [
+    'Stamp',
+    h(
+      Stamp,
+      {},
+      h(Time, {
+        at: '2026-11-06T15:42:00Z',
+        now: 1794238920000,
+        timeZone: 'UTC',
+      }),
+    ),
+  ],
   [
     'Stamp, two parts',
     h(
       Stamp,
       {},
-      h('span', null, '3 days ago'),
-      h('span', null, '· edited 1 hour ago'),
+      h(Time, {
+        at: '2026-11-06T15:42:00Z',
+        now: 1794238920000,
+        timeZone: 'UTC',
+      }),
+      h(
+        'span',
+        null,
+        '· edited ',
+        h(Time, {
+          at: '2026-11-06T16:42:00Z',
+          now: 1794238920000,
+          timeZone: 'UTC',
+        }),
+      ),
     ),
   ],
 ]

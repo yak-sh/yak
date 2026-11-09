@@ -1,3 +1,4 @@
+import { Time } from '@yaks/ui/parts'
 // The admin's Spending page (T-151607): where the platform's dollars went
 // over the last thirty days. Each day's dollars, by what sold them and by who
 // covered them, come from the directory's space rows (`trend`, meter.ts
@@ -11,7 +12,7 @@ import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
 import { Card, type Col, Empty, Group, Table } from '@yaks/ui/parts'
 import { type ByDay, columns, series, sparkline, summed } from '@yaks/ui/chart'
 import { count, dollars, SOURCES } from './meter.ts'
-import { day, moment } from './html.ts'
+import { day } from './html.ts'
 import {
   joined,
   none,
@@ -181,7 +182,7 @@ let daily = (spaces: Counted[], asked: Asked[], now: number) => {
       ...since
         ? [
           [
-            `Covered by paying plans since ${day(since, 'short')}`,
+            `Covered by paying plans since ${day(since)}`,
             `${dollars(paid)} of ${dollars(recorded)} (${pct(paid, recorded)})`,
           ],
           [
@@ -319,7 +320,7 @@ let sessions = (runs: Placed[], base: string) => {
       h(Table.Cell, null, first),
       h(Table.Cell, null, r.space.slug),
       used(r).map((n) => h(Table.Cell, { mod: 'num' }, n)),
-      h(Table.Cell, null, moment(r.until)),
+      h(Table.Cell, null, h(Time, { at: r.until })),
     )
   return shown.length
     ? table(

@@ -6,7 +6,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { bearerFor, connector, kernel, meta, signIn, unique } from './probe.ts'
 import { HELLO } from './mcp-probe.ts'
 import { agentEid } from './instrument.ts'
-import { day } from './html.ts'
+import { relative } from '@yaks/ui/relative'
 import { managePath } from './route.ts'
 
 type Stamp = { at?: string; by?: unknown; via?: unknown }
@@ -60,7 +60,7 @@ test('a deploy is stamped with the person, or the agent writing for them, and wh
       assertEquals(r.status, 200)
       return (await r.text()).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
     }
-    let today = day(new Date().toISOString(), 'short')
+    let today = relative(String(mine.created?.at))
     let dashboard = await page(managePath('apps', owner.name), owner.cookie)
     assertStringIncludes(
       dashboard,
@@ -83,11 +83,11 @@ test('a deploy is stamped with the person, or the agent writing for them, and wh
     let admin = await page(`/admin/${theirs.entity.eid}`, k.owner.cookie)
     assertStringIncludes(
       admin,
-      `the last ${day(new Date().toISOString())} by probe for ${owner.name}`,
+      `the last ${today} by probe for ${owner.name}`,
     )
     assertStringIncludes(
       admin,
-      `Made ${day(new Date().toISOString())} by probe for ${owner.name}`,
+      `Made ${today} by probe for ${owner.name}`,
     )
   } finally {
     await k.stop()

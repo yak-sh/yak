@@ -20,46 +20,11 @@ export let markup = (nodes: ComponentChildren): string =>
 /// markup(h('p', null, raw('<b>a</b>'), ' & ', '<b>')) -> '<p><b>a</b> &amp; &lt;b></p>'
 export let raw = (html: string): VNode => jsxTemplate([html])
 
-// A formatter is made the first time a page formats with it, then reused for
-// every cell after: making one loads ICU's data, about 16 ms of a new
-// isolate's CPU, which most isolates importing this (a space's Operator
-// reading its chat page) never format a day with (T-150377).
-let made = new Map<string, Intl.DateTimeFormat>()
-let formatter = (key: string, options: Intl.DateTimeFormatOptions) => {
-  let f = made.get(key)
-  if (!f) {
-    f = new Intl.DateTimeFormat('en-GB', { ...options, timeZone: 'UTC' })
-    made.set(key, f)
-  }
-  return f
-}
-
-// The month said short where a day sits in a narrow column.
-/// day('2026-10-13T11:37:16.784Z') -> '13 October 2026'
-/// day('2026-10-13T11:37:16.784Z', 'short') -> '13 Oct 2026'
-/// day('soon') -> ''
-export let day = (iso: string, month: 'long' | 'short' = 'long') => {
-  let at = new Date(iso)
-  return Number.isNaN(at.getTime())
-    ? ''
-    : formatter(month, { day: 'numeric', month, year: 'numeric' }).format(at)
-}
-
-// A moment to the minute, where when it changed matters more than its day.
-/// moment('2026-10-13T11:37:16.784Z') -> '13 Oct 2026, 11:37 UTC'
-/// moment('soon') -> ''
-export let moment = (iso: string) => {
-  let at = new Date(iso)
-  return Number.isNaN(at.getTime()) ? '' : `${
-    formatter('minute', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(at)
-  } UTC`
-}
+// Plain dates in prose use the kit formatter, with server text in UTC.
+import { day as date, pretty } from '@yaks/ui/relative'
+export let day = (iso: string): string => date(iso, 'UTC')
+export let moment = (iso: string): string =>
+  pretty(iso, 'UTC') ? `${pretty(iso, 'UTC')} UTC` : ''
 
 // A file input as a drop zone (@yaks/ui `Drop`, public/drop.js): the
 // form's own input inside a place to press or drop on, and the list of what
