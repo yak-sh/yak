@@ -2,7 +2,6 @@ import { addressed, type Bundle, type Comp } from '@yaks/graph'
 import { short } from '@yaks/id'
 import { base64 } from './bytes.ts'
 import { derivedEid } from '@yaks/graph/identity'
-import { writes } from '@yaks/member'
 import { directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { extractor, isPdf, legible, supported } from './documents.ts'
@@ -804,10 +803,10 @@ export let handleChannels = (
         ? derivedEid('operator-task|' + row.entity.eid)
         : undefined
       try {
-        if (!writes(role) && !ANSWERING.has(request.channel)) {
+        if (!role && !ANSWERING.has(request.channel)) {
           throw refuse(
             'access',
-            'Only a member who writes can ask the operator.',
+            'Only a member can ask the operator.',
           )
         }
         let extracted = part<Comp>(row, 'content')?.body

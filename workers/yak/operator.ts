@@ -230,8 +230,10 @@ let told = (
 
 // What the Operator is told when the person it is talking with has no seat
 // in its space to write with: it has only their permissions.
-let outside = (space: Space) =>
-  `The person you are talking with is not a member of ${space.slug}: you have only their permissions, so you see none of the space's apps, rows, conversations or memories, and you can do for them only what they could do themselves. Answer what they ask from what they tell you, and say plainly when something needs one of the space's people. What needs the person you wrote to them for, raise with escalate.`
+let outside = (space: Space, role: Role | null = null) =>
+  role
+    ? `Your role in ${space.slug} is ${role}: read only the apps and rows this person can read through your tools. You cannot change them or read the space's private Operator memories, tasks or other people's conversations. You may also help this person sign up through the sign-up tools when they are offered; ask the question returned by next and record only answers they gave.`
+    : `The person you are talking with is not a member of ${space.slug}: you have only their permissions, so you see none of the space's apps, rows, conversations or memories, and you can do for them only what they could do themselves. Answer what they ask from what they tell you, and say plainly when something needs one of the space's people. What needs the person you wrote to them for, raise with escalate.`
 
 // What the Operator reads of itself: its own store, where each conversation
 // and every entry in it, its forks and helpers, its memories, its persona and
@@ -370,7 +372,7 @@ export let operatorRoster = async (
     ctx,
     { graph: work.g, person: ctx.person, space },
   )).map(namedTool)
-    .filter((t) => !ownNamed.has(t.name))
+    .filter((t) => !ownNamed.has(t.name) && (member || t.readOnly))
   return [
     ...apps.map((t): Tool => {
       let ours = own.get(t.name)
@@ -1253,7 +1255,7 @@ export let operating = (
         REPLIES.join(',')
       }&.limit=1&.fields=entity.eid`,
     )
-    let [roster, google, platform, [reply]] = await Promise.all([
+    let [roster, google, platform, [reply], [text]] = await Promise.all([
       operatorRoster(ctx, store, { space: space.eid, tasked: !!task, member })
         .then((r) => reached('roster', r)),
       member
@@ -1261,6 +1263,12 @@ export let operating = (
         : [],
       admin({ dir: whole, person: ctx.person! }),
       replied,
+      member ? [] : g.read(
+        `.operator_request.session=${await topOf(
+          store,
+          session,
+        )} .operator_request.channel=text,texted .order=-created.at .limit=1 .fields=operator_request.address`,
+      ),
     ])
     return [
       ...sessionTools(g).filter((t) => t.name == 'fork'),
@@ -1275,6 +1283,14 @@ export let operating = (
         ]
         : [],
       ...roster,
+      ...text
+        ? signupTools(
+          env,
+          space,
+          ctx.person,
+          String(comp(text, 'operator_request')!.address),
+        )
+        : [],
       ...member
         ? [
           platformBug(ctx, space),
@@ -1292,8 +1308,10 @@ export let operating = (
         : [],
       ...reply ? [escalate(store, space)] : [],
       ...platform ? adminTools(env, whole) : [],
-      ...options.tools?.(ctx, files) ?? [],
-      ...options.browsers
+      ...(options.tools?.(ctx, files) ?? []).filter((t) =>
+        member || t.readOnly
+      ),
+      ...member && options.browsers
         ? browserTools(env, space, ctx.person, options.browsers)
         : [],
     ]
@@ -1360,7 +1378,9 @@ export let operating = (
         if (work?.signup) return outside(space) + '\n\n' + SIGNUP
         let topic = topicOf(row)
         // Someone who does not write in the space is told none of its work.
-        if (!writes(ctx.role)) return reached('instructions', outside(space))
+        if (!writes(ctx.role)) {
+          return reached('instructions', outside(space, ctx.role))
+        }
         let [map, google] = await Promise.all([
           topic ? oracleContext(ctx, g, topic) : oracleMap(ctx, g),
           googleTold(env, ctx, space),

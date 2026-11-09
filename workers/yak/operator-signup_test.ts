@@ -1,5 +1,5 @@
 import { equal, ok, test } from '@yaks/testing'
-import type { Request as ModelRequest } from '@yaks/model'
+import type { Item, Request as ModelRequest } from '@yaks/model'
 import type { Arrival } from '@yaks/phone'
 import { platform } from './directory-rows-probe.ts'
 import { operating } from './operator.ts'
@@ -14,6 +14,10 @@ import {
 } from './operator-signup.ts'
 import { drain } from './operator-store.ts'
 import { rootOf } from './operator-root.ts'
+import { stores } from './app-store-probe.ts'
+import { appVocab } from './vocab.ts'
+import { declared } from './directory-fixture.ts'
+import type { Env } from './env.ts'
 
 let { env, dir } = platform('signup-operator')
 let spaceId = crypto.randomUUID(), member = crypto.randomUUID()
@@ -30,6 +34,7 @@ await dir.apply({
 let space = (await dir.at(spaceId))!
 let store = operatorMemory()
 let seen: ModelRequest[] = [], replies: string[] = [], texts: string[] = []
+let script: Item[][] | undefined
 let operator = operating(store, env, {
   directory: () => dir,
   tools: () => [{
@@ -43,7 +48,8 @@ let operator = operating(store, env, {
     return Promise.resolve({
       id: crypto.randomUUID(),
       model: req.model,
-      items: [{ kind: 'assistant', text: 'Which form would you like?' }],
+      items: script?.shift() ??
+        [{ kind: 'assistant', text: 'Which form would you like?' }],
     })
   }),
 })
@@ -125,12 +131,12 @@ test('a text from someone with no seat in the space runs as them, with only form
 })
 
 test("a member's text to the space's number is theirs to their own Operator, with their reach", async () => {
-  equal(seen.length, 3)
+  equal(memberTurns, 3)
   ok(tools(2).includes('unrelated'))
   ok(!tools(2).some((t) => t.startsWith('signup_')))
   equal(asked(member).length, 1)
   ok((await store.g.get([rootOf(spaceId, member)]))[0]?.operator_session)
-  equal(texts, ['+12695550100: Which form would you like?'])
+  equal(memberTexts, ['+12695550100: Which form would you like?'])
 })
 
 let control = async (text: string) => {
@@ -157,7 +163,7 @@ test('STOP persists until START, and carrier keywords never start a model turn',
     false,
   ])
   equal(keyword, false)
-  equal(seen.length, 3)
+  equal(memberTurns, 3)
 })
 
 let incoming = arrival('+12695550199')
@@ -190,4 +196,105 @@ test('STOP suppresses a queued sign-up answer before the carrier is called', () 
   equal(replies.length, 2)
   ok(suppressed.bounced)
   equal(suppressed.delivered, undefined)
+})
+
+let memberTurns = seen.length, memberTexts = [...texts]
+let viewer = crypto.randomUUID(), hidden = crypto.randomUUID()
+await dir.apply({
+  entities: [
+    { entity: { eid: viewer }, person: {}, phone: { number: '+12695550144' } },
+    {
+      entity: { eid: crypto.randomUUID() },
+      member: { person: viewer, space: spaceId, role: 'viewer' },
+    },
+    { entity: { eid: hidden }, space: { slug: 'hidden', store: 'hidden' } },
+    {
+      entity: { eid: crypto.randomUUID() },
+      operator_reach: {
+        operator: spaceId,
+        space: hidden,
+        role: 'editor',
+      },
+    },
+    {
+      entity: { eid: '$notices' },
+      app: {
+        slug: 'notices',
+        space: spaceId,
+        store: 'church/notices',
+        version: 1,
+        access: 'private',
+      },
+    },
+  ],
+}, { 'x-yak-person': member, 'x-yak-role': 'owner' })
+let app = (await dir.app(space, 'notices'))!
+await declared(env, space, app)
+let at = stores(env, appVocab(), {
+  app: { eid: app.eid, mode: 'private', manifest: {} },
+})
+await at('church/notices').graph.apply([
+  {
+    entity: { eid: crypto.randomUUID() },
+    doc: { title: 'Sunday service at ten' },
+  },
+], { trusted: true })
+await store.g.apply([
+  {
+    entity: { eid: crypto.randomUUID() },
+    memory: {},
+    doc: { title: 'Private Operator memory' },
+  },
+], { trusted: true })
+let original = env.STORE, registrations: Record<string, unknown>[] = []
+env.STORE = {
+  ...original,
+  get: (name, options) => {
+    let door = original.get(name, options)
+    return {
+      fetch: async (req: Request) => {
+        if (new URL(req.url).pathname != '/signup') return await door.fetch(req)
+        registrations.push(await req.json())
+        return Response.json([{ title: 'Sunday school' }])
+      },
+    }
+  },
+} as Env['STORE']
+
+let call = (name: string, args: unknown): Item[] => [{
+  kind: 'call',
+  id: crypto.randomUUID(),
+  name,
+  args: JSON.stringify(args),
+}]
+script = [
+  call('graph_query', { q: '.doc' }),
+  call('signup_forms', {}),
+  [{
+    kind: 'assistant',
+    text: 'Sunday service is at ten. You can sign up for Sunday school.',
+  }],
+]
+await spaceArrived(env, space, arrival('+12695550144', 'What is on Sunday?'))
+await drain(store)
+let viewerRoot = (await store.g.get([rootOf(spaceId, viewer)]))[0]
+
+test("a viewer's text reads only their reach and offers sign-up without writer tools or private Operator context", () => {
+  equal(seen.length, 6)
+  let transcript = JSON.stringify(seen.slice(3))
+  ok(transcript.includes('Sunday service at ten'))
+  ok(transcript.includes('Sunday school'))
+  ok(!transcript.includes('Private Operator memory'))
+  ok(!transcript.includes('hidden (editor)'))
+  for (let name of FORMS) ok(tools(3).includes(name))
+  for (let name of ['graph_apply', 'unrelated', 'text_send', 'memory_recall']) {
+    ok(!tools(3).includes(name))
+  }
+  equal(registrations[0].person, viewer)
+  equal(registrations[0].phone, '+12695550144')
+  ok(viewerRoot?.operator_session)
+  equal(
+    texts.at(-1),
+    '+12695550144: Sunday service is at ten. You can sign up for Sunday school.',
+  )
 })
