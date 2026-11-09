@@ -1208,7 +1208,7 @@ gallery_code_review:
     keys, whether it works as it says, and anything that should not be shown
     under yaks.app's name. by is your project, via your session.
 
-operator_run:
+operator_chat:
   title: Ask your space's operator
   description: >-
     Give this space's operator a request or a design to implement. It reads and
@@ -1220,6 +1220,10 @@ operator_run:
     private task and session ids, its answer and model cost in dollars. Pass task
     to continue an earlier request; operator_read reads its work. Ships changes
     live; app_rollback can undo a deployment. Only members who write may ask.
+operator_run:
+  title: Ask your space's operator (alias)
+  description: >-
+    Alias for operator_chat, with the same arguments, permissions and behavior.
 operator_read:
   title: Read your operator's work
   description: >-

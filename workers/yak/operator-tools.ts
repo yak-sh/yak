@@ -27,32 +27,35 @@ let ask = async (ctx: Ctx, args: Args, path: string) => {
   return { space, text: String(value.text ?? JSON.stringify(value)), value }
 }
 
-export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
-  {
-    name: 'operator_run',
-    destructive: true,
-    input: {
-      type: 'object',
-      properties: {
-        space: SPACE,
-        say: str(
-          'What you want done in this space, or the design your agent prepared.',
-        ),
-        task: str(
-          'The id of an existing operator task to continue. Omit for a new request.',
-        ),
-        provider: str('The configured model provider to use for this run.'),
-        model: str('The model the selected provider lists for this run.'),
-        attachments: {
-          type: 'array',
-          items: { type: 'string' },
-          description:
-            'SHA-256 addresses of files already sent to your Operator, as attachment.artifact names them.',
-        },
+let chat: Omit<Tool, 'title' | 'description'> = {
+  name: 'operator_chat',
+  destructive: true,
+  input: {
+    type: 'object',
+    properties: {
+      space: SPACE,
+      say: str(
+        'What you want done in this space, or the design your agent prepared.',
+      ),
+      task: str(
+        'The id of an existing operator task to continue. Omit for a new request.',
+      ),
+      provider: str('The configured model provider to use for this run.'),
+      model: str('The model the selected provider lists for this run.'),
+      attachments: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'SHA-256 addresses of files already sent to your Operator, as attachment.artifact names them.',
       },
     },
-    run: (ctx, args) => ask(ctx, args, '/operator/run'),
   },
+  run: (ctx, args) => ask(ctx, args, '/operator/run'),
+}
+
+export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
+  chat,
+  { ...chat, name: 'operator_run' },
   {
     name: 'operator_read',
     readOnly: true,

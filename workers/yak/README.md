@@ -970,11 +970,12 @@ other platform-owned rows.
 
 ## Space operator
 
-`operator_run({space, say})` starts a private task and a native harness session
+`operator_chat({space, say})` starts a private task and a native harness session
 in the space's existing Builder object. `say` can be a short request or a
-design. It uses the connector's tools to read and change that space's apps,
-files and rows. A renewed space scope applies to each tool call. Model requests
-charge the space's shared dollar budget as they answer; there is no round limit.
+design. `operator_run` is an alias with the same arguments and behavior. It uses
+the connector's tools to read and change that space's apps, files and rows. A
+renewed space scope applies to each tool call. Model requests charge the space's
+shared dollar budget as they answer; there is no round limit.
 
 The result includes `task`, `session`, `text`, `status`, `model` and `cost` in
 USD. `operator_read({space, task})` returns the task, comments and conversation;
@@ -982,7 +983,7 @@ a conversation's session returns its newest 64 lines, and while lines come
 before them, `earlier: {count, before}` says how many and the `before` to pass
 for the 64 preceding. `context: true` also includes model instruction snapshots.
 Omit `task` to list recent tasks. Continue with
-`operator_run({space, task, say})`. A settled model turn may be a question: the
+`operator_chat({space, task, say})`. A settled model turn may be a question: the
 operator explicitly completes a task through `task_update` after finishing it.
 
 `operator_retry({space, request})` runs a request that could not finish again,

@@ -254,10 +254,16 @@ let mine = new Set(['memory_save', 'memory_recall', 'memory_around'])
 // The connector's tools the Operator holds as its own: memory_save and
 // memory_recall are its own memories (the space's are store_memory_save and
 // store_memory_recall), mail_send is its own letter for the person it works
-// for (an app's is store_mail_send), and operator_run and operator_read reach
+// for (an app's is store_mail_send), and operator_chat and operator_read reach
 // the Operator itself, whose fork, spawn and reads with self are its own of
 // them.
-let ownNamed = new Set([...mine, 'mail_send', 'operator_run', 'operator_read'])
+let ownNamed = new Set([
+  ...mine,
+  'mail_send',
+  'operator_chat',
+  'operator_run',
+  'operator_read',
+])
 // Where the Operator finds what it no longer holds in front of it, declared
 // beside the code that gives it `self` and the memory loop. The base persona
 // contains it (operator-persona.ts).
@@ -1710,7 +1716,7 @@ export let operating = (
     }
   }
 
-  // An agent asking through operator_run waits on one answer, so its words
+  // An agent asking through operator_chat waits on one answer, so its words
   // are a task of their own rather than a person's conversation.
   let run: Operator['run'] = async (held, space, args, o = {}) => {
     let files = await attached(store, held, space, args.attachments)
@@ -1917,7 +1923,7 @@ export type Operator = {
     open: string,
     by: string,
   ) => Promise<{ task: string; session: string; stopped: boolean }>
-  /** operator_run's door: the words, then the answer once the session ends,
+  /** operator_chat's door: the words, then the answer once the session ends,
    * working the pool meanwhile as the object's alarm does. */
   run: (held: Asker, space: Space, args: Args, o?: Asking) => Promise<{
     task: string

@@ -89,5 +89,8 @@ test('the conversation and its forks are offered every tool the connector lists,
       .map(has),
     [true, true, true, true, true],
   )
-  assertEquals(['operator_run', 'operator_read'].map(has), [false, false])
+  assertEquals(
+    ['operator_chat', 'operator_run', 'operator_read'].map(has),
+    [false, false, false],
+  )
 })

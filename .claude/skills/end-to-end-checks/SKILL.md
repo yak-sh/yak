@@ -104,7 +104,7 @@ waits for those background runs. `admin_deploys` as admin says what is live,
 `admin_errors` what broke, and a new failure reaches the tracker when it happens
 (M-37965). A live check of the platform runs in the agents' own space,
 `checks` (checks.yaks.app), as its owner `checks@bot.yak.sh`: `--as checks` on
-any `yak` command, its Operator through `yak operator_run --space checks --as
+any `yak` command, its Operator through `yak operator_chat --space checks --as
 checks`. It is kept from the idle sweep, so it outlasts any check. Never check
 in the owner's `jeff` space or any person's: a test row there lands in his
 conversation, Updates and task list. A check that needs a clean account runs

@@ -192,7 +192,7 @@ try {
   delete factory.WebSocketPair
 }
 let agent = connector(k, cookie)
-await agent.tool('operator_run', { space: slug, say: 'What does my tab say?' })
+await agent.tool('operator_chat', { space: slug, say: 'What does my tab say?' })
 await k.settled()
 let { tasks } = JSON.parse(
   (await agent.answer('operator_read', { space: slug })).text,

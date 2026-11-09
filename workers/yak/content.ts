@@ -806,10 +806,15 @@ export let WORDS: Record<string, Words> = {
     'description':
       "Record the platform admin's code review of an app somebody else asked into the gallery, and send the platform's owner its review request with the verdict and findings; he decides either way. An ask from outside the platform's own spaces comes to the admin's agents for this first, and app_files reads the app's code. verdict is approve or reject; findings says what the review found: what the app does with people's data and keys, whether it works as it says, and anything that should not be shown under yaks.app's name. by is your project, via your session.",
   },
-  'operator_run': {
+  'operator_chat': {
     'title': "Ask your space's operator",
     'description':
       "Give this space's operator a request or a design to implement. It reads and writes this space's apps with the same tools your agent uses, including rows and deployments, and charges model use to the space's budget. The operator on your own space is your personal assistant: it also reaches your other spaces, with your role in each. Any space's owner may let another space's operator work there too, from its People page. Returns the private task and session ids, its answer and model cost in dollars. Pass task to continue an earlier request; operator_read reads its work. Ships changes live; app_rollback can undo a deployment. Only members who write may ask.",
+  },
+  'operator_run': {
+    'title': "Ask your space's operator (alias)",
+    'description':
+      'Alias for operator_chat, with the same arguments, permissions and behavior.',
   },
   'operator_read': {
     'title': "Read your operator's work",
