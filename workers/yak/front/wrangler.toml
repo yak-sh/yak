@@ -74,12 +74,13 @@ queue = "yak-errors"
 binding = "VIEWS"
 dataset = "yak_views"
 
-# The two workspace files this Worker reads. Each is named here because esbuild
+# The workspace files this Worker reads. Each is named here because esbuild
 # has no idea about the workspace, and the kernel's written-out `paths` carry
 # hundreds of names this Worker must not grow to need.
 [alias]
 "@yaks/tracker/report" = "../../../packages/tracker/report.ts"
 "@yaks/graph/errors" = "../../../packages/graph/errors.ts"
+"@yaks/fp" = "../../../packages/fp/mod.ts"
 
 [env.staging]
 name = "yak-front-staging"

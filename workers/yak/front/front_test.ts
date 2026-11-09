@@ -1,6 +1,6 @@
 // yak-front: what it answers itself from Site's cache, and that everything else
 // and every failure of its own reach the kernel unchanged.
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { type FrontEnv, serve, settled } from './front.ts'
 import { pageAt, personal, SEEN } from '../kept-page.ts'
@@ -33,7 +33,7 @@ let page = (headers: Record<string, string> = {}) =>
 
 let front = (
   site: (req: Request) => Response | Promise<Response>,
-  kernel = () => new Response('kernel'),
+  kernel: () => Response | Promise<Response> = () => new Response('kernel'),
 ) => {
   let asked: string[] = [], forwarded: Request[] = [], used: string[] = []
   let files: string[] = []
@@ -102,6 +102,43 @@ let front = (
     told,
   }
 }
+
+test('a front request reports a pending kernel or Site without cutting off its answer', async () => {
+  for (let service of ['kernel', 'site']) {
+    let time = clock(), answer = Promise.withResolvers<Response>()
+    let f = front(
+      () => service == 'site' ? answer.promise : page(),
+      () => answer.promise,
+    )
+    f.env.CLOCK = time
+    let result = f.go(
+      service == 'site' ? at : 'https://yaks.app/connections?token=secret',
+    )
+    await time.advance(60_000)
+    await Promise.all(f.retained)
+    assertEquals(f.errors.length, 1)
+    let [error, http] = f.errors[0] as {
+      error?: { tags: Record<string, string> }
+      request?: { url: string }
+    }[]
+    assertEquals(error.error?.tags.waiting, `${service}_wait`)
+    assertEquals(
+      http.request?.url,
+      service == 'site' ? at : 'https://yaks.app/connections',
+    )
+    await time.advance(120_000)
+    assertEquals(f.errors.length, 1)
+    answer.resolve(page({
+      [SEEN]: JSON.stringify({
+        app: 'hung-front',
+        space: 'ada',
+        slug: 'cookbook',
+      }),
+    }))
+    assertEquals((await result).status, 200)
+    assertEquals(time.pending(), 0)
+  }
+})
 
 // The CLI's bytes change with every package, so they are this Worker's assets
 // and a CLI change starts no kernel isolate cold (wrangler.toml `[assets]`).

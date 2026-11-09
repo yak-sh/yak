@@ -20,6 +20,7 @@
 // the store it read — which is counted here too, at the one door every write
 // passes (door.ts), so a write by any caller is seen by every reader.
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { unwatched, waiting } from './waits.ts'
 
 /** Round trips by name, for one request. Names are fine-grained on purpose —
  * `r2.get` and `r2.put` are separate lines a test can assert — and `counts`
@@ -77,7 +78,7 @@ export let ambient = (): Tally | undefined => here.getStore()
  * only until the work's first await, and the request's count came back after
  * it. */
 export let apart = <T>(work: () => T): T =>
-  here.run(undefined as unknown as Tally, work)
+  here.run(undefined as unknown as Tally, () => unwatched(work))
 
 /** One round trip, named. A no-op wherever nobody is counting.
  *
@@ -213,7 +214,7 @@ export let elapsed = async <T>(
   let tally = here.getStore()
   let at = Date.now()
   try {
-    return await work()
+    return await waiting(name, work)
   } finally {
     hop(name, Date.now() - at, tally)
   }

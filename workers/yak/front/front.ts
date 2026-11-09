@@ -39,6 +39,8 @@ import {
 import { type Conversion, conversionOf, keep } from '../arrival.ts'
 import { foreign, hostOf, loopback, platform, spaceDoor } from '../route.ts'
 import * as variant from '../variant.ts'
+import type { Clock } from '@yaks/fp'
+import { overdue, watch } from '../lib/watch.ts'
 
 export type Lent = { waitUntil: (work: Promise<unknown>) => void }
 
@@ -58,6 +60,7 @@ export type FrontEnv = Host & {
   ERRORS?: { send: (body: never) => Promise<void> }
   WORKER_NAME?: string
   CF_VERSION_METADATA?: { id: string }
+  CLOCK?: Clock
 }
 
 // A session lives ninety days and slides at half of that (session.ts `slid`).
@@ -221,16 +224,22 @@ let report = (
   ctx: Lent,
   where: string,
   req: Request,
+  tags?: Record<string, string>,
 ) => {
+  let source = origin(
+    env.WORKER_NAME ?? 'yak-front',
+    env.CF_VERSION_METADATA?.id,
+    where,
+    req,
+  )
   ctx.waitUntil(
     caught(error, {
       sink: env.ERRORS ? queue(env.ERRORS as never) : (() => {}) as Sink,
-      ...origin(
-        env.WORKER_NAME ?? 'yak-front',
-        env.CF_VERSION_METADATA?.id,
-        where,
-        req,
-      ),
+      ...source,
+      ...tags && {
+        tags: { ...source.tags, ...tags },
+        fault: 'request hang',
+      },
     }),
   )
 }
@@ -244,17 +253,27 @@ let cli = (req: Request, env: FrontEnv) => {
     new URL(req.url).pathname.startsWith('/_cli/')
 }
 
-export let serve = async (req: Request, env: FrontEnv, ctx: Lent) => {
+let serving = async (
+  req: Request,
+  env: FrontEnv,
+  ctx: Lent,
+  waiting: (name: string) => void,
+) => {
   let at = Date.now(), cold = served++ == 0, said: string[] = []
   let refused: number | null = null
   try {
-    if (cli(req, env)) return await env.CLI.fetch(req)
+    if (cli(req, env)) {
+      waiting('cli_wait')
+      return await env.CLI.fetch(req)
+    }
+    waiting('site_wait')
     let page = await kept(req, env, ctx, said)
     if (page instanceof Response) return finished(page, env, at, cold, said)
     refused = page
   } catch (error) {
     report(error, env, ctx, 'front fetch', req)
   }
+  waiting('kernel_wait')
   let res = await env.KERNEL.fetch(req)
   // A page the kernel serves that Site refused is one Worker deployed ahead of
   // the other: the visitor has the page all the same, and the skew is a bug.
@@ -278,4 +297,21 @@ export let serve = async (req: Request, env: FrontEnv, ctx: Lent) => {
   let out = new Response(res.body, res)
   out.headers.delete(UNKEPT_AT)
   return out
+}
+
+export let serve = (
+  req: Request,
+  env: FrontEnv,
+  ctx: Lent,
+): Promise<Response> => {
+  let waiting = 'front fetch'
+  return watch(
+    () => serving(req, env, ctx, (name) => waiting = name),
+    (ms) =>
+      report(overdue(), env, ctx, 'front fetch', req, {
+        waiting,
+        elapsed_ms: String(ms),
+      }),
+    env.CLOCK,
+  )
 }

@@ -23,6 +23,9 @@ import { isTestAddress } from '@yaks/platform/bots'
 import { Pending } from './writes.ts'
 import { moved } from '@yaks/durable-object/resets'
 import type { Ctx } from './tools.ts'
+import { type Clock, system } from '@yaks/fp'
+import { watching } from './lib/waits.ts'
+import { overdue } from './lib/watch.ts'
 
 export type Hit = { id: string; account: 'person' | 'test' }
 type Tags = Record<string, string | null | undefined>
@@ -110,6 +113,20 @@ export let bound = <A extends unknown[], R>(
   return (...args) =>
     context.run(invocation!, () => within({}, tags, () => run(...args)))
 }
+
+/** A handler which never answers still reaches the tracker. Response bodies
+ * and upgraded streams keep their own lifetime after the handler returns. */
+export let watched = <T>(run: () => T, time: Clock = system): T =>
+  watching(
+    run,
+    bound((ms, waits) =>
+      defect(overdue(), {
+        elapsed_ms: String(ms),
+        waiting: waits.length ? JSON.stringify(waits) : 'handler',
+      }, { fault: 'request hang' })
+    ),
+    time,
+  )
 
 /** An accepted write has already been reported where it failed. */
 export let refused = (error: unknown) =>

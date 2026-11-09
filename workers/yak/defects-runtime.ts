@@ -1,7 +1,7 @@
 // Runtime retention for tracker delivery and its bounded repeat windows.
 import { waitUntil } from 'cloudflare:workers'
 import { faults } from '@yaks/api'
-import { caught, within } from './defects.ts'
+import { caught, watched, within } from './defects.ts'
 import { origin } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
 import { learn, restarting } from './running.ts'
@@ -50,7 +50,7 @@ export let entry = <T>(
     within(
       env,
       { request },
-      run,
+      http ? () => watched(run, env.CLOCK) : run,
       clock,
       {
         retain: waitUntil,

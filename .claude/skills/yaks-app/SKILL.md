@@ -526,7 +526,10 @@ runs in `jeff` or another person's space.
   its state beside the error; `operator_read` with the space reads its work.
   The Operator's tool `platform_bug` files what yaks.app got wrong in our
   tracker.
-- A hang reports nothing from inside. Cloudflare's own record of every
+- An HTTP handler still awaiting its response after 60 seconds reports to the
+  tracker once, with its route and pending named I/O waits (`defects-runtime.ts`,
+  `lib/waits.ts`). The request keeps running; a streamed response's lifetime
+  after headers is separate. Cloudflare's own record of every
   invocation (outcome, wall and CPU time, the object it ran in) is Workers
   observability, read with the cloudflare-api MCP's `telemetry/query` or the
   box's own token (`secrets-and-connections`); an event's timestamp is when the
