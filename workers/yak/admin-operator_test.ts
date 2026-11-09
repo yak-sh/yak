@@ -159,11 +159,20 @@ test("the sessions page lists every space's Operator conversations, each by its 
     sessions.document.querySelectorAll('.Rows_Name')[1]!.getAttribute('href'),
     `${at}/${rootOf(eid, jeff)}`,
   )
-  // Each says its space, its state, and when it last changed, to the minute.
+  // Each says its space, its state, and when it last changed.
   assertEquals(
-    texts(sessions.document, '.Rows_Meta').map((m) =>
-      m!.replace(/\d+ \w+ \d{4}, \d\d:\d\d UTC$/, 'when')
-    ),
+    [...sessions.document.querySelectorAll('.Rows_Meta')].map((meta) => {
+      let time = meta.querySelector('time')!
+      assertEquals(
+        Number.isFinite(Date.parse(time.getAttribute('datetime')!)),
+        true,
+      )
+      assertEquals(!!time.textContent, true)
+      assertEquals(!!time.getAttribute('data-tip'), true)
+      let copy = meta.cloneNode(true) as Element
+      copy.querySelector('time')!.textContent = 'when'
+      return copy.textContent
+    }),
     ['clerk · Waiting to start · when', 'clerk · Answered · when'],
   )
   assertEquals(notYours.status, 404)

@@ -38,6 +38,13 @@ let SIGNED_IN = Object.fromEntries(
     `${COOKIE}=${await sign({ person, space: null, exp: 4e9 }, SECRET)}`,
   ])),
 )
+let value = (node: Element) =>
+  node.querySelector('time')?.getAttribute('datetime') ?? node.textContent
+let figures = (node: ParentNode) =>
+  Object.fromEntries([...node.querySelectorAll('dt')].map((label) => [
+    label.textContent,
+    value(label.nextElementSibling!),
+  ]))
 let NOW = new Date('2026-10-14T12:00:00Z')
 let meter = (m: Partial<Meter>) => ({ month: '2026-10', ...m })
 let census = (): Census => ({
@@ -178,19 +185,29 @@ test('an app says when it was deployed, changed and broke, and who owns it', () 
   )
   let c = census()
   let row = drawn(c.apps[0], 'Directory.List.Tile', { uses: a1, space: 'ann' })
-  for (
-    let said of [
-      'ann/notes · ann',
+  let { document } = parseHTML(row)
+  assertEquals(
+    document.querySelector('.Directory_Sub')?.textContent,
+    'ann/notes · ann',
+  )
+  let facts = figures(document)
+  assertEquals(
+    [
       'Deployed',
-      '9 Oct',
       'Data changed',
-      '11 Oct',
       'Last error',
-      '10 Oct',
       'Requests this month',
       'Visits, 30 days',
     ]
-  ) assertStringIncludes(row, said)
+      .map((key) => facts[key]),
+    [
+      '2026-10-09T00:00:00Z',
+      '2026-10-11T00:00:00Z',
+      '2026-10-10T00:00:00Z',
+      '40',
+      '7',
+    ],
+  )
   assertStringIncludes(
     drawn(c.apps[1], 'Directory.List.Tile', { uses: a2, space: 'shop' }),
     'not counted yet',
@@ -337,8 +354,8 @@ test("the admin's funnel shows each step's count", async () => {
     let [req, , path] = asking('/admin/funnel?days=30', 'root')
     let page = (await answer(req, on, path, dir))!
     assertEquals(page.status, 200)
-    let html = await page.text()
-    assertStringIncludes(html, '<dt>Home page visits</dt><dd>12</dd>')
+    let { document } = parseHTML(await page.text())
+    assertEquals(figures(document)['Home page visits'], '12')
     // Thirty days back, in the seconds the SQL API's toDateTime takes.
     let at = Number(/toDateTime\((\d+)\)/.exec(sql.asked[0])![1]) * 1000
     assertEquals(Math.round((Date.now() - at) / 86_400_000), 30)
@@ -427,7 +444,7 @@ let page = async (path: string) => {
       row.querySelector('strong')?.textContent,
       row.querySelector('.Directory_Sub')?.textContent,
       ...[...row.querySelectorAll('.Chips > *, .Directory_Uses dd')]
-        .map((t) => t.textContent),
+        .map(value),
     ])
   }
   return {
@@ -458,32 +475,32 @@ test("the admin's Invites page says who invited whom, when, and the month each f
       'Eve',
       'invited by Dee',
       'charge moved',
-      '6 Oct 2026',
-      '7 Oct 2026',
+      on('06'),
+      on('07'),
       'dee',
-      '1 Dec 2026',
+      '2026-12-01T12:00:00.000Z',
     ],
-    ['/admin/bo', 'Bo', 'invited by Jeff', '3 Oct 2026', 'not yet', '', ''],
+    ['/admin/bo', 'Bo', 'invited by Jeff', on('03'), 'not yet', '', ''],
     [
       '/admin/ana',
       'Ana',
       'invited by Jeff',
-      '2 Oct 2026',
-      '5 Oct 2026',
+      on('02'),
+      on('05'),
       'jeff',
-      '5 Nov 2026',
+      '2026-11-05T12:00:00.000Z',
     ],
   ])
 })
 
 test("the admin's Invites page says who was given the starter, when and to which space", () => {
   assertEquals(invites.starters, [
-    ['/admin/bo', 'Bo', '+12695550177', '3 Oct 2026', 'bo', '$100.00', '$0.00'],
+    ['/admin/bo', 'Bo', '+12695550177', on('03'), 'bo', '$100.00', '$0.00'],
     [
       '/admin/jeff',
       'Jeff',
       'jeff@x.com',
-      '1 Oct 2026',
+      on('01'),
       'jeff',
       '$100.00',
       '$0.00',
