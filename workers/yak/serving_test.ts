@@ -43,7 +43,7 @@ import * as dirPart from './directory.ts'
 import { granting, scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { analytics, assets, bucket, dataset } from './binding-probe.ts'
-import { declared } from './directory-fixture.ts'
+import { app as appFixture, declared } from './directory-fixture.ts'
 import { emptied, trash, trashSpace } from './erase.ts'
 import { call, type Ctx, type Listed, wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
@@ -1344,6 +1344,7 @@ let hashed = async (text: string) =>
   }'`
 let unwoven = (html: string) =>
   html.replace(/<script data-yak-at[^>]*>[\s\S]*?<\/script>/g, '')
+    .replace(/<meta[^>]*>\n?/g, '')
 
 test('worker HTML carries its reporter without changing its page or headers', async () => {
   let csp = "default-src 'self'; script-src 'self'"
@@ -1394,7 +1395,7 @@ test('worker HTML carries its reporter without changing its page or headers', as
       let scripts = woven(body)
       assertEquals(scripts.length, 4)
       assertEquals(body.split(`data-yak-at="${at}"`).length - 1, 4)
-      assertEquals(unwoven(body), html)
+      assertStringIncludes(unwoven(body), html)
       // The worker's own policy still holds, and lets the platform's inline
       // scripts run by their hashes and nothing else.
       assertEquals(
@@ -1409,7 +1410,7 @@ test('worker HTML carries its reporter without changing its page or headers', as
     let page = await k.at('/cookbook/menu')
     let body = await page.text()
     assertEquals(body.split('data-yak-at="/cookbook/"').length - 1, 4)
-    assertEquals(unwoven(body), html)
+    assertStringIncludes(unwoven(body), html)
   }
 })
 
@@ -1417,7 +1418,7 @@ test('worker HTML carries its reporter without changing its page or headers', as
 // and hands it on; the platform's scripts are woven into what leaves, once.
 test("a worker's own page runs each platform script once", async () => {
   let env = { ASSETS } as unknown as Env
-  let app = { version: 1, source: null } as App
+  let app = appFixture({ version: 1, source: null })
   // What the files door hands a worker's call: the page with no scripts.
   let handed = await apps.woven(env, doc('own'), '/', '/', app, '', null)
   assertEquals(woven(handed), [])

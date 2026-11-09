@@ -3,6 +3,8 @@ import { decodedPath } from './request-path.ts'
 import { serves, stamped } from './site-data.ts'
 import { BINARY } from '@yaks/vocab/wire'
 import { copyOf } from './directory-copy.ts'
+import { APP, type Preview } from './link-preview.ts'
+import { previewed } from './preview-html.ts'
 // The app-serving part: `<space>.yaks.app/<app>/…` — the deploy seam's first
 // hosted implementation (D-32318 §v1 sequencing). One fetch handler: it
 // reads the hostname and path (route.ts), resolves the space and app through
@@ -515,13 +517,23 @@ let namedClient = async (req: Request, env: Env, path: string) => {
 // `badgeOf`), and a visitor's page their bar (public/visit.js, `barOf`):
 // decided as it is served, so every version and release an app serves wears
 // them, and none of their files change.
+let appPreview = (app: App, at: string): Preview =>
+  app.access == 'private' ? APP : {
+    title: app.title || app.slug,
+    description: app.published?.about,
+    image: app.screenshot ? `${at}api/blob/${app.screenshot}` : undefined,
+  }
+
 export let reported = async (
   env: Env,
   at: string,
   page: Response,
   version: number,
   scripts: Scripts,
+  preview: Preview = APP,
+  address = hostUrl(env, at),
 ) => {
+  page = previewed(env, page, address, preview)
   let { tags, hashes } = await pageScript(env.ASSETS, at, version, scripts)
   let done = false
   let once = (put: (s: string, o: { html: boolean }) => void) => {
@@ -1075,6 +1087,7 @@ let asset = async (
       sandbox ? await sandbox() : '',
       worn(req, space, app, env, who),
       base,
+      req.headers.get(ADDRESS) ?? req.url,
     ))
   if (sandbox) {
     return new Response(page, {
@@ -1116,6 +1129,7 @@ export let woven = async (
   tags: string,
   scripts: Scripts | null,
   base = at,
+  address = hostUrl(env, at),
 ) => {
   let own = pinned(at, mapped(original, at, bare, app.source, base), app)
   let page = released(
@@ -1127,8 +1141,16 @@ export let woven = async (
     base,
   )
   if (scripts) {
-    page = await reported(env, at, page, app.version ?? 0, scripts)
-  }
+    page = await reported(
+      env,
+      at,
+      page,
+      app.version ?? 0,
+      scripts,
+      appPreview(app, bare),
+      address,
+    )
+  } else page = previewed(env, page, address, appPreview(app, bare))
   return await page.text()
 }
 
@@ -2796,9 +2818,17 @@ let served = async (
       ))
   if (open) {
     if (open.headers.get('content-type')?.startsWith('text/html')) {
-      open = await reported(env, bare, open, app.version ?? 0, {
-        badge: badgeOf(space, app, env),
-      })
+      open = await reported(
+        env,
+        bare,
+        open,
+        app.version ?? 0,
+        {
+          badge: badgeOf(space, app, env),
+        },
+        APP,
+        req.headers.get(ADDRESS) ?? req.url,
+      )
     }
     let page = reporting(open, req, bare)
     if (edge) return keep(page, space, app)
@@ -2922,9 +2952,17 @@ let served = async (
         page.body &&
         page.headers.get('content-type')?.startsWith('text/html')
       ) {
-        page = await reported(env, '/', page, early.app.version ?? 0, {
-          badge: badgeOf(space, early.app, env),
-        })
+        page = await reported(
+          env,
+          '/',
+          page,
+          early.app.version ?? 0,
+          {
+            badge: badgeOf(space, early.app, env),
+          },
+          appPreview(early.app, '/'),
+          req.headers.get(ADDRESS) ?? req.url,
+        )
       }
       let res = reporting(page, req, '/')
       return sandboxed(early.app) ? walled(res) : res
@@ -3221,6 +3259,8 @@ let served = async (
       own,
       app.version ?? 0,
       wearing(space, app, env, who),
+      appPreview(app, bare),
+      req.headers.get(ADDRESS) ?? req.url,
     )
   }
   let page = own ?? await file!

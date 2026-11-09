@@ -9,10 +9,11 @@
 // exactly as the files say them.
 import type { VNode } from 'preact'
 import { esc, markup } from './html.ts'
-import { type Host, url } from './host.ts'
+import { type Host } from './host.ts'
 import { asset, links } from './sheets.ts'
 import { island, signedIn } from './signed.ts'
 import { idle } from './mascot.ts'
+import { tags as previewTags } from './link-preview.ts'
 
 // What every drawn page wears in its head, in the shape the file pages wear it
 // (site/frame.tsx, site_test.ts): the title and the line, the canonical, the
@@ -23,27 +24,18 @@ export let head = (
   description: string,
   at: string,
   index = true,
+  image?: string,
 ) =>
   `<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title>
-<meta name="description" content="${esc(description)}">
 <meta name="color-scheme" content="light dark">
 ${
     index
       ? ''
       : '<meta name="robots" content="noindex">\n'
   }<link rel="canonical" href="${esc(at)}">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="yaks.app">
-<meta property="og:url" content="${esc(at)}">
-<meta property="og:title" content="${esc(title)}">
-<meta property="og:description" content="${esc(description)}">
-<meta property="og:image" content="${url(env, '/og.png')}">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="${esc(title)}">
-<meta name="twitter:description" content="${esc(description)}">
-<meta name="twitter:image" content="${url(env, '/og.png')}">
+${previewTags(env, { title, description, at, image })}
 <link rel="apple-touch-icon" href="${asset(env, 'apple-touch-icon.png')}">
 ${links(env, 'style.css')}
 <script src="${asset(env, 'idle.js')}" defer></script>

@@ -12,6 +12,7 @@
 import type { ComponentChildren } from 'preact'
 import { Address } from '@yaks/ui'
 import { Idle } from '../mascot.ts'
+import { fields, meta } from '../link-preview.ts'
 
 let SITE = 'https://yaks.app'
 let ALT = 'yaks.app: an Operator that does things for you'
@@ -38,24 +39,15 @@ let Head = (
     <meta charset='utf-8' />
     <meta name='viewport' content='width=device-width, initial-scale=1' />
     <title>{title}</title>
-    <meta name='description' content={description} />
     <meta name='color-scheme' content='light dark' />
     <link rel='canonical' href={SITE + path} />
     {robots && <meta name='robots' content={robots} />}
-    <meta property='og:type' content='website' />
-    <meta property='og:site_name' content='yaks.app' />
-    <meta property='og:url' content={SITE + path} />
-    <meta property='og:title' content={name} />
-    <meta property='og:description' content={description} />
-    <meta property='og:image' content={`${SITE}/og.png`} />
+    {Object.entries(fields({}, { title: name, description, at: SITE + path }))
+      .map(([k, v]) => meta(k, v))}
     <meta property='og:image:width' content='1200' />
     <meta property='og:image:height' content='630' />
     <meta property='og:image:alt' content={ALT} />
     <meta property='og:locale' content='en_US' />
-    <meta name='twitter:card' content='summary_large_image' />
-    <meta name='twitter:title' content={name} />
-    <meta name='twitter:description' content={description} />
-    <meta name='twitter:image' content={`${SITE}/og.png`} />
     <meta name='twitter:image:alt' content={ALT} />
     <link rel='apple-touch-icon' href='apple-touch-icon.png' />
     <link rel='stylesheet' href='style.css' />

@@ -1,3 +1,4 @@
+import { linked } from './preview-route.ts'
 // The identity part (D-32318 §Auth): one sign-in for the whole platform, at
 // the apex, and the OAuth 2.1 door agents come through. Two ways in, one
 // answer — a person's eid — which every other part reads through `withAuth`
@@ -979,8 +980,13 @@ let phoneAt = async (env: Env, person: string) => {
 }
 
 // The sign-in card, saying whether a number works on it here (`textable`).
-let signCard = async (env: Env, at: Parameters<typeof askEmail>[0] = {}) =>
-  askEmail({ ...at, texts: await textable(env) }, env)
+let signCard = async (env: Env, at: Parameters<typeof askEmail>[0] = {}) => {
+  let [texts, preview] = await Promise.all([
+    textable(env),
+    linked(env, at.back, dirOf(env)),
+  ])
+  return askEmail({ ...at, texts, preview }, env)
+}
 
 // A letter's one click, spent: the very code the form would have spent
 // (signin.ts), so following the link is single use, dies with the code, and

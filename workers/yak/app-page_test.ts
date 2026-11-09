@@ -40,6 +40,18 @@ test('a published app has a page that opens it first and offers a copy second', 
   let { status, html } = await visit([offer()])
   assertEquals(status, 200)
   let { document } = parseHTML(html)
+  assertEquals(
+    document.querySelector('meta[property="og:image"]')?.getAttribute(
+      'content',
+    ),
+    screenshot(space(), app({ screenshot: 'shot' })),
+  )
+  assertEquals(
+    document.querySelector('meta[property="og:description"]')?.getAttribute(
+      'content',
+    ),
+    'Somewhere to keep recipes',
+  )
   assertEquals(document.querySelector('h1')!.textContent, 'Recipe box')
   assertStringIncludes(html, 'Somewhere to keep recipes')
   assertStringIncludes(html, 'Made at jeff.yaks.app')
@@ -76,6 +88,10 @@ test('a private app opens as its demo copy, or offers only the copy', async () =
   let alone = (await visit([offer(source)])).html
   assert(!alone.includes('Open the app'))
   assert(!alone.includes('api/blob/shot'), 'an unlisted private picture')
+  assertStringIncludes(
+    alone,
+    '<meta property="og:image" content="https://yaks.app/og.png">',
+  )
   assertStringIncludes(alone, 'Make your own copy')
   let demo = {
     space: space({ slug: 'yourname' }),

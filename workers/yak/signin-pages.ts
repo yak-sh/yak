@@ -24,6 +24,7 @@ import { CODE_NOTE, texted } from './signin.ts'
 import { MANAGE, managePath, OAUTH } from './route.ts'
 import { CONNECTOR } from './seo.ts'
 import { AGENT } from './docs.ts'
+import { destination, type Preview } from './link-preview.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
 
 import {
@@ -112,11 +113,14 @@ export let askEmail = (at: {
   why?: string
   status?: number
   texts?: boolean
+  preview?: Preview
 }, env: Host = {}) =>
   page(
     env,
     {
       title: 'Sign in or sign up',
+      preview: at.preview ??
+        destination(at.back ?? (at.q ? '/oauth/authorize' : null), env),
       lead: at.why ?? welcome(at.back ?? null, env),
       status: at.status ?? 200,
     },

@@ -121,6 +121,7 @@
     "@yaks/yaml": "0.2.24",
     "ajv": "^8.17.1",
     "csv-parse": "^7.0.3",
+    "entities": "6.0.1",
     "esbuild": "0.28.1",
     "fast-png": "8.0.0",
     "html-rewriter-wasm": "0.4.1",

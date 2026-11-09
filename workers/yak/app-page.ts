@@ -41,6 +41,7 @@ export let page = (a: Shown, env: Host = {}) => {
       a.about || `${a.title}, an app made with yaks.app.`,
       pageAt(a.name, env),
       listed,
+      shot,
     ),
     h(
       'main',

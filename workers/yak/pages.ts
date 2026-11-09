@@ -64,6 +64,8 @@ import { versionOf } from './running.ts'
 import { Yak, yak } from './mascot.ts'
 
 import { asset, links } from './sheets.ts'
+import { type Preview, tags as previewTags } from './link-preview.ts'
+import { decodeHTML } from 'entities'
 
 import {
   BLOCK,
@@ -186,6 +188,7 @@ let documented = (
   head = '',
   later?: Promise<string>,
   assets?: string,
+  preview?: Preview,
 ) => {
   let file = (name: string) => asset(env, name, undefined, assets)
   let open = `<!doctype html>
@@ -194,7 +197,8 @@ let documented = (
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>${title} · yaks.app</title>
+<title>${preview ? esc(preview.title) : `${title} · yaks.app`}</title>
+${previewTags(env, preview ?? { title: `${decodeHTML(title)} · yaks.app` })}
 ${links(env, 'pages.css', undefined, assets)}${
     head.includes('rel="apple-touch-icon"')
       ? ''
@@ -273,6 +277,7 @@ let staged = (first: string, rest: Promise<string>) => {
  * its body wears, and tags for its head beside the platform's own. */
 export type Said = {
   title: string
+  preview?: Preview
   lead?: Kids
   status?: number
   headers?: Record<string, string>
@@ -302,6 +307,10 @@ export let page = (env: Host, at: Said, ...parts: Kids[]) =>
     at.head,
     at.later?.then(markup),
     at.assets,
+    at.preview ?? {
+      title: `${at.title} · yaks.app`,
+      description: typeof at.lead == 'string' ? at.lead : undefined,
+    },
   )
 
 /** The same page written as markup, for the pages that still are (admin.ts,

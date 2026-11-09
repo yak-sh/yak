@@ -5200,6 +5200,7 @@
             "npm:@yaks/yaml@0.2.24",
             "npm:ajv@^8.17.1",
             "npm:csv-parse@^7.0.3",
+            "npm:entities@6.0.1",
             "npm:es-module-lexer@2.3.2",
             "npm:esbuild@0.28.1",
             "npm:fast-png@8.0.0",
