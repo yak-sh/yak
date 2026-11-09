@@ -732,9 +732,9 @@ The complete list of reserved names:
     sending serves session session_input session_run sfu signed_in signin
     sms_consent space space_logo spend staged started starter stop submitted
     subscription supersedes supervises sweep switched task text text_post
-    theme tool topic trashed tree_entry trend tunnel typed updated usage
-    uses using verified visit visitor_build visitor_calls visitor_share
-    volume waitlisted wake wants web worked worktree written
+    theme tool topic trashed tree_entry trend tunnel typed unchecked updated
+    usage uses using verified visit visitor_build visitor_calls
+    visitor_share volume waitlisted wake wants web worked worktree written
 
 When your first choice is reserved, name the component for its specific purpose:
 the reserved name is the general one, and yours is the specific one. Not

@@ -38,6 +38,13 @@ export type Integration = {
   tagline?: string
   /** its address on the web */
   site?: string
+  description?: string
+  details?: string
+  docs?: string
+  connects?: 'key' | 'signin' | 'client'
+  categories?: string[]
+  image?: string
+  featured?: boolean
   /** its mark, as an SVG document, drawn as an image */
   logo?: string
   /** where a person grants access (OAuth) */
@@ -150,6 +157,11 @@ export let installed = async (read: Read): Promise<Integration[]> =>
     b[INTEGRATION] as Integration
   )
 
+/** The host catalog's rows, including integrations not connected yet. */
+export let catalogued = async (read: Read): Promise<Integration[]> =>
+  (await read(`.${INTEGRATION}`)).map((b) => b[INTEGRATION] as Integration)
+    .filter((i) => !i.owner && (i.built || Array.isArray(i.categories)))
+
 /** What a person reads about an integration, which its owner may change:
  * never where its credential is sent. */
 export type About = Pick<
@@ -260,10 +272,24 @@ let canon = (v: unknown): unknown =>
     : v
 let said = (v: unknown) => JSON.stringify(canon(v))
 
+// Catalog descriptions are maintained in the graph, independently of the
+// operational seed definitions shipped by this package.
+let EDITORIAL = [
+  'title',
+  'tagline',
+  'site',
+  'description',
+  'details',
+  'docs',
+  'categories',
+  'image',
+  'featured',
+]
+
 /**
  * The batch that installs built integrations in a graph: each one missing
- * there, or held otherwise than its seed says, written whole — a property the
- * seed does not name is cleared — and marked `built`. Nothing, where every one
+ * there, or held otherwise than its seed says, with operational seed fields
+ * current and graph-authored catalog descriptions preserved, and marked `built`. Nothing, where every one
  * already matches. A host applies it trusted, since `built` is server-owned,
  * once at start-up. `seeds` defaults to this package's own.
  */
@@ -276,14 +302,24 @@ export let install = (
       seeds.map((i) => integrationEid(i.name)).join(',')
     }&.${INTEGRATION}`),
     (found: Bundle[]) => {
-      let held = new Map(found.map((b) => [b.entity.eid, b[INTEGRATION]]))
+      let held = new Map(found.map((b) => [
+        b.entity.eid,
+        b[INTEGRATION] as Record<string, unknown>,
+      ]))
       return seeds.flatMap((seed) => {
         let eid = integrationEid(seed.name)
-        let now: Record<string, unknown> = { ...seed, built: true }
         let was = held.get(eid) ?? {}
-        let gone = Object.keys(was).filter((k) =>
-          now[k] == null
+        let editorial = Object.fromEntries(
+          EDITORIAL.filter((k) =>
+            was[k] != null
+          ).map((k) => [k, was[k]]),
         )
+        let now: Record<string, unknown> = {
+          ...seed,
+          ...editorial,
+          built: true,
+        }
+        let gone = Object.keys(was).filter((k) => now[k] == null)
         return said(was) == said(now) ? [] : [{
           entity: { eid },
           [INTEGRATION]: {

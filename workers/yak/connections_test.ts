@@ -1059,6 +1059,37 @@ test('the catalog offers what its broker lists, a search finds it, and Connect m
     return real(input, init)
   }
   try {
+    await s.at.apply([{
+      entity: { eid: integrationEid('hubspot') },
+      integration: {
+        name: 'hubspot',
+        title: 'HubSpot',
+        categories: ['crm'],
+        hosts: ['api.hubapi.com'],
+        description: 'A customer workspace.',
+        details: 'Reads contacts.',
+        docs: 'https://hubspot.com/docs',
+        broker: { name: 'nango', integration: 'hubspot' },
+        image: 'https://logos.test/hubspot.svg',
+        featured: true,
+      },
+      unchecked: {},
+    }, {
+      entity: { eid: integrationEid('account-host') },
+      integration: {
+        name: 'account-host',
+        title: 'Account Host',
+        categories: [],
+        hosts: [],
+        description: 'A service needing an account-specific host.',
+      },
+      unchecked: {},
+    }], KERNEL)
+    let unavailable = await connectionsOf(s.p.env, s.space, s.person, {
+      add: 'account-host',
+    })
+    assertEquals(unavailable.asked?.name, 'account-host')
+    assertEquals(unavailable.asked?.available, false)
     let found = await connectionsOf(s.p.env, s.space, s.person, {
       find: 'hub',
     })
@@ -1099,6 +1130,19 @@ test('the catalog offers what its broker lists, a search finds it, and Connect m
         '<svg xmlns="http://www.w3.org/2000/svg"/>',
       ],
     )
+    assertEquals(i.description, 'A customer workspace.')
+    assertEquals(i.details, 'Reads contacts.')
+    assertEquals(i.docs, 'https://hubspot.com/docs')
+    // A custom row sharing a catalog name stays under its owner's control.
+    await s.at.apply([{
+      entity: { eid: integrationEid('abyssale') },
+      integration: {
+        name: 'abyssale',
+        title: 'Our design account',
+        owner: s.space.eid,
+        hosts: ['api.design.example'],
+      },
+    }], KERNEL)
     // A key is kept here, sent only to its hosts, and Nango never asked.
     let before = asked.length
     assertEquals(
@@ -1111,7 +1155,7 @@ test('the catalog offers what its broker lists, a search finds it, and Connect m
     )
     assertEquals(
       (aby.integration as { hosts: string[] }).hosts,
-      ['api.abyssale.com'],
+      ['api.design.example'],
     )
     // Both are connected here now, and offered no more.
     let after = await connectionsOf(s.p.env, s.space, s.person, { find: 'a' })

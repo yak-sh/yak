@@ -639,6 +639,12 @@
           "description": "what the write came in through — the session or client that made it"
         }
       }
+    },
+    "unchecked": {
+      "component": true,
+      "type": "object",
+      "properties": {},
+      "description": "an entry awaiting a check against its sources; remove this mark once it has been checked"
     }
   }
 }

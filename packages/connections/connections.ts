@@ -981,10 +981,11 @@ export let begin = async (
   if (i?.broker) {
     // A broker's sign-in returns to the broker, not to us: `settle` finds
     // it there afterwards by the connection's eid.
-    return {
-      url: await (await brokering(c, i.broker.name))
-        .begin(i.broker.integration, connection),
+    let broker = await brokering(c, i.broker.name)
+    if (!i.built && !i.owner && Array.isArray(i.categories)) {
+      await broker.enable(i.broker.integration, i.connects ?? 'signin')
     }
+    return { url: await broker.begin(i.broker.integration, connection) }
   }
   if (!c.redirect) throw new Error('signing in needs a redirect')
   return (await signIn(c, b)).begin()

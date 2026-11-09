@@ -13,7 +13,8 @@ import {
   isSvg,
   kinds,
 } from './catalog.ts'
-import type { Integration } from './integrations.ts'
+import { install, type Integration } from './integrations.ts'
+import { integrationEid } from './identity.ts'
 
 let provider = (name: string, auth_mode: string, more = {}) => ({
   name,
@@ -137,6 +138,10 @@ test('the catalog is direct first: a built integration stands in for its listing
     name: 'hubspot',
     title: 'Hubspot',
     tagline: 'CRM',
+    connects: 'signin',
+    categories: ['crm'],
+    image: 'https://logos.example/hubspot.svg',
+    featured: true,
     hosts: ['api.hubspot.example'],
     broker: { name: 'nango', integration: 'hubspot' },
     logo: '<svg/>',
@@ -205,4 +210,70 @@ test('a service with no logo wears its initial, as an SVG document', () => {
     let svg = initialLogo(title)
     assertEquals([isSvg(svg), svg.includes(`>${letter}</text>`)], [true, true])
   }
+})
+
+test('graph catalog details survive broker refresh and adoption without exposing custom rows', () => {
+  let described: Integration = {
+    name: 'hub',
+    title: 'Hub',
+    hosts: ['api.hub.example'],
+    tagline: 'Customer relationships',
+    description: 'A CRM for teams.',
+    details: 'Reads contacts with the account permissions.',
+    docs: 'https://hub.example/docs',
+    site: 'https://hub.example',
+    categories: ['crm'],
+    image: 'https://hub.example/logo.svg',
+    broker: { name: 'nango', integration: 'hub' },
+    connects: 'signin',
+  }
+  let own = { ...described, name: 'private', owner: 'space' }
+  let [offer] = catalogue([described, own], [
+    listing('hub', { title: 'Changed title', categories: ['other'] }),
+  ], 'nango')
+  assertEquals(offer.title, 'Hub')
+  assertEquals(offer.categories, ['crm'])
+  assertEquals(offer.details, described.details)
+  assertEquals(offer.built, undefined)
+  let installed = adopted(offer)
+  assertEquals(installed.description, described.description)
+  assertEquals(installed.docs, described.docs)
+  assertEquals(installed.built, true)
+  assertEquals(catalogue([described, own], [], 'nango').map((o) => o.name), [
+    'hub',
+  ])
+})
+
+test('seed installation updates operational fields and preserves graph descriptions', async () => {
+  let seed: Integration = {
+    name: 'hub',
+    hosts: ['api.new.example'],
+    title: 'Hub',
+  }
+  let integration = {
+    ...seed,
+    hosts: ['api.old.example'],
+    token: 'https://old.example/token',
+    tagline: 'CRM for teams',
+    description: 'A shared customer workspace.',
+    details: 'Reads contacts.',
+    docs: 'https://hub.example/docs',
+    built: true,
+  }
+  let entity = { eid: integrationEid('hub') }
+  let [patch] = await install(() => [{ entity, integration }], [seed])
+  let updated = {
+    ...integration,
+    ...(patch.integration as Partial<Integration>),
+  } as Integration
+  assertEquals(updated.hosts, seed.hosts)
+  assertEquals(updated.token, null)
+  assertEquals(updated.description, integration.description)
+  assertEquals(updated.tagline, integration.tagline)
+  assertEquals(updated.details, integration.details)
+  assertEquals(updated.docs, integration.docs)
+  assertEquals(
+    await install(() => [{ entity, integration: updated }], [seed]),
+    [],
+  )
 })

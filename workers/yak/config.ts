@@ -182,7 +182,7 @@ export let directoryConfig: Config = {
     {
       use: '@yaks/kernel',
       facets: ['vocab'],
-      words: [...spine, ...relations, ...marks, 'completed'],
+      words: [...spine, ...relations, ...marks, 'completed', 'unchecked'],
     },
     provenance,
     // Who changed a space's or an app's address or title, its seats and

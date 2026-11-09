@@ -1662,3 +1662,32 @@ test('a connection its broker no longer holds is broken', async () => {
   await assertRejects(() => credential(c, eid), Error, 'invalid_credentials')
   assertEquals(of(await at(g, eid), 'connection').status, 'broken')
 })
+
+test('an app request for a catalog integration prepares its broker at sign-in', async () => {
+  let { g, c, needs } = await setup()
+  await g.apply([{
+    entity: { eid: integrationEid('pending-mail') },
+    integration: {
+      name: 'pending-mail',
+      hosts: ['mail.example'],
+      categories: ['email'],
+      broker: { name: 'nango', integration: 'google-mail' },
+      connects: 'signin',
+    },
+  }, brokerKey('nango', 'nk')])
+  let eid = await needs({ integration: 'pending-mail' })
+  let nango = nangoAt({
+    'GET /integrations/google-mail': () => [404, {}],
+    'POST /integrations': () => [200, { data: {} }],
+    'POST /connect/sessions': () => [201, {
+      data: { connect_link: 'https://connect.example/start' },
+    }],
+  })
+  c.fetch = nango.fetch
+  assertEquals(await begin(c, eid), { url: 'https://connect.example/start' })
+  assertEquals(nango.asked, [
+    'GET /integrations/google-mail',
+    'POST /integrations',
+    'POST /connect/sessions',
+  ])
+})

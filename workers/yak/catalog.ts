@@ -131,7 +131,7 @@ export let offersOf = async (
   let kept = await listingsOf(env)
   let closed = new Set(kept?.closed ?? [])
   return catalogue(
-    built,
+    built.filter((i) => i.built || !closed.has(i.name)),
     (kept?.listings ?? []).filter((l) => !closed.has(l.name)),
     BROKER,
   )
@@ -237,7 +237,7 @@ export let adopting = async (
     entity: { eid: integrationEid(name) },
     [INTEGRATION]: i,
     // Refused, rather than written over, where one was made meanwhile.
-    $was: { [INTEGRATION]: { name: null } },
+    $was: { [INTEGRATION]: { built: null, owner: null } },
   }], KERNEL)
   return i
 }

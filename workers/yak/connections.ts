@@ -39,6 +39,7 @@ import {
   borrowed,
   brokerOf,
   carry,
+  catalogued,
   connect,
   connectable,
   CONNECTION,
@@ -49,7 +50,6 @@ import {
   fieldsOf,
   find,
   type Given,
-  installed,
   type Integration,
   integrationEid,
   keyed,
@@ -134,6 +134,11 @@ let integrationOf = (b: Bundle | undefined) =>
 export type Face = {
   title: string
   tagline: string
+  description?: string
+  details?: string
+  docs?: string
+  connects?: Integration['connects']
+  broker?: string
   site: string
   /** an SVG document, drawn as an image */
   logo: string
@@ -159,11 +164,16 @@ export let faceOf = async (
 ): Promise<Face> => ({
   title: i?.title || name,
   tagline: i?.tagline ?? '',
+  description: i?.description ?? '',
+  details: i?.details ?? '',
+  docs: i?.docs ?? '',
+  connects: i?.connects ?? (i?.token || i?.broker ? 'signin' : 'key'),
+  broker: i?.broker?.name ?? '',
   site: i?.site ?? '',
   logo: i?.logo ?? '',
   image: !i?.logo && i?.image ? `${LOGOS}${encodeURIComponent(name)}` : '',
   instructions: brief ? '' : await drawn(i?.instructions),
-  theirs: !i?.built,
+  theirs: !!i?.owner,
   fields: fieldsOf(i),
 })
 
@@ -266,7 +276,12 @@ export type Borrowed = {
 }
 
 /** A service the page offers to connect, as a card draws it. */
-export type Offered = { name: string; keyed: boolean; face: Face }
+export type Offered = {
+  name: string
+  keyed: boolean
+  face: Face
+  available?: boolean
+}
 
 /** The catalog, as the page shows it. */
 export type Catalog = {
@@ -618,7 +633,7 @@ export let connectionsAsked = async (
       ownedBy(dir, by ? { path: by, eid } : await eid),
       read(`.${LISTED}`),
       own ? list(read, person) : [],
-      installed(read),
+      catalogued(read),
       add ? known(read, add) : undefined,
       own ?? false,
     ],
@@ -696,7 +711,9 @@ export let connectionsOf = async (
   // What is offered, each client read from the vault at once and beside the
   // reads below.
   let offers = Promise.all(
-    built.map(async (i) => await offered(i) ? [await card(i, false)] : []),
+    built.filter((i) => i.built).map(async (i) =>
+      await offered(i) ? [await card(i, false)] : []
+    ),
   ).then((each) => each.flat().sort((a, b) => a.name.localeCompare(b.name)))
   offers.catch(() => {})
   // The catalog, beside them: a built one is offered as above, and one only
@@ -816,13 +833,16 @@ export let connectionsOf = async (
     (wanted.built
       ? await offered(wanted)
       : listed.has(integrationEid(wanted.name)) && connectable(wanted))
-  let fromCatalog = !wanted && at.add
-    ? can.find((o) => o.name == at.add)
+  let fromCatalog = at.add ? can.find((o) => o.name == at.add) : undefined
+  let described = wanted && !wanted.owner && Array.isArray(wanted.categories)
+    ? wanted
     : undefined
   let asked = listedHere
     ? await card(wanted!, false)
     : fromCatalog
     ? await card(fromCatalog, false)
+    : described
+    ? { ...await card(described, false), available: false }
     : undefined
   return {
     on: vaulted(env),
@@ -1172,10 +1192,13 @@ export let connecting = async (
       // A card's Connect names a service the catalog may only offer yet,
       // which is written as an integration first; a key for a service of
       // the space's own names its hosts.
-      if (!hosts.length && !await known(c.graph.read, name)) {
+      let existing = await known(c.graph.read, name)
+      let pending = existing && !existing.built && !existing.owner &&
+        Array.isArray(existing.categories)
+      if (!hosts.length && (!existing || pending)) {
         await adopting(
           env,
-          await offersOf(env, await installed(c.graph.read)),
+          await offersOf(env, await catalogued(c.graph.read)),
           name,
         )
       }

@@ -12,9 +12,8 @@
 // hosts depend on the account names none, and is left out until it can say
 // them.
 //
-// An offer is only data until someone connects it: the host then writes it as
-// an integration (`adopted`), marked `built` because only the host writes
-// it, and from then on it is an integration like any other.
+// Every offer can have its own integration row before anyone connects it.
+// Connecting marks it built only once its broker is ready (`adopted`).
 
 import { cmp } from '@yaks/fp'
 import type { Listing } from './brokers.ts'
@@ -53,6 +52,7 @@ export let offerOf = (l: Listing, broker: string): Offer => ({
   title: l.title,
   tagline: l.categories.slice(0, 3).map(kind).join(' · '),
   hosts: l.hosts,
+  connects: l.connects,
   ...l.connects == 'key'
     ? {
       ...l.fields ? { fields: l.fields } : {},
@@ -70,26 +70,35 @@ export let offerOf = (l: Listing, broker: string): Offer => ({
  * where the broker features it, by title. A built integration takes the kinds
  * of the listing it stands in for. */
 export let catalogue = (
-  built: Integration[],
+  integrations: Integration[],
   listings: Listing[],
   broker: string,
 ): Offer[] => {
+  let built = integrations.filter((i) => i.built)
   let by = new Map(listings.map((l) => [l.name, l]))
   let standing = (i: Integration) =>
     by.get(i.broker?.name == broker ? i.broker.integration : i.name) ??
       by.get(i.name)
   let taken = new Set(built.flatMap((i) => [i.name, standing(i)?.name]))
+  let pending = integrations.filter((i) =>
+    !i.built && !i.owner && !i.testing && i.hosts.length &&
+    Array.isArray(i.categories) && !taken.has(i.name)
+  ).map((i): Offer => ({ ...i, categories: i.categories ?? [] }))
+  let described = new Set(pending.map((i) => i.name))
   return [
     ...built.filter((i) => !i.testing).map((i): Offer => {
       let l = standing(i)
       return {
         ...i,
-        categories: l?.categories ?? [],
-        ...!i.logo && l?.logo ? { image: l.logo } : {},
+        categories: i.categories ?? l?.categories ?? [],
+        ...!i.logo && !i.image && l?.logo ? { image: l.logo } : {},
         featured: true,
       }
     }),
-    ...listings.filter((l) => !taken.has(l.name) && l.hosts.length)
+    ...pending,
+    ...listings.filter((l) =>
+      !taken.has(l.name) && !described.has(l.name) && l.hosts.length
+    )
       .map((l) => offerOf(l, broker)),
   ].sort((a, b) =>
     cmp((a.title || a.name).toLowerCase(), (b.title || b.name).toLowerCase())
@@ -135,8 +144,7 @@ export let kinds = (offers: Offer[]): string[] => {
  * its logo as an SVG document where one was fetched: only the host writes
  * it, so it is `built`. */
 export let adopted = (o: Offer, logo?: string): Integration => {
-  let { categories: _c, image: _i, featured: _f, ...i } = o
-  return { ...i, ...logo ? { logo } : {}, built: true }
+  return { ...o, ...logo ? { logo } : {}, built: true }
 }
 
 // What may stand before an SVG document's root: a byte-order mark, space, an
