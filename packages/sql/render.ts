@@ -8,10 +8,13 @@
 // which bind nothing: there it is written as a literal, quoted the way SQLite
 // reads one back. A statement binds no more parameters than its engine allows
 // (`VARIABLES`); every value past that is written as a literal too, so no
-// statement is too big to bind, however many values a query compiles to. The words a statement is built from that are not names — a
-// function, an operator, a type, a pragma, a module — are checked against what
-// such a word can be before they are written, so text a caller passes in is
-// never taken for SQL.
+// statement is too big to bind, however many values a query compiles to. Nor
+// is it longer than its engine reads (`LENGTH`) for repeating itself: past
+// that, a shared relation (./ast.ts `Cte`) written in several scopes is
+// written once at the statement's top. The words a statement is built from
+// that are not names — a function, an operator, a type, a pragma, a module —
+// are checked against what such a word can be before they are written, so
+// text a caller passes in is never taken for SQL.
 //
 // Operators are parenthesized where one sits inside another, so a tree renders
 // with the precedence it was built with. AND and OR nest in halves: SQLite
@@ -47,6 +50,17 @@ type Ctx = { params: Param[]; inline: boolean; stable: boolean; cap: number }
  * default: an engine that allows more passes its own. A value past it is
  * written as a literal. */
 export let VARIABLES = 100
+
+/** How long a statement's text may be, in UTF-8 bytes. Workerd allows
+ * 100,000 (its SQLITE_MAX_SQL_LENGTH), the lowest of any supported engine. */
+export let LENGTH = 100_000
+
+// Whether text is past LENGTH, which the engine counts in UTF-8 bytes: up to
+// three for each UTF-16 unit.
+let utf8 = new TextEncoder()
+let long = (sql: string) =>
+  sql.length > LENGTH || sql.length * 3 > LENGTH &&
+    utf8.encode(sql).length > LENGTH
 
 /** What an embedded SQLite allows: the stock SQLITE_MAX_VARIABLE_NUMBER. */
 export let STOCK_VARIABLES = 32766
@@ -517,15 +531,104 @@ export let render = (node: Stmt | Expr, cap = VARIABLES): Raw =>
 export let renderStable = (node: Stmt | Expr, cap = VARIABLES): Raw =>
   rendered(node, true, cap)
 
-let rendered = (node: Stmt | Expr, stable: boolean, cap: number): Raw => {
+let rendered = (
+  node: Stmt | Expr,
+  stable: boolean,
+  cap: number,
+  hoist = true,
+): Raw => {
   let c: Ctx = { params: [], inline: false, stable, cap }
   let sql = isExpr(node) ? expr(node, c) : stmt(node, c)
+  let top = hoist && long(sql) && !isExpr(node) &&
+    hoisted(node, (q) => rendered(q, stable, cap, false))
+  if (top) return rendered(top, stable, cap, false)
   return raw(
     sql,
     c.params,
     node.t == 'raw' ? node.table : undefined,
     node.t == 'raw' ? node.origin : isExpr(node) ? undefined : node,
   )
+}
+
+// The statements that open with their own `with`.
+let WITH = new Set(['select', 'compound', 'insert', 'update', 'delete'])
+type Topped = Extract<Stmt, { with?: Cte[] }>
+
+let plain = (v: unknown): v is Record<string, unknown> =>
+  typeof v == 'object' && v != null && !Array.isArray(v) &&
+  Object.getPrototypeOf(v) == Object.prototype
+
+/**
+ * The statement with every shared relation it holds below its top written
+ * once at its top instead, or null when none is written twice or one cannot
+ * move. They move only where each name means one relation throughout the
+ * statement: two different bodies under one name, or a name given to a shared
+ * relation and to one that is not, leave the statement as it is. They move in
+ * the order their uses need them, each after those its body holds. A raw
+ * fragment is text, and is left as it stands.
+ */
+let hoisted = (s: Stmt, write: (q: Query) => Raw): Topped | null => {
+  if (!WITH.has(s.t)) return null
+  let top = s as Topped
+  let same = (a: Cte, b: Cte) => {
+    if (a == b) return true
+    let [x, y] = [write(a.q), write(b.q)]
+    let rest = (c: Cte, r: Raw) =>
+      JSON.stringify([c.cols, c.recursive, c.materialized, r.sql, r.params])
+    return rest(a, x) == rest(b, y)
+  }
+  let moving = new Map<string, Cte>()
+  let plainNames = new Set<string>()
+  let twice = false, mixed = false
+  let note = (cte: Cte) => {
+    if (!cte.shared) return void plainNames.add(cte.name)
+    let held = moving.get(cte.name)
+    if (!held) return void moving.set(cte.name, cte)
+    twice = true
+    if (!same(held, cte)) mixed = true
+  }
+  let visit = (v: unknown): void => {
+    if (Array.isArray(v)) return v.forEach(visit)
+    if (!plain(v) || v.t == 'raw') return
+    for (let [k, x] of Object.entries(v)) {
+      if (k != 'with' || !Array.isArray(x)) visit(x)
+      else for (let cte of x as Cte[]) visit(cte.q), note(cte)
+    }
+  }
+  let { with: ctes = [], ...body } = top
+  for (let cte of ctes) visit(cte.q)
+  visit(body)
+  // A name the top already defines is dropped below it, not moved.
+  let dropped = new Set(moving.keys())
+  for (let cte of ctes) {
+    let held = moving.get(cte.name)
+    if (held && !same(held, cte)) mixed = true
+    if (held) twice = true
+    moving.delete(cte.name)
+  }
+  for (let name of plainNames) if (dropped.has(name)) mixed = true
+  if (mixed || !twice) return null
+  let strip = <T>(v: T): T => {
+    if (Array.isArray(v)) {
+      let out = v.map(strip)
+      return (out.some((x, i) => x !== v[i]) ? out : v) as T
+    }
+    if (!plain(v) || v.t == 'raw') return v
+    let out: Record<string, unknown> = {}, changed = false
+    for (let [k, x] of Object.entries(v)) {
+      let kept = k == 'with' && Array.isArray(x)
+        ? (x as Cte[]).filter((cte) => !dropped.has(cte.name))
+        : undefined
+      let y = strip(kept && kept.length < (x as Cte[]).length ? kept : x)
+      out[k] = y
+      changed ||= y !== x
+    }
+    return (changed ? out : v) as T
+  }
+  return {
+    ...strip(body),
+    with: [...moving.values(), ...ctes].map(strip),
+  } as Topped
 }
 
 /** The statement's SQL shape, without values. Bound parameters were never in

@@ -188,13 +188,17 @@ export type Join = {
 }
 
 /** A common table expression. `materialized` states the hint either way;
- * left out, the planner decides. */
+ * left out, the planner decides. A `shared` one reads nothing from the scope
+ * it is written in, so it is the same relation wherever it stands: a
+ * statement too long for its engine writes it once at its top rather than in
+ * every scope holding it (./render.ts `LENGTH`). */
 export type Cte = {
   name: string
   cols?: string[]
   q: Query
   recursive?: boolean
   materialized?: boolean
+  shared?: boolean
 }
 
 /** What a write does on a constraint failure, spelled `insert or …`. */

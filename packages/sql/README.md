@@ -143,6 +143,11 @@ equal(
 )
 ```
 
+Nor is a statement longer than workerd reads, 100,000 bytes, for repeating a
+relation. A common table expression marked `shared` reads nothing from the scope
+it stands in, as a visibility scope's relations don't. Past that length, one
+written in several scopes is written once at the statement's top.
+
 Compose queries from nodes without writing SQL text:
 
 ```ts

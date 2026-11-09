@@ -5338,6 +5338,7 @@ let visible = (
       return {
         name,
         materialized: false,
+        shared: true,
         q: { ...selected, cols: [raw('"entity".*')], order: [] },
       }
     }
@@ -5384,6 +5385,7 @@ let visible = (
     return {
       name,
       materialized: false,
+      shared: true,
       q: select({
         cols,
         from: raw(`${base.source?.(comp) ?? quoted(comp)} as "__visible"`),
