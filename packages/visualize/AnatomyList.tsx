@@ -35,13 +35,13 @@ export let AnatomyList = ({ model }: { model: AtlasModel }) => {
       <header class='Map_Header'>
         <div>
           <span class='Atlas_Eyebrow'>Complete anatomy</span>
-          <h2>
+          <h2 class='Atlas_Reset Map_Header_Title'>
             {relations ? 'Every declared connection' : 'Every reported part'}
           </h2>
         </div>
         <span class='Map_Count'>
           {total ? start + 1 : 0}–{Math.min(total, start + PAGE_SIZE)}
-          <span>of {total}</span>
+          <span class='Map_Count_Text'>of {total}</span>
         </span>
       </header>
       <div class='AnatomyList_Head' aria-hidden='true'>
@@ -51,18 +51,19 @@ export let AnatomyList = ({ model }: { model: AtlasModel }) => {
       {!total
         ? (
           <div class='AnatomyList_Empty' role='status'>
-            <h3>
+            <h3 class='Atlas_Reset AnatomyList_Empty_Title'>
               {unobserved
                 ? 'Category unobserved here.'
                 : `No matching ${relations ? 'relationships' : 'parts'}.`}
             </h3>
-            <p>
+            <p class='Atlas_Reset AnatomyList_Empty_Description'>
               {unobserved
                 ? 'This host does not report coverage for this category. No matches cannot establish absence.'
                 : 'Try a shorter filter or choose a different anatomy group.'}
             </p>
             {model.state.filter && (
               <Button
+                class='Atlas_Button'
                 type='button'
                 onClick={() => {
                   model.search('')
@@ -75,13 +76,13 @@ export let AnatomyList = ({ model }: { model: AtlasModel }) => {
           </div>
         )
         : (
-          <ul class='AnatomyList_Rows'>
+          <ul class='AnatomyList_Rows Atlas_Reset'>
             {relations
               ? edges.slice(start, start + PAGE_SIZE).map((edge) => (
                 <li key={edge.id}>
                   <button
                     type='button'
-                    class='AnatomyList_Row'
+                    class='AnatomyList_Row Atlas_Button'
                     aria-pressed={model.state.selected == edge.id}
                     onClick={() =>
                       model.select(edge.id)}
@@ -106,7 +107,7 @@ export let AnatomyList = ({ model }: { model: AtlasModel }) => {
                 <li key={node.id}>
                   <button
                     type='button'
-                    class='AnatomyList_Row'
+                    class='AnatomyList_Row Atlas_Button'
                     aria-pressed={model.state.selected == node.id}
                     style={{ '--part': `var(--${colorOf(node)})` }}
                     onClick={() =>
@@ -145,11 +146,12 @@ export let AnatomyList = ({ model }: { model: AtlasModel }) => {
           </ul>
         )}
       <footer class='AnatomyList_Pager'>
-        <span>
+        <span class='AnatomyList_Pager_Text'>
           All {total} matches are accessible · {PAGE_SIZE} rows per page
         </span>
-        <nav aria-label='Anatomy list pagination'>
+        <nav class='AnatomyList_Pager_Nav' aria-label='Anatomy list pagination'>
           <Button
+            class='Atlas_Button'
             type='button'
             disabled={!page}
             aria-label='Previous anatomy page'
@@ -157,10 +159,14 @@ export let AnatomyList = ({ model }: { model: AtlasModel }) => {
           >
             ← Previous
           </Button>
-          <output aria-label='Anatomy list page'>
+          <output
+            class='AnatomyList_Pager_Output'
+            aria-label='Anatomy list page'
+          >
             {page + 1} / {lastPage + 1}
           </output>
           <Button
+            class='Atlas_Button'
             type='button'
             disabled={page >= lastPage}
             aria-label='Next anatomy page'

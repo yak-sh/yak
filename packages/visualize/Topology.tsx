@@ -138,13 +138,15 @@ export let Spine = ({ model }: { model: AtlasModel }) => {
       aria-label='Pipeline labels and observed phase activity'
     >
       <div class='Spine_Intro'>
-        <span class='Atlas_Eyebrow'>Pipeline labels</span>
-        <strong>apply()</strong>
-        <span>Labels ≠ bound handlers. Activity is observed.</span>
+        <span class='Atlas_Eyebrow Spine_Intro_Text'>Pipeline labels</span>
+        <strong class='Spine_Intro_Strong'>apply()</strong>
+        <span class='Spine_Intro_Text'>
+          Labels ≠ bound handlers. Activity is observed.
+        </span>
       </div>
       {phases.length
         ? (
-          <ol class='Spine_Path'>
+          <ol class='Spine_Path Atlas_Reset'>
             {phases.map((node, i) => {
               let event = recent.findLast((e) => phaseOf(e, node))
               return (
@@ -156,7 +158,7 @@ export let Spine = ({ model }: { model: AtlasModel }) => {
                 >
                   <button
                     type='button'
-                    class='Spine_Phase'
+                    class='Spine_Phase Atlas_Button'
                     onClick={() => {
                       model.select(node.id)
                       if (event) model.choose(event.id)
@@ -185,7 +187,7 @@ export let Spine = ({ model }: { model: AtlasModel }) => {
           </ol>
         )
         : (
-          <p class='Spine_Empty'>
+          <p class='Spine_Empty Atlas_Reset'>
             Pipeline labels are not available in this page.
           </p>
         )}
@@ -338,22 +340,26 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
       <header class='Map_Header'>
         <div>
           <span class='Atlas_Eyebrow'>Anatomy</span>
-          <h2>The shape of this runtime</h2>
+          <h2 class='Atlas_Reset Map_Header_Title'>
+            The shape of this runtime
+          </h2>
         </div>
         <span class='Map_Count'>
           {placed.length} of {nodes.length} parts
-          <span>· {edges.length} relations</span>
+          <span class='Map_Count_Text'>· {edges.length} relations</span>
         </span>
       </header>
       {!nodes.length && (
         <div class='Map_NoMatches' role='status'>
-          <strong>No parts match this view.</strong>
+          <strong class='Map_NoMatches_Strong'>
+            No parts match this view.
+          </strong>
           <span>Change the filter or choose another anatomy group.</span>
         </div>
       )}
       <div class='Map_Viewport'>
         <svg
-          class='Map_Canvas'
+          class='Map_Canvas Atlas_Focusable'
           viewBox={`0 0 ${width} ${aperture}`}
           role='group'
           aria-label='Pan and zoom the system topology'
@@ -445,7 +451,9 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
                   <g
                     key={edge.id}
                     data-edge={edge.id}
-                    class={`Map_Edge${selected ? ' Map_Edge-selected' : ''}`}
+                    class={`Atlas_Focusable Map_Edge${
+                      selected ? ' Map_Edge-selected' : ''
+                    }`}
                     role='button'
                     tabIndex={0}
                     aria-pressed={state.selected == edge.id}
@@ -472,7 +480,7 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
                 transform={`translate(${x} ${y})`}
                 data-node={node.id}
                 style={{ '--node': `var(--${colorOf(node)})` }}
-                class={`Map_Node${
+                class={`Atlas_Focusable Map_Node${
                   state.selected == node.id
                     ? ' Map_Node-selected'
                     : related.has(node.id)
@@ -528,16 +536,18 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
         </svg>
         <div class='Map_Camera' aria-label='Map camera controls'>
           <Button
+            class='Atlas_Button Map_Camera_Button'
             type='button'
             aria-label='Zoom out'
             onClick={() => zoomed(model, -.2)}
           >
             −
           </Button>
-          <output aria-label='Current zoom'>
+          <output class='Map_Camera_Output' aria-label='Current zoom'>
             {Math.round(state.zoom * 100)}%
           </output>
           <Button
+            class='Atlas_Button Map_Camera_Button'
             type='button'
             aria-label='Zoom in'
             onClick={() => zoomed(model, .2)}
@@ -545,6 +555,7 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
             +
           </Button>
           <Button
+            class='Atlas_Button Map_Camera_Button'
             type='button'
             onClick={() => model.set({ x: 0, y: 0, zoom: 1 })}
           >
@@ -552,13 +563,13 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
           </Button>
         </div>
         <div class='Map_Legend' aria-label='Map legend'>
-          <span>
+          <span class='Map_Legend_Text'>
             <i class='Map_LegendDot Map_LegendDot-bound' />bound
           </span>
-          <span>
+          <span class='Map_Legend_Text'>
             <i class='Map_LegendDot' />declaration
           </span>
-          <span>
+          <span class='Map_Legend_Text'>
             <i class='Map_LegendLine' />relationship
           </span>
         </div>
@@ -568,6 +579,7 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
         <span class='Map_Budget'>≤{PULSE_LIMIT} observed records animate</span>
         {(nodes.length > NODE_LIMIT || relations.length > EDGE_LIMIT) && (
           <Button
+            class='Atlas_Button'
             type='button'
             mod='quiet'
             onClick={() => model.set({ view: 'list' })}

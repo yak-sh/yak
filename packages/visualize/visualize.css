@@ -7,31 +7,35 @@
   background: var(--bg);
   font: 14px/1.5 var(--font);
 }
-.Atlas :where(h1, h2, h3, p, dl, ul, ol) {
+.Atlas_Reset {
   margin: 0;
   max-width: none;
 }
-.Atlas :where(button, select, input) {
+.Atlas_Button,
+.Atlas_Select,
+.Atlas_Input {
   font-family: inherit;
 }
-.Atlas :where(button, select, summary) {
+.Atlas_Button,
+.Atlas_Select,
+.Atlas_Summary {
   cursor: pointer;
 }
-.Atlas :where(button, select, input, a, summary, [tabindex]):focus-visible {
+:is(.Atlas_Button, .Atlas_Select, .Atlas_Input, .Atlas_Link, .Atlas_Summary, .Atlas_Focusable):focus-visible {
   outline: 2px solid var(--link);
   outline-offset: 4px;
 }
-.Atlas :where(button):disabled {
+.Atlas_Button:disabled {
   cursor: default;
 }
-.Atlas :where(kbd) {
+.Atlas_Key {
   padding: 1px 5px;
   color: var(--muted);
   border: 1px solid var(--border2);
   border-radius: calc(var(--radius) / 2);
   font: 10px/1.6 var(--mono);
 }
-.Atlas :where(select) {
+.Atlas_Select {
   min-height: 36px;
   padding: 6px 28px 6px 10px;
   border: 1px solid var(--border2);
@@ -77,13 +81,13 @@
   align-items: center;
   gap: 12px;
 }
-.Atlas_Brand strong {
+.Atlas_Brand_Strong {
   display: block;
   color: var(--heading);
   font-size: 20px;
   letter-spacing: -.04em;
 }
-.Atlas_Brand span {
+.Atlas_Brand_Text {
   display: block;
   color: var(--muted);
   font: 10px/1.5 var(--mono);
@@ -95,14 +99,14 @@
   fill: none;
   stroke: var(--accent);
 }
-.Atlas_Mark rect {
+.Atlas_Mark_Frame {
   fill: var(--card);
   stroke: var(--border2);
 }
-.Atlas_Mark path {
+.Atlas_Mark_Path {
   stroke-width: 1.8;
 }
-.Atlas_Mark circle {
+.Atlas_Mark_Circle {
   stroke: var(--border2);
 }
 .Atlas_Host {
@@ -110,7 +114,7 @@
   gap: 3px;
   min-width: 0;
 }
-.Atlas_Host > span:last-child {
+.Atlas_Host_Text:last-child {
   max-width: 32ch;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -136,20 +140,20 @@
   margin-right: 8px;
   font: 11px/1.5 var(--mono);
 }
-.Atlas_Connection i {
+.Atlas_Connection_Indicator {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--muted);
 }
-.Atlas_Connection[data-connection='live'] i {
+.Atlas_Connection[data-connection='live'] .Atlas_Connection_Indicator {
   background: var(--positive);
 }
-.Atlas_Connection[data-connection='connecting'] i,
-.Atlas_Connection[data-connection='reconnecting'] i {
+.Atlas_Connection[data-connection='connecting'] .Atlas_Connection_Indicator,
+.Atlas_Connection[data-connection='reconnecting'] .Atlas_Connection_Indicator {
   background: var(--caution);
 }
-.Atlas_Connection[data-connection='offline'] i {
+.Atlas_Connection[data-connection='offline'] .Atlas_Connection_Indicator {
   background: var(--negative);
 }
 .Atlas_Pause {
@@ -179,18 +183,18 @@
   gap: 32px;
   margin-bottom: 26px;
 }
-.Atlas_Heading h1 {
+.Atlas_Heading_Title {
   margin: 8px 0;
   font-size: clamp(26px, 3vw, 42px);
   font-weight: 500;
   letter-spacing: -.04em;
   line-height: 1.15;
 }
-.Atlas_Heading em {
+.Atlas_Heading_Emphasis {
   color: var(--heading);
   font-style: normal;
 }
-.Atlas_Heading p {
+.Atlas_Heading_Description {
   color: var(--muted);
   font-size: 13px;
 }
@@ -199,16 +203,16 @@
   gap: 28px;
   flex: none;
 }
-.Atlas_Metrics div {
+.Atlas_Metrics_Row {
   display: flex;
   flex-direction: column-reverse;
   gap: 3px;
 }
-.Atlas_Metrics dt {
+.Atlas_Metrics_Term {
   color: var(--muted);
   font: 10px/1.5 var(--mono);
 }
-.Atlas_Metrics dd {
+.Atlas_Metrics_Value {
   margin: 0;
   color: var(--text);
   font: 28px/1.3 var(--mono);
@@ -227,7 +231,7 @@
 .Atlas_Scope {
   flex: none;
 }
-.Atlas_Coverage p {
+.Atlas_Coverage_Description {
   flex: 1;
   color: var(--muted);
   font-size: 11px;
@@ -238,11 +242,11 @@
   color: var(--muted);
   font-size: 11px;
 }
-.Atlas_Unobserved summary {
+.Atlas_Unobserved_Summary {
   width: fit-content;
   color: var(--caution);
 }
-.Atlas_Unobserved p {
+.Atlas_Unobserved_Description {
   margin-top: 6px;
   overflow-wrap: anywhere;
 }
@@ -275,10 +279,10 @@
 .Atlas_Notice[data-tone='caution'] {
   --notice: var(--caution);
 }
-.Atlas_Notice strong {
+.Atlas_Notice_Strong {
   color: var(--notice);
 }
-.Atlas_Notice > span {
+.Atlas_Notice_Text {
   flex: 1;
   min-width: 200px;
   overflow-wrap: anywhere;
@@ -299,10 +303,10 @@
   align-content: center;
   gap: 4px;
 }
-.Spine_Intro strong {
+.Spine_Intro_Strong {
   font: 18px/1.5 var(--mono);
 }
-.Spine_Intro > span:last-child {
+.Spine_Intro_Text:last-child {
   color: var(--muted);
   font-size: 10px;
 }
@@ -407,7 +411,7 @@
   border-color: var(--link);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--link) 12%, transparent);
 }
-.Atlas_Search svg {
+.Atlas_Search_Icon {
   width: 16px;
   height: 16px;
   flex: none;
@@ -428,7 +432,7 @@
 .Atlas_SearchField:focus-visible {
   outline: none;
 }
-.Atlas_Group select {
+.Atlas_Group_Select {
   min-height: 42px;
   max-width: 250px;
 }
@@ -439,7 +443,7 @@
   border-radius: var(--radius);
   background: var(--surface);
 }
-.Atlas_Views button {
+.Atlas_Views_Button {
   --ink: var(--muted);
   --line: transparent;
   display: flex;
@@ -447,7 +451,7 @@
   gap: 6px;
   padding: 3px 12px;
 }
-.Atlas_Views button[aria-pressed='true'] {
+.Atlas_Views_Button[aria-pressed='true'] {
   --ink: var(--text);
   background: var(--card);
 }
@@ -465,7 +469,7 @@
   color: var(--muted);
   font-size: 11px;
 }
-.Atlas_FilterSummary strong {
+.Atlas_FilterSummary_Strong {
   color: var(--text);
   font-weight: 500;
 }
@@ -473,16 +477,16 @@
   position: relative;
   margin-left: auto;
 }
-.Atlas_Shortcuts summary {
+.Atlas_Shortcuts_Summary {
   display: flex;
   align-items: center;
   gap: 7px;
   list-style: none;
 }
-.Atlas_Shortcuts summary::-webkit-details-marker {
+.Atlas_Shortcuts_Summary::-webkit-details-marker {
   display: none;
 }
-.Atlas_Shortcuts dl {
+.Atlas_Shortcuts_List {
   position: absolute;
   z-index: 10;
   right: 0;
@@ -496,13 +500,13 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
-.Atlas_Shortcuts dl div {
+.Atlas_Shortcuts_List_Row {
   display: grid;
   grid-template-columns: 65px 1fr;
   align-items: center;
   gap: 8px;
 }
-.Atlas_Shortcuts dd {
+.Atlas_Shortcuts_Value {
   margin: 0;
 }
 .Atlas_Anatomy {
@@ -531,8 +535,8 @@
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
 }
-.Map_Header h2,
-.Activity_Header h2 {
+.Map_Header_Title,
+.Activity_Header_Title {
   margin-top: 4px;
   font-size: 16px;
   font-weight: 500;
@@ -543,7 +547,7 @@
   font: 10px/1.5 var(--mono);
   white-space: nowrap;
 }
-.Map_Count span {
+.Map_Count_Text {
   color: var(--muted);
 }
 .Map_Viewport {
@@ -677,11 +681,11 @@
   background: var(--surface);
   box-shadow: var(--shadow);
 }
-.Map_Camera button {
+.Map_Camera_Button {
   min-width: 30px;
   padding: 3px 8px;
 }
-.Map_Camera output {
+.Map_Camera_Output {
   min-width: 44px;
   color: var(--muted);
   text-align: center;
@@ -700,7 +704,7 @@
   font: 9px/1.5 var(--mono);
   pointer-events: none;
 }
-.Map_Legend span {
+.Map_Legend_Text {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -738,7 +742,7 @@
   font-size: 12px;
   border-bottom: 1px solid var(--border);
 }
-.Map_NoMatches strong {
+.Map_NoMatches_Strong {
   color: var(--text);
 }
 .Detail {
@@ -759,13 +763,13 @@
 .Detail_Body {
   padding: 20px 18px;
 }
-.Detail_Identity h2 {
+.Detail_Identity_Title {
   margin: 14px 0 8px;
   font: 500 21px/1.3 var(--mono);
   letter-spacing: -.04em;
   overflow-wrap: anywhere;
 }
-.Detail_Identity > p {
+.Detail_Identity_Description {
   color: var(--muted);
   font-size: 12px;
   overflow-wrap: anywhere;
@@ -785,24 +789,24 @@
   padding: 12px 0;
   border-block: 1px solid var(--border);
 }
-.Detail_Flags dt {
+.Detail_Flags_Term {
   display: flex;
   align-items: center;
   gap: 5px;
   color: var(--muted);
   font-size: 10px;
 }
-.Detail_Flags i {
+.Detail_Flags_Indicator {
   width: 4px;
   height: 4px;
   border-radius: 50%;
   background: var(--dim);
 }
-.Detail_Flags dd {
+.Detail_Flags_Value {
   margin: 4px 0 0;
   font: 9px/1.5 var(--mono);
 }
-.Detail_Flags [data-present='true'] i {
+.Detail_Flags_Row[data-present='true'] .Detail_Flags_Indicator {
   background: var(--positive);
 }
 .Detail_Callout {
@@ -817,7 +821,7 @@
 .Detail_Callout[data-tone='caution'] {
   border-color: var(--caution);
 }
-.Detail_Callout strong {
+.Detail_Callout_Strong {
   color: var(--text);
 }
 .Detail_Metadata {
@@ -825,19 +829,19 @@
   gap: 10px;
   margin: 20px 0;
 }
-.Detail_Metadata div,
-.Cause_Provenance div {
+.Detail_Metadata_Row,
+.Cause_Provenance_Row {
   display: grid;
   grid-template-columns: 70px minmax(0, 1fr);
   gap: 12px;
 }
-.Detail_Metadata dt,
-.Cause_Provenance dt {
+.Detail_Metadata_Term,
+.Cause_Provenance_Term {
   color: var(--muted);
   font-size: 10px;
 }
-.Detail_Metadata dd,
-.Cause_Provenance dd {
+.Detail_Metadata_Value,
+.Cause_Provenance_Value {
   margin: 0;
   font: 10px/1.5 var(--mono);
   overflow-wrap: anywhere;
@@ -847,11 +851,11 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.Detail_Schema summary {
+.Detail_Schema_Summary {
   padding: 10px;
   font-size: 11px;
 }
-.Detail_Schema summary > span {
+.Detail_Schema_Summary_Text {
   float: right;
   color: var(--muted);
   font: 9px/1.7 var(--mono);
@@ -859,22 +863,22 @@
 .Detail_Fields {
   padding: 0 10px 10px;
 }
-.Detail_Fields div {
+.Detail_Fields_Row {
   display: flex;
   align-items: baseline;
   gap: 10px;
   padding: 6px 0;
   border-top: 1px solid var(--border);
 }
-.Detail_Fields dt {
+.Detail_Fields_Term {
   flex: 1;
   overflow-wrap: anywhere;
   font: 10px/1.5 var(--mono);
 }
-.Detail_Fields dt span {
+.Detail_Fields_Term_Text {
   color: var(--caution);
 }
-.Detail_Fields dd {
+.Detail_Fields_Value {
   margin: 0;
   color: var(--type);
   font: 9px/1.5 var(--mono);
@@ -893,15 +897,15 @@
   list-style: none;
   padding: 0 10px 10px;
 }
-.Detail_References li {
+.Detail_References_Item {
   display: flex;
   gap: 8px;
   font-size: 10px;
 }
-.Detail_References span {
+.Detail_References_Text {
   color: var(--muted);
 }
-.Detail_References code {
+.Detail_References_Code {
   overflow-wrap: anywhere;
 }
 .Detail_Relations {
@@ -913,16 +917,16 @@
   gap: 8px;
   margin-bottom: 8px;
 }
-.Detail_Subhead h3,
-.Cause_PathHead h3 {
+.Detail_Subhead_Title,
+.Cause_PathHead_Title {
   font-size: 12px;
   font-weight: 500;
 }
-.Detail_Subhead > span {
+.Detail_Subhead_Text {
   color: var(--number);
   font: 10px/1.5 var(--mono);
 }
-.Detail_Relations ul {
+.Detail_Relations_List {
   list-style: none;
   padding: 0;
 }
@@ -942,15 +946,15 @@
 .Detail_Link:hover {
   color: var(--link);
 }
-.Detail_Link > span:first-child {
+.Detail_Link_Text:first-child {
   color: var(--link);
   font-size: 17px;
 }
-.Detail_Link > span:last-child {
+.Detail_Link_Text:last-child {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.Detail_Link small {
+.Detail_Link_Note {
   display: block;
   color: var(--muted);
   font: 9px/1.5 var(--mono);
@@ -967,12 +971,12 @@
   border-top: 1px solid var(--border);
   font-size: 10px;
 }
-.Detail_Identifiers summary,
-.Cause_Identifiers summary {
+.Detail_Identifiers_Summary,
+.Cause_Identifiers_Summary {
   color: var(--muted);
 }
-.Detail_Identifiers code,
-.Cause_Identifiers code {
+.Detail_Identifiers_Code,
+.Cause_Identifiers_Code {
   display: block;
   margin-top: 8px;
   padding: 6px;
@@ -984,7 +988,7 @@
   gap: 8px;
   margin-top: 20px;
 }
-.Detail_Endpoints button {
+.Detail_Endpoints_Button {
   overflow-wrap: anywhere;
   white-space: normal;
   text-align: left;
@@ -1002,7 +1006,7 @@
   padding: 46px 0 30px;
   text-align: center;
 }
-.Detail_Empty svg {
+.Detail_Empty_Icon {
   width: 120px;
   height: 96px;
   margin-bottom: 8px;
@@ -1010,15 +1014,15 @@
   stroke: var(--border2);
   stroke-width: 1.5;
 }
-.Detail_Empty svg circle:nth-last-child(3) {
+.Detail_Empty_Icon_Circle:nth-last-child(3) {
   fill: var(--card);
   stroke: var(--info);
 }
-.Detail_Empty h2 {
+.Detail_Empty_Title {
   font-size: 17px;
   font-weight: 500;
 }
-.Detail_Empty > p {
+.Detail_Empty_Description {
   max-width: 26ch;
   color: var(--muted);
   font-size: 12px;
@@ -1028,11 +1032,11 @@
   padding-top: 16px;
   border-top: 1px solid var(--border);
 }
-.Detail_EmptyNote span {
+.Detail_EmptyNote_Text {
   color: var(--info);
   font: 10px/1.5 var(--mono);
 }
-.Detail_EmptyNote p {
+.Detail_EmptyNote_Description {
   margin-top: 8px;
   color: var(--muted);
   font-size: 10px;
@@ -1112,11 +1116,11 @@
   min-height: 280px;
   padding: 40px 20px;
 }
-.AnatomyList_Empty h3 {
+.AnatomyList_Empty_Title {
   font-size: 16px;
   font-weight: 500;
 }
-.AnatomyList_Empty p {
+.AnatomyList_Empty_Description {
   color: var(--muted);
   font-size: 12px;
 }
@@ -1128,16 +1132,16 @@
   gap: 12px;
   padding: 14px 20px;
 }
-.AnatomyList_Pager > span {
+.AnatomyList_Pager_Text {
   color: var(--muted);
   font: 9px/1.5 var(--mono);
 }
-.AnatomyList_Pager nav {
+.AnatomyList_Pager_Nav {
   display: flex;
   align-items: center;
   gap: 12px;
 }
-.AnatomyList_Pager output {
+.AnatomyList_Pager_Output {
   color: var(--muted);
   font: 10px/1.5 var(--mono);
 }
@@ -1175,18 +1179,18 @@
   padding: 38px 24px;
   text-align: center;
 }
-.Activity_Empty svg {
+.Activity_Empty_Icon {
   width: 190px;
   height: 58px;
   fill: none;
   stroke: var(--border2);
   stroke-width: 1.5;
 }
-.Activity_Empty h3 {
+.Activity_Empty_Title {
   font-size: 17px;
   font-weight: 500;
 }
-.Activity_Empty p {
+.Activity_Empty_Description {
   max-width: 44ch;
   color: var(--muted);
   font-size: 12px;
@@ -1302,17 +1306,17 @@
   gap: 8px;
   margin: 16px 0;
 }
-.Activity_Counts div {
+.Activity_Counts_Row {
   min-width: 70px;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.Activity_Counts dt {
+.Activity_Counts_Term {
   color: var(--muted);
   font: 9px/1.5 var(--mono);
 }
-.Activity_Counts dd {
+.Activity_Counts_Value {
   margin: 4px 0 0;
   color: var(--number);
   font: 16px/1.3 var(--mono);
@@ -1331,11 +1335,11 @@
   color: var(--border2);
   font: 48px/1 var(--mono);
 }
-.Cause_Empty h3 {
+.Cause_Empty_Title {
   font-size: 17px;
   font-weight: 500;
 }
-.Cause_Empty p {
+.Cause_Empty_Description {
   max-width: 44ch;
   color: var(--muted);
   font-size: 12px;
@@ -1352,11 +1356,11 @@
 .Cause_Identity[data-outcome='interrupted'] {
   border-color: var(--negative);
 }
-.Cause_Tokens > span:last-child {
+.Cause_Tokens_Text:last-child {
   color: var(--muted);
   font: 10px/1.5 var(--mono);
 }
-.Cause_Identity h3 {
+.Cause_Identity_Title {
   margin: 12px 0;
   overflow-wrap: anywhere;
   font: 500 16px/1.4 var(--mono);
@@ -1368,11 +1372,11 @@
   align-items: baseline;
   gap: 10px;
 }
-.Cause_Measure strong {
+.Cause_Measure_Strong {
   color: var(--time);
   font: 22px/1.4 var(--mono);
 }
-.Cause_Measure span {
+.Cause_Measure_Text {
   color: var(--muted);
   font-size: 10px;
 }
@@ -1398,7 +1402,7 @@
   gap: 12px;
   margin: 22px 0 12px;
 }
-.Cause_PathHead > span {
+.Cause_PathHead_Text {
   color: var(--muted);
   font: 9px/1.5 var(--mono);
 }
@@ -1406,7 +1410,7 @@
   list-style: none;
   padding: 0;
 }
-.Cause_Path li {
+.Cause_Path_Item {
   margin-left: calc(var(--depth) * 12px);
   border-left: 1px solid var(--border2);
 }
@@ -1440,7 +1444,7 @@
   overflow-wrap: anywhere;
   font: 10px/1.5 var(--mono);
 }
-.Cause_SpanName small {
+.Cause_SpanName_Note {
   display: block;
   color: var(--muted);
   font: 8px/1.5 var(--mono);
@@ -1474,7 +1478,7 @@
   color: var(--muted);
   font: 9px/1.5 var(--mono);
 }
-.Atlas_Footer strong {
+.Atlas_Footer_Strong {
   color: var(--text);
   font-weight: 500;
 }
@@ -1523,7 +1527,7 @@
   .Atlas_Metrics {
     gap: 18px;
   }
-  .Atlas_Metrics dd {
+  .Atlas_Metrics_Value {
     font-size: 24px;
   }
   .Atlas_Coverage {
@@ -1573,7 +1577,7 @@
     grid-template-columns: 1fr 1fr;
     gap: 10px 22px;
   }
-  .Atlas_Metrics dd {
+  .Atlas_Metrics_Value {
     font-size: 22px;
   }
   .Atlas_HeaderControls {
@@ -1608,7 +1612,7 @@
   .Atlas_Group {
     flex: 1;
   }
-  .Atlas_Group select {
+  .Atlas_Group_Select {
     width: 100%;
     max-width: none;
   }
@@ -1632,7 +1636,7 @@
   .Detail_Body {
     padding: 16px 14px;
   }
-  .Detail_Identity h2 {
+  .Detail_Identity_Title {
     font-size: 18px;
   }
   .Activity {
@@ -1676,10 +1680,10 @@
     flex-wrap: wrap;
     gap: 8px;
   }
-  .Atlas_Brand span {
+  .Atlas_Brand_Text {
     font-size: 8px;
   }
-  .Atlas_Brand strong {
+  .Atlas_Brand_Strong {
     font-size: 18px;
   }
   .Atlas_Mark {
@@ -1689,7 +1693,7 @@
   .Atlas_Theme {
     order: 3;
   }
-  .Atlas_Theme select {
+  .Atlas_Theme_Select {
     min-height: 32px;
     font-size: 11px;
   }
@@ -1708,7 +1712,7 @@
     flex-wrap: wrap;
     gap: 22px;
   }
-  .Atlas_Heading h1 {
+  .Atlas_Heading_Title {
     font-size: 32px;
   }
   .Atlas_Metrics {
@@ -1716,7 +1720,7 @@
     flex-wrap: wrap;
     gap: 12px 24px;
   }
-  .Atlas_Coverage p {
+  .Atlas_Coverage_Description {
     flex-basis: 100%;
     order: 2;
   }
@@ -1729,7 +1733,7 @@
     padding: 14px;
     margin-bottom: 20px;
   }
-  .Spine_Intro > span:last-child {
+  .Spine_Intro_Text:last-child {
     margin-left: auto;
     font-size: 9px;
   }
@@ -1743,7 +1747,7 @@
   .Map_Header {
     flex-wrap: nowrap;
   }
-  .Map_Header h2 {
+  .Map_Header_Title {
     font-size: 15px;
   }
   .Detail {
@@ -1753,7 +1757,7 @@
   .Detail_Empty {
     padding: 20px 0;
   }
-  .Detail_Empty svg {
+  .Detail_Empty_Icon {
     width: 90px;
     height: 72px;
   }
@@ -1763,7 +1767,7 @@
   .Detail_Flags {
     max-width: 360px;
   }
-  .Detail_Metadata div {
+  .Detail_Metadata_Row {
     grid-template-columns: 90px minmax(0, 1fr);
   }
   .Activity {
@@ -1781,7 +1785,7 @@
   .AnatomyList_Pager {
     padding-inline: 16px;
   }
-  .AnatomyList_Pager nav {
+  .AnatomyList_Pager_Nav {
     width: 100%;
     justify-content: space-between;
   }
@@ -1809,13 +1813,13 @@
     justify-content: space-between;
     gap: 12px;
   }
-  .Atlas_Metrics dt {
+  .Atlas_Metrics_Term {
     font-size: 8px;
   }
-  .Atlas_Metrics dd {
+  .Atlas_Metrics_Value {
     font-size: 23px;
   }
-  .Atlas_Views button {
+  .Atlas_Views_Button {
     padding-inline: 9px;
   }
   .Atlas_FilterSummary {
@@ -1824,7 +1828,7 @@
   .Atlas_Shortcuts {
     margin-left: 0;
   }
-  .Atlas_Shortcuts dl {
+  .Atlas_Shortcuts_List {
     right: auto;
     left: 0;
   }

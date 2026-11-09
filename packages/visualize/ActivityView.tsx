@@ -45,17 +45,17 @@ let Counts = ({ event }: { event: Activity }) => {
   )
   return values.length
     ? (
-      <dl class='Activity_Counts'>
+      <dl class='Activity_Counts Atlas_Reset'>
         {values.slice(0, 12).map(([name, count]) => (
-          <div key={name}>
-            <dt>{name}</dt>
-            <dd>{count}</dd>
+          <div class='Activity_Counts_Row' key={name}>
+            <dt class='Activity_Counts_Term'>{name}</dt>
+            <dd class='Activity_Counts_Value'>{count}</dd>
           </div>
         ))}
         {values.length > 12 && (
-          <div>
-            <dt>additional counters</dt>
-            <dd>{values.length - 12}</dd>
+          <div class='Activity_Counts_Row'>
+            <dt class='Activity_Counts_Term'>additional counters</dt>
+            <dd class='Activity_Counts_Value'>{values.length - 12}</dd>
           </div>
         )}
       </dl>
@@ -90,7 +90,7 @@ let Cause = ({ model }: { model: AtlasModel }) => {
   )
   return (
     <section
-      class='Cause'
+      class='Cause Atlas_Focusable'
       id='atlas-cause'
       tabIndex={-1}
       aria-label='Selected causal path'
@@ -98,10 +98,11 @@ let Cause = ({ model }: { model: AtlasModel }) => {
       <header class='Activity_Header'>
         <div>
           <span class='Atlas_Eyebrow'>Causality</span>
-          <h2>Follow the work</h2>
+          <h2 class='Atlas_Reset Activity_Header_Title'>Follow the work</h2>
         </div>
         {model.state.cause && (
           <Button
+            class='Atlas_Button'
             type='button'
             mod='quiet'
             aria-label='Clear selected cause'
@@ -115,12 +116,12 @@ let Cause = ({ model }: { model: AtlasModel }) => {
         ? (
           <div class='Cause_Empty'>
             <span class='Cause_EmptyMark' aria-hidden='true'>↳</span>
-            <h3>
+            <h3 class='Atlas_Reset Cause_Empty_Title'>
               {model.state.cause
                 ? 'Outside the retained window'
                 : 'What caused this?'}
             </h3>
-            <p>
+            <p class='Atlas_Reset Cause_Empty_Description'>
               {model.state.cause
                 ? 'The selected span is no longer retained. Choose another observation.'
                 : 'Choose an observation to reveal its ancestors and descendants. No activity is invented when the process is quiet.'}
@@ -131,13 +132,15 @@ let Cause = ({ model }: { model: AtlasModel }) => {
           <div class='Cause_Body'>
             <div class='Cause_Identity' data-outcome={selected.outcome}>
               <div class='Cause_Tokens'>
-                <Chip>{selected.kind}</Chip>
-                <span>{outcome(selected)}</span>
+                <Chip class='Cause_Tokens_Text'>{selected.kind}</Chip>
+                <span class='Cause_Tokens_Text'>{outcome(selected)}</span>
               </div>
-              <h3>{selected.name}</h3>
+              <h3 class='Atlas_Reset Cause_Identity_Title'>{selected.name}</h3>
               <div class='Cause_Measure'>
-                <strong>{elapsed(selected)}</strong>
-                <span>
+                <strong class='Cause_Measure_Strong'>
+                  {elapsed(selected)}
+                </strong>
+                <span class='Cause_Measure_Text'>
                   {selected.stage == 'start'
                     ? 'unfinished span'
                     : selected.duration == undefined
@@ -147,29 +150,30 @@ let Cause = ({ model }: { model: AtlasModel }) => {
               </div>
             </div>
             {(selected.package || selected.plugin) && (
-              <dl class='Cause_Provenance'>
+              <dl class='Cause_Provenance Atlas_Reset'>
                 {selected.package && (
-                  <div>
-                    <dt>Package</dt>
-                    <dd>{selected.package}</dd>
+                  <div class='Cause_Provenance_Row'>
+                    <dt class='Cause_Provenance_Term'>Package</dt>
+                    <dd class='Cause_Provenance_Value'>{selected.package}</dd>
                   </div>
                 )}
                 {selected.plugin && (
-                  <div>
-                    <dt>Plugin</dt>
-                    <dd>{selected.plugin}</dd>
+                  <div class='Cause_Provenance_Row'>
+                    <dt class='Cause_Provenance_Term'>Plugin</dt>
+                    <dd class='Cause_Provenance_Value'>{selected.plugin}</dd>
                   </div>
                 )}
               </dl>
             )}
             <Counts event={selected} />
-            <p class='Cause_ClockNote'>
+            <p class='Cause_ClockNote Atlas_Reset'>
               A recorded 0 ms is valid. Some runtime clocks advance only with
               I/O; counts carry information too.
             </p>
             <div class='Cause_Actions'>
               {selected.node && (
                 <Button
+                  class='Atlas_Button'
                   type='button'
                   onClick={() => model.select(selected.node!)}
                 >
@@ -178,6 +182,7 @@ let Cause = ({ model }: { model: AtlasModel }) => {
               )}
               {parent && (
                 <Button
+                  class='Atlas_Button'
                   type='button'
                   mod='quiet'
                   onClick={() => model.choose(parent.id)}
@@ -187,25 +192,28 @@ let Cause = ({ model }: { model: AtlasModel }) => {
               )}
             </div>
             <div class='Cause_PathHead'>
-              <h3>Causal path</h3>
-              <span>{related.length} retained spans</span>
+              <h3 class='Atlas_Reset Cause_PathHead_Title'>Causal path</h3>
+              <span class='Cause_PathHead_Text'>
+                {related.length} retained spans
+              </span>
             </div>
-            <ol class='Cause_Path'>
+            <ol class='Cause_Path Atlas_Reset'>
               {related.map((event) => (
                 <li
+                  class='Cause_Path_Item'
                   key={`${event.epoch}:${event.id}`}
                   style={{ '--depth': Math.min(5, depthOf(event, related)) }}
                 >
                   <button
                     type='button'
-                    class='Cause_Span'
+                    class='Cause_Span Atlas_Button'
                     data-selected={event.id == selected.id}
                     data-outcome={event.outcome}
                     onClick={() => model.choose(event.id)}
                   >
                     <span class='Cause_Branch' aria-hidden='true'>↳</span>
                     <span class='Cause_SpanName'>
-                      <small>{event.kind}</small>
+                      <small class='Cause_SpanName_Note'>{event.kind}</small>
                       {event.name}
                     </span>
                     <span class='Cause_SpanTime'>{elapsed(event)}</span>
@@ -214,14 +222,16 @@ let Cause = ({ model }: { model: AtlasModel }) => {
               ))}
             </ol>
             {(clipped || selected.parent && !parent) && (
-              <p class='Cause_Notice'>
+              <p class='Cause_Notice Atlas_Reset'>
                 An ancestor is outside this process's retained window. This is
                 not a complete distributed trace.
               </p>
             )}
             <details class='Cause_Identifiers'>
-              <summary>Span identifier</summary>
-              <code>{selected.id}</code>
+              <summary class='Atlas_Summary Cause_Identifiers_Summary'>
+                Span identifier
+              </summary>
+              <code class='Cause_Identifiers_Code'>{selected.id}</code>
             </details>
           </div>
         )}
@@ -243,7 +253,7 @@ export let ActivityView = ({ model }: { model: AtlasModel }) => {
         <header class='Activity_Header'>
           <div>
             <span class='Atlas_Eyebrow'>Live flow</span>
-            <h2>Process activity</h2>
+            <h2 class='Atlas_Reset Activity_Header_Title'>Process activity</h2>
           </div>
           <div class='Activity_Summary'>
             <span>
@@ -261,15 +271,19 @@ export let ActivityView = ({ model }: { model: AtlasModel }) => {
         {!events.length
           ? (
             <div class='Activity_Empty'>
-              <svg viewBox='0 0 220 58' aria-hidden='true'>
+              <svg
+                class='Activity_Empty_Icon'
+                viewBox='0 0 220 58'
+                aria-hidden='true'
+              >
                 <path d='M0 29h60l12-8 14 16 14-32 14 48 14-24h92' />
               </svg>
-              <h3>
+              <h3 class='Atlas_Reset Activity_Empty_Title'>
                 {model.state.connected == 'live'
                   ? 'Quiet is a real signal.'
                   : 'Waiting for the process.'}
               </h3>
-              <p>
+              <p class='Atlas_Reset Activity_Empty_Description'>
                 {model.state.connected == 'live'
                   ? 'No activity observed in this subscriber window. Anatomy is still available; execute real work to see a causal path.'
                   : 'Anatomy and activity come from the connected host. No sample traffic, timings or synthetic pulses are shown.'}
@@ -278,11 +292,11 @@ export let ActivityView = ({ model }: { model: AtlasModel }) => {
           )
           : (
             <div
-              class='Activity_Window'
+              class='Activity_Window Atlas_Focusable'
               tabIndex={0}
               aria-label='Retained activity, scroll for older spans'
             >
-              <Timeline class='Activity_Timeline'>
+              <Timeline class='Activity_Timeline Atlas_Reset'>
                 {events.map((event) => (
                   <Timeline.Item
                     key={`${event.epoch}:${event.id}`}
@@ -295,7 +309,7 @@ export let ActivityView = ({ model }: { model: AtlasModel }) => {
                   >
                     <button
                       type='button'
-                      class='Activity_Row'
+                      class='Activity_Row Atlas_Button'
                       aria-pressed={model.state.cause == event.id}
                       aria-label={`${event.kind}: ${event.name}, ${
                         outcome(event)

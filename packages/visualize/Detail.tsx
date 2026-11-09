@@ -46,23 +46,29 @@ let Schema = ({ title, properties }: {
   properties.length
     ? (
       <details class='Detail_Schema'>
-        <summary>
+        <summary class='Atlas_Summary Detail_Schema_Summary'>
           {title}
-          <span>{properties.length} fields</span>
+          <span class='Detail_Schema_Summary_Text'>
+            {properties.length} fields
+          </span>
         </summary>
-        <dl class='Detail_Fields'>
+        <dl class='Detail_Fields Atlas_Reset'>
           {properties.slice(0, 32).map((prop) => (
-            <div key={prop.name}>
-              <dt>
+            <div class='Detail_Fields_Row' key={prop.name}>
+              <dt class='Detail_Fields_Term'>
                 {prop.name}
-                {prop.required && <span title='Required field'>*</span>}
+                {prop.required && (
+                  <span class='Detail_Fields_Term_Text' title='Required field'>
+                    *
+                  </span>
+                )}
               </dt>
-              <dd>{prop.type}</dd>
+              <dd class='Detail_Fields_Value'>{prop.type}</dd>
             </div>
           ))}
         </dl>
         {properties.length > 32 && (
-          <p class='Detail_Note'>
+          <p class='Detail_Note Atlas_Reset'>
             First 32 field names shown. The anatomy JSON door has the full
             contract.
           </p>
@@ -97,18 +103,18 @@ let metadata = (node: Node): [string, string][] => {
 }
 
 let Flags = ({ node }: { node: Node }) => (
-  <dl class='Detail_Flags'>
+  <dl class='Detail_Flags Atlas_Reset'>
     {([
       ['Declared', node.declared],
       ['Loaded', node.loaded],
       ['Bound', node.bound],
     ] as [string, boolean][]).map(([label, present]) => (
-      <div key={label} data-present={present}>
-        <dt>
-          <i aria-hidden='true' />
+      <div class='Detail_Flags_Row' key={label} data-present={present}>
+        <dt class='Detail_Flags_Term'>
+          <i class='Detail_Flags_Indicator' aria-hidden='true' />
           {label}
         </dt>
-        <dd>{present ? 'Yes' : 'Not reported'}</dd>
+        <dd class='Detail_Flags_Value'>{present ? 'Yes' : 'Not reported'}</dd>
       </div>
     ))}
   </dl>
@@ -121,19 +127,21 @@ let References = ({ node }: { node: Node }) => {
   return rows.length
     ? (
       <details class='Detail_Schema'>
-        <summary>
-          Code references<span>{rows.length}</span>
+        <summary class='Atlas_Summary Detail_Schema_Summary'>
+          Code references<span class='Detail_Schema_Summary_Text'>
+            {rows.length}
+          </span>
         </summary>
-        <ul class='Detail_References'>
+        <ul class='Detail_References Atlas_Reset'>
           {rows.slice(0, 32).map((row, i) => (
-            <li key={i}>
-              <span>{row.key}</span>
-              <code>{row.name}</code>
+            <li class='Detail_References_Item' key={i}>
+              <span class='Detail_References_Text'>{row.key}</span>
+              <code class='Detail_References_Code'>{row.name}</code>
             </li>
           ))}
         </ul>
         {rows.length > 32 && (
-          <p class='Detail_Note'>First 32 references shown.</p>
+          <p class='Detail_Note Atlas_Reset'>First 32 references shown.</p>
         )}
       </details>
     )
@@ -148,12 +156,12 @@ let Relationships = ({ model, node }: { model: AtlasModel; node: Node }) => {
   return (
     <section class='Detail_Relations' aria-label='Part relationships'>
       <div class='Detail_Subhead'>
-        <h3>Relationships</h3>
-        <span>{links.length}</span>
+        <h3 class='Atlas_Reset Detail_Subhead_Title'>Relationships</h3>
+        <span class='Detail_Subhead_Text'>{links.length}</span>
       </div>
       {links.length
         ? (
-          <ul>
+          <ul class='Atlas_Reset Detail_Relations_List'>
             {links.slice(0, 16).map((edge) => {
               let outgoing = edge.from == node.id
               let other = outgoing ? edge.to : edge.from
@@ -161,12 +169,14 @@ let Relationships = ({ model, node }: { model: AtlasModel; node: Node }) => {
                 <li key={edge.id}>
                   <button
                     type='button'
-                    class='Detail_Link'
+                    class='Detail_Link Atlas_Button'
                     onClick={() => model.select(edge.id)}
                   >
-                    <span aria-hidden='true'>{outgoing ? '↗' : '↙'}</span>
-                    <span>
-                      <small>{edge.kind}</small>
+                    <span class='Detail_Link_Text' aria-hidden='true'>
+                      {outgoing ? '↗' : '↙'}
+                    </span>
+                    <span class='Detail_Link_Text'>
+                      <small class='Detail_Link_Note'>{edge.kind}</small>
                       {names.get(other) ?? other}
                     </span>
                   </button>
@@ -176,12 +186,13 @@ let Relationships = ({ model, node }: { model: AtlasModel; node: Node }) => {
           </ul>
         )
         : (
-          <p class='Detail_Note'>
+          <p class='Detail_Note Atlas_Reset'>
             No relationships reported in this snapshot.
           </p>
         )}
       {links.length > 16 && (
         <Button
+          class='Atlas_Button'
           type='button'
           mod='quiet'
           onClick={() => {
@@ -222,12 +233,16 @@ let NodeDetail = ({ model, node }: { model: AtlasModel; node: Node }) => {
             {statusOf(node)}
           </Chip>
         </div>
-        <h2>{node.name}</h2>
-        {node.description && <p>{node.description}</p>}
+        <h2 class='Atlas_Reset Detail_Identity_Title'>{node.name}</h2>
+        {node.description && (
+          <p class='Atlas_Reset Detail_Identity_Description'>
+            {node.description}
+          </p>
+        )}
       </div>
       {node.group == 'phases'
         ? (
-          <p class='Detail_Callout'>
+          <p class='Detail_Callout Atlas_Reset'>
             A synthetic label for the{' '}
             {node.detail.path == 'rollback' ? 'rollback' : 'apply'}{' '}
             path, not a separately bound implementation. Timing appears only
@@ -236,37 +251,41 @@ let NodeDetail = ({ model, node }: { model: AtlasModel; node: Node }) => {
         )
         : <Flags node={node} />}
       {node.detail.observed === false && (
-        <p class='Detail_Callout' data-tone='caution'>
-          <strong>Category unobserved here.</strong>{' '}
+        <p class='Detail_Callout Atlas_Reset' data-tone='caution'>
+          <strong class='Detail_Callout_Strong'>
+            Category unobserved here.
+          </strong>{' '}
           The host does not report coverage for this category. Unreported parts
           or bindings are not evidence of absence.
         </p>
       )}
       {node.group == 'facets' && node.detail.attempted === false &&
         (
-          <p class='Detail_Callout' data-tone='caution'>
-            <strong>Not attempted, not absent.</strong>{' '}
+          <p class='Detail_Callout Atlas_Reset' data-tone='caution'>
+            <strong class='Detail_Callout_Strong'>
+              Not attempted, not absent.
+            </strong>{' '}
             This lazy facet has not been resolved. Its declaration alone says
             nothing about import success.
           </p>
         )}
       {node.group == 'effects' && node.detail.noop === true &&
         (
-          <p class='Detail_Callout'>
+          <p class='Detail_Callout Atlas_Reset'>
             This is a declared no-op binding. Being bound is not evidence that
             work ran.
           </p>
         )}
       {node.group == 'secrets' && (
-        <p class='Detail_Callout' data-tone='caution'>
+        <p class='Detail_Callout Atlas_Reset' data-tone='caution'>
           A configured secret name only. No value is read or displayed here.
         </p>
       )}
-      <dl class='Detail_Metadata'>
+      <dl class='Detail_Metadata Atlas_Reset'>
         {metadata(node).map(([label, value]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>{value}</dd>
+          <div class='Detail_Metadata_Row' key={label}>
+            <dt class='Detail_Metadata_Term'>{label}</dt>
+            <dd class='Detail_Metadata_Value'>{value}</dd>
           </div>
         ))}
       </dl>
@@ -283,15 +302,21 @@ let NodeDetail = ({ model, node }: { model: AtlasModel; node: Node }) => {
       {recent && (
         <div class='Detail_Observed'>
           <span class='Atlas_Eyebrow'>Last retained observation</span>
-          <Button type='button' onClick={() => model.choose(recent.id)}>
+          <Button
+            class='Atlas_Button'
+            type='button'
+            onClick={() => model.choose(recent.id)}
+          >
             {recent.kind} · {elapsed(recent)} <span aria-hidden='true'>↗</span>
           </Button>
         </div>
       )}
       <Relationships model={model} node={node} />
       <details class='Detail_Identifiers'>
-        <summary>Stable identifier</summary>
-        <code>{node.id}</code>
+        <summary class='Atlas_Summary Detail_Identifiers_Summary'>
+          Stable identifier
+        </summary>
+        <code class='Detail_Identifiers_Code'>{node.id}</code>
       </details>
     </>
   )
@@ -304,27 +329,39 @@ let EdgeDetail = ({ model, edge }: { model: AtlasModel; edge: Edge }) => {
     <>
       <div class='Detail_Identity'>
         <Chip>Relationship</Chip>
-        <h2>{edge.kind}</h2>
-        <p>A declared connection in the composition.</p>
+        <h2 class='Atlas_Reset Detail_Identity_Title'>{edge.kind}</h2>
+        <p class='Atlas_Reset Detail_Identity_Description'>
+          A declared connection in the composition.
+        </p>
       </div>
       <div class='Detail_Endpoints'>
         <span class='Atlas_Eyebrow'>From</span>
-        <Button type='button' onClick={() => model.select(edge.from)}>
+        <Button
+          class='Atlas_Button Detail_Endpoints_Button'
+          type='button'
+          onClick={() => model.select(edge.from)}
+        >
           {from?.name ?? edge.from}
         </Button>
         <span class='Detail_Direction' aria-hidden='true'>↓ {edge.kind}</span>
         <span class='Atlas_Eyebrow'>To</span>
-        <Button type='button' onClick={() => model.select(edge.to)}>
+        <Button
+          class='Atlas_Button Detail_Endpoints_Button'
+          type='button'
+          onClick={() => model.select(edge.to)}
+        >
           {to?.name ?? edge.to}
         </Button>
       </div>
-      <p class='Detail_Callout'>
+      <p class='Detail_Callout Atlas_Reset'>
         A relationship is not measured data transfer. Pulses mark observed trace
         records, never inferred traffic.
       </p>
       <details class='Detail_Identifiers'>
-        <summary>Stable identifier</summary>
-        <code>{edge.id}</code>
+        <summary class='Atlas_Summary Detail_Identifiers_Summary'>
+          Stable identifier
+        </summary>
+        <code class='Detail_Identifiers_Code'>{edge.id}</code>
       </details>
     </>
   )
@@ -336,7 +373,7 @@ export let Detail = ({ model }: { model: AtlasModel }) => {
   let edge = model.edges.find((edge) => edge.id == model.state.selected)
   return (
     <aside
-      class='Detail'
+      class='Detail Atlas_Focusable'
       id='atlas-detail'
       tabIndex={-1}
       aria-label='Selected anatomy detail'
@@ -345,6 +382,7 @@ export let Detail = ({ model }: { model: AtlasModel }) => {
         <span class='Atlas_Eyebrow'>Anatomy detail</span>
         {model.state.selected && (
           <Button
+            class='Atlas_Button'
             type='button'
             mod='quiet'
             aria-label='Clear selected part'
@@ -361,26 +399,54 @@ export let Detail = ({ model }: { model: AtlasModel }) => {
           ? <EdgeDetail model={model} edge={edge} />
           : (
             <div class='Detail_Empty'>
-              <svg viewBox='0 0 120 96' aria-hidden='true'>
+              <svg
+                class='Detail_Empty_Icon'
+                viewBox='0 0 120 96'
+                aria-hidden='true'
+              >
                 <path d='M22 48h38m0 0V18h38m-38 30v30h38' />
-                <circle cx='22' cy='48' r='8' />
-                <circle cx='60' cy='48' r='10' />
-                <circle cx='98' cy='18' r='6' />
-                <circle cx='98' cy='78' r='6' />
+                <circle
+                  class='Detail_Empty_Icon_Circle'
+                  cx='22'
+                  cy='48'
+                  r='8'
+                />
+                <circle
+                  class='Detail_Empty_Icon_Circle'
+                  cx='60'
+                  cy='48'
+                  r='10'
+                />
+                <circle
+                  class='Detail_Empty_Icon_Circle'
+                  cx='98'
+                  cy='18'
+                  r='6'
+                />
+                <circle
+                  class='Detail_Empty_Icon_Circle'
+                  cx='98'
+                  cy='78'
+                  r='6'
+                />
               </svg>
-              <h2>
+              <h2 class='Atlas_Reset Detail_Empty_Title'>
                 {model.state.selected
                   ? 'Part no longer reported'
                   : 'Every part has a place.'}
               </h2>
-              <p>
+              <p class='Atlas_Reset Detail_Empty_Description'>
                 {model.state.selected
                   ? 'This selection is outside the current anatomy snapshot.'
                   : 'Select a part or a relationship to see its contract, provenance and connections.'}
               </p>
               <div class='Detail_EmptyNote'>
-                <span>Declared ≠ loaded ≠ bound</span>
-                <p>These are composition facts, not execution counts.</p>
+                <span class='Detail_EmptyNote_Text'>
+                  Declared ≠ loaded ≠ bound
+                </span>
+                <p class='Atlas_Reset Detail_EmptyNote_Description'>
+                  These are composition facts, not execution counts.
+                </p>
               </div>
             </div>
           )}
