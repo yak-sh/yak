@@ -28,11 +28,11 @@ test('live and draft app shells serve the location reporter inline', () => {
 
 let page = () => {
   let { document, Event } = parseHTML(
-    '<html><body>' +
+    '<html><body><section data-app=notes><a data-open href="https://ada.yaks.app/draft/" target="_blank">Open</a><input name=screen value=draft type=radio checked><input name=screen value=live type=radio>' +
       ['draft', 'live'].map((which) =>
         `<a data-address="${which}" target="_blank" href="https://ada.yaks.app/${which}/">https://ada.yaks.app/${which}/</a>` +
         `<iframe data-frame="${which}" src="https://ada.yaks.app/${which}/"></iframe>`
-      ).join('') + '</body></html>',
+      ).join('') + '</section></body></html>',
   )
   let parent = new EventTarget()
   let send = (source: unknown, origin: string, data: unknown) => {
@@ -89,16 +89,20 @@ let page = () => {
     return { frame, address, source, location, history, fire, load }
   }
   let draft = make('draft'), live = make('live')
-  frames(parent as Window, document)
+  let refresh = frames(parent as Window, document)
   let shown = (p: typeof live, at = p.location.href) => {
     equal(p.address.textContent, at)
     equal(p.address.getAttribute('href'), at)
     equal(p.address.target, '_blank')
   }
-  return { document, Event, draft, live, send, shown }
+  return { document, Event, draft, live, send, shown, refresh }
 }
 
-let initial = page(), navigating = page(), guarded = page(), inserted = page()
+let initial = page(),
+  navigating = page(),
+  guarded = page(),
+  inserted = page(),
+  switching = page()
 
 test('a preview reports its initial address even when its shell loads before the Operator script', () => {
   let p = initial
@@ -171,4 +175,31 @@ test('frames inserted after the Operator script ask their loaded shell for its a
   p.document.body.append(frame)
   frame.dispatchEvent(new p.Event('load', { bubbles: true }))
   equal(asked, [[{ 'yak-location': true }, 'https://ada.yaks.app']])
+})
+
+test('Open follows the visible frame’s address through navigation, switching and header redraws', () => {
+  let p = switching
+  let open = () => p.document.querySelector('[data-open]')!.getAttribute('href')
+  equal(open(), p.draft.location.href)
+  p.live.history.pushState(null, '', 'live-records#today')
+  equal(open(), p.draft.location.href)
+  p.draft.history.replaceState(null, '', 'draft-records?q=tea#today')
+  equal(open(), p.draft.location.href)
+  let pick = (which: string) => {
+    for (let radio of p.document.querySelectorAll('[name=screen]')) {
+      radio.toggleAttribute('checked', radio.getAttribute('value') == which)
+    }
+    p.document.querySelector(`[name=screen][value=${which}]`)!
+      .dispatchEvent(new p.Event('change', { bubbles: true }))
+  }
+  pick('live')
+  equal(open(), p.live.location.href)
+  pick('draft')
+  equal(open(), p.draft.location.href)
+  let next = p.document.createElement('a')
+  next.setAttribute('data-open', '')
+  next.href = 'https://ada.yaks.app/draft/'
+  p.document.querySelector('[data-open]')!.replaceWith(next)
+  p.refresh()
+  equal(open(), p.draft.location.href)
 })

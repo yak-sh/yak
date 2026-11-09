@@ -1560,8 +1560,8 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
   let title = app.title || app.slug
   let whose = { app: title, operator }
   let stage = stageOf(app)
-  // Where Open takes it: the app itself, else its draft.
-  let away = app.live ?? app.draft
+  // Open starts at the frame on screen; location reports keep it current.
+  let away = app.draft ?? app.live
   let tab = (id: string, name: string, ...inside: Node[]) =>
     h(
       TabSet.Item,
@@ -1609,7 +1609,7 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
       away
         ? h(
           Button,
-          { href: away, target: '_blank', rel: 'noopener' },
+          { href: away, target: '_blank', rel: 'noopener', 'data-open': '' },
           h(Icon, { of: icons['external-link'] }),
           'Open',
         )
@@ -2200,12 +2200,12 @@ let form = document.querySelector('#ask')
 let here = ${JSON.stringify(space.slug)}
 let follows = ${JSON.stringify(follows)}
 let canvas = () => document.querySelector('[data-app]')
-frames(globalThis, document)
 let painted = new WeakMap()
 let remember = (app) => {
   for (let part of app?.querySelectorAll('[data-part]') ?? []) painted.set(part, part.outerHTML)
 }
 remember(canvas())
+let refreshFrames = frames(globalThis, document)
 let ours = (apps = []) => apps.filter((c) => !c.space || c.space == here).map((c) => c.app)
 let changing = (o) => {
   let app = canvas(), shown = app?.querySelector('[data-frame=live]')
@@ -2228,6 +2228,7 @@ let put = (drawn) => {
     page.classList.add('Talk-app')
     page.append(next)
     remember(next)
+    refreshFrames()
     made.innerHTML = drawn.show
     let bar = document.querySelector('.Talk_Bar')
     bar.insertBefore(made.content.firstElementChild, bar.querySelector('[data-aside]'))
@@ -2241,6 +2242,7 @@ let put = (drawn) => {
       at.replaceWith(part)
     }
   }
+  refreshFrames()
   if (next.dataset.stage == was.dataset.stage) return
   was.dataset.stage = next.dataset.stage
   let tab = was.querySelector('[name=made][value="' + next.dataset.stage + '"]')
@@ -2256,6 +2258,7 @@ document.addEventListener('click', (e) => {
   if (tab) tab.checked = true
   let frame = app?.querySelector('[name=screen][value="' + shows.dataset.shows + '"]')
   if (frame) frame.checked = true
+  refreshFrames()
 })
 // One read of it at a time; one asked for meanwhile follows it.
 let remaking = false, wanted

@@ -583,6 +583,10 @@ test('what the app beside the chat is made of is drawn again as the Operator wor
   assertEquals(document.querySelector('[data-address=draft]'), address)
   assertEquals(address.getAttribute('href'), navigated)
   assertEquals(address.textContent, navigated)
+  assertEquals(
+    document.querySelector('[data-open]')?.getAttribute('href'),
+    navigated,
+  )
   assertEquals(page.loads, { app: 0, page: 0 })
   page.leave()
 })
