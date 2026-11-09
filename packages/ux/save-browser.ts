@@ -128,8 +128,15 @@ export let bindSave = (
       if (!marked.includes(g)) marked.push(g)
     }
   }
-  let labels: HTMLElement[] = []
+  let labels: HTMLElement[] = [], tagged: Element[] = []
   for (let field of marks.keys()) {
+    for (let face of field.children) {
+      let heading = face.matches('legend') ||
+        face == field.firstElementChild && face.matches('label')
+      if (!heading || face.matches('.Form_Label,.Save_Label')) continue
+      face.classList.add('Save_Label')
+      tagged.push(face)
+    }
     if (!field.matches('label')) continue
     let text = [...field.childNodes].find((n) =>
       n.nodeType == 3 && n.textContent?.trim()
@@ -298,6 +305,7 @@ export let bindSave = (
         field.classList.remove('Save_Field', 'Save_Field-changed')
         field.removeAttribute('data-changed')
       }
+      for (let face of tagged) face.classList.remove('Save_Label')
       for (let label of labels) label.replaceWith(...label.childNodes)
       render(null, mount)
       mount.remove()

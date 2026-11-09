@@ -148,6 +148,29 @@ for (let width of [1280, 390]) {
   })
 }
 
+test('binding marks standalone legends and labels and restores them on close', () => {
+  let legend: HTMLElement, label: HTMLElement
+  {
+    using p = page()
+    legend = p.$('legend')
+    label = p.$('[name="enabled"]').parentElement!
+    equal(legend.classList.contains('Save_Label'), true)
+    equal(label.classList.contains('Save_Label'), true)
+    let ask = p.$<HTMLInputElement>('[value="ask"]')
+    let act = p.$<HTMLInputElement>('[value="act"]')
+    ask.checked = false
+    act.checked = true
+    p.fire(act, 'change')
+    equal(p.$('.Save_Field-changed > .Save_Label'), legend)
+    let enabled = p.$<HTMLInputElement>('[name="enabled"]')
+    enabled.checked = false
+    p.fire(enabled, 'change')
+    equal(label.parentElement!.hasAttribute('data-changed'), true)
+  }
+  equal(legend.classList.contains('Save_Label'), false)
+  equal(label.classList.contains('Save_Label'), false)
+})
+
 test('Discard restores text, radios and checkboxes without writing', () => {
   using p = page()
   p.type('instructions', 'Unsaved words')

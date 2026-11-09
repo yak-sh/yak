@@ -33,7 +33,7 @@
 .Save_Field {
   min-width: 0;
 }
-.Save_Field > :is(.Form_Label, .Save_Label, legend, label:first-child)::after {
+.Save_Field > :is(.Form_Label, .Save_Label)::after {
   content: '';
   display: inline-block;
   width: .45em;
@@ -45,7 +45,7 @@
   filter: var(--drawn, none);
   opacity: 0;
 }
-.Save_Field-changed > :is(.Form_Label, .Save_Label, legend, label:first-child)::after {
+.Save_Field-changed > :is(.Form_Label, .Save_Label)::after {
   opacity: 1;
 }
 .Save_Notice {

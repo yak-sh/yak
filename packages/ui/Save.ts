@@ -10,17 +10,19 @@ import type { Colors, Specimen } from './theme.ts'
 /** One fixed bar, with a changed field's mark beside its label. */
 export let Save:
   & Part
-  & Record<'Count' | 'Actions' | 'Field' | 'Mark' | 'Notice', Part> = block(
-    'aside',
-    'Save',
-    {
-      Count: 'span',
-      Actions: 'div',
-      Field: 'div',
-      Mark: 'span',
-      Notice: 'p',
-    },
-  )
+  & Record<'Count' | 'Actions' | 'Field' | 'Label' | 'Mark' | 'Notice', Part> =
+    block(
+      'aside',
+      'Save',
+      {
+        Count: 'span',
+        Actions: 'div',
+        Field: 'div',
+        Label: 'span',
+        Mark: 'span',
+        Notice: 'p',
+      },
+    )
 
 export let description = 'Pending changes, saved or discarded together.'
 
@@ -50,7 +52,7 @@ export let specimens = (): Specimen[] => [[
   h(
     Save.Field,
     { as: Form.Field, mod: 'changed' },
-    h(Form.Label, { for: 'save-name' }, 'Name'),
+    h(Save.Label, { as: Form.Label, for: 'save-name' }, 'Name'),
     h(Field, { id: 'save-name', value: 'A changed name' }),
   ),
 ], [
