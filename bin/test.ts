@@ -546,14 +546,17 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   ).filter(([, files]) => files.length)
   let children: Deno.ChildProcess[] = []
   let host = runtime()
-  let spawn = (
-    p: string,
-    files: readonly string[],
-    env?: Record<string, string>,
-  ) => {
+  let spawn = (p: string, files: readonly string[], more: string[]) => {
     let child = new Deno.Command(Deno.execPath(), {
-      args: [...host.args, RUNNER, `--platform=${p}`, ...flags, ...files],
-      env: { ...env, ...host.env },
+      args: [
+        ...host.args,
+        RUNNER,
+        `--platform=${p}`,
+        ...flags,
+        ...more,
+        ...files,
+      ],
+      env: host.env,
       stdin: 'inherit',
       // Keep each reporter intact: platforms running at once would
       // interleave their half-lines. Drain concurrently below.
@@ -580,6 +583,8 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       said: 0,
       reported: Date.now(),
       done: false,
+      // Where the output of the platform's latest runtime begins.
+      from: 0,
     }
   })
   // What each platform has said, kept as it comes: one ended before its
@@ -601,11 +606,14 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     progress[i].done = true
     let out = bytes(heard[i].out), err = bytes(heard[i].err)
     let said = new TextDecoder().decode(out)
+    let last = new TextDecoder().decode(
+      bytes(heard[i].out.slice(progress[i].from)),
+    )
     let ok = status?.success ?? false
     // A runtime that died (out of memory, say) never listed its failures.
     let why = `test ${runs[i][0]}: ${
       status ? status.signal ?? status.code : 'still running'
-    }${ok || reported(said) ? '' : died(progress[i])}`
+    }${ok || reported(last) ? '' : died(progress[i])}`
     if (verbose) {
       report(Deno.stdout, out)
       report(Deno.stderr, err)
@@ -686,19 +694,43 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       }
     }
   }, pulse)
-  let run = async (i: number, child: Deno.ChildProcess) => {
+  // A runtime keeps every module it loaded until it exits, so one that grew
+  // full hands the files it did not reach to a fresh one
+  // (packages/testing/main.ts `--rest`). The platform's report is all of its
+  // runtimes', and its status the first failure, or a death, which ends it.
+  let run = async (i: number) => {
+    let [name, files] = runs[i]
     let p = progress[i]
-    p.now = own(child.pid, { every: pulse / 2 })
-    p.at = p.now()
-    let followed = Promise.all([
-      observe(kept(child.stdout, heard[i].out), p, p.now),
-      observe(kept(child.stderr, heard[i].err), p, p.now),
-    ])
-    let status = await child.status
-    await followed
+    let rest = await Deno.makeTempFile({
+      prefix: 'test-rest-',
+      suffix: '.json',
+    })
+    let status: Deno.CommandStatus | undefined
+    try {
+      for (let part = 1, left = files; left.length && !ending; part++) {
+        await Deno.writeTextFile(rest, '[]')
+        let child = spawn(name, left, [
+          `--rest=${rest}`,
+          ...part > 1 ? [`--part=${part}`] : [],
+        ])
+        p.now = own(child.pid, { every: pulse / 2 })
+        p.at = p.now()
+        p.from = heard[i].out.length
+        let followed = Promise.all([
+          observe(kept(child.stdout, heard[i].out), p, p.now),
+          observe(kept(child.stderr, heard[i].err), p, p.now),
+        ])
+        let ended = await child.status
+        await followed
+        status = ended.success && status ? status : ended
+        left = JSON.parse(await Deno.readTextFile(rest))
+      }
+    } finally {
+      await Deno.remove(rest).catch(() => {})
+    }
     say(i, status)
   }
-  await Promise.all(runs.map(([p, files], i) => run(i, spawn(p, files))))
+  await Promise.all(runs.map((_, i) => run(i)))
   finish()
 } else if (import.meta.main) {
   Deno.env.set(RUN, String(Deno.pid))

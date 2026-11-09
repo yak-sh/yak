@@ -40,3 +40,12 @@ test('files load and execute in order, retaining reports without fixture bodies'
   equal(Object.keys(result.took), ['first.ts', 'second.ts'])
   equal(result.loading, Object.values(result.loads).reduce((a, b) => a + b, 0))
 })
+
+test('a full runtime loads no more files and leaves them for another', async () => {
+  let loaded: string[] = []
+  let result = await drive(['a.ts', 'b.ts', 'c.ts'], (path) => {
+    loaded.push(path)
+    return Promise.resolve([])
+  }, { full: () => loaded.length == 2 })
+  equal([loaded, result.rest], [['a.ts', 'b.ts'], ['c.ts']])
+})

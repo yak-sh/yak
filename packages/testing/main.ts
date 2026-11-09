@@ -5,7 +5,7 @@ import * as system from '@yaks/process/system'
 // this one runtime a file at a time, each file's tests run as it loads.
 //
 //   main.ts [--tag=t]... [--platform=p] [--all] [--also=path]... [--keys=file]
-//     [--timeout=ms] [--times=dir] [--verbose] path...
+//     [--timeout=ms] [--times=dir] [--rest=file] [--part=n] [--verbose] path...
 //
 // A path is a test module (`*_test.ts`), a page whose examples run (a module
 // or a Markdown page), or a directory holding them. `--tag` keeps the tests
@@ -21,7 +21,13 @@ import * as system from '@yaks/process/system'
 // A test that has not ended within `--timeout` of its own time fails, and the
 // run goes on (./run.ts `one`).
 // `--times` writes what each test and each file's load took, and the proof
-// of each file the run remembered as passed, to `<dir>/<platform>.json`.
+// of each file the run remembered as passed, to `<dir>/<platform>.json`, or
+// `<dir>/<platform>-<n>.json` for `--part=n`.
+//
+// A runtime keeps every module it loaded, and whatever their tests left
+// reachable, until it exits. With `--rest`, once it holds more than FULL it
+// loads no more files and writes those it did not reach to that file as a
+// JSON list, for a fresh runtime to run (bin/test.ts).
 //
 // Each test is said as it runs, a failure's error right after it, and the
 // closing report says every failure again; each error is cut short (./run.ts
@@ -39,7 +45,8 @@ import { collect, from, type Test, test } from './suite.ts'
 system.env.delete('DENO_AUDIT_PERMISSIONS')
 let observation = observe()
 
-let FLAGS = /^--(tag|platform|also|keys|timeout|times)=(.*)$|^--(all|verbose)$/
+let FLAGS =
+  /^--(tag|platform|also|keys|timeout|times|rest|part)=(.*)$|^--(all|verbose)$/
 let odd = system.args.find((a) => a.startsWith('--') && !FLAGS.test(a))
 if (odd) {
   console.error(`main.ts: the runner has no flag ${odd}`)
@@ -57,6 +64,10 @@ let all = system.args.includes('--all')
 let verbose = system.args.includes('--verbose')
 let paths = system.args.filter((a) => !a.startsWith('--'))
 let given = flag('keys').at(-1)
+let rest = flag('rest').at(-1)
+let part = flag('part').at(-1)
+// The resident memory past which a runtime with `--rest` hands on its files.
+let FULL = 2 * 1024 ** 3
 let started = performance.now()
 let here = (path: string) => new URL(path, `file://${system.cwd()}/`).href
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
@@ -112,10 +123,10 @@ let load = async (path: string) => {
   return collected.splice(at).filter(picked)
 }
 // Examples load before test modules, while the runtime's import graph is small.
-let { outcomes, loading, loads, took } = await drive(
+let { outcomes, loading, loads, took, rest: unreached } = await drive(
   [...pages, ...modules],
   load,
-  { timeout, verbose },
+  { timeout, verbose, full: () => !!rest && system.memoryUsage().rss > FULL },
 )
 
 // A file passed when every test it declared ran and passed; a run that
@@ -124,7 +135,9 @@ let { outcomes, loading, loads, took } = await drive(
 let failed = new Set(outcomes.filter((o) => !o.ok).map((o) => o.test.file))
 let passing = tags.length
   ? []
-  : [...modules, ...pages].filter((p) => !failed.has(p) && key.has(p))
+  : [...modules, ...pages].filter((p) =>
+    p in took && !failed.has(p) && key.has(p)
+  )
 tally(took)
 let seen = observation.reads()
 observation.close()
@@ -153,10 +166,11 @@ let times = flag('times').at(-1)
 if (times) {
   await io.mkdir(times, { recursive: true })
   await io.writeTextFile(
-    `${times}/${platform || 'tests'}.json`,
+    `${times}/${platform || 'tests'}${part ? `-${part}` : ''}.json`,
     JSON.stringify(
       timed(outcomes, { wall, planned, loading, loads, remembered, left }),
     ),
   )
 }
+if (rest) await io.writeTextFile(rest, JSON.stringify(unreached))
 system.exit(outcomes.some((o) => !o.ok) ? 1 : 0)

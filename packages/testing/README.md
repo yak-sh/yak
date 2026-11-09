@@ -250,7 +250,8 @@ try {
 
 ```sh
 deno run -A jsr:@yaks/testing/main [--tag=t]... [--platform=p] [--all] \
-  [--also=path]... [--keys=file] [--timeout=ms] [--times=dir] [--verbose] path...
+  [--also=path]... [--keys=file] [--timeout=ms] [--times=dir] [--rest=file] \
+  [--part=n] [--verbose] path...
 ```
 
 A path names a test module, a page, or a directory holding them. Files load one
@@ -277,17 +278,25 @@ what planning and loading took.
 `--tag` selects tests carrying every named tag; comma-separated tags are also
 accepted. `--platform` supplies the runtime's tag, so selecting that tag keeps
 all tests in the runtime. `--times` writes what the run took, in milliseconds,
-to `<dir>/<platform>.json` (`tests.json` without a platform): the whole run, its
-planning and loading, each file's load, each test that ran with its file, name,
-wall time (`ms`), CPU time (`cpu`) and whether it passed. A test's CPU time is
-the user and system time of the thread it runs on and of the child processes
-reaped while it ran (`threadtime` from @yaks/benchmark). Waiting for timers, I/O
-or a CPU contributes no CPU time. The per-test performance budget uses `cpu`;
-wall time remains diagnostic. Existing budget records are marked
-`legacy-wall-ceilings`: retained upper bounds that `--write` lowers using CPU
-samples. The report also records each file the run remembered as passed, with
-its proof in the pass record (`forget` from `@yaks/testing/deps` takes one
-back), and how many tests it skipped and files it left out as unchanged.
+to `<dir>/<platform>.json` (`tests.json` without a platform, and
+`<platform>-<n>.json` with `--part=n`): the whole run, its planning and loading,
+each file's load, each test that ran with its file, name, wall time (`ms`), CPU
+time (`cpu`) and whether it passed. A test's CPU time is the user and system
+time of the thread it runs on and of the child processes reaped while it ran
+(`threadtime` from @yaks/benchmark). Waiting for timers, I/O or a CPU
+contributes no CPU time. The per-test performance budget uses `cpu`; wall time
+remains diagnostic. Existing budget records are marked `legacy-wall-ceilings`:
+retained upper bounds that `--write` lowers using CPU samples. The report also
+records each file the run remembered as passed, with its proof in the pass
+record (`forget` from `@yaks/testing/deps` takes one back), and how many tests
+it skipped and files it left out as unchanged.
+
+A runtime keeps every module it loaded, and whatever their tests left reachable,
+until it exits, so one runtime holding a whole suite can outgrow its machine.
+With `--rest`, once the runtime's resident memory passes 2 GiB after a file, it
+loads no more and writes the files it did not reach to that file as a JSON list;
+the caller runs them in a fresh runtime, as the repo's `bin/test.ts` does,
+naming each later one by `--part`.
 
 The process's other threads are left out because their work is not the test's.
 V8 compiles and collects garbage on background threads whenever it likes, often
