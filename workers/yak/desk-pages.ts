@@ -1747,8 +1747,7 @@ let connections = (at: DeskPage, env: Host) => {
         one.status == 'connected' && !one.failed ? 'positive' : 'negative',
       ),
     )
-  let grid = (cards: Kids[]) =>
-    cards.length ? h(Cards, { mod: 'compact' }, cards) : null
+  let grid = (cards: Kids[]) => cards.length ? h(Cards, null, cards) : null
   let group = (title: Kids, ...kids: Kids[]) =>
     kids.some(Boolean) ? [h(Group, null, title), kids] : null
   let yours = [
@@ -1909,7 +1908,11 @@ let connections = (at: DeskPage, env: Host) => {
     )
     : null
   return [
-    h('div', { inert: setup ? true : undefined, 'data-connections': '' }, [
+    h('div', {
+      class: 'Desk_Connections',
+      inert: setup ? true : undefined,
+      'data-connections': '',
+    }, [
       c.on ? null : h(
         Card,
         null,

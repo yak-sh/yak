@@ -106,17 +106,25 @@
 
 /* A whole card can be pressed: its mark above its name and summary. */
 .Card-button {
+  --pad-block: .75rem;
+  --pad-inline: .875rem;
+  gap: .5rem;
   justify-items: center;
   text-align: center;
   color: var(--text);
   text-decoration: none;
   cursor: pointer;
 }
-.Card-button:hover,
+.Card-button:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
 .Card-button:focus-visible {
-  background: var(--surface);
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--text);
   outline-offset: 2px;
+}
+.Card-button .Card_Sub {
+  line-height: 1.35;
 }
 .Card-button .Card_Mark {
   width: 3rem;

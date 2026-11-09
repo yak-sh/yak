@@ -761,6 +761,10 @@
   .Desk_Content > * {
     margin: 0;
   }
+  .Desk_Connections {
+    display: grid;
+    gap: .75rem;
+  }
   .Desk input,
   .Desk textarea,
   .Card input,
