@@ -372,6 +372,32 @@ test('a release compiled by an older toolkit is made again as itself', () => {
   assertStringIncludes(draft, 'let n: number = 2')
 })
 
+let remadeAssets = await (async () => {
+  await using s = await scenario()
+  let image = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'
+  await s.write({
+    'index.html': '<img src="img/photo.svg" loading="lazy">',
+    'img/photo.svg': image,
+  })
+  await s.tool('app_deploy')
+  let space = (await s.dir.space('ada'))!
+  let remake = async () => {
+    let app = (await s.dir.app(space, 'cookbook'))!
+    await remade(s.env, { app: app.eid, source: app.source! })
+  }
+  await remake()
+  let page = await (await s.response('')).text()
+  let address = /src="([^" ]*img\/photo.svg)"/.exec(page)![1]
+  await remake()
+  let res = await s.response(address.slice('/cookbook/'.length))
+  return { status: res.status, body: await res.text(), image }
+})()
+
+test('a lazy image from an open page loads after another toolkit remake', () => {
+  assertEquals(remadeAssets.status, 200)
+  assertEquals(remadeAssets.body, remadeAssets.image)
+})
+
 // A page whose ask for a remake is refused (a Store still on the last
 // deploy's code does not know the remake's words) has the next page ask again,
 // and a remake that fired and left the release serving is woken again.

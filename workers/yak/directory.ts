@@ -2897,13 +2897,14 @@ export let directoryRows = (rows: {
       )
       return row?.deploy ? deployOf(row) : null
     },
-    // Whether `source` is one of the app's own releases. A release is kept
-    // under its space's handle, which no rename moves (D-131924), so the
-    // source a deploy wrote is the source asked for.
+    // A toolkit remake keeps the deploy's version and records its new
+    // source in the switch history. Both histories own immutable assets a
+    // page already open may still load, as the blob sweep keeps them.
     released: async (app: App, source: string) =>
       !!(await one(
-        `.deploy.app=${app.eid}&.deploy.source=${source}`,
-      ))?.deploy,
+        `(.deploy.app=${app.eid}&.deploy.source=${source})|` +
+          `(.switched.app=${app.eid}&.switched.source=${source})`,
+      )),
     // Every time this app's store was put back to a moment, newest first
     // (recover.ts, T-34507). Never cached, for the reason `deploys` is not: a
     // restore reads its own trail back the moment it writes to it.

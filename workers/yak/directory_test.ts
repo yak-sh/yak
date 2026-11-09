@@ -100,24 +100,33 @@ let an: App = {
   theme: null,
 }
 
-test('a release is served only after its deploy records it', async () => {
+test('release assets belong to deployed and remade sources of their own app', async () => {
   let source = 'jeff.1f7c3e/.releases/a1/'
+  let vocab = platformVocab()
+  let held: Bundle[] = [
+    {
+      entity: { eid: 'd1' },
+      deploy: { app: an.eid, source: source + 'live', version: 1 },
+    },
+    {
+      entity: { eid: 's1' },
+      switched: { app: an.eid, source: source + 'remade' },
+    },
+    {
+      entity: { eid: 's2' },
+      switched: { app: 'another-app', source: source + 'another' },
+    },
+  ]
   let dir = directory({
     fetch: (req: Request) => {
       let q = new URL(req.url).searchParams.get('q') ?? ''
-      let found = q.endsWith(`.deploy.source=${source}live`)
-      return Promise.resolve(rows(
-        found
-          ? [{
-            entity: { eid: 'd1' },
-            deploy: { app: 'a1', source, version: 1 },
-          }]
-          : [],
-      ))
+      return Promise.resolve(rows(matcher(q, vocab)(held)))
     },
   })
-  assertEquals(await dir.released(an, `${source}live`), true)
-  assertEquals(await dir.released(an, `${source}failed`), false)
+  assertEquals(await dir.released(an, source + 'live'), true)
+  assertEquals(await dir.released(an, source + 'remade'), true)
+  assertEquals(await dir.released(an, source + 'failed'), false)
+  assertEquals(await dir.released(an, source + 'another'), false)
 })
 
 // A meta store that answers one app, at whatever version the test has set.
