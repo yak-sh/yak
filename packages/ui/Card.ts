@@ -70,7 +70,7 @@ let { Head, Mark, Title, Actions, Sub } = Card
 /** A card with all its head holds, and one with no head at all. */
 export let specimens = (): Specimen[] => [
   [
-    'Card, Head, Mark, Title, Actions, Sub',
+    'Card, Head, Mark, Title, Link, Actions, Form, Sub',
     h(
       Card,
       {},
@@ -78,9 +78,13 @@ export let specimens = (): Specimen[] => [
         Head,
         {},
         h(Mark, { 'aria-hidden': true }, '☀'),
-        h(Title, {}, 'Weather API'),
+        h(Title, {}, h(Card.Link, { href: '#' }, 'Weather API')),
         h(State, { mod: 'positive' }, 'Connected'),
-        h(Actions, {}, h(Button, { type: 'button' }, 'Disconnect')),
+        h(
+          Actions,
+          {},
+          h(Card.Form, {}, h(Button, { type: 'button' }, 'Disconnect')),
+        ),
       ),
       h(Sub, {}, 'Forecasts for any place on Earth.'),
     ),

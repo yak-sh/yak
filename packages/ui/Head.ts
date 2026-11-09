@@ -89,7 +89,10 @@ export let specimens = (): Specimen[] => [
       ),
     ),
   ],
-  ['Head, Title', h(Head, {}, h(Title, {}, 'inspect'))],
+  [
+    'Head, Title, Link',
+    h(Head, {}, h(Title, {}, h(Head.Link, { href: '#' }, 'inspect'))),
+  ],
   [
     'Head, Sub-refused',
     h(

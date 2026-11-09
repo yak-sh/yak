@@ -84,7 +84,11 @@ let row = (id: string, title: string) =>
   h(
     Item,
     { key: id },
-    h(Tile, {}, h(Tile.Id, {}, id), h(Tile.Title, {}, title)),
+    h(
+      Rows.Link,
+      { href: '#' },
+      h(Tile, {}, h(Tile.Id, {}, id), h(Tile.Title, {}, title)),
+    ),
   )
 let line = (press: string, id: string, title: string) =>
   h(
@@ -113,7 +117,9 @@ let person = (name: string, meta: string, ...actions: string[]) =>
       h(
         Rows.Actions,
         {},
-        actions.map((a) => h(Button, { key: a, type: 'button' }, a)),
+        actions.map((a) =>
+          h(Rows.Form, { key: a }, h(Button, { type: 'button' }, a))
+        ),
       ),
   )
 
