@@ -176,7 +176,16 @@ export let said = (all: Listed[], words: string, env: Host = {}) =>
         `${i.title || i.name} (integration: '${i.name}')${
           i.tagline ? `: ${i.tagline}` : ''
         }`,
+        i.description ? `  service: ${i.description}` : '',
+        i.details ? `  integration: ${i.details}` : '',
         i.site ? `  site: ${i.site}` : '',
+        i.docs ? `  docs: ${i.docs}` : '',
+        i.categories?.length ? `  categories: ${i.categories.join(', ')}` : '',
+        i.connects ? `  connects: ${i.connects}` : '',
+        i.broker ? `  through: ${i.broker.name}` : '',
+        i.unchecked
+          ? '  unchecked: this catalog entry has not been verified'
+          : '',
         `  its key is only ever sent to ${i.hosts.join(', ') || 'no host'}`,
         keyed(i)
           ? i.instructions

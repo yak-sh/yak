@@ -234,26 +234,44 @@ export let set = async (
 
 /** An integration in the integration directory, and since when a custom one
  * is listed there. */
-export type Listed = Integration & { listed?: string }
+export type Listed = Integration & { listed?: string; unchecked?: boolean }
 
 /**
- * The integration directory: every built integration a person can be offered
- * unasked (none in its service's testing mode), and every custom one its
- * owner listed while it has one, by title. With `words`, only those whose name, title,
- * tagline, site, hosts or instructions hold every one of them.
+ * The integration directory: host catalog services outside testing and custom
+ * integrations their owner listed, by title. Words match every part of the
+ * service and integration descriptions, including categories and docs.
  */
 export let listing = async (read: Read, words = ''): Promise<Listed[]> => {
   let terms = words.toLowerCase().split(/\s+/).filter(Boolean)
-  let all = (await read(`.${INTEGRATION}&?${LISTED}`)).flatMap((b) => {
-    let i = b[INTEGRATION] as Integration
-    let at = (b[LISTED] as { at?: string } | undefined)?.at
-    // A listing whose owner is gone is nobody's to keep, or take down.
-    return (i.built && !i.testing) || (b[LISTED] && i.owner)
-      ? [{ ...i, ...at ? { listed: at } : {} }]
-      : []
-  })
+  let all = (await read(`.${INTEGRATION}&?${LISTED}&?unchecked`)).flatMap(
+    (b) => {
+      let i = b[INTEGRATION] as Integration
+      let at = (b[LISTED] as { at?: string } | undefined)?.at
+      // A listing whose owner is gone is nobody's to keep, or take down.
+      return (!i.testing && !i.owner &&
+          (i.built || Array.isArray(i.categories))) || (b[LISTED] && i.owner)
+        ? [{
+          ...i,
+          ...at ? { listed: at } : {},
+          ...b.unchecked ? { unchecked: true } : {},
+        }]
+        : []
+    },
+  )
   let text = (i: Integration) =>
-    [i.name, i.title, i.tagline, i.site, ...i.hosts, i.instructions]
+    [
+      i.name,
+      i.title,
+      i.tagline,
+      i.site,
+      ...i.hosts,
+      i.instructions,
+      i.description,
+      i.details,
+      i.docs,
+      i.connects,
+      ...i.categories ?? [],
+    ]
       .join(' ').toLowerCase()
   return all.filter((i) => terms.every((t) => text(i).includes(t)))
     .sort((a, b) =>

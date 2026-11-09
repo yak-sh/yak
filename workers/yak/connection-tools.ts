@@ -233,7 +233,7 @@ let CONNECTIONS: Row[] = [
       properties: {
         words: str(
           'what to look for, in the words the person used: matched against ' +
-            "each service's name, title, line, site, hosts and instructions",
+            "each service's name, title, summary, description, integration details, docs, categories, site, hosts and instructions",
         ),
       },
     },

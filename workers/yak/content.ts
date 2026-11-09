@@ -536,7 +536,7 @@ export let WORDS: Record<string, Words> = {
   'integration_list': {
     'title': 'Search the integration directory',
     'description':
-      'Find an outside service a yaks app can call, in the integration directory at https://yaks.app/integrations: every service yaks.app builds in, and every one a space added and listed. Pass the words the person used, or none for all. Each result says what the service is, the hosts its key is only ever sent to, how to get the key (written for the person and for you, to walk them through it) or that they sign in instead, and how to add it: store_connection_need with its name in a space of theirs, or the connections page the result links. It works signed out too: the directory is public. Documentation: https://yaks.app/docs/code.',
+      'Find an outside service a yaks app can call, in the integration directory at https://yaks.app/integrations: every service in the host catalog, and every one a space added and listed. Pass the words the person used, or none for all. Search includes service descriptions, integration access and limits, categories and docs. Each result includes those descriptions, homepage and documentation links, how it connects and whether its catalog entry is unchecked. It also says the hosts its key is only ever sent to, how to get the key (written for the person and for you, to walk them through it) or that they sign in instead, and how to add it: store_connection_need with its name in a space of theirs, or the connections page the result links. It works signed out too: the directory is public. Documentation: https://yaks.app/docs/code.',
   },
   'connection_need': {
     'title': 'Say an app needs a key or a sign-in',
