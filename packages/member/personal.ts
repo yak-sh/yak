@@ -1,4 +1,5 @@
-// A person's private rows and aspects. App roles never confer ownership.
+// A person's private rows and aspects, and rows kept to readers holding a
+// level on the app. App roles never confer ownership.
 import { after } from '@yaks/fp'
 import { absent, and, eq, or, present } from '@yaks/query/core'
 import { actorOf as writerOf } from '@yaks/graph/provenance'
@@ -13,6 +14,8 @@ import type {
 } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { Denied } from './deny.ts'
+import { readersIn } from './keywords.ts'
+import { type Level, LEVELS, stands } from './words.ts'
 
 /** Component → owner: `entity` keeps just this aspect private on the person's
  * entity; a local reference property makes the entire entity private. */
@@ -94,9 +97,15 @@ export let personalsIn = (vocab: Vocab, overrides: Personal = {}): Personal => {
 let caller = (opts: ReadOpts) =>
   opts.person !== undefined && !opts.administrative
 
+// The level a read carries, as the host verified it; anything else is none.
+let vouched = (l: unknown): Level | null =>
+  LEVELS.includes(l as Level) ? l as Level : null
+
 /** Protect person-owned data at reads and at every transaction write,
- * including changes made by rules and reference cascades. Trusted server
- * writes and explicitly vouched administrative reads are the only bypasses. */
+ * including changes made by rules and reference cascades, and keep each entity
+ * wearing a component its vocabulary declares `readers` from every reader
+ * below that floor. Trusted server writes and explicitly vouched
+ * administrative reads are the only bypasses. */
 export let personal = (
   vocab: Vocab,
   declared: Personal = {},
@@ -112,17 +121,32 @@ export let personal = (
       )
     }
   }
-  let comps = [...new Set([...Object.keys(owners), ...Object.keys(through)])]
+  let floors = Object.entries(readersIn(vocab))
+  // What a write's ownership is checked by, and what a read's visibility is.
+  let owned = [...new Set([...Object.keys(owners), ...Object.keys(through)])]
+  let comps = [...owned, ...floors.map(([name]) => name)]
   let entityOwned = entries.filter(([, by]) => by != 'entity')
-  let foreign = (row: Bundle, person: string | null | undefined) =>
+  // The components kept from this reader: those whose readers' floor it does
+  // not stand on.
+  let unseen = (opts: ReadOpts) =>
+    floors.filter(([, floor]) =>
+      !stands(opts.person ?? null, vouched(opts.level), floor)
+    ).map(([name]) => name)
+  let foreign = (
+    row: Bundle,
+    person: string | null | undefined,
+    hidden: string[],
+  ) =>
+    hidden.some((name) => row[name] != null) ||
     entityOwned.some(([name, by]) => {
       let c = row[name] as Comp | undefined
       return c && (!person || c[by] != person)
     })
   // The entities `who` may see: each holds no private component, or holds it
-  // as theirs.
-  let mine = (who: string | null | undefined) =>
+  // as theirs, and holds none kept from them.
+  let mine = (who: string | null | undefined, hidden: string[]) =>
     and(
+      ...hidden.map((name) => absent(name)),
       ...entityOwned.map(([name, by]) =>
         who ? or(absent(name), eq(`${name}.${by}`, who)) : absent(name)
       ),
@@ -132,6 +156,7 @@ export let personal = (
           absent(name),
           and(
             present(source),
+            ...hidden.map((kept) => absent(`${source}.${kept}`)),
             ...entityOwned.map(([owner, by]) =>
               who
                 ? or(
@@ -154,7 +179,7 @@ export let personal = (
   ) => {
     let missing = [...new Set(bundles.map((b) => b.entity.eid))]
       .filter((eid) => !held.has(eid))
-    return after(missing.length ? tx.get(missing, comps) : [], (rows) => {
+    return after(missing.length ? tx.get(missing, owned) : [], (rows) => {
       for (let eid of missing) held.set(eid, undefined)
       for (let row of rows) held.set(row.entity.eid, row)
       return bundles.map((bundle) => {
@@ -206,14 +231,17 @@ export let personal = (
     name: '@yaks/member/personal',
     admission: () => true,
     reads: (opts) =>
-      (entries.length > 0 || inherited.length > 0) && caller(opts),
+      (entries.length > 0 || inherited.length > 0 || floors.length > 0) &&
+      caller(opts),
     scope: ({ opts }) => {
-      if ((!entries.length && !inherited.length) || !caller(opts)) {
+      if (!caller(opts)) return undefined
+      let who = opts.person
+      let hidden = unseen(opts)
+      if (!entries.length && !inherited.length && !hidden.length) {
         return undefined
       }
-      let who = opts.person
       return {
-        entity: mine(who),
+        entity: mine(who, hidden),
         components: Object.fromEntries(
           entries.filter(([, by]) => by == 'entity')
             .map(([name]) => [
@@ -223,7 +251,9 @@ export let personal = (
         ),
       }
     },
-    wants: (bundles) => [{ eids: bundles.map((b) => b.entity.eid), comps }],
+    wants: (
+      bundles,
+    ) => [{ eids: bundles.map((b) => b.entity.eid), comps: owned }],
     authorize: (bundles, tx, _error, context) =>
       context?.trusted || !entries.length
         ? bundles
@@ -247,7 +277,7 @@ export let personal = (
             continue
           }
           let row = { ...(held.get(eid) ?? { entity: b.entity }) }
-          for (let name of comps) {
+          for (let name of owned) {
             if (!Object.hasOwn(b, name)) continue
             let patch = b[name] as Comp | null
             if (patch == null) delete row[name]
@@ -293,6 +323,10 @@ export let personal = (
     // Rows the store read under this scope are already what it allows.
     answer: ({ opts, tx, screened }, bundles) => {
       if (!caller(opts) || !bundles.length || screened) return bundles
+      let hidden = unseen(opts)
+      if (!entries.length && !inherited.length && !hidden.length) {
+        return bundles
+      }
       return after(tx.get(bundles.map((b) => b.entity.eid), comps), (rows) => {
         let held = new Map(rows.map((b) => [b.entity.eid, b]))
         let targets = [
@@ -307,13 +341,14 @@ export let personal = (
           let byId = new Map(sources.map((b) => [b.entity.eid, b]))
           let visible = bundles.flatMap((b) => {
             let row = held.get(b.entity.eid)
-            if (foreign(row ?? b, opts.person)) return []
+            if (foreign(row ?? b, opts.person, hidden)) return []
             if (
               inherited.some(([name, prop]) => {
                 let comp = (row ?? b)[name] as Comp | undefined
                 if (!comp) return false
                 let source = byId.get(String(comp[prop]))
-                return !source || dead(source) || foreign(source, opts.person)
+                return !source || dead(source) ||
+                  foreign(source, opts.person, hidden)
               })
             ) return []
             let out = { ...b }
@@ -328,7 +363,9 @@ export let personal = (
             }
             return [out]
           })
-          if (!entityOwned.length && !inherited.length) return visible
+          if (!entityOwned.length && !inherited.length && !hidden.length) {
+            return visible
+          }
           let references = (b: Bundle) =>
             Object.entries(b).flatMap(([name, value]) => {
               if (
@@ -351,7 +388,7 @@ export let personal = (
           if (!targets.length) return visible
           return after(
             tx.get(targets, comps, {
-              visibility: { entity: mine(opts.person) },
+              visibility: { entity: mine(opts.person, hidden) },
             }),
             (rows) => {
               // A deleted target holds nothing left to say whose it was. Its
@@ -360,13 +397,15 @@ export let personal = (
               let gone = rows.filter(dead).map((b) => b.entity.eid)
               let seen = gone.length
                 ? tx.get(gone, [], {
-                  visibility: { entity: mine(opts.person) },
+                  visibility: { entity: mine(opts.person, hidden) },
                 })
                 : []
               return after(seen, (seen) => {
                 let allowed = new Set(
                   [
-                    ...rows.filter((b) => !dead(b) && !foreign(b, opts.person)),
+                    ...rows.filter((b) =>
+                      !dead(b) && !foreign(b, opts.person, hidden)
+                    ),
                     ...seen,
                   ]
                     .map((b) => b.entity.eid),

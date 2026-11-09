@@ -2,11 +2,20 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yak.sh/vocab/member",
   "title": "yaks member keyword vocabulary",
-  "description": "The permission keywords @yaks/member adds to a component vocabulary: floor asks a level of whoever writes it; permit grants a companion mark to the owner of a referenced row; personal names the owner of private data.",
+  "description": "The permission keywords @yaks/member adds to a component vocabulary: floor asks a level of whoever writes it; readers asks one of whoever reads it; permit grants a companion mark to the owner of a referenced row; personal names the owner of private data.",
   "$comment": "A vocabulary declaration in the JSON Schema sense: a URI naming this keyword set, plus the schema of each keyword. A vocabulary file declares it under $vocabulary; a loader registers it with loadVocab(docs, [memberKeywords]).",
   "$defs": {
     "floor": {
       "description": "The least a writer of this component holds. \"person\" is anyone signed in; \"viewer\", \"editor\" and \"owner\" are that level on the app, or more. Absent, the app's access mode decides alone.",
+      "enum": [
+        "person",
+        "viewer",
+        "editor",
+        "owner"
+      ]
+    },
+    "readers": {
+      "description": "The least a reader of this component holds, whatever the app's mode: an entity wearing it is seen only by such readers. \"person\" is anyone signed in; \"viewer\", \"editor\" and \"owner\" are that level on the app, or more. Absent, the app's access mode decides alone.",
       "enum": [
         "person",
         "viewer",

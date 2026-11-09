@@ -451,6 +451,7 @@ export type Opts = BindOpts & {
 // The read options a statement is the same under (@yaks/graph `ReadOpts`).
 const UNREAD = new Set([
   'person',
+  'level',
   'administrative',
   'native',
   'durable',

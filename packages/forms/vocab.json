@@ -1,7 +1,8 @@
 {
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
-    "https://yak.sh/vocab/kernel": true
+    "https://yak.sh/vocab/kernel": true,
+    "https://yak.sh/vocab/member": true
   },
   "title": "forms",
   "$defs": {
@@ -128,7 +129,8 @@
     "registration": {
       "component": true,
       "type": "object",
-      "description": "one sign-up; answers are keyed by question id, with repeat groups holding arrays of answer objects",
+      "description": "one sign-up; answers are keyed by question id, with repeat groups holding arrays of answer objects; read only by those holding a level on the app",
+      "readers": "viewer",
       "status": {
         "cancelled": "cancelled",
         "waitlisted": "waitlisted",

@@ -1879,6 +1879,7 @@ export class Store {
           ...read,
           person: this.#authority(writer?.actor)?.person ??
             writer?.actor?.by ?? null,
+          level: this.#authority(writer?.actor)?.level ?? read?.level ?? null,
           administrative: false,
         }),
         writer: ({ actor }) => this.#socketWriter(actor),
@@ -4391,9 +4392,11 @@ export class Store {
   }
 
   #callerRead(request: Request): ReadOpts {
+    let { person, level } = vouchOf(request)
     return {
       ...spoken(request),
-      person: vouchOf(request).person,
+      person,
+      level,
       administrative: request.headers.get('x-yak-administrative') == '1',
     }
   }
@@ -5061,23 +5064,26 @@ export class Store {
     }
     if (path == '/documents/search' && request.method == 'POST') {
       if (!kernel) return json({ error: 'NotFound' }, 404)
-      let { words, semantic, scope, person } = await request.json() as {
-        words: string
-        semantic: boolean
-        scope?: string
-        person: string | null
-      }
+      let { words, semantic, scope, person, level } = await request
+        .json() as {
+          words: string
+          semantic: boolean
+          scope?: string
+          person: string | null
+          level?: string | null
+        }
+      let reader = { person, level: level ?? null }
       let screen = (line: string) =>
-        this.#texts.screen(line, this.#graph.scope({ person }))
+        this.#texts.screen(line, this.#graph.scope(reader))
       return Response.json(
         await documentHits(
           {
             get: (ids, comps, opts) =>
-              this.#graph.get(ids, comps, { ...opts, person }),
+              this.#graph.get(ids, comps, { ...opts, ...reader }),
           },
           {
             words: (text, { limit, within }) =>
-              Promise.resolve(this.#found(text, { person }, {
+              Promise.resolve(this.#found(text, reader, {
                 limit,
                 screen: within ? screen(within) ?? undefined : undefined,
               })),

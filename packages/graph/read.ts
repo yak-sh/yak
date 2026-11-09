@@ -123,6 +123,7 @@ export let reader = (opts: {
         ...options,
         ...extra,
         person: options.person,
+        level: options.level,
         administrative: options.administrative,
       })
     let read: ReadTx['read'] = (q, o, comps) =>

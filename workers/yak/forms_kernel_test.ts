@@ -184,3 +184,74 @@ test('a phone match sends the confirmation to the directory email', () => {
   equal(phoned.status, 204)
   equal(letters(k, 'ann@example.com')[1].subject, 'Contact')
 })
+
+// A public app reads to anyone, and a sign-up is still the app's own: only a
+// principal holding a level on it reads one, through every read door.
+let shown = `formspub${crypto.randomUUID().slice(0, 6)}`
+await agent.answer('app_new', {
+  slug: shown,
+  title: 'Prayer',
+  access: 'public',
+})
+await agent.tool('app_files', {
+  app: shown,
+  op: 'write',
+  path: 'index.html',
+  content: '<h1>Prayer</h1>',
+})
+await agent.tool('app_deploy', { app: shown })
+let prayer = crypto.randomUUID(), request = crypto.randomUUID()
+await agent.tool('graph_apply', {
+  app: shown,
+  entities: [
+    { entity: { eid: prayer }, alias: { name: 'pray' }, form: {} },
+    {
+      entity: { eid: request },
+      question: { form: prayer, kind: 'lines', label: 'Your request' },
+    },
+  ],
+})
+let prayed = await k.at(host, `/${shown}/api/form/pray`, {
+  method: 'POST',
+  body: JSON.stringify({ answers: { [request]: 'Heal my daughter Ruth' } }),
+})
+await k.settled()
+let stranger = await signIn(k)
+let asked = async (q: string, cookie?: string, live = false) => {
+  let search = new URLSearchParams({ q, ...live ? { live: '1' } : {} })
+  let r = await k.at(host, `/${shown}/api/query?${search}`, {
+    headers: cookie ? { cookie } : {},
+  })
+  return [r.status, await r.text()] as const
+}
+
+test('a public app keeps its sign-ups from visitors holding no level', async () => {
+  equal(prayed.status, 204)
+  for (let cookie of [undefined, stranger.cookie]) {
+    for (let live of [false, true]) {
+      for (let q of ['.registration', '.completed', `.refs=${prayer}`]) {
+        let [status, text] = await asked(q, cookie, live)
+        equal(status, 200)
+        ok(!text.includes('registration'), `${q}: ${text}`)
+      }
+    }
+    equal(await asked('.registration .count', cookie), [200, '{"count":0}'])
+  }
+})
+
+test('the app owner reads the sign-ups of a public app', async () => {
+  for (let live of [false, true]) {
+    let [status, text] = await asked('.registration', owner.cookie, live)
+    equal(status, 200)
+    ok(text.includes('Heal my daughter Ruth'), text)
+  }
+  equal(
+    await asked('.registration .count', owner.cookie),
+    [200, '{"count":1}'],
+  )
+  let rows = (await agent.answer('graph_query', {
+    app: shown,
+    query: '.registration',
+  })).rows
+  equal(rows.length, 1)
+})

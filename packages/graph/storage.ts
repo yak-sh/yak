@@ -39,6 +39,9 @@ export type ReadOpts = {
   eids?: readonly Eid[]
   /** Authenticated person; null is a guest, absent is an internal read. */
   person?: Eid | null
+  /** The permission level the host verified `person` holds on this graph's
+   * app (@yaks/member: viewer, editor or owner); absent or null is none. */
+  level?: string | null
   /** Explicit administrative access vouched by the host. */
   administrative?: boolean
   /** Relational visibility, applied before predicates, references and shaping. */

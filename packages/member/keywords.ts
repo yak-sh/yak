@@ -7,6 +7,8 @@
 // guard's `floors` option says the same thing from outside, for a program
 // holding words it did not declare; `floor` is a vocabulary saying it about its
 // own, so an app that declares a word also declares who may write it.
+// `readers` is the same ladder for whoever reads it: an entity wearing the
+// component is seen only by readers standing on that floor, whatever the mode.
 // `permit` lets the owner of a stored reference answer with a companion mark,
 // without gaining the declaring row or permission to change its request.
 // `personal` names the owner of a private entity or private person component.
@@ -26,9 +28,18 @@ export let MEMBER_URI = 'https://yak.sh/vocab/member'
  */
 export let memberKeywords: Keywords = {
   uri: MEMBER_URI,
-  comp: ['floor', 'permit', 'personal'],
+  comp: ['floor', 'readers', 'permit', 'personal'],
   doc,
 }
+
+// Component → floor, as one keyword of a loaded vocabulary declares them.
+let ladder = (v: Vocab, keyword: 'floor' | 'readers'): Floors =>
+  Object.fromEntries(
+    v.all.flatMap((c) => {
+      let said = v.comp(c)?.keywords[keyword]
+      return said === undefined ? [] : [[c, floor(said)]]
+    }),
+  )
 
 /**
  * The floors a loaded vocabulary declares, component → floor.
@@ -46,32 +57,50 @@ export let memberKeywords: Keywords = {
  * assertEquals(floorsIn(v), { line: 'person' })
  * ```
  */
-export let floorsIn = (v: Vocab): Floors =>
-  Object.fromEntries(
-    v.all.flatMap((c) => {
-      let said = v.comp(c)?.keywords.floor
-      return said === undefined ? [] : [[c, floor(said)]]
-    }),
-  )
+export let floorsIn = (v: Vocab): Floors => ladder(v, 'floor')
 
 /**
- * Every `floor` a document declares that is not one, as sentences, the way
- * @yaks/vocab's `storable` answers.
+ * The floors a loaded vocabulary asks of readers, component → floor.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { memberKeywords, readersIn } from '@yaks/member'
+ * let v = loadVocab({
+ *   $defs: {
+ *     signup: { component: true, type: 'object', readers: 'viewer' },
+ *     note: { component: true, type: 'object' },
+ *   },
+ * }, [memberKeywords])
+ * assertEquals(readersIn(v), { signup: 'viewer' })
+ * ```
+ */
+export let readersIn = (v: Vocab): Floors => ladder(v, 'readers')
+
+/**
+ * Every `floor` or `readers` a document declares that is not a floor, as
+ * sentences, the way @yaks/vocab's `storable` answers.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { floored } from '@yaks/member'
- * assertEquals(floored({ $defs: { line: { floor: 'admin' } } }), [
+ * assertEquals(floored({ $defs: { line: { floor: 'admin', readers: 'all' } } }), [
  *   'line is floored "admin" — a floor is person, viewer, editor or owner',
+ *   'line is read by "all" — readers is person, viewer, editor or owner',
  * ])
  * ```
  */
 export let floored = (d: VocabDoc): string[] =>
   Object.entries(d.$defs ?? {}).flatMap(([name, s]) =>
-    s?.floor === undefined || isFloor(s.floor) ? [] : [
-      `${name} is floored "${s.floor}" — a floor is person, viewer, editor ` +
-      'or owner',
-    ]
+    [
+      ['floor', `is floored`, 'a floor'],
+      ['readers', 'is read by', 'readers'],
+    ].flatMap(([keyword, says, is]) =>
+      s?.[keyword] === undefined || isFloor(s[keyword]) ? [] : [
+        `${name} ${says} "${s[keyword]}" — ${is} is person, viewer, editor ` +
+        'or owner',
+      ]
+    )
   )
 
 /** Declaring component → companion mark → its local reference property. */

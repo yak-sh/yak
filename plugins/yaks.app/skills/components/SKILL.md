@@ -1,6 +1,6 @@
 ---
 name: components
-description: "Components and vocab.json (yaks.app). Every built-in component an app already has (doc, task, filed, comment, alias, attachment, created and the rest), property by property, and vocab.json for declaring an app's own components: the property types, schema refusals, who may write a component and how often (floor, pace), private per-person rows (personal), full-text search on a property, what a later deploy may change, the reserved component names, when to use a property instead of doc.body, and edges."
+description: "Components and vocab.json (yaks.app). Every built-in component an app already has (doc, task, filed, comment, alias, attachment, created and the rest), property by property, and vocab.json for declaring an app's own components: the property types, schema refusals, who may write a component and how often (floor, pace), rows kept to members (readers), private per-person rows (personal), full-text search on a property, what a later deploy may change, the reserved component names, when to use a property instead of doc.body, and edges."
 ---
 
 # Components and vocab.json
@@ -545,6 +545,22 @@ Either refusal reaches a page as `refused` with that message
 message. Neither is a break: nothing is filed. A page that changes each line no
 faster than its component’s pace is never refused. Call `me()` on load to learn
 whether the person is signed in before they type.
+
+**Rows kept to members: `readers`.** A component can also declare the least a
+reader holds, whatever the app's access, with the same values as `floor`. An
+entity wearing it is then seen only by such readers, through every read: a
+query, a count, a live subscription, a search. A `public` or `open` app shows
+everything else to anyone and keeps these rows from visitors with no role:
+
+    { "$defs": {
+        "signup": {
+          "readers": "viewer",
+          "properties": { "answers": { "type": "string" } } } } }
+
+Here the app's viewers, editors and owners read every `signup`, and a visitor
+signed out or holding no role reads none, nor counts them. The platform's
+`registration`, a form's sign-up, is declared this way. `readers` keeps rows
+from readers only; who may write them is still `floor` and the app's access.
 
 ## Private per-person rows: `personal`
 

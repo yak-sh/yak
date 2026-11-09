@@ -58,6 +58,10 @@ otherwise `open`. `registration.answers` holds answers; no separate answer
 component is declared. The core reports missing answers and does not write
 marks.
 
+A registration declares @yaks/member's `"readers": "viewer"`: whatever the app's
+access, only those holding a level on the app read one, so a `public` form's
+sign-ups stay with its people.
+
 ## Question progress
 
 `missing(form, answers)` returns required questions still owed.

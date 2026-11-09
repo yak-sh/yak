@@ -205,6 +205,7 @@ let retrieve = (
         semantic,
         scope,
         person: asked.who.person,
+        level: asked.who.role,
       }),
     },
     KERNEL,
