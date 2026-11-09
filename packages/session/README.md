@@ -141,6 +141,16 @@ the parent transcript through the referenced entry, followed by its own entries.
 Provider continuation data is stored as a provider-specific component on an ask
 entry; for example, `@yaks/openai` stores `openai{response_id}`.
 
+`spawned{parent, notice, quiet}` selects passive completion delivery. With
+`notice: true`, `deliverChild(g, child, now)` writes one `notice{child}` entry
+in the parent instead of waking it. A settled chat waits `quiet` milliseconds
+after its latest input and for its helpers to finish; failure and stop close it
+immediately. The return value is the quiet deadline the host should wake at, or
+`undefined`. The receipt's `delivery{child, outcome, through}` records its last
+covered entry. Delivery marks the child `completed{}`; a host clears that mark
+when accepting another input and schedules only children without it. Continuing
+the child refreshes that same notice after it closes again.
+
 Session status is derived from entries rather than stored. `statusOf()` returns
 `empty`, `pending`, `running`, `settled`, `stopped`, or `failed`.
 `sessionDerived` exposes the corresponding `session.status` SQL-derived

@@ -319,6 +319,13 @@ let operator = operating(store, p.env, {
   providers: { openai: nativeModel },
   price,
 })
+p.env.AI = {
+  run: () => Promise.reject(new Error('No inference expected')),
+  toMarkdown: async ({ blob }) => ({
+    data: await blob.text(),
+    format: 'markdown',
+  }),
+}
 let docxBytes = new TextEncoder().encode(
   'A document handled natively does not need conversion.',
 )

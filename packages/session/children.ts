@@ -24,6 +24,7 @@ import { entryStatus, newestOf, openOf, usingOf } from './reach.ts'
 import { live, newestAsk, textOf, usingBefore } from './state.ts'
 import { type Clock, system } from '@yaks/fp'
 import { changes } from './wait.ts'
+import { childNotice } from './child-notice.ts'
 
 export type ChildLimits = {
   /** Defaults for user-created tasks, resolved before durable queue admission. */
@@ -521,9 +522,16 @@ let working = async (g: Graph, session: Eid): Promise<boolean> => {
 
 /** Build one idempotent completion receipt, while holding the parent's queue.
  * The final-entry-derived id also allows a child to be sent another turn. */
-export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
+export let deliverChild = async (
+  g: Graph,
+  child: Eid,
+  now: number = Date.now(),
+): Promise<number | undefined> => {
   let link = comp(await row(g, child), 'spawned')
   if (!link?.parent || !await row(g, String(link.parent))) return
+  if (link.notice) {
+    return childNotice(g, child, link, now, () => working(g, child))
+  }
   // A settled child's receipt usually already exists. Inspect its local tail
   // before materializing the inherited prefix (which can be very large).
   let [tail] = await g.read(

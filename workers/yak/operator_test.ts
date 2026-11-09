@@ -185,11 +185,18 @@ let talked = await readOperator(f.store, out.session)
 let drawn = await conversationOf(f.store, '/manage/clerk/operator', out.task)
 let work = await workOf(f.store, f.space.eid, f.held.person)
 test('operator_read lists the conversations and reads one by its session, as its task reads it', () => {
-  assertEquals(listing.conversations?.map((b) => b.entity.eid), [out.session])
+  assertEquals(
+    listing.conversations?.map((b) => b.entity.eid).sort(),
+    [
+      out.session,
+      rootOf(f.space.eid, f.held.person),
+    ].sort(),
+  )
   assertEquals(talked.entries, history.entries)
 })
 test('the Operator page lists its work in plain words, each opening on a page of its own', () => {
   assertEquals(work.map((w) => [w.open, w.state, w.busy]), [
+    [rootOf(f.space.eid, f.held.person), 'Ready', false],
     [out.task, 'Done', false],
   ])
 })
@@ -803,7 +810,8 @@ let holder = operate(
     })
   }),
 )
-let opened = await holder.run(roundsHeld, roundsSpace, { say: 'Hello.' })
+let opened = await holder.ask(roundsHeld, roundsSpace, { say: 'Hello.' })
+await drain(heldBack)
 let started = crypto.randomUUID()
 await heldBack.g.apply([
   {

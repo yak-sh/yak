@@ -1,4 +1,5 @@
 import { inputSource } from './operator-provenance.ts'
+import { chatFork } from './operator-chat.ts'
 import {
   type Bundle,
   type Comp,
@@ -674,6 +675,7 @@ let asked = (session?: string) => {
 let topOf = async (store: Store, session: string): Promise<string> => {
   let [row] = await store.g.get([session], ['spawned'])
   let parent = comp(row, 'spawned')?.parent
+  if (comp(row, 'spawned')?.notice) return session
   return parent ? topOf(store, String(parent)) : session
 }
 // The task a session (or the session its helper works for) carries on, or ''
@@ -1150,7 +1152,10 @@ export let operating = (
       'completed',
       'failed',
     ])
-    let { entries, calls, whole } = await ending(session, !!row?.spawned)
+    let { entries, calls, whole } = await ending(
+      session,
+      !!row?.spawned && !comp(row, 'spawned')?.notice,
+    )
     let reply = replyOf(turnOf(entries))
     if (row?.operator_work) {
       await workFinished(store, row, reply.text, reply.fault)
@@ -1158,7 +1163,7 @@ export let operating = (
     }
     // A fork or helper that could not finish reaches the tracker as it ends;
     // what it ended with goes to the session that started it (M-37965).
-    if (row?.spawned) {
+    if (row?.spawned && !comp(row, 'spawned')?.notice) {
       if (reply.fault) await unfinished(session, reply.fault, 'operator fork')
       return
     }
@@ -1478,11 +1483,12 @@ export let operating = (
     ]
     return {
       entity: { eid: session },
+      completed: null,
       operator_session: {
         space: space.eid,
         person: held.person,
         ...o.signup ? { signup: o.signup } : {},
-        ...held.administrative ? { administrative: true } : {},
+        administrative: held.administrative ?? null,
         ...conversation ? { conversation } : {},
         ...files.length ? { files } : {},
       },
@@ -1593,8 +1599,19 @@ export let operating = (
         $actor: { by },
       },
     ], { trusted: true })
+    let forks: Bundle[] = []
     if (!newest) {
       await started(session, by, space)
+      if (o.chat) {
+        let parent = await rootAt(store, space.eid, held.person)
+        if (!await conversed(store, parent)) {
+          await started(parent, held.person, space)
+          await g.apply([await carrying(parent, held, space, {}, true)], {
+            trusted: true,
+          })
+        }
+        forks = await chatFork(g, parent, session)
+      }
       await g.apply([{
         entity: { eid: crypto.randomUUID() },
         edge: { from: task, to: session },
@@ -1603,6 +1620,7 @@ export let operating = (
     }
     let [row] = await g.get([task])
     await g.apply([
+      ...forks,
       await carrying(session, held, space, o),
       ...old
         ? [{
@@ -1619,7 +1637,7 @@ export let operating = (
       given(
         session,
         input,
-        (newest ? text : JSON.stringify({ task: row })) + reference,
+        (newest || o.chat ? text : JSON.stringify({ task: row })) + reference,
         by,
         o,
       ),
@@ -1716,8 +1734,8 @@ export let operating = (
     }
   }
 
-  // An agent asking through operator_chat waits on one answer, so its words
-  // are a task of their own rather than a person's conversation.
+  // Connector chats own a fork and a private task; only their closing
+  // notice reaches the person's conversation.
   let run: Operator['run'] = async (held, space, args, o = {}) => {
     let files = await attached(store, held, space, args.attachments)
     let selected = await chosen(
@@ -1730,6 +1748,8 @@ export let operating = (
     }
     let { task, session, input } = await ask(held, space, args, {
       task: crypto.randomUUID(),
+      chat: true,
+      from: 'an outside agent',
       ...selected,
       ...files.length ? { files } : {},
       ...o,
@@ -1778,7 +1798,7 @@ export let operating = (
     // Every helper under it, however deep: a helper a helper started works
     // for the same conversation.
     let helpers: string[] = []
-    for (let parents = row?.session ? [session] : []; parents.length;) {
+    for (let parents = [session]; parents.length;) {
       parents = (await g.read(`.spawned.parent=${parents.join(',')}`))
         .map((b) => b.entity.eid)
       helpers.push(...parents)
@@ -1792,7 +1812,7 @@ export let operating = (
       if (status == 'pending' || status == 'running') busy.push(b.entity.eid)
       else if (status != 'stopped') idle.push(b.entity.eid)
     }
-    if (!busy.length) {
+    if (!busy.length && !comp(newest, 'spawned')?.notice) {
       return { task: open, session, stopped: false }
     }
     // A helper the person stopped is theirs to start again. The session that
@@ -1864,6 +1884,8 @@ export type Asking = {
   request?: string
   // Exact original words before channel framing or attachment extraction.
   source?: string
+  // Open a connector chat as a passive-reporting fork.
+  chat?: boolean
   // The task the words carry on; without one they go to the person's
   // conversation with the Operator (`rootAt`).
   task?: string

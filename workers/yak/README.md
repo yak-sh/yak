@@ -970,12 +970,13 @@ other platform-owned rows.
 
 ## Space operator
 
-`operator_chat({space, say})` starts a private task and a native harness session
-in the space's existing Builder object. `say` can be a short request or a
-design. `operator_run` is an alias with the same arguments and behavior. It uses
-the connector's tools to read and change that space's apps, files and rows. A
-renewed space scope applies to each tool call. Model requests charge the space's
-shared dollar budget as they answer; there is no round limit.
+`operator_chat({space, say})` starts a private task and a native harness fork of
+the caller's main Operator conversation in the space's existing Builder object.
+`say` can be a short request or a design. `operator_run` is an alias with the
+same arguments and behavior. It uses the connector's tools to read and change
+that space's apps, files and rows. A renewed space scope applies to each tool
+call. Model requests charge the space's shared dollar budget as they answer;
+there is no round limit.
 
 The result includes `task`, `session`, `text`, `status`, `model` and `cost` in
 USD. `operator_read({space, task})` returns the task, comments and conversation;
@@ -985,6 +986,17 @@ for the 64 preceding. `context: true` also includes model instruction snapshots.
 Omit `task` to list recent tasks. Continue with
 `operator_chat({space, task, say})`. A settled model turn may be a question: the
 operator explicitly completes a task through `task_update` after finishing it.
+
+The fork inherits the main conversation's completed context. Each caller input
+and reply stays in the fork. Five minutes without another input closes a settled
+chat, after its helpers finish, and writes one passive notice in the main
+conversation: what was asked, the final report, and outstanding work. Stopping
+or failing closes it immediately. The notice starts no model turn. The quiet
+interval is recorded as `spawned.quiet` in milliseconds; the object's alarm
+reconstructs its deadline from the newest input's timestamp after a reset.
+Closing marks the chat `completed{}` so later alarms skip it. A new input clears
+that mark; closing again updates its existing notice. Helpers report to the fork
+that started them. Each turn uses the caller's current permissions.
 
 `operator_retry({space, request})` runs a request that could not finish again,
 as itself, once its cause is fixed: its failure and the answer that told of it

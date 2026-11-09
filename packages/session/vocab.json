@@ -582,6 +582,14 @@
           "ref": "session",
           "death": "keep"
         },
+        "notice": {
+          "type": "boolean",
+          "description": "Report passively, without waking the parent, in one notice per child; later turns update that same notice."
+        },
+        "quiet": {
+          "type": "number",
+          "description": "For passive reports, milliseconds without new input before a settled chat closes; failure and stop report at once."
+        },
         "call": {
           "type": "string",
           "ref": "entry",
@@ -598,6 +606,12 @@
           "type": "string",
           "ref": "session",
           "death": "keep"
+        },
+        "through": {
+          "type": "string",
+          "ref": "entry",
+          "death": "keep",
+          "description": "The last entry covered by a passive closing notice."
         },
         "outcome": {
           "type": "string",

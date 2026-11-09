@@ -12,6 +12,7 @@ import { personaDoc } from '@yaks/persona'
 import { projectDoc } from '@yaks/project/vocab'
 import { sessionDoc } from '@yaks/session/vocab'
 import { plugins as sessions } from '@yaks/session/graph'
+import { deliverChild } from '@yaks/session'
 import { modelDoc } from '@yaks/model'
 import { providerDocs } from './provider-vocab.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
@@ -307,6 +308,11 @@ export let drain = async (
     caught(error, { request: 'operator wake', wake: wake.entity.eid })
   }
   let run = await working({ g, fx }, until)
+  let chats = await g.read('.spawned.notice=true&!completed&.fields=entity.eid')
+  for (let chat of chats) {
+    let next = await deliverChild(g, chat.entity.eid)
+    if (next != null) run = run == null ? next : Math.min(run, next)
+  }
   await expiring(g, until)
   // One that came due while the pool worked fires on the next alarm; one a
   // tick refused waits RETRY, rather than ringing the alarm at once again.

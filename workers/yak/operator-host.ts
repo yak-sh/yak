@@ -529,10 +529,12 @@ export let workOf = async (
     }
   }))
   let titles = new Map(conversations.map((c) => [c.root, c.title]))
-  let work = await Promise.all(helpers.map(async (helper) => ({
-    ...(await helperOf(store, helper)).worked,
-    from: titles.get(String(comp(helper, 'spawned')?.parent)),
-  })))
+  let work = await Promise.all(
+    helpers.filter((b) => !comp(b, 'spawned')?.notice).map(async (helper) => ({
+      ...(await helperOf(store, helper)).worked,
+      from: titles.get(String(comp(helper, 'spawned')?.parent)),
+    })),
+  )
   let waiting = taken(await own(requests)).map((r) => {
     let failed = r.failed ?? r.bounced
     return {
@@ -545,7 +547,9 @@ export let workOf = async (
   })
   let talking = await Promise.all(conversations.map(async ({ root, title }) => {
     let entries = await linesOf(store, root, TAIL)
-    let state = stateOf(entries, false)
+    let state = entries.every((b) => b.notice || b.prompt)
+      ? 'Ready'
+      : stateOf(entries, false)
     return {
       open: root,
       title,
