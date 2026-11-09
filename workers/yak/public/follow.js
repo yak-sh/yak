@@ -15,13 +15,13 @@
  * @param {Window & typeof globalThis} win
  * @param {Element} conversation
  * @param {HTMLElement | null} jump
+ * @param {HTMLElement} pane
  */
-export function follow(win, conversation, jump) {
+export function follow(win, conversation, jump, pane) {
   let doc = conversation.ownerDocument
-  let root = doc.documentElement
   let near = () =>
-    !win.innerHeight ||
-    win.innerHeight + win.scrollY >= root.scrollHeight - 120
+    !pane.clientHeight ||
+    pane.clientHeight + pane.scrollTop >= pane.scrollHeight - 120
   let named = () => {
     let id = decodeURIComponent(win.location.hash?.slice(1) ?? '')
     return id ? doc.getElementById(id) : null
@@ -40,27 +40,27 @@ export function follow(win, conversation, jump) {
     if (jump) jump.hidden = pinned
   }
   let newest = () => {
-    win.scrollTo(0, root.scrollHeight)
-    y = win.scrollY
+    pane.scrollTop = pane.scrollHeight
+    y = pane.scrollTop
   }
   let opened = () => {
     let at = entry()
     pinned = !at
-    if (at) at.scrollIntoView({ block: 'center' }), y = win.scrollY
+    if (at) at.scrollIntoView({ block: 'center' }), y = pane.scrollTop
     else newest()
     shown()
   }
   let back = () => {
     if (pinned) newest()
-    else win.scrollTo(0, y)
+    else pane.scrollTop = y
   }
 
   if (win.history) win.history.scrollRestoration = 'manual'
   opened()
   // Scrolling up is the person reading; reaching the newest follows it again.
-  win.addEventListener('scroll', () => {
+  pane.addEventListener('scroll', () => {
     if (over()) return
-    let now = win.scrollY
+    let now = pane.scrollTop
     if (near()) pinned = true
     else if (now < y) pinned = false
     y = now
@@ -69,7 +69,11 @@ export function follow(win, conversation, jump) {
   let grown = () => {
     if (pinned && !over()) newest()
   }
-  if (win.ResizeObserver) new win.ResizeObserver(grown).observe(doc.body)
+  if (win.ResizeObserver) {
+    let sizes = new win.ResizeObserver(grown)
+    sizes.observe(pane)
+    for (let child of pane.children) sizes.observe(child)
+  }
   win.addEventListener('resize', grown)
   win.addEventListener('hashchange', () => {
     if (entry()) opened()

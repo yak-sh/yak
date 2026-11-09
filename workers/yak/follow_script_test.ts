@@ -1,7 +1,7 @@
 // The chat page's place in its conversation (public/follow.js), over a
-// linkedom page and a window that lays out a page of `height` pixels: as a
-// browser does, a scroll is clamped to the page, and a fragment naming
-// nothing (a link to `#`) sends the page to its top.
+// linkedom page with an independently scrolling conversation pane. As in a
+// browser, scrolling is clamped to its content, and a fragment naming
+// nothing (a link to `#`) sends the window to its top.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -10,8 +10,8 @@ import { follow } from './public/follow.js'
 let page = (hash = '') => {
   let { document, Event } = parseHTML(
     `<html><body><nav id="menu"><a href="#">Close</a></nav>` +
-      `<div data-conversation><div id="row-a"></div><div id="row-b"></div></div>` +
-      `<button data-jump hidden></button></body></html>`,
+      `<main id="content"><div data-conversation><div id="row-a"></div><div id="row-b"></div></div>` +
+      `<button data-jump hidden></button></main><section id="app"></section></body></html>`,
   )
   let on: Record<string, (() => void)[]> = {}
   let grew: (() => void)[] = []
@@ -41,22 +41,36 @@ let page = (hash = '') => {
       observe() {}
     },
   }
-  Object.defineProperty(document.documentElement, 'scrollHeight', {
-    get: () => w.height,
+  let pane = document.getElementById('content') as HTMLElement
+  let y = 0
+  Object.defineProperties(pane, {
+    clientHeight: { get: () => w.innerHeight },
+    scrollHeight: { get: () => w.height },
+    scrollTop: {
+      get: () => y,
+      set: (value: number) =>
+        y = Math.max(0, Math.min(value, w.height - w.innerHeight)),
+    },
   })
   let row = document.getElementById('row-a')!
-  row.scrollIntoView = () => w.scrollTo(0, 1000)
+  row.scrollIntoView = () => void (pane.scrollTop = 1000)
   let jump = document.querySelector('[data-jump]') as HTMLElement
   let fire = (type: string) => on[type]?.forEach((f) => f())
   let reader = follow(
     w as never,
     document.querySelector('[data-conversation]')!,
     jump,
+    pane,
   )
   return {
     w,
+    pane,
+    preview: document.getElementById('app')!,
+    Event,
     // The person scrolls, or the browser does.
-    scroll: (y: number) => (w.scrollTo(0, y), fire('scroll')),
+    scroll: (
+      y: number,
+    ) => (pane.scrollTop = y, pane.dispatchEvent(new Event('scroll'))),
     grow: (by: number) => (w.height += by, grew.forEach((f) => f())),
     // The address's fragment changes: a link followed, or Back.
     hash: (h: string) => {
@@ -71,7 +85,7 @@ let page = (hash = '') => {
     },
     jump: () => jump.dispatchEvent(new Event('click')),
     jumpShown: () => !jump.hasAttribute('hidden'),
-    newest: () => w.scrollY == w.height - w.innerHeight,
+    newest: () => pane.scrollTop == w.height - w.innerHeight,
     reader,
   }
 }
@@ -85,7 +99,7 @@ test('a conversation opens at its newest entry, and no old place is restored ove
 
 test('it stays at the newest as what is above it loads and as entries arrive', () => {
   let p = page()
-  for (let by of [400, 0, 1200, -300]) p.grow(by), p.scroll(p.w.scrollY)
+  for (let by of [400, 0, 1200, -300]) p.grow(by), p.scroll(p.pane.scrollTop)
   assert(p.newest())
   assert(!p.jumpShown())
 })
@@ -94,7 +108,7 @@ test('scrolled up to read, it stays there as the page grows, and jump takes it b
   let p = page()
   p.scroll(900)
   p.grow(600)
-  assertEquals(p.w.scrollY, 900)
+  assertEquals(p.pane.scrollTop, 900)
   assert(p.jumpShown())
   p.jump()
   assert(p.newest())
@@ -114,24 +128,47 @@ test('scrolling back down to the newest follows the conversation again', () => {
 
 test('an address naming an entry opens at it, and the page stays there', () => {
   let p = page('#row-a')
-  assertEquals(p.w.scrollY, 1000)
+  assertEquals(p.pane.scrollTop, 1000)
   assert(p.jumpShown())
   p.grow(800)
-  assertEquals(p.w.scrollY, 1000)
+  assertEquals(p.pane.scrollTop, 1000)
 })
 
 test('closing the menu over it puts the conversation back where it was, not at its top', () => {
   for (let reading of [false, true]) {
     let p = page()
     if (reading) p.scroll(700)
-    let was = p.w.scrollY
+    let was = p.pane.scrollTop
     p.hash('#menu')
     p.scroll(0)
     assert(p.close(), 'the link to # is not followed to the top')
-    assertEquals(p.w.scrollY, was)
+    assertEquals(p.pane.scrollTop, was)
     // and as Back takes the menu off
     p.hash('#menu')
     p.hash('')
-    assertEquals(p.w.scrollY, was)
+    assertEquals(p.pane.scrollTop, was)
+  }
+})
+
+test('only scrolling the conversation changes whether it follows new entries', () => {
+  for (let height of [800, 600]) {
+    let p = page()
+    p.w.innerHeight = height
+    p.reader.newest()
+    p.preview.scrollTop = 400
+    p.preview.dispatchEvent(new p.Event('scroll'))
+    p.grow(300)
+    assert(p.newest())
+    assertEquals(p.preview.scrollTop, 400)
+    assertEquals(p.w.scrollY, 0)
+    p.scroll(700)
+    p.preview.scrollTop = 0
+    p.preview.dispatchEvent(new p.Event('scroll'))
+    p.grow(300)
+    assertEquals(p.pane.scrollTop, 700)
+    assert(p.jumpShown())
+    p.reader.newest()
+    assertEquals(p.preview.scrollTop, 0)
+    assertEquals(p.w.scrollY, 0)
   }
 })

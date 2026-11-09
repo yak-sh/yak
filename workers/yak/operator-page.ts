@@ -2616,6 +2616,6 @@ form?.addEventListener('submit', async (e) => {
 })
 // The page opens at the newest entry and follows the conversation down as it
 // grows, unless the person has scrolled up to read (public/follow.js).
-let reader = follow(globalThis, box, document.querySelector('[data-jump]'))
+let reader = follow(globalThis, box, document.querySelector('[data-jump]'), document.getElementById('content'))
 listen()
 </script>`

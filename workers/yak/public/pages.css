@@ -1073,11 +1073,14 @@
   }
   /* The Operator's chat app (operator-page.ts `chatPage`): the product's
      side, and one conversation filling the page, read down a column with the
-     box to write in held at the foot of the window. The page itself scrolls;
-     the side holds the window's height, and what lies between its top and
+     box to write in held at the foot of the window. Each pane scrolls within
+     the window; the side holds its height, and what lies between its top and
      Manage scrolls on its own when it is longer (`.Talk_Scroll`). */
   .Talk_Page {
     display: block;
+    min-height: 0;
+    height: 100dvh;
+    overflow: hidden;
   }
   /* The app is a window onto another site. Keep the page's grain below
      its column, including when that column fills the screen on a phone. */
@@ -1092,7 +1095,8 @@
   .Talk {
     display: grid;
     grid-template-columns: 17rem minmax(0, 1fr);
-    min-height: 100dvh;
+    height: 100dvh;
+    overflow: hidden;
   }
   .Talk_Side {
     position: sticky;
@@ -1118,6 +1122,7 @@
       calc(-1 * var(--reach));
     padding: var(--reach) .75rem var(--reach) var(--reach);
     overflow: hidden auto;
+    overscroll-behavior: contain;
   }
   /* The side's places are the settings' tabs (pages.ts `navigation`): the
      current one opens into the page beside it. */
@@ -1214,7 +1219,10 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
-    min-height: 100dvh;
+    min-height: 0;
+    height: 100dvh;
+    overflow: hidden auto;
+    overscroll-behavior: contain;
   }
   .Talk_Bar {
     position: sticky;
@@ -1455,6 +1463,9 @@
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
     height: 100dvh;
+    min-width: 0;
+    overflow: hidden auto;
+    overscroll-behavior: contain;
     border-left: 1px solid var(--border2);
     background: var(--surface);
   }
@@ -1519,6 +1530,7 @@
     margin: -.25rem;
     padding: .25rem;
     overflow: auto;
+    overscroll-behavior: contain;
   }
   .Talk_Part-screens {
     --pad-block: .5rem;
