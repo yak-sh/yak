@@ -1,8 +1,8 @@
 # @yaks/ux
 
-Controlled Preact components for editing properties, opening disclosures and
-completing input. Component state lives in a page graph; drafts and emitted
-bundles belong to the caller.
+Controlled Preact components for editing properties, opening disclosures,
+completing input and filling in sign-up forms. Component state lives in a page
+graph; drafts and emitted bundles belong to the caller.
 
 A **UX component** supplies behavior between [@yaks/ui](../ui/README.md)'s
 presentation and an application's data. It takes a
@@ -96,14 +96,14 @@ try {
 
 ## Exports
 
-| Entry point           | Provides                                                                                                                                                                         |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/ux`            | `Edit`, `Text`, `Disclosure`, `Order`; `Ux`, `useHost`, `useOwner`; `useEdit`; state, emission, formatting and picker helpers; `defineKit`, `kitDocs`; `completion`; their types |
-| `@yaks/ux/views`      | `editorViews`, `views`: editor registrations and their registry                                                                                                                  |
-| `@yaks/ux/vocab`      | `uxDoc`, `docs`, `description`: the UX vocabulary documents and package summary                                                                                                  |
-| `@yaks/ux/ui`         | `kit`, `ux`: the base UX kit and `{ base: kit }`                                                                                                                                 |
-| `@yaks/ux/completion` | `completion`; `typed`, `placed`, `moved`, `taken`, `dismissed`, `act`, `CAP`; controller, input and transition types                                                             |
-| `@yaks/ux/keys`       | `walk`, `keymap`, `walkKeys`, `chord`, `land`, `items`, `front`, `typing`; `Box`, `Move`: vim's keys walking a page                                                              |
+| Entry point           | Provides                                                                                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@yaks/ux`            | `Edit`, `Text`, `Disclosure`, `Order`, `Signup`; `Ux`, `useHost`, `useOwner`; `useEdit`; state, emission, formatting and picker helpers; `defineKit`, `kitDocs`; `completion`; their types |
+| `@yaks/ux/views`      | `editorViews`, `views`: editor registrations and their registry                                                                                                                            |
+| `@yaks/ux/vocab`      | `uxDoc`, `docs`, `description`: the UX vocabulary documents and package summary                                                                                                            |
+| `@yaks/ux/ui`         | `kit`, `ux`: the base UX kit and `{ base: kit }`                                                                                                                                           |
+| `@yaks/ux/completion` | `completion`; `typed`, `placed`, `moved`, `taken`, `dismissed`, `act`, `CAP`; controller, input and transition types                                                                       |
+| `@yaks/ux/keys`       | `walk`, `keymap`, `walkKeys`, `chord`, `land`, `items`, `front`, `typing`; `Box`, `Move`: vim's keys walking a page                                                                        |
 
 ## Kits from outside
 
@@ -188,14 +188,14 @@ for page-only state rather than requesting a server subscription.
 
 A package's `./ui` facet exports `ux = {toggle}` beside any `kits`, `themes` and
 `skins` it contributes. `@yaks/ux/ui` exports `kit` and `ux = {base: kit}`:
-`Edit`, `Disclosure`, `Order` and `Text`, with labelled Preact specimens. `Text`
-shares `Edit` state. **Refused** is the transient event component emitted when
-input cannot be read; its `said` property is the reason. The guide reads
-`components[name].description` and `specimens()` without importing UX or
-invoking its component references. Guide identities must include the kind and
-kit name: UI `base/Edit` and UX `base/Edit` are separate entries even though
-they have the same component name. The UI composition supplies the look; UX kits
-supply behavior and page words, not CSS or terminal sheets.
+`Edit`, `Disclosure`, `Order`, `Signup` and `Text`, with labelled Preact
+specimens. `Text` shares `Edit` state. **Refused** is the transient event
+component emitted when input cannot be read; its `said` property is the reason.
+The guide reads `components[name].description` and `specimens()` without
+importing UX or invoking its component references. Guide identities must include
+the kind and kit name: UI `base/Edit` and UX `base/Edit` are separate entries
+even though they have the same component name. The UI composition supplies the
+look; UX kits supply behavior and page words, not CSS or terminal sheets.
 
 ## Edit
 
@@ -296,6 +296,76 @@ tree.props.onChange(opened)
 equal(sent, [opened])
 ```
 
+## Signup
+
+`Signup` draws any sign-up form from its `question` rows
+([@yaks/forms](../forms/README.md)) with @yaks/ui's `Form`, `Field` and `Check`,
+and sends it to the app's form door. `at` is the door's address:
+`./api/form/<alias>` in the page's own app, or another app's, such as
+`/directory/api/form/kids-club`. Signup reads the form with `GET at`, which
+answers `{doc, form, open, questions}`, and posts `{answers}` to the same
+address. An app adds a form by writing rows; its page writes no form code.
+
+```ts
+import { h } from 'preact'
+import { type Door, Signup, signupAt, signupOf } from '@yaks/ux'
+import { equal } from '@yaks/testing'
+
+let door: Door = {
+  doc: { title: 'Contact' },
+  form: { thanks: 'Thanks, we’ll write back.' },
+  open: true,
+  questions: [{
+    entity: { eid: 'name' },
+    question: {
+      form: 'contact',
+      label: 'Your name',
+      kind: 'line',
+      required: true,
+    },
+  }],
+}
+let at = './api/form/contact'
+let e = { entity: { eid: signupAt(at) }, Signup: { door } }
+let tree = h(Signup, {
+  at,
+  e,
+  onChange: (b) => e = b as typeof e,
+  read: () => Promise.resolve(door),
+})
+equal(tree.props.at, at)
+equal(signupOf(e).door?.doc?.title, 'Contact')
+```
+
+What it draws:
+
+- **Each kind its control.** `line`, `email`, `phone` and `date` are one-line
+  fields typed for a phone's keyboard; `lines` and `address` are several lines
+  (@yaks/ui's `Address` is a web address, not a postal one). `choose` is a row
+  of radios to press, or a list to pick from past six choices; `choices` is a
+  box for each; `check` is one box, and unticked is no answer, so a required one
+  must be ticked. `file` says files can't be sent with a form yet.
+- **Repeat groups.** Each entry of a `repeat` is a card of its own questions,
+  numbered from its label ("Child 1"), with Add and Remove. A required repeat
+  starts with one entry and keeps at least one.
+- **Conditions.** A question shows only while its `when` holds, from `asked()`.
+  What is sent is `kept()`: an answer whose question has since hidden is not
+  sent.
+- **Required and optional.** An optional question's label says "(optional)".
+  Sending checks `missing()` first; what is owed says so under its question, and
+  nothing is sent.
+- **Closed and thanks.** A form its door says is not `open` shows `form.closed`
+  (or "This form is closed."). A sent one shows `form.thanks`, and a button to
+  fill it in again. A refusal shows the door's own words and keeps every answer.
+- **Without JavaScript.** It is a native `<form method="post" action={at}>`,
+  each control named by its answer's path (`children.0.born`), with `required`
+  set. The door takes JSON only, so a form posted without JavaScript is refused.
+
+Its state is `Signup{door, unread, answers, tried, sending, sent, said}` on
+`signupAt(at)`: the form as the door answered it, why it could not be read, the
+answers so far, and how sending went. `read` and `send` replace the door calls
+(`get`, `post`).
+
 ## Dragging an entity
 
 A drag between two lists on one page says which entity the dragged row stands
@@ -342,24 +412,25 @@ equal(list.type, Order)
 
 ## State and events
 
-| component    | on                                | what it holds                                          |
-| ------------ | --------------------------------- | ------------------------------------------------------ |
-| `Edit`       | `at(owner, eid, comp, prop)`      | `open` while it is changed here, `query` in its picker |
-| `Disclosure` | `disclosureAt(owner)`             | `open`, whether its content is shown                   |
-| `Order`      | `orderAt(owner)`                  | `at`, where an entity dragged over it would land       |
-| `Completion` | field id                          | `caret`, `from`, `to`, `cands`, `pick`                 |
-| `Refused`    | the entity whose value it changes | an event: `said`, why what was typed could not be read |
+| component    | on                                | what it holds                                                   |
+| ------------ | --------------------------------- | --------------------------------------------------------------- |
+| `Edit`       | `at(owner, eid, comp, prop)`      | `open` while it is changed here, `query` in its picker          |
+| `Disclosure` | `disclosureAt(owner)`             | `open`, whether its content is shown                            |
+| `Order`      | `orderAt(owner)`                  | `at`, where an entity dragged over it would land                |
+| `Signup`     | `signupAt(at)`, its door          | `door`, `unread`, `answers`, `tried`, `sending`, `sent`, `said` |
+| `Completion` | field id                          | `caret`, `from`, `to`, `cands`, `pick`                          |
+| `Refused`    | the entity whose value it changes | an event: `said`, why what was typed could not be read          |
 
 Each state component is `sync: none`: nothing leaves the page. `Edit`,
-`Disclosure`, `Order` and `Completion` are `durable: connection`, gone with the
-page and kept across every remount before that; closing an `Edit` removes it.
-What is typed over a value is not its state but the person's draft, in the
-value's own place (`place(eid, comp, prop)`), kept by the host's `drafts`: every
-view of the value, and every interface the host syncs drafts to, types on from
-it, and a value whose draft says something else shows it, open, wherever it is
-drawn. Leaving a value typed over emits it and spends the draft, Escape puts the
-value back and spends it, and being taken off the page is neither: the draft
-waits for the remount. `Refused` is `durable: "0s"`; see
+`Disclosure`, `Order`, `Signup` and `Completion` are `durable: connection`, gone
+with the page and kept across every remount before that; closing an `Edit`
+removes it. What is typed over a value is not its state but the person's draft,
+in the value's own place (`place(eid, comp, prop)`), kept by the host's
+`drafts`: every view of the value, and every interface the host syncs drafts to,
+types on from it, and a value whose draft says something else shows it, open,
+wherever it is drawn. Leaving a value typed over emits it and spends the draft,
+Escape puts the value back and spends it, and being taken off the page is
+neither: the draft waits for the remount. `Refused` is `durable: "0s"`; see
 [component lifetimes](../vocab/README.md#state-lifetimes).
 
 The state helpers can also be used without rendering a component.
@@ -630,27 +701,28 @@ browser); without it a popout paints in the flow, as a terminal wants.
 ## Limits
 
 UX components do not fetch bodies, keep persistent drafts or decide navigation
-URLs. The host supplies those policies. Styling belongs to
-[@yaks/ui](../ui/README.md); vocabulary declarations belong to
-[@yaks/vocab](../vocab/README.md); query syntax and query completion belong to
-[@yaks/query](../query/README.md).
+URLs. `Signup` alone reads and writes, and only through its form's door. The
+host supplies those policies. Styling belongs to [@yaks/ui](../ui/README.md);
+vocabulary declarations belong to [@yaks/vocab](../vocab/README.md); query
+syntax and query completion belong to [@yaks/query](../query/README.md).
 
 ## Files
 
-| file                  | owns                                                                |
-| --------------------- | ------------------------------------------------------------------- |
-| `kit.ts`              | external kit metadata, boundary validation and vocabulary documents |
-| `ui.ts`               | the base kit and its browser-safe `./ui` facet and specimens        |
-| `vocab.json`          | the `Edit`, `Disclosure`, `Order`, `Completion`, `Refused` words    |
-| `state.ts`            | the bundles: an `Edit`'s eid, its patches, what it emits            |
-| `live.ts`             | `useEdit`: an `Edit`'s state and its value's draft, read live       |
-| `emit.ts`             | typed or picked input, read as its type, sent as a bundle           |
-| `host.ts`             | `Host`, `Ux`                                                        |
-| `Edit.ts`             | `Edit`, its controls and faces, `views`                             |
-| `Text.ts`             | `Edit.Text`                                                         |
-| `Order.ts`            | `Order`, rows put in order by dragging                              |
-| `hits.ts`             | a picker's line and its debounced search                            |
-| `read.ts`             | what a property is, off the vocabulary                              |
-| `completion.ts`       | shared completion controller, field, list and input binding         |
-| `completion-state.ts` | pure completion transitions and candidate types                     |
-| `keys.ts`             | vim's keys: the keymap, where a move lands, the cursor and layers   |
+| file                  | owns                                                                       |
+| --------------------- | -------------------------------------------------------------------------- |
+| `kit.ts`              | external kit metadata, boundary validation and vocabulary documents        |
+| `ui.ts`               | the base kit and its browser-safe `./ui` facet and specimens               |
+| `vocab.json`          | the `Edit`, `Disclosure`, `Order`, `Signup`, `Completion`, `Refused` words |
+| `state.ts`            | the bundles: an `Edit`'s eid, its patches, what it emits                   |
+| `live.ts`             | `useEdit`: an `Edit`'s state and its value's draft, read live              |
+| `emit.ts`             | typed or picked input, read as its type, sent as a bundle                  |
+| `host.ts`             | `Host`, `Ux`                                                               |
+| `Edit.ts`             | `Edit`, its controls and faces, `views`                                    |
+| `Text.ts`             | `Edit.Text`                                                                |
+| `Order.ts`            | `Order`, rows put in order by dragging                                     |
+| `Signup.ts`           | `Signup`, a sign-up form drawn from its questions, and its door            |
+| `hits.ts`             | a picker's line and its debounced search                                   |
+| `read.ts`             | what a property is, off the vocabulary                                     |
+| `completion.ts`       | shared completion controller, field, list and input binding                |
+| `completion-state.ts` | pure completion transitions and candidate types                            |
+| `keys.ts`             | vim's keys: the keymap, where a move lands, the cursor and layers          |

@@ -23,6 +23,7 @@ export type Settings = {
   closes?: string
   capacity?: number
   thanks?: string
+  closed?: string
   notify?: readonly string[]
 }
 
@@ -149,6 +150,56 @@ export let answered = (
         : []
     })
   return walk([answers])
+}
+
+/** A visible question where it stands in the answers; a repeat also holds
+ * each entry's visible questions, one list per entry answered so far. */
+export type Asked = Owed & { entries?: Asked[][] }
+
+let shown = (
+  questions: readonly Question[],
+  scopes: readonly Answers[],
+  within?: string,
+  path: (string | number)[] = [],
+): Asked[] =>
+  questions.filter((q) =>
+    q.question.within == within && visible(q, scopes, questions)
+  ).map((q) => {
+    let key = q.entity.eid, value = scopes[0][key], here = [...path, key]
+    return q.question.kind == 'repeat'
+      ? {
+        question: q,
+        path: here,
+        entries: (Array.isArray(value) ? value : []).map((item, i) =>
+          shown(questions, [scope(item), ...scopes], key, [...here, i])
+        ),
+      }
+      : { question: q, path: here }
+  })
+
+/** The questions to ask now, in order: what a form shows for these answers. */
+export let asked = (form: Form, answers: Answers): Asked[] =>
+  shown(ordered(form.questions), [answers])
+
+/** The answers to visible questions only, so an answer given before its
+ * question was hidden is not sent. */
+export let kept = (form: Form, answers: Answers): Answers => {
+  let keep = (asked: Asked[], scope: Answers): Answers =>
+    Object.fromEntries(
+      asked.filter((a) => Object.hasOwn(scope, a.question.entity.eid))
+        .map((a) => {
+          let key = a.question.entity.eid, value = scope[key]
+          return [
+            key,
+            a.entries && Array.isArray(value)
+              ? a.entries.map((entry, i) =>
+                keep(entry, value[i] as Answers ?? {})
+              )
+              : value,
+          ]
+        }),
+    )
+  return keep(asked(form, answers), answers)
 }
 
 /** Whether sign-ups are accepted at this instant and registration count.

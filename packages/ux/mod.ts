@@ -12,6 +12,9 @@
  *   stands, typed over in place, or its control alone (./Edit.ts, ./Text.ts).
  * - `Disclosure`: a summary opening optional content; `disclosureAt`,
  *   `isOpen`, `disclosed`, its page eid and bundles, pure (./Disclosure.ts).
+ * - `Signup`: any sign-up form drawn from its questions, read from and sent
+ *   to its form door; `signupAt`, `signupOf`, its page eid and state, and
+ *   `get`, `post`, the default door calls (./Signup.ts).
  * - `Ux`, `useHost`, `Host`: what a page hands down, once per tree
  *   (./host.ts).
  * - `drag`, `drags`, `dragged`: an entity dragged from one place to
@@ -61,6 +64,18 @@ export {
   type DisclosureProps,
   isOpen,
 } from './Disclosure.ts'
+export {
+  type Door,
+  get,
+  post,
+  type Read,
+  type Send,
+  Signup,
+  signupAt,
+  signupOf,
+  type SignupProps,
+  type SignupState,
+} from './Signup.ts'
 export { drag, DRAGGED, dragged, drags } from './drag.ts'
 export {
   among,

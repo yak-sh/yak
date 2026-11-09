@@ -12,7 +12,9 @@ import { loadVocab } from '@yaks/vocab'
 import { Disclosure, disclosureAt } from './Disclosure.ts'
 import { Edit } from './Edit.ts'
 import { Order, orderAt } from './Order.ts'
+import { type Door, Signup, signupAt } from './Signup.ts'
 import { Text } from './Text.ts'
+import type { Question } from '@yaks/forms'
 import { type Host, Ux } from './host.ts'
 import { defineKit, type Kit } from './kit.ts'
 import { uxDoc } from './vocab.ts'
@@ -83,6 +85,51 @@ let OrderSample = (): JSX.Element => {
   })
 }
 
+// A sign-up read from a sample door and sent nowhere; its state is the
+// specimen's own.
+let card: Door = {
+  doc: {
+    title: 'Membership card',
+    body: 'Tell us a little about you, and what you’d like to do next.',
+  },
+  form: {
+    thanks: 'Thank you. We’ll be in touch this week.',
+    closed: 'Membership cards are back in January.',
+  },
+  open: true,
+  questions: [
+    ['name', 'line', 'Your name', { required: true }],
+    ['phone', 'phone', 'Phone', { order: 1, hint: 'For a call back.' }],
+    ['next', 'choices', 'Next steps', {
+      order: 2,
+      choices: ['Baptism', 'Membership class', 'Serving', 'Church directory'],
+    }],
+    ['children', 'repeat', 'Child', { order: 3 }],
+    ['child', 'line', 'Name', { within: 'children', required: true }],
+    ['texts', 'check', 'Announcements by text', { order: 4 }],
+  ].map(([eid, kind, label, more]) => ({
+    entity: { eid: eid as string },
+    question: {
+      form: 'card',
+      label: label as string,
+      kind: kind as Question['question']['kind'],
+      ...more as object,
+    },
+  })),
+}
+
+let SignupSample = ({ open }: { open: boolean }): JSX.Element => {
+  let at = `guide/signup/${open}`
+  let row = useSignal<Bundle>({ entity: { eid: signupAt(at) } })
+  return h(Signup, {
+    at,
+    e: row.value,
+    onChange: (b) => row.value = b,
+    read: () => Promise.resolve({ ...card, open }),
+    send: () => Promise.resolve(undefined),
+  })
+}
+
 // Read-only text specimens do not type drafts. A real editor uses the
 // consumer's persistent drafts through its host, not this guide's graph.
 let Sample = ({ part }: { part: 'Edit' | 'Text' }): JSX.Element => {
@@ -140,6 +187,22 @@ export let kit: Kit = defineKit({
         'Drag a row between two others',
         h('div', {}, h(OrderSample, {})),
       ]],
+    },
+    Signup: {
+      Component: Signup,
+      description:
+        'Any sign-up form, drawn from its questions and sent to its form door',
+      state: ['Signup'],
+      specimens: () => [
+        [
+          'A membership card; send it to see its thanks',
+          h('div', {}, h(SignupSample, { open: true })),
+        ],
+        [
+          'A closed form says its own words',
+          h('div', {}, h(SignupSample, { open: false })),
+        ],
+      ],
     },
     Edit: {
       Component: Edit,

@@ -41,7 +41,7 @@ marks. Add `doc{title, body}` to a form for its title and introduction.
 
 | Component      | Properties                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------ |
-| `form`         | `opens`, `closes`, `capacity`, `thanks`, `notify`                                          |
+| `form`         | `opens`, `closes`, `capacity`, `thanks`, `closed`, `notify`                                |
 | `question`     | `form`, `label`, `kind`, `choices`, `required`, `hint`, `within`, `when`, `fills`, `order` |
 | `registration` | `form`, `person`, `answers`, `at`                                                          |
 | `waitlisted`   | stamped `at`, `by`, `via`                                                                  |
@@ -85,11 +85,51 @@ children. A required repeat needs at least one entry. For an answer such as
 path `['children', 1, 'born']`. Nested repeats use the same structure. An empty
 array answers an optional repeat without entries; null skips it.
 
+## What a form shows
+
+`asked(form, answers)` lists the visible questions in order, each with its
+`path`. A repeat also holds `entries`: for each entry answered so far, that
+entry's visible questions. A form drawn from `asked` shows exactly what `next`
+and `missing` count. `kept(form, answers)` keeps only the answers to visible
+questions, so an answer given before a later answer hid its question is not
+sent.
+
+```ts
+import { asked, type Form, kept } from '@yaks/forms'
+import { equal } from '@yaks/testing'
+
+let ask = (eid: string, kind: 'line' | 'choose' | 'repeat', more = {}) => ({
+  entity: { eid },
+  question: { form: 'kids', label: eid, kind, ...more },
+})
+let form: Form = {
+  form: {},
+  questions: [
+    ask('children', 'repeat', { required: true }),
+    ask('name', 'line', { within: 'children' }),
+    ask('allergic', 'choose', { within: 'children', order: 1 }),
+    ask('allergies', 'line', {
+      within: 'children',
+      order: 2,
+      when: { question: 'allergic', is: 'Yes' },
+    }),
+  ],
+}
+let answers = {
+  children: [{ name: 'Ada', allergic: 'No', allergies: 'nuts' }],
+}
+equal(
+  asked(form, answers)[0].entries?.[0].map((a) => a.path),
+  [['children', 0, 'name'], ['children', 0, 'allergic']],
+)
+equal(kept(form, answers), { children: [{ name: 'Ada', allergic: 'No' }] })
+```
+
 ## Availability
 
 `open(form, now, count)` takes an epoch-millisecond instant and the caller's
 accepted-registration count. Opening is inclusive, closing exclusive, and
 capacity is reached when `count >= capacity`. Absent dates or capacity impose no
 limit; zero capacity accepts nobody. Invalid dates or a non-finite instant
-return false. This package implements no HTTP door, rendering, tools or
-registration side effects.
+return false. While `open` is false a page shows `form.closed`. This package
+implements no HTTP door, rendering, tools or registration side effects.

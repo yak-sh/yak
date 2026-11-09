@@ -29,6 +29,10 @@
           "type": "string",
           "description": "confirmation shown after a sign-up"
         },
+        "closed": {
+          "type": "string",
+          "description": "what the form says while it takes no sign-ups: before it opens, after it closes, or once it is full"
+        },
         "notify": {
           "type": "array",
           "items": {

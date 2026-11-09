@@ -3,7 +3,9 @@
 import { equal, test } from '@yaks/testing'
 import {
   type Answers,
+  asked,
   type Form,
+  kept,
   missing,
   next,
   open,
@@ -129,4 +131,46 @@ test('open uses inclusive opening, exclusive closing and supplied capacity', () 
   equal(open({ form: { opens: 'invalid' } }, at, 0), false)
   equal(open({ form: { closes: 'invalid' } }, at, 0), false)
   equal(open({ form: {} }, NaN, 0), false)
+})
+
+test('asked shows what a form shows, and kept drops answers to hidden questions', () => {
+  let f = form(
+    question('children', { kind: 'repeat', required: true }),
+    question('name', { within: 'children', required: true }),
+    question('allergic', { within: 'children', kind: 'choose', order: 1 }),
+    question('allergies', {
+      within: 'children',
+      order: 2,
+      when: { question: 'allergic', is: 'Yes' },
+    }),
+    question('photos', { kind: 'check', order: 3 }),
+  )
+  let shape = (answers: Answers) =>
+    asked(f, answers).map((a) => [
+      a.path.join('.'),
+      a.entries?.map((e) => e.map((a) => a.path.join('.'))),
+    ])
+  equal(shape({}), [['children', []], ['photos', undefined]])
+  let answers = {
+    children: [
+      { name: 'Ada', allergic: 'Yes', allergies: 'nuts' },
+      { name: 'Sam', allergic: 'No', allergies: 'stale' },
+    ],
+    photos: true,
+    gone: 'not a question',
+  }
+  equal(shape(answers), [
+    ['children', [
+      ['children.0.name', 'children.0.allergic', 'children.0.allergies'],
+      ['children.1.name', 'children.1.allergic'],
+    ]],
+    ['photos', undefined],
+  ])
+  equal(kept(f, answers), {
+    children: [
+      { name: 'Ada', allergic: 'Yes', allergies: 'nuts' },
+      { name: 'Sam', allergic: 'No' },
+    ],
+    photos: true,
+  })
 })

@@ -4917,6 +4917,7 @@
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/draft@0.2.24",
+            "npm:@yaks/forms@0.2.33",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/id@0.2.23",

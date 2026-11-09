@@ -5058,6 +5058,9 @@ importers:
       '@yaks/client':
         specifier: 0.2.24
         version: link:../client
+      '@yaks/forms':
+        specifier: 0.2.33
+        version: link:../forms
       '@yaks/fp':
         specifier: 0.2.23
         version: link:../fp
