@@ -69,19 +69,19 @@ let linked = (config: Config, space: string, link: Link) =>
 
 let asking = (site: string) =>
   `<section class="ask"><strong>Allow on ${esc(host(site))}?</strong>` +
-  `<p>Your agent asked to use this site. It reads or does something on a page only when it asks.</p>` +
+  `<p class="Ask_Text">Your agent asked to use this site. It reads or does something on a page only when it asks.</p>` +
   `${button('allow', 'Allow', site)}${button('dismiss', 'Not now')}</section>`
 
 let lending = (site: string) =>
   `<section class="ask"><strong>Your agent wants a screenshot of ${
     esc(host(site))
   }</strong>` +
-  `<p>Chrome lets it take one only after you click this extension's button on that tab. Go to the tab and click the button there.</p></section>`
+  `<p class="Ask_Text">Chrome lets it take one only after you click this extension's button on that tab. Go to the tab and click the button there.</p></section>`
 
 let confirming = (c: Asked) =>
   `<section class="ask"><strong>Do this on ${esc(host(c.site))}?</strong>` +
-  `<p class="doing">${esc(c.doing)}</p>` +
-  `<p>Your agent waits for you, and does nothing unless you press Do it.</p>` +
+  `<p class="doing Ask_Text">${esc(c.doing)}</p>` +
+  `<p class="Ask_Text">Your agent waits for you, and does nothing unless you press Do it.</p>` +
   `${button('yes', 'Do it')}${button('no', "Don't")}</section>`
 
 let sites = (c: Consent) =>

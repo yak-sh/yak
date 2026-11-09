@@ -170,7 +170,7 @@ export let Page = ({ at }: { at: string }) => {
             ? (
               <>
                 <Shell.Icon>
-                  <Icon name='search' size={16} />
+                  <Icon class='Shell_Glyph' name='search' size={16} />
                 </Shell.Icon>
                 Search
               </>
@@ -179,7 +179,7 @@ export let Page = ({ at }: { at: string }) => {
             ? (
               <>
                 <Shell.Icon>
-                  <Icon name='plus' size={16} />
+                  <Icon class='Shell_Glyph' name='plus' size={16} />
                 </Shell.Icon>
                 New
               </>
@@ -187,7 +187,7 @@ export let Page = ({ at }: { at: string }) => {
             : named && (
               <>
                 <Shell.Icon>
-                  <Icon name={named.icon} size={16} />
+                  <Icon class='Shell_Glyph' name={named.icon} size={16} />
                 </Shell.Icon>
                 {named.name}
               </>

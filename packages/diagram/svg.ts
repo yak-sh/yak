@@ -50,7 +50,7 @@ let text = (
   anchor = '',
   inner = '',
 ) =>
-  `<text class="${cls}" x="${n(x)}" y="${n(y)}"${
+  `<text class="Diagram_Text ${cls}" x="${n(x)}" y="${n(y)}"${
     anchor ? ` text-anchor="${anchor}"` : ''
   }>${inner}${esc(s)}</text>`
 

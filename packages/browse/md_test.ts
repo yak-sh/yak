@@ -14,19 +14,25 @@ test('mdInline: title markup has no block wrapper or nested links', () => {
   assertEquals(mdInline('![alt](https://y.z/x.png)'), 'alt')
 })
 
-test('md: paragraphs are <p>, not a wall of <br>', () => {
+test('md: paragraphs are <p class="Body_Paragraph">, not a wall of <br>', () => {
   let text = 'One 2  three   '
-  assertEquals(md(text), `<p>${text}</p>\n`)
-  assertEquals(mdAbs(text), `<p>${text}</p>\n`)
+  assertEquals(md(text), `<p class="Body_Paragraph">${text}</p>\n`)
+  assertEquals(mdAbs(text), `<p class="Body_Paragraph">${text}</p>\n`)
   assertEquals(mdInline(text), text)
-  assertEquals(md('one\n'), '<p>one</p>\n')
+  assertEquals(md('one\n'), '<p class="Body_Paragraph">one</p>\n')
   assertEquals(md(''), '')
-  assertEquals(md('one\n\ntwo').trim(), '<p>one</p>\n<p>two</p>')
+  assertEquals(
+    md('one\n\ntwo').trim(),
+    '<p class="Body_Paragraph">one</p>\n<p class="Body_Paragraph">two</p>',
+  )
 })
 
 test('md: intra-word underscores stay literal', () => {
   assertStringIncludes(md('foo_bar and bar_baz'), 'foo_bar and bar_baz')
-  assertEquals(md('a _point_ made').trim(), '<p>a <em>point</em> made</p>')
+  assertEquals(
+    md('a _point_ made').trim(),
+    '<p class="Body_Paragraph">a <em>point</em> made</p>',
+  )
 })
 
 test('md: gfm tables render', () => {
@@ -39,7 +45,7 @@ test('md: gfm tables render', () => {
 // detection across every registered grammar.
 test('md: fenced code with blank lines survives whole', () => {
   let html = md('```\none\n\ntwo\n```')
-  assertStringIncludes(html, '<pre><code class="hljs')
+  assertStringIncludes(html, '<pre class="Body_Source"><code class="hljs')
   assertStringIncludes(html, '</span>\n\ntwo')
 })
 
@@ -279,7 +285,7 @@ for (let [door, render] of Object.entries(doors)) {
     )
     assertStringIncludes(
       render('```js\n<script>x</script>\n```'),
-      '<pre><code class="hljs language-js">&lt;script&gt;',
+      '<pre class="Body_Source"><code class="hljs language-js">&lt;script&gt;',
     )
     // marked escapes a link title; a body cannot break out of it
     assertStringIncludes(

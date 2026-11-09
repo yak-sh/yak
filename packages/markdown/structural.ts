@@ -82,48 +82,91 @@ export let safeHref = (href: string): string | undefined => {
  */
 export let blocks = <Node>(tokens: Token[], host: H<Node>): Child<Node>[] => {
   let name = slugs()
+  let element = (
+    tag: string,
+    props: Record<string, unknown> | null,
+    ...children: Child<Node>[]
+  ) => {
+    let part = {
+      p: 'Paragraph',
+      h1: 'Heading',
+      h2: 'Heading',
+      h3: 'Heading',
+      h4: 'Heading',
+      h5: 'Heading',
+      h6: 'Heading',
+      strong: 'Strong',
+      em: 'Emphasis',
+      del: 'Deleted',
+      code: 'Code',
+      pre: 'Source',
+      br: 'Break',
+      hr: 'Rule',
+      blockquote: 'Quote',
+      ol: 'Ordered',
+      ul: 'Unordered',
+      li: 'Item',
+      a: 'Link',
+      table: 'Table',
+      thead: 'Head',
+      tbody: 'Rows',
+      tr: 'Row',
+      th: 'HeadingCell',
+      td: 'Cell',
+    }[tag]
+    return host(tag, {
+      ...props,
+      class: [
+        'Body_' + part,
+        /^h[1-6]$/.test(tag) ? 'Body_Heading-' + tag.slice(1) : undefined,
+        props?.class,
+      ].filter(Boolean).join(' '),
+    }, ...children)
+  }
   let children = (items: Token[]): Child<Node>[] => items.flatMap(token)
   let token = (t: Token): Child<Node>[] => {
     switch (t.type) {
       case 'space':
         return []
       case 'paragraph':
-        return [host('p', null, ...children((t as Tokens.Paragraph).tokens))]
+        return [element('p', null, ...children((t as Tokens.Paragraph).tokens))]
       case 'heading': {
         let v = t as Tokens.Heading
         // The id is the anchor a contents list points at (`headings` hands
         // out the same names in the same order), so every consumer of a
         // document gets headings it can link to.
         let at = { id: name(words(v.tokens)) }
-        return [host('h' + v.depth, at, ...children(v.tokens))]
+        return [element('h' + v.depth, at, ...children(v.tokens))]
       }
       case 'strong':
-        return [host('strong', null, ...children((t as Tokens.Strong).tokens))]
+        return [
+          element('strong', null, ...children((t as Tokens.Strong).tokens)),
+        ]
       case 'em':
-        return [host('em', null, ...children((t as Tokens.Em).tokens))]
+        return [element('em', null, ...children((t as Tokens.Em).tokens))]
       case 'del':
-        return [host('del', null, ...children((t as Tokens.Del).tokens))]
+        return [element('del', null, ...children((t as Tokens.Del).tokens))]
       case 'codespan':
-        return [host('code', null, (t as Tokens.Codespan).text)]
+        return [element('code', null, (t as Tokens.Codespan).text)]
       case 'code': {
         let v = t as Tokens.Code
         return [
-          host(
+          element(
             'pre',
             null,
-            host('code', {
+            element('code', {
               class: v.lang ? 'language-' + v.lang.split(/\s/)[0] : undefined,
             }, v.text),
           ),
         ]
       }
       case 'br':
-        return [host('br', null)]
+        return [element('br', null)]
       case 'hr':
-        return [host('hr', null)]
+        return [element('hr', null)]
       case 'blockquote':
         return [
-          host(
+          element(
             'blockquote',
             null,
             ...children((t as Tokens.Blockquote).tokens),
@@ -132,11 +175,11 @@ export let blocks = <Node>(tokens: Token[], host: H<Node>): Child<Node>[] => {
       case 'list': {
         let v = t as Tokens.List
         return [
-          host(
+          element(
             v.ordered ? 'ol' : 'ul',
             { start: v.ordered ? v.start : undefined },
             ...v.items.map((item, i) =>
-              host(
+              element(
                 'li',
                 {
                   'data-marker': v.ordered
@@ -153,7 +196,7 @@ export let blocks = <Node>(tokens: Token[], host: H<Node>): Child<Node>[] => {
       case 'link': {
         let v = t as Tokens.Link
         return [
-          host(
+          element(
             'a',
             { href: safeHref(v.href), title: v.title },
             ...children(v.tokens),
@@ -163,7 +206,7 @@ export let blocks = <Node>(tokens: Token[], host: H<Node>): Child<Node>[] => {
       case 'image': {
         let v = t as Tokens.Image
         return [
-          host(
+          element(
             'a',
             { href: safeHref(v.href), title: v.title },
             v.text || '[image]',
@@ -173,17 +216,17 @@ export let blocks = <Node>(tokens: Token[], host: H<Node>): Child<Node>[] => {
       case 'table': {
         let v = t as Tokens.Table
         return [
-          host(
+          element(
             'table',
             null,
-            host(
+            element(
               'thead',
               null,
-              host(
+              element(
                 'tr',
                 null,
                 ...v.header.map((cell, col) =>
-                  host(
+                  element(
                     'th',
                     { align: v.align[col] ?? undefined },
                     ...children(cell.tokens),
@@ -191,15 +234,15 @@ export let blocks = <Node>(tokens: Token[], host: H<Node>): Child<Node>[] => {
                 ),
               ),
             ),
-            host(
+            element(
               'tbody',
               null,
               ...v.rows.map((row) =>
-                host(
+                element(
                   'tr',
                   null,
                   ...row.map((cell, col) =>
-                    host(
+                    element(
                       'td',
                       { align: v.align[col] ?? undefined },
                       ...children(cell.tokens),

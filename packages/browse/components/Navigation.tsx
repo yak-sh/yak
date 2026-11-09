@@ -101,7 +101,7 @@ export let Navigation = () => {
       </Brand>
       <Find>
         <Shell.Icon>
-          <Icon name='search' size={16} />
+          <Icon class='Shell_Glyph' name='search' size={16} />
         </Shell.Icon>
         <Button
           type='button'
@@ -124,7 +124,7 @@ export let Navigation = () => {
           onClick={go(p.path)}
         >
           <Shell.Icon>
-            <Icon name={p.icon} size={16} />
+            <Icon class='Shell_Glyph' name={p.icon} size={16} />
           </Shell.Icon>
           <Label>{p.name}</Label>
           {p.path == '/' && home && actor && (

@@ -1907,7 +1907,7 @@ a[data-ref]:hover {
   color: var(--muted);
   font-size: var(--small);
 }
-.SessionManage_Label select {
+.SessionManage_Select {
   max-width: min(34vw, 12rem);
   min-height: var(--tap);
   background: var(--card);
@@ -2539,7 +2539,7 @@ a[data-ref]:hover {
   font-size: var(--small);
   min-width: 4rem;
 }
-.Run select {
+.Run_Select {
   flex: 1;
   font: inherit;
   font-size: var(--small);
@@ -2737,22 +2737,8 @@ a[data-ref]:hover {
   height: 100%;
   color: var(--dim);
 }
-.Layout_Fill input {
+.Layout_Input {
   width: min(24rem, 90%);
-}
-.Layout_Row {
-  border: none;
-  background: none;
-  color: var(--text);
-  font-size: var(--small);
-  cursor: pointer;
-}
-.Layout_Row span {
-  color: var(--muted);
-  font-size: var(--small);
-}
-.Layout_Row:hover {
-  color: var(--accent);
 }
 .Layout_Empty {
   margin: auto;
@@ -2813,14 +2799,14 @@ a[data-ref]:hover {
   gap: var(--gap);
   align-items: center;
 }
-.New textarea.Field {
+.New_Body.Field {
   min-height: 6lh;
 }
 .New .Pairs_Value > .Field {
   width: 100%;
   box-sizing: border-box;
 }
-.New .Pairs_Value > textarea.Field {
+.New .Pairs_Value > .New_Text.Field {
   min-height: 3lh;
 }
 

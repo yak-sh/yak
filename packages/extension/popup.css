@@ -87,7 +87,7 @@ input {
   border: 1px solid var(--line);
   border-radius: 8px;
 }
-.ask p {
+.Ask_Text {
   flex-basis: 100%;
 }
 .ask .doing {

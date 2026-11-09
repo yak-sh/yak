@@ -123,7 +123,7 @@ test('without an offered home page, / lists the host query and calls itself Home
     assertEquals(text(seen.root, '.Shell_Item')[0], 'Home')
     assertEquals(
       seen.root.querySelector('.Shell_Item .Icon')?.getAttribute('class'),
-      'lucide lucide-house Icon',
+      'lucide lucide-house Icon Shell_Glyph',
     )
   } finally {
     seen.free()
@@ -148,7 +148,7 @@ test('an offered home page draws the owner at /, names the first place and wears
     assertEquals(text(first, '.Shell_Label'), ['Desk'])
     assertEquals(
       first.querySelector('.Icon')?.getAttribute('class'),
-      'lucide lucide-lamp Icon',
+      'lucide lucide-lamp Icon Shell_Glyph',
     )
     assertEquals(first.querySelector('.Icon circle') != null, true)
     assertEquals(text(first, '.Shell_Count'), ['99+'])

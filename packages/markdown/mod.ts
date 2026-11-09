@@ -5,35 +5,47 @@ import { blocks, parse, parseInline, render, safeHref } from './structural.ts'
 export * from './structural.ts'
 
 type Props = { children?: ComponentChildren }
-export let Bold = ({ children }: Props): VNode => h('strong', null, children)
-export let Italic = ({ children }: Props): VNode => h('em', null, children)
+export let Bold = ({ children }: Props): VNode<{ class?: string }> =>
+  h<{ class?: string }>('strong', { class: 'Body_Strong' }, children)
+export let Italic = ({ children }: Props): VNode<{ class?: string }> =>
+  h<{ class?: string }>('em', { class: 'Body_Emphasis' }, children)
 export let Heading = (
   { level = 1, children }: Props & { level?: number },
-): VNode =>
-  h<object>('h' + Math.max(1, Math.min(6, Math.trunc(level))), null, children)
-export let Code = ({ children }: Props): VNode => h('code', null, children)
+): VNode<{ class?: string }> =>
+  h<{ class?: string }>('h' + Math.max(1, Math.min(6, Math.trunc(level))), {
+    class: `Body_Heading Body_Heading-${
+      Math.max(1, Math.min(6, Math.trunc(level)))
+    }`,
+  }, children)
+export let Code = ({ children }: Props): VNode<{ class?: string }> =>
+  h<{ class?: string }>('code', { class: 'Body_Code' }, children)
 export let CodeBlock = (
   { children, language }: Props & { language?: string },
-): VNode =>
-  h(
+): VNode<{ class?: string }> =>
+  h<{ class?: string }>(
     'pre',
-    null,
+    { class: 'Body_Source' },
     h(
       'code',
-      { class: language ? 'language-' + language : undefined },
+      { class: 'Body_Code' + (language ? ' language-' + language : '') },
       children,
     ),
   )
 export let Link = (
   { href, children }: Props & { href: string },
-): VNode<{ href: string | undefined }> =>
-  h<{ href: string | undefined }>('a', { href: safeHref(href) }, children)
+): VNode<{ href: string | undefined; class: string }> =>
+  h<{ href: string | undefined; class: string }>('a', {
+    href: safeHref(href),
+    class: 'Body_Link',
+  }, children)
 
 /** Preact component shared by browser DOM and the terminal's Preact DOM. */
-export let Markdown = ({ source }: { source: string }): VNode =>
-  render(parse(source), h as H<ReturnType<typeof h>>)
+export let Markdown = (
+  { source }: { source: string },
+): VNode => render(parse(source), h as H<ReturnType<typeof h>>)
 
 /** A line of Markdown in the line it stands in, such as a label in a button:
  * its inline markup, in a `span`. */
-export let MarkdownInline = ({ source }: { source: string }): VNode =>
-  h('span', null, ...blocks(parseInline(source), h as H<VNode>))
+export let MarkdownInline = (
+  { source }: { source: string },
+): VNode => h('span', null, ...blocks(parseInline(source), h as H<VNode>))

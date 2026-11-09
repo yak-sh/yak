@@ -44,6 +44,7 @@ export let choose = async (pick: Pick): Promise<string> =>
 let Frame = block('div', 'Run', {
   Row: 'label',
   Name: 'span',
+  Select: 'select',
   Go: 'button',
 })
 let { Row, Name, Go } = Frame
@@ -196,7 +197,7 @@ let Form = ({ a }: { a: Ask }) => {
     >
       <Row>
         <Name>model</Name>
-        <select
+        <Frame.Select
           value={m?.model}
           onChange={(e: Event) =>
             setChoice((e.target as HTMLSelectElement).value)}
@@ -204,19 +205,19 @@ let Form = ({ a }: { a: Ask }) => {
           {ms.map((x) => (
             <option key={x.model} value={x.model}>{x.label}</option>
           ))}
-        </select>
+        </Frame.Select>
       </Row>
       {/* effort is a provider's own axis — claude has none, so no row */}
       {!!m?.efforts.length && (
         <Row>
           <Name>effort</Name>
-          <select
+          <Frame.Select
             value={ef}
             onChange={(e: Event) =>
               setEffort((e.target as HTMLSelectElement).value)}
           >
             {m.efforts.map((x) => <option key={x} value={x}>{x}</option>)}
-          </select>
+          </Frame.Select>
         </Row>
       )}
       <Go type='button' disabled={!m} onClick={go}>▶ start</Go>

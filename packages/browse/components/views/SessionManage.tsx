@@ -16,6 +16,7 @@ import { useQueryResult } from '../useQuery.ts'
 let Frame = block('div', 'SessionManage', {
   Input: 'div',
   Label: 'label',
+  Select: 'select',
   Related: 'div',
   Group: 'details',
   Gist: 'summary',
@@ -50,7 +51,7 @@ export let SessionInput = ({ e }: { e: Ent }) => {
     <Input>
       <Label>
         model
-        <select
+        <Frame.Select
           aria-label='model for next message'
           value={choice}
           onChange={(ev: Event) => {
@@ -64,12 +65,12 @@ export let SessionInput = ({ e }: { e: Ent }) => {
           {picks.map((p) => (
             <option key={p.model} value={p.model}>{p.label}</option>
           ))}
-        </select>
+        </Frame.Select>
       </Label>
       {!!pick?.efforts.length && (
         <Label>
           effort
-          <select
+          <Frame.Select
             aria-label='effort for next message'
             value={tier}
             onChange={(ev: Event) =>
@@ -78,7 +79,7 @@ export let SessionInput = ({ e }: { e: Ent }) => {
             {pick.efforts.map((level) => (
               <option key={level} value={level}>{level}</option>
             ))}
-          </select>
+          </Frame.Select>
         </Label>
       )}
       <Composer eid={e.eid} entry using={using} />

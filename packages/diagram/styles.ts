@@ -49,7 +49,7 @@ export const css = `
 .Diagram_Head { fill: var(--_line); }
 .Diagram_Head-ref { fill: var(--_soft); }
 .Diagram_Dia { fill: var(--_paper); stroke: var(--_line); stroke-width: 1.1; }
-.Diagram text { fill: var(--_line); font-size: 10.5px; }
+.Diagram .Diagram_Text { fill: var(--_line); font-size: 10.5px; }
 .Diagram_Id { font-weight: 500; }
 .Diagram_Node-round .Diagram_Id, .Diagram_Node-hex .Diagram_Id { font-size: 11px; }
 .Diagram_Title { font-size: 12.5px; }
@@ -79,7 +79,7 @@ export const css = `
 .Diagram:not(.is-inked) .is-new .Diagram_Line {
   animation: diagram-pen var(--_pen) ease-out calc(var(--i, 0) * var(--_pen) * .6) backwards;
 }
-.Diagram:not(.is-inked) .is-new text {
+.Diagram:not(.is-inked) .is-new .Diagram_Text {
   animation: diagram-ink var(--_pen) ease-out calc((var(--i, 0) * .6 + .7) * var(--_pen)) backwards;
 }
 @keyframes diagram-pen {
@@ -89,11 +89,11 @@ export const css = `
 @keyframes diagram-ink { from { opacity: 0; } }
 
 .is-inked .is-gone { display: none; }
-.is-inked .Diagram_Fill, .is-inked text, .is-inked .Diagram_Dia, .is-inked .Diagram_Mark {
+.is-inked .Diagram_Fill, .is-inked .Diagram_Text, .is-inked .Diagram_Dia, .is-inked .Diagram_Mark {
   transition: opacity .35s;
 }
 .is-inked :not(.is-drawn) > .Diagram_Fill,
-.is-inked :not(.is-drawn) > text,
+.is-inked :not(.is-drawn) > .Diagram_Text,
 .is-inked :not(.is-drawn) > .Diagram_Dia,
 .is-inked :not(.is-drawn) > .Diagram_Mark { opacity: 0; }
 .is-inked :not(.is-drawn) > .Diagram_Line { marker-end: none; }
@@ -104,7 +104,7 @@ export const css = `
 .is-zoomed > .Diagram { cursor: grab; }
 .is-zoomed > .Diagram:active { cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) {
-  .is-new .Diagram_Stroke, .is-new .Diagram_Line, .is-new text { animation: none; }
-  .is-inked .Diagram_Fill, .is-inked text { transition: none; }
+  .is-new .Diagram_Stroke, .is-new .Diagram_Line, .is-new .Diagram_Text { animation: none; }
+  .is-inked .Diagram_Fill, .is-inked .Diagram_Text { transition: none; }
 }
 `

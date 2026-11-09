@@ -148,7 +148,11 @@ export let learnGlyphs = (more: Record<string, IconNode>): void => {
 
 /** One glyph as Lucide draws it: a 24-unit stroked SVG, sized in pixels. */
 export let Icon = (
-  { name, size = 14 }: { name: string; size?: number },
+  { name, size = 14, class: part }: {
+    name: string
+    size?: number
+    class?: string
+  },
 ) => {
   let known = name in glyphs ? name : 'file-text'
   return (
@@ -162,7 +166,7 @@ export let Icon = (
       stroke-width='2'
       stroke-linecap='round'
       stroke-linejoin='round'
-      class={`lucide lucide-${known} Icon`}
+      class={`lucide lucide-${known} Icon${part ? ` ${part}` : ''}`}
       aria-hidden='true'
     >
       {glyphs[known].map(([tag, attrs]) => h(tag, attrs))}

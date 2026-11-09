@@ -10,17 +10,19 @@ import { h } from 'preact'
 
 export let Stats:
   & Part
-  & Record<'Stat' | 'Mark' | 'Words' | 'Better' | 'Worse', Part> = block(
-    'div',
-    'Stats',
-    {
-      Stat: 'span',
-      Mark: 'span',
-      Words: 'span',
-      Better: 'em',
-      Worse: 'em',
-    },
-  )
+  & Record<'Stat' | 'Mark' | 'Glyph' | 'Words' | 'Better' | 'Worse', Part> =
+    block(
+      'div',
+      'Stats',
+      {
+        Stat: 'span',
+        Mark: 'span',
+        Glyph: 'svg',
+        Words: 'span',
+        Better: 'em',
+        Worse: 'em',
+      },
+    )
 export let description =
   'Numbers, a line each, coloured only where one would change.'
 export let sheet = (c: Colors): Sheet => ({

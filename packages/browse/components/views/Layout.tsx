@@ -131,6 +131,7 @@ let Fill = ({ eid, layout }: { eid: string; layout: string }) => {
   return (
     <FillEl>
       <Field
+        class='Layout_Input'
         placeholder='fill this pane — search the graph…'
         onInput={(e: InputEvent) =>
           seek((e.currentTarget as HTMLInputElement).value)}

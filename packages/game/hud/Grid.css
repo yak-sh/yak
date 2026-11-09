@@ -100,7 +100,7 @@
   gap: 0.05rem;
   color: var(--negative);
 
-  & svg {
+  & .Grid_Glyph {
     width: 0.65rem;
     height: 0.65rem;
   }

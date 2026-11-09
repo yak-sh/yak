@@ -32,7 +32,7 @@
 // because the surrounding title is usually the link.
 import { SHORT } from '@yaks/id'
 import { EID } from './types.ts'
-import { Marked, type RendererThis, type Tokens } from 'marked'
+import { Marked, Renderer, type RendererThis, type Tokens } from 'marked'
 import { highlight } from './highlight.ts'
 import { entityPath, entityUrl } from './url.ts'
 
@@ -120,10 +120,29 @@ let door = (ref: Ref, repo?: string | null, links = true) =>
           ? `<a href="${attr(href)}"><code>${esc(t.text)}</code></a>`
           : false
       },
+      paragraph(this: RendererThis, t: Tokens.Paragraph) {
+        return `<p class="Body_Paragraph">${
+          this.parser.parseInline(t.tokens)
+        }</p>\n`
+      },
+      list(this: RendererThis, t: Tokens.List) {
+        let tag = t.ordered ? 'ol' : 'ul'
+        let part = t.ordered ? 'Ordered' : 'Unordered'
+        return Renderer.prototype.list.call(this, t).replace(
+          `<${tag}`,
+          `<${tag} class="Body_${part}"`,
+        )
+      },
+      listitem(this: RendererThis, t: Tokens.ListItem) {
+        return Renderer.prototype.listitem.call(this, t).replace(
+          '<li',
+          '<li class="Body_Item"',
+        )
+      },
       code: (t: Tokens.Code) => {
         let lit = highlight(t.text, t.lang)
         let language = lit.language ? ` language-${lit.language}` : ''
-        return `<pre><code class="hljs${language}">${lit.html}</code></pre>\n`
+        return `<pre class="Body_Source"><code class="hljs${language}">${lit.html}</code></pre>\n`
       },
     },
   })
@@ -154,7 +173,9 @@ let parser = (ref: Ref, repo?: string | null) => {
 // prose out of the lexer's full grammar, including its first-use regex cost.
 let PLAIN = /^[A-Za-z0-9][A-Za-z0-9 ]*$/
 let prose = (s: string, ref: Ref, repo?: string | null): string =>
-  PLAIN.test(s) ? `<p>${s}</p>\n` : parser(ref, repo).parse(s) as string
+  PLAIN.test(s)
+    ? `<p class="Body_Paragraph">${s}</p>\n`
+    : parser(ref, repo).parse(s) as string
 export let md = (s: string, repo?: string | null): string =>
   prose(s, canvasRef, repo)
 export let mdAbs = (s: string, repo?: string | null): string =>

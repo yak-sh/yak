@@ -30,6 +30,7 @@ let Base = block('div', 'Grid', {
   Tier: 'span',
   Need: 'span',
   Count: 'span',
+  Glyph: 'svg',
 })
 let Box = el('span', 'Grid_Cell')
 let Press = el('button', 'Grid_Cell')
@@ -45,7 +46,7 @@ let Cell = (p: Props) =>
 export let Grid:
   & Part
   & Record<
-    'Cell' | 'Picture' | 'Label' | 'Name' | 'Tier' | 'Need' | 'Count',
+    'Cell' | 'Picture' | 'Label' | 'Name' | 'Tier' | 'Need' | 'Count' | 'Glyph',
     Part
   > = Object.assign(Base, { Cell })
 

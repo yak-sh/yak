@@ -235,6 +235,7 @@ let Input = (
     ? <Ref place={place} kind={type.eid} text={text} set={set} />
     : (
       <ui.Field
+        class={type == 'body' ? 'New_Body New_Text' : undefined}
         lines={type == 'body'}
         value={text}
         placeholder={typeName(type)}
@@ -336,6 +337,7 @@ let Outline = (
   { s, put }: { s: Sketch; put: (s: Sketch) => void },
 ) => (
   <ui.Field
+    class='New_Body'
     lines
     value={s.outline}
     placeholder='Outline: one entity a line, like this one; indent a line to put it in the one above'
