@@ -16,17 +16,23 @@
 //
 // A card's logo is the broker's image, served through our own door
 // (`logoDoor`) so the page names only yaks.app and loads nothing from
-// anywhere else.
+// anywhere else. An image is kept in the bucket once it is fetched, and only
+// an SVG document is: a broker's address can answer a web page (Nango's CDN
+// does for a logo it lost), so each address it is kept at is tried in turn,
+// and a service none answers for wears its initial until one does.
 
 import {
   adopted,
   BrokerError,
   brokerOf,
   catalogue,
+  initialLogo,
   INTEGRATION,
   type Integration,
   integrationEid,
+  isSvg,
   type Listing,
+  logoSources,
   type Offer,
 } from '@yaks/connections'
 import { background, caught } from './defects.ts'
@@ -41,9 +47,10 @@ export let BROKER = 'nango'
 /** Where a card's logo is served: this and the service's name. */
 export let LOGOS = '/connections/logo/'
 
-// Where the list is kept, how long it stands before it is asked again, and
-// the most of a logo that is kept.
+// Where the list and its logos are kept, how long the list stands before it
+// is asked again, and the most of a logo that is kept.
 let KEPT = `platform/catalog/${BROKER}.json`
+let LOGOS_KEPT = `platform/catalog/${BROKER}/logos/`
 let DAY = 86_400_000
 let LOGO_ROOM = 100_000
 
@@ -128,18 +135,56 @@ export let offersOf = async (
   )
 }
 
-// A logo as an SVG document, kept with the integration it marks; none where
-// it is not one, or is too big to keep.
-let svgOf = async (at: string): Promise<string | undefined> => {
-  if (!/^https:\/\//.test(at)) return undefined
+type Fetch = typeof fetch
+
+// The first of `sources` that answers an SVG document small enough to keep,
+// or what each answered instead.
+let fetched = async (sources: string[], fetcher: Fetch) => {
+  let answers: string[] = []
+  for (let at of sources.filter((at) => /^https:\/\//.test(at))) {
+    try {
+      let res = await fetcher(at, { signal: AbortSignal.timeout(5_000) })
+      let text = res.ok ? await res.text() : ''
+      if (text.length <= LOGO_ROOM && isSvg(text)) return { svg: text }
+      answers.push(`${at}: ${res.status} ${res.headers.get('content-type')}`)
+    } catch (e) {
+      answers.push(`${at}: ${e}`)
+    }
+  }
+  return { answers }
+}
+
+/** A listing's logo as an SVG document: kept in the bucket, else fetched
+ * from the first address that answers one and kept. None where it names no
+ * logo, or none answered one, which is ours to hear about. */
+export let logoOf = async (
+  env: Env,
+  l: Pick<Listing, 'name' | 'logo'>,
+  fetcher: Fetch = fetch,
+): Promise<string | undefined> => {
+  if (!l.logo) return undefined
+  let key = LOGOS_KEPT + encodeURIComponent(l.name)
   try {
-    let res = await fetch(at, { signal: AbortSignal.timeout(5_000) })
-    let text = res.ok ? await res.text() : ''
-    return text.length <= LOGO_ROOM && /<svg[\s>]/.test(text) ? text : undefined
+    let kept = await env.BLOBS.get(key)
+    if (kept) return new TextDecoder().decode(await kept.arrayBuffer())
   } catch (e) {
     caught(e, { request: 'catalog logo' })
+  }
+  let { svg, answers } = await fetched(logoSources(l.logo), fetcher)
+  if (!svg) {
+    caught(new Error('no address answered a catalog logo as an SVG'), {
+      request: 'catalog logo',
+      service: l.name,
+      answers: answers?.join('; '),
+    })
     return undefined
   }
+  try {
+    await env.BLOBS.put(key, svg)
+  } catch (e) {
+    caught(e, { request: 'catalog logo' })
+  }
+  return svg
 }
 
 /**
@@ -171,7 +216,10 @@ export let adopting = async (
       throw refuse('integration', `${o.title} can't be connected yet.`)
     }
   }
-  let i = adopted(o, o.image ? await svgOf(o.image) : undefined)
+  let i = adopted(
+    o,
+    o.image ? await logoOf(env, { name, logo: o.image }) : undefined,
+  )
   await meta(env).apply([{
     entity: { eid: integrationEid(name) },
     [INTEGRATION]: i,
@@ -181,21 +229,24 @@ export let adopting = async (
   return i
 }
 
-/** A card's logo, as the broker's list names it: kept by the browser for a
- * week, and drawn as an image that runs nothing.
- * Null for any other path. */
-export let logoDoor = async (env: Env, path: string) => {
+/** A card's logo, as the broker's list names it, or the service's initial
+ * where no address answers one: drawn as an image that runs nothing, and kept
+ * by the browser for a week, the initial only for an hour. A 404 for a name
+ * the list doesn't hold; null for any other path. */
+export let logoDoor = async (
+  env: Env,
+  path: string,
+  fetcher: Fetch = fetch,
+) => {
   if (!path.startsWith(LOGOS)) return null
   let name = decodeURIComponent(path.slice(LOGOS.length))
-  let at = (await listingsOf(env))?.listings.find((l) => l.name == name)?.logo
-  let res = at && /^https:\/\//.test(at)
-    ? await fetch(at, { signal: AbortSignal.timeout(5_000) })
-    : undefined
-  if (!res?.ok) return new Response(null, { status: 404 })
-  return new Response(res.body, {
+  let l = (await listingsOf(env))?.listings.find((l) => l.name == name)
+  if (!l) return new Response(null, { status: 404 })
+  let svg = await logoOf(env, l, fetcher)
+  return new Response(svg ?? initialLogo(l.title), {
     headers: {
       'content-type': 'image/svg+xml',
-      'cache-control': 'public, max-age=604800',
+      'cache-control': `public, max-age=${svg ? 604800 : 3600}`,
       'content-security-policy':
         "default-src 'none'; style-src 'unsafe-inline'",
       'x-content-type-options': 'nosniff',

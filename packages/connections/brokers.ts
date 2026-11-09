@@ -148,6 +148,22 @@ export let listingOf = (p: Provider): Listing | undefined => {
   }
 }
 
+// Where a logo a broker names is also kept: Nango's CDN can answer a missing
+// one with its web app's page, and cache that error for hours, so the same
+// file in Nango's repository stands behind it.
+let MIRRORS: [from: string, to: string][] = [[
+  'https://app.nango.dev/images/template-logos/',
+  'https://raw.githubusercontent.com/NangoHQ/nango/master/packages/webapp/public/images/template-logos/',
+]]
+
+/** Every address a listing's logo may be fetched from, its own first. */
+/// logoSources('https://logos.example/hub.svg') -> ['https://logos.example/hub.svg']
+export let logoSources = (at: string): string[] => [
+  at,
+  ...MIRRORS.filter(([from]) => at.startsWith(from))
+    .map(([from, to]) => to + at.slice(from.length)),
+]
+
 let strs = (v: unknown): string[] =>
   Array.isArray(v)
     ? v.map(String)

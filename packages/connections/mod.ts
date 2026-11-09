@@ -83,12 +83,15 @@ export {
   BROKERS,
   type Grant,
   type Listing,
+  logoSources,
   nango,
 } from './brokers.ts'
 export {
   adopted,
   catalogue,
   find,
+  initialLogo,
+  isSvg,
   kind,
   kinds,
   type Offer,

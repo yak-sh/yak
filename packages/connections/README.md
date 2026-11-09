@@ -307,6 +307,10 @@ connect that hands back no access token is left out.
 - `adopted(offer, logo)` is the integration an offer is written as once someone
   connects it: `built`, since only the host writes it, its logo the SVG fetched.
   From then on it is an integration like any other.
+- A logo is fetched from `logoSources(address)`, the listing's own first, then
+  where the broker also keeps it (Nango's repository, since Nango's CDN can
+  answer a missing logo with its web app's page). Only a body `isSvg` holds is a
+  logo; a service with none wears `initialLogo(title)`.
 
 ## Hosting it
 

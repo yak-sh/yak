@@ -138,3 +138,29 @@ export let adopted = (o: Offer, logo?: string): Integration => {
   let { categories: _c, image: _i, featured: _f, ...i } = o
   return { ...i, ...logo ? { logo } : {}, built: true }
 }
+
+// What may stand before an SVG document's root: a byte-order mark, space, an
+// XML declaration, comments and its doctype.
+let PROLOG =
+  /^(?:\uFEFF|\s|<\?xml[^>]*\?>|<!--[\s\S]*?-->|<!DOCTYPE svg[^>]*>)*/i
+
+/** Whether `text` is an SVG document: its root is `<svg>`. A page that holds
+ * an SVG is not one. */
+/// isSvg('<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg"/>') -> true
+/// isSvg('<!-- drawn --><svg><path/></svg>') -> true
+/// isSvg('<!doctype html><html><body><svg></svg></body></html>') -> false
+export let isSvg = (text: string): boolean =>
+  /^<svg[\s>/]/.test(text.replace(PROLOG, ''))
+
+let XML: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;' }
+
+/** The logo a service with no image of its own wears: the first letter of
+ * its title on a rounded square, as an SVG document. */
+export let initialLogo = (title: string): string => {
+  let first = ([...title.trim()][0] ?? '?').toUpperCase()
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">' +
+    '<rect width="24" height="24" rx="6" fill="#8882"/>' +
+    '<text x="12" y="16.5" text-anchor="middle" font-size="13" ' +
+    'font-family="system-ui,sans-serif" font-weight="600" fill="#888">' +
+    `${first.replace(/[&<>]/g, (c) => XML[c])}</text></svg>`
+}

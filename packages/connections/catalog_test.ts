@@ -4,8 +4,15 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { type Listing, listingOf, nango } from './brokers.ts'
-import { adopted, catalogue, find, kinds } from './catalog.ts'
+import { type Listing, listingOf, logoSources, nango } from './brokers.ts'
+import {
+  adopted,
+  catalogue,
+  find,
+  initialLogo,
+  isSvg,
+  kinds,
+} from './catalog.ts'
 import type { Integration } from './integrations.ts'
 
 let provider = (name: string, auth_mode: string, more = {}) => ({
@@ -176,4 +183,26 @@ test('enabling a service at Nango makes its integration once, through Nango’s 
     'GET /integrations/cc',
     'POST /integrations {"unique_key":"cc","provider":"cc"}',
   ])
+})
+
+test("a Nango logo is also fetched from Nango's repository", () => {
+  assertEquals(
+    logoSources('https://app.nango.dev/images/template-logos/hubspot.svg'),
+    [
+      'https://app.nango.dev/images/template-logos/hubspot.svg',
+      'https://raw.githubusercontent.com/NangoHQ/nango/master/packages/webapp/public/images/template-logos/hubspot.svg',
+    ],
+  )
+})
+
+test('a service with no logo wears its initial, as an SVG document', () => {
+  for (
+    let [title, letter] of [['hubSpot', 'H'], [' é', 'É'], ['<x>', '&lt;'], [
+      '',
+      '?',
+    ]]
+  ) {
+    let svg = initialLogo(title)
+    assertEquals([isSvg(svg), svg.includes(`>${letter}</text>`)], [true, true])
+  }
 })
