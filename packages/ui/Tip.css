@@ -10,3 +10,7 @@
   padding: 1px 6px;
   pointer-events: none;
 }
+.Tip[popover] {
+  inset: auto;
+  margin: 0;
+}

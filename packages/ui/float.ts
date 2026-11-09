@@ -186,6 +186,7 @@ export let tips = (
   tip.className = 'Overlay Tip'
   tip.id = 'yak-tip'
   tip.setAttribute('role', 'tooltip')
+  tip.setAttribute('popover', 'manual')
   let host: Element | null = null
   let cancel: (() => void) | undefined
   let hide = () => {
@@ -206,7 +207,10 @@ export let tips = (
     let put = () => {
       if (host != next) return
       tip.textContent = next.getAttribute('data-tip') ?? ''
-      doc.body.appendChild(tip)
+      // Stay in the dialog's accessible scope, then above it in the top layer.
+      let layer = next.closest('dialog[open]') ?? doc.body
+      layer.appendChild(tip)
+      tip.showPopover?.()
       let ids = next.getAttribute('aria-describedby')
       next.setAttribute(
         'aria-describedby',
