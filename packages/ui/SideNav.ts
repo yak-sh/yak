@@ -7,6 +7,8 @@
  * accessible text, only not shown, and the caller gives each link its label
  * as a `title` too, its tooltip. Where there is no room beside the page (a
  * phone) the column is a row that wraps, its words shown, rail or not.
+ * `SideNav.Edge` holds a whole sidebar when its edge must run past the
+ * links; its navs share that edge.
  *
  * @module
  */
@@ -24,11 +26,12 @@ import { Icon } from './Icon.ts'
 import type { Colors, Specimen } from './theme.ts'
 
 /** A side navigation. */
-export let SideNav: Part & Record<'Link' | 'Label' | 'Rule', Part> = block(
-  'nav',
-  'SideNav',
-  { Link: 'a', Label: 'span', Rule: 'hr' },
-)
+export let SideNav: Part & Record<'Link' | 'Label' | 'Rule' | 'Edge', Part> =
+  block(
+    'nav',
+    'SideNav',
+    { Link: 'a', Label: 'span', Rule: 'hr', Edge: 'aside' },
+  )
 
 /** What it is, in a line. */
 export let description =
@@ -42,21 +45,29 @@ export let sheet = (c: Colors): Sheet => ({
   SideNav_Rule: { fg: c.border2 },
 })
 
-let { Link, Label, Rule } = SideNav
+let { Link, Label, Rule, Edge } = SideNav
 
 /** Two groups, the page you are on in the first, one link under the
  * pointer; and a rail, the column collapsed to its icons. */
 export let specimens = (): Specimen[] => [
   [
-    'SideNav, Link, Link-on, Link-hover, Rule',
+    'SideNav, Edge, Link, Link-on, Link-hover, Rule',
     h(
-      SideNav,
-      { 'aria-label': 'Settings' },
-      h(Link, { href: '#SideNav', mod: 'on', 'aria-current': 'page' }, 'Apps'),
-      h(Link, { href: '#SideNav', mod: 'hover' }, 'People'),
-      h(Link, { href: '#SideNav' }, 'Billing'),
-      h(Rule, {}),
-      h(Link, { href: '#SideNav' }, 'Profile'),
+      Edge,
+      {},
+      h(
+        SideNav,
+        { 'aria-label': 'Settings' },
+        h(
+          Link,
+          { href: '#SideNav', mod: 'on', 'aria-current': 'page' },
+          'Apps',
+        ),
+        h(Link, { href: '#SideNav', mod: 'hover' }, 'People'),
+        h(Link, { href: '#SideNav' }, 'Billing'),
+        h(Rule, {}),
+        h(Link, { href: '#SideNav' }, 'Profile'),
+      ),
     ),
   ],
   [

@@ -423,7 +423,7 @@ export let deskFrame = (
   ),
   h('a', { class: 'Desk_Skip', href: '#content' }, 'Skip to content'),
   h(
-    'aside',
+    SideNav.Edge,
     { class: 'Desk_Side', id: 'menu', 'aria-label': at.label },
     h(
       'div',

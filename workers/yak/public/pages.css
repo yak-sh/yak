@@ -393,17 +393,6 @@
     min-height: 100vh;
     padding: 2rem 1.25rem;
   }
-  /* The edge between the side and the body, which the current tab opens. */
-  .Desk_Side::after {
-    content: '';
-    position: absolute;
-    inset: 0 calc(-1 * var(--room)) 0 auto;
-    width: calc(var(--stroke) + 2 * var(--room));
-    background: linear-gradient(var(--graphite) 0 0) center / var(--stroke)
-      100% no-repeat;
-    filter: var(--drawn);
-    pointer-events: none;
-  }
   .Desk_Brand {
     display: flex;
     align-items: center;
@@ -717,7 +706,6 @@
     margin-top: auto;
   }
   .Desk .SideNav {
-    --nav-edge: transparent;
     margin-right: -1.25rem;
   }
   .Desk .Desk_Here .SideNav {
@@ -875,9 +863,6 @@
       padding: 1rem;
       overflow: hidden auto;
       background: var(--bg);
-    }
-    .Desk_Side::after {
-      display: none;
     }
     .Desk_Menu {
       position: relative;
@@ -1109,19 +1094,6 @@
     padding: 1rem .75rem;
     background: var(--surface);
   }
-  /* The edge between the side and the conversation, drawn inside the side so
-     the current tab, which is clipped where the side scrolls, still covers
-     it and opens into the page (@yaks/ui `SideNav`). */
-  .Talk_Side::after {
-    content: '';
-    position: absolute;
-    inset: 0 0 0 auto;
-    width: calc(var(--stroke) + 2 * var(--room));
-    background: linear-gradient(var(--graphite) 0 0) center / var(--stroke)
-      100% no-repeat;
-    filter: var(--drawn);
-    pointer-events: none;
-  }
   /* The region scrolls down only. Its padding is the room the selector's
      hatch and lift take on hover, so the clip at its edge never cuts them;
      the current tab still reaches over the side's edge and is cut there. */
@@ -1140,7 +1112,6 @@
   /* The side's places are the settings' tabs (pages.ts `navigation`): the
      current one opens into the page beside it. */
   .Talk_Side .SideNav {
-    --nav-edge: transparent;
     --nav-panel: var(--bg);
     flex: none;
     margin-right: -.75rem;
@@ -2027,9 +1998,6 @@
       z-index: 3;
       display: flex;
       height: auto;
-    }
-    .Talk_Side::after {
-      content: none;
     }
     .Talk_Side .SideNav {
       margin-right: 0;

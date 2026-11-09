@@ -15,12 +15,21 @@
   display: grid;
   gap: .15rem;
 }
-.SideNav::after {
+.SideNav_Edge {
+  position: relative;
+}
+.SideNav_Edge .SideNav {
+  --nav-edge: transparent;
+}
+/* The stroke ends at the box's edge; the filter's room straddles it. */
+.SideNav::after,
+.SideNav_Edge::after {
   content: '';
   position: absolute;
   inset: 0 calc(-1 * var(--room)) 0 auto;
   width: calc(var(--stroke) + 2 * var(--room));
-  background: linear-gradient(var(--nav-edge) 0 0) center / var(--stroke)
+  background: linear-gradient(var(--nav-edge, var(--graphite)) 0 0) center /
+    var(--stroke)
     100% no-repeat;
   filter: var(--drawn);
   pointer-events: none;
@@ -83,6 +92,9 @@
   filter: var(--drawn);
 }
 @media (max-width: 700px) {
+  .SideNav_Edge::after {
+    content: none;
+  }
   .SideNav {
     --nav-panel: transparent;
     --nav-edge: transparent;

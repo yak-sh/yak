@@ -1249,7 +1249,7 @@ let side = (
   let open = at.current.find((c) => c && c != 'updates') ?? 'new'
   let rail = beside.collapsed ? 'rail' : undefined
   return h(
-    'aside',
+    SideNav.Edge,
     { class: 'Talk_Side', id: 'menu', 'aria-label': 'Menu' },
     h(
       'div',
