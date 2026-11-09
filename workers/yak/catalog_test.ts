@@ -66,6 +66,12 @@ test('a logo is served as its address answers it, and kept', async () => {
   equal(d.asked, [OWN])
 })
 
+test("a logo too big for an integration's row is still served", async () => {
+  let big = SVG.replace('<path', `<desc>${'x'.repeat(300_000)}</desc><path`)
+  let d = await door({ [OWN]: big })
+  equal((await d.get()).body.length, big.length)
+})
+
 test('a page answered for a logo is never relayed; its mirror stands in', async () => {
   let d = await door({ [MIRROR]: SVG })
   equal(await d.get(), { status: 200, body: SVG, cache: WEEK })

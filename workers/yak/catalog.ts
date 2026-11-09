@@ -48,11 +48,13 @@ export let BROKER = 'nango'
 export let LOGOS = '/connections/logo/'
 
 // Where the list and its logos are kept, how long the list stands before it
-// is asked again, and the most of a logo that is kept.
+// is asked again, the most of a logo the bucket keeps, and the most an
+// integration's row does (a bigger one is drawn from the door).
 let KEPT = `platform/catalog/${BROKER}.json`
 let LOGOS_KEPT = `platform/catalog/${BROKER}/logos/`
 let DAY = 86_400_000
-let LOGO_ROOM = 100_000
+let LOGO_ROOM = 1_000_000
+let ROW_ROOM = 100_000
 
 /** The broker's list as it was kept: when it was asked, what it listed, and
  * the services it refused to make ready. */
@@ -228,10 +230,8 @@ export let adopting = async (
       throw refuse('integration', `${o.title} can't be connected yet.`)
     }
   }
-  let i = adopted(
-    o,
-    o.image ? await logoOf(env, { name, logo: o.image }) : undefined,
-  )
+  let svg = o.image ? await logoOf(env, { name, logo: o.image }) : undefined
+  let i = adopted(o, svg && svg.length <= ROW_ROOM ? svg : undefined)
   await meta(env).apply([{
     entity: { eid: integrationEid(name) },
     [INTEGRATION]: i,
