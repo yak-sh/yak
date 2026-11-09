@@ -14,7 +14,7 @@ import { sourceReference } from './operator-source.ts'
 import { type Ctx, inApp, refuse } from './tool.ts'
 import type { Tool } from '@yaks/session'
 import { Unsent } from '@yaks/mail'
-import { Blocked } from '@yaks/phone'
+import { Blocked, Denied } from '@yaks/phone'
 import { appStore } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { vouched } from './session.ts'
@@ -451,7 +451,14 @@ export let channels = (env: Env): Record<string, Channel> => {
     let { phoneOf } = await import('./phones.ts')
     let { charged, costOf, unpaid } = await import('./text-spend.ts')
     let end = textSigned(space) + (request.signup ? `\n${DISCLOSURE}` : '')
-    let phone = await phoneOf(
+    // A text to a number someone connected is answered from it, paid by
+    // them (operator-line.ts `accountFor`); one to the space's or the
+    // platform's from its phone, paid from the space's budget.
+    let { accountFor } = await import('./operator-line.ts')
+    let line = back.from && back.from != space.sender?.number
+      ? await accountFor(env, back.from)
+      : null
+    let phone = line || await phoneOf(
       env,
       request.via ? { ...space.sender, via: request.via } : space.sender,
     )
@@ -462,10 +469,11 @@ export let channels = (env: Env): Record<string, Channel> => {
       ...(back.agent ? { agent: back.agent } : {}),
     })
     try {
-      return await charged(env, space, phone).send(
+      return await (line ? phone : charged(env, space, phone)).send(
         text(await signingIn(env, request.address!, answer.text)),
       )
     } catch (error) {
+      if (error instanceof Denied) throw refuse('connection', error.message)
       if (!unpaid(error)) throw error
       // Someone who texted is told by text why no answer came, however the
       // budget stands, and that text is counted all the same; the answer

@@ -1,4 +1,4 @@
-import { test } from '@yaks/testing'
+import { ok, test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -51,6 +51,7 @@ await dir.apply({
       person: {},
       doc: { title: 'Jeff Peterson' },
       email: { address: 'jeff@example.com' },
+      phone: { number: '+12695550177' },
     },
     { entity: { eid }, space: { slug: 'jeff', store: 'jeff' } },
     {
@@ -161,6 +162,7 @@ let said = (r: Request, words: RegExp) => {
 // What the writer of a text back is offered, in their own conversation.
 let offered: Request['tools'] = []
 let signupOffered: Request['tools'] = []
+let memberOffered: Request['tools'] = []
 let service = operatorService(
   env,
   held,
@@ -175,6 +177,8 @@ let service = operatorService(
           name: 'Dr Alvarez',
           text: 'Does Tuesday at 3 work for his checkup?',
         })
+      : said(req, /By text: Is the hall free/)
+      ? (memberOffered = req.tools, reply('The hall is free Sunday.'))
       : said(req, /By text, signing up for a form:/)
       ? (signupOffered = req.tools, reply('Which form would you like?'))
       : said(req, /By text from \+12695550142/)
@@ -267,6 +271,11 @@ await texted('start-signup', '2695550199', 'START')
 await texted('yes-signup', '2695550199', 'yes')
 await service.drain()
 let afterStart = (await store.g.read('.operator_request')).length
+await texted('member', '2695550177', 'Is the hall free Sunday?')
+await service.drain()
+let memberBack = of('sendSMS').find((t) =>
+  t.get('message')?.startsWith('The hall is free')
+)!
 let root = await conversationOf(store, '/at', rootOf(eid, person))
 let writer = (await dir.phoned('+12695550142'))!
 let theirs = await conversationOf(store, '/at', rootOf(eid, writer))
@@ -523,4 +532,11 @@ test('a legacy voip.ms account-number connection answers without own_number rows
   assertEquals(legacyAnswer.get('did'), '2695550111')
   assertEquals(legacyAnswer.get('dst'), '2695550198')
   assertStringIncludes(legacyAnswer.get('message')!, 'Legacy signup answer')
+})
+
+test("a member's text to the inbound number is their own Operator's, answered from that number", () => {
+  ok(memberOffered.some((t) => t.name == 'phone_numbers'))
+  ok(!memberOffered.some((t) => t.name.startsWith('signup_')))
+  assertEquals(memberBack.get('did'), '2695550111')
+  assertEquals(memberBack.get('dst'), '2695550177')
 })

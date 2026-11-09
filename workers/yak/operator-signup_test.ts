@@ -6,7 +6,12 @@ import { operating } from './operator.ts'
 import { handleChannels } from './operator-channels.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { operatorReply, operatorRequest } from './operator-host.ts'
-import { signupArrived, textControl, textStopped } from './operator-signup.ts'
+import {
+  signupArrived,
+  spaceArrived,
+  textControl,
+  textStopped,
+} from './operator-signup.ts'
 import { drain } from './operator-store.ts'
 import { rootOf } from './operator-root.ts'
 
@@ -24,7 +29,7 @@ await dir.apply({
 }, { 'x-yak-person': member, 'x-yak-role': 'owner' })
 let space = (await dir.at(spaceId))!
 let store = operatorMemory()
-let seen: ModelRequest[] = [], replies: string[] = []
+let seen: ModelRequest[] = [], replies: string[] = [], texts: string[] = []
 let operator = operating(store, env, {
   directory: () => dir,
   tools: () => [{
@@ -47,6 +52,10 @@ handleChannels(operator, env, {
     replies.push(answer.text)
     return Promise.resolve({})
   },
+  text: (request, answer) => {
+    texts.push(`${request.address}: ${answer.text}`)
+    return Promise.resolve({})
+  },
 })
 env.BUILDER = {
   idFromName: (name) => name,
@@ -66,7 +75,11 @@ env.BUILDER = {
         )
         : (await operatorRequest(
           operator,
-          { person, space: spaceId, role: 'viewer' },
+          {
+            person,
+            space: spaceId,
+            role: person == member ? 'owner' : 'viewer',
+          },
           path,
           await req.json(),
           () => {},
@@ -88,31 +101,36 @@ let first = arrival('+12695550142')
 let accepted = await signupArrived(env, space, first)
 let redelivered = await signupArrived(env, space, first)
 await drain(store)
-await signupArrived(env, space, arrival('+12695550100'))
+await spaceArrived(env, space, arrival('+12695550143'))
+await drain(store)
+await spaceArrived(env, space, arrival('+12695550100', 'Add Sunday to it'))
 await drain(store)
 let stranger = (await dir.phoned(first.from))!
+let walkIn = (await dir.phoned('+12695550143'))!
 let requests = await store.g.read('.operator_request')
-let sessions = await store.g.read('.operator_session')
-
-test('inbound sign-ups run as the sender, with only form tools even when they own the space', () => {
-  equal([accepted, redelivered], [true, false])
-  equal(seen.length, 2)
-  for (let req of seen) {
-    equal(req.tools.map((t) => t.name).sort(), [
-      'signup_answer',
-      'signup_forms',
-      'signup_mine',
-      'signup_start',
-    ])
-  }
-  equal(
-    requests.map((b) => (b.operator_request as { person: string }).person)
-      .sort(),
-    [stranger, member].sort(),
+let asked = (person: string) =>
+  requests.filter((b) =>
+    (b.operator_request as { person: string }).person == person
   )
+let tools = (i: number) => seen[i].tools.map((t) => t.name).sort()
+let FORMS = ['signup_answer', 'signup_forms', 'signup_mine', 'signup_start']
+
+test('a text from someone with no seat in the space runs as them, with only form tools', async () => {
+  equal([accepted, redelivered], [true, false])
+  equal([tools(0), tools(1)], [FORMS, FORMS])
+  equal([asked(stranger).length, asked(walkIn).length], [1, 1])
   equal(replies, ['Which form would you like?', 'Which form would you like?'])
-  ok(sessions.every((b) => b.entity.eid != rootOf(spaceId, member)))
-  ok(!JSON.stringify(seen).includes('Private member tool'))
+  ok(!JSON.stringify(seen.slice(0, 2)).includes('Private member tool'))
+  equal((await store.g.get([rootOf(spaceId, walkIn)]))[0], undefined)
+})
+
+test("a member's text to the space's number is theirs to their own Operator, with their reach", async () => {
+  equal(seen.length, 3)
+  ok(tools(2).includes('unrelated'))
+  ok(!tools(2).some((t) => t.startsWith('signup_')))
+  equal(asked(member).length, 1)
+  ok((await store.g.get([rootOf(spaceId, member)]))[0]?.operator_session)
+  equal(texts, ['+12695550100: Which form would you like?'])
 })
 
 let control = async (text: string) => {
@@ -139,7 +157,7 @@ test('STOP persists until START, and carrier keywords never start a model turn',
     false,
   ])
   equal(keyword, false)
-  equal(seen.length, 2)
+  equal(seen.length, 3)
 })
 
 let incoming = arrival('+12695550199')

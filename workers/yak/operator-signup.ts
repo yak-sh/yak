@@ -8,7 +8,8 @@ import { KERNEL } from './meta.ts'
 import { refuse } from './tool.ts'
 import { builderOf, SPACE } from './build-door.ts'
 import { requestId } from './operator-channels.ts'
-import { phonedIn } from './operator-texts.ts'
+import { phonedIn, textedOperator } from './operator-texts.ts'
+import { reachOf } from './operator-reach.ts'
 
 /** A yes answers a form question; the named carrier commands keep their aliases. */
 export let formKeyword = (text: string) =>
@@ -126,9 +127,10 @@ export let signupArrived = async (
   env: Env,
   space: Space,
   arrival: Arrival & { via: string },
+  person?: string,
 ) => {
   if (formKeyword(arrival.text) || !arrival.text.trim()) return false
-  let person = await phonedIn(env, arrival.from)
+  person ??= await phonedIn(env, arrival.from)
   let response = await builderOf(env, space.eid)(() =>
     new Request('https://builder/operator/signup', {
       method: 'POST',
@@ -182,18 +184,26 @@ export let controlText = async (
   return await response.json() as { stopped: boolean }
 }
 
-/** A space's own inbound line keeps carrier keywords out of the model. */
+/** A text to a space's own number or inbound line: carrier keywords are
+ * answered and kept out of the model. Anything else from someone with a seat
+ * in the space is a request in their own conversation with its Operator,
+ * which has their reach (operator-reach.ts `reachOf`); from anyone else it is
+ * a sign-up, with only the form tools (D-151808). */
 export let spaceArrived = async (
   env: Env,
   space: Space,
   arrival: Arrival & { via: string },
 ) => {
   let word = formKeyword(arrival.text)
-  let { countedTexts } = await import('./meter.ts')
-  let { costOf } = await import('./text-spend.ts')
   let { stopped } = await controlText(env, space, arrival)
   if (!word) {
-    if (!stopped && await signupArrived(env, space, arrival)) {
+    if (stopped) return
+    let person = await phonedIn(env, arrival.from)
+    let { role } = await reachOf(directoryOf(env.STORE), space, person)
+    if (role) return await textedOperator(env, space, person, arrival)
+    if (await signupArrived(env, space, arrival, person)) {
+      let { countedTexts } = await import('./meter.ts')
+      let { costOf } = await import('./text-spend.ts')
       await countedTexts(env, space, costOf(arrival.text))
     }
     return

@@ -292,6 +292,21 @@ export let arrived = async (
   // often it is posted.
   let signup = Date.parse(texting.at) == Date.parse(arrival.at) &&
     texting.consent == arrival.text.trim()
+  await textedOperator(env, space, person, arrival, signup)
+}
+
+/**
+ * `arrival`, a request to `space`'s Operator in `person`'s own conversation,
+ * answered by text from the number or RCS agent it reached. Counted once it
+ * is the Operator's, and only the first time a provider posts it.
+ */
+export let textedOperator = async (
+  env: Env,
+  space: Space,
+  person: string,
+  arrival: Arrival & { via: string },
+  signup = false,
+) => {
   let { requestId } = await import('./operator-channels.ts')
   let { builderOf, SPACE } = await import('./build-door.ts')
   let files = await pictures(env, space, arrival)
@@ -322,8 +337,7 @@ export let arrived = async (
   if (!response.ok) {
     throw new Error('Operator text intake failed: ' + await response.text())
   }
-  // Counted once it is the Operator's, and only the first time a provider
-  // posts it.
+  await response.body?.cancel()
   if (response.status == 202) {
     await countedTexts(env, space, costOf(arrival.text))
   }

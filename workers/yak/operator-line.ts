@@ -403,7 +403,7 @@ export let phoneSend = (
 /** The account that sends from `number`: the one a connection holding it
  * opens, as listed beside it; null when no connection holds it or its key is
  * missing. */
-let accountFor = async (env: Env, number: string) => {
+export let accountFor = async (env: Env, number: string) => {
   let [held] = await meta(env).query(
     `.${OWN}.number=${JSON.stringify(number)}&*`,
   )
