@@ -14,6 +14,7 @@ import * as base from './base.ts'
 import * as body from './Body.ts'
 import * as button from './Button.ts'
 import * as card from './Card.ts'
+import * as modal from './Modal.ts'
 import * as catalog from './Catalog.ts'
 import * as cards from './Cards.ts'
 import * as chart from './Chart.ts'
@@ -147,6 +148,7 @@ let modules = {
     Section: section,
     More: more,
     Card: card,
+    Modal: modal,
     Report: report,
     Group: group,
     Panes: panes,

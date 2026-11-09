@@ -10,3 +10,7 @@
 .Cards > * {
   min-width: 0;
 }
+
+.Cards-compact {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr));
+}

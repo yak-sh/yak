@@ -1,0 +1,37 @@
+/* The frame owns scrolling, so a long card fits a phone and its backdrop
+   stays behind it. The open attribute also works before script runs. */
+.Modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: var(--gap);
+  border: 0;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  color: var(--text);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.Modal[open] {
+  display: grid;
+  align-items: start;
+  justify-items: center;
+}
+.Modal::backdrop {
+  background: transparent;
+}
+.Modal_Backdrop {
+  position: fixed;
+  inset: 0;
+}
+.Modal_Body {
+  position: relative;
+  box-sizing: border-box;
+  width: min(100%, 42rem);
+  margin-block: auto;
+}

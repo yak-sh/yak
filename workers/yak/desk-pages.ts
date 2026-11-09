@@ -14,6 +14,7 @@ import {
   Form,
   Group,
   Icon,
+  Modal,
   More,
   Notice,
   Report,
@@ -31,6 +32,7 @@ import type {
   Using,
 } from './connections.ts'
 import { INTEGRATIONS } from './integrations.ts'
+import { detail } from './integration-detail.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { type IconName, icons } from './icons.ts'
 import { day, fileDrop, raw } from './html.ts'
@@ -52,7 +54,6 @@ import { type Ceiling, count, PRICE, share, size, WARN } from './meter.ts'
 import { columns } from '@yaks/ui/chart'
 
 import {
-  about,
   addressBox,
   billButton,
   billing,
@@ -353,7 +354,7 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
               link('apps', 'Apps'),
               link('people', 'People'),
               operator,
-              link('connections', 'Linked accounts'),
+              link('connections', 'Connections'),
               link('visits', 'Visits'),
               at.sell ? link('selling', 'Selling') : null,
               link('billing', 'Billing'),
@@ -1464,7 +1465,7 @@ let connection = (c: Shown, on: boolean, action: string) => {
     Card,
     { 'data-connection': c.eid },
     heading(c.face.title, { mark: logo(c.face), status: stands, actions }),
-    about(c.face),
+    detail(c.face, c.keyed),
     notice,
     howTo(c.face, open && !ask),
     paste,
@@ -1535,7 +1536,7 @@ let borrowing = (
       status: status(`Borrowed from ${b.lender}`, 'positive'),
       actions,
     }),
-    about(b.face),
+    detail(b.face, b.keyed),
     h(
       Card.Sub,
       null,
@@ -1568,23 +1569,23 @@ let borrowing = (
   )
 }
 
-// A connection, a service or a loan as a card in a grid: its logo, name and
-// one line, how it stands where it is connected, and the one link that opens
-// the rest. What it asks for and how to get it are behind that link, drawn
-// whole at the top of the page (`setup`).
+// One navigable card, its mark above its name and one short line.
 let card = (
   env: Host,
   face: Face,
   line: Kids,
-  go: Kids,
+  href?: string,
   stands: Kids = null,
 ) =>
   h(
     Card,
-    null,
-    heading(face.title, { mark: logo(face, env), status: stands }),
-    line ? h(Card.Sub, null, line) : null,
-    go ? h(Card.Actions, null, go) : null,
+    { mod: href ? 'button' : undefined, href },
+    logo(face, env) ??
+      h(Card.Mark, { 'aria-hidden': true }, face.title.charAt(0)),
+    h(Card.Title, null, face.title),
+    face.tagline ? h(Card.Sub, null, face.tagline) : null,
+    line && line != face.tagline ? h(Card.Sub, null, line) : null,
+    stands,
   )
 
 // The link a card's button follows: this page, opened on one thing.
@@ -1594,16 +1595,9 @@ let openedOn = (action: string, key: string, value: string) => {
   return `${to.pathname}${to.search}#connect`
 }
 
-// The page: one space's connections, short on first visit. Each thing is a
-// card in a grid, and what it asks for (a key, a sign-in, how to get one) is
-// behind its button: Connect, or Manage for one already connected, which
-// opens the page on it (`?connect=<eid>`, `?add=<name>`) with it drawn whole
-// at the top, saying which space it goes to. Under that, what agents asked
-// this space for and nobody has connected yet, then what is connected (on the
-// person's own space, theirs too: what they connected for apps that ask each
-// person, and the services holding a grant from them), then the catalog:
-// featured services, or what a search found, every service a broker lists
-// among them, and a key for a service nobody lists.
+// One space's connections and catalog. Each card opens a server-rendered
+// dialog at ?connect=<eid> or ?add=<name>; the ordinary links and forms work
+// before JavaScript, which adds the browser's modal focus and Escape behavior.
 let connections = (at: DeskPage, env: Host) => {
   let c: Connections = at.connections ?? {
     on: false,
@@ -1613,30 +1607,50 @@ let connections = (at: DeskPage, env: Host) => {
     borrowed: [],
   }
   let host = spaceHost(env, at.space)
-  let action = enabling(managePath('connections', at.space), c.enable)
+  let context = new URL(
+    enabling(managePath('connections', at.space), c.enable),
+    'https://page.invalid',
+  )
+  if (c.catalog?.q) context.searchParams.set('q', c.catalog.q)
+  let action = `${context.pathname}${context.search}`
   // The service the page was opened to add: a key to paste, or a sign-in to
   // start, and which space it goes to.
-  let offer = (i: Offered) =>
-    h(
-      Card,
-      { as: 'form', method: 'post', action },
-      held('integration', i.name),
-      heading(`Connect ${i.face.title}`, {
-        mark: logo(i.face, env),
-        actions: i.keyed ? null : press('add', 'Connect', false),
-      }),
-      about(i.face),
-      howTo(i.face, true),
-      i.keyed
-        ? keyBox(
-          `add-${i.name}`,
-          'Paste the key',
-          press('add', 'Save key', false),
-          '',
-          i.face.fields,
-        )
-        : null,
-    )
+  let offer = (i: Offered) => [
+    heading(`Connect ${i.face.title}`, {
+      mark: logo(i.face, env),
+      actions: h(Button, {
+        href: action,
+        'data-modal-close': '',
+        autofocus: true,
+      }, 'Close'),
+    }),
+    detail(i.face, i.keyed),
+    to('It will be connected to', addTo(i.name)),
+    i.available === false
+      ? [
+        h(
+          Notice,
+          null,
+          'This service is in the catalog, but connecting through this provider is not available yet.',
+        ),
+        h(Button, { type: 'button', disabled: true }, 'Connect'),
+      ]
+      : h(
+        Form,
+        { method: 'post', action },
+        held('integration', i.name),
+        howTo(i.face, true),
+        i.keyed
+          ? keyBox(
+            `add-${i.name}`,
+            'Paste the key',
+            press('add', 'Connect', false),
+            '',
+            i.face.fields,
+          )
+          : h(Form.Actions, null, press('add', 'Connect', false)),
+      ),
+  ]
   let add = h(
     Card,
     { as: 'form', method: 'post', action },
@@ -1715,8 +1729,7 @@ let connections = (at: DeskPage, env: Host) => {
   // service to add.
   let open = c.open ? c.list.find((one) => one.eid == c.open) : undefined
   let loan = c.open ? c.borrowed.find((b) => b.eid == c.open) : undefined
-  let manage = (eid: string, label: string) =>
-    h(Button, { href: openedOn(action, 'connect', eid) }, label)
+  let manage = (eid: string) => openedOn(action, 'connect', eid)
   let shown = (one: Shown) =>
     card(
       env,
@@ -1728,20 +1741,14 @@ let connections = (at: DeskPage, env: Host) => {
         : one.apps.length
         ? `For ${one.apps.map((a) => a.title).join(', ')}`
         : one.face.tagline,
-      manage(
-        one.eid,
-        one.status == 'needed'
-          ? 'Connect'
-          : one.status == 'broken' || one.failed
-          ? 'Reconnect'
-          : 'Manage',
-      ),
+      manage(one.eid),
       one.status == 'needed' ? null : status(
         one.failed ? 'Not saved' : STATUS[one.status],
         one.status == 'connected' && !one.failed ? 'positive' : 'negative',
       ),
     )
-  let grid = (cards: Kids[]) => cards.length ? h(Cards, null, cards) : null
+  let grid = (cards: Kids[]) =>
+    cards.length ? h(Cards, { mod: 'compact' }, cards) : null
   let group = (title: Kids, ...kids: Kids[]) =>
     kids.some(Boolean) ? [h(Group, null, title), kids] : null
   let yours = [
@@ -1753,7 +1760,7 @@ let connections = (at: DeskPage, env: Host) => {
         `Signed in with your yaks.app account on ${
           day(new Date(s.connectedAt * 1000).toISOString())
         }.`,
-        null,
+        undefined,
         status('Connected', 'positive'),
       )
     ),
@@ -1765,7 +1772,7 @@ let connections = (at: DeskPage, env: Host) => {
         env,
         b.face,
         `${b.app.title} borrows ${b.lender}’s`,
-        manage(b.eid, 'Manage'),
+        manage(b.eid),
         status('Borrowed', 'positive'),
       )
     ),
@@ -1778,7 +1785,7 @@ let connections = (at: DeskPage, env: Host) => {
       env,
       i.face,
       i.face.tagline,
-      h(Button, { href: openedOn(action, 'add', i.name) }, 'Connect'),
+      openedOn(action, 'add', i.name),
     )
   let finding = cat
     ? h(
@@ -1839,8 +1846,7 @@ let connections = (at: DeskPage, env: Host) => {
         : null,
     ]
     : grid(c.built.map(tile))
-  // At the top, the one the page was opened on, saying where it goes, and
-  // the other spaces it could go to instead.
+  // The selected service says which space it goes to and offers the others.
   let elsewhere = (at.spaces ?? []).filter((s) => s.owner && s.slug != at.space)
   let to = (what: string, other?: (slug: string) => string) =>
     h(
@@ -1860,9 +1866,7 @@ let connections = (at: DeskPage, env: Host) => {
     )
   let addTo = (name: string) => (slug: string) =>
     openedOn(managePath('connections', slug), 'add', name)
-  let setup = c.asked
-    ? [to('It will be connected to', addTo(c.asked.name)), offer(c.asked)]
-    : open
+  let setup = c.asked ? offer(c.asked) : open
     ? [
       open.own ? null : to(
         open.status == 'needed' ? 'It will be connected to' : 'Connected for',
@@ -1872,51 +1876,74 @@ let connections = (at: DeskPage, env: Host) => {
     : loan
     ? [borrowing(loan, c.on, action, mine(loan))]
     : null
-  let back = setup
+  let modal = setup
     ? h(
-      'p',
-      null,
+      Modal,
+      {
+        open: true,
+        'aria-modal': true,
+        id: 'connect',
+        'aria-label': c.asked
+          ? `Connect ${c.asked.face.title}`
+          : 'Manage connection',
+      },
+      h(Modal.Backdrop, {
+        href: action,
+        tabIndex: -1,
+        'aria-label': 'Close connection details',
+      }),
       h(
-        'a',
-        { href: managePath('connections', at.space) },
-        'Back to all connections',
+        Modal.Body,
+        null,
+        c.asked ? null : h(
+          Card.Actions,
+          null,
+          h(
+            Button,
+            { href: action, 'data-modal-close': '', autofocus: true },
+            'Close',
+          ),
+        ),
+        setup,
       ),
     )
     : null
   return [
-    c.on ? null : h(
-      Card,
-      null,
-      heading("Keys can't be saved here yet"),
-      h(
-        Card.Sub,
+    h('div', { inert: setup ? true : undefined, 'data-connections': '' }, [
+      c.on ? null : h(
+        Card,
         null,
-        'This server has nowhere safe to keep a key, so connecting is switched off.',
+        heading("Keys can't be saved here yet"),
+        h(
+          Card.Sub,
+          null,
+          'This server has nowhere safe to keep a key, so connecting is switched off.',
+        ),
       ),
-    ),
-    setup ? h('div', { id: 'connect' }, setup, back) : null,
-    group('Requested by agents', grid(asks.map(shown))),
-    group('Yours', grid(yours)),
-    group(yours.length ? `Connected for ${host}` : 'Connected', grid(here)),
-    c.list.length || c.services.length || c.borrowed.length ? null : empty(
-      'No connections yet',
-      h(
-        'p',
-        null,
-        'Connect a service below, or ask an agent to build an app that uses one: what it asks for shows up here.',
+      group('Requested by agents', grid(asks.map(shown))),
+      group('Yours', grid(yours)),
+      group(yours.length ? `Connected for ${host}` : 'Connected', grid(here)),
+      c.list.length || c.services.length || c.borrowed.length ? null : empty(
+        'No connections yet',
+        h(
+          'p',
+          null,
+          'Connect a service below, or ask an agent to build an app that uses one: what it asks for shows up here.',
+        ),
       ),
-    ),
-    h(Group, { id: 'find' }, 'All services'),
-    finding,
-    h('div', { 'data-found': '' }, found),
-    c.on
-      ? h(
-        More,
-        null,
-        h('summary', null, 'Add a key for a service not listed'),
-        h(More.Body, null, add),
-      )
-      : null,
+      h(Group, { id: 'find' }, 'All services'),
+      finding,
+      h('div', { 'data-found': '' }, found),
+      c.on
+        ? h(
+          More,
+          null,
+          h('summary', null, 'Add a key for a service not listed'),
+          h(More.Body, null, add),
+        )
+        : null,
+    ]),
+    modal,
   ]
 }
 
@@ -2139,7 +2166,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     updates: 'Updates',
     apps: 'Apps',
     people: 'People',
-    connections: 'Linked accounts',
+    connections: 'Connections',
     new: 'New app',
     visits: 'Visits',
     selling: 'Selling',

@@ -117,7 +117,7 @@ test('Manage is one side: back to the Operator, the space you manage, then your 
     { label: 'Apps', href: '/manage/dana/apps' },
     { label: 'People', href: '/manage/dana/people' },
     { label: 'Pip, your Operator', href: '/manage/dana/operator' },
-    { label: 'Linked accounts', href: '/manage/dana/connections' },
+    { label: 'Connections', href: '/manage/dana/connections' },
     { label: 'Visits', href: '/manage/dana/visits' },
     { label: 'Billing', href: '/manage/dana/billing' },
     { label: 'Space settings', href: '/manage/dana/settings' },
@@ -127,7 +127,7 @@ test('Manage is one side: back to the Operator, the space you manage, then your 
   for (
     let [view, title] of [
       ['operator', 'Pip, your Operator'],
-      ['connections', 'Linked accounts'],
+      ['connections', 'Connections'],
       ['settings', 'Space settings'],
       ['invite', 'Invite a friend'],
     ] as const

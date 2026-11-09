@@ -218,6 +218,10 @@ ${links(env, 'pages.css')}${
       ? `<script src="${asset(env, 'side.js')}" defer></script>`
       : ''
   }${
+    main.includes('data-modal-close')
+      ? `<script src="${asset(env, 'modal.js')}" defer></script>`
+      : ''
+  }${
     main.includes('data-find')
       ? `<script src="${asset(env, 'find.js')}" defer></script>`
       : ''

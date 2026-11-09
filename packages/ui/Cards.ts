@@ -2,7 +2,7 @@
  * Like things side by side in equal columns, as many to a line as fit: cards
  * of services to connect, of apps, of anything a person scans across to pick
  * one. Each child is a cell, and they line up in rows the same height; on a
- * phone it is one column. A terminal lists them, one under another.
+ * phone it is one column; `compact` fits smaller choices side by side. A terminal lists them, one under another.
  *
  * @module
  */
@@ -50,6 +50,15 @@ export let specimens = (): Specimen[] => [
       cell('Weather API', 'Forecasts for any place on Earth, by the hour.'),
       cell('Mail', 'Communication'),
       cell('Payments', 'Payment · Invoicing'),
+    ),
+  ],
+  [
+    'Cards-compact',
+    h(
+      Cards,
+      { mod: 'compact' },
+      cell('Calendar', 'Productivity'),
+      cell('Mail', 'Communication'),
     ),
   ],
 ]

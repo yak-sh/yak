@@ -152,7 +152,7 @@ export let page = async (all: Listed[], env: Host = {}) =>
         h(
           'p',
           { class: 'Note' },
-          "On your space's Linked accounts page, add a key for any service, write how to get one, and list it here. Anyone can then add it to a space of theirs, with their own key.",
+          "On your space's Connections page, add a key for any service, write how to get one, and list it here. Anyone can then add it to a space of theirs, with their own key.",
         ),
         h(
           'p',

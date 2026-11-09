@@ -81,6 +81,16 @@ export let specimens = (): Specimen[] => [
     ),
   ],
   [
+    'Card-button',
+    h(
+      Card,
+      { mod: 'button', href: '#weather' },
+      h(Mark, { 'aria-hidden': true }, '☀'),
+      h(Title, null, 'Weather API'),
+      h(Sub, null, 'Forecasts for any place on Earth.'),
+    ),
+  ],
+  [
     'Card',
     h(Card, {}, h('p', null, 'What a card holds, a gap from what follows.')),
   ],

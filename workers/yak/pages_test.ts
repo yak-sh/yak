@@ -254,17 +254,16 @@ test('connections: first a grid of cards, theirs on their own space and then the
   let under = (g: Element) =>
     [...g.nextElementSibling!.querySelectorAll('.Card')].map((c) => [
       c.querySelector('h2')?.textContent,
-      c.querySelector('.Card_Actions a')?.textContent,
-      c.querySelector('.Card_Actions a')?.getAttribute('href'),
+      c.getAttribute('href'),
     ])
   assertEquals(under(groups[0]), [
-    ['Maps', 'Connect', '/manage/ada/connections?connect=Maps#connect'],
+    ['Maps', '/manage/ada/connections?connect=Maps#connect'],
   ])
   assertEquals(under(groups[1]), [
-    ['Mail', 'Manage', '/manage/ada/connections?connect=Mail#connect'],
+    ['Mail', '/manage/ada/connections?connect=Mail#connect'],
   ])
   assertEquals(under(groups[2]), [
-    ['Weather', 'Manage', '/manage/ada/connections?connect=Weather#connect'],
+    ['Weather', '/manage/ada/connections?connect=Weather#connect'],
   ])
   assertEquals(
     [...document.querySelectorAll('[data-found] .Card h2')]
@@ -302,7 +301,7 @@ test('connections: first a grid of cards, theirs on their own space and then the
   let posts = [
     ...[...kept.querySelectorAll('form[method="post"]')]
       .map((f) => f.getAttribute('action')!),
-    ...[...kept.querySelectorAll('.Card_Actions a')]
+    ...[...kept.querySelectorAll('.Card-button')]
       .map((a) => a.getAttribute('href')!),
   ].map((at) => new URL(at, 'https://yaks.fyi'))
     .filter((to) => to.pathname == '/manage/ada/connections')
@@ -427,10 +426,10 @@ test('connections: a page opened to add one from the directory offers it first, 
   assertStringIncludes(top.textContent!, 'It will be connected to ada.yaks.fyi')
   assertEquals(how(card), { open: true, says: HOW })
   // Its site is its maker's word, linked as theirs.
-  let site = card.querySelector('.Card_Sub a')!
+  let site = card.querySelector('a[href="https://api.esv.org"]')!
   assertEquals(
     [site.getAttribute('href'), site.getAttribute('rel'), site.textContent],
-    ['https://api.esv.org', 'nofollow ugc', 'api.esv.org'],
+    ['https://api.esv.org', 'nofollow ugc', 'Service homepage'],
   )
   assertEquals(
     card.querySelector<HTMLInputElement>('[name=integration]')!.value,
@@ -438,7 +437,7 @@ test('connections: a page opened to add one from the directory offers it first, 
   )
   assertEquals(
     card.querySelector('button[value=add]')!.textContent,
-    'Save key',
+    'Connect',
   )
 })
 
@@ -625,14 +624,21 @@ test('connections: a built integration is offered by its face, and a site is lin
     .querySelector('[data-found] .Card')!
   assertEquals(tile.querySelector('h2')!.textContent, 'Cal')
   assertEquals(
-    tile.querySelector('.Card_Actions a')!.getAttribute('href'),
+    tile.getAttribute('href'),
     '/manage/ada/connections?add=cal#connect',
   )
   // Pressed, the page draws it whole: its site linked by its host.
   let card = parseHTML(await offered(CAL.site, true)).document
     .querySelector('#connect .Card')!
   assertEquals(card.querySelector('h2')!.textContent, 'Connect Cal')
-  assertEquals(faced(card), drawn)
+  assertEquals(
+    card.querySelector('img.Card_Mark')!.getAttribute('src'),
+    drawn.logo,
+  )
+  assertEquals(
+    card.querySelector('a[href="https://cal.test/"]')?.textContent,
+    'Service homepage',
+  )
   assertEquals(
     (await offered('javascript:alert(1)', true)).includes('alert'),
     false,
@@ -765,4 +771,117 @@ test('selling names the provider it sells through', async () => {
     await selling({ provider: undefined }),
     'Selling is not available here yet.',
   )
+})
+
+test('a service detail URL is a server-open modal with its pitch, access, provider, space and Connect form', async () => {
+  for (let keyed of [false, true]) {
+    let face = {
+      ...CAL,
+      tagline: 'Team calendars',
+      description: 'Cal keeps a team’s appointments together.',
+      details:
+        'Read calendars and create events. Access depends on the account and granted permissions.',
+      docs: 'https://cal.test/docs',
+      connects: keyed ? 'key' as const : 'signin' as const,
+      broker: 'nango',
+    }
+    let catalog = {
+      q: 'calendar',
+      found: [],
+      featured: [],
+      total: 1,
+      matched: 0,
+      kinds: [],
+    }
+    let html = await desk({
+      ...page,
+      view: 'connections',
+      connections: {
+        on: true,
+        list: [],
+        services: [],
+        borrowed: [],
+        built: [],
+        enable: ['cal'],
+        catalog,
+        asked: { name: 'cal', keyed, face },
+      },
+    }, env).text()
+    let { document } = parseHTML(html)
+    let modal = document.querySelector('dialog[open]')!
+    assert(modal)
+    assertEquals(modal.id, 'connect')
+    for (
+      let text of [
+        face.tagline,
+        face.description,
+        face.details,
+        `Connects with ${keyed ? 'API key' : 'OAuth'} through Nango.`,
+        'It will be connected to ada.yaks.fyi',
+      ]
+    ) {
+      assertStringIncludes(modal.textContent!, text)
+    }
+    assertEquals(
+      modal.querySelector('a[href="https://cal.test/"]')?.textContent,
+      'Service homepage',
+    )
+    assertEquals(
+      modal.querySelector('a[href="https://cal.test/docs"]')?.textContent,
+      'Integration docs',
+    )
+    let form = modal.querySelector('form')!
+    assertEquals(form.getAttribute('method'), 'post')
+    assertEquals(
+      form.querySelector('input[name=integration]')?.getAttribute('value'),
+      'cal',
+    )
+    assertEquals(form.querySelector('button[name=do]')?.textContent, 'Connect')
+    assertEquals(!!form.querySelector('input[type=password]'), keyed)
+    let back = '/manage/ada/connections?enable=cal&q=calendar'
+    assertEquals(form.getAttribute('action'), back)
+    assertEquals(
+      modal.querySelector('[data-modal-close]')?.getAttribute('href'),
+      back,
+    )
+    assertEquals(
+      modal.querySelector('.Modal_Backdrop')?.getAttribute('href'),
+      back,
+    )
+    assert(document.querySelector('[data-connections]')?.hasAttribute('inert'))
+    assert(!modal.closest('[inert]'))
+    assertStringIncludes(html, '/modal.js')
+  }
+})
+
+test('a catalog service without a connectable host still opens its details', async () => {
+  let html = await desk({
+    ...page,
+    view: 'connections',
+    connections: {
+      on: true,
+      list: [],
+      services: [],
+      borrowed: [],
+      built: [],
+      asked: {
+        name: 'cal',
+        keyed: false,
+        available: false,
+        face: {
+          ...CAL,
+          description: 'A calendar service.',
+          details:
+            'This provider does not expose an API host for this service.',
+          docs: 'https://cal.test/docs',
+        },
+      },
+    },
+  }, env).text()
+  let modal = parseHTML(html).document.querySelector('dialog[open]')!
+  assertStringIncludes(modal.textContent!, 'A calendar service.')
+  assertStringIncludes(modal.textContent!, 'does not expose an API host')
+  assert(modal.querySelector('a[href="https://cal.test/docs"]'))
+  assertEquals(modal.querySelector('button[disabled]')?.textContent, 'Connect')
+  assertEquals(modal.querySelector('form'), null)
 })
