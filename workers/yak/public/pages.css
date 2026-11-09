@@ -1083,7 +1083,8 @@
     overflow: hidden;
   }
   /* The app is a window onto another site. Keep the page's grain below
-     its column, including when that column fills the screen on a phone. */
+     its column, including when that column fills the screen on a phone.
+     The conversation's isolated stack keeps its sticky parts below the grain. */
   html:has(.Talk_Page)::after {
     z-index: 0;
   }
@@ -1216,6 +1217,7 @@
     white-space: nowrap;
   }
   .Talk_Main {
+    isolation: isolate;
     display: flex;
     flex-direction: column;
     min-width: 0;
