@@ -244,10 +244,8 @@ export let arrived = async (
   }
   let own = await dir.textSpace(arrival.to)
   if (own) {
-    let { lineArrived } = await import('./operator-line.ts')
-    let took = await lineArrived(env, [own], arrival)
-    if (took?.fresh) await countedTexts(env, took.space, costOf(arrival.text))
-    if (took) return
+    let { spaceArrived } = await import('./operator-signup.ts')
+    return await spaceArrived(env, own, arrival)
   }
   let person: string | null = await dir.phoned(arrival.from)
   let word = keyword(arrival.text)

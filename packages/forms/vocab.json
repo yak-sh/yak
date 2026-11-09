@@ -159,6 +159,12 @@
           "type": "string",
           "format": "date-time",
           "description": "when this sign-up began"
+        },
+        "submitter": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "platform person whose submission this is, independent of the matched directory person"
         }
       }
     },

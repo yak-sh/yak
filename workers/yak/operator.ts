@@ -101,6 +101,7 @@ import {
 import { escalate, escalationAnswer, REPLIES } from './operator-escalate.ts'
 import { askedAt, inputOf, rootAt } from './operator-root.ts'
 import { textSend } from './operator-texts.ts'
+import { SIGNUP, signupTools } from './operator-signup.ts'
 import { notificationSend } from './operator-alerts.ts'
 import { iconic } from './raster.ts'
 import { phoneNumbers, phoneSend } from './operator-line.ts'
@@ -553,6 +554,7 @@ type Working = {
   space: string
   person: string
   administrative?: boolean
+  signup?: string
   files?: File[]
 }
 let workingOf = async ({ g }: Store, session: string) => {
@@ -1234,6 +1236,8 @@ export let operating = (
         `.entry.session=${session} .using .order=-entry.seq .limit=1 .fields=using.provider`,
       ),
     ])
+    let work = await workingOf(store, session)
+    if (work?.signup) return signupTools(env, space, ctx.person!, work.signup)
     reached('working', space)
     let persona = await spaced(g.storage, space)
     if (persona.length) await g.apply(persona, { trusted: true })
@@ -1259,6 +1263,7 @@ export let operating = (
       replied,
     ])
     return [
+      ...sessionTools(g).filter((t) => t.name == 'fork'),
       // A conversation and its forks hand coding and careful reasoning
       // to the stronger model in a fresh helper, which starts no other.
       ...!(row?.spawned && !row.fork && !topicOf(row))
@@ -1313,7 +1318,7 @@ export let operating = (
       typed: options.typing,
       context: shown,
       // The conversation forks for its work.
-      tools: sessionTools(g).filter((t) => t.name == 'fork'),
+      tools: [],
       // Each ask wears the space's persona on the platform's base, read from
       // the directory (operator-persona.ts).
       wear: { bases: bases(env) },
@@ -1351,6 +1356,8 @@ export let operating = (
           working(env, store, session, options.directory),
           g.read(`.entity.eid=${session}&.fields=session.topic`),
         ])
+        let work = await workingOf(store, session)
+        if (work?.signup) return outside(space) + '\n\n' + SIGNUP
         let topic = topicOf(row)
         // Someone who does not write in the space is told none of its work.
         if (!writes(ctx.role)) return reached('instructions', outside(space))
@@ -1392,6 +1399,7 @@ export let operating = (
       operator_session: {
         space: space.eid,
         person: held.person,
+        ...o.signup ? { signup: o.signup } : {},
         ...held.administrative ? { administrative: true } : {},
         ...conversation ? { conversation } : {},
         ...files.length ? { files } : {},
@@ -1461,13 +1469,15 @@ export let operating = (
     // A person's words with no task are the next input of their one
     // conversation with the Operator.
     if (!named) {
-      let session = await rootAt(store, space.eid, held.person)
+      let session = o.signup
+        ? derivedEid(`operator-signup|${space.eid}|${held.person}`)
+        : await rootAt(store, space.eid, held.person)
       if ((await g.get([input]))[0]) return { task: '', session, input }
       if (!await conversed(store, session)) {
         await started(session, held.person, space)
       }
       await g.apply([
-        await carrying(session, held, space, o, true),
+        await carrying(session, held, space, o, !o.signup),
         given(session, input, text + reference, by, o),
         ...attachmentRows(o.request ?? input, [
           ...o.files ?? [],
@@ -1763,6 +1773,7 @@ export type Asking = {
   // of how they came (operator-channels.ts `BY`), which the conversation
   // leaves out of the person's words.
   channel?: string
+  signup?: string
   framing?: string
   // The call whose talking model asked in these words, for the caller.
   call?: string

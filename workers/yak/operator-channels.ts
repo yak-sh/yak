@@ -339,6 +339,7 @@ let BY: Record<
 > = {
   chat: (request) => request.page ? onPage(request.page, request.app) : '',
   email: (request) => request.signup ? 'By email, signing up: ' : 'By email: ',
+  signup: () => 'By text, signing up for a form: ',
   text: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
   rcs: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
   voice: (request) =>
@@ -516,6 +517,15 @@ export let channels = (env: Env): Record<string, Channel> => {
     },
     // A text goes back from the number it reached, an RCS one from the agent,
     // signed with the Operator's name and the brand carriers ask a text to say.
+    signup: async (request, answer) => {
+      if (request.app) {
+        return texted(request, answer, { from: request.reply_to })
+      }
+      let space = await directoryOf(env.STORE).at(request.space)
+      if (!space) throw new Error('Operator sign-up has no space')
+      let { answerText } = await import('./operator-line.ts')
+      return answerText(env, space, request, answer.text)
+    },
     text: (request, answer) =>
       texted(request, answer, { from: request.reply_to }),
     rcs: (request, answer) =>
@@ -730,7 +740,7 @@ export let attachmentTools = (env: Env) => (ctx: Ctx, files: File[]): Tool[] =>
 // The channels someone who does not write in the space arrives on: their
 // answer to a letter or text the Operator sent them. Their conversation has
 // only their permissions (operator.ts `roster`).
-let ANSWERING = new Set(['letter', 'texted'])
+let ANSWERING = new Set(['letter', 'texted', 'signup'])
 
 /** The channels whose words are the Operator's or the platform's own, never
  * those of the person they are said for: a break to fix, and what another
@@ -838,6 +848,7 @@ export let handleChannels = (
             session: derivedEid('operator-session|' + row.entity.eid),
             files: request.files ?? [],
             channel: request.channel,
+            ...request.channel == 'signup' ? { signup: request.address } : {},
             framing,
             ...request.call ? { call: request.call } : {},
             ...request.model ? { model: request.model } : {},
@@ -897,6 +908,17 @@ export let handleChannels = (
       let [about] = request.about ? await g.get([request.about]) : []
       let receipt
       try {
+        if (request.channel == 'signup') {
+          let { textStopped } = await import('./operator-signup.ts')
+          if (
+            await textStopped(g, {
+              from: request.address!,
+              to: request.reply_to!,
+            })
+          ) {
+            throw new Blocked('This person replied STOP.')
+          }
+        }
         receipt = await adapter(
           request,
           { ...answer, id: row.entity.eid },

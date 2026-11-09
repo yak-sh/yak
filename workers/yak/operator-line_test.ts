@@ -20,6 +20,7 @@ import { conversationOf, workOf } from './operator-host.ts'
 import { listed as listing } from './operator-view.ts'
 import { parseHTML } from 'linkedom'
 import {
+  answerText,
   chosen,
   lineDoor,
   numbersOf,
@@ -159,6 +160,7 @@ let said = (r: Request, words: RegExp) => {
 }
 // What the writer of a text back is offered, in their own conversation.
 let offered: Request['tools'] = []
+let signupOffered: Request['tools'] = []
 let service = operatorService(
   env,
   held,
@@ -173,6 +175,8 @@ let service = operatorService(
           name: 'Dr Alvarez',
           text: 'Does Tuesday at 3 work for his checkup?',
         })
+      : said(req, /By text, signing up for a form:/)
+      ? (signupOffered = req.tools, reply('Which form would you like?'))
       : said(req, /By text from \+12695550142/)
       ? (offered = req.tools, reply('Thank you; I will tell Jeff.'))
       : said(req, /Texted Dr Alvarez/)
@@ -230,6 +234,8 @@ let callback = pointed.get('url_callback')!
 let [keptChurch] = (await numbersOf(env, connection.entity.eid))
   .filter((n) => n.number == '+12695550111')
 
+await setting({ number: 'Church line', inbound: false })
+
 // voip.ms calls back the way its SMS URL callback fills its variables in.
 let { voipms } = await owned(env)
 let texted = (id: string, from: string, message: string) =>
@@ -246,6 +252,21 @@ let texted = (id: string, from: string, message: string) =>
 let answered = await texted('77', '2695550142', 'Tuesday at 3 works for us.')
 let stranger = await texted('78', '2695550199', 'Are we still on for golf?')
 await service.drain()
+await setting({ number: 'Church line', inbound: true })
+await texted('new-signup', '2695550199', 'KIDS')
+await service.drain()
+let signupBack = of('sendSMS').find((t) =>
+  t.get('message')?.startsWith('Which form')
+)!
+let beforeControl = (await store.g.read('.operator_request')).length
+await texted('stop-signup', '2695550199', 'STOP')
+await texted('stopped-signup', '2695550199', 'KIDS')
+let whileStopped = (await store.g.read('.operator_request')).length
+await texted('help-signup', '2695550199', 'HELP')
+await texted('start-signup', '2695550199', 'START')
+await texted('yes-signup', '2695550199', 'yes')
+await service.drain()
+let afterStart = (await store.g.read('.operator_request')).length
 let root = await conversationOf(store, '/at', rootOf(eid, person))
 let writer = (await dir.phoned('+12695550142'))!
 let theirs = await conversationOf(store, '/at', rootOf(eid, writer))
@@ -263,6 +284,32 @@ let forged = await lineDoor(
   'voipms',
   voipms,
 )
+
+// A retained account-number connection can answer before own_number rows exist.
+let local = ctxOf(env).graph
+let retained = await local.read(
+  `.own_number.connection=${connection.entity.eid}&*`,
+)
+let previousAccount = (connection.connection as { account: string }).account
+await local.apply([
+  { entity: connection.entity, connection: { account: '+12695550111' } },
+  ...retained.map((row) => ({ entity: row.entity, own_number: null })),
+])
+await answerText(env, space, {
+  address: '+12695550198',
+  reply_to: '+12695550111',
+}, 'Legacy signup answer')
+let legacyAnswer = of('sendSMS').at(-1)!
+await local.apply([
+  {
+    entity: connection.entity,
+    connection: { account: previousAccount },
+  },
+  ...retained.map((row) => ({
+    entity: row.entity,
+    own_number: row.own_number,
+  })),
+])
 
 test('a voip.ms connection is checked and lists every number on the account, changing none', () => {
   assertEquals(unfilled, { say: 'Fill in API password first.', no: true })
@@ -339,7 +386,7 @@ test('an inbound number has its callback pointed here, keeping how texts reach t
     ['2695550111', '1'],
   )
   assertEquals(restored.get('url_callback'), church)
-  assertEquals(of('setSMS').length, 2)
+  assertEquals(of('setSMS').length, 4)
 })
 
 test('a connection saved before numbers were listed is used both ways on the number it took', async () => {
@@ -457,4 +504,23 @@ test('a voip.ms key kept as its email and password joined by a colon is read as 
     JSON.parse((await reveal(c.vault, name, { env: () => undefined }))!),
     { username: 'jeff@example.com', password: 'pw:with-colon' },
   )
+})
+
+test('a fresh text to the chosen voip.ms inbound number reaches only sign-up tools, and keywords preserve its opt-out', () => {
+  assertEquals(signupOffered.map((t) => t.name).sort(), [
+    'signup_answer',
+    'signup_forms',
+    'signup_mine',
+    'signup_start',
+  ])
+  assertEquals(signupBack.get('did'), '2695550111')
+  assertEquals(signupBack.get('dst'), '2695550199')
+  assertEquals(whileStopped, beforeControl)
+  assertEquals(afterStart, beforeControl + 1)
+})
+
+test('a legacy voip.ms account-number connection answers without own_number rows', () => {
+  assertEquals(legacyAnswer.get('did'), '2695550111')
+  assertEquals(legacyAnswer.get('dst'), '2695550198')
+  assertStringIncludes(legacyAnswer.get('message')!, 'Legacy signup answer')
 })

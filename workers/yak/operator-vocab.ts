@@ -76,6 +76,11 @@ export let operatorDoc: VocabDoc = {
         space: { type: 'string', ref: 'entity', death: 'keep' },
         person: { type: 'string', ref: 'person', death: 'keep' },
         administrative: { type: 'boolean' },
+        signup: {
+          type: 'string',
+          description:
+            'The vouched phone of a reply-only form conversation; its tools are only sign-up operations.',
+        },
         conversation: {
           type: 'boolean',
           description:

@@ -1131,7 +1131,47 @@ export let operatorReply = async (
   sender?: string | null,
 ): Promise<Response> => {
   let { store } = operator
+  if (path == '/operator/inbound') {
+    let { chosen } = await import('./operator-line.ts')
+    let lines = await chosen(store.g, args.line as Bundle)
+    return Response.json({
+      inbound: lines.some((l) => l.number == args.number && l.inbound),
+    })
+  }
+  if (path == '/operator/control') {
+    let { kept } = await import('@yaks/phone')
+    let { textControl, textStopped } = await import('./operator-signup.ts')
+    let arrival = args.arrival as import('@yaks/phone').Arrival
+    await store.g.apply(
+      [...kept(arrival, []), ...textControl(arrival)],
+      { trusted: true },
+    )
+    return Response.json({ stopped: await textStopped(store.g, arrival) })
+  }
   let { letterOf, receive, textOf } = await channels()
+  if (path == '/operator/signup') {
+    if (!sender) {
+      return Response.json({ message: 'No text sender.' }, { status: 403 })
+    }
+    let options = args.options as Receiving
+    let [old] = options?.id ? await store.g.get([options.id]) : []
+    let id = await receive(
+      store,
+      {
+        ...args.request as Request,
+        space,
+        person: sender,
+        channel: 'signup',
+        administrative: false,
+      },
+      String(args.say ?? ''),
+      options,
+    )
+    await armed()
+    return Response.json({ request: id }, {
+      status: old?.operator_request ? 200 : 202,
+    })
+  }
   let thread = Array.isArray(args.thread) ? args.thread.map(String) : []
   let texted = args.texted as { from: string; to: string } | undefined
   let letter = texted

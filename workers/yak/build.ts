@@ -489,6 +489,9 @@ export class Builder {
         // A reply to the Operator's letter is the kernel's to bring (inbox.ts),
         // and is asked by no person.
         if (
+          url.pathname == '/operator/signup' ||
+          url.pathname == '/operator/inbound' ||
+          url.pathname == '/operator/control' ||
           url.pathname == '/operator/receipt' ||
           url.pathname == '/operator/letter' ||
           url.pathname == '/operator/replied' ||

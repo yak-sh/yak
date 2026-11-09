@@ -408,9 +408,12 @@ let accountFor = async (env: Env, number: string) => {
     `.${OWN}.number=${JSON.stringify(number)}&*`,
   )
   let connection = String(comp(held, OWN).connection ?? '')
-  let [line] = connection
-    ? await meta(env).query(`.entity.eid=${connection}&.${CONNECTION}&*`)
-    : []
+  let [line] = await meta(env).query(
+    connection
+      ? `.entity.eid=${connection}&.${CONNECTION}&*`
+      : `.${CONNECTION}.account=${JSON.stringify(number)}&*`,
+  )
+  connection = line?.entity.eid ?? ''
   let via = String(comp(line, CONNECTION).integration ?? '')
   let own = (await owned(env))[via]
   return own && accountOf(ctxOf(env), own, via, connection, number)
@@ -425,13 +428,20 @@ let accountFor = async (env: Env, number: string) => {
 export let answerText = async (
   env: Env,
   space: Space,
-  request: { address?: string; reply_to?: string; via?: string },
+  request: {
+    address?: string
+    reply_to?: string
+    via?: string
+    channel?: string
+  },
   text: string,
   sent?: Bundle,
 ) => {
   let to = request.address!, from = request.reply_to ?? ''
-  let account = space.sender?.number == from
-    ? charged(env, space, await phoneOf(env, space.sender))
+  let own = space.sender?.number == from
+  let phone = own ? await phoneOf(env, space.sender) : null
+  let account = phone
+    ? request.channel == 'control' ? phone : charged(env, space, phone)
     : await accountFor(env, from)
   if (!account) throw new Error(`No connected account texts from ${from}`)
   let { directoryOf } = await import('./directory.ts')
@@ -439,7 +449,13 @@ export let answerText = async (
   let me = person ? await directoryOf(env.STORE).known(person) : null
   let body = `${text}\n\n${textedFor(space, me?.name || 'the sender')}`
   try {
-    return await account.send({ to, text: body })
+    let receipt = await account.send({ to, text: body })
+    if (own && request.channel == 'control') {
+      let { countedTexts } = await import('./meter.ts')
+      let { costOf } = await import('./text-spend.ts')
+      await countedTexts(env, space, costOf(body))
+    }
+    return receipt
   } catch (error) {
     if (error instanceof Denied) throw refuse('connection', error.message)
     throw error
@@ -599,6 +615,28 @@ export let lineDoor = async (
     ? [mine]
     : (await dir.seats(owner)).filter((s) => writes(s.role))
       .sort((a, b) => Number(!!b.own) - Number(!!a.own)).map((s) => s.space)
+  let { builderOf, SPACE } = await import('./build-door.ts')
+  for (let space of spaces.filter((s) => !s.trashed)) {
+    let response = await builderOf(env, space.eid)(() =>
+      new Request('https://builder/operator/inbound', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-yak-kernel': '1',
+          [SPACE]: space.eid,
+        },
+        body: JSON.stringify({ line, number: arrival.to }),
+      })
+    )
+    if (!response.ok) {
+      throw new Error('Operator inbound lookup: ' + await response.text())
+    }
+    if ((await response.json() as { inbound: boolean }).inbound) {
+      let { spaceArrived } = await import('./operator-signup.ts')
+      await spaceArrived(env, space, { ...arrival, via })
+      return ok()
+    }
+  }
   await lineArrived(env, spaces, { ...arrival, via })
   return ok()
 }
