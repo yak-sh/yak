@@ -57,6 +57,8 @@ export {
   views,
 } from './Edit.ts'
 export { Text, type TextProps } from './Text.ts'
+export { Save, type SaveFieldProps, type SaveProps } from './Save.ts'
+export { bindSave, type SaveBinding, type SaveOptions } from './save-browser.ts'
 export {
   disclosed,
   Disclosure,

@@ -58,6 +58,7 @@ import * as quote from './Quote.ts'
 import * as report from './Report.ts'
 import * as rows from './Rows.ts'
 import * as say from './Say.ts'
+import * as save from './Save.ts'
 import * as section from './Section.ts'
 import * as shell from './Shell.ts'
 import * as sideNav from './SideNav.ts'
@@ -124,6 +125,7 @@ let modules = {
     Choices: choices,
     Edit: edit,
     Say: say,
+    Save: save,
     Menu: menu,
     Prop: prop,
   },

@@ -14,6 +14,7 @@ import { Edit } from './Edit.ts'
 import { Order, orderAt } from './Order.ts'
 import { type Door, Signup, signupAt } from './Signup.ts'
 import { Text } from './Text.ts'
+import { Save } from './Save.ts'
 import type { Question } from '@yaks/forms'
 import { type Host, Ux } from './host.ts'
 import { defineKit, type Kit } from './kit.ts'
@@ -162,6 +163,25 @@ export let kit: Kit = defineKit({
   description: 'Controlled editing and navigation in the page graph',
   vocab: uxDoc,
   components: {
+    Save: {
+      Component: Save,
+      description:
+        'Changed fields and one viewport bar to save or discard them together',
+      state: [],
+      specimens: () => [[
+        'Two pending changes',
+        h(
+          'div',
+          {},
+          h(Save, {
+            count: 2,
+            mod: 'sample',
+            onSave: () => {},
+            onDiscard: () => {},
+          }),
+        ),
+      ]],
+    },
     Disclosure: {
       Component: Disclosure,
       description:

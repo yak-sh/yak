@@ -487,6 +487,7 @@ let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
   return connect(
     {
       slug: space.slug,
+      person: who.person,
       agents: theirAgents,
       said,
       say,

@@ -38,6 +38,7 @@ export let FILES = [
   'favicon-32.png',
   'apple-touch-icon.png',
   '_client.js',
+  '_settings.js',
 ]
 
 /** The kit's sheet among the sources. */
@@ -52,6 +53,7 @@ export let WORN = [
   'base',
   'Button',
   'Field',
+  'Save',
   'Chip',
   'Chips',
   'Address',

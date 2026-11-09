@@ -726,3 +726,35 @@ syntax and query completion belong to [@yaks/query](../query/README.md).
 | `completion.ts`       | shared completion controller, field, list and input binding                |
 | `completion-state.ts` | pure completion transitions and candidate types                            |
 | `keys.ts`             | vim's keys: the keymap, where a move lands, the cursor and layers          |
+
+## Saving several fields
+
+`Save` shows a viewport bar with a change count, Discard and Save. Its host
+supplies `count`, `onSave`, `onDiscard` and optional `busy` and `message` props.
+`Save.Field` marks a control's wrapper when `changed` is true. The host owns its
+values, persistence and writes.
+
+Server-rendered pages can use `bindSave` from `@yaks/ux/save`. It groups named
+controls in `form[data-save]`, counts changed names, marks their fields, and
+saves all changed forms from one bar. A radio group is one change. The
+`data-save` value is a stable draft place for that form. Drafts supply reactive
+`text(place)` and synchronous `type(place, text)`; an optional asynchronous
+`spend(place)` acknowledges clearing before `saved()` runs. The
+[@yaks/draft](../draft/README.md) desk supplies these methods and recovery.
+
+```ts ignore
+// In a connected page, with a durable draft desk supplied by its host:
+import { bindSave } from '@yaks/ux/save'
+let binding = bindSave(document, {
+  drafts,
+  save: async (form, body) => {
+    let response = await fetch(form.action, { method: 'POST', body })
+    if (!response.ok) throw new Error('Your changes could not be saved.')
+  },
+})
+// Before replacing the page's forms:
+binding.close()
+```
+
+Failed writes retain their drafts. Successful writes retain any newer edits
+typed while saving; Discard restores the values the page last saved.

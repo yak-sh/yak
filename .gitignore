@@ -78,6 +78,7 @@ node_modules
 
 # The Operator chat's line drawing, generated from workers/yak/operator-rows.ts.
 /workers/yak/public/_talk.js
+/workers/yak/public/_settings.js
 
 # Temporary standalone platform compiler configs.
 .platform-*.json

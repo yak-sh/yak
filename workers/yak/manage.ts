@@ -167,6 +167,10 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     : await whoIs(req, env.SESSION_SECRET, () => Promise.resolve(null))
   if (!person && socket) return json(401, 'signed_out', 'Sign in again.')
   if (!person) return redirect(signInAt(sentFrom(req, env).href, env), 303)
+  if (url.searchParams.has('settings-draft')) {
+    let { settingsDraft } = await import('./settings-draft.ts')
+    return settingsDraft(req, dir, { person, role: null, until })
+  }
   // A token narrowed to one space reaches that space alone.
   if (caller?.space && 'space' in at && caller.space != at.space) {
     return json(403, 'not_a_member', 'That token is for another space.')
@@ -620,6 +624,7 @@ let desk = async (
   ])
   let known = await inHand(agents)
   let page = deskPage({
+    person: who.person,
     views,
     viewDays: DAYS,
     viewsOff: NOT_ON,
@@ -727,6 +732,7 @@ let mine = async (
   let chosen = q.get('space') ?? inOf(req)
   let space = picks.find((s) => s.slug == chosen)?.slug ?? own.slug
   let page = deskPage({
+    person: who.person,
     space,
     view,
     apps: [],

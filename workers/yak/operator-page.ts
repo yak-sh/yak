@@ -124,8 +124,8 @@ let shown = (number: string) =>
 // One of the Operator's settings, the way the dashboard draws one (pages.ts):
 // a form around its card, the card's head naming it, and under the card its
 // actions, with what pressing one said beside them (`settingsScript`). `id`
-// names the form and the answer it posts to (`operatorAnswer`). The first
-// action is the one Enter in a field presses.
+// names the form and the answer it posts to (`operatorAnswer`). Changed
+// fields join the page's Save bar.
 let acting = (
   at: string,
   id: string,
@@ -135,7 +135,7 @@ let acting = (
 ) =>
   h(
     Form,
-    { id, method: 'post', action: `${at}?${id}=1` },
+    { id, method: 'post', action: `${at}?${id}=1`, 'data-save': id },
     h(Card, null, h(Card.Head, null, h(Card.Title, null, title)), ...inside),
     h(
       Form.Actions,
@@ -145,12 +145,9 @@ let acting = (
     ),
   )
 
-let save = (also: Record<string, unknown> = {}) =>
-  h(Button, { mod: 'go', type: 'submit', ...also }, 'Save')
-
-// A setting saved by its Save.
+// A setting saved with the page's other changed fields.
 let setting = (at: string, id: string, title: string, ...inside: Node[]) =>
-  acting(at, id, title, save(), ...inside)
+  acting(at, id, title, null, ...inside)
 
 // A field under its label.
 let field = (id: string, label: string, control: Node) =>
@@ -254,57 +251,69 @@ export let textsCard = (
   from?: string,
   call?: string,
 ) =>
-  acting(
-    at,
-    'texts',
-    'Texts and calls',
-    consent
-      ? [
-        save({ id: 'texts-save', hidden: true }),
-        h(Button, { type: 'submit', name: 'stop', value: '1' }, 'Stop texts'),
-      ]
-      : save(),
-    h(
-      'p',
-      null,
-      'Text your Operator about anything, and it answers by text; call it, and it answers by voice. It also texts you its alerts, unless you choose another way for them above, and apps you build can text you reminders. You can still use chat and email.',
-    ),
-    from || call
-      ? h(
+  h(
+    Fragment,
+    null,
+    acting(
+      at,
+      'texts',
+      'Texts and calls',
+      consent
+        ? h(Button, {
+          type: 'submit',
+          form: 'texts-stop',
+        }, 'Stop texts')
+        : null,
+      h(
         'p',
         null,
-        from === call
-          ? [h('a', { href: `sms:${from}` }, 'Text'), ' or call ']
-          : from
-          ? ['Text ', h('a', { href: `sms:${from}` }, shown(from))]
-          : null,
-        from && call && from !== call ? ' or call ' : !from ? 'Call ' : null,
-        call ? h('a', { href: `tel:${call}` }, shown(call)) : null,
-        consent
-          ? ' to reach your Operator.'
-          : ' from the mobile number you agree to texts at below to reach your Operator.',
-      )
-      : null,
-    consent
-      ? h(
-        'p',
-        null,
-        'Texts go to ',
-        h('b', null, shown(consent.number)),
-        from
-          ? ''
-          : '; to text your Operator, reply to the number your welcome text came from',
-        `. You agreed on ${
-          new Date(consent.at).toLocaleDateString('en-US', {
-            dateStyle: 'long',
-            timeZone: 'UTC',
-          })
-        }.`,
-      )
-      : null,
-    consent ? changing(agreeing('Change your mobile number')) : agreeing(
-      'Mobile number',
+        'Text your Operator about anything, and it answers by text; call it, and it answers by voice. It also texts you its alerts, unless you choose another way for them above, and apps you build can text you reminders. You can still use chat and email.',
+      ),
+      from || call
+        ? h(
+          'p',
+          null,
+          from === call
+            ? [h('a', { href: `sms:${from}` }, 'Text'), ' or call ']
+            : from
+            ? ['Text ', h('a', { href: `sms:${from}` }, shown(from))]
+            : null,
+          from && call && from !== call ? ' or call ' : !from ? 'Call ' : null,
+          call ? h('a', { href: `tel:${call}` }, shown(call)) : null,
+          consent
+            ? ' to reach your Operator.'
+            : ' from the mobile number you agree to texts at below to reach your Operator.',
+        )
+        : null,
+      consent
+        ? h(
+          'p',
+          null,
+          'Texts go to ',
+          h('b', null, shown(consent.number)),
+          from
+            ? ''
+            : '; to text your Operator, reply to the number your welcome text came from',
+          `. You agreed on ${
+            new Date(consent.at).toLocaleDateString('en-US', {
+              dateStyle: 'long',
+              timeZone: 'UTC',
+            })
+          }.`,
+        )
+        : null,
+      consent ? changing(agreeing('Change your mobile number')) : agreeing(
+        'Mobile number',
+      ),
     ),
+    consent
+      ? h('form', {
+        id: 'texts-stop',
+        method: 'post',
+        action: `${at}?texts=1`,
+        hidden: true,
+      }, h('input', { type: 'hidden', name: 'stop', value: '1' }))
+      : null,
   )
 
 // The number to text and the words agreed to with it.
@@ -330,13 +339,12 @@ let agreeing = (label: string) => [
 ]
 
 // A number already agreed to changes behind a button, which shows the field
-// in its place and the Save that changes it (`settingsScript`). Until then
-// Save is hidden, and only Stop texts can be pressed.
+// in its place (`settingsScript`). Its edits join the page's Save bar.
 let changing = (fields: Node) => [
   h(Button, {
     type: 'button',
     'aria-expanded': 'false',
-    'aria-controls': 'texts-change texts-save',
+    'aria-controls': 'texts-change',
     'data-reveal': '',
   }, 'Change number'),
   h('div', { id: 'texts-change', hidden: true }, fields),
@@ -1154,17 +1162,8 @@ let fit = () => {
   if (picked?.disabled) voice.querySelector('[name=voice]:not(:disabled)').checked = true
 }
 voice?.addEventListener('change', fit)
+voice?.addEventListener('save-restored', fit)
 fit()
-let allow = async (offer) => {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('This browser cannot show notifications. Choose another way.')
-  if (await Notification.requestPermission() != 'granted') throw new Error('Notifications are blocked for yaks.app in this browser. Allow them in its settings, then save again.')
-  let worker = await navigator.serviceWorker.register('/push.js')
-  await navigator.serviceWorker.ready
-  let key = Uint8Array.from(atob(offer.dataset.push.replaceAll('-', '+').replaceAll('_', '/')), (c) => c.charCodeAt(0))
-  let sub = await worker.pushManager.getSubscription() ?? await worker.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key })
-  let response = await fetch(offer.dataset.at, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sub) })
-  if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? 'This browser could not be allowed. Try again.')
-}
 for (let reveal of document.querySelectorAll('[data-reveal]')) {
   reveal.addEventListener('click', () => {
     let shown = reveal.getAttribute('aria-controls').split(' ').map((id) => document.getElementById(id))
@@ -1174,16 +1173,19 @@ for (let reveal of document.querySelectorAll('[data-reveal]')) {
     shown[0].querySelector('input')?.focus()
   })
 }
-for (let form of document.querySelectorAll('#texts, #name, #voice, #alerts')) {
+document.querySelector('#texts')?.addEventListener('save-restored', () => {
+  let number = document.querySelector('#texts-number')
+  let agreed = document.querySelector('#texts [name=agreed]')
+  if (number?.value || agreed?.checked) document.querySelector('#texts [data-reveal]')?.click()
+})
+for (let form of document.querySelectorAll('#texts-stop')) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
-    let said = form.querySelector('[data-status]')
+    let said = document.querySelector('#texts [data-status]')
     let body = new FormData(form)
     if (e.submitter?.name == 'stop') body.set('stop', '1')
     said.textContent = 'Saving…'
     try {
-      let offer = form.querySelector('[name=channel][value=push]:checked')
-      if (offer) await allow(offer)
       let response = await fetch(form.action, { method: 'POST', body })
       let answer = await response.json().catch(() => null)
       if (!response.ok) throw new Error(answer?.message ?? 'Your choice could not be saved. Try again.')

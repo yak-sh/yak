@@ -513,9 +513,14 @@ test('the connections page lends, shows the loan on both sides, and replaces and
     })
     let doc = await open(jeff, his)
     assertStringIncludes(
-      await press(jeff, doc, button(card(doc, 'ESV'), 'Save key'), {
-        key: 'jeffs-esv-key',
-      }),
+      await press(
+        jeff,
+        doc,
+        card(doc, 'ESV').querySelector('form[data-save] [name=do][value=key]')!,
+        {
+          key: 'jeffs-esv-key',
+        },
+      ),
       'Saved',
     )
     doc = await open(jeff, his)
@@ -553,7 +558,12 @@ test('the connections page lends, shows the loan on both sides, and replaces and
       `${hers}Their copy of Bible Study · 0 of 2 calls this month`,
     )
     assertStringIncludes(
-      await press(jeff, doc, button(esv, 'Save'), { cap: '5' }),
+      await press(
+        jeff,
+        doc,
+        esv.querySelector('form[data-save] [name=do][value=lend]')!,
+        { cap: '5' },
+      ),
       '5 calls a month',
     )
     away = await open(friend, hers)
@@ -666,9 +676,14 @@ test('the connections page lends, shows the loan on both sides, and replaces and
     // made replaces a second's, and the lender recalls the third.
     let first = away.querySelector('[data-borrowed]')!
     assertStringIncludes(
-      await press(friend, away, button(first, 'Save key'), {
-        key: 'friends-key',
-      }),
+      await press(
+        friend,
+        away,
+        first.querySelector('form[data-save] [name=do][value=own]')!,
+        {
+          key: 'friends-key',
+        },
+      ),
       'your own connection',
     )
     away = await open(friend, hers)

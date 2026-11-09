@@ -392,7 +392,10 @@ test('connections: a service the space added can be changed there, all but where
     typed.textContent,
     'Sign up at [weather.test](https://weather.test) & <b>.',
   )
-  assertEquals(pressed(told, 'about'), 'Save')
+  assertEquals(
+    told.querySelector('form[data-save] [name=do]')?.getAttribute('value'),
+    'about',
+  )
   assertEquals(told.querySelector('[name="hosts"]'), null)
 })
 
@@ -521,7 +524,6 @@ test('connections: a lent connection names each copy borrowing it, recalls one, 
     pressed.filter(([, does]) => does == 'recall' || does == 'lend'),
     [
       ['Recall', 'recall', 'copy', undefined],
-      ['Save', 'lend', 'notes', '5'],
       ['Stop lending', 'lend', 'notes', undefined],
     ],
   )
@@ -551,12 +553,7 @@ test('connections: a borrowed connection says whose it is, and gives way to a ke
   }
   // Who may call out through it is the borrowing space's to say.
   let open = ['Open to anyone', 'open', 'copy', undefined]
-  assertEquals(await replaced(lent), [open, [
-    'Save key',
-    'own',
-    'copy',
-    undefined,
-  ]])
+  assertEquals(await replaced(lent), [open])
   assertEquals(await replaced({ ...lent, keyed: false }), [
     ['Connect your own', 'own', 'copy', undefined],
     open,

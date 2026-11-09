@@ -203,6 +203,7 @@ export let directoryConfig: Config = {
     '@yaks/id',
     ...addressed,
     '@yaks/doc',
+    '@yaks/draft',
     // doc.body uses the blob keyword and graph hooks without artifact words.
     { use: '@yaks/blob', words: [] },
     { use: '@yaks/task', facets: ['vocab'], words: ['contains', 'requires'] },

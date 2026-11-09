@@ -1,0 +1,53 @@
+/* The pending changes stay within the viewport, above its safe area. */
+.Save {
+  position: fixed;
+  z-index: 110;
+  inset-inline: var(--gap);
+  bottom: calc(var(--gap) + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--half-gap) var(--gap);
+  width: fit-content;
+  max-width: calc(100% - 2 * var(--gap));
+  margin-inline: auto;
+  padding: var(--half-gap) var(--gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface, var(--card));
+  color: var(--text);
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--text) 15%, transparent);
+}
+.Save-sample {
+  position: static;
+}
+.Save_Count {
+  flex: 1 1 auto;
+}
+.Save_Actions {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+.Save_Field {
+  min-width: 0;
+}
+.Save_Field-changed {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--radius);
+}
+.Save_Mark {
+  color: var(--accent);
+  font-size: var(--small);
+}
+.Save_Notice {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--negative);
+  overflow-wrap: anywhere;
+}
+body:has(.Save:not(.Save-sample)) {
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+}

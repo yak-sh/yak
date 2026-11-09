@@ -422,7 +422,13 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
 // on a phone a top bar naming the page, whose Menu opens the same side over
 // the whole screen and whose Close shuts it (`:target`, no script).
 export let deskFrame = (
-  at: Side & { where: Kids; head: Kids; content: Kids; class?: string },
+  at: Side & {
+    where: Kids
+    head: Kids
+    content: Kids
+    class?: string
+    person?: string
+  },
 ) => [
   h(
     'header',
@@ -450,6 +456,7 @@ export let deskFrame = (
       class: ['Desk_Content', at.class].filter(Boolean).join(' '),
       id: 'content',
       tabindex: '-1',
+      'data-save-person': at.person,
     }, at.content),
   ),
 ]
@@ -670,7 +677,7 @@ export let library = (at: DeskPage, env: Host) => {
   ]
 }
 
-// A form a dashboard card is, and the button that saves it under the card.
+// Settings join the page's Save bar; creation keeps its own action.
 let saving = (
   action: string,
   card: Kids,
@@ -678,9 +685,13 @@ let saving = (
 ) =>
   h(
     Form,
-    { method: 'post', action },
+    {
+      method: 'post',
+      action,
+      ...label == 'Save' ? { 'data-save': action } : {},
+    },
     card,
-    h(Form.Actions, null, send(label)),
+    label == 'Save' ? null : h(Form.Actions, null, send(label)),
   )
 
 // The fields a card holds, one under the other.
@@ -860,9 +871,8 @@ let newSpace = (at: DeskPage, env: Host) =>
     'Create space',
   )
 
-// A space's Settings: its name, its address and what it opens, one form and
-// one Save,
-// then deleting it, which asks again on its own page (identity.ts
+// A space's Settings: its name, its address and what it opens join the
+// page's Save bar. Deleting asks again on its own page (identity.ts
 // `closing`). A refusal draws the page again with what was typed still in
 // the fields (`at.typed`).
 
@@ -1178,6 +1188,8 @@ let connection = (c: Shown, on: boolean, action: string) => {
       held('connection', c.eid),
       kids,
     )
+  let editing = (do_: string, kids: Kids) =>
+    form([held('do', do_), kids], { 'data-save': id(do_) })
   let open = c.status != 'connected' || !!c.failed
   // A key is pasted here for a keyed connection this deploy can keep one for.
   let keying = !ask && on && c.keyed
@@ -1201,11 +1213,12 @@ let connection = (c: Shown, on: boolean, action: string) => {
     ? said(sentence(c.saving))
     : null
   let paste = keying && open
-    ? form(
+    ? editing(
+      'key',
       keyBox(
         id('key'),
         'Paste the key',
-        press('key', 'Save key', false),
+        null,
         reach(c.hosts),
         c.face.fields,
       ),
@@ -1316,11 +1329,12 @@ let connection = (c: Shown, on: boolean, action: string) => {
     )
     : null
   let replace = keying && !open
-    ? form(
+    ? editing(
+      'key',
       keyBox(
         id('key'),
         'Replace the key',
-        press('key', 'Save key'),
+        null,
         reach(c.hosts),
         c.face.fields,
       ),
@@ -1375,10 +1389,11 @@ let connection = (c: Shown, on: boolean, action: string) => {
       More,
       null,
       h('summary', null, `Change what ${c.face.title} says`),
-      form(
+      editing(
+        'about',
         h(
-          More.Body,
-          { as: Form },
+          Form,
+          { as: More.Body },
           (
             [
               ['title', 'Its name', 'What people call it'],
@@ -1412,7 +1427,6 @@ let connection = (c: Shown, on: boolean, action: string) => {
             }),
             'Written for whoever connects it and the agent helping them, in markdown. Where its key may be sent stays as it is.',
           ),
-          h(Form.Actions, null, press('about', 'Save', false)),
         ),
       ),
     )
@@ -1428,31 +1442,35 @@ let connection = (c: Shown, on: boolean, action: string) => {
     return [
       forApp(
         a,
-        labeled(
-          field,
-          `Lend to copies of ${a.title}`,
-          h(
-            Form.Line,
-            null,
-            h(Field, {
-              id: field,
-              name: 'cap',
-              type: 'number',
-              min: 1,
-              step: 1,
-              inputmode: 'numeric',
-              value: a.lends ?? 100,
-              required: true,
-            }),
-            press('lend', a.lends == null ? 'Lend' : 'Save'),
-            a.lends == null ? null : h(
-              Button,
-              { type: 'submit', form: stop, name: 'do', value: 'lend' },
-              'Stop lending',
+        [
+          a.lends == null ? null : held('do', 'lend'),
+          labeled(
+            field,
+            `Lend to copies of ${a.title}`,
+            h(
+              Form.Line,
+              null,
+              h(Field, {
+                id: field,
+                name: 'cap',
+                type: 'number',
+                min: 1,
+                step: 1,
+                inputmode: 'numeric',
+                value: a.lends ?? 100,
+                required: true,
+              }),
+              a.lends == null ? press('lend', 'Lend') : null,
+              a.lends == null ? null : h(
+                Button,
+                { type: 'submit', form: stop, name: 'do', value: 'lend' },
+                'Stop lending',
+              ),
             ),
+            'The calls a month each copy someone installs may make through it. A copy keeps its own data, never sees the key, and can connect its own instead.',
           ),
-          'The calls a month each copy someone installs may make through it. A copy keeps its own data, never sees the key, and can connect its own instead.',
-        ),
+        ],
+        a.lends == null ? {} : { 'data-save': field },
       ),
       a.lends == null ? null : forApp(a, null, { id: stop, hidden: true }),
     ]
@@ -1493,10 +1511,15 @@ let borrowing = (
   action: string,
   mine?: Shown,
 ) => {
-  let form = (kids: Kids, connection = b.eid) =>
+  let form = (kids: Kids, connection = b.eid, edit = false) =>
     h(
       'form',
-      { method: 'post', action },
+      {
+        method: 'post',
+        action,
+        ...edit ? { 'data-save': `own-${b.eid}-${b.app.app}` } : {},
+      },
+      edit ? held('do', 'own') : null,
       held('connection', connection),
       held('app', b.app.app),
       kids,
@@ -1520,10 +1543,12 @@ let borrowing = (
           keyBox(
             id,
             'Paste your key',
-            press('own', 'Save key', false),
+            null,
             reach(b.hosts),
             b.face.fields,
           ),
+          b.eid,
+          true,
         ),
       ),
     )
@@ -1709,7 +1734,7 @@ let connections = (at: DeskPage, env: Host) => {
             'Where to sign up, which page gives the key, and what to paste',
         }),
       ),
-      h(Form.Actions, null, press('add', 'Save key', false)),
+      h(Form.Actions, null, press('add', 'Connect', false)),
     ),
   )
   // What the space holds already that could replace a loan: a connected
@@ -2267,6 +2292,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     },
     deskFrame({
       ...navigation(at, view, env),
+      person: at.person,
       where: [h('b', null, titles[view]), h('small', null, whose)],
       head: [
         h(

@@ -225,6 +225,10 @@ ${links(env, 'pages.css', undefined, assets)}${
     main.includes('data-find')
       ? `<script src="${file('find.js')}" defer></script>`
       : ''
+  }${
+    main.includes('data-save=')
+      ? `<script type="module" src="${file('_settings.js')}"></script>`
+      : ''
   }<script src="${file('drop.js')}" defer></script>${deployed(env)}</body>
 </html>`
   return new Response(
@@ -773,6 +777,8 @@ export type DeskPage = {
   /** the space the page is in, or on a page of the person's own, the one the
    * side's selector holds */
   space: string
+  /** the signed-in person whose settings drafts this page keeps */
+  person?: string
   /** each with its open errors, newest first (unseen.ts `plain`), and when
    * it was made and last deployed, and by whom, where known */
   apps: (Listed & {
@@ -1013,7 +1019,7 @@ export let keyBox = (
         box(`${id}-${f.name}`, `key.${f.name}`, f.shown),
       )
     ),
-    h(Form.Actions, null, send),
+    send ? h(Form.Actions, null, send) : null,
     hint ? h(Form.Hint, null, hint) : null,
   ]
 }
@@ -1495,6 +1501,7 @@ export let said = (say?: string, no?: boolean) =>
 // instruction with no way past it is worse than none.
 export type Yours = {
   slug: string
+  person?: string
   agents?: Agent[]
   said?: string
   say?: string
@@ -1552,7 +1559,13 @@ export let mine = (y: Yours, env: Host) =>
     ),
     h(
       Form,
-      { class: 'Addr', method: 'post', action: '/connect' },
+      {
+        class: 'Addr',
+        method: 'post',
+        action: '/connect',
+        'data-save': 'address',
+        'data-save-person': y.person,
+      },
       labeled(
         'your-space',
         'Your address',
@@ -1560,7 +1573,6 @@ export let mine = (y: Yours, env: Host) =>
           Form.Line,
           null,
           addressBox('your-space', 'space', y.said ?? y.slug, env),
-          send('Save'),
         ),
         MOVES,
       ),
@@ -1695,7 +1707,7 @@ let credit = (
 ) =>
   h(
     Form,
-    { method: 'post', action: target },
+    { method: 'post', action: target, 'data-save': 'credit-cap' },
     h('input', { type: 'hidden', name: 'billing', value: 'cap' }),
     labeled(
       'credit-cap',
@@ -1713,7 +1725,6 @@ let credit = (
           value: c.cap,
           required: true,
         }),
-        send('Save'),
         c.buy ? billButton('credit', `Buy $${BLOCK} of credit`, target) : null,
       ),
       c.cap
