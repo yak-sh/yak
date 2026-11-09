@@ -270,6 +270,10 @@ test('connections: first a grid of cards, theirs on their own space and then the
       .map((h) => h.textContent),
     ['OpenRouter'],
   )
+  assertEquals(document.querySelectorAll('.Card_Mark').length, 0)
+  for (let card of document.querySelectorAll('.Card-button')) {
+    assert(card.firstElementChild?.matches('.Card_Title'))
+  }
   // Nothing on the first visit asks for a key but the fold for a service
   // nobody lists.
   assertEquals(
@@ -289,6 +293,7 @@ test('connections: first a grid of cards, theirs on their own space and then the
   let top = opened.querySelector('#connect')!
   assertStringIncludes(top.textContent!, 'Connected for ada.yaks.fyi')
   assert(top.querySelector('[data-connection="Weather"]'))
+  assertEquals(top.querySelector('.Card_Mark'), null)
   let actions = [...opened.querySelectorAll('form')].filter((f) =>
     f.querySelector('input[name="connection"]')
   ).map((f) => f.getAttribute('action'))
@@ -620,6 +625,10 @@ test('connections: a built integration is offered by its face, and a site is lin
   let tile = parseHTML(await offered(CAL.site)).document
     .querySelector('[data-found] .Card')!
   assertEquals(tile.querySelector('h2')!.textContent, 'Cal')
+  assertEquals(
+    tile.querySelector('img.Card_Mark')!.getAttribute('src'),
+    drawn.logo,
+  )
   assertEquals(
     tile.getAttribute('href'),
     '/manage/ada/connections?add=cal#connect',

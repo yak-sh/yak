@@ -1590,8 +1590,7 @@ let card = (
   h(
     Card,
     { mod: href ? 'button' : undefined, href },
-    logo(face, env) ??
-      h(Card.Mark, { 'aria-hidden': true }, face.title.charAt(0)),
+    logo(face, env),
     h(Card.Title, null, face.title),
     face.tagline ? h(Card.Sub, null, face.tagline) : null,
     line && line != face.tagline ? h(Card.Sub, null, line) : null,
