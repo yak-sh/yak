@@ -192,37 +192,24 @@ test('the answer is the return value; inner results stay in the sandbox', async 
   equal(out.calls.length, 4)
   ok(JSON.stringify(out).length < 1024)
 })
-test('each result counts once toward the read budget, then stays whole in the graph', async () => {
+test('nested calls beyond four MiB still return full results to the script', async () => {
   let kib = 1400
-  equal(
-    (await run(
-      `for (let i = 0; i < 2; i++) await tools.yaks.big({kib: ${kib}})`,
-    )).error,
-    undefined,
-  )
   let out = await run(`let result
     for (let i = 0; i < 3; i++) result = await tools.yaks.big({kib: ${kib}})
-    let kept = await results.read(result.structuredContent.kept)
-    return {length: kept.structuredContent.result[0].content.body.length,
-      wholeText: kept.content.some(c => c.text.includes(kept.structuredContent.result[0].content.body)),
-      id: result.structuredContent.kept}`)
+    return {length: result.structuredContent.result[0].content.body.length,
+      wholeText: result.content.some(c => c.text.includes(result.structuredContent.result[0].content.body))}`)
   equal(out.error, undefined)
-  equal((out.value as { length: number }).length, kib * 1024)
-  equal((out.value as { wholeText: boolean }).wholeText, true)
+  equal(out.value, { length: kib * 1024, wholeText: true })
   equal(out.calls.map((c) => c.error), [undefined, undefined, undefined])
-  let id = (out.value as { id: string }).id
-  equal(who(stored.get(id)!.source), reads.actor)
-  equal((stored.get(id)!.source.call as Comp).source, reads.asked.entity.eid)
 })
 
-test('large return values are kept whole and can be narrowed in a later execution', async () => {
+test('large return values stay whole for programs, and saved results remain readable', async () => {
   let out = await run('return "x".repeat(300000)')
   equal(out.error, undefined)
-  let id = (out.value as { kept: string }).kept
-  equal(stored.get(id)!.value, 'x'.repeat(300000))
-  equal(stored.get(id)!.source, reads.asked)
+  equal(out.value, 'x'.repeat(300000))
+  let saved = await kept.keep(out.value, reads.asked) as { kept: string }
   let narrowed = await run(
-    `return (await results.read(${JSON.stringify(id)})).slice(-3)`,
+    `return (await results.read(${JSON.stringify(saved.kept)})).slice(-3)`,
   )
   equal(narrowed.value, 'xxx')
   equal(narrowed.calls, [])

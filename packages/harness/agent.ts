@@ -29,6 +29,8 @@ import { identityEid } from '@yaks/graph/identity'
 import type { Effects } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
 import { MODEL, type Model, ModelError, PROVIDER, TOOL } from '@yaks/model'
+import { resultTool } from './results.ts'
+import { valueTools } from '@yaks/blob'
 import { toolEid } from '@yaks/tools/result'
 import {
   actorOf,
@@ -208,8 +210,10 @@ export type Opts<H extends Host = Host> = ChildLimits & {
    * graph does not keep it. A host that opens a transcript with its persona's
    * text (`opening`) leaves this out. */
   wear?: { bases?: Reads }
-  /** Maximum tool-result code points before model-facing handle projection. */
+  /** Maximum tool-result UTF-8 bytes before model-facing handle projection. */
   outputLimit?: number
+  /** A multi-user host supplies its scoped result storage at the same model boundary. */
+  resultText?: Deps['resultText']
   /** the share of its model's context window a transcript fills before it is
    * compacted, for every model (@yaks/session `Deps.compactAt`) */
   compactAt?: number
@@ -419,7 +423,11 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
   let name = opts.name ?? ''
   const implementations = served(opts)
   let model = opts.model ?? implementations[provider ?? ''] ?? unserved
-  let tools = opts.tools ?? []
+  let tools = opts.resultText ? opts.tools ?? [] : [
+    ...opts.tools ?? [],
+    ...[resultTool(h.g), ...valueTools(async (id) => (await h.g.get([id]))[0])]
+      .filter((t) => !opts.tools?.some((own) => own.name == t.name)),
+  ]
   let remote = opts.remote ?? (() => Promise.resolve([]))
   let remoteSignature = ''
   // The remote tools each session's newest ask was offered. A tool is its
@@ -561,9 +569,8 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       inputText(transcript, await senders(h.g, transcript)),
     contextItems: opts.context,
     requestItems: opts.requestItems,
-    resultText: tools.some((t) => t.name == 'graph_value_read')
-      ? (entry) => outputView(h.g, entry, opts.outputLimit)
-      : undefined,
+    resultText: opts.resultText ??
+      ((entry) => outputView(h.g, entry, opts.outputLimit)),
     report: (error, session, phase) => report(error, { session, phase }),
     each: opts.each,
     hold: opts.hold,

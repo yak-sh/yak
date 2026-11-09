@@ -72,7 +72,7 @@ export type Opts = ChildLimits & NotHarness & {
   checkpointMs?: number
   /** The system prompt every ask carries. */
   instructions?: string
-  /** Maximum tool-result code points before model-facing handle projection. */
+  /** Maximum tool-result UTF-8 bytes before model-facing handle projection. */
   outputLimit?: number
   /** the share of its model's context window a transcript fills before it is
    * compacted, for every model (@yaks/session `Deps.compactAt`) */

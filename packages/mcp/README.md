@@ -481,3 +481,7 @@ Tool schemas remain exact advertisements. Calls still go through the shared
 graph runner, including malformed arguments, so validation refusals,
 attribution, call records, roster notices and structured results remain
 runner-owned.
+
+Tool calls return complete structured data and accompanying text. Model hosts
+keep and summarize oversized results at their agent loop boundary; MCP clients
+do not need a special header to receive whole answers.

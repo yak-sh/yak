@@ -29,26 +29,21 @@ script returned, and each call is a receipt of its id and exact path, with
 the sandbox: a script reads, filters and joins there, and returns only what the
 model needs. `code_mode` itself is excluded from nested discovery and execution.
 
-The host supplies `Kept` to keep large results in the caller's graph. Return
-values over 256 KiB and tool results beyond the execution's 4 MiB read budget
-are kept whole, and answered with their id, size, shape and preview. A script
-can read a kept result through `await results.read(id)` and manipulate it
-without sending it through the model context:
+The host supplies `Kept` so a script can read results the harness saved in the
+caller's graph through `await results.read(id)`. Nested tool calls and script
+return values remain complete for programs. The agent harness keeps oversized
+answers and gives the model a summary after execution.
 
 ```ts ignore
 let rows = await results.read('result-id')
 return rows.filter((row) => row.status === 'open').map((row) => row.id)
 ```
 
-`results.read` reads the kept value exactly: a script's return value is kept as
-that value, and a nested tool's result is kept as its MCP result including
-`content`, `structuredContent` and `isError`. Reads use the host's scope and are
-revoked when the execution ends. Without `Kept`, results stay inline.
-
-yaks.app also keeps model-facing tool answers over 16 KiB. Its `result_query`
-tool runs jq against an id and keeps a large query result again. Ordinary graph
-answers have rows at `.result`; custom tool answers keep their data under
-`.structuredContent`, with complete text and images beside it.
+`results.read` reads the saved value exactly, within the caller's scope. Its
+capability is revoked when the execution ends. yaks.app's `result_query` tool
+runs jq against the same snapshots. Ordinary graph answers have rows at
+`.result`; custom tool answers keep data under `.structuredContent`, with
+accompanying text in `.content`.
 
 The Cloudflare adapter uses a fresh Worker Loader isolate with an empty `env`,
 `globalOutbound: null`, and one RPC capability passed as an argument. The
@@ -57,12 +52,10 @@ the bridge after 30 seconds or completion. A trusted child deadline settles its
 invocation after 30 seconds too. The Loader exposes no hard termination method;
 CPU limits stop synchronous loops, and revocation prevents late tool calls. The
 returned RPC promise is disposed when the host finishes. Executions permit 16
-tool calls and 64 KiB of script and JSON arguments per call. Tool results count
-once toward the 4 MiB retention threshold, by their structured form where one
-exists. A serialized MCP result, kept result read or script answer over 32 MiB
-is refused for system safety; ordinary retention thresholds never reject or
-truncate a result. Each limit's error says what to do instead (`TOO`). Discovery
-is paged and uses the same result retention.
+tool calls and 64 KiB of script and JSON arguments per call. A serialized MCP
+result, kept result read or script answer over 32 MiB is refused for system
+safety; ordinary results remain whole. Each limit's error says what to do
+instead (`TOO`). Discovery is paged.
 
 A script's failure does not undo started writes. A receipt with `pending: true`
 means the call was still in flight when the execution answered; it may finish

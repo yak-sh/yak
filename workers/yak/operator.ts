@@ -54,7 +54,8 @@ import { runs as memoryRuns } from '@yaks/memory/tools'
 import { taskDoc } from '@yaks/task/vocab'
 import { runs as taskRuns } from '@yaks/task/tools'
 import { worded } from '@yaks/tools'
-import { retainAnswer } from './results.ts'
+import { keepResult, resultValue } from './results.ts'
+import { outputView } from '@yaks/context'
 import type { Handlers } from '@yaks/effects'
 import {
   type Directory,
@@ -341,8 +342,12 @@ export let operatorRoster = async (
       if (fault) throw fault
       // Applied tools already wrote through their own store; generic writes
       // return patches and use the same graph application as the connector.
-      let kept = await retainAnswer(work.g, out, t, call, ctx.person)
-      return kept ? JSON.stringify(kept) : worded(out) || JSON.stringify(out)
+      return {
+        text: worded(out, Infinity) || JSON.stringify(out),
+        with: {
+          output: { source: call.entity.eid, value: resultValue(out, t) },
+        },
+      }
     }
   let shaped = (t: NamedTool) => ({
     name: t.name,
@@ -1328,6 +1333,17 @@ export let operating = (
         }
       },
       remote: roster,
+      resultText: async (entry) => {
+        let session = String(comp(entry, 'entry')?.session)
+        let work = await workingOf(store, session)
+        if (!work) throw new Error('Operator result has no working session')
+        return outputView(
+          g,
+          entry,
+          undefined,
+          (value, source) => keepResult(g, value, source, work.person),
+        )
+      },
       // The conversation and its work forks share a short topic map. Only a
       // session opened on a topic carries that topic's compiled context.
       instructions: async (session) => {
@@ -1585,7 +1601,17 @@ export let operating = (
           call: { to: name, args },
         }
         let told = await tool.run(args, { session, call, entries: [] })
-        return typeof told == 'string' ? told : told.text
+        let entry = {
+          entity: call.entity,
+          content: { body: typeof told == 'string' ? told : told.text },
+          ...typeof told == 'string' ? {} : told.with,
+        }
+        return outputView(
+          g,
+          entry,
+          undefined,
+          (value, source) => keepResult(g, value, source, held.person),
+        )
       },
     }
   }

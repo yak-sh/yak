@@ -25,7 +25,7 @@
 // did not come from this handler.
 
 import { type Authenticate, type Handler, json, refuse } from '@yaks/api'
-import { TEXT, WHOLE } from '@yaks/api/address'
+import { TEXT } from '@yaks/api/address'
 import type { Actor, Bundle, Graph } from '@yaks/graph'
 import { status } from '@yaks/graph/errors'
 import { SESSION, sessionFor, speaking } from '@yaks/session'
@@ -641,8 +641,6 @@ export let mcp = (opts: MountOptions): Handler => {
         actor,
         runner: running(),
         text: drawing(request),
-        // A program asking in `x-yak-whole` reads every answer whole.
-        retain: request.headers.has(WHOLE) ? undefined : opts.retain,
       }),
       opts,
       exchange,

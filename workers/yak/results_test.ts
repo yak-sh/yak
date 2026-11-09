@@ -1,7 +1,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { operatorMemory } from './operator-testing.ts'
-import { keepResult, readResult, resultValue, retainAnswer } from './results.ts'
-import { RESULT_LIMIT, resultBytes, resultSummary } from './result-view.ts'
+import { keepResult, readResult, resultValue } from './results.ts'
+import { RESULT_LIMIT, resultBytes, resultSummary } from '@yaks/context/result'
 import { queryResult } from './result-query.ts'
 
 let { g } = operatorMemory()
@@ -26,15 +26,14 @@ let answer = [{
   content: { body: 'z'.repeat(300_000) },
   output: { value: { total: 100 } },
 }]
-let prose = await retainAnswer(
+let prose = await keepResult(
   g,
-  answer,
-  {
+  resultValue(answer, {
     name: 'sample',
     description: 'A sample',
     outputSchema: { type: 'object' },
     run: () => [],
-  },
+  }),
   source,
   person,
 )
@@ -52,13 +51,11 @@ test('large results retain all Unicode data and describe the shape with a bounde
   equal(await readResult(g, summary.id, person), { result: data })
 })
 
-test('jq narrows kept data and large jq outputs remain available by id', async () => {
+test('jq narrows kept data and returns full query outputs to programs', () => {
   equal(narrowed, {
     values: [[{ id: 98, name: 'row 98' }, { id: 99, name: 'row 99' }]],
   })
-  let id = (repeated as { id: string }).id
-  ok(id)
-  equal(await readResult(g, id, person), { values: [{ result: data }] })
+  equal(repeated, { values: [{ result: data }] })
 })
 
 test('a kept result is private to the reader who produced it', async () => {

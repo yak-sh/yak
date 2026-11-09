@@ -260,14 +260,24 @@ export let ridden = (
       !['entity', 'content', 'output'].includes(k) && !k.startsWith('$')
     )
     : []
-  if (!carried.length) return [end(made), made]
+  let output = one.output as Comp | undefined
+  let payload = one.entity.eid == '$said' && output
+    ? Object.fromEntries(
+      Object.entries(output).filter(([key]) => key != 'source' && key != 'id'),
+    )
+    : {}
+  if (!carried.length && !Object.keys(payload).length) return [end(made), made]
   let words = Object.fromEntries(
     Object.entries(one).filter(([k]) => !carried.includes(k)),
   ) as Bundle
   let [result, ...rest] = end([words])
   return [
     [
-      { ...result, ...Object.fromEntries(carried.map((k) => [k, one[k]])) },
+      {
+        ...result,
+        ...Object.fromEntries(carried.map((k) => [k, one[k]])),
+        ...Object.keys(payload).length ? { output: payload } : {},
+      },
       ...rest,
     ],
     [words],

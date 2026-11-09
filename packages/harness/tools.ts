@@ -116,7 +116,7 @@ export let graphTools = (
       })
       let fault = faultOf(landed, id)
       if (fault) throw failure(fault)
-      return worded(answerOf(landed, id))
+      return worded(answerOf(landed, id), Infinity)
     },
     recover: async (_, ctx) => {
       let id = derivedEid(`harness graph tool ${ctx.call.entity.eid}`)
@@ -127,7 +127,7 @@ export let graphTools = (
         'Graph tool execution was interrupted. Its write may have landed; ' +
           'inspect the graph before repeating it.',
       )
-      return worded(answerOf(answer, id))
+      return worded(answerOf(answer, id), Infinity)
     },
   }))
 }

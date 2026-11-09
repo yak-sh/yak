@@ -4,63 +4,34 @@ import { toolCheck } from '@yaks/vocab/tools'
 import { CallError } from '@yaks/tools'
 import { valued } from '@yaks/tools/value'
 import { WORDS } from '@yaks/tools/result'
-import type { Bundle, Tool } from '@yaks/graph'
 import { connect, text } from './testing.ts'
 
-let keptSchema = {
-  type: 'object',
-  properties: { kept: { type: 'string' } },
-  required: ['kept'],
-  additionalProperties: false,
-}
-
-let summary = () => ({
-  content: [{ type: 'text' as const, text: 'The whole result is kept as r1.' }],
-  structuredContent: { kept: 'r1' },
-})
-
-test('MCP retention receives the whole answer before rendering and preserves its summary', async () => {
+test('MCP returns the whole answer and its accompanying prose without an opt-in', async () => {
   let body = 'x'.repeat(WORDS + 1)
-  let seen: { answer: Bundle[]; tool: Tool; call: Bundle } | undefined
-  let reports: unknown[] = []
   let client = await connect({
     core: false,
     tools: [{
       name: 'large',
       description: 'Read a large result',
       readOnly: true,
-      run: (call) => [valued(call, { body })],
+      outputSchema: { type: 'object' },
+      run: (call) => [{ ...valued(call, { body }), content: { body } }],
     }],
-    retain: {
-      schema: keptSchema,
-      result: (answer, tool, call) => {
-        seen = { answer, tool, call }
-        return Promise.resolve(summary())
-      },
-    },
-    text: () =>
-      Promise.reject(new Error('retained summaries are already text')),
-    roster: () => ({ line: 'Tools changed.' }),
-    report: (err) => void reports.push(err),
   })
   try {
-    await client.listTools()
     let out = await client.callTool({ name: 'large' })
+    equal((out.structuredContent as { body: string }).body.length, body.length)
     equal(
-      (seen?.answer[0].output as { value: { body: string } }).value.body,
-      body,
+      String((out.structuredContent as { said: string }).said).includes(body),
+      true,
     )
-    equal(seen?.tool.name, 'large')
-    equal(typeof seen?.call.entity.eid, 'string')
-    equal(text(out), 'The whole result is kept as r1.')
-    equal(out.structuredContent, { kept: 'r1', said: 'Tools changed.' })
-    equal(reports, [])
+    equal(text(out).includes(body), true)
   } finally {
     await client.close()
   }
 })
 
-test('MCP retention can leave an ordinary answer and its text unchanged', async () => {
+test('MCP preserves an ordinary answer and requested text rendering', async () => {
   let reports: unknown[] = []
   let client = await connect({
     core: false,
@@ -76,7 +47,6 @@ test('MCP retention can leave an ordinary answer and its text unchanged', async 
       },
       run: (call) => [valued(call, { count: 2 })],
     }],
-    retain: { schema: keptSchema, result: () => Promise.resolve(undefined) },
     text: () => Promise.resolve('Two books.'),
     roster: () => ({ line: 'Tools changed.' }),
     report: (err) => void reports.push(err),
@@ -88,7 +58,6 @@ test('MCP retention can leave an ordinary answer and its text unchanged', async 
     equal(text(out), 'Two books.')
     equal(out.structuredContent, { count: 2, said: 'Tools changed.' })
     equal(check(out.structuredContent), [])
-    equal(check({ kept: 'r1', said: 'Tools changed.' }), [])
     equal(check({ count: 'two' }).length > 0, true)
     equal(check({ kept: 1 }).length > 0, true)
     equal(reports, [])
@@ -97,7 +66,7 @@ test('MCP retention can leave an ordinary answer and its text unchanged', async 
   }
 })
 
-test('a retained refusal still answers as an MCP tool error', async () => {
+test('a refusal answers as an MCP tool error', async () => {
   let reports: unknown[] = []
   let client = await connect({
     core: false,
@@ -109,14 +78,13 @@ test('a retained refusal still answers as an MCP tool error', async () => {
         throw new CallError('closed', 'The shelf is closed.')
       },
     }],
-    retain: { schema: keptSchema, result: () => Promise.resolve(summary()) },
     report: (err) => void reports.push(err),
   })
   try {
     await client.listTools()
     let out = await client.callTool({ name: 'refuse' })
     equal(out.isError, true)
-    equal(out.structuredContent, { kept: 'r1' })
+    equal(text(out).includes('The shelf is closed.'), true)
     equal(reports, [])
   } finally {
     await client.close()

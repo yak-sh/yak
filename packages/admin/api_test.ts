@@ -134,7 +134,6 @@ test('admin query reaches the platform directory by its space or store name', as
         path: '/mcp',
         headers: {
           'content-type': 'application/json',
-          'x-yak-whole': '1',
           authorization: 'Bearer session',
         },
         params: {

@@ -20,7 +20,6 @@
 import * as systemProcess from '@yaks/process/system'
 import { sleep } from '@yaks/fp'
 import { type Bundle, type Comp, minted } from '@yaks/graph'
-import { WHOLE } from '@yaks/api/address'
 import { timed } from '@yaks/api/timing'
 import { brokerKey, type Registered, registration } from '@yaks/connections'
 
@@ -431,14 +430,13 @@ export { codeFor, codeIn, lettersFor } from '@yaks/connections'
 
 // The connector, as JSON-RPC over one POST. Stateless: /mcp answers a
 // tools/call with no initialize handshake, which is what makes a CLI call
-// cost one round trip. This client is a program, so it asks for every answer
-// whole rather than a kept result's summary (@yaks/api/address `WHOLE`).
+// cost one round trip.
 export let rpc = (session: string) => {
   let n = 0
   return async (method: string, params: unknown = {}) => {
     let r = await sent(apex('/mcp'), session, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', [WHOLE]: '1' },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method, params }),
     })
     if (r.status != 200) {

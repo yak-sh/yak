@@ -16,6 +16,7 @@
   "license": "Apache-2.0",
   "description": "Runs an agent on this machine over a yak graph: the machine the session runner is lent, the machine and graph tools, and the terminal app.",
   "dependencies": {
+    "@gabrielbryk/jq-ts": "1.7.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@preact/signals": "2.9.4",
     "@yaks/api": "0.2.29",

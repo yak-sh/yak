@@ -4,7 +4,6 @@ import { outputView } from '@yaks/context'
 import { valueRange, valueSearch, valueTools } from '@yaks/blob'
 import { transcript } from '@yaks/session'
 import { local } from './local.ts'
-import { harnessTools } from './tools.ts'
 import type { Request } from '@yaks/model'
 import { harness } from './testing.ts'
 
@@ -18,8 +17,7 @@ test('large outputs snapshot transparently, survive reopen and source mutation',
     const entry = (await h.g.read('.entity.eid=result&*'))[0]
     const stub = await outputView(h.g, entry)
     assert(stub.length < 2000)
-    const handle = stub.match(/Handle: (.+)/)![1]
-    const revision = stub.match(/Expected revision: ([a-f0-9]+)/)![1]
+    const { id: handle, revision } = JSON.parse(stub)
     assertEquals(await outputView(h.g, entry), stub)
     assertEquals((await h.g.read('.context_output&*')).length, 1)
     await h.g.apply([{ entity: { eid: 'result' }, content: { body: 'newer' } }])
@@ -103,7 +101,7 @@ test('model receives bounded tool result, UI keeps original and prompt/user stay
   const a = await local({
     h,
     name: 'fake',
-    tools: [...harnessTools(h.g), {
+    tools: [{
       name: 'large',
       description: 'test',
       parameters: { type: 'object' },

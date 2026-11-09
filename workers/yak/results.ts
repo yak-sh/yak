@@ -5,18 +5,11 @@ import { structured, texts } from '@yaks/tools/result'
 import { imagesIn } from '@yaks/tools/value'
 import { refuse } from './tool.ts'
 import {
-  RESULT_LIMIT,
   RESULT_MAX,
-  resultBytes,
   type ResultSummary,
   resultSummary,
-} from './result-view.ts'
-export {
-  RESULT_LIMIT,
-  RESULT_MAX,
-  RESULT_SCHEMA,
-  resultBytes,
-} from './result-view.ts'
+} from '@yaks/context/result'
+export { RESULT_MAX, RESULT_SCHEMA } from '@yaks/context/result'
 
 /** A snapshot names its call and reader; the graph holding it scopes its space. */
 export let keepResult = async (
@@ -64,17 +57,6 @@ export let readResult = async (
   return JSON.parse(output.body)
 }
 
-export let retainResult = (
-  g: Graph,
-  value: unknown,
-  source: Bundle,
-  person: string,
-  limit = RESULT_LIMIT,
-): Promise<unknown> =>
-  resultBytes(value) > limit
-    ? keepResult(g, value, source, person)
-    : Promise.resolve(value)
-
 /** Custom values and accompanying content occupy separate fields so neither
  * can replace a property the tool's schema owns. */
 export let resultValue = (
@@ -89,16 +71,4 @@ export let resultValue = (
     content: texts(answer, Infinity).map((text) => ({ type: 'text', text })),
     ...images.length ? { images } : {},
   }
-}
-export let retainAnswer = (
-  g: Graph,
-  answer: Bundle[],
-  tool: Tool,
-  call: Bundle,
-  person: string,
-): Promise<ResultSummary | undefined> => {
-  let value = resultValue(answer, tool)
-  return resultBytes(value) > RESULT_LIMIT
-    ? keepResult(g, value, call, person)
-    : Promise.resolve(undefined)
 }

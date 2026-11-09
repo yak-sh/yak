@@ -38,4 +38,9 @@ export let snapshot = async (
   return { body, source, revision }
 }
 
-export { OUTPUT_LIMIT, outputView } from './output.ts'
+export {
+  type KeepOutput,
+  OUTPUT_LIMIT,
+  outputValue,
+  outputView,
+} from './output.ts'

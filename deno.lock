@@ -3615,6 +3615,7 @@
       "packages/harness": {
         "packageJson": {
           "dependencies": [
+            "npm:@gabrielbryk/jq-ts@1.7.0",
             "npm:@jsr/std__assert@1",
             "npm:@modelcontextprotocol/sdk@^1.29.0",
             "npm:@preact/signals@2.9.4",

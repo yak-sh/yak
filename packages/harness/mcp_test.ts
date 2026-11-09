@@ -1,6 +1,7 @@
 import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
+import { agent } from './agent.ts'
 import { mcpTools } from './mcp.ts'
 import { signins } from '@yaks/connections'
 import type { Remote } from './mcp_auth.ts'
@@ -110,6 +111,92 @@ test('remote images use external artifacts while large text retains bounded cont
     assert(text.endsWith('a'.repeat(100000)))
   } finally {
     await tools.close()
+    await h.close()
+  }
+})
+
+// A short human sentence must not hide a large structured answer from retention.
+test('the model receives a summary of a full third-party reply and can query it with custom tools', async () => {
+  let h = await harness()
+  let reply = {
+    content: [{ type: 'text' as const, text: 'These are the rows.' }],
+    structuredContent: { rows: [{ title: 'First', body: 'x'.repeat(20_000) }] },
+  }
+  let remote = connected(h, () => Promise.resolve(reply))
+  let requests = 0
+  let summary: { id: string; shape: { rows: number; path: string } } | undefined
+  let queried = false
+  let a = agent({
+    h,
+    name: 'fake',
+    tools: [],
+    remote: remote.snapshot,
+    model: (req) => {
+      requests++
+      for (let item of req.items) {
+        let text = item.kind == 'result'
+          ? item.output
+          : item.kind == 'user'
+          ? item.text
+          : ''
+        if (text.includes('"preview"')) {
+          summary = JSON.parse(
+            text.slice(text.indexOf('{')).split('\ntook ')[0],
+          )
+        }
+      }
+      let narrowed = req.items.find((i) =>
+        i.kind == 'result' && i.id == 'query'
+      )
+      if (narrowed?.kind == 'result' && narrowed.output.includes('"First"')) {
+        queried = true
+      }
+      let item = requests == 1
+        ? {
+          kind: 'call' as const,
+          id: 'large',
+          name: 'publish_mockup',
+          args: '{}',
+        }
+        : summary && !queried
+        ? {
+          kind: 'call' as const,
+          id: 'query',
+          name: 'result_query',
+          args: JSON.stringify({
+            id: summary.id,
+            query: '.structuredContent.rows[0].title',
+          }),
+        }
+        : { kind: 'assistant' as const, text: 'done' }
+      return Promise.resolve({
+        id: 'r' + requests,
+        model: 'fake',
+        items: [item],
+      })
+    },
+  })
+  try {
+    let [tool] = await remote.snapshot()
+    let raw = await tool.run({})
+    assertEquals(
+      typeof raw == 'string' ? undefined : raw.with.output.value,
+      reply,
+    )
+    let session = await a.start('Read those rows.')
+    await a.idle(session)
+    assert(summary)
+    assertEquals(summary?.shape.rows, 1)
+    assertEquals(summary?.shape.path, '.structuredContent.rows')
+    assertEquals(queried, true)
+    let [stored] = await h.g.get([summary!.id], ['context_output'])
+    assertEquals(
+      JSON.parse(String((stored.context_output as { body: string }).body)),
+      reply,
+    )
+  } finally {
+    await remote.close()
+    await a.close()
     await h.close()
   }
 })

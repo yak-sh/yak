@@ -1,7 +1,7 @@
 import { run } from '@gabrielbryk/jq-ts'
 import type { Bundle, Graph } from '@yaks/graph'
-import { readResult, retainResult } from './results.ts'
-import { RESULT_MAX } from './result-view.ts'
+import { readResult } from './results.ts'
+import { RESULT_MAX } from '@yaks/context/result'
 import { refuse } from './tool.ts'
 
 /** jq is interpreted by the library, with bounded work even for recursive filters. */
@@ -9,7 +9,7 @@ export let queryResult = async (
   g: Graph,
   id: string,
   query: string,
-  source: Bundle,
+  _source: Bundle,
   person: string,
 ) => {
   let value = await readResult(g, id, person)
@@ -21,5 +21,5 @@ export let queryResult = async (
   } catch (error) {
     throw refuse('arguments', 'jq query failed: ' + (error as Error).message)
   }
-  return retainResult(g, { values }, source, person)
+  return { values }
 }

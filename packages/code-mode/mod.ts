@@ -23,8 +23,6 @@ export let LIMITS = {
   cpuMs: 100,
   memoryMiB: 128,
   calls: 16,
-  outputBytes: 262_144,
-  readBytes: 4_194_304,
   systemBytes: 33_554_432,
   scriptBytes: 65_536,
 }
@@ -44,8 +42,7 @@ export type Receipt = {
   pending?: boolean
 }
 export type Answer = { value: unknown; calls: Receipt[]; error?: string }
-/** The caller's graph keeps large results and admits reads within its scope.
- * `keep` returns the result's id, shape and preview for the model or script. */
+/** The host admits reads of results kept by its model-facing harness. */
 export type Kept = {
   keep(value: unknown, source: Bundle): Promise<unknown>
   read(id: string): Promise<unknown>
@@ -64,30 +61,21 @@ export type Strip = (path: string, source: string) => string | Promise<string>
 let bytes = (v: unknown) => new TextEncoder().encode(JSON.stringify(v)).length
 let message = (e: unknown) =>
   (e instanceof Error ? e.message : String(e)).slice(0, 1024)
-let keptValue = async (value: unknown, asked: Bundle, kept?: Kept) => {
-  let size = bytes(value)
-  if (size > LIMITS.systemBytes) throw new CallError('limit', TOO.system)
-  return size > LIMITS.outputBytes && kept
-    ? await kept.keep(value, asked)
-    : value
-}
-let finished = async (
+let finished = (
   value: unknown,
   calls: Receipt[],
-  asked: Bundle,
-  kept?: Kept,
   error?: string,
-): Promise<Answer> => {
+): Answer => {
+  if (bytes(value) > LIMITS.systemBytes) {
+    throw new CallError('limit', TOO.system)
+  }
   let out: Answer = {
-    value: await keptValue(value, asked, kept),
+    value,
     calls: structuredClone(calls),
     ...(error ? { error } : {}),
   }
   return out
 }
-// A result's size, counted once: its structured form where it has one, which
-// its text repeats.
-let size = (r: Result) => bytes(r.structuredContent ?? r.content)
 let said = (r: Result) => r.content.map((c) => c.text).join('\n').slice(0, 1024)
 
 /** All nested calls use admitted registry implementations, the outer caller's
@@ -114,7 +102,6 @@ export let execute = async (
   let pending = new Set<Promise<unknown>>()
   let controller = new AbortController()
   let active = true
-  let used = 0
   let read = async (id: string): Promise<unknown> => {
     if (!active) throw new CallError('expired', 'execution has ended')
     if (typeof id != 'string' || !id || id.length > 256) {
@@ -191,20 +178,10 @@ export let execute = async (
           : {}),
         ...(failed ? { isError: true } : {}),
       }
-      let length = size(result)
       if (bytes(result) > LIMITS.systemBytes) {
         throw new CallError('limit', TOO.system)
       }
-      used += length
       if (failed) Object.assign(receipt, { isError: true, error: said(result) })
-      if (used > LIMITS.readBytes && kept) {
-        let value = await kept.keep(result, nested)
-        return {
-          content: [{ type: 'text', text: JSON.stringify(value) }],
-          structuredContent: value as Record<string, unknown>,
-          ...(failed ? { isError: true } : {}),
-        }
-      }
       return result
     })()
     pending.add(work)
@@ -244,12 +221,10 @@ export let execute = async (
     return await finished(
       answer.value ?? null,
       calls,
-      asked,
-      kept,
       typeof answer.error == 'string' ? answer.error.slice(0, 1024) : undefined,
     )
   } catch (e) {
-    return await finished(null, calls, asked, kept, message(e))
+    return await finished(null, calls, message(e))
   } finally {
     active = false
     controller.abort()
@@ -325,7 +300,9 @@ export let tool = (
         current,
         kept,
       )
-    value = await keptValue(value, asked, kept) as typeof value
+    if (bytes(value) > LIMITS.systemBytes) {
+      throw new CallError('limit', TOO.system)
+    }
     return [{
       entity: { eid: mint() },
       output: { source: asked.entity.eid, value },

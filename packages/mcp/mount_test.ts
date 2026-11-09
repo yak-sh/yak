@@ -8,7 +8,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, derivedEid, graph } from '@yaks/graph'
 import { graphDoc } from '@yaks/graph/vocab'
 import { served, subscriptions, Unauthorized } from '@yaks/api'
-import { TEXT, WHOLE } from '@yaks/api/address'
+import { TEXT } from '@yaks/api/address'
 import { ram } from '@yaks/ram'
 import { sessionDoc, sessionEid } from '@yaks/session'
 import { authenticate as sessionAuth } from '@yaks/session/graph'
@@ -124,27 +124,6 @@ test('a request asking for text is answered drawn and told so, and any other as 
   assertEquals((await plain.json()).result.content, [
     { type: 'text', text: '[]' },
   ])
-})
-
-test('a program asking for whole answers reads one the server would keep', async () => {
-  let door = mcp({
-    graph: shopGraph(),
-    retain: {
-      schema: { type: 'object' },
-      result: () =>
-        Promise.resolve({
-          content: [{ type: 'text', text: 'kept as r1' }],
-          structuredContent: { kept: 'r1' },
-        }),
-    },
-  })
-  let asked = call('graph_query', { q: '.book' })
-  asked.headers.set(WHOLE, '1')
-  assertEquals((await (await door(asked)).json()).result.structuredContent, {
-    result: [],
-  })
-  let kept = await door(call('graph_query', { q: '.book' }))
-  assertEquals((await kept.json()).result.structuredContent, { kept: 'r1' })
 })
 
 test('a slow tool answers with its committed outcome', async () => {

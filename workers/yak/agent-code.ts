@@ -8,13 +8,6 @@ import { ledger } from './ledger.ts'
 import { argsOf } from '@yaks/graph'
 import { type Ctx, refuse, SPACE } from './tool.ts'
 import { type ResultHost, resultStore, resultTools } from './result-tools.ts'
-import {
-  RESULT_LIMIT,
-  RESULT_SCHEMA,
-  resultBytes,
-  resultValue,
-} from './results.ts'
-
 // Both agent doors offer short executions over the connector's tools. Each
 // nested call reads the caller's reach anew, including apps just deployed.
 export let coded = <T extends Options>(
@@ -80,20 +73,5 @@ export let coded = <T extends Options>(
     ) => offered(argsOf(call)).run(call, graph),
   }
   catalog.replace('code', [code])
-  let retain: NonNullable<Options['retain']> = {
-    schema: RESULT_SCHEMA,
-    result: async (answer, tool, call) => {
-      let value = resultValue(answer, tool)
-      if (resultBytes(value) <= RESULT_LIMIT) return
-      let summary = await resultStore(ctx, argsOf(call), local).keep(
-        value,
-        call,
-      )
-      return {
-        content: [{ type: 'text', text: JSON.stringify(summary) }],
-        structuredContent: summary,
-      }
-    },
-  }
-  return { ...opts, registry: catalog, runner: run, retain }
+  return { ...opts, registry: catalog, runner: run }
 }

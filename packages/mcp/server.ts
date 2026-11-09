@@ -106,17 +106,6 @@ export type Options = {
    * for a request that asks (./mount.ts), so every other client reads the
    * reply it always did. */
   text?: (answer: Bundle[], tool: Tool) => Promise<string>
-  /** Keep an answer outside the model's reply before rendering can shorten
-   * it. Return its summary, or undefined to send the ordinary answer. The
-   * summary's schema is listed beside each tool's own output schema. */
-  retain?: {
-    schema: Record<string, unknown>
-    result: (
-      answer: Bundle[],
-      tool: Tool,
-      call: Bundle,
-    ) => Promise<CallToolResult | undefined>
-  }
   /** Optional local file input: callers opt in with `_files: true`. Hosted
    * servers without a reader keep literal inputs and their exact schemas. */
   readFile?: ReadFile
@@ -278,13 +267,15 @@ let said = (t: Tool, answer: Bundle[], failed: boolean): CallToolResult => {
   // A refusal points at the tool that has the current answer: a client
   // holding a tool list from before a property was added or removed finds out
   // here and nowhere else.
-  let refused = failed ? worded(answer) : ''
+  let refused = failed ? worded(answer, Infinity) : ''
   let point = failed ? pointer(refused) : undefined
   let out: CallToolResult = {
     // Data and the words beside it go in blocks of their own, data first, so
     // a client parsing the first block finds JSON (@yaks/tools `texts`).
     content: [
-      ...(failed ? [point ? `${refused}. ${point}` : refused] : texts(answer))
+      ...(failed
+        ? [point ? `${refused}. ${point}` : refused]
+        : texts(answer, Infinity))
         .map((text) => ({ type: 'text' as const, text })),
       ...imagesIn(answer).map(({ data, mime_type }) => ({
         type: 'image' as const,
@@ -297,7 +288,7 @@ let said = (t: Tool, answer: Bundle[], failed: boolean): CallToolResult => {
       : { structuredContent: structured(t, answer) }),
     ...(failed ? { isError: true } : {}),
   }
-  return beside(out, failed ? point : aside(t, answer))
+  return beside(out, failed ? point : aside(t, answer, Infinity))
 }
 
 // Words the data is told beside what it holds, joined onto any it already has.
@@ -516,12 +507,7 @@ export let server = (
   let schemaOf = (t: NamedTool) => {
     let schema = schemas.get(t)
     if (!schema) {
-      let ordinary = saying(t.outputSchema ?? answer)
-      // Decorate each branch: properties on the union would leave a closed
-      // branch unable to accept the words added beside its own result.
-      schema = opts.retain
-        ? { type: 'object', anyOf: [ordinary, saying(opts.retain.schema)] }
-        : ordinary
+      schema = saying(t.outputSchema ?? answer)
       schemas.set(t, schema)
     }
     return schema
@@ -581,10 +567,9 @@ export let server = (
       let landed = await (t.readOnly ? admitted.read() : admitted.call())
       let answer = answerOf(landed, id)
       let isError = faulted(landed, id)
-      let retained = await opts.retain?.result(answer, t, asked)
-      out = retained ?? said(t, answer, isError)
+      out = said(t, answer, isError)
       if (isError) out = { ...out, isError: true }
-      if (!retained && opts.text) {
+      if (opts.text) {
         out = {
           ...out,
           content: [{ type: 'text', text: await opts.text(answer, t) }],

@@ -23,7 +23,7 @@ test('bounded output retains its immutable snapshot under a UUID handle', () => 
     handle,
     /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
   )
-  assertEquals(view.includes('Handle: ' + handle), true)
+  assertEquals(JSON.parse(view).id, handle)
   const [stored] = rows
   assertEquals(stored.entity.eid, handle)
   assertEquals((stored.context_output as Comp).body, body)

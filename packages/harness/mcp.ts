@@ -18,7 +18,7 @@ export const mcpTools = (
   const render = async (
     value: unknown,
     call?: ToolContext,
-  ): Promise<string> => {
+  ): Promise<import('@yaks/session').Told> => {
     const result = value as {
       content?: Record<string, unknown>[]
       structuredContent?: unknown
@@ -105,7 +105,15 @@ export const mcpTools = (
     if (result.isError) {
       throw new ToolError('mcp_tool', text || 'Remote tool returned an error')
     }
-    return text
+    return {
+      text,
+      with: {
+        output: {
+          ...call ? { source: call.call.entity.eid } : {},
+          value: result,
+        },
+      },
+    }
   }
   return {
     refresh: connections.refresh,

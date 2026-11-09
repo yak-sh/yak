@@ -1,7 +1,7 @@
 /** Small model-facing descriptions of JSON values kept whole in the graph. */
-export let RESULT_LIMIT = 16_384
-export let RESULT_MAX = 33_554_432
-export let resultBytes = (value: unknown) =>
+export let RESULT_LIMIT: number = 16_384
+export let RESULT_MAX: number = 33_554_432
+export let resultBytes = (value: unknown): number =>
   new TextEncoder().encode(JSON.stringify(value) ?? 'null').length
 
 let object = (value: unknown): value is Record<string, unknown> =>
@@ -33,7 +33,15 @@ let rows = (
     if (table) return table
   }
 }
-let shape = (value: unknown) => {
+type Shape = {
+  type: string
+  keys?: string[]
+  characters?: number
+  rows?: number
+  path?: string
+  columns?: string[]
+}
+let shape = (value: unknown): Shape => {
   let table = rows(value)
   return {
     type: value === null
@@ -90,7 +98,7 @@ export type ResultSummary = {
 export let resultSummary = (
   id: string,
   value: unknown,
-  bytes = resultBytes(value),
+  bytes: number = resultBytes(value),
 ): ResultSummary => ({
   id,
   bytes,
@@ -101,7 +109,7 @@ export let resultSummary = (
     'await results.read(id) inside code_mode. The preview is abbreviated.',
 })
 
-export let RESULT_SCHEMA = {
+export let RESULT_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {
     id: { type: 'string' },

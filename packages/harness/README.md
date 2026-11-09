@@ -744,13 +744,14 @@ one row.
 
 ### Inspecting large tool results
 
-The standard tools include `graph_value_read` and `graph_value_search` from
-`@yaks/blob`. Tool-result bodies over 16,384 Unicode code points are replaced in
-model requests by a short preview and a revisioned graph address. The full
-result remains in the transcript and blob-backed storage. This applies equally
-to shell output and large graph-tool responses. User messages and instruction
-snapshots are unchanged. Set `outputLimit` on `agent()` or `local()` to change
-the threshold.
+The harness supplies `result_query` for jq inspection and `graph_value_read` and
+`graph_value_search` from `@yaks/blob`, including with custom tool sets. Tool
+results over 16,384 UTF-8 bytes are replaced in model requests by a summary with
+an id, size, shape and preview. The full result remains in the transcript and
+blob-backed storage. This applies equally to shell output, graph tools and
+third-party MCP tools. Programs and connector clients receive complete answers.
+User messages and instruction snapshots are unchanged. Set `outputLimit` on
+`agent()` or `local()` to change the threshold.
 
 Read accepts `entity`, `component`, `property`, `start`, `count`, and optional
 `revision`. Search accepts the same address with a literal `query` and bounded
