@@ -399,3 +399,18 @@ test('a permanent Wrangler failure is not retried', async () => {
   )
   assertEquals(runs, 1)
 })
+
+test('a gateway serving an old kernel is distinguished from a newer promotion', () => {
+  let report = table([deploy(2, [], { live: 100 }), deploy(1, [])], {
+    kernel: 'v1',
+    front: 'f2',
+    at: at(3),
+  })
+  assert(report.includes('kernel v1, front f2'))
+  assert(
+    report.includes('Gateway differs from the promoted kernel deployment.'),
+  )
+  assert(/v1\s+served\s+—/.test(report))
+  assert(/v2\s+—\s+100%/.test(report))
+  assert(!/v2\s+served/.test(table([deploy(2, [], { live: 100 })])))
+})

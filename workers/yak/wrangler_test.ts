@@ -12,6 +12,7 @@ import { globToRegExp } from '@std/path/glob-to-regexp'
 import {
   bundled,
   executor,
+  FRONT,
   fronted,
   guard,
   images,
@@ -625,31 +626,53 @@ test("a sibling's images are its Dockerfiles and their build contexts", async ()
   await checkSiblingPreparation()
 })
 
-test('independent sibling deploys overlap and the kernel waits for every success', async () => {
+test('dependencies overlap, then the kernel finishes promotion before the public gateway deploys', async () => {
   let started: { args: string[]; unpinned?: boolean }[] = []
-  let waits = SIBLINGS.map(() => Promise.withResolvers<number>())
+  let dependencies = siblings(['deploy', '--env', 'staging']).filter((args) =>
+    args.at(-1) != FRONT
+  )
+  let waits = dependencies.map(() => Promise.withResolvers<number>())
+  let kernel = Promise.withResolvers<number>(),
+    promoting = Promise.withResolvers<void>()
   let deploy = runWrangler(['deploy', '--env', 'staging'], (args, unpinned) => {
     started.push({ args, unpinned })
-    return unpinned ? waits[started.length - 1].promise : Promise.resolve(0)
+    if (!unpinned) {
+      promoting.resolve()
+      return kernel.promise
+    }
+    return args.at(-1) == FRONT
+      ? Promise.resolve(0)
+      : waits[started.length - 1].promise
   })
   try {
     await Promise.resolve()
     assertEquals(
       started.map((call) => call.args),
-      siblings(['deploy', '--env', 'staging']),
+      dependencies,
     )
-    assertEquals(started.map((call) => call.unpinned), SIBLINGS.map(() => true))
+    assertEquals(
+      started.map((call) => call.unpinned),
+      dependencies.map(() => true),
+    )
     for (let wait of waits.slice(0, -1)) wait.resolve(0)
     await Promise.resolve()
-    assertEquals(started.length, SIBLINGS.length)
+    assertEquals(started.length, dependencies.length)
     waits.at(-1)!.resolve(0)
-    assertEquals(await deploy, 0)
-    assertEquals(started[SIBLINGS.length], {
+    await promoting.promise
+    assertEquals(started.length, dependencies.length + 1)
+    assertEquals(started[dependencies.length], {
       args: ['deploy', '--env', 'staging'],
       unpinned: undefined,
     })
+    kernel.resolve(0)
+    assertEquals(await deploy, 0)
+    assertEquals(started.at(-1), {
+      args: ['deploy', '--env', 'staging', '-c', FRONT],
+      unpinned: true,
+    })
   } finally {
     for (let wait of waits) wait.resolve(0)
+    kernel.resolve(0)
     await deploy
   }
 })
@@ -672,7 +695,7 @@ for (let failure of [7, Error('process wait failed')]) {
     })
     try {
       await Promise.resolve()
-      assertEquals(starts, SIBLINGS.length)
+      assertEquals(starts, SIBLINGS.length - 1)
       assertEquals(ended, false)
       other.resolve(0)
       assertEquals(
@@ -685,6 +708,15 @@ for (let failure of [7, Error('process wait failed')]) {
     }
   })
 }
+
+test('a failed kernel promotion leaves the public gateway deployment alone', async () => {
+  let front = false
+  let code = await runWrangler(['deploy'], (args, sibling) => {
+    if (args.at(-1) == FRONT) front = true
+    return Promise.resolve(sibling ? 0 : 7)
+  })
+  assertEquals({ code, front }, { code: 7, front: false })
+})
 
 test('a wrangler command with no sibling deploy runs once with its own pinned identity', async () => {
   let called: unknown[] = []
@@ -1133,17 +1165,6 @@ test("a long subject is cut so the message keeps its digest within Cloudflare's 
 test('a dry run uploads as asked', async () => {
   let args = await kernelDeploy('b', made, { flags: ['--dry-run'] })
   assertEquals(args.at(-3), 'b')
-})
-
-test('a build leaves its own commit live when another build of it went live first', async () => {
-  let main = {
-    at: null as string | null,
-    live: undefined as string | undefined,
-  }
-  let b = await build(main)
-  main.live = 'a'.repeat(40)
-  assertEquals([await b.deploy(), b.uploads()], [0, 0])
-  assertEquals(b.notes.at(-1), 'not deploying: aaaaaaaa is already live')
 })
 
 test('a retry leaves a newer version live when it activates after an attempt', async () => {
@@ -1792,4 +1813,87 @@ test('a failed kernel bundle prevents uploading and removes its output', async (
   } finally {
     Deno.removeSync(kernelRoot, { recursive: true })
   }
+})
+
+test('an unchanged gateway re-promotes its serving version to refresh kernel service bindings', async () => {
+  let root = Deno.makeTempDirSync(), live: unknown = []
+  Deno.mkdirSync(join(root, 'front'))
+  Deno.writeTextFileSync(join(root, FRONT), 'main="worker.ts"')
+  let args = ['deploy', '-c', FRONT]
+  let read: Reads = {
+    deployments: () => Promise.resolve(live),
+    version: () => {
+      throw Error('complete annotations need no version read')
+    },
+  }
+  let query = (argv: string[]): Promise<CommandOutput> => {
+    let to = argv[argv.indexOf('--outdir') + 1]
+    Deno.writeTextFileSync(join(to, 'worker.js'), 'export default {}')
+    Deno.writeTextFileSync(
+      argv[argv.indexOf('--metafile') + 1],
+      JSON.stringify({
+        outputs: { [join(to, 'worker.js')]: { entryPoint: 'worker.ts' } },
+      }),
+    )
+    return Promise.resolve({
+      success: true,
+      code: 0,
+      signal: null,
+      stdout: new Uint8Array(),
+      stderr: new Uint8Array(),
+    })
+  }
+  try {
+    let first = await prepareSibling(args, [], root, query, read)
+    let message = first.args[first.args.indexOf('--message') + 1]
+    first.remove()
+    live = [{
+      created_on: '2026-11-09T12:00:00Z',
+      annotations: { 'workers/message': message },
+      versions: [{ version_id: 'front-v1', percentage: 100 }],
+    }]
+    let same = await prepareSibling(args, [], root, query, read)
+    try {
+      let calls: string[][] = []
+      assertEquals(
+        await uploadSibling(same, (argv) => {
+          calls.push(argv)
+          return Promise.resolve(0)
+        }),
+        0,
+      )
+      assertEquals(calls, [[
+        'versions',
+        'deploy',
+        'front-v1@100%',
+        '--yes',
+        '-c',
+        FRONT,
+        '--message',
+        message,
+      ]])
+    } finally {
+      same.remove()
+    }
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
+})
+
+test('a retry can finish the gateway when its kernel commit already serves, but leaves a newer build alone', async () => {
+  let head = 'a'.repeat(40), live = 'f'.repeat(40)
+  let door = guard(
+    () => Promise.resolve({ head, live: [{ sha: live, ahead: live == B }] }),
+    () => {},
+  )
+  assert(await door.first())
+  live = head
+  assert(await door.still())
+  let retry = guard(
+    () => Promise.resolve({ head, live: [{ sha: live, ahead: false }] }),
+    () => {},
+  )
+  assert(await retry.first())
+  live = B
+  assertEquals(await door.still(), false)
 })

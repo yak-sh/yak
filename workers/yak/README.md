@@ -25,8 +25,8 @@ it pays for, so what it imports stays free of the graph stack. Moving a route
 takes an API call on the route, since Wrangler refuses one held by another
 Worker.
 
-A deploy of the kernel deploys its sibling Workers first, from the same commit
-and to the same environment: `yak-front`, `yak-out` (`outbound/`, the dispatch
+A deploy of the kernel deploys its sibling Workers from the same commit and to
+the same environment: `yak-front`, `yak-out` (`outbound/`, the dispatch
 namespace's outbound Worker), `yak-esbuild` (`esbuild/`, the compiler
 `app_deploy` asks for an app's TypeScript and npm imports, @yaks/esbuild),
 `yak-raster` (`raster/`, which draws an app's `icon.svg` as its `icon.png` with
@@ -39,12 +39,12 @@ a container's calls to the platform come back to the kernel's `SandboxOutbound`,
 which holds the secret its placeholder is swapped with). `yak-esbuild` is a
 Worker in front of a container running native esbuild; its image is
 `esbuild/Dockerfile` over `packages/esbuild`, and its deploy builds and pushes
-the image when its inputs change. The siblings do not call one another, so their
-deploys run concurrently with the kernel bundle. All must finish successfully
-before the kernel upload begins; a failure waits for the other work and refuses
-the kernel upload. The pinned Wrangler bundles once, including node
-compatibility code and source maps; the upload reads those generated modules
-without bundling again.
+the image when its inputs change. Sibling preparation runs concurrently with the
+kernel bundle. Dependencies must finish successfully before the kernel upload
+begins; a failure waits for the other work and refuses the kernel upload.
+`yak-front`, which calls the kernel, deploys last. The pinned Wrangler bundles
+once, including node compatibility code and source maps; the upload reads those
+generated modules without bundling again.
 
 Hosted model execution has its own [executor release](../model/README.md),
 independently deployed by Workers Builds. A production kernel build adds its
@@ -231,7 +231,13 @@ queue consumers. A pending Durable Object migration, which only
 deploy` applies, deploys in one step. A push to main does not stop a
 completed build from deploying. A build behind a newer live version deploys
 nothing, leaves the newer one serving and says why in its log; nothing is put
-back after a deploy.
+back after a deploy. The public gateway (`yak-front`) is promoted after the
+kernel, including a re-promotion when its bytes are unchanged, so its service
+bindings pick up that kernel. Its preparation overlaps the dependencies and
+kernel build. `admin_deploys` observes `/_yak/version` through the public
+gateway and names both responding Worker versions, beside the kernel promotion
+history. The stateless version response loads no router or Durable Object and is
+never cached; a promotion by itself is not evidence of what the gateway serves.
 
 The sandbox tools use the Cloudflare provider in
 [@yaks/machine](../../packages/machine/README.md#cloudflare-containers).

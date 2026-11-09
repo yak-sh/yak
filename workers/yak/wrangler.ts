@@ -231,7 +231,7 @@ let logTail = (path: string) => {
   }
 }
 
-// The Workers this one is a contract with, each deployed first, from the same
+// The Workers this one is a contract with, deployed from the same
 // commit and to the same environment, so no Worker is ever deployed by hand:
 // yak-out (outbound/) is this Worker's dispatch namespace's outbound Worker,
 // handing every fetch an app makes back to this Worker's `Outbound`
@@ -241,17 +241,16 @@ let logTail = (path: string) => {
 // with; yak-browser (browser/) is what the BROWSER binding renders a draft
 // with for app_preview; yak-sandbox (sandbox/) holds the Sandbox object and
 // container the WORKBENCH binding names; and yak-front (front/) is what answers the cached
-// pages in front of this Worker. Each exists before this Worker's bindings
-// name it, except yak-front, whose bindings name this Worker: a missing
-// entrypoint there only fails its use receipts until this deploy finishes,
-// seconds later.
+// pages in front of this Worker. Dependencies deploy first; yak-front deploys
+// last, so its service bindings pick up the promoted kernel.
+export let FRONT = 'front/wrangler.toml'
 export let SIBLINGS = [
   'outbound/wrangler.toml',
   'esbuild/wrangler.toml',
   'raster/wrangler.toml',
   'browser/wrangler.toml',
   'sandbox/wrangler.toml',
-  'front/wrangler.toml',
+  FRONT,
 ]
 
 // Each sibling's deploy arguments, or none when these arguments are not a
@@ -349,17 +348,18 @@ let imageInputs = (
   return out
 }
 
-/** Deploy independent siblings together, settling every process before the
- * kernel starts. A sibling failure never launches the kernel, and a rejected
- * process wait cannot leave its other sibling running after this door exits. */
+/** Deploy dependencies together, then the kernel, then its public gateway.
+ * Settle every dependency before proceeding, including when one fails. */
 export let runWrangler = async (
   argv: string[],
   run: (args: string[], unpinned?: boolean) => Promise<number>,
   prepare: () => Promise<string[]> = () => Promise.resolve(argv),
 ): Promise<number> => {
+  let all = siblings(argv)
+  let front = all.find((args) => args[args.indexOf('-c') + 1] == FRONT)
   let completed = await Promise.allSettled(
     [
-      ...siblings(argv).map((args) =>
+      ...all.filter((args) => args != front).map((args) =>
         Promise.resolve().then(() => run(args, true))
       ),
       Promise.resolve().then(prepare),
@@ -369,7 +369,10 @@ export let runWrangler = async (
     if (result.status == 'rejected') throw result.reason
     if (typeof result.value == 'number' && result.value) return result.value
   }
-  return await run((completed.at(-1) as PromiseFulfilledResult<string[]>).value)
+  let code = await run(
+    (completed.at(-1) as PromiseFulfilledResult<string[]>).value,
+  )
+  return code || !front ? code : await run(front, true)
 }
 
 /** Prepare a disposable artifact while the read-only guard runs. Uploads may
@@ -1027,7 +1030,8 @@ export let prepareSibling = async (
         } — already serving`,
       )
       let current = singleServing(deployments)!
-      let refresh = annotation(current).split('\n')[0] == siblingMessage(digest)
+      let refresh = config != FRONT &&
+          annotation(current).split('\n')[0] == siblingMessage(digest)
         ? undefined
         : [
           'versions',
@@ -1117,7 +1121,7 @@ export let descendants = (pid: number): number[] => {
 // ---- which commit may go live ----------------------------------------------
 //
 // Builds finish in any order. A completed build may deploy unless a newer
-// commit, or its own, is already live: on main's history, only a commit that
+// commit is already live: on main's history, only a commit that
 // equals or descends from what serves goes live. Read live versions again
 // right before the step that puts a version live, and before each retry: a
 // newer build can go live while this one prepares, uploads or waits.
@@ -1139,15 +1143,13 @@ export type Seen = {
 
 let short = (sha: string) => sha.slice(0, 8)
 
-/** Why this commit must not go live, or null when it may. A commit another
- * build already put live is not uploaded again: the same bytes as a new
- * version would start every isolate cold a second time. */
+/** Why this commit must not go live, or null when it may. Equality permits a
+ * retry to finish a gateway promotion after its kernel went live; kernelStep
+ * reuses unchanged kernel bytes instead of starting its isolates cold. */
 export let superseded = ({ head, live }: Seen): string | null => {
   let newer = live.find((l) => l.ahead)
   return newer
     ? `${short(newer.sha)} is live and ahead of ${short(head)}`
-    : live.length == 1 && live[0].sha == head
-    ? `${short(head)} is already live`
     : null
 }
 
@@ -1504,18 +1506,23 @@ if (import.meta.main) {
   })
   let inspected = inspect()
   let uploads = new Map(
-    siblings(argv).map((args) => [
-      args[args.indexOf('-c') + 1],
+    siblings(argv).map((args) => {
+      let start = Promise.withResolvers<boolean>()
       // yak-front's assets are the sandbox CLI (front/wrangler.toml), which
-      // its bundle and digest read.
-      preflight(
+      // its bundle and digest read. Prepare every sibling now; only its turn
+      // in runWrangler releases the upload, with the gateway after the kernel.
+      let work = preflight(
         () => Promise.all([readied, made.cli]),
-        () => inspected,
+        async () => await start.promise && await inspected,
         () => prepareSibling(args, wrangler),
         async (prepared) => uploadSibling(await prepared, run, wrangler),
         () => made.all,
-      ),
-    ]),
+      )
+      return [args[args.indexOf('-c') + 1], {
+        start: start.resolve,
+        work,
+      }] as const
+    }),
   )
   // The kernel's modules read tracked source and the client, whose byte name
   // they carry (sheet-assets.ts); the catalog and the other generated assets
@@ -1567,15 +1574,25 @@ if (import.meta.main) {
     (bundle) =>
       runWrangler(
         argv,
-        (args, unpinned) =>
-          unpinned ? uploads.get(args[args.indexOf('-c') + 1])! : deploy(args),
+        (args, unpinned) => {
+          if (!unpinned) return deploy(args)
+          let upload = uploads.get(args[args.indexOf('-c') + 1])!
+          upload.start(true)
+          return upload.work
+        },
         async () => await kernelStep(argv, await bundle),
       ),
     () => made.all,
   )
-  // A refused guard never enters runWrangler, so drain its sibling preparations
-  // here too before leaving the door.
-  let completed = await Promise.allSettled([kernel, ...uploads.values()])
+  // A refusal or failure can leave uploads unstarted. Drain their preparations
+  // too before leaving the door.
+  let finished = kernel.finally(() => {
+    for (let upload of uploads.values()) upload.start(false)
+  })
+  let completed = await Promise.allSettled([
+    finished,
+    ...[...uploads.values()].map((upload) => upload.work),
+  ])
   for (let result of completed) {
     if (result.status == 'rejected') throw result.reason
   }

@@ -41,6 +41,7 @@ import { foreign, hostOf, loopback, platform, spaceDoor } from '../route.ts'
 import * as variant from '../variant.ts'
 import type { Clock } from '@yaks/fp'
 import { overdue, watch } from '../lib/watch.ts'
+import { DEPLOYMENT, FRONT_VERSION } from '../deployment.ts'
 
 export type Lent = { waitUntil: (work: Promise<unknown>) => void }
 
@@ -275,6 +276,12 @@ let serving = async (
   }
   waiting('kernel_wait')
   let res = await env.KERNEL.fetch(req)
+  if (new URL(req.url).pathname == DEPLOYMENT) {
+    let out = new Response(res.body, res)
+    out.headers.set(FRONT_VERSION, env.CF_VERSION_METADATA?.id ?? '')
+    out.headers.set('cache-control', 'no-store')
+    return out
+  }
   // A page the kernel serves that Site refused is one Worker deployed ahead of
   // the other: the visitor has the page all the same, and the skew is a bug.
   if (refused && res.status < 400) {

@@ -538,7 +538,7 @@
       "noun": "admin",
       "verb": "deploys",
       "title": "List yaks.app versions and deployments",
-      "description": "Recent yaks.app uploads and deployments with their commits and live times; ~ marks a commit inferred by time. Migration boundaries survive code rollbacks, and unknown history refuses a rollback. Infrastructure requires the platform admin or the configured person’s own account.",
+      "description": "The kernel and front versions observed through yaks.app's public gateway, beside recent kernel promotions and their commits; ~ marks a commit inferred by time. Promotion percentages do not prove what the gateway serves. Migration boundaries survive code rollbacks, and unknown history refuses a rollback. Infrastructure requires the platform admin or the configured person’s own account.",
       "input": {
         "as": {
           "type": "string",

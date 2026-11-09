@@ -28,6 +28,7 @@ import type { Lexicon as Lexical } from './lexicon.ts'
 import type { Conversion } from './arrival.ts'
 import type { Inference, InferenceReceipt, Mark } from '@yaks/model'
 import { deferred } from './deferred.ts'
+import { deployment } from './deployment.ts'
 
 // The tracker's boundary (defects-runtime.ts), loaded with the first call it
 // wraps.
@@ -431,6 +432,8 @@ let handler = async () => (await import('./kernel.ts')).handler
 export default {
   fetch: (req: Request, env: Env) =>
     entry(env, 'gateway fetch', async () => {
+      let version = deployment(req, env.CF_VERSION_METADATA)
+      if (version) return version
       let [route, agent] = await Promise.all([handler(), agentEnv()])
       return route.fetch(req, agent(env))
     }, req),

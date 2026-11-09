@@ -14,6 +14,7 @@ import {
 } from '@yaks/cloudflare/wrangler'
 import { Refused } from './refusal.ts'
 import { output } from './subprocess.ts'
+import type { Gateway } from './gateway.ts'
 
 // One git run in `cwd`, answered as it came — the runner @yaks/git lands with.
 // A run cut off by shutdown is no answer from git, so it is thrown as it came.
@@ -324,18 +325,24 @@ export let boundaries = (
   return out
 }
 
-export let table = (rows: Deploy[]): string => {
+export let table = (rows: Deploy[], observed?: Gateway): string => {
   let first = Math.min(
     ...rows.filter((r) => r.first).map((r) => Date.parse(r.first!)),
   )
   let lines = [
-    'VERSION                               LIVE   FIRST LIVE                COMMIT    SUBJECT',
+    observed
+      ? `Gateway observed ${observed.at}: kernel ${observed.kernel}, front ${observed.front}`
+      : 'Gateway not observed; promotion records alone do not establish what serves.',
+    'VERSION                               GATEWAY  PROMOTED  FIRST PROMOTED            COMMIT    SUBJECT',
   ]
+  if (observed && !rows.some((r) => r.id == observed.kernel && r.live > 0)) {
+    lines.splice(1, 0, 'Gateway differs from the promoted kernel deployment.')
+  }
   for (let r of rows) {
     lines.push(
-      `${r.id}  ${r.live ? `${r.live}%`.padEnd(5) : '—    '}  ${
-        r.first ?? '(never deployed)'
-      }  ` +
+      `${r.id}  ${r.id == observed?.kernel ? 'served ' : '—      '}  ${
+        r.live ? `${r.live}%`.padEnd(8) : '—       '
+      }  ${r.first ?? '(never deployed)'}  ` +
         `${r.commit?.sha.slice(0, 8) ?? '?'}${r.estimated ? '~' : ''}  ${
           r.commit?.subject ?? '(commit unknown)'
         }`,

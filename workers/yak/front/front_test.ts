@@ -6,6 +6,7 @@ import { type FrontEnv, serve, settled } from './front.ts'
 import { pageAt, personal, SEEN } from '../kept-page.ts'
 import type { Conversion } from '../arrival.ts'
 import { COOKIE } from '../variant.ts'
+import { DEPLOYMENT, deployment, FRONT_VERSION } from '../deployment.ts'
 
 // A visitor who already holds today's home page, where the home page is split
 // (variant.ts).
@@ -362,8 +363,8 @@ test("a listing Site fails to render is the kernel's to answer", async () => {
   assertEquals(await (await f.go('https://yaks.app/')).text(), 'kernel')
 })
 
-// yak-front deploys before the kernel (wrangler.ts `SIBLINGS`), so for a while
-// it may list a page the Site it asks doesn't keep yet.
+// Service bindings can reach different kernel versions while a deployment
+// propagates, so Site may refuse a page the default entrypoint serves.
 test('an apex page Site refuses is answered by the kernel, reported when it serves it', async () => {
   let lost = () => new Response('lost', { status: 404 })
   let f = front(lost)
@@ -539,4 +540,22 @@ test("an app the kernel says is never kept isn't asked about again", async () =>
   assertEquals(f.asked.length, 1)
   await f.go('https://ada.yaks.app/cookbook/b')
   assertEquals(f.asked.length, 1)
+})
+
+test('the public deployment response names its stateless kernel and front without asking Site or a store', async () => {
+  let f = front(
+    () => {
+      throw Error('deployment observations must bypass Site')
+    },
+    () =>
+      deployment(new Request(`https://yaks.app${DEPLOYMENT}`), {
+        id: 'kernel-v2',
+      })!,
+  )
+  f.env.CF_VERSION_METADATA = { id: 'front-v3' }
+  let res = await f.go(`https://yaks.app${DEPLOYMENT}`)
+  assertEquals(await res.json(), { kernel: 'kernel-v2' })
+  assertEquals(res.headers.get(FRONT_VERSION), 'front-v3')
+  assertEquals(res.headers.get('cache-control'), 'no-store')
+  assertEquals([f.asked, f.used, f.warmed], [[], [], []])
 })

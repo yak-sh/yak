@@ -51,6 +51,7 @@ import {
   zone,
 } from './api.ts'
 import { deploys, rollback, table } from './deploys.ts'
+import { gateway } from './gateway.ts'
 import { erase } from './erase.ts'
 import { select, sweep } from './move.ts'
 import { relocate } from './relocate.ts'
@@ -554,7 +555,11 @@ export let runs = (
 
     admin_deploys: verb(async (call) => {
       await platform(argsOf(call))
-      return [said(call, table(await deploys(checkout, host.stopping)))]
+      let [rows, observed] = await Promise.all([
+        deploys(checkout, host.stopping),
+        gateway(host.stopping, host.fetch),
+      ])
+      return [said(call, table(rows, observed))]
     }),
 
     admin_errors: verb(async (call, vault, _keep, graph) => {

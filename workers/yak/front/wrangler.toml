@@ -1,7 +1,7 @@
 # yak-front (front.ts): answers what Site's cache holds, and hands everything
 # else to the kernel over a service binding, so a request answered from the edge
 # never pays for the kernel's start (T-133886, D-133933). No secrets and no
-# stores; the kernel's deploy deploys it first, to the same environment
+# stores; the kernel's deploy deploys it last, to the same environment
 # (../wrangler.ts `siblings`).
 name = "yak-front"
 main = "index.ts"
