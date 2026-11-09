@@ -317,7 +317,11 @@ export let open = ({ root, client, kinds: all, accepts, view, files }) => {
         ...sha
           ? [
             at.mime?.startsWith('image/')
-              ? h('img', { src: files + sha, alt: at.name ?? '' })
+              ? h('img', {
+                class: 'Data_Image',
+                src: files + sha,
+                alt: at.name ?? '',
+              })
               : '',
             h(
               'a',
@@ -429,7 +433,7 @@ export let open = ({ root, client, kinds: all, accepts, view, files }) => {
         { class: 'Check' },
         h('input', {
           ...attrs,
-          class: null,
+          class: 'Check_Input',
           type: 'checkbox',
           value: 'true',
           checked: value == 'true',
@@ -581,7 +585,12 @@ export let open = ({ root, client, kinds: all, accepts, view, files }) => {
     }
     page = h(
       'form',
-      { class: 'Form', onsubmit: save, oninput: changed, onchange: changed },
+      {
+        class: 'Form Page_Form',
+        onsubmit: save,
+        oninput: changed,
+        onchange: changed,
+      },
       parts,
       writes
         ? h(

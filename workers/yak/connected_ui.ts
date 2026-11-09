@@ -21,7 +21,11 @@ let hidden = (name: string, value: string, more = {}) =>
 let disconnect = (agent: Agent | undefined, back: string) =>
   h(
     'form',
-    { method: 'post', action: '/oauth/agents/disconnect' },
+    {
+      class: 'Rows_Form Page_Form',
+      method: 'post',
+      action: '/oauth/agents/disconnect',
+    },
     hidden('agent', agent?.id ?? '', { 'data-agent-id': '' }),
     hidden('return', back),
     h(Button, {

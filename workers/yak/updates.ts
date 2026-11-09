@@ -68,7 +68,7 @@ let form = (
   h(
     'form',
     {
-      class: 'Update_Form',
+      class: 'Update_Form Page_Form',
       method: 'post',
       action: managePath('updates', space.slug),
     },
@@ -134,11 +134,12 @@ let replying = (space: Space, u: Update) =>
   h(
     'details',
     { class: 'Update_Reply' },
-    h('summary', null, `Ask ${space.operator} about it`),
+    h('summary', { class: 'Update_Summary' }, `Ask ${space.operator} about it`),
     form(
       space,
       [['reply', u.eid]],
       h(Field, {
+        class: 'Update_Input',
         lines: true,
         name: 'say',
         required: true,
@@ -259,7 +260,7 @@ export let updates = (
     updates.length ? updates.map((u) => card(env, space, u, apps)) : h(
       'div',
       { class: 'Talk_Hello' },
-      h('h2', null, 'Nothing yet'),
+      h('h2', { class: 'Talk_HelloTitle' }, 'Nothing yet'),
       h(
         'p',
         null,

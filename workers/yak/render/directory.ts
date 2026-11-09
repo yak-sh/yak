@@ -154,7 +154,12 @@ let row = <N>(
       'dl',
       { class: 'Directory_Uses' },
       ...figures.map(([key, value]) =>
-        h('div', null, h('dt', noted(key), key), h('dd', null, value))
+        h(
+          'div',
+          { class: 'Directory_Figure' },
+          h('dt', { ...noted(key), class: 'Directory_Label' }, key),
+          h('dd', { class: 'Directory_Value' }, value),
+        )
       ),
     ),
   )
@@ -173,7 +178,12 @@ let facts = <N>(h: H<N>, all: [string, Child<N>][]) =>
     'dl',
     { class: 'Fields Directory_Facts' },
     ...all.filter(([, v]) => v !== '' && v != null).map(([key, value]) =>
-      h('div', null, h('dt', noted(key), key), h('dd', null, value))
+      h(
+        'div',
+        { class: 'Fields_Row' },
+        h('dt', { ...noted(key), class: 'Fields_Label' }, key),
+        h('dd', { class: 'Fields_Value' }, value),
+      )
     ),
   )
 

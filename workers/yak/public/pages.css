@@ -93,7 +93,7 @@
   .Away {
     font-size: var(--small);
   }
-  .Url code {
+  .Url_Code {
     display: inline-block;
     padding: .5rem 1rem;
     background: var(--card);
@@ -104,11 +104,13 @@
     margin: 0 0 1rem;
     text-align: left;
   }
-  .Card h2 {
+  .Card .Card_Title,
+  .Card .Body_Heading-2 {
     font-size: 1rem;
     font-weight: 800;
   }
-  .Card ol {
+  .Card_List,
+  .Card .Body_Ordered {
     display: grid;
     gap: .4rem;
     margin: 0;
@@ -116,18 +118,19 @@
     color: var(--muted);
     font-size: var(--small);
   }
-  .Card li::marker {
+  .Card :is(.Card_Item, .Body_Item, .Rows_Item, .Directory_Item, .Files_Item)::marker {
     color: var(--accent);
     font-weight: 700;
   }
-  .Card pre {
+  .Card_Pre,
+  .Card .Body_Source {
     margin: 0;
     white-space: pre-wrap;
     font: inherit;
     color: var(--muted);
     text-align: left;
   }
-  .Card form {
+  .Card .Page_Form {
     margin: 0;
   }
   .Note {
@@ -176,7 +179,7 @@
     background: var(--accent);
     color: var(--bg);
   }
-  .Chat_Bubble a {
+  .Chat_Link {
     color: inherit;
   }
   .Chat_Tool {
@@ -212,7 +215,8 @@
     background: var(--bg);
     text-align: center;
   }
-  .Chat_Built p {
+  .Chat_BuiltWords,
+  .Chat_Built .Url {
     margin: 0 0 .6rem;
   }
   .Chat_Note {
@@ -223,12 +227,12 @@
   .Chat_Ask {
     margin: 0;
   }
-  .Chat_Ask textarea {
+  .Chat_Input {
     width: 100%;
     min-height: 4.5rem;
     resize: vertical;
   }
-  .Chat_Ask textarea:disabled {
+  .Chat_Input:disabled {
     opacity: .6;
   }
   .Fields {
@@ -236,24 +240,24 @@
     gap: .55rem;
     margin: 0;
   }
-  .Fields > div {
+  .Fields_Row {
     display: grid;
     grid-template-columns: 6rem minmax(0, 1fr);
     align-items: center;
     gap: .65rem;
   }
   @media (max-width: 480px) {
-    .Fields > div {
+    .Fields_Row {
       grid-template-columns: minmax(0, 1fr);
       gap: .25rem;
     }
   }
-  .Fields dt {
+  .Fields_Label {
     color: var(--text);
     font-size: var(--small);
     font-weight: 700;
   }
-  .Fields dd {
+  .Fields_Value {
     min-width: 0;
     margin: 0;
   }
@@ -262,7 +266,7 @@
     align-items: center;
     gap: .65rem;
   }
-  .Connect_Icon img {
+  .Connect_Image {
     display: block;
     width: 56px;
     height: 56px;
@@ -283,7 +287,7 @@
     padding-top: .75rem;
     border-top: 1px solid var(--border);
   }
-  .Connect_Next p {
+  .Connect_Lead {
     margin: 0;
     color: var(--text);
     font-weight: 800;
@@ -331,7 +335,7 @@
   /* A TV (screen.ts): seen across a room, so the code is large; once
      paired, the draft fills the screen edge to edge, and each change it
      takes is said in a line over its corner. */
-  .Tv main {
+  .Tv_Main {
     max-width: 48rem;
   }
   .Tv_Code {
@@ -345,7 +349,7 @@
     width: min(60vw, 14rem);
     margin: 0 auto 1.5rem;
   }
-  .Tv:has(.Tv_Frame) main {
+  .Tv:has(.Tv_Frame) .Tv_Main {
     max-width: none;
     padding: 0;
   }
@@ -374,7 +378,7 @@
   .Desk {
     display: block;
   }
-  .Desk main {
+  .Desk_Main {
     display: grid;
     grid-template-columns: 15rem minmax(0, 1fr);
     align-items: start;
@@ -503,14 +507,14 @@
     padding: .55rem .7rem;
     list-style: none;
   }
-  .Desk_Pick > summary {
+  .Desk_Summary {
     grid-template-columns: 2rem minmax(0, 1fr) auto;
     position: relative;
     border-radius: var(--radius);
     background: var(--card);
     cursor: pointer;
   }
-  .Desk_Pick > summary::before {
+  .Desk_Summary::before {
     content: '';
     position: absolute;
     inset: calc(var(--lift) - 1px) calc(-1px - var(--lift))
@@ -522,7 +526,7 @@
       calc(100% - var(--lift)));
     pointer-events: none;
   }
-  .Desk_Pick > summary::after {
+  .Desk_Summary::after {
     content: '';
     position: absolute;
     inset: -1px;
@@ -531,15 +535,15 @@
     filter: var(--drawn);
     pointer-events: none;
   }
-  .Desk_Pick > summary:hover {
+  .Desk_Summary:hover {
     --lift: 5px;
     transform: translate(-1px, -1px);
   }
-  .Desk_Pick[open] > summary {
+  .Desk_Pick[open] > .Desk_Summary {
     --lift: 1.5px;
     transform: translate(2.5px, 2.5px);
   }
-  .Desk_Pick > summary::-webkit-details-marker {
+  .Desk_Summary::-webkit-details-marker {
     display: none;
   }
   .Desk_Tile {
@@ -577,7 +581,7 @@
     min-width: 0;
     line-height: 1.25;
   }
-  .Desk_Name b {
+  .Desk_NameText {
     overflow-wrap: anywhere;
   }
   .Desk_Space .Desk_Name > * {
@@ -585,7 +589,7 @@
     white-space: nowrap;
     text-overflow: ellipsis;
   }
-  .Desk_Name small {
+  .Desk_NameNote {
     color: var(--muted);
     font-size: var(--fine);
   }
@@ -729,7 +733,7 @@
     max-width: 52rem;
     margin-bottom: 1.5rem;
   }
-  .Desk_Head h1 {
+  .Desk_Heading {
     font-size: 1.75rem;
     line-height: 1.2;
     margin: .15rem 0 0;
@@ -759,13 +763,14 @@
     display: grid;
     gap: .75rem;
   }
-  .Desk input,
-  .Desk textarea,
-  .Card input,
-  .Card textarea {
+  .Desk .Field,
+  .Desk .Check_Input,
+  .Card .Field,
+  .Card .Check_Input {
     text-align: left;
   }
-  .Desk form > .Button {
+  .Desk .Form > .Button,
+  .Desk .Page_Form > .Button {
     justify-self: start;
   }
   .Desk_Connect {
@@ -776,17 +781,17 @@
     margin: 1.5rem auto 0;
     text-align: left;
   }
-  .Data main {
+  .Data_Main {
     max-width: 44rem;
     text-align: left;
   }
-  .Data main > .Card {
+  .Data_Main > .Card {
     margin-bottom: 1rem;
   }
-  .Data main .Card > .Field {
+  .Data_Main .Card > .Field {
     margin-bottom: .75rem;
   }
-  .Data main img {
+  .Data_Image {
     max-width: 6rem;
     max-height: 6rem;
   }
@@ -824,7 +829,7 @@
     top: 1rem;
   }
   @media (max-width: 700px) {
-    .Desk main {
+    .Desk_Main {
       display: block;
     }
     /* The top bar: Menu, and the page with the space it is in. */
@@ -844,7 +849,7 @@
       min-width: 0;
       line-height: 1.2;
     }
-    .Desk_Where small {
+    .Desk_WhoseName {
       color: var(--muted);
       font-size: var(--fine);
       overflow-wrap: anywhere;
@@ -881,7 +886,7 @@
     .Desk_Brand {
       font-size: 1.1rem;
     }
-    .Desk_Brand img {
+    .Desk_BrandImage {
       width: 36px;
       height: 36px;
     }
@@ -905,7 +910,7 @@
     .Desk_Head {
       margin-bottom: 1.25rem;
     }
-    .Desk_Head h1 {
+    .Desk_Heading {
       font-size: 1.5rem;
     }
   }
@@ -957,7 +962,7 @@
   .Directory_Find .Field {
     flex: 1;
   }
-  .Directory_Bar > a {
+  .Directory_Toggle {
     font-size: .9rem;
   }
   /* A card of rows edge to edge, a hairline between each. Each row sits in
@@ -969,14 +974,14 @@
     padding: 0;
     list-style: none;
   }
-  .Directory > li + li {
+  .Directory > .Directory_Item + .Directory_Item {
     border-top: 1px solid var(--border);
   }
-  .Directory > li:first-child > .Directory_Row {
+  .Directory > .Directory_Item:first-child > .Directory_Row {
     border-top-left-radius: var(--radius);
     border-top-right-radius: var(--radius);
   }
-  .Directory > li:last-child > .Directory_Row {
+  .Directory > .Directory_Item:last-child > .Directory_Row {
     border-bottom-left-radius: var(--radius);
     border-bottom-right-radius: var(--radius);
   }
@@ -1024,18 +1029,18 @@
     gap: .5rem 1rem;
     margin: 0;
   }
-  .Directory_Uses dt {
+  .Directory_Label {
     color: var(--muted);
     font-size: .8rem;
   }
-  .Directory_Uses dd {
+  .Directory_Value {
     margin: 0;
     font-variant-numeric: tabular-nums;
   }
-  .Directory_Facts > div {
+  .Directory_Facts > .Fields_Row {
     grid-template-columns: 10rem minmax(0, 1fr);
   }
-  .Directory_Facts dt {
+  .Directory_Facts .Fields_Label {
     font-weight: 700;
     color: var(--muted);
   }
@@ -1062,7 +1067,7 @@
     .Directory_Uses {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-    .Directory_Facts > div {
+    .Directory_Facts > .Fields_Row {
       grid-template-columns: 8rem minmax(0, 1fr);
     }
   }
@@ -1074,7 +1079,7 @@
   .Talk_Page {
     display: block;
   }
-  .Talk_Page main {
+  .Talk_PageMain {
     max-width: none;
     padding: 0;
     text-align: left;
@@ -1255,7 +1260,7 @@
     padding-top: 18vh;
     text-align: center;
   }
-  .Talk_Hello h2 {
+  .Talk_HelloTitle {
     margin: 0 0 .5rem;
     font-size: 1.5rem;
   }
@@ -1369,7 +1374,7 @@
   .Talk_Turn {
     margin: 0;
   }
-  .Talk_Aside time {
+  .Talk_Time {
     font-variant-numeric: tabular-nums;
   }
   @container talk (min-width: 76rem) {
@@ -1410,7 +1415,7 @@
   .Update_Choices {
     padding-left: 1.25rem;
   }
-  .Update_Reply > summary {
+  .Update_Summary {
     color: var(--muted);
     font-size: var(--fine);
     cursor: pointer;
@@ -1421,7 +1426,7 @@
     margin-top: .5rem;
     justify-items: end;
   }
-  .Update_Reply textarea {
+  .Update_Input {
     width: 100%;
   }
   .Talk_Starts {
@@ -1460,13 +1465,13 @@
     margin-right: auto;
     line-height: 1.25;
   }
-  .Talk_AppName b,
-  .Talk_AppName small {
+  .Talk_AppTitle,
+  .Talk_AppHost {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .Talk_AppName small {
+  .Talk_AppHost {
     color: var(--muted);
     font-size: var(--fine);
   }
@@ -1624,10 +1629,10 @@
     color: var(--text);
     overflow-wrap: anywhere;
   }
-  .Talk_Reply p,
-  .Talk_Reply ul,
-  .Talk_Reply ol,
-  .Talk_Written :is(p, ul, ol, h1, h2, h3, h4) {
+  .Talk_Reply .Body_Paragraph,
+  .Talk_Reply .Body_Unordered,
+  .Talk_Reply .Body_Ordered,
+  .Talk_Written :is(.Body_Paragraph, .Body_Unordered, .Body_Ordered, .Body_Heading) {
     margin: 0 0 .75rem;
     color: inherit;
   }
@@ -1637,14 +1642,14 @@
   .Talk_Written > :last-child {
     margin-bottom: 0;
   }
-  .Talk_Reply pre,
-  .Talk_Written pre {
+  .Talk_Reply .Body_Source,
+  .Talk_Written .Body_Source {
     padding: .6rem .8rem;
     background: var(--card);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
-  .Talk_Reply table {
+  .Talk_Reply .Body_Table {
     display: block;
     max-width: 100%;
     overflow-x: auto;
@@ -1679,7 +1684,7 @@
   }
   /* A step the Operator took, as one quiet item that opens on what it asked
      for and what came back. */
-  .Talk_Step > summary {
+  .Talk_Summary {
     display: inline-flex;
     gap: .4rem;
     align-items: baseline;
@@ -1688,20 +1693,20 @@
     cursor: pointer;
     list-style: none;
   }
-  .Talk_Step > summary::-webkit-details-marker {
+  .Talk_Summary::-webkit-details-marker {
     display: none;
   }
-  .Talk_Step > summary::after {
+  .Talk_Summary::after {
     content: '›';
     transition: transform .15s;
   }
-  .Talk_Step[open] > summary::after {
+  .Talk_Step[open] > .Talk_Summary::after {
     transform: rotate(90deg);
   }
-  .Talk_Step-on > summary {
+  .Talk_Step-on > .Talk_Summary {
     color: var(--accent);
   }
-  .Talk_Step-no > summary {
+  .Talk_Step-no > .Talk_Summary {
     color: var(--negative);
   }
   .Talk_Detail {
@@ -1710,14 +1715,14 @@
     border-left: 2px solid var(--border2);
     font-size: var(--small);
   }
-  .Talk_Detail > p {
+  .Talk_DetailLabel {
     margin: .4rem 0 .2rem;
     font-weight: 700;
   }
-  .Talk_Detail > p:first-child {
+  .Talk_DetailLabel:first-child {
     margin-top: 0;
   }
-  .Talk_Detail > span {
+  .Talk_Detail > .Talk_DetailValue {
     display: block;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -1727,20 +1732,20 @@
     gap: .2rem;
     margin: 0;
   }
-  .Talk_Facts > div {
+  .Talk_Fact {
     display: grid;
     grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
     gap: .6rem;
   }
-  .Talk_Facts dt {
+  .Talk_FactLabel {
     color: var(--muted);
   }
-  .Talk_Facts dd {
+  .Talk_FactValue {
     margin: 0;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
-  .Talk_Facts .Talk_Facts > div {
+  .Talk_Facts .Talk_Facts > .Talk_Fact {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
   }
@@ -1753,12 +1758,12 @@
     color: var(--negative);
   }
   /* An error: a sentence in words, and what it said only when opened. */
-  .Talk_Trouble > details > summary {
+  .Talk_TroubleSummary {
     color: var(--muted);
     font-size: var(--small);
     cursor: pointer;
   }
-  .Talk_Trouble pre {
+  .Talk_TroubleDetail {
     margin: .4rem 0 0;
     padding: .6rem .8rem;
     background: var(--card);
@@ -1768,16 +1773,16 @@
   }
   /* What a call's talking model asked the Operator, behind a small mark
      between what the caller said and what they heard. */
-  .Talk_Asked > summary {
+  .Talk_AskedSummary {
     display: inline-flex;
     color: var(--muted);
     cursor: pointer;
     list-style: none;
   }
-  .Talk_Asked > summary::-webkit-details-marker {
+  .Talk_AskedSummary::-webkit-details-marker {
     display: none;
   }
-  .Talk_Asked > summary .Icon {
+  .Talk_AskedSummary .Icon {
     width: 1em;
     height: 1em;
   }
@@ -1797,7 +1802,7 @@
     border-radius: .6rem;
     font-size: var(--small);
   }
-  .Talk_Told > summary {
+  .Talk_ToldSummary {
     color: var(--muted);
     cursor: pointer;
   }
@@ -1807,7 +1812,8 @@
     overflow: auto;
     overflow-wrap: anywhere;
   }
-  .Talk_Told pre {
+  .Talk_Told .Body_Source,
+  .Talk_ToldSource {
     max-height: 60vh;
     margin: .4rem 0 0;
     overflow: auto;
@@ -1833,7 +1839,7 @@
     margin: 0;
     font-size: var(--small);
   }
-  .Talk_Files a {
+  .Talk_FilesLink {
     overflow-wrap: anywhere;
   }
   .Talk_Said .Talk_Files {
@@ -1841,11 +1847,11 @@
     justify-content: flex-end;
     max-width: 85%;
   }
-  .Talk_Said > div:has(> .Talk_Files) {
+  .Talk_Said > .Talk_Row:has(> .Talk_Files) {
     display: grid;
     gap: .5rem;
   }
-  .Talk_Picture img {
+  .Talk_Image {
     display: block;
     width: auto;
     max-width: min(100%, 16rem);
@@ -1913,7 +1919,7 @@
   .Talk_Attach:hover {
     color: var(--text);
   }
-  .Talk_Attach input {
+  .Talk_Attachment {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -2031,7 +2037,7 @@
     .Talk_Stage {
       padding: 0 .5rem .5rem;
     }
-    .Talk_Facts > div {
+    .Talk_Fact {
       grid-template-columns: minmax(0, 1fr);
       gap: 0;
     }
@@ -2085,20 +2091,20 @@
     /* The space selector is its tile; Change still opens the list beside
        the rail, over the page. */
     .Desk-rail .Desk_Here > .Desk_Space,
-    .Desk-rail .Desk_Here > .Desk_Pick > summary,
+    .Desk-rail .Desk_Here > .Desk_Pick > .Desk_Summary,
     .Talk_Page-rail .Talk_Whose .Desk_Space {
       grid-template-columns: 2rem;
       justify-content: center;
       padding: .4rem;
     }
     .Desk-rail .Desk_Here > .Desk_Space .Desk_Name,
-    .Desk-rail .Desk_Here > .Desk_Pick > summary :is(.Desk_Name, .Desk_Change),
+    .Desk-rail .Desk_Here > .Desk_Pick > .Desk_Summary :is(.Desk_Name, .Desk_Change),
     .Talk_Page-rail .Talk_Whose > .Desk_Space .Desk_Name,
-    .Talk_Page-rail .Talk_Whose > .Desk_Pick > summary :is(.Desk_Name, .Desk_Change) {
+    .Talk_Page-rail .Talk_Whose > .Desk_Pick > .Desk_Summary :is(.Desk_Name, .Desk_Change) {
       display: none;
     }
     /* The dashboard's frame (`deskFrame`). */
-    .Desk-rail main {
+    .Desk-rail .Desk_Main {
       grid-template-columns: 4.5rem minmax(0, 1fr);
     }
     .Desk-rail .Desk_Side {

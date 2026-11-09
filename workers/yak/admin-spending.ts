@@ -115,7 +115,12 @@ let facts = (all: [string, string][]) =>
       'dl',
       { class: 'Fields Directory_Facts' },
       all.map(([say, n]) =>
-        h('div', null, h('dt', null, say), h('dd', null, n))
+        h(
+          'div',
+          { class: 'Fields_Row' },
+          h('dt', { class: 'Fields_Label' }, say),
+          h('dd', { class: 'Fields_Value' }, n),
+        )
       ),
     ),
   )
@@ -351,7 +356,7 @@ let sessions = (runs: Placed[], base: string) => {
           : [],
       ]),
     )
-    : h(Empty, null, h('h2', null, 'No Operator has spent anything yet'))
+    : h(Empty, null, h(Empty.Title, null, 'No Operator has spent anything yet'))
 }
 
 // ---- what each request carries -------------------------------------------------
@@ -535,7 +540,7 @@ export let spendingBody = (
           unread.map((a) =>
             h(
               'li',
-              null,
+              { class: 'Directory_Item' },
               `${a.space.slug}: ${(a.spending as Error).message}`,
             )
           ),

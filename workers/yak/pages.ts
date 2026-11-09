@@ -201,7 +201,11 @@ ${links(env, 'pages.css', undefined, assets)}${
       : `\n<link rel="apple-touch-icon" href="${file('apple-touch-icon.png')}">`
   }${head ? `\n${head}` : ''}
 </head>
-<body${layout ? ` class="${layout}"` : ''}><main>${main}`
+<body${layout ? ` class="${layout}"` : ''}><main class="${
+    layout.split(/\s+/).filter(Boolean).map((name) =>
+      name + (name == 'Talk_Page' ? 'Main' : '_Main')
+    ).join(' ')
+  }">${main}`
   let close = `</main><script type="module" src="${
     file('_dates.js')
   }"></script>${
@@ -393,7 +397,7 @@ export let spaceBinned = (at: {
     },
     h(
       'form',
-      { method: 'post', action: '/' },
+      { class: 'Page_Form', method: 'post', action: '/' },
       held('restore-space', at.slug),
       h(Button, { mod: 'go', type: 'submit' }, `Restore ${host}`),
     ),
@@ -419,7 +423,7 @@ export let dropZone = (slug?: string, to = '/deploy') =>
   h(
     'form',
     {
-      class: 'Deploy',
+      class: 'Deploy Page_Form',
       method: 'post',
       action: to,
       enctype: 'multipart/form-data',
@@ -495,7 +499,10 @@ let linked = (text: string) => {
   let from = 0
   for (let m of text.matchAll(AT)) {
     let to = m[0].replace(/[.,;:!?)\]]+$/, '')
-    out.push(text.slice(from, m.index), h('a', { href: to }, to))
+    out.push(
+      text.slice(from, m.index),
+      h('a', { class: 'Chat_Link', href: to }, to),
+    )
     from = m.index + to.length
   }
   return [...out, text.slice(from)]
@@ -542,7 +549,7 @@ export let transcript = (frames: Frame[]) => {
         h(
           Card,
           { as: 'div', class: 'Chat_Built' },
-          h('p', null, 'It is live.'),
+          h('p', { class: 'Chat_BuiltWords' }, 'It is live.'),
           address(f.built),
         ),
       )
@@ -555,7 +562,11 @@ export let transcript = (frames: Frame[]) => {
 
 // An address something is live at, to open or copy.
 export let address = (to: string) =>
-  h('p', { class: 'Url' }, h('a', { href: to }, h('code', null, to)))
+  h(
+    'p',
+    { class: 'Url' },
+    h('a', { href: to }, h('code', { class: 'Url_Code' }, to)),
+  )
 
 // The line a person types. `required` is the browser's own guard; the door
 // keeps the same one, for whoever posts without it. While a build runs, the
@@ -564,11 +575,12 @@ export let address = (to: string) =>
 export let chatAsk = (env: Host, to = '/api/build') =>
   h(
     'form',
-    { class: 'Chat_Ask', method: 'post', action: to },
+    { class: 'Chat_Ask Page_Form', method: 'post', action: to },
     h(
       'p',
       null,
       h(Field, {
+        class: 'Chat_Input',
         lines: true,
         name: 'say',
         rows: 3,
@@ -655,7 +667,11 @@ export let dropped = (at: {
         heading(
           `${at.files.length} ${at.files.length == 1 ? 'file' : 'files'}`,
         ),
-        h('ol', { class: 'Files' }, at.files.map((f) => h('li', null, f))),
+        h(
+          'ol',
+          { class: 'Files Card_List' },
+          at.files.map((f) => h('li', { class: 'Files_Item' }, f)),
+        ),
       )
       : null,
     h(
@@ -980,7 +996,7 @@ export let howTo = (f: Face, open: boolean) =>
     ? h(
       More,
       { open },
-      h('summary', null, 'How to get the key'),
+      h(More.Summary, null, 'How to get the key'),
       h(More.Body, null, raw(f.instructions)),
     )
     : null
@@ -1051,7 +1067,7 @@ export let editor = (
         'div',
         null,
         h('a', { class: 'Desk_Address', href: `${at.at}/` }, `${at.app} ↗`),
-        h('h1', null, 'Data'),
+        h('h1', { class: 'Desk_Heading' }, 'Data'),
       ),
     ),
     h(
@@ -1186,7 +1202,7 @@ export let provisioning = (
       status: 503,
       headers: { 'retry-after': '30' },
     },
-    h(Card, null, heading(host), h('pre', null, said)),
+    h(Card, null, heading(host), h('pre', { class: 'Card_Pre' }, said)),
     home(env),
   )
 
@@ -1365,7 +1381,7 @@ export let pairing = (
       : null,
     h(
       'form',
-      { method: 'post', action: '/tv/pair' },
+      { class: 'Page_Form', method: 'post', action: '/tv/pair' },
       labeled(
         'tv-code',
         'Code',
@@ -1413,7 +1429,11 @@ export let pairing = (
                 null,
                 h(
                   'form',
-                  { method: 'post', action: '/tv/unpair' },
+                  {
+                    class: 'Page_Form Rows_Form',
+                    method: 'post',
+                    action: '/tv/unpair',
+                  },
                   held('screen', s.eid),
                   h(Button, { type: 'submit' }, 'Unpair'),
                 ),
@@ -1469,7 +1489,11 @@ export let joinable = (
       } it.`,
       status: 403,
     },
-    h('form', { method: 'post', action: at.action }, send('Join')),
+    h(
+      'form',
+      { class: 'Page_Form', method: 'post', action: at.action },
+      send('Join'),
+    ),
     home(env),
   )
 
@@ -1562,7 +1586,7 @@ export let mine = (y: Yours, env: Host) =>
     h(
       Form,
       {
-        class: 'Addr',
+        class: 'Addr Page_Form',
         method: 'post',
         action: '/connect',
         'data-save': 'address',
@@ -1709,7 +1733,12 @@ let credit = (
 ) =>
   h(
     Form,
-    { method: 'post', action: target, 'data-save': 'credit-cap' },
+    {
+      class: 'Page_Form',
+      method: 'post',
+      action: target,
+      'data-save': 'credit-cap',
+    },
     h('input', { type: 'hidden', name: 'billing', value: 'cap' }),
     labeled(
       'credit-cap',
@@ -1773,9 +1802,11 @@ let NAMES = { plus: 'the Plus plan', pro: 'the Pro plan' }
 export let field = (label: string, value: Kids, what?: string) =>
   h(
     'div',
-    null,
-    h('dt', null, label),
-    what == null ? value : h('dd', null, copyable(value, what)),
+    { class: 'Fields_Row' },
+    h('dt', { class: 'Fields_Label' }, label),
+    what == null
+      ? value
+      : h('dd', { class: 'Fields_Value' }, copyable(value, what)),
   )
 
 export let fields = (...rows: Kids[]) => h('dl', { class: 'Fields' }, rows)

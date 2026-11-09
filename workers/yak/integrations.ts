@@ -104,7 +104,7 @@ let card = async (i: Listed, env: Host) => {
         ? h(
           More,
           null,
-          h('summary', null, 'How to get the key'),
+          h(More.Summary, null, 'How to get the key'),
           h(More.Body, null, raw(how)),
         )
         : small('Connected with a key you paste.')

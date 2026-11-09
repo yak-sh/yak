@@ -11,7 +11,7 @@ test('someone’s markdown is drawn with its links marked theirs, and nothing of
     await drawn(
       'Sign up at [api.esv.org](https://api.esv.org). <script>x()</script> [x](javascript:x)',
     ),
-    '<div class="Body"><p>Sign up at <a href="https://api.esv.org" rel="nofollow ugc">api.esv.org</a>. &lt;script>x()&lt;/script> <a rel="nofollow ugc">x</a></p></div>',
+    '<div class="Body"><p class="Body_Paragraph">Sign up at <a href="https://api.esv.org" class="Body_Link" rel="nofollow ugc">api.esv.org</a>. &lt;script>x()&lt;/script> <a class="Body_Link" rel="nofollow ugc">x</a></p></div>',
   )
   equal(await drawn(' '), '')
 })

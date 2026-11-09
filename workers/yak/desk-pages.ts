@@ -140,16 +140,16 @@ let column = (head: string, rows: { name: string; views: number }[]) =>
     ? h(
       Report.Column,
       null,
-      h('h3', null, head),
+      h(Report.Heading, null, head),
       h(
         Report.List,
         null,
         rows.map((r) =>
           h(
-            'li',
+            Report.Item,
             null,
-            h('span', { title: r.name }, r.name),
-            h('b', null, count(r.views)),
+            h(Report.Label, { title: r.name }, r.name),
+            h(Report.Value, null, count(r.views)),
           )
         ),
       ),
@@ -166,7 +166,7 @@ let visits = (v: Visits, site: string) =>
       h(
         Card.Title,
         { id: `visits-${v.slug}` },
-        h('a', {
+        h(Card.Link, {
           href: `${site}/${encodeURIComponent(v.slug)}/`,
           target: '_blank',
           rel: 'noopener',
@@ -233,7 +233,7 @@ export let fold = (collapsed: boolean, back: string, rail: string) => {
   return h(
     'form',
     {
-      class: 'Desk_Fold',
+      class: 'Desk_Fold Page_Form',
       method: 'post',
       action: managePath('profile'),
       'data-side': rail,
@@ -389,7 +389,7 @@ let navigation = (at: DeskPage, view: ManageView, env: Host) => {
         ),
         h(
           'form',
-          { method: 'post', action: url(env, LOGOUT) },
+          { class: 'Page_Form', method: 'post', action: url(env, LOGOUT) },
           h(
             SideNav.Link,
             { as: 'button', type: 'submit', title: 'Sign out' },
@@ -506,8 +506,8 @@ export let choice = (
       h(
         'span',
         { class: 'Desk_Name' },
-        h('b', null, named(s)),
-        said ? h('small', null, said) : null,
+        h('b', { class: 'Desk_NameText' }, named(s)),
+        said ? h('small', { class: 'Desk_NameNote' }, said) : null,
       ),
     ]
   }
@@ -523,7 +523,7 @@ export let choice = (
     h(
       'summary',
       {
-        class: 'Desk_Space',
+        class: 'Desk_Space Desk_Summary',
         title: `Change space: ${named(here)}`,
         'aria-label': `Change space: ${named(here)}`,
       },
@@ -583,7 +583,7 @@ let connectCard = (at: DeskPage, env: Host) =>
 
 // Nothing in a list yet: what will be there, and how it gets there.
 let empty = (title: string, ...says: Kids[]) =>
-  h(Empty, null, h('h2', null, title), says)
+  h(Empty, null, h(Empty.Title, null, title), says)
 
 // What others let this person into (Your account › Shared with you): drawn by
 // the same Tile as their own, each with the address it lives at.
@@ -671,6 +671,7 @@ let saving = (
   h(
     Form,
     {
+      class: 'Page_Form',
       method: 'post',
       action,
       ...label == 'Save' ? { 'data-save': action } : {},
@@ -680,7 +681,8 @@ let saving = (
   )
 
 // The fields a card holds, one under the other.
-let fieldsOf = (...kids: Kids[]) => h(Form, { as: 'div' }, kids)
+let fieldsOf = (...kids: Kids[]) =>
+  h(Form, { class: 'Page_Form', as: 'div' }, kids)
 
 let option = (value: string, label: string, chosen: boolean) =>
   h('option', { value, selected: chosen }, label)
@@ -781,7 +783,7 @@ let invitation = (r: Invitation, space: string, env: Host) => {
         h(
           TabSet.Item,
           null,
-          h('input', {
+          h(TabSet.Input, {
             type: 'radio',
             name: 'way',
             id: `way-${w.key}`,
@@ -879,7 +881,7 @@ let logoCard = (at: DeskPage) => {
     h(
       'form',
       {
-        class: 'Desk_Logo',
+        class: 'Desk_Logo Page_Form',
         method: 'post',
         action,
         enctype: 'multipart/form-data',
@@ -899,7 +901,7 @@ let logoCard = (at: DeskPage) => {
     here.logo
       ? h(
         'form',
-        { method: 'post', action },
+        { class: 'Page_Form', method: 'post', action },
         h(
           Button,
           { type: 'submit', name: 'unlogo', value: '1' },
@@ -983,7 +985,11 @@ let selling = (at: DeskPage, env: Host) => {
   let account = at.paying || connected
     ? h(
       'form',
-      { method: 'post', action: managePath('selling', at.space) },
+      {
+        class: 'Page_Form',
+        method: 'post',
+        action: managePath('selling', at.space),
+      },
       held('sell', stop ? 'stop' : 'start'),
       h(
         Button,
@@ -1175,7 +1181,12 @@ let connection = (
   let form = (kids: Kids, at: Record<string, unknown> = {}) =>
     h(
       'form',
-      { method: 'post', action, ...at },
+      {
+        method: 'post',
+        action,
+        ...at,
+        class: ['Page_Form', at.class].filter(Boolean).join(' '),
+      },
       held('connection', c.eid),
       kids,
     )
@@ -1189,9 +1200,12 @@ let connection = (
   // for an app that asks each person, is theirs to remove.
   let waiting = c.status == 'needed' && c.apps.length && !c.each
   let actions = any(
-    !ask && !c.keyed && open ? form(press('signin', 'Connect', false)) : null,
+    !ask && !c.keyed && open
+      ? form(press('signin', 'Connect', false), { class: 'Card_Form' })
+      : null,
     ask || waiting ? null : form(
       press('disconnect', c.status == 'needed' ? 'Remove' : 'Disconnect'),
+      { class: 'Card_Form' },
     ),
   )
   let stands = ask ? status('Each person connects their own') : status(
@@ -1255,6 +1269,7 @@ let connection = (
         forApp(
           a,
           a.borrower != null ? press('recall', 'Recall') : opening(a),
+          { class: 'Rows_Form' },
         ),
       ),
     )
@@ -1379,7 +1394,7 @@ let connection = (
     ? h(
       More,
       null,
-      h('summary', null, `Change what ${c.face.title} says`),
+      h(More.Summary, null, `Change what ${c.face.title} says`),
       editing(
         'about',
         h(
@@ -1489,7 +1504,7 @@ let connection = (
       ? h(
         More,
         null,
-        h('summary', null, 'Advanced options'),
+        h(More.Summary, null, 'Advanced options'),
         h(More.Body, null, folded),
       )
       : null,
@@ -1508,10 +1523,11 @@ let borrowing = (
   close: Kids,
   mine?: Shown,
 ) => {
-  let form = (kids: Kids, connection = b.eid, edit = false) =>
+  let form = (kids: Kids, connection = b.eid, edit = false, part = '') =>
     h(
       'form',
       {
+        class: ['Page_Form', part].filter(Boolean).join(' '),
         method: 'post',
         action,
         ...edit ? { 'data-save': `own-${b.eid}-${b.app.app}` } : {},
@@ -1522,16 +1538,16 @@ let borrowing = (
       kids,
     )
   let actions = mine
-    ? form(press('attach', 'Use your own'), mine.eid)
+    ? form(press('attach', 'Use your own'), mine.eid, false, 'Card_Form')
     : on && !b.keyed
-    ? form(press('own', 'Connect your own'))
+    ? form(press('own', 'Connect your own'), b.eid, false, 'Card_Form')
     : null
   let id = `own-${b.eid}-${b.app.app}`
   let own = on && b.keyed && !mine
     ? h(
       More,
       null,
-      h('summary', null, 'Use your own key'),
+      h(More.Summary, null, 'Use your own key'),
       h(
         More.Body,
         null,
@@ -1584,7 +1600,7 @@ let borrowing = (
             ]),
           ),
         ),
-        h(Rows.Actions, null, form(opening(b.app))),
+        h(Rows.Actions, null, form(opening(b.app), b.eid, false, 'Rows_Form')),
       ),
     ),
     own,
@@ -1663,7 +1679,7 @@ let connections = (at: DeskPage, env: Host) => {
         ]
         : h(
           Form,
-          { method: 'post', action },
+          { class: 'Page_Form', method: 'post', action },
           held('integration', i.name),
           howTo(i.face, true),
           i.keyed
@@ -1818,6 +1834,7 @@ let connections = (at: DeskPage, env: Host) => {
     ? h(
       Form,
       {
+        class: 'Page_Form',
         method: 'get',
         action: managePath('connections', at.space),
         role: 'search',
@@ -1959,7 +1976,7 @@ let connections = (at: DeskPage, env: Host) => {
         ? h(
           More,
           null,
-          h('summary', null, 'Add a key for a service not listed'),
+          h(More.Summary, null, 'Add a key for a service not listed'),
           h(More.Body, null, add),
         )
         : null,
@@ -1979,7 +1996,11 @@ let inviting = (at: DeskPage) => {
     heading('Invite someone'),
     h(
       Form,
-      { method: 'post', action: managePath('people', at.space) },
+      {
+        class: 'Page_Form',
+        method: 'post',
+        action: managePath('people', at.space),
+      },
       labeled(
         'invite-email',
         'Email address',
@@ -2059,7 +2080,7 @@ let operating = (at: DeskPage) => {
         null,
         h(
           'form',
-          { method: 'post', action },
+          { class: 'Page_Form Rows_Form', method: 'post', action },
           held('unreach', o.eid),
           h(Button, {
             type: 'submit',
@@ -2072,7 +2093,7 @@ let operating = (at: DeskPage) => {
   let form = offered.length
     ? h(
       Form,
-      { method: 'post', action },
+      { class: 'Page_Form', method: 'post', action },
       labeled(
         'operator-space',
         "Let this space's Operator work here",
@@ -2119,7 +2140,11 @@ export let people = (at: DeskPage) => {
   let act = (fields: Kids, label: string, aria: string) =>
     h(
       'form',
-      { method: 'post', action: managePath('people', at.space) },
+      {
+        class: 'Page_Form Rows_Form',
+        method: 'post',
+        action: managePath('people', at.space),
+      },
       fields,
       h(Button, { type: 'submit', 'aria-label': aria }, label),
     )
@@ -2286,13 +2311,16 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     deskFrame({
       ...navigation(at, view, env),
       person: at.person,
-      where: [h('b', null, titles[view]), h('small', null, whose)],
+      where: [
+        h('b', null, titles[view]),
+        h('small', { class: 'Desk_WhoseName' }, whose),
+      ],
       head: [
         h(
           'div',
           null,
           h('p', { class: 'Desk_Whose' }, whose),
-          h('h1', null, titles[view]),
+          h('h1', { class: 'Desk_Heading' }, titles[view]),
           view == 'visits'
             ? h('p', { class: 'Desk_Period' }, `Last ${at.viewDays ?? 30} days`)
             : null,

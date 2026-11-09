@@ -135,12 +135,17 @@ export let attached = (row: string, files: Sent[]) =>
         return PICTURES.includes(f.mime ?? '')
           ? h(
             'a',
-            { class: 'Talk_Picture', href, target: '_blank' },
-            h('img', { src: href, alt: f.name, loading: 'lazy' }),
+            { class: 'Talk_Picture Talk_FilesLink', href, target: '_blank' },
+            h('img', {
+              class: 'Talk_Image',
+              src: href,
+              alt: f.name,
+              loading: 'lazy',
+            }),
           )
           : h(
             'a',
-            { class: 'Talk_File', href },
+            { class: 'Talk_File Talk_FilesLink', href },
             h(
               Drop.Kind,
               null,
@@ -184,15 +189,17 @@ let readable = (value: unknown, depth = 0): Node => {
       // Words that happen to start with a bracket.
     }
   }
-  if (value == null || value === '') return h('span', null, 'Nothing')
-  if (typeof value != 'object') {
-    return h('span', null, cut(String(value), 600))
+  if (value == null || value === '') {
+    return h('span', { class: 'Talk_DetailValue' }, 'Nothing')
   }
-  if (depth > 2) return h('span', null, '…')
+  if (typeof value != 'object') {
+    return h('span', { class: 'Talk_DetailValue' }, cut(String(value), 600))
+  }
+  if (depth > 2) return h('span', { class: 'Talk_DetailValue' }, '…')
   let list = Array.isArray(value)
     ? value.map((v, i) => [String(i + 1), v] as const)
     : Object.entries(value)
-  if (!list.length) return h('span', null, 'Nothing')
+  if (!list.length) return h('span', { class: 'Talk_DetailValue' }, 'Nothing')
   let more = list.length - 12
   return h(
     'dl',
@@ -200,18 +207,24 @@ let readable = (value: unknown, depth = 0): Node => {
     list.slice(0, 12).map(([k, v]) =>
       h(
         'div',
-        null,
+        { class: 'Talk_Fact' },
         h(
           'dt',
-          null,
+          { class: 'Talk_FactLabel' },
           Array.isArray(value)
             ? k
             : k.replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase()),
         ),
-        h('dd', null, readable(v, depth + 1)),
+        h('dd', { class: 'Talk_FactValue' }, readable(v, depth + 1)),
       )
     ),
-    more > 0 ? h('div', null, h('dd', null, `and ${more} more`)) : null,
+    more > 0
+      ? h(
+        'div',
+        { class: 'Talk_Fact' },
+        h('dd', { class: 'Talk_FactValue' }, `and ${more} more`),
+      )
+      : null,
   )
 }
 
@@ -241,8 +254,8 @@ export let trouble = (said: string, detail?: unknown) =>
       : h(
         'details',
         null,
-        h('summary', null, 'Details'),
-        h('pre', null, laid(detail)),
+        h('summary', { class: 'Talk_TroubleSummary' }, 'Details'),
+        h('pre', { class: 'Talk_TroubleDetail' }, laid(detail)),
       ),
   )
 
@@ -252,7 +265,7 @@ let step = (name: string, mod: '' | 'on' | 'no', ...inside: Node[]) =>
   h(
     'details',
     { class: mod ? `Talk_Step Talk_Step-${mod}` : 'Talk_Step' },
-    h('summary', null, name),
+    h('summary', { class: 'Talk_Summary' }, name),
     h('div', { class: 'Talk_Detail' }, ...inside),
   )
 
@@ -276,12 +289,12 @@ let tool = (
   let drawn = step(
     ok == null ? said.doing : ok ? said.done : tried(said.doing),
     ok == null ? 'on' : ok ? '' : 'no',
-    h('p', null, 'What it asked for'),
+    h('p', { class: 'Talk_DetailLabel' }, 'What it asked for'),
     readable(c.args ?? {}),
     ...told,
     ok == null ? null : ok
       ? [
-        h('p', null, 'What came back'),
+        h('p', { class: 'Talk_DetailLabel' }, 'What came back'),
         readable(String(comp(result, 'content')?.body ?? '')),
       ]
       : trouble(
@@ -308,7 +321,7 @@ let helper = (b: Bundle, body: string) => {
     ? step(
       'Heard back from a helper',
       '',
-      h('p', null, 'What came back'),
+      h('p', { class: 'Talk_DetailLabel' }, 'What came back'),
       readable(said),
     )
     : step(
@@ -324,7 +337,12 @@ let helper = (b: Bundle, body: string) => {
 // What a model was told before anything was said to it, closed until
 // opened, and drawn apart from the words, the replies and the errors.
 let instructed = (said: string, ...inside: Node[]) =>
-  h('details', { class: 'Talk_Told' }, h('summary', null, said), ...inside)
+  h(
+    'details',
+    { class: 'Talk_Told' },
+    h('summary', { class: 'Talk_ToldSummary' }, said),
+    ...inside,
+  )
 
 // What a model was told is Markdown, drawn the way a reply is.
 let written = (body: string) =>
@@ -350,7 +368,11 @@ let offered = (tools: Tool[], page: Drawn) => {
         null,
         h('summary', null, t.name),
         written(t.description),
-        h('pre', null, JSON.stringify(t.parameters, null, 2)),
+        h(
+          'pre',
+          { class: 'Talk_ToldSource' },
+          JSON.stringify(t.parameters, null, 2),
+        ),
       )
     ),
     !rest
@@ -714,6 +736,7 @@ let Asked = ({ nodes }: { nodes: Node[] }) =>
     h(
       'summary',
       {
+        class: 'Talk_AskedSummary',
         title: 'What was asked of the Operator',
         'aria-label': 'What was asked of the Operator',
       },
@@ -787,7 +810,7 @@ let system = (b: Bundle, body: string) => {
     { class: 'Talk_Told Talk_System' },
     h(
       'summary',
-      null,
+      { class: 'Talk_ToldSummary' },
       `${label ?? 'From the system'}: `,
       cut(spoken(b, body).split('\n')[0], 80),
     ),

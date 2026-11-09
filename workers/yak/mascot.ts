@@ -50,7 +50,7 @@ export let Yak = ({ pose, base = '' }: { pose: Pose; base?: string }) =>
         media: '(prefers-reduced-motion: reduce)',
         srcset: srcset(`${pose}-still`, base),
       }),
-      h('img', {
+      h(Loading.Image, {
         src: `${base}/mascot/${pose}.webp`,
         srcset: srcset(pose, base),
         width: 40,

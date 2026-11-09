@@ -136,7 +136,13 @@ let acting = (
 ) =>
   h(
     Form,
-    { id, method: 'post', action: `${at}?${id}=1`, 'data-save': id },
+    {
+      class: 'Page_Form',
+      id,
+      method: 'post',
+      action: `${at}?${id}=1`,
+      'data-save': id,
+    },
     h(Card, null, h(Card.Head, null, h(Card.Title, null, title)), ...inside),
     h(
       Form.Actions,
@@ -160,7 +166,7 @@ let field = (id: string, label: string, control: Node) =>
 export let keepCard = (back: string) =>
   h(
     Form,
-    { class: 'Talk_Keep', method: 'post', action: '/login' },
+    { class: 'Talk_Keep Page_Form', method: 'post', action: '/login' },
     h(
       Card,
       null,
@@ -208,7 +214,7 @@ let choice = (
   h(
     Check,
     null,
-    h('input', {
+    h(Check.Input, {
       type: 'radio',
       name,
       value: o.id,
@@ -331,7 +337,7 @@ let agreeing = (label: string) => [
   h(
     Check,
     { style: 'align-items:flex-start' },
-    h('input', { type: 'checkbox', name: 'agreed', value: 'yes' }),
+    h(Check.Input, { type: 'checkbox', name: 'agreed', value: 'yes' }),
     h('span', null, terms(CONSENT)),
   ),
 ]
@@ -1493,7 +1499,7 @@ let screens = (app: Making, operator: string) => {
     h(
       Check,
       null,
-      h('input', {
+      h(Check.Input, {
         type: 'radio',
         name: 'screen',
         value: which,
@@ -1547,7 +1553,7 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
     h(
       TabSet.Item,
       null,
-      h('input', {
+      h(TabSet.Input, {
         type: 'radio',
         name: 'made',
         id: `made-${id}`,
@@ -1584,8 +1590,8 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
       h(
         'span',
         { class: 'Talk_AppName' },
-        h('b', null, title),
-        h('small', null, host),
+        h('b', { class: 'Talk_AppTitle' }, title),
+        h('small', { class: 'Talk_AppHost' }, host),
       ),
       away
         ? h(
@@ -1858,7 +1864,12 @@ export let column = (html: string, empty: Node = null) =>
   }, html ? undefined : empty)
 
 let hello = (heading: string, said: string) =>
-  h('div', { class: 'Talk_Hello' }, h('h2', null, heading), h('p', null, said))
+  h(
+    'div',
+    { class: 'Talk_Hello' },
+    h('h2', { class: 'Talk_HelloTitle' }, heading),
+    h('p', null, said),
+  )
 
 /**
  * One conversation with the Operator in its chat app, a page of its own
@@ -2059,7 +2070,7 @@ let composer = (
   return h(
     'form',
     {
-      class: 'Talk_Box',
+      class: 'Talk_Box Page_Form',
       id: 'ask',
       method: 'post',
       action: at,
@@ -2099,6 +2110,7 @@ let composer = (
           },
           '＋ Add files',
           h(Drop.File, {
+            class: 'Talk_Attachment',
             type: 'file',
             name: 'file',
             multiple: true,
@@ -2530,6 +2542,7 @@ let hear = (frame) => {
     let at = document.getElementById('row-' + row.id)
     if (!at) {
       at = document.createElement('div')
+      at.className = 'Talk_Row'
       at.id = 'row-' + row.id
       rows.append(at)
     }

@@ -39,7 +39,7 @@ body {
   align-items: baseline;
   gap: var(--gap);
 }
-.Shop_Head h1 {
+.Shop_Title {
   font-size: 1.5rem;
   margin: 0 auto 0 0;
 }
@@ -159,7 +159,7 @@ input[type=number] {
   gap: var(--half-gap);
   align-items: baseline;
 }
-.Cart_Line span:first-child {
+.Cart_Name {
   flex: 1;
 }
 .Cart_Foot {
@@ -176,18 +176,18 @@ input[type=number] {
 .Orders {
   margin-top: calc(var(--gap) * 2);
 }
-.Orders table {
+.Orders_Table {
   width: 100%;
   border-collapse: collapse;
   font-size: .9rem;
 }
-.Orders th,
-.Orders td {
+.Orders_Heading,
+.Orders_Cell {
   text-align: left;
   padding: .4rem .5rem;
   border-bottom: 1px solid var(--line);
 }
-.Orders td:last-child {
+.Orders_Cell:last-child {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -199,7 +199,7 @@ input[type=number] {
 
 <main class="Shop">
   <header class="Shop_Head">
-    <h1>The Shop</h1>
+    <h1 class="Shop_Title">The Shop</h1>
     <span class="Card_Words" id="who"></span>
   </header>
 
@@ -219,13 +219,13 @@ input[type=number] {
 
   <section class="Orders" id="orders" hidden>
     <h2>Orders</h2>
-    <table>
+    <table class="Orders_Table">
       <thead>
         <tr>
-          <th>Order</th>
-          <th>Who</th>
-          <th>State</th>
-          <th>Total</th>
+          <th class="Orders_Heading">Order</th>
+          <th class="Orders_Heading">Who</th>
+          <th class="Orders_Heading">State</th>
+          <th class="Orders_Heading">Total</th>
         </tr>
       </thead>
       <tbody id="rows"></tbody>
@@ -314,6 +314,7 @@ let draw = () => {
     let li = document.createElement('li')
     li.className = 'Cart_Line'
     let what = document.createElement('span')
+    what.className = 'Cart_Name'
     what.append(text(`${l.qty} × ${l.title}`))
     let sum = document.createElement('span')
     sum.append(text(money(l.cents)))
@@ -396,6 +397,7 @@ if (mine.writes) {
         ]
       ) {
         let td = document.createElement('td')
+        td.className = 'Orders_Cell'
         td.append(text(cell))
         tr.append(td)
       }

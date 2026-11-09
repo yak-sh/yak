@@ -122,7 +122,7 @@ export let askEmail = (at: {
     },
     h(
       'form',
-      { method: 'post', action: '/login' },
+      { class: 'Page_Form', method: 'post', action: '/login' },
       carried(at.q ?? null, at.back),
       h(
         'p',
@@ -220,7 +220,7 @@ export let askCode = (at: {
     },
     h(
       'form',
-      { method: 'post', action: '/login/code' },
+      { class: 'Page_Form', method: 'post', action: '/login/code' },
       carried(q, back),
       h(
         'p',
@@ -247,7 +247,7 @@ export let askCode = (at: {
     ),
     h(
       'form',
-      { class: 'Again', method: 'post', action: '/login' },
+      { class: 'Again Page_Form', method: 'post', action: '/login' },
       carried(q, back),
       held('address', address),
       h(Button, { type: 'submit' }, 'Send a new code'),
@@ -313,13 +313,21 @@ export let askDelete = (at: {
             ? 'What goes, for good'
             : 'What stops until you restore it',
         ),
-        h('ol', null, at.lines.map((l) => h('li', null, l))),
+        h(
+          'ol',
+          { class: 'Card_List' },
+          at.lines.map((l) => h('li', { class: 'Card_Item' }, l)),
+        ),
       )
       : null,
     at.stop ? null : [
       h(
         'form',
-        { method: 'post', action: `/space/${at.slug}/delete` },
+        {
+          class: 'Page_Form',
+          method: 'post',
+          action: `/space/${at.slug}/delete`,
+        },
         held('t', at.token),
         at.token ? null : [
           h(
@@ -397,7 +405,7 @@ export let invited = (o: Offer, env: Host = {}) => {
       : null,
     h(
       'form',
-      { method: 'post', action: '/login' },
+      { class: 'Page_Form', method: 'post', action: '/login' },
       held('address', o.email),
       held('return', o.back),
       h(
@@ -448,7 +456,7 @@ export let askConnect = (at: {
         actions: at.on && !at.keyed
           ? h(
             'form',
-            { method: 'post' },
+            { class: 'Page_Form', method: 'post' },
             send(at.status == 'needed' ? 'Connect' : 'Connect again'),
           )
           : null,
@@ -459,7 +467,7 @@ export let askConnect = (at: {
       !at.on ? h(Card.Sub, null, "Keys can't be saved here yet.") : at.keyed
         ? h(
           'form',
-          { method: 'post' },
+          { class: 'Page_Form', method: 'post' },
           keyBox('key', 'Paste your key', send('Save key'), '', at.face.fields),
         )
         : null,
@@ -484,7 +492,7 @@ export let askLink = (t: string, env: Host = {}) =>
     },
     h(
       'form',
-      { method: 'post', action: '/login/link' },
+      { class: 'Page_Form', method: 'post', action: '/login/link' },
       held('t', t),
       send('Sign in'),
     ),
@@ -510,7 +518,7 @@ export let askHandoff = (
     },
     h(
       'form',
-      { method: 'post', action: '/login/handoff' },
+      { class: 'Page_Form', method: 'post', action: '/login/handoff' },
       held('return', back),
       held('consent', consent),
       send(`Continue to ${host}`),
@@ -535,7 +543,7 @@ export let askAllow = (
     },
     h(
       'form',
-      { method: 'post', action: '/oauth/allow' },
+      { class: 'Page_Form', method: 'post', action: '/oauth/allow' },
       carried(q),
       held('consent', consent),
       send('Allow'),
@@ -551,7 +559,7 @@ export let chatgptFields = (env: Host) =>
       'Icon',
       h(
         'dd',
-        { class: 'Connect_Icon' },
+        { class: 'Connect_Icon Fields_Value' },
         h(
           'a',
           {
@@ -560,6 +568,7 @@ export let chatgptFields = (env: Host) =>
             'aria-label': 'Download the yaks.app icon',
           },
           h('img', {
+            class: 'Connect_Image',
             src: url(env, '/yaks-app.png'),
             width: 56,
             height: 56,
@@ -883,7 +892,12 @@ export let clients = (env: Host): Client[] => [
   },
 ]
 
-let steps = (items: Kids[]) => h('ol', null, items.map((s) => h('li', null, s)))
+let steps = (items: Kids[]) =>
+  h(
+    'ol',
+    { class: 'Card_List' },
+    items.map((s) => h('li', { class: 'Card_Item' }, s)),
+  )
 
 // Native radio tabs share their layout with the working style-guide example.
 export let doors = (env: Host) =>
@@ -895,7 +909,7 @@ export let doors = (env: Host) =>
       h(
         TabSet.Item,
         null,
-        h('input', {
+        h(TabSet.Input, {
           type: 'radio',
           name: 'agent',
           id: `tab-${a.key}`,
@@ -919,14 +933,14 @@ export let doors = (env: Host) =>
             ? h(
               More,
               null,
-              h('summary', null, a.details.summary),
+              h(More.Summary, null, a.details.summary),
               h(More.Body, { class: 'Note' }, a.details.text),
             )
             : null,
           h(
             'div',
             { class: 'Connect_Next' },
-            h('p', null, 'Make your first app'),
+            h('p', { class: 'Connect_Lead' }, 'Make your first app'),
             a.finish,
             ', then ask:',
             firstAsk(),
@@ -1028,7 +1042,7 @@ export let connect = (yours: Yours, status = 200, env: Host = {}) =>
     h(
       More,
       { class: 'Attach', open: status != 200 || yours.paid },
-      h('summary', null, 'Your address and plan'),
+      h(More.Summary, null, 'Your address and plan'),
       h(More.Body, null, mine(yours, env), plan(yours, env)),
     ),
     h(

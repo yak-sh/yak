@@ -89,6 +89,7 @@ let For = (
   { since, until, now }: { since: string; until?: string; now: number },
 ) =>
   h('time', {
+    class: 'Talk_Time',
     'data-since': since,
     'data-until': until,
     dateTime: since,

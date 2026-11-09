@@ -597,7 +597,7 @@ export let talk = (
       'div',
       { class: 'Talk_Said', 'data-rows': '' },
       lines(entries, names, seen).map((r) =>
-        h('div', { id: `row-${r.id}` }, r.node)
+        h('div', { class: 'Talk_Row', id: `row-${r.id}` }, r.node)
       ),
     ),
     // the words a screen reader hears; the yak beside the box shows them
@@ -613,7 +613,10 @@ export let talk = (
         rest.map((f) =>
           h(
             'a',
-            { href: `${at}?attachment=${f.request}&file=${f.index}` },
+            {
+              class: 'Talk_FilesLink',
+              href: `${at}?attachment=${f.request}&file=${f.index}`,
+            },
             f.name,
           )
         ),
