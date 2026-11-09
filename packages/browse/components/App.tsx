@@ -62,7 +62,12 @@ let { Tab } = Tabs
 // entity, a foreign graph's number. The 404 face keeps the whole shell
 // (the sidebar, `/` search, the : statusbar): a dead link offers the doors,
 // never a blank wall.
-let LostFrame = block('section', 'Lost', { Code: 'p', Id: 'code', Hint: 'p' })
+let LostFrame = block('section', 'Lost', {
+  Code: 'p',
+  Id: 'code',
+  Hint: 'p',
+  Key: 'kbd',
+})
 let { Code, Hint } = LostFrame
 let Lost = ({ at }: { at: string }) => {
   let path = new URL(at, 'http://x').pathname
@@ -74,7 +79,7 @@ let Lost = ({ at }: { at: string }) => {
         names nothing here — a mistyped id, or an entity that's gone.
       </p>
       <Hint>
-        press <kbd>/</kbd> to search, or{' '}
+        press <LostFrame.Key>/</LostFrame.Key> to search, or{' '}
         <a href='/' onClick={follow('/')}>
           head home
         </a>

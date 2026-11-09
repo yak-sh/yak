@@ -115,7 +115,7 @@ html {
 .Lost_Hint {
   color: var(--muted);
 }
-.Lost_Hint kbd {
+.Lost_Key {
   padding: 1px 5px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
