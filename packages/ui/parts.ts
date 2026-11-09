@@ -25,6 +25,14 @@ export { Dot } from './Dot.ts'
 export { Drop } from './Drop.ts'
 export { Empty } from './Empty.ts'
 export { Field, type FieldProps } from './Field.ts'
+export {
+  Float,
+  type FloatProps,
+  place,
+  placeAt,
+  tips,
+  usePlaceAt,
+} from './float.ts'
 export { Form } from './Form.ts'
 export { Group } from './Group.ts'
 export { Icon, type IconProps } from './Icon.ts'

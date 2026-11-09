@@ -28,4 +28,4 @@ export {
   turnHtml,
 } from './operator-aside.ts'
 
-export { tips } from '@yaks/ui'
+export { tips } from '@yaks/ui/parts'

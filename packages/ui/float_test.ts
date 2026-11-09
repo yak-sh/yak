@@ -1,7 +1,7 @@
 import { clock, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
-import { place, tips } from './float.ts'
+import { place, tips } from './parts.ts'
 
 // Overlay placement is viewport geometry. The tiny element double keeps that
 // seam fast and leaves component lifecycle to the browser probe.
