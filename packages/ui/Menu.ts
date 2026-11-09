@@ -28,7 +28,6 @@ export let description =
 
 /** An item is a row of its own, as it is in a browser. */
 export let sheet = (c: Colors): Sheet => ({
-  Menu_Trigger: { fg: c.muted, underline: true },
   Menu_Item: { block: true },
   'Menu_Item-hover': { bg: c.card },
   'Menu_Item-danger': { fg: c.negative },

@@ -46,20 +46,16 @@
   overflow-y: auto;
 }
 .Menu_Trigger {
+  appearance: none;
   font: inherit;
   color: inherit;
+  text-align: inherit;
   background: none;
   border: 0;
-  border-radius: var(--radius);
-  padding: .25em;
+  margin: 0;
+  padding: 0;
   cursor: pointer;
-  text-decoration: underline dotted;
-  text-underline-offset: .2em;
-}
-.Menu_Trigger:hover,
-.Menu_Trigger[aria-expanded='true'] {
-  color: var(--link);
-  background: var(--soft);
+  text-decoration: none;
 }
 .Menu_Item:focus-visible {
   background: var(--soft);
