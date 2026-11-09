@@ -14,6 +14,9 @@ const OWNING = [
   'operator_session',
   'operator_request',
   'operator_ask',
+  'call',
+  'result',
+  'output',
   'task',
   'tombstone',
 ]
@@ -44,6 +47,10 @@ export let ownerOf = async (
       seen,
     )
   }
+  let source = (row.call as { source?: string } | undefined)?.source ??
+    (row.result as { call?: string } | undefined)?.call ??
+    (row.output as { source?: string } | undefined)?.source
+  if (source) return ownerOf(store, source, seen)
   let owner = (row.operator_session ?? row.operator_request ??
     row.operator_ask) as Owner | undefined
   if (owner?.person && owner.space) return owner
@@ -90,6 +97,7 @@ const OWNED: [string, string][] = [
   ['operator_ask', 'person'],
   ['operator_letter', 'person'],
   ['operator_text', 'person'],
+  ['context_output', 'reader'],
   ['deliver', 'to'],
   ['draft', 'by'],
 ]
@@ -102,7 +110,6 @@ const ON = [
   'entry.session.spawned.parent.',
   'operator_files.request.',
 ]
-
 // The entities `person` may read: each names nobody else as its owner, here
 // or on what it hangs on.
 let theirs = (person: string) =>
@@ -111,6 +118,11 @@ let theirs = (person: string) =>
       OWNED.map(([name, by]) =>
         or(absent(`${at}${name}`), eq(`${at}${name}.${by}`, person))
       )
+    ),
+    or(
+      and(absent('call'), absent('result'), absent('output')),
+      absent('created.via.operator_session'),
+      eq('created.via.operator_session.person', person),
     ),
   )
 

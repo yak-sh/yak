@@ -281,6 +281,23 @@ person's conversation, run as that person and paid from the space's budget, and
 the Operator's answer reaches them in their Updates. An app's schedules stay
 `wake` rows in the app, as above.
 
+`wake_set` also accepts `tool` and `args`: the same tool name and arguments as
+an immediate Operator call. Each occurrence records its own call and result and
+uses the person's current permissions. A scheduled `code_mode` call takes its
+script in `args.script`, just like an immediate one, and runs without a model
+turn:
+
+    { tool: 'code_mode', args: { script: 'return await tools.yaks.graph_query({q: ".invoice"})' },
+      every: '0 9 * * 6 America/Detroit' }
+
+Add `helper` with a brief to start a fresh helper after the call, including its
+outcome in the helper's input. `helper` alone schedules a helper each time;
+`say` alone wakes the conversation. `say` alongside a call gives the
+conversation its outcome. `wake_list` includes the latest ten run records for
+each active schedule; each run has a transcript and its result reaches the
+person's Updates. A failed call or helper also reaches the Operator's
+conversation and the platform tracker, even if a checking helper succeeds.
+
 ## The Operator's subscriptions
 
 A person's Operator can also be woken by a change rather than a time, when they

@@ -254,6 +254,7 @@ export type Ask = {
   person: string
   administrative?: boolean
   say: string
+  helper?: string
 }
 
 /**
@@ -780,6 +781,8 @@ export let handleChannels = (
       if (row.operator_subscription) {
         let { looked } = await import('./operator-subscriptions.ts')
         await looked(operator.store, row, at, operator.watching)
+      } else if (row.call || part<Ask>(row, 'operator_ask')?.helper) {
+        await operator.scheduled(row, at)
       } else await fire(operator.store, row, 'wake', at)
     },
     operator_receive: async (event) => {

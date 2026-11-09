@@ -23,6 +23,10 @@ export let removal = async (g: Reader, ids: string[]): Promise<string[]> => {
       ...await g.read(`.comment.target=${eid}`),
       ...await g.read(`.operator_request.about=${eid}`),
       ...await g.read(`.operator_request.task=${eid}`),
+      ...await g.read(`.call.source=${eid}`),
+      ...await g.read(`.result.call=${eid}`),
+      ...await g.read(`.output.source=${eid}`),
+      ...await g.read(`.context_output.source=${eid}`),
       ...links,
       ...row?.session ? await g.read(`.entry.session=${eid}`) : [],
     ].map((b) => b.entity.eid)

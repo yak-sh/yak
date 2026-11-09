@@ -261,6 +261,27 @@ export let operatorDoc: VocabDoc = {
           type: 'string',
           description: 'The words given to the Operator when it fires.',
         },
+        helper: {
+          type: 'string',
+          description:
+            'The brief for a fresh helper after the scheduled call, including its result.',
+        },
+      },
+    },
+    operator_work: {
+      component: true,
+      description:
+        'One occurrence of scheduled Operator work, with its recorded call and helper.',
+      properties: {
+        schedule: { type: 'string', ref: 'entity', death: 'keep' },
+        at: { type: 'string', format: 'date-time' },
+        call: { type: 'string', ref: 'call', death: 'keep' },
+        helper: { type: 'string', ref: 'session', death: 'keep' },
+        error: {
+          type: 'string',
+          description:
+            'A call failure retained while the helper checks its outcome.',
+        },
       },
     },
     // A query the Operator watches for the person who set it, beside the

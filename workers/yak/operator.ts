@@ -110,6 +110,11 @@ import { imageNew } from './operator-images.ts'
 import { googleTold, googleTools } from './operator-google.ts'
 import { notification } from './operator-updates.ts'
 import { wakeTools } from './operator-wakes.ts'
+import {
+  finished as workFinished,
+  recorded,
+  scheduled as workScheduled,
+} from './operator-work.ts'
 import { subscriptionTools, type Watching } from './operator-subscriptions.ts'
 import { type Browsers, browserTools } from './operator-browser.ts'
 import {
@@ -279,10 +284,11 @@ let BULK: Record<string, string> = {
 export let operatorRoster = async (
   ctx: Ctx,
   work: Store,
-  { space, tasked = false, member = true }: {
+  { space, tasked = false, member = true, session }: {
     space: string
     tasked?: boolean
     member?: boolean
+    session?: string
   },
 ): Promise<Tool[]> => {
   ctx.dir = ctx.reopen!()
@@ -367,7 +373,7 @@ export let operatorRoster = async (
   let apps = listing(coded(
     {
       ...connected(ctx, reach, g),
-      calls: ledger(g, work.g),
+      calls: ledger(g, session ? recorded(work.g, session, space) : work.g),
       report: (e) => caught(e, { request: 'operator code mode' }),
     },
     ctx,
@@ -1131,9 +1137,19 @@ export let operating = (
     return { entries, calls, whole: read.whole }
   }
   let answered = async (session: string) => {
-    let [row] = await g.get([session], ['spawned'])
+    let [row] = await g.get([session], [
+      'spawned',
+      'operator_work',
+      'operator_session',
+      'completed',
+      'failed',
+    ])
     let { entries, calls, whole } = await ending(session, !!row?.spawned)
     let reply = replyOf(turnOf(entries))
+    if (row?.operator_work) {
+      await workFinished(store, row, reply.text, reply.fault)
+      return
+    }
     // A fork or helper that could not finish reaches the tracker as it ends;
     // what it ended with goes to the session that started it (M-37965).
     if (row?.spawned) {
@@ -1263,7 +1279,12 @@ export let operating = (
       }&.limit=1&.fields=entity.eid`,
     )
     let [roster, google, platform, [reply], [text]] = await Promise.all([
-      operatorRoster(ctx, store, { space: space.eid, tasked: !!task, member })
+      operatorRoster(ctx, store, {
+        space: space.eid,
+        tasked: !!task,
+        member,
+        session,
+      })
         .then((r) => reached('roster', r)),
       member
         ? googleTools(env, ctx, space).then((t) => reached('google', t))
@@ -1330,6 +1351,33 @@ export let operating = (
   // (@yaks/tools `whose`), rather than left `running` with nobody to finish it.
   let me = mint()
   let gone = (holder: string) => holder != me
+  let scheduled: Operator['scheduled'] = (row, at) =>
+    workScheduled(store, row, at, {
+      tools: roster,
+      owner: me,
+      gone,
+      helper: async (session, ask, brief) => {
+        let input = derivedEid(`operator-work-helper|${session}`)
+        if ((await g.get([input]))[0]) return
+        let space = await dir().at(ask.space)
+        if (!space || space.trashed) {
+          throw refuse('missing', 'That space is gone.')
+        }
+        await readying(ask, space)
+        await started(session, ask.space, space)
+        await g.apply([
+          { entity: { eid: session }, operator_work: { helper: session } },
+          given(
+            session,
+            input,
+            `You are a scheduled helper. Do this work here and give a short report.\n\n${brief}`,
+            ask.space,
+            { from: 'the system' },
+          ),
+        ], { trusted: true })
+        options.tell?.(session)
+      },
+    })
   fx.handle(stepwise(running(
     g,
     lend({
@@ -1788,7 +1836,18 @@ export let operating = (
   // What to call a person in what the Operator shows of its work.
   let named = (person: string) => dir().nameAt(person)
 
-  return { store, reads, ask, note, tools, run, stop, named, watching }
+  return {
+    store,
+    reads,
+    ask,
+    note,
+    tools,
+    run,
+    stop,
+    named,
+    watching,
+    scheduled,
+  }
 }
 
 export type Asking = {
@@ -1872,4 +1931,6 @@ export type Operator = {
   named: (person: string) => Promise<string | null>
   /** A subscription's query, read as the person who set it. */
   watching: Watching
+  /** One occurrence of a scheduled tool call and its optional checking helper. */
+  scheduled: (row: Bundle, at: string) => Promise<void>
 }
