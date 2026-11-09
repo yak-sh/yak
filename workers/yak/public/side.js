@@ -1,4 +1,4 @@
-// The side's fold (desk-pages.ts `fold`), pressed without leaving the page:
+// The side's fold (sidebar.ts `fold`), pressed without leaving the page:
 // the side collapses to its rail of icons, or opens again, at once, and the
 // choice is sent to be kept on the person's row. Where it could not be sent,
 // the form is sent as it would be without this script, and the page is drawn
@@ -15,6 +15,7 @@ addEventListener('submit', async (e) => {
   let collapsed = field.value == 'collapsed'
   let said = collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'
   document.body.classList.toggle(form.dataset.side, collapsed)
+  document.getElementById('menu').classList.toggle('Sidebar-rail', collapsed)
   for (let nav of document.querySelectorAll('#menu .SideNav')) {
     nav.classList.toggle('SideNav-rail', collapsed)
   }

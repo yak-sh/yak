@@ -188,7 +188,7 @@ test('the Updates page and a new chat show what needs the person, and a button o
     [...d.querySelectorAll('.Update-needs button[name=choice]')]
       .map((b) => b.textContent)
   assertEquals(buttons(fresh), ['Send', 'Not yet'])
-  let count = (d: Document) => d.querySelector('.Talk_Count')?.textContent
+  let count = (d: Document) => d.querySelector('.Sidebar_Count')?.textContent
   assertEquals(Number(count(fresh)) > 1, true)
   let updates = await page(updatesPage(p.env, space, who))
   assertEquals(buttons(updates), ['Send', 'Not yet'])

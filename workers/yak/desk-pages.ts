@@ -1,8 +1,8 @@
+// The dashboard's pages, apart from pages.ts so a page that only serves a
+// space never compiles them. Its sidebar is composed by desk-sidebar.ts.
+import { deskSide } from './desk-sidebar.ts'
+import { spaceTile } from './space-picker.ts'
 import { Time } from '@yaks/ui/parts'
-// The dashboard's pages (manage.ts, admin.ts, operator-page.ts): a space's
-// desk and each of its pages, the side that picks a space, and the person's
-// own. Apart from pages.ts, so a page that only serves a space never compiles
-// them (T-148886).
 import { agentSetup, pasteLink } from './signin-pages.ts'
 import {
   Button,
@@ -15,13 +15,11 @@ import {
   Form,
   Group,
   Icon,
-  Menu,
   Modal,
   More,
   Notice,
   Report,
   Rows,
-  SideNav,
   TabSet,
 } from '@yaks/ui/parts'
 import { h, type VNode } from 'preact'
@@ -36,7 +34,7 @@ import type {
 import { INTEGRATIONS } from './integrations.ts'
 import { detail } from './integration-detail.ts'
 import { agentList, agentLive } from './connected_ui.ts'
-import { type IconName, icons } from './icons.ts'
+import { icons } from './icons.ts'
 import { day, fileDrop, raw } from './html.ts'
 import { LOGO } from './logo.ts'
 import { holder, tile } from './render/mod.ts'
@@ -44,9 +42,7 @@ import type { Person } from './people.ts'
 import { type Invitation, qr } from './referral.ts'
 import {
   accountView,
-  chatPath,
   enabling,
-  LOGOUT,
   MANAGE,
   managePath,
   type ManageView,
@@ -81,7 +77,6 @@ import {
   said,
   send,
   sentence,
-  type Side,
   state,
   status,
   tabbing,
@@ -197,218 +192,18 @@ let visits = (v: Visits, site: string) =>
 let visited = (apps: Visits[] | null, off: string, site: string) =>
   apps == null ? h(Form.Hint, null, off) : apps.map((v) => visits(v, site))
 
-// What each page of the side is, by the glyph beside its name.
-let navIcons = {
-  profile: 'user',
-  invite: 'qr-code',
-  agents: 'bot',
-  shared: 'share-2',
-  operator: 'bot',
-  apps: 'layout-grid',
-  people: 'users',
-  connections: 'plug',
-  visits: 'chart-no-axes-column-increasing',
-  selling: 'credit-card',
-  billing: 'receipt',
-  settings: 'settings-2',
-  trash: 'trash-2',
-} satisfies Record<string, IconName>
-
-// A glyph the pages draw (icons.ts), as the kit's Icon.
-let glyph = (name: IconName) => h(Icon, { of: icons[name] })
-
-// Words beside an icon of the side, which its rail does not show: still the
-// element's accessible text, and said by its title.
-export let worded = (words: Kids) => h('span', { class: 'Desk_Label' }, words)
-
-/**
- * The side's own button (T-151458): it collapses the side to a rail of its
- * icons, and opens it again. It is a form keeping the choice on the person's
- * row (`desk_sidebar{collapsed}`, manage.ts `account`), so it holds on every page
- * and device; public/side.js sends it without leaving the page, and sets
- * `rail`, the body's modifier, and `SideNav-rail` on the side's navs. Without
- * script the page is drawn again at `back`, the page it was pressed on.
- */
-export let fold = (collapsed: boolean, back: string, rail: string) => {
-  let said = collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'
-  return h(
-    'form',
-    {
-      class: 'Desk_Fold Page_Form',
-      method: 'post',
-      action: managePath('profile'),
-      'data-side': rail,
-    },
-    h('input', {
-      type: 'hidden',
-      name: 'sidebar',
-      value: collapsed ? 'open' : 'collapsed',
-    }),
-    h('input', { type: 'hidden', name: 'back', value: back }),
-    h(
-      Button,
-      {
-        type: 'submit',
-        class: 'Desk_Folder',
-        title: said,
-        'aria-label': said,
-        'aria-controls': 'menu',
-        'aria-expanded': String(!collapsed),
-      },
-      h(Icon, { of: icons['panel-left-close'], class: 'Desk_Shut' }),
-      h(Icon, { of: icons['panel-left-open'], class: 'Desk_Unshut' }),
-    ),
-  )
-}
-
-// The space a page is in, as the side and the page's head name it.
 let picked = (at: DeskPage) =>
   at.spaces?.find((s) => s.slug == at.space) ??
     { slug: at.space, title: '', owner: !at.member, own: false }
-
 let named = (s: Pick<Picked, 'slug' | 'title'>) => s.title || s.slug
-
-// The settings' one side, Manage (T-136122, T-140507): the way back to the
-// Operator's chat on top, then the space being managed, chosen in place, with
-// its pages under it on one sheet (T-140072), then what is the person's own
-// wherever they are. On a phone the same side opens full screen from the top
-// bar's Menu (`:target`, no script).
-let navigation = (at: DeskPage, view: ManageView, env: Host) => {
-  let link = (
-    key: keyof typeof navIcons,
-    label: string,
-    to = managePath(key, at.space),
-  ) => {
-    let on = view == key || (view == 'new' && key == 'apps')
-    return h(
-      SideNav.Link,
-      {
-        href: to,
-        title: label,
-        mod: on && 'on',
-        'aria-current': on ? 'page' : undefined,
-      },
-      glyph(navIcons[key]),
-      h(SideNav.Label, null, label),
-      key == 'trash' && at.trash?.length
-        ? h('span', { class: 'Desk_Count' }, at.trash.length)
-        : null,
-    )
-  }
-  let back = picked(at).operator || 'your Operator'
-  let operator = link('operator', 'Operator')
-  let host = spaceHost(env, at.space)
-  let rail = at.collapsed ? 'rail' : undefined
-  return {
-    label: 'Manage',
-    top: [
-      h(
-        Button,
-        {
-          mod: 'go',
-          class: 'Desk_Back',
-          href: chatPath(at.space),
-          title: `Back to ${back}`,
-          'aria-label': `Back to ${back}`,
-        },
-        glyph('chevron-left'),
-        // The Operator's name, and before it "Back to" where the button has
-        // room for both on its one line (pages.css `.Desk_Way`).
-        h(
-          'span',
-          { class: 'Desk_Label Desk_Way' },
-          h('span', { class: 'Desk_To' }, back),
-          h('span', null, 'Back to'),
-        ),
-      ),
-      fold(!!at.collapsed, managePath(view, at.space), 'Desk-rail'),
-    ],
-    side: [
-      h('h2', { class: 'Desk_Title' }, 'Manage'),
-      h(
-        'div',
-        { class: 'Desk_Section' },
-        h('h3', { class: 'Desk_Group', id: 'side-space' }, 'This space'),
-        h(
-          'div',
-          { class: 'Desk_Here' },
-          chooser(at, view),
-          h(
-            SideNav,
-            { 'aria-labelledby': 'side-space', mod: rail },
-            at.member ? operator : [
-              link('apps', 'Apps'),
-              link('people', 'People'),
-              operator,
-              link('connections', 'Connections'),
-              link('visits', 'Visits'),
-              at.sell ? link('selling', 'Selling') : null,
-              link('billing', 'Billing'),
-              link('settings', 'Space settings'),
-              link('trash', 'Trash'),
-            ],
-          ),
-        ),
-      ),
-      h(
-        'div',
-        { class: 'Desk_Section' },
-        h('h3', { class: 'Desk_Group', id: 'side-account' }, 'Your account'),
-        h(
-          SideNav,
-          { 'aria-labelledby': 'side-account', mod: rail },
-          link('profile', 'Profile'),
-          link('invite', 'Invite a friend'),
-          link('agents', 'Agents'),
-          link('shared', 'Shared with you'),
-        ),
-      ),
-      h(
-        SideNav,
-        { class: 'Desk_Foot', 'aria-label': 'Help and account', mod: rail },
-        h(
-          SideNav.Link,
-          {
-            href: `https://${host}/`,
-            target: '_blank',
-            rel: 'noopener',
-            title: `Open ${host}`,
-          },
-          glyph('external-link'),
-          h(SideNav.Label, null, `Open ${host}`),
-        ),
-        h(
-          SideNav.Link,
-          {
-            href: url(env, '/help'),
-            target: '_blank',
-            rel: 'noopener',
-            title: 'Help',
-          },
-          glyph('circle-question-mark'),
-          h(SideNav.Label, null, 'Help'),
-        ),
-        h(
-          'form',
-          { class: 'Page_Form', method: 'post', action: url(env, LOGOUT) },
-          h(
-            SideNav.Link,
-            { as: 'button', type: 'submit', title: 'Sign out' },
-            glyph('log-out'),
-            h(SideNav.Label, null, 'Sign out'),
-          ),
-        ),
-      ),
-    ],
-  }
-}
 
 // The dashboard's frame, which every dashboard page is drawn in (`desk`, and
 // the platform's admin directory, admin.ts `desk`): the side beside the page;
 // on a phone a top bar naming the page, whose Menu opens the same side over
 // the whole screen and whose Close shuts it (`:target`, no script).
 export let deskFrame = (
-  at: Side & {
+  at: {
+    sidebar: Kids
     where: Kids
     head: Kids
     content: Kids
@@ -423,17 +218,7 @@ export let deskFrame = (
     h('span', { class: 'Desk_Where' }, at.where),
   ),
   h('a', { class: 'Desk_Skip', href: '#content' }, 'Skip to content'),
-  h(
-    SideNav.Edge,
-    { class: 'Desk_Side', id: 'menu', 'aria-label': at.label },
-    h(
-      'div',
-      { class: 'Desk_Top' },
-      at.top,
-      h(Button, { class: 'Desk_Close', href: '#' }, '✕ Close'),
-    ),
-    at.side,
-  ),
+  at.sidebar,
   h(
     'div',
     { class: 'Desk_Body' },
@@ -446,118 +231,6 @@ export let deskFrame = (
     }, at.content),
   ),
 ]
-
-// The space selector (T-135919, T-136122, T-136983, T-137003): the space
-// every link under it changes, as a box saying its name, and Change, which
-// opens the list over the page; it closes like any menu (public/menu.js).
-// Choosing another keeps the page: Billing in one space becomes Billing in
-// the other, a page of the person's own stays where it is, and a space they
-// are only a member of opens at its Operator.
-let chooser = (at: DeskPage, view: ManageView) =>
-  choice(
-    picked(at),
-    at.spaces ?? [],
-    (s) =>
-      accountView(view)
-        ? `${managePath(view)}?space=${encodeURIComponent(s.slug)}`
-        : managePath(
-          !s.owner ? 'operator' : view == 'new' ? 'apps' : view,
-          s.slug,
-        ),
-    h(
-      'a',
-      { class: 'Desk_New', href: managePath('space'), title: 'New space' },
-      glyph('plus'),
-      worded('New space'),
-    ),
-  )
-
-/** A space's logo, or where it has none its first letter. */
-let spaceTile = (s: Picked) =>
-  s.logo
-    ? h('img', {
-      class: 'Desk_Tile',
-      src: s.logo,
-      width: 32,
-      height: 32,
-      alt: '',
-      decoding: 'async',
-    })
-    : h(
-      'span',
-      { class: 'Desk_Tile', 'aria-hidden': 'true' },
-      named(s).charAt(0).toUpperCase(),
-    )
-
-// The space selector over `all`, holding `here`: each space opens at `to`,
-// `make` follows the list, and `about` leads the line under each space's name
-// (the dashboard's side, and the Operator's chat app, which names each
-// space's Operator: operator-page.ts `chatPage`).
-export let choice = (
-  here: Picked,
-  all: Picked[],
-  to: (s: Picked) => string,
-  make: Kids = null,
-  about: (s: Picked) => string = () => '',
-) => {
-  let box = (s: Picked, line = '') => {
-    let said = [about(s), line].filter(Boolean).join(' · ')
-    return [
-      spaceTile(s),
-      h(
-        'span',
-        { class: 'Desk_Name' },
-        h('b', { class: 'Desk_NameText' }, named(s)),
-        said ? h('small', { class: 'Desk_NameNote' }, said) : null,
-      ),
-    ]
-  }
-  if (all.length < 2) {
-    return [
-      h('div', { class: 'Desk_Space', title: named(here) }, box(here)),
-      make,
-    ]
-  }
-  return h(
-    Menu.Fold,
-    { 'data-menu': '' },
-    h(
-      Menu.Summary,
-      {
-        class: 'Desk_Space',
-        title: `Change space: ${named(here)}`,
-        'aria-label': `Change space: ${named(here)}`,
-      },
-      box(here),
-      h('span', { class: 'Desk_Change' }, glyph('chevrons-up-down')),
-    ),
-    h(
-      Menu,
-      { mod: 'below' },
-      h(Menu.Ask, {}, 'Which space do you want to work in?'),
-      all.map((s) =>
-        h(
-          Menu.Item,
-          {
-            href: to(s),
-            'aria-current': s.slug == here.slug ? 'true' : undefined,
-          },
-          box(
-            s,
-            s.owner
-              ? ''
-              : s.whose
-              ? `${s.whose}’s space · you’re a member`
-              : 'You’re a member',
-          ),
-          s.slug == here.slug ? h('span', { class: 'Desk_Tick' }, '✓') : null,
-        )
-      ),
-      make ? h(Menu.Rule, {}) : null,
-      make ? h(Menu.Footer, {}, make) : null,
-    ),
-  )
-}
 
 let connectCard = (at: DeskPage, env: Host) =>
   h(
@@ -2337,7 +2010,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
       layout: at.collapsed ? 'Desk Desk-rail' : 'Desk',
     },
     deskFrame({
-      ...navigation(at, view, env),
+      sidebar: deskSide(at, view, env),
       person: at.person,
       where: [
         h('b', null, titles[view]),

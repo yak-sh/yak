@@ -868,10 +868,6 @@ export type DeskPage = {
   collapsed?: boolean
 }
 
-/** A side in the dashboard's frame: what it is called, what sits beside its
- * Close on a phone, and what it holds. */
-export type Side = { label: string; top?: Kids; side: Kids }
-
 // What broke in an app, for its owner: each break as its line says it to their
 // assistant, how often and when last, and the one thing to do, which is to
 // ask that assistant. The app's mark on its tile links here.

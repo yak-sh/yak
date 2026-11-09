@@ -44,7 +44,7 @@ let sides = (html: string) => {
     document,
     account: links('aria-labelledby="side-account"'),
     space: links('aria-labelledby="side-space"'),
-    back: document.querySelector('.Desk_Back'),
+    back: document.querySelector('.Sidebar_Back'),
     current: document.querySelector('.SideNav [aria-current]')?.textContent
       ?.trim(),
   }
@@ -72,16 +72,16 @@ test('the side’s top keeps its words to one line, and the selector has no Chan
       ],
     }),
   )
-  let back = document.querySelector('.Desk_Back')!
+  let back = document.querySelector('.Sidebar_Back')!
   assertEquals(
     [back.getAttribute('aria-label'), back.getAttribute('title')],
     ['Back to Menno', 'Back to Menno'],
   )
   assertEquals(
-    [...back.querySelectorAll('.Desk_Way > span')].map((s) => s.textContent),
+    [...back.querySelectorAll('.Sidebar_Way > span')].map((s) => s.textContent),
     ['Menno', 'Back to'],
   )
-  assertEquals(back.querySelector('.Desk_To')?.textContent, 'Menno')
+  assertEquals(back.querySelector('.Sidebar_To')?.textContent, 'Menno')
   let pick = document.querySelector('.Menu_Fold > summary')!
   assertEquals(
     pick.getAttribute('aria-label'),
@@ -105,7 +105,7 @@ test('Manage is one side: back to the Operator, the space you manage, then your 
   let { document, account, space, back } = sides(page)
   assertEquals(back?.getAttribute('aria-label'), 'Back to Pip')
   assertEquals(back?.getAttribute('href'), '/manage/dana')
-  assertEquals(document.querySelector('.Desk_Title')?.textContent, 'Manage')
+  assertEquals(document.querySelector('.Sidebar_Title')?.textContent, 'Manage')
   assertEquals(account, [
     { label: 'Profile', href: '/manage/account/profile' },
     { label: 'Invite a friend', href: '/manage/account/invite' },
@@ -148,7 +148,7 @@ test('Manage is one side: back to the Operator, the space you manage, then your 
   assertEquals(document.querySelector('.Desk_Whose')?.textContent, 'dana')
   // Sign out is the side's one form; the library has none.
   assertEquals(
-    document.querySelector('.Desk_Foot form')?.getAttribute('action'),
+    document.querySelector('.Sidebar_Foot form')?.getAttribute('action'),
     'https://yaks.app/logout',
   )
   assert(!document.querySelector('#content form'), page)

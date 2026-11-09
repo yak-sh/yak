@@ -1,4 +1,4 @@
-// The side's fold (public/side.js, desk-pages.ts `fold`), pressed as a person
+// The side's fold (public/side.js, sidebar.ts `fold`), pressed as a person
 // would on a dashboard page: the side collapses to its icons at once and the
 // choice is sent to be kept; pressed again it opens. Where it could not be
 // sent, the form goes as it would without the script.
@@ -35,7 +35,10 @@ let page = async (answers = true) => {
     sent,
     submitted: () => submitted,
     press: () => on.submit({ target: button, preventDefault() {} }),
-    rail: () => document.body.classList.contains('Desk-rail'),
+    rail: () => [
+      document.body.classList.contains('Desk-rail'),
+      document.getElementById('menu')!.classList.contains('Sidebar-rail'),
+    ],
     navs: () =>
       [...document.querySelectorAll('#menu .SideNav')].map((n) =>
         n.classList.contains('SideNav-rail')
@@ -51,14 +54,14 @@ test('the page with a fold loads its script', async () => {
 
 test('the fold collapses the side to its icons, then opens it', async () => {
   let p = await page()
-  assertEquals([p.rail(), p.expanded()], [false, 'true'])
+  assertEquals([p.rail(), p.expanded()], [[false, false], 'true'])
   await p.press()
-  assertEquals(p.rail(), true)
+  assertEquals(p.rail(), [true, true])
   assert(p.navs().every(Boolean))
   assertEquals(p.expanded(), 'false')
   assertEquals(p.said(), ['Expand the sidebar', 'Expand the sidebar'])
   await p.press()
-  assertEquals(p.rail(), false)
+  assertEquals(p.rail(), [false, false])
   assert(!p.navs().some(Boolean))
   assertEquals(p.said(), ['Collapse the sidebar', 'Collapse the sidebar'])
   assertEquals(p.sent, ['collapsed', 'open'])

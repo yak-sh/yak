@@ -59,19 +59,11 @@ import {
   writers,
 } from './stamps.ts'
 import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
-import {
-  Button,
-  Card,
-  Empty,
-  Field,
-  Group,
-  Icon,
-  SideNav,
-} from '@yaks/ui/parts'
+import { Button, Card, Empty, Field, Group } from '@yaks/ui/parts'
 import { esc, markup, raw } from './html.ts'
 import { lost, shell } from './pages.ts'
 import { deskFrame } from './desk-pages.ts'
-import { type IconName, icons } from './icons.ts'
+import { type IconName } from './icons.ts'
 import { type Host, spaceHost, url } from './host.ts'
 import { DAYS, NOT_ON, statsOf } from './views.ts'
 import { type Funnel, funnel, STEPS } from './funnel.ts'
@@ -84,7 +76,7 @@ import { column, conversationOf } from './operator-page.ts'
 import { ADMIN, managePath } from './route.ts'
 import { admin } from './tool.ts'
 import { adminWho } from './asking.ts'
-import { Idle } from './mascot.ts'
+import { type Item, Sidebar } from './sidebar.ts'
 import { type Asked, type Counted, spendingBody } from './admin-spending.ts'
 import type { Spending } from './operator-spending.ts'
 
@@ -512,25 +504,13 @@ let desk = (
   status = 200,
 ) => {
   let all = lists(d.census)
-  // A page down the side: its icon, its name, and how many it holds.
   let link = (
     key: string,
     href: string,
-    glyph: IconName,
-    name: string,
-    n?: number,
-  ) =>
-    h(
-      SideNav.Link,
-      {
-        href,
-        mod: current == key && 'on',
-        'aria-current': current == key ? 'page' : undefined,
-      },
-      h(Icon, { of: icons[glyph] }),
-      name,
-      n == null ? null : h('span', { class: 'Desk_Count' }, n),
-    )
+    icon: IconName,
+    label: string,
+    count?: number,
+  ): Item => ({ href, icon, label, count, current: current == key })
   let nav = [
     ...KEYS.map((key) =>
       link(
@@ -580,14 +560,12 @@ let desk = (
     null,
     status,
     markup(deskFrame({
-      label: 'Directory',
-      top: h(
-        'a',
-        { class: 'Desk_Brand', href: url(d.env, '/') },
-        h(Idle, { class: 'Desk_BrandImage', base: url(d.env), size: 44 }),
-        'yaks.app',
-      ),
-      side: h(SideNav, { 'aria-label': 'Directory' }, nav),
+      sidebar: h(Sidebar, {
+        label: 'Directory',
+        base: url(d.env),
+        home: url(d.env, '/'),
+        sections: [{ id: 'side-directory', label: 'Directory', items: nav }],
+      }),
       where: [
         h('b', null, title),
         h('small', { class: 'Desk_WhoseName' }, 'Admin'),

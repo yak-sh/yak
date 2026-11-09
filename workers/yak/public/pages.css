@@ -386,99 +386,8 @@
     padding: 0;
     text-align: left;
   }
-  .Desk_Side {
-    position: sticky;
-    top: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-    z-index: 1;
-    min-height: 100vh;
-    padding: 2rem 1.25rem;
-  }
-  .Desk_Brand {
-    display: flex;
-    align-items: center;
-    gap: .65rem;
-    color: var(--text);
-    font-size: 1.25rem;
-    font-weight: 800;
-    text-decoration: none;
-  }
-  .Desk_Top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: .5rem;
-  }
-  .Desk_Close,
   .Desk_Bar {
     display: none;
-  }
-  /* The way back to the Operator's chat, over everything the side manages
-     (pages.ts `navigation`). */
-  .Desk_Back {
-    flex: 0 1 auto;
-    gap: .4rem;
-    min-width: 0;
-  }
-  /* Its words hold one line, never wrapped or clipped: "Back to" and the
-     Operator's name where both fit, else the name alone, cut with an
-     ellipsis only where it alone does not fit. The name comes first in the
-     markup and the row runs right to left, so "Back to" is what wraps, onto
-     a line the box does not show; the button's own label says it whole. */
-  .Desk_Way {
-    display: flex;
-    flex-flow: row-reverse wrap;
-    justify-content: flex-end;
-    column-gap: .25em;
-    min-width: 0;
-    height: 1.25em;
-    overflow: hidden;
-    line-height: 1.25;
-  }
-  .Desk_To {
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  .Desk_Way > :not(.Desk_To) {
-    white-space: nowrap;
-  }
-  .Desk_Title {
-    margin: 0 .8rem;
-    font-size: 1.25rem;
-    font-weight: 800;
-  }
-  /* The side's two sections (pages.ts `navigation`): the space being
-     managed, then the person's own, each under a small heading. */
-  .Desk_Section {
-    display: grid;
-    gap: .4rem;
-    min-width: 0;
-  }
-  .Desk_Group {
-    margin: 0 .8rem;
-    color: var(--muted);
-    font-size: var(--fine);
-    font-weight: 700;
-  }
-  /* The space and its pages on one sheet (pages.ts `navigation`), a shade
-     behind the paper, running into the edge so the current tab still opens
-     into the body. */
-  .Desk_Here {
-    display: grid;
-    gap: .6rem;
-    margin-right: -1.25rem;
-    padding: .6rem 0 .6rem .5rem;
-    border-radius: var(--radius) 0 0 var(--radius);
-    background: var(--surface);
-  }
-  .Desk_Here > .Desk_Space,
-  .Desk_Here > .Menu_Fold,
-  .Desk_Here > .Desk_New {
-    margin-right: 1.75rem;
   }
   /* The space selector (pages.ts `chooser`): the space's name, and with
      another to go to, a button on its hatch, so it reads as something to
@@ -577,20 +486,6 @@
   }
   .Desk_Danger .Card_Title {
     color: var(--negative);
-  }
-  .Desk_Count {
-    margin-left: auto;
-    font-size: var(--fine);
-    opacity: .8;
-  }
-  .Desk_Foot {
-    margin-top: auto;
-  }
-  .Desk .SideNav {
-    margin-right: -1.25rem;
-  }
-  .Desk .Desk_Here .SideNav {
-    margin-right: 0;
   }
   /* The body keeps what it raises (a selected tab, a chart) to itself, so
      the side, and a menu opened from it over the body, lies above it all. */
@@ -730,55 +625,6 @@
       color: var(--muted);
       font-size: var(--fine);
       overflow-wrap: anywhere;
-    }
-    /* The same side, behind Menu: the whole screen while it is open. */
-    .Desk_Side {
-      display: none;
-    }
-    .Desk_Side:target {
-      position: fixed;
-      inset: 0;
-      z-index: 3;
-      display: flex;
-      gap: 1.25rem;
-      min-height: 0;
-      padding: 1rem;
-      overflow: hidden auto;
-      background: var(--bg);
-    }
-    .Menu-below {
-      position: relative;
-      top: auto;
-      margin: .6rem var(--lift) var(--lift) 0;
-      width: auto;
-      min-width: 0;
-      max-width: none;
-    }
-    .Menu-below .Menu_List {
-      max-height: none;
-    }
-    .Desk_Close {
-      display: inline-flex;
-    }
-    .Desk_Brand {
-      font-size: 1.1rem;
-    }
-    .Desk_BrandImage {
-      width: 36px;
-      height: 36px;
-    }
-    .Desk .SideNav {
-      margin-right: 0;
-    }
-    .Desk_Here {
-      margin-right: 0;
-      padding: .6rem .5rem;
-      border-radius: var(--radius);
-    }
-    .Desk_Here > .Desk_Space,
-    .Desk_Here > .Menu_Fold,
-    .Desk_Here > .Desk_New {
-      margin-right: var(--lift);
     }
     .Desk_Body {
       min-height: 0;
@@ -952,7 +798,7 @@
      side, and one conversation filling the page, read down a column with the
      box to write in held at the foot of the window. Each pane scrolls within
      the window; the side holds its height, and what lies between its top and
-     Manage scrolls on its own when it is longer (`.Talk_Scroll`). */
+     Manage scrolls on its own when it is longer (`.Sidebar_Scroll`). */
   .Talk_Page {
     display: block;
     min-height: 0;
@@ -960,8 +806,7 @@
     overflow: hidden;
   }
   /* The app is a window onto another site. Keep the page's grain below
-     its column, including when that column fills the screen on a phone.
-     The conversation's isolated stack keeps its sticky parts below the grain. */
+     its column, including when that column fills the screen on a phone. */
   html:has(.Talk_Page)::after {
     z-index: 0;
   }
@@ -971,111 +816,20 @@
     text-align: left;
   }
   .Talk {
+    --sidebar-panel: var(--bg);
     display: grid;
     grid-template-columns: 17rem minmax(0, 1fr);
     height: 100dvh;
     overflow: hidden;
   }
-  .Talk_Side {
-    position: sticky;
-    top: 0;
-    display: flex;
-    flex-direction: column;
-    gap: .75rem;
-    height: 100dvh;
-    padding: 1rem .75rem;
-    background: var(--surface);
-  }
-  /* The region scrolls down only. Its padding is the room the selector's
-     hatch and lift take on hover, so the clip at its edge never cuts them;
-     the current tab still reaches over the side's edge and is cut there. */
-  .Talk_Scroll {
-    --reach: calc(var(--stroke) + 6px);
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: .75rem;
-    min-height: 0;
-    margin: calc(-1 * var(--reach)) -.75rem calc(-1 * var(--reach))
-      calc(-1 * var(--reach));
-    padding: var(--reach) .75rem var(--reach) var(--reach);
-    overflow: hidden auto;
-    overscroll-behavior: contain;
-  }
-  /* The side's places are the settings' tabs (pages.ts `navigation`): the
-     current one opens into the page beside it. */
-  .Talk_Side .SideNav {
-    --nav-panel: var(--bg);
-    flex: none;
-    margin-right: -.75rem;
-  }
-  .Talk_Top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: .5rem;
-    padding: 0 .4rem;
-  }
-  .Talk_Brand {
-    display: flex;
-    align-items: center;
-    gap: .55rem;
-    color: var(--text);
-    font-weight: 800;
-    text-decoration: none;
-  }
-  /* Whose Operator this is (operator-page.ts `side`): the space, in the
-     dashboard's selector, whose list stays inside the side it scrolls in. */
-  .Talk_Whose {
-    display: grid;
-  }
-  .Talk_Whose .Menu-below {
-    min-width: 100%;
-    max-width: 100%;
-  }
-  .Talk_Icon {
+  .Talk_Icon,
+  .Sidebar_Icon {
     flex: none;
     width: 1.5rem;
     height: 1.5rem;
     border-radius: .35rem;
     object-fit: cover;
   }
-  .Talk_Side .SideNav_Link.Talk_All {
-    color: var(--muted);
-    font-size: var(--fine);
-  }
-  .Talk_Count {
-    min-width: 1.3rem;
-    margin-left: auto;
-    padding: 0 .35rem;
-    border-radius: 99px;
-    background: var(--negative);
-    color: var(--card);
-    font-size: var(--fine);
-    font-weight: 800;
-    text-align: center;
-  }
-  /* What each part of the side holds, said small over it. */
-  .Talk_Group {
-    margin: .25rem .6rem -.5rem;
-    color: var(--muted);
-    font-size: var(--fine);
-    font-weight: 800;
-  }
-  .Talk_None {
-    margin: 0 .6rem;
-  }
-  .Talk_None {
-    color: var(--muted);
-    font-size: var(--fine);
-  }
-  .Talk_Foot {
-    flex: none;
-  }
-  .Talk_Foot > .SideNav_Rule {
-    margin-block: calc(.375rem - var(--room));
-  }
-  .Talk_Close,
   .Talk_Menu,
   .Talk_Back,
   .Talk_Show {
@@ -1094,7 +848,6 @@
     white-space: nowrap;
   }
   .Talk_Main {
-    isolation: isolate;
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -1887,24 +1640,6 @@
     .Talk_Hello {
       padding-top: 10vh;
     }
-    /* The same side, behind the bar's button: the whole screen while it is
-       open. */
-    .Talk_Side {
-      display: none;
-    }
-    .Talk_Side:target {
-      position: fixed;
-      inset: 0;
-      z-index: 3;
-      display: flex;
-      height: auto;
-    }
-    .Talk_Side .SideNav {
-      margin-right: 0;
-    }
-    .Talk_Close {
-      display: inline-flex;
-    }
     /* The app takes the screen in the chat's place while chosen from the
        bar (`#app`), and Chat goes back. */
     .Talk-app .Talk_Show {
@@ -1936,37 +1671,179 @@
       gap: 0;
     }
   }
-  /* The side's fold (desk-pages.ts `fold`): one button at its top, showing
-     the way it goes, which collapses the side to a rail of its icons and
-     opens it again. The words beside the side's icons (`Desk_Label`, and
-     the kit's `SideNav_Label`) are still each one's accessible text in the
-     rail, and its title says them. On a phone the side opens whole from
-     Menu, so there is nothing to fold. */
-  .Desk_Fold {
+  @media (min-width: 701px) {
+    .Desk-rail .Desk_Main {
+      grid-template-columns: 4.5rem minmax(0, 1fr);
+    }
+    .Talk_Page-rail .Talk {
+      grid-template-columns: 4.5rem minmax(0, 1fr);
+    }
+    .Talk_Page-rail .Talk-app {
+      grid-template-columns: 4.5rem minmax(20rem, 1fr) minmax(0, 1.4fr);
+    }
+  }
+}
+
+@layer sections {
+  .Sidebar {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    height: 100dvh;
+    min-width: 0;
+    padding: 1rem .75rem;
+    background: var(--surface);
+    z-index: 1;
+  }
+  .Sidebar_Top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    padding: 0 .4rem;
+  }
+  .Sidebar_Brand {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    color: var(--text);
+    font-weight: 800;
+    text-decoration: none;
+  }
+  /* Leave the footer in view while the navigation scrolls. The extra room
+     holds the picker's hatch without cutting off the selected tab's edge. */
+  .Sidebar_Scroll {
+    --reach: calc(var(--stroke) + 6px);
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: .75rem;
+    min-height: 0;
+    margin: calc(-1 * var(--reach)) -.75rem calc(-1 * var(--reach))
+      calc(-1 * var(--reach));
+    padding: var(--reach) .75rem var(--reach) var(--reach);
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+  }
+  .Sidebar_Nav {
+    --nav-panel: var(--sidebar-panel, var(--card));
+    flex: none;
+    margin-right: -.75rem;
+  }
+
+  .Sidebar_Section,
+  .Sidebar_Whose {
+    display: grid;
+    gap: .4rem;
+  }
+  .Sidebar_Whose .Menu-below {
+    min-width: 100%;
+    max-width: 100%;
+  }
+  .Sidebar_Title {
+    margin: 0 .6rem;
+    font-size: 1.25rem;
+    font-weight: 800;
+  }
+  .Sidebar_Group {
+    margin: .25rem .6rem 0;
+    color: var(--muted);
+    font-size: var(--fine);
+    font-weight: 800;
+  }
+  .Sidebar_None {
+    margin: 0 .6rem;
+    color: var(--muted);
+    font-size: var(--fine);
+  }
+  .Sidebar_More {
+    color: var(--muted);
+    font-size: var(--fine);
+  }
+  .Sidebar_Count {
+    min-width: 1.3rem;
+    margin-left: auto;
+    padding: 0 .35rem;
+    border-radius: 99px;
+    background: var(--negative);
+    color: var(--card);
+    font-size: var(--fine);
+    font-weight: 800;
+    text-align: center;
+  }
+  .Sidebar_Foot {
+    flex: none;
+  }
+  .Sidebar_Rule {
+    margin-block: calc(.375rem - var(--room));
+  }
+  .Sidebar_Close {
+    display: none;
+  }
+  .Sidebar_Fold {
     display: flex;
     margin: 0;
   }
-  .Desk_Folder {
+  .Sidebar_Folder {
     padding: .45rem;
   }
-  .Desk_Folder .Icon {
+  .Sidebar_Shut,
+  .Sidebar_Unshut {
     width: 1.25rem;
     height: 1.25rem;
   }
-  .Desk_Unshut {
+  .Sidebar_Unshut {
     display: none;
   }
+  .Sidebar_Back {
+    flex: 0 1 auto;
+    gap: .4rem;
+    min-width: 0;
+    align-self: start;
+  }
+  .Sidebar_Way {
+    display: flex;
+    flex-flow: row-reverse wrap;
+    justify-content: flex-end;
+    column-gap: .25em;
+    min-width: 0;
+    height: 1.25em;
+    overflow: hidden;
+    line-height: 1.25;
+  }
+  .Sidebar_To {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .Sidebar_Before {
+    white-space: nowrap;
+  }
   @media (min-width: 701px) {
-    .Desk-rail .Desk_Shut,
-    .Talk_Page-rail .Desk_Shut {
+    .Sidebar-rail {
+      padding-inline: .5rem;
+    }
+    .Sidebar-rail .Sidebar_Top {
+      flex-direction: column;
+      padding: 0;
+    }
+    .Sidebar-rail .Sidebar_Scroll {
+      margin-right: -.5rem;
+      padding-right: .5rem;
+    }
+    .Sidebar-rail .Sidebar_Nav {
+      margin-right: -.5rem;
+    }
+    .Sidebar-rail :is(.Sidebar_Title, .Sidebar_Group, .Sidebar_None, .Sidebar_Shut) {
       display: none;
     }
-    .Desk-rail .Desk_Unshut,
-    .Talk_Page-rail .Desk_Unshut {
+    .Sidebar-rail .Sidebar_Unshut {
       display: inline-block;
     }
-    .Desk-rail .Desk_Label,
-    .Talk_Page-rail .Desk_Label {
+    .Sidebar-rail .Sidebar_Label {
       position: absolute;
       width: 1px;
       height: 1px;
@@ -1974,86 +1851,24 @@
       clip-path: inset(50%);
       white-space: nowrap;
     }
-    .Desk-rail .Desk_Count,
-    .Talk_Page-rail .Talk_Count {
+    .Sidebar-rail .Sidebar_Count {
       position: absolute;
       top: .1rem;
       right: .1rem;
       min-width: 1.1rem;
       margin: 0;
     }
-    /* The space selector is its tile; Change still opens the list beside
-       the rail, over the page. */
-    .Desk-rail .Desk_Here > .Desk_Space,
-    .Desk-rail .Desk_Here > .Menu_Fold > .Menu_Summary,
-    .Talk_Page-rail .Talk_Whose .Desk_Space {
+    .Sidebar-rail .Desk_Space {
       grid-template-columns: 2rem;
       justify-content: center;
       padding: .4rem;
     }
-    .Desk-rail .Desk_Here > .Desk_Space .Desk_Name,
-    .Desk-rail .Desk_Here > .Menu_Fold > .Menu_Summary :is(.Desk_Name, .Desk_Change),
-    .Talk_Page-rail .Talk_Whose > .Desk_Space .Desk_Name,
-    .Talk_Page-rail .Talk_Whose > .Menu_Fold > .Menu_Summary :is(.Desk_Name, .Desk_Change) {
+    .Sidebar-rail .Sidebar_Whose > .Desk_Space .Desk_Name,
+    .Sidebar-rail .Sidebar_Whose > .Menu_Fold > .Menu_Summary :is(.Desk_Name, .Desk_Change) {
       display: none;
     }
-    /* The dashboard's frame (`deskFrame`). */
-    .Desk-rail .Desk_Main {
-      grid-template-columns: 4.5rem minmax(0, 1fr);
-    }
-    .Desk-rail .Desk_Side {
-      gap: 1.25rem;
-      padding: 1.25rem .5rem;
-    }
-    .Desk-rail .Desk_Top {
-      flex-direction: column-reverse;
-      gap: .75rem;
-    }
-    .Desk-rail .Desk_Back {
-      padding-inline: .6rem;
-    }
-    .Desk-rail :is(.Desk_Title, .Desk_Group) {
-      display: none;
-    }
-    .Desk-rail .SideNav {
-      margin-right: -.5rem;
-    }
-    .Desk-rail .Desk_Here {
-      margin-right: -.5rem;
-      padding: .5rem 0 .5rem .25rem;
-    }
-    .Desk-rail .Desk_Here .SideNav {
-      margin-right: 0;
-    }
-    .Desk-rail .Desk_Here > :is(.Desk_Space, .Menu_Fold, .Desk_New) {
-      margin-right: .75rem;
-    }
-    /* The chat app's side (operator-page.ts `side`). */
-    .Talk_Page-rail .Talk {
-      grid-template-columns: 4.5rem minmax(0, 1fr);
-    }
-    .Talk_Page-rail .Talk-app {
-      grid-template-columns: 4.5rem minmax(20rem, 1fr) minmax(0, 1.4fr);
-    }
-    .Talk_Page-rail .Talk_Side {
-      padding-inline: .5rem;
-    }
-    .Talk_Page-rail .Talk_Top {
-      flex-direction: column;
-      padding: 0;
-    }
-    .Talk_Page-rail .Talk_Scroll {
-      margin-right: -.5rem;
-      padding-right: .5rem;
-    }
-    .Talk_Page-rail .Talk_Side .SideNav {
-      margin-right: -.5rem;
-    }
-    .Talk_Page-rail :is(.Talk_Group, .Talk_None) {
-      display: none;
-    }
-    /* The selector's list lies beside the rail, out of the side's scroll. */
-    .Talk_Page-rail .Talk_Whose .Menu-below {
+    /* The picker opens beside the rail, outside the scrolling column. */
+    .Sidebar-rail .Menu-below {
       position: fixed;
       top: auto;
       left: auto;
@@ -2062,7 +1877,34 @@
     }
   }
   @media (max-width: 700px) {
-    .Desk_Fold {
+    .Sidebar {
+      display: none;
+    }
+    .Sidebar:target {
+      position: fixed;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      height: auto;
+    }
+    .Sidebar_Nav {
+      margin-right: 0;
+    }
+    .Sidebar_Whose .Menu-below {
+      position: relative;
+      top: auto;
+      margin: .6rem var(--lift) var(--lift) 0;
+      width: auto;
+      min-width: 0;
+      max-width: none;
+    }
+    .Sidebar_Whose .Menu_List {
+      max-height: none;
+    }
+    .Sidebar_Close {
+      display: inline-flex;
+    }
+    .Sidebar_Fold {
       display: none;
     }
   }

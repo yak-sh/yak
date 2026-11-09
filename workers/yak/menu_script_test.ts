@@ -73,7 +73,7 @@ test('focus moving outside the open menu closes it', async () => {
   reflect(p.opened())
   p.focus('.Menu_Item')
   assertEquals(p.isOpen(), true)
-  p.focus('.Desk_Foot button[type="submit"]')
+  p.focus('.Sidebar_Foot button[type="submit"]')
   assertEquals(p.isOpen(), false)
 })
 

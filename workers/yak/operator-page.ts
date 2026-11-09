@@ -12,7 +12,6 @@ import {
   Field,
   Form,
   Icon,
-  SideNav,
   TabSet,
 } from '@yaks/ui/parts'
 import type { Env } from './env.ts'
@@ -22,10 +21,9 @@ import { builderOf, carried, operatorDoor, seated } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
 import { esc, heading, type Picked, script, shell } from './pages.ts'
-import { choice as spaceChoice, fold, worded } from './desk-pages.ts'
+import { aboutPath, talkSide } from './talk-sidebar.ts'
 import { spaceHost, url } from './host.ts'
 import {
-  ADMIN,
   chatPath,
   logoPath,
   MANAGE,
@@ -1217,179 +1215,7 @@ export type Beside = {
   collapsed?: boolean
 }
 
-// How many of the space's apps the side shows before "All N apps".
-let APPS = 4
-
-// The chat app's side, the product's whole menu (T-140506): whose Operator
-// it is, in the space selector; the Operator by name, which opens the
-// person's one conversation with it (T-141349); Updates from the Operator,
-// with how many wait on the person; the space's apps; and at the foot Manage,
-// the settings behind the product (today's dashboard pages: its Apps for the
-// space's owner, the Operator's settings for a member, the only one of them
-// they may open), where older chats are listed, and for the platform's admin
-// Admin, its directory (admin.ts). `current` holds what this
-// page shows: a conversation, `updates`, and `app` the app open beside it.
-// Each app opens beside the conversation on screen, or else the person's one
-// conversation, so their words stay where they were (T-140509, T-141273).
-// Between the top and Manage the side scrolls on its own, so a long list
-// never runs under Manage (T-141332), and its current item is the settings'
-// tab (`SideNav`, T-141334). On a phone the bar's Menu opens the side over
-// the page (`:target`, no script).
-let side = (
-  env: Env,
-  space: Space,
-  who: Who,
-  beside: Beside,
-  at: { current: string[]; waiting: number; app?: string; here: string },
-) => {
-  let owner = who.role == 'owner'
-  let here = beside.spaces?.find((s) => s.slug == space.slug) ?? {
-    slug: space.slug,
-    title: space.title,
-    owner,
-    own: false,
-    operator: space.operator,
-    logo: logoPath(space),
-  }
-  let spaces = beside.spaces ?? []
-  let apps = beside.apps ?? []
-  let host = `https://${spaceHost(env, space.slug)}`
-  let operator = space.operator
-  let open = at.current.find((c) => c && c != 'updates') ?? 'new'
-  let rail = beside.collapsed ? 'rail' : undefined
-  return h(
-    SideNav.Edge,
-    { class: 'Talk_Side', id: 'menu', 'aria-label': 'Menu' },
-    h(
-      'div',
-      { class: 'Talk_Top' },
-      h(
-        'a',
-        { class: 'Talk_Brand', href: chatPath(space.slug) },
-        h(Idle, { base: url(env), size: 36 }),
-        worded('yaks.app'),
-      ),
-      fold(!!beside.collapsed, at.here, 'Talk_Page-rail'),
-      h(Button, { href: '#', class: 'Talk_Close' }, '✕ Close'),
-    ),
-    h(
-      'div',
-      { class: 'Talk_Scroll' },
-      // The space selector is the dashboard's own (pages.ts).
-      h(
-        'div',
-        { class: 'Talk_Whose' },
-        spaceChoice(
-          here,
-          spaces.some((s) => s.slug == space.slug) ? spaces : [here, ...spaces],
-          (s) => chatPath(s.slug),
-          null,
-          (s) => s.operator ?? '',
-        ),
-      ),
-      h(
-        SideNav,
-        { 'aria-label': operator, mod: rail },
-        link(
-          chatPath(space.slug),
-          !at.app && !at.current.includes('updates'),
-          h(Icon, { of: icons['message-circle'] }),
-          operator,
-        ),
-        link(
-          managePath('updates', space.slug),
-          at.current.includes('updates'),
-          h(Icon, { of: icons.bell }),
-          `Updates from ${operator}`,
-          at.waiting ? h('span', { class: 'Talk_Count' }, at.waiting) : null,
-        ),
-      ),
-      h('h2', { class: 'Talk_Group', id: 'side-apps' }, 'Your apps'),
-      apps.length
-        ? h(
-          SideNav,
-          { 'aria-labelledby': 'side-apps', mod: rail },
-          apps.slice(0, APPS).map((a) =>
-            link(
-              aboutPath(space.slug, a.slug, open),
-              a.slug == at.app,
-              h('img', {
-                class: 'Talk_Icon',
-                src: `${host}/${a.slug}/icon.png`,
-                width: 24,
-                height: 24,
-                alt: '',
-                loading: 'lazy',
-              }),
-              a.title || a.slug,
-            )
-          ),
-          owner && apps.length > APPS
-            ? link(
-              managePath('apps', space.slug),
-              false,
-              h(Icon, { of: icons['layout-grid'] }),
-              `All ${apps.length} apps`,
-              null,
-              'Talk_All',
-            )
-            : null,
-        )
-        : h(
-          'p',
-          { class: 'Talk_None' },
-          `None yet. Ask ${operator} to make one.`,
-        ),
-    ),
-    h(
-      'div',
-      { class: 'Talk_Foot' },
-      h(SideNav.Rule, null),
-      h(
-        SideNav,
-        { 'aria-label': 'Settings', mod: rail },
-        link(
-          managePath(owner ? 'apps' : 'operator', space.slug),
-          false,
-          h(Icon, { of: icons['sliders-horizontal'] }),
-          'Manage',
-        ),
-        beside.admin
-          ? link(ADMIN, false, h(Icon, { of: icons.shield }), 'Admin')
-          : null,
-      ),
-    ),
-  )
-}
-
-// A link of the side, the page on screen lit and said to be current: its
-// icon, its label, which is its title too (the tooltip its rail shows), and
-// what is counted beside it.
-let link = (
-  href: string,
-  on: boolean,
-  icon: Node,
-  label: string,
-  count: Node = null,
-  kind?: string,
-) =>
-  h(
-    SideNav.Link,
-    {
-      href,
-      class: kind,
-      title: label,
-      mod: on && 'on',
-      'aria-current': on ? 'page' : undefined,
-    },
-    icon,
-    h(SideNav.Label, null, label),
-    count,
-  )
-
-/** A conversation, or a new chat, with one of the space's apps beside it. */
-export let aboutPath = (space: string, app: string, open = 'new') =>
-  `${chatPath(space, open)}?app=${encodeURIComponent(app)}`
+export { aboutPath }
 
 /** An app as the chat shows it. */
 type Shown = { slug: string; title: string }
@@ -1770,7 +1596,7 @@ let talkPage = (
       h(
         'div',
         { class: page.app ? 'Talk Talk-app' : 'Talk' },
-        side(env, space, who, beside, {
+        talkSide(env, space, who, beside, {
           waiting: page.waiting,
           current: page.current,
           app: page.app?.slug,

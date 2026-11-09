@@ -145,7 +145,7 @@ let sided = async (
   )
   let lines = [
     ...document.querySelectorAll(
-      '.Talk_Side :is(.Talk_Brand, .Desk_Space b, .SideNav_Link, .Talk_Group)',
+      '.Sidebar :is(.Sidebar_Brand, .Desk_Space b, .SideNav_Link, .Sidebar_Group)',
     ),
   ]
   return {
@@ -508,16 +508,16 @@ test("the chat app says whose Operator it is, and opens another space's", () => 
       said('title'),
       `Message ${at.operator} · ${at.operator} · yaks.app`,
     )
-    assertEquals(said('.Talk_Whose .Desk_Space b'), name)
+    assertEquals(said('.Sidebar_Whose .Desk_Space b'), name)
     assertEquals(said('.Talk_Who'), `${at.operator}, ${name}’s Operator`)
     assertStringIncludes(said('.Talk_Hello')!, `Ask ${at.operator}`)
     // the yak waits beside the box, played by its script (mascot.ts `idle`)
     assert(document.querySelector('#ask .Talk_Write > img[data-idle]'))
     assert(document.querySelector('script[src$="/idle.js"]'))
     assertEquals(
-      [...document.querySelectorAll('.Talk_Whose .Menu_Item small')].map((a) =>
-        a.textContent
-      ),
+      [...document.querySelectorAll('.Sidebar_Whose .Menu_Item small')].map((
+        a,
+      ) => a.textContent),
       [
         ...(at == mill ? ['Fern'] : []),
         space.operator,
@@ -525,7 +525,7 @@ test("the chat app says whose Operator it is, and opens another space's", () => 
       ],
     )
     assertEquals(
-      [...document.querySelectorAll('.Talk_Whose .Menu_Item')].map((a) =>
+      [...document.querySelectorAll('.Sidebar_Whose .Menu_Item')].map((a) =>
         a.getAttribute('href')
       ),
       [
@@ -802,7 +802,7 @@ let asked = async (old: boolean) => {
   let { document } = parseHTML(await page.text())
   return {
     paths,
-    count: document.querySelector('.Talk_Count')?.textContent,
+    count: document.querySelector('.Sidebar_Count')?.textContent,
   }
 }
 

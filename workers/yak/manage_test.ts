@@ -242,7 +242,7 @@ test('the side collapses to its icons on every page, and opens again', async () 
       assert(a.querySelector('.Icon, img'), `${label} has an icon`)
       assertEquals(a.getAttribute('title'), label)
     }
-    let button = page.querySelector('#menu .Desk_Folder')!
+    let button = page.querySelector('#menu .Sidebar_Folder')!
     assertEquals(button.getAttribute('aria-expanded'), 'false')
     assertEquals(button.getAttribute('aria-label'), 'Expand the sidebar')
   }
