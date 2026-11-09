@@ -27,3 +27,5 @@ export {
   ordered,
   turnHtml,
 } from './operator-aside.ts'
+
+export { tips } from '@yaks/ui'

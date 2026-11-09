@@ -83,22 +83,28 @@ test('a person archives a span in one write without losing its words or search h
   equal(glance.includes('Pruning canary'), false)
 })
 
-test('archived lines stay readable and dimmed with kit Restore buttons, and restoration removes the marks', () => {
-  equal(doc.querySelectorAll('.Rows-quiet').length, 2)
-  equal(
-    [...doc.querySelectorAll('.Button[data-restore=true]')].map((b) =>
-      b.textContent
-    ),
-    ['Restore', 'Restore'],
-  )
+test('entries keep an icon action before their timestamp, and hiding preserves readable words and restoration', () => {
+  equal(doc.querySelectorAll('.Talk_Entry-hidden').length, 2)
   equal(restored.every((b) => !b.archived && !!b.content), true)
-  equal(restoredDoc.querySelectorAll('.Rows-quiet').length, 0)
-  equal(
-    [...restoredDoc.querySelectorAll('.Button[data-restore=false]')].map((b) =>
-      b.textContent
-    ),
-    ['Archive', 'Archive'],
-  )
+  equal(restoredDoc.querySelectorAll('.Talk_Entry-hidden').length, 0)
+  for (
+    let [page, label, restore] of [
+      [doc, 'Restore', 'true'],
+      [restoredDoc, 'Hide', 'false'],
+    ] as const
+  ) {
+    let actions = [...page.querySelectorAll('.Talk_Meta > .Button')]
+    equal(actions.length, 2)
+    for (let button of actions) {
+      equal(button.textContent, '')
+      equal(button.getAttribute('aria-label'), label)
+      equal(button.getAttribute('data-tip'), label)
+      equal(button.getAttribute('data-restore'), restore)
+      equal(button.hasAttribute('title'), false)
+      equal(!!button.querySelector('svg'), true)
+      equal(button.nextElementSibling?.tagName, 'TIME')
+    }
+  }
 })
 
 test('an archive span cannot include another person’s entry, and old-row edits refresh watching pages', () => {

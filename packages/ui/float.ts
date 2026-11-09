@@ -31,6 +31,7 @@ import {
   render,
 } from 'preact'
 import { useLayoutEffect, useRef } from 'preact/hooks'
+import { type Clock, system } from '@yaks/fp'
 
 let MARGIN = 6 // keep this many px off every viewport edge
 let GAP = 4 // between the trigger and the overlay
@@ -170,41 +171,67 @@ export let Float: FunctionComponent<FloatProps> = (
   return globalThis.document?.body ? null : h(Fragment, null, children)
 }
 
-/** The house tooltip, one portaled `Tip` instead of a ::before on every
- * [data-tip] host (which the overflow ancestors clipped). Delegated on the
- * document: linger ~0.3s over a [data-tip], show it centered above, clamped;
- * hide instantly on the pointer leaving or any press. Once per page, through
- * a globalThis latch. */
-export let tips = (): void => {
-  let g = globalThis as { document?: Document; __tips?: boolean }
-  if (!g.document?.body || g.__tips) return // real browser only, once
-  g.__tips = true
+let tipped = new WeakSet<Document>()
 
-  let tip = document.createElement('div')
-  tip.className = 'Overlay Tip' // floated like any overlay, dressed as a Tip
+/** One delegated kit tooltip per document, shown on hover or keyboard focus,
+ * above its anchor and outside clipping ancestors. */
+export let tips = (
+  doc: Document = globalThis.document,
+  clock: Clock = system,
+): void => {
+  if (!doc?.body || tipped.has(doc)) return
+  tipped.add(doc)
+
+  let tip = doc.createElement('div')
+  tip.className = 'Overlay Tip'
+  tip.id = 'yak-tip'
+  tip.setAttribute('role', 'tooltip')
   let host: Element | null = null
-  let timer: ReturnType<typeof setTimeout> | null = null
-
+  let cancel: (() => void) | undefined
   let hide = () => {
-    if (timer) clearTimeout(timer)
+    cancel?.()
     tip.remove()
+    if (host) {
+      let ids = (host.getAttribute('aria-describedby') ?? '').split(' ')
+        .filter((id) => id && id != tip.id)
+      if (ids.length) host.setAttribute('aria-describedby', ids.join(' '))
+      else host.removeAttribute('aria-describedby')
+    }
     host = null
   }
-
-  document.addEventListener('pointerover', (e) => {
-    let next = (e.target as Element)?.closest?.('[data-tip]') ?? null
-    if (next == host) return
-    if (timer) clearTimeout(timer)
-    tip.remove()
+  let show = (next: Element | null, wait = 0) => {
+    hide()
     host = next
     if (!next) return
-    timer = setTimeout(() => {
+    let put = () => {
       if (host != next) return
       tip.textContent = next.getAttribute('data-tip') ?? ''
-      document.body.appendChild(tip)
+      doc.body.appendChild(tip)
+      let ids = next.getAttribute('aria-describedby')
+      next.setAttribute(
+        'aria-describedby',
+        [ids, tip.id].filter(Boolean).join(' '),
+      )
       place(tip, next.getBoundingClientRect(), 'above')
-    }, 300)
+    }
+    if (wait) cancel = clock.after(wait, put)
+    else put()
+  }
+  let target = (e: Event) =>
+    (e.target as Element)?.closest?.('[data-tip]') ?? null
+  doc.addEventListener('pointerover', (e) => {
+    let next = target(e)
+    if (next != host) show(next, 300)
   })
-  // A press anywhere kills the tooltip at once — no linger over a click.
-  document.addEventListener('pointerdown', hide, true)
+  doc.addEventListener('pointerout', (e) => {
+    if (host && !host.contains((e as PointerEvent).relatedTarget as Node)) {
+      hide()
+    }
+  })
+  doc.addEventListener('focusin', (e) => show(target(e)))
+  doc.addEventListener('focusout', hide)
+  doc.addEventListener('pointerdown', hide, true)
+  doc.addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key == 'Escape') hide()
+  })
 }

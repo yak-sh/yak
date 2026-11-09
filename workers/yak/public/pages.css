@@ -1726,18 +1726,35 @@
     height: .95em;
     vertical-align: -.1em;
   }
-  .Talk_Said div:has(> .Talk_You) {
+  .Talk_Entry:has(> .Talk_You) {
     display: grid;
   }
-  /* When each message was sent, quiet under it: the person's to the right. */
-  .Talk_When {
-    display: block;
+  /* Each entry keeps its quiet controls beside the time. Opacity leaves the
+     action in the keyboard tab order while the pointer is elsewhere. */
+  .Talk_Meta {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
     margin-top: .25rem;
     color: var(--muted);
     font-size: var(--fine);
   }
-  .Talk_Said div:has(> .Talk_You, > .Talk_Files) > .Talk_When {
-    justify-self: end;
+  .Talk_Entry:has(> .Talk_You, > .Talk_Files) > .Talk_Meta {
+    justify-content: end;
+  }
+  .Talk_Hide {
+    --control-height: 1.4rem;
+    --button-ink: var(--muted);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .Talk_Entry:hover > .Talk_Meta > .Talk_Hide,
+  .Talk_Entry:focus-within > .Talk_Meta > .Talk_Hide {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .Talk_Entry-hidden {
+    opacity: .5;
   }
   .Talk_Reply {
     margin: 0;
@@ -1781,13 +1798,13 @@
     align-items: baseline;
     gap: .35rem .9rem;
   }
-  .Talk_Said[data-rows] > :not(:has(> .Talk_Step:only-child)),
-  .Talk_Said[data-rows] > :has(> .Talk_Step[open]) {
+  .Talk_Said[data-rows] > :not(:has(> .Talk_Entry > .Talk_Step)),
+  .Talk_Said[data-rows] > :has(> .Talk_Entry > .Talk_Step[open]) {
     flex-basis: 100%;
     margin-block: .325rem;
   }
-  .Talk_Inner > :not(.Talk_Step),
-  .Talk_Inner > .Talk_Step[open] {
+  .Talk_Inner > :not(:has(> .Talk_Step)),
+  .Talk_Inner > :has(> .Talk_Step[open]) {
     flex-basis: 100%;
     margin-block: .125rem;
   }

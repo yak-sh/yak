@@ -13,7 +13,7 @@ import type { Style } from '@yaks/native'
 import { type Step, stepOf, type Steps } from '@yaks/tools/title'
 import { blocks, parse } from '@yaks/markdown/structural'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
-import { Body, Button, Drop, Icon, Rows } from '@yaks/ui/parts'
+import { Body, Button, Drop, Icon } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
 import { pretty, when } from './public/when.js'
 import { PART } from '@yaks/persona/part'
@@ -110,7 +110,11 @@ let stamp = (b: Bundle) => {
   let at = String(comp(b, 'created')?.at ?? '')
   let said = when(at)
   return said
-    ? h('time', { class: 'Talk_When', datetime: at, title: pretty(at) }, said)
+    ? h(
+      'time',
+      { class: 'Talk_When', datetime: at, 'data-tip': pretty(at) },
+      said,
+    )
     : null
 }
 
@@ -573,25 +577,24 @@ let archivable = (line: Line, entries: Bundle[]): Line => {
   return {
     ...line,
     node: h(
-      Rows,
-      { mod: archived.length ? 'quiet' : undefined },
+      'div',
+      {
+        class: archived.length ? 'Talk_Entry Talk_Entry-hidden' : 'Talk_Entry',
+      },
+      line.node,
       h(
-        Rows.Item,
-        null,
-        h(Rows.Main, null, line.node),
-        h(
-          Rows.Actions,
-          null,
-          h(Button, {
-            type: 'button',
-            mod: 'quiet',
-            'data-archive-entries': ids.join(','),
-            'data-restore': String(archived.length > 0),
-            title: archived.length
-              ? 'Include these words in the model context again'
-              : 'Keep these words in history, outside the model context',
-          }, archived.length ? 'Restore' : 'Archive'),
-        ),
+        'div',
+        { class: 'Talk_Meta' },
+        h(Button, {
+          type: 'button',
+          mod: 'quiet',
+          class: 'Talk_Hide',
+          'data-archive-entries': ids.join(','),
+          'data-restore': String(archived.length > 0),
+          'data-tip': archived.length ? 'Restore' : 'Hide',
+          'aria-label': archived.length ? 'Restore' : 'Hide',
+        }, h(Icon, { of: icons[archived.length ? 'eye' : 'eye-off'] })),
+        stamp(rows[0]),
       ),
     ),
   }
@@ -743,14 +746,14 @@ let line = (
       body || comp(b, 'response')?.body || comp(b, 'refusal'),
     ))
   }
-  if (b.output && body) return is(said(b, reply(body)))
+  if (b.output && body) return is(reply(body))
   // A line of a call its talking model hears and speaks: theirs, or its own
   // (old rows, before its own were outputs). Where the call began is the
   // model's to read.
   let called = comp(b, 'operator_call')
   if (called?.began) return []
   if (called && b.notice && body) {
-    return is(said(b, called.said ? reply(spoken(b, body)) : input(b, body)))
+    return is(called.said ? reply(spoken(b, body)) : input(b, body))
   }
   // A helper the person stopped (operator.ts `stop`, the only stop here),
   // told to the session that started it in its report or, up the
@@ -764,7 +767,7 @@ let line = (
       ? h('a', { href: `${opens}/${stopped}` }, 'a helper')
       : 'a helper'
     return is(
-      said(b, h('p', { class: 'Talk_Note' }, 'You stopped ', helper, '.')),
+      h('p', { class: 'Talk_Note' }, 'You stopped ', helper, '.'),
     )
   }
   if (told(b, body)) return is(helper(b, body))
@@ -778,7 +781,7 @@ let line = (
   if (b.stop || b.interrupted || b.cancel) {
     return is(h('p', { class: 'Talk_Note' }, 'Stopped.'))
   }
-  if (theirs(b)) return is(said(b, input(b, body)))
+  if (theirs(b)) return is(input(b, body))
   return []
 }
 
@@ -798,9 +801,6 @@ let system = (b: Bundle, body: string) => {
     written(spoken(b, body)),
   )
 }
-
-// Words someone sent, and under them when.
-let said = (b: Bundle, words: Node) => h(Fragment, null, words, stamp(b))
 
 /**
  * Lines as a page's socket sends them: each line by the id it is put by and
@@ -898,7 +898,10 @@ export let look = (c: Colors): Record<string, Style> => ({
     color: c.text,
   },
   Talk_Via: { color: c.dim },
-  Talk_When: { alignSelf: 'flex-end', fontSize: 12, color: c.dim },
+  Talk_Entry: { gap: 4 },
+  'Talk_Entry-hidden': { opacity: 0.5 },
+  Talk_Meta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  Talk_When: { fontSize: 12, color: c.dim },
   Talk_Reply: { gap: 8, fontSize: 16, color: c.text },
   Body: { gap: 8 },
   Talk_Step: { gap: 6 },

@@ -26,6 +26,10 @@ import Download from 'lucide/dist/esm/icons/download.mjs'
 // @ts-types="@yaks/ui/lucide"
 import ExternalLink from 'lucide/dist/esm/icons/external-link.mjs'
 // @ts-types="@yaks/ui/lucide"
+import Eye from 'lucide/dist/esm/icons/eye.mjs'
+// @ts-types="@yaks/ui/lucide"
+import EyeOff from 'lucide/dist/esm/icons/eye-off.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Globe from 'lucide/dist/esm/icons/globe.mjs'
 // @ts-types="@yaks/ui/lucide"
 import House from 'lucide/dist/esm/icons/house.mjs'
@@ -75,6 +79,8 @@ import User from 'lucide/dist/esm/icons/user.mjs'
 import Users from 'lucide/dist/esm/icons/users.mjs'
 
 export let icons = {
+  eye: Eye,
+  'eye-off': EyeOff,
   house: House,
   'layout-grid': LayoutGrid,
   globe: Globe,

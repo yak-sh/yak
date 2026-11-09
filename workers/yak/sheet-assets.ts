@@ -73,6 +73,8 @@ export let WORN = [
   'Table',
   'Tabs',
   'Icon',
+  'Tip',
+  'Overlay',
   'SideNav',
   'Check',
   'Catalog',

@@ -163,7 +163,7 @@ test('the lines sent paint natively, each step one line until pressed', async ()
   )
   await new Promise((r) => setTimeout(r))
   let main = (painted as unknown as Box).children[0] as Box
-  let words = main.children.map(said).map((s) => s.replace(/\|Archive$/, ''))
+  let words = main.children.map(said).map((s) => s.replace(/\|+$/, ''))
   assertEquals(words[0], 'Make me a notes app')
   assertEquals(words[2], 'Read notes for Jeff')
   assertEquals(

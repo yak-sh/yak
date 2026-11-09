@@ -215,9 +215,8 @@ test('a conversation opens in the chat app: its words, each step in plain words,
     'posted',
   )
   assertEquals(text('.Talk_Reply li'), ['Thursday at 7'])
-  // Each message says when it was sent, under it: the person's words and
-  // the reply, not the steps between.
-  assertEquals(text('.Talk_Said .Talk_When'), ['just now', 'just now'])
+  // Every entry keeps its action beside its own time, including steps.
+  assertEquals(text('.Talk_Said .Talk_When'), Array(6).fill('just now'))
   // A step opens on what it asked for in words; what its error said shows
   // only inside its closed Details, and what the model was told only in its
   // own frame.
