@@ -80,10 +80,15 @@ test('a page answered for a logo is never relayed; its mirror stands in', async 
 })
 
 test('a mirror that links to another logo is followed to it', async () => {
+  let via = MIRROR.replace('hub.svg', 'hub-scim.svg')
   let shared = MIRROR.replace('hub.svg', 'hubspot.svg')
-  let d = await door({ [MIRROR]: 'hubspot.svg\n', [shared]: SVG })
+  let d = await door({
+    [MIRROR]: 'hub-scim.svg\n',
+    [via]: 'hubspot.svg',
+    [shared]: SVG,
+  })
   equal(await d.get(), { status: 200, body: SVG, cache: WEEK })
-  equal(d.asked, [OWN, MIRROR, shared])
+  equal(d.asked, [OWN, MIRROR, via, shared])
 })
 
 test('a service no address answers for wears its initial, reported', async () => {
