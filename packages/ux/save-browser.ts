@@ -1,7 +1,6 @@
 /** Save behavior for server-rendered forms, with drafts supplied by the host. */
 import { batch, effect, untracked } from '@preact/signals'
 import { h, render } from 'preact'
-import { Save as Paint } from '@yaks/ui/parts'
 import { Save } from './Save.ts'
 
 type Control = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -119,19 +118,28 @@ export let bindSave = (
   let mount = doc.createElement('div')
   let surface = root.nodeType == 9 ? doc.body : root as HTMLElement
   surface.append(mount)
-  let marks = new Map<HTMLElement, { slot: HTMLElement; groups: Group[] }>()
+  let marks = new Map<HTMLElement, Group[]>()
   for (let g of groups) {
     for (let c of g.controls) {
       let field = c.closest<HTMLElement>('[data-save-field],.Form_Field') ??
         c.parentElement!
-      let mark = marks.get(field)
-      if (!mark) {
-        let slot = doc.createElement('span')
-        field.append(slot)
-        marks.set(field, mark = { slot, groups: [] })
-      }
-      if (!mark.groups.includes(g)) mark.groups.push(g)
+      let marked = marks.get(field)
+      if (!marked) marks.set(field, marked = [])
+      if (!marked.includes(g)) marked.push(g)
     }
+  }
+  let labels: HTMLElement[] = []
+  for (let field of marks.keys()) {
+    if (!field.matches('label')) continue
+    let text = [...field.childNodes].find((n) =>
+      n.nodeType == 3 && n.textContent?.trim()
+    )
+    if (!text) continue
+    let label = doc.createElement('span')
+    label.className = 'Save_Label'
+    text.replaceWith(label)
+    label.append(text)
+    labels.push(label)
   }
   let busy = false, message = '', closed = false
   let count = () => groups.filter(changed).length
@@ -139,12 +147,11 @@ export let bindSave = (
     if (closed) return
     let at = root.querySelector('dialog[open]') ?? surface
     if (mount.parentElement != at) at.append(mount)
-    for (let [field, mark] of marks) {
-      let pending = mark.groups.some(changed)
+    for (let [field, groups] of marks) {
+      let pending = groups.some(changed)
       field.classList.add('Save_Field')
       field.classList.toggle('Save_Field-changed', pending)
       field.toggleAttribute('data-changed', pending)
-      render(pending ? h(Paint.Mark, {}, 'Changed') : null, mark.slot)
     }
     render(
       h(Save, {
@@ -287,12 +294,11 @@ export let bindSave = (
         form.removeEventListener('change', input)
         form.removeEventListener('submit', submit)
       }
-      for (let [field, { slot }] of marks) {
-        render(null, slot)
-        slot.remove()
+      for (let field of marks.keys()) {
         field.classList.remove('Save_Field', 'Save_Field-changed')
         field.removeAttribute('data-changed')
       }
+      for (let label of labels) label.replaceWith(...label.childNodes)
       render(null, mount)
       mount.remove()
     },

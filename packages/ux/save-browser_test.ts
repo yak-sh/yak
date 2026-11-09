@@ -6,16 +6,17 @@ import { bindSave, type SaveOptions } from './save-browser.ts'
 let markup = `<html><body><main>
   <form data-save="operator">
     <input type="hidden" name="token" value="csrf">
-    <label class="Form_Field">Instructions<textarea name="instructions">Be brief</textarea></label>
+    <div class="Form_Field"><label class="Form_Label" for="instructions">Instructions</label><textarea id="instructions" name="instructions">Be brief</textarea></div>
     <label class="Form_Field">Model<input name="model" value="small"></label>
     <fieldset data-save-field>
+      <legend>Mode</legend>
       <label><input type="radio" name="mode" value="ask" checked>Ask</label>
       <label><input type="radio" name="mode" value="act">Act</label>
     </fieldset>
-    <label class="Form_Field"><input type="checkbox" name="enabled" value="yes" checked>Enabled</label>
+    <div class="Form_Field"><label><input type="checkbox" name="enabled" value="yes" checked>Enabled</label></div>
   </form>
   <form data-save="space">
-    <label class="Form_Field">Name<input name="name" value="My space"></label>
+    <div class="Form_Field"><label class="Form_Label" for="name">Name</label><input id="name" name="name" value="My space"></div>
   </form>
 </main></body></html>`
 
@@ -94,6 +95,26 @@ let page = (
 }
 
 for (let width of [1280, 390]) {
+  test(`marking a field leaves its label and control tree unchanged at ${width}px`, async () => {
+    using p = page(width)
+    let field = p.field('model').parentElement!
+    let label = field.querySelector('.Save_Label')!
+    let shape = () => [...field.querySelectorAll('*')]
+    let before = shape()
+    equal(label.textContent, 'Model')
+    p.type('model', 'large')
+    equal(field.hasAttribute('data-changed'), true)
+    equal(shape(), before)
+    equal(label.textContent, 'Model')
+    p.binding.discard()
+    equal(field.hasAttribute('data-changed'), false)
+    equal(shape(), before)
+    p.type('model', 'large')
+    await p.binding.save()
+    equal(field.hasAttribute('data-changed'), false)
+    equal(shape(), before)
+  })
+
   test(`one Save bar counts fields and writes every changed form at ${width}px`, async () => {
     using p = page(width)
     equal(p.$('.Save'), null)

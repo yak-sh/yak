@@ -33,14 +33,20 @@
 .Save_Field {
   min-width: 0;
 }
-.Save_Field-changed {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: var(--radius);
+.Save_Field > :is(.Form_Label, .Save_Label, legend, label:first-child)::after {
+  content: '';
+  display: inline-block;
+  width: .45em;
+  height: .45em;
+  margin-inline-start: .55em;
+  vertical-align: .1em;
+  border-radius: 50%;
+  background: var(--accent);
+  filter: var(--drawn, none);
+  opacity: 0;
 }
-.Save_Mark {
-  color: var(--accent);
-  font-size: var(--small);
+.Save_Field-changed > :is(.Form_Label, .Save_Label, legend, label:first-child)::after {
+  opacity: 1;
 }
 .Save_Notice {
   flex-basis: 100%;

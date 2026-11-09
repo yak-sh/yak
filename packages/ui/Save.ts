@@ -4,9 +4,10 @@ import type { Sheet } from '@yaks/tui/theme'
 import { block, type Part } from './el.ts'
 import { Button } from './Button.ts'
 import { Field } from './Field.ts'
+import { Form } from './Form.ts'
 import type { Colors, Specimen } from './theme.ts'
 
-/** One fixed bar, with a changed field's outline and mark. */
+/** One fixed bar, with a changed field's mark beside its label. */
 export let Save:
   & Part
   & Record<'Count' | 'Actions' | 'Field' | 'Mark' | 'Notice', Part> = block(
@@ -27,7 +28,6 @@ export let sheet = (c: Colors): Sheet => ({
   Save: { block: true, spaced: true, bg: c.surface },
   Save_Count: { fg: c.text },
   Save_Actions: { spaced: true },
-  'Save_Field-changed': { border: c.accent },
   Save_Mark: { fg: c.accent },
   Save_Notice: { fg: c.negative },
 })
@@ -49,9 +49,9 @@ export let specimens = (): Specimen[] => [[
   'A changed field',
   h(
     Save.Field,
-    { mod: 'changed' },
-    h(Field, { value: 'A changed name', 'aria-label': 'Name' }),
-    h(Save.Mark, {}, 'Changed'),
+    { as: Form.Field, mod: 'changed' },
+    h(Form.Label, { for: 'save-name' }, 'Name'),
+    h(Field, { id: 'save-name', value: 'A changed name' }),
   ),
 ], [
   'A failed save keeps its changes',

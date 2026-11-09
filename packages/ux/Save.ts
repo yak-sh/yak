@@ -27,7 +27,6 @@ let Field = (
       'data-changed': changed || undefined,
     },
     children,
-    changed && h(Paint.Mark, {}, 'Changed'),
   )
 
 /** The one place to save or discard all the host's pending changes. */
