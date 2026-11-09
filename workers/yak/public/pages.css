@@ -1625,6 +1625,9 @@
   .Talk_Entry:has(> .Talk_You, > .Talk_Files) > .Talk_Meta {
     justify-content: end;
   }
+  .Talk_Entry:not(:has(> .Talk_You, > .Talk_Files)) > .Talk_Meta > .Talk_Hide {
+    order: 1;
+  }
   .Talk_Hide {
     --control-height: 1.4rem;
     --button-ink: var(--muted);
