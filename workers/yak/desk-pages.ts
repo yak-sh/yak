@@ -15,6 +15,7 @@ import {
   Form,
   Group,
   Icon,
+  Menu,
   Modal,
   More,
   Notice,
@@ -518,12 +519,12 @@ export let choice = (
     ]
   }
   return h(
-    'details',
-    { class: 'Desk_Pick', 'data-menu': '' },
+    Menu.Fold,
+    { 'data-menu': '' },
     h(
-      'summary',
+      Menu.Summary,
       {
-        class: 'Desk_Space Desk_Summary',
+        class: 'Desk_Space',
         title: `Change space: ${named(here)}`,
         'aria-label': `Change space: ${named(here)}`,
       },
@@ -531,33 +532,29 @@ export let choice = (
       h('span', { class: 'Desk_Change' }, glyph('chevrons-up-down')),
     ),
     h(
-      'div',
-      { class: 'Desk_Menu' },
-      h(
-        'div',
-        { class: 'Desk_List' },
-        h('p', { class: 'Desk_Ask' }, 'Which space do you want to work in?'),
-        all.map((s) =>
-          h(
-            'a',
-            {
-              class: 'Desk_Row',
-              href: to(s),
-              'aria-current': s.slug == here.slug ? 'true' : undefined,
-            },
-            box(
-              s,
-              s.owner
-                ? ''
-                : s.whose
-                ? `${s.whose}’s space · you’re a member`
-                : 'You’re a member',
-            ),
-            s.slug == here.slug ? h('span', { class: 'Desk_Tick' }, '✓') : null,
-          )
-        ),
-        make,
+      Menu,
+      { mod: 'below' },
+      h(Menu.Ask, {}, 'Which space do you want to work in?'),
+      all.map((s) =>
+        h(
+          Menu.Item,
+          {
+            href: to(s),
+            'aria-current': s.slug == here.slug ? 'true' : undefined,
+          },
+          box(
+            s,
+            s.owner
+              ? ''
+              : s.whose
+              ? `${s.whose}’s space · you’re a member`
+              : 'You’re a member',
+          ),
+          s.slug == here.slug ? h('span', { class: 'Desk_Tick' }, '✓') : null,
+        )
       ),
+      make ? h(Menu.Rule, {}) : null,
+      make ? h(Menu.Footer, {}, make) : null,
     ),
   )
 }

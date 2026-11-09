@@ -1,11 +1,23 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
+import { Menu } from './Menu.ts'
 import { menus } from './menus.ts'
 
 let { document, Event } = parseHTML(`<html><body><div id="home">
   <button data-menu-trigger="actions" aria-expanded="false">a moment ago</button>
-  <div id="actions" role="menu" hidden><button role="menuitem">Copy</button><button role="menuitem">Quote</button></div>
+  ${
+  renderToString(
+    h(
+      Menu,
+      { id: 'actions', role: 'menu', hidden: true, mod: 'float' },
+      h(Menu.Item, { role: 'menuitem', type: 'button' }, 'Copy'),
+      h(Menu.Item, { role: 'menuitem', type: 'button' }, 'Quote'),
+    ),
+  )
+}
   </div><button id="outside">Elsewhere</button></body></html>`)
 let trigger = document.querySelector<HTMLElement>('[data-menu-trigger]')!
 let panel = document.getElementById('actions')!
@@ -13,6 +25,7 @@ Object.defineProperties(panel, {
   offsetWidth: { value: 180 },
   offsetHeight: { value: 160 },
 })
+let choices = [...panel.querySelectorAll<HTMLElement>('[role=menuitem]')]
 let focused = ''
 for (let node of document.querySelectorAll<HTMLElement>('button')) {
   node.focus = () => void (focused = node.textContent!)
@@ -40,9 +53,9 @@ test('a timestamp menu escapes clipping, closes after an action and outside clic
     assertEquals(panel.hidden, false)
     assertEquals(trigger.getAttribute('aria-expanded'), 'true')
     assertEquals(focused, 'Copy')
-    key(panel.firstElementChild!, 'ArrowDown')
+    key(choices[0], 'ArrowDown')
     assertEquals(focused, 'Quote')
-    key(panel.lastElementChild!, 'Escape')
+    key(choices[1], 'Escape')
     assertEquals(panel.hidden, true)
     assertEquals(panel.parentElement?.id, 'home')
     assertEquals(focused, 'a moment ago')
@@ -50,7 +63,7 @@ test('a timestamp menu escapes clipping, closes after an action and outside clic
     click(document.getElementById('outside')!)
     assertEquals(panel.hidden, true)
     click(trigger)
-    click(panel.firstElementChild!)
+    click(choices[0])
     assertEquals(panel.hidden, true)
     assertEquals(trigger.getAttribute('aria-expanded'), 'false')
   } finally {

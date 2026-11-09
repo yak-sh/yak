@@ -1,49 +1,101 @@
-/* A menu: a raised box of items, one to a row, with rules between groups.
-   Where it floats is its host's business. */
+/* One menu surface and its scrollable list, whether opened from a summary
+   or placed beside a trigger. The skin draws it; its host sizes and places it. */
 .Menu {
-  display: grid;
+  position: relative;
   min-width: 10rem;
-  background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  overflow: hidden;
+}
+.Menu_List {
+  position: relative;
+  display: grid;
+  max-height: min(34rem, 70vh);
+  padding: .35rem 0;
+  border-radius: inherit;
+  background: var(--card);
+  overflow-y: auto;
 }
 .Menu_Item {
-  font: inherit;
-  text-align: left;
-  color: var(--text);
-  background: none;
-  border: 0;
-  padding: var(--half-gap) var(--gap);
-  cursor: pointer;
-  min-height: var(--tap);
   display: flex;
   align-items: center;
+  gap: var(--half-gap);
+  margin: 0 .35rem;
+  padding: .55rem .65rem;
+  min-height: var(--tap);
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
 }
 .Menu_Item:hover,
-.Menu_Item-hover {
+.Menu_Item-hover,
+.Menu_Item:focus-visible {
   background: var(--soft);
 }
-/* an item that destroys something */
+.Menu_Item[aria-current='true'] {
+  background: var(--soft);
+}
 .Menu_Item-danger {
   color: var(--negative);
 }
 .Menu_Rule {
-  margin: 0;
+  width: 100%;
+  margin: .35rem 0;
   border: 0;
   border-top: 1px solid var(--border);
 }
-
+.Menu_Ask {
+  margin: 0;
+  padding: .5rem 1rem .6rem;
+  color: var(--muted);
+  font-size: var(--small);
+}
+.Menu_Footer {
+  display: grid;
+}
+.Menu_Fold {
+  position: relative;
+}
+.Menu_Fold[open] {
+  z-index: var(--float, 100);
+}
+.Menu_Summary {
+  position: relative;
+  padding: var(--half-gap) var(--gap);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  list-style: none;
+}
+.Menu_Summary::-webkit-details-marker {
+  display: none;
+}
 .Menu[hidden] {
   display: none;
+}
+.Menu-below {
+  position: absolute;
+  top: calc(100% + .6rem);
+  left: 0;
+  width: max-content;
+  min-width: max(100%, 18rem);
+  max-width: 26rem;
 }
 .Menu-float {
   position: fixed;
   z-index: 100;
   max-width: calc(100vw - 12px);
+}
+.Menu-float .Menu_List {
   max-height: calc(100dvh - 12px);
-  overflow-y: auto;
 }
 .Menu_Trigger {
   appearance: none;
@@ -56,7 +108,4 @@
   padding: 0;
   cursor: pointer;
   text-decoration: none;
-}
-.Menu_Item:focus-visible {
-  background: var(--soft);
 }

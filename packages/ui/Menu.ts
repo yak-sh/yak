@@ -8,19 +8,41 @@
 
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
-import { block, type Part } from './el.ts'
+import { block, type Part, type Props } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 
-/** A menu. */
-export let Menu: Part & Record<'Trigger' | 'Item' | 'Rule', Part> = block(
+let Base = block(
   'div',
   'Menu',
   {
     Trigger: 'button',
     Item: 'button',
     Rule: 'hr',
+    List: 'div',
+    Ask: 'p',
+    Footer: 'div',
+    Fold: 'details',
+    Summary: 'summary',
   },
 )
+
+/** One menu surface, shared by floating actions and a summary's choices. */
+export let Menu:
+  & Part
+  & Record<
+    | 'Trigger'
+    | 'Item'
+    | 'Rule'
+    | 'Ask'
+    | 'Footer'
+    | 'Fold'
+    | 'Summary',
+    Part
+  > = Object.assign(
+    ({ children, ...props }: Props) =>
+      h(Base, props, h(Base.List, {}, children)),
+    Base,
+  )
 
 /** What it is, in a line. */
 export let description =
@@ -29,6 +51,8 @@ export let description =
 /** An item is a row of its own, as it is in a browser. */
 export let sheet = (c: Colors): Sheet => ({
   Menu_Item: { block: true },
+  Menu_Ask: { block: true, fg: c.muted },
+  Menu_Footer: { block: true },
   'Menu_Item-hover': { bg: c.card },
   'Menu_Item-danger': { fg: c.negative },
   Menu_Rule: { fg: c.border2 },
@@ -38,6 +62,22 @@ let { Trigger, Item, Rule } = Menu
 
 /** Two groups, one item under the pointer, and a dangerous one. */
 export let specimens = (): Specimen[] => [
+  [
+    'Menu Fold, Summary, Ask, Footer',
+    h(
+      Menu.Fold,
+      { open: true },
+      h(Menu.Summary, {}, 'Change'),
+      h(
+        Menu,
+        {},
+        h(Menu.Ask, {}, 'Choose an action'),
+        h(Item, { type: 'button' }, 'Open'),
+        h(Rule, {}),
+        h(Menu.Footer, {}, h(Item, { type: 'button' }, 'New')),
+      ),
+    ),
+  ],
   [
     'Menu-float',
     h(

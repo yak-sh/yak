@@ -515,7 +515,7 @@ test("the chat app says whose Operator it is, and opens another space's", () => 
     assert(document.querySelector('#ask .Talk_Write > img[data-idle]'))
     assert(document.querySelector('script[src$="/idle.js"]'))
     assertEquals(
-      [...document.querySelectorAll('.Talk_Whose .Desk_Row small')].map((a) =>
+      [...document.querySelectorAll('.Talk_Whose .Menu_Item small')].map((a) =>
         a.textContent
       ),
       [
@@ -525,7 +525,7 @@ test("the chat app says whose Operator it is, and opens another space's", () => 
       ],
     )
     assertEquals(
-      [...document.querySelectorAll('.Talk_Whose .Desk_Row')].map((a) =>
+      [...document.querySelectorAll('.Talk_Whose .Menu_Item')].map((a) =>
         a.getAttribute('href')
       ),
       [

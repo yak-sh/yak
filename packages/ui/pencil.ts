@@ -18,6 +18,7 @@ export let pencil: Skin = {
   Check: { css: at('./pencil/Check.css') },
   Form: { css: at('./pencil/Form.css') },
   Drop: { css: at('./pencil/Drop.css') },
+  Menu: { over: at('./pencil/Menu.css') },
   More: { css: at('./pencil/More.css') },
   Button: { css: at('./pencil/Button.css') },
   Chip: { css: at('./pencil/Chip.css') },

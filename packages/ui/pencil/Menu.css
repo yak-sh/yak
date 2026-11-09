@@ -1,0 +1,90 @@
+/* The shared menu, brought from the space picker: its pencil outline and
+   hatch surround the scrolling paper, with wells under the choices. */
+.Menu_Summary {
+  position: relative;
+  border-radius: var(--radius);
+  background: var(--card);
+  cursor: pointer;
+  border-color: transparent;
+}
+.Menu_Summary::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--lift) - 1px) calc(-1px - var(--lift))
+    calc(-1px - var(--lift)) calc(var(--lift) - 1px);
+  border-radius: var(--radius);
+  background: var(--hatch);
+  clip-path: polygon(calc(100% - var(--lift)) 0, 100% 0, 100% 100%, 0 100%,
+    0 calc(100% - var(--lift)), calc(100% - var(--lift))
+    calc(100% - var(--lift)));
+  pointer-events: none;
+}
+.Menu_Summary::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border: var(--stroke) solid var(--graphite);
+  border-radius: var(--radius);
+  filter: var(--drawn);
+  pointer-events: none;
+}
+.Menu_Summary:hover {
+  --lift: 5px;
+  transform: translate(-1px, -1px);
+}
+.Menu_Fold[open] > .Menu_Summary {
+  --lift: 1.5px;
+  transform: translate(2.5px, 2.5px);
+}
+.Menu_Summary::-webkit-details-marker {
+  display: none;
+}
+.Menu {
+  --lift: 6px;
+  border: 0;
+  box-shadow: none;
+}
+.Menu::before {
+  content: '';
+  position: absolute;
+  inset: var(--lift) calc(-1 * var(--lift)) calc(-1 * var(--lift))
+    var(--lift);
+  border-radius: var(--radius);
+  background: var(--hatch);
+  clip-path: polygon(calc(100% - var(--lift)) 0, 100% 0, 100% 100%, 0 100%,
+    0 calc(100% - var(--lift)), calc(100% - var(--lift))
+    calc(100% - var(--lift)));
+  filter: var(--drawn);
+  pointer-events: none;
+}
+.Menu::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border: var(--stroke) solid var(--graphite);
+  border-radius: var(--radius);
+  filter: var(--drawn);
+  pointer-events: none;
+}
+.Menu_Item:hover,
+.Menu_Item-hover,
+.Menu_Item:focus-visible {
+  background: var(--well);
+}
+.Menu_Item[aria-current='true'] {
+  background: color-mix(in srgb, var(--card), var(--accent) 12%);
+}
+
+.Menu_Rule {
+  position: relative;
+  height: calc(var(--stroke) + 2 * var(--room));
+  border: 0;
+  background: var(--rule);
+  filter: var(--drawn);
+}
+.Menu_Footer {
+  padding: .35rem .65rem .4rem;
+}
+.Menu_Ask {
+  font-size: var(--fine, var(--small));
+}

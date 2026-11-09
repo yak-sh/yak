@@ -42,7 +42,7 @@ let page = async () => {
     isOpen: () => menu.hasAttribute('open'),
     click: (q: string) => on.click({ target: at(q) }),
     focus: (q: string) => on.focusin({ target: at(q) }),
-    key: (key: string, q = '.Desk_Row') => on.keydown({ key, target: at(q) }),
+    key: (key: string, q = '.Menu_Item') => on.keydown({ key, target: at(q) }),
     focused: () => focused,
   }
 }
@@ -62,7 +62,7 @@ test('the page that draws a menu loads its script', async () => {
 test('a click outside the open menu closes it; one inside leaves it open', async () => {
   let p = await page()
   reflect(p.opened())
-  p.click('.Desk_Ask')
+  p.click('.Menu_Ask')
   assertEquals(p.isOpen(), true)
   p.click('main')
   assertEquals(p.isOpen(), false)
@@ -71,7 +71,7 @@ test('a click outside the open menu closes it; one inside leaves it open', async
 test('focus moving outside the open menu closes it', async () => {
   let p = await page()
   reflect(p.opened())
-  p.focus('.Desk_Row')
+  p.focus('.Menu_Item')
   assertEquals(p.isOpen(), true)
   p.focus('.Desk_Foot button[type="submit"]')
   assertEquals(p.isOpen(), false)

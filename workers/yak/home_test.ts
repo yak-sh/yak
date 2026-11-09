@@ -82,7 +82,7 @@ test('the side’s top keeps its words to one line, and the selector has no Chan
     ['Menno', 'Back to'],
   )
   assertEquals(back.querySelector('.Desk_To')?.textContent, 'Menno')
-  let pick = document.querySelector('.Desk_Pick > summary')!
+  let pick = document.querySelector('.Menu_Fold > summary')!
   assertEquals(
     pick.getAttribute('aria-label'),
     'Change space: Loch Lomond Allotments',
@@ -208,7 +208,7 @@ test('the selector names the space, not its address, and keeps the page when ano
     { slug: 'quilt', title: 'Quilts', owner: false, own: false },
   ]
   let rows = (html: string) =>
-    [...parseHTML(html).document.querySelectorAll('.Desk_Row')].map((a) => ({
+    [...parseHTML(html).document.querySelectorAll('.Menu_Item')].map((a) => ({
       href: a.getAttribute('href'),
       text: a.textContent,
       here: a.hasAttribute('aria-current'),
@@ -249,7 +249,7 @@ test('the selector names the space, not its address, and keeps the page when ano
   )
   // With one space there is nothing to change, only a way to make another.
   let alone = parseHTML(await block({ spaces: [spaces[0]] })).document
-  assertEquals(alone.querySelector('.Desk_Pick'), null)
+  assertEquals(alone.querySelector('.Menu_Fold'), null)
   assertEquals(
     alone.querySelector('.Desk_New')?.getAttribute('href'),
     '/manage/account/space',
