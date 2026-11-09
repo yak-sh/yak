@@ -612,7 +612,9 @@ store:
 {
   "entity": { "eid": "<form>" },
   "doc": { "title": "Tea", "body": "Bring a cup." },
-  "form": { "opens": "…", "closes": "…", "capacity": 20, "thanks": "…" },
+  "form": {
+    "opens": "…", "closes": "…", "capacity": 20, "thanks": "…", "closed": "…"
+  },
   "open": true,
   "questions": [{ "entity": { "eid": "<question>" }, "question": { … } }]
 }

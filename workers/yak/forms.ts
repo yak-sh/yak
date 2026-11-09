@@ -23,10 +23,13 @@ let only = (comp: unknown, keys: readonly string[]): Comp =>
     }),
   )
 
+// `closed` is what the form says while it takes no sign-ups (T-151836).
+let SHOWN = ['opens', 'closes', 'capacity', 'thanks', 'closed']
+
 // What a page needs to draw the form and nothing more: never `notify`, whose
 // recipients are the app's, and no registration but their count.
 let shown = async (at: Stored, eid: string, row: Comp) => {
-  let form = only(row.form, ['opens', 'closes', 'capacity', 'thanks'])
+  let form = only(row.form, SHOWN)
   let [questions, held] = await Promise.all([
     at.graph.read(`.question.form=${JSON.stringify(eid)}`),
     form.capacity == null
