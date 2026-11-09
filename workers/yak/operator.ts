@@ -1588,12 +1588,13 @@ export let operating = (
   // What another model working for the person is offered (a call's backend
   // on OpenAI's side, operator-calls.ts): the tools their conversation is
   // offered, through their reach in the space, each run as a call of that
-  // conversation. Starting helpers is the conversation's own, so it is left
-  // out.
+  // conversation. Forking and starting helpers are the conversation's own,
+  // so they are left out.
   let tools: Operator['tools'] = async (held, space) => {
     let { session, fresh } = await conversing(held, space)
     if (fresh) await g.apply([fresh], { trusted: true })
-    let offered = (await roster(session)).filter((t) => t.name != spawn.name)
+    let offered = (await roster(session))
+      .filter((t) => t.name != spawn.name && t.name != 'fork')
     let named = new Map(offered.map((t) => [t.name, t]))
     return {
       tools: offered.map(({ name, description, parameters }) => ({

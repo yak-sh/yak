@@ -19,6 +19,7 @@ import {
   Blocked,
   kept,
   type Keyword,
+  keyword,
   type Sender,
 } from '@yaks/phone'
 import { type App, appStore, directoryOf, type Space } from './directory.ts'
@@ -89,34 +90,9 @@ export let appArrived = async (
   let people = await graph.query(
     `.phone.number=${JSON.stringify(arrival.from)}`,
   )
-  let { controlText, formKeyword, textControl, textStopped } = await import(
-    './operator-signup.ts'
-  )
-  if (textControl(arrival).length) await controlText(env, line.space, arrival)
-  let word = formKeyword(arrival.text)
-  await graph.apply([
-    ...kept(arrival, word ? people.map((p) => p.entity.eid) : []),
-    ...textControl(arrival),
-  ], KERNEL)
-  if (!word) {
-    if (
-      await textStopped({
-        get: (ids) => graph.query(`.entity.eid=${ids.join(',')}&?cancelled`),
-      }, arrival)
-    ) return
-    let { signupArrived } = await import('./operator-signup.ts')
-    if (
-      await signupArrived(
-        env,
-        line.space,
-        { ...arrival, via: arrival.via! },
-        line.app.eid,
-      )
-    ) {
-      await countedTexts(env, line.space, costOf(arrival.text))
-    }
-    return
-  }
+  await graph.apply(kept(arrival, people.map((p) => p.entity.eid)), KERNEL)
+  let word = keyword(arrival.text)
+  if (!word) return
   let said = answers(line.space.title || line.space.slug)[word]
   let answer: Bundle = {
     entity: { eid: crypto.randomUUID() },

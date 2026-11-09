@@ -126,7 +126,6 @@ export let signupArrived = async (
   env: Env,
   space: Space,
   arrival: Arrival & { via: string },
-  app?: string,
 ) => {
   if (formKeyword(arrival.text) || !arrival.text.trim()) return false
   let person = await phonedIn(env, arrival.from)
@@ -143,7 +142,6 @@ export let signupArrived = async (
         say: arrival.text,
         request: {
           channel: 'signup',
-          ...app ? { app } : {},
           address: arrival.from,
           reply_to: arrival.to,
           via: arrival.via,

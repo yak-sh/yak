@@ -518,9 +518,6 @@ export let channels = (env: Env): Record<string, Channel> => {
     // A text goes back from the number it reached, an RCS one from the agent,
     // signed with the Operator's name and the brand carriers ask a text to say.
     signup: async (request, answer) => {
-      if (request.app) {
-        return texted(request, answer, { from: request.reply_to })
-      }
       let space = await directoryOf(env.STORE).at(request.space)
       if (!space) throw new Error('Operator sign-up has no space')
       let { answerText } = await import('./operator-line.ts')
