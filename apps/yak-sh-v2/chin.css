@@ -17,13 +17,13 @@
     0 .06em 0 rgba(255, 255, 255, .8),
     0 -.05em 0 rgba(60, 50, 30, .35);
 
-  & span {
+  & .Crt_Name {
     font-size: 2em;
     font-weight: 700;
     letter-spacing: -.04em;
   }
 
-  & small {
+  & .Crt_Model {
     font-size: .72em;
     letter-spacing: .38em;
     text-transform: uppercase;
@@ -51,7 +51,7 @@
   align-items: center;
   gap: 1.3em;
 
-  & small {
+  & .Control_Label {
     display: block;
     margin-top: .45em;
     font-size: .56em;
@@ -116,7 +116,7 @@
   }
 }
 
-.Degauss span {
+.Degauss .Degauss_Cap {
   width: 2.8em;
   height: 1.15em;
   border-radius: .25em;

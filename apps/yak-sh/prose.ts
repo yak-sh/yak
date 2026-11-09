@@ -18,9 +18,9 @@ let away = (href?: string) =>
   href == YAKS_APP || href?.startsWith(`${YAKS_APP}/`) ? AWAY : {}
 
 /** A line of text with each mention of yaks.app a link to it. */
-export let words = (line: string) =>
+export let words = (line: string, cls = 'Body_Link') =>
   line.split(MENTION).flatMap((part, i) => [
-    ...i ? [h('a', { href: YAKS_APP, ...AWAY }, 'yaks.app')] : [],
+    ...i ? [h('a', { class: cls, href: YAKS_APP, ...AWAY }, 'yaks.app')] : [],
     ...part ? [part] : [],
   ])
 

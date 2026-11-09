@@ -65,7 +65,7 @@ body {
   align-items: center;
   font-size: 0.72rem;
 }
-.BookPreview_Vital i {
+.BookPreview_Vital .BookPreview_Fill {
   height: 0.52rem;
   background: linear-gradient(90deg, var(--bar) var(--fill), #433a2c
     var(--fill));

@@ -21,10 +21,10 @@ export let picture = (
   })
 
 /** A glyph beside words, which a screen reader passes over. */
-export let mark = (icon: Glyph): JSX.Element =>
+export let mark = (icon: Glyph, part = ''): JSX.Element =>
   h('span', {
     'aria-hidden': 'true',
-    dangerouslySetInnerHTML: { __html: glyph(icon) },
+    dangerouslySetInnerHTML: { __html: glyph(icon, part) },
   })
 
 /** A part of a picked thing's page: its `title`, then what it holds. */

@@ -39,15 +39,15 @@
     <main id="page">
       <div class="Site">
         <nav class="Nav">
-          <a class="Nav_Mark"
+          <a class="Nav_Mark Nav_Link"
             href="./"><img class="Nav_Logo" src="yak.webp" srcset="yak.webp 320w, yak-480.webp 480w, yak-880.webp 880w" sizes="(max-width: 480px) 72px, 15vw" width="200" height="200" alt="">yak.sh</a>
           <span class="Nav_Links">
-            <a href="#install">Install</a>
-            <a href="#yaks-app">Hosting</a>
-            <a href="https://yaks.app" target="_blank"
+            <a class="Nav_Link" href="#install">Install</a>
+            <a class="Nav_Link" href="#yaks-app">Hosting</a>
+            <a class="Nav_Link" href="https://yaks.app" target="_blank"
               rel="noopener">yaks.app</a>
-            <a href="https://jsr.io/@yaks">Packages</a>
-            <a href="https://github.com/yak-sh/yak">GitHub</a>
+            <a class="Nav_Link" href="https://jsr.io/@yaks">Packages</a>
+            <a class="Nav_Link" href="https://github.com/yak-sh/yak">GitHub</a>
           </span>
         </nav>
         <section class="Plot">
@@ -58,11 +58,12 @@
               <h1>A shared graph for your data, tools, and agents.</h1>
               <div class="Lead">
                 <div class="Markdown">
-                  <p><code>yak</code> is a command line, and <code>@yaks</code> a set of open-source TypeScript packages, for one graph that you and your agents both read and write.</p>
+                  <p
+                    class="Body_Paragraph"><code class="Body_Code">yak</code> is a command line, and <code class="Body_Code">@yaks</code> a set of open-source TypeScript packages, for one graph that you and your agents both read and write.</p>
                 </div>
               </div>
               <div
-                class="Copy"><code><span class="Copy_Sign">$ </span>deno run -A jsr:@yaks/cli/install</code><button type="button">Copy</button></div>
+                class="Copy"><code class="Copy_Code"><span class="Copy_Sign">$ </span>deno run -A jsr:@yaks/cli/install</code><button class="Copy_Button" type="button">Copy</button></div>
               <p
                 class="Hint">Scroll, and each step below runs in the graph in this tab while the drawing beside it adds what it wrote.</p>
             </header>

@@ -103,8 +103,9 @@ export let Editor: FunctionComponent<Ctx> = (ctx) => {
   }, [
     h('div', { class: 'Editor_Bar' }, [
       h('b', null, human(yak.vocab)(b)),
-      h('span', null, title),
+      h('span', { class: 'Editor_Title' }, title),
       h('button', {
+        class: 'Editor_Close',
         type: 'button',
         'aria-label': 'Close',
         onClick: () => figure.pick(undefined),
@@ -120,10 +121,10 @@ export let Editor: FunctionComponent<Ctx> = (ctx) => {
       let props = yak.vocab.props(comp)
       let fixed = !!yak.vocab.comp(comp)?.mark
       return h('section', { class: 'Editor_Comp', key: comp }, [
-        h('h3', null, `${comp}{${props.join(', ')}}`),
+        h('h3', { class: 'Editor_Name' }, `${comp}{${props.join(', ')}}`),
         h(
           'dl',
-          null,
+          { class: 'Editor_Fields' },
           Object.entries(value).map(([prop, v]) => {
             // A property the vocabulary declares, not one computed on read
             // such as a task's status, and not a stamped mark.
@@ -133,10 +134,10 @@ export let Editor: FunctionComponent<Ctx> = (ctx) => {
               (typeof v == 'string' || typeof v == 'number')
             let other = typeof v == 'string' && yak.row(v)
             return h('div', { class: 'Editor_Prop', key: prop }, [
-              h('dt', null, prop),
+              h('dt', { class: 'Editor_Key' }, prop),
               h(
                 'dd',
-                null,
+                { class: 'Editor_Value' },
                 other
                   ? h('button', {
                     type: 'button',
@@ -149,7 +150,7 @@ export let Editor: FunctionComponent<Ctx> = (ctx) => {
                     name: `${comp}.${prop}`,
                     set: (next) => term.enter(patchLine(ref, comp, prop, next)),
                   })
-                  : h('code', null, JSON.stringify(v)),
+                  : h('code', { class: 'Editor_Code' }, JSON.stringify(v)),
               ),
             ])
           }),

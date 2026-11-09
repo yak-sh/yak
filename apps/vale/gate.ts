@@ -64,7 +64,7 @@ export let gateCard = (card: HTMLElement) => {
                 onClick: () => pick(o),
               },
               h('i', { class: 'Hero_Face' }),
-              h('b', {}, o.name),
+              h('b', { class: 'Hero_Name' }, o.name),
             )
           ),
         ),
@@ -103,7 +103,7 @@ export let gateCard = (card: HTMLElement) => {
           ? h(
             'p',
             { class: 'Gate_Note' },
-            h('a', { href: who.signIn }, 'Sign in'),
+            h('a', { class: 'Gate_Link', href: who.signIn }, 'Sign in'),
             ' to keep your heroes on every device. A hero made without signing in lasts as long as this tab.',
           )
           : NOTE,

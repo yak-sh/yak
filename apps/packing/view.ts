@@ -90,7 +90,7 @@ export let Packing = ({ store }: { store: Store }) => {
             h(
               Check,
               { key: item.entity.eid },
-              h('input', {
+              h(Check.Input, {
                 type: 'checkbox',
                 checked: !!item.packed,
                 onChange: () => flip(item),
@@ -102,7 +102,7 @@ export let Packing = ({ store }: { store: Store }) => {
         : h(
           Empty,
           {},
-          h('h2', {}, 'Nothing to bring yet'),
+          h(Empty.Title, {}, 'Nothing to bring yet'),
           h('p', {}, 'Add the first thing above.'),
         ),
       trouble ? h('p', { class: 'Notice' }, trouble) : null,

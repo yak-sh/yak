@@ -22,7 +22,7 @@
   cursor: pointer;
   touch-action: manipulation;
 
-  & svg {
+  & .ValeOrb_Glyph {
     width: calc(var(--size) * 0.48);
     height: calc(var(--size) * 0.48);
   }

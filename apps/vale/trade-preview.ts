@@ -24,7 +24,7 @@ export let preview = (trade: Gather, lvl: number): ComponentChildren => [
     Body,
     {},
     h(
-      'p',
+      Body.Paragraph,
       {},
       'Work these nodes in the world to gather materials and earn trade xp. ' +
         'Higher-tier nodes are most rewarding at their recommended trade level.',

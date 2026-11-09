@@ -18,8 +18,8 @@ export function renderPhotos(recipeId, rows = [], canWrite = false) {
     <div class="recipe-photos-list"></div>
     <p class="recipe-photos-empty">No photos yet. Add a picture of your dish.</p>
     <form class="recipe-photos-upload">
-      <label>Choose photos <input type="file" accept="image/*" multiple></label>
-      <button type="submit" class="btn edit">Upload photos</button>
+      <label class="recipe-photos-upload_Label">Choose photos <input class="recipe-photos_File" type="file" accept="image/*" multiple></label>
+      <button type="submit" class="btn edit recipe-photos_Button">Upload photos</button>
     </form>
     <p class="recipe-photos-status" role="status" aria-live="polite"></p>
     <p class="recipe-photos-error" role="alert" hidden></p>`
@@ -57,13 +57,13 @@ function card(row) {
   el.className = 'recipe-photo'
   el.dataset.photo = row.entity.eid
   el.innerHTML = `
-    <img loading="lazy" decoding="async">
+    <img class="recipe-photo_Image" loading="lazy" decoding="async">
     <p class="recipe-photo-image-error" role="status" hidden>Photo could not be displayed.</p>
-    <figcaption>
-      <label>Caption <input type="text" placeholder="Add a caption"></label>
+    <figcaption class="recipe-photo_Caption">
+      <label class="recipe-photo_Label">Caption <input class="recipe-photo_Input" type="text" placeholder="Add a caption"></label>
       <span class="recipe-photo-status" role="status" aria-live="polite"></span>
       <span class="recipe-photo-error" role="alert" hidden></span>
-      <button type="button" class="btn quiet" data-retry hidden>Retry caption</button>
+      <button type="button" class="btn quiet recipe-photos_Button" data-retry hidden>Retry caption</button>
     </figcaption>`
   let img = el.querySelector('img')
   img.addEventListener('error', () => {

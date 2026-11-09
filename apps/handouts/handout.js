@@ -58,8 +58,14 @@ export let page = (text) => {
   let list = null
   let lines = []
   let flush = () => {
-    if (lines.length) out.push(`<p>${lines.join('<br>')}</p>`)
-    if (list) out.push(`<${list.tag}>${list.items.join('')}</${list.tag}>`)
+    if (lines.length) {
+      out.push(`<p class="sheet_Paragraph">${lines.join('<br>')}</p>`)
+    }
+    if (list) {
+      out.push(
+        `<${list.tag} class="sheet_List">${list.items.join('')}</${list.tag}>`,
+      )
+    }
     lines = []
     list = null
   }
@@ -74,12 +80,12 @@ export let page = (text) => {
           flush()
           list = { tag, items: [] }
         }
-        list.items.push(`<li>${esc(item[1])}</li>`)
+        list.items.push(`<li class="sheet_Item">${esc(item[1])}</li>`)
         continue
       }
       let head = /^##\s+(.*)$/.exec(line.trim())
       if (head || list) flush()
-      if (head) out.push(`<h3>${esc(head[1])}</h3>`)
+      if (head) out.push(`<h3 class="sheet_Heading">${esc(head[1])}</h3>`)
       else if (line.trim()) lines.push(esc(line.trim()))
     }
     flush()

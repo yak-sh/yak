@@ -310,7 +310,7 @@ let journalPages = () => {
         `<button class=Book_ListButton data-quest=${i} aria-pressed="${
           quest == i
         }">
-          ${x.title}<small>${x.from} · ${x.progress}</small></button>`
+          ${x.title}<small class=Book_ListNote>${x.from} · ${x.progress}</small></button>`
       ).join('')
     }</div>
       <h2 class=Book_Subhead>Completed</h2><div class=Book_Card>✓ The baker's missing recipe</div>
@@ -319,7 +319,7 @@ let journalPages = () => {
       <blockquote class=Book_Quote>“${q.note}”</blockquote>
       <h2 class=Book_Subhead>What remains</h2><ol class=Book_Steps>${
       q.steps.map((s, i) =>
-        `<li class="${i < q.done ? 'Book_Done' : ''}">${s}${
+        `<li class="Book_Step ${i < q.done ? 'Book_Done' : ''}">${s}${
           i < q.done ? ' ✓' : ''
         }</li>`
       ).join('')
@@ -350,7 +350,7 @@ let craftPages = () => {
         }">
           ${
           image(x.kind)
-        } ${x.name}<small>Item level ${x.level} · Tier ${x.tier}</small></button>`
+        } ${x.name}<small class=Book_ListNote>Item level ${x.level} · Tier ${x.tier}</small></button>`
       ).join('')
     }</div>
       <p class="Book_Note Book_Foot">Materials are counted from your bag.</p>${

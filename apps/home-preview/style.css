@@ -96,7 +96,7 @@ footer {
   letter-spacing: -1.5px;
   text-decoration: none;
 }
-.brand > span {
+.brand > .brand_Domain {
   font-weight: 400;
   margin-left: -10px;
 }
@@ -113,7 +113,7 @@ nav a {
   border-bottom: 1px solid var(--ink);
   padding-bottom: 5px;
 }
-.nav-start span {
+.nav-start .nav-start_Arrow {
   padding-left: 12px;
 }
 .hero {
@@ -143,14 +143,14 @@ nav a {
   height: 7px;
   border-radius: 50%;
 }
-.hero h1 {
+.hero .hero_Title {
   font-size: clamp(64px,7.7vw,108px);
   margin: 24px 0;
 }
-.hero h1 em {
+.hero .hero_Emphasis {
   position: relative;
 }
-.hero h1 em:after {
+.hero .hero_Emphasis:after {
   content: '';
   position: absolute;
   bottom: -6px;
@@ -194,7 +194,7 @@ nav a {
   transform: rotate(-8deg);
   color: #6e775b;
 }
-.margin-note svg {
+.margin-note .margin-note_Drawing {
   display: block;
   width: 95px;
   height: 55px;
@@ -215,11 +215,11 @@ nav a {
   padding: 0 24px 30px;
   gap: 25px;
 }
-.bench-heading h2 {
+.bench-heading .bench-heading_Title {
   font-size: 40px;
   margin-top: 12px;
 }
-.bench-heading > p {
+.bench-heading > .bench-heading_Text {
   font-size: 14px;
   color: var(--muted);
   line-height: 1.8;
@@ -274,7 +274,7 @@ nav a {
   background: #f6f3e9;
   color: #677752;
 }
-.agent-title small {
+.agent-title .agent-title_Subtitle {
   display: block;
   font-size: 11px;
   font-weight: 400;
@@ -295,7 +295,7 @@ nav a {
   display: grid;
   gap: 10px;
 }
-.directions button {
+.directions .directions_Button {
   position: relative;
   text-align: left;
   display: grid;
@@ -310,18 +310,18 @@ nav a {
   line-height: 1.45;
   transition: background .25s,transform .25s,box-shadow .25s;
 }
-.directions button span {
+.directions .directions_Button .directions_Number {
   font-size: 11px;
   color: #727e68;
 }
-.directions button b {
+.directions .directions_Button .directions_Arrow {
   font-weight: 400;
 }
-.directions button:hover {
+.directions .directions_Button:hover {
   transform: translateX(3px);
   background: #fffdf5;
 }
-.directions button[aria-pressed=true] {
+.directions .directions_Button[aria-pressed=true] {
   background: #d5ddc2;
   border-color: #8b9b73;
   box-shadow: 3px 3px 0 #b9c4a5;
@@ -349,10 +349,10 @@ nav a {
   padding-top: 14px;
   margin-top: 12px;
 }
-.how summary {
+.how .how_Summary {
   cursor: pointer;
 }
-.how p {
+.how .how_Text {
   padding: 12px 0;
 }
 .app-shell {
@@ -374,20 +374,20 @@ nav a {
   border-bottom: 1px solid #dce1ce;
   font-size: 11px;
 }
-.window-bar > a {
+.window-bar > .window-bar_Link {
   flex: 1;
   text-decoration: none;
   color: #67745d;
   text-align: center;
 }
-.window-bar > a span {
+.window-bar > .window-bar_Link .window-bar_Arrow {
   padding-left: 12px;
 }
 .traffic {
   display: flex;
   gap: 5px;
 }
-.traffic i {
+.traffic .traffic_Dot {
   width: 6px;
   height: 6px;
   border: 1px solid #aeba9a;
@@ -420,7 +420,7 @@ nav a {
   font-size: 9px;
   color: #7a836d;
 }
-.app-top h3 {
+.app-top .app-top_Title {
   font-family: var(--serif);
   font-weight: 400;
   letter-spacing: -1px;
@@ -434,7 +434,7 @@ nav a {
   vertical-align: middle;
   margin-left: 14px;
 }
-.app-top button {
+.app-top .app-top_Reset {
   font-size: 11px;
   border-bottom: 1px solid #cbd2bd;
   padding: 3px 0;
@@ -491,27 +491,27 @@ nav a {
   padding-bottom: 10px;
   margin-bottom: 13px;
 }
-.card-rule span:last-child {
+.card-rule .card-rule_Mark:last-child {
   font-size: 19px;
   line-height: 1;
   color: #8c9774;
 }
-.recipe-card h4 {
+.recipe-card .recipe-card_Title {
   font: 400 25px/1.05 var(--serif);
   letter-spacing: -.4px;
   margin-bottom: 9px;
   overflow-wrap: anywhere;
 }
-.recipe-card > p {
+.recipe-card > .recipe-card_Text {
   font-size: 10px;
   color: #717b64;
   margin-bottom: 15px;
 }
-.recipe-card details {
+.recipe-card .recipe-card_Details {
   font-size: 10px;
   margin-top: auto;
 }
-.recipe-card summary {
+.recipe-card .recipe-card_Summary {
   list-style: none;
   cursor: pointer;
   display: flex;
@@ -550,7 +550,7 @@ nav a {
   height: 4px;
   margin-right: 3px;
 }
-.app-bottom > a {
+.app-bottom > .app-bottom_Link {
   white-space: nowrap;
   text-decoration: none;
 }
@@ -573,7 +573,7 @@ nav a {
   margin: 100px auto 95px;
   padding: 0 6%;
 }
-.explanation > h2 {
+.explanation > .explanation_Title {
   margin-top: 24px;
 }
 .three {
@@ -582,20 +582,20 @@ nav a {
   gap: 55px;
   margin-top: 52px;
 }
-.three article {
+.three .three_Article {
   border-top: 1px solid #cdd4bf;
   padding-top: 18px;
 }
-.three article > span {
+.three .three_Article > .three_Number {
   font-size: 11px;
   color: #7a836d;
 }
-.three h3 {
+.three .three_Title {
   font: 400 28px/1.2 var(--serif);
   letter-spacing: -.6px;
   margin: 17px 0 12px;
 }
-.three p {
+.three .three_Text {
   font-size: 14px;
   color: var(--muted);
   line-height: 1.9;
@@ -609,11 +609,11 @@ nav a {
   grid-template-columns: 1fr 1fr;
   gap: 70px;
 }
-.examples h2 {
+.examples .examples_Title {
   font-size: 46px;
   margin: 20px 0;
 }
-.examples p:not(.eyebrow) {
+.examples .examples_Text:not(.eyebrow) {
   font-size: 14px;
   color: var(--muted);
   line-height: 1.9;
@@ -621,7 +621,7 @@ nav a {
 .example-links {
   display: grid;
 }
-.example-links a {
+.example-links .example-links_Link {
   display: flex;
   align-items: center;
   gap: 20px;
@@ -631,14 +631,14 @@ nav a {
   font: 400 25px var(--serif);
   transition: padding .2s;
 }
-.example-links a:hover {
+.example-links .example-links_Link:hover {
   padding-left: 8px;
 }
-.example-links span {
+.example-links .example-links_Number {
   font: 11px var(--sans);
   color: #818a73;
 }
-.example-links b {
+.example-links .example-links_Arrow {
   margin-left: auto;
   font: 18px var(--sans);
   font-weight: 400;
@@ -654,10 +654,10 @@ nav a {
   font-size: 50px;
   margin-bottom: 25px;
 }
-.closing h2 {
+.closing .closing_Title {
   font-size: 62px;
 }
-.closing p {
+.closing .closing_Text {
   color: var(--muted);
   font-size: 15px;
   line-height: 1.8;
@@ -690,17 +690,17 @@ footer > div {
   flex-wrap: wrap;
   margin-bottom: 21px;
 }
-.category-tabs button {
+.category-tabs .category-tabs_Button {
   border: 1px solid #d5dcc7;
   border-radius: 20px;
   padding: 6px 11px;
   font-size: 10px;
 }
-.category-tabs button[aria-pressed=true] {
+.category-tabs .category-tabs_Button[aria-pressed=true] {
   background: #dce4cd;
   border-color: #aebd95;
 }
-.category-tabs span {
+.category-tabs .category-tabs_Count {
   margin-left: 6px;
   color: #7d886b;
 }
@@ -717,7 +717,7 @@ footer > div {
   gap: 7px;
   padding-bottom: 8px;
 }
-.category-heading > span:last-child {
+.category-heading > .category-heading_Count:last-child {
   margin-left: auto;
   color: #8a927e;
   font-weight: 400;
@@ -739,24 +739,24 @@ footer > div {
   color: #899378;
   padding-top: 4px;
 }
-.recipe-row > div {
+.recipe-row > .recipe-row_Body {
   flex: 1;
   min-width: 0;
 }
-.recipe-row h5 {
+.recipe-row .recipe-row_Title {
   font: 400 23px/1.1 var(--serif);
 }
-.recipe-row p {
+.recipe-row .recipe-row_Text {
   font-size: 10px;
   color: #76816b;
   margin-top: 5px;
 }
-.recipe-row details {
+.recipe-row .recipe-row_Details {
   flex-basis: 100%;
   font-size: 10px;
   padding-left: 22px;
 }
-.recipe-row summary {
+.recipe-row .recipe-row_Summary {
   cursor: pointer;
   list-style: none;
 }
@@ -771,7 +771,7 @@ footer > div {
   gap: 7px;
   margin-bottom: 20px;
 }
-.recipe-picks label {
+.recipe-picks .recipe-picks_Label {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -782,7 +782,7 @@ footer > div {
   font-size: 10px;
   cursor: pointer;
 }
-.recipe-picks label:has(:checked) {
+.recipe-picks .recipe-picks_Label:has(:checked) {
   background: #dbe5c9;
   border-color: #a1b18a;
 }
@@ -809,14 +809,14 @@ input[type=checkbox] {
   align-items: center;
   margin-bottom: 20px;
 }
-.list-title h4 {
+.list-title .list-title_Title {
   font: 400 29px var(--serif);
 }
-.list-title > span {
+.list-title > .list-title_Count {
   font-size: 10px;
   color: #7d826b;
 }
-.list-paper h5 {
+.list-paper .list-paper_Heading {
   font-size: 12px;
   margin: 18px 0 10px;
   font-weight: 600;
@@ -830,10 +830,10 @@ input[type=checkbox] {
   line-height: 30px;
   cursor: pointer;
 }
-.ingredient-line input {
+.ingredient-line .ingredient-line_Input {
   margin-top: 8px;
 }
-.ingredient-line:has(:checked) > span {
+.ingredient-line:has(:checked) > .ingredient-line_Text {
   text-decoration: line-through;
   color: #89917d;
 }
@@ -852,12 +852,12 @@ input[type=checkbox] {
   color: #6c7a5c;
   font-size: 14px;
 }
-.empty button {
+.empty .empty_Retry {
   border: 1px solid #aebc9c;
   border-radius: 5px;
   padding: 8px 18px;
 }
-.empty a {
+.empty .empty_Link {
   font-size: 12px;
 }
 #app-view {
@@ -916,7 +916,7 @@ input[type=checkbox] {
   .brand {
     font-size: 25px;
   }
-  .brand img {
+  .brand .brand_Icon {
     width: 32px;
     height: 32px;
   }
@@ -940,7 +940,7 @@ input[type=checkbox] {
   .hero > .eyebrow {
     font-size: 10px;
   }
-  .hero h1 {
+  .hero .hero_Title {
     font-size: 65px;
     line-height: 1.02;
     margin-top: 20px;
@@ -952,7 +952,7 @@ input[type=checkbox] {
   .desktop {
     display: none;
   }
-  .hero h1 em:after {
+  .hero .hero_Emphasis:after {
     bottom: -2px;
   }
   .primary {
@@ -972,11 +972,11 @@ input[type=checkbox] {
   .bench-heading .eyebrow {
     font-size: 10px;
   }
-  .bench-heading h2 {
+  .bench-heading .bench-heading_Title {
     font-size: 34px;
     margin: 10px 0 15px;
   }
-  .bench-heading > p {
+  .bench-heading > .bench-heading_Text {
     font-size: 12px;
   }
   .studio {
@@ -992,7 +992,7 @@ input[type=checkbox] {
   .agent-title {
     font-size: 13px;
   }
-  .agent-title small {
+  .agent-title .agent-title_Subtitle {
     font-size: 10px;
   }
   .agent-mark {
@@ -1010,7 +1010,7 @@ input[type=checkbox] {
     gap: 8px;
     margin: 13px 0;
   }
-  .directions button {
+  .directions .directions_Button {
     padding: 12px;
     font-size: 12px;
     grid-template-columns: 20px 1fr 12px;
@@ -1034,10 +1034,10 @@ input[type=checkbox] {
     gap: 8px;
     font-size: 9px;
   }
-  .window-bar > a {
+  .window-bar > .window-bar_Link {
     font-size: 9px;
   }
-  .window-bar > a span {
+  .window-bar > .window-bar_Link .window-bar_Arrow {
     padding-left: 3px;
   }
   .live-tag {
@@ -1046,14 +1046,14 @@ input[type=checkbox] {
   .traffic {
     gap: 3px;
   }
-  .traffic i {
+  .traffic .traffic_Dot {
     width: 4px;
     height: 4px;
   }
   .app-content {
     padding: 19px 12px;
   }
-  .app-top h3 {
+  .app-top .app-top_Title {
     font-size: 32px;
   }
   .app-top .eyebrow {
@@ -1063,7 +1063,7 @@ input[type=checkbox] {
     font-size: 23px;
     margin-left: 7px;
   }
-  .app-top button {
+  .app-top .app-top_Reset {
     font-size: 9px;
   }
   .app-toolbar {
@@ -1077,17 +1077,17 @@ input[type=checkbox] {
     padding: 11px 10px;
     min-height: 200px;
   }
-  .recipe-card h4 {
+  .recipe-card .recipe-card_Title {
     font-size: 25px;
   }
   .card-rule {
     font-size: 8px;
     margin-bottom: 11px;
   }
-  .recipe-card > p {
+  .recipe-card > .recipe-card_Text {
     font-size: 9px;
   }
-  .recipe-card details {
+  .recipe-card .recipe-card_Details {
     font-size: 10px;
   }
   .card-foot {
@@ -1114,7 +1114,7 @@ input[type=checkbox] {
   .eyebrow {
     font-size: 10px;
   }
-  .explanation h2 {
+  .explanation .explanation_Title {
     font-size: 45px;
     margin-top: 17px;
   }
@@ -1122,15 +1122,15 @@ input[type=checkbox] {
     display: block;
     margin-top: 30px;
   }
-  .three article {
+  .three .three_Article {
     padding-top: 15px;
     margin-top: 25px;
   }
-  .three h3 {
+  .three .three_Title {
     font-size: 29px;
     margin: 12px 0 10px;
   }
-  .three p {
+  .three .three_Text {
     font-size: 13px;
   }
   .examples {
@@ -1138,27 +1138,27 @@ input[type=checkbox] {
     padding: 38px 30px;
     margin: 0 15px;
   }
-  .examples h2 {
+  .examples .examples_Title {
     font-size: 41px;
     margin: 17px 0;
   }
-  .examples p:not(.eyebrow) {
+  .examples .examples_Text:not(.eyebrow) {
     font-size: 12px;
   }
   .example-links {
     margin-top: 25px;
   }
-  .example-links a {
+  .example-links .example-links_Link {
     font-size: 25px;
     padding: 15px 0;
   }
   .closing {
     margin: 55px 20px 60px;
   }
-  .closing h2 {
+  .closing .closing_Title {
     font-size: 49px;
   }
-  .closing p {
+  .closing .closing_Text {
     font-size: 13px;
   }
   .closing > .agent-mark {
@@ -1184,10 +1184,10 @@ input[type=checkbox] {
   .list-title {
     display: block;
   }
-  .list-title h4 {
+  .list-title .list-title_Title {
     font-size: 28px;
   }
-  .recipe-picks label {
+  .recipe-picks .recipe-picks_Label {
     font-size: 10px;
   }
   .category-board {
@@ -1212,7 +1212,7 @@ input[type=checkbox] {
   }
   .recipe-card:hover,
   .primary:hover,
-  .directions button:hover {
+  .directions .directions_Button:hover {
     transform: none;
   }
 }

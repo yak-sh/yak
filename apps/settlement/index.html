@@ -11,15 +11,15 @@
       <canvas id=map></canvas>
       <div id=toolbar>
         <button id=play type=button aria-label="Pause simulation">Pause</button>
-        <label>
+        <label class="toolbar_Field">
 				Speed
 				<input id=speed type=range min=0 max=5 step=1 value=3>
 			</label>
-        <label>
+        <label class="toolbar_Field">
 				Bounty
 				<input id=bounty type=range min=0 max=24 step=1 value=6>
 			</label>
-        <label>
+        <label class="toolbar_Field">
 				Subsidy
 				<select id=industry>
 					<option value=farm>Farm</option>
@@ -39,7 +39,7 @@
     </section>
 
     <aside id=inspector>
-      <header>
+      <header class=inspector_Header>
         <h1>Settlement Market</h1>
         <p id=clock></p>
       </header>

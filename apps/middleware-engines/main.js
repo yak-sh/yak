@@ -42,9 +42,10 @@ export let mount = (document, timers = globalThis) => {
   let one = (selector) => document.querySelector(selector)
   let text = (selector, value) => one(selector).textContent = value
   let button = (id) => one(`#${id}`)
-  let list = (selector, rows) => {
+  let list = (selector, rows, className) => {
     one(selector).replaceChildren(...rows.map((row) => {
       let item = document.createElement('li')
+      item.className = className
       item.textContent = row
       return item
     }))
@@ -80,6 +81,7 @@ export let mount = (document, timers = globalThis) => {
           action.type + (action.progress ? ` · ${action.progress}%` : '')
         )
         : ['No actions yet.'],
+      'actions-item',
     )
     text(`[data-traces="${side}"]`, `${model.events.length} events`)
     list(
@@ -87,6 +89,7 @@ export let mount = (document, timers = globalThis) => {
       model.events.map((event) =>
         `t${event.at} · ${event.where} — ${event.text}`
       ),
+      'trace-event',
     )
     let runtime = model.pending?.length
       ? 'Held in middleware: UPLOAD_QUEUED (architecture.pdf).'

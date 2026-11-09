@@ -378,19 +378,23 @@ export let nodes = (
 
   // How far the work has come, as a bar under a plate's name.
   let bar = (k: number) =>
-    `<span class="Plate_Bar Plate_Bar-work"><i style="--k:${
+    `<span class="Plate_Bar Plate_Bar-work"><i class=Plate_Fill style="--k:${
       Math.min(1, k).toFixed(3)
     }"></i></span>`
   let hint = (mark: Glyph, verb: string) =>
-    `<em>${glyphText(mark)} ${verb}${phone ? '' : ' · E'}</em>`
+    `<em class=Plate_Level>${glyphText(mark)} ${verb}${
+      phone ? '' : ' · E'
+    }</em>`
 
   let plate = (n: Seen, job: Job) => {
     if (n.spent) return
     let doing = job.doing?.node?.eid == n.eid ? job.doing : null
     if (!doing && job.near?.eid != n.eid) return
     let t = TRADES[n.lode.trade]
-    let name = `<b>${esc(n.name)}</b>${
-      n.rarity == 'common' ? '' : ` <em>${GRADES[n.rarity].name}</em>`
+    let name = `<b class=Plate_Name>${esc(n.name)}</b>${
+      n.rarity == 'common'
+        ? ''
+        : ` <em class=Plate_Level>${GRADES[n.rarity].name}</em>`
     }`
     let html = doing
       ? `<span>${name}</span>${bar(doing.k)}`
@@ -413,7 +417,7 @@ export let nodes = (
     if (!b || job.near) return
     let s = STATIONS[b.craft], t = TRADES[b.craft]
     let doing = job.doing?.recipe ? job.doing : null
-    let name = `<b>${esc(s.name)}</b>`
+    let name = `<b class=Plate_Name>${esc(s.name)}</b>`
     plates.plate(
       `bench:${b.at.join()}`,
       v3(b.at, 1.9),

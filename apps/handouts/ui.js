@@ -28,15 +28,15 @@ export let need = (cond, text) => {
 // A field is {name, label, type, value, options, hint, required, accept}.
 let field = (f) => {
   let id = `f-${f.name}`
-  let label = `<label for="${id}">${esc(f.label)}</label>`
-  let hint = f.hint ? `<small>${esc(f.hint)}</small>` : ''
+  let label = `<label class="field_Label" for="${id}">${esc(f.label)}</label>`
+  let hint = f.hint ? `<small class="field_Hint">${esc(f.hint)}</small>` : ''
   if (f.type == 'textarea') {
-    return `<p class="field">${label}<textarea id="${id}" name="${f.name}" rows="4">${
+    return `<p class="field">${label}<textarea class="field_Control field_Area" id="${id}" name="${f.name}" rows="4">${
       esc(f.value)
     }</textarea>${hint}</p>`
   }
   if (f.type == 'select') {
-    return `<p class="field">${label}<select id="${id}" name="${f.name}">${
+    return `<p class="field">${label}<select class="field_Control" id="${id}" name="${f.name}">${
       f.options.map(([v, l]) =>
         `<option value="${esc(v)}"${v == f.value ? ' selected' : ''}>${
           esc(l)
@@ -50,7 +50,7 @@ let field = (f) => {
     ? ` accept="${esc(f.accept)}"`
     : ''
   let value = f.type == 'file' ? '' : ` value="${esc(f.value)}"`
-  return `<p class="field">${label}<input id="${id}" name="${f.name}" type="${
+  return `<p class="field">${label}<input class="field_Control" id="${id}" name="${f.name}" type="${
     f.type ?? 'text'
   }"${value}${f.required ? ' required' : ''}${extra}>${hint}</p>`
 }
@@ -154,13 +154,13 @@ export let footer = (el, { published, readOnly }) => {
   let words = `Install the yaks.app app called ${published}`
   let demo = location.hostname.split('.')[0] == 'yourname'
   el.innerHTML =
-    `<p>Made on <a href="https://yaks.app/">yaks.app</a>: you ask your assistant for an app, and it builds it.</p>` +
+    `<p class="foot_Text">Made on <a class="foot_Link" href="https://yaks.app/">yaks.app</a>: you ask your assistant for an app, and it builds it.</p>` +
     (demo
-      ? `<p>${
+      ? `<p class="foot_Text">${
         readOnly ? 'This is an example, so it is read-only here. ' : ''
       }Want your own? Say this to your assistant:</p>
        <button type="button" class="say" data-copy>${esc(words)}</button>
-       <p>No assistant yet? <a href="https://yaks.app/connect">Start here</a>. Your copy starts empty, at your own address.</p>`
+       <p class="foot_Text">No assistant yet? <a class="foot_Link" href="https://yaks.app/connect">Start here</a>. Your copy starts empty, at your own address.</p>`
       : '')
   el.onclick = async (ev) => {
     let b = ev.target.closest('[data-copy]')

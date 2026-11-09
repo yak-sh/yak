@@ -79,14 +79,16 @@ let home = async () => {
   $('.Recent').hidden = false
   let list = $('.Recent_list')
   list.innerHTML = recent.map((d) =>
-    `<li><a href="?doc=${encodeURIComponent(d.id)}">
-      <span class="Recent_who">${
-      d.who.slice(0, 5).map((c) => `<i style="--c:${c}"></i>`).join('')
+    `<li><a class="Recent_link" href="?doc=${encodeURIComponent(d.id)}">
+      <span class="Recent_who Recent_meta">${
+      d.who.slice(0, 5).map((c) =>
+        `<i class="Recent_dot" style="--c:${c}"></i>`
+      ).join('')
     }</span>
-      <b data-doc="${esc(d.id)}">Untitled</b>
-      <span>${d.who.length} writer${d.who.length == 1 ? '' : 's'} · ${
-      esc(ago(d.at))
-    }</span>
+      <b class="Recent_name" data-doc="${esc(d.id)}">Untitled</b>
+      <span class="Recent_meta">${d.who.length} writer${
+      d.who.length == 1 ? '' : 's'
+    } · ${esc(ago(d.at))}</span>
     </a></li>`
   ).join('')
   // Each title is the doc rebuilt from its logs, as any reader rebuilds it.
@@ -333,7 +335,7 @@ let open = async () => {
     return state
   }
   let chip = (a, s) =>
-    `<span class="Chip" style="--c:${looks(a).color}"><i></i>${
+    `<span class="Chip" style="--c:${looks(a).color}"><i class="Chip_dot"></i>${
       esc(name(a))
     } block ${s - 1}</span>`
   let step = () => {
@@ -346,7 +348,7 @@ let open = async () => {
     if (!rewound()) {
       time.past = null
       range.value = n
-      $('.Time_at').innerHTML = `<b>Now</b> · ${n} block${
+      $('.Time_at').innerHTML = `<b class="Time_position">Now</b> · ${n} block${
         n == 1 ? '' : 's'
       } in ${
         now.checks.filter((c) => c.trusted.length).length
@@ -359,18 +361,18 @@ let open = async () => {
     let t = at(all, k, time.forks)
     time.past = { ...t, state: rebuild(t.applied) }
     $('.Time_at').innerHTML =
-      `<b>Rewound</b> to ${k} of ${n} blocks · ${t.applied.length} applied${
+      `<b class="Time_position">Rewound</b> to ${k} of ${n} blocks · ${t.applied.length} applied${
         t.waiting.length
           ? ` · <span class="Wait">${t.waiting.length} waiting</span>`
           : ''
       }`
     $('.Time_queue').innerHTML =
       t.waiting.slice(0, 3).map((c) =>
-        `<li>${chip(c.actor, c.seq)} waits for ${
+        `<li class="Time_wait">${chip(c.actor, c.seq)} waits for ${
           needs(c, t.clock).map(([a, s]) => chip(a, s)).join(' ')
         }</li>`
       ).join('') + (t.waiting.length > 3
-        ? `<li>and ${t.waiting.length - 3} more</li>`
+        ? `<li class="Time_wait">and ${t.waiting.length - 3} more</li>`
         : '')
     return t.phase
   }

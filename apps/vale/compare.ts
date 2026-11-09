@@ -172,7 +172,7 @@ export let stat = (
     {},
     h(Stats.Mark, {
       'aria-hidden': 'true',
-      dangerouslySetInnerHTML: { __html: glyph(mark) },
+      dangerouslySetInnerHTML: { __html: glyph(mark, 'Stats_Glyph') },
     }),
     h(Stats.Words, {}, ...words),
   )

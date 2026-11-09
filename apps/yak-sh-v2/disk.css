@@ -33,19 +33,19 @@
 
   /* The shadow belongs to the slot a disk lies in, since the disk's own
    * outline (its clipped corner) would clip a shadow of its own. */
-  & li {
+  & .Shelf_Slot {
     position: relative;
     filter: drop-shadow(0 .35em .3em rgba(0, 0, 0, .55));
     transition: filter .35s var(--ease-out);
   }
 
-  & li:has(.Disk:hover),
-  & li:has(.Disk:focus-visible) {
+  & .Shelf_Slot:has(.Disk:hover),
+  & .Shelf_Slot:has(.Disk:focus-visible) {
     filter: drop-shadow(0 1.2em .8em rgba(0, 0, 0, .55));
   }
 
   /* Where a disk lay before it went into the drive. */
-  & li::before {
+  & .Shelf_Slot::before {
     content: '';
     position: absolute;
     inset: 0;
@@ -55,7 +55,7 @@
     transition: opacity .3s;
   }
 
-  & li:has(.Disk[data-out])::before {
+  & .Shelf_Slot:has(.Disk[data-out])::before {
     opacity: 1;
   }
 }
@@ -225,11 +225,11 @@
   font-size: .56em;
   letter-spacing: .06em;
 
-  & b {
+  & .Disk_Brand {
     font-weight: 700;
   }
 
-  & i {
+  & .Disk_Number {
     font-style: normal;
     color: #6d6a62;
   }

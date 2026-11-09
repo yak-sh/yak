@@ -52,7 +52,7 @@ a {
   margin: 0;
   font: 700 clamp(26px, 5vw, 34px)/1.1 var(--serif);
 }
-.top__title a {
+.top__title .top_Link {
   color: inherit;
   text-decoration: none;
 }
@@ -110,7 +110,7 @@ a {
   gap: 8px;
   margin-bottom: 14px;
 }
-.find input {
+.find .find_Input {
   flex: 1;
   font: 16px/1.4 var(--sans);
   padding: 10px 12px;
@@ -251,19 +251,19 @@ a {
   margin-top: 18px;
   font-size: 17px;
 }
-.sheet__text h3 {
+.sheet__text .sheet_Heading {
   font: 700 18px/1.3 var(--serif);
   margin: 22px 0 6px;
 }
-.sheet__text p {
+.sheet__text .sheet_Paragraph {
   margin: 0 0 12px;
 }
-.sheet__text ul,
-.sheet__text ol {
+.sheet__text .sheet_List,
+.sheet__text .sheet_List {
   margin: 0 0 12px;
   padding-left: 1.3em;
 }
-.sheet__text li {
+.sheet__text .sheet_Item {
   margin: 3px 0;
 }
 .tools {
@@ -296,16 +296,14 @@ dialog::backdrop {
   display: grid;
   gap: 5px;
 }
-.field label {
+.field .field_Label {
   font-weight: 600;
   font-size: 14px;
 }
-.field small {
+.field .field_Hint {
   color: var(--quiet);
 }
-.field input,
-.field select,
-.field textarea {
+.field .field_Control {
   font: 16px/1.4 var(--sans);
   padding: 10px 12px;
   border: 1px solid #d3c4be;
@@ -314,7 +312,7 @@ dialog::backdrop {
   color: var(--ink);
   width: 100%;
 }
-.field textarea {
+.field .field_Area {
   field-sizing: content;
   min-height: 6lh;
   max-height: 50vh;
@@ -341,10 +339,10 @@ dialog::backdrop {
   color: var(--quiet);
   font-size: 14px;
 }
-.foot p {
+.foot .foot_Text {
   margin: 0 0 8px;
 }
-.foot a {
+.foot .foot_Link {
   color: var(--ink);
 }
 .say {

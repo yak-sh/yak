@@ -57,7 +57,7 @@
   white-space: nowrap;
   overflow: hidden;
 
-  & > :first-child::before {
+  & > .Pane_Name:first-child::before {
     content: '── ';
   }
 }
@@ -108,7 +108,7 @@
   cursor: text;
 }
 
-.Shell_Log > div {
+.Shell_Log > .Shell_Row {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   min-height: 1.3em;
@@ -129,11 +129,6 @@
 
 .Out-sys {
   color: var(--ph-lo);
-
-  & b {
-    color: var(--ph);
-    font-weight: 400;
-  }
 }
 
 .Fresh {
@@ -238,7 +233,7 @@
     flex: 1;
   }
 
-  & b {
+  & .Bar_Name {
     font-weight: 700;
   }
 }
@@ -308,7 +303,7 @@
   overflow: hidden;
   mask-image: linear-gradient(transparent, #000 3em);
 
-  & > div {
+  & > .Graph_Write {
     flex: none;
     white-space: nowrap;
     overflow: hidden;

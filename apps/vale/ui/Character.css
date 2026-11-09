@@ -47,11 +47,6 @@
   align-content: center;
   gap: 0.5rem;
   min-width: 0;
-
-  & small {
-    font-size: 0.8rem;
-    color: var(--faint);
-  }
 }
 
 .Character_Name {

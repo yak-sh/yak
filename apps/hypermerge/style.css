@@ -102,7 +102,7 @@ button {
   opacity: .45;
   cursor: default;
 }
-.Button svg {
+.Button .Button_icon {
   width: 16px;
   height: 16px;
 }
@@ -162,7 +162,7 @@ button {
   font: 500 12px/1.6 var(--sans);
   white-space: nowrap;
 }
-.Chip i {
+.Chip .Chip_dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
@@ -204,11 +204,11 @@ button {
   letter-spacing: -.01em;
   text-decoration: none;
 }
-.Bar_mark svg {
+.Bar_mark .Bar_icon {
   width: 24px;
   height: 24px;
 }
-.Bar_mark em {
+.Bar_mark .Bar_note {
   font: italic 400 17px/1 var(--serif);
   color: var(--ink-2);
 }
@@ -231,7 +231,7 @@ button {
   gap: 56px;
   min-height: calc(86vh - var(--bar));
 }
-.Hero h1 {
+.Hero .Hero_title {
   margin: 0;
   font: 400 clamp(2.6rem, 5.4vw, 4.4rem)/1.02 var(--serif);
   letter-spacing: -.025em;
@@ -258,11 +258,11 @@ button {
   justify-self: center;
   overflow: visible;
 }
-.Art_col text {
+.Art_col .Art_label {
   font: 500 12px var(--sans);
   fill: var(--muted);
 }
-.Art_col line {
+.Art_col .Art_spine {
   stroke: var(--c);
   stroke-width: 2;
   opacity: .25;
@@ -312,7 +312,7 @@ button {
     opacity: 0;
   }
 }
-.Recent h2 {
+.Recent .Recent_title {
   margin: 0 0 16px;
   font: 500 13px var(--mono);
   letter-spacing: .06em;
@@ -327,7 +327,7 @@ button {
   padding: 0;
   list-style: none;
 }
-.Recent_list a {
+.Recent_list .Recent_link {
   display: grid;
   gap: 6px;
   padding: 18px 20px;
@@ -337,24 +337,24 @@ button {
   text-decoration: none;
   transition: box-shadow .2s, transform .2s;
 }
-.Recent_list a:hover {
+.Recent_list .Recent_link:hover {
   box-shadow: var(--lift);
   transform: translateY(-2px);
 }
-.Recent_list b {
+.Recent_list .Recent_name {
   font: 500 19px/1.3 var(--serif);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.Recent_list span {
+.Recent_list .Recent_meta {
   font-size: 13px;
   color: var(--muted);
 }
 .Recent_who {
   display: flex;
 }
-.Recent_who i {
+.Recent_who .Recent_dot {
   width: 14px;
   height: 14px;
   margin-right: -4px;
@@ -387,17 +387,17 @@ button {
 .Chapter-on {
   opacity: 1;
 }
-.Chapter p {
+.Chapter .Chapter_text {
   margin: 0 0 14px;
 }
-.Chapter h1 {
+.Chapter .Chapter_title {
   margin: 0 0 22px;
   font: 400 clamp(2.2rem, 3.4vw, 3rem)/1.05 var(--serif);
   letter-spacing: -.022em;
   color: var(--ink);
   font-variation-settings: 'opsz' 144;
 }
-.Chapter h2 {
+.Chapter .Chapter_heading {
   margin: 6px 0 16px;
   font: 400 1.85rem/1.15 var(--serif);
   letter-spacing: -.015em;
@@ -408,7 +408,7 @@ button {
   min-height: calc(78vh - var(--bar));
   padding-top: 9vh;
 }
-.Chapter-intro p {
+.Chapter-intro .Chapter_text {
   font-size: 16.5px;
 }
 .Chapter_n {
@@ -423,7 +423,7 @@ button {
   text-transform: uppercase;
   color: var(--muted);
 }
-.Hint span {
+.Hint .Hint_arrow {
   display: inline-block;
   animation: nudge 1.8s infinite ease-in-out;
 }
@@ -444,7 +444,7 @@ button {
   list-style: none;
   font-size: 14px;
 }
-.Reading li {
+.Reading .Reading_item {
   padding: 7px 0;
   border-top: 1px solid var(--rule);
 }
@@ -544,7 +544,7 @@ button {
   cursor: pointer;
   user-select: none;
 }
-.Switch input {
+.Switch .Switch_input {
   position: absolute;
   opacity: 0;
 }
@@ -568,13 +568,13 @@ button {
   box-shadow: 0 1px 3px rgb(0 0 0 / .25);
   transition: left .2s cubic-bezier(.3, .8, .3, 1.2);
 }
-.Switch input:not(:checked) + .Switch_track {
+.Switch .Switch_input:not(:checked) + .Switch_track {
   background: color-mix(in oklab, var(--muted) 60%, var(--rule));
 }
-.Switch input:not(:checked) + .Switch_track::after {
+.Switch .Switch_input:not(:checked) + .Switch_track::after {
   left: 2px;
 }
-.Switch input:focus-visible + .Switch_track {
+.Switch .Switch_input:focus-visible + .Switch_track {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -684,7 +684,7 @@ button {
   font-size: 14px;
   white-space: nowrap;
 }
-.Head_name i {
+.Head_name .Head_dot {
   width: 10px;
   height: 10px;
   border-radius: 3px;
@@ -696,7 +696,7 @@ button {
   color: var(--muted);
   white-space: nowrap;
 }
-.Head_key code {
+.Head_key .Head_id {
   font-size: 11.5px;
 }
 .Logs_view {
@@ -724,12 +724,12 @@ button {
   font-size: 11.5px;
   color: var(--muted);
 }
-.Logs_key span {
+.Logs_key .Logs_legend {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.Logs_key i {
+.Logs_key .Logs_mark {
   display: inline-block;
 }
 .Key_block {
@@ -763,14 +763,14 @@ button {
   transform-origin: center;
   transition: opacity .35s;
 }
-.Block rect:first-child {
+.Block .Block_face:first-child {
   fill: color-mix(in oklab, var(--c) 9%, var(--surface));
   stroke: color-mix(in oklab, var(--c) 40%, transparent);
   stroke-width: 1.2;
   transition: stroke .2s, fill .2s;
 }
-.Block:hover rect:first-child,
-.Block:focus-visible rect:first-child {
+.Block:hover .Block_face:first-child,
+.Block:focus-visible .Block_face:first-child {
   stroke: var(--c);
   fill: color-mix(in oklab, var(--c) 15%, var(--surface));
 }
@@ -785,14 +785,14 @@ button {
   font: 10.5px var(--mono);
   fill: var(--muted);
 }
-.Block-selected rect:first-child {
+.Block-selected .Block_face:first-child {
   stroke: var(--c);
   stroke-width: 2.2;
   fill: color-mix(in oklab, var(--c) 18%, var(--surface));
   filter: drop-shadow(0 6px 14px color-mix(in oklab, var(--c) 35%,
     transparent));
 }
-.Block-held rect:first-child {
+.Block-held .Block_face:first-child {
   fill: var(--surface);
   stroke: var(--muted);
   stroke-dasharray: 5 4;
@@ -812,7 +812,7 @@ button {
 .Block-pending .Block_in {
   opacity: .14;
 }
-.Block-waiting rect:first-child {
+.Block-waiting .Block_face:first-child {
   stroke: var(--wait);
   stroke-width: 2;
   stroke-dasharray: 6 4;
@@ -843,11 +843,11 @@ button {
   fill: var(--muted);
   fill: context-stroke;
 }
-.Seal rect {
+.Seal .Seal_face {
   fill: color-mix(in oklab, var(--ok) 10%, var(--surface));
   stroke: color-mix(in oklab, var(--ok) 45%, transparent);
 }
-.Seal text {
+.Seal .Seal_label {
   font: 500 10.5px var(--mono);
   fill: var(--ok);
   text-anchor: middle;
@@ -859,14 +859,14 @@ button {
   opacity: .7;
   stroke-width: 4;
 }
-.Stage[data-focus='logs'] .Head_name i {
+.Stage[data-focus='logs'] .Head_name .Head_dot {
   box-shadow: 0 0 0 4px color-mix(in oklab, var(--c) 22%, transparent);
 }
 .Stage[data-focus='logs'] .Dep,
 .Stage[data-focus='blocks'] .Dep {
   opacity: .12;
 }
-.Stage[data-focus='blocks'] .Block rect:first-child {
+.Stage[data-focus='blocks'] .Block .Block_face:first-child {
   stroke: var(--c);
 }
 .Stage[data-focus='blocks'] .Block_edge {
@@ -887,7 +887,7 @@ button {
 .Stage[data-focus='seal'] .Dep {
   opacity: .1;
 }
-.Stage[data-focus='seal'] .Seal rect {
+.Stage[data-focus='seal'] .Seal .Seal_face {
   stroke: var(--ok);
   stroke-width: 1.8;
   fill: color-mix(in oklab, var(--ok) 18%, var(--surface));
@@ -895,7 +895,7 @@ button {
 .Stage[data-focus='replay'] .Dep {
   opacity: .3;
 }
-.Stage[data-focus='merge'] .Block-held rect:first-child {
+.Stage[data-focus='merge'] .Block-held .Block_face:first-child {
   stroke: var(--wait);
 }
 
@@ -934,17 +934,17 @@ button {
   align-items: center;
   gap: 10px;
 }
-.Detail_head i {
+.Detail_head .Detail_dot {
   width: 12px;
   height: 12px;
   border-radius: 4px;
   background: var(--c);
 }
-.Detail_head div {
+.Detail_head .Detail_writer {
   display: grid;
   flex: 1;
 }
-.Detail_head span {
+.Detail_head .Detail_meta {
   font: 11.5px var(--mono);
   color: var(--muted);
 }
@@ -962,7 +962,7 @@ button {
   margin: 14px 0 4px;
   font: 500 20px/1.3 var(--serif);
 }
-.Detail h4 {
+.Detail .Detail_heading {
   margin: 18px 0 8px;
   font: 500 11px var(--mono);
   letter-spacing: .08em;
@@ -972,7 +972,7 @@ button {
 .Detail_deps {
   margin: 0;
 }
-.Detail_deps small {
+.Detail_deps .Detail_note {
   display: block;
   margin-top: 4px;
   color: var(--muted);
@@ -989,7 +989,7 @@ button {
   font: 12px/1.5 var(--mono);
   color: var(--ink-2);
 }
-.Detail_ops li {
+.Detail_ops .Detail_op {
   display: flex;
   gap: 8px;
   align-items: baseline;
@@ -1027,22 +1027,22 @@ button {
   margin: 0;
   font-size: 12.5px;
 }
-.Detail_proof dt {
+.Detail_proof .Detail_term {
   color: var(--muted);
 }
-.Detail_proof dd {
+.Detail_proof .Detail_value {
   margin: 0;
   color: var(--ink-2);
 }
 .Detail_raw {
   margin-top: 16px;
 }
-.Detail_raw summary {
+.Detail_raw .Detail_summary {
   font-size: 12.5px;
   color: var(--ink-2);
   cursor: pointer;
 }
-.Detail_raw pre {
+.Detail_raw .Detail_code {
   max-height: 240px;
   overflow: auto;
   margin: 10px 0 0;
@@ -1097,7 +1097,7 @@ button {
 .Time_play:active {
   transform: scale(.94);
 }
-.Time_play svg {
+.Time_play .Time_symbol {
   width: 17px;
   height: 17px;
 }
@@ -1156,11 +1156,11 @@ button {
   font-size: 12.5px;
   color: var(--muted);
 }
-.Time_at b {
+.Time_at .Time_position {
   color: var(--ink);
   font-weight: 600;
 }
-.Stage-past .Time_at b {
+.Stage-past .Time_at .Time_position {
   color: var(--wait);
 }
 .Time_queue {
@@ -1170,7 +1170,7 @@ button {
   font-size: 12.5px;
   color: var(--ink-2);
 }
-.Time_queue li {
+.Time_queue .Time_wait {
   padding: 2px 0;
 }
 .Pane-past {
@@ -1200,11 +1200,11 @@ button {
   padding: 18vh 0;
   text-align: center;
 }
-.Missing h2 {
+.Missing .Missing_title {
   font: 400 2.2rem var(--serif);
   margin: 0 0 8px;
 }
-.Missing p {
+.Missing .Missing_text {
   color: var(--muted);
   margin: 0 0 28px;
 }
@@ -1236,7 +1236,7 @@ button {
   .Bar {
     padding: 0 16px;
   }
-  .Bar_mark em {
+  .Bar_mark .Bar_note {
     display: none;
   }
   .Hero {
@@ -1288,10 +1288,10 @@ button {
     opacity: .6;
     scroll-snap-align: center;
   }
-  .Chapter h1 {
+  .Chapter .Chapter_title {
     font-size: 1.9rem;
   }
-  .Chapter h2 {
+  .Chapter .Chapter_heading {
     font-size: 1.5rem;
   }
   .Hint {

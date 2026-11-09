@@ -113,7 +113,7 @@ h1 em {
   max-width: 780px;
   margin-bottom: 14px;
 }
-.lede strong {
+.lede .lede-emphasis {
   font-weight: 550;
 }
 .context {
@@ -149,7 +149,7 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 6px;
 }
-.file span {
+.file .file-mark {
   margin-right: 8px;
 }
 .controls {
@@ -182,7 +182,7 @@ button.primary {
 button.primary:hover:not(:disabled) {
   background: #225441;
 }
-button.primary span {
+button.primary .primary-mark {
   margin-left: 15px;
 }
 button.quiet {
@@ -206,7 +206,7 @@ button:disabled {
   font-size: .78rem;
   color: var(--muted);
 }
-.milestones span {
+.milestones .milestones-phase {
   border-top: 3px solid var(--line);
   padding-top: 7px;
 }
@@ -229,7 +229,7 @@ button:disabled {
   font-size: 1.35rem;
   color: var(--accent);
 }
-.insight p {
+.insight .insight-text {
   margin: 0;
   font-size: .95rem;
   max-width: 960px;
@@ -270,7 +270,7 @@ h3 {
   margin-bottom: 5px;
   font-weight: 650;
 }
-.lane-title p {
+.lane-title .lane-description {
   color: var(--muted);
   font-size: .86rem;
   margin-bottom: 20px;
@@ -283,12 +283,12 @@ h3 {
   white-space: nowrap;
   padding-bottom: 24px;
 }
-.flow span {
+.flow .flow-step {
   border: 1px solid var(--line);
   border-radius: 4px;
   padding: 6px 8px;
 }
-.flow b {
+.flow .flow-arrow {
   color: var(--muted);
   font-weight: 400;
 }
@@ -309,8 +309,8 @@ h3 {
   border-bottom: 1px solid var(--line);
   padding-bottom: 22px;
 }
-.widget > span,
-.runtime > span {
+.widget > .widget-title,
+.runtime > .runtime-title {
   font-size: .85rem;
   font-weight: 550;
 }
@@ -320,7 +320,7 @@ small {
   font-size: .74rem;
   display: block;
 }
-.widget strong {
+.widget .widget-status {
   font-size: .82rem;
   font-weight: 550;
   text-align: right;
@@ -359,8 +359,8 @@ h4 {
   font-weight: 650;
   margin-bottom: 0;
 }
-.store-head span,
-.log-head span {
+.store-head .store-count,
+.log-head .log-count {
   font-size: .75rem;
   color: var(--muted);
 }
@@ -384,7 +384,7 @@ pre {
   padding: 16px 0;
   min-height: 112px;
 }
-.runtime p {
+.runtime .runtime-text {
   font-size: .8rem;
   color: var(--muted);
   margin: 7px 0 0;
@@ -397,7 +397,7 @@ pre {
   margin: 0;
   padding-left: 22px;
 }
-.actions li::marker {
+.actions .actions-item::marker {
   color: var(--muted);
 }
 .actions .empty {
@@ -412,17 +412,17 @@ pre {
 summary {
   font-size: .85rem;
 }
-.trace summary span {
+.trace .trace-summary .trace-count {
   color: var(--muted);
   float: right;
   font-size: .75rem;
 }
-.trace ol {
+.trace .trace-events {
   font-size: .78rem;
   padding-left: 19px;
   margin-bottom: 0;
 }
-.trace li {
+.trace .trace-event {
   margin-bottom: 10px;
   overflow-wrap: anywhere;
 }
@@ -436,10 +436,10 @@ summary {
   border: 1px solid var(--line);
   border-radius: 7px;
 }
-.second-view h3 {
+.second-view .second-view-title {
   font-size: .95rem;
 }
-.second-view p {
+.second-view .second-view-text {
   color: var(--muted);
   font-size: .8rem;
   margin: 0;
@@ -450,11 +450,11 @@ summary {
   gap: 25px;
   flex-shrink: 0;
 }
-.status-pair span {
+.status-pair .status-label {
   font-size: .75rem;
   color: var(--muted);
 }
-.status-pair strong {
+.status-pair .status-value {
   display: block;
   font-size: .8rem;
   color: var(--ink);
@@ -471,7 +471,7 @@ summary {
 .lesson .eyebrow {
   margin-bottom: 14px;
 }
-.lesson h2 {
+.lesson .lesson-title {
   font-size: clamp(2rem, 4vw, 3rem);
   margin-bottom: 30px;
 }
@@ -480,12 +480,12 @@ summary {
   grid-template-columns: repeat(3, 1fr);
   gap: 32px;
 }
-.principles span {
+.principles .principles-title {
   font-size: .8rem;
   color: var(--accent);
   font-weight: 650;
 }
-.principles p {
+.principles .principles-text {
   margin: 10px 0 0;
   font-size: .95rem;
   color: var(--muted);
@@ -495,22 +495,22 @@ summary {
   border-bottom: 1px solid var(--line);
   padding: 22px 0;
 }
-.source summary {
+.source .source-summary {
   font-size: 1.1rem;
   font-weight: 550;
 }
-.source summary span + span {
+.source .source-summary .source-label + .source-label {
   font-size: .8rem;
   color: var(--muted);
   float: right;
   font-weight: 400;
 }
-.source p {
+.source .source-text {
   font-size: .9rem;
   color: var(--muted);
   margin-top: 24px;
 }
-.source pre {
+.source .source-code {
   overflow-x: auto;
   background: #25332e;
   color: #edf1e7;
@@ -523,19 +523,19 @@ summary {
   grid-template-columns: 1fr 1fr;
   gap: 24px;
 }
-.code-pair > div {
+.code-pair > .code-column {
   min-width: 0;
 }
 .nuance {
   max-width: 850px;
   padding: 32px 0;
 }
-.nuance h2 {
+.nuance .nuance-title {
   font-size: 1rem;
   font-weight: 650;
   margin-bottom: 10px;
 }
-.nuance p {
+.nuance .nuance-text {
   font-size: .85rem;
   color: var(--muted);
   margin-bottom: 10px;
@@ -568,7 +568,7 @@ footer {
     gap: 4px;
     font-size: .64rem;
   }
-  .flow span {
+  .flow .flow-step {
     padding: 5px;
   }
   .second-view {
@@ -634,7 +634,7 @@ footer {
     font-size: .75rem;
     justify-content: space-between;
   }
-  .flow span {
+  .flow .flow-step {
     padding: 6px 8px;
   }
   .state {
@@ -652,7 +652,7 @@ footer {
   .lesson {
     margin-top: 50px;
   }
-  .source summary span + span {
+  .source .source-summary .source-label + .source-label {
     float: none;
     display: block;
     margin-top: 6px;
@@ -675,11 +675,11 @@ footer {
   margin-bottom: 20px;
   align-items: center;
 }
-.configuration label {
+.configuration .configuration-label {
   font-size: .9rem;
   font-weight: 600;
 }
-.configuration select {
+.configuration .configuration-select {
   font: inherit;
   color: var(--ink);
   background: var(--surface);
@@ -688,7 +688,7 @@ footer {
   border-radius: 5px;
   width: min(100%, 420px);
 }
-.configuration p {
+.configuration .configuration-help {
   grid-column: 2;
   font-size: .85rem;
   color: var(--muted);
@@ -720,7 +720,7 @@ footer {
   .configuration {
     grid-template-columns: 1fr;
   }
-  .configuration p {
+  .configuration .configuration-help {
     grid-column: 1;
   }
 }

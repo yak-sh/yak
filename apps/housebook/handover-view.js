@@ -14,14 +14,18 @@ export let transfer = (
     el(
       'div',
       { class: 'handover-intro' },
-      el('span', {}, '↗'),
+      el('span', { class: 'handover-intro_Icon' }, '↗'),
       el(
         'div',
         {},
-        el('h2', {}, 'Choose what goes with the house'),
+        el(
+          'h2',
+          { class: 'handover-intro_Title' },
+          'Choose what goes with the house',
+        ),
         el(
           'p',
-          {},
+          { class: 'handover-intro_Text' },
           'Download a standalone HTML file to open or print to PDF. Selected items, their documents and your circuit directory travel with it. Review the contents before you give it to someone. Contacts are not included.',
         ),
       ),
@@ -29,11 +33,11 @@ export let transfer = (
     el(
       'div',
       { class: 'section-head' },
-      el('h2', {}, 'Included items'),
+      el('h2', { class: 'section-head_Title' }, 'Included items'),
       button('Select all', () => {
         items().forEach((r) => select(id(r), true))
         navigate('handover')
-      }),
+      }, 'section-head_Action'),
     ),
     el(
       'div',
@@ -43,6 +47,7 @@ export let transfer = (
           'label',
           { class: 'check' },
           el('input', {
+            class: 'check_Input',
             type: 'checkbox',
             checked: selected.has(id(row)),
             onChange: (event) => select(id(row), event.target.checked),
@@ -50,8 +55,8 @@ export let transfer = (
           el(
             'span',
             {},
-            el('strong', {}, title(row)),
-            el('small', {}, row.house_item.category),
+            el('strong', { class: 'check_Title' }, title(row)),
+            el('small', { class: 'check_Detail' }, row.house_item.category),
           ),
         )
       ),
@@ -59,7 +64,11 @@ export let transfer = (
     el(
       'label',
       { class: 'check' },
-      el('input', { type: 'checkbox', id: 'include-history' }),
+      el('input', {
+        class: 'check_Input',
+        type: 'checkbox',
+        id: 'include-history',
+      }),
       'Include the selected items’ logbook history (may contain costs and names)',
     ),
     el(

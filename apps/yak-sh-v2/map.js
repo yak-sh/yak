@@ -131,14 +131,14 @@ export let draw = (figure, pkgs, { groups = new Map(), open }) => {
     let node = make(
       'a',
       {
-        class: 'Map_Node',
+        class: 'Map_Node Body_Link',
         href: p.jsr
           ? `https://jsr.io/@yaks/${p.name}`
           : `https://github.com/yak-sh/yak/tree/main/packages/${p.name}`,
         'data-pkg': p.name,
       },
-      make('circle', { cx: x, cy: y, r }),
-      make('text', { x: x + DOT, y }, p.name),
+      make('circle', { class: 'Map_Dot', cx: x, cy: y, r }),
+      make('text', { class: 'Map_Name', x: x + DOT, y }, p.name),
     )
     node.style.setProperty('--delay', `${depth.get(p.name) * 70}ms`)
     nodes.append(node)
@@ -147,6 +147,7 @@ export let draw = (figure, pkgs, { groups = new Map(), open }) => {
   let svg = make(
     'svg',
     {
+      class: 'Map_Drawing',
       viewBox: `0 ${-half} ${width} ${half * 2}`,
       role: 'img',
       'aria-label':
@@ -189,6 +190,7 @@ export let draw = (figure, pkgs, { groups = new Map(), open }) => {
         : names.join(' ') || 'none'
     readout.replaceChildren()
     let b = document.createElement('b')
+    b.className = 'Map_Package'
     b.textContent = `@yaks/${name}`
     readout.append(
       b,

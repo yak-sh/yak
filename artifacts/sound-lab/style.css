@@ -160,7 +160,7 @@ h2 {
 .play:hover {
   background: #ff7951;
 }
-.play span {
+.play .play_Icon {
   font-size: 20px;
 }
 .transport-note {
@@ -173,7 +173,7 @@ h2 {
   font-size: 11px;
   margin-top: 0;
 }
-.tempo input {
+.tempo .tempo_Input {
   background: transparent;
   border: 0;
   border-bottom: 1px solid #9da294;
@@ -182,7 +182,7 @@ h2 {
   padding: 2px;
   width: 68px;
 }
-.tempo span {
+.tempo .tempo_Unit {
   font-size: 10px;
 }
 .display {
@@ -214,7 +214,7 @@ h2 {
   display: flex;
   gap: 3px;
 }
-.display-modes button {
+.display-modes .display-modes_Button {
   font-family: monospace;
   font-size: 10px;
   padding: 5px 7px;
@@ -224,7 +224,7 @@ h2 {
   color: #92a385;
   border-radius: 2px;
 }
-.display-modes button[aria-pressed=true] {
+.display-modes .display-modes_Button[aria-pressed=true] {
   background: #33432e;
   color: #daedba;
 }
@@ -301,11 +301,11 @@ h2 {
   background: #4d91a8;
   border-color: #448499;
 }
-.dial input {
+.dial .dial_Input {
   width: 65px;
   margin: 0;
 }
-.dial output {
+.dial .dial_Value {
   font-family: monospace;
   font-size: 11px;
 }
@@ -325,16 +325,16 @@ h2 {
   align-items: center;
   gap: 10px;
 }
-.project-name label,
+.project-name .project-name_Label,
 .preset-label {
   font-size: 10px;
   letter-spacing: .5px;
   color: var(--muted);
 }
-.project-name label {
+.project-name .project-name_Label {
   display: block;
 }
-.project-name input {
+.project-name .project-name_Input {
   border: 0;
   background: transparent;
   font-size: 17px;
@@ -349,7 +349,7 @@ h2 {
   align-items: center;
   gap: 8px;
 }
-.preset-label select {
+.preset-label .preset-label_Select {
   font-size: 12px;
   padding: 6px 8px;
 }
@@ -386,14 +386,14 @@ h2 {
   align-items: center;
   gap: 7px;
 }
-.pattern-tabs button {
+.pattern-tabs .pattern-tabs_Button {
   width: 32px;
   height: 30px;
   padding: 0;
   font-family: monospace;
   font-size: 15px;
 }
-.pattern-tabs button[aria-pressed=true] {
+.pattern-tabs .pattern-tabs_Button[aria-pressed=true] {
   background: var(--orange);
   border-color: #dc5932;
 }
@@ -401,11 +401,11 @@ h2 {
   font-size: 11px;
   gap: 10px;
 }
-.pattern-tools button {
+.pattern-tools .pattern-tools_Button {
   font-size: 11px;
   padding: 7px 9px;
 }
-.pattern-tools select {
+.pattern-tools .pattern-tools_Select {
   font-size: 11px;
   padding: 5px;
 }
@@ -446,7 +446,7 @@ h2 {
   align-items: center;
   gap: 7px;
 }
-.track-label i {
+.track-label .track-label_Dot {
   display: block;
   width: 7px;
   height: 7px;
@@ -506,7 +506,7 @@ h2 {
   text-align: center;
   margin-bottom: 6px;
 }
-.steps-header span:first-child {
+.steps-header .steps-header_Label:first-child {
   text-align: left;
   padding: 0 8px;
 }
@@ -520,20 +520,20 @@ h2 {
   font-size: 11px;
   color: var(--muted);
 }
-.editor > div {
+.editor > .editor_Controls {
   display: flex;
   gap: 15px;
   align-items: center;
 }
-.editor label {
+.editor .editor_Label {
   display: flex;
   align-items: center;
   gap: 7px;
 }
-.editor input {
+.editor .editor_Input {
   width: 85px;
 }
-.editor select {
+.editor .editor_Select {
   font-size: 11px;
   padding: 3px;
 }
@@ -560,7 +560,7 @@ h2 {
 .lower .sub {
   flex-shrink: 0;
 }
-.lower > section {
+.lower > .lower_Section {
   min-width: 0;
 }
 .sub {
@@ -574,7 +574,7 @@ h2 {
   gap: 6px;
   margin: 8px 0 5px;
 }
-.chain button {
+.chain .chain_Button {
   font-family: monospace;
   font-size: 18px;
   min-height: 39px;
@@ -582,14 +582,14 @@ h2 {
   position: relative;
   background: #c7cbbf;
 }
-.chain button small {
+.chain .chain_Button .chain_Number {
   position: absolute;
   top: 3px;
   left: 5px;
   font-size: 8px;
   color: #68715f;
 }
-.chain button.current {
+.chain .chain_Button.current {
   background: var(--orange);
 }
 #mode[aria-pressed=true],
@@ -611,7 +611,7 @@ h2 {
   border-top: 4px solid var(--track);
   border-radius: 4px;
 }
-.pad b {
+.pad .pad_Key {
   display: block;
   font-size: 15px;
   margin-bottom: 5px;
@@ -647,13 +647,13 @@ h2 {
   font-size: 11px;
   margin-bottom: 7px;
 }
-.strip-name i {
+.strip-name .strip-name_Dot {
   width: 8px;
   height: 8px;
   background: var(--track);
   border-radius: 50%;
 }
-.strip label {
+.strip .strip_Label {
   font-size: 10px;
   color: var(--muted);
   display: grid;
@@ -662,7 +662,7 @@ h2 {
   align-items: center;
   margin-top: 2px;
 }
-.strip input {
+.strip .strip_Input {
   width: 100%;
   margin: 0;
   display: block;
@@ -671,7 +671,7 @@ h2 {
   grid-row: 1;
   height: 12px;
 }
-.strip output {
+.strip .strip_Value {
   font-family: monospace;
   grid-column: 3;
   grid-row: 1;
@@ -683,14 +683,14 @@ h2 {
   gap: 5px;
   margin-top: 7px;
 }
-.strip-buttons button {
+.strip-buttons .strip-buttons_Button {
   flex: 1;
   font-size: 10px;
   padding: 4px 2px;
   box-shadow: none;
   min-height: 24px;
 }
-.strip-buttons button[aria-pressed=true] {
+.strip-buttons .strip-buttons_Button[aria-pressed=true] {
   background: var(--track);
 }
 .device-footer {
@@ -723,7 +723,7 @@ dialog::backdrop {
   align-items: center;
   margin-bottom: 22px;
 }
-.modal-head button {
+.modal-head .modal-head_Close {
   font-size: 22px;
   box-shadow: none;
   padding: 3px 10px;
@@ -736,10 +736,10 @@ dialog::backdrop {
   padding: 13px 0;
   border-bottom: 1px solid var(--line);
 }
-.modal-row strong {
+.modal-row .modal-row_Title {
   font-size: 14px;
 }
-.modal-row p {
+.modal-row .modal-row_Detail {
   font-size: 11px;
   color: var(--muted);
   margin-top: 5px;
@@ -748,10 +748,10 @@ dialog::backdrop {
   font-size: 14px;
   line-height: 1.7;
 }
-.modal-prose p {
+.modal-prose .modal-prose_Paragraph {
   margin: 12px 0;
 }
-.modal-prose kbd {
+.modal-prose .modal-prose_Key {
   padding: 2px 6px;
   background: var(--case);
 }
@@ -759,12 +759,12 @@ dialog::backdrop {
   display: grid;
   gap: 14px;
 }
-.exports button {
+.exports .exports_Button {
   padding: 20px;
   text-align: left;
   font-size: 15px;
 }
-.exports small {
+.exports .exports_Detail {
   display: block;
   color: var(--muted);
   font-size: 12px;
@@ -780,7 +780,7 @@ dialog::backdrop {
 .transport .section-label {
   display: none;
 }
-.project-bar > button {
+.project-bar > .project-bar_Button {
   padding: 8px 12px;
 }
 .workspace-tabs {
@@ -789,12 +789,12 @@ dialog::backdrop {
   gap: 8px;
   padding: 5px 0;
 }
-.workspace-tabs button {
+.workspace-tabs .workspace-tabs_Button {
   padding: 5px 12px;
   box-shadow: none;
   background: transparent;
 }
-.workspace-tabs button[aria-pressed=true] {
+.workspace-tabs .workspace-tabs_Button[aria-pressed=true] {
   background: #333a30;
   border-color: #333a30;
   color: #f4f4ec;
@@ -808,7 +808,7 @@ dialog::backdrop {
 .lower .section-head {
   margin: 0 0 6px;
 }
-.lower .section-head button {
+.lower .section-head .section-head_Button {
   padding: 6px 10px;
 }
 .mixer > .section-head {
@@ -824,7 +824,7 @@ dialog::backdrop {
   align-items: center;
   white-space: nowrap;
 }
-.footer-actions button {
+.footer-actions .footer-actions_Button {
   font-size: 10px;
   padding: 5px;
   background: transparent;
@@ -859,7 +859,7 @@ dialog::backdrop {
   .strip {
     padding: 8px 6px;
   }
-  .strip label {
+  .strip .strip_Label {
     grid-template-columns: 25px 1fr 20px;
   }
   .strip-name {
@@ -871,7 +871,7 @@ dialog::backdrop {
   .project-bar {
     gap: 7px;
   }
-  .project-bar > button {
+  .project-bar > .project-bar_Button {
     padding: 8px 10px;
   }
   .step-row {
@@ -931,10 +931,10 @@ dialog::backdrop {
   .knob {
     display: none;
   }
-  .dial input {
+  .dial .dial_Input {
     width: 90px;
   }
-  .dial output {
+  .dial .dial_Value {
     font-size: 10px;
   }
   .project-bar {
@@ -946,10 +946,10 @@ dialog::backdrop {
   .preset-label {
     flex: 1;
   }
-  .preset-label select {
+  .preset-label .preset-label_Select {
     width: 100%;
   }
-  .project-bar > button {
+  .project-bar > .project-bar_Button {
     flex: 1;
     min-height: 36px;
   }
@@ -961,7 +961,7 @@ dialog::backdrop {
     margin-left: auto;
     gap: 6px;
   }
-  .pattern-tools label {
+  .pattern-tools .pattern-tools_Label {
     white-space: nowrap;
   }
   .step-row {
@@ -987,10 +987,10 @@ dialog::backdrop {
     gap: 9px;
     padding: 8px 0;
   }
-  .editor > span {
+  .editor > .editor_Text {
     width: 100%;
   }
-  .editor select {
+  .editor .editor_Select {
     padding: 7px;
   }
   .workspace-tabs {
@@ -999,7 +999,7 @@ dialog::backdrop {
   .workspace-tabs .sub {
     display: none;
   }
-  .workspace-tabs button {
+  .workspace-tabs .workspace-tabs_Button {
     min-height: 36px;
   }
   .mixers {
@@ -1012,32 +1012,32 @@ dialog::backdrop {
   .strip-name {
     font-size: 11px;
   }
-  .strip label {
+  .strip .strip_Label {
     display: block;
     margin-top: 8px;
   }
-  .strip output {
+  .strip .strip_Value {
     float: right;
     font-size: 10px;
   }
-  .strip input {
+  .strip .strip_Input {
     margin-top: 4px;
     height: 22px;
   }
-  .strip-buttons button {
+  .strip-buttons .strip-buttons_Button {
     min-height: 32px;
   }
   .lower {
     grid-template-columns: 1fr;
     gap: 18px;
   }
-  .chain button {
+  .chain .chain_Button {
     height: 45px;
   }
   .pads .pad {
     height: 62px;
   }
-  .pad b {
+  .pad .pad_Key {
     font-size: 18px;
   }
   .device-footer {
@@ -1045,13 +1045,13 @@ dialog::backdrop {
     gap: 5px;
     margin-top: 14px;
   }
-  .device-footer > span:nth-child(2) {
+  .device-footer > .device-footer_Text:nth-child(2) {
     display: none;
   }
   .footer-actions {
     margin-left: auto;
   }
-  .footer-actions button {
+  .footer-actions .footer-actions_Button {
     min-height: 30px;
   }
   #save-status {
@@ -1079,7 +1079,7 @@ dialog::backdrop {
   .display-modes {
     align-self: flex-end;
   }
-  .display-modes button {
+  .display-modes .display-modes_Button {
     font-size: 9px;
     padding: 4px;
   }
@@ -1094,14 +1094,14 @@ dialog::backdrop {
     gap: 5px;
     font-size: 10px;
   }
-  .dial input {
+  .dial .dial_Input {
     width: 90px;
   }
   .play {
     font-size: 13px;
     gap: 6px;
   }
-  .play span {
+  .play .play_Icon {
     font-size: 17px;
   }
 
@@ -1110,7 +1110,7 @@ dialog::backdrop {
     font-size: 10px;
     flex-wrap: wrap;
   }
-  .tempo input {
+  .tempo .tempo_Input {
     font-size: 18px;
     width: 46px;
   }
@@ -1120,21 +1120,21 @@ dialog::backdrop {
   .project-name {
     min-width: 120px;
   }
-  .project-name input {
+  .project-name .project-name_Input {
     font-size: 16px;
   }
-  .project-name label,
+  .project-name .project-name_Label,
   .preset-label {
     font-size: 9px;
   }
   .preset-label {
     gap: 5px;
   }
-  .preset-label select {
+  .preset-label .preset-label_Select {
     max-width: 165px;
     font-size: 11px;
   }
-  .project-bar > button {
+  .project-bar > .project-bar_Button {
     font-size: 11px;
     padding: 7px 6px;
   }
@@ -1154,10 +1154,10 @@ dialog::backdrop {
   .strip-name {
     font-size: 10px;
   }
-  .strip-buttons button {
+  .strip-buttons .strip-buttons_Button {
     font-size: 10px;
   }
-  .workspace-tabs button {
+  .workspace-tabs .workspace-tabs_Button {
     font-size: 11px;
   }
   .sub {

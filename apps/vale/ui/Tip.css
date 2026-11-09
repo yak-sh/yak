@@ -44,7 +44,7 @@
   justify-content: space-between;
   gap: 0.7rem;
 
-  & b {
+  & .Tip_Name {
     font-size: 0.95rem;
     color: var(--deep);
   }

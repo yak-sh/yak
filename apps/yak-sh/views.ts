@@ -80,7 +80,7 @@ let Page: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
 
 let Nav = () =>
   h('nav', { class: 'Nav' }, [
-    h('a', { class: 'Nav_Mark', href: './' }, [
+    h('a', { class: 'Nav_Mark Nav_Link', href: './' }, [
       h(Logo, {
         class: 'Nav_Logo',
         sizes: '(max-width: 480px) 72px, 15vw',
@@ -90,11 +90,15 @@ let Nav = () =>
       'yak.sh',
     ]),
     h('span', { class: 'Nav_Links' }, [
-      h('a', { href: '#install' }, 'Install'),
-      h('a', { href: '#yaks-app' }, 'Hosting'),
-      ...words('yaks.app'),
-      h('a', { href: 'https://jsr.io/@yaks' }, 'Packages'),
-      h('a', { href: 'https://github.com/yak-sh/yak' }, 'GitHub'),
+      h('a', { class: 'Nav_Link', href: '#install' }, 'Install'),
+      h('a', { class: 'Nav_Link', href: '#yaks-app' }, 'Hosting'),
+      ...words('yaks.app', 'Nav_Link'),
+      h('a', { class: 'Nav_Link', href: 'https://jsr.io/@yaks' }, 'Packages'),
+      h(
+        'a',
+        { class: 'Nav_Link', href: 'https://github.com/yak-sh/yak' },
+        'GitHub',
+      ),
     ]),
   ])
 
@@ -217,15 +221,19 @@ let Step: FunctionComponent<
   let body = text(e, 'doc', 'body')
   return h('li', { class: 'Step', ref: at, 'data-eid': e.entity.eid }, [
     h('span', { class: 'Step_No' }, String(n)),
-    h('h2', null, words(text(e, 'doc', 'title'))),
+    h('h2', { class: 'Step_Title' }, words(text(e, 'doc', 'title'))),
     h(Prose, { source: proseOf(body) }),
     h(
       'ul',
       { class: 'Step_Lines' },
       scriptOf(body).map((c) =>
-        h('li', { class: c.kind == 'mcp' ? 'is-agent' : undefined }, [
+        h('li', {
+          class: [c.kind == 'mcp' ? 'is-agent' : undefined, 'Step_Line'].filter(
+            Boolean,
+          ).join(' '),
+        }, [
           c.note ? h('span', { class: 'Step_Note' }, `# ${c.note}`) : null,
-          h('code', null, shown(c)),
+          h('code', { class: 'Step_Command' }, shown(c)),
         ])
       ),
     ),
@@ -283,10 +291,10 @@ let Prompt: FunctionComponent<Ctx> = (ctx) => {
   }
   return h('div', { class: 'Prompt' }, [
     h('div', { class: 'Prompt_Bar' }, [
-      h('i', null),
-      h('i', null),
-      h('i', null),
-      h('span', null, 'yak, in this tab'),
+      h('i', { class: 'Prompt_Dot' }),
+      h('i', { class: 'Prompt_Dot' }),
+      h('i', { class: 'Prompt_Dot' }),
+      h('span', { class: 'Prompt_Title' }, 'yak, in this tab'),
     ]),
     h('div', { class: 'Prompt_Screen', ref: screen }, [
       ...term.lines().map((l) =>
@@ -315,6 +323,7 @@ let Prompt: FunctionComponent<Ctx> = (ctx) => {
     }, [
       h('span', { class: 'Prompt_Sign' }, '$ yak '),
       h('input', {
+        class: 'Prompt_Input',
         value: line,
         'aria-label': 'Type a yak command',
         placeholder: "task new 'Write the launch post'",
@@ -458,7 +467,10 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
   }
   return h('figure', { class: 'Figure' }, [
     h('div', { class: 'Figure_Bar' }, [
-      h('span', null, [h('b', null, 'fig. 1'), ' · the graph in this tab']),
+      h('span', null, [
+        h('b', { class: 'Figure_Label' }, 'fig. 1'),
+        ' · the graph in this tab',
+      ]),
       h('span', { class: 'Figure_State' }, `${yak.rows().length} entities`),
     ]),
     h('div', { class: 'Figure_Sheet', ref: sheet }),
@@ -471,6 +483,7 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
     }, [
       h('label', null, 'Showing'),
       h('input', {
+        class: 'Figure_Input',
         value: asked,
         'aria-label': 'The query the drawing shows',
         spellcheck: false,
@@ -484,7 +497,8 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
       WIDER.map(([name, q]) =>
         h('button', {
           type: 'button',
-          class: q == asked ? 'is-on' : '',
+          class: [q == asked ? 'is-on' : '', 'Figure_Choice'].filter(Boolean)
+            .join(' '),
           onClick: () => ask(q),
         }, name)
       ),

@@ -37,7 +37,7 @@ export let questPage = (t: Task, here: string) => [
     need: s.need,
     done: s.done,
   }))),
-  part('Reward', h(Body, {}, h('p', {}, t.gives))),
+  part('Reward', h(Body, {}, h(Body.Paragraph, {}, t.gives))),
 ]
 
 /** The journal, drawn into its tab (panel.ts). */

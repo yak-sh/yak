@@ -86,7 +86,7 @@ h2 {
   padding: 1.2rem var(--gutter);
   font: 500 .9rem var(--mono);
 }
-.Nav a {
+.Nav .Nav_Link {
   text-decoration: none;
 }
 .Nav_Mark {
@@ -146,7 +146,7 @@ h2 {
   background: var(--card);
   overflow: hidden;
 }
-.Copy code {
+.Copy .Copy_Code {
   flex: 1;
   padding: .75rem .9rem;
   overflow-x: auto;
@@ -155,7 +155,7 @@ h2 {
 .Copy_Sign {
   color: var(--accent);
 }
-.Copy button {
+.Copy .Copy_Button {
   border: 0;
   padding: 0 1.1rem;
   font: 500 .85rem var(--font);
@@ -164,7 +164,7 @@ h2 {
   cursor: pointer;
   transition: background .2s;
 }
-.Copy button:hover {
+.Copy .Copy_Button:hover {
   background: var(--border2);
 }
 
@@ -220,11 +220,11 @@ h2 {
   background: var(--card);
   box-shadow: 0 0 0 5px var(--wash);
 }
-.Step h2 {
+.Step .Step_Title {
   font-size: clamp(1.45rem, 2.3vw, 1.85rem);
   margin: .2rem 0 .9rem;
 }
-.Step p {
+.Step .Body_Paragraph {
   color: var(--muted);
   max-width: 33em;
 }
@@ -233,7 +233,7 @@ h2 {
   padding: 0;
   margin: 1.2rem 0 0;
 }
-.Step_Lines > li + li {
+.Step_Lines > .Step_Line + .Step_Line {
   margin-top: .7rem;
 }
 .Step_Note {
@@ -242,7 +242,7 @@ h2 {
   font: 400 .8125rem/1.5 var(--mono);
   color: var(--muted);
 }
-.Step_Lines code {
+.Step_Lines .Step_Command {
   display: block;
   background: none;
   border: 0;
@@ -251,19 +251,19 @@ h2 {
   white-space: pre-wrap;
   word-break: break-all;
 }
-.Step_Lines code::before {
+.Step_Lines .Step_Command::before {
   content: '$ ';
   color: var(--accent);
 }
-.Step_Lines .is-agent code::before {
+.Step_Lines .is-agent .Step_Command::before {
   content: 'agent → ';
 }
 /* The command whose write the pen is drawing, where the leader starts. */
-.Step_Lines code {
+.Step_Lines .Step_Command {
   border-radius: 3px;
   transition: color .3s, background .3s, box-shadow .3s;
 }
-.Step_Lines .is-led code {
+.Step_Lines .is-led .Step_Command {
   color: var(--accent);
   background: var(--wash);
   box-shadow: 0 0 0 4px var(--wash);
@@ -306,7 +306,7 @@ h2 {
   font: .75rem var(--mono);
   color: var(--muted);
 }
-.Figure_Bar b {
+.Figure_Bar .Figure_Label {
   font-weight: 500;
   color: var(--text);
 }
@@ -324,7 +324,7 @@ h2 {
   flex: 1 1 auto;
   min-height: 0;
 }
-.Figure_Sheet svg {
+.Figure_Sheet .Diagram {
   width: 100%;
   height: 100%;
 }
@@ -349,7 +349,7 @@ h2 {
   font: .75rem var(--mono);
   color: var(--muted);
 }
-.Figure_Query input {
+.Figure_Query .Figure_Input {
   flex: 1;
   min-width: 0;
   padding: .35rem .55rem;
@@ -366,7 +366,7 @@ h2 {
   margin: 0;
   padding: .5rem .9rem .7rem;
 }
-.Figure_Wider button {
+.Figure_Wider .Figure_Choice {
   padding: .3rem .55rem;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -375,8 +375,8 @@ h2 {
   font: .72rem var(--mono);
   cursor: pointer;
 }
-.Figure_Wider button:hover,
-.Figure_Wider button.is-on {
+.Figure_Wider .Figure_Choice:hover,
+.Figure_Wider .Figure_Choice.is-on {
   border-color: var(--accent);
   background: var(--wash);
   color: var(--text);
@@ -436,13 +436,13 @@ h2 {
   border-bottom: 1px solid rgba(236, 228, 212, .1);
   color: #a19b90;
 }
-.Prompt_Bar i {
+.Prompt_Bar .Prompt_Dot {
   width: 9px;
   height: 9px;
   border-radius: 50%;
   background: var(--border);
 }
-.Prompt_Bar span {
+.Prompt_Bar .Prompt_Title {
   margin-left: .5rem;
 }
 .Prompt_Screen {
@@ -495,7 +495,7 @@ h2 {
   padding: .55rem .9rem;
   border-top: 1px solid rgba(236, 228, 212, .1);
 }
-.Prompt_Form input {
+.Prompt_Form .Prompt_Input {
   flex: 1;
   min-width: 0;
   border: 0;
@@ -573,7 +573,7 @@ h2 {
   border-bottom: 1px solid var(--border);
   background: var(--card);
 }
-.Editor_Bar span {
+.Editor_Bar .Editor_Title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -581,7 +581,7 @@ h2 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.Editor_Bar button {
+.Editor_Bar .Editor_Close {
   border: 0;
   padding: 0 .45rem;
   background: none;
@@ -598,12 +598,12 @@ h2 {
 .Editor_Comp {
   padding: .6rem .9rem .2rem;
 }
-.Editor_Comp h3 {
+.Editor_Comp .Editor_Name {
   margin: 0 0 .35rem;
   font: 500 .8125rem/1.3 var(--mono);
   color: var(--text);
 }
-.Editor_Comp dl {
+.Editor_Comp .Editor_Fields {
   margin: 0;
 }
 .Editor_Prop {
@@ -612,17 +612,17 @@ h2 {
   gap: .6rem;
   padding: .2rem 0;
 }
-.Editor_Prop dt {
+.Editor_Prop .Editor_Key {
   padding-top: .3rem;
   color: var(--muted);
   overflow-wrap: anywhere;
 }
-.Editor_Prop dd {
+.Editor_Prop .Editor_Value {
   margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.Editor_Prop code {
+.Editor_Prop .Editor_Code {
   display: block;
   padding-top: .3rem;
   color: var(--muted);
@@ -679,7 +679,7 @@ h2 {
   padding: 5rem var(--gutter);
   border-top: 1px solid var(--border);
 }
-.Band_Text p {
+.Band_Text .Body_Paragraph {
   color: var(--muted);
   max-width: 34rem;
 }
@@ -712,8 +712,8 @@ h2 {
   position: sticky;
   top: 1.5rem;
 }
-.Stack_Figure figcaption,
-.Doors_Figure figcaption {
+.Stack_Figure .Stack_Caption,
+.Doors_Figure .Doors_Caption {
   font-size: .875rem;
   color: var(--muted);
   margin-top: .6rem;
@@ -750,19 +750,19 @@ h2 {
   background: var(--bg);
   transition: background .3s, border-color .3s, box-shadow .3s;
 }
-.Phases b {
+.Phases .Phase_Name {
   display: block;
   font: 500 .875rem/1.3 var(--mono);
   color: var(--muted);
   transition: color .3s;
 }
-.Phases [data-phase] > :not(.Dot, b, .Skip) {
+.Phases [data-phase] > :not(.Dot, .Phase_Name, .Skip) {
   color: var(--muted);
   font-size: .90625rem;
   line-height: 1.5;
   margin-top: .2rem;
 }
-.Phases [data-phase] > :not(.Dot, b, .Skip) p {
+.Phases [data-phase] > :not(.Dot, .Phase_Name, .Skip) .Body_Paragraph {
   margin: 0;
 }
 /* The phases inside the transaction: one box in ink around them, whatever
@@ -775,7 +775,7 @@ h2 {
   border: 1px solid var(--border2);
   border-radius: 8px;
 }
-.Phases .Tx > ol {
+.Phases .Tx > .Tx_Phases {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -798,7 +798,7 @@ h2 {
   position: relative;
   padding: .55rem 0 .9rem;
 }
-.Phases .Call code {
+.Phases .Call .Call_Code {
   display: block;
   margin-top: .3rem;
   font: 400 .75rem/1.5 var(--mono);
@@ -811,21 +811,21 @@ h2 {
 .Phases [data-phase].on {
   background: linear-gradient(90deg, var(--wash), transparent 70%);
 }
-.Phases li.on .Dot {
+.Phases .Phase.on .Dot {
   background: var(--accent);
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--wash);
 }
-.Phases li.on b {
+.Phases .Phase.on .Phase_Name {
   color: var(--text);
 }
-.Phases li.skip .Dot {
+.Phases .Phase.skip .Dot {
   border-style: dashed;
 }
 .Phases .Skip {
   display: none;
 }
-.Phases li.skip .Skip {
+.Phases .Phase.skip .Skip {
   display: block;
   font: 400 .75rem/1.5 var(--mono);
   color: var(--muted);
@@ -847,7 +847,7 @@ h2 {
   display: contents;
   cursor: pointer;
 }
-.Source .R > div {
+.Source .R > .Source_Cell {
   padding: 3px 12px;
   transition: background .4s, max-height .6s, opacity .5s, padding .6s;
 }
@@ -872,7 +872,7 @@ h2 {
   height: 1px;
   background: var(--border2);
 }
-.Source .n code {
+.Source .n .Source_Label {
   font-size: .75rem;
   color: var(--text);
 }
@@ -895,18 +895,18 @@ h2 {
   opacity: 1;
 }
 /* Admit reads each line in turn as the reader scrolls past the phase. */
-.Source.now-admit .comp > div {
+.Source.now-admit .comp > .Source_Cell {
   --at: 0s;
   animation: scan 1.6s linear both paused;
   animation-delay: calc(var(--at) - var(--p, 1) * 2.65s);
 }
-.Source.now-admit .d2 > div {
+.Source.now-admit .d2 > .Source_Cell {
   --at: .35s;
 }
-.Source.now-admit .d3 > div {
+.Source.now-admit .d3 > .Source_Cell {
   --at: .7s;
 }
-.Source.now-admit .d4 > div {
+.Source.now-admit .d4 > .Source_Cell {
   --at: 1.05s;
 }
 @keyframes scan {
@@ -924,13 +924,13 @@ h2 {
 }
 /* A line the phase the reader is at changed, its margin saying what it did,
    lit as they scroll past the phase. */
-.Source .is-now > div {
+.Source .is-now > .Source_Cell {
   background: rgba(26, 111, 123, calc(.16 * var(--p, 1)));
 }
 .Source .is-now .n {
   color: var(--text);
 }
-.Source .n b {
+.Source .n .Source_Change {
   font: 500 .75rem/1 var(--mono);
 }
 .Source.now-mutate .body > .c {
@@ -960,28 +960,28 @@ h2 {
   border-bottom: 1px solid var(--border);
   color: var(--muted);
 }
-.Outbox_Bar b {
+.Outbox_Bar .Outbox_Title {
   font-weight: 500;
   color: var(--text);
   margin-right: .4rem;
 }
-.Outbox ol {
+.Outbox .Outbox_Events {
   list-style: none;
   margin: 0;
   padding: 6px 12px;
 }
-.Outbox li {
+.Outbox .Outbox_Event {
   animation: pop .4s both;
 }
-.Outbox li::before {
+.Outbox .Outbox_Event::before {
   content: '→ ';
   color: var(--muted);
 }
-.Outbox li.is-sent::before {
+.Outbox .Outbox_Event.is-sent::before {
   content: '✓ ';
   color: var(--accent);
 }
-.Outbox li.is-refused::before {
+.Outbox .Outbox_Event.is-refused::before {
   content: '✗ ';
   color: var(--negative);
 }
@@ -1014,10 +1014,10 @@ h2 {
   background: var(--accent);
   box-shadow: 0 0 0 3px var(--wash);
 }
-.Toast b {
+.Toast .Toast_Title {
   font-weight: 500;
 }
-.Toast span {
+.Toast .Toast_Subject {
   color: var(--muted);
 }
 @keyframes toast {
@@ -1074,7 +1074,7 @@ h2 {
 /* Each beat takes a stretch of scrolling, so the windows open one at a time
    while the drawing stays in view, each as far as the reader has played it
    (`--p`, told.ts). */
-.Beats li {
+.Beats .Beat {
   position: relative;
   flex: 1 0 auto;
   min-height: 30vh;
@@ -1082,22 +1082,22 @@ h2 {
   border-top: 1px solid var(--faint);
   transition: background .3s;
 }
-.Beats li > b {
+.Beats .Beat > .Beat_Title {
   display: block;
   font: 500 .875rem/1.3 var(--mono);
   color: var(--muted);
   transition: color .3s;
 }
-.Beats li > :not(.Dot, b, code) {
+.Beats .Beat > :not(.Dot, .Beat_Title, .Beat_Code) {
   color: var(--muted);
   font-size: .90625rem;
   line-height: 1.5;
   margin-top: .2rem;
 }
-.Beats li > :not(.Dot, b, code) p {
+.Beats .Beat > :not(.Dot, .Beat_Title, .Beat_Code) .Body_Paragraph {
   margin: 0;
 }
-.Beats li > code {
+.Beats .Beat > .Beat_Code {
   display: block;
   margin-top: .45rem;
   background: none;
@@ -1118,16 +1118,16 @@ h2 {
   background: var(--bg);
   transition: background .3s, border-color .3s, box-shadow .3s;
 }
-.Beats li.on {
+.Beats .Beat.on {
   background: linear-gradient(90deg, var(--wash), transparent 70%) 0 0 / 100%
     2.6rem no-repeat;
 }
-.Beats li.on .Dot {
+.Beats .Beat.on .Dot {
   background: var(--accent);
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--wash);
 }
-.Beats li.on > b {
+.Beats .Beat.on > .Beat_Title {
   color: var(--text);
 }
 /* The doors' desk: a column of windows left of the drawing, one slot for
@@ -1149,7 +1149,7 @@ h2 {
   width: var(--sheet, 57%);
 }
 .Doors_Drawing,
-.Doors_Drawing svg,
+.Doors_Drawing .Diagram,
 .Doors_Wire {
   position: absolute;
   inset: 0;
@@ -1170,7 +1170,7 @@ h2 {
   overflow: visible;
   pointer-events: none;
 }
-.Doors_Wire path {
+.Doors_Wire .Doors_Path {
   fill: none;
   stroke: var(--accent);
   stroke-width: 1.4;
@@ -1255,14 +1255,14 @@ h2 {
   padding: .45em .7em;
   background: rgba(236, 228, 212, .06);
 }
-.Term_Bar i {
+.Term_Bar .Term_Dot {
   flex: none;
   width: .65em;
   height: .65em;
   border-radius: 50%;
   background: rgba(236, 228, 212, .28);
 }
-.Term_Bar span {
+.Term_Bar .Term_Title {
   margin: 0 auto;
   padding-right: 2.6em;
   color: rgba(236, 228, 212, .6);
@@ -1275,7 +1275,7 @@ h2 {
 .Term_In {
   color: #faf6ee;
 }
-.Term_In span {
+.Term_In .Term_Sign {
   color: var(--accent);
 }
 
@@ -1299,10 +1299,10 @@ h2 {
   background: radial-gradient(circle at 35% 35%,
     color-mix(in srgb, var(--accent) 45%, #fff), var(--accent));
 }
-.Chat_Head b {
+.Chat_Head .Chat_Name {
   font-weight: 500;
 }
-.Chat_Head span:last-child {
+.Chat_Head .Chat_At:last-child {
   color: var(--muted);
 }
 .Chat_Call {
@@ -1319,7 +1319,7 @@ h2 {
   padding: .35em .6em;
   border-bottom: 1px solid var(--border);
 }
-.Chat_Tool svg {
+.Chat_Tool .Chat_Icon {
   flex: none;
   width: 1.05em;
   height: 1.05em;
@@ -1329,21 +1329,21 @@ h2 {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.Chat_Tool code {
+.Chat_Tool .Chat_Name {
   font: 500 1em var(--mono);
   color: var(--text);
 }
-.Chat_Call dl {
+.Chat_Call .Chat_Args {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0 .8em;
   margin: 0;
   padding: .35em .6em;
 }
-.Chat_Call dt {
+.Chat_Call .Chat_Key {
   color: var(--muted);
 }
-.Chat_Call dd {
+.Chat_Call .Chat_Value {
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -1399,7 +1399,7 @@ h2 {
   align-items: baseline;
   gap: .55em;
 }
-.Page_Title b {
+.Page_Title .Page_Name {
   font-weight: 500;
   font-size: 1.12em;
 }
@@ -1443,13 +1443,13 @@ h2 {
   padding: 0;
   list-style: none;
 }
-.Page_Choices li {
+.Page_Choices .Page_Choice {
   padding: .3em .7em;
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--muted);
 }
-.Page_Choices li.is-on {
+.Page_Choices .Page_Choice.is-on {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   color: var(--text);
@@ -1460,11 +1460,11 @@ h2 {
   border-left: 2px solid color-mix(in srgb, var(--accent) 45%, #fff);
   background: color-mix(in srgb, var(--accent) 5%, transparent);
 }
-.Page_Comment span {
+.Page_Comment .Page_Author {
   color: var(--muted);
   font-family: var(--mono);
 }
-.Page_Comment p {
+.Page_Comment .Page_Text {
   margin: .15em 0 0;
 }
 .Page_Status {
@@ -1501,10 +1501,10 @@ h2 {
   padding-bottom: .5em;
   border-bottom: 1px solid var(--border);
 }
-.Letter_Head dt {
+.Letter_Head .Letter_Key {
   color: var(--muted);
 }
-.Letter_Head dd {
+.Letter_Head .Letter_Value {
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1516,10 +1516,10 @@ h2 {
 .Letter_Body {
   overflow-wrap: anywhere;
 }
-.Letter_Body :is(p, ol, ul) {
+.Letter_Body :is(.Body_Paragraph, .Body_Ordered, .Body_Unordered) {
   margin: 0 0 .3em;
 }
-.Letter_Body :is(ol, ul) {
+.Letter_Body :is(.Body_Ordered, .Body_Unordered) {
   padding-left: 1.5em;
 }
 .Letter_Tries {
@@ -1544,7 +1544,7 @@ h2 {
   background: var(--accent);
   color: var(--bg);
 }
-.Tui_Bar b {
+.Tui_Bar .Tui_Title {
   font-weight: 500;
 }
 .Tui_Screen {
@@ -1580,11 +1580,11 @@ h2 {
   font: 400 .75rem/1.5 var(--mono);
   color: var(--muted);
 }
-.Declared_Bar b {
+.Declared_Bar .Declared_Kind {
   font-weight: 500;
   color: var(--text);
 }
-.Declared pre {
+.Declared .Declared_Code {
   margin: 0;
   padding: 8px 12px;
   font: 400 .75rem/1.55 var(--mono);
@@ -1592,7 +1592,7 @@ h2 {
   white-space: pre-wrap;
   word-break: break-word;
 }
-.Declared p {
+.Declared .Declared_Text {
   margin: 0;
   padding: 0 12px 8px;
   font-size: .8125rem;
@@ -1630,8 +1630,8 @@ h2 {
   position: sticky;
   top: 2rem;
 }
-.Part_Head p,
-.Part_Body p {
+.Part_Head .Body_Paragraph,
+.Part_Body .Body_Paragraph {
   color: var(--muted);
   max-width: 36rem;
 }
@@ -1656,7 +1656,7 @@ h2 {
   height: 1px;
   background: var(--border);
 }
-.Part_Body > ul {
+.Part_Body > .Body_Unordered {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
   gap: 1.6rem 2.4rem;
@@ -1664,13 +1664,13 @@ h2 {
   padding: 0;
   list-style: none;
 }
-.Part_Body > ul li {
+.Part_Body > .Body_Unordered .Body_Item {
   padding-top: .8rem;
   border-top: 1px solid var(--border2);
   color: var(--muted);
   font-size: .95rem;
 }
-.Part_Body > ul strong {
+.Part_Body > .Body_Unordered .Body_Strong {
   display: block;
   margin-bottom: .3rem;
   color: var(--text);
@@ -1687,15 +1687,15 @@ h2 {
   counter-reset: n;
   border-left: 1px solid var(--border);
 }
-.Part_List li {
+.Part_List .Part_Item {
   position: relative;
   padding: 0 0 2rem 36px;
   counter-increment: n;
 }
-.Part_List li:last-child {
+.Part_List .Part_Item:last-child {
   padding-bottom: .3rem;
 }
-.Part_List li::before {
+.Part_List .Part_Item::before {
   content: counter(n);
   position: absolute;
   left: -15px;
@@ -1709,42 +1709,42 @@ h2 {
   background: var(--bg);
   font: 500 .75rem/1 var(--mono);
 }
-.Part_List h3,
-.Part_Body > h3 {
+.Part_List .Part_Title,
+.Part_Body > .Body_Heading {
   margin: .1rem 0 .7rem;
   font: 500 1.06rem/1.3 var(--font);
 }
-.Part_Body > h3 {
+.Part_Body > .Body_Heading {
   margin-top: 2.5rem;
 }
-.Part_Body table {
+.Part_Body .Body_Table {
   width: 100%;
   margin-bottom: 1.6rem;
   border-collapse: collapse;
 }
-.Part_Body th {
+.Part_Body .Body_HeadingCell {
   padding-bottom: .55rem;
   border-bottom: 1px solid var(--border2);
   text-align: left;
   font: 500 .75rem/1 var(--mono);
 }
-.Part_Body tr {
+.Part_Body .Body_Row {
   border-bottom: 1px solid var(--border);
 }
-.Part_Body td {
+.Part_Body .Body_Cell {
   padding: .5rem 0;
   vertical-align: top;
   color: var(--muted);
   font-size: .875rem;
   line-height: 1.45;
 }
-.Part_Body td:first-child {
+.Part_Body .Body_Cell:first-child {
   width: 1%;
   padding-right: .9rem;
   white-space: nowrap;
   font: 500 .8125rem/1.45 var(--mono);
 }
-.Part_Body td:first-child a {
+.Part_Body .Body_Cell:first-child .Body_Link {
   text-decoration: none;
 }
 .File {
@@ -1760,7 +1760,7 @@ h2 {
   font: .75rem var(--mono);
   color: var(--muted);
 }
-.File pre {
+.File .File_Source {
   margin: 0;
   padding: 1rem 1.1rem;
   overflow-x: auto;
@@ -1798,35 +1798,35 @@ h2 {
   grid-auto-rows: 1fr;
   gap: 1px;
 }
-.Block_Sign strong {
+.Block_Sign .Block_Name {
   display: block;
   font: 500 1.125rem/1.2 var(--mono);
 }
-.Block_Sign span {
+.Block_Sign .Block_Line {
   color: var(--muted);
   font-size: .875rem;
 }
-.Block dt {
+.Block .Block_Key {
   margin-bottom: .5rem;
   font: .6875rem/1 var(--mono);
   color: var(--muted);
 }
-.Block dd {
+.Block .Block_Value {
   margin: 0;
   font: 500 .875rem/1.35 var(--mono);
   overflow-wrap: anywhere;
 }
-.Block dd p {
+.Block .Block_Value .Body_Paragraph {
   margin: 0;
 }
-.Block dd a {
+.Block .Block_Value .Body_Link {
   text-decoration: none;
 }
 
 /* ---------------------------------------------------------------- setup
    A part with one field: the address, sent through apply() and out of the
    tab, then what happens next, and the write drawn as the band draws it. */
-.Setup_Form label {
+.Setup_Form .Setup_Label {
   display: block;
   margin-bottom: .5rem;
   font: 500 .8rem var(--mono);
@@ -1843,7 +1843,7 @@ h2 {
 .Setup_Field:focus-within {
   border-color: var(--accent);
 }
-.Setup_Field input {
+.Setup_Field .Setup_Input {
   flex: 1;
   min-width: 0;
   padding: .75rem .9rem;
@@ -1853,7 +1853,7 @@ h2 {
   color: var(--text);
   font: 1rem var(--font);
 }
-.Setup_Field button {
+.Setup_Field .Setup_Button {
   border: 0;
   padding: 0 1.2rem;
   font: 500 .9rem var(--font);
@@ -1871,11 +1871,11 @@ h2 {
 .Setup_Told.is-sent {
   border-color: var(--accent);
 }
-.Setup_Told b {
+.Setup_Told .Setup_Status {
   display: block;
   font-weight: 500;
 }
-.Setup_Told p {
+.Setup_Told .Body_Paragraph {
   margin: .4rem 0 0;
 }
 .Setup_Write {
@@ -1889,7 +1889,7 @@ h2 {
   margin: 0 0 0 1.2rem;
   font-size: .9rem;
 }
-.Setup .Phases [data-phase] > :not(.Dot, b, .Skip) {
+.Setup .Phases [data-phase] > :not(.Dot, .Phase_Name, .Skip) {
   display: none;
 }
 @media (max-width: 880px) {
@@ -1948,7 +1948,7 @@ h2 {
   .Toast {
     animation-name: fade;
   }
-  .Outbox li,
+  .Outbox .Outbox_Event,
   .Caret {
     animation: none;
   }

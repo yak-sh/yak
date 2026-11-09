@@ -468,7 +468,9 @@ test('the apply() band sends its letter as the source of its bundle, beside the 
   match(source, /message_id: "outbox-1"/)
   match(stack.querySelector('.Call')!.textContent!, /agent → graph_apply/)
   equal(
-    [...stack.querySelectorAll('.Outbox li')].map((l) => l.className),
+    [...stack.querySelectorAll('.Outbox li')].map((l) =>
+      [...l.classList].find((c) => c.startsWith('is-'))
+    ),
     ['is-handed', 'is-refused', 'is-handed', 'is-sent'],
   )
   match(

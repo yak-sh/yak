@@ -44,7 +44,7 @@ test('typed text becomes paragraphs, headings and lists, and nothing runs', () =
   assertEquals(
     page(
       '## Before\nBring water.\nArrive early.\n\n- Shoes\n- Ball\n\n1. Call\n2. Wait\nThen <b>go</b>',
-    ),
+    ).replace(/ class="[^"]*"/g, ''),
     '<h3>Before</h3><p>Bring water.<br>Arrive early.</p>' +
       '<ul><li>Shoes</li><li>Ball</li></ul>' +
       '<ol><li>Call</li><li>Wait</li></ol><p>Then &lt;b&gt;go&lt;/b&gt;</p>',

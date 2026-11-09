@@ -128,7 +128,7 @@ button {
   scrollbar-width: none;
 }
 
-.Top_Disks a {
+.Top_Disks .Top_Disk {
   display: flex;
   align-items: center;
   gap: .5em;
@@ -189,11 +189,11 @@ button {
     border-color: #2c3539;
   }
 
-  & b {
+  & .Toggle_State {
     font-weight: 400;
   }
 
-  &[aria-pressed=true] b {
+  &[aria-pressed=true] .Toggle_State {
     color: var(--signal);
   }
 }

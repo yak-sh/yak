@@ -126,18 +126,18 @@ let landing = (rows: Row[], page: Page, actions: Actions) => {
     h(
       'section',
       { class: 'Camp_Content' },
-      text('p', 'Eyebrow', 'A LITTLE FORT. A SHARED DEFENCE.'),
-      text('h1', 'Wordmark', 'HOLDFAST'),
-      text('p', 'Camp_Tag', 'Stand together. Hold the line.'),
+      text('p', 'Eyebrow Holdfast_text', 'A LITTLE FORT. A SHARED DEFENCE.'),
+      text('h1', 'Wordmark Holdfast_heading', 'HOLDFAST'),
+      text('p', 'Camp_Tag Holdfast_text', 'Stand together. Hold the line.'),
       text(
         'p',
-        'Camp_Intro',
+        'Camp_Intro Holdfast_text',
         'Raise a few towers, share the gold, and keep the creatures from your gate. Better with company. Just as brave alone.',
       ),
       h(
         'div',
         { class: 'Camp_Divider' },
-        text('h2', 'SectionLabel', 'Choose your ground'),
+        text('h2', 'SectionLabel Holdfast_heading', 'Choose your ground'),
         text('span', 'Camp_Coop', 'CO-OP TOWER DEFENSE'),
       ),
       h(
@@ -174,7 +174,7 @@ let landing = (rows: Row[], page: Page, actions: Actions) => {
         ),
         text(
           'p',
-          'Camp_Aside',
+          'Camp_Aside Holdfast_text',
           'One purse. Twelve waves. A link for your friends.',
         ),
       ),
@@ -204,9 +204,9 @@ let game = (rows: Row[], page: Page, actions: Actions) => {
     return h(
       'main',
       { class: 'Waiting' },
-      text('p', 'Eyebrow', 'HOLDFAST'),
-      text('h1', '', 'Finding your fort…'),
-      text('p', '', 'The shared run is on its way.'),
+      text('p', 'Eyebrow Waiting_text Holdfast_text', 'HOLDFAST'),
+      text('h1', 'Waiting_title Holdfast_heading', 'Finding your fort…'),
+      text('p', 'Waiting_text Holdfast_text', 'The shared run is on its way.'),
       press('Back to camp', actions.leave, { mod: 'quiet' }),
       notice(page),
     )
@@ -233,7 +233,7 @@ let game = (rows: Row[], page: Page, actions: Actions) => {
         'div',
         { class: 'RunTitle' },
         text('span', 'Eyebrow', 'HOLDFAST'),
-        text('h1', '', v.map.name),
+        text('h1', 'RunTitle_title Holdfast_heading', v.map.name),
       ),
       h(
         Stats,
@@ -272,28 +272,43 @@ let game = (rows: Row[], page: Page, actions: Actions) => {
           e: page.helpRow,
           onChange: actions.disclosure,
           summary: '☷  Build sites & field guide',
+          class: 'Tactics_disclosure',
           summaryProps: { mod: 'quiet' },
         },
         h(
           'div',
           { class: 'Tactics_Content' },
-          text('h2', '', 'A plan, then a little courage.'),
+          text(
+            'h2',
+            'Tactics_heading Holdfast_heading',
+            'A plan, then a little courage.',
+          ),
           text(
             'p',
-            '',
+            'Tactics_text Holdfast_text',
             'Tap a pale build site in the world, choose a tower, then build. Gold belongs to the whole team; the coloured rings show where your friends are pointing.',
           ),
           text(
             'p',
-            '',
+            'Tactics_text Holdfast_text',
             'Upgrade towers for stronger attacks, or sell to recover some gold. Clear a wave to earn its bounty. Let too many creatures through and the gate falls.',
           ),
           h(
             'div',
             { class: 'CounterGuide' },
-            crafts.map((c) => text('p', '', `${c.icon} ${c.hint}.`)),
+            crafts.map((c) =>
+              text(
+                'p',
+                'Tactics_text CounterGuide_text Holdfast_text',
+                `${c.icon} ${c.hint}.`,
+              )
+            ),
           ),
-          text('h3', '', 'Pick a build site'),
+          text(
+            'h3',
+            'Tactics_subheading Holdfast_heading',
+            'Pick a build site',
+          ),
           h(
             'div',
             { class: 'Sites', role: 'group', 'aria-label': 'Build sites' },
@@ -327,7 +342,7 @@ let game = (rows: Row[], page: Page, actions: Actions) => {
           { class: 'Workshop_Header' },
           text(
             'p',
-            'Eyebrow',
+            'Eyebrow Holdfast_text',
             selected ? `BUILD SITE ${page.slot + 1}` : 'MAKE YOUR STAND',
           ),
           text(
@@ -356,7 +371,7 @@ let game = (rows: Row[], page: Page, actions: Actions) => {
                 h(
                   'span',
                   { class: 'Blueprint_Words' },
-                  text('strong', '', d?.name ?? craft.key),
+                  text('strong', 'Blueprint_name', d?.name ?? craft.key),
                   text('span', 'Blueprint_Role', craft.role),
                 ),
                 text('span', 'Blueprint_Price', `${d?.cost ?? '—'} ◈`),
@@ -379,7 +394,7 @@ let game = (rows: Row[], page: Page, actions: Actions) => {
             { class: 'BuildDetail_Words' },
             text(
               'h2',
-              '',
+              'BuildDetail_title Holdfast_heading',
               selected
                 ? design?.name ?? 'Choose a blueprint'
                 : 'Find your corner of the fight.',
@@ -387,7 +402,7 @@ let game = (rows: Row[], page: Page, actions: Actions) => {
             selected && design
               ? text(
                 'p',
-                '',
+                'BuildDetail_text Holdfast_text',
                 `${design.damage} damage · ${
                   Number(design.range.toFixed(1))
                 }m reach${design.splash ? ' · Splash' : ''}${
@@ -396,7 +411,7 @@ let game = (rows: Row[], page: Page, actions: Actions) => {
               )
               : text(
                 'p',
-                '',
+                'BuildDetail_text Holdfast_text',
                 'Point at a build site, then choose what it needs.',
               ),
           ),
@@ -433,11 +448,15 @@ let game = (rows: Row[], page: Page, actions: Actions) => {
       h(
         'aside',
         { class: 'WaveOrder' },
-        text('p', 'Eyebrow', active ? 'THEY’RE COMING' : 'A MOMENT TO PREPARE'),
+        text(
+          'p',
+          'Eyebrow Holdfast_text',
+          active ? 'THEY’RE COMING' : 'A MOMENT TO PREPARE',
+        ),
         active
           ? text(
             'p',
-            'WaveOrder_Info',
+            'WaveOrder_Info Holdfast_text',
             `${v.creeps.length} on the path · hold your ground`,
           )
           : press(
@@ -456,15 +475,19 @@ let game = (rows: Row[], page: Page, actions: Actions) => {
         text('span', 'Outcome_Mark', dead ? '⚑' : '✦'),
         text(
           'p',
-          'Eyebrow',
+          'Eyebrow Holdfast_text',
           dead
             ? 'THE BANNER WILL RISE AGAIN'
             : 'TWELVE WAVES. ONE SHARED VICTORY.',
         ),
-        text('h2', '', dead ? 'A brave last stand.' : 'The fort holds.'),
+        text(
+          'h2',
+          'Outcome_title Holdfast_heading',
+          dead ? 'A brave last stand.' : 'The fort holds.',
+        ),
         text(
           'p',
-          '',
+          'Outcome_text Holdfast_text',
           dead
             ? 'The gate fell, but the next plan is already taking shape.'
             : 'Every tower mattered. So did the people beside you.',

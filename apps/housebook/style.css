@@ -153,11 +153,11 @@ small {
   color: #738074;
   margin: 18px 0 29px;
 }
-.sidebar nav {
+.sidebar .sidebar_Nav {
   display: grid;
   gap: 6px;
 }
-.sidebar nav button {
+.sidebar .sidebar_Nav .sidebar_Button {
   background: none;
   border: 0;
   display: flex;
@@ -168,17 +168,17 @@ small {
   color: #59695e;
   font-size: 13px;
 }
-.sidebar nav button span {
+.sidebar .sidebar_Nav .sidebar_Button .sidebar_Icon {
   font-size: 20px;
   width: 20px;
   text-align: center;
 }
-.sidebar nav button.active {
+.sidebar .sidebar_Nav .sidebar_Button.active {
   background: #dfe7d9;
   color: #213c30;
   font-weight: 600;
 }
-.sidebar nav button:hover {
+.sidebar .sidebar_Nav .sidebar_Button:hover {
   background: #e5ebdf;
 }
 .sidebar-bottom {
@@ -191,7 +191,7 @@ small {
   color: #687a69;
   font-size: 12px;
 }
-.sidebar-bottom > a {
+.sidebar-bottom > .sidebar-bottom_Link {
   margin-top: 14px;
   font-size: 11px;
   color: #687a69;
@@ -215,11 +215,11 @@ small {
   width: 480px;
   max-width: 100%;
 }
-.search span {
+.search .search_Icon {
   font-size: 26px;
   color: #7a8479;
 }
-.search input {
+.search .search_Input {
   width: 100%;
   border: 0;
   background: transparent;
@@ -248,12 +248,12 @@ small {
   gap: 32px;
   min-height: 285px;
 }
-.hero h1 {
+.hero .hero_Title {
   font-size: 54px;
   max-width: 550px;
   line-height: 1.04;
 }
-.hero p {
+.hero .hero_Text {
   color: #65745e;
   font-size: 14px;
   max-width: 390px;
@@ -273,7 +273,7 @@ small {
   gap: 10px;
   flex-wrap: wrap;
 }
-.hero-actions button {
+.hero-actions .hero-actions_Action {
   font-size: 12px;
   padding: 11px 15px;
 }
@@ -282,7 +282,7 @@ small {
   flex-shrink: 0;
   color: #658065;
 }
-.house-drawing svg {
+.house-drawing .house-drawing_Image {
   width: 100%;
 }
 .stats {
@@ -292,7 +292,7 @@ small {
   border-bottom: 1px solid var(--line);
   padding-bottom: 26px;
 }
-.stats button {
+.stats .stats_Button {
   border: 0;
   border-right: 1px solid var(--line);
   border-radius: 0;
@@ -303,18 +303,18 @@ small {
   background: none;
   padding: 0 20px;
 }
-.stats button:first-child {
+.stats .stats_Button:first-child {
   padding-left: 0;
 }
-.stats button:last-child {
+.stats .stats_Button:last-child {
   border: 0;
 }
-.stats strong {
+.stats .stats_Value {
   font-family: 'Libre Caslon Display',Georgia,serif;
   font-size: 34px;
   font-weight: 400;
 }
-.stats span {
+.stats .stats_Label {
   font-size: 11px;
   max-width: 75px;
   line-height: 1.5;
@@ -327,10 +327,10 @@ small {
   gap: 12px;
   margin: 32px 0 16px;
 }
-.section-head h2 {
+.section-head .section-head_Title {
   margin: 0;
 }
-.section-head button {
+.section-head .section-head_Action {
   font-size: 12px;
 }
 .category-grid {
@@ -348,12 +348,12 @@ small {
   align-items: center;
   border-radius: 8px;
 }
-.category strong {
+.category .category_Title {
   font-size: 12px;
   line-height: 1.5;
   font-weight: 500;
 }
-.category small {
+.category .category_Count {
   grid-column: 2;
   font-size: 10px;
 }
@@ -375,17 +375,17 @@ small {
   border-radius: 8px;
   padding: 8px 22px;
 }
-.shutoffs div {
+.shutoffs .shutoffs_Row {
   padding: 15px 0;
   border-bottom: 1px solid var(--line);
 }
-.shutoffs div:last-child {
+.shutoffs .shutoffs_Row:last-child {
   border: 0;
 }
-.shutoffs strong {
+.shutoffs .shutoffs_Title {
   font-size: 13px;
 }
-.shutoffs p {
+.shutoffs .shutoffs_Text {
   font-size: 12px;
   color: var(--muted);
   margin: 5px 0 0;
@@ -403,13 +403,13 @@ small {
   gap: 25px;
   margin: 4px 0 28px;
 }
-.page-heading p {
+.page-heading .page-heading_Text {
   color: var(--muted);
   font-size: 13px;
   margin-bottom: 0;
   max-width: 600px;
 }
-.page-heading button {
+.page-heading .page-heading_Action {
   white-space: nowrap;
   font-size: 12px;
 }
@@ -419,13 +419,13 @@ small {
   flex-wrap: wrap;
   margin-bottom: 25px;
 }
-.filters button {
+.filters .filters_Button {
   font-size: 11px;
   padding: 7px 11px;
   border-radius: 20px;
   background: transparent;
 }
-.filters button.active {
+.filters .filters_Button.active {
   background: var(--green);
   color: white;
   border-color: var(--green);
@@ -444,7 +444,7 @@ small {
   align-items: flex-start;
   min-height: 150px;
 }
-.item-card > div:nth-child(2) {
+.item-card > .item-card_Body:nth-child(2) {
   min-width: 0;
 }
 .item-symbol {
@@ -458,19 +458,19 @@ small {
   border-radius: 9px;
   font-size: 28px;
 }
-.item-card h3 {
+.item-card .item-card_Title {
   margin-top: 10px;
   font-size: 17px;
   overflow-wrap: anywhere;
 }
-.item-card p {
+.item-card .item-card_Text {
   font-size: 12px;
   font-weight: 400;
   color: #68766c;
   margin-bottom: 8px;
   overflow-wrap: anywhere;
 }
-.item-card small {
+.item-card .item-card_Location {
   font-weight: 400;
   font-size: 11px;
 }
@@ -495,18 +495,18 @@ small {
   padding: 35px 25px;
   text-align: center;
 }
-.empty h3 {
+.empty .empty_Title {
   font-family: 'Libre Caslon Display',Georgia,serif;
   font-size: 24px;
   font-weight: 400;
 }
-.empty p {
+.empty .empty_Text {
   font-size: 13px;
   color: var(--muted);
   max-width: 420px;
   margin: 10px auto 15px;
 }
-.empty button {
+.empty .empty_Action {
   font-size: 12px;
 }
 .list {
@@ -525,18 +525,18 @@ small {
 .list-row:last-child {
   border: 0;
 }
-.list-row p {
+.list-row .list-row_Text {
   font-size: 12px;
   color: var(--muted);
   margin: 5px 0;
   max-height: 4.8em;
   overflow: hidden;
 }
-.list-row a {
+.list-row .list-row_Link {
   font-size: 14px;
   font-weight: 500;
 }
-.list-row h3 {
+.list-row .list-row_Title {
   font-size: 14px;
 }
 .file-icon {
@@ -552,7 +552,7 @@ small {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
-.row-actions button {
+.row-actions .row-actions_Button {
   font-size: 11px;
   padding: 7px 9px;
 }
@@ -566,10 +566,10 @@ small {
   padding: 8px 0;
   color: #5c7157;
 }
-.date-chip strong {
+.date-chip .date-chip_Day {
   font: 27px 'Libre Caslon Display',Georgia,serif;
 }
-.date-chip span {
+.date-chip .date-chip_Month {
   font-size: 10px;
 }
 .date-chip.overdue {
@@ -604,16 +604,16 @@ small {
   top: 15px;
   box-shadow: 0 0 0 5px #f7f7f2;
 }
-.log-row time {
+.log-row .log-row_Date {
   font-size: 11px;
   color: var(--muted);
   min-width: 83px;
   padding-top: 4px;
 }
-.log-row h3 {
+.log-row .log-row_Title {
   margin: 9px 0;
 }
-.log-row p {
+.log-row .log-row_Text {
   font-size: 13px;
   margin: 8px 0;
 }
@@ -628,22 +628,22 @@ small {
   border-radius: 8px;
   padding: 26px;
 }
-.details h2 {
+.details .details_Title {
   font-size: 25px;
 }
-.details p {
+.details .details_Text {
   font-size: 13px;
 }
-.details dl {
+.details .details_List {
   display: grid;
   grid-template-columns: 115px 1fr;
   gap: 17px 13px;
   font-size: 12px;
 }
-.details dt {
+.details .details_Label {
   color: var(--muted);
 }
-.details dd {
+.details .details_Value {
   margin: 0;
   overflow-wrap: anywhere;
 }
@@ -664,7 +664,7 @@ small {
   border-radius: 8px;
   overflow: hidden;
 }
-.breaker-panel h2 {
+.breaker-panel .breaker-panel_Title {
   padding: 18px 20px;
   margin: 0;
   font-size: 26px;
@@ -704,16 +704,16 @@ small {
   border-radius: 8px;
   padding: 24px;
 }
-.contact h2 {
+.contact .contact_Name {
   font-size: 28px;
   margin: 12px 0;
 }
-.contact > a {
+.contact > .contact_Link {
   display: block;
   font-size: 13px;
   margin: 10px 0;
 }
-.contact p {
+.contact .contact_Notes {
   font-size: 13px;
 }
 .handover-intro {
@@ -724,15 +724,15 @@ small {
   border-radius: 9px;
   margin: 25px 0;
 }
-.handover-intro > span {
+.handover-intro > .handover-intro_Icon {
   font-size: 42px;
   color: #7a8c67;
 }
-.handover-intro h2 {
+.handover-intro .handover-intro_Title {
   font-size: 29px;
   margin-bottom: 10px;
 }
-.handover-intro p {
+.handover-intro .handover-intro_Text {
   font-size: 13px;
   max-width: 650px;
   color: var(--muted);
@@ -752,19 +752,19 @@ small {
   font-size: 13px;
   cursor: pointer;
 }
-.check input {
+.check .check_Input {
   width: 17px;
   height: 17px;
   accent-color: var(--green);
 }
-.check strong,
-.check small {
+.check .check_Title,
+.check .check_Detail {
   display: block;
 }
-.check small {
+.check .check_Detail {
   font-size: 11px;
 }
-.check strong {
+.check .check_Title {
   font-size: 13px;
   font-weight: 500;
 }
@@ -794,7 +794,7 @@ dialog form {
   align-items: center;
   margin-bottom: 6px;
 }
-.modal-head h2 {
+.modal-head .modal-head_Title {
   margin: 0;
   font-size: 34px;
 }
@@ -811,9 +811,7 @@ dialog form {
   color: #566757;
   align-content: start;
 }
-.field input,
-.field textarea,
-.field select {
+.field .field_Control {
   padding: 11px 12px;
   width: 100%;
   min-width: 0;
@@ -823,7 +821,7 @@ dialog form {
   border-radius: 6px;
   font-size: 13px;
 }
-.field textarea {
+.field .field_Area {
   min-height: 140px;
   resize: vertical;
   line-height: 1.6;
@@ -845,7 +843,7 @@ dialog form {
   border-top: 1px solid var(--line);
   padding-top: 18px;
 }
-.form-actions button {
+.form-actions .form-actions_Button {
   font-size: 12px;
 }
 #toast:empty {
@@ -871,7 +869,7 @@ dialog form {
   .hero {
     padding: 48px 55px;
   }
-  .hero h1 {
+  .hero .hero_Title {
     font-size: 62px;
   }
   .house-drawing {
@@ -898,7 +896,7 @@ dialog form {
   .hero {
     padding: 32px;
   }
-  .hero h1 {
+  .hero .hero_Title {
     font-size: 46px;
   }
   .house-drawing {
@@ -921,7 +919,7 @@ dialog form {
   .row-actions {
     max-width: 115px;
   }
-  .hero-actions button {
+  .hero-actions .hero-actions_Action {
     font-size: 11px;
   }
 }
@@ -936,7 +934,7 @@ dialog form {
   .brand {
     font-size: 28px;
   }
-  .brand img {
+  .brand .brand_Icon {
     width: 31px;
     height: 31px;
   }
@@ -944,19 +942,19 @@ dialog form {
   .sidebar-bottom {
     display: none;
   }
-  .sidebar nav {
+  .sidebar .sidebar_Nav {
     display: flex;
     overflow-x: auto;
     gap: 5px;
     margin-top: 17px;
     padding-bottom: 5px;
   }
-  .sidebar nav button {
+  .sidebar .sidebar_Nav .sidebar_Button {
     white-space: nowrap;
     padding: 9px 12px;
     font-size: 12px;
   }
-  .sidebar nav button span {
+  .sidebar .sidebar_Nav .sidebar_Button .sidebar_Icon {
     display: none;
   }
   .workspace {
@@ -977,11 +975,11 @@ dialog form {
     gap: 5px;
     min-height: 265px;
   }
-  .hero h1 {
+  .hero .hero_Title {
     font-size: 41px;
     max-width: 340px;
   }
-  .hero p {
+  .hero .hero_Text {
     font-size: 12px;
   }
   .house-drawing {
@@ -996,15 +994,15 @@ dialog form {
     padding-bottom: 22px;
     gap: 8px;
   }
-  .stats button {
+  .stats .stats_Button {
     display: grid;
     gap: 5px;
     padding: 0 10px;
   }
-  .stats strong {
+  .stats .stats_Value {
     font-size: 31px;
   }
-  .stats span {
+  .stats .stats_Label {
     font-size: 10px;
   }
   .category-grid {
@@ -1017,10 +1015,10 @@ dialog form {
     gap: 6px;
     min-height: 88px;
   }
-  .category strong {
+  .category .category_Title {
     font-size: 11px;
   }
-  .category small {
+  .category .category_Count {
     font-size: 10px;
   }
   .category-icon {
@@ -1041,7 +1039,7 @@ dialog form {
     height: 32px;
     font-size: 23px;
   }
-  .item-card h3 {
+  .item-card .item-card_Title {
     font-size: 15px;
   }
   .item-card .tag {
@@ -1056,7 +1054,7 @@ dialog form {
   .detail-grid {
     grid-template-columns: 1fr;
   }
-  .details dl {
+  .details .details_List {
     grid-template-columns: 130px 1fr;
   }
   .log-row {
@@ -1064,7 +1062,7 @@ dialog form {
     padding-left: 20px;
     flex-wrap: wrap;
   }
-  .log-row time {
+  .log-row .log-row_Date {
     min-width: 72px;
   }
   .log-row .row-actions {
@@ -1081,7 +1079,7 @@ dialog form {
   .house-drawing {
     display: none;
   }
-  .hero h1 {
+  .hero .hero_Title {
     font-size: 45px;
   }
   .hero {
@@ -1095,7 +1093,7 @@ dialog form {
     gap: 10px;
     grid-template-columns: 28px 1fr;
   }
-  .category strong {
+  .category .category_Title {
     font-size: 12px;
   }
   .items-grid {
@@ -1105,10 +1103,10 @@ dialog form {
     gap: 14px;
     flex-wrap: wrap;
   }
-  .page-heading h1 {
+  .page-heading .page-heading_Title {
     font-size: 39px;
   }
-  .page-heading p {
+  .page-heading .page-heading_Text {
     font-size: 12px;
   }
   .list-row {
@@ -1123,13 +1121,13 @@ dialog form {
     margin-left: auto;
     max-width: none;
   }
-  .list-row h3 {
+  .list-row .list-row_Title {
     font-size: 13px;
   }
   .log-row {
     display: block;
   }
-  .log-row time {
+  .log-row .log-row_Date {
     display: block;
     margin-bottom: 9px;
   }
@@ -1137,13 +1135,13 @@ dialog form {
     max-width: none;
     justify-content: flex-start;
   }
-  .stats strong {
+  .stats .stats_Value {
     font-size: 29px;
   }
-  .stats button {
+  .stats .stats_Button {
     padding: 0 8px;
   }
-  .stats span {
+  .stats .stats_Label {
     font-size: 9px;
   }
   .stats {
@@ -1159,7 +1157,7 @@ dialog form {
   .check {
     grid-column: 1;
   }
-  .modal-head h2 {
+  .modal-head .modal-head_Title {
     font-size: 30px;
   }
   .form-actions {
@@ -1168,10 +1166,10 @@ dialog form {
   .handover-intro {
     padding: 22px;
   }
-  .handover-intro > span {
+  .handover-intro > .handover-intro_Icon {
     display: none;
   }
-  .section-head h2 {
+  .section-head .section-head_Title {
     font-size: 27px;
   }
 }
@@ -1240,7 +1238,7 @@ dialog form {
   }
 }
 
-.list-row .related-item a {
+.list-row .related-item .related-item_Link {
   font-size: 12px;
   font-weight: 500;
 }

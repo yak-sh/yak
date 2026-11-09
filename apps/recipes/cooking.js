@@ -194,8 +194,8 @@ export function cookingHTML(rows, who, recipes = []) {
     a.entity.eid.localeCompare(b.entity.eid)
   )
   let html =
-    `<section class="cooking" aria-label="Live cooking"><header><h2>Cook together</h2>
-    <p>Choose recipes, then work through their interleaved steps. Timers and progress follow you across devices.</p><p>Each timer uses the first duration written in its step (the upper end of a range). Check it before starting; use the duration buttons or enter custom seconds to adjust it. This page must be open to show an elapsed timer.</p></header>
+    `<section class="cooking" aria-label="Live cooking"><header class="cooking_Header"><h2 class="cooking_Heading">Cook together</h2>
+    <p class="cooking_Description">Choose recipes, then work through their interleaved steps. Timers and progress follow you across devices.</p><p class="cooking_Description">Each timer uses the first duration written in its step (the upper end of a range). Check it before starting; use the duration buttons or enter custom seconds to adjust it. This page must be open to show an elapsed timer.</p></header>
     <p class="cook-error" role="alert" data-cook-error ${
       lastError ? '' : 'hidden'
     }>${escape(lastError)}</p>`
@@ -205,12 +205,12 @@ export function cookingHTML(rows, who, recipes = []) {
       '<p>This recipe box is read-only. Your saved sessions are shown below.</p>'
   }
   if (recipes.length) {
-    html += `<form data-cook-picker><fieldset ${
+    html += `<form data-cook-picker><fieldset class="cooking_Fieldset" ${
       writable(who) ? '' : 'disabled'
     }><legend>What are we making?</legend>`
     for (const recipe of recipes) {
       html +=
-        `<label class="cook-choice"><input type="checkbox" name="cook-recipe" value="${
+        `<label class="cook-choice"><input class="cooking_Input cook-choice_Input" type="checkbox" name="cook-recipe" value="${
           escape(recipe.eid)
         }" ${
           pickRows(rows, who).some((r) => r.edge.to === recipe.eid)
@@ -219,7 +219,7 @@ export function cookingHTML(rows, who, recipes = []) {
         }> ${escape(recipe.title)}</label>`
     }
     html +=
-      '<button type="submit">Start cooking selected recipes</button></fieldset></form>'
+      '<button class="cooking_Button" type="submit">Start cooking selected recipes</button></fieldset></form>'
   }
   if (!sessions.length) {
     html +=
@@ -237,15 +237,17 @@ export function cookingHTML(rows, who, recipes = []) {
     html += `<article class="cook-session ${
       session.completed ? 'is-complete' : ''
     }" data-cook-session="${escape(eid)}">
-      <header><h3>${escape(session.doc?.title ?? 'Cooking session')}</h3>
-      <p>${count} / ${steps.length} steps complete${
+      <header class="cooking_Header"><h3 class="cooking_Heading">${
+      escape(session.doc?.title ?? 'Cooking session')
+    }</h3>
+      <p class="cooking_Description">${count} / ${steps.length} steps complete${
       session.created?.at
         ? ` · Started <time>${
           escape(new Date(session.created.at).toLocaleString())
         }</time>`
         : ''
     }</p>
-      <button type="button" data-cook-action="session" data-id="${
+      <button class="cooking_Button" type="button" data-cook-action="session" data-id="${
       escape(eid)
     }" ${
       !writable(who) ||
@@ -255,11 +257,12 @@ export function cookingHTML(rows, who, recipes = []) {
     }>${
       session.completed ? 'Reopen session' : 'Finish session'
     }</button></header>
-      <details><summary>Ingredients · interleaved by recipe</summary><ul class="cook-ingredients">`
+      <details><summary class="cook-session_Summary">Ingredients · interleaved by recipe</summary><ul class="cook-ingredients">`
     for (const ingredient of cookingIngredients(recipeRows)) {
-      html += `<li><span class="cook-recipe-name">${
-        escape(ingredient.title)
-      }</span> ${escape(ingredient.text)}</li>`
+      html +=
+        `<li class="cook-ingredients_Item"><span class="cook-recipe-name">${
+          escape(ingredient.title)
+        }</span> ${escape(ingredient.text)}</li>`
     }
     html += '</ul></details><ol class="cook-steps">'
     for (const step of steps) {
@@ -277,10 +280,10 @@ export function cookingHTML(rows, who, recipes = []) {
       html += `<li class="cook-step ${
         done ? 'is-complete' : ''
       }"><label class="cook-step-check">
-        <input type="checkbox" data-cook-action="complete" data-id="${
+        <input class="cooking_Input cook-step-check_Input" type="checkbox" data-cook-action="complete" data-id="${
         escape(id)
       }" ${done ? 'checked' : ''} ${locked ? 'disabled' : ''}>
-        <span><span class="cook-recipe-name">${
+        <span class="cook-step-check_Text"><span class="cook-recipe-name">${
         escape(recipe?.cook_recipe.title ?? 'Recipe snapshot')
       }</span> ${escape(step.cook_step.text)}</span></label>
         <div class="cook-timer" aria-label="${
@@ -296,29 +299,32 @@ export function cookingHTML(rows, who, recipes = []) {
             ? ' · Paused'
             : ''
         }</output>`
-        html += `<button type="button" data-cook-action="${
-          timer?.due ? 'pause' : 'start'
-        }" data-id="${escape(id)}" ${locked || done ? 'disabled' : ''}>${
-          timer?.due ? 'Pause' : timer?.remaining > 0 ? 'Resume' : 'Start'
-        }</button>
-          <button type="button" data-cook-action="reset" data-id="${
-          escape(id)
-        }" ${locked || done ? 'disabled' : ''}>Reset</button>`
+        html +=
+          `<button class="cooking_Button" type="button" data-cook-action="${
+            timer?.due ? 'pause' : 'start'
+          }" data-id="${escape(id)}" ${locked || done ? 'disabled' : ''}>${
+            timer?.due ? 'Pause' : timer?.remaining > 0 ? 'Resume' : 'Start'
+          }</button>
+          <button class="cooking_Button" type="button" data-cook-action="reset" data-id="${
+            escape(id)
+          }" ${locked || done ? 'disabled' : ''}>Reset</button>`
       }
       html += '<div class="cook-seconds"><span>Set duration:</span>'
       for (const seconds of [30, 60, 300, 600, 1800, 3600]) {
-        html += `<button type="button" data-cook-action="duration" data-id="${
-          escape(id)
-        }" data-seconds="${seconds}" ${locked || done ? 'disabled' : ''}>${
-          formatSeconds(seconds)
-        }</button>`
+        html +=
+          `<button class="cooking_Button" type="button" data-cook-action="duration" data-id="${
+            escape(id)
+          }" data-seconds="${seconds}" ${locked || done ? 'disabled' : ''}>${
+            formatSeconds(seconds)
+          }</button>`
       }
       for (const delta of [-60, -10, 10, 60]) {
-        html += `<button type="button" data-cook-action="adjust" data-id="${
-          escape(id)
-        }" data-delta="${delta}" ${locked || done ? 'disabled' : ''}>${
-          delta > 0 ? '+' : ''
-        }${delta}s</button>`
+        html +=
+          `<button class="cooking_Button" type="button" data-cook-action="adjust" data-id="${
+            escape(id)
+          }" data-delta="${delta}" ${locked || done ? 'disabled' : ''}>${
+            delta > 0 ? '+' : ''
+          }${delta}s</button>`
       }
       html += `</div>${durationHTML(id, locked || done)}</div></li>`
     }

@@ -58,11 +58,11 @@ h1 {
   background: #fafbf3;
   box-shadow: 0 .6rem 2rem #253e2d12;
 }
-.Task h2 {
+.Task .Task_Title {
   margin-top: .4rem;
   font-size: 1.45rem;
 }
-.Task > p:not(.Task_Who) {
+.Task > .Task_Body {
   margin-top: .8rem;
   line-height: 1.5;
 }

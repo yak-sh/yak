@@ -8,13 +8,15 @@ const view = $('#app-view')
 function card(row, index) {
   return `<article class="recipe-card colour-${
     index % 4
-  }" style="view-transition-name:recipe-${index}"><div class="card-rule"><span>${
+  }" style="view-transition-name:recipe-${index}"><div class="card-rule"><span class="card-rule_Mark">${
     esc(row.recipe.category || 'Recipe')
-  }</span><span aria-hidden="true">${
+  }</span><span class="card-rule_Mark" aria-hidden="true">${
     ['◒', '✳', '◔', '❋'][index % 4]
-  }</span></div><h4>${esc(row.doc.title || 'Untitled recipe')}</h4><p>${
+  }</span></div><h4 class="recipe-card_Title">${
+    esc(row.doc.title || 'Untitled recipe')
+  }</h4><p class="recipe-card_Text">${
     esc(row.recipe.duration || 'Take your time')
-  }</p><details><summary>Look inside <span>＋</span></summary><p class="recipe-ingredients">${
+  }</p><details class="recipe-card_Details"><summary class="recipe-card_Summary">Look inside <span>＋</span></summary><p class="recipe-card_Text recipe-ingredients">${
     esc(row.recipe.ingredients)
   }</p></details><div class="card-foot">${
     row.recipe.serves ? `Serves ${esc(row.recipe.serves)}` : 'From the demo box'
@@ -33,18 +35,20 @@ function render() {
     view.innerHTML =
       `<div class="ingredient-work"><p class="view-intro">Pick recipes. Their actual ingredient lists come with them.</p><div class="recipe-picks">${
         rows.map((r) =>
-          `<label><input type="checkbox" data-pick="${esc(r.entity.eid)}" ${
-            selected.has(r.entity.eid) ? 'checked' : ''
-          }><span>${esc(r.doc.title)}</span></label>`
+          `<label class="recipe-picks_Label"><input type="checkbox" data-pick="${
+            esc(r.entity.eid)
+          }" ${selected.has(r.entity.eid) ? 'checked' : ''}><span>${
+            esc(r.doc.title)
+          }</span></label>`
         ).join('')
-      }</div><div class="list-paper"><div class="list-title"><h4>The ingredient list</h4><span>${
+      }</div><div class="list-paper"><div class="list-title"><h4 class="list-title_Title">The ingredient list</h4><span class="list-title_Count">${
         list.reduce((n, r) => n + r.lines.length, 0)
       } lines · ${list.length} recipes</span></div>${
         list.length
           ? list.map((r) =>
-            `<section><h5>${esc(r.title)}</h5>${
+            `<section><h5 class="list-paper_Heading">${esc(r.title)}</h5>${
               r.lines.map((line) =>
-                `<label class="ingredient-line"><input type="checkbox"><span>${
+                `<label class="ingredient-line"><input class="ingredient-line_Input" type="checkbox"><span class="ingredient-line_Text">${
                   esc(line)
                 }</span></label>`
               ).join('')
@@ -54,19 +58,21 @@ function render() {
       }<p class="list-note">Read from the live cards. Quantities kept exactly as written.</p></div></div>`
   } else if (mode === 'categories') {
     view.innerHTML =
-      `<div class="category-tabs" role="group" aria-label="Recipe category"><button data-category="" aria-pressed="${!category}">All <span>${rows.length}</span></button>${
+      `<div class="category-tabs" role="group" aria-label="Recipe category"><button class="category-tabs_Button" data-category="" aria-pressed="${!category}">All <span class="category-tabs_Count">${rows.length}</span></button>${
         groups.map((g) =>
-          `<button data-category="${esc(g)}" aria-pressed="${category === g}">${
+          `<button class="category-tabs_Button" data-category="${
             esc(g)
-          } <span>${
+          }" aria-pressed="${category === g}">${
+            esc(g)
+          } <span class="category-tabs_Count">${
             rows.filter((r) => r.recipe.category === g).length
           }</span></button>`
         ).join('')
       }</div><div class="category-board">${
         groups.filter((g) => !category || g === category).map((g) =>
-          `<section><h4 class="category-heading"><span class="seed"></span>${
+          `<section><h4 class="category-heading"><span class="category-heading_Count seed"></span>${
             esc(g)
-          }<span>${
+          }<span class="category-heading_Count">${
             rows.filter((r) => (r.recipe.category || 'Unsorted') === g).length
           }</span></h4><div class="category-rows">${
             rows.map((r, i) => ({ r, i })).filter(({ r }) =>
@@ -74,9 +80,11 @@ function render() {
             ).map(({ r, i }) =>
               `<article class="recipe-row" style="view-transition-name:recipe-${i}"><span class="row-number">${
                 String(i + 1).padStart(2, '0')
-              }</span><div><h5>${esc(r.doc.title)}</h5><p>${
+              }</span><div class="recipe-row_Body"><h5 class="recipe-row_Title">${
+                esc(r.doc.title)
+              }</h5><p class="recipe-row_Text">${
                 esc(r.recipe.duration)
-              }</p></div><details><summary>Ingredients ＋</summary><p class="recipe-ingredients">${
+              }</p></div><details class="recipe-row_Details"><summary class="recipe-row_Summary">Ingredients ＋</summary><p class="recipe-row_Text recipe-ingredients">${
                 esc(r.recipe.ingredients)
               }</p></details></article>`
             ).join('')
@@ -153,7 +161,7 @@ async function load() {
       'The live demo is taking a moment. You can retry, or open the original recipe box.'
     view.setAttribute('aria-busy', 'false')
     view.innerHTML =
-      '<div class="empty"><p>We couldn’t reach the live recipe box.</p><button id="retry">Try again ↺</button><a href="https://yourname.yaks.app/recipes/">Open the recipe box ↗</a></div>'
+      '<div class="empty"><p>We couldn’t reach the live recipe box.</p><button class="empty_Retry" id="retry">Try again ↺</button><a class="empty_Link" href="https://yourname.yaks.app/recipes/">Open the recipe box ↗</a></div>'
     $('#retry').addEventListener('click', load)
   }
 }

@@ -33,7 +33,7 @@
   width: min(27rem, 100%);
   line-height: 1.5;
 
-  & p {
+  & .Yaks_Paragraph {
     margin: 0 0 0.9rem;
   }
 }

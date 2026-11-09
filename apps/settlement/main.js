@@ -424,10 +424,10 @@ let drawSelectionMark = () => {
 }
 
 let stat = (label, value) =>
-  `<div class=stat><b>${value}</b><span>${label}</span></div>`
+  `<div class=stat><b class="stat_Value">${value}</b><span class="stat_Label">${label}</span></div>`
 
 let citizenRow = (c) => `
-	<li data-citizen="${c.id}">
+	<li class=citizen data-citizen="${c.id}">
 		<div class=row><b>${c.id}</b><span>${c.intent.kind}</span></div>
 		<div class=thought>${c.thought}</div>
 	</li>

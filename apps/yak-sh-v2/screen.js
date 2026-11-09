@@ -21,6 +21,7 @@ let rule = (cls, left, middle, right = left) => {
   div.className = cls
   for (let text of [left, middle, right]) {
     let span = document.createElement('span')
+    span.className = 'Man_Part'
     span.textContent = text
     div.append(span)
   }
@@ -75,6 +76,7 @@ export let tube = (els) => {
   let paint = () => {
     let cell = (text, bold) => {
       let span = document.createElement(bold ? 'b' : 'span')
+      if (bold) span.className = 'Bar_Name'
       span.textContent = text
       return span
     }

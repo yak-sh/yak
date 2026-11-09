@@ -16,8 +16,12 @@ import { Logo } from './idle.ts'
 export let Copy = ({ line }: { line: string }) => {
   let [done, set] = useState(false)
   return h('div', { class: 'Copy' }, [
-    h('code', null, [h('span', { class: 'Copy_Sign' }, '$ '), line]),
+    h('code', { class: 'Copy_Code' }, [
+      h('span', { class: 'Copy_Sign' }, '$ '),
+      line,
+    ]),
     h('button', {
+      class: 'Copy_Button',
       type: 'button',
       onClick: () =>
         navigator.clipboard?.writeText(line).then(() => {
@@ -73,7 +77,7 @@ let piece = (p: Piece) =>
     : p.kind == 'file'
     ? h('div', { class: 'File' }, [
       h('div', { class: 'File_Bar' }, p.name),
-      h('pre', null, h('code', null, p.text)),
+      h('pre', { class: 'File_Source' }, h('code', null, p.text)),
     ])
     : null
 
@@ -94,8 +98,8 @@ let held = (pieces: Piece[]) => {
         'ol',
         { class: 'Part_List' },
         items.map((it) =>
-          h('li', null, [
-            h('h3', null, words(it.title)),
+          h('li', { class: 'Part_Item' }, [
+            h('h3', { class: 'Part_Title' }, words(it.title)),
             ...it.pieces.map(piece),
           ])
         ),
@@ -144,16 +148,16 @@ let Block: FunctionComponent<Ctx & { e: Bundle }> = ({ e }) => {
         height: 440,
         loading: 'lazy',
       }),
-      h('strong', null, words(text(e, 'doc', 'title'))),
-      h('span', null, words(line)),
+      h('strong', { class: 'Block_Name' }, words(text(e, 'doc', 'title'))),
+      h('span', { class: 'Block_Line' }, words(line)),
     ]),
     h(
       'div',
       { class: 'Block_Facts' },
       facts.map(([term, value]) =>
         h('dl', null, [
-          h('dt', null, term),
-          h('dd', null, h(Prose, { source: value })),
+          h('dt', { class: 'Block_Key' }, term),
+          h('dd', { class: 'Block_Value' }, h(Prose, { source: value })),
         ])
       ),
     ),

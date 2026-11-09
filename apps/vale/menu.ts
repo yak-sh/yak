@@ -139,6 +139,7 @@ export let menu = (panel: Page, o: Settings) => {
       'span',
       { class: 'Settings_Slider' },
       h('input', {
+        class: 'Settings_Input',
         type: 'range',
         min: 0,
         max: 100,
@@ -150,7 +151,7 @@ export let menu = (panel: Page, o: Settings) => {
           paint()
         },
       }),
-      h('output', {}, `${value}%`),
+      h('output', { class: 'Settings_Output' }, `${value}%`),
     )
   }
 
@@ -178,6 +179,7 @@ export let menu = (panel: Page, o: Settings) => {
         'span',
         { class: 'Settings_Slider' },
         h('input', {
+          class: 'Settings_Input',
           type: 'range',
           min: 0,
           max: VOXELS.length - 1,

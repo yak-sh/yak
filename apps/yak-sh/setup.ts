@@ -47,20 +47,32 @@ let Told = ({ address, row, upto }: {
     ? null
     : row?.signin_sent
     ? h('div', { class: 'Setup_Told is-sent', role: 'status' }, [
-      h('b', null, 'Sent. Check your email.'),
+      h('b', { class: 'Setup_Status' }, 'Sent. Check your email.'),
       h(Prose, {
         source:
           `A letter from yaks.app's Operator is on its way to **${address}**, with a code and a link that signs you in. Or just reply to it, and the Operator sets you up from there.`,
       }),
-      h('p', null, 'Nothing in a few minutes? Look in spam, or send it again.'),
+      h(
+        'p',
+        { class: 'Body_Paragraph' },
+        'Nothing in a few minutes? Look in spam, or send it again.',
+      ),
     ])
     : row?.signin_refused
     ? h('div', { class: 'Setup_Told is-refused', role: 'status' }, [
-      h('b', null, "That isn't an email address."),
-      h('p', null, "It's back in the box: check it, and send it again."),
+      h('b', { class: 'Setup_Status' }, "That isn't an email address."),
+      h(
+        'p',
+        { class: 'Body_Paragraph' },
+        "It's back in the box: check it, and send it again.",
+      ),
     ])
     : h('div', { class: 'Setup_Told', role: 'status' }, [
-      h('b', null, words("Asking yaks.app's sign-in door…")),
+      h(
+        'b',
+        { class: 'Setup_Status' },
+        words("Asking yaks.app's sign-in door…"),
+      ),
     ])
 
 export let Setup: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
@@ -124,9 +136,14 @@ export let Setup: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
     ]),
     h('div', { class: 'Part_Body' }, [
       h('form', { class: 'Setup_Form', onSubmit: send }, [
-        h('label', { for: 'setup-address' }, 'Your email address'),
+        h(
+          'label',
+          { class: 'Setup_Label', for: 'setup-address' },
+          'Your email address',
+        ),
         h('div', { class: 'Setup_Field' }, [
           h('input', {
+            class: 'Setup_Input',
             id: 'setup-address',
             type: 'email',
             name: 'address',
@@ -140,7 +157,7 @@ export let Setup: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
                 (ev.currentTarget as HTMLInputElement).value,
               ),
           }),
-          h('button', { type: 'submit' }, 'Email me'),
+          h('button', { class: 'Setup_Button', type: 'submit' }, 'Email me'),
         ]),
       ]),
       ...pieces.map((p) =>
@@ -158,7 +175,7 @@ export let Setup: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
         }),
         h('figure', { class: 'Stack_Figure' }, [
           rows.length ? h(Source, { rows, changed, state }) : null,
-          h('figcaption', null, [
+          h('figcaption', { class: 'Stack_Caption' }, [
             h('span', { class: 'No' }, 'Fig. 3'),
             ask
               ? 'Your ask, as the bundle that wrote it: each phase changes it as apply() did, and its effect records what the door said.'

@@ -1,6 +1,6 @@
 import { fileMark, fileUrl, imageUrl, preview } from './media.js'
 import { transfer } from './handover-view.js'
-import { button, el, empty, tag } from './dom.js'
+import { button, el, empty, part, tag } from './dom.js'
 import { categories, date, due, id, itemName, safeUrl, title } from './model.js'
 
 export let view = (
@@ -26,8 +26,13 @@ export let view = (
     el(
       'div',
       { class: 'page-heading' },
-      el('div', {}, el('h1', {}, name), el('p', {}, body)),
-      action,
+      el(
+        'div',
+        {},
+        el('h1', { class: 'page-heading_Title' }, name),
+        el('p', { class: 'page-heading_Text' }, body),
+      ),
+      part(action, 'page-heading_Action'),
     )
   let card = (row) =>
     el(
@@ -43,21 +48,29 @@ export let view = (
         ),
         'item-photo',
         () =>
-          el('div', { class: 'item-symbol' }, symbol(row.house_item.category)),
+          el(
+            'div',
+            { class: 'item-symbol' },
+            symbol(row.house_item.category),
+          ),
       ),
       el(
         'div',
-        {},
+        { class: 'item-card_Body' },
         tag(row.house_item.category),
-        el('h3', {}, title(row)),
+        el('h3', { class: 'item-card_Title' }, title(row)),
         el(
           'p',
-          {},
+          { class: 'item-card_Text' },
           [row.house_item.brand, row.house_item.model].filter(Boolean).join(
             ' · ',
           ) || 'Details ready to add',
         ),
-        el('small', {}, row.house_item.location || 'Location not recorded'),
+        el(
+          'small',
+          { class: 'item-card_Location' },
+          row.house_item.location || 'Location not recorded',
+        ),
       ),
       el('span', { class: 'arrow' }, '↗'),
     )
@@ -66,8 +79,8 @@ export let view = (
       ? el(
         'div',
         { class: 'row-actions' },
-        button('Edit', () => edit(kind, row)),
-        button('Remove', () => remove(row), 'quiet'),
+        button('Edit', () => edit(kind, row), 'row-actions_Button'),
+        button('Remove', () => remove(row), 'row-actions_Button quiet'),
       )
       : null
   let doc = (row) => {
@@ -83,7 +96,7 @@ export let view = (
             href: url,
             target: '_blank',
             rel: 'noopener',
-            class: 'photo-link',
+            class: 'list-row_Link photo-link',
             'aria-label': `Open ${title(row)}`,
           },
           preview(row, 'document-photo', () =>
@@ -96,15 +109,21 @@ export let view = (
         url
           ? el(
             'a',
-            { href: url, target: '_blank', rel: 'noopener' },
+            {
+              class: 'list-row_Link',
+              href: url,
+              target: '_blank',
+              rel: 'noopener',
+            },
             title(row),
           )
           : el('strong', {}, title(row)),
         el(
           'p',
-          { class: 'related-item' },
+          { class: 'list-row_Text related-item' },
           f.item
             ? el('a', {
+              class: 'list-row_Link related-item_Link',
               href: '#item/' + f.item,
               onClick: (event) => {
                 event.preventDefault()
@@ -114,7 +133,7 @@ export let view = (
             : 'House reference',
         ),
         row.doc?.body
-          ? el('p', { class: 'document-notes' }, row.doc.body)
+          ? el('p', { class: 'list-row_Text document-notes' }, row.doc.body)
           : null,
       ),
       el(
@@ -133,20 +152,20 @@ export let view = (
     el(
       'article',
       { class: 'log-row' },
-      el('time', {}, date(row.house_record.date)),
+      el('time', { class: 'log-row_Date' }, date(row.house_record.date)),
       el(
         'div',
         { class: 'grow' },
         tag(row.house_record.kind || 'Note'),
-        el('h3', {}, title(row)),
+        el('h3', { class: 'log-row_Title' }, title(row)),
         row.house_record.item
           ? el(
             'p',
-            { class: 'muted' },
+            { class: 'log-row_Text muted' },
             itemName(items(), row.house_record.item),
           )
           : null,
-        el('p', { class: 'notes' }, row.doc?.body || ''),
+        el('p', { class: 'log-row_Text notes' }, row.doc?.body || ''),
         el(
           'small',
           {},
@@ -167,10 +186,14 @@ export let view = (
       el(
         'div',
         { class: 'date-chip ' + (due(row) ? 'overdue' : '') },
-        el('strong', {}, row.house_care.due?.slice(8) || '—'),
+        el(
+          'strong',
+          { class: 'date-chip_Day' },
+          row.house_care.due?.slice(8) || '—',
+        ),
         el(
           'span',
-          {},
+          { class: 'date-chip_Month' },
           row.house_care.due
             ? new Date(row.house_care.due + 'T12:00:00').toLocaleDateString(
               undefined,
@@ -182,10 +205,10 @@ export let view = (
       el(
         'div',
         { class: 'grow' },
-        el('h3', {}, title(row)),
+        el('h3', { class: 'list-row_Title' }, title(row)),
         el(
           'p',
-          {},
+          { class: 'list-row_Text' },
           row.house_care.item
             ? itemName(items(), row.house_care.item)
             : 'Whole house',
@@ -199,15 +222,21 @@ export let view = (
               : ' · One time'
           }`,
         ),
-        row.doc?.body ? el('p', { class: 'notes' }, row.doc.body) : null,
+        row.doc?.body
+          ? el('p', { class: 'list-row_Text notes' }, row.doc.body)
+          : null,
       ),
       who.writes
         ? el(
           'div',
           { class: 'row-actions' },
-          button('Mark done', () => complete(row), 'primary'),
-          button('Edit', () => edit('house_care', row)),
-          button('Remove', () => remove(row), 'quiet'),
+          button(
+            'Mark done',
+            () => complete(row),
+            'row-actions_Button primary',
+          ),
+          button('Edit', () => edit('house_care', row), 'row-actions_Button'),
+          button('Remove', () => remove(row), 'row-actions_Button quiet'),
         )
         : null,
     )
@@ -256,21 +285,25 @@ export let view = (
           el('span', { class: 'eyebrow' }, 'A home, well remembered'),
           el(
             'h1',
-            {},
+            { class: 'hero_Title' },
             title(profile) === 'Untitled'
               ? 'Your house, in one place'
               : title(profile),
           ),
           el(
             'p',
-            {},
+            { class: 'hero_Text' },
             'The details that make a house yours. The knowledge that helps you care for it.',
           ),
           el(
             'div',
             { class: 'hero-actions' },
-            add('house_item', '+ Add an item'),
-            button('Write in the logbook', () => navigate('logbook')),
+            part(add('house_item', '+ Add an item'), 'hero-actions_Action'),
+            button(
+              'Write in the logbook',
+              () => navigate('logbook'),
+              'hero-actions_Action',
+            ),
           ),
         ),
         houseDrawing(),
@@ -286,20 +319,24 @@ export let view = (
         ].map(([label, n, page]) =>
           el(
             'button',
-            { type: 'button', onClick: () => navigate(page) },
-            el('strong', {}, String(n)),
-            el('span', {}, label),
+            {
+              class: 'stats_Button',
+              type: 'button',
+              onClick: () => navigate(page),
+            },
+            el('strong', { class: 'stats_Value' }, String(n)),
+            el('span', { class: 'stats_Label' }, label),
           )
         ),
       ),
       el(
         'div',
         { class: 'section-head' },
-        el('h2', {}, 'Explore your home'),
+        el('h2', { class: 'section-head_Title' }, 'Explore your home'),
         button(
           'See the full manual →',
           () => navigate('manual'),
-          'text-button',
+          'section-head_Action text-button',
         ),
       ),
       el(
@@ -314,10 +351,10 @@ export let view = (
               onClick: () => navigate('manual', category),
             },
             el('span', { class: 'category-icon' }, symbol(category)),
-            el('strong', {}, category),
+            el('strong', { class: 'category_Title' }, category),
             el(
               'small',
-              {},
+              { class: 'category_Count' },
               `${
                 items().filter((r) => r.house_item.category === category).length
               } items`,
@@ -334,8 +371,12 @@ export let view = (
           el(
             'div',
             { class: 'section-head' },
-            el('h2', {}, 'Next on the list'),
-            button('All care →', () => navigate('care'), 'text-button'),
+            el('h2', { class: 'section-head_Title' }, 'Next on the list'),
+            button(
+              'All care →',
+              () => navigate('care'),
+              'section-head_Action text-button',
+            ),
           ),
           reminders(
             [...data.house_care].sort((a, b) =>
@@ -349,12 +390,12 @@ export let view = (
           el(
             'div',
             { class: 'section-head' },
-            el('h2', {}, 'Know where to look'),
+            el('h2', { class: 'section-head_Title' }, 'Know where to look'),
             who.writes
               ? button(
                 'Edit',
                 () => edit('house_profile', profile),
-                'text-button',
+                'section-head_Action text-button',
               )
               : null,
           ),
@@ -367,9 +408,13 @@ export let view = (
             ]].map(([label, value]) =>
               el(
                 'div',
-                {},
-                el('strong', {}, label),
-                el('p', {}, value || 'Location not recorded'),
+                { class: 'shutoffs_Row' },
+                el('strong', { class: 'shutoffs_Title' }, label),
+                el(
+                  'p',
+                  { class: 'shutoffs_Text' },
+                  value || 'Location not recorded',
+                ),
               )
             ),
           ),
@@ -402,10 +447,14 @@ export let view = (
         button(
           'Everything',
           () => navigate('manual'),
-          !category ? 'active' : '',
+          !category ? 'filters_Button active' : 'filters_Button',
         ),
         categories.map((c) =>
-          button(c, () => navigate('manual', c), c === category ? 'active' : '')
+          button(
+            c,
+            () => navigate('manual', c),
+            c === category ? 'filters_Button active' : 'filters_Button',
+          )
         ),
       ),
       rows.length ? el('div', { class: 'items-grid' }, rows.map(card)) : empty(
@@ -426,8 +475,8 @@ export let view = (
         el(
           'div',
           { class: 'section-head' },
-          el('h2', {}, name),
-          add(kind, '+ Add', { item: id(row) }),
+          el('h2', { class: 'section-head_Title' }, name),
+          part(add(kind, '+ Add', { item: id(row) }), 'section-head_Action'),
         ),
         render(related(kind)),
       )
@@ -448,10 +497,10 @@ export let view = (
         el(
           'section',
           { class: 'details' },
-          el('h2', {}, 'At a glance'),
+          el('h2', { class: 'details_Title' }, 'At a glance'),
           el(
             'dl',
-            {},
+            { class: 'details_List' },
             [
               ['Brand', p.brand],
               ['Model', p.model],
@@ -461,17 +510,20 @@ export let view = (
               ['Warranty', p.warranty],
             ].map((
               [label, value],
-            ) => [el('dt', {}, label), el('dd', {}, value || 'Not recorded')])
+            ) => [
+              el('dt', { class: 'details_Label' }, label),
+              el('dd', { class: 'details_Value' }, value || 'Not recorded'),
+            ])
               .flat(),
           ),
         ),
         el(
           'section',
           { class: 'details' },
-          el('h2', {}, 'Good to know'),
+          el('h2', { class: 'details_Title' }, 'Good to know'),
           el(
             'p',
-            { class: 'notes' },
+            { class: 'details_Text notes' },
             row.doc?.body ||
               'Add specifications, instructions and the little things only you know.',
           ),
@@ -506,7 +558,7 @@ export let view = (
           el(
             'section',
             { class: 'breaker-panel' },
-            el('h2', {}, side + ' slots'),
+            el('h2', { class: 'breaker-panel_Title' }, side + ' slots'),
             rows.filter((r) => r.house_circuit.side === side).sort((a, b) =>
               parseInt(a.house_circuit.slots) - parseInt(b.house_circuit.slots)
             ).map((row) =>
@@ -552,29 +604,36 @@ export let view = (
               'article',
               { class: 'contact' },
               tag(row.house_contact.trade || 'Contact'),
-              el('h2', {}, title(row)),
+              el('h2', { class: 'contact_Name' }, title(row)),
               row.house_contact.phone
                 ? el(
                   'a',
-                  { href: 'tel:' + row.house_contact.phone },
+                  {
+                    class: 'contact_Link',
+                    href: 'tel:' + row.house_contact.phone,
+                  },
                   row.house_contact.phone,
                 )
                 : null,
               row.house_contact.email
                 ? el(
                   'a',
-                  { href: 'mailto:' + row.house_contact.email },
+                  {
+                    class: 'contact_Link',
+                    href: 'mailto:' + row.house_contact.email,
+                  },
                   row.house_contact.email,
                 )
                 : null,
               safeUrl(row.house_contact.website)
                 ? el('a', {
+                  class: 'contact_Link',
                   href: safeUrl(row.house_contact.website),
                   target: '_blank',
                   rel: 'noopener',
                 }, 'Visit website ↗')
                 : null,
-              el('p', { class: 'notes' }, row.doc?.body || ''),
+              el('p', { class: 'contact_Notes notes' }, row.doc?.body || ''),
               rowActions('house_contact', row),
             )
           ),
@@ -617,6 +676,6 @@ let symbol = (name) =>
 let houseDrawing = () => {
   let drawing = el('div', { class: 'house-drawing', 'aria-hidden': 'true' })
   drawing.innerHTML =
-    '<svg viewBox="0 0 320 230" fill="none"><g stroke="currentColor" stroke-width="1.5"><path d="M35 115 155 33l124 82M56 100v99h202v-99M37 202h245M70 209h198M155 34v-9l-16-8M224 77V42h20v48M89 197v-65h37v65M159 122h68v42h-68zM193 123v40M160 143h66M103 90h27V66M153 57l87 58M67 107l85-60"/><circle cx="116" cy="163" r="2"/><path d="M281 195c-25-22-16-51-2-60 18 17 21 43 2 60Zm0-3v20M26 198c-13-12-9-27-1-32 9 9 11 23 1 32Zm0-2v15"/></g><g stroke="currentColor" opacity=".25" stroke-dasharray="3 5"><path d="M19 216h283M19 15v200M298 15v200M18 16h282"/></g></svg>'
+    '<svg class="house-drawing_Image" viewBox="0 0 320 230" fill="none"><g stroke="currentColor" stroke-width="1.5"><path d="M35 115 155 33l124 82M56 100v99h202v-99M37 202h245M70 209h198M155 34v-9l-16-8M224 77V42h20v48M89 197v-65h37v65M159 122h68v42h-68zM193 123v40M160 143h66M103 90h27V66M153 57l87 58M67 107l85-60"/><circle cx="116" cy="163" r="2"/><path d="M281 195c-25-22-16-51-2-60 18 17 21 43 2 60Zm0-3v20M26 198c-13-12-9-27-1-32 9 9 11 23 1 32Zm0-2v15"/></g><g stroke="currentColor" opacity=".25" stroke-dasharray="3 5"><path d="M19 216h283M19 15v200M298 15v200M18 16h282"/></g></svg>'
   return drawing
 }

@@ -16,20 +16,20 @@
     --tall: 1.4rem;
   }
 
-  & b {
+  & .Foe_Name {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  & em {
+  & .Foe_Level {
     flex: none;
     font-size: 0.85em;
     font-style: normal;
     opacity: 0.85;
   }
 
-  & small {
+  & .Foe_Health {
     flex: none;
     margin-left: auto;
     font-size: inherit;
@@ -46,7 +46,7 @@
     --fill: var(--hp);
   }
 
-  & em {
+  & .Foe_Level {
     padding-inline: 0.3em;
     border-radius: var(--round);
     background: var(--paper);

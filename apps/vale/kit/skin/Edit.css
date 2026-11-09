@@ -27,7 +27,7 @@
 :is(input, select).Edit-fit {
   width: auto;
 }
-select.Edit option {
+select.Edit .Edit_Option {
   background: var(--card);
   color: var(--text);
 }

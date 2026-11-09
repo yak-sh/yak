@@ -49,7 +49,7 @@
       color: #C9CFB9;
       margin: 4px 0 0;
     }
-    .count a {
+    .count .count_Link {
       color: #F0E3BE;
     }
     .warn {
@@ -112,7 +112,7 @@
       flex-wrap: wrap;
       box-shadow: 0 2px 0 rgba(0,0,0,.3);
     }
-    .banner button {
+    .banner .banner_Button {
       font-family: var(--mono);
       font-size: 13px;
       font-weight: 700;
@@ -201,7 +201,7 @@
       gap: 12px;
       padding: 18px 22px 10px;
     }
-    .head h2 {
+    .head .head_Title {
       margin: 0;
       font-family: var(--serif);
       font-size: 24px;
@@ -235,7 +235,7 @@
       margin: 0;
       padding: 0;
     }
-    ul.ing li {
+    ul.ing .ing_Item {
       font-family: var(--mono);
       font-size: 14px;
       line-height: 1.5;
@@ -246,7 +246,7 @@
       margin: 0;
       padding: 0 0 0 22px;
     }
-    ol.steps li {
+    ol.steps .steps_Item {
       font-family: var(--mono);
       font-size: 14px;
       line-height: 1.7;
@@ -326,12 +326,12 @@
       padding: 36px 24px;
       text-align: center;
     }
-    .empty p.big {
+    .empty .empty_Message {
       font-family: var(--serif);
       font-size: 18px;
       margin: 0;
     }
-    .empty p.small {
+    .empty .empty_Hint {
       font-family: var(--mono);
       font-size: 13px;
       color: var(--ink-soft);
@@ -380,7 +380,7 @@
       gap: 16px;
       flex-wrap: wrap;
     }
-    .row3 > div {
+    .row3 > .row3_Field {
       flex: 1 1 110px;
     }
     </style>
@@ -724,7 +724,9 @@
       if (who && !who.writes) {
         s += ' \u00b7 viewing only'
         if (who.signIn) {
-          s += ` \u2014 <a href="${esc(who.signIn)}">sign in</a> to edit`
+          s += ` \u2014 <a class="count_Link" href="${
+            esc(who.signIn)
+          }">sign in</a> to edit`
         }
       }
       if (busy) s += ' \u00b7 saving\u2026'
@@ -755,20 +757,20 @@
           <span>${localCards.length} card${
           localCards.length === 1 ? '' : 's'
         } saved only on this device.</span>
-          <button id="importlocal">Move into the shared box</button>
+          <button class="banner_Button" id="importlocal">Move into the shared box</button>
         </div>`
       }
 
       let inner
       if (!synced) {
         inner =
-          `<div class="card empty"><p class="big">Opening the box\u2026</p></div>`
+          `<div class="card empty"><p class="empty_Message">Opening the box\u2026</p></div>`
       } else if (vis.length === 0) {
         inner = `<div class="card empty">
-          <p class="big">${
+          <p class="empty_Message">${
           recipes.length === 0 ? 'The box is empty.' : 'No cards match.'
         }</p>
-          <p class="small">${
+          <p class="empty_Hint">${
           recipes.length === 0
             ? (canWrite()
               ? 'Add your first recipe card below.'
@@ -801,10 +803,10 @@
     function detailHTML(r) {
       if (!r) {
         return `<div class="card empty">
-          <p class="big">${
+          <p class="empty_Message">${
           synced ? "That card isn't in the box." : 'Opening the box\u2026'
         }</p>
-          <p class="small">${
+          <p class="empty_Hint">${
           synced
             ? `<a href="#/" style="color:var(--rule-red)">Back to the box</a>`
             : ''
@@ -813,7 +815,7 @@
       }
       return `<div class="card">
         <div class="head">
-          <h2>${esc(r.title)}</h2>
+          <h2 class="head_Title">${esc(r.title)}</h2>
           <button class="backbtn" id="back">\u2190 back to box</button>
         </div>
         <div class="redrule"><div class="a"></div><div class="b"></div></div>
@@ -821,11 +823,11 @@
           <p class="meta">${esc(metaLine(r))}</p>
           <h3 class="sec">Ingredients</h3>
           <ul class="ing">${
-        r.ingredients.map((i) => `<li>${esc(i)}</li>`).join('')
+        r.ingredients.map((i) => `<li class="ing_Item">${esc(i)}</li>`).join('')
       }</ul>
           <h3 class="sec">Steps</h3>
           <ol class="steps">${
-        r.steps.map((s) => `<li>${esc(s)}</li>`).join('')
+        r.steps.map((s) => `<li class="steps_Item">${esc(s)}</li>`).join('')
       }</ol>
           ${r.notes ? `<p class="notes">${esc(r.notes)}</p>` : ''}
           ${
@@ -875,17 +877,17 @@
         <div class="redrule"><div class="a"></div><div class="b"></div></div>
         <div class="pad" style="padding-bottom:20px">
           <div class="row3">
-            <div><label class="fld" for="f-cat">Card tab</label>
+            <div class="row3_Field"><label class="fld" for="f-cat">Card tab</label>
               <select id="f-cat" class="fs">${
         CATS.map((c) =>
           `<option ${c === r.category ? 'selected' : ''}>${c}</option>`
         ).join('')
       }</select></div>
-            <div><label class="fld" for="f-serves">Serves</label>
+            <div class="row3_Field"><label class="fld" for="f-serves">Serves</label>
               <input id="f-serves" class="fi" placeholder="4" value="${
         esc(r.servings)
       }"></div>
-            <div><label class="fld" for="f-time">Time</label>
+            <div class="row3_Field"><label class="fld" for="f-time">Time</label>
               <input id="f-time" class="fi" placeholder="45 min" value="${
         esc(r.time)
       }"></div>

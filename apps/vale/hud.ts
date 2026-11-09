@@ -122,8 +122,9 @@ export let talkView = (
   done = () => {},
 ): ComponentChildren => {
   let say = (...lines: string[]) =>
-    h(Body, {}, lines.map((l) => h('p', { key: l }, l)))
-  let aside = (words: string) => h(Body, { mod: 'short' }, h('p', {}, words))
+    h(Body, {}, lines.map((l) => h(Body.Paragraph, { key: l }, l)))
+  let aside = (words: string) =>
+    h(Body, { mod: 'short' }, h(Body.Paragraph, {}, words))
   let answer = (does: keyof Answers | 'close', words: string) =>
     h(Button, {
       key: does,
@@ -330,13 +331,13 @@ let foeView = (
   return h(
     ValeMeter,
     { label: name, value: hp, max: m.most, tone: 'danger' },
-    h('b', {}, name),
+    h('b', { class: 'Foe_Name' }, name),
     h(
       'em',
-      danger ? { title: 'Overwhelming foe' } : {},
+      { class: 'Foe_Level', title: danger ? 'Overwhelming foe' : undefined },
       danger ? '☠' : `level ${m.lvl}`,
     ),
-    h('small', {}, says),
+    h('small', { class: 'Foe_Health' }, says),
   )
 }
 
@@ -384,7 +385,7 @@ let OrbView = ({ name, o }: { name: string; o: Orb }) => {
       live: o.marks.live.value,
       onClick: o.press,
     },
-    mark(o.glyph.value),
+    mark(o.glyph.value, 'ValeOrb_Glyph'),
     t.key && h(ValeKeycap, { keycap: t.key }),
   )
 }
@@ -595,7 +596,7 @@ export let hud = (
           selected: screen.on,
           disabled: screen.busy,
           onClick: screen.toggle,
-        }, mark(screen.on ? 'shrink' : 'expand')),
+        }, mark(screen.on ? 'shrink' : 'expand', 'ValeOrb_Glyph')),
       ),
       trayBox,
     )

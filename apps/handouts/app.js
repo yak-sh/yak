@@ -52,7 +52,7 @@ let shelfHtml = () => {
   ).join('')
   return `<form class="find" role="search" data-find>
       <label class="vh" for="words">Search the handouts</label>
-      <input id="words" name="words" type="search" placeholder="Search the handouts" value="${
+      <input class="find_Input" id="words" name="words" type="search" placeholder="Search the handouts" value="${
     esc(view.words)
   }">
       <button type="submit" class="btn btn--quiet">Search</button>

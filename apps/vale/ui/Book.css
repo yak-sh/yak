@@ -472,7 +472,7 @@
     var(--book-paper-light));
   border-color: var(--book-green-light);
 }
-.Book_ListButton small {
+.Book_ListButton .Book_ListNote {
   display: block;
   color: var(--book-muted);
 }
@@ -480,7 +480,7 @@
   margin: 0.8rem 0;
   padding-left: 1.5rem;
 }
-.Book_Steps li {
+.Book_Steps .Book_Step {
   margin: 0.5rem 0;
 }
 .Book_Steps .Book_Done {

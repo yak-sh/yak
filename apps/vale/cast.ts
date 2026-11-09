@@ -92,7 +92,7 @@ let kitIn = (gear: Record<string, string>) =>
   ))
 
 let bar = (k: number, cls = '') =>
-  `<span class="Plate_Bar ${cls}"><i style="--k:${
+  `<span class="Plate_Bar ${cls}"><i class=Plate_Fill style="--k:${
     Math.max(0, Math.min(1, k)).toFixed(3)
   }"></i></span>`
 
@@ -545,7 +545,9 @@ export let cast = (
       plates.plate(
         me,
         head(mine, 0.25),
-        `<span><b>${esc(name)}</b> <em>${f.vitals.lvl}</em></span>${
+        `<span><b class=Plate_Name>${
+          esc(name)
+        }</b> <em class=Plate_Level>${f.vitals.lvl}</em></span>${
           voicePlate(meter(me))
         }`,
         'Plate Plate-friend',
@@ -621,7 +623,9 @@ export let cast = (
         plates.plate(
           o.eid,
           head(a, 0.25),
-          `<span><b>${esc(o.name)}</b> <em>${o.vitals.lvl}</em></span>${
+          `<span><b class=Plate_Name>${
+            esc(o.name)
+          }</b> <em class=Plate_Level>${o.vitals.lvl}</em></span>${
             voicePlate(meter(o.eid))
           }${life < 0.999 ? bar(life, 'Plate_Bar-friend') : ''}<small>${
             labels(o.statuses, f.now)
@@ -692,9 +696,11 @@ export let cast = (
           plates.plate(
             m.eid,
             head(a, 0.15),
-            `<span><b>${esc(b.name)}</b> <em${
-              skull(m.lvl, f.sheet.lvl) ? ' class=Plate_Danger' : ''
-            }>${skull(m.lvl, f.sheet.lvl) ? '☠' : m.lvl}</em></span>${
+            `<span><b class=Plate_Name>${
+              esc(b.name)
+            }</b> <em class="Plate_Level ${
+              skull(m.lvl, f.sheet.lvl) ? 'Plate_Danger' : ''
+            }">${skull(m.lvl, f.sheet.lvl) ? '☠' : m.lvl}</em></span>${
               bar(m.hp / m.most, 'Plate_Bar-foe')
             }<small>${labels(m.statuses, f.now)}</small>`,
             `Plate Plate-foe${b.combat?.boss ? ' Plate-boss' : ''}`,
@@ -735,7 +741,7 @@ export let cast = (
         plates.plate(
           g.id,
           head(a, 0.2),
-          `${mark}<b>${esc(g.name)}</b>`,
+          `${mark}<b class=Plate_Name>${esc(g.name)}</b>`,
           'Plate Plate-npc',
         )
       }
@@ -747,7 +753,9 @@ export let cast = (
         plates.plate(
           `road:${r.level}:${r.to}`,
           at.set(x, groundAt(v, x, z) + 3.4, z),
-          `${r.side[0].toUpperCase() + r.side.slice(1)} road to <b>${
+          `${
+            r.side[0].toUpperCase() + r.side.slice(1)
+          } road to <b class=Plate_Name>${
             esc(levelOf(r.to)?.name ?? r.to)
           }</b>`,
           'Plate Plate-npc',

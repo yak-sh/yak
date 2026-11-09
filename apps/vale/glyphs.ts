@@ -163,7 +163,8 @@ let svg = (cls: string, name: Glyph) =>
  * assertMatch(glyph('x'), /^<svg class="Glyph"[^>]*><path d="M18 6 6 18"\/>/)
  * ```
  */
-export let glyph = (name: Glyph): string => svg('Glyph', name)
+export let glyph = (name: Glyph, part = ''): string =>
+  svg(part ? `Glyph ${part}` : 'Glyph', name)
 
 /** An icon set in a line of text, a letter's size and seated like one
  * (`.Glyph-text`). */

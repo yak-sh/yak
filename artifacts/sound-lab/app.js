@@ -105,13 +105,13 @@ let drawGrid = () => {
   let length = bank().length, cells = bank().steps
   let row = `step-row ${length === 16 ? 'sixteen' : ''}`
   $('grid').innerHTML =
-    `<div class="${row} steps-header" style="--steps:${length}"><span>Instrument</span>${
+    `<div class="${row} steps-header" style="--steps:${length}"><span class="steps-header_Label">Instrument</span>${
       Array.from({ length }, (_, s) =>
         `<span>${String(s + 1).padStart(2, '0')}</span>`).join('')
     }</div>` + tracks.map((track, t) =>
       `<div class="${row}" style="--steps:${length};--track:${track.color}"><button class="track-label" data-track="${t}" aria-pressed="${
         selected.track === t
-      }"><i></i>${track.name}</button>${
+      }"><i class="track-label_Dot"></i>${track.name}</button>${
         Array.from({ length }, (_, s) => {
           let cell = cells[t][s],
             title = `${track.name}, step ${s + 1}${
@@ -146,30 +146,32 @@ let drawMixers = () => {
   $('mixers').innerHTML = tracks.map((track, t) =>
     `<div class="strip ${
       selected.track === t ? 'selected' : ''
-    }" style="--track:${track.color}"><div class="strip-name"><i></i>${track.name}</div>${
+    }" style="--track:${track.color}"><div class="strip-name"><i class="strip-name_Dot"></i>${track.name}</div>${
       ['volume', 'pan', 'tone'].map((name) =>
-        `<label>${
+        `<label class="strip_Label">${
           { volume: 'Level', pan: 'Pan', tone: 'Tone' }[name]
-        }<output id="mix-${t}-${name}">${
+        }<output class="strip_Value" id="mix-${t}-${name}">${
           Math.round(value.mix[t][name] * 100)
-        }</output><input data-mix="${name}" data-track="${t}" aria-label="${track.name} ${name}" type="range" min="${
+        }</output><input class="strip_Input" data-mix="${name}" data-track="${t}" aria-label="${track.name} ${name}" type="range" min="${
           name === 'pan' ? -1 : 0
         }" max="1" step="0.01" value="${value.mix[t][name]}"></label>`
       ).join('')
-    }<div class="strip-buttons"><button data-mix="mute" data-track="${t}" aria-pressed="${
+    }<div class="strip-buttons"><button class="strip-buttons_Button" data-mix="mute" data-track="${t}" aria-pressed="${
       value.mix[t].mute
-    }" aria-label="Mute ${track.name}">M</button><button data-mix="solo" data-track="${t}" aria-pressed="${
+    }" aria-label="Mute ${track.name}">M</button><button class="strip-buttons_Button" data-mix="solo" data-track="${t}" aria-pressed="${
       value.mix[t].solo
     }" aria-label="Solo ${track.name}">S</button></div></div>`
   ).join('')
 }
 let drawChain = () => {
   $('chain').innerHTML = value.chain.map((pattern, i) =>
-    `<button data-scene="${i}" aria-label="Scene ${i + 1}: pattern ${
+    `<button class="chain_Button" data-scene="${i}" aria-label="Scene ${
+      i + 1
+    }: pattern ${
       letters[pattern]
-    }. Click to change."><small>${String(i + 1).padStart(2, '0')}</small>${
-      letters[pattern]
-    }</button>`
+    }. Click to change."><small class="chain_Number">${
+      String(i + 1).padStart(2, '0')
+    }</small>${letters[pattern]}</button>`
   ).join('')
 }
 let drawDuration = () => {
@@ -193,7 +195,7 @@ let draw = () => {
     )
   }
   document.querySelector('.pattern-tabs').innerHTML = letters.map((letter, i) =>
-    `<button data-bank="${i}" aria-pressed="${
+    `<button class="pattern-tabs_Button" data-bank="${i}" aria-pressed="${
       value.pattern === i
     }" aria-label="Pattern ${letter}">${letter}</button>`
   ).join('')
@@ -207,7 +209,9 @@ let draw = () => {
   $('undo').disabled = !historyStack.length
 }
 let player = transport(audio, (playing) => {
-  $('play').innerHTML = playing ? '<span>■</span> Stop' : '<span>▶</span> Play'
+  $('play').innerHTML = playing
+    ? '<span class="play_Icon">■</span> Stop'
+    : '<span class="play_Icon">▶</span> Play'
   $('play').setAttribute('aria-label', playing ? 'Stop' : 'Play')
   $('run-state').textContent = playing === 'starting'
     ? 'Starting…'
@@ -278,7 +282,7 @@ $('note').innerHTML = Array.from(
   (_, i) => `<option value="${i + 24}">${noteName(i + 24)}</option>`,
 ).join('')
 $('pads').innerHTML = tracks.map((track, t) =>
-  `<button class="pad" data-pad="${t}" style="--track:${track.color}" aria-label="Play ${track.name}"><b>${
+  `<button class="pad" data-pad="${t}" style="--track:${track.color}" aria-label="Play ${track.name}"><b class="pad_Key">${
     keys[t].toUpperCase()
   }</b>${
     track.name.replace('Closed ', '').replace('Percussion', 'Perc.')

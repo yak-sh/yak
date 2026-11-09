@@ -9,22 +9,26 @@ export let about = (panel: Panel) =>
     h(
       Body,
       { class: 'Yaks' },
-      h('p', { class: 'Yaks_Lead' }, 'Mossvale was built on yaks.app.'),
       h(
-        'p',
-        {},
+        Body.Paragraph,
+        { class: 'Yaks_Paragraph Yaks_Lead' },
+        'Mossvale was built on yaks.app.',
+      ),
+      h(
+        Body.Paragraph,
+        { class: 'Yaks_Paragraph' },
         'Bring your ideas to your own space. Ask Claude or ChatGPT to build ' +
           'the lands, quests, and characters you imagine, then keep asking for ' +
           'changes. yaks.app hosts the result at your own address.',
       ),
       h(
-        'p',
-        { class: 'Yaks_Prompt' },
+        Body.Paragraph,
+        { class: 'Yaks_Paragraph Yaks_Prompt' },
         '“Based on what we’ve talked about, how would you make Mossvale mine?”',
       ),
       h(
-        'p',
-        {},
+        Body.Paragraph,
+        { class: 'Yaks_Paragraph' },
         'Mossvale’s code is open if you want to start from this game. Give ' +
           'your assistant the source and ask it to make your version.',
       ),

@@ -55,16 +55,16 @@
   & > :is(.Turns_Who, .Turns_Text) {
     display: block;
   }
-  .Markdown :is(h1, h2, h3, h4, h5, h6, p, ol, ul, pre) {
+  .Markdown :is(.Body_Heading, .Body_Paragraph, .Body_Ordered, .Body_Unordered, .Body_Source) {
     margin: 0.25rem 0;
   }
-  .Markdown :is(ol, ul) {
+  .Markdown :is(.Body_Ordered, .Body_Unordered) {
     padding-left: 1.25rem;
   }
-  .Markdown a {
+  .Markdown .Body_Link {
     color: var(--hail);
   }
-  .Markdown pre {
+  .Markdown .Body_Source {
     max-width: 100%;
     overflow-x: auto;
     white-space: pre-wrap;

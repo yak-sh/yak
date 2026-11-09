@@ -270,6 +270,7 @@ let shell = () => {
   ]
   content = el('main', { id: 'content', tabindex: '-1' })
   search = el('input', {
+    class: 'search_Input',
     type: 'search',
     'aria-label': 'Search',
     placeholder: 'Find something in your house…',
@@ -295,22 +296,29 @@ let shell = () => {
             navigate('overview')
           },
         },
-        el('img', { src: './icon.svg', alt: '', width: '36', height: '36' }),
+        el('img', {
+          class: 'brand_Icon',
+          src: './icon.svg',
+          alt: '',
+          width: '36',
+          height: '36',
+        }),
         el('span', {}, 'Housebook'),
       ),
       el('p', { class: 'sidebar-caption' }, 'A place for everything you know.'),
       el(
         'nav',
-        { 'aria-label': 'Main navigation' },
+        { class: 'sidebar_Nav', 'aria-label': 'Main navigation' },
         nav.map(([page, icon, label]) =>
           el(
             'button',
             {
+              class: 'sidebar_Button',
               type: 'button',
               'data-page': page,
               onClick: () => navigate(page),
             },
-            el('span', { 'aria-hidden': 'true' }, icon),
+            el('span', { class: 'sidebar_Icon', 'aria-hidden': 'true' }, icon),
             label,
           )
         ),
@@ -330,7 +338,12 @@ let shell = () => {
         ),
         el(
           'a',
-          { href: 'https://yaks.app', target: '_blank', rel: 'noopener' },
+          {
+            class: 'sidebar-bottom_Link',
+            href: 'https://yaks.app',
+            target: '_blank',
+            rel: 'noopener',
+          },
           'Made with yaks.app ↗',
         ),
       ),
@@ -344,7 +357,7 @@ let shell = () => {
         el(
           'label',
           { class: 'search' },
-          el('span', { 'aria-hidden': 'true' }, '⌕'),
+          el('span', { class: 'search_Icon', 'aria-hidden': 'true' }, '⌕'),
           search,
         ),
         el('span', { class: 'user' }, who.name || 'Housebook'),

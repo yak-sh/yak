@@ -42,7 +42,7 @@ let value = (v: unknown) => typeof v == 'string' ? v : JSON.stringify(v)
 /** A wrench, the mark a chat client puts on a tool it called. */
 let WRENCH = h(
   'svg',
-  { viewBox: '0 0 24 24', 'aria-hidden': 'true' },
+  { class: 'Chat_Icon', viewBox: '0 0 24 24', 'aria-hidden': 'true' },
   h('path', {
     d: 'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z',
   }),
@@ -51,13 +51,16 @@ let WRENCH = h(
 /** A terminal: the command typed after its prompt, and what it printed. */
 let Term = (s: Shown) => [
   h('div', { class: 'Term_Bar' }, [
-    h('i', null),
-    h('i', null),
-    h('i', null),
-    h('span', null, 'zsh'),
+    h('i', { class: 'Term_Dot' }),
+    h('i', { class: 'Term_Dot' }),
+    h('i', { class: 'Term_Dot' }),
+    h('span', { class: 'Term_Title' }, 'zsh'),
   ]),
   h('div', { class: 'Term_Screen' }, [
-    h('div', { class: 'Term_In' }, [h('span', null, '$ '), s.line]),
+    h('div', { class: 'Term_In' }, [
+      h('span', { class: 'Term_Sign' }, '$ '),
+      s.line,
+    ]),
     ...said(s),
   ]),
 ]
@@ -68,18 +71,21 @@ let Chat = (s: Shown) => {
   let { tool, args } = called(s.line)
   return [
     h('div', { class: 'Chat_Head' }, [
-      h('span', { class: 'Chat_Face', 'aria-hidden': 'true' }),
-      h('b', null, 'Your agent'),
-      h('span', null, 'over MCP'),
+      h('span', { class: 'Chat_Face Chat_At', 'aria-hidden': 'true' }),
+      h('b', { class: 'Chat_Name' }, 'Your agent'),
+      h('span', { class: 'Chat_At' }, 'over MCP'),
     ]),
     h('div', { class: 'Chat_Call' }, [
-      h('div', { class: 'Chat_Tool' }, [WRENCH, h('code', null, tool)]),
+      h('div', { class: 'Chat_Tool' }, [
+        WRENCH,
+        h('code', { class: 'Chat_Name' }, tool),
+      ]),
       h(
         'dl',
-        null,
+        { class: 'Chat_Args' },
         Object.entries(args).flatMap(([k, v]) => [
-          h('dt', null, k),
-          h('dd', null, value(v)),
+          h('dt', { class: 'Chat_Key' }, k),
+          h('dd', { class: 'Chat_Value' }, value(v)),
         ]),
       ),
       h('div', { class: 'Chat_Result' }, said(s)),
@@ -105,15 +111,15 @@ let Drawn = (s: Shown, row: Bundle): ComponentChildren => {
         })
         : null,
       h('span', { class: 'Page_Id' }, s.id(r.entity.eid)),
-      h('b', null, text(r, 'doc', 'title')),
+      h('b', { class: 'Page_Name' }, text(r, 'doc', 'title')),
     ])
   if (row.comment) {
     let on = s.find(text(row, 'comment', 'target'))
     return [
       on ? head(on) : null,
       h('div', { class: 'Page_Comment' }, [
-        h('span', null, s.id(text(row, 'created', 'by'))),
-        h('p', null, text(row, 'doc', 'body')),
+        h('span', { class: 'Page_Author' }, s.id(text(row, 'created', 'by'))),
+        h('p', { class: 'Page_Text' }, text(row, 'doc', 'body')),
       ]),
     ]
   }
@@ -127,7 +133,10 @@ let Drawn = (s: Shown, row: Bundle): ComponentChildren => {
         'ul',
         { class: 'Page_Choices' },
         choices.map((c) =>
-          h('li', { class: c.label == chose ? 'is-on' : undefined }, c.label)
+          h('li', {
+            class: [c.label == chose ? 'is-on' : undefined, 'Page_Choice']
+              .filter(Boolean).join(' '),
+          }, c.label)
         ),
       )
       : h('div', { class: 'Page_State' }, text(row, 'task', 'status')),
@@ -145,7 +154,13 @@ let Page = (s: Shown) => [
   h('div', { class: 'Page_Status' }, `called ${called(s.line).tool}`),
 ]
 
-let field = (k: string, v: string) => [h('dt', null, k), h('dd', null, v)]
+let field = (
+  k: string,
+  v: string,
+) => [
+  h('dt', { class: 'Letter_Key' }, k),
+  h('dd', { class: 'Letter_Value' }, v),
+]
 
 /** What happened to a letter, a line each. */
 let Happened = (s: Shown) =>
@@ -196,7 +211,7 @@ let Reply = (s: Shown) => {
  * the context it starts with. */
 let Session = (s: Shown) => [
   h('div', { class: 'Tui_Bar' }, [
-    h('b', null, 'new session'),
+    h('b', { class: 'Tui_Title' }, 'new session'),
     h('span', null, `wears ${s.line}`),
   ]),
   h(

@@ -12,11 +12,13 @@ export function durationHTML(step, disabled) {
       ],
   )
   return `<form class="cook-seconds" data-cook-duration data-id="${id}">
-    <label>Custom duration (seconds)<input type="text" inputmode="numeric"
+    <label class="cook-seconds_Label">Custom duration (seconds)<input class="cooking_Input cook-seconds_Input" type="text" inputmode="numeric"
       data-cook-draft="${id}" autocomplete="off" ${
     disabled ? 'disabled' : ''
   }></label>
-    <button type="submit" ${disabled ? 'disabled' : ''}>Set duration</button>
+    <button class="cooking_Button" type="submit" ${
+    disabled ? 'disabled' : ''
+  }>Set duration</button>
   </form>`
 }
 

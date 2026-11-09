@@ -9,19 +9,18 @@
   border-radius: 4px;
   padding: 20px;
 }
-.cooking header p {
+.cooking .cooking_Header .cooking_Description {
   color: #68695d;
   line-height: 1.5;
 }
-.cooking h2,
-.cooking h3 {
+.cooking .cooking_Heading {
   margin-bottom: .4rem;
 }
-.cooking button,
-.cooking input {
+.cooking .cooking_Button,
+.cooking .cooking_Input {
   font: inherit;
 }
-.cooking button {
+.cooking .cooking_Button {
   min-height: 2.75rem;
   padding: .5rem .85rem;
   border: 1px solid #bcb9a8;
@@ -30,10 +29,10 @@
   color: #292a25;
   cursor: pointer;
 }
-.cooking button:hover:not(:disabled) {
+.cooking .cooking_Button:hover:not(:disabled) {
   background: #e9eddc;
 }
-.cooking button:disabled {
+.cooking .cooking_Button:disabled {
   opacity: .55;
   cursor: default;
 }
@@ -41,7 +40,7 @@
   outline: 3px solid #6b8155;
   outline-offset: 3px;
 }
-.cooking fieldset {
+.cooking .cooking_Fieldset {
   border: 1px solid #d9d6c9;
   border-radius: .5rem;
   padding: 1rem;
@@ -53,8 +52,8 @@
   align-items: center;
   margin: .4rem 1rem .8rem 0;
 }
-.cook-choice input,
-.cook-step-check input {
+.cook-choice .cook-choice_Input,
+.cook-step-check .cook-step-check_Input {
   width: 1.25rem;
   height: 1.25rem;
   accent-color: #567747;
@@ -80,13 +79,13 @@
   padding: 1.2rem;
   background: #fffef9;
 }
-.cook-session > header {
+.cook-session > .cooking_Header {
   margin-bottom: 1rem;
 }
 .cook-session.is-complete {
   border-color: #a1b18f;
 }
-.cook-session summary {
+.cook-session .cook-session_Summary {
   cursor: pointer;
   padding-block: .6rem;
   font-weight: 600;
@@ -94,7 +93,7 @@
 .cook-ingredients {
   padding-inline-start: 1.4rem;
 }
-.cook-ingredients li {
+.cook-ingredients .cook-ingredients_Item {
   padding-block: .4rem;
   line-height: 1.5;
 }
@@ -124,7 +123,7 @@
 .cook-step.is-complete .cook-step-check {
   color: #6b7063;
 }
-.cook-step.is-complete .cook-step-check > span {
+.cook-step.is-complete .cook-step-check > .cook-step-check_Text {
   text-decoration: line-through;
 }
 .cook-timer {
@@ -156,13 +155,13 @@
   align-items: end;
   flex: 1 0 100%;
 }
-.cook-seconds label {
+.cook-seconds .cook-seconds_Label {
   font-size: .8rem;
   display: flex;
   flex-direction: column;
   gap: .3rem;
 }
-.cook-seconds input {
+.cook-seconds .cook-seconds_Input {
   box-sizing: border-box;
   width: 10rem;
   min-height: 2.75rem;

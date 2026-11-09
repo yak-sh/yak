@@ -124,7 +124,11 @@ export let graphPane = (body, count, y) => {
       if (now.call) {
         return fresh && b.call
           ? [
-            el('div', 'Fresh', `» call ${by.get(b.call.to)?.tool?.name ?? ''}`),
+            el(
+              'div',
+              'Graph_Write Fresh',
+              `» call ${by.get(b.call.to)?.tool?.name ?? ''}`,
+            ),
           ]
           : []
       }
@@ -134,11 +138,23 @@ export let graphPane = (body, count, y) => {
         !['entity', 'tombstone', ...STAMPS].includes(k) && !k.startsWith('$')
       )
       return comps.length || b.tombstone
-        ? [el('div', 'Fresh', `${sign} ${name(eid)} ${comps.join(' ')}`)]
+        ? [
+          el(
+            'div',
+            'Graph_Write Fresh',
+            `${sign} ${name(eid)} ${comps.join(' ')}`,
+          ),
+        ]
         : []
     }
     let lines = refused
-      ? [el('div', 'Graph_Refused', `✗ refused: ${refused.message ?? refused}`)]
+      ? [
+        el(
+          'div',
+          'Graph_Write Graph_Refused',
+          `✗ refused: ${refused.message ?? refused}`,
+        ),
+      ]
       : applied.flatMap(line)
     feed.append(...lines)
     while (feed.childElementCount > 40) feed.firstElementChild.remove()

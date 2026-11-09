@@ -24,7 +24,7 @@
 }
 
 .Pane_Body {
-  & h2 {
+  & .Body_Heading-2 {
     margin: 1.3em 0 .15em;
     font-size: 1em;
     font-weight: 700;
@@ -32,56 +32,56 @@
     color: var(--ph-hi);
   }
 
-  & h3 {
+  & .Body_Heading-3 {
     margin: 1em 0 .15em calc(var(--in) / 2);
     font-size: 1em;
     font-weight: 700;
     color: var(--ph-hi);
   }
 
-  & p,
-  & dl,
-  & table,
-  & pre,
+  & .Body_Paragraph,
+  & .Body_Terms,
+  & .Body_Table,
+  & .Body_Source,
   & .Ex,
   & .Groups,
   & .Map,
-  & ul,
-  & ol,
-  & blockquote {
+  & .Body_Unordered,
+  & .Body_Ordered,
+  & .Body_Quote {
     margin: .3em 0 .7em var(--in);
   }
 
-  & .Ex pre {
+  & .Ex .Body_Source {
     margin: 0;
   }
 
-  & b,
-  & strong {
+  & .Body_Bold,
+  & .Body_Strong {
     font-weight: 700;
     color: var(--ph-hi);
   }
 
-  & i,
-  & em {
+  & .Body_Argument,
+  & .Body_Emphasis {
     font-style: normal;
     text-decoration: underline;
     text-underline-offset: .18em;
   }
 
-  & code,
-  & kbd {
+  & .Body_Code,
+  & .Body_Key {
     font: inherit;
   }
 
-  & kbd {
+  & .Body_Key {
     padding: 0 .5ch;
     background: var(--ph);
     color: var(--ph-bg);
     text-shadow: none;
   }
 
-  & a {
+  & .Body_Link {
     color: inherit;
     text-decoration: underline dotted;
     text-underline-offset: .2em;
@@ -97,7 +97,7 @@
     }
   }
 
-  & pre {
+  & .Body_Source {
     padding: .1em 0 .1em 1.5ch;
     border-left: 1px solid var(--ph-dim);
     white-space: pre;
@@ -106,43 +106,43 @@
     scrollbar-color: var(--ph-dim) transparent;
   }
 
-  & table {
+  & .Body_Table {
     border-collapse: collapse;
   }
 
-  & th,
-  & td {
+  & .Body_HeadingCell,
+  & .Body_Cell {
     padding: 0 2.5ch 0 0;
     text-align: left;
     vertical-align: top;
   }
 
-  & th {
+  & .Body_HeadingCell {
     color: var(--ph-hi);
     border-bottom: 1px dashed var(--ph-dim);
   }
 
-  & dl {
+  & .Body_Terms {
     display: grid;
     grid-template-columns: max-content 1fr;
     column-gap: 2ch;
   }
 
-  & dt {
+  & .Body_Term {
     color: var(--ph-hi);
   }
 
-  & dd {
+  & .Body_Definition {
     margin: 0;
   }
 
-  & hr {
+  & .Body_Rule {
     border: 0;
     border-top: 1px dashed var(--ph-dim);
     margin: 1em 0;
   }
 
-  & blockquote {
+  & .Body_Quote {
     padding-left: 1.5ch;
     border-left: 1px solid var(--ph-dim);
     color: var(--ph-lo);
@@ -186,11 +186,11 @@
   }
 }
 
-.Pane_Body .Ex pre {
+.Pane_Body .Ex .Body_Source {
   padding-right: 9ch;
 }
 
-.Ex[data-running] pre {
+.Ex[data-running] .Body_Source {
   border-left-color: var(--ph);
 }
 
@@ -212,8 +212,8 @@
   color: var(--ph-hi);
 }
 
-.Pane_Body .Man-motd p,
-.Pane_Body .Man-motd pre {
+.Pane_Body .Man-motd .Body_Paragraph,
+.Pane_Body .Man-motd .Body_Source {
   margin-left: 0;
 }
 
@@ -221,7 +221,7 @@
   display: grid;
   margin: 1em 0 0;
 
-  & a {
+  & .Body_Link {
     display: flex;
     gap: 1ch;
     text-decoration: none;
@@ -231,13 +231,13 @@
       content: '[' var(--n, '■') ']';
     }
 
-    & b {
+    & .Body_Bold {
       min-width: 9ch;
     }
   }
 }
 
-.Pane_Body .Index a:hover b {
+.Pane_Body .Index .Body_Link:hover .Body_Bold {
   color: inherit;
 }
 
@@ -255,7 +255,7 @@
   position: relative;
   margin-left: 0 !important;
 
-  & svg {
+  & .Map_Drawing {
     display: block;
     width: 100%;
     height: auto;
@@ -295,12 +295,12 @@
 .Map_Node {
   cursor: pointer;
 
-  & circle {
+  & .Map_Dot {
     fill: var(--map-ink);
     transition: r .2s;
   }
 
-  & text {
+  & .Map_Name {
     font-size: 10px;
     fill: var(--map-ink);
     dominant-baseline: middle;
@@ -316,19 +316,19 @@
     opacity: 1 !important;
   }
 
-  &.is-on text {
+  &.is-on .Map_Name {
     fill: var(--map-hi);
     font-weight: 700;
   }
 
-  &.is-on circle {
+  &.is-on .Map_Dot {
     fill: var(--map-hi);
   }
 
   &:focus-visible {
     outline: none;
 
-    & text {
+    & .Map_Name {
       text-decoration: underline;
     }
   }
@@ -348,17 +348,17 @@
   margin-top: .3em;
   color: var(--map-ink);
 
-  & b {
+  & .Map_Package {
     color: var(--map-hi);
   }
 }
 
-.Map svg.is-drawing .Map_Edge {
+.Map .Map_Drawing.is-drawing .Map_Edge {
   stroke-dasharray: var(--len) var(--len);
   animation: trace 1.3s var(--delay, 0s) cubic-bezier(.3, .1, .2, 1) both;
 }
 
-.Map svg.is-drawing .Map_Node {
+.Map .Map_Drawing.is-drawing .Map_Node {
   animation: blip .45s var(--delay, 0s) ease-out both;
 }
 
@@ -381,34 +381,34 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .Map svg.is-drawing .Map_Edge,
-  .Map svg.is-drawing .Map_Node {
+  .Map .Map_Drawing.is-drawing .Map_Edge,
+  .Map .Map_Drawing.is-drawing .Map_Node {
     animation: none;
   }
 }
 
 /* A README, as the manual shows one: its headings are sections. */
 .Readme {
-  & h1 {
+  & .Body_Heading-1 {
     margin: .2em 0 .8em;
     font-size: 1em;
     font-weight: 700;
     color: var(--ph-hi, #fff);
   }
 
-  & h4,
-  & h5,
-  & h6 {
+  & .Body_Heading-4,
+  & .Body_Heading-5,
+  & .Body_Heading-6 {
     font-size: 1em;
     margin: 1em 0 .2em calc(var(--in, 0ch) / 2);
   }
 
-  & li {
+  & .Body_Item {
     margin: .1em 0;
   }
 
-  & ul,
-  & ol {
+  & .Body_Unordered,
+  & .Body_Ordered {
     padding-left: 2.5ch;
   }
 }

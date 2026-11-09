@@ -9,7 +9,7 @@
   color: var(--ink);
   overflow-wrap: anywhere;
 
-  & > p {
+  & > .Body_Paragraph {
     margin: 0;
   }
 

@@ -64,15 +64,11 @@ canvas[data-stage] {
   pointer-events: none;
   line-height: 1.4;
 }
-.Holdfast h1,
-.Holdfast h2,
-.Holdfast h3,
-.Holdfast p {
+.Holdfast .Holdfast_heading,
+.Holdfast .Holdfast_text {
   margin: 0;
 }
-.Holdfast h1,
-.Holdfast h2,
-.Holdfast h3 {
+.Holdfast .Holdfast_heading {
   color: var(--heading);
 }
 .Holdfast .Button {
@@ -301,7 +297,7 @@ canvas[data-stage] {
 .RunTitle .Eyebrow {
   font-size: 13px;
 }
-.RunTitle h1 {
+.RunTitle .RunTitle_title {
   font-family: Georgia, serif;
   font-size: 22px;
   font-weight: 500;
@@ -369,7 +365,7 @@ canvas[data-stage] {
   pointer-events: auto;
   z-index: 3;
 }
-.Tactics > section > .Button {
+.Tactics > .Tactics_disclosure > .Button {
   font-size: 13px;
   background: #fffbeee8;
   border-radius: 7px;
@@ -386,16 +382,16 @@ canvas[data-stage] {
   max-height: min(440px, calc(100dvh - 230px));
   overflow-y: auto;
 }
-.Tactics_Content h2 {
+.Tactics_Content .Tactics_heading {
   font-family: Georgia, serif;
   font-size: 20px;
   font-weight: 500;
 }
-.Tactics_Content h3 {
+.Tactics_Content .Tactics_subheading {
   font-size: 13px;
   margin-top: 16px;
 }
-.Tactics_Content p {
+.Tactics_Content .Tactics_text {
   font-size: 13px;
   color: var(--muted);
   line-height: 1.6;
@@ -406,7 +402,7 @@ canvas[data-stage] {
   padding-top: 4px;
   border-top: 1px solid var(--border);
 }
-.CounterGuide p {
+.CounterGuide .CounterGuide_text {
   margin-top: 3px;
 }
 .Sites {
@@ -499,7 +495,7 @@ canvas[data-stage] {
   min-width: 0;
   flex: 1;
 }
-.Blueprint_Words strong {
+.Blueprint_Words .Blueprint_name {
   font-size: 13px;
   line-height: 1.2;
 }
@@ -525,13 +521,13 @@ canvas[data-stage] {
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
-.BuildDetail_Words h2 {
+.BuildDetail_Words .BuildDetail_title {
   font-family: Georgia, serif;
   font-weight: 500;
   font-size: 18px;
   line-height: 1.25;
 }
-.BuildDetail_Words p {
+.BuildDetail_Words .BuildDetail_text {
   color: var(--muted);
   font-size: 13px;
   margin-top: 4px;
@@ -596,15 +592,15 @@ canvas[data-stage] {
   font-size: 42px;
   margin-bottom: 15px;
 }
-.Outcome h2 {
+.Outcome .Outcome_title {
   font-size: 43px;
   font-family: Georgia, serif;
   font-weight: 500;
   letter-spacing: -0.035em;
   margin: 12px 0;
 }
-.Outcome > p:not(.Eyebrow),
-.Waiting p {
+.Outcome > .Outcome_text,
+.Waiting .Waiting_text {
   color: var(--muted);
   font-size: 15px;
   line-height: 1.6;
@@ -619,7 +615,7 @@ canvas[data-stage] {
 .Outcome .Button {
   border-radius: 7px;
 }
-.Waiting h1 {
+.Waiting .Waiting_title {
   font-family: Georgia, serif;
   font-weight: 500;
   margin: 15px 0;
@@ -668,7 +664,7 @@ canvas[data-stage] {
     flex-wrap: wrap;
     justify-content: flex-end;
   }
-  .BuildDetail_Words h2 {
+  .BuildDetail_Words .BuildDetail_title {
     font-size: 17px;
   }
 }
@@ -718,7 +714,7 @@ canvas[data-stage] {
     min-width: 0;
     flex: 1;
   }
-  .RunTitle h1 {
+  .RunTitle .RunTitle_title {
     font-size: 19px;
   }
   .RunStats {
@@ -762,7 +758,7 @@ canvas[data-stage] {
     left: 13px;
     top: 119px;
   }
-  .Tactics > section > .Button {
+  .Tactics > .Tactics_disclosure > .Button {
     min-height: 36px;
     font-size: 13px;
   }
@@ -793,7 +789,7 @@ canvas[data-stage] {
   .Blueprint_Icon {
     font-size: 22px;
   }
-  .Blueprint_Words strong {
+  .Blueprint_Words .Blueprint_name {
     font-size: 13px;
   }
   .Blueprint_Role {
@@ -808,10 +804,10 @@ canvas[data-stage] {
     padding-top: 8px;
     min-height: 51px;
   }
-  .BuildDetail_Words h2 {
+  .BuildDetail_Words .BuildDetail_title {
     font-size: 16px;
   }
-  .BuildDetail_Words p {
+  .BuildDetail_Words .BuildDetail_text {
     font-size: 13px;
     max-width: 185px;
   }
@@ -841,7 +837,7 @@ canvas[data-stage] {
   .Outcome {
     padding: 25px;
   }
-  .Outcome h2 {
+  .Outcome .Outcome_title {
     font-size: 35px;
   }
   .Outcome .Eyebrow {
@@ -940,12 +936,12 @@ canvas[data-stage] {
 .Holdfast .Blueprint {
   white-space: normal;
 }
-.Blueprint_Words strong {
+.Blueprint_Words .Blueprint_name {
   overflow-wrap: anywhere;
 }
 
 @media (max-width: 520px) {
-  .Blueprint_Words strong {
+  .Blueprint_Words .Blueprint_name {
     font-size: 12px;
     white-space: nowrap;
   }

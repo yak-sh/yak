@@ -105,7 +105,7 @@ let words = (t: Tip) => [
   h(
     'div',
     { class: 'Tip_Head' },
-    h('b', {}, t.name),
+    h('b', { class: 'Tip_Name' }, t.name),
     t.key && h(ValeKeycap, { keycap: t.key }),
   ),
   t.note && h('small', { class: 'Tip_Note' }, t.note),

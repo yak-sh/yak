@@ -44,8 +44,8 @@ export let heads = ({ doc, lanes, checks, looks, mine }) =>
       mine.has(lane.actor) && '<span class="Badge Badge-you">you</span>',
     ].filter(Boolean).join('')
     return `<div class="Head" style="width:${w}px;--c:${color}">
-      <div class="Head_name"><i></i>${esc(name)}${badges}</div>
-      <div class="Head_key"><code title="${esc(lane.actor)}">${
+      <div class="Head_name"><i class="Head_dot"></i>${esc(name)}${badges}</div>
+      <div class="Head_key"><code class="Head_id" title="${esc(lane.actor)}">${
       esc(short(lane.actor))
     }…</code> · ${n} block${n == 1 ? '' : 's'}</div>
     </div>`
@@ -102,7 +102,7 @@ export let logs = (
           esc(what)
         }" style="--c:${color}" transform="translate(${x},${
           y(b)
-        })"><g class="Block_in"><rect width="${BW}" height="${BH}" rx="10"/>` +
+        })"><g class="Block_in"><rect class="Block_face" width="${BW}" height="${BH}" rx="10"/>` +
           `<rect class="Block_edge" width="4" height="${
             BH - 16
           }" x="0" y="8" rx="2"/>` +
@@ -119,8 +119,8 @@ export let logs = (
     let sealY = y(list.at(-1)) + BH + 10
     bottom = Math.max(bottom, sealY + 26)
     seals.push(
-      `<g class="Seal" style="--c:${color}" transform="translate(${x},${sealY})"><rect width="${BW}" height="26" rx="13"/>` +
-        `<text x="${BW / 2}" y="17">✓ signed · ${
+      `<g class="Seal" style="--c:${color}" transform="translate(${x},${sealY})"><rect class="Seal_face" width="${BW}" height="26" rx="13"/>` +
+        `<text class="Seal_label" x="${BW / 2}" y="17">✓ signed · ${
           esc(check.tree.slice(0, 8))
         }</text>` +
         `<title>The hash of this log’s Merkle tree, signed with its actor’s key: ${

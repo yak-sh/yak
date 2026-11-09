@@ -24,7 +24,7 @@ let TABS = [
 export let frame = (m, tab, waiting) => {
   let tabs = TABS.map(([k, label]) =>
     html`
-      <a href="${k}" class="${tab == k ? 'on' : ''}"
+      <a href="${k}" class="tabs_Link ${tab == k ? 'on' : ''}"
         ${tab == k ? html`aria-current="page"` : ''}>${icon(
           k,
         )}<span>${label}</span>${k == 'inbox' && waiting
@@ -33,9 +33,9 @@ export let frame = (m, tab, waiting) => {
     `
   )
   return {
-    top: html`<a class="brand" href="inbox"><b>${
+    top: html`<a class="brand" href="inbox"><b class="brand_Name">${
       m.church?.name || 'Church'
-    }</b><small>Messages</small></a><nav class="tabs">${tabs}</nav>`,
+    }</b><small class="brand_Label">Messages</small></a><nav class="tabs">${tabs}</nav>`,
     bottom: html`${tabs}`,
   }
 }
@@ -57,7 +57,7 @@ export let inbox = (m, ui) => {
   let row = (c) =>
     html`<a class="row ${c.waiting ? 'new' : ''}" href="inbox/${c.number}">
       ${avatar(c.name)}
-      <span class="grow"><b>${c.name}</b><span class="snip">${
+      <span class="grow"><b class="row_Title">${c.name}</b><span class="snip">${
       c.last.out ? 'You: ' : ''
     }${c.last.body}</span></span>
       <span class="when">${when(c.last.at, ui.now)}</span>
@@ -105,7 +105,7 @@ export let thread = (m, number, who, ui) => {
     return html`
       <div class="bubble ${t.out ? 'out' : 'in'}">
         <p>${t.body}</p>
-        <small>${when(t.at, ui.now)}${t.out
+        <small class="bubble_Meta">${when(t.at, ui.now)}${t.out
           ? html`
             · ${list
               ? `To the ${list} list`
@@ -148,9 +148,11 @@ export let thread = (m, number, who, ui) => {
   return html`${back('inbox', 'Inbox')}
     <header class="who">${
     avatar(c.name)
-  }<div><h1>${c.name}</h1><p class="muted">${shown(c.number)}${
-    lists.length ? ` · ${lists.join(', ')}` : ''
-  }${c.person ? '' : ' · not in the directory'}</p></div></header>
+  }<div><h1 class="who_Title">${c.name}</h1><p class="muted">${
+    shown(c.number)
+  }${lists.length ? ` · ${lists.join(', ')}` : ''}${
+    c.person ? '' : ' · not in the directory'
+  }</p></div></header>
     <div class="bubbles">${bubbles}</div>
     ${answer}`
 }
@@ -172,10 +174,11 @@ export let send = (m, who, ui) => {
         let n = recipients(m, g.eid).to.length
         return html`
           <label
-            class="choice"><input type="radio" name="group" value="${g
+            class="choice"><input class="choice_Input" type="radio" name="group" value="${g
               .eid}" ${g.eid == pick
               ? 'checked'
-              : ''} data-act="pick"><span><b>${g.name}</b><small>${plural(
+              : ''} data-act="pick"><span class="choice_Text"><b>${g
+              .name}</b><small class="choice_Count">${plural(
                 n,
                 'person',
                 'people',
@@ -257,7 +260,8 @@ let sentRow = (m, b, ui) =>
   html`
     <a class="row"
       href="sent/${b
-        .eid}"><span class="grow"><b>${m.groups.get(b.group)?.name ||
+        .eid}"><span class="grow"><b class="row_Title">${m.groups.get(b.group)
+        ?.name ||
         'A list'} · ${when(b.at, ui.now)}</b><span class="snip">${b
         .body}</span><span class="muted small">${summary(
           reach(m, b.eid),
@@ -273,7 +277,7 @@ export let sent = (m, eid, ui) => {
   }
   let r = reach(m, eid)
   let person = (x, extra = '') =>
-    html`<li>${
+    html`<li class="people_Person">${
       x.person
         ? html`<a href="inbox/${x.text.number}">${x.person.name}</a>`
         : shown(x.text.number)
@@ -327,7 +331,7 @@ export let lists = (m, who) => {
     groups.map((g) =>
       html`
         <a class="row"
-          href="lists/${g.eid}"><span class="grow"><b>${g
+          href="lists/${g.eid}"><span class="grow"><b class="row_Title">${g
             .name}</b><span class="muted small">${plural(
               g.members.length,
               'person',
@@ -336,7 +340,7 @@ export let lists = (m, who) => {
       `
     )
   }
-    <a class="row" href="stopped"><span class="grow"><b>Opted out</b><span class="muted small">${
+    <a class="row" href="stopped"><span class="grow"><b class="row_Title">Opted out</b><span class="muted small">${
     plural(m.stopped.size, 'number')
   } texted STOP</span></span>${icon('next')}</a></div>
     ${
@@ -345,7 +349,7 @@ export let lists = (m, who) => {
         <form class="inline" data-form="group">
           <label for="group-name" class="label">New list</label>
           <div
-            class="field"><input id="group-name" name="list" placeholder="Like “Youth parents”" required autocomplete="off"><button class="btn" type="submit">${icon(
+            class="field"><input class="field_Input" id="group-name" name="list" placeholder="Like “Youth parents”" required autocomplete="off"><button class="btn" type="submit">${icon(
               'plus',
             )}Make list</button></div>
         </form>
@@ -365,7 +369,7 @@ export let list = (m, eid, who, ui) => {
     let no = recipients(m, eid).left.find((l) => l.person.eid == p.eid)?.why
     return html`
       <li
-        class="person"><span class="grow"><b>${p
+        class="people_Person person"><span class="grow"><b>${p
           .name}</b><span class="muted small">${shown(p.mobile) ||
           'No mobile number'}${no
           ? html`
@@ -384,19 +388,19 @@ export let list = (m, eid, who, ui) => {
   let found = ui.words != null ? findPeople(m, ui.words, on).slice(0, 30) : []
   let add = !who.writes ? '' : html`
     <section class="add">
-      <h2>Add people</h2>
+      <h2 class="add_Title">Add people</h2>
       <p
         class="muted small">Only add people who asked to get texts from ${m
           .church?.name ||
           'the church'}. Adding them records that they agreed.</p>
       <label for="find" class="sr">Find someone in the directory</label>
-      <input id="find" type="search" data-act="find"
+      <input class="add_Input" id="find" type="search" data-act="find"
         placeholder="Name or phone number" value="${ui.words ??
           ''}" autocomplete="off">
       <ul class="people">${found.map((p) =>
         html`
           <li
-            class="person"><span class="grow"><b>${p
+            class="people_Person person"><span class="grow"><b>${p
               .name}</b><span class="muted small">${shown(
                 p.mobile,
               )}${m.stopped.has(p.mobile)
@@ -434,7 +438,8 @@ export let stoppedList = (m, ui) => {
         rows.map(([n, at]) =>
           html`
             <li
-              class="person"><span class="grow"><b>${m.byNumber.get(n)?.name ||
+              class="people_Person person"><span class="grow"><b>${m.byNumber
+                .get(n)?.name ||
                 shown(n)}</b><span class="muted small">${shown(n)} · ${when(
                   at,
                   ui.now,

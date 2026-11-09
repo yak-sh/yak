@@ -67,7 +67,7 @@ export let terminal = (els, said) => {
 
   let line = (content, kind) => {
     let div = document.createElement('div')
-    div.className = kind ? `Fresh Out-${kind}` : 'Fresh'
+    div.className = kind ? `Shell_Row Fresh Out-${kind}` : 'Shell_Row Fresh'
     if (typeof content == 'string') div.textContent = content
     else div.append(content)
     return div

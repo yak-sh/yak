@@ -12,6 +12,32 @@ let TREE = 'https://github.com/yak-sh/yak/blob/main/packages/'
 let pkgOf = (url) =>
   url.href.match(/\/packages\/([a-z0-9-]+)\/?(?:README\.md)?(?:#.*)?$/)?.[1]
 
+let parts = {
+  p: 'Body_Paragraph',
+  ol: 'Body_Ordered',
+  ul: 'Body_Unordered',
+  li: 'Body_Item',
+  pre: 'Body_Source',
+  table: 'Body_Table',
+  thead: 'Body_Head',
+  tbody: 'Body_Rows',
+  tr: 'Body_Row',
+  th: 'Body_HeadingCell',
+  td: 'Body_Cell',
+  a: 'Body_Link',
+  img: 'Body_Image',
+  blockquote: 'Body_Quote',
+  code: 'Body_Code',
+  hr: 'Body_Rule',
+  strong: 'Body_Strong',
+  em: 'Body_Emphasis',
+}
+
+let part = (tag) =>
+  /^h[1-6]$/.test(tag)
+    ? `Body_Heading Body_Heading-${tag.slice(1)}`
+    : parts[tag]
+
 /** The README of `@yaks/<name>`, drawn into a new `.Readme` element. */
 export let readme = async (name) => {
   let [{ parse, render }, { h, render: mount }, res] = await Promise.all([
@@ -22,7 +48,12 @@ export let readme = async (name) => {
   if (!res.ok) throw new Error(`no README for @yaks/${name} (${res.status})`)
   let box = document.createElement('div')
   box.className = 'Readme'
-  mount(render(parse(await res.text(), { breaks: false }), h), box)
+  let host = (tag, props, ...kids) =>
+    h(tag, {
+      ...props,
+      class: [props?.class, part(tag)].filter(Boolean).join(' '),
+    }, ...kids)
+  mount(render(parse(await res.text(), { breaks: false }), host), box)
   // Its headings' anchors are prefixed, so none of them can be taken for one
   // of the page's own sections; a link within the README follows them.
   for (let heading of box.querySelectorAll('[id]')) {

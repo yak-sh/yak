@@ -78,14 +78,14 @@ a {
   display: flex;
   gap: 4px;
 }
-.tabs a {
+.tabs .tabs_Link {
   color: #c9d6e8;
   text-decoration: none;
   font-weight: 600;
   padding: 10px 14px;
   border-radius: 8px 8px 0 0;
 }
-.tabs a[aria-current="true"] {
+.tabs .tabs_Link[aria-current="true"] {
   background: var(--ground);
   color: var(--ink);
 }
@@ -216,7 +216,7 @@ a {
   border-radius: 4px;
   overflow: hidden;
 }
-.strip i {
+.strip .strip_Part {
   background: var(--k);
   min-width: 3px;
 }
@@ -406,16 +406,14 @@ dialog::backdrop {
   display: grid;
   gap: 5px;
 }
-.field label {
+.field .field_Label {
   font-weight: 600;
   font-size: 14px;
 }
-.field small {
+.field .field_Hint {
   color: var(--quiet);
 }
-.field input,
-.field select,
-.field textarea {
+.field .field_Control {
   font: 16px/1.4 var(--sans);
   padding: 10px 12px;
   border: 1px solid #c3ccd8;
@@ -424,7 +422,7 @@ dialog::backdrop {
   color: var(--ink);
   width: 100%;
 }
-.field textarea {
+.field .field_Area {
   field-sizing: content;
   min-height: 5lh;
   max-height: 50vh;
@@ -452,10 +450,10 @@ dialog::backdrop {
   color: var(--quiet);
   font-size: 14px;
 }
-.foot p {
+.foot .foot_Text {
   margin: 0 0 8px;
 }
-.foot a {
+.foot .foot_Link {
   color: var(--ink);
 }
 .say {

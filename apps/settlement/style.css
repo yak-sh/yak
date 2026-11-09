@@ -91,7 +91,7 @@ input[type="range"] {
   box-shadow: 0 10px 24px rgba(24, 33, 28, 0.12);
 }
 
-#toolbar label {
+#toolbar .toolbar_Field {
   display: flex;
   align-items: center;
   gap: 0.45rem;
@@ -106,7 +106,7 @@ input[type="range"] {
   box-shadow: -16px 0 40px rgba(24, 33, 28, 0.12);
 }
 
-#inspector header {
+#inspector .inspector_Header {
   border-block-end: 1px solid var(--line);
   padding-block-end: 0.65rem;
 }
@@ -151,13 +151,13 @@ h2 {
   padding-block-start: 0.4rem;
 }
 
-.stat b {
+.stat .stat_Value {
   display: block;
   font-size: 1.25rem;
   font-variant-numeric: tabular-nums;
 }
 
-.stat span {
+.stat .stat_Label {
   color: rgba(24, 33, 28, 0.6);
   font-size: 0.78rem;
 }
@@ -184,12 +184,12 @@ li,
   padding-inline-end: 0.2rem;
 }
 
-#citizens li {
+#citizens .citizen {
   cursor: pointer;
   padding-block-end: 0.2rem;
 }
 
-#citizens li:hover {
+#citizens .citizen:hover {
   background: rgba(255, 255, 255, 0.35);
 }
 

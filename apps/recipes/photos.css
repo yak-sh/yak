@@ -17,7 +17,7 @@
   border: 1px solid var(--card-edge);
   border-radius: 3px;
 }
-.recipe-photo img {
+.recipe-photo .recipe-photo_Image {
   display: block;
   width: 100%;
   aspect-ratio: 4 / 3;
@@ -25,17 +25,17 @@
   background: var(--card-edge);
   border-radius: 2px;
 }
-.recipe-photo figcaption {
+.recipe-photo .recipe-photo_Caption {
   padding-top: 10px;
 }
-.recipe-photo label,
-.recipe-photos-upload label {
+.recipe-photo .recipe-photo_Label,
+.recipe-photos-upload .recipe-photos-upload_Label {
   display: flex;
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
 }
-.recipe-photo input {
+.recipe-photo .recipe-photo_Input {
   width: 100%;
   min-width: 0;
   font: inherit;
@@ -47,9 +47,9 @@
   border-radius: 0;
   padding: 8px 2px;
 }
-.recipe-photo input:focus-visible,
-.recipe-photos button:focus-visible,
-.recipe-photos input[type=file]:focus-visible {
+.recipe-photo .recipe-photo_Input:focus-visible,
+.recipe-photos .recipe-photos_Button:focus-visible,
+.recipe-photos .recipe-photos_File:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 3px;
 }
@@ -61,19 +61,19 @@
   padding-top: 12px;
   border-top: 1px dashed var(--rule-blue);
 }
-.recipe-photos-upload label {
+.recipe-photos-upload .recipe-photos-upload_Label {
   flex: 1 1 200px;
   min-width: 0;
 }
-.recipe-photos input[type=file] {
+.recipe-photos .recipe-photos_File {
   width: 100%;
   font: inherit;
   padding: 6px 0;
 }
-.recipe-photos button {
+.recipe-photos .recipe-photos_Button {
   min-height: 44px;
 }
-.recipe-photos button:disabled {
+.recipe-photos .recipe-photos_Button:disabled {
   opacity: .6;
   cursor: wait;
 }

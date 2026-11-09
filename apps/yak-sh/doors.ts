@@ -87,15 +87,15 @@ let Declared = (
     )
   return h('div', { class: 'Declared', 'data-declared': name }, [
     h('div', { class: 'Declared_Bar' }, [
-      h('b', null, def.rule ? 'rule' : 'effect'),
+      h('b', { class: 'Declared_Kind' }, def.rule ? 'rule' : 'effect'),
       ` ${from == 'shop' ? "this app's" : `${from}'s`} vocab.json`,
     ]),
     h(
       'pre',
-      null,
+      { class: 'Declared_Code' },
       [`  ${JSON.stringify(name)}: {`, ...said, '  }'].join('\n'),
     ),
-    h('p', null, String(def.description ?? '')),
+    h('p', { class: 'Declared_Text' }, String(def.description ?? '')),
   ])
 }
 
@@ -245,16 +245,17 @@ let band = (
         { class: 'Beats', ref: list, 'aria-label': 'Each turn, in order' },
         beats.map((b, i) =>
           h('li', {
-            class: turns.done(key, i) && i <= upto ? 'on' : undefined,
+            class: [turns.done(key, i) && i <= upto ? 'on' : undefined, 'Beat']
+              .filter(Boolean).join(' '),
             'data-door': b.kind,
             key: i,
           }, [
             h('span', { class: 'Dot' }),
-            h('b', null, words(b.title)),
+            h('b', { class: 'Beat_Title' }, words(b.title)),
             h(Prose, { source: b.prose }),
             b.kind == 'outbox' ? null : h(
               'code',
-              null,
+              { class: 'Beat_Code' },
               (SIGNS[b.kind] ?? '') + b.line.split('\n').at(-1),
             ),
           ])
@@ -278,12 +279,21 @@ let band = (
           h('div', { class: 'Doors_Drawing', ref: sheet }),
         ]),
         path
-          ? h('svg', {
-            class: 'Doors_Wire',
-            style: held ? '--p: 1' : undefined,
-            viewBox: `0 0 ${desk!.width} ${desk!.height}`,
-            'aria-hidden': 'true',
-          }, h('path', { d: path, key: path, pathLength: 1 }))
+          ? h(
+            'svg',
+            {
+              class: 'Doors_Wire',
+              style: held ? '--p: 1' : undefined,
+              viewBox: `0 0 ${desk!.width} ${desk!.height}`,
+              'aria-hidden': 'true',
+            },
+            h('path', {
+              class: 'Doors_Path',
+              d: path,
+              key: path,
+              pathLength: 1,
+            }),
+          )
           : null,
         h(
           'div',
@@ -309,7 +319,7 @@ let band = (
       declared.length
         ? h('div', { class: 'Declares' }, declared.map((d) => h(Declared, d)))
         : null,
-      h('figcaption', null, [
+      h('figcaption', { class: 'Doors_Caption' }, [
         h('span', { class: 'No' }, no),
         ...words(caption),
       ]),

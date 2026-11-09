@@ -40,12 +40,12 @@
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2);
   }
 
-  & span:first-child {
+  & .Man_Part:first-child {
     color: #fff;
     font-weight: 700;
   }
 
-  & span:nth-child(2) {
+  & .Man_Part:nth-child(2) {
     flex: 1;
     text-align: center;
   }
@@ -56,7 +56,7 @@
 }
 
 .Doc {
-  & h2 {
+  & .Body_Heading-2 {
     margin: 2.2rem 0 .6rem;
     font-size: 12px;
     font-weight: 700;
@@ -70,29 +70,29 @@
     }
   }
 
-  & h3 {
+  & .Body_Heading-3 {
     margin: 1.6rem 0 .4rem;
     font-size: 13px;
     font-weight: 700;
     color: #fff;
   }
 
-  & p {
+  & .Body_Paragraph {
     margin: .6rem 0;
     max-width: 72ch;
   }
 
-  & b,
-  & strong {
+  & .Body_Bold,
+  & .Body_Strong {
     color: #fff;
   }
 
-  & i {
+  & .Body_Argument {
     font-style: normal;
     color: var(--warn);
   }
 
-  & a {
+  & .Body_Link {
     color: #fff;
     text-decoration: underline;
     text-decoration-color: color-mix(in srgb, var(--signal) 55%, transparent);
@@ -103,7 +103,7 @@
     }
   }
 
-  & code {
+  & .Body_Code {
     padding: .05em .35em;
     border-radius: 3px;
     background: #111715;
@@ -112,7 +112,7 @@
     color: #e6ece3;
   }
 
-  & pre {
+  & .Body_Source {
     margin: .8rem 0;
     padding: .85rem 1rem;
     border: 1px solid var(--hair);
@@ -122,14 +122,14 @@
     font-size: 13px;
     line-height: 1.55;
 
-    & code {
+    & .Body_Code {
       padding: 0;
       border: 0;
       background: none;
     }
   }
 
-  & table {
+  & .Body_Table {
     width: 100%;
     margin: .8rem 0;
     border-collapse: collapse;
@@ -138,37 +138,37 @@
     overflow-x: auto;
   }
 
-  & th,
-  & td {
+  & .Body_HeadingCell,
+  & .Body_Cell {
     padding: .45rem 1.2rem .45rem 0;
     border-bottom: 1px solid var(--hair);
     text-align: left;
     vertical-align: top;
   }
 
-  & th {
+  & .Body_HeadingCell {
     color: var(--mute);
     font-weight: 400;
     letter-spacing: .06em;
   }
 
-  & dl {
+  & .Body_Terms {
     display: grid;
     grid-template-columns: max-content 1fr;
     gap: .35rem 1.4rem;
     margin: .8rem 0;
   }
 
-  & dt {
+  & .Body_Term {
     color: #fff;
   }
 
-  & dd {
+  & .Body_Definition {
     margin: 0;
     color: var(--ink);
   }
 
-  & kbd {
+  & .Body_Key {
     padding: .05em .4em;
     border-radius: 3px;
     background: var(--signal);
@@ -208,7 +208,7 @@
   gap: .1rem;
   margin: 1.6rem 0 0;
 
-  & a {
+  & .Body_Link {
     padding: .5rem .7rem;
     border: 1px solid transparent;
     border-radius: 5px;
@@ -232,7 +232,7 @@
       color: #fff;
     }
 
-    & b {
+    & .Body_Bold {
       min-width: 10ch;
     }
   }
@@ -242,7 +242,7 @@
 .Doc .Ex {
   margin: .8rem 0;
 
-  & pre {
+  & .Body_Source {
     margin: 0;
     padding-right: 6rem;
   }
@@ -316,7 +316,7 @@
   background: radial-gradient(ellipse at 50% 45%, #0b1510, #060908 75%);
   overflow-x: auto;
 
-  & svg {
+  & .Map_Drawing {
     min-width: 560px;
   }
 }
@@ -326,7 +326,7 @@
   grid-template-columns: repeat(auto-fit, minmax(30ch, 1fr));
   gap: 0 2rem;
 
-  & dl {
+  & .Body_Terms {
     grid-template-columns: max-content 1fr;
     font-size: 13px;
   }
@@ -392,25 +392,25 @@
     font-size: 14px;
   }
 
-  .Doc dl {
+  .Doc .Body_Terms {
     grid-template-columns: 1fr;
     gap: 0;
 
-    & dd {
+    & .Body_Definition {
       margin-bottom: .6rem;
     }
   }
 
-  .Doc .Ex pre {
+  .Doc .Ex .Body_Source {
     padding-right: 1rem;
     padding-top: 2.4rem;
   }
 
-  .Doc .Man_Head span:last-child {
+  .Doc .Man_Head .Man_Part:last-child {
     display: none;
   }
 
-  .Doc .Man_Head span:nth-child(2) {
+  .Doc .Man_Head .Man_Part:nth-child(2) {
     text-align: right;
   }
 }

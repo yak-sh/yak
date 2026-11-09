@@ -43,7 +43,11 @@ export let editor =
       el(
         'div',
         { class: 'modal-head' },
-        el('h2', {}, `${row ? 'Edit' : 'Add'} ${kinds[kind]}`),
+        el(
+          'h2',
+          { class: 'modal-head_Title' },
+          `${row ? 'Edit' : 'Add'} ${kinds[kind]}`,
+        ),
         button('×', () => dialog.close(), 'close'),
       ),
     )
@@ -57,11 +61,16 @@ export let editor =
       let input = options
         ? el(
           'select',
-          { name },
+          { name, class: 'field_Control' },
           options.map(([value, label]) => el('option', { value }, label)),
         )
         : el(type === 'textarea' ? 'textarea' : 'input', {
           name,
+          class: type === 'checkbox'
+            ? 'check_Input'
+            : type === 'textarea'
+            ? 'field_Control field_Area'
+            : 'field_Control',
           type: type === 'textarea' ? null : type,
           required,
           step: type === 'number' ? 'any' : null,
@@ -107,17 +116,28 @@ export let editor =
           'label',
           { class: 'field wide' },
           el('span', {}, 'Or upload a file'),
-          el('input', { type: 'file', name: 'upload' }),
+          el('input', {
+            class: 'field_Control',
+            type: 'file',
+            name: 'upload',
+          }),
         ),
       )
     }
-    let submit = el('button', { type: 'submit', class: 'primary' }, 'Save')
+    let submit = el('button', {
+      type: 'submit',
+      class: 'form-actions_Button primary',
+    }, 'Save')
     form.append(
       status,
       el(
         'div',
         { class: 'form-actions' },
-        button('Close — keep draft', () => dialog.close()),
+        button(
+          'Close — keep draft',
+          () => dialog.close(),
+          'form-actions_Button',
+        ),
         submit,
       ),
     )

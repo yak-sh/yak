@@ -118,7 +118,7 @@ export let board = (panel: Page, acts: Learning) => {
             : open && h(Button, { mod: 'go', 'data-do': 'learn' }, 'Learn it'),
         ),
       ),
-      h(Body, {}, h('p', {}, `${k.says} ${what}.`)),
+      h(Body, {}, h(Body.Paragraph, {}, `${k.says} ${what}.`)),
       ...skillDetail(s, picked),
     ]
   }

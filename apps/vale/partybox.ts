@@ -18,7 +18,7 @@ import { head, hint, part, picture } from './tile.ts'
 
 // How a member fares, and what they wear, as far as is known.
 let details = (m: Member) => [
-  h(Body, {}, h('p', {}, m.status)),
+  h(Body, {}, h(Body.Paragraph, {}, m.status)),
   m.vitals
     ? h(ValeMeter, { label: 'Health', value: m.vitals.hp, max: m.vitals.max })
     : hint('Live stats unavailable.'),

@@ -249,7 +249,8 @@ export let pack = (panel: Page, acts: Acts) => {
       [(had || locked) && 'dim'],
       { ...tipProps(tip), 'aria-label': heard(tip) },
       ...face(h, p),
-      locked && el(Need, { 'aria-hidden': 'true' }, mark('lock'), p.lvl),
+      locked &&
+        el(Need, { 'aria-hidden': 'true' }, mark('lock', 'Grid_Glyph'), p.lvl),
       n > 1 && el(Count, { 'aria-hidden': 'true' }, n),
     )
   }

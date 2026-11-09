@@ -31,7 +31,7 @@ let strip = (blocks) => {
   if (!all) return ''
   return `<span class="strip" aria-hidden="true">${
     blocks.map((b) =>
-      `<i class="${kindClass(b.block.kind)}" style="flex:${
+      `<i class="strip_Part ${kindClass(b.block.kind)}" style="flex:${
         b.block.minutes ?? 0
       }"></i>`
     ).join('')

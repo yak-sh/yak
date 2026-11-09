@@ -135,7 +135,7 @@ textarea {
   text-decoration: none;
   min-width: 0;
 }
-.brand b {
+.brand .brand_Name {
   font-family: var(--hf);
   font-weight: 400;
   font-size: 19px;
@@ -143,7 +143,7 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.brand small {
+.brand .brand_Label {
   font-size: 12px;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -154,8 +154,8 @@ textarea {
   gap: 4px;
   margin-left: auto;
 }
-.tabs a,
-.bottom a {
+.tabs .tabs_Link,
+.bottom .tabs_Link {
   position: relative;
   display: flex;
   align-items: center;
@@ -165,8 +165,8 @@ textarea {
   text-decoration: none;
   color: var(--muted);
 }
-.tabs a.on,
-.bottom a.on {
+.tabs .tabs_Link.on,
+.bottom .tabs_Link.on {
   color: var(--ink);
   background: var(--soft);
 }
@@ -209,7 +209,7 @@ main {
     -webkit-backdrop-filter: blur(12px);
     border-top: 1px solid var(--line);
   }
-  .bottom a {
+  .bottom .tabs_Link {
     flex: 1;
     flex-direction: column;
     gap: 2px;
@@ -316,7 +316,7 @@ textarea {
   display: flex;
   gap: 10px;
 }
-.field input {
+.field .field_Input {
   flex: 1;
 }
 fieldset {
@@ -340,20 +340,20 @@ legend {
   background: var(--card);
   cursor: pointer;
 }
-.choice:has(input:checked) {
+.choice:has(.choice_Input:checked) {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
 }
-.choice input {
+.choice .choice_Input {
   width: 22px;
   height: 22px;
   accent-color: var(--accent);
 }
-.choice span {
+.choice .choice_Text {
   display: flex;
   flex-direction: column;
 }
-.choice small {
+.choice .choice_Count {
   color: var(--muted);
   font-size: 15px;
 }
@@ -385,10 +385,10 @@ blockquote {
   border-bottom: 1px solid var(--line);
   text-decoration: none;
 }
-.row b {
+.row .row_Title {
   font-weight: 600;
 }
-.row.new b::after {
+.row.new .row_Title::after {
   content: '';
   display: inline-block;
   width: 9px;
@@ -427,7 +427,7 @@ blockquote {
   gap: 14px;
   margin: 6px 0 18px;
 }
-.who h1 {
+.who .who_Title {
   margin: 0;
 }
 .bubbles {
@@ -448,7 +448,7 @@ blockquote {
   background: var(--soft);
   border-color: transparent;
 }
-.bubble small {
+.bubble .bubble_Meta {
   display: block;
   margin-top: 4px;
   color: var(--muted);
@@ -468,7 +468,7 @@ blockquote {
   margin: 0;
   border-top: 1px solid var(--line);
 }
-.people li {
+.people .people_Person {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -483,10 +483,10 @@ blockquote {
   border-radius: 16px;
   background: var(--card);
 }
-.add h2 {
+.add .add_Title {
   margin-top: 0;
 }
-.add input {
+.add .add_Input {
   margin: 12px 0;
 }
 

@@ -43,8 +43,8 @@ let draw = () => {
     let disabled = doneHere || busy.has(r.entity.eid) || !writable
     return `<article class=Task>
       <p class=Task_Who>From ${esc(name)}</p>
-      <h2>${esc(t.title)}</h2>
-      <p>${esc(t.body)}</p>
+      <h2 class=Task_Title>${esc(t.title)}</h2>
+      <p class=Task_Body>${esc(t.body)}</p>
       <button data-task="${esc(r.entity.eid)}" ${disabled ? 'disabled' : ''}>
         ${
       doneHere
