@@ -2,7 +2,13 @@ import type { Tool } from '@yaks/session'
 import type { Arrival } from '@yaks/phone'
 import { Blocked, keyword } from '@yaks/phone'
 import { type Bundle, derivedEid, type Graph } from '@yaks/graph'
-import { appStore, directoryOf, type Space, url as urlOf } from './directory.ts'
+import {
+  appStore,
+  directoryOf,
+  type Role,
+  type Space,
+  url as urlOf,
+} from './directory.ts'
 import type { Env } from './env.ts'
 import { KERNEL } from './meta.ts'
 import { refuse } from './tool.ts'
@@ -198,11 +204,25 @@ export let controlText = async (
   return await response.json() as { stopped: boolean }
 }
 
-/** A text to a space's own number or inbound line: carrier keywords are
- * answered and kept out of the model. Anything else from someone with a seat
- * in the space is a request in their own conversation with its Operator,
- * which has their reach (operator-reach.ts `reachOf`); from anyone else it is
- * a sign-up, with only the form tools (D-151808). */
+/**
+ * Who a text to a space's own number or inbound line is for (D-151808). A
+ * text to an app's own number never gets here: it is that app's
+ * (operator-texts.ts `arrived`, app-texts.ts). Here a carrier keyword (STOP,
+ * START, HELP) is answered in the campaign's words, from anyone; nothing else
+ * from a number that said STOP reaches a model; someone with a seat in the
+ * space, viewer or writer, writes in their own conversation with its
+ * Operator, which has their reach (a viewer's with the sign-up tools beside
+ * it, operator.ts `roster`); anyone else signs up, with only the form tools.
+ */
+export let textRoute = (
+  word: string | null,
+  stopped: boolean,
+  role: Role | null,
+): 'control' | 'quiet' | 'own' | 'signup' =>
+  word ? 'control' : stopped ? 'quiet' : role ? 'own' : 'signup'
+
+/** A text to a space's own number or inbound line, sent where `textRoute`
+ * says. */
 export let spaceArrived = async (
   env: Env,
   space: Space,
@@ -210,11 +230,14 @@ export let spaceArrived = async (
 ) => {
   let word = formKeyword(arrival.text)
   let { stopped } = await controlText(env, space, arrival)
-  if (!word) {
-    if (stopped) return
-    let person = await phonedIn(env, arrival.from)
-    let { role } = await reachOf(directoryOf(env.STORE), space, person)
-    if (role) return await textedOperator(env, space, person, arrival)
+  let person = word || stopped ? '' : await phonedIn(env, arrival.from)
+  let { role } = person
+    ? await reachOf(directoryOf(env.STORE), space, person)
+    : { role: null }
+  let route = textRoute(word, stopped, role)
+  if (route == 'quiet') return
+  if (route == 'own') return await textedOperator(env, space, person, arrival)
+  if (route == 'signup') {
     if (await signupArrived(env, space, arrival, person)) {
       let { countedTexts } = await import('./meter.ts')
       let { costOf } = await import('./text-spend.ts')
@@ -230,7 +253,7 @@ export let spaceArrived = async (
       reply_to: arrival.to,
       via: arrival.via,
       channel: 'control',
-    }, answers(space.title || space.slug)[word])
+    }, answers(space.title || space.slug)[word!])
   } catch (error) {
     if (!(error instanceof Blocked)) throw error
   }

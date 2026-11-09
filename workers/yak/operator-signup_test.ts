@@ -8,8 +8,10 @@ import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { operatorReply, operatorRequest } from './operator-host.ts'
 import {
   signupArrived,
+  signupTools,
   spaceArrived,
   textControl,
+  textRoute,
   textStopped,
 } from './operator-signup.ts'
 import { drain } from './operator-store.ts'
@@ -18,6 +20,7 @@ import { stores } from './app-store-probe.ts'
 import { appVocab } from './vocab.ts'
 import { declared } from './directory-fixture.ts'
 import type { Env } from './env.ts'
+import type { Role } from './directory.ts'
 
 let { env, dir } = platform('signup-operator')
 let spaceId = crypto.randomUUID(), member = crypto.randomUUID()
@@ -119,7 +122,21 @@ let asked = (person: string) =>
     (b.operator_request as { person: string }).person == person
   )
 let tools = (i: number) => seen[i].tools.map((t) => t.name).sort()
-let FORMS = ['signup_answer', 'signup_forms', 'signup_mine', 'signup_start']
+let FORMS = signupTools(env, space, '', '').map((t) => t.name).sort()
+
+test('a text to a space is answered by keyword, kept quiet after STOP, and otherwise is a seated person’s own or a sign-up', () => {
+  let routes = [null, 'stop', 'start', 'help'].map((word) =>
+    [null, 'viewer', 'editor', 'owner'].map((role) =>
+      [false, true].map((stopped) =>
+        textRoute(word, stopped, role as Role | null)
+      )
+    )
+  )
+  equal(routes, [
+    [['signup', 'quiet'], ...Array(3).fill(['own', 'quiet'])],
+    ...Array(3).fill(Array(4).fill(['control', 'control'])),
+  ])
+})
 
 test('a text from someone with no seat in the space runs as them, with only form tools', async () => {
   equal([accepted, redelivered], [true, false])

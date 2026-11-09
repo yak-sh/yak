@@ -15,6 +15,7 @@ import { credential } from '@yaks/connections'
 import { reveal } from '@yaks/secrets'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
+import { signupTools } from './operator-signup.ts'
 import { rootOf } from './operator-root.ts'
 import { conversationOf, workOf } from './operator-host.ts'
 import { listed as listing } from './operator-view.ts'
@@ -516,12 +517,10 @@ test('a voip.ms key kept as its email and password joined by a colon is read as 
 })
 
 test('a fresh text to the chosen voip.ms inbound number reaches only sign-up tools, and keywords preserve its opt-out', () => {
-  assertEquals(signupOffered.map((t) => t.name).sort(), [
-    'signup_answer',
-    'signup_forms',
-    'signup_mine',
-    'signup_start',
-  ])
+  assertEquals(
+    signupOffered.map((t) => t.name).sort(),
+    signupTools(env, space, '', '').map((t) => t.name).sort(),
+  )
   assertEquals(signupBack.get('did'), '2695550111')
   assertEquals(signupBack.get('dst'), '2695550199')
   assertEquals(whileStopped, beforeControl)
