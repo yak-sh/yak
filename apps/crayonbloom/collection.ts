@@ -4,12 +4,18 @@ import { type Book, current, fingerprint, type Page } from './model.ts'
 
 export let collection = (db: Store, engine: ReturnType<typeof atelier>) => ({
   async list(caller: Who) {
-    let rows = []
-    for (let book of await engine.shelf(caller)) {
-      for (let page of await engine.pages(book)) {
-        if (current(book, page)) {
-          rows.push({ book: book.entity.eid, title: book.doc.title, page })
-        }
+    let books = await engine.shelf(caller),
+      rows: { book: string; title: string; page: Page }[] = []
+    if (!books.length) return rows
+    let pages = await db.query(
+      `.coloring_page.book=${
+        books.map((b) => b.entity.eid).join(',')
+      }&?coloring_page&?artwork`,
+    ) as Page[]
+    for (let page of pages) {
+      let book = books.find((b) => b.entity.eid === page.coloring_page.book)!
+      if (current(book, page)) {
+        rows.push({ book: book.entity.eid, title: book.doc.title, page })
       }
     }
     return rows

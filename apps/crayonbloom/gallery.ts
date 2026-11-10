@@ -17,13 +17,23 @@ export let gallery = (db: Store, app: Binding) => {
           '.gallery_approved&?coloring_page&?artwork',
         ) as Page[],
         rows = []
+      let books = [
+        ...new Set(
+          candidates.map((p) => p.coloring_page?.book).filter(Boolean),
+        ),
+      ]
+      let consented = new Set(
+        books.length
+          ? (await db.query(`.entity.eid=${books.join(',')}&.gallery_consent`))
+            .map((b) => b.entity.eid)
+          : [],
+      )
       for (let page of candidates) {
-        let approved = await selected(page.entity.eid)
-        if (approved) {
+        if (page.artwork && consented.has(page.coloring_page.book)) {
           rows.push({
-            id: approved.entity.eid,
-            caption: approved.coloring_page.caption,
-            mime: approved.artwork!.mime,
+            id: page.entity.eid,
+            caption: page.coloring_page.caption,
+            mime: page.artwork.mime,
           })
         }
       }

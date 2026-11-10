@@ -182,7 +182,7 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
         await db.apply([{ entity: job.entity, call: null, wake: null }])
         return reply({ superseded: true })
       }
-      let output = await printable(env.APP, runtime, owner, parent, page)
+      let output = await printable(env.APP, runtime, parent, page)
       let bytes = new Uint8Array(await output.arrayBuffer())
       let stored = await put(env.APP, owner, bytes, 'application/pdf')
       await db.apply([{

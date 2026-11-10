@@ -1,13 +1,12 @@
 import { PDFDocument } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
-import { type Binding, guard, Refusal, type Store, type Who } from './db.ts'
-import { put, type Runtime } from './generation.ts'
+import { type Binding, guard, Refusal, type Store } from './db.ts'
+import { type Runtime } from './generation.ts'
 import { type Book, current, type Page } from './model.ts'
 
 export let printable = async (
   app: Binding,
   runtime: Runtime,
-  caller: Who,
   book: Book,
   page: Page,
 ) => {
@@ -52,7 +51,6 @@ export let printable = async (
   sheet.drawText(book.doc.title.slice(0, 75), { x: 54, y: 65, size: 13, font })
   sheet.drawText('Made with CrayonBloom', { x: 54, y: 44, size: 9, font })
   let output = await doc.save()
-  await put(app, caller, output, 'application/pdf')
   return new Response(new Uint8Array(output), {
     headers: {
       'content-type': 'application/pdf',
