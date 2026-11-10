@@ -133,32 +133,42 @@ export function described(
  */
 export function catalog(
   driver: Driver,
-  pending?: ReadonlyMap<number, readonly string[]>,
+  pending?:
+    | ReadonlyMap<number, readonly string[]>
+    | (() => ReadonlyMap<number, readonly string[]>),
 ): ArchetypeSet {
   let loaded = false
   let current: ArchetypeSet | undefined
+  let moved: ReadonlyMap<number, readonly string[]> | undefined
+  let shapes = () =>
+    moved ??= typeof pending == 'function' ? pending() : pending
   let cache = cacheFor(driver)
   let choose = (predicate: Parameters<ArchetypeSet>[0]) => {
     if (!loaded) {
-      current = snapshot(driver, pending)
+      current = snapshot(driver, shapes())
       loaded = true
     }
     return current?.(predicate)
   }
-  if (pending?.size) {
-    Object.assign(choose, {
-      pending: {
-        ids: [...pending.keys()],
-        matching: (predicate: Parameters<ArchetypeSet>[0]) =>
-          [...pending].filter(([, tables]) =>
-            satisfies(predicate, { eid: '', tables })
-          ).map(([id]) => id),
+  if (pending) {
+    Object.defineProperty(choose, 'pending', {
+      get: () => {
+        let pending = shapes()
+        return pending?.size
+          ? {
+            ids: [...pending.keys()],
+            matching: (predicate: Parameters<ArchetypeSet>[0]) =>
+              [...pending].filter(([, tables]) =>
+                satisfies(predicate, { eid: '', tables })
+              ).map(([id]) => id),
+          }
+          : undefined
       },
     })
   }
   return Object.defineProperty(choose, 'held', {
     get: () => {
-      if (pending?.size) return true
+      if (shapes()?.size) return true
       if (!cache.descriptors) return false
       let version = revision(driver, 'descriptors')
       if (cache.descriptorVersion == version) return true

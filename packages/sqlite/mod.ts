@@ -534,7 +534,7 @@ export let storage = (
   vocab: Vocab,
   base: Opts = {},
 ): Store => {
-  let opts = options(driver, vocab, base)
+  let effective = options(driver, vocab, base)
   if (base.history) keep(driver, vocab, base.history, base.mode)
   // What a store with history adds beside its own schema, run and printed
   // with it.
@@ -552,6 +552,14 @@ export let storage = (
   // (./archetype.ts `ledger`).
   let book = keeping ? ledger(driver) : undefined
   let owing = () => book?.owed() ?? []
+  // All handles on this connection see the open writer's rows, including a
+  // graph's scope reads through the outer store rather than its tx handle.
+  let opts = () => ({
+    ...effective(),
+    ...book?.owed().length
+      ? { archetypes: catalog(driver, () => pendingShapes(driver, book)) }
+      : {},
+  })
   // Who says what an entity holds where its pointer does not: the open
   // transaction's ledger, or the mode this connection reads (`base.held`).
   let unsettled: Unsettled | undefined = book
@@ -1431,7 +1439,7 @@ export let storage = (
       let o = asking(signalled)
       let parsed = ast(query)
       if (
-        classified && base.counts != 'eager' &&
+        classified && !owing().length && base.counts != 'eager' &&
         cardinality(parsed, vocab, { ...opts(), ...o })
       ) {
         unit(driver, () => population(driver))

@@ -233,6 +233,26 @@ test('classification begins the next presence comparison in a ledger', () => {
   assertEquals(l.owed(), [])
 })
 
+test("an outer storage read uses the open writer's pending archetypes", () => {
+  let driver = mem(), reports: Error[] = []
+  let s = storage(driver, vocab, { report: (e) => void reports.push(e) })
+  s.install()
+  s.tx((tx) => {
+    tx.patch([{ entity: { eid: 'new' }, doc: { title: 'pending' } }])
+    assertEquals(s.read('.doc').map((b) => b.entity.eid), ['new'])
+    assertEquals(s.rows('.doc').map((b) => b.eid), ['new'])
+    assertEquals(s.rows('.doc&.count').map((b) => b.n), [1])
+    assertEquals(driver.query(s.screen('.doc')!).length, 1)
+    tx.patch([{ entity: { eid: 'new' }, doc: null, task: {} }])
+    assertEquals(s.read('.doc'), [])
+    assertEquals(s.read('.task').map((b) => b.entity.eid), ['new'])
+    assertEquals(s.rows('.doc&.count').map((b) => b.n), [0])
+    assertEquals(reports, [])
+    assertEquals(ledger(driver).owed(), ['new'])
+  })
+  assertEquals(s.get(['new'])[0].entity.archetype, eidOf(['task']))
+})
+
 test('a ledger says what an entity holds from its pointer and the rows since', () => {
   let l = ledger(mem())
   assertEquals(l.held('a', ['doc']), ['doc'])

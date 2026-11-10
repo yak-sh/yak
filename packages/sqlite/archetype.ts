@@ -14,7 +14,6 @@ import {
   gt,
   isNull,
   type Join,
-  join,
   le,
   left,
   lit,
@@ -357,8 +356,10 @@ export function backfill(driver: Driver, number = false): Backfill {
     )
     if (owners.size) {
       presence(run, tables(), owners, (c) => ({
-        joins: [join(table('entity', 'e'), eq(col('id', 'e'), c))],
-        where: isNull(col('archetype', 'e')),
+        // A backfill reads each component once, looking up its owner. Without
+        // statistics a join may walk every missing spine for each empty table.
+        joins: [cross(table('entity', 'e'))],
+        where: and(eq(col('id', 'e'), c), isNull(col('archetype', 'e'))),
       }))
     }
     minter(run, driver, cache, ids, number, counts).assign(owners)
