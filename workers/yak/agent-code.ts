@@ -33,11 +33,13 @@ export let coded = <T extends Options>(
     tools: catalog,
     host: opts.graph,
     report: opts.report,
+    refused: opts.refused,
   })
   let codeRun = runner(opts.calls ?? opts.graph, {
     tools: codeCatalog,
     host: opts.graph,
     report: opts.report,
+    refused: opts.refused,
   })
   let unavailable = () => {
     throw refuse('unavailable', 'code mode is unavailable on this kernel')
@@ -64,6 +66,7 @@ export let coded = <T extends Options>(
           tools: catalog,
           host: graph,
           report: opts.report,
+          refused: opts.refused,
         })
       },
       resultStore(ctx, args, local),

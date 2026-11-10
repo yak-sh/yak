@@ -7,6 +7,7 @@ import { CallError } from '@yaks/tools/errors'
 import { toolEid } from '@yaks/tools/result'
 import type { InputText } from './source.ts'
 import type { Steps } from '@yaks/tools/title'
+import type { Refusal } from '@yaks/tools'
 export { CallError as ToolError } from '@yaks/tools/errors'
 import { argsOf } from '@yaks/graph/call'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
@@ -329,6 +330,9 @@ export type Deps = {
   ) => Promise<Item[]>
   /** Unexpected model/tool defects, separate from expected refusals. */
   report?: (error: unknown, session: Eid, phase: string) => void
+  /** Each refusal a tool call met, apart from defects (@yaks/tools
+   * `Opts.refused`): the call names its session. */
+  refused?: (refusal: Refusal, call: Bundle, tool?: string) => unknown
   mint?: () => Eid
 }
 
@@ -1339,6 +1343,7 @@ export let react = async (
       owner: deps.owner ?? session,
       ...deps.gone ? { gone: deps.gone } : {},
       report: (error) => deps.report?.(error, session, 'tool'),
+      ...deps.refused ? { refused: deps.refused } : {},
       // A refusal is the call's answer: one entry, its result.
       onResult: true,
     })

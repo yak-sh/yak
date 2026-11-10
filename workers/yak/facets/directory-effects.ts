@@ -30,6 +30,13 @@ export let schedules: Wake[] = [{
   wake: { every: '@hourly', note: 'Read yaks.app usage for this month' },
   sweep: { kind: 'meter' },
 }, {
+  entity: { eid: 'yak-refusals' },
+  wake: {
+    every: '@hourly',
+    note: "Report the hour's tool refusals to TaskMaster",
+  },
+  sweep: { kind: 'refusals' },
+}, {
   entity: { eid: 'yak-trash' },
   wake: { every: TRASH, note: 'Collect expired yaks.app trash' },
   sweep: { kind: 'trash' },

@@ -19,7 +19,8 @@ export let REPLY_TO = replyTo()
 
 /**
  * A letter to REPLY_TO as the platform store's rows: the address as an
- * entity, and the letter delivered to it, `about` the entity it concerns. The
+ * entity, and the letter delivered to it, `about` the entity it concerns
+ * where it is not that entity itself (a refusal report is its own letter). The
  * store's pool sends it after the write commits, through the platform's own
  * sender (config.ts), and marks it delivered only once the sender took it, so
  * a mail outage leaves it waiting. `eid` is the letter's: one derived from
@@ -28,14 +29,14 @@ export let REPLY_TO = replyTo()
 export let toPlatform = (
   env: Host,
   eid: string,
-  letter: { subject: string; body: string; about: string },
+  letter: { subject: string; body: string; about?: string },
 ): Bundle[] => {
   let address = replyTo(env)
   let to = derivedEid(JSON.stringify(['platform-address', address]))
   return [{ entity: { eid: to }, email: { address } }, {
     entity: { eid },
     doc: { title: letter.subject, body: letter.body },
-    mail: { from: FROM, target: letter.about },
+    mail: { from: FROM, ...letter.about ? { target: letter.about } : {} },
     deliver: { to },
   }]
 }

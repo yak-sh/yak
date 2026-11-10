@@ -249,7 +249,7 @@
           "description": "the inverse sandbox mark kept in step for rollback readers"
         }
       },
-      "description": "a copy of somebody else’s app, at the version it was copied from"
+      "description": "a copy of somebody else\u2019s app, at the version it was copied from"
     },
     "trend": {
       "component": true,
@@ -387,7 +387,7 @@
         "status": {
           "type": "string",
           "stamped": true,
-          "description": "that subscription's status as Stripe last said it (`active`, `past_due`, `canceled`, …), mirrored by the webhook and never moved by anything here: Stripe's state machine, not ours"
+          "description": "that subscription's status as Stripe last said it (`active`, `past_due`, `canceled`, \u2026), mirrored by the webhook and never moved by anything here: Stripe's state machine, not ours"
         },
         "until": {
           "type": "string",
@@ -485,6 +485,77 @@
       "before": [
         "doc"
       ]
+    },
+    "tool_refusal": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "kind": true,
+      "identity": [
+        "source"
+      ],
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "the name of the tool the call asked for, as it is published"
+        },
+        "source": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the call it refused, wherever that is recorded; one call is one occurrence however many boundaries it crossed"
+        },
+        "space": {
+          "type": "string",
+          "ref": "space",
+          "death": "keep",
+          "description": "the space the call was made in, where that is known"
+        },
+        "session": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the session or run that made the call, where that is known"
+        },
+        "release": {
+          "type": "string",
+          "description": "the platform release that refused it"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when it was refused"
+        }
+      },
+      "description": "one time a yaks.app tool refused a call, worn with the call's `refusal{code}` and its cause as `content{body}`: the words of the refusal with the values in them taken out. It keeps no arguments. Never a bug: refusals reach TaskMaster in an hourly `refusal_report`",
+      "before": [
+        "content"
+      ]
+    },
+    "refusal_report": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "kind": true,
+      "properties": {},
+      "description": "an hour's letter to TaskMaster grouping the tool refusals counted in it by tool, code and cause, worn with the letter's `doc{title, body}`, `mail` and `deliver`; `delivered{at}` once it has left",
+      "before": [
+        "doc"
+      ]
+    },
+    "counted": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "properties": {
+        "report": {
+          "type": "string",
+          "ref": "refusal_report",
+          "death": "detach",
+          "description": "the report"
+        }
+      },
+      "description": "the `refusal_report` a tool refusal was counted in; one without it waits for the next report"
     },
     "support": {
       "component": true,
@@ -602,7 +673,7 @@
           "description": "the immutable handle its storage uses, independent of its current address"
         }
       },
-      "description": "one customer’s area of the platform, at its own slug",
+      "description": "one customer\u2019s area of the platform, at its own slug",
       "before": [
         "doc"
       ]

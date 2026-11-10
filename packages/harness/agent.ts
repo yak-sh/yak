@@ -227,6 +227,9 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   requestItems?: Deps['requestItems']
   /** defects, apart from refusals (default `console.error`) */
   report?: (error: unknown, where: Where) => void
+  /** each refusal a tool call met, apart from defects (@yaks/session
+   * `Deps.refused`) */
+  refused?: Deps['refused']
   /** what the host reconciles when the agent resumes */
   resuming?: () => Promise<void>
   /** what the host lets go of once every admitted operation has drained */
@@ -573,6 +576,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     resultText: opts.resultText ??
       ((entry) => outputView(h.g, entry, opts.outputLimit)),
     report: (error, session, phase) => report(error, { session, phase }),
+    ...opts.refused ? { refused: opts.refused } : {},
     each: opts.each,
     hold: opts.hold,
   }

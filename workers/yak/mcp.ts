@@ -96,6 +96,7 @@ import { type Ctx, VIEW_MIME } from './tools.ts'
 import { type Asked, listen, rostered, said } from './stream.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { background, caught, reporter } from './defects.ts'
+import { admitted, hearing } from './refusals.ts'
 import { isTestAddress } from '@yaks/platform/bots'
 import { refuse } from './tool.ts'
 import { url as hostUrl } from './host.ts'
@@ -427,6 +428,9 @@ let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
       ...(ctx.who?.instrument ? { via: ctx.who.instrument } : {}),
     }),
     report: reporter(ctx, clientOf(session)),
+    // A refusal is no defect, and reaches TaskMaster in the hour's report
+    // instead (refusals.ts), with the space the call was made in.
+    refused: hearing(ctx.env, admitted(ctx)),
     // The name, the one-line description and the picture, from the one place
     // they are written (seo.ts connector, T-34415): a client that reads
     // `serverInfo` shows this connector with a face, and nobody has to type
@@ -592,6 +596,7 @@ let stranger = async (
     security: asked,
     scope: scope(env),
     report: reporter(ctx, clientOf(req.headers.get('mcp-session-id') ?? '')),
+    refused: hearing(env),
     ...connector(env),
   }
   // No tool-list line and no session: both are a person's own — the roster

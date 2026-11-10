@@ -4,7 +4,7 @@ import { who } from '@yaks/graph/call'
 import { signed } from '@yaks/graph/provenance'
 import { status } from '@yaks/graph/errors'
 import { asking } from '@yaks/graph/asker'
-import type { Opts } from './runner.ts'
+import type { Opts, Refusal } from './runner.ts'
 import { CallError, parsed, resolved, validated } from './args.ts'
 import { Interrupted } from './errors.ts'
 import { actionable, exceptionOf } from './fault.ts'
@@ -46,22 +46,50 @@ let measured = (answer: Bundle[], most: number) => {
   }
 }
 
+/** What an error refuses, when it is a refusal: a `CallError` with its code,
+ * or an error the graph's `status` puts below 500 (a `Refused` write, an
+ * `Unknown` name) with its name, each in its own words. Anything else is a
+ * defect, and refuses nothing. */
+export let refusalOf = (error: unknown): Refusal | undefined => {
+  let code = error instanceof CallError
+    ? error.code
+    : status(error) < 500
+    ? (error as Error).name
+    : undefined
+  if (code == undefined) return undefined
+  return { code, said: (error as Error).message || String(error) }
+}
+
+/** Tell whoever hears refusals of one, reporting a hearer that fails rather
+ * than letting it change the call's answer. */
+export let heard = async (
+  opts: Pick<Opts, 'report' | 'refused'>,
+  refusal: Refusal,
+  call: Bundle,
+  tool?: string,
+): Promise<void> => {
+  try {
+    await opts.refused?.(refusal, call, tool)
+  } catch (e) {
+    await opts.report?.(e, call, tool)
+  }
+}
+
 /** Invoke once, letting the owner retain the answer or return it in memory. */
 export let invoke = async (
   call: Bundle,
   tool: NamedTool,
   g: Graph,
-  opts: Pick<Opts, 'host' | 'process' | 'report' | 'most'>,
+  opts: Pick<Opts, 'host' | 'process' | 'report' | 'refused' | 'most'>,
   land: Land,
 ): Promise<Bundle[]> => {
   let id = call.entity.eid
   let host = opts.host ?? g
   let c = call.call as Comp
   // What a thrown error becomes: the fault as its own entity, recording
-  // which call it came from. An expected refusal gets `refusal{code}`: a
-  // `CallError` with its code, or an error the graph's `status` puts below
-  // 500 (a `Refused` write, an `Unknown` name) with its name. Anything else
-  // is a defect, reported with its original thrown value.
+  // which call it came from. An expected refusal ({@link refusalOf}) gets
+  // `refusal{code}` and is told to whoever hears refusals. Anything else is
+  // a defect, reported with its original thrown value.
   let faulted = async (error: unknown): Promise<Bundle[]> => {
     if (error instanceof Interrupted) {
       return [{
@@ -71,27 +99,20 @@ export let invoke = async (
         ...(g.vocab.comp('notice') ? { notice: {} } : {}),
       }]
     }
-    let code = error instanceof CallError
-      ? error.code
-      : status(error) < 500
-      ? (error as Error).name
-      : undefined
-    if (
-      code == undefined &&
-      actionable(String(exceptionOf(error).value))
-    ) {
+    let refusal = refusalOf(error)
+    if (!refusal && actionable(String(exceptionOf(error).value))) {
       await opts.report?.(error, call, tool.name)
     }
+    if (refusal) await heard(opts, refusal, call, tool.name)
     // A refusal is said in its own words, which its code already classes;
     // a defect keeps the name of what was thrown.
-    let said = code != undefined && (error as Error).message
     return [{
       entity: { eid: '$fault' },
-      content: { body: said || String(error) },
+      content: { body: refusal?.said ?? String(error) },
       output: { source: id },
-      ...code == undefined
-        ? { exception: exceptionOf(error) }
-        : { refusal: { code } },
+      ...refusal
+        ? { refusal: { code: refusal.code } }
+        : { exception: exceptionOf(error) },
     }]
   }
   let answered: Bundle[]

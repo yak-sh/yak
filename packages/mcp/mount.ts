@@ -618,6 +618,7 @@ export let mcp = (opts: MountOptions): Handler => {
       tools: opts.registry ?? listing(opts),
       host: opts.graph,
       report,
+      ...opts.refused ? { refused: opts.refused } : {},
       ...opts.reply ? { reply: opts.reply } : {},
       ...opts.clock ? { clock: opts.clock } : {},
     })

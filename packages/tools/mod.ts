@@ -46,6 +46,8 @@ export {
   keeps,
   type Opts,
   reconcile,
+  type Refusal,
+  type Refused,
   type Reply,
   type Runner,
   runner,
@@ -70,4 +72,4 @@ export {
   registry,
 } from './registry.ts'
 
-export { CUT, invoke, type Land } from './invoke.ts'
+export { CUT, heard, invoke, type Land, refusalOf } from './invoke.ts'

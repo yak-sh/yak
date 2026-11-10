@@ -29,7 +29,15 @@ export let sweepDoc: VocabDoc = {
       properties: {
         kind: {
           type: 'string',
-          enum: ['git', 'kills', 'meter', 'remake', 'trash', 'wrap'],
+          enum: [
+            'git',
+            'kills',
+            'meter',
+            'refusals',
+            'remake',
+            'trash',
+            'wrap',
+          ],
         },
         began: {
           type: 'string',

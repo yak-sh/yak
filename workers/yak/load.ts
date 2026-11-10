@@ -79,7 +79,8 @@ import * as vocab74 from './facets/directory-vocab.ts'
 import * as vocab75 from './facets/git-vocab.ts'
 import * as vocab76 from './facets/meter-vocab.ts'
 import * as vocab77 from './facets/models-vocab.ts'
-import * as vocab78 from './facets/trash-vocab.ts'
+import * as vocab78 from './facets/refusals-vocab.ts'
+import * as vocab79 from './facets/trash-vocab.ts'
 import * as provider0 from '@yaks/anthropic/provider'
 import * as provider1 from '@yaks/openai/provider'
 import * as provider2 from '@yaks/openrouter/provider'
@@ -164,7 +165,8 @@ export let vocabFacets: Record<string, VocabFacet> = {
   'yak/git': vocab75,
   'yak/meter': vocab76,
   'yak/models': vocab77,
-  'yak/trash': vocab78,
+  'yak/refusals': vocab78,
+  'yak/trash': vocab79,
 }
 /** The providers config.ts `providing` and `serving` name, by plugin. */
 export let providerFacets: Record<string, ProviderFacet> = {
@@ -223,6 +225,7 @@ let facets: Record<string, () => Promise<unknown>> = {
   'yak/models/effects': () => import('./facets/models-effects.ts'),
   'yak/pages/graph': () => import('./facets/pages-graph.ts'),
   'yak/publishing/graph': () => import('./facets/publishing-graph.ts'),
+  'yak/refusals/effects': () => import('./facets/refusals-effects.ts'),
   'yak/remake/graph': () => import('./facets/remake-graph.ts'),
   'yak/signin/graph': () => import('./facets/signin-graph.ts'),
   'yak/trash/graph': () => import('./facets/trash-graph.ts'),

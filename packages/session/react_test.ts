@@ -1491,9 +1491,26 @@ test('two tool calls in one reply are both answered before the next ask', async 
 test('a call for a tool this session does not serve is refused, not left open', async () => {
   let g = world()
   let { model } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
+  let heard: [string, string | undefined, string][] = []
   // The tool row is in the graph and the session serves no function for it.
-  assertEquals(await rest(g, ids.s, { model, tools: [], mint }), 'settled')
+  assertEquals(
+    await rest(g, ids.s, {
+      model,
+      tools: [],
+      mint,
+      refused: (r, call, tool) => {
+        heard.push([r.code, tool, call.entity.eid])
+      },
+    }),
+    'settled',
+  )
   let entries = await transcript(g, ids.s)
+  // Whoever hears the session's refusals hears this one, with its call.
+  assertEquals(heard, [[
+    'tool',
+    'unserved',
+    entries.find((b) => kindOf(b) == 'call')!.entity.eid,
+  ]])
   // The refusal is the call's result, as any expected failure lands — one
   // entry: the model hears it and the transcript goes on.
   assertEquals(entries.map(kindOf), [

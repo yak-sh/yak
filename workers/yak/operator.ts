@@ -87,6 +87,7 @@ import { bound, type Env } from './env.ts'
 import type { Held } from './build-door.ts'
 import { accounted, resultOf } from './meter.ts'
 import { caught, defect } from './defects.ts'
+import { hearing } from './refusals.ts'
 import {
   ambient,
   counts,
@@ -388,6 +389,7 @@ export let operatorRoster = async (
       ...connected(ctx, reach, g),
       calls: ledger(g, session ? recorded(work.g, session, space) : work.g),
       report: (e) => caught(e, { request: 'operator code mode' }),
+      refused: hearing(ctx.env, () => ({ space, session })),
     },
     ctx,
     { graph: work.g, person: ctx.person, space },
@@ -1489,6 +1491,15 @@ export let operating = (
         options.tell?.(session)
       },
       report: (e, where) => caught(e, { request: 'operator', ...where }),
+      // Each refusal a tool gave the conversation, with its space
+      // (refusals.ts): a connector tool's is its own call's, heard here once.
+      refused: hearing(env, async (call) => {
+        let session = String(comp(call, 'entry')?.session ?? '')
+        return {
+          session: session || null,
+          space: session ? (await workingOf(store, session))?.space : null,
+        }
+      }),
     }),
   )))
 

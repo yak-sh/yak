@@ -93,6 +93,16 @@ import { type Registry, registryOf } from './registry.ts'
 // the call taken.
 let running = new WeakMap<Graph, Map<Eid, Promise<Bundle[]>>>()
 
+/** A refusal as its answer says it: the code that classes it and its words. */
+export type Refusal = { code: string; said: string }
+
+/** What hears a refusal: the refusal, the call it answered and the tool. */
+export type Refused = (
+  refusal: Refusal,
+  call: Bundle,
+  tool?: string,
+) => unknown
+
 /** What a runner is built with. */
 export type Opts = {
   /** what it can run: a function makes them only once a call asks for a
@@ -107,6 +117,13 @@ export type Opts = {
    * `status` puts below 500) is never reported. A report that answers a
    * promise is awaited before the call's answer is. */
   report?: (err: unknown, call: Bundle, tool?: string) => unknown
+  /** what hears each refusal a call is answered with, apart from
+   * {@link report}: arguments its schema refuses, a tool named that this
+   * runner lacks (answered by {@link otherwise}), the tool's own `CallError`,
+   * a write the graph refuses. It is told the code and words of the refusal,
+   * the call and the tool that answered. Awaited like a report; what it
+   * throws is reported, and never changes the call's answer. */
+  refused?: Refused
   /** what answers a call naming a tool this runner does not have. Omitted,
    * nothing does: the call is left for whichever runner has that tool. */
   otherwise?: Tool

@@ -219,7 +219,8 @@ export let directoryConfig: Config = {
     { use: '@yaks/task', facets: ['vocab'], words: ['contains', 'requires'] },
     ...links,
     // A support thread (support.ts): a conversation whose messages are
-    // comments, and the letter each message owes TaskMaster, sent by the pool
+    // comments, and the letter each message owes TaskMaster, as each hour's
+    // refusal report is one (refusals.ts), sent by the pool
     // through the platform's own sender (graph.ts `senders`) so a mail outage
     // keeps the letter waiting rather than losing it.
     { use: '@yaks/inbox', facets: ['vocab'], words: ['conversation'] },
@@ -298,6 +299,7 @@ export let directoryConfig: Config = {
     'yak/directory',
     'yak/trash',
     'yak/meter',
+    'yak/refusals',
     { use: 'yak/pages', facets: ['graph'] },
     { use: 'yak/publishing', facets: ['graph'] },
     { use: 'yak/attribution', words: ['browser', 'attribute_writes'] },
@@ -576,6 +578,10 @@ export let domains = {
   'yak/meter': {
     vocab: './facets/meter-vocab.ts',
     graph: './facets/meter-graph.ts',
+  },
+  'yak/refusals': {
+    vocab: './facets/refusals-vocab.ts',
+    effects: './facets/refusals-effects.ts',
   },
   'yak/pages': { graph: './facets/pages-graph.ts' },
   'yak/publishing': { graph: './facets/publishing-graph.ts' },

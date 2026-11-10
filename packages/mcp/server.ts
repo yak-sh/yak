@@ -19,9 +19,8 @@ import { errorsText, legacyOptions, toolCheck } from '@yaks/vocab/tools'
 // something the agent reads and corrects, not a broken connection.
 
 import type { Actor, Bundle, Graph, Tool } from '@yaks/graph'
-import { status } from '@yaks/graph/errors'
 import { toolsOf } from '@yaks/graph'
-import type { Opts as RunnerOpts, Runner } from '@yaks/tools'
+import type { Opts as RunnerOpts, Refused, Runner } from '@yaks/tools'
 import {
   answerOf,
   aside,
@@ -31,8 +30,14 @@ import {
   toolEid,
   worded,
 } from '@yaks/tools/result'
-import { CallError } from '@yaks/tools/errors'
-import { type Registry, registry, runner } from '@yaks/tools'
+import {
+  heard,
+  type Refusal,
+  refusalOf,
+  type Registry,
+  registry,
+  runner,
+} from '@yaks/tools'
 import { answerSchema, saying } from '@yaks/tools/schema'
 import { imagesIn } from '@yaks/tools/value'
 import {
@@ -95,6 +100,11 @@ export type Options = {
    * The classifier's input rejections and tool refusals (`CallError`) are
    * answered without reporting a defect. */
   report?: (err: unknown, call?: Bundle, tool?: string) => unknown
+  /** what hears each refusal a tool call is answered with (@yaks/tools
+   * `Refused`): the runner's, and the ones made here before any runner, a
+   * tool this server does not offer (`tool`) and a request the protocol
+   * refused (`arguments`), each with a call minted for it. */
+  refused?: Refused
   /** what a call is owed beside its tool's answer (@yaks/tools `Reply`): the
    * host's, so a caller over MCP reads what a caller at the command line
    * reads. Used where a runner is built here; a runner passed in has its
@@ -477,6 +487,24 @@ export let server = (
   // because a question was asked). The tools still read and write `graph`.
   let calls = opts.calls ?? graph
   let report = opts.report ?? logged
+  // A refusal made here before any runner, heard once: one a call below
+  // hears itself is marked, so the protocol's hearing of it passes it by,
+  // and what is left there is a request the protocol refused unread.
+  let told = new WeakSet<object>()
+  let hear = async (
+    err: unknown,
+    refusal: Refusal,
+    call: Bundle,
+    tool?: string,
+  ) => {
+    if (typeof err == 'object' && err) told.add(err)
+    await heard({ report, refused: opts.refused }, refusal, call, tool)
+  }
+  let minted = (name?: string): Bundle => ({
+    entity: { eid: mint() },
+    call: name ? { to: toolEid(name) } : {},
+    ...(actor ? { $actor: { ...actor } } : {}),
+  })
   let mcp = protocol({
     info: {
       name: opts.name ?? 'yaks',
@@ -495,11 +523,23 @@ export let server = (
     capabilities: { tools: tools().length ? { listChanged: true } : {} },
     ...(opts.instructions ? { instructions: opts.instructions } : {}),
     report,
+    refused: async (err, request) => {
+      if (request.method != 'tools/call' || told.has(err as object)) return
+      let { name } = (request.params ?? {}) as { name?: unknown }
+      let tool = typeof name == 'string' ? name : undefined
+      await hear(
+        err,
+        { code: 'arguments', said: (err as Error).message ?? String(err) },
+        minted(tool),
+        tool,
+      )
+    },
   })
   let run = opts.runner ?? runner(calls, {
     tools: catalog,
     host: graph,
     report,
+    ...opts.refused ? { refused: opts.refused } : {},
     ...opts.reply ? { reply: opts.reply } : {},
   })
   let answer = opts.answer ?? answerSchema
@@ -547,7 +587,9 @@ export let server = (
     let admitted = run.admit(asked)
     let t = admitted?.tool
     if (!admitted || !t || t.name != name || !offered('mcp')(t)) {
-      throw new ProtocolError(-32602, `Tool ${name} not found`)
+      let err = new ProtocolError(-32602, `Tool ${name} not found`)
+      await hear(err, { code: 'tool', said: err.message }, asked, name)
+      throw err
     }
     // The news is asked for beside the tool, not after it, and the answer
     // never waits for it (Options.roster). A refusal carries it too: an agent
@@ -579,9 +621,9 @@ export let server = (
       // The runner answers a tool's own throw as a fault above; a throw that
       // reaches here is the runner's (a call it could not record), reported
       // the same way unless it was the caller's refusal.
-      if (!(err instanceof CallError) && status(err) >= 500) {
-        await report(err, asked, t.name)
-      }
+      let refusal = refusalOf(err)
+      if (refusal) await hear(err, refusal, asked, t.name)
+      else await report(err, asked, t.name)
       out = failed(err)
     }
     let unfit = misfit(t, out)

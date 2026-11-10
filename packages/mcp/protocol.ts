@@ -319,13 +319,15 @@ export type Server = {
  * capabilities and handlers registered on it afterwards. `report` hears a
  * handler's failure — not a refusal: a {@link ProtocolError} or a
  * `CallError` is the caller's, and so is anything @yaks/graph's `status` puts
- * under 500.
+ * under 500. `refused` hears each of those refusals, with the request it
+ * answered; what it throws is reported, and the refusal is answered still.
  */
 export let protocol = (opts: {
   info: Implementation
   instructions?: string
   capabilities?: Json
   report?: (err: unknown) => unknown
+  refused?: (err: unknown, request: Request) => unknown
 }): Server => {
   let { info, instructions } = opts
   let capabilities: Json = { ...opts.capabilities }
@@ -431,6 +433,9 @@ export let protocol = (opts: {
         let theirs = err instanceof ProtocolError || err instanceof CallError
         if (!theirs && status(err) >= 500) {
           await opts.report?.(err)
+        } else {
+          await (async () => await opts.refused?.(err, request))()
+            .catch((e) => opts.report?.(e))
         }
         return {
           reply: refused({

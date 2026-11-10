@@ -36,8 +36,8 @@ and setup; this is the map and the feel.
   failure raised there is reported and thrown on, never answered as a 4xx.
 - **The front** (`front/`): yak-front holds the routes and answers what Site's
   cache holds (`kept-page.ts`), so a request answered from the edge doesn't wait
-  for the kernel to start: its upload is 11 KB against the kernel's 3.7 MB, and a
-  hit through a service binding runs no code of the Worker behind it. It holds
+  for the kernel to start: its upload is 11 KB against the kernel's 3.7 MB, and
+  a hit through a service binding runs no code of the Worker behind it. It holds
   no secret and opens no store: everything else, and every failure of its own,
   goes to the kernel unchanged. So a module it imports reaches no graph stack;
   check the upload's size when you add one. A first-time visitor gets their
@@ -53,13 +53,13 @@ and setup; this is the map and the feel.
   (`/api/relocate?where=<handle>&colo=IAD` says where one stands, reaching a new
   name first from the kernel) moves to a new object through relocate.ts:
   `?store=<handle>&prepare=<new>`, then `&to=<new>`, which hands every request
-  on and names the new object in `app.store`. `yak admin relocate [--move]`
-  does it for every far app, and answers each store's line.
+  on and names the new object in `app.store`. `yak admin relocate [--move]` does
+  it for every far app, and answers each store's line.
 - **The directory**: the store named `yak/platform` on the platform's own
   vocabulary (`directory.ts`, `meta.ts`): spaces, apps, members, deploys. Its
   file stands in the object `PLATFORM_OBJECT` (`door.ts`), near Chicago; an
-  object can't move, so moving it is a new name there and a copy. Every
-  door asks it who may do what before a request reaches an app's store. What its
+  object can't move, so moving it is a new name there and a copy. Every door
+  asks it who may do what before a request reaches an app's store. What its
   writes owe (a release's commit, a trash notice) is an effect its pool works
   after the write answers, so a test that reads one awaits the platform's
   `settled()` first.
@@ -75,14 +75,14 @@ and setup; this is the map and the feel.
   copied body answers only while the copy holds its revision current. A
   directory write raises a fence on the copy until it commits, so a copied body
   from before it never answers, and asks for it above the revision it holds
-  committed, so a copy that fell behind costs the write nothing. A directory that can't answer for a moment (a
-  throw, a 5xx, no revision) is waited out, at most `FENCE_WAIT`, never refused,
-  and a read that gives up says what its last look saw. A store takes the
-  kernel's word at the revision it read, and rereads the directory only for a
-  request older than one it already acted on. Every call on a request's path is
-  a round trip someone waits for: the copy once cost more than the directory
-  reads it checked (T-132705), so keep its calls behind the answer, and ask it
-  only after a read has gone `STALL` without one.
+  committed, so a copy that fell behind costs the write nothing. A directory
+  that can't answer for a moment (a throw, a 5xx, no revision) is waited out, at
+  most `FENCE_WAIT`, never refused, and a read that gives up says what its last
+  look saw. A store takes the kernel's word at the revision it read, and rereads
+  the directory only for a request older than one it already acted on. Every
+  call on a request's path is a round trip someone waits for: the copy once cost
+  more than the directory reads it checked (T-132705), so keep its calls behind
+  the answer, and ask it only after a read has gone `STALL` without one.
 - **Asking the directory**: the reads a request starts in one turn travel as one
   trip (directory-copy.ts `gathered`, the store's `/reads`), each answered its
   own line. So a page starts everything it needs at once and awaits it together
@@ -97,27 +97,26 @@ and setup; this is the map and the feel.
   are `ui-building`'s.
 - **The connector**: `mcp.ts` and `tools.ts`, the tools Claude and ChatGPT call;
   `prompts/` and `public/docs/` are what those assistants read.
-- **Spending**: `models.ts` and `meter.ts`, one model and voice budget per
-  space (D-131886). A spend names its source (a provider, `voice`, `texts`,
-  `browser`; meter.ts `SOURCES`), which the space's `trend` keeps by the day
-  beside what a paying plan covered; /admin/spending (admin-spending.ts)
-  reads those and each Operator's ask rows (operator-spending.ts). A new
-  thing that costs money names its source too. An app's builders are
-  `builders-and-builds`.
+- **Spending**: `models.ts` and `meter.ts`, one model and voice budget per space
+  (D-131886). A spend names its source (a provider, `voice`, `texts`, `browser`;
+  meter.ts `SOURCES`), which the space's `trend` keeps by the day beside what a
+  paying plan covered; /admin/spending (admin-spending.ts) reads those and each
+  Operator's ask rows (operator-spending.ts). A new thing that costs money names
+  its source too. An app's builders are `builders-and-builds`.
 - **Drawing**: yak-raster (`raster/`), the Worker behind RASTER, draws an app's
   icon.svg as the icon.png a home screen reads (`raster.ts`). It is its own
   Worker because resvg is 2.4 MB of WebAssembly, which every isolate of the
   kernel, each waking Store included, would compile on start.
 - **Previews**: yak-browser (`browser/`), the Worker behind BROWSER, renders a
-  draft for app_preview with puppeteer and checks it with axe-core
-  (`browser.ts` asks it; `browser/capture.ts` renders). Its own Worker for the
-  same reason as yak-raster.
-- **Sandboxes**: yak-sandbox (`sandbox/`) holds the Workbench Durable Object (the
-  SDK's Sandbox) and its container, which the kernel's WORKBENCH binding names, so the Sandbox SDK
-  is compiled only by isolates that run one. A container's HTTPS to the
-  platform comes back to the kernel's `SandboxOutbound`, which swaps its
-  placeholder for its grant (`sandbox.ts` `swapped`), since only the kernel
-  holds the secret.
+  draft for app_preview with puppeteer and checks it with axe-core (`browser.ts`
+  asks it; `browser/capture.ts` renders). Its own Worker for the same reason as
+  yak-raster.
+- **Sandboxes**: yak-sandbox (`sandbox/`) holds the Workbench Durable Object
+  (the SDK's Sandbox) and its container, which the kernel's WORKBENCH binding
+  names, so the Sandbox SDK is compiled only by isolates that run one. A
+  container's HTTPS to the platform comes back to the kernel's
+  `SandboxOutbound`, which swaps its placeholder for its grant (`sandbox.ts`
+  `swapped`), since only the kernel holds the secret.
 - **Keys**: a key a space or app uses is a connection, kept in the directory's
   vault; an app is handed only a sentinel, swapped for the key on the way out
   (`outbound.ts`). That whole corner is `secrets-and-connections`.
@@ -130,10 +129,9 @@ READMEs). A build whose kernel bytes match the serving version's (`inputs:`
 digest, wrangler.ts `kernelStep`) makes no new version, since a new version
 starts every isolate cold: it deploys the serving one under its commit. The
 build is deterministic, so keep it so: a stamp, sha or time in the bundle or
-`public/` would make every push a new version again.
-Nothing gates it; main's CI reports asynchronously and files bugs.
-Nobody waits for CI or a deploy to finish their work. Safety lives in recovery,
-and recovery is quick:
+`public/` would make every push a new version again. Nothing gates it; main's CI
+reports asynchronously and files bugs. Nobody waits for CI or a deploy to finish
+their work. Safety lives in recovery, and recovery is quick:
 
 - A push Builds starts no build for is caught by the box's deploy catch-up
   (@yaks/admin's service): 3 minutes after main's head landed, not live and with
@@ -164,22 +162,23 @@ sandbox for billing, not a canary.
 "Live at 100%" is the Worker. Each Durable Object (a store, the directory) moves
 to the new version on its own, seconds later; Cloudflare releases them
 eventually consistently. A busy object finishes on the code it has for up to
-five minutes before taking up a deploy (wrangler.toml `[durable_objects]
-code_update_strategy`, deferred, `max_delay = 300`), so an Operator is not
-reset under its reply (T-145428). A store a newer Worker reaches answers it on
-the code it has, and restarts itself only when that code refused the caller
-(running.ts `owed`, graph.ts `#fetch`): the refusal may be a door or a word
-only the new deploy has, and the caller's door sends it again to the new code.
-Never restart an object to hurry a deploy along: the instance after a
+five minutes before taking up a deploy (wrangler.toml
+`[durable_objects]
+code_update_strategy`, deferred, `max_delay = 300`), so an
+Operator is not reset under its reply (T-145428). A store a newer Worker reaches
+answers it on the code it has, and restarts itself only when that code refused
+the caller (running.ts `owed`, graph.ts `#fetch`): the refusal may be a door or
+a word only the new deploy has, and the caller's door sends it again to the new
+code. Never restart an object to hurry a deploy along: the instance after a
 `ctx.abort()` waited 21 and 32 s to run its first line twice on 2026-11-07,
 where Cloudflare's own moves started in under a second (T-150897). Work an
 object starts behind an answer waits until its caller has read the answer
 through, and a beat more (running.ts `onceRead`, `BEAT`): on a timer set as the
-handler returns it runs before the runtime has sent the answer on. A
-store still behind its caller answers a refusal as a failure the caller's door
-retries, and reports it (running.ts `skewed`). So a call from the new Worker can reach a store
-still on the previous code: a new store route or RPC answers as missing for a
-while, and a probe right after a deploy can see the old behavior. A bug's
+handler returns it runs before the runtime has sent the answer on. A store still
+behind its caller answers a refusal as a failure the caller's door retries, and
+reports it (running.ts `skewed`). So a call from the new Worker can reach a
+store still on the previous code: a new store route or RPC answers as missing
+for a while, and a probe right after a deploy can see the old behavior. A bug's
 occurrence carries the version it ran (`commit`); one from the previous version
 in that window is the lag, not the change. Keep a Worker-to-store call working
 against the previous store code. A restart can cut off an answer already being
@@ -188,10 +187,9 @@ whole inside its retry, and a caller never handles a reset. A lost connection
 ("Network connection lost.") is a reset too (@yaks/durable-object `moved`): a
 call cut off is sent again, and an instance whose own storage lost its
 connection reports nothing it meets, since its replacement redoes the work
-(defects.ts `redone`). A reset that still
-outlasts the retries files under one bug per wording (defects.ts `defect`),
-whichever caller and deploy it names. The tracker's own deploy waits for its object
-(`workers/tracker/deploy.ts`).
+(defects.ts `redone`). A reset that still outlasts the retries files under one
+bug per wording (defects.ts `defect`), whichever caller and deploy it names. The
+tracker's own deploy waits for its object (`workers/tracker/deploy.ts`).
 
 The sandbox names a prebuilt toolchain image in `sandbox/wrangler.toml`, tagged
 with `sandbox/base/Dockerfile`'s hash. Provision a changed image before landing
@@ -200,8 +198,8 @@ a remote builder. Worker deploys build no sandbox image. The sandbox's `yak`
 downloads its CLI workspace from Worker assets on first use. The app compiler
 (`yak-esbuild`, built from packages/esbuild by workers/yak/esbuild/Dockerfile)
 is separate: a push that changes packages/esbuild rolls it out, and one that
-changes neither its Worker nor its image skips it (`wrangler.ts` `images`).
-A dry run that must not need Docker passes `--containers-rollout=none`.
+changes neither its Worker nor its image skips it (`wrangler.ts` `images`). A
+dry run that must not need Docker passes `--containers-rollout=none`.
 
 ## Inside a Durable Object
 
@@ -219,45 +217,44 @@ A query that works on the box can be refused in a store.
   stores made 20 s apart each found no earlier new store in its isolate
   (T-143307), so a cache kept in module scope did not serve one new store's
   first request. Prove a cache hits live before counting on it.
-- **A new object takes 150 to 500 ms to start** before any code of ours runs
-  in it (T-143307). Start it beside what the request already waits on, with
-  `WARM` (door.ts, used.ts `start`), which touches no storage, so a start
-  nobody follows up leaves nothing behind: a birth's. A store that stands is
-  sent `WAKE` (used.ts `wake`), which brings it up as any request does (boot,
-  release, owed writes) and answers nothing else, so the call behind it finds
-  it booted. A page view wakes its app's store for the scripts that ask it
-  next, from the edge too (page-cache.ts `shown`, front.ts through `Uses`),
-  and the pages that send a person to a space's chat wake its Builder
-  (build-door.ts `woken`). Both go through door.ts `ahead`.
-- **Only the caller knows an answer has arrived.** The runtime sends an
-  object's answer on in turns of its event loop, so work begun as the answer
-  was read, or on a timer as the handler returned, held it (T-149700). Work
-  nobody waits for runs where no answer is under way: the Builder marks its
-  answers while its incarnation owes work (build-door.ts `OWED`), and its
-  door wakes it once it has one.
-- **An isolate's first wake runs every path cold.** Its boot and first read
-  cost a store 130-320 ms of CPU against a warm wake's 5-15 ms (T-148354):
-  each function runs for the first time, and each per-isolate derivation (a
-  vocabulary's words, its description rows) is made then. A bench in one
-  process times warm code, so measure a first wake in a fresh process over a
-  stored copy of the object (CPU profile with `deno run --cpu-prof`). Keep
-  what the first request runs to what its answer needs: work nobody waits for
-  (re-arming an owed alarm, `#start`) runs behind the answer.
+- **A new object takes 150 to 500 ms to start** before any code of ours runs in
+  it (T-143307). Start it beside what the request already waits on, with `WARM`
+  (door.ts, used.ts `start`), which touches no storage, so a start nobody
+  follows up leaves nothing behind: a birth's. A store that stands is sent
+  `WAKE` (used.ts `wake`), which brings it up as any request does (boot,
+  release, owed writes) and answers nothing else, so the call behind it finds it
+  booted. A page view wakes its app's store for the scripts that ask it next,
+  from the edge too (page-cache.ts `shown`, front.ts through `Uses`), and the
+  pages that send a person to a space's chat wake its Builder (build-door.ts
+  `woken`). Both go through door.ts `ahead`.
+- **Only the caller knows an answer has arrived.** The runtime sends an object's
+  answer on in turns of its event loop, so work begun as the answer was read, or
+  on a timer as the handler returned, held it (T-149700). Work nobody waits for
+  runs where no answer is under way: the Builder marks its answers while its
+  incarnation owes work (build-door.ts `OWED`), and its door wakes it once it
+  has one.
+- **An isolate's first wake runs every path cold.** Its boot and first read cost
+  a store 130-320 ms of CPU against a warm wake's 5-15 ms (T-148354): each
+  function runs for the first time, and each per-isolate derivation (a
+  vocabulary's words, its description rows) is made then. A bench in one process
+  times warm code, so measure a first wake in a fresh process over a stored copy
+  of the object (CPU profile with `deno run --cpu-prof`). Keep what the first
+  request runs to what its answer needs: work nobody waits for (re-arming an
+  owed alarm, `#start`) runs behind the answer.
 - **An object's trace leaves out its CPU.** Its spans and
   `time_to_first_byte_ms` advance only across I/O, so a cold Builder whose
   handler span read 126 ms spent 279 ms of CPU, and its caller's fetch of it
   took 761 (T-148780). Time an object by its caller's fetch span (Workers
-  observability, by `$metadata.traceId`) beside the invocation's
-  `cpu_time_ms`. Everything run before a handler returns is the caller's to
-  wait for, and so is the confirmation of every write made before it. So a
-  read does only what its answer needs first: a schema is fitted once (a
-  Store once a Worker version, graph.ts `#stood`; the Operator's store once
-  a schema print, operator-store.ts `FITTED`), a
-  migration that finished says so once (channel-move.ts `CHANNELED`), and
-  the rest starts in a timer once the answer has returned (build.ts
-  `#behind`). An object's clock stands still
-  while its code runs and reads a timer's own deadline when it fires, so no
-  time read inside an object shows how long its code ran (T-150377).
+  observability, by `$metadata.traceId`) beside the invocation's `cpu_time_ms`.
+  Everything run before a handler returns is the caller's to wait for, and so is
+  the confirmation of every write made before it. So a read does only what its
+  answer needs first: a schema is fitted once (a Store once a Worker version,
+  graph.ts `#stood`; the Operator's store once a schema print, operator-store.ts
+  `FITTED`), a migration that finished says so once (channel-move.ts
+  `CHANNELED`), and the rest starts in a timer once the answer has returned
+  (build.ts `#behind`). An object's clock stands still while its code runs and
+  reads a timer's own deadline when it fires, so no time read inside an object
+  shows how long its code ran (T-150377).
 - **128 MB per isolate**, shared by every object in it (`HELD` in
   packages/embedding/held.ts caps vector copies at 48 MB; the vectors are
   `search-and-embeddings`). The kernel Worker has the same 128 MB, so a body
@@ -330,9 +327,9 @@ use of those apps, and adds no activity hop to those reads.
   own two stores have no deploy POST: every commit on main is their release, and
   the first request under a new Worker version arms their alarm for the pass
   (`#deploying`) and is served at an ordinary wake's cost
-  (@yaks/durable-object's wake logic). An app store's schema pages are derived from
-  its vocabulary when read (@yaks/code's `describing`), so a deploy writes none;
-  the platform's own two stores write theirs with `described`, where
+  (@yaks/durable-object's wake logic). An app store's schema pages are derived
+  from its vocabulary when read (@yaks/code's `describing`), so a deploy writes
+  none; the platform's own two stores write theirs with `described`, where
   `_vocab.hash` skips an unchanged vocabulary and a changed hash writes only the
   changed rows. That is separate from the storage schema stamp. `schemaReady`
   trusts the physical `schema` stamp a completed installation leaves, epoch and
@@ -356,13 +353,13 @@ use of those apps, and adds no activity hop to those reads.
   graph boot or SQL, and a dormant fetch answers 404. Restore clears the mark
   and arms the store for owed wakes. Permanent erasure stays reachable while
   dormant.
-- **A death wakes only the stores it can change** (deaths.ts). A store
-  applies a delete to its own rows, so its `notify_deaths` effect tells the
-  space's other apps (`/mourn`), retried until each takes it, and each applies
-  its references' death rules (@yaks/graph `bereft`). Only a sibling whose
-  release declaration (R2) declares a reference that cascades, detaches or
-  releases is told. The move sweep's wake (`/move`) tells the graves a store
-  held before, once (`mourned`).
+- **A death wakes only the stores it can change** (deaths.ts). A store applies a
+  delete to its own rows, so its `notify_deaths` effect tells the space's other
+  apps (`/mourn`), retried until each takes it, and each applies its references'
+  death rules (@yaks/graph `bereft`). Only a sibling whose release declaration
+  (R2) declares a reference that cascades, detaches or releases is told. The
+  move sweep's wake (`/move`) tells the graves a store held before, once
+  (`mourned`).
 - **Discovery leaves stores asleep** (T-65378). An app's accepted vocabulary and
   commands are release metadata in R2 (`declaration.ts`), selected by the
   directory's source and declaration pointers. A deploy writes that snapshot
@@ -426,10 +423,10 @@ from that:
   (packages/member/words.ts `mode()`), and the directory reports an app row with
   none. A default that opens something is a leak waiting for a stale row.
 - **An agent is an actor of its own** (M-31958). A connector's token or the
-  CLI's grant is held by an agent writing for the person (mcp.ts sets
-  `agent`, the client's name), so the apps it makes and the deploys it puts
-  live are stamped `by` its `acts_for{person}` row (instrument.ts `agentEid`,
-  session.ts `acting`), its session in `via`, never as the person's own act.
+  CLI's grant is held by an agent writing for the person (mcp.ts sets `agent`,
+  the client's name), so the apps it makes and the deploys it puts live are
+  stamped `by` its `acts_for{person}` row (instrument.ts `agentEid`, session.ts
+  `acting`), its session in `via`, never as the person's own act.
 - **A guest writes through a vouched via**, with no person (`session.ts`). The
   same cookie holds the browser before sign-in and the person after it.
   `attribution.ts` follows directory receipts to fill missing authors in each
@@ -457,13 +454,12 @@ rename serves the old name as a translation (`published.ts`), listed in
 `tools/list` like any tool: a client installed from a directory's snapshot
 checks the live list before it calls, and a name missing there fails in the
 client ("was not returned by tools/list") without reaching us. A client also
-holds every answer to the `outputSchema` its tool is listed with and refuses
-one that doesn't fit, after we answered 200. Every tool whose answer is
-entities is listed with agent.ts `ROWS`, the generic bundle plus the row words
-a store and the composing read put beside components (`kind`, `space`): a new
-row word is declared there, or every read answering it fails in the client.
-@yaks/mcp checks each answer against its listing as it leaves and reports one
-that doesn't fit.
+holds every answer to the `outputSchema` its tool is listed with and refuses one
+that doesn't fit, after we answered 200. Every tool whose answer is entities is
+listed with agent.ts `ROWS`, the generic bundle plus the row words a store and
+the composing read put beside components (`kind`, `space`): a new row word is
+declared there, or every read answering it fails in the client. @yaks/mcp checks
+each answer against its listing as it leaves and reports one that doesn't fit.
 
 Prompts and examples start from the person's own situation, never a scenario
 invented for them (M-37856; the owner on one such example, verbatim: "these are
@@ -489,62 +485,75 @@ stamped with the account that made it, and his name belongs only on an act he
 asked for (M-31958), so platform work goes `--as admin@bot.yak.sh`: the
 platform's admin, an owner of `yak`, which stands as an owner in every space
 through the connector's graph tier (tool.ts `roleIn`). A live check (an app, a
-subscription, the Operator) runs in `checks`, the agents' own space, `--as
-checks`; `operator_chat --space checks` reaches its Operator. `checks` is in
-idle-spaces.ts `PROTECTED`, so the sweep never takes it. Nothing an agent tests
-runs in `jeff` or another person's space.
+subscription, the Operator) runs in `checks`, the agents' own space,
+`--as
+checks`; `operator_chat --space checks` reaches its Operator. `checks` is
+in idle-spaces.ts `PROTECTED`, so the sweep never takes it. Nothing an agent
+tests runs in `jeff` or another person's space.
 
 - `yak admin query <space>/<app> <query>` reads a store, and
   `yak admin apply <space>/<app> <bundles>` patches, adds or deletes its rows
-  through the store's own apply (`--check` rehearses and keeps nothing). Both
-  go through `graph_query` and `graph_apply` with `space` and `app`.
-- `admin_errors` reads platform bugs through the independent tracker's
-  signed door (every unresolved one; `--since` narrows by last seen). It
-  summarizes time to fix; `resolved: true` adds full explanations of past
-  fixes. Every unexpected caught failure reports to the tracker with its catch location
+  through the store's own apply (`--check` rehearses and keeps nothing). Both go
+  through `graph_query` and `graph_apply` with `space` and `app`.
+- `admin_errors` reads platform bugs through the independent tracker's signed
+  door (every unresolved one; `--since` narrows by last seen). It summarizes
+  time to fix; `resolved: true` adds full explanations of past fixes. Every
+  unexpected caught failure reports to the tracker with its catch location
   (M-37965); a new platform bug mails the owner through workers/tracker's
-  delivery. Beside it on the tasks MCP server (and `yak bug …` under the
-  default config), `bug_show` reads one bug by the global id admin_errors
-  lists, with its kept occurrences (tags, stack, request), and `bug_resolve`
-  marks it with its explanation once its fix is live, as the last step of
-  every fix: `broke`, `cause`, `since`, `fix`, `recur`, a commit by a short
-  sha as Git reads it; on the CLI a long `--broke`, `--cause` or `--recur`
-  reads a file as `@path`. A bug that only stopped is not fixed and stays
-  open; `bug_reopen` takes back a resolution whose cause was never fixed, and
-  `bug_archive` hides one that needs no fix.
+  delivery. Beside it on the tasks MCP server (and `yak bug …` under the default
+  config), `bug_show` reads one bug by the global id admin_errors lists, with
+  its kept occurrences (tags, stack, request), and `bug_resolve` marks it with
+  its explanation once its fix is live, as the last step of every fix: `broke`,
+  `cause`, `since`, `fix`, `recur`, a commit by a short sha as Git reads it; on
+  the CLI a long `--broke`, `--cause` or `--recur` reads a file as `@path`. A
+  bug that only stopped is not fixed and stays open; `bug_reopen` takes back a
+  resolution whose cause was never fixed, and `bug_archive` hides one that needs
+  no fix.
+- A tool's refusal is never a bug. Every one a hosted tool gives (the
+  connector's, the Operator's, code mode's, and the MCP door's own before any
+  tool runs) is heard through @yaks/tools `refused` and kept in the platform
+  store as `tool_refusal{tool, source, space, session, release, at}` with its
+  `refusal{code}` and its cause as `content{body}`, values taken out
+  (refusals.ts). The directory's hourly `yak-refusals` wake counts what no
+  report has (`counted{report}`) into one `refusal_report{}`, grouped by tool,
+  code and cause, which is its own platform letter to TaskMaster (mail-config.ts
+  `toPlatform`), sent by the pool and marked `delivered{at}`. A connector read
+  of them names `.refusal` (refusals.ts `countedIn`): `.tool_refusal *` there
+  finds none.
 - `yak admin tail` follows live events. It streams local Wrangler stdout, not
   the MCP door; its account check runs once before the stream, so following logs
   is not app traffic.
 - `yak admin throwaway '<command>' [--name <name>]` runs one shell command as a
-  test account, `<name>@bot.yak.sh`, and erases the account when it ends. `yak
-  auth yaks.app --as <address>` keeps a test account across commands; the daily
-  sweep erases it after seven idle days. `yak admin erase <address> --as
+  test account, `<name>@bot.yak.sh`, and erases the account when it ends.
+  `yak
+  auth yaks.app --as <address>` keeps a test account across commands; the
+  daily sweep erases it after seven idle days.
+  `yak admin erase <address> --as
   admin@bot.yak.sh` erases one now.
 - An app's own errors surface through `app_errors` and the unseen block
-  (`unseen.ts`). Each distinct one starts its space's Operator (unseen.ts
-  `fix`, one request per break by `fixOf`), and the owner's Apps page shows
-  its state beside the error; `operator_read` with the space reads its work.
-  The Operator's tool `platform_bug` files what yaks.app got wrong in our
-  tracker.
+  (`unseen.ts`). Each distinct one starts its space's Operator (unseen.ts `fix`,
+  one request per break by `fixOf`), and the owner's Apps page shows its state
+  beside the error; `operator_read` with the space reads its work. The
+  Operator's tool `platform_bug` files what yaks.app got wrong in our tracker.
 - An HTTP handler still awaiting its response after 60 seconds reports to the
-  tracker once, with its route and pending named I/O waits (`defects-runtime.ts`,
-  `lib/waits.ts`). The request keeps running; a streamed response's lifetime
-  after headers is separate. Cloudflare's own record of every
-  invocation (outcome, wall and CPU time, the object it ran in) is Workers
+  tracker once, with its route and pending named I/O waits
+  (`defects-runtime.ts`, `lib/waits.ts`). The request keeps running; a streamed
+  response's lifetime after headers is separate. Cloudflare's own record of
+  every invocation (outcome, wall and CPU time, the object it ran in) is Workers
   observability, read with the cloudflare-api MCP's `telemetry/query` or the
   box's own token (`secrets-and-connections`); an event's timestamp is when the
-  invocation ended. An object's event can outlast its answer by a minute:
-  while the object has work under way (its alarm, say), the runtime holds the
-  last request's event open until that work ends or another request comes. So
-  the directory's `/used` read 44 s and a seats query 21 s while their callers'
+  invocation ended. An object's event can outlast its answer by a minute: while
+  the object has work under way (its alarm, say), the runtime holds the last
+  request's event open until that work ends or another request comes. So the
+  directory's `/used` read 44 s and a seats query 21 s while their callers'
   fetch spans took 17 and 629 ms (T-149085, the alarm remaking two releases).
-  Before calling an event's wall time a wait, read its caller's fetch span
-  under the same `$metadata.traceId`. Calls to a store that wait
-  with 0 ms CPU, ended by resets saying "instance is no longer active" or
-  "internal error; reference = …", are the runtime stalling that object, not our
-  code. Every app door reads its app row from the directory, so a stalled
-  directory hangs the whole platform; the tracker's minute probe
-  (workers/tracker/monitor.ts `PROBES`) asks such a door and files a bug.
+  Before calling an event's wall time a wait, read its caller's fetch span under
+  the same `$metadata.traceId`. Calls to a store that wait with 0 ms CPU, ended
+  by resets saying "instance is no longer active" or "internal error; reference
+  = …", are the runtime stalling that object, not our code. Every app door reads
+  its app row from the directory, so a stalled directory hangs the whole
+  platform; the tracker's minute probe (workers/tracker/monitor.ts `PROBES`)
+  asks such a door and files a bug.
 - Row profiles (packages/durable-object/profile.ts) count SQL statements, not
   invocation events, and their labels follow asynchronous work, timers from a
   socket close included: a repeated `ws close` bucket can be a pending save
