@@ -18,7 +18,6 @@ export type PreparationRow = {
   }
   print_document?: { manifest: Prepared }
   print_preparation_failed?: { at: string; reason: string }
-  sale_access?: { buyer?: string; via?: string }
 }
 let key = (value: unknown): string => {
   if (
@@ -46,10 +45,13 @@ let read = async (ports: ServicePorts, value: unknown) => {
 let owned = async (ports: ServicePorts, value: unknown, who: Who) => {
   let row = await read(ports, value)
   if (
-    !owns({ by: row.sale_access?.buyer, via: row.sale_access?.via }, {
-      by: who.person,
-      via: who.via,
-    }) ||
+    !owns(
+      { by: row.print_preparation.person, via: row.print_preparation.via },
+      {
+        by: who.person,
+        via: who.via,
+      },
+    ) ||
     row.print_preparation.source !== who.source
   ) throw new InputError('This prepared document is not available')
   return row
@@ -115,7 +117,6 @@ export let prepareCommand = async (
   await apply(ports.store, [{
     entity: { eid },
     print_preparation: { state, ...who },
-    sale_access: { buyer: who.person, via: who.via },
   }, await continuation(ports, eid)])
   return { id: eid, pending: true, preview: ports.preview }
 }

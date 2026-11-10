@@ -49,7 +49,7 @@ export type ServicePorts = Fulfillment & {
 type DocumentRow = {
   entity: { eid: string }
   print_document: { manifest: Prepared }
-  sale_access?: { buyer?: string; via?: string }
+  print_preparation: { person?: string; via?: string }
 }
 type QuoteRow = {
   entity: { eid: string }
@@ -71,13 +71,9 @@ let object = (value: unknown): Record<string, unknown> => {
   }
   return value as Record<string, unknown>
 }
-let access = (who: Who) => ({
-  ...(who.person ? { buyer: who.person } : {}),
-  ...(who.via ? { via: who.via } : {}),
-})
 let owns = (row: DocumentRow, who: Who) =>
   ownedBy(
-    { by: row.sale_access?.buyer, via: row.sale_access?.via },
+    { by: row.print_preparation.person, via: row.print_preparation.via },
     { by: who.person, via: who.via },
   )
 let requirePerson = (who: Who): string => {
@@ -131,11 +127,11 @@ let quoted = async (
   if (!row?.print_document || !owns(row, who)) {
     throw new InputError('This document is not available to this buyer')
   }
-  if (!row.sale_access?.buyer) {
+  if (!row.print_preparation.person) {
     await apply(ports.store, [{
       entity: row.entity,
-      sale_access: { buyer: person },
-      $was: { sale_access: { buyer: null } },
+      print_preparation: { person },
+      $was: { print_preparation: { person: null } },
     }])
   }
   let manifest = row.print_document.manifest
@@ -227,7 +223,6 @@ let purchased = async (
       print: row.print_quote.print,
       ...(who.authority ? { authority: who.authority } : {}),
     },
-    sale_access: access(who),
   }])
   await schedule(ports, quoteId)
   let checkout = await ports.checkout(quote, who)
