@@ -10,6 +10,7 @@ export type PreparationRow = {
   entity: { eid: string }
   print_preparation: {
     state: Preparation
+    run: string
     person?: string
     via?: string
     source: string
@@ -118,11 +119,16 @@ export let prepareCommand = async (
       print_preparation: {
         ...row.print_preparation,
         state: renewal(row.print_preparation.state, args),
+        run: crypto.randomUUID(),
         ...(who.authority ? { authority: who.authority } : {}),
       },
       print_preparation_failed: null,
       $was: {
-        print_preparation: { state: token(row.print_preparation.state) },
+        print_preparation: {
+          state: token(row.print_preparation.state),
+          run: token(row.print_preparation.run),
+          authority: token(row.print_preparation.authority),
+        },
       },
     }, await continuation(ports, row.entity.eid)])
     return status(ports, await read(ports, row.entity.eid))
@@ -135,6 +141,7 @@ export let prepareCommand = async (
     entity: { eid },
     print_preparation: {
       state,
+      run: crypto.randomUUID(),
       person: who.person,
       via: who.via,
       source: who.source,
@@ -160,7 +167,11 @@ export let prepareStep = async (ports: ServicePorts, value: unknown) => {
     await ports.verifyPreparation(whoOf(row))
     let next = await ports.advance(row.print_preparation.state, whoOf(row))
     let guard = {
-      print_preparation: { state: token(row.print_preparation.state) },
+      print_preparation: {
+        state: token(row.print_preparation.state),
+        run: token(row.print_preparation.run),
+        authority: token(row.print_preparation.authority),
+      },
     }
     let changes = 'revision' in next
       ? [{
@@ -184,7 +195,11 @@ export let prepareStep = async (ports: ServicePorts, value: unknown) => {
         reason: error instanceof Error ? error.message : String(error),
       },
       $was: {
-        print_preparation: { state: token(row.print_preparation.state) },
+        print_preparation: {
+          state: token(row.print_preparation.state),
+          run: token(row.print_preparation.run),
+          authority: token(row.print_preparation.authority),
+        },
       },
     }])
     if (

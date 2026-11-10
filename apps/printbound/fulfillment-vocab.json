@@ -290,6 +290,10 @@
         },
         "authority": {
           "type": "string"
+        },
+        "run": {
+          "type": "string",
+          "description": "The current preparation attempt; reconnecting or retrying changes it so older work cannot overwrite the new continuation."
         }
       }
     },
