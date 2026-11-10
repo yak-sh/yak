@@ -99,7 +99,11 @@ let card = async (i: Listed, env: Host) => {
         ? ['Its key is only ever sent to ', hostsOf(i), '.']
         : null,
     ),
-    keyed(i)
+    i.service
+      ? small(
+        'Connect selected service operations. Purchases require a separate checkout or explicit purchase authority.',
+      )
+      : keyed(i)
       ? how
         ? h(
           More,
@@ -186,8 +190,12 @@ export let said = (all: Listed[], words: string, env: Host = {}) =>
         i.unchecked
           ? '  unchecked: this catalog entry has not been verified'
           : '',
-        `  its key is only ever sent to ${i.hosts.join(', ') || 'no host'}`,
-        keyed(i)
+        i.service
+          ? `  app: ${i.service.app}; selected operations only, no store membership`
+          : `  its key is only ever sent to ${i.hosts.join(', ') || 'no host'}`,
+        i.service
+          ? '  connect selected operations; purchases require checkout or explicit purchase authority'
+          : keyed(i)
           ? i.instructions
             ? `  how to get the key:\n${
               i.instructions.split('\n').map((l) => `    ${l}`).join('\n')

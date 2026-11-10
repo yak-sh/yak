@@ -7,6 +7,7 @@ import {
   integrationEid,
   known,
   LISTED,
+  publishService,
   set,
   USES,
   using,
@@ -15,6 +16,8 @@ import { edgeEid } from '@yaks/edge'
 import { url } from './host.ts'
 import { APP, inApp, inSpace, refuse, SPACE, str, text } from './tool.ts'
 import { type Row, worded } from './tool-words.ts'
+import { serviceOffer } from './app-services.ts'
+import { declarationOf } from './declaration.ts'
 import { INTEGRATIONS, said } from './integrations.ts'
 import { EITHER } from './preauth.ts'
 import {
@@ -146,6 +149,64 @@ let CONNECTIONS: Row[] = [
     },
   },
   {
+    name: 'integration_publish',
+    destructive: false,
+    idempotent: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        title: str('the service name people see'),
+        tagline: str('what the service does'),
+        description: str('the service and its selling terms'),
+        listed: {
+          type: 'boolean',
+          description:
+            'publish, or withdraw discovery while preserving orders and connections',
+        },
+      },
+      required: ['app', 'listed'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, who } = await inApp(ctx, args)
+      if (who.role != 'owner') {
+        throw refuse('access', 'Only the app owner publishes a service')
+      }
+      let { tools } = await declarationOf(ctx.env, space, app)
+      if (
+        args.listed &&
+        !Object.values(tools).some((t) => t.service && t.discoverable !== false)
+      ) {
+        throw refuse(
+          'arguments',
+          'Mark a declared command with service: {pricing: "its terms"} before publishing',
+        )
+      }
+      let c = ctxOf(ctx.env, who)
+      await c.graph.apply(
+        await publishService(c.graph.read, {
+          app: app.eid,
+          owner: space.eid,
+          title: args.title == null
+            ? app.title || app.slug
+            : String(args.title),
+          ...args.tagline == null ? {} : { tagline: String(args.tagline) },
+          ...args.description == null
+            ? {}
+            : { description: String(args.description) },
+          listed: args.listed === true,
+        }),
+      )
+      return {
+        space,
+        text: `${app.title || app.slug}: service ${
+          args.listed ? 'listed' : 'withdrawn'
+        }`,
+      }
+    },
+  },
+  {
     name: 'integration_set',
     destructive: false,
     idempotent: true,
@@ -239,8 +300,24 @@ let CONNECTIONS: Row[] = [
     },
     run: async (ctx, args) => {
       let words = args.words == null ? '' : String(args.words)
+      let offers = await ctx.dir.integrations()
+      let services = await Promise.all(
+        offers.filter((i) => i.service).map((i) =>
+          serviceOffer(ctx.env, ctx.dir, i)
+        ),
+      )
+      let terms = words.toLowerCase().split(/\s+/).filter(Boolean)
+      let matches = (i: unknown) =>
+        terms.every((word) => JSON.stringify(i).toLowerCase().includes(word))
+      let all = [
+        ...offers.filter((i) => !i.service),
+        ...services.filter((i) => i != null),
+      ].filter(matches)
       return {
-        text: said(await ctx.dir.integrations(words), words, ctx.env),
+        text: said(all, words, ctx.env) +
+          services.filter((i) => i != null).filter(matches).map((i) =>
+            `\n\n${i.name} operations: ${JSON.stringify(i.commands)}`
+          ).join(''),
       }
     },
   },

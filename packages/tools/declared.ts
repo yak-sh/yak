@@ -82,6 +82,8 @@ export type Arg = Record<string, unknown>
 export type ToolDef = {
   description: string
   revision?: string
+  /** Offer this command as an app service, with its pricing terms. */
+  service?: { pricing: string }
   input: Record<string, Arg>
   required?: string[]
   /** The declared command-line grammar; absent means flags only. */
@@ -123,6 +125,7 @@ let KEYS = [
   'tool',
   'description',
   'revision',
+  'service',
   'input',
   'required',
   'positional',
@@ -321,6 +324,13 @@ export let parseTools = (
     if (entry.model != null && typeof entry.model != 'boolean') {
       wrong.push(`${name}.model is true, to offer it to the app's models`)
     }
+    if (
+      entry.service != null &&
+      (!object(entry.service) || typeof entry.service.pricing != 'string' ||
+        !entry.service.pricing.trim())
+    ) {
+      wrong.push(`${name}.service names its pricing terms as {pricing: string}`)
+    }
     if (entry.revision != null && typeof entry.revision != 'string') {
       wrong.push(`${name}.revision is a source version string`)
     }
@@ -400,6 +410,9 @@ export let parseTools = (
       description: String(entry.description ?? ''),
       ...(typeof entry.revision == 'string'
         ? { revision: entry.revision }
+        : {}),
+      ...(object(entry.service) && typeof entry.service.pricing == 'string'
+        ? { service: { pricing: entry.service.pricing } }
         : {}),
       input,
       ...(required.length ? { required } : {}),

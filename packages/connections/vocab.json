@@ -212,6 +212,21 @@
         "featured": {
           "type": "boolean",
           "description": "featured among the services the host catalog offers"
+        },
+        "service": {
+          "type": "object",
+          "description": "a hosted app service, whose operations are the service-marked commands in its current release declaration",
+          "required": [
+            "app"
+          ],
+          "properties": {
+            "app": {
+              "type": "string",
+              "ref": "entity",
+              "death": "keep",
+              "description": "the stable app identity; a rename changes no connection or order"
+            }
+          }
         }
       }
     },

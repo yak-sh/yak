@@ -528,6 +528,11 @@ export let WORDS: Record<string, Words> = {
     'description':
       "Lend a shared connection this app uses to copies installed from it. Only the owner of the app's space may lend its own connection. Each copy gets a sentinel and a cap of calls a month, never the key or the source app's data. A new cap also changes copies already borrowing it. cap: null stops lending and gives every copy borrowing through this app a connection needing its own key. A copy may replace a borrowed connection with its own using connection_attach. A direct key, a connection each person connects, and a borrowed connection cannot be lent. Documentation: https://yaks.app/docs/sharing.",
   },
+  'integration_publish': {
+    'title': 'Publish an app service',
+    'description':
+      'Publish the app\'s service commands in the integration directory. A declared command opts in with service: {pricing: "its pricing terms"}. The listing exposes its description, input schema, revision and permission floor from the current app release. Only the app owner publishes it. listed: false withdraws discovery and preserves customer orders and connections.',
+  },
   'integration_set': {
     'title': 'Describe or list a custom integration',
     'description':

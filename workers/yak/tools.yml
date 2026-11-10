@@ -613,6 +613,14 @@ connection_lend:
     own using connection_attach. A direct key, a connection each person
     connects, and a borrowed connection cannot be lent. Documentation:
     https://yaks.app/docs/sharing.
+integration_publish:
+  title: Publish an app service
+  description: >-
+    Publish the app's service commands in the integration directory. A declared
+    command opts in with service: {pricing: "its pricing terms"}. The listing
+    exposes its description, input schema, revision and permission floor from
+    the current app release. Only the app owner publishes it. listed: false
+    withdraws discovery and preserves customer orders and connections.
 integration_set:
   title: Describe or list a custom integration
   description: >-

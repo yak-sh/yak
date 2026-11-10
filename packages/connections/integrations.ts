@@ -32,6 +32,8 @@ import voipms from './voipms.json' with { type: 'json' }
 /** An outside service, as data. */
 export type Integration = {
   name: string
+  /** A hosted service; operation declarations stay with the app release. */
+  service?: { app: string }
   /** what a person calls it: OpenRouter, Google Calendar */
   title?: string
   /** one line saying what it is, written for a person */
@@ -270,6 +272,7 @@ export let listing = async (read: Read, words = ''): Promise<Listed[]> => {
       i.details,
       i.docs,
       i.connects,
+      i.service?.app,
       ...i.categories ?? [],
     ]
       .join(' ').toLowerCase()

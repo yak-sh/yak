@@ -145,3 +145,5 @@ export {
 export { REDIRECT, type SignIns, signins } from './signin.ts'
 
 export { codeFor, codeIn, lettersFor } from './signin-mail.ts'
+
+export { publishService, serviceName } from './services.ts'
