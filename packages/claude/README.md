@@ -52,6 +52,11 @@ never reaches another's reply. A waiting process doesn't hold its host open
 190 MB while it waits, one for each model and effort asked for. The model is
 `AsyncDisposable`, which ends the waiting ones.
 
+Through `/model/step` on this box, one-word `haiku` steps 3 s apart reached
+first text in 612–2015 ms (median 876) this way, and 858–2949 ms (median 1145)
+with a process started per step. workers/yak/README.md has the rest of an
+Operator step's time.
+
 ## What is not graph-native
 
 `claude` owns subscription authentication, transport/init diagnostics, internal

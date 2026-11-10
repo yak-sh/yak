@@ -1261,6 +1261,15 @@ step's start. What it shows now is two directory round trips in a row, each
 The machine's own checks (`machineFor`) are answered from the first batch, so
 `at_request` to `at_submit` is nothing.
 
+The machine's share of stage 4, measured the same day through `/model/step` on
+the machine itself, in one-word `haiku` steps 3 s apart. With one `claude`
+process started for each step, first text came 858–2949 ms after the step was
+sent (median 1145, ten steps). @yaks/claude now answers each step from a process
+started before it (packages/claude/README.md): 612–2015 ms (median 876, ten
+steps), and 1293 ms for the first step after `yak serve` starts, which finds
+none waiting. The model's own time varies by more than the 0.25–0.3 s saved; the
+fastest steps show it, 612 ms against 858.
+
 What the Operator is told is two personas, worn through @yaks/persona
 (operator-persona.ts). The yaks.app Operator persona is kept in the directory:
 its own text is the general guidance, written by the code only where there is
