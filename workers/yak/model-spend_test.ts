@@ -37,6 +37,7 @@ let concurrent = await fixture(0.05)
 let helpers = await fixture()
 let released = await fixture()
 let uncertain = await fixture()
+let measured = await fixture()
 let rollover = await fixture()
 let free = await fixture(0.20023140)
 let visited = await fixture()
@@ -114,13 +115,30 @@ test('settlement releases unused dollars and a replay never debits twice', async
 })
 
 test('an unanswered submitted call keeps its maximum unavailable', async () => {
-  let hold = await reserved(p.env, uncertain.space, () => ({ dollars: 0.2 }))
+  await reserved(p.env, uncertain.space, () => ({ dollars: 0.2 }))
   await assertRejects(
     () => reserved(p.env, uncertain.space, () => ({ dollars: 0.01 })),
     ModelError,
   )
-  await assertRejects(() => hold.settle(0.21), Error, 'exceeded')
   assertAlmostEquals(await uncertain.used(), 0.2)
+})
+
+test('measured cost above a quote settles once and later calls see the full debit', async () => {
+  let call = mint()
+  let hold = await reserved(
+    p.env,
+    measured.space,
+    () => ({ dollars: 0.01 }),
+    call,
+  )
+  await Promise.all([hold.settle(0.21), settled(p.env, call, 0.21)])
+  assertAlmostEquals(await measured.used(), 0.21)
+  await settled(p.env, call, 0.21)
+  assertAlmostEquals(await measured.used(), 0.21)
+  await assertRejects(
+    () => reserved(p.env, measured.space, () => ({ dollars: 0.01 })),
+    ModelError,
+  )
 })
 
 test('settling an older reservation does not reset or refund this month', async () => {

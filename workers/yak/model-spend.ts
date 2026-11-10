@@ -1,4 +1,4 @@
-// A paid call reserves its maximum before submission. Uncertain submissions
+// A paid call reserves its quoted cost before submission. Uncertain submissions
 // keep that debit; only a measured answer or a known unsubmitted call frees it.
 import { type Bundle, type Comp, mint, token } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
@@ -71,7 +71,8 @@ export let reservation = async (
   call: string,
 ): Promise<Hold | undefined> => held(await read(env, receiptEid(call)))
 
-/** Settle the original call once, including media delivered after a restart. */
+/** Settle measured usage once, including costs above the original quote and
+ * media delivered after a restart. Later admissions see the full debit. */
 export let settled = async (
   env: Env,
   call: string,
@@ -92,11 +93,8 @@ export let settled = async (
       }
       return previous != null
     }
-    if (dollars > hold.dollars) {
-      throw new Error(
-        `Provider exceeded its reserved maximum: $${dollars} > $${hold.dollars}`,
-      )
-    }
+    // The provider has already spent these dollars. A low estimate must not
+    // hide usage or strand delivery; the next admission sees the full debit.
     let space = await read(env, hold.space)
     let meter = space?.meter as Comp | undefined
     let delta = dollars - hold.dollars

@@ -137,6 +137,12 @@ export let FILES: Record<string, number> = Object.fromEntries([
 
 // https://developers.openai.com/api/docs/guides/images-vision
 // PNG/JPEG/WebP/non-animated GIF; 512 MB total request payload, including base64.
+let references = Object.fromEntries(
+  ['image/png', 'image/jpeg', 'image/webp'].map((
+    type,
+  ) => [type, 14 * 1024 * 1024]),
+)
+
 let images = Object.fromEntries(
   ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].map((
     type,
@@ -145,6 +151,7 @@ let images = Object.fromEntries(
 
 /** Responses file inputs, keeping text-only and specialized endpoints apart. */
 export let reads = (name: string): Record<string, number> => {
+  if (/^gpt-image-2\.[56](?:-|$)/.test(name)) return references
   let text =
     /^(gpt-(4o|4\.1|5|6)(?:[.-]|$)|o[134](?:-|$)|chatgpt-4o)/.test(name) &&
     !/^(o1-(mini|preview))/.test(name) &&

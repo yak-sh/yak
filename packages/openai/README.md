@@ -287,8 +287,12 @@ or cache negative observations. No paid capability probes are performed.
 The `openai` provider answers a GPT Image model's name
 (`gpt-image-2.6-sunburst`, `gpt-image-2.6-flare`, `gpt-image-2.5-sunburst`,
 `gpt-image-2.5-flare` and their snapshots) through the Image API's
-`/images/generations` door instead of Responses. The newest user text is the
-prompt; `Request.input` may carry `size`, `quality`, `background`,
+`/images/generations` door instead of Responses. With `kind: 'image'` items it
+uses `/images/edits`, passing the bytes as data URLs in `images`. References are
+PNG, JPEG or WebP, up to 16, at most 14 MiB each. Their labels precede the
+newest user text in the prompt. Invalid references fail before submission; no
+reference is silently dropped. Without image items the newest user text is the
+prompt, as before. `Request.input` may carry `size`, `quality`, `background`,
 `output_format` (`png`, `jpeg` or `webp`), `output_compression`, `moderation`
 and `complexity`, and anything else is refused as `bad_request` before a call.
 One image is made. Its answer is saved as a private media receipt before its
@@ -296,12 +300,16 @@ bytes are stored in the lent store, so `recover(call)` delivers it again without
 buying it twice; `reply.artifacts` carries its address, never the payload.
 `info(name)` lists it with image output.
 
-`quote(req, remaining)` holds twice what OpenAI's cost calculator says the image
-makes at its quality and size (`max` and 2880x2880 where `auto`), plus the
-prompt's bytes as text tokens. `reply.cost` is what the answer's `usage` says it
-used at OpenAI's published rates: $5 per million text input tokens, $8 per
-million image input tokens and $30 per million output tokens. A ChatGPT grant
-cannot use the Image API and is refused.
+`quote(req, remaining)` reserves twice what OpenAI's cost calculator says the
+image makes at its quality and size (`max` and 2880x2880 where `auto`), plus the
+prompt's bytes as text tokens. For reference inputs, it uses the same calculator
+at each reference's dimensions and max quality as a finite estimate. OpenAI
+publishes no input-token estimator for these image families; this estimate is
+not a spending limit. The host settles measured usage even when it exceeds the
+quote, and later calls see that full debit. `reply.cost` is what the answer's
+`usage` says it used at OpenAI's published rates: $5 per million text input
+tokens, $8 per million image input tokens and $30 per million output tokens. A
+ChatGPT grant cannot use the Image API and is refused.
 
 ## Hosted web tools
 

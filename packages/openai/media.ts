@@ -1,7 +1,15 @@
 /** Decode provider media at the artifact boundary, before bytes enter a store. */
 import { type ArtifactStore, matchesMediaType } from '@yaks/blob'
-import { ModelError, type Reply } from '@yaks/model'
+import { type Item, ModelError, type Reply } from '@yaks/model'
 
+/** Encode neutral media items for a provider's JSON input. */
+export let dataUrl = (m: Extract<Item, { bytes: Uint8Array }>): string => {
+  let chunks: string[] = []
+  for (let at = 0; at < m.bytes.length; at += 8192) {
+    chunks.push(String.fromCharCode(...m.bytes.subarray(at, at + 8192)))
+  }
+  return 'data:' + m.mediaType + ';base64,' + btoa(chunks.join(''))
+}
 export type MediaStore = {
   store: ArtifactStore
   maxBytes?: number

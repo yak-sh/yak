@@ -14,6 +14,7 @@ import {
   listPrice,
   type MediaReceipt,
   ModelError,
+  modelReads,
   type Request,
 } from '@yaks/model'
 import { imageCost, imageQuote, imageTokens } from './generations.ts'
@@ -163,4 +164,54 @@ test('text models keep their token pricing and listing', async () => {
   assertEquals((await model.info!('gpt-image-2.6-flare'))?.modalities, [
     'image',
   ])
+})
+
+test('image references and their labels reach the edits door; recovery buys nothing twice', async () => {
+  let h = harness(ok)
+  let req = ask('gpt-image-2.6-flare', { quality: 'low', size: '1024x1024' })
+  req.items.unshift({
+    kind: 'image',
+    mediaType: 'image/png',
+    label: 'Character sheet: preserve appearance',
+    bytes: Uint8Array.from(atob(png), (c) => c.charCodeAt(0)),
+  })
+  req.items.unshift({ kind: 'user', text: 'Old prompt ignored' })
+  req.items.push({
+    kind: 'image',
+    mediaType: 'image/png',
+    label: 'Previous page: different composition',
+    bytes: Uint8Array.from(atob(png), (c) => c.charCodeAt(0)),
+  })
+  let quoted = imageQuote(req, 1)!
+  assert(quoted.dollars > imageQuote(ask(req.model, req.input), 1)!.dollars)
+  assert(quoted.dollars < 0.2)
+  await h.model(req)
+  assertEquals(h.sent[0].url, 'https://api.openai.com/v1/images/edits')
+  assertEquals(h.sent[0].body.images, [{
+    image_url: 'data:image/png;base64,' + png,
+  }, { image_url: 'data:image/png;base64,' + png }])
+  assertEquals(
+    h.sent[0].body.prompt,
+    'Reference image 1: Character sheet: preserve appearance\n\nReference image 2: Previous page: different composition\n\nA yak in gouache',
+  )
+  assertEquals(
+    (await modelReads(h.model, req.model))['image/png'],
+    14 * 1024 * 1024,
+  )
+  await h.model.recover!('c1')
+  assertEquals(h.sent.length, 1)
+})
+
+test('invalid references refuse before submission instead of generating without them', async () => {
+  let h = harness(ok)
+  let req = ask('gpt-image-2.6-flare')
+  req.items.push({
+    kind: 'image',
+    bytes: new Uint8Array([1]),
+    mediaType: 'image/png',
+    label: 'broken',
+  })
+  let failure = await assertRejects(() => h.model(req), ModelError)
+  assertEquals(failure.code, 'bad_request')
+  assertEquals(h.sent.length, 0)
 })

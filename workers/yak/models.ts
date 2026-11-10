@@ -43,6 +43,7 @@ import { caught } from './defects.ts'
 import type { Answer, Asked } from './apps.ts'
 import type { Stored } from './graph.ts'
 import { lending } from './inference.ts'
+import { modelInputs } from './model-inputs.ts'
 import { bare, connection, names, served } from './providers.ts'
 import { serving } from './config.ts'
 import { grantEid } from './app-writes.ts'
@@ -413,6 +414,7 @@ export let asking = (at: Stored): Handlers => {
     // to wait for: an unresolved selection must reach the runner's refusal.
     answers: () => Promise.resolve(true),
     tools: [],
+    contextItems: modelInputs(at),
     toolSnapshot: () => Promise.resolve(tooled(at)),
     report: (error, _, phase) => at.broke(`model ${phase}`, error),
   })

@@ -2,6 +2,7 @@ import { listing } from './list.ts'
 import { described } from './info.ts'
 import { reads } from './reads.ts'
 import { generatedImages, type Images } from './images.ts'
+import { dataUrl } from './media.ts'
 // Provider-neutral model items in and out; transport.ts alone owns the HTTP
 // calls to the Responses API.
 import {
@@ -63,13 +64,6 @@ let str = (value: unknown, fallback = '') =>
   typeof value == 'string' ? value : fallback
 
 // The neutral items in the API's four shapes.
-let dataUrl = (m: Extract<Item, { bytes: Uint8Array }>) => {
-  let chunks: string[] = []
-  for (let at = 0; at < m.bytes.length; at += 8192) {
-    chunks.push(String.fromCharCode(...m.bytes.subarray(at, at + 8192)))
-  }
-  return 'data:' + m.mediaType + ';base64,' + btoa(chunks.join(''))
-}
 let shape: Record<Item['kind'], (item: Item) => unknown> = {
   image: (i) => {
     let image = i as Extract<Item, { kind: 'image' }>

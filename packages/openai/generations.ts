@@ -13,8 +13,9 @@ import {
   type Request,
   submitted,
 } from '@yaks/model'
+import { mediaTypeOf, sizeOf } from '@yaks/blob'
 import { CODEX, type Credential } from './credential.ts'
-import { generatedMedia, mediaRoom, type MediaStore } from './media.ts'
+import { dataUrl, generatedMedia, mediaRoom, type MediaStore } from './media.ts'
 
 // Each family's output tokens per quality at a square of 2,000,000 pixels'
 // weight, and GPT Image 2.6's own scale on them: OpenAI's cost calculator
@@ -30,6 +31,7 @@ let PRICE = { text: 5, image: 8, output: 30 }
 // The largest image either family makes: 8,294,400 pixels, square.
 let LARGEST = 2880
 let FORMATS = ['png', 'jpeg', 'webp']
+let MAX_REFERENCE = 14 * 1024 * 1024
 let OPTIONS = [
   'size',
   'quality',
@@ -73,6 +75,52 @@ let prompt = (req: Request): string => {
   return input.text
 }
 
+let references = (req: Request) => {
+  let images = req.items.filter((item) => item.kind == 'image')
+  if (images.length > 16 || req.items.some((item) => item.kind == 'document')) {
+    throw new ModelError(
+      'bad_request',
+      'Image models take up to 16 reference images and no documents',
+    )
+  }
+  for (let image of images) {
+    if (
+      !['image/png', 'image/jpeg', 'image/webp'].includes(image.mediaType) ||
+      image.bytes.length > MAX_REFERENCE ||
+      mediaTypeOf(image.bytes) != image.mediaType || !sizeOf(image.bytes)
+    ) {
+      throw new ModelError(
+        'bad_request',
+        'References must be PNG, JPEG or WebP images under 14 MiB',
+      )
+    }
+  }
+  return images
+}
+
+let imagePrompt = (req: Request, images: ReturnType<typeof references>) =>
+  [
+    ...images.map((item, i) => `Reference image ${i + 1}: ${item.label}`),
+    prompt(req),
+  ].join('\n\n')
+
+let requestBody = (req: Request) => {
+  let images = references(req)
+  return {
+    model: req.model,
+    prompt: imagePrompt(req, images),
+    n: 1,
+    ...settings(req),
+    ...images.length
+      ? {
+        images: images.map((item) => ({
+          image_url: dataUrl(item),
+        })),
+      }
+      : {},
+  }
+}
+
 let settings = (req: Request): Record<string, unknown> => {
   let input = req.input ?? {}
   let extra = Object.keys(input).filter((k) => !OPTIONS.includes(k))
@@ -103,9 +151,9 @@ let settings = (req: Request): Record<string, unknown> => {
   return { ...input, output_format: format, quality, size }
 }
 
-/** The most one image costs: its prompt's bytes as text tokens, and twice
+/** A reservation estimate: its prompt's bytes as text tokens, and twice
  * the calculator's output at its quality (at most `max`) and size (at most the
- * largest), since settling above a hold is refused. */
+ * largest), plus a reference-input estimate at max-quality token weight. */
 export let imageQuote = (
   req: Request,
   remaining: number,
@@ -115,9 +163,18 @@ export let imageQuote = (
   let [width, height] = sent.size == 'auto'
     ? [LARGEST, LARGEST]
     : String(sent.size).split('x').map(Number)
-  let text = new TextEncoder().encode(prompt(req)).length
+  let images = references(req)
+  let text = new TextEncoder().encode(imagePrompt(req, images)).length
+  // There is no published input calculator for these families. Use the
+  // existing max-quality token calculator as an estimate for each reference.
+  // The meter settles the provider's measured usage, even above this estimate.
+  let input = images.reduce((sum, item) => {
+    let { w, h } = sizeOf(item.bytes)!
+    return sum + imageTokens(req.model, w, h, 'max')
+  }, 0)
   let dollars = (text * PRICE.text +
-    2 * imageTokens(req.model, width, height, quality) * PRICE.output) / 1e6
+    2 * imageTokens(req.model, width, height, quality) * PRICE.output +
+    input * PRICE.image) / 1e6
   return dollars <= remaining ? { dollars, tokens: 0 } : null
 }
 
@@ -189,10 +246,9 @@ let deliver = async (
   }
 }
 
-/** The Image API's generations door as a model: the newest user text is the
- * prompt and `req.input` its settings. The answer is kept as a private
- * receipt before its bytes are stored, so a stored image is never bought
- * twice. */
+/** The Image API as a model: the newest user text is the prompt, image items
+ * its references, and `req.input` its settings. The answer is kept as a private
+ * receipt before its bytes are stored, so a stored image is never bought twice. */
 export let generations = (options: Generations) => {
   let ask = async (req: Request): Promise<Reply> => {
     if (!options.media) {
@@ -207,7 +263,7 @@ export let generations = (options: Generations) => {
         'Image models answer no typed questions',
       )
     }
-    let body = { model: req.model, prompt: prompt(req), n: 1, ...settings(req) }
+    let body = requestBody(req)
     let credential = await options.credential()
     if (credential.base == CODEX) {
       throw new ModelError('model', 'Image models need an OpenAI API key')
@@ -217,7 +273,8 @@ export let generations = (options: Generations) => {
     let res: Response
     try {
       res = await (options.fetch ?? fetch)(
-        credential.base + '/images/generations',
+        credential.base +
+          (body.images ? '/images/edits' : '/images/generations'),
         {
           method: 'POST',
           headers: {

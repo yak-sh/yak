@@ -200,17 +200,14 @@ test('missing provider token counts retain held budget without claiming measured
   assertEquals((await reservation(p.env, call))?.dollars, 0.003)
 })
 
-test('a provider violating its quote is surfaced without freeing held dollars', async () => {
+test('measured provider cost above a quote is delivered and fully accounted', async () => {
   let raw: Model = Object.assign(async (ask: Parameters<Model>[0]) => {
     await ask.onSubmit!()
     return { id: 'over', model: ask.model, items: [], cost: 0.004 }
   }, { info })
-  await assertRejects(
-    () => withModel(over.space, raw)(req),
-    Error,
-    'exceeded its reserved maximum',
-  )
-  assertAlmostEquals(await over.used(), 0.003)
+  let reply = await withModel(over.space, raw)(req)
+  assertEquals(reply.cost, 0.004)
+  assertAlmostEquals(await over.used(), 0.004)
 })
 
 test('a model that searches reserves its tools’ most and is charged each search it ran', async () => {

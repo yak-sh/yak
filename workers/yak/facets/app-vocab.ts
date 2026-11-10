@@ -66,6 +66,7 @@ export let kernelDoc: VocabDoc = {
         mime: text,
         name: text,
         artifact: ref('keep'),
+        audience: { type: 'string', enum: ['user', 'model'] },
         call: text,
         revised_prompt: text,
         // The web address the file was fetched from (library-tools.ts).

@@ -170,6 +170,39 @@ The reply is an `entry` with `attachment.artifact` pointing to an `artifact`
 row, as with audio, and the page shows it from `./api/blob/<artifact-id>`. A
 prompt OpenAI declines receives a `refusal` entry.
 
+For reference-based generation or editing, add an entry for each image before
+the prompt entry in the same write. Each `attachment` names an `artifact` in
+this app and explicitly sets `audience: 'model'`. Existing uploads can instead
+use `attachment.blob` with their upload's SHA-256 address. `content.body` labels
+how the model should use it:
+
+    await apply([
+      {
+        entity: { eid: '$reference' },
+        entry: { session: easel, seq: 1 },
+        attachment: { artifact: referenceArtifact, audience: 'model' },
+        content: { body: referenceInstructions },
+      },
+      {
+        entity: { eid: '$picture' },
+        entry: { session: easel, seq: 2 },
+        content: { body: prompt },
+        using: { provider: 'openai', model: 'gpt-image-2.6-flare' },
+        sending: { input: { size: '1024x1024', quality: 'low' } },
+      },
+    ])
+
+The model receives reference images in entry order, their labels, and the newest
+prompt. GPT Image accepts up to 16 PNG, JPEG or WebP references, at most 14 MiB
+each and 20 MiB together through the app transcript. A reference from another
+app or unsupported image input refuses the turn before a provider call.
+Generated output attachments remain for display unless explicitly attached to a
+later request with `audience: 'model'`.
+
+Reference requests reserve a finite cost estimate from the same space budget.
+The provider's measured text, image input and output usage settles once, even if
+it exceeds the estimate; later calls use the updated balance.
+
 ## Audio generation with a connected model
 
 An app can ask `bytedance-seed/seed-audio-1-0` for an audio clip. Its owner
