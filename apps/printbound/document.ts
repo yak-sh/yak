@@ -1,7 +1,16 @@
-import { compose, type Draft, type Read } from './composition.ts'
+import {
+  compose,
+  cover,
+  type Draft,
+  fragment,
+  merge,
+  type Read,
+} from './composition.ts'
 import { monochrome } from './artwork.ts'
 import { inspect, type Inspected, preflight } from './inspection.ts'
-import type { Product } from './layout.ts'
+import { count, type Product } from './layout.ts'
+import { DocumentInputError, supplied } from './document-errors.ts'
+export { DocumentInputError } from './document-errors.ts'
 
 export type Artifact = { blob: string; hash: string; pages: number }
 export type Page = Inspected & {
@@ -22,6 +31,17 @@ export type DocumentIO = {
   read: Read
   put(bytes: Uint8Array, mime: string): Promise<string>
   preview(pdf: Uint8Array, page: number): Promise<Uint8Array>
+}
+export type Preparation = {
+  specification: Product
+  draft: Draft
+  parts: Artifact[]
+  collated?: Artifact[]
+  content?: number
+  interior?: Artifact
+  cover?: Artifact
+  inspected?: { interior: Inspected[]; cover: Inspected[] }
+  pages: Page[]
 }
 export type { Draft, PageSource } from './composition.ts'
 export type { Product } from './layout.ts'
@@ -56,7 +76,7 @@ let previews = async (
   for (let page of inspected) {
     let bytesPage = await io.preview(bytes, page.number)
     if (role == 'interior' && spec.coloring && !monochrome(bytesPage)) {
-      throw new Error(
+      throw new DocumentInputError(
         'Coloring interior page ' + page.number + ' contains colored ink',
       )
     }
@@ -71,42 +91,152 @@ let previews = async (
   return pages
 }
 
+export let start = (spec: Product, draft: Draft): Preparation => {
+  if (!!draft.interior != !!draft.cover) {
+    throw new DocumentInputError('Upload both interior and cover PDFs')
+  }
+  if (!draft.interior && !!draft.markdown == !!draft.pages?.length) {
+    throw new DocumentInputError('Choose Markdown or ordered page artwork')
+  }
+  if (!draft.interior && draft.pages?.length) {
+    try {
+      count(spec, draft.pages.length)
+    } catch (error) {
+      throw new DocumentInputError((error as Error).message)
+    }
+  }
+  return {
+    specification: structuredClone(spec),
+    draft: structuredClone(draft),
+    parts: [],
+    pages: [],
+  }
+}
+
+/** Each call completes one bounded stage. Only immutable artifact references
+ * cross the checkpoint; no PDF document or decoded bitmap survives a step. */
+export let advance = async (
+  state: Preparation,
+  io: DocumentIO,
+): Promise<Preparation | Manifest> => {
+  let spec = state.specification, draft = state.draft
+  if (
+    !state.interior && (!draft.pages?.length || draft.interior || draft.cover)
+  ) {
+    let output = await compose(spec, draft, io.read)
+    let check = async () => {
+      let interior = await inspect(output.interior),
+        cover = await inspect(output.cover)
+      preflight(spec, interior, cover)
+      return { interior, cover }
+    }
+    let { interior, cover } = draft.interior
+      ? await supplied(check)
+      : await check()
+    return {
+      ...state,
+      content: output.content ?? interior.length,
+      interior: await artifact(io, output.interior, interior.length),
+      cover: await artifact(io, output.cover, cover.length),
+      inspected: { interior, cover },
+    }
+  }
+  if (state.content == null && draft.pages?.length) {
+    let offset = state.parts.reduce((n, part) => n + part.pages, 0)
+    let pages = draft.pages.slice(offset, offset + 4)
+    let bytes = await fragment(spec, { ...draft, pages }, io.read)
+    await inspect(bytes)
+    let parts = [...state.parts, await artifact(io, bytes, pages.length)]
+    return {
+      ...state,
+      parts,
+      ...offset + pages.length == draft.pages.length
+        ? { content: draft.pages.length }
+        : {},
+    }
+  }
+  if (!state.interior) {
+    let selected = state.parts.slice(0, 8)
+    let final = state.parts.length == 1 && !state.collated?.length
+    let bytes = await merge(
+      spec,
+      await Promise.all(selected.map((part) => io.read(part.blob))),
+      final,
+    )
+    let pages = await inspect(bytes)
+    let part = await artifact(io, bytes, pages.length)
+    if (final) return { ...state, interior: part, parts: [] }
+    let collated = [...state.collated ?? [], part],
+      remaining = state.parts.slice(8)
+    return remaining.length
+      ? { ...state, parts: remaining, collated }
+      : { ...state, parts: collated, collated: [] }
+  }
+  if (!state.cover) {
+    let bytes = await cover(spec, draft, state.interior.pages, io.read)
+    await inspect(bytes)
+    return { ...state, cover: await artifact(io, bytes, 1) }
+  }
+  if (!state.inspected) {
+    let interior = await inspect(await io.read(state.interior.blob)),
+      cover = await inspect(await io.read(state.cover.blob))
+    preflight(spec, interior, cover)
+    return { ...state, inspected: { interior, cover } }
+  }
+  let count = state.inspected.interior.length + state.inspected.cover.length
+  if (state.pages.length < count) {
+    let pending = [
+      ...state.inspected.interior.map((page) => ({
+        page,
+        role: 'interior' as const,
+      })),
+      ...state.inspected.cover.map((page) => ({
+        page,
+        role: 'cover' as const,
+      })),
+    ].slice(state.pages.length, state.pages.length + 4)
+    let bytes = new Map<string, Uint8Array>(), pages: Page[] = []
+    for (let { page, role } of pending) {
+      let blob = state[role]!.blob
+      if (!bytes.has(blob)) bytes.set(blob, await io.read(blob))
+      pages.push(
+        ...await previews(
+          io,
+          spec,
+          bytes.get(blob)!,
+          [page],
+          role,
+          state.content!,
+        ),
+      )
+    }
+    return { ...state, pages: [...state.pages, ...pages] }
+  }
+  let files = { interior: state.interior, cover: state.cover }
+  return {
+    revision: await digest({
+      specification: spec,
+      title: draft.title,
+      interior: files.interior.hash,
+      cover: files.cover.hash,
+      pages: state.pages.map(({ blob: _blob, ...page }) => page),
+    }),
+    specification: spec,
+    title: draft.title,
+    ...files,
+    pages: state.pages,
+  }
+}
+
+/** In-process convenience; deployed callers persist between advance calls. */
 export let prepare = async (
   spec: Product,
   draft: Draft,
   io: DocumentIO,
 ): Promise<Manifest> => {
-  let output = await compose(spec, draft, io.read)
-  let interior = await inspect(output.interior),
-    cover = await inspect(output.cover)
-  preflight(spec, interior, cover)
-  let pages = [
-    ...await previews(
-      io,
-      spec,
-      output.interior,
-      interior,
-      'interior',
-      output.content ?? interior.length,
-    ),
-    ...await previews(io, spec, output.cover, cover, 'cover', 1),
-  ]
-  let files = {
-    interior: await artifact(io, output.interior, interior.length),
-    cover: await artifact(io, output.cover, cover.length),
+  let state: Preparation | Manifest = start(spec, draft)
+  while (!('revision' in state)) {
+    state = await advance(state, io)
   }
-  let revision = await digest({
-    specification: spec,
-    title: draft.title,
-    interior: files.interior.hash,
-    cover: files.cover.hash,
-    pages: pages.map(({ blob: _blob, ...page }) => page),
-  })
-  return {
-    revision,
-    specification: structuredClone(spec),
-    title: draft.title,
-    ...files,
-    pages,
-  }
+  return state
 }

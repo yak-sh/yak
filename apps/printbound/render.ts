@@ -1,4 +1,5 @@
 import { type DocumentIO, type Draft, prepare } from './document.ts'
+import { DocumentInputError } from './document-errors.ts'
 import { products } from './layout.ts'
 
 export type Door = {
@@ -26,13 +27,22 @@ export let documents = (
   read: async (blob) => {
     let remote = URL.canParse(blob)
     if (remote && new URL(blob).protocol != 'https:') {
-      throw new Error('Source assets require HTTPS')
+      throw new DocumentInputError('Source assets require HTTPS')
     }
-    let res = await answer(
-      remote ? await call(blob) : await (blob == font ? app : source).fetch(
+    let response = remote
+      ? await call(blob)
+      : await (blob == font ? app : source).fetch(
         '/pay/artifacts/' + encodeURIComponent(blob),
-      ),
-    )
+      )
+    if (
+      blob != font && [400, 401, 403, 404, 410, 422].includes(response.status)
+    ) {
+      throw new DocumentInputError(
+        'Source artwork is unavailable (' + response.status +
+          '); upload it again or renew its access',
+      )
+    }
+    let res = await answer(response)
     return new Uint8Array(await res.arrayBuffer())
   },
   put: async (bytes, mime) => {
@@ -78,7 +88,7 @@ export let preparation = (
   call: typeof fetch = fetch,
 ) => {
   let spec = products[product]
-  if (!spec) throw new Error('Unknown print product: ' + product)
+  if (!spec) throw new DocumentInputError('Unknown print product: ' + product)
   return prepare(
     spec,
     { ...draft, font },

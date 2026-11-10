@@ -14,6 +14,8 @@ import {
   rectangle,
 } from 'pdf-lib'
 import { raster } from './artwork.ts'
+import { DocumentInputError, supplied } from './document-errors.ts'
+import { inspect } from './inspection.ts'
 import { count, fit, geometry, type Product } from './layout.ts'
 
 export type PageSource = {
@@ -31,6 +33,7 @@ export type Draft = {
   interior?: string
   cover?: string
   front?: string
+  frontBleed?: boolean
   back?: string
   backText?: string
   dedication?: string
@@ -172,7 +175,7 @@ let textPages = (
   let size = draft.typography?.size ?? 11
   let leading = draft.typography?.leading ?? size * 1.4
   if (size < 8 || size > 24 || leading < size || leading > 48) {
-    throw new Error('Invalid book typography')
+    throw new DocumentInputError('Invalid book typography')
   }
   let width = spec.width - 86.4, page: PDFPage | undefined
   let top = spec.height + spec.bleed - 54
@@ -223,18 +226,23 @@ let picture = async (
 ) => {
   let isPdf = new TextDecoder().decode(bytes.subarray(0, 5)) == '%PDF-'
   let input = isPdf
-    ? await PDFDocument.load(bytes, { updateMetadata: false })
+    ? await supplied(async () => {
+      await inspect(bytes)
+      return PDFDocument.load(bytes, { updateMetadata: false })
+    })
     : undefined
   if (input && input.getPageCount() != 1) {
-    throw new Error('A page asset PDF must contain one page')
+    throw new DocumentInputError('A page asset PDF must contain one page')
   }
   let art = input
     ? (await page.doc.embedPdf(input))[0]
-    : await image(page.doc, spec, bytes, coloring, {
-      ...box,
-      dpi: spec.dpi,
-      bleed,
-    })
+    : await supplied(() =>
+      image(page.doc, spec, bytes, coloring, {
+        ...box,
+        dpi: spec.dpi,
+        bleed,
+      })
+    )
   page.pushOperators(
     pushGraphicsState(),
     rectangle(box.x, box.y, box.width, box.height),
@@ -242,6 +250,13 @@ let picture = async (
     endPath(),
   )
   let size = fit(art.width, art.height, box, bleed)
+  let images = input ? (await inspect(bytes))[0].images : [{ dpi: 72 }]
+  let dpi = Math.min(art.width / size.width, art.height / size.height)
+  if (images.some((image) => image.dpi * dpi + .1 < spec.dpi)) {
+    throw new DocumentInputError(
+      'Page artwork is below ' + spec.dpi + ' dpi at its print size',
+    )
+  }
   if (art instanceof PDFEmbeddedPage) page.drawPage(art, size)
   else page.drawImage(art, size)
   page.pushOperators(popGraphicsState())
@@ -258,7 +273,7 @@ let imagePages = async (
   for (let source of draft.pages ?? []) {
     let page = sheet(pdf, spec)
     if (source.kind == 'blank') continue
-    if (!source.blob) throw new Error('Page artwork is missing')
+    if (!source.blob) throw new DocumentInputError('Page artwork is missing')
     let margin = source.bleed ? 0 : spec.bleed + 36
     let band = source.caption ? 54 : 0
     let box = {
@@ -272,7 +287,9 @@ let imagePages = async (
       if (!font) throw new Error('Captions need an embedded font')
       let lines = wrap(source.caption, font, 11, spec.width - 72)
       if (lines.length > 3) {
-        throw new Error('Page caption does not fit its print band')
+        throw new DocumentInputError(
+          'Page caption does not fit its print band',
+        )
       }
       paragraph(
         page,
@@ -287,7 +304,12 @@ let imagePages = async (
   }
 }
 
-let cover = async (spec: Product, draft: Draft, pages: number, read: Read) => {
+export let cover = async (
+  spec: Product,
+  draft: Draft,
+  pages: number,
+  read: Read,
+) => {
   let pdf = await fresh(), box = geometry(spec, pages)
   let page = pdf.addPage([box.width, box.height])
   let font = await face(pdf, draft, read)
@@ -301,15 +323,34 @@ let cover = async (spec: Product, draft: Draft, pages: number, read: Read) => {
     await picture(page, spec, await read(draft.back), panel(0), true, false)
   }
   if (draft.front) {
+    let bleed = draft.frontBleed !== false
+    let title = Math.max(
+      72,
+      wrap(draft.title, font, 24, spec.width - 2 * box.safe).length * 32 + 24,
+    )
+    let footer = draft.author ? 48 : 24
+    let inset = {
+      x: box.front + box.safe,
+      y: box.edge + box.safe + footer,
+      width: spec.width - 2 * box.safe,
+      height: spec.height - 2 * box.safe - title - footer,
+    }
+    if (!bleed && inset.height <= 0) {
+      throw new DocumentInputError(
+        'Cover title leaves no room for its illustration',
+      )
+    }
     await picture(
       page,
       spec,
       await read(draft.front),
-      {
-        ...panel(box.front - box.spine - 18),
-        width: spec.width + box.edge + box.spine + 18,
-      },
-      true,
+      bleed
+        ? {
+          ...panel(box.front - box.spine - 18),
+          width: spec.width + box.edge + box.spine + 18,
+        }
+        : inset,
+      bleed,
       false,
     )
   }
@@ -337,7 +378,7 @@ let cover = async (spec: Product, draft: Draft, pages: number, read: Read) => {
   if (draft.backText) {
     let lines = wrap(draft.backText, font, 11, spec.width - 2 * safe)
     if (lines.length * 16 > spec.height - 2 * safe) {
-      throw new Error('Back cover text does not fit')
+      throw new DocumentInputError('Back cover text does not fit')
     }
     paragraph(
       page,
@@ -369,9 +410,35 @@ let cover = async (spec: Product, draft: Draft, pages: number, read: Read) => {
   return pdf.save()
 }
 
+/** An ordered input chunk is complete before another source is read. */
+export let fragment = async (spec: Product, draft: Draft, read: Read) => {
+  let pdf = await fresh()
+  let font = draft.pages?.some((p) => p.caption)
+    ? await face(pdf, draft, read)
+    : undefined
+  await imagePages(pdf, spec, draft, read, font)
+  return pdf.save()
+}
+
+/** Merge adjacent immutable fragments without reading their source artwork. */
+export let merge = async (spec: Product, parts: Uint8Array[], pad = false) => {
+  let pdf = await fresh()
+  for (let bytes of parts) {
+    let part = await PDFDocument.load(bytes, { updateMetadata: false })
+    for (let page of await pdf.copyPages(part, part.getPageIndices())) {
+      pdf.addPage(page)
+    }
+  }
+  if (pad) {
+    let pages = count(spec, pdf.getPageCount())
+    while (pdf.getPageCount() < pages) sheet(pdf, spec)
+  }
+  return pdf.save()
+}
+
 export let compose = async (spec: Product, draft: Draft, read: Read) => {
   if (!!draft.interior != !!draft.cover) {
-    throw new Error('Upload both interior and cover PDFs')
+    throw new DocumentInputError('Upload both interior and cover PDFs')
   }
   if (draft.interior && draft.cover) {
     return {
@@ -380,7 +447,7 @@ export let compose = async (spec: Product, draft: Draft, read: Read) => {
     }
   }
   if (!!draft.markdown == !!draft.pages?.length) {
-    throw new Error('Choose Markdown or ordered page artwork')
+    throw new DocumentInputError('Choose Markdown or ordered page artwork')
   }
   let pdf = await fresh()
   let font = draft.markdown || draft.pages?.some((p) => p.caption)

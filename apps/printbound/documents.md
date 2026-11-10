@@ -1,11 +1,19 @@
 # Print document preparation
 
-`prepare(product, draft, io)` composes and inspects an interior PDF and a
-single-page wraparound cover. A **manifest** names the complete PDFs and a PNG
-preview of every composed page, including padding. Each artifact carries its
-SHA-256; `revision` binds the product, title, output hashes and page inspection.
-Persist a manifest on a fresh document entity. A changed draft produces another
-document; quotes name that document and its revision.
+`start(product, draft)` creates a serializable preparation checkpoint. Each
+`advance(checkpoint, io)` completes one stage: four ordered source pages, eight
+immutable PDF fragments, or four page previews. Persist the returned checkpoint
+and schedule the next command. Only a result carrying `revision` is a complete
+manifest; pending work cannot be reviewed, quoted or purchased. A failed stage
+retries from the last checkpoint without restarting completed stages. At most
+ten document-door operations occur in a stage, including source reads. The
+deployed service uses scheduled commands; `prepare(product, draft, io)` is an
+in-process convenience that runs all stages. Preparation composes and inspects
+an interior PDF and a single-page wraparound cover. A **manifest** names the
+complete PDFs and a PNG preview of every composed page, including padding. Each
+artifact carries its SHA-256; `revision` binds the product, title, output hashes
+and page inspection. Persist a manifest on a fresh document entity. A changed
+draft produces another document; quotes name that document and its revision.
 
 `Draft` accepts an interior/cover PDF pair, Markdown, or ordered PNG, JPEG and
 single-page PDF assets. Page PDFs support vector puzzles. `kind: 'blank'`
@@ -14,7 +22,10 @@ use a reserved band. `bleed: true` fills the sheet and crops to its edge.
 Full-color art stays in color; coloring interiors flatten PNG transparency,
 remove near-white backgrounds and convert artwork to grayscale. Uploaded
 coloring PDFs are checked against their rendered pages. Covers may use color for
-every product.
+every product. `frontBleed: false` places front artwork in an inset panel
+between the title and author bands, retaining native print resolution. The
+default front artwork fills the cover. Neither mode enlarges insufficient
+resolution artwork.
 
 `layout.ts` owns binding padding, trim, bleed, perfect-bound spines and casewrap
 board bands. `inspection.ts` uses pdf-lib's object and stream parser, walks font
@@ -43,8 +54,11 @@ customer typography.
 PDF previews call `APP.fetch('/pdf?page=1&render=1', {method: 'POST', body})`.
 The platform's authenticated PDF door uses its existing PDFium raster worker.
 App code loads no WebAssembly or local files, starts no browser, and calls no
-external rendering service. A failure propagates to the app's error reporting;
-the caller retains its source draft and publishes no incomplete manifest.
+external rendering service. Invalid supplied PDFs and artwork raise
+`DocumentInputError`, which the service answers as a correction request.
+Transport and generated-document failures propagate to the app's error
+reporting; the caller retains its source draft and publishes no incomplete
+manifest.
 
 The binding geometry and layout rules come from the PrintBound and CrayonBloom
 renderers. Lulu requires downloadable interior and cover PDFs, embedded fonts,
