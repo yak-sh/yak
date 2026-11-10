@@ -234,14 +234,23 @@ let accounts = (env: Env, ctx: Ctx, space: Space) =>
       Promise.all([CALENDAR, GMAIL].map(async (name) => {
         // A sign-in finished at a broker is theirs from this ask on: the
         // connection is read beside it, and again only once one settled.
+        // What the person would sign in with, told where they have not, is
+        // read as soon as the integration is.
+        let { read } = ctxOf(env).graph
+        let found = known(read, name)
+        let client = found.then((i) =>
+          i && vaulted(env) ? signsInWith(vaultOf(env), read, i) : undefined
+        )
+        client.catch(() => {})
         let [made, i, held] = await Promise.all([
           settling(env, [ctx.person, space.eid], name),
-          known(ctxOf(env).graph.read, name),
+          found,
           ownConnection(env, ctx, space, name),
         ])
         return {
           i,
           held: made ? await ownConnection(env, ctx, space, name) : held,
+          client,
         }
       })),
   )
@@ -275,16 +284,14 @@ export let googleTools = async (
  * connected, and where they connect each that this deploy can connect and
  * they have not. */
 export let googleTold = async (env: Env, ctx: Ctx, space: Space) => {
-  let read = ctxOf(env).graph.read
   let said = await Promise.all(
-    (await accounts(env, ctx, space)).map(async ({ i, held }) => {
+    (await accounts(env, ctx, space)).map(async ({ i, held, client }) => {
       if (!i) return []
       if (held) {
         let account = str(comp(held, CONNECTION).account)
         return [`- ${titled(i)}: connected${account ? ` as ${account}` : ''}`]
       }
-      let client = vaulted(env) && await signsInWith(vaultOf(env), read, i)
-      if (!connectable(i, client)) return []
+      if (!connectable(i, await client)) return []
       return [
         `- ${titled(i)}: not connected. They connect it at ${
           addingAt(env, space.slug, i)

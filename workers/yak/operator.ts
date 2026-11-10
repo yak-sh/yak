@@ -587,12 +587,19 @@ export let machineFor = async (
   via?: Calling['via'],
 ): Promise<typeof fetch | null> => {
   if (!space.tunnel || !person) return null
-  if (!await admin({ dir: open(), person })) return null
-  return (await import('./tunnel.ts')).machine(env, space.eid, person, {
-    caller: 'operator',
-    space: space.eid,
-    via,
-  })
+  // Whether they are the admin and whether the tunnel is theirs are asked at
+  // once: neither needs the other's answer.
+  let [chief, fetch] = await Promise.all([
+    admin({ dir: open(), person }),
+    import('./tunnel.ts').then((t) =>
+      t.machine(env, space.eid, person, {
+        caller: 'operator',
+        space: space.eid,
+        via,
+      })
+    ),
+  ])
+  return chief ? fetch : null
 }
 
 /** This space's operator work as operator_read answers it: the latest tasks
