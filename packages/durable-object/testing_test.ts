@@ -94,6 +94,26 @@ test('eviction, schema changes and deleteAll leave reusable storage', async () =
   assertEquals(all(), [{ value: 42 }])
 })
 
+test('a statement naming a CTE as often as workerd counts to is refused', () => {
+  let d = durable()
+  let naming = (n: number, body = 'select "x" from "q"') =>
+    `with "q" as (select 1 as "x"), "r" as (select "x" from "q") ` +
+    `select 1 as "v" where 1 in (${Array(n).fill(`(${body})`).join(', ')})`
+  assertEquals([...d.sql.exec(naming(98))], [{ v: 1 }])
+  assertThrows(() => d.sql.exec(naming(99)), Error, 'nested too deep')
+  // One named through another counts for both.
+  assertEquals([...d.sql.exec(naming(49, 'select "x" from "r"'))], [{ v: 1 }])
+  assertThrows(
+    () => d.sql.exec(naming(50, 'select "x" from "r"')),
+    Error,
+    'nested too deep',
+  )
+  // A subquery is no CTE, however many stand beside each other.
+  assertEquals([
+    ...d.sql.exec(naming(120, 'select "x" from (select 1 as "x")')),
+  ], [{ v: 1 }])
+})
+
 test('disposed storage rejects queries and can be disposed twice', () => {
   let d = durable()
   let one = select({ cols: [lit(1)] })

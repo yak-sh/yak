@@ -186,6 +186,46 @@ test('reads inherit an enclosing transaction while nested writes keep rollback',
   assertEquals(transactions, 0)
 })
 
+test('an entity is read whole where its file holds more tables than workerd lets one statement ask about', async () => {
+  let wide = loadVocab({
+    $defs: {
+      entity: { component: true, type: 'object', wire: false },
+      ...Object.fromEntries(Array.from({ length: 100 }, (_, i) => [
+        `facet${i}`,
+        {
+          component: true,
+          type: 'object',
+          properties: { value: { type: 'string' } },
+        },
+      ])),
+    },
+  })
+  let s = storage(durable(), wide, { number: false })
+  s.install()
+  // Every component's table is raised, as a busy store's are.
+  let all = Object.fromEntries(
+    Array.from({ length: 100 }, (_, i) => [`facet${i}`, { value: `${i}` }]),
+  )
+  await s.tx((tx) => tx.patch([{ entity: { eid: 'every' }, ...all }]))
+  await s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'few' }, facet0: { value: 'a' } }])
+  )
+  // One this transaction wrote has no archetype yet, so its tables are asked.
+  let few = {
+    entity: { eid: 'few' },
+    facet0: { value: 'a' },
+    facet99: { value: 'z' },
+  }
+  await s.tx((tx) => {
+    tx.patch([{ entity: { eid: 'few' }, facet99: { value: 'z' } }])
+    assertEquals(tx.get(['few']), [few])
+    assertEquals(tx.get(['every', 'few']).map((b) => Object.keys(b).length), [
+      101,
+      3,
+    ])
+  })
+})
+
 test('an empty identity lookup opens no transaction or SQL statement', () => {
   using db = durable()
   let transactions = 0, statements = 0

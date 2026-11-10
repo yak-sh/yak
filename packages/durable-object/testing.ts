@@ -16,6 +16,9 @@
 //   a blob comes back as an ArrayBuffer
 //   it holds workerd's SQLite limits   100 binds, an expression 100 deep, a
 //                                      compound select of 5: see {@link LIMITS}
+//   it counts each naming of a CTE     against that depth of 100, as workerd
+//                                      does, however flat the statement
+//                                      (../sqlite/testing.ts `textual`)
 //
 // so a bug this stand-in cannot see is a bug the runtime would not have shown
 // either.
