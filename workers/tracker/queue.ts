@@ -9,9 +9,17 @@ import { traceBatch } from '@yaks/tracker/intake'
 export type Message = {
   id?: string
   body: unknown
+  /** how many times the queue has delivered it, this delivery included */
+  attempts?: number
   ack: () => void
-  retry: () => void
+  retry: (options?: { delaySeconds: number }) => void
 }
+/** The seconds a message whose intake failed waits for its next delivery: two
+ * after its first, doubling to five minutes. An object that refuses is then
+ * asked a few times a minute for each message it holds up, not as fast as the
+ * queue delivers, and with the consumer's hundred retries (wrangler.toml) a
+ * message outlasts an outage of about eight hours before it is a dead letter. */
+export let wait = (attempts = 1) => Math.min(2 ** attempts, 300)
 export type Destination = { ingest: (rows: Bundle[]) => Promise<void> }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export let batch = (body: unknown): { scope: string; rows: Bundle[] } => {
@@ -71,10 +79,10 @@ export let consume = async (
   reject: (message: Message, error: unknown) => Promise<void>,
   trace?: (scope: string, rows: Bundle[]) => Promise<unknown>,
 ): Promise<void> => {
-  // A failed intake is the queue's to retry, and is said once a batch, never
-  // once a message: its report travels this same queue, so one for every
-  // message that failed multiplied the backlog with each pass of an outage
-  // (2026-11-10: 9,700 dead letters in half an hour).
+  // A failed intake is the queue's to retry, each message after its wait, and
+  // is said once a batch. `report` never sends through this queue (worker.ts):
+  // on 2026-11-10 each failed message's report came back as a message to
+  // fail, with no wait, and one refused intake was 685,603 in 25 minutes.
   let told = false
   for (let message of messages.slice(0, 100)) {
     let tracing = Array.isArray(message.body) &&
@@ -90,7 +98,7 @@ export let consume = async (
           await reject(message, error)
           message.ack()
         } catch {
-          message.retry()
+          message.retry({ delaySeconds: wait(message.attempts) })
         }
         continue
       }
@@ -109,9 +117,9 @@ export let consume = async (
       }
       message.ack()
     } catch (error) {
-      message.retry()
-      // An unavailable authority may retry transport, but tracing its failure
-      // through the error queue would feed the snowball this guard prevents.
+      message.retry({ delaySeconds: wait(message.attempts) })
+      // An unavailable authority may retry transport, but its failure is not
+      // told as an error of the tracker's.
       if (tracing || told) continue
       told = true
       try {

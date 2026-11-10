@@ -88,8 +88,7 @@ for (
     let f = fixture()
     equal(await f.send(body), [1, 0])
     equal(f.saved, [body])
-    equal(f.reported.length, 1)
-    equal(f.admitted, [])
+    equal([f.reported.length, f.admitted.length], [0, 1])
   })
 }
 test('queue retries failed preservation without reporting admission again', async () => {
@@ -98,35 +97,42 @@ test('queue retries failed preservation without reporting admission again', asyn
   equal(await f.send(body), [0, 1])
   equal(await f.send(body), [0, 1])
   equal(f.saved, [])
-  equal(f.reported, [])
+  equal(f.admitted, [])
   f.outage(false)
   equal(await f.send(body), [1, 0])
   equal(f.saved, [body])
-  equal(f.reported.length, 1)
-  equal(f.admitted, [])
+  equal([f.reported.length, f.admitted.length], [0, 1])
 })
 test('queue redelivery keeps the rejection report identity', async () => {
   let f = fixture(), body = captureRows('named-error')
   await f.send(body)
   await f.send(body)
-  equal(f.reported[0][0].entity.eid, f.reported[1][0].entity.eid)
-  equal(f.reported[0][1].entity.eid, f.reported[1][1].entity.eid)
+  equal(f.admitted[0][0].entity.eid, f.admitted[1][0].entity.eid)
+  equal(f.admitted[0][1].entity.eid, f.admitted[1][1].entity.eid)
 })
 
-test('a batch whose intake fails is retried whole and reported once', async () => {
-  let reported: Bundle[][] = [], retried = 0
+test('a failed intake waits longer each delivery and sends nothing back through the queue', async () => {
+  let queued: Bundle[][] = [], asked = 0, waits: (number | undefined)[] = []
   let { queue } = worker({
     TRACKERS: {
       getByName: () =>
-        ({ ingest: () => Promise.reject(Error('object down')) }) as never,
+        ({
+          ingest: () => {
+            asked++
+            return Promise.reject(Error('object down'))
+          },
+        }) as never,
     },
-    ERRORS: { send: (rows) => Promise.resolve(void reported.push(rows)) },
+    ERRORS: { send: (rows) => Promise.resolve(void queued.push(rows)) },
   })
   let failure = () => capture(Error('missing row'), { sink: () => {} })
-  await queue([1, 2, 3].map(() => ({
+  await queue([1, 3, 40].map((attempts) => ({
     body: failure(),
+    attempts,
     ack: () => {},
-    retry: () => retried++,
+    retry: (options) => waits.push(options?.delaySeconds),
   })))
-  equal([retried, reported.length], [3, 1])
+  equal(waits, [2, 8, 300])
+  // Three intakes and the one report of the batch, told to the object itself.
+  equal([asked, queued.length], [4, 0])
 })

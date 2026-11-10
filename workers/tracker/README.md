@@ -138,6 +138,16 @@ without reporting; store outages still retry admission. Rejection reports use
 the queue message's identity so redelivery cannot multiply bug hit counts. Error
 intake does not share the trace allowance.
 
+A message whose intake failed is redelivered after a wait: two seconds after its
+first delivery, doubling to five minutes, up to a hundred times, then it is a
+dead letter. So one refused intake costs one message, read at most a hundred
+times over about eight hours, and nothing else. What the consumer could not take
+or had to set aside it tells the platform's Tracker object directly, once a
+batch, and never by a message on `yak-errors`: a report sent back through intake
+is one more message for a refusing object to fail (2026-11-10: 685,603 in 25
+minutes). When the platform's object is the one refusing, the report stays in
+the Worker's log and the box's syncs report the tracker down from outside.
+
 A failure in an app whose space is not a probe's is recorded twice: in the
 space's store for its owner, and in the platform's as its own occurrence, with
 no space or app in `during` and `error.tags.source=app`, so `yak admin errors`

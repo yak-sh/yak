@@ -55,8 +55,8 @@ let fixture = (doors: Partial<Stub> = {}) => {
   )
   // What the invocations left running once they answered.
   let settled = () => Promise.all(behind)
-  let check = (entrypoint: string) => {
-    let [failure, companion] = sent.at(-1)!
+  let check = (entrypoint: string, rows = sent.at(-1)!) => {
+    let [failure, companion] = rows
     equal((failure.error as Comp).tags, {
       script: 'yak-tracker',
       version: '00000000-0000-4000-8000-000000000012',
@@ -89,15 +89,19 @@ test('caught tracker fetch preserves its scrubbed request and origin', async () 
 })
 
 test('tracker queue and scheduled failures identify their entrypoint', async () => {
-  let { w, check } = fixture()
+  // The queue's failure is told to the object itself, never queued.
+  let told: Bundle[][] = []
+  let { w, check, sent } = fixture({
+    ingest: (rows) => (told.push(rows), Promise.reject(Error('object down'))),
+  })
   let retried = false
   await w.queue([{
     body: [{ entity: { eid: crypto.randomUUID() }, error: {} }],
     ack: () => {},
     retry: () => void (retried = true),
   }])
-  equal(retried, true)
-  check('queue')
+  equal([retried, told.length, sent.length], [true, 2, 0])
+  check('queue', told[1])
   await throws(() => w.scheduled())
   check('scheduled')
 })
@@ -204,8 +208,10 @@ let ran = async (door: 'monitor' | 'ingest', failures: Error[]) => {
 test("the minute's monitor and a queue's intake wait out a moving object, unreported", async () => {
   for (let door of ['monitor', 'ingest'] as const) {
     equal(await ran(door, [lost, refused, reset, unstarted]), [5, 0])
-    equal(await ran(door, [broken]), [1, 1])
   }
+  equal(await ran('monitor', [broken]), [1, 1])
+  // A failed intake is told to the object itself: a second send, none queued.
+  equal(await ran('ingest', [broken]), [2, 0])
 })
 
 test("a space tracker that answers a door or takes intake joins the platform's list once", async () => {

@@ -6,7 +6,7 @@ import { minted } from '@yaks/graph/identity'
 import { sha256 } from '@yaks/graph/sha256'
 import { Unsigned } from '@yaks/host/senders'
 import { sign } from './auth.ts'
-import { capture, caught, origin, queue } from '@yaks/tracker/report'
+import { capture, caught, origin, queue, type Sink } from '@yaks/tracker/report'
 import { evicted, jittered, opaque, retried } from '@yaks/durable-object'
 import { type Clock, system } from '@yaks/fp'
 import { platform } from './core.ts'
@@ -169,9 +169,12 @@ export let scopeOf = (url: URL) => {
     ? scope
     : null
 }
-/** A failure of this Worker, reported to its own queue with the entry that
- * met it. */
-export let reporting = (env: Pick<Env, 'ERRORS' | 'CF_VERSION_METADATA'>) =>
+/** A failure of this Worker, reported with the entry that met it: to its own
+ * queue, or to the `sink` given. */
+export let reporting = (
+  env: Pick<Env, 'ERRORS' | 'CF_VERSION_METADATA'>,
+  sink: Sink = env.ERRORS ? queue(env.ERRORS) : () => {},
+) =>
 (
   error: unknown,
   entrypoint: string,
@@ -185,11 +188,7 @@ export let reporting = (env: Pick<Env, 'ERRORS' | 'CF_VERSION_METADATA'>) =>
     request,
     eid ? sha256(`${eid}|request`) : undefined,
   )
-  return caught(error, {
-    sink: env.ERRORS ? queue(env.ERRORS) : () => {},
-    ...context,
-    eid,
-  })
+  return caught(error, { sink, ...context, eid })
 }
 // The space trackers this isolate has enrolled in the platform's list, or is
 // enrolling: one call a scope, however many reads arrive while it runs.
@@ -223,6 +222,15 @@ export let worker = (
       (error) => evicted(error) || opaque(error),
       wait,
     )
+  // What the queue's consumer could not take is told to the platform's object
+  // itself, never through the queue it came from: sent back through intake it
+  // is one more message for a refusing object to fail. An object that cannot
+  // take the report either leaves it in this Worker's log, and the box's syncs
+  // say from outside that the tracker is down.
+  let told = reporting(
+    env,
+    (rows) => call(platform, (stub) => stub.ingest(rows)),
+  )
   // A space tracker that took intake or answered a door joins the platform's
   // list of them, which every bug door reads (`/scopes`), once an isolate,
   // behind the answer: it is a second object's call, often 50 ms, that the
@@ -424,7 +432,10 @@ export let worker = (
             enroll(scope)
           },
         }),
-        (error) => report(error, 'queue'),
+        (error) => {
+          console.error('queue', error)
+          return told(error, 'queue')
+        },
         async (message, error) => {
           if (!env.REJECTED) {
             throw Error('tracker dead letter queue unavailable')
@@ -435,7 +446,7 @@ export let worker = (
           let eid = sha256(
             `tracker|rejected|${message.id ?? JSON.stringify(message.body)}`,
           )
-          await report(error, 'queue', undefined, eid)
+          await told(error, 'queue', undefined, eid)
         },
         (scope, rows) =>
           env.TRACKERS.getByName(platform).admitTrace(scope, rows),
