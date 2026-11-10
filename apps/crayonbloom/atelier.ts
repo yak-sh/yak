@@ -1,4 +1,4 @@
-import { type Bundle } from '@yaks/graph'
+import { type Bundle, token } from '@yaks/graph'
 import {
   allowed,
   guard,
@@ -62,6 +62,16 @@ export let atelier = (db: Store, io: AtelierIO) => {
     ) as Book[]
     if (!row || !allowed(row.coloring_book, caller)) {
       throw new Refusal('That saved book is not available.', 403)
+    }
+    if (caller.person && !row.coloring_book.owner) {
+      await db.apply([{
+        entity: row.entity,
+        coloring_book: { owner: caller.person },
+        $was: {
+          coloring_book: { owner: null, via: token(row.coloring_book.via) },
+        },
+      }])
+      row.coloring_book.owner = caller.person
     }
     return row
   }

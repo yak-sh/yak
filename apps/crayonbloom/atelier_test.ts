@@ -185,3 +185,17 @@ test('saving an unchanged idea keeps its preparation job while an edit invalidat
   }, alice)
   assertEquals(edited.print_preparation, undefined)
 })
+
+test('a signed continuation adopts the selected guest book before another person can see its snapshots', async () => {
+  let f = await fixture(), row = await f.desk.save(input, { via: alice.via })
+  await f.db.apply([{
+    entity: row.entity,
+    print_receipt: { receipt: { status: 'paid', id: crypto.randomUUID() } },
+  }])
+  let selected = await f.desk.owned(row.entity.eid, alice)
+  assertEquals(selected.coloring_book.owner, alice.person)
+  await assertRejects(() =>
+    f.desk.owned(row.entity.eid, { ...bob, via: alice.via })
+  )
+  assertEquals((await f.desk.shelf({ ...bob, via: alice.via })).length, 0)
+})
