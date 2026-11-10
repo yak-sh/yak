@@ -307,7 +307,8 @@ A query that works on the box can be refused in a store.
   (`#failed`), and an effect that meets one runs again as the same attempt
   (@yaks/effects `deferral`). A Builder answers 429 the same way and its alarm
   comes back then. The directory is spared (`#start`): every door reads it.
-  A relocation runs on `freely` drivers and never stops half way. A page's
+  A relocation runs on `freely` drivers: it never stops half way, nor leaves
+  either end stopped. A page's
   outbox and socket wait as long as `retry-after` says (client.js). The
   tracker's objects refuse too: a report that meets a stop goes back on
   `yak-errors` delayed until the window ends, a new message that spends no

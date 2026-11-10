@@ -16,7 +16,9 @@
 // caller sends it again and a pool or a queue redelivers after the wait. Past
 // its written rows it still reads; past its read rows it takes nothing. What a
 // host must still write while stopped (keeping a person's write for later) it
-// runs in `free`. A host asks `stopped` at its doors, so a stopped object
+// runs in `free`, which counts against windows of its own: told past them,
+// it stops nothing, so work that must not stop leaves no stop behind it. A
+// host asks `stopped` at its doors, so a stopped object
 // answers there rather than failing deep inside, and one whose stopping costs
 // more than its rows (every door reads it) is `spare`d: told, never refused.
 //
@@ -134,7 +136,8 @@ export type Ceiling = {
   refusal: (writing?: boolean) => Stopped | null
   /** How long until a statement is admitted, in ms: 0 when one is now. */
   stopped: (writing?: boolean) => number
-  /** Run statements a stopped object must still take. */
+  /** Run statements a stopped object must still take. What they cost is
+   * told, and stops nothing. */
   free: <T>(body: () => T) => T
   /** Refuse nothing from now on, and go on telling: for an object whose
    * stopping costs more than its rows. */
@@ -185,7 +188,11 @@ export let ceiling = (
     all: group(),
     past: { read: false, written: false },
   })
+  // What the object's own statements spent, which stops it, and what it ran
+  // in `free`, which is told and stops nothing: a relocation's new object
+  // writes its whole file before it serves, and serves from then on.
   let spans = windows.map((w) => turned(w, -Infinity))
+  let loose = windows.map((w) => turned(w, -Infinity))
   // When each scanning statement was last told, by its shape.
   let scans = new Map<string, number>()
   let freed = 0
@@ -218,8 +225,10 @@ export let ceiling = (
     let named = rowsRead + rowsWritten >= NAMED ? shape() : ''
     let cost: Cost = { calls: 1, rowsRead, rowsWritten }
     let tell: [Scan | Runaway, Told][] = []
-    spans = spans.map((s) => at - s.since >= s.ms ? turned(s, at) : s)
-    for (let s of spans) {
+    let charged = !freed, list = charged ? spans : loose
+    for (let i = 0; i < list.length; i++) {
+      let s = list[i]
+      if (at - s.since >= s.ms) s = list[i] = turned(s, at)
       if (named) tally(s.all, { shape: named, rowsRead, rowsWritten }, 16)
       else {
         for (let to of [s.all.total, s.all.other]) {
@@ -245,7 +254,9 @@ export let ceiling = (
           new Runaway(
             `${rows(n)} rows ${k} in ${span(s.ms)}, past the ${rows(s[k])} ` +
               `an object may` +
-              (refuse
+              (!charged
+                ? ', in work it never stops'
+                : refuse
                 ? `: it takes no ${k == 'read' ? 'statement' : 'write'} for ` +
                   `${Math.ceil((s.since + s.ms - at) / 1000)} s`
                 : ''),

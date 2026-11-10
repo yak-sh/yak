@@ -736,8 +736,8 @@ while stopped, plus the statement that passed it. What a stopped object answers:
   after the wait as the same attempt (@yaks/effects).
 - A Builder answers each door 429 the same way; its alarm comes back then.
 - The directory is told of a runaway and never stopped: every door reads it, so
-  stopping it would stop the platform. A relocation counts its rows and is never
-  stopped half way (relocate.ts `freely`).
+  stopping it would stop the platform. A relocation counts its rows, is never
+  stopped half way, and leaves neither end stopped (relocate.ts `freely`).
 
 ## A reviewer's sign-in link
 

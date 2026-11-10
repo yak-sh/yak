@@ -54,10 +54,12 @@ milliseconds, 0 when a statement is admitted) or `refusal(writing)` at its
 doors, so a stopped object answers there rather than failing deep inside.
 Statements a stopped object must still take, such as keeping a person's write
 for later, run inside the ceiling's `free(body)`; work that must not stop half
-way runs on `freely(ctx.storage)`, a driver that counts and never refuses. An
-object whose stopping costs more than its rows is `spare()`d: told, never
-refused. The tallies live in the instance's memory, so an object evicted between
-bursts starts its windows over.
+way runs on `freely(ctx.storage)`, a driver that counts and never refuses. What
+runs free counts against windows of its own: it is told past them and stops
+nothing, so a relocation's new object takes writes once it serves. An object
+whose stopping costs more than its rows is `spare()`d: told, never refused. The
+tallies live in the instance's memory, so an object evicted between bursts
+starts its windows over.
 
 A `Stopped` that crosses a stub reaches its caller as a new error with the name,
 message and own properties it was thrown with, never its class

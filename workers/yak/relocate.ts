@@ -35,8 +35,9 @@
 // its store, and its steps are asynchronous, so `free` around each one would
 // miss what runs between; stopped half way, the copy left behind is neither
 // object, and the far end of a large store writes past its window by design.
-// What a move wrote stays in its window: a copy that passed it waits that out
-// before it writes, keeping what it is sent meanwhile (graph.ts `#kept`).
+// What a move ran stops neither end afterwards: the old object goes on
+// serving through `prepare`, and the new one takes writes as soon as it is
+// named.
 import {
   arrived,
   type Cell,

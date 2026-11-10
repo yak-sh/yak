@@ -4,7 +4,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { assertThrows } from '@std/assert'
 import { insert, select, table } from '@yaks/sql'
 import { bounded, ceiling, type Options, Stopped } from './ceiling.ts'
-import { driver, type DurableStorage } from './sql.ts'
+import { driver, type DurableStorage, freely } from './sql.ts'
 
 // A ceiling on a clock the test moves, and what it told.
 let bound = (options: Options = {}) => {
@@ -90,7 +90,9 @@ test('an object spared after it stopped takes every statement again', () => {
   equal(c.stopped(), 0)
 })
 
-test('every driver over one storage counts against its one ceiling', () => {
+// A storage whose every statement costs what `cost` says, bounded by a
+// minute of 1,000 rows read and 10 written, and what its ceiling told.
+let storage = () => {
   let cost = { rowsRead: 0, rowsWritten: 0 }
   let held: DurableStorage = {
     sql: {
@@ -105,8 +107,13 @@ test('every driver over one storage counts against its one ceiling', () => {
     report: (e, { tags }) => told.push(`${e.name} ${tags.statement}`),
     refuse: true,
   })
+  return { held, told, costs: (c: typeof cost) => void (cost = c) }
+}
+
+test('every driver over one storage counts against its one ceiling', () => {
+  let { held, told, costs } = storage()
   let a = driver(held), b = driver(held)
-  cost = { rowsRead: 600, rowsWritten: 0 }
+  costs({ rowsRead: 600, rowsWritten: 0 })
   a.query(select({ from: table('book') }))
   b.query(select({ from: table('book') }))
   equal(told, ['Runaway undefined'])
@@ -114,6 +121,18 @@ test('every driver over one storage counts against its one ceiling', () => {
   let keep = insert('kept', { v: 'x' })
   assertThrows(() => b.query(keep), Stopped)
   bounded(held).free(() => b.query(keep))
+})
+
+test('what an object runs freely is told and leaves it taking writes', () => {
+  let { held, told, costs } = storage()
+  costs({ rowsRead: 0, rowsWritten: 20 })
+  freely(held).query(insert('copied', { v: 'x' }))
+  freely(held).query(insert('copied', { v: 'y' }))
+  equal(told.length, 1)
+  ok(told[0].startsWith('Runaway '))
+  costs({ rowsRead: 0, rowsWritten: 1 })
+  driver(held).query(insert('kept', { v: 'x' }))
+  equal(bounded(held).stopped(true), 0)
 })
 
 test('an object that spent nothing takes every statement, whatever its clock reads', () => {
