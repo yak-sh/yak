@@ -17,6 +17,7 @@ import {
   type Reply,
   type Request,
   submitted,
+  type Usage,
 } from '@yaks/model'
 import { offer } from './offer.ts'
 
@@ -75,6 +76,20 @@ export let items = (message: Record<string, unknown>, req: Request): Item[] => {
 // deno-lint-ignore no-explicit-any
 export type Frame = Record<string, any>
 
+/** A reply's usage from the API's usage fields. */
+let counted = (u: Frame): Usage => {
+  let cached = u.cache_read_input_tokens ?? 0
+  let input = (u.input_tokens ?? 0) + cached +
+    (u.cache_creation_input_tokens ?? 0)
+  let output = u.output_tokens ?? 0
+  return {
+    input_tokens: input,
+    output_tokens: output,
+    total_tokens: input + output,
+    cached_tokens: cached,
+  }
+}
+
 /** What the frames of one turn came to. `terminal` says the CLI reported a
  * successful result, which a turn ended by a call never reaches. */
 export type Turn = { reply?: Reply; session: string; terminal: boolean }
@@ -84,7 +99,10 @@ export type Turn = { reply?: Reply; session: string; terminal: boolean }
  * `stream_event` deltas arrive, at its place among the reply's assistant
  * items; each completed assistant frame then adds its items to the reply and
  * tells whatever of its text no delta carried, so the text told is always the
- * reply's text. Reading stops at the first frame that requests a call.
+ * reply's text. Usage is the count the message ended with, which its
+ * `message_delta` carries; an `assistant` frame holds the count it started
+ * with. A message that requests a call is read through its `message_delta`,
+ * which the CLI writes before it dispatches the call, and reading stops there.
  */
 export let read = async (
   req: Request,
@@ -95,6 +113,8 @@ export let read = async (
   // Content block index to its place among the assistant items.
   let place = new Map<number, number>()
   let told: string[] = []
+  // The message's usage as last reported, newest fields winning.
+  let usage: Frame = {}
   let tell = (index: number, text: string) => {
     if (!text) return
     told[index] = (told[index] ?? '') + text
@@ -107,7 +127,15 @@ export let read = async (
     }
     if (frame.type == 'stream_event') {
       let e = frame.event ?? {}
-      if (e.type == 'message_start') id = String(e.message?.id)
+      if (e.type == 'message_start') {
+        id = String(e.message?.id)
+        usage = { ...e.message?.usage }
+      }
+      if (e.type == 'message_delta') {
+        usage = { ...usage, ...e.usage }
+        if (turn.reply) turn.reply.usage = counted(usage)
+        if (turn.reply?.items.some((i) => i.kind == 'call')) break
+      }
       if (e.type == 'content_block_start') {
         began(req)
         if (e.content_block?.type == 'text') place.set(e.index, place.size)
@@ -125,20 +153,13 @@ export let read = async (
       id = String(message.id)
       let prior = turn.reply?.items ?? []
       let output = items(message, req)
-      let u = message.usage ?? {}
-      let cached = u.cache_read_input_tokens ?? 0
-      let totalInput = (u.input_tokens ?? 0) + cached +
-        (u.cache_creation_input_tokens ?? 0)
+      // The frame's count is the message's start: never below a later one.
+      usage = { ...message.usage, ...usage }
       turn.reply = {
         id,
         model: message.model ?? req.model,
         items: [...prior, ...output],
-        usage: {
-          input_tokens: totalInput,
-          output_tokens: u.output_tokens ?? 0,
-          total_tokens: totalInput + (u.output_tokens ?? 0),
-          cached_tokens: cached,
-        },
+        usage: counted(usage),
       }
       let at = prior.filter((i) => i.kind == 'assistant').length
       for (let item of output) {
@@ -146,7 +167,6 @@ export let read = async (
         tell(at, item.text.slice(told[at]?.length ?? 0))
         at++
       }
-      if (output.some((i) => i.kind == 'call')) break
     }
     if (frame.type == 'result') {
       turn.terminal = true

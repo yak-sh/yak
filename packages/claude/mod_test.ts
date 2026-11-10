@@ -169,6 +169,7 @@ test('the first block of a reply is its first output, and a call ends the readin
       id: 'call-1',
       input: {},
     }),
+    event({ type: 'message_delta', usage: { output_tokens: 9 } }),
     said({ type: 'text', text: 'never read' }),
   ]
   let seen = 0
@@ -178,6 +179,46 @@ test('the first block of a reply is its first output, and a call ends the readin
     },
   })
   assertEquals(first, 1)
-  assertEquals(seen, 3)
+  assertEquals(seen, 4)
   assertEquals(reply!.items.map((i) => i.kind), ['assistant', 'call'])
+})
+
+test('usage is the count the message ended with, for text and for a call', async () => {
+  let ended = async (...content: Frame[]) => {
+    let usage = {
+      input_tokens: 5,
+      cache_read_input_tokens: 2,
+      output_tokens: 8,
+    }
+    let { reply } = await read(req, [
+      event({ type: 'message_start', message: { id: 'm', usage } }),
+      ...content.map((c) => ({
+        ...said(c),
+        message: { id: 'm', content: [c], usage },
+      })),
+      event({ type: 'message_delta', usage: { output_tokens: 63 } }),
+      event({ type: 'message_stop' }),
+      { type: 'result', subtype: 'success' },
+    ])
+    return reply!.usage
+  }
+  let usage = {
+    input_tokens: 7,
+    output_tokens: 63,
+    total_tokens: 70,
+    cached_tokens: 2,
+  }
+  assertEquals(await ended({ type: 'text', text: '1…30, done' }), usage)
+  assertEquals(
+    await ended(
+      { type: 'text', text: 'checking' },
+      {
+        type: 'tool_use',
+        name: 'mcp__harness__graph_query',
+        id: 'c',
+        input: {},
+      },
+    ),
+    usage,
+  )
 })
