@@ -19,6 +19,7 @@ import { Time } from '@yaks/ui/parts'
 import { pretty } from '@yaks/ui/relative'
 import { PART } from '@yaks/persona/part'
 import { sourceWords } from './operator-source.ts'
+import { measured, type Metadata } from './operator-metadata.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -571,6 +572,7 @@ export type Helper = { session?: string; call?: string; entries: Bundle[] }
  * where a conversation opens, by its id after `opens/`. */
 export type Seen = {
   helpers?: Helper[]
+  metadata?: Record<string, Metadata>
   offers?: Offers
   called?: string
   opens?: string
@@ -673,7 +675,7 @@ let archivable = (line: Line, entries: Bundle[]): Line => {
 export let lines = (
   entries: Bundle[],
   names: Names,
-  { helpers = [], offers, called = 'the Operator', opens }: Seen = {},
+  { helpers = [], offers, called = 'the Operator', opens, metadata }: Seen = {},
 ): Line[] => {
   let results = new Map(
     entries.filter((b) => b.result).map((b) => [
@@ -733,7 +735,10 @@ export let lines = (
           ...tool(b, names, result, under(id)),
         }]
         : line(b, id, body, opens)
-      drawn = drawn.map((line) => archivable(line, result ? [b, result] : [b]))
+      drawn = drawn.map((line) => {
+        let row = archivable(line, result ? [b, result] : [b])
+        return { ...row, node: measured(row.node, metadata?.[id]) }
+      })
       before = sources.get(id) ?? before
       let at = inside.get(id)
       if (!at) return drawn

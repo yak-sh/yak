@@ -34,6 +34,7 @@ import {
 } from './operator-view.ts'
 import { type Aside, type HelperLine, ordered } from './operator-aside.ts'
 import { type Spending, spent } from './operator-spending.ts'
+import { metadata } from './operator-metadata.ts'
 import {
   type Helper,
   type Lines,
@@ -96,6 +97,34 @@ let namingOf = async (
     ),
     person: await personOf(store, entries, named),
   }
+}
+
+// Admin reads include compactions and producing requests outside the page.
+let metadataOf = async (store: Store, entries: Bundle[]) => {
+  let sessions = [
+    ...new Set(entries.map((b) => String(comp(b, 'entry')?.session ?? ''))),
+  ].filter(Boolean)
+  let sources = [
+    ...new Set(entries.flatMap((b) => {
+      let source = (comp(b, 'output') ?? comp(b, 'call'))?.source
+      return source ? [String(source)] : []
+    })),
+  ]
+  let [checkpoints, asks] = await Promise.all([
+    Promise.all(sessions.map((id) =>
+      store.g.read(
+        `.checkpoint .entry.session=${id}&.fields=entry.session,entry.seq`,
+      )
+    )).then((rows) => rows.flat()),
+    store.g.get(sources),
+  ])
+  let models = await store.g.get([
+    ...new Set(asks.flatMap((b) => {
+      let model = comp(b, 'using')?.model ?? comp(b, 'ask')?.to
+      return model ? [String(model)] : []
+    })),
+  ], ['model'])
+  return metadata(entries, checkpoints, asks, models)
 }
 
 // A conversation's lines and its helpers', whose steps it names too.
@@ -850,6 +879,7 @@ export let conversationOf = async (
     let helped = await seenOf(store, [row], entries, calls)
     let seen = {
       ...helped,
+      ...everyone ? { metadata: await metadataOf(store, entries) } : {},
       called,
       opens,
       ...await namingOf(store, withHelpers(entries, helped.helpers), named),
@@ -914,6 +944,7 @@ export let conversationOf = async (
   let helped = await seenOf(store, sessions, entries)
   let seen = {
     ...helped,
+    ...everyone ? { metadata: await metadataOf(store, entries) } : {},
     called,
     opens,
     ...await namingOf(store, withHelpers(entries, helped.helpers), named),

@@ -1,7 +1,9 @@
-/* A tooltip: one line of small text on a raised chip. It never takes the
+/* A tooltip: small text on a raised chip. It never takes the
    pointer; where it floats is its host's business. */
 .Tip {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: min(36rem, calc(100vw - 12px));
   font: var(--small) var(--font);
   color: var(--text);
   background: var(--surface);

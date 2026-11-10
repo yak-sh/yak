@@ -3,6 +3,7 @@
 // draws, what its model was told and offered included, and for nobody else.
 
 import { test } from '@yaks/testing'
+import { identityEid } from '@yaks/graph/identity'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { answer } from './admin.ts'
@@ -11,6 +12,8 @@ import { platform } from './testing.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
+import { conversationOf } from './operator-host.ts'
+import { dates } from './dates.ts'
 import { COOKIE, sign } from './lib/token.ts'
 
 let p = platform('admin-operator', { SESSION_SECRET: 'secret' })
@@ -237,4 +240,108 @@ test('operator_read reads a long conversation back to its start, the newest 64 f
     [total - 128, undefined],
   ])
   assertEquals(pages.toReversed().flatMap(eids), [...first, ...said])
+})
+
+let plain = await conversationOf(service.store, '/operator', long)
+test('only the admin conversation puts recorded model prices beside messages', () => {
+  let reply = talk.document.querySelector('.Talk_Reply')!.closest(
+    '.Talk_Measured',
+  )!
+  assertEquals(texts(reply, '.Talk_Price'), ['$0.001'])
+  let yours = talk.document.querySelector('.Talk_You')!.closest(
+    '.Talk_Measured',
+  )!
+  assertEquals(texts(yours, '.Talk_Price'), [])
+  assertEquals(plain.html.includes('Talk_Margin'), false)
+  assertEquals(talk.document.querySelectorAll('.Talk_Margin[title]').length, 0)
+})
+
+let [
+  checkpoint,
+  ask,
+  beforeCompact,
+  nextCompact,
+  afterCompact,
+  unpriced,
+  unknown,
+] = Array.from({ length: 7 }, () => crypto.randomUUID())
+let atTime = '2026-11-09T23:00:00.000Z'
+let model = identityEid('model', ['metadata-test-model'])
+let entry = (id: string, seq: number, more: object) => ({
+  entity: { eid: id },
+  entry: { session: long, seq },
+  created: { at: atTime },
+  ...more,
+})
+await service.store.g.apply([
+  { entity: { eid: model }, model: { name: 'metadata-test-model' } },
+  entry(checkpoint, 2000, { checkpoint: { seq: 1149, through: said.at(-1) } }),
+  entry(ask, 2001, {
+    ask: { to: model, through: checkpoint },
+    using: { model },
+    cost: { dollars: 0.0123456 },
+    usage: { input_tokens: 1200, cached_tokens: 1000, output_tokens: 80 },
+  }),
+  ...Array.from({ length: 67 }, (_, i) =>
+    entry(crypto.randomUUID(), 2002 + i, {
+      content: { body: `Message ${i}` },
+    })),
+  entry(beforeCompact, 2069, {
+    output: { source: ask },
+    content: { body: 'Before compact' },
+  }),
+  entry(nextCompact, 2070, { checkpoint: { seq: 2068 } }),
+  entry(afterCompact, 2071, {
+    output: { source: ask },
+    content: { body: 'After compact' },
+  }),
+  entry(unpriced, 2072, { ask: { to: model, through: afterCompact } }),
+  entry(unknown, 2073, {
+    output: { source: unpriced },
+    content: { body: 'Unpriced answer' },
+  }),
+], { trusted: true })
+let metered = await get(`${at}/${long}`)
+let margin = (id: string) =>
+  metered.document.querySelector(`#row-${id} .Talk_Margin`)!
+test('entry numbering crosses an off-page compact and resets at the next one, with off-page recorded spend', () => {
+  assertEquals(metered.status, 200)
+  assertEquals(texts(margin(beforeCompact), '.Talk_Sequence'), ['#69'])
+  assertEquals(texts(margin(afterCompact), '.Talk_Sequence'), ['#1'])
+  assertEquals(texts(margin(afterCompact), '.Talk_Price'), ['$0.012346'])
+  assertEquals(texts(margin(unknown), '.Talk_Sequence'), ['#3'])
+  assertEquals(texts(margin(unknown), '.Talk_Price'), [])
+  assertEquals(
+    margin(unknown).getAttribute('data-tip')!.includes('price not recorded'),
+    true,
+  )
+})
+
+Object.defineProperties(globalThis, {
+  innerWidth: { value: 1000, configurable: true },
+  innerHeight: { value: 800, configurable: true },
+})
+test('the margin reveals request details in the kit tooltip on keyboard focus', () => {
+  let document = metered.document
+  let target = margin(afterCompact) as unknown as HTMLElement
+  target.getBoundingClientRect = () => new DOMRect(20, 30, 20, 20)
+  dates(document as unknown as Document)
+  target.dispatchEvent(
+    new document.defaultView!.Event('focusin', { bubbles: true }),
+  )
+  let tip = document.querySelector('[role=tooltip]')!
+  assertEquals(tip.className, 'Overlay Tip')
+  for (
+    let detail of [
+      'Entry 2071',
+      atTime,
+      'test-model',
+      '$0.0123456',
+      'Tokens in: 1200',
+      'Cached: 1000',
+      'Tokens out: 80',
+    ]
+  ) {
+    assertEquals(tip.textContent!.includes(detail), true)
+  }
 })

@@ -1268,6 +1268,23 @@
   .Talk_Entry:has(> .Talk_You, > .Talk_Files) > .Talk_Meta {
     justify-content: end;
   }
+  .Talk_Measured {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 6.5rem;
+    align-items: start;
+    gap: 1rem;
+  }
+  .Talk_Reading {
+    min-width: 0;
+  }
+  .Talk_Margin {
+    display: grid;
+    justify-items: end;
+    gap: .2rem;
+    color: var(--muted);
+    font-size: var(--small);
+    font-variant-numeric: tabular-nums;
+  }
   .Talk_Entry-hidden {
     opacity: .5;
   }
