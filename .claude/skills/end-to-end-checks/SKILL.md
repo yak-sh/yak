@@ -107,7 +107,10 @@ waits for those background runs. `admin_deploys` as admin says what is live,
 any `yak` command, its Operator through `yak operator_chat --space checks --as
 checks`. It is kept from the idle sweep, so it outlasts any check. Never check
 in the owner's `jeff` space or any person's: a test row there lands in his
-conversation, Updates and task list. A check that needs a clean account runs
+conversation, Updates and task list. The yaks.app connector on this box
+(the `mcp__…yaks_app__*` tools) is signed in as Jeff, so anything a live check
+writes through it, `feedback` included, is written as him; a live check that
+writes goes through `yak … --as checks` instead. A check that needs a clean account runs
 `yak admin throwaway '<command>'` (listing accounts is
 `secrets-and-connections`). A check of yaks.app's own pages or funnel tags its
 visit `utm_source=agent-check` (@yaks/platform/bots `CHECK`), in its link or
