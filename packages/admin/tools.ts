@@ -34,6 +34,8 @@ import {
   funnelNow,
   linkFor,
   moveIn,
+  operatorPage,
+  operatorSpaces,
   refund,
   relocateIn,
   renewing,
@@ -56,6 +58,8 @@ import {
   zone,
 } from './api.ts'
 import { deploys, rollback, table } from './deploys.ts'
+import { copy, type Copying } from './copy.ts'
+import { open } from '@yaks/sqlite/db'
 import { gateway } from './gateway.ts'
 import { erase } from './erase.ts'
 import { select, sweep } from './move.ts'
@@ -623,6 +627,39 @@ export let runs = (
         stopping: host.stopping,
       })
       return [said(call, [...each.lines, ...summary])]
+    }),
+
+    // Every space's Operator store, or one space's, copied into a SQLite file
+    // here (./copy.ts), to rehearse a migration on. The platform's act, with
+    // authorization checked by the server.
+    admin_copy: verb(async (call) => {
+      let a = argsOf(call)
+      let at = await acting(a)
+      let where = word(a, 'space')
+      let to = word(a, 'to') ?? '.scratch/operators'
+      let spaces = (await operatorSpaces(at.bearer))
+        .filter((s) => !where || s.slug == where)
+      if (where && !spaces.length) {
+        throw new CallError('space', `no space is ${where}`)
+      }
+      let each = kept()
+      await copy({
+        spaces,
+        page: (space, asked) => operatorPage<Copying>(at.bearer, space, asked),
+        open: (slug) => {
+          let path = `${to}/${slug}.db`
+          // A copy is made anew: what an earlier one left goes first.
+          for (let file of [path, `${path}-wal`, `${path}-shm`]) {
+            try {
+              fs.removeSync(file)
+            } catch { /* none was there */ }
+          }
+          return open(path)
+        },
+        out: each.out,
+        stopping: host.stopping,
+      })
+      return [said(call, each.lines)]
     }),
 
     admin_deploys: verb(async (call) => {

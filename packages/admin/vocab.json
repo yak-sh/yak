@@ -272,6 +272,31 @@
         "where"
       ]
     },
+    "admin_copy": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "copy",
+      "title": "Copy a space's Operator store, or every space's, to this machine",
+      "description": "Each space's Operator store is read out of its Builder object a page at a time and written to a SQLite file here, <to>/<space>.db, every table under its own rowids, so a migration over Operator stores is rehearsed on copies before it runs. The store serves while it is read, so its tables are read at different moments: a copy rehearses, it is no backup. A space with no store says so and writes nothing. A copy holds people's private words: remove it once its proof is done. The platform’s act, so the selected account must have the platform role.\n\n  yak admin copy --as admin@bot.yak.sh\n  yak admin copy ada --to .scratch/operators --as admin@bot.yak.sh",
+      "input": {
+        "space": {
+          "type": "string",
+          "description": "only this space, by its slug"
+        },
+        "to": {
+          "type": "string",
+          "description": "the directory the copies are written to (default .scratch/operators)"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "openWorld": true,
+      "positional": [
+        "space"
+      ]
+    },
     "admin_erase": {
       "tool": true,
       "noun": "admin",

@@ -64,7 +64,7 @@
 // then the whole conversation as this same list. One wire, two ways to read
 // it.
 import type { Hibernation, Wire } from '@yaks/durable-object'
-import { driver, type DurableStorage } from '@yaks/durable-object/sql'
+import { driver, type DurableStorage, freely } from '@yaks/durable-object/sql'
 import {
   bounded,
   type Ceiling,
@@ -96,6 +96,7 @@ import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
 import { managePath } from './route.ts'
 import { WAKE } from './door.ts'
+import { COPY, copying } from './operator-copy.ts'
 import {
   type Frame,
   HELD,
@@ -595,6 +596,14 @@ export class Builder {
       if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
       await this.wipe()
       return Response.json({ ok: true })
+    }
+    if (url.pathname == COPY) {
+      // The platform's admin's, through the kernel (sweep.ts): a read of the
+      // file as it stands, made by no Operator, counted and never stopped.
+      if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
+      return Response.json(
+        copying(freely(this.#ctx.storage), await request.json()),
+      )
     }
     if (url.pathname.startsWith('/result/')) {
       if (

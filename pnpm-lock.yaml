@@ -421,6 +421,9 @@ importers:
       '@yaks/connections':
         specifier: 0.2.28
         version: link:../connections
+      '@yaks/durable-object':
+        specifier: 0.2.28
+        version: link:../durable-object
       '@yaks/file':
         specifier: 0.2.28
         version: link:../file
@@ -451,6 +454,12 @@ importers:
       '@yaks/secrets':
         specifier: 0.2.28
         version: link:../secrets
+      '@yaks/sql':
+        specifier: 0.2.30
+        version: link:../sql
+      '@yaks/sqlite':
+        specifier: 0.2.30
+        version: link:../sqlite
       '@yaks/tools':
         specifier: 0.2.30
         version: link:../tools

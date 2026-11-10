@@ -15,6 +15,9 @@
 //                                           would take
 //   DELETE /api/account?address=<address>   it erased (erase.ts `closed`); a
 //                                           test account may end itself
+//   GET  /api/operator-copy                 every space
+//   POST /api/operator-copy?space=<eid>     a page of that space's Operator
+//                                           store (operator-copy.ts)
 //
 // The gate is the one the fee answers to (sell.ts `fees`): an owner of the
 // platform's own space, read off a website session or an OAuth token. A store is named by the
@@ -31,11 +34,14 @@ import { adminWho } from './asking.ts'
 import { vouched, type Who } from './session.ts'
 import { LEAVE, WHERE } from './relocate.ts'
 import { visits } from './visit.ts'
+import { builderOf } from './build-door.ts'
+import { COPY } from './operator-copy.ts'
 
 export let PATH = '/api/move'
 export let RELOCATE_PATH = '/api/relocate'
 export let IDLE_PATH = '/api/idle-spaces'
 export let ACCOUNT_PATH = '/api/account'
+export let OPERATOR_PATH = '/api/operator-copy'
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
@@ -163,6 +169,38 @@ let relocating = async (
   return Response.json({ ...await r.json(), app: app.eid, forgot: true })
 }
 
+// A space's Operator store read out (operator-copy.ts), for a rehearsal on
+// a copy: GET lists every space, and a POST naming `space=<eid>` is that
+// space's Builder answering the asked page. A space the directory does not
+// hold wakes no object.
+let copying = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof dirOf>,
+): Promise<Response> => {
+  let spaces = await dir.all()
+  if (req.method == 'GET') {
+    return Response.json(spaces.map(({ eid, slug }) => ({ eid, slug })), {
+      headers: { 'cache-control': 'private, no-store' },
+    })
+  }
+  if (req.method != 'POST') {
+    return json(405, 'method_not_allowed', 'list the spaces, or post to one')
+  }
+  let space = new URL(req.url).searchParams.get('space') ?? ''
+  if (!spaces.some((s) => s.eid == space)) {
+    return json(404, 'no_space', `no space is ${space || '(nothing)'}`)
+  }
+  let body = await req.text()
+  return await builderOf(env, space)(() =>
+    new Request(`https://builder${COPY}`, {
+      method: 'POST',
+      headers: { 'x-yak-kernel': '1', 'content-type': 'application/json' },
+      body,
+    })
+  )
+}
+
 // The app whose own store this handle names.
 let appAt = async (dir: ReturnType<typeof dirOf>, store: string) => {
   let spaces = await dir.all()
@@ -202,6 +240,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   if (new URL(req.url).pathname == RELOCATE_PATH) {
     return relocating(req, env, dir, who)
+  }
+  if (new URL(req.url).pathname == OPERATOR_PATH) {
+    return copying(req, env, dir)
   }
   let all = await stores(env)
   if (req.method == 'GET') return Response.json(all)

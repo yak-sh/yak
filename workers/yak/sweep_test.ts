@@ -10,6 +10,8 @@ import { sign } from './lib/token.ts'
 import * as sweep from './sweep.ts'
 import type { Swept } from '@yaks/platform/mover'
 import { platform } from './testing.ts'
+import { builderOf } from './build-door.ts'
+import { WAKE } from './door.ts'
 
 let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -101,6 +103,47 @@ test('nobody else sweeps', async () => {
     (await door(ADA, '?store=ada/notes.abc123&rehearse=1', 'POST')).status,
     403,
   )
+  assertEquals((await door(ADA, '', 'GET', sweep.OPERATOR_PATH)).status, 403)
+})
+
+test('the platform’s owner reads a space’s Operator store out, a table at a time', async () => {
+  let { scenario, dir } = await spaces()
+  await using _ = scenario
+  let { env } = scenario
+  let ada = (await dir.space('ada'))!
+  // A wake makes the Operator's store, which a copy then reads.
+  await builderOf(env, ada.eid)(() =>
+    new Request('https://builder' + WAKE, {
+      method: 'POST',
+      headers: { 'x-yak-kernel': '1' },
+    })
+  )
+  let cookie = `yak_session=${await sign(
+    { person: JEFF, space: null, exp: Date.now() + 60_000 },
+    SECRET,
+  )}`
+  let ask = async (query: string, body?: unknown) => {
+    let r = await sweep.fetch(
+      new Request(`https://yaks.app${sweep.OPERATOR_PATH}${query}`, {
+        method: body ? 'POST' : 'GET',
+        headers: { cookie },
+        body: body ? JSON.stringify(body) : undefined,
+      }),
+      env,
+    )
+    return { status: r.status, body: await r.json() }
+  }
+  let listed = (await ask('')).body as { eid: string; slug: string }[]
+  assertEquals(listed.find((s) => s.slug == 'ada')?.eid, ada.eid)
+  let { plan } = (await ask(`?space=${ada.eid}`, {})).body
+  let entity = plan.tables.find((t: { name: string }) => t.name == 'entity')
+  let read = (await ask(`?space=${ada.eid}`, { table: 'entity' })).body
+  assertEquals(Array.isArray(read.rows), true)
+  assertEquals(
+    read.rows.every((r: unknown[]) => r.length == entity.cols.length + 1),
+    true,
+  )
+  assertEquals((await ask('?space=nobody', {})).body.error.code, 'no_space')
 })
 
 // Three test accounts and a person: `probe` alone in its own space and seated

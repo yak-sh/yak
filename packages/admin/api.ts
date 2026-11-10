@@ -420,6 +420,31 @@ export let relocateIn = (
     { method: 'POST' },
   ))
 
+/** A space's Operator store read out a page at a time (workers/yak/sweep.ts
+ * `copying`, operator-copy.ts): every space there is, and one space's plan or
+ * a page of one of its tables. An owner of the `yak` space is answered. */
+export let OPERATOR_COPY = '/api/operator-copy'
+
+export let operatorSpaces = (
+  session: string,
+): Promise<{ eid: string; slug: string }[]> =>
+  said(sent(apex(OPERATOR_COPY), session))
+
+export let operatorPage = <T>(
+  session: string,
+  space: string,
+  asked: { table?: string; after?: number },
+): Promise<T> =>
+  said(sent(
+    apex(`${OPERATOR_COPY}?${new URLSearchParams({ space })}`),
+    session,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(asked),
+    },
+  ))
+
 /** A test account's end (workers/yak/sweep.ts): what it would take, or it gone. */
 export type Closed = {
   address: string
