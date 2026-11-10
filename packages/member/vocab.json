@@ -81,6 +81,45 @@
         }
       }
     },
+    "_privacy": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "wire": false,
+      "sync": "none",
+      "description": "Who may read this entity, as the personal, inherited and readers declarations say of its components and of what it inherits from; kept by @yaks/member's personal rule in the transaction that changes them, and screening a person's read where every entity's is current. An entity wearing none of those components keeps none.",
+      "properties": {
+        "person": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The one person it is kept to; none where it is kept to no one in particular."
+        },
+        "shut": {
+          "type": "boolean",
+          "stamped": true,
+          "description": "True where it is kept to nobody: it names more than one person, or names nobody where a person was asked."
+        },
+        "signed": {
+          "type": "boolean",
+          "stamped": true,
+          "description": "True where a component asks its readers to be signed in."
+        },
+        "floor": {
+          "type": "string",
+          "enum": ["viewer", "editor", "owner"],
+          "stamped": true,
+          "description": "The highest level a component asks its readers to hold."
+        },
+        "hash": {
+          "type": "string",
+          "index": true,
+          "stamped": true,
+          "description": "The declarations it was reckoned under, as their hash: one other than the store's is stale."
+        }
+      }
+    },
     "_pace": {
       "component": true,
       "journal": false,

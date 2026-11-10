@@ -4,17 +4,20 @@ import { after } from '@yaks/fp'
 import { absent, and, eq, or, present } from '@yaks/query/core'
 import { actorOf as writerOf } from '@yaks/graph/provenance'
 import { dead } from '@yaks/graph/bundle'
+import { isPromise } from '@yaks/fp'
 import type {
   Bundle,
   Comp,
   HookContext,
   Plugin,
   ReadOpts,
+  ReadTx,
   Tx,
 } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { Denied } from './deny.ts'
 import { readersIn } from './keywords.ts'
+import { type Declared, kept, privacy } from './privacy.ts'
 import { type Level, LEVELS, stands } from './words.ts'
 
 /** Component → owner: `entity` keeps just this aspect private on the person's
@@ -101,6 +104,21 @@ let caller = (opts: ReadOpts) =>
 let vouched = (l: unknown): Level | null =>
   LEVELS.includes(l as Level) ? l as Level : null
 
+/** What an entity's privacy is reckoned from (./privacy.ts), as
+ * {@link personal} is given it: the vocabulary's `personal` and `readers`
+ * declarations, the host's own, and what inherits its source's. */
+export let declarationsOf = (
+  vocab: Vocab,
+  declared: Personal = {},
+  through: PersonalSources = {},
+): Declared => ({
+  owners: Object.entries(personalsIn(vocab, declared)).filter(([, by]) =>
+    by != 'entity'
+  ),
+  through: Object.entries(through),
+  floors: Object.entries(readersIn(vocab)),
+})
+
 /** Protect person-owned data at reads and at every transaction write,
  * including changes made by rules and reference cascades, and keep each entity
  * wearing a component its vocabulary declares `readers` from every reader
@@ -169,6 +187,30 @@ export let personal = (
         )
       }),
     )
+  // Each entity's privacy, kept where the vocabulary declares `_privacy`
+  // (./privacy.ts). A store is read by it once it holds no entity whose
+  // privacy is missing or stale, and by the declarations until then: asked
+  // again after a write that could complete it (./privacy.ts `keeping`).
+  let keeps = kept(vocab)
+    ? privacy(declarationsOf(vocab, declared, through))
+    : undefined
+  let ready = false, asked = false
+  let stored = (tx: ReadTx): boolean => {
+    if (!keeps || ready) return ready
+    if (asked) return false
+    asked = true
+    let none = keeps.current((line) => tx.read(line))
+    if (isPromise(none)) {
+      none.then((v) => ready ||= v, () => asked = false)
+      return false
+    }
+    return ready = none
+  }
+  // The entities this reader sees: by their privacy, or by the declarations.
+  let sight = (opts: ReadOpts, tx: ReadTx, hidden: string[]) =>
+    stored(tx)
+      ? keeps!.seen(opts.person, vouched(opts.level))
+      : mine(opts.person, hidden)
   let check = (
     bundles: Bundle[],
     tx: Tx,
@@ -233,7 +275,7 @@ export let personal = (
     reads: (opts) =>
       (entries.length > 0 || inherited.length > 0 || floors.length > 0) &&
       caller(opts),
-    scope: ({ opts }) => {
+    scope: ({ opts, tx }) => {
       if (!caller(opts)) return undefined
       let who = opts.person
       let hidden = unseen(opts)
@@ -241,7 +283,7 @@ export let personal = (
         return undefined
       }
       return {
-        entity: mine(who, hidden),
+        entity: sight(opts, tx, hidden),
         components: Object.fromEntries(
           entries.filter(([, by]) => by == 'entity')
             .map(([name]) => [
@@ -290,33 +332,32 @@ export let personal = (
         context?.trusted || !entries.length
           ? b
           : check(b, tx, by, false, born, held)
-      return {
-        tx: {
-          ...tx,
-          patch: (bundles) =>
-            after(
-              inspect(bundles),
-              (checked) =>
-                after(tx.patch(checked), (made) => {
-                  remember(checked)
-                  return made
-                }),
-            ),
-          remove: (entities) =>
-            after(
-              inspect(entities.map((entity) => ({ entity, $delete: true }))),
-              () =>
-                after(tx.remove(entities), (removed) => {
-                  for (let { eid } of entities) {
-                    held.delete(eid)
-                    born.delete(eid)
-                  }
-                  return removed
-                }),
-            ),
-        },
-        flush: (b) => b,
+      let inspected: Tx = {
+        ...tx,
+        patch: (bundles) =>
+          after(
+            inspect(bundles),
+            (checked) =>
+              after(tx.patch(checked), (made) => {
+                remember(checked)
+                return made
+              }),
+          ),
+        remove: (entities) =>
+          after(
+            inspect(entities.map((entity) => ({ entity, $delete: true }))),
+            () =>
+              after(tx.remove(entities), (removed) => {
+                for (let { eid } of entities) {
+                  held.delete(eid)
+                  born.delete(eid)
+                }
+                return removed
+              }),
+          ),
       }
+      if (!keeps) return { tx: inspected, flush: (b) => b }
+      return keeps.keeping(tx, inspected, () => asked = false)
     },
     // Subscription relays and coverage carry patches, whose owner need not be
     // present. Consult canonical rows instead of trusting incoming bylines.
@@ -388,7 +429,7 @@ export let personal = (
           if (!targets.length) return visible
           return after(
             tx.get(targets, comps, {
-              visibility: { entity: mine(opts.person, hidden) },
+              visibility: { entity: sight(opts, tx, hidden) },
             }),
             (rows) => {
               // A deleted target holds nothing left to say whose it was. Its
@@ -397,7 +438,7 @@ export let personal = (
               let gone = rows.filter(dead).map((b) => b.entity.eid)
               let seen = gone.length
                 ? tx.get(gone, [], {
-                  visibility: { entity: mine(opts.person, hidden) },
+                  visibility: { entity: sight(opts, tx, hidden) },
                 })
                 : []
               return after(seen, (seen) => {

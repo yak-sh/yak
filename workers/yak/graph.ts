@@ -338,6 +338,7 @@ import {
 import { type Host as PluginHost, type Load } from '@yaks/host'
 import { type Config, given, meet, used } from '@yaks/host/config'
 import { configs, posts } from './config.ts'
+import { privacyRules } from './privacy-move.ts'
 import { load } from './load.ts'
 import { metering } from './meter.ts'
 import { appTexter } from './app-texts.ts'
@@ -940,6 +941,9 @@ export class Store {
   // as.
   #rules: Rule[]
   #lensMove: Rule | null = null
+  // The pass that writes each entity's privacy under this vocabulary's
+  // declarations (privacy-move.ts).
+  #privacyMoves: Rule[] = []
   #halted = new Set<Mark>()
   // Why this object's schema would not stand, when it would not. The rows are
   // as they were: the boot ran in one transaction and it unwound.
@@ -1398,6 +1402,7 @@ export class Store {
       let [comp, prop] = path.split('.')
       return prop ? !!vocab.prop(comp, prop) : !!vocab.comp(comp)
     })
+    this.#privacyMoves = vocab.comp('_privacy') ? privacyRules(vocab) : []
     let drive = this.#sql = driver(ctx.storage, observe, this.#measure)
     let bytes = sqliteBlobs(statements(drive))
     let store!: ReturnType<typeof sqliteStorage>
@@ -3316,6 +3321,7 @@ export class Store {
       ...this.#rules,
       sessionMove(),
       ...(this.#lensMove ? [this.#lensMove] : []),
+      ...this.#privacyMoves,
     ]
       .filter((r) =>
         (r.stores == 'apps'

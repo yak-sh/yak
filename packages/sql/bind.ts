@@ -5257,11 +5257,9 @@ let admitting = (
 ): Cond => {
   let query = parsed(scope)
   let key = inline(owner)
-  let read = (comp: string, expr: string) =>
-    `(select ${expr} from ${base.table(comp)} where ${
-      base.ownerKey(comp)
-    } = ${key})`
   let direct = ownerKeyed(vocab, opts, query)
+  // Keyed to the owner, each component the scope reads is joined on the owner
+  // in hand, beside one row standing for the spine.
   let keyedTo: Dialect = {
     ...base,
     indexed: undefined,
@@ -5271,13 +5269,11 @@ let admitting = (
       ? {
         live: () => base.live(key),
         ownerKey: (comp: string) =>
-          comp == 'entity' ? key : read(comp, base.ownerKey(comp)),
-        col: (comp: string, prop: string, v: Vocab) => {
-          let expr = base.col(comp, prop, v)
-          return expr == null ? null : read(comp, expr)
-        },
-        refCol: (comp: string, prop: string) =>
-          read(comp, base.refCol!(comp, prop)),
+          comp == 'entity' ? key : base.ownerKey(comp),
+        joinOn: (comp: string, at: string) =>
+          at == 'entity'
+            ? `${base.ownerKey(comp)} = ${key}`
+            : base.joinOn(comp, at),
       }
       : {},
   }
@@ -5299,7 +5295,7 @@ let admitting = (
   )
   return exists({
     ...owners,
-    ...direct ? { from: undefined, joins: [] } : {},
+    ...direct ? { from: raw('(select 1) as "__owner"') } : {},
     cols: [val(1)],
     where: direct
       ? owners.where

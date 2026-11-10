@@ -399,6 +399,7 @@ The main export includes:
 | `owns(owner, who)`, `Owner`                                                               | Match verified `{by, via}` against a row's recorded owner; a bound person takes precedence over its instrument. |
 | `memberKeywords`, `floorsIn`, `readersIn`, `floored`, `permitsIn`, `permitted`; `Permits` | Permission declarations, their validation and loaded forms.                                                     |
 | `personal`, `personalsIn`, `unowned`; `Personal`                                          | Person-owned policy, its validated declarations and their refusals.                                             |
+| `privacy`, `declarationsOf`, `kept`, `PRIVACY`; `Declared`, `Privacy`                     | Each entity's kept privacy: how it is reckoned, written, found stale and read.                                  |
 
 ## What is deliberately not here
 
@@ -426,3 +427,25 @@ Reads, counts, reference traversal and relayed patches then follow the source's
 current owner; changing that owner changes the derived row's visibility too.
 This controls disclosure. It does not give a client permission to edit the
 source or the derived row.
+
+## Each entity's privacy, kept
+
+A vocabulary that loads this package's document keeps, on every entity wearing a
+`personal`, inherited or `readers` component, what those declarations make of
+it: `_privacy{person, shut, signed, floor, hash}` (./privacy.ts). `person` is
+the one person it is kept to, `shut` says it is kept to nobody (it names more
+than one person, or a page names no source), `signed` that a component asks its
+readers to be signed in, `floor` the highest level one asks, and `hash` the
+declarations it was reckoned under. The plugin writes it in the transaction that
+changes what it is read from, and rewrites the entities that inherit from one
+whose own part moved; a `_privacy` written by anyone else is put back.
+
+A person's read is then screened by that one component, which @yaks/sql asks of
+each row's owner in place: a derived property that reads many relations pays for
+one join a relation, not for every declaration through every reference. A store
+is read this way once it holds no entity whose privacy is missing or reckoned
+under other declarations (`privacy(...).current`), and by the declarations
+themselves until then, so a store written before it kept privacy, or one whose
+declarations a deploy changed, is never read by a privacy it lacks. A pass over
+`privacy(...).stale`, with `reckon`, brings it up to date; yaks.app runs one
+from each app store's mover (workers/yak/ privacy-move.ts).
