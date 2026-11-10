@@ -28,7 +28,10 @@ export let publicPage = async (
 ): Promise<Response | null> => {
   if (!['GET', 'HEAD'].includes(request.method)) return null
   let url = new URL(request.headers.get('x-yak-address') ?? request.url)
-  let path = url.pathname.replace(/\/$/, '').replace(/\.html$/, '')
+  // A doubled slash (`//contact`) names the same page; left in, the base below
+  // would start with `//` and parse as an address with no host.
+  let path = url.pathname.replace(/\/{2,}/g, '/').replace(/\/$/, '')
+    .replace(/\.html$/, '')
   let image = [...pictures.keys()].find((key) => path.endsWith(key))
   if (image) {
     let response = await env.FILES.fetch('/' + pictures.get(image))
@@ -45,7 +48,7 @@ export let publicPage = async (
     '/public/' + routes[route as keyof typeof routes],
   )
   if (!response.ok) return response
-  let base = new URL(path.slice(0, -route.length) + '/', url).href
+  let base = url.origin + path.slice(0, -route.length) + '/'
   let text = (await response.text()).replaceAll(
     'href="/',
     `href="${escape(base)}`,

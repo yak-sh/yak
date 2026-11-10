@@ -51,7 +51,10 @@ test('a post and feed preserve published text and mounted links', async () => {
   ok(html.includes(`href="${base}/coloring-pages/unicorns"`))
   ok(!html.includes('<script'))
   let feed = await publicPage(new Request(base + '/blog.rss'), env)
-  equal(feed?.headers.get('content-type'), 'application/rss+xml; charset=utf-8')
+  equal(
+    feed?.headers.get('content-type'),
+    'application/rss+xml; charset=utf-8',
+  )
   let document = new DOMParser().parseFromString(
     await feed!.text(),
     'text/xml',
@@ -92,4 +95,22 @@ test('a public seed grid and its printable expose only curated asset paths', asy
     ),
     null,
   )
+})
+
+test('a doubled slash serves the page with links at the mount', async () => {
+  for (
+    let [address, base] of [
+      ['https://crayonbloom.com//contact', 'https://crayonbloom.com/'],
+      [
+        'https://crayonbloom.yaks.app/crayonbloom//terms',
+        'https://crayonbloom.yaks.app/crayonbloom/',
+      ],
+    ]
+  ) {
+    let response = await publicPage(new Request(address), env)
+    equal(response?.status, 200)
+    let html = await response!.text()
+    ok(html.includes(`href="${base}blog"`), address)
+    ok(!html.includes(`href="${base}/`), address)
+  }
 })
