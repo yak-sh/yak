@@ -4,3 +4,7 @@
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
   gap: 1.4rem;
 }
+/* Small pages are four across, still big enough to see what was colored. */
+.Cards-compact {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+}

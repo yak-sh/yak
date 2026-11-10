@@ -4,7 +4,7 @@
 
    The paints are named for what they look like (paper, page, ink, coral,
    marigold, grass, cornflower, grape) and a theme has more roles than a box
-   has crayons, so roles share them. The washes (mint, blush) tint a band
+   has crayons, so roles share them. The washes (mint, blush, butter) tint a band
    behind a section; nothing is written in them. */
 @font-face {
   font-family: 'Fredoka';
@@ -96,6 +96,7 @@
   /* the washes a band is tinted with, and the line every sticker is drawn in */
   --mint: #e8f6ee;
   --blush: #fdeee8;
+  --butter: #fff3d6;
   --grass: #2a9466;
   --stroke: 2.6px;
 }

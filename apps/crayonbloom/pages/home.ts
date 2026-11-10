@@ -240,6 +240,60 @@ let Samples = ({ place }: { place: Place }) =>
     ),
   )
 
+let Colored = ({ place }: { place: Place }) =>
+  h(
+    Band,
+    { mod: 'butter', id: 'colored' },
+    h(
+      Band.Inner,
+      {},
+      h(
+        Lead,
+        {},
+        h(Kicker, {}, 'Colored in'),
+        h(Lead.Title, {}, 'And here’s the part the crayons live for.'),
+        h(
+          Lead.Lede,
+          {},
+          'You print the clean outlines above; the coloring is the fun part. Here are a few of the same kind of pages after a kid (or a grown-up) filled them in. There’s no “right” way to do it: the page is theirs to color however they like.',
+        ),
+      ),
+      h(
+        Cards,
+        { mod: 'compact' },
+        samples.map((s) =>
+          h(
+            Sheet,
+            { mod: 'taped' },
+            h(
+              Sheet.Art,
+              {},
+              h(Sheet.Line, {
+                src: colored(place, s.file),
+                alt:
+                  s.alt.replace('Coloring page line art', 'A coloring page') +
+                  ', colored in with crayons',
+                width: 720,
+                height: 1080,
+                loading: 'lazy',
+                decoding: 'async',
+              }),
+            ),
+            h(Sheet.Caption, {}, h(Sheet.Title, {}, s.title)),
+          )
+        ),
+      ),
+      h(
+        Lead.Lede,
+        {},
+        'Love how they turn out? Turn a favorite into a ',
+        h('strong', {}, 'printed story book'),
+        ': its own story, activities, and plenty of pages to color. ',
+        h('a', { href: '#keepsake' }, 'See the book →'),
+      ),
+    ),
+  )
+
 let Keepsake = ({ place }: { place: Place }) =>
   h(
     Band,
@@ -368,6 +422,7 @@ export let home = (place: Place): Response =>
       h(Wave, {}),
       h(How, {}),
       h(Samples, { place }),
+      h(Colored, { place }),
       h(Keepsake, { place }),
       h(Close, { place }),
     ),

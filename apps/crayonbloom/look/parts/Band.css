@@ -5,11 +5,15 @@
   padding-top: clamp(2rem, 5vw, 3.75rem);
 }
 .Band-mint,
-.Band-blush {
+.Band-blush,
+.Band-butter {
   border-block: 2px solid var(--border);
 }
 .Band-mint {
   background: var(--mint);
+}
+.Band-butter {
+  background: var(--butter);
 }
 .Band-blush {
   background: var(--blush);

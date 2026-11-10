@@ -116,6 +116,13 @@
   border-radius: 28px;
   pointer-events: none;
 }
+.Cards > .Sheet-taped {
+  justify-self: center;
+}
+/* Taped up in a row, every other one leans the other way. */
+.Cards > .Sheet-taped:nth-child(even) {
+  rotate: 1.8deg;
+}
 .Sheet-taped .Sheet_Art {
   aspect-ratio: 2 / 3;
   border-radius: 16px;
