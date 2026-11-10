@@ -119,6 +119,7 @@ export type Answer = {
  * for the complete next turn. Its adapter enforces the granted output cap. */
 export type Model = {
   id: string
+  provider?: string
   price?: Price
   context?: number
   output?: number
@@ -365,11 +366,14 @@ let through = (
  * platform's lending, priced from its own list. */
 let lent = (env: Env, provider: string, id: string): Model => {
   let model = provided(env, provider)
-  return through(id, () => model, async () => {
-    let info = await model.info?.(id)
-    if (!info) throw new Error(`${provider} lists no model ${id}`)
-    return info
-  })
+  return {
+    provider,
+    ...through(id, () => model, async () => {
+      let info = await model.info?.(id)
+      if (!info) throw new Error(`${provider} lists no model ${id}`)
+      return info
+    }),
+  }
 }
 
 /** Which model this space builds on: its tier picks, config overrides. */

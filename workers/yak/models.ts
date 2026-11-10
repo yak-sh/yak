@@ -29,7 +29,7 @@ import type { VocabDoc } from '@yaks/vocab'
 import { type ArtifactStore, objectBlobs } from '@yaks/blob'
 import { artifactStore } from '@yaks/blob/identify'
 import { appStore, type Directory, directoryOf } from './directory.ts'
-import { vaultOf } from './vault.ts'
+import { vaulted, vaultOf } from './vault.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import { storeOf } from './door.ts'
 import { blobPrefix, receiptPrefix } from './blob-key.ts'
@@ -190,12 +190,19 @@ export let recovering = async (at: Stored, call: string) => {
   let outputs = await at.graph.read(`.output.source=${call}&.attachment&*`)
   let cost = ask.cost as { dollars?: number; reported?: boolean } | undefined
   if (outputs.length && cost?.dollars != null) {
+    let using = (ask.using as Comp | undefined)?.provider
+    let [provider] = typeof using == 'string' ? await at.graph.get([using]) : []
+    let source = (provider?.provider as Comp | undefined)?.name
+    if (!source && vaulted(at.env)) {
+      source = (await receiptsFor(at)?.read(call))?.provider
+    }
     await countedMedia(
       { STORE: at.env.STORE },
       found.space,
       call,
       cost.dollars,
       cost.reported ?? true,
+      typeof source == 'string' ? source : undefined,
     )
     return outputs
   }
@@ -224,6 +231,7 @@ export let recovering = async (at: Stored, call: string) => {
     call,
     charge.dollars,
     charge.reported,
+    provider,
   )
   let session = (ask.entry as Comp).session
   let patches: Bundle[] = [{

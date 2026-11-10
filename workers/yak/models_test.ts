@@ -54,6 +54,15 @@ import type { Inference } from '@yaks/model'
 // counts against figures it states.
 let MONTH = 0.2
 
+let sourceTotal = async (env: Env, space: string, source: string) => {
+  let [row] = await appMeta(env).query(`.entity.eid=${space}&?trend`)
+  let sources = (row.trend as Comp).sources as Record<
+    string,
+    Record<string, number>
+  >
+  return Object.values(sources[source] ?? {}).reduce((a, b) => a + b, 0)
+}
+
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let BOB = 'b0000000-0000-4000-8000-0000000000b0'
 let FLASH = '@cf/zai-org/glm-5.3-flash'
@@ -519,6 +528,10 @@ test('an existing OpenRouter receipt delivers audio and settles once without gen
       await assertRejects(() => host.delivered(dormant))
     }
     assertAlmostEquals((await v.spent()).meter!.models, MONTH + 0.02)
+    assertAlmostEquals(
+      await sourceTotal(v.env, (await v.spent()).eid, 'openrouter'),
+      0.145,
+    )
     await host.report(dormant, {
       code: 'inference_delivery',
       reason: 'Awaiting restore',
@@ -595,6 +608,10 @@ test('a hosted text call freezes and sends the output its remaining space budget
     )
     assertEquals(frozen.request.tokens, tokens)
     assert((await v.spent()).meter!.models <= MONTH)
+    assertAlmostEquals(
+      await sourceTotal(v.env, (await v.spent()).eid, 'openrouter'),
+      0.0001 + tokens / 1000,
+    )
   } finally {
     globalThis.fetch = original
   }
@@ -1299,6 +1316,10 @@ test('./api/ai/run carries affinity through its metered binding', async () => {
     cached_tokens: 2700,
   })
   assertAlmostEquals((await p.spent()).meter!.models, cost)
+  assertAlmostEquals(
+    await sourceTotal(p.env, (await p.spent()).eid, 'workers-ai'),
+    cost,
+  )
 })
 
 test('raw Workers AI audio debits its tariff once and refuses at the space limit', async () => {
@@ -1395,11 +1416,12 @@ test('original media debit is atomic once across concurrent and repeated recover
   let call = crypto.randomUUID()
   await Promise.all(
     [1, 2, 3].map(() =>
-      countedMedia({ STORE: v.env.STORE }, space, call, 0.45, true)
+      countedMedia({ STORE: v.env.STORE }, space, call, 0.45, true, 'openai')
     ),
   )
-  await countedMedia({ STORE: v.env.STORE }, space, call, 0.45, true)
+  await countedMedia({ STORE: v.env.STORE }, space, call, 0.45, true, 'openai')
   assertAlmostEquals((await v.spent()).meter!.models, 0.45)
+  assertAlmostEquals(await sourceTotal(v.env, space.eid, 'openai'), 0.45)
   assertEquals(v.asked, [])
 })
 
@@ -1413,6 +1435,28 @@ test('recovery door accounts an existing attachment without download or generati
     },
   })
   let session = crypto.randomUUID(), call = crypto.randomUUID()
+  let space = (await v.dir.space('ada'))!
+  let app = (await v.dir.app(space, 'vale'))!
+  let store = mediaReceipts(
+    records<MediaRecord>(
+      {
+        apply: (bundles) =>
+          appMeta({ STORE: v.env.STORE }).apply(bundles, KERNEL),
+      },
+      vaultOf(v.env),
+      'generated-media:' + app.eid + ':',
+    ),
+    objectBlobs(v.env.BLOBS, receiptPrefix(app)),
+  )
+  await store.save({
+    call,
+    id: 'attached',
+    provider: 'openai',
+    model: 'fixture',
+    input: {},
+    response: {},
+    cost: 0.45,
+  })
   let artifact = crypto.randomUUID()
   assertEquals(
     (await v.send('/apply', [
@@ -1465,22 +1509,10 @@ test('recovery door accounts an existing attachment without download or generati
   assertEquals((await recover()).status, 200)
   assertEquals((await recover()).status, 200)
   assertAlmostEquals((await v.spent()).meter!.models, 0.45)
+  assertAlmostEquals(await sourceTotal(v.env, space.eid, 'openai'), 0.45)
   assertEquals(v.asked, [])
   // A receipt without delivered artifacts must use the adapter that recorded it.
   let original = crypto.randomUUID()
-  let space = (await v.dir.space('ada'))!
-  let app = (await v.dir.app(space, 'vale'))!
-  let store = mediaReceipts(
-    records<MediaRecord>(
-      {
-        apply: (bundles) =>
-          appMeta({ STORE: v.env.STORE }).apply(bundles, KERNEL),
-      },
-      vaultOf(v.env),
-      'generated-media:' + app.eid + ':',
-    ),
-    objectBlobs(v.env.BLOBS, receiptPrefix(app)),
-  )
   let bytes = new Uint8Array(576)
   bytes.set([255, 251, 180, 0])
   await store.save({
@@ -1514,6 +1546,7 @@ test('recovery door accounts an existing attachment without download or generati
     1,
   )
   assertAlmostEquals((await v.spent()).meter!.models, 0.49)
+  assertAlmostEquals(await sourceTotal(v.env, space.eid, 'openrouter'), 0.04)
   assertEquals(v.asked, [])
 })
 

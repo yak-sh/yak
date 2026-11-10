@@ -209,6 +209,7 @@ export let lending = async (
               found.space,
               (remaining) => quoted(req, price, context, remaining),
               call,
+              { source: provider },
             )).value
           if (!quote) {
             throw new ModelError(
@@ -301,10 +302,16 @@ export let hosting = (env: Bindings): Kernel => ({
       // A job frozen by an earlier release has no hold. Its immutable request
       // can proceed only if its whole existing output limit still fits.
       try {
-        await reserved({ STORE: env.STORE! }, found.space, (remaining) => {
-          let quote = quoted(frozen.request, frozen.price, context, remaining)
-          return quote?.tokens == desired ? quote : null
-        }, job.call)
+        await reserved(
+          { STORE: env.STORE! },
+          found.space,
+          (remaining) => {
+            let quote = quoted(frozen.request, frozen.price, context, remaining)
+            return quote?.tokens == desired ? quote : null
+          },
+          job.call,
+          { source: frozen.provider.name },
+        )
       } catch (error) {
         if (error instanceof ModelError && error.code == 'limit') {
           return { refused: { code: 'limit', reason: error.message } }
@@ -401,6 +408,7 @@ export let hosting = (env: Bindings): Kernel => ({
         job.call,
         cost.dollars,
         cost.reported,
+        frozen.provider.name,
       )
     } else if (!budgetRefusal(receipt.failure)) {
       await hosting(env).report(job, {

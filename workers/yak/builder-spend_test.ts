@@ -7,6 +7,8 @@ import { turn } from './builder-spend.ts'
 import { directoryOf, stamp } from './directory.ts'
 import { monthOf } from './meter.ts'
 import { platform } from './testing.ts'
+import { meta } from './meta.ts'
+import type { Comp } from '@yaks/graph'
 
 let p = platform('builder budget')
 let dir = directoryOf(p.env.STORE)
@@ -33,6 +35,7 @@ let ambiguous = await fixture()
 let ask: Ask = { system: '', said: [], fns: [], tokens: 4096 }
 let model = (run: Model['ask']): Model => ({
   id: 'bounded',
+  provider: 'openai',
   context: 0,
   price: { input: 0, output: 1000 },
   ask: run,
@@ -79,6 +82,15 @@ test('builder turns use fresh provider pricing and context before granting outpu
   await turn(p.env, fresh.space, m, ask)
   assertEquals(tokens, 190)
   assertAlmostEquals(await fresh.used(), 0.2)
+  let [row] = await meta(p.env).query(`.entity.eid=${fresh.space.eid}&?trend`)
+  let sources = (row.trend as Comp).sources as Record<
+    string,
+    Record<string, number>
+  >
+  assertAlmostEquals(
+    Object.values(sources.openai).reduce((a, b) => a + b, 0),
+    0.2,
+  )
 })
 
 test('unreported builder cache categories retain the highest possible input charge', async () => {

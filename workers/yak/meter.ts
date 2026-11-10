@@ -1129,6 +1129,7 @@ export let countedMedia = async (
   call: string,
   dollars: number,
   reported = true,
+  source?: string,
 ) => {
   if (!Number.isFinite(dollars) || dollars < 0) {
     throw new Error('Generated media returned no valid request cost')
@@ -1143,7 +1144,7 @@ export let countedMedia = async (
         cost: { dollars, reported },
       }, {
         entity: { eid: space.eid },
-        spend: { month: monthOf(new Date()), models: dollars },
+        spend: { month: monthOf(new Date()), models: dollars, source },
       }],
     })
   } catch (error) {
@@ -1250,7 +1251,10 @@ export let metered = (
     let door = ns && space
       ? native(bind, platform(bind as Env), {
         hold: (quote) =>
-          reserved({ STORE: ns }, space, quote, undefined, { visitor }),
+          reserved({ STORE: ns }, space, quote, undefined, {
+            visitor,
+            source: provider,
+          }),
         answered: (name, info) =>
           rows?.answered(provider, name, info) ?? Promise.resolve(),
         report: (e, model) =>
@@ -1398,6 +1402,7 @@ export let accounted = (
             call,
             cost.dollars,
             cost.reported,
+            source,
           )
         }
         return reply

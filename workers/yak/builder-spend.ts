@@ -33,6 +33,8 @@ export let turn = async (
           request.tokens,
         )
         : null,
+    undefined,
+    { source: model.provider },
   )
   let submitted = false
   let answer: Answer
