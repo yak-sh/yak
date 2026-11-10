@@ -8,7 +8,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { bounded } from '@yaks/durable-object/ceiling'
 import { by, tally } from '@yaks/sql'
 import { PLATFORM_STORE } from '@yaks/platform/names'
-import { doorOf } from './door.ts'
+import { doorOf, IDEMPOTENCY } from './door.ts'
 import { Store } from './graph.ts'
 import { Builder } from './build.ts'
 import type { Env } from './env.ts'
@@ -177,12 +177,17 @@ let PHOTOS = {
     },
   },
 }
-let photo = (o: Awaited<ReturnType<typeof object>>, body: BodyInit) =>
+let photo = (
+  o: Awaited<ReturnType<typeof object>>,
+  body: BodyInit,
+  headers: Record<string, string> = {},
+) =>
   o.store.fetch(
     new Request('http://store/apply', {
       method: 'POST',
       headers: {
         ...KERNEL,
+        ...headers,
         'x-store': NAME,
         'x-yak-access': 'public',
         'content-type': BINARY,
@@ -212,6 +217,22 @@ for (let kind of ['read', 'written'] as const) {
     })
   })
 }
+
+let outboxed = await object(PHOTOS)
+test("a stopped store keeps an outbox's binary write, lands it when the window ends, and answers its resend from the receipt", async () => {
+  let o = outboxed, key = { [IDEMPOTENCY]: 'outbox:photo' }
+  o.spend('written')
+  let answer = await photo(o, snapped, key)
+  assertEquals([answer.status, o.writes('pending')], [202, 1])
+  o.at.t = MINUTE
+  await o.alarm()
+  assertEquals(o.writes('applied'), 1)
+  let again = await photo(o, snapped, key)
+  assertEquals(again.status, 200)
+  assertEquals((await again.json())[0]?.photo, {
+    bytes: { $bytes: 'AP+A', encoding: 'base64' },
+  })
+})
 
 let torn = await object(PHOTOS)
 test('a stopped store refuses a binary write it cannot read, keeping nothing', async () => {

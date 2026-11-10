@@ -311,7 +311,7 @@ import {
 } from '@yaks/query'
 import { effectsIn, loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { decode as fromWire, stringify } from '@yaks/vocab/wire'
-import { decoded, isBinaryApply, opened, taken } from './binary.ts'
+import { decoded, opened, taken } from './binary.ts'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
 import type { Runner } from '@yaks/tools'
@@ -4282,8 +4282,6 @@ export class Store {
     }
     // Authority is the replay's to check (`#commit`), as for every kept write.
     let stop = this.#ceiling.refusal(true)
-    // An outbox's binary write waits with its caller while stopped.
-    if (stop && durable(key) && isBinaryApply(request)) return refuse(stop)
     if (stop) return this.#kept(fingerprinted(request, body), body, stop)
     if (durable(key)) {
       try {
