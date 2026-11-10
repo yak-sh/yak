@@ -3,6 +3,7 @@ import { addressed, type Bundle, type Comp, type Graph } from '@yaks/graph'
 import { refuse } from './tool.ts'
 import { remove } from './operator-remove.ts'
 import { draftEid } from '@yaks/draft'
+import type { Carried } from './support-reply.ts'
 import { enqueue } from '@yaks/effects'
 import { derivedEid } from '@yaks/graph/identity'
 import { sha256 } from '@yaks/graph/sha256'
@@ -1283,6 +1284,12 @@ export let operatorReply = async (
   sender?: string | null,
 ): Promise<Response> => {
   let { store } = operator
+  // TaskMaster's answer in a support thread of someone here
+  // (support-reply.ts): their Update, and the note in their conversation.
+  if (path == '/operator/support') {
+    let { heard } = await import('./support-reply.ts')
+    return Response.json(await heard(store, args as unknown as Carried))
+  }
   if (path == '/operator/inbound') {
     let { chosen } = await import('./operator-line.ts')
     let lines = await chosen(store.g, args.line as Bundle)

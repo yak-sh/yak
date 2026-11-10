@@ -819,6 +819,25 @@
   .Update_Input {
     width: 100%;
   }
+  /* A support thread (support-page.ts): what was said, a card each, and the
+     box that adds to it. */
+  .Support {
+    display: grid;
+    gap: .75rem;
+  }
+  .Support_Meta,
+  .Support_Fix {
+    color: var(--muted);
+    font-size: var(--fine);
+  }
+  .Support_Form {
+    display: grid;
+    gap: .5rem;
+    justify-items: end;
+  }
+  .Support_Input {
+    width: 100%;
+  }
   .Talk_Starts {
     display: flex;
     flex-wrap: wrap;

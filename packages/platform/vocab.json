@@ -581,6 +581,11 @@
           "death": "keep",
           "stamped": true,
           "description": "the tool call it was said in, where the door recorded one"
+        },
+        "agent": {
+          "type": "string",
+          "stamped": true,
+          "description": "the connector client it was said through, by the name it gave at connect: the platform's answers ride that client's next tool result, across reconnects (workers/yak/support-reply.ts); absent from an Operator or a browser"
         }
       },
       "description": "who a support thread or one of its messages came from, as the caller's credential said: ownership on a thread (a conversation{} wearing report{}), evidence on each of its comment{} messages. A message without it is the platform's answer (workers/yak/support.ts)."

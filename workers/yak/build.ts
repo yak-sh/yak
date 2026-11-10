@@ -496,6 +496,7 @@ export class Builder {
           url.pathname == '/operator/receipt' ||
           url.pathname == '/operator/letter' ||
           url.pathname == '/operator/replied' ||
+          url.pathname == '/operator/support' ||
           url.pathname == '/operator/tell'
         ) {
           let space = request.headers.get(SPACE)

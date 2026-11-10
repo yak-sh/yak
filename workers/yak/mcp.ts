@@ -475,10 +475,16 @@ let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
     listed,
     // Every result carries a line when this session connected against an older
     // tool list — the same news `notifications/tools/list_changed` sends to a
-    // client holding a stream, put where a client without one will read it.
+    // client holding a stream, put where a client without one will read it —
+    // and the platform's answers this agent is owed (stream.ts `Reply`).
     handle: mcp({
       ...shared,
-      roster: () => noticed(ctx, { session, ...listed }, c),
+      roster: () =>
+        noticed(ctx, {
+          session,
+          ...listed,
+          agent: ctx.who?.agent ?? '',
+        }, c),
     }),
   }
 }
@@ -495,15 +501,15 @@ let noticed = (
 ): Promise<Notice | undefined> => {
   let heard = c.time('roster', () => rostered(ctx.env, ctx.person, asked))
   background(heard.then(() => {}, () => {}))
-  return heard.then(({ line, notices }) =>
+  return heard.then(({ line, notices, replies }) =>
     line
       ? {
         line,
         said: () =>
           background(
-            said(ctx.env, ctx.person, { ...asked, notices }).catch((e) =>
-              caught(e, { request: 'POST /mcp roster said' })
-            ),
+            said(ctx.env, ctx.person, { ...asked, notices, replies }).catch((
+              e,
+            ) => caught(e, { request: 'POST /mcp roster said' })),
           ),
       }
       : undefined

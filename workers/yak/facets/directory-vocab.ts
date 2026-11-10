@@ -723,6 +723,15 @@ export let referralDoc: VocabDoc = {
       description:
         "give an invitee's inviter a free month of the Plus plan when the invitee builds their first app",
     },
+    // The platform's answer in a support thread, or its completion, carried
+    // to the thread's person (support-reply.ts).
+    support_reply: {
+      effect: true,
+      created: ['comment', 'completed'],
+      target: '(.comment !support|.conversation .report)',
+      description:
+        "carry the platform's answer in a support thread to the person's Updates and to the Operator conversation or connector agent it came from, until each takes it",
+    },
   },
 }
 export let docs: VocabDoc[] = [

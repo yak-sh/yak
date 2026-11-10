@@ -81,6 +81,8 @@ export let WIRE = [
   'released',
   'roster',
   'said',
+  'replies',
+  'owe',
   'listed',
   'keep',
   'attach',

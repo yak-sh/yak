@@ -692,7 +692,10 @@ let asked = (session?: string) => {
 
 // The session a helper works for, up its `spawned` links: a person's
 // conversation, or a task's session.
-let topOf = async (store: Store, session: string): Promise<string> => {
+export let topOf = async (
+  store: Store,
+  session: string,
+): Promise<string> => {
   let [row] = await store.g.get([session], ['spawned'])
   let parent = comp(row, 'spawned')?.parent
   if (comp(row, 'spawned')?.quiet != null) return session

@@ -86,6 +86,7 @@ export let VIA: Record<string, [IconName, string]> = {
   error: ['triangle-alert', 'From an error'],
   escalated: ['message-circle', 'Raised from another conversation'],
   escalation: ['message-circle', 'From another conversation'],
+  support: ['message-circle', 'From TaskMaster, who runs yaks.app'],
 }
 
 let via = (b: Bundle) => {

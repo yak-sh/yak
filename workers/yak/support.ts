@@ -18,25 +18,37 @@
 // tool call takes its eid from that call, and its letter from it, so the same
 // call run again lands on the same rows and owes no second letter.
 //
-// The bundles are made here as values; `open`, `say`, `answer` and `read` are
-// the only doors to the store, and `opens` the one decision about who reads.
+// The bundles are made here as values; `open`, `say` (and `adding`, a
+// person's words with their letter), `answer` and `read` are the only doors
+// to the store, and `opens` the one decision about who reads. The feedback
+// tool and the thread's page (support-page.ts) both go through them, and
+// each platform answer is carried to whoever the thread is for
+// (support-reply.ts).
 import { type Bundle, mint } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { link as linked } from '@yaks/edge'
 import { KERNEL, type Meta } from './meta.ts'
 import { toPlatform } from './mail-config.ts'
 import { type Host, url as hostUrl } from './host.ts'
+import { isTestAddress } from '@yaks/platform/bots'
+import type { Directory } from './directory.ts'
+import { admin } from './tool.ts'
+import { caught } from './defects.ts'
+import { VERSION } from './running.ts'
 
 /** Where a thread is read in a browser: `link`. */
 export let SUPPORT = '/support'
 
 /** What was said, by whom and from where: the caller's credential, never
- * anything they typed, fills `person`, `session` and `call`. */
+ * anything they typed, fills `person`, `session`, `call` and `agent`. */
 export type Said = {
   words: string
   person?: string | null
   session?: string | null
   call?: string | null
+  /** the connector client it was said through, by the name it gave at
+   * connect: whose next tool result carries the platform's answers */
+  agent?: string | null
 }
 
 /** Where they stood when they opened a thread. */
@@ -54,6 +66,7 @@ export type Message = {
   words: string
   from: 'person' | 'platform'
   by: string | null
+  via: string | null
   at: string | null
   reply_to: string | null
   person: string | null
@@ -71,6 +84,7 @@ export type Thread = {
   person: string | null
   session: string | null
   call: string | null
+  agent: string | null
   space: string | null
   app: string | null
   version: number | null
@@ -111,6 +125,7 @@ let supportOf = (said: Said) => ({
   person: said.person ?? null,
   session: said.session ?? null,
   call: said.call ?? null,
+  agent: said.agent ?? null,
 })
 
 // The letter a message owes, its eid following the message's, ending with
@@ -227,6 +242,7 @@ export let threadOf = (
     person: ref(support.person),
     session: ref(support.session),
     call: ref(support.call),
+    agent: str(support.agent),
     space: ref(report.space),
     app: ref(report.app),
     version: typeof report.version == 'number' ? report.version : null,
@@ -240,6 +256,7 @@ export let threadOf = (
         words: str(comp(m, 'doc').body) ?? '',
         from: said ? 'person' : 'platform',
         by: ref(comp(m, 'created').by),
+        via: ref(comp(m, 'created').via),
         at: str(comp(m, 'created').at),
         reply_to: ref(comp(m, 'comment').reply_to),
         person: ref(said?.person),
@@ -278,7 +295,10 @@ export let opens = async (t: Thread, a: Asking): Promise<boolean> => {
 let THREAD = '.conversation&.report&?doc&?support&?completed&?created'
 
 /** A thread by its eid, or null where there is none. */
-export let read = async (store: Meta, eid: string): Promise<Thread | null> => {
+export let read = async (
+  store: Pick<Meta, 'query'>,
+  eid: string,
+): Promise<Thread | null> => {
   let [row] = await store.query(`.entity.eid=${eid}&${THREAD}`)
   if (!row) return null
   let messages = await store.query(
@@ -383,6 +403,7 @@ export let context = (t: Thread): string =>
     ['app', t.app && `${t.app}${t.version ? ` v${t.version}` : ''}`],
     ['release', t.release],
     ['session', t.session],
+    ['agent', t.agent],
     ['call', t.call],
   ].flatMap(([k, v]) => v ? [`${k} ${v}`] : []).join(' · ')
 
@@ -403,3 +424,109 @@ export let valueOf = (t: Thread, env: Host) => ({
     fixes: m.fixes,
   })),
 })
+
+/** The platform's answer `m` (none: the thread was only marked completed),
+ * as the agent the thread came from hears it: its Operator, as a note, or a
+ * connector, beside its next tool result (support-reply.ts). */
+export let noted = (t: Thread, m: Message | undefined, env: Host): string =>
+  [
+    m
+      ? `TaskMaster answered for yaks.app in the support thread “${t.title}” (thread ${t.eid}), opened with feedback: ${m.words}`
+      : `TaskMaster marked the support thread “${t.title}” (thread ${t.eid}) completed.`,
+    ...m?.fixes.length ? [`Fix: ${m.fixes.join(', ')}.`] : [],
+    ...m ? [t.completed ? 'It is marked completed.' : 'It is still open.'] : [],
+    `Read the whole thread with feedback(thread: '${t.eid}'), or at ${
+      link(env, t.eid)
+    }.`,
+  ].join(' ')
+
+/** The same, as the person reads it in their Updates: in Markdown, with
+ * the way to the whole thread and how it stands. */
+export let told = (t: Thread, m: Message | undefined, env: Host): string =>
+  [
+    m
+      ? `yaks.app answered your feedback “${t.title}”: ${m.words}`
+      : `yaks.app marked your feedback “${t.title}” done.`,
+    [
+      ...m && t.completed ? ['It is marked done.'] : [],
+      `[Read the thread](${link(env, t.eid)})`,
+    ].join(' '),
+  ].join('\n\n')
+
+/** Who asks to read a thread, as a door that holds the directory asks it:
+ * `person` signed in, narrowed to one space or none. */
+export let asking = (
+  dir: Directory,
+  person: string,
+  narrowed: string | null = null,
+): Asking => ({
+  person,
+  narrowed,
+  member: async (space) => {
+    let at = await dir.at(space)
+    return !!at && !!await dir.role(at, person)
+  },
+  admin: () => admin({ dir, person }),
+})
+
+/** How many messages one person adds to threads in an hour. A conversation
+ * needs more turns than reports need openings, and each one still mails a
+ * person. */
+export let SAYS = 12
+
+/** What `person` has added to threads this hour, out of the store itself.
+ * A store that cannot answer counts nothing: a limit is never the reason
+ * words are lost. */
+export let lately = async (store: Meta, person: string): Promise<number> => {
+  try {
+    return (await store.query(
+      `.comment&.support.person=${person}&.created.at>=1-hour-ago`,
+    )).length
+  } catch (e) {
+    caught(e, { request: 'support lately' })
+    return 0
+  }
+}
+
+/** Who said it, on the letter, and whether a letter goes at all: a test
+ * account's words are kept and go nowhere (@yaks/platform/bots), since a
+ * letter is a thing a person has to read. Nobody signed in is said plainly,
+ * so a reader knows there is no address to answer. */
+export let signer = async (
+  dir: Pick<Directory, 'nameAt' | 'emailAt'>,
+  person: string | null | undefined,
+) => {
+  let by = person ? await dir.nameAt(person) : null
+  let email = person ? await dir.emailAt(person) : null
+  return {
+    email,
+    test: isTestAddress(email ?? ''),
+    from: person
+      ? `${by ?? 'someone'}${email ? ` <${email}>` : ''}`
+      : 'someone, signed out',
+  }
+}
+
+/** Add a person's words to a thread, as the feedback tool and the thread's
+ * page both do, with the letter TaskMaster is owed; the message's eid. */
+export let adding = async (
+  store: Meta,
+  env: Host,
+  dir: Pick<Directory, 'nameAt' | 'emailAt'>,
+  t: Thread,
+  said: Said,
+  headers: Record<string, string>,
+): Promise<string> => {
+  let me = await signer(dir, said.person)
+  return await say(
+    store,
+    env,
+    t.eid,
+    said,
+    me.test ? null : {
+      subject: `feedback: ${t.title}`,
+      lines: [me.from, `yaks.app ${VERSION} · ${new Date().toISOString()}`],
+    },
+    headers,
+  )
+}

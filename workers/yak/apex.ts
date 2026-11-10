@@ -30,6 +30,7 @@ import * as pageReport from './page-report.ts'
 import { paymentDoor } from './payment-doors.ts'
 import * as sell from './sell.ts'
 import * as support from './support-door.ts'
+import * as supportPage from './support-page.ts'
 import * as sweep from './sweep.ts'
 import * as tunnel from './tunnel.ts'
 import * as site from './site.ts'
@@ -138,6 +139,11 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // TaskMaster's answers to support threads (support-door.ts), the owner's
   // door, before the connector for the same reason as the fee's.
   if (path == support.PATH) return support.fetch(req, env)
+  // A support thread's own page (support-page.ts), signed in: the link the
+  // feedback tool answers with and the person's Updates lead to.
+  if (path.startsWith(`${supportPage.PATH}/`)) {
+    return supportPage.answer(req, env, path)
+  }
   // The tunnel a space has to a machine (tunnel.ts, T-39585): the owner's own
   // door, before the connector for the same reason as the fee's.
   if (path == '/api/tunnel') return tunnel.fetch(req, env)

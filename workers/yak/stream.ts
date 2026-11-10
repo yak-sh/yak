@@ -31,7 +31,10 @@
 // T-34277). A notification only reaches a client holding a stream and willing
 // to act on it; the roster is how the same news reaches one that is not, as a
 // line on the next tool result naming which tools moved. Both are per session,
-// so both live here.
+// so both live here. So do the platform's answers to a support thread one of
+// the person's agents opened (`Reply`, support-reply.ts): each rides that
+// agent's next tool result, read or write, and is forgotten only once a
+// result carried it.
 //
 // One log per person, one cursor per stream, and at most one copy of a line
 // per session: the transport forbids broadcasting one message across two
@@ -78,11 +81,49 @@ type Told = { method: string; params?: unknown; reply?: string }
 // things the fixed roster already carries (declared.ts) — so a session is
 // told its list is stale only when the names actually moved under it.
 export type Roster = { version: string; names: string[] }
-export type Asked = Roster & { session: string; init?: boolean }
-// The line one reply would carry, and the owner notices in it, which the
-// reply that carried them hands back (`said`).
-export type Heard = { line?: string; notices?: string[] }
-export type Said = Asked & { notices?: string[] }
+/** What one call asks of its session: the roster it holds, and the agent
+ * holding it (mcp.ts `Who.agent`, '' for a client that named none). */
+export type Asked = Roster & { session: string; init?: boolean; agent?: string }
+// The line one reply would carry, and the owner notices and replies in it,
+// which the reply that carried them hands back (`said`).
+export type Heard = { line?: string; notices?: string[]; replies?: string[] }
+export type Said = Asked & { notices?: string[]; replies?: string[] }
+
+/**
+ * A platform answer one of the person's agents is owed (support-reply.ts):
+ * the agent by its name, the message's id, and the line it rides on that
+ * agent's next tool result as. Unlike an owner notice, which any of the
+ * person's clients may carry, a reply waits for the agent its thread came
+ * from, across its reconnects, and no other client hears it.
+ */
+export type Reply = { agent: string; id: string; line: string }
+
+// How many replies an agent may be owed at once: the newest are kept.
+let OWED = 20
+
+/**
+ * The replies held, with `r` owed too: once, however often it is sent.
+ *
+ * ```ts
+ * let r = { agent: 'claude-ai', id: 'm1', line: 'answered' }
+ * owing(owing([], r), r)
+ * // [r]
+ * ```
+ */
+export let owing = (held: Reply[], r: Reply): Reply[] => {
+  if (held.some((h) => h.agent == r.agent && h.id == r.id)) return held
+  let mine = held.filter((h) => h.agent == r.agent)
+  let dropped = new Set(mine.slice(0, Math.max(0, mine.length + 1 - OWED)))
+  return [...held.filter((h) => !dropped.has(h)), r]
+}
+
+/** What `agent` is owed. */
+export let owed = (held: Reply[], agent: string): Reply[] =>
+  held.filter((h) => h.agent == agent)
+
+/** The replies held, less those a reply to `agent` carried. */
+export let paid = (held: Reply[], agent: string, ids: string[]): Reply[] =>
+  held.filter((h) => h.agent != agent || !ids.includes(h.id))
 
 type Held = {
   session: string
@@ -259,13 +300,25 @@ export class Wire {
     }
     if (asked.init) return {}
     let notices = await this.state.storage.get<string[]>('pending') ?? []
-    let text = [...notices, ...line ? [line] : []].join('\n')
-    return text ? { line: text, ...notices.length ? { notices } : {} } : {}
+    let replies = owed(await this.replies(), asked.agent ?? '')
+    let text = [
+      ...notices,
+      ...replies.map((r) => r.line),
+      ...line ? [line] : [],
+    ].join('\n')
+    return text
+      ? {
+        line: text,
+        ...notices.length ? { notices } : {},
+        ...replies.length ? { replies: replies.map((r) => r.id) } : {},
+      }
+      : {}
   }
 
-  // A reply carried the line: the notices on it are forgotten, and the roster
-  // it told the session about is the one the session holds now, so a client
-  // that never reconnects is told about the next move and not this one again.
+  // A reply carried the line: the notices and replies on it are forgotten,
+  // and the roster it told the session about is the one the session holds
+  // now, so a client that never reconnects is told about the next move and
+  // not this one again.
   async said(said: Said): Promise<void> {
     if (said.notices?.length) {
       let pending = await this.state.storage.get<string[]>('pending') ?? []
@@ -274,8 +327,24 @@ export class Wire {
         pending.filter((n) => !said.notices!.includes(n)),
       )
     }
+    if (said.replies?.length) {
+      await this.state.storage.put(
+        'replies',
+        paid(await this.replies(), said.agent ?? '', said.replies),
+      )
+    }
     let all = await this.listed()
     if (all[said.session]?.version != said.version) await this.keep(all, said)
+  }
+
+  async replies(): Promise<Reply[]> {
+    return await this.state.storage.get<Reply[]>('replies') ?? []
+  }
+
+  // A reply one of the person's agents is owed, kept until a reply to that
+  // agent carries it.
+  async owe(reply: Reply): Promise<void> {
+    await this.state.storage.put('replies', owing(await this.replies(), reply))
   }
 
   async listed(): Promise<Record<string, Roster>> {
@@ -379,6 +448,10 @@ export class Wire {
       await this.said(await req.json() as Said)
       return new Response(null, { status: 204 })
     }
+    if (path == '/owe') {
+      await this.owe(await req.json() as Reply)
+      return new Response(null, { status: 204 })
+    }
     return new Response('not found', { status: 404 })
   }
 }
@@ -480,6 +553,15 @@ export let rostered = async (
 // What a reply carried, for the object to forget.
 export let said = (env: Env, person: string, said: Said): Promise<void> =>
   sent(env, person, 'said', said)
+
+/** A reply one of `person`'s agents is owed, for its next tool result to
+ * carry. It throws when the object did not take it, so the caller tries
+ * again. */
+export let owe = async (env: Env, person: string, reply: Reply) => {
+  let r = await posted(env, person, 'owe', reply)
+  await r.body?.cancel()
+  if (!r.ok) throw new Error(`the Wire did not take the reply (${r.status})`)
+}
 
 // News for one person, whether or not they are listening this second.
 export let told = (

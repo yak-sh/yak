@@ -15,6 +15,8 @@ import { DAILY as WRAP, forward, ROW } from '../rewrap.ts'
 import { directoryRows, type Row } from '../directory.ts'
 import { rewarding } from '../reward.ts'
 import { plans } from '../payments.ts'
+import { carry } from '../support-reply.ts'
+import type { Env } from '../env.ts'
 
 /** What the directory is born holding: a schedule for each sweep. */
 export let schedules: Wake[] = [{
@@ -68,6 +70,27 @@ export let effects = (_host: unknown, options: Options): Handlers => {
       let [wrap] = await at.graph.read(`.entity.eid=${ROW} ?wake`)
       await at.graph.apply(forward(wrap, now))
     },
+    // Carried until every place it goes took it, as trash is (trash-effects.ts):
+    // a reply nobody hears is the one thing a support thread is for.
+    ...(at.env.BUILDER && at.env.WIRE
+      ? {
+        support_reply: async (event, _tx, _write, attempt) => {
+          try {
+            await carry(
+              at.env as Env,
+              { query: async (q) => await at.graph.read(q) },
+              event.entity.eid,
+            )
+          } catch (error) {
+            await attempt?.progressed()
+            throw Object.assign(
+              error instanceof Error ? error : new Error(String(error)),
+              { retry: { after: 60000 } },
+            )
+          }
+        },
+      } satisfies Handlers
+      : {}),
     reward_referral: async (event) =>
       await rewarding(
         dir(),

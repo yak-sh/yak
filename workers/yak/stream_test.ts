@@ -58,6 +58,45 @@ test('a retained owner notice survives eviction and rides one reply after reconn
   assertEquals(await ask(), {})
 })
 
+test('a support reply waits for its own agent across reconnects, until a reply carries it', async () => {
+  let storage = kvStorage()
+  let wire = new Wire({ storage }, {})
+  let owe = (id: string, agent = 'claude-ai') =>
+    wire.fetch(
+      new Request('http://wire/owe', {
+        method: 'POST',
+        body: JSON.stringify({ agent, id, line: `answered ${id}` }),
+      }),
+    )
+  await owe('m1')
+  await owe('m1')
+  // Evicted, and asked by a new session of the same client.
+  wire = new Wire({ storage }, {})
+  let ask = (agent: string, session = 'fresh') =>
+    wire.roster({ session, version: 'same', names: [], agent })
+  let heard = { line: 'answered m1', replies: ['m1'] }
+  assertEquals(await ask('claude-ai'), heard)
+  assertEquals(await ask('chatgpt'), {}, 'another client hears nothing')
+  // A reply the answer outran carried nothing, so it is still owed.
+  assertEquals(await ask('claude-ai', 'again'), heard)
+  await wire.said({
+    session: 'again',
+    version: 'same',
+    names: [],
+    agent: 'chatgpt',
+    replies: ['m1'],
+  })
+  assertEquals(await ask('claude-ai'), heard, 'nobody else pays it')
+  await wire.said({
+    session: 'fresh',
+    version: 'same',
+    names: [],
+    agent: 'claude-ai',
+    replies: heard.replies,
+  })
+  assertEquals(await ask('claude-ai'), {})
+})
+
 test('a stream resuming across a release hears the lists moved', async () => {
   let storage = kvStorage()
   let wire = new Wire({ storage }, {})

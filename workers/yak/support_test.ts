@@ -23,6 +23,9 @@ import {
   unique,
 } from './probe.ts'
 import type { Env } from './env.ts'
+import { carrying } from './support-reply.ts'
+import { managePath } from './route.ts'
+import { parseHTML } from 'linkedom'
 
 // ---- who reads a thread ----------------------------------------------------
 
@@ -33,6 +36,7 @@ let thread = (person: string | null, space: string | null): Thread => ({
   person,
   session: null,
   call: null,
+  agent: null,
   space,
   app: null,
   version: null,
@@ -155,12 +159,77 @@ test("the platform's answer is a message without support, a fix edge and a mark"
   equal(answering('t', {}, 'a'), [])
 })
 
+// ---- what an answer owes ---------------------------------------------------
+
+let said = (
+  eid: string,
+  from: 'person' | 'platform',
+  at: string,
+): Thread['messages'][number] => ({
+  eid,
+  words: eid,
+  from,
+  by: null,
+  via: null,
+  at,
+  reply_to: null,
+  person: null,
+  session: null,
+  call: null,
+  fixes: [],
+})
+
+test('an answer owes its person what it says, and a bare completion its outcome', () => {
+  let t = (done: string | null, ...messages: Thread['messages']) => ({
+    ...thread('ada', 's'),
+    completed: done ? { at: done, by: null } : null,
+    messages,
+  })
+  let answer = said('a', 'platform', '2')
+  let cases: [string, Thread, string, unknown][] = [
+    ['an answer', t(null, answer), 'a', { m: answer }],
+    ['their own words', t(null, said('p', 'person', '1')), 'p', null],
+    ['completed alone', t('3', answer), 't', {}],
+    ['completed with an answer', t('2', answer), 't', null],
+    ['still open', t(null, answer), 't', null],
+    ['signed out', { ...t(null, answer), person: null }, 'a', null],
+  ]
+  for (let [name, th, eid, want] of cases) {
+    equal(carrying(th, eid), want, name)
+  }
+})
+
 // ---- through the kernel ------------------------------------------------------
 
 let k = await kernel()
-let them = await seed(k, [{ slug: unique('helped'), apps: ['board'] }])
-let agent = connector(k, them.cookie)
+// Someone with a space of their own and an app in it, and their agent: each
+// case its own, since a person opens three threads an hour.
+let helped = async () => {
+  let slug = unique('helped')
+  let them = await seed(k, [{ slug, apps: ['board'] }])
+  return { ...them, slug, agent: connector(k, them.cookie) }
+}
+let them = await helped()
+let agent = them.agent
 let ana = await signIn(k)
+
+// A page as a person's browser gets it, and every word a tool's result
+// carries, the lines riding beside its answer included.
+let opened = async (path: string, cookie?: string) => {
+  let r = await k.at(k.host, path, {
+    redirect: 'manual',
+    headers: cookie ? { cookie } : {},
+  })
+  return {
+    status: r.status,
+    location: r.headers.get('location'),
+    document: parseHTML(await r.text()).document,
+  }
+}
+let carried = async (who: ReturnType<typeof connector>, name: string) => {
+  let out = await who.call('tools/call', { name, arguments: {} })
+  return (out.content as { text: string }[]).map((c) => c.text).join('\n')
+}
 
 type Value = {
   thread: string
@@ -275,6 +344,77 @@ test('a stranger still opens a thread, and cannot read it back', async () => {
     Error,
   )
   assertStringIncludes(no.message, 'signed in')
+})
+
+test("an answer rides the agent's next result once, and the person's Updates lead to the thread and its outcome", async () => {
+  let me = await helped()
+  let { thread } =
+    (await feedback(me.agent, { app: 'board', text: 'The chart is blank.' }))
+      .value
+  let reply = 'Fixed: the chart draws now.'
+  equal((await support({ thread, text: reply, complete: 'true' })).status, 200)
+  await k.settled()
+  // A read carries it, and the next result does not again.
+  assertStringIncludes(await carried(me.agent, 'about'), reply)
+  await k.settled()
+  ok(!(await carried(me.agent, 'about')).includes(reply), 'carried once')
+  ok(!(await carried(agent, 'about')).includes(reply), 'nobody else hears it')
+
+  let updates = await opened(managePath('updates', me.slug), me.cookie)
+  let link = [...updates.document.querySelectorAll('a')]
+    .map((a) => a.getAttribute('href') ?? '')
+    .find((href) => href.endsWith(`/support/${thread}`))
+  ok(link, 'their Updates link the thread')
+  let shown = await opened(new URL(link!).pathname, me.cookie)
+  equal(shown.status, 200)
+  let text = shown.document.body.textContent ?? ''
+  for (let words of ['The chart is blank.', reply, 'marked this done']) {
+    assertStringIncludes(text, words)
+  }
+})
+
+test('the person adds to a thread from its page, as the tool does', async () => {
+  let me = await helped()
+  let { thread } =
+    (await feedback(me.agent, { app: 'board', text: 'Buttons overlap.' }))
+      .value
+  let posted = await k.at(k.host, `/support/${thread}`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: {
+      cookie: me.cookie,
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ text: 'Only on a phone.' }).toString(),
+  })
+  equal(posted.status, 303)
+  let mine = (await feedback(me.agent, { thread })).value.messages.at(-1)!
+  equal([mine.from, mine.words], ['person', 'Only on a phone.'])
+  ok((await letterOf(mine.message))?.delivered, 'TaskMaster is told')
+  assertStringIncludes(
+    (await opened(`/support/${thread}`, me.cookie)).document.body
+      .textContent ?? '',
+    'Only on a phone.',
+  )
+})
+
+test("two spaces never read each other's threads, and a signed-out one opens to nobody here", async () => {
+  let me = await helped(), you = await helped()
+  let mine = (await feedback(me.agent, { app: 'board', text: 'Mine.' })).value
+    .thread
+  let yours = (await feedback(you.agent, { app: 'board', text: 'Yours.' }))
+    .value.thread
+  equal((await opened(`/support/${mine}`, me.cookie)).status, 200)
+  equal((await opened(`/support/${yours}`, me.cookie)).status, 404)
+  equal((await opened(`/support/${mine}`, you.cookie)).status, 404)
+  await assertRejects(() => me.agent.answer('feedback', { thread: yours }))
+  let stranger = connector(k, undefined, undefined, '/mcp?auth=mixed')
+  let unsigned =
+    (await feedback(stranger, { text: 'Said signed out.' })).value.thread
+  equal((await opened(`/support/${unsigned}`, me.cookie)).status, 404)
+  let away = await opened(`/support/${mine}`)
+  equal(away.status, 303)
+  assertStringIncludes(away.location ?? '', '/login?return=')
 })
 
 // The kernel's mail fetch, which this test turns off to stand for an outage:

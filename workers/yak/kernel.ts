@@ -43,6 +43,7 @@
 //     /manage, /manage/*      apps.ts: the dashboard, one space's at a time
 //     /admin, /admin/*        admin.ts: the directory, for the platform admin
 //     /invite                identity.ts: an invitation's one click (invite.ts)
+//     /support/<thread>       support-page.ts: a support thread, signed in
 //     /tv, /tv/*              screen.ts: a TV paired by a code, and the
 //                             phone's page that pairs and unpairs it
 //     /connect                identity.ts: the connector page, signed in, and

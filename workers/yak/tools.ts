@@ -50,7 +50,6 @@ import { broken, mediaTypeOf, type Objects } from '@yaks/blob'
 import { blobPrefix } from './blob-key.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { filesAt, staged, viewOf } from './release.ts'
-import { isTestAddress } from '@yaks/platform/bots'
 import { fullFiles } from './usage.ts'
 import { TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
 import { appTools } from './tool-grammar.ts'
@@ -204,11 +203,15 @@ import {
   revoke,
 } from './grants.ts'
 import {
+  adding,
+  asking,
+  lately,
   link,
   open,
   opens,
   read as readThread,
-  say,
+  SAYS,
+  signer,
   type Thread,
   title,
   transcript,
@@ -2731,15 +2734,6 @@ let counted = async (ctx: Ctx, line: string) => {
 }
 let recently = (ctx: Ctx) =>
   counted(ctx, `.report&.created.by=${ctx.person}&.report.at>=1-hour-ago`)
-
-// And what they have added to threads this hour. A conversation needs more
-// turns than reports need openings, and each one still mails a person.
-let SAYS = 12
-let recentlySaid = (ctx: Ctx) =>
-  counted(
-    ctx,
-    `.comment&.support.person=${ctx.person}&.created.at>=1-hour-ago`,
-  )
 
 // The type a view is served under: text/html with the profile the MCP Apps
 // spec requires, which is how a host tells a page it renders from a page it
@@ -6634,29 +6628,14 @@ let OURS: Row[] = [
         ...vouched(asCaller(ctx, null)),
         ...await titling(ctx.dir, ctx.person),
       })
-      // Who said it, on the letter, and whether a letter goes at all: a test
-      // account's words are kept and go nowhere (@yaks/platform/bots), since a
-      // letter in a person's mailbox is a thing a person has to read. Nobody
-      // signed in is said plainly — "someone, signed out" — rather than left
-      // blank, so a reader knows there is no address to answer.
-      let signed = async () => {
-        let by = ctx.person ? await ctx.dir.nameAt(ctx.person) : null
-        let email = ctx.person ? await ctx.dir.emailAt(ctx.person) : null
-        return {
-          email,
-          test: isTestAddress(email ?? ''),
-          from: ctx.person
-            ? `${by ?? 'someone'}${email ? ` <${email}>` : ''}`
-            : 'someone, signed out',
-        }
-      }
       // What the credential says about where this was said from: the person,
-      // the run it vouched for, the call the door recorded. Never an id the
-      // caller typed.
+      // the run it vouched for, the call the door recorded and the client
+      // whose next result hears the answers. Never an id the caller typed.
       let evidence = {
         person: ctx.person || null,
         session: ctx.who?.instrument ?? null,
         call: ctx.call ?? null,
+        agent: ctx.who?.agent ?? null,
       }
       let answer = (t: Thread, lead: string): Out => ({
         text: `${lead}\n\n${transcript(t, ctx.person)}\n\n` +
@@ -6683,40 +6662,23 @@ let OURS: Row[] = [
             : null)
         // One sentence for a thread that is not there and one that is not
         // theirs: an id says nothing about somebody else's thread.
-        if (
-          !t || !await opens(t, {
-            person: ctx.person,
-            narrowed,
-            member: async (space) => {
-              let at = await ctx.dir.at(space)
-              return !!at && !!await ctx.dir.role(at, ctx.person)
-            },
-            admin: () => admin(ctx),
-          })
-        ) {
+        if (!t || !await opens(t, asking(ctx.dir, ctx.person, narrowed))) {
           throw refuse('missing', `no thread ${eid} that you can read`)
         }
         if (!said) return answer(t, 'The thread as it stands:')
-        let held = await recentlySaid(ctx)
+        let held = await lately(store, ctx.person)
         if (held >= SAYS) {
           throw refuse(
             'limit',
             `That is ${held} already this hour, and ${pause}`,
           )
         }
-        let me = await signed()
-        await say(
+        await adding(
           store,
           ctx.env,
-          t.eid,
+          ctx.dir,
+          t,
           { words: said, ...evidence },
-          me.test ? null : {
-            subject: `feedback: ${t.title}`,
-            lines: [
-              me.from,
-              `yaks.app ${VERSION} · ${new Date().toISOString()}`,
-            ],
-          },
           await headers(),
         )
         return answer(
@@ -6768,7 +6730,7 @@ let OURS: Row[] = [
         }
       }
       let at = new Date().toISOString()
-      let me = await signed()
+      let me = await signer(ctx.dir, ctx.person)
       let where = app && space
         ? `${space.slug}/${app.slug}${app.version ? ` v${app.version}` : ''}`
         : space?.slug ?? ''
