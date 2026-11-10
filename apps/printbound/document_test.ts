@@ -177,7 +177,7 @@ test('coloring PNG cleanup flattens alpha and the complete print pages carry the
     pages: [{ blob: 'art', kind: 'puzzle' }],
   }, f.io)
   equal(doc.pages[0].images.length, 1)
-  equal(doc.pages[0].images[0].color, '/DeviceRGB')
+  equal(doc.pages[0].images[0].color, '/DeviceGray')
   equal(doc.pages.filter((p) => p.blank).length, 3)
 })
 

@@ -74,7 +74,7 @@ let complete = async (
     reads += n.sources
     stages++
     ok(n.operations <= 10)
-    ok(n.sources <= 4)
+    ok(n.sources <= 1)
   }
   return { doc: current, maximum, reads, stages }
 }

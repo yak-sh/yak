@@ -1,7 +1,7 @@
 # Print document preparation
 
 `start(product, draft)` creates a serializable preparation checkpoint. Each
-`advance(checkpoint, io)` completes one stage: four ordered source pages, eight
+`advance(checkpoint, io)` completes one stage: one ordered source page, eight
 immutable PDF fragments, or four page previews. Persist the returned checkpoint
 and schedule the next command. Only a result carrying `revision` is a complete
 manifest; pending work cannot be reviewed, quoted or purchased. A failed stage
@@ -32,8 +32,11 @@ board bands. `inspection.ts` uses pdf-lib's object and stream parser, walks font
 resources and nested artwork, and follows content transforms to measure image
 resolution. It checks every page's print dimensions, embedded fonts, artwork
 resolution and unflattened transparency before publishing a manifest. PNG
-artwork is reduced to the product's print resolution; each image is embedded
-immediately so decoded art is released before the next page.
+artwork that needs conversion is reduced to the product's print resolution and
+embedded directly as decoded pixels, with grayscale image streams for coloring
+interiors. Print-ready PNG rows are carried unchanged. One source page is
+composed per saved stage; no PNG encoding and second decoding sits between
+normalization and PDF embedding. Decoded art is released before the next page.
 
 `render.ts` binds preparation to app doors. Its
 `preparation(APP, STORE, buyer,

@@ -146,7 +146,7 @@ export let advance = async (
   }
   if (state.content == null && draft.pages?.length) {
     let offset = state.parts.reduce((n, part) => n + part.pages, 0)
-    let pages = draft.pages.slice(offset, offset + 4)
+    let pages = draft.pages.slice(offset, offset + 1)
     let bytes = await fragment(spec, { ...draft, pages }, io.read)
     await inspect(bytes)
     let parts = [...state.parts, await artifact(io, bytes, pages.length)]

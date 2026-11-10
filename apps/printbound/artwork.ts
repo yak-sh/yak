@@ -1,6 +1,6 @@
 import { decode, encode } from 'fast-png'
 
-export let raster = (
+export let pixels = (
   bytes: Uint8Array,
   coloring: boolean,
   box?: { width: number; height: number; dpi: number; bleed: boolean },
@@ -21,12 +21,13 @@ export let raster = (
   let width = Math.ceil(image.width * scale),
     height = Math.ceil(image.height * scale)
   let channels = image.channels
-  let data = new Uint8Array(width * height * 3)
+  let output: 1 | 3 = coloring || channels < 3 ? 1 : 3
+  let data = new Uint8Array(width * height * output)
   for (let y = 0; y < height; y++) {
+    let y0 = Math.floor(y * image.height / height),
+      y1 = Math.ceil((y + 1) * image.height / height)
     for (let x = 0; x < width; x++) {
-      let rgb = [0, 0, 0], samples = 0
-      let y0 = Math.floor(y * image.height / height),
-        y1 = Math.ceil((y + 1) * image.height / height)
+      let red = 0, green = 0, blue = 0, samples = 0
       let x0 = Math.floor(x * image.width / width),
         x1 = Math.ceil((x + 1) * image.width / width)
       for (let sy = y0; sy < y1; sy++) {
@@ -35,22 +36,31 @@ export let raster = (
           let alpha = channels == 2 || channels == 4
             ? image.data[at + channels - 1] / 255
             : 1
-          for (let c = 0; c < 3; c++) {
-            rgb[c] += 255 * (1 - alpha) +
-              image.data[at + (channels < 3 ? 0 : c)] * alpha
-          }
+          let white = 255 * (1 - alpha)
+          red += white + image.data[at] * alpha
+          green += white + image.data[at + (channels < 3 ? 0 : 1)] * alpha
+          blue += white + image.data[at + (channels < 3 ? 0 : 2)] * alpha
           samples++
         }
       }
-      let gray = .2126 * rgb[0] + .7152 * rgb[1] + .0722 * rgb[2]
-      for (let c = 0; c < 3; c++) {
-        let value = Math.round((coloring ? gray : rgb[c]) / samples)
-        data[(y * width + x) * 3 + c] = coloring && value >= 245 ? 255 : value
+      let at = (y * width + x) * output
+      if (output == 1) {
+        let value = Math.round(
+          (.2126 * red + .7152 * green + .0722 * blue) / samples,
+        )
+        data[at] = coloring && value >= 245 ? 255 : value
+      } else {
+        data[at] = Math.round(red / samples)
+        data[at + 1] = Math.round(green / samples)
+        data[at + 2] = Math.round(blue / samples)
       }
     }
   }
-  return encode({ data, width, height, channels: 3 })
+  return { data, width, height, channels: output }
 }
+
+export let raster = (...args: Parameters<typeof pixels>) =>
+  encode(pixels(...args))
 
 export let gray = (bytes: Uint8Array) => raster(bytes, true)
 

@@ -11,13 +11,14 @@ import {
   PDFHexString,
   type PDFPage,
   PDFRawStream,
+  type PDFRef,
   popGraphicsState,
   pushGraphicsState,
   rectangle,
   scale,
   translate,
 } from 'pdf-lib'
-import { paper, raster, type Rows, rows } from './artwork.ts'
+import { paper, pixels, type Rows, rows } from './artwork.ts'
 import { DocumentInputError, supplied } from './document-errors.ts'
 import { inspect } from './inspection.ts'
 import { count, fit, geometry, type Product } from './layout.ts'
@@ -251,20 +252,26 @@ let carried = (pdf: PDFDocument, png: Rows, coloring: boolean): Art => {
     data,
   )
   let ref = context.register(stream)
-  return {
-    width,
-    height,
-    draw: (page, at) =>
-      page.pushOperators(
-        pushGraphicsState(),
-        translate(at.x, at.y),
-        scale(at.width, at.height),
-        drawObject(page.node.newXObject('Image', ref)),
-        popGraphicsState(),
-      ),
-    embed: () => Promise.resolve(),
-  }
+  return drawn(ref, width, height)
 }
+
+let drawn = (
+  ref: PDFRef,
+  width: number,
+  height: number,
+): Art => ({
+  width,
+  height,
+  draw: (page, at) =>
+    page.pushOperators(
+      pushGraphicsState(),
+      translate(at.x, at.y),
+      scale(at.width, at.height),
+      drawObject(page.node.newXObject('Image', ref)),
+      popGraphicsState(),
+    ),
+  embed: () => Promise.resolve(),
+})
 
 // Artwork is decoded only when it must change: transparency to flatten, or
 // color on a coloring page.
@@ -277,9 +284,21 @@ let image = async (
 ): Promise<Art> => {
   let png = bytes[0] == 0x89 ? rows(bytes) : undefined
   if (png && !(coloring && png.colors == 3)) return carried(pdf, png, coloring)
-  let art = bytes[0] == 0x89
-    ? await pdf.embedPng(raster(bytes, coloring, box))
-    : await pdf.embedJpg(bytes)
+  if (bytes[0] == 0x89) {
+    // Already normalized pixels become the PDF's image stream directly;
+    // no PNG encoding and second decoding sits between these interfaces.
+    let art = pixels(bytes, coloring, box), context = pdf.context
+    let stream = context.flateStream(art.data, {
+      Type: 'XObject',
+      Subtype: 'Image',
+      BitsPerComponent: 8,
+      Width: art.width,
+      Height: art.height,
+      ColorSpace: art.channels == 1 ? 'DeviceGray' : 'DeviceRGB',
+    })
+    return drawn(context.register(stream), art.width, art.height)
+  }
+  let art = await pdf.embedJpg(bytes)
   return {
     width: art.width,
     height: art.height,
