@@ -18,6 +18,35 @@
       },
       "description": "this memory records a correction somebody gave, and who gave it"
     },
+    "miss": {
+      "component": true,
+      "type": "object",
+      "description": "worn beside feedback{by} on the entity that records a correction: what the corrected agent had wrong, and where the fact it lacked was. A miss is a case a way of assembling context can be scored on (@yaks/trial)",
+      "properties": {
+        "entry": {
+          "type": "string",
+          "ref": "entry",
+          "death": "keep",
+          "description": "the agent's entry that erred; everything before it in its session is what the agent had"
+        },
+        "needed": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the entity that held the fact; absent when the graph did not hold it"
+        },
+        "across": {
+          "type": "string",
+          "enum": ["compaction", "clear", "fork", "spawn"],
+          "description": "what stood between the fact and the agent, when something did"
+        },
+        "told": {
+          "type": "string",
+          "enum": ["restated", "pointed"],
+          "description": "restated when the person said the fact again, pointed when they said it is in the graph; absent when an agent found the miss"
+        }
+      }
+    },
     "memory": {
       "component": true,
       "type": "object",

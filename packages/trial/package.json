@@ -1,0 +1,30 @@
+{
+  "name": "@yaks/trial",
+  "version": "0.2.23",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./moment": "./moment.ts",
+    "./cli": "./cli.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Scores a way of assembling an agent's context on the corrections it missed: what was in front of the agent before it erred, and whether a search with its words would have found the fact.",
+  "dependencies": {
+    "@yaks/cli": "0.2.33",
+    "@yaks/graph": "0.2.33",
+    "@yaks/match": "0.2.30",
+    "@yaks/persona": "0.2.23",
+    "@yaks/query": "0.2.32",
+    "@yaks/vocab": "0.2.32"
+  },
+  "devDependencies": {
+    "@yaks/doc": "0.2.24",
+    "@yaks/edge": "0.2.24",
+    "@yaks/memory": "0.2.23",
+    "@yaks/ram": "0.2.24",
+    "@yaks/session": "0.2.33",
+    "@yaks/task": "0.2.23",
+    "@yaks/testing": "0.2.30"
+  }
+}

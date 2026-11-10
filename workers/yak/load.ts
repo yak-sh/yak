@@ -68,19 +68,20 @@ import * as vocab63 from '@yaks/tmux/vocab'
 import * as vocab64 from '@yaks/tools/vocab'
 import * as vocab65 from '@yaks/topic/vocab'
 import * as vocab66 from '@yaks/tracker/vocab'
-import * as vocab67 from '@yaks/tunnel/vocab'
-import * as vocab68 from '@yaks/ux/vocab'
-import * as vocab69 from '@yaks/visualize/vocab'
-import * as vocab70 from '@yaks/vocab/vocab'
-import * as vocab71 from '@yaks/wake/vocab'
-import * as vocab72 from './facets/app-vocab.ts'
-import * as vocab73 from './facets/attribution-vocab.ts'
-import * as vocab74 from './facets/directory-vocab.ts'
-import * as vocab75 from './facets/git-vocab.ts'
-import * as vocab76 from './facets/meter-vocab.ts'
-import * as vocab77 from './facets/models-vocab.ts'
-import * as vocab78 from './facets/refusals-vocab.ts'
-import * as vocab79 from './facets/trash-vocab.ts'
+import * as vocab67 from '@yaks/trial/vocab'
+import * as vocab68 from '@yaks/tunnel/vocab'
+import * as vocab69 from '@yaks/ux/vocab'
+import * as vocab70 from '@yaks/visualize/vocab'
+import * as vocab71 from '@yaks/vocab/vocab'
+import * as vocab72 from '@yaks/wake/vocab'
+import * as vocab73 from './facets/app-vocab.ts'
+import * as vocab74 from './facets/attribution-vocab.ts'
+import * as vocab75 from './facets/directory-vocab.ts'
+import * as vocab76 from './facets/git-vocab.ts'
+import * as vocab77 from './facets/meter-vocab.ts'
+import * as vocab78 from './facets/models-vocab.ts'
+import * as vocab79 from './facets/refusals-vocab.ts'
+import * as vocab80 from './facets/trash-vocab.ts'
 import * as provider0 from '@yaks/anthropic/provider'
 import * as provider1 from '@yaks/openai/provider'
 import * as provider2 from '@yaks/openrouter/provider'
@@ -154,19 +155,20 @@ export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/tools': vocab64,
   '@yaks/topic': vocab65,
   '@yaks/tracker': vocab66,
-  '@yaks/tunnel': vocab67,
-  '@yaks/ux': vocab68,
-  '@yaks/visualize': vocab69,
-  '@yaks/vocab': vocab70,
-  '@yaks/wake': vocab71,
-  'yak/app': vocab72,
-  'yak/attribution': vocab73,
-  'yak/directory': vocab74,
-  'yak/git': vocab75,
-  'yak/meter': vocab76,
-  'yak/models': vocab77,
-  'yak/refusals': vocab78,
-  'yak/trash': vocab79,
+  '@yaks/trial': vocab67,
+  '@yaks/tunnel': vocab68,
+  '@yaks/ux': vocab69,
+  '@yaks/visualize': vocab70,
+  '@yaks/vocab': vocab71,
+  '@yaks/wake': vocab72,
+  'yak/app': vocab73,
+  'yak/attribution': vocab74,
+  'yak/directory': vocab75,
+  'yak/git': vocab76,
+  'yak/meter': vocab77,
+  'yak/models': vocab78,
+  'yak/refusals': vocab79,
+  'yak/trash': vocab80,
 }
 /** The providers config.ts `providing` and `serving` name, by plugin. */
 export let providerFacets: Record<string, ProviderFacet> = {

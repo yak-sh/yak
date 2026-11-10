@@ -725,8 +725,8 @@ The complete list of reserved names:
     integration integration_install interrupted invite inviting key
     last_deploy lease lines listed mail mail_answered mail_dismissed
     mail_post mail_task mcp_list mcp_server member memory mentions meter
-    model model_reservation model_result newcomer newcomer_builds notice
-    notice_confirmed notice_letter notice_posted notice_subscription
+    miss model model_reservation model_result newcomer newcomer_builds
+    notice notice_confirmed notice_letter notice_posted notice_subscription
     notified notify_deaths notify_trash oauth_grant occupancy offer openai
     opened openrouter operator operator_alerts operator_reach order output
     output_of own_number parent pending person persona phone phone_line plan

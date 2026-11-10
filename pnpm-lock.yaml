@@ -5014,6 +5014,49 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
 
+  packages/trial:
+    dependencies:
+      '@yaks/cli':
+        specifier: 0.2.33
+        version: link:../cli
+      '@yaks/graph':
+        specifier: 0.2.33
+        version: link:../graph
+      '@yaks/match':
+        specifier: 0.2.30
+        version: link:../match
+      '@yaks/persona':
+        specifier: 0.2.23
+        version: link:../persona
+      '@yaks/query':
+        specifier: 0.2.32
+        version: link:../query
+      '@yaks/vocab':
+        specifier: 0.2.32
+        version: link:../vocab
+    devDependencies:
+      '@yaks/doc':
+        specifier: 0.2.24
+        version: link:../doc
+      '@yaks/edge':
+        specifier: 0.2.24
+        version: link:../edge
+      '@yaks/memory':
+        specifier: 0.2.23
+        version: link:../memory
+      '@yaks/ram':
+        specifier: 0.2.24
+        version: link:../ram
+      '@yaks/session':
+        specifier: 0.2.33
+        version: link:../session
+      '@yaks/task':
+        specifier: 0.2.23
+        version: link:../task
+      '@yaks/testing':
+        specifier: 0.2.30
+        version: link:../testing
+
   packages/tui:
     dependencies:
       '@preact/signals':

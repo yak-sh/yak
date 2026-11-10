@@ -1,0 +1,40 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "trial",
+  "$defs": {
+    "trial": {
+      "component": true,
+      "type": "object",
+      "identity": ["case", "variant"],
+      "description": "one variant scored on one case: whether the fact the case's agent lacked was in front of it, unasked, before it erred, and whether a search with the words it was answering finds it. Its eid is derived from the case and the variant, so a rerun replaces the score",
+      "properties": {
+        "case": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "description": "the entity wearing miss{entry, needed, across, told}"
+        },
+        "variant": {
+          "type": "string",
+          "ref": "persona",
+          "death": "cascade",
+          "description": "the persona whose context was assembled"
+        },
+        "unasked": {
+          "type": "boolean",
+          "description": "the case's needed entity was among what the variant put in front of the agent before its entry: the persona, the compaction summary, notices, knocks delivered and hit rows returned. Its own searches and a pointer from a person do not count"
+        },
+        "asked": {
+          "type": "boolean",
+          "description": "a search with the words of the message the agent was answering returns the needed entity among its first five rows that predate the entry"
+        },
+        "tokens": {
+          "type": "integer",
+          "description": "the size of what the variant put in front of the agent, at four characters a token"
+        }
+      }
+    }
+  }
+}

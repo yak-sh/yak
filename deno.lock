@@ -4882,6 +4882,25 @@
           ]
         }
       },
+      "packages/trial": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@yaks/cli@0.2.33",
+            "npm:@yaks/doc@0.2.24",
+            "npm:@yaks/edge@0.2.24",
+            "npm:@yaks/graph@0.2.33",
+            "npm:@yaks/match@0.2.30",
+            "npm:@yaks/memory@0.2.23",
+            "npm:@yaks/persona@0.2.23",
+            "npm:@yaks/query@0.2.32",
+            "npm:@yaks/ram@0.2.24",
+            "npm:@yaks/session@0.2.33",
+            "npm:@yaks/task@0.2.23",
+            "npm:@yaks/testing@0.2.30",
+            "npm:@yaks/vocab@0.2.32"
+          ]
+        }
+      },
       "packages/tui": {
         "packageJson": {
           "dependencies": [
