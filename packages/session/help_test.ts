@@ -208,6 +208,32 @@ test('an alert that arrives by mail is its helper’s, and a person’s letter t
   equal(await o.heard(), ['Re: Standup'])
 })
 
+test('what reaches a project filed under it, or an address filed there, is its helper’s too', async () => {
+  let o = await office()
+  await o.write([
+    { entity: { eid: 'app' }, project: {}, filed: { project: 'p' } },
+    {
+      entity: { eid: 'hello' },
+      email: { address: 'hello@example.com' },
+      filed: { project: 'app' },
+    },
+  ])
+  await o.write([
+    {
+      entity: { eid: 'at-app' },
+      knock: { target: 'app' },
+      doc: { body: 'bug' },
+    },
+    {
+      entity: { eid: 'to-hello' },
+      mail: { from: 'alerts@example.com', target: 'hello' },
+      doc: { title: 'tool refusals', body: 'tool refusals' },
+    },
+  ])
+  equal((await o.helpers()).map((h) => h.told), [['bug', 'tool refusals']])
+  equal(await o.heard(), [])
+})
+
 test('an answer to a letter a session at work wrote stays that session’s', async () => {
   let o = await office()
   await o.write([

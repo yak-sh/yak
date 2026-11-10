@@ -883,10 +883,10 @@ wearing `persona`, whose context holds only what was waiting.
 
 **Routine** is what is addressed to the operator and is not the operator's own:
 
-| Addressed to the operator                                                                                                                                                 | The operator's own, never routine                                                                                                    |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| a knock at the project, or at a session a person opened (`session.operator`) wearing a persona homed there                                                                | a person's act or words: `knock.from`, else the knock's writer, wears `person`; a letter's `mail.from` is a person's `email.address` |
-| a letter that arrived for the project or for an address filed under it, unless it answers a letter another session wrote that is not over (that session hears the answer) | a hand-up: a knock written through a helper's session                                                                                |
+| Addressed to the operator                                                                                                                                                            | The operator's own, never routine                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| a knock at the project, at a project filed under it at any depth, or at a session a person opened (`session.operator`) wearing a persona homed there                                 | a person's act or words: `knock.from`, else the knock's writer, wears `person`; a letter's `mail.from` is a person's `email.address` |
+| a letter that arrived for one of those projects or for an address filed under one, unless it answers a letter another session wrote that is not over (that session hears the answer) | a hand-up: a knock written through a helper's session                                                                                |
 
 The rule runs in the write that leaves the knock or letter (`routing`, a
 `precondition` hook in [`routine.ts`](./routine.ts)) and marks a routine one

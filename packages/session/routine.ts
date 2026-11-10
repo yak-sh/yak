@@ -8,11 +8,13 @@
 //
 // Addressed to the operator:
 //
-// - a knock at the project, or at a session a person opened
-//   (`session.operator`) wearing a persona homed there;
-// - a letter that arrived (no `deliver`) for the project or for an address
-//   filed under it (@yaks/mail's `mail.target`), unless it answers a letter
-//   another session wrote that may still hear the answer (./listen.ts).
+// - a knock at the project, at a project filed under it at any depth, or at a
+//   session a person opened (`session.operator`) wearing a persona homed
+//   there;
+// - a letter that arrived (no `deliver`) for one of those projects or for an
+//   address filed under one (@yaks/mail's `mail.target`), unless it answers a
+//   letter another session wrote that may still hear the answer
+//   (./listen.ts).
 //
 // The operator's own:
 //
@@ -60,11 +62,42 @@ let wearing = async (tx: Tx, ids: Eid[], name: string): Promise<Set<Eid>> =>
       .filter((b) => b[name]).map((b) => b.entity.eid),
   )
 
-// The helped project each addressed entity leads to: itself, for a session a
-// person opened the home of the persona it wears, and for an address the
-// project it is filed under.
+// How far up a line of projects is followed: a longer one is a cycle.
+let DEPTH = 8
+
+// The nearest project wearing `helper` at or above each of these projects.
+// An operator hears what is held for its persona's home and for every
+// project filed under it (./listen.ts `below`), so its helper takes the same.
+let nearest = async (tx: Tx, projects: Eid[]): Promise<Map<Eid, Eid>> => {
+  let found = new Map<Eid, Eid>()
+  let at = new Map(projects.map((p) => [p, p]))
+  for (let depth = 0; at.size && depth < DEPTH; depth++) {
+    let rows = new Map(
+      (await tx.get(unique([...at.values()]), [HELPER, 'project', 'filed']))
+        .map((b) => [b.entity.eid, b]),
+    )
+    for (let [start, here] of [...at]) {
+      let b = rows.get(here)
+      let up = b?.project ? str(comp(b, 'filed').project) : ''
+      if (b?.[HELPER]) found.set(start, here)
+      if (b?.[HELPER] || !up) at.delete(start)
+      else at.set(start, up)
+    }
+  }
+  return found
+}
+
+// The helped project each addressed entity leads to: from a project, itself
+// or the nearest above it; from a session a person opened, the home of the
+// persona it wears; from an address, the project it is filed under.
 let helped = async (tx: Tx, targets: Eid[]): Promise<Map<Eid, Eid>> => {
-  let rows = await tx.get(targets, [HELPER, SESSION, 'email', 'filed'])
+  let rows = await tx.get(targets, [
+    HELPER,
+    SESSION,
+    'project',
+    'email',
+    'filed',
+  ])
   let worn = (b: Bundle) =>
     comp(b, SESSION).operator == true ? str(comp(b, SESSION).persona) : ''
   let personas = unique(rows.map(worn))
@@ -73,13 +106,14 @@ let helped = async (tx: Tx, targets: Eid[]): Promise<Map<Eid, Eid>> => {
       .map((b) => [b.entity.eid, str(comp(b, 'persona').home)]),
   )
   let lead = (b: Bundle) =>
-    b[HELPER]
+    b[HELPER] || b.project
       ? b.entity.eid
       : home.get(worn(b)) ?? (b.email ? str(comp(b, 'filed').project) : '')
-  let projects = await wearing(tx, unique(rows.map(lead)), HELPER)
+  let leads = unique(rows.map(lead))
+  let projects = leads.length ? await nearest(tx, leads) : new Map<Eid, Eid>()
   return new Map(
     rows.filter((b) => projects.has(lead(b)))
-      .map((b) => [b.entity.eid, lead(b)]),
+      .map((b) => [b.entity.eid, projects.get(lead(b))!]),
   )
 }
 
