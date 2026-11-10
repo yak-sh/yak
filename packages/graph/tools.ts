@@ -332,7 +332,7 @@ export let runs = (seams: Seams = {}): Runs => {
       // declared reference). An id that names nothing is said after the rest
       // rather than refusing them, so one miscopied id costs no second call;
       // only a call naming nothing at all is refused.
-      let ids = strings(args.ids)
+      let ids = [...strings(args.ids), ...strings([args.id])]
       if (!ids.length) throw new Refused('graph_show needs at least one id')
       let asked = [...new Set(ids)]
       let rows = (await graph.get(asked)).filter(held)

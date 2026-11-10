@@ -99,6 +99,7 @@ import { background, caught, reporter } from './defects.ts'
 import { admitted, hearing } from './refusals.ts'
 import { isTestAddress } from '@yaks/platform/bots'
 import { refuse } from './tool.ts'
+import { inApp } from './attachment-core.ts'
 import { url as hostUrl } from './host.ts'
 import { source, within } from './rate.ts'
 import * as appAddress from './app-address.ts'
@@ -260,7 +261,8 @@ async (
 // The `app`/`space` pair that named one app moves too: on a write it becomes
 // `$app` on each bundle, on a read an `.in=` filter — both the
 // platform's own forms, each written where the thing it is about is
-// (agent.ts). Signed out it moves nowhere: the pair is the call's scope there,
+// (attachment-core.ts `inApp`), and here first so the door reads only
+// that app's reach. Signed out it moves nowhere: the pair is the call's scope there,
 // read off the arguments before any graph exists (anon.ts `opened`), so
 // `scoped` tells us whether this caller has a reach for an app to be narrowed
 // out of.
@@ -290,20 +292,8 @@ let heard = (
   // call's own scope there, declared on the tool (anon.ts scope) and read
   // here, not a narrowing of a reach nobody has.
   if (!scoped) return out
-  let { app, space, ...rest } = out
-  if (typeof app != 'string') return rest
-  let at = typeof space == 'string' ? `${space}/${app}` : app
-  if (name == 'graph_apply' && Array.isArray(rest.bundles)) {
-    rest.bundles = rest.bundles.map((b) =>
-      b && typeof b == 'object' && !('$app' in b) ? { ...b, $app: at } : b
-    )
-  }
-  if (name == 'graph_query' && typeof rest.q == 'string') {
-    rest.filters = [
-      `.in=${at}`,
-      ...(Array.isArray(rest.filters) ? rest.filters : []),
-    ]
-  }
+  if (name != 'search') return inApp(name, out)
+  let { app: _, space: __, ...rest } = out
   return rest
 }
 

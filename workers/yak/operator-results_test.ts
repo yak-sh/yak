@@ -137,3 +137,37 @@ test('Operator keeps extension tool results at its loop and realtime model bound
   ok(kept.bytes > 20_000)
   equal(await readResult(store.g, kept.id, person), value)
 })
+
+// The Operator reads its own store with `self`, and the space and app a read
+// of the apps takes name nothing there, so carrying them along is answered.
+test('Operator reads its own store with self beside a space and app', async () => {
+  let { env } = platform('operator-self-scope')
+  let person = mint(), dir = directoryOf(env.STORE)
+  let eid = await dir.mint(person, 'mine', 'Mine', {
+    'x-yak-person': person,
+    'x-yak-role': 'owner',
+  })
+  let space = (await dir.at(eid))!
+  let store = operatorMemory()
+  let row = mint()
+  await store.g.apply([{ entity: { eid: row }, doc: { title: 'Own row' } }], {
+    trusted: true,
+  })
+  let ctx = await operatorContext(env, { person }, space, () => dir)
+  let tools = await operatorRoster(ctx, store, { space: eid })
+  let said = async (name: string, args: Record<string, unknown>) => {
+    let call = { entity: { eid: mint() }, call: { to: toolEid(name), args } }
+    return wordsOf(
+      await tools.find((t) => t.name == name)!.run(
+        { self: true, space: 'mine', app: 'notes', ...args },
+        { session: mint(), call, entries: [] },
+      ),
+    )
+  }
+  for (
+    let out of [
+      await said('graph_show', { id: row }),
+      await said('graph_query', { q: '.doc' }),
+    ]
+  ) ok(out.includes('Own row'), out)
+})

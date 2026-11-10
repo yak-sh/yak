@@ -475,8 +475,12 @@ export let operatorRoster = async (
             self: SELF,
           },
         },
-        run: ({ self: reads, ...args }, context) =>
-          (reads ? here : there)(args, context),
+        // Its own store is one store, so the app and space that narrow a
+        // read of the apps name nothing there.
+        run: ({ self: reads, ...args }, context) => {
+          let { space: _, app: __, ...own } = args
+          return reads ? here(own, context) : there(args, context)
+        },
       }
     }),
     ...[...own.values()]

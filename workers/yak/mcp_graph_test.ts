@@ -254,6 +254,38 @@ test(
   { tags: ['published-arguments'] },
 )
 
+// The graph tools take the space and app nearly every other tool takes, and
+// graph_show one id as well as several, rather than refusing what a caller
+// carried over from app_files.
+test('graph_show and graph_apply take the space and app other tools take', async () => {
+  let k = await kernel()
+  try {
+    let agent = connector(k, (await signIn(k)).cookie)
+    let made = await agent.tool('app_new', { slug: 'notes', title: 'Notes' })
+    let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/.exec(made)![1]
+    let eid = minted(
+      await agent.tool('graph_apply', {
+        space,
+        app: 'notes',
+        bundles: [{ entity: { eid: '$note' }, doc: { title: 'Kept' } }],
+      }),
+      '$note',
+    )
+    let shown = async (args: Record<string, unknown>) =>
+      JSON.parse(await agent.tool('graph_show', args))[0].doc.title
+    assertEquals(
+      await Promise.all([
+        shown({ ids: [eid], space }),
+        shown({ ids: [eid], space, app: 'notes' }),
+        shown({ id: eid }),
+      ]),
+      ['Kept', 'Kept', 'Kept'],
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
 // A reduction asks about the selection, not its members, and is answered with
 // its value, as `/query` answers it — one app's or the whole reach's.
 test('graph_query answers a count and a tally as their value', async () => {
