@@ -66,6 +66,8 @@ let dir = {
   space: (slug: string) => Promise.resolve(slug == META.space ? root : null),
   role: (_: Space, person: string) =>
     Promise.resolve(person == 'root' ? 'owner' : null),
+  sitting: (person: string) =>
+    Promise.resolve(new Map(person == 'root' ? [[root.eid, 'owner']] : [])),
   census: () => Promise.resolve(records),
 } as unknown as Directory
 let asking = (path: string, person?: string) =>

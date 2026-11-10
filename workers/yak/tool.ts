@@ -333,12 +333,17 @@ let held = async (ctx: Ctx, app: string) => {
 }
 
 // The platform's admin: an owner of the meta space, the seat every platform
-// act answers to (sell.ts `fees`, tunnel.ts).
+// act answers to (sell.ts `fees`, tunnel.ts). The space and the person's seats
+// are asked at once, and the seats are what the rest of a request asks of
+// them too (directory.ts `sitting`).
 export let admin = async (
   { dir, person }: Pick<Ctx, 'dir' | 'person'>,
 ): Promise<boolean> => {
-  let meta = await dir.space(META.space)
-  return !!meta && await dir.role(meta, person) == 'owner'
+  let [meta, seats] = await Promise.all([
+    dir.space(META.space),
+    person ? dir.sitting(person) : new Map(),
+  ])
+  return !!meta && seats.get(meta.eid) == 'owner'
 }
 
 // The caller's role in a space: their seat's. Where the door says `over` —

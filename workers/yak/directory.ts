@@ -2180,19 +2180,36 @@ export let directoryRows = (rows: {
     on: string | Walk,
   ): Promise<Reach[]> => {
     let at = typeof on == 'string' ? `=${on}` : on.path
-    let [found, eid] = await Promise.all([
+    let reached = `.operator_reachs_${other}.operator_reach.${side}${at}`
+    // The spaces an Operator reaches come with their apps, which is what it
+    // asks of them next (grants.ts `narrowed`): this request's `apps` of
+    // them is answered from this read.
+    let withApps = other == 'space'
+    let since = wrote(META_STORE)
+    let [got, eid] = await Promise.all([
       query(
         `(.operator_reach.${side}${at})` +
-          `|(.space&.operator_reachs_${other}.operator_reach.${side}${at}&${SPACE_ABOUT})`,
+          `|(.space&${reached}&${SPACE_ABOUT})` +
+          (withApps ? `|(.app.space${reached}&${ABOUT})` : ''),
       ),
       typeof on == 'string' ? on : on.eid,
     ])
-    let rows = found.filter((r) =>
+    let rows = got.filter((r) =>
       r.operator_reach && idOf(r.operator_reach[side]) == eid
     )
     let spaces = new Map(
-      found.filter((r) => r.space).map((r) => [r.entity.eid, spaceOf(r)]),
+      got.filter((r) => r.space).map((r) => [r.entity.eid, spaceOf(r)]),
     )
+    let mine = withApps ? found() : undefined
+    if (mine && since != null) {
+      let apps = got.filter((r) => r.app).map(appOf)
+      for (let space of spaces.keys()) {
+        mine.apps.set(space, {
+          at: since,
+          apps: apps.filter((app) => app.space == space),
+        })
+      }
+    }
     return rows.flatMap((r) => {
       let space = spaces.get(idOf(r.operator_reach![other]))
       return space && !space.trashed
@@ -2655,9 +2672,10 @@ export let directoryRows = (rows: {
       }
       let eids = [space].flat().map((s) => s.eid)
       if (!eids.length) return []
-      let read = eids.length == 1 ? found()?.apps.get(eids[0]) : undefined
-      if (read && read.at === wrote(META_STORE)) {
-        return structuredClone(read.apps)
+      let held = found()?.apps
+      let read = eids.map((eid) => held?.get(eid))
+      if (read.every((r) => r && r.at === wrote(META_STORE))) {
+        return structuredClone(read.flatMap((r) => r!.apps))
       }
       return (await query(`.app.space=${eids.join(',')}&${ABOUT}`))
         .map(appOf)

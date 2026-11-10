@@ -9,6 +9,7 @@ import { as, SECRET } from './serving-data-probe.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
 import { operatorContext } from './operator.ts'
 import { call, TOOLS } from './tools.ts'
+import { tallying } from './lib/hops.ts'
 
 await using p = platform(SECRET)
 let { env } = p
@@ -103,6 +104,24 @@ let offered = await (await page(people)).text()
 let letIn = await page(people, { operator: shop, role: 'viewer' })
 let listed = await (await page(people)).text()
 let during = await reach()
+// Within one request, the spaces the Operator reaches come with their apps:
+// what it then asks of their apps is answered from that read.
+let asked: string[] = []
+let counted = directory({
+  fetch: (req) => {
+    asked.push(decodeURIComponent(new URL(req.url).search))
+    return directoryFetch(req, env)
+  },
+})
+let oneRead = await tallying(new Map(), async () => {
+  let ctx = await operatorContext(
+    env,
+    { person: bea },
+    shopSpace,
+    () => counted,
+  )
+  return (await ctx.dir.reachable(bea)).map((r) => r.app.slug)
+})
 // Someone with no seat in the shop, talking with its Operator.
 let outsider = await reach(crypto.randomUUID())
 let stranger = await page(people, { operator: 'nobody-here', role: 'editor' })
@@ -124,6 +143,11 @@ test('let in from the People page, it works there with the role given, for a wri
   assertEquals(during.role, 'viewer')
   assertEquals(during.apps, ['list'])
   assertStringIncludes(during.writes, `not a writer of ${books}`)
+})
+
+test('the spaces an Operator reaches are read with their apps, in one trip', () => {
+  assertEquals(oneRead, ['list'])
+  assertEquals(asked.filter((q) => q.includes('.app.space=')), [])
 })
 
 test('someone with no seat at home reaches nothing the Operator was let into', () => {

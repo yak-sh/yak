@@ -153,6 +153,8 @@ let fixture = () => {
       },
       role: async (where: Space) =>
         where.eid == 'meta' ? 'owner' : await read<Role | null>('role'),
+      sitting: () =>
+        Promise.resolve(new Map<string, Role>([['meta', 'owner']])),
       target: async (eid: string, _person: string, held?: string | null) => {
         let [where, now, role] = await Promise.all([
           read<Space>('space'),
