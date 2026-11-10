@@ -48,7 +48,13 @@ let tables = (): Tables => ({
     id: 1,
     token: 'fixture-free-token',
     prompt: 'Free fixture',
-    status: 'ready',
+    status: 'failed',
+  }, {
+    id: 2,
+    token: 'fixture-claimed',
+    prompt: 'A <claimed> page',
+    status: 'completed',
+    email: 'parent@example.test',
   }],
   checkout_sessions: [{
     id: 1,
@@ -74,11 +80,20 @@ let tables = (): Tables => ({
     provider_order_id: 'provider_fixture',
     status: 'failed',
   }],
-  active_storage_blobs: [{ id: 1, key: 'private/art', byte_size: 3 }, {
-    id: 2,
-    key: 'private/character',
-    byte_size: 3,
-  }, { id: 3, key: 'private/pdf', byte_size: 3 }],
+  active_storage_blobs: [
+    { id: 1, key: 'private/art', byte_size: 3 },
+    {
+      id: 2,
+      key: 'private/character',
+      byte_size: 3,
+    },
+    { id: 3, key: 'private/pdf', byte_size: 3 },
+    {
+      id: 4,
+      key: 'private/free',
+      byte_size: 3,
+    },
+  ],
   active_storage_attachments: [{
     id: 1,
     blob_id: 1,
@@ -97,6 +112,12 @@ let tables = (): Tables => ({
     record_type: 'Book',
     record_id: 1,
     name: 'interior_pdf',
+  }, {
+    id: 4,
+    blob_id: 4,
+    record_type: 'FreePage',
+    record_id: 2,
+    name: 'artwork',
   }],
   waitlist_signups: [{
     id: 1,
@@ -249,7 +270,7 @@ test('ActiveStorage variants retain their original blob and attachment links', (
   let sourceRows = tables()
   sourceRows.active_storage_variant_records = [{ id: 1, blob_id: 1 }]
   sourceRows.active_storage_attachments.push({
-    id: 4,
+    id: 5,
     blob_id: 2,
     record_type: 'ActiveStorage::VariantRecord',
     record_id: 1,
@@ -260,7 +281,7 @@ test('ActiveStorage variants retain their original blob and attachment links', (
     r.table === 'active_storage_variant_records'
   )!
   let attachment = data.rows.find((r) =>
-    r.table === 'active_storage_attachments' && r.data.id === 4
+    r.table === 'active_storage_attachments' && r.data.id === 5
   )!
   equal(attachment.refs.record_id, variant.eid)
   equal(variant.refs.blob_id, row('active_storage_blobs', 1).eid)
@@ -278,12 +299,36 @@ test('Historical order links require the mapped owner or guest principal', async
 })
 
 test('A free printable capability and an opt-out retain their scoped reach', async () => {
-  let free = await legacyPage(
-    new Request('https://fixture.test/free_pages/fixture-free-token'),
-    db,
-    {},
-  )
-  equal((await free!.json()).prompt, 'Free fixture')
+  let ports = {
+    asset: (blob: string) => Promise.resolve(new Response(blob)),
+    printable: (art: { blob: string }, title: string) =>
+      Promise.resolve(new Response(`${title}:${art.blob}`)),
+  }
+  let open = (path: string, accept = 'text/html') =>
+    legacyPage(
+      new Request('https://fixture.test/free_pages/' + path, {
+        headers: { accept },
+      }),
+      db,
+      {},
+      undefined,
+      ports,
+    )
+  let text = async (path: string) => (await open(path))!.text()
+  let art = sha256('private/free')
+  match(await (await open('fixture-claimed', 'application/json'))!.json(), {
+    prompt: 'A <claimed> page',
+    artwork: [{ blob: art }],
+  })
+  let page = await text('fixture-claimed')
+  match(page, /Your page is ready/)
+  match(page, /A &#60;claimed&#62; page/)
+  match(page, /href="\/free_pages\/fixture-claimed\/download"/)
+  equal(await text('fixture-claimed/artwork'), art)
+  equal(await text('fixture-claimed/download'), `A <claimed> page:${art}`)
+  match(await text('fixture-free-token'), /didn’t come out right/)
+  equal((await open('fixture-free-token/artwork'))!.status, 404)
+  equal((await open('unknown'))!.status, 404)
   let response = await legacyPage(
     new Request('https://fixture.test/unsubscribe/fixture-opt-out', {
       method: 'POST',

@@ -1,7 +1,7 @@
 import { collection } from './collection.ts'
 import { gallery } from './gallery.ts'
 import { story } from './story.ts'
-import { printable, printableRequest } from './printable.ts'
+import { printable, printableRequest, sheet } from './printable.ts'
 import { atelier } from './atelier.ts'
 import { type Binding, guard, identifier, Refusal, store, who } from './db.ts'
 import { generation, put, puzzle, settings } from './generation.ts'
@@ -63,7 +63,11 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
       via: caller.via ?? undefined,
     },
     undefined,
-    { asset: (blob) => env.APP.fetch('/pay/artifacts/' + blob) },
+    {
+      asset: (blob) => env.APP.fetch('/pay/artifacts/' + blob),
+      printable: async (art, title) =>
+        sheet(env.APP, (await settings(db)).font, art, title),
+    },
   )
   if (old) return old
   let published = await publicPage(request, env)
