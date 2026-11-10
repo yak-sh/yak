@@ -148,6 +148,8 @@ let part = (row: Bundle, name: string) => row[name] as Comp | undefined
 export let alert = async (env: Env, store: Store, eid: string) => {
   let [row] = await store.g.get([eid])
   if (!row || row.delivered || row.bounced) return
+  let { waitingContact } = await import('./operator-contacts.ts')
+  if (await waitingContact(store, row)) return
   let to = String(part(row, 'deliver')?.to ?? '')
   let by = String(part(row, 'created')?.by ?? '')
   let words = String(part(row, 'doc')?.body ?? '').trim()
@@ -277,7 +279,7 @@ export let notificationSend = (ctx: Ctx, space: Space, store: Store): Tool => ({
     },
     required: ['text'],
   },
-  run: async (args) => {
+  run: async (args, context) => {
     let words = String(args.text ?? '').trim()
     if (!words) throw refuse('arguments', 'Say what to tell them.')
     let { notification } = await import('./operator-updates.ts')
@@ -287,7 +289,16 @@ export let notificationSend = (ctx: Ctx, space: Space, store: Store): Tool => ({
       by: space.eid,
       ...args.about ? { about: String(args.about) } : {},
     })
+    if (context?.session) row.$actor = { by: space.eid, via: context.session }
     await store.g.apply([row], { trusted: true })
+    let [kept] = await store.g.get([row.entity.eid])
+    let { waitingContact } = await import('./operator-contacts.ts')
+    if (kept && await waitingContact(store, kept)) {
+      return JSON.stringify({
+        notification: row.entity.eid,
+        reaches: 'pending contact confirmation',
+      })
+    }
     let route = await routeFor(ctx.dir, ctx.person)
     return JSON.stringify({
       notification: row.entity.eid,

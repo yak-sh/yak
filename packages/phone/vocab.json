@@ -71,6 +71,12 @@
           "type": "string",
           "description": "the words they agreed to, exactly as they were shown"
         },
+        "source": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the conversation entry or authenticated form confirmation that gave this consent"
+        },
         "at": {
           "type": "string",
           "format": "date-time",

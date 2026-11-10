@@ -3070,7 +3070,7 @@ export let directoryRows = (rows: {
     // nobody, which is how an invited person's later sign-in finds the row
     // the invite made.
     personAt: async (email: string) =>
-      (await one(`.person&.email.address=${email}`))
+      (await one(`.person&.email.address=${JSON.stringify(email)}`))
         ?.entity.eid ?? null,
     // Who has this mobile number (@yaks/phone `mobile`'s form), if anyone:
     // where a text that arrived is from.

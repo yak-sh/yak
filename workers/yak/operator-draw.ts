@@ -20,6 +20,7 @@ import { pretty } from '@yaks/ui/relative'
 import { PART } from '@yaks/persona/part'
 import { sourceWords } from './operator-source.ts'
 import { measured, type Metadata } from './operator-metadata.ts'
+import { contactCard } from './operator-contact-card.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -825,6 +826,25 @@ let line = (
   opens?: string,
 ): Line[] => {
   let is = (node: Node, text?: string) => [{ id, node, text, uses: [id] }]
+  if (b.operator_contact) {
+    return is(
+      b.verified
+        ? h('p', { class: 'Talk_Note' }, 'Your contact is confirmed.')
+        : b.cancelled
+        ? h(
+          'p',
+          { class: 'Talk_Note' },
+          'This contact request is no longer active.',
+        )
+        : String(comp(b, 'operator_contact')?.address ?? '').includes('@')
+        ? h(
+          'p',
+          { class: 'Talk_Note' },
+          'Check your email for the contact verification code.',
+        )
+        : contactCard(body),
+    )
+  }
   // A provider's refusal (its own response kept beside it) is said in plain
   // words; its error waits in Details.
   if (b.refusal && !b.result && (b.response || !b.output)) {

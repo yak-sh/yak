@@ -2,6 +2,26 @@ import type { VocabDoc } from '@yaks/vocab'
 
 export let operatorDoc: VocabDoc = {
   $defs: {
+    operator_contact: {
+      component: true,
+      description:
+        'A contact proposed in this person’s conversation; only confirmed contacts are written on their directory person.',
+      properties: {
+        person: { type: 'string', ref: 'entity', death: 'keep' },
+        address: { type: 'string' },
+        source: { type: 'string', ref: 'entry', death: 'keep' },
+        session: { type: 'string', ref: 'session', death: 'keep' },
+        code: {
+          type: 'string',
+          description:
+            'Address-bound HMAC of an email ownership code, never the digits.',
+        },
+        expires: { type: 'string', format: 'date-time' },
+        tries: { type: 'number' },
+        consent: { type: 'string' },
+        consent_source: { type: 'string', ref: 'entity', death: 'keep' },
+      },
+    },
     operator_request: {
       component: true,
       description:

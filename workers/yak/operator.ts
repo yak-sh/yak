@@ -105,6 +105,7 @@ import {
 import { escalate, escalationAnswer, REPLIES } from './operator-escalate.ts'
 import { askedAt, inputOf, rootAt } from './operator-root.ts'
 import { textSend } from './operator-texts.ts'
+import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
 import { notificationSend } from './operator-alerts.ts'
 import { iconic } from './raster.ts'
@@ -1350,6 +1351,7 @@ export let operating = (
         ? [
           platformBug(ctx, space),
           textSend(env, ctx, space),
+          contactAdd(env, ctx, space, store),
           notificationSend(ctx, space, store),
           mailSend(env, ctx, space, store),
           phoneSend(env, ctx, space, store),
@@ -1922,6 +1924,11 @@ export let operating = (
 
   return {
     store,
+    confirmContact: async (held, id, number, agreed) => {
+      let space = (await dir().at(held.space))!
+      let ctx = await operatorContext(env, held, space, options.directory)
+      return confirmTextContact(env, ctx, space, store, id, number, agreed)
+    },
     reads,
     ask,
     note,
@@ -1970,6 +1977,12 @@ export type Asking = {
 type Asker = Pick<Held, 'person' | 'administrative'>
 export type Operator = {
   store: Store
+  confirmContact: (
+    held: Held,
+    id: string,
+    number: string,
+    agreed: boolean,
+  ) => Promise<{ confirmed: string }>
   /** What its model reads as it is, beside text (@yaks/model `Model.reads`). */
   reads: (model?: string, provider?: string) => Promise<Record<string, number>>
   /** Words given: the next input of the person's conversation, or on a task

@@ -155,6 +155,66 @@ test('each line sent alone draws from its own entries what the conversation draw
   assertStringIncludes(rowsOf(sent)[0].html, 'Read notes for Jeff')
 })
 
+test('a contact request stays inline in the person’s conversation through confirmation and socket updates', () => {
+  let contact = {
+    id: 'contact-request',
+    number: '+12695550142',
+    action: '/manage/mill/operator?texts=1',
+  }
+  let proposed = entry(contact.id, 2, {
+    operator_contact: {
+      person: 'person',
+      session: 's',
+      source: 'request',
+      address: contact.number,
+    },
+    notice: {},
+    content: { body: JSON.stringify({ contact }) },
+  })
+  let entries = [
+    entry('request', 1, { content: { body: 'Text me when done.' } }),
+    proposed,
+  ]
+  let whole = rows(entries, namer({}))
+  let html = whole.find((r) => r.id == contact.id)!.html
+  let form = parseHTML(html).document.querySelector('form')!
+  assertEquals(form.closest('details'), null)
+  assertEquals(form.getAttribute('action'), contact.action)
+  assertEquals(
+    form.querySelector('[name=number]')!.getAttribute('value'),
+    contact.number,
+  )
+  assertEquals(
+    form.querySelector('[name=agreed]')!.hasAttribute('checked'),
+    false,
+  )
+  for (let mark of [{}, { verified: {} }, { cancelled: {} }]) {
+    let changed = [entries[0], { ...proposed, ...mark }]
+    let painted = rows(changed, namer({}))
+    for (let line of lines(changed, namer({}))) {
+      let sent = JSON.parse(JSON.stringify(wire([line], changed)))
+      assertEquals(rowsOf(sent), painted.filter((r) => r.id == line.id))
+    }
+    let updated = parseHTML(
+      painted.find((r) => r.id == contact.id)!.html,
+    ).document
+    assertEquals(
+      !!updated.querySelector('form'),
+      !('verified' in mark || 'cancelled' in mark),
+    )
+  }
+  let email = {
+    ...proposed,
+    operator_contact: { person: 'person', address: 'person@example.net' },
+  }
+  let changed = parseHTML(rows([email], namer({}))[0].html).document
+  assertEquals(changed.querySelector('form'), null)
+  assertStringIncludes(
+    changed.textContent ?? changed.toString(),
+    'Check your email',
+  )
+})
+
 // What a painted node says, its boxes' parts joined by `|`.
 let said = (n: Node): string =>
   n.kind == 'text'

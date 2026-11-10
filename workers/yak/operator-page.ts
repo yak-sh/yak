@@ -608,6 +608,15 @@ export let operatorAnswer = async (
     let person = who.person ?? ''
     let dir = directoryOf(env.STORE)
     try {
+      if (form.has('contact')) {
+        return Response.json(
+          await operatorDoor(env, space, who, 'contact', {
+            id: String(form.get('contact')),
+            number: String(form.get('number') ?? ''),
+            agreed: form.get('agreed') == 'yes',
+          }),
+        )
+      }
       let before = await dir.texting(person)
       await dir.apply({
         entities: form.has('stop') ? stopping(person) : texts(
@@ -2103,6 +2112,20 @@ let remake = async (slug) => {
   } catch (e) { said(e) } finally { remaking = false }
 }
 let status = document.querySelector('[data-send-status]') ?? document.createElement('p')
+document.addEventListener('submit', async (event) => {
+  let contact = event.target.closest?.('[data-contact-form]')
+  if (!contact) return
+  event.preventDefault()
+  let said = contact.querySelector('[data-contact-status]')
+  said.textContent = 'Saving…'
+  try {
+    let response = await fetch(contact.action, { method: 'POST', body: new FormData(contact) })
+    let answer = await response.json()
+    if (!response.ok) throw new Error(answer?.message ?? 'Your contact could not be saved. Try again.')
+    said.textContent = 'Confirmed. Your Operator can text you here.'
+    contact.querySelector('[type=submit]').disabled = true
+  } catch (error) { said.textContent = error.message }
+})
 let draftAt = '${at}?draft=1'
 // How long the page waits on its door before giving up and asking again, so
 // a request the network holds unanswered fails in seconds rather than stopping
