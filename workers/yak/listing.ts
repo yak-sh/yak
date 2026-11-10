@@ -158,21 +158,19 @@ let holds = (c: Clause, ignore: string[] = []): boolean =>
     ? c.clauses.every((c) => holds(c, ignore))
     : false
 
-// The rule itself, over rows: what this filter line's answer carries. A
-// projection's row is narrowed on purpose, so one carrying nothing but its
-// name is still an answer: an entity whose named properties it lacks.
+// The rule itself, over rows: what this filter line's answer carries. Which
+// rows it holds is the question's (`asking`), screened in the store, since
+// only the store knows whether a kernel word is bookkeeping there or the
+// rows it is made of: the platform's own store keeps every tool refusal as
+// `refusal{code}`, and an answer screened again here as if it were an app's
+// lost each one a line did not name (T-153319). A projection's row is
+// narrowed on purpose, so one carrying nothing but its name is still an
+// answer: an entity whose named properties it lacks.
 export let listed = (rows: Row[], asked: string): Row[] => {
   let hidden = STAMPS.filter((s) => !names(asked, s))
   let narrowed = projects(asked).length > 0
   let out: Row[] = []
   for (let row of rows) {
-    let kernel = KERNEL.filter((k) => k in row)
-    if (
-      kernel.length && !kernel.some((k) => names(asked, k)) &&
-      !asked.includes('id=') &&
-      !(row.entry && names(asked, 'entry') &&
-        kernel.every((k) => k == 'refusal'))
-    ) continue
     let kept = Object.fromEntries(
       Object.entries(row).filter(([k]) => !hidden.includes(k)),
     )

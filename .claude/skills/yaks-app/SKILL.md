@@ -519,8 +519,7 @@ tests runs in `jeff` or another person's space.
   code and cause, which is its own platform letter to TaskMaster (mail-config.ts
   `toPlatform`), sent by the pool and marked `delivered{at}`. The letter is kept
   as the record; the same firing deletes the occurrences a delivered one counted
-  once they are 30 days old (`forgotten`). A connector read of them names
-  `.refusal` (refusals.ts `countedIn`): `.tool_refusal *` there finds none.
+  once they are 30 days old (`forgotten`).
 - `yak admin tail` follows live events. It streams local Wrangler stdout, not
   the MCP door; its account check runs once before the stream, so following logs
   is not app traffic.

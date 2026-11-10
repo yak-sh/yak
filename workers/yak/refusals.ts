@@ -159,11 +159,8 @@ let text = (c: Comp | undefined, k: string) =>
  * twice writes the same report. */
 export let reportOf = (at: string) => derivedEid(`refusal_report ${at}`)
 
-/** The query reading every occurrence a report counted. It names
- * `refusal`, since a read of every component leaves out a refusal it was
- * not asked for. */
-export let countedIn = (report: string) =>
-  `.refusal&.counted.report=${report} *`
+/** The query reading every occurrence a report counted. */
+export let countedIn = (report: string) => `.counted.report=${report} *`
 
 /** The letter for a report's occurrences, grouped by tool, code and cause,
  * the most refused first. */

@@ -96,64 +96,58 @@ test('a listing carries what a person saved, not the stamps', () => {
   })
 })
 
-test("the kernel's own rows are not the person's", () => {
-  let body = JSON.stringify([
-    { kind: 'doc', entity: { eid: 'a', num: 1 }, doc: { title: 'Pancakes' } },
-    {
-      kind: 'entity',
-      entity: { eid: 'b', num: 2 },
-      exception: { value: 'boom' },
-      created: { by: null },
-    },
-  ])
-  // Asking for the stamps is not asking for the platform's bookkeeping
-  // (C-32607 item 4): a break stays out until the filter names it.
-  assertEquals(rows(listing(body, '.created')).map((r) => r.kind), ['doc'])
-  assertEquals(rows(listing(body, '.doc')).map((r) => r.kind), ['doc'])
-  assertEquals(rows(listing(body, '.exception')).map((r) => r.kind), [
-    'doc',
-    'entity',
-  ])
-})
-
-test('a session query and an eid include its refusal entry', () => {
-  let error = {
-    kind: 'entry',
-    entity: { eid: 'failure' },
-    entry: { session: 'heal', seq: 3 },
-    refusal: { code: 'http_400' },
-    content: { body: 'OpenRouter speech request failed (400)' },
-  }
-  let body = JSON.stringify([error])
+// The kernel's own rows (a break, a refusal) are left out of an app's
+// question, so a listing, its count and its search agree; a line naming one,
+// a transcript's entry or an address asks for it back.
+let kernelVocab = loadVocab([toolsDoc, {
+  $defs: {
+    doc: { component: true, properties: { title: { type: 'string' } } },
+    entry: { component: true, properties: { session: { type: 'string' } } },
+    created: { component: true, properties: { at: { type: 'string' } } },
+  },
+}])
+let kernelDb = storage(mem(), kernelVocab)
+kernelDb.install()
+let kernelRows = graph({ vocab: kernelVocab, storage: kernelDb })
+let refused = {
+  entry: { session: 'heal' },
+  refusal: { code: 'limit' },
+  content: { body: 'Budget exhausted' },
+}
+let created = { at: 'now' }
+await kernelRows.apply([
+  { entity: { eid: 'saved' }, created, doc: { title: 'Saved' } },
+  { entity: { eid: 'broke' }, created, exception: { value: 'boom' } },
+  { entity: { eid: 'refused' }, created, ...refused },
+  {
+    entity: { eid: 'both' },
+    created,
+    ...refused,
+    exception: { value: 'boom' },
+  },
+], { trusted: true })
+let KERNEL_WORDS = ['exception', 'refusal']
+for (
+  let [line, eids] of [
+    ['.created', ['saved']],
+    ['.doc', ['saved']],
+    ['(.doc|.content)', ['saved']],
+    ['.content', []],
+    ['.exception', ['broke']],
+    ['.refusal', ['refused']],
+    ['.entry.session=heal&*', ['refused']],
+    ['.entity.eid=both&*', ['both']],
+  ] as const
+) {
+  test(`a listing of ${line} holds the kernel's rows it asked for`, async () => {
+    let read = await kernelRows.read(asking(line, KERNEL_WORDS))
+    assertEquals(read.map((b) => b.entity.eid).sort(), [...eids].sort())
+  })
+}
+test("a listing's count counts the rows it lists", async () => {
   assertEquals(
-    asking('.entry.session=heal', ['refusal']),
-    '.entry.session=heal',
-  )
-  assertEquals(rows(listing(body, '.entry.session=heal&*')), [error])
-  assertEquals(rows(listing(body, '.entity.eid=failure&*')), [error])
-  assertEquals(rows(listing(body, '.content')), [])
-})
-
-test('refusals are hidden by default but explicit transcript and refusal asks include them', () => {
-  let refusal = {
-    kind: 'entry',
-    entity: { eid: 'refused' },
-    entry: { session: 'heal', seq: 4 },
-    refusal: { code: 'limit' },
-    content: { body: 'Budget exhausted' },
-  }
-  let exception = { ...refusal, exception: { value: 'unexpected' } }
-  let body = JSON.stringify([refusal, exception])
-  assertEquals(rows(listing(body, '.content')), [])
-  assertEquals(rows(listing(body, '.created')), [])
-  assertEquals(rows(listing(body, '.entry.session=heal&*')), [refusal])
-  assertEquals(rows(listing(JSON.stringify([refusal]), '.refusal')), [refusal])
-  assertEquals(rows(listing(JSON.stringify([refusal]), '.eid=refused&*')), [
-    refusal,
-  ])
-  assertEquals(
-    asking('.entry.session=heal', ['refusal']),
-    '.entry.session=heal',
+    await kernelRows.read(asking('(.doc|.content)&.count', KERNEL_WORDS)),
+    await kernelRows.read('.doc&.count'),
   )
 })
 
@@ -181,49 +175,6 @@ test('storage is screened only from a line that names no component', () => {
   assertEquals(asking('!recipe', words), '!recipe&!archetype&!effect')
   assertEquals(asking('.a|!b', words), '(.a|!b)&!archetype&!effect')
   assertEquals(asking('*', words), '*&!archetype&!effect')
-})
-
-test('query screening excludes refusals from all alternatives and counts', async () => {
-  let vocab = loadVocab([toolsDoc, {
-    $defs: {
-      doc: { component: true, properties: { title: { type: 'string' } } },
-      entry: {
-        component: true,
-        properties: { session: { type: 'string' } },
-      },
-    },
-  }])
-  let db = storage(mem(), vocab)
-  db.install()
-  let g = graph({ vocab, storage: db })
-  await g.apply([{
-    entity: { eid: 'saved' },
-    doc: { title: 'Saved' },
-  }, {
-    entity: { eid: 'refused' },
-    refusal: { code: 'limit' },
-    entry: { session: 'heal' },
-    content: { body: 'Budget exhausted' },
-  }])
-  let q = '(.doc|.content)'
-  assertEquals(
-    (await g.read(asking(q, ['refusal']))).map((b) => b.entity.eid),
-    ['saved'],
-  )
-  assertEquals(
-    await g.read(asking(q + '&.count', ['refusal'])),
-    await g.read('.doc&.count'),
-  )
-  assertEquals(
-    (await g.read(asking('.entry.session=heal', ['refusal']))).map((b) =>
-      b.entity.eid
-    ),
-    ['refused'],
-  )
-  assertEquals(
-    (await g.read(asking('.refusal', ['refusal']))).map((b) => b.entity.eid),
-    ['refused'],
-  )
 })
 
 test('a saved aspect cannot be a lens step, while a stamp can', () => {

@@ -25,7 +25,7 @@ type Row = {
   counted?: { report: string }
 }
 let heard = async (tool: string) =>
-  (await meta(k).query('.refusal&.tool_refusal *') as unknown as Row[])
+  (await meta(k).query('.tool_refusal *') as unknown as Row[])
     .filter((r) => r.tool_refusal.tool == tool)
 
 test('a tool nobody offers is kept as one occurrence', async () => {
