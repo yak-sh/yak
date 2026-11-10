@@ -330,13 +330,13 @@ export type Env = {
   // T-33197). Absent in a test run; there, and wherever Cloudflare
   // refuses the hop, files.ts `door` reads the module in-process and nothing
   // is cached.
-  FILES?: Fetcher & Partial<Purges>
+  FILES?: Fetcher
   // The cached public pages behind the uncached gateway (site.ts): the apex's
   // home and gallery, and every public page an app serves. Its `purge` takes
   // pages out of its cache (purge.ts); the in-process stand-in has none, and
   // no cache either.
   SITE?: Fetcher & Partial<Purges>
-  // The one object every purge of Site's and Files' caches goes through (index.ts
+  // The one object every purge of Site's cache goes through (index.ts
   // `Purger`), keeping the account's purge budget. Bound where Site's cache
   // is on; a test run binds none, so nothing is purged.
   PURGER?: Purgers

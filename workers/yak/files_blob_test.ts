@@ -1,18 +1,16 @@
 // The Files entrypoint's blob door caches only tenant-keyed bytes. In a
 // runtime without Workers Caching, the same door streams bounded R2 ranges.
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
+import type { Bundle } from '@yaks/graph'
 import {
   assertEquals,
   assertNotEquals,
   assertStringIncludes,
 } from '@std/assert'
 import { blobAt } from './cache.ts'
-import { blobBytes, fetch, fileBytes } from './files.ts'
-import { within } from './defects.ts'
-import { clock } from '@yaks/testing'
-import type { Bundle } from '@yaks/graph'
-import type { Cache } from './purge.ts'
+import { blobBytes, fetch } from './files.ts'
 import { platform } from './serving-probe.ts'
+import { within } from './defects.ts'
 
 let scenario = platform()
 let { env, files } = scenario
@@ -49,52 +47,7 @@ test('the cached blob door streams bytes and bounds uncached seeks', async () =>
 })
 
 test('a blob is read in-process when the cache in front of the door fails', async () => {
-  let failing = {
-    ...env,
-    FILES: {
-      fetch: () => Promise.resolve(new Response(null, { status: 520 })),
-    },
-  }
-  let got = await blobBytes(failing, { eid }, prefix, sha)
-  assertEquals(got.status, 200)
-  assertEquals(new Uint8Array(await got.arrayBuffer()), bytes)
-})
-
-test('a failed file cache key is repaired without waiting for its purge', async () => {
-  let repair = Promise.withResolvers<void>()
-  let sent: { keys: string[]; cache?: Cache }[] = []
-  let failing = {
-    ...env,
-    FILES: {
-      fetch: () => Promise.resolve(new Response(null, { status: 520 })),
-    },
-    PURGER: {
-      idFromName: (name: string) => name,
-      get: () => ({
-        purge: (keys: string[], _spread?: boolean, cache?: Cache) => {
-          sent.push({ keys, cache })
-          return repair.promise
-        },
-      }),
-    },
-  }
-  try {
-    let got = await blobBytes(failing, { eid }, prefix, sha)
-    assertEquals(new Uint8Array(await got.arrayBuffer()), bytes)
-    assertEquals(sent, [{
-      keys: [new URL(blobAt(eid, sha)).pathname],
-      cache: 'files',
-    }])
-  } finally {
-    repair.resolve()
-  }
-})
-
-test('a missing file still answers 404 and reports a failed cache repair', async () => {
   let rows: Bundle[] = []
-  let retained: Promise<void>[] = []
-  let time = clock()
-  let failure = Error('purge unavailable')
   let failing = {
     ...env,
     ERRORS: {
@@ -104,31 +57,36 @@ test('a missing file still answers 404 and reports a failed cache repair', async
       },
     },
     FILES: {
-      fetch: () => Promise.resolve(new Response(null, { status: 520 })),
-    },
-    PURGER: {
-      idFromName: (name: string) => name,
-      get: () => ({ purge: () => Promise.reject(failure) }),
+      fetch: () =>
+        Promise.resolve(
+          new Response(null, {
+            status: 520,
+            headers: {
+              'cf-cache-status': 'BYPASS',
+              'cf-error-type': '520',
+              'cf-error-origin': 'cache',
+              'cf-ray': 'ray-IAD',
+            },
+          }),
+        ),
     },
   }
   let got = await within(
     failing,
     {},
-    () => fileBytes(failing, eid, 'ada/cookbook', '/src/config.php', ''),
-    time,
-    {
-      retain: (p) => {
-        retained.push(p)
-      },
-    },
+    () => blobBytes(failing, { eid }, prefix, sha),
+    clock(),
   )
-  await Promise.all(retained)
-  assertEquals(got.status, 404)
-  await got.body?.cancel()
-  assertEquals(rows.map((r) => (r.exception as { value: string }).value), [
-    'the files cache answered 520',
-    'purge unavailable',
-  ])
+  assertEquals(got.status, 200)
+  assertEquals(new Uint8Array(await got.arrayBuffer()), bytes)
+  assertEquals((rows[0].error as { tags: unknown }).tags, {
+    request: 'GET files',
+    cache_url: blobAt(eid, sha),
+    cache_status: 'BYPASS',
+    cache_error: '520',
+    cache_origin: 'cache',
+    cache_ray: 'ray-IAD',
+  })
 })
 
 test('the blob door reads no bytes for HEAD and keeps missing blobs private', async () => {

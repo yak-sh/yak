@@ -2,7 +2,7 @@
 // wait a token out when it is empty, and carry every tag owed meanwhile.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { type Cache, cleared, purger, SPREAD, Unpurged } from './purge.ts'
+import { purger, SPREAD, Unpurged } from './purge.ts'
 
 // A Site that refuses the purges `refuses` names (by count) for rate, on a
 // clock that moves only when the purger waits and as each purge is
@@ -82,46 +82,4 @@ test('a purge asked to spread resolves SPREAD past the send it shares, its ackno
     at(purge(['app:b'], true)),
   ])
   assertEquals([sent.length, plain, spread], [1, 300, SPREAD])
-})
-
-test('cache owners keep separate batches while sharing the account quota', async () => {
-  let t = 0
-  let sent: { cache: Cache | undefined; keys: string[]; at: number }[] = []
-  let purge = purger(
-    {
-      purge: (keys, cache) => {
-        sent.push({ keys, cache, at: t })
-        return Promise.resolve({ success: true, errors: [] })
-      },
-    },
-    (ms) => Promise.resolve(void (t += ms)),
-    () => t,
-  )
-  for (let i = 0; i < 24; i++) await purge([`app:${i}`])
-  await Promise.all([
-    purge(['app:last']),
-    purge(['/a/config.php'], false, 'files'),
-    purge(['/b/file.png'], false, 'files'),
-  ])
-  assertEquals(sent.slice(24), [
-    { cache: 'site', keys: ['app:last'], at: 0 },
-    { cache: 'files', keys: ['/a/config.php', '/b/file.png'], at: 12_000 },
-  ])
-})
-
-test('the owning cache receives its paths and a refused purge stays refused', async () => {
-  let options: unknown[] = []
-  let result = { success: false, errors: [{ code: 1134, message: 'limited' }] }
-  let cache = {
-    purge: (o: unknown) => {
-      options.push(o)
-      return Promise.resolve(result)
-    },
-  }
-  assertEquals(
-    await cleared(cache, { pathPrefixes: ['/a/config.php'] }),
-    result,
-  )
-  assertEquals(options, [{ pathPrefixes: ['/a/config.php'] }])
-  assertEquals((await cleared(undefined, { tags: ['app:a'] })).success, false)
 })
