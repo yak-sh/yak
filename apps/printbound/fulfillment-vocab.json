@@ -1,0 +1,320 @@
+{
+  "$defs": {
+    "print_order": {
+      "description": "A print purchase: its immutable quote, buyer and originating app, exact document manifest and provider print specification.",
+      "properties": {
+        "quote": {
+          "type": "string"
+        },
+        "person": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "document": {
+          "type": "string"
+        },
+        "print": {
+          "type": "object"
+        },
+        "authority": {
+          "type": "string"
+        },
+        "preview": {
+          "type": "boolean"
+        },
+        "manifest": {
+          "type": "object"
+        }
+      },
+      "readers": "editor",
+      "writers": "editor"
+    },
+    "print_paid": {
+      "description": "The authenticated platform payment receipt authorizing this print purchase.",
+      "properties": {
+        "checkout": {
+          "type": "string"
+        },
+        "payment": {
+          "type": "string"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "currency": {
+          "type": "string"
+        }
+      },
+      "readers": "editor",
+      "writers": "editor"
+    },
+    "print_submission": {
+      "description": "Durable submission intent written before contacting the printer. A lost response is reconciled by this reference; it is never blindly submitted again.",
+      "properties": {
+        "at": {
+          "type": "string"
+        },
+        "reference": {
+          "type": "string"
+        },
+        "attempt": {
+          "type": "string"
+        }
+      },
+      "readers": "editor",
+      "writers": "editor"
+    },
+    "print_receipt": {
+      "description": "The provider's last authenticated print receipt. Its status is the provider's observation, preserved verbatim.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "reference": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "changed": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "tracking": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "observed": {
+          "type": "string"
+        }
+      },
+      "readers": "editor",
+      "writers": "editor"
+    },
+    "print_cancel": {
+      "description": "A buyer's recorded cancellation request.",
+      "properties": {
+        "at": {
+          "type": "string"
+        }
+      },
+      "readers": "editor",
+      "writers": "editor"
+    },
+    "print_cancelled": {
+      "description": "The print job was confirmed cancelled or was stopped before submission.",
+      "properties": {
+        "at": {
+          "type": "string"
+        }
+      },
+      "readers": "editor",
+      "writers": "editor"
+    },
+    "print_refunded": {
+      "description": "The platform confirmed the buyer's refund.",
+      "properties": {
+        "at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "readers": "editor",
+      "writers": "editor"
+    },
+    "print_absent": {
+      "description": "An operator confirmed that an uncertain submission created no provider order.",
+      "properties": {
+        "at": {
+          "type": "string"
+        }
+      },
+      "readers": "editor",
+      "writers": "editor"
+    },
+    "print_quote": {
+      "description": "The print specification and immutable artifact manifest priced by one server-owned service quote.",
+      "properties": {
+        "print": {
+          "type": "object"
+        },
+        "manifest": {
+          "type": "object"
+        }
+      },
+      "readers": "editor",
+      "writers": "editor"
+    },
+    "print_retry": {
+      "description": "An operator authorized one retry after investigating an uncertain submission and confirming absence at the printer.",
+      "properties": {
+        "at": {
+          "type": "string"
+        },
+        "submission": {
+          "type": "string"
+        }
+      },
+      "readers": "editor",
+      "writers": "editor"
+    },
+    "print_cancel_denied": {
+      "description": "The provider observation that made cancellation unavailable. No refund was started.",
+      "properties": {
+        "at": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "readers": "editor",
+      "writers": "editor"
+    },
+    "print_document": {
+      "description": "An immutable prepared print document, inspected page previews and its exact file manifest.",
+      "properties": {
+        "manifest": {
+          "type": "object"
+        }
+      },
+      "readers": "editor",
+      "writers": "editor"
+    },
+    "print_service": {
+      "description": "PrintBound seller configuration. Preview mode simulates the printer and checkout without external calls or payments.",
+      "properties": {
+        "preview": {
+          "type": "boolean"
+        },
+        "font": {
+          "type": "string"
+        },
+        "product": {
+          "type": "string"
+        },
+        "margin": {
+          "type": "integer"
+        },
+        "contact": {
+          "type": "string"
+        },
+        "sandbox": {
+          "type": "boolean"
+        }
+      },
+      "readers": "editor",
+      "writers": "editor"
+    },
+    "print_fixture": {
+      "description": "The persistent simulated provider receipt in a preview space.",
+      "properties": {
+        "receipt": {
+          "type": "object"
+        }
+      },
+      "readers": "editor",
+      "writers": "editor"
+    },
+    "print_preview_paid": {
+      "description": "A simulated preview purchase; no payment provider was contacted.",
+      "properties": {
+        "at": {
+          "type": "string"
+        }
+      },
+      "readers": "editor",
+      "writers": "editor"
+    },
+    "print_expired": {
+      "description": "The unpaid quote expired. A delayed verified payment can still restart merchant recovery.",
+      "readers": "editor",
+      "writers": "editor",
+      "properties": {
+        "at": {
+          "type": "string"
+        }
+      }
+    },
+    "print_payment_seen": {
+      "description": "This platform payment already scheduled print fulfillment.",
+      "readers": "editor",
+      "writers": "editor",
+      "properties": {}
+    },
+    "print_payment_ready": {
+      "rule": true,
+      "description": "A verified paid platform order restarts its print fulfillment, including late payment callbacks after quote expiry.",
+      "match": "$payment .order.quote=$quote, +!print_payment_seen; $quote .print_order; $step .tool.name=print_step; +call.to=$step, +call.source=$quote"
+    },
+    "print_payment_blocked": {
+      "description": "A payment reversal observed before printing blocked a new supplier submission. Existing accepted supplier work remains recoverable.",
+      "readers": "editor",
+      "writers": "editor",
+      "properties": {
+        "at": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "print_preparation": {
+      "description": "A customer-scoped document preparation checkpoint and its originating app authority, resumed by bounded scheduled commands.",
+      "readers": "editor",
+      "writers": "editor",
+      "properties": {
+        "state": {
+          "type": "object"
+        },
+        "person": {
+          "type": "string"
+        },
+        "via": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "seller": {
+          "type": "string"
+        },
+        "authority": {
+          "type": "string"
+        }
+      }
+    },
+    "print_preparation_done": {
+      "description": "Document composition and inspection finished; print_document holds the immutable complete manifest.",
+      "readers": "editor",
+      "writers": "editor",
+      "properties": {
+        "at": {
+          "type": "string"
+        }
+      }
+    },
+    "print_preparation_failed": {
+      "description": "Preparation stopped while retaining the last complete checkpoint and all source work.",
+      "readers": "editor",
+      "writers": "editor",
+      "properties": {
+        "at": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

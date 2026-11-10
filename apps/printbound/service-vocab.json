@@ -1,0 +1,239 @@
+{
+  "$defs": {
+    "prepare": {
+      "tool": true,
+      "description": "Prepare and inspect an immutable print document before requesting a quote.",
+      "revision": "1",
+      "input": {
+        "title": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "markdown": {
+          "type": "string"
+        },
+        "dedication": {
+          "type": "string"
+        },
+        "product": {
+          "type": "string",
+          "enum": [
+            "text",
+            "picture",
+            "hardcover",
+            "coloring",
+            "booklet"
+          ]
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "interior": {
+          "type": "string"
+        },
+        "cover": {
+          "type": "string"
+        },
+        "front": {
+          "type": "string"
+        },
+        "back": {
+          "type": "string"
+        },
+        "document": {
+          "type": "string",
+          "description": "An existing owned preparation to resume from its saved checkpoint."
+        },
+        "back_text": {
+          "type": "string"
+        },
+        "front_bleed": {
+          "type": "boolean"
+        }
+      },
+      "worker": "/service/prepare",
+      "service": {
+        "pricing": "Document preparation uses the PrintBound space budget. No payment or print order is created."
+      }
+    },
+    "document_file": {
+      "tool": true,
+      "description": "Read one composed page or PDF belonging to the buyer's prepared document.",
+      "revision": "1",
+      "floor": "person",
+      "readOnly": true,
+      "input": {
+        "document": {
+          "type": "string"
+        },
+        "blob": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "document",
+        "blob"
+      ],
+      "worker": "/service/document_file",
+      "service": {
+        "pricing": "Included with document preparation."
+      }
+    },
+    "quote": {
+      "tool": true,
+      "description": "Price the exact prepared document, quantity, shipping destination and shipping level. Returns an immutable quote with an expiry.",
+      "revision": "1",
+      "floor": "person",
+      "input": {
+        "document": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "address": {
+          "type": "object"
+        },
+        "shipping": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "document",
+        "quantity",
+        "address",
+        "shipping"
+      ],
+      "worker": "/service/quote",
+      "service": {
+        "pricing": "An exact shipping and printing quote is returned before checkout."
+      }
+    },
+    "purchase": {
+      "tool": true,
+      "description": "Open the identified PrintBound checkout for one immutable print quote. Printing starts only after verified payment.",
+      "revision": "1",
+      "floor": "person",
+      "input": {
+        "quote": {
+          "type": "string"
+        },
+        "document": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "quote",
+        "document"
+      ],
+      "worker": "/service/purchase",
+      "service": {
+        "pricing": "The buyer pays the immutable quote through PrintBound checkout."
+      }
+    },
+    "order_status": {
+      "tool": true,
+      "description": "Read this buyer's print order and the last provider-confirmed status and tracking.",
+      "revision": "1",
+      "floor": "person",
+      "readOnly": true,
+      "input": {
+        "order": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "order"
+      ],
+      "worker": "/service/order_status",
+      "service": {
+        "pricing": "Included with the print order."
+      }
+    },
+    "cancel": {
+      "tool": true,
+      "description": "Request cancellation of this buyer's print order. A refund follows confirmed cancellation or rejection; a job in production may be too late to cancel.",
+      "revision": "1",
+      "floor": "person",
+      "input": {
+        "order": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "order"
+      ],
+      "worker": "/service/cancel",
+      "service": {
+        "pricing": "Included with the print order; refunds follow confirmed provider cancellation."
+      }
+    },
+    "print_step": {
+      "tool": true,
+      "discoverable": false,
+      "floor": "editor",
+      "description": "Recover one merchant-owned print order and schedule its next bounded fulfillment step.",
+      "input": {
+        "order": {
+          "type": "string"
+        }
+      },
+      "worker": "/service/step"
+    },
+    "print_reconcile": {
+      "tool": true,
+      "discoverable": false,
+      "floor": "owner",
+      "description": "Authorize one retry after an operator investigated an uncertain submission and confirmed no provider order exists.",
+      "input": {
+        "order": {
+          "type": "string"
+        },
+        "confirm_absent": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "order",
+        "confirm_absent"
+      ],
+      "worker": "/service/reconcile"
+    },
+    "document_status": {
+      "tool": true,
+      "description": "Read the preparation progress or complete immutable manifest for the buyer's selected document.",
+      "revision": "1",
+      "readOnly": true,
+      "input": {
+        "document": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "document"
+      ],
+      "worker": "/service/document_status",
+      "service": {
+        "pricing": "Included with document preparation."
+      }
+    },
+    "print_prepare_step": {
+      "tool": true,
+      "discoverable": false,
+      "floor": "editor",
+      "description": "Advance one private document checkpoint and record its next bounded continuation.",
+      "input": {
+        "document": {
+          "type": "string"
+        }
+      },
+      "worker": "/service/prepare_step"
+    }
+  }
+}
