@@ -354,3 +354,42 @@ test('a definitely unsent verification email can be retried immediately without 
   assertEquals((unsent.operator_contact as Comp).expires, undefined)
   assertEquals(!!retryDelivered.delivered, true)
 })
+
+let two = await setup('two-chats', 'prior@example.com')
+let firstRequest = await two.entry('Email me at shared@example.net.')
+await two.invoke({ address: 'shared@example.net', source: firstRequest })
+let secondSession = crypto.randomUUID()
+await two.store.g.apply([{
+  entity: { eid: secondSession },
+  session: {},
+  operator_session: { person: two.person, space: two.space.eid },
+}], { trusted: true })
+let secondRequest = await two.entry(
+  'Email me at shared@example.net when done here.',
+  secondSession,
+)
+await two.invoke({ address: 'shared@example.net', source: secondRequest })
+let secondNote = notification({
+  to: two.person,
+  words: 'Second conversation is finished.',
+  by: two.space.eid,
+})
+await two.store.g.apply([{
+  ...secondNote,
+  $actor: { by: two.space.eid, via: secondSession },
+}], { trusted: true })
+await alert(two.env, two.store, secondNote.entity.eid)
+let heldTwo = two.letters.length
+let secondCode = String(two.letters[1].subject).match(/\d{6}/)![0]
+let secondAnswer = await two.entry(secondCode, secondSession)
+await two.invoke({
+  address: 'shared@example.net',
+  code: secondCode,
+  source: secondAnswer,
+})
+let [secondDelivered] = await two.store.g.get([secondNote.entity.eid])
+test('the same pending email in another conversation has its own confirmation and held completion', () => {
+  assertEquals(heldTwo, 2)
+  assertEquals(!!secondDelivered.delivered, true)
+  assertEquals(two.letters.length, 3)
+})

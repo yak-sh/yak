@@ -78,9 +78,14 @@ let available = async (ctx: Ctx, address: string) => {
   }
 }
 
-let pending = async (store: OperatorStore, person: string, address: string) =>
+let pending = async (
+  store: OperatorStore,
+  person: string,
+  session: string,
+  address: string,
+) =>
   (await store.g.read(
-    `.operator_contact.person=${person} .operator_contact.address=${
+    `.operator_contact.person=${person} .operator_contact.session=${session} .operator_contact.address=${
       JSON.stringify(address)
     } !cancelled ?created ?verified .order=-created.at .limit=1`,
   ))[0]
@@ -233,9 +238,9 @@ export let contactAdd = (
     let address = addressOf(args.address)
     let source = await sourceOf(store, ctx, space, args.source)
     await available(ctx, address)
-    let row = await pending(store, ctx.person, address)
     let [entry] = await store.g.get([source.eid], ['entry'])
     let session = String(comp(entry, 'entry')!.session)
+    let row = await pending(store, ctx.person, session, address)
     if (args.code) {
       if (!row || row.verified || row.cancelled) {
         throw refuse('missing', 'Ask for a contact verification code first.')

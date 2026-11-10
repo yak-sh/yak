@@ -390,7 +390,7 @@ export let textSend = (env: Env, ctx: Ctx, space: Space): Tool => ({
   title: 'Send a text',
   step: { doing: 'Texting %{person}…', done: 'Texted %{person}' },
   description:
-    'Send a text message to the person you are working for, at the mobile number they agreed to be texted at. Use it when they asked to be texted; to tell them something away from the page, use notification_send, which reaches them the way they chose. Keep it short; it is signed with your name. Their reply reaches you as a new request. Refused when they have not agreed to texts.',
+    'Send a text message to the person you are working for, at the mobile number they agreed to be texted at. Use it when they asked to be texted; to tell them something away from the page, use notification_send, which reaches them the way they chose. Keep it short; it is signed with your name. Their reply reaches you as a new request. If they give a new mobile number, use contact_add first to show the inline consent form. Refused until they agree.',
   parameters: {
     type: 'object',
     properties: { text: { type: 'string', description: 'What to say.' } },
@@ -403,7 +403,7 @@ export let textSend = (env: Env, ctx: Ctx, space: Space): Tool => ({
     if (!texting) {
       throw refuse(
         'missing',
-        'This person has not agreed to texts. They can on the Operator page.',
+        'This person has not agreed to texts. Use contact_add with the mobile number they gave to show the inline consent form.',
       )
     }
     try {
