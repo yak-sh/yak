@@ -1,3 +1,10 @@
+/* The scrollport holds table content only. Decorative borders belong to
+   the surface outside it, so their paint cannot create or be clipped by overflow. */
+.Table_Scroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+
 /* Things in rows, as a grid: every row a subgrid of it, so the cells line
    up; hairlines between the rows, headings small and muted. A column is as wide
    as its widest cell where there is room, and they share the room when there

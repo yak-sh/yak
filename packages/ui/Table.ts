@@ -25,6 +25,10 @@
  * an `Indent` is as wide as a `Toggle`, and stands for one in a row that holds
  * none, so the words of every row line up under its parent's.
  *
+ * A wide table sits in `Table.Scroll`, an unpainted horizontal scrollport.
+ * A card's border stays on the outer card, outside this scrollport, so only
+ * the table's content contributes overflow and its frame is never clipped.
+ *
  * Each part says what it is to a reader of the page by its role (`table`,
  * `row`, `cell`, …), as an html table's elements would, and a terminal lays
  * it out as the grid it is (@yaks/tui's `grid`).
@@ -47,6 +51,7 @@ export type Col = string | false | null | undefined
 export type TableProps = Props & { cols?: Col[] }
 
 let Base = block('div', 'Table', {
+  Scroll: 'div',
   Head: 'div',
   Body: 'div',
   Row: 'div',
@@ -74,13 +79,22 @@ let template = (cols: Col[]) =>
 export let Table:
   & FunctionComponent<TableProps>
   & Record<
-    'Head' | 'Body' | 'Row' | 'Heading' | 'Cell' | 'Toggle' | 'Sort' | 'Indent',
+    | 'Scroll'
+    | 'Head'
+    | 'Body'
+    | 'Row'
+    | 'Heading'
+    | 'Cell'
+    | 'Toggle'
+    | 'Sort'
+    | 'Indent',
     Part
   > = Object
     .assign(
       ({ cols = [], ...p }: TableProps) =>
         h(Base, { role: 'table', ...p, style: { '--cols': template(cols) } }),
       {
+        Scroll: Base.Scroll,
         Head: roled(Base.Head, 'rowgroup'),
         Body: roled(Base.Body, 'rowgroup'),
         Row: roled(Base.Row, 'row'),
@@ -276,6 +290,39 @@ export let specimens = (): Specimen[] => [
         branch(1, 'filed', '4 properties', '12,000', true),
         branch(2, 'priority', 'number', ''),
         branch(0, '@yaks/topic', '2 components', '381', false),
+      ),
+    ),
+  ],
+  [
+    'Table, Scroll',
+    h(
+      Table.Scroll,
+      { style: 'max-width: 12rem' },
+      h(
+        Table,
+        { cols: ['num', 'num', 'num'] },
+        h(
+          Head,
+          null,
+          h(
+            Row,
+            null,
+            ['Input', 'Cached', 'Output'].map((label) =>
+              h(Heading, { mod: 'num' }, label)
+            ),
+          ),
+        ),
+        h(
+          Body,
+          null,
+          h(
+            Row,
+            null,
+            ['1,234,567,890', '1,111,222,333', '456,789,012'].map((n) =>
+              h(Cell, { mod: 'num' }, n)
+            ),
+          ),
+        ),
       ),
     ),
   ],

@@ -244,9 +244,11 @@ equal(
 `Table` uses a CSS grid with subgrid rows and accessibility roles. `cols` names
 the column tracks; apply matching variants to cells. Text cuts short with an
 ellipsis, `num` sets right, and `prose` wraps. The table owns its `style` prop
-to carry those tracks. Sorting and selection belong to its caller. `Table.Sort`
-is a native button for a heading; `@yaks/ux` supplies controlled sorting with
-raw values.
+to carry those tracks. Wide tables sit in `Table.Scroll`, a horizontal
+scrollport around the table. Keep a card or other decorated surface outside that
+scrollport: its border neither creates overflow nor gets clipped when the table
+scrolls. Sorting and selection belong to its caller. `Table.Sort` is a native
+button for a heading; `@yaks/ux` supplies controlled sorting with raw values.
 
 A table can be a tree. A row holding rows starts its first cell with a `Toggle`,
 `Toggle-open` while the rows it holds show under it; a row sits one `Indent`

@@ -770,15 +770,11 @@
   .Directory_Content .Group {
     margin-top: 2rem;
   }
-  /* The Spending page (admin-spending.ts): its notes on what its rows
-     record, and its tables, each a card a wide one scrolls sideways in. */
+  /* The Spending page's notes on what its rows record. */
   .Spending_Note {
     margin: 0.5rem 0 0;
     font-size: var(--small);
     color: var(--muted);
-  }
-  .Spending_Table {
-    overflow-x: auto;
   }
   .Directory_Content .Card + .Card {
     margin-top: 0.75rem;

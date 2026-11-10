@@ -75,14 +75,18 @@ let pct = (n: number, of: number) => of ? `${Math.round(n / of * 100)}%` : '0%'
 let table = (cols: Col[], heads: string[], rows: SortRow[]) =>
   h(
     Card,
-    { as: 'div', class: 'Spending_Table' },
-    h(Sort, {
-      e: { entity: { eid: sortAt(`spending/${heads[0]}`) } },
-      onChange: () => {},
-      cols,
-      heads,
-      rows,
-    }),
+    { as: 'div' },
+    h(
+      Table.Scroll,
+      null,
+      h(Sort, {
+        e: { entity: { eid: sortAt(`spending/${heads[0]}`) } },
+        onChange: () => {},
+        cols,
+        heads,
+        rows,
+      }),
+    ),
   )
 let row = (
   first: ComponentChildren,
