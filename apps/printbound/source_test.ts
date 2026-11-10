@@ -70,7 +70,7 @@ test('saved guest input continues through sign-in and becomes private to the bou
 
 test('failed preparation cannot quote or take payment', async () => {
   let bought = 0,
-    { desk } = fixture(async (name) => {
+    { desk } = fixture(async (name, args) => {
       if (name === 'prepare') throw new Error('Artwork failed')
       bought++
       return {}
@@ -129,9 +129,10 @@ test('an edit racing preparation preserves the edit and does not attach a stale 
 test('pending preparation resumes one stored job and never becomes a reviewed document early', async () => {
   let starts = 0,
     polls = 0,
-    { desk } = fixture(async (name) => {
+    { desk } = fixture(async (name, args) => {
       if (name === 'prepare') {
-        starts++
+        if (!args.document) starts++
+        else assertEquals(args.document, doc.id)
         return { id: doc.id, pending: true }
       }
       if (name === 'document_status') {
@@ -145,6 +146,42 @@ test('pending preparation resumes one stored job and never becomes a reviewed do
   assertEquals(starts, 1)
   await assertRejects(() => desk.purchase(row.entity.eid, alice))
   assertEquals((await desk.preparation(row.entity.eid, alice))?.pending, true)
+  await desk.preparation(row.entity.eid, alice)
+  assertEquals(
+    (await desk.owned(row.entity.eid, alice)).book_prepared?.document.id,
+    doc.id,
+  )
+})
+
+test('a preparation input error preserves its job and resumes the same document after correction', async () => {
+  let resumed: unknown, failed = true
+  let { desk } = fixture(async (name, args) => {
+    if (name === 'prepare') {
+      resumed = args.document
+      return { id: doc.id, pending: true }
+    }
+    if (name === 'document_status') {
+      return failed
+        ? {
+          id: doc.id,
+          pending: false,
+          error: 'Reconnect the source before resuming.',
+        }
+        : doc
+    }
+    throw new Error('Checkout reached before review')
+  })
+  let row = await desk.save(text, alice)
+  await desk.prepare(row.entity.eid, alice)
+  await assertRejects(
+    () => desk.preparation(row.entity.eid, alice),
+    undefined,
+    'Reconnect the source',
+  )
+  await assertRejects(() => desk.purchase(row.entity.eid, alice))
+  failed = false
+  await desk.prepare(row.entity.eid, alice)
+  assertEquals(resumed, doc.id)
   await desk.preparation(row.entity.eid, alice)
   assertEquals(
     (await desk.owned(row.entity.eid, alice)).book_prepared?.document.id,

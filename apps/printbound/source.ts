@@ -175,13 +175,16 @@ export let studio = (db: Store, service: Service) => {
           'Paste your conversation or Markdown before preparing the book.',
         )
       }
-      if (book.book_preparation?.source === revision(book)) {
-        return { id: book.book_preparation.document, pending: true }
-      }
       let document = await service('prepare', {
+        ...(book.book_preparation?.source === revision(book)
+          ? { document: book.book_preparation.document }
+          : {}),
         title: book.doc.title,
         ...book.book_source,
       }, caller) as Document | { id: string; pending: true }
+      if ('error' in document && document.error) {
+        throw new Refusal(String(document.error))
+      }
       if (document?.pending) {
         await write(book, {
           entity: book.entity,
@@ -212,6 +215,9 @@ export let studio = (db: Store, service: Service) => {
         document: pending.document,
       }, caller) as Document | { id: string; pending: true }
       if (document.pending) return document
+      if ('error' in document && document.error) {
+        throw new Refusal(String(document.error))
+      }
       if (!document.revision || !document.pages?.length) {
         throw new Error('Preparation returned no reviewable document.')
       }
