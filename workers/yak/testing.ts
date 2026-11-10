@@ -258,7 +258,7 @@ export let lasting = (
         if (disposed || ringing.has(name)) return
         let work = event(() => deliver(name))
         states.get(name)!.waitUntil(work)
-        return work.catch((error) => {
+        void work.catch((error) => {
           failed.push(error)
         })
       }),

@@ -3,7 +3,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { test, tick, until } from '@yaks/testing'
 import { Store } from './graph.ts'
-import { bucket, state } from './testing.ts'
+import { bucket, platform, state } from './testing.ts'
 import type { Env } from './env.ts'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
 
@@ -190,11 +190,9 @@ test('a new incarnation re-arms the alarm its pending effects owe', async () => 
 })
 
 test('a run holds the alarm a minute out while it is in flight', async () => {
-  let ctx = state()
-  using _db = ctx.storage
   // An upload's deletion asks the directory where the app lives, and the
   // directory answers once the test lets it.
-  let blocked = false, asked = false, answer = () => {}
+  let asked = false, blocked = false, answer = () => {}
   let held = new Promise<void>((r) => answer = r)
   let STORE = {
     idFromName: (name: string) => name,
@@ -209,39 +207,44 @@ test('a run holds the alarm a minute out while it is in flight', async () => {
     }),
   }
   let bind = { STORE, BLOBS: bucket().r2 } as unknown as Env
-  let store = new Store(ctx, bind, [])
+  await using p = platform('running-effect-alarm', bind)
+  let ctx = state()
+  let store = p.register('ada/idle', ctx, () => new Store(ctx, bind, []))
   let sha = '1'.repeat(64)
   assertEquals(
     (await kernel(store, [{ entity: { eid: sha }, blob: { bytes: 3 } }]))
       .status,
     200,
   )
-  await ctx.storage.deleteAlarm()
-  await alarm(store)
-  while (ctx.pending.size) await Promise.allSettled([...ctx.pending])
-  blocked = true
+  await p.settled()
   let before = Date.now()
+  blocked = true
   await ctx.storage.deleteAlarm()
   assertEquals(
     (await kernel(store, [{ entity: { eid: sha }, $delete: true }])).status,
     200,
   )
-  await Promise.all([...ctx.pending])
-  await ctx.storage.deleteAlarm()
-  await alarm(store)
-  await until(() => asked)
-  assert(await ctx.storage.getAlarm() != null)
-  await ctx.storage.deleteAlarm()
-  await alarm(store)
-  assert((await ctx.storage.getAlarm() ?? 0) >= before + 60_000)
-  answer()
-  while (ctx.pending.size) await Promise.allSettled([...ctx.pending])
+  try {
+    await until(() => asked)
+    // Let the runtime consume any alarm armed before the run occupied its
+    // slot. Its next delivery leaves the live run to its recovery alarm.
+    await until(async () =>
+      (await ctx.storage.getAlarm() ?? 0) >= before + 60_000
+    )
+    await ctx.storage.deleteAlarm()
+    await alarm(store)
+    assert((await ctx.storage.getAlarm() ?? 0) >= before + 60_000)
+  } finally {
+    answer()
+  }
 })
 
 test('a failed effect run the kernel retries is worked again', async () => {
+  await using p = platform('retry-effect-alarm')
   let ctx = state()
-  using _db = ctx.storage
-  let { store } = await idle(ctx)
+  let store = p.register('ada/idle', ctx, () => new Store(ctx))
+  await kernel(store, [])
+  await p.settled()
   let failed = effect(Date.now())
   failed.effect.state = 'failed'
   assertEquals((await kernel(store, [failed])).status, 200)
@@ -254,8 +257,7 @@ test('a failed effect run the kernel retries is worked again', async () => {
     )
   assertEquals((await retry(false)).status, 404)
   assertEquals(await (await retry(true)).json(), { retried: 1 })
-  await ctx.storage.deleteAlarm()
-  await alarm(store)
+  await p.settled()
   await until(async () => {
     let read = await store.fetch(
       new Request(

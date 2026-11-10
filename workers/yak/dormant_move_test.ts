@@ -1,6 +1,7 @@
 // Explicit administrative migration is allowed while ordinary app work sleeps.
 import { ownedBy } from './directory-fixture.ts'
 import { equal, test, until } from '@yaks/testing'
+import { system } from '@yaks/fp'
 import { type Bundle, token } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import {
@@ -19,7 +20,10 @@ import * as sweep from './sweep.ts'
 import type { Rule } from './mover.ts'
 
 let fixture = async () => {
-  await using p = platform('dormant mover secret')
+  let now = Date.now()
+  await using p = platform('dormant mover secret', {
+    CLOCK: { ...system, now: () => now },
+  })
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
   let space = await ownedBy(dir, 'dormant-mover-owner', 'asleep')
   await dir.apply({
@@ -49,7 +53,7 @@ let fixture = async () => {
   let rows = Array.from({ length: 300 }, (_, i) => ({
     entity: { eid: crypto.randomUUID() },
     doc: { title: 'Legacy' },
-    ...i == 0 ? { wake: { at: '2020-01-01T00:00:00.000Z' } } : {},
+    ...i == 0 ? { wake: { at: new Date(now + 60_000).toISOString() } } : {},
   }))
   for (let i = 0; i < rows.length; i += 100) {
     let written = await ask('/apply', {
@@ -72,6 +76,9 @@ let fixture = async () => {
   await until(async () => await ctx.storage.get<boolean>('dormant') == true, {
     label: 'source asleep',
   })
+  // It becomes due only after trash: ordinary alarm delivery during setup
+  // must not spend the occurrence this fixture checks across dormancy.
+  now += 60_000
   let sent: Bundle[] = [], fired: number[] = [], results: number[] = []
   let call = crypto.randomUUID()
   let rule: Rule = {
