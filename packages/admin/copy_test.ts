@@ -3,6 +3,8 @@ import { open } from '@yaks/sqlite/db'
 import { page, plan, raised } from '@yaks/durable-object'
 import { col, select, table, val } from '@yaks/sql'
 import { copy, type Copying } from './copy.ts'
+import { assertRejects } from '@std/assert'
+import { Interrupted } from '@yaks/tools/errors'
 
 // A source over a file of its own, read out the way the Builder's door reads
 // one (workers/yak/store-copy.ts), a page of two rows at a time.
@@ -47,4 +49,25 @@ test('a space’s store is copied table by table, and one with none says so', as
     made.query(select({ cols: [col('body')], from: table('note') })),
     [{ body: 'a' }, { body: 'b' }, { body: 'c' }],
   )
+})
+
+test('a copy stops at the next page once its process stops', async () => {
+  let stop = new AbortController()
+  let asked = 0
+  let read = asking(source)
+  await assertRejects(
+    () =>
+      copy({
+        spaces: [{ eid: 'ada', slug: 'ada' }],
+        page: (space, at) => {
+          if (++asked == 2) stop.abort()
+          return read(space, at)
+        },
+        open: () => ({ ...open(':memory:'), close: () => {} }),
+        out: () => {},
+        stopping: stop.signal,
+      }),
+    Interrupted,
+  )
+  equal(asked, 2)
 })

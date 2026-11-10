@@ -15,13 +15,16 @@ import {
   type Plan,
 } from '@yaks/durable-object'
 import type { Driver } from '@yaks/sql'
+import { Interrupted } from '@yaks/tools/errors'
 
 /** One answer of the door: a space's plan, or a page of one of its tables. */
 export type Copying = { plan: Plan } | { rows: Cell[][]; last: number | null }
 
 /** Each space's store into the file `open` makes for its slug, a line said
  * for each: its tables and rows, or that it holds none. The file is one, to
- * be copied or opened anywhere: `open` makes it with a rollback journal. */
+ * be copied or opened anywhere: `open` makes it with a rollback journal. A
+ * copy stops at the next page once `stopping` aborts, as its process drains,
+ * which waits for it. */
 export let copy = async (o: {
   spaces: { eid: string; slug: string }[]
   page: (
@@ -32,8 +35,11 @@ export let copy = async (o: {
   out: (line: string) => void
   stopping: AbortSignal
 }) => {
+  let going = () => {
+    if (o.stopping.aborted) throw new Interrupted('the copy was interrupted')
+  }
   for (let space of o.spaces) {
-    if (o.stopping.aborted) break
+    going()
     let { plan } = await o.page(space.eid, {}) as { plan: Plan }
     if (!plan.tables.length) {
       o.out(`${space.slug}  no store`)
@@ -45,6 +51,7 @@ export let copy = async (o: {
       let rows = 0
       for (let t of plan.tables) {
         for (let after = 0;;) {
+          going()
           let next = await o.page(space.eid, { table: t.name, after }) as {
             rows: Cell[][]
             last: number | null
