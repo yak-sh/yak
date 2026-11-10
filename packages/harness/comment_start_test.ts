@@ -1,7 +1,8 @@
 // A person's comment on an open task nobody holds, committed through a
 // composed box graph, owes one `session_start`, and the harness starts the
-// session as `session_new --work` would: wearing the common persona of the
-// task's lineage and asking the default model.
+// session wearing the common persona of the task's lineage and asking what
+// the task's project says its work runs on, `using{provider, model}` on the
+// project; a project that names none gets the harness's default model.
 import { equal, test } from '@yaks/testing'
 import { compose } from '@yaks/cli/host'
 import { type Comp, identityEid } from '@yaks/graph'
@@ -20,12 +21,22 @@ let started = await (async () => {
   let handlers = effects(host)
   let model = identityEid('model', ['gpt-6-astra'])
   let provider = identityEid('provider', ['openai'])
+  let opus = identityEid('model', ['opus'])
+  let claude = identityEid('provider', ['claude'])
   try {
     await g.apply([
       { entity: { eid: model }, model: { name: 'gpt-6-astra' } },
       { entity: { eid: provider }, provider: { name: 'openai' } },
       { entity: { eid: HARNESS }, using: { provider, model } },
-      { entity: { eid: 'p' }, project: {}, doc: { title: 'Project' } },
+      { entity: { eid: opus }, model: { name: 'opus' } },
+      { entity: { eid: claude }, provider: { name: 'claude' } },
+      {
+        entity: { eid: 'p' },
+        project: {},
+        doc: { title: 'Project' },
+        using: { provider: claude, model: opus },
+      },
+      { entity: { eid: 'q' }, project: {}, doc: { title: 'Plain' } },
       {
         entity: { eid: 'crew' },
         persona: { home: 'p' },
@@ -40,30 +51,46 @@ let started = await (async () => {
         doc: { title: 'Fix the door' },
         filed: { project: 'p' },
       },
+      {
+        entity: { eid: 'chore' },
+        task: {},
+        doc: { title: 'Oil the hinge' },
+        filed: { project: 'q' },
+      },
     ], { trusted: true })
-    await g.apply([{
-      entity: { eid: 'word' },
-      comment: { target: 'job' },
-      doc: { body: 'the hinge squeaks' },
-      $actor: { by: 'jeff', via: 'web' },
-    }])
+    let say = (eid: string, on: string) =>
+      g.apply([{
+        entity: { eid },
+        comment: { target: on },
+        doc: { body: 'the hinge squeaks' },
+        $actor: { by: 'jeff', via: 'web' },
+      }])
+    // The session a comment started, and the `using` its first input carries.
+    let start = async (comment: string) => {
+      await handlers.session_start(
+        { entity: { eid: comment } } as never,
+        g,
+        {} as never,
+        {} as never,
+      )
+      let [session] = await g.read(`.session.source=${comment}&*`)
+      let [input] = await g.read(
+        `.entry.session=${session.entity.eid}&.using&*`,
+      )
+      return { session, using: input.using }
+    }
+    await say('word', 'job')
     let owed = await g.read('.effect.handler=session_start&*')
-    await handlers.session_start(
-      { entity: { eid: 'word' } } as never,
-      g,
-      {} as never,
-      {} as never,
-    )
-    let [session] = await g.read('.session.source=word&*')
-    let [input] = await g.read(
-      `.entry.session=${session.entity.eid}&.using&*`,
-    )
+    let { session, using } = await start('word')
+    await say('aside', 'chore')
     return {
       owed: owed.map((b) => (b.effect as Comp).target),
       session: session.session as Comp,
       native: !!session.native,
       filed: session.filed,
-      using: input.using,
+      using,
+      plain: (await start('aside')).using,
+      project: { provider: claude, model: opus },
       default: (await g.get([HARNESS]))[0].using,
       holds: (await g.get(['job']))[0].claim,
       said: !!(await g.get(['word']))[0].notified,
@@ -75,12 +102,13 @@ let started = await (async () => {
 })()
 
 test('a comment through the box graph owes one start, and the harness opens the session on the task', () => {
-  let { eid, session, holds, using, ...rest } = started
+  let { eid, session, holds, using: _, plain: __, project: ___, ...rest } =
+    started
   equal(rest, {
     owed: ['word'],
     native: true,
     filed: { project: 'p' },
-    default: using,
+    default: started.plain,
     said: true,
   })
   equal([session.persona, session.source, session.operator], [
@@ -89,4 +117,9 @@ test('a comment through the box graph owes one start, and the harness opens the 
     false,
   ])
   equal((holds as Comp).session, eid)
+})
+
+test("the session asks what the task's project runs its work on, and the default where the project names none", () => {
+  equal(started.using, started.project)
+  equal(started.plain, started.default)
 })

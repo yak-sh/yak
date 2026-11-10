@@ -123,16 +123,16 @@ budgets.
 
 ## Exports
 
-| Import                  | Main exports                                                                        |
-| ----------------------- | ----------------------------------------------------------------------------------- |
-| `@yaks/harness`         | `agent`, `seed`, `sessionTitle`, `titleOf`, and their types; web platform only      |
-| `@yaks/harness/default` | `defaultUsing(graph)` and `HARNESS`, alone, for packages that request sessions      |
-| `@yaks/harness/local`   | `local`, `hosted`, `harnessTools`, `graphTools`, and their types                    |
-| `@yaks/harness/tui`     | `views`: a lone session or entry, drawn as the terminal app                         |
-| `@yaks/harness/vocab`   | `docs`, the harness's own words                                                     |
-| `@yaks/harness/tools`   | `runs(host)`, the functions behind the tools `vocab.json` declares                  |
-| `@yaks/harness/cli`     | `commands`, the session terminal control                                            |
-| `@yaks/harness/routes`  | `routes(host, options)`: `POST /model/step`, answered from this machine's providers |
+| Import                  | Main exports                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- |
+| `@yaks/harness`         | `agent`, `seed`, `sessionTitle`, `titleOf`, and their types; web platform only                          |
+| `@yaks/harness/default` | `defaultUsing(graph)`, `usingFor(graph, work)` and `HARNESS`, alone, for packages that request sessions |
+| `@yaks/harness/local`   | `local`, `hosted`, `harnessTools`, `graphTools`, and their types                                        |
+| `@yaks/harness/tui`     | `views`: a lone session or entry, drawn as the terminal app                                             |
+| `@yaks/harness/vocab`   | `docs`, the harness's own words                                                                         |
+| `@yaks/harness/tools`   | `runs(host)`, the functions behind the tools `vocab.json` declares                                      |
+| `@yaks/harness/cli`     | `commands`, the session terminal control                                                                |
+| `@yaks/harness/routes`  | `routes(host, options)`: `POST /model/step`, answered from this machine's providers                     |
 
 ## Use
 
@@ -237,6 +237,14 @@ write changes it:
 ```sh
 yak graph apply --bundles '[{"entity": {"eid": "8b429c76-beb1-8dcf-82fc-c68f7f0e5c73"}, "using": {"provider": "openrouter", "model": "z-ai/glm-5.3"}}]'
 ```
+
+A session started on a person's comment (@yaks/session
+[A comment starts a session](../session/README.md#a-comment-starts-a-session))
+asks what the task's project says its work runs on (`usingFor`): the
+`using{provider, model}` on the project, and the default where the project names
+none. A project whose `using` names the `claude` provider has such a session
+answered by the signed-in `claude -p` (@yaks/claude), on its owner's
+subscription.
 
 Each provider signs in its own way (OpenAI: `$OPENAI_API_KEY` or the OpenAI
 connection), over the sign-ins this machine lends it. `yak auth` belongs to
@@ -546,8 +554,11 @@ is the launch directory. An explicit `--workspace` wins over that default.
 Remote graph-only openings do not select the server directory.
 
 A selected workspace admits its instruction files at opening. With no checkout
-or explicit workspace selected, the first file or command call requests a
-sandbox intention using the host's configured default adapter. Provisioning is
+or explicit workspace selected, the first file or command call of a session
+holding a task gets a worktree of its own, cut as a spawned run's is from the
+checkout @yaks/spawn's config names (`cwd`, under `worktrees`); a session
+started on a comment works in one. Any other session's first such call requests
+a sandbox intention using the host's configured default adapter. Provisioning is
 the sandbox effect's work, not a local directory provider. Missing configuration
 refuses rather than borrowing the host's disk. A pending sandbox has no files to
 admit.

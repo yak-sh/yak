@@ -115,7 +115,8 @@ export interface Host {
       request?: { provider?: string; from?: string; image?: string },
     ) => Promise<string>
   }
-  /** Host preparation for an explicitly configured workspace (native fixers). */
+  /** Host preparation of the checkout a native session works in where its
+   * home names none: a fixer's, and that of a session holding a task. */
   resolveHome?: (
     session: string,
   ) => Promise<import('@yaks/graph').Comp | undefined>

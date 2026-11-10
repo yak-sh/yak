@@ -7,7 +7,9 @@
 //
 // `session_start` is handled here too (@yaks/session `starting`): a session
 // started on a person's comment wears the persona of the task's lineage and
-// asks the harness's default model, as `session_new --work` does.
+// asks what the task's project says its work runs on (./default.ts
+// `usingFor`): the project's own `using{provider, model}`, and the harness's
+// default model where the project names none.
 
 import { promptEntry } from '@yaks/context'
 import { type Comp, derivedEid, Refused } from '@yaks/graph'
@@ -16,7 +18,7 @@ import type { Handlers } from '@yaks/effects'
 import type { Host } from '@yaks/host'
 
 import { running, starting } from '@yaks/session'
-import { defaultUsing } from './default.ts'
+import { usingFor } from './default.ts'
 import { lend, offering } from './agent.ts'
 import { here, type Opts } from './local.ts'
 import { hosted } from './store.ts'
@@ -27,7 +29,8 @@ import { machines } from './session_machines.ts'
  * may name `compactAt`, the share of its model's context window a transcript
  * fills before it is compacted (half where absent), and `starts`, the most
  * sessions started on comments at work at once (two where absent); the model
- * a session asks by default is graph data (./default.ts `defaultUsing`). */
+ * a session asks by default is graph data (./default.ts `defaultUsing`), and
+ * so is the one a project's work runs on (`usingFor`). */
 export let effects = (
   host: Host,
   options: Record<string, unknown> & Pick<Opts, 'env' | 'http'> = {},
@@ -148,7 +151,7 @@ export let effects = (
       limit: typeof options.starts == 'number' ? options.starts : undefined,
       opening: async (work) => ({
         persona: (await openingFor(g, {}, host.workspaces, { work })).persona,
-        using: await defaultUsing(g),
+        using: await usingFor(g, work),
       }),
     }),
   }

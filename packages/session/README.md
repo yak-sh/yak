@@ -923,9 +923,10 @@ At most two sessions started this way are at work (mid-turn) at once; the host
 sets the number (`starting`'s `limit`, the harness plugin's `starts`). A start
 past it keeps its run and waits in the pool, asking again every ten seconds. The
 host also says what a session on a task opens with (`opening`): the harness
-gives the common persona of the task's lineage and its default model, as
-`yak session new --work` does. [`start_test.ts`](./start_test.ts) runs each case
-through the commit, the pool and the bus.
+gives the common persona of the task's lineage, and the model the task's project
+says its work runs on, `using{provider, model}` on the project, or its own
+default model where the project names none. [`start_test.ts`](./start_test.ts)
+runs each case through the commit, the pool and the bus.
 
 ## Claimed-work comments
 
