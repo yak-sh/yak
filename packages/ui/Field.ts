@@ -29,11 +29,11 @@ export type FieldProps = Props & {
 
 /** A text field. */
 export let Field: FunctionComponent<FieldProps> = (
-  { lines, choose, caret, ...p },
+  { lines, choose, caret, as, ...p },
 ) =>
   h(Input, {
-    as: choose ? 'select' : lines ? 'textarea' : 'input',
     ...p,
+    as: as ?? (choose ? 'select' : lines ? 'textarea' : 'input'),
     'data-caret': caret,
   })
 

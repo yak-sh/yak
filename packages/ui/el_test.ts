@@ -3,6 +3,8 @@ import { assertEquals } from '@std/assert'
 import { h, type VNode } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { block, el } from './el.ts'
+import { Field } from './Field.ts'
+import { parseHTML } from 'linkedom'
 
 let html = (node: VNode) => renderToString(node)
 let Dot = el('span', 'Dot')
@@ -70,4 +72,21 @@ test('links nest the way HTML allows', () => {
     '<a href="/T-1" class="Card"><span role="link" tabindex="0" ' +
       'data-href="/T-2" class="Id">T-2</span></a>',
   )
+})
+
+let Wrapped = el(Field, 'Wrapped')
+test('a composed field keeps its input kind and an explicit element', () => {
+  for (let Part of [Field, Wrapped]) {
+    for (
+      let [props, tag] of [
+        [{}, 'INPUT'],
+        [{ lines: true }, 'TEXTAREA'],
+        [{ choose: true }, 'SELECT'],
+        [{ lines: true, as: 'input' }, 'INPUT'],
+      ] as const
+    ) {
+      let { document } = parseHTML(html(h(Part, props)))
+      assertEquals(document.querySelector('.Field')?.tagName, tag)
+    }
+  }
 })

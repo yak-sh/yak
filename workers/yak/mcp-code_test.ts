@@ -46,8 +46,13 @@ test('remote MCP tools run in code mode while the connector keeps its published 
   let opts = { graph: store.g, core: false as const }
   let local = { graph: store.g, person, space: eid }
   let base = listing(coded(opts, ctx, local)).map((t) => t.name)
-  let connected = coded(opts, ctx, local, [remote])
+  let reads = 0
+  let connected = coded(opts, ctx, local, () => {
+    reads++
+    return Promise.resolve([remote])
+  })
   equal(listing(connected).map((t) => t.name), base)
+  equal(reads, 0)
   let code = listing(connected).find((t) => t.name == 'code_mode')!
   let run = (args: Record<string, unknown>) =>
     code.run({
@@ -55,6 +60,7 @@ test('remote MCP tools run in code mode while the connector keeps its published 
       call: { args },
     }, store.g)
   let described = await run({ search: 'Quote a book' })
+  equal(reads, 1)
   let value =
     (described[0].output as { value: { tools: { path: string[] }[] } }).value
   equal(value.tools.map((t) => t.path), [['mcp', 'Books_Print__quote']])

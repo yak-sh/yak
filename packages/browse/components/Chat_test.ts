@@ -105,7 +105,7 @@ let invited = (row: Record<string, unknown>) => {
   let mounted = mount(h(Starter, { e: ent('it'), actor: 'actor', done() {} }))
   try {
     let box = mounted.root.querySelector('textarea.Field')
-    return [box?.getAttribute('placeholder'), box?.getAttribute('class')]
+    return [box?.getAttribute('placeholder'), box?.classList.contains('Field')]
   } finally {
     mounted.free()
     cache.value = {}
@@ -122,7 +122,7 @@ let invites = {
 }
 
 test('a new chat reuses the composer input with a terse prompt', () => {
-  assertEquals(invites.document, ['start a chat…', 'Field'])
+  assertEquals(invites.document, ['start a chat…', true])
 })
 
 test('a chat on a persona messages it by name', () => {

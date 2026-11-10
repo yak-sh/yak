@@ -394,7 +394,7 @@ test('a public app keeps its sign-ups from visitors holding no level', async () 
     for (let live of [false, true]) {
       for (let q of ['.registration', '.completed', `.refs=${prayer}`]) {
         let [status, text] = await asked(q, cookie, live)
-        equal(status, 200)
+        equal(status, 200, `${q} live=${live}: ${text}`)
         ok(!text.includes('registration'), `${q}: ${text}`)
       }
     }

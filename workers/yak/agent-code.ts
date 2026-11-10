@@ -15,7 +15,7 @@ export let coded = <T extends Options>(
   opts: T,
   ctx: Ctx,
   local?: ResultHost,
-  remote: Tool[] = [],
+  remote: Tool[] | (() => Promise<Tool[]>) = [],
 ) => {
   let catalog = registry([{
     name: 'yaks',
@@ -24,9 +24,10 @@ export let coded = <T extends Options>(
       ...resultTools(ctx, local),
     ],
   }])
+  let remoteTools = typeof remote == 'function' ? [] : remote
   let codeCatalog = registry([
     { name: 'yaks', tools: catalog.list() },
-    { name: 'mcp', tools: remote },
+    { name: 'mcp', tools: remoteTools },
   ])
   let run = runner(opts.calls ?? opts.graph, {
     tools: catalog,
@@ -58,7 +59,7 @@ export let coded = <T extends Options>(
             ...listing({ ...opts, graph, search: searching(now, reach) }),
             ...resultTools(now, local),
           ],
-        }, { name: 'mcp', tools: remote }])
+        }, { name: 'mcp', tools: remoteTools }])
         return runner(ledger(graph, opts.calls), {
           tools: catalog,
           host: graph,
@@ -78,10 +79,16 @@ export let coded = <T extends Options>(
         space: SPACE,
       },
     },
-    run: (
+    run: async (
       call: Parameters<typeof base.run>[0],
       graph: Parameters<typeof base.run>[1],
-    ) => offered(argsOf(call)).run(call, graph),
+    ) => {
+      if (typeof remote == 'function') {
+        remoteTools = await remote()
+        codeCatalog.replace('mcp', remoteTools)
+      }
+      return offered(argsOf(call)).run(call, graph)
+    },
   }
   catalog.replace('code', [code])
   codeCatalog.replace('code', [code])

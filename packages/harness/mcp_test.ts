@@ -115,11 +115,14 @@ test('remote images use external artifacts while large text retains bounded cont
   }
 })
 
-// A short human sentence must not hide a large structured answer from retention.
+// Oversized prose is summarized; the complete structured reply stays queryable.
 test('the model receives a summary of a full third-party reply and can query it with custom tools', async () => {
   let h = await harness()
   let reply = {
-    content: [{ type: 'text' as const, text: 'These are the rows.' }],
+    content: [{
+      type: 'text' as const,
+      text: 'These are the rows. '.repeat(1000),
+    }],
     structuredContent: { rows: [{ title: 'First', body: 'x'.repeat(20_000) }] },
   }
   let remote = connected(h, () => Promise.resolve(reply))

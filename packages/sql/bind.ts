@@ -1444,7 +1444,9 @@ let referrers = (ctx: Ctx, value: string): Frag | undefined => {
   if (!groups[0].length) return
   let name = '__refs_target'
   while (ctx.v.comp(name)) name += '_'
-  let target = `with "${name}" as (select id from ${
+  // Every arm shares this scoped lookup. Inlining it per table can exceed
+  // the engine’s instruction limit even when there is only one target.
+  let target = `with "${name}" as materialized (select id from ${
     source(ctx, 'entity')
   } where eid = ?)`
   let term = ([c, props]: Arm) =>

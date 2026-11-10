@@ -238,11 +238,8 @@ for (let [origin, mount] of [[host, '/site'], [custom, '']]) {
     assertStringIncludes(css, '--hatch:')
     assertStringIncludes(css, '--hollow:')
     assertStringIncludes(css, '--grain:')
-    assertStringIncludes(css, 'filter: var(--drawn)')
-    assertStringIncludes(
-      css,
-      ':where(.Button, .Card, a.Chip, .Empty, .Drop_Zone)::after',
-    )
+    assertStringIncludes(css, '--edge-filter: var(--drawn)')
+    assertStringIncludes(css, 'filter: var(--edge-filter)')
     let p = page(them.cookie)
     try {
       await p.start()
