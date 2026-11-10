@@ -1,6 +1,9 @@
 // An ended CLI run leaves its report on its task and a knock for whoever
-// started it. The knock is ordinary session-bus delivery, so listen, hooks
-// and native transcripts all hear the same receipt.
+// started it, or for the nearest session up that one's line once it is over
+// (@yaks/session `reported`). The knock is ordinary session-bus delivery, so
+// listen, hooks and native transcripts all hear the same receipt: one row
+// carrying the whole report, which is the only knock its work on the task
+// makes (@yaks/session's watch.ts).
 //
 // A provider's subagents run inside its process, so they end when it does. A
 // run waits on its own background agents (./adapters.ts `claude.env`), but one
@@ -11,7 +14,6 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { signed } from '@yaks/graph/provenance'
-import { argsOf } from '@yaks/graph/call'
 import { human } from '@yaks/id'
 import {
   children,
@@ -19,6 +21,7 @@ import {
   entryStatus,
   parked,
   receiptOf,
+  reported,
   saidOf,
   speaking,
   textOf,
@@ -62,26 +65,13 @@ export let complete = async (g: Graph, session: string): Promise<void> => {
     'exit',
     'stop',
     'brief',
-    'spawned',
   ])
   if (!row?.process || !row.exit) return
   if (cleanEnd(row) && await parked(g, session)) return
   let end = await receiptOf(g, session)
   if (!end) return
-  let source = str(comp(row, 'session')?.source)
-  let [call] = source ? await g.get([source], ['call', 'entry', 'created']) : []
-  // Claims may already have been released by the terminal-entry effect, or
-  // by the agent itself. The originating spawn call still names its task.
-  let task = call?.call ? str(argsOf(call).task) : ''
-  let tasks = task
-    ? [task]
-    : g.vocab.comp('task')
-    ? (await g.read(`.task&.claim.session=${session}`)).map((b) => b.entity.eid)
-    : []
-  let parent = str(comp(row, 'spawned')?.parent) ||
-    str(comp(call, 'entry')?.session) || str(comp(call, 'created')?.via)
-  let [owner] = parent ? await g.get([parent], ['session']) : []
-  let notify = owner?.session && g.vocab.comp('knock') ? parent : ''
+  let { tasks, to } = await reported(g, session)
+  let notify = to && g.vocab.comp('knock') ? to : ''
   if (!tasks.length && !notify) return
   let name = human(g.vocab)
   let cut = await unfinished(g, session)

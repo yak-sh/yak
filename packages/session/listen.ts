@@ -3,9 +3,12 @@
 // delivered to it, a letter answering one it wrote. `yak session listen` is
 // the command a harness runs under a monitor — Claude Code's Monitor tool reads
 // each line a command prints as one event — so a running agent learns about its
-// work while it works. With `once` it ends at the first lines it says, for a
+// work while it works. With `once` it ends once it has said something, for a
 // harness that wakes its agent when a background command ends (Claude Code's
-// background Bash), so an idle agent is woken by what arrives.
+// background Bash), so an idle agent is woken by what arrives. A wake costs
+// such an agent a read of its whole context, so one wake carries all that is
+// waiting: the command stays up through a quiet window after each line and
+// ends when nothing new came in it, with everything that arrived meanwhile.
 //
 // A line is marked said as it is printed, so the printing is the delivery: the
 // command's output goes to the agent's own harness, never to a file a second
@@ -64,7 +67,13 @@
 //
 // Each item is marked `notified` as it is said, so it is said once, including
 // one that arrived while nothing was listening: a monitor that expired and was
-// armed again hears the gap. A session never hears what it wrote itself.
+// armed again hears the gap. A session never hears what it wrote itself, and a
+// knock left at two addresses it hears (itself and its project) is said once.
+//
+// A line carries the item whole, so reading it needs no second command. A
+// managed run's receipt (@yaks/spawn's completion: the run's report as a
+// comment on its task that knocks whoever started it) is said as the knock it
+// is, with where the task stands now.
 //
 // The graph is a file other processes write, so this reads it again every few
 // seconds rather than waiting on commits: @yaks/client's `watch` hears only the
@@ -75,6 +84,7 @@ import { signed } from '@yaks/graph/provenance'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { human } from '@yaks/id'
+import { statusOf } from '@yaks/task'
 import {
   absent,
   type And,
@@ -438,28 +448,39 @@ export let held = async (
 let author = (b: Bundle): string =>
   str(comp(b, 'created').via) || str(comp(b, 'created').by)
 
+// An item's words. A knock's ride in `doc` or, from a session's own notices
+// (wake.ts), in `content{body}`; a letter delivered is said by its subject.
+let words = (b: Bundle): string => {
+  let doc = comp(b, 'doc')
+  return fold(
+    b.deliver
+      ? str(doc.title)
+      : str(doc.body) || str(doc.title) || str(comp(b, 'content').body),
+  )
+}
+
 /** One item as the line a monitor shows. `named` gives the readable id of an
- * entity the item points at, where it could be read. */
+ * entity the item points at, where it could be read, and `state` where a task
+ * it is about stands. */
 export let said = (
   vocab: Vocab,
   b: Bundle,
   named: (eid: string) => string,
+  state: (eid: string) => string = () => '',
 ): string => {
   let id = human(vocab)(b)
-  let doc = comp(b, 'doc')
-  // A knock's words ride in `doc` or, from a session's own notices
-  // (wake.ts), in `content{body}`.
-  let text = fold(
-    str(doc.body) || str(doc.title) || str(comp(b, 'content').body),
-  )
   let from = author(b) ? ` from ${named(author(b))}` : ''
-  let line = b.comment
-    ? `comment ${id} on ${named(str(comp(b, 'comment').target))}${from}`
+  let on = str(comp(b, 'comment').target)
+  let stands = state(on) ? ` (${state(on)})` : ''
+  let line = b.comment && b.knock
+    ? `knock ${id} on ${named(on)}${stands}${from}`
+    : b.comment
+    ? `comment ${id} on ${named(on)}${from}`
     : b.knock
     ? `knock ${id} at ${named(str(comp(b, 'knock').target))}${from}`
     : `mail ${id} from ${str(comp(b, 'mail').from) || named(author(b))}`
-  let words = b.deliver ? fold(str(doc.title)) : text
-  return safe(words ? `${line}: ${words}` : line)
+  let text = words(b)
+  return safe(text ? `${line}: ${text}` : line)
 }
 
 /** What {@link listen} needs besides the tool's own context. */
@@ -468,8 +489,13 @@ export type Ear = {
   out: (line: string) => void
   /** how long to wait between reads, in milliseconds, or what to wait for */
   every: number | (() => Promise<void>)
-  /** end after the first read that says anything */
+  /** end once something was said and nothing new came for `quiet` */
   once?: boolean
+  /** with `once`, how long nothing new must come before it ends, in
+   * milliseconds (default 0: end with the first read that says anything) */
+  quiet?: number
+  /** the clock the quiet window is read from (default `Date.now`) */
+  now?: () => number
   /** stops the loop when it aborts; a command under a monitor stops when its
    * process is killed, so this is for a program that runs it in-process */
   stop?: AbortSignal
@@ -588,12 +614,18 @@ export let replies = (
     ids,
   )
 
-/** What this session has yet to hear, as the item and its readable line. */
+/** One thing a session has yet to hear: the item, its readable line, and the
+ * other knocks that say the same from the same writer, left at another
+ * address the session hears (itself and its project, say). They are one
+ * knock, said once and marked said together. */
+export type Owed = { item: Bundle; line: string; same: Bundle[] }
+
+/** What this session has yet to hear. */
 export let pending = async (
   graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
   session: Eid,
   news?: News,
-): Promise<{ item: Bundle; line: string }[]> => {
+): Promise<Owed[]> => {
   let vocab = graph.vocab
   // Ordinary claimed-thread comments stay out of native transcripts. Replies
   // on records a session created reach native and outside sessions alike.
@@ -653,21 +685,39 @@ export let pending = async (
       ]).filter(Boolean),
     ),
   ]
-  let names = new Map<string, string>()
+  let names = new Map<string, string>(), states = new Map<string, string>()
   for (let b of await graph.get(pointed)) {
     names.set(b.entity.eid, human(vocab)(b))
+    if (b.task) states.set(b.entity.eid, statusOf(vocab, b) ?? '')
   }
   let named = (eid: string) => names.get(eid) ?? eid
-  return items.map((item) => ({ item, line: said(vocab, item, named) }))
+  let state = (eid: string) => states.get(eid) ?? ''
+  let out: Owed[] = [], knocks = new Map<string, Owed>()
+  for (let item of items) {
+    let key = item.knock && !item.comment && words(item)
+      ? `${author(item)} ${words(item)}`
+      : ''
+    let first = knocks.get(key)
+    if (first) {
+      first.same.push(item)
+      continue
+    }
+    let owed = { item, line: said(vocab, item, named, state), same: [] }
+    if (key) knocks.set(key, owed)
+    out.push(owed)
+  }
+  return out
 }
 
-/** Mark an item only if nobody has delivered it meanwhile. The optional
- * entry makes a native session's input and the mark one committed batch. */
+/** Mark an item only if nobody has delivered it meanwhile, and with it the
+ * knocks that say the `same` ({@link Owed}). The optional entry makes a native
+ * session's input and the mark one committed batch. */
 export let deliver = async (
   graph: Pick<Graph, 'apply'>,
   actor: Actor | null,
   item: Bundle,
   entry?: Bundle,
+  same: Bundle[] = [],
 ): Promise<boolean> => {
   try {
     await graph.apply(signed([
@@ -677,6 +727,7 @@ export let deliver = async (
         [NOTIFIED]: {},
         $was: { [NOTIFIED]: { at: token(null) } },
       },
+      ...same.map((b) => ({ entity: { eid: b.entity.eid }, [NOTIFIED]: {} })),
     ], actor))
     return true
   } catch (error) {
@@ -708,16 +759,22 @@ export let hear = async (
   out: (line: string) => void,
 ): Promise<number> => {
   let count = 0
-  for (let { item, line } of await pending(graph, session)) {
+  for (let { item, line, same } of await pending(graph, session)) {
     out(line)
-    if (!await deliver(graph, actor, item)) continue
+    if (!await deliver(graph, actor, item, undefined, same)) continue
     count++
   }
   return count
 }
 
+// How many quiet windows a `once` listener stays up at most after its first
+// line. Knocks that keep coming inside each window would otherwise hold what
+// was already said from the agent for as long as they came.
+let HOLD = 6
+
 /** Say everything addressed to the session as it arrives, until `stop`
- * aborts, or until the first read that says anything when `once`. */
+ * aborts or, when `once`, until something was said and nothing new came for
+ * `quiet`. */
 export let listen = async (
   graph:
     & Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>
@@ -733,6 +790,8 @@ export let listen = async (
     )
   }
   let first = true, prior: unknown
+  let now = ear.now ?? Date.now, quiet = ear.quiet ?? 0
+  let began: number | undefined, last = 0
   while (!ear.stop?.aborted) {
     // Sample before reading: a commit during hear must be read next beat.
     // SQLite revisions include other processes' commits; watch does not.
@@ -742,8 +801,15 @@ export let listen = async (
       prior = revision
       let lines = 0
       await hear(graph, actor, session, (line) => (lines++, ear.out(line)))
-      if (ear.once && lines) return
+      if (lines) {
+        last = now()
+        began ??= last
+      }
     }
+    if (
+      ear.once && began !== undefined &&
+      (now() - last >= quiet || now() - began >= quiet * HOLD)
+    ) return
     await pause(ear.every, ear.stop)
   }
 }

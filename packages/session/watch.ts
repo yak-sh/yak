@@ -15,15 +15,28 @@
 //
 // Each change knocks a target once, named for the target and the change, so
 // two watchers routed to one session make one knock and a run that is tried
-// again knocks nobody twice. Nobody is knocked about their own write. A
-// person's comment already reaches the session that filed the task and the one
-// holding it (./listen.ts), so those two are not knocked for it.
+// again knocks nobody twice. A person's comment already reaches the session
+// that filed the task and the one holding it (./listen.ts), so those two are
+// not knocked for it.
+//
+// Nobody is knocked about their own write, and a session's subagents write
+// for it: a subagent runs inside its parent's process and hands what it did
+// back as the result of the parent's own call, so a knock about its comment
+// would tell the parent what it just read (`writers`).
+//
+// One event is one knock. A managed run that ends leaves its whole report as
+// a comment on its task that knocks whoever started it (`reported`, which
+// @yaks/spawn's completion writes by). That receipt is the knock for
+// the run's work on the task: the session it knocks is knocked neither for
+// the comment a second time nor, a little earlier, for the run marking the
+// task completed or cancelled.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
 import { derivedEid } from '@yaks/graph/identity'
 import { human } from '@yaks/id'
 import { CLAIM, SESSION } from './comp.ts'
-import { ended } from './listen.ts'
+import { ended, type Projects, projects } from './listen.ts'
 
 type G = Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>
 
@@ -105,12 +118,26 @@ let projectOf = (rows: Map<Eid, Bundle>, eid: Eid): Eid => {
   return str(comp(rows.get(persona), 'persona').home)
 }
 
+// A project and every project it is filed under, nearest first.
+let above = (tree: Projects, project: Eid): Eid[] => {
+  let found = [project]
+  for (let up = tree.get(project); up && !found.includes(up);) {
+    found.push(up)
+    up = tree.get(up)
+  }
+  return found
+}
+
 /** The operator of a project still able to hear: a session a person opened
- * wearing a persona homed there, not over, the one that spoke last. */
+ * wearing a persona homed there or at a project it is filed under (the
+ * projects ./listen.ts gives such a session what is held for), not over, the
+ * one that spoke last. */
 let operatorOf = async (g: G, project: Eid): Promise<Eid | undefined> => {
   if (!g.vocab.prop(SESSION, 'operator')) return
+  let homes = above(await projects(g), project)
   let open = await g.read(
-    `.${SESSION}.operator=true&.${SESSION}.persona.persona.home=${project}` +
+    `.${SESSION}.operator=true` +
+      `&.${SESSION}.persona.persona.home=${homes.join(',')}` +
       `&!${SESSION}.ended&.fields=${SESSION}.ended`,
   )
   let gone = await ended(g, open)
@@ -172,6 +199,94 @@ export let targets = async (
     out.add(operators.get(project) ?? project)
   }
   return [...out]
+}
+
+// How far a line of sessions is followed up before it stops: a longer one is
+// a cycle someone wrote.
+let DEPTH = 8
+
+// What places a session in its line, read alone: the rest of `session` (its
+// computed status above all) is derived from its whole log.
+let placed = async (g: G, eid: Eid): Promise<Bundle | undefined> =>
+  (await g.read(
+    `.entity.eid=${JSON.stringify(eid)}&.${SESSION}&.fields=` +
+      [`${SESSION}.source`, `${SESSION}.ended`, `${SESSION}.transcript`]
+        .concat(g.vocab.comp('spawned') ? ['spawned.parent'] : []).join(','),
+  ))[0]
+
+let managed = async (g: G, eid: Eid): Promise<Bundle | undefined> =>
+  g.vocab.comp('process')
+    ? (await g.get([eid], ['process', 'exit']))[0]
+    : undefined
+
+/** The sessions a write through `via` is the own write of: that session, and
+ * while it is a subagent (a transcript its harness keeps in a file and runs
+ * inside its parent's process, as a Claude Code subagent is), each session up
+ * its line. A managed run or a native child is a line of work of its own. */
+export let writers = async (g: G, via: Eid): Promise<Set<Eid>> => {
+  let own = new Set<Eid>()
+  for (let at = via; at && !own.has(at) && own.size < DEPTH;) {
+    own.add(at)
+    let s = await placed(g, at)
+    let parent = str(comp(s, 'spawned').parent)
+    at = parent && comp(s, SESSION).transcript &&
+        !(await managed(g, at))?.process
+      ? parent
+      : ''
+  }
+  return own
+}
+
+/**
+ * Where a managed run's ending is reported: the task its spawn call names,
+ * else the tasks it holds, and the session to knock, which is the one that
+ * started it or, that one being over, the nearest up its own line that can
+ * still hear. @yaks/spawn's completion writes its receipt by this, and
+ * {@link knocks} leaves that receipt to be the one knock.
+ *
+ * ```ts
+ * import { reported } from '@yaks/session'
+ *
+ * // let { tasks, to } = await reported(graph, run)
+ * ```
+ */
+export let reported = async (
+  g: G,
+  run: Eid,
+): Promise<{ tasks: Eid[]; to?: Eid }> => {
+  let row = await placed(g, run)
+  let source = str(comp(row, SESSION).source)
+  let [call] = source ? await g.get([source], ['call', 'entry', 'created']) : []
+  // Claims may already have been released by the terminal-entry effect, or
+  // by the agent itself. The originating spawn call still names its task.
+  let task = call?.call ? str(argsOf(call).task) : ''
+  let tasks = task
+    ? [task]
+    : g.vocab.comp('task')
+    ? (await g.read(`.task&.${CLAIM}.session=${run}`)).map((b) => b.entity.eid)
+    : []
+  let seen = new Set<Eid>([run])
+  let at = str(comp(row, 'spawned').parent) ||
+    str(comp(call, 'entry').session) || str(comp(call, 'created').via)
+  while (at && !seen.has(at) && seen.size < DEPTH) {
+    seen.add(at)
+    let s = await placed(g, at)
+    if (!s) break
+    if (!(await ended(g, [s])).has(at)) return { tasks, to: at }
+    at = str(comp(s, 'spawned').parent)
+  }
+  return { tasks }
+}
+
+// Who hears a change another way, so is not knocked for it: the session a
+// comment itself knocks, and, for a mark a managed run made while still at
+// work on the task, whoever its receipt will knock.
+let told = async (g: G, row: Bundle, task: Eid, via: Eid): Promise<Eid[]> => {
+  if (row.comment) return [str(comp(row, 'knock').target)].filter(Boolean)
+  let run = via ? await managed(g, via) : undefined
+  if (!run?.process || run.exit) return []
+  let { tasks, to } = await reported(g, via)
+  return to && tasks.includes(task) ? [to] : []
 }
 
 /** A change worth telling: what happened, what it says (the task's title, or
@@ -239,12 +354,19 @@ export let knocks = async (g: G, eid: Eid): Promise<Bundle[]> => {
     let told = [str(comp(task, 'created').via), str(comp(task, CLAIM).session)]
     watching = watching.filter((w) => !told.includes(w))
   }
-  watching = watching.filter((w) => w != change.via)
-  let to = (await targets(g, watching, muting)).filter((t) => t != change.via)
+  let own = change.via ? await writers(g, change.via) : new Set<Eid>()
+  let knows = new Set([
+    ...own,
+    ...await told(g, row, task.entity.eid, change.via),
+  ])
+  watching = watching.filter((w) => !own.has(w))
+  let to = (await targets(g, watching, muting)).filter((t) => !knows.has(t))
   if (!to.length) return []
   let [who] = change.by ? await g.get([change.by], ['doc']) : []
   let name = who ? str(comp(who, 'doc').title) || human(g.vocab)(who) : ''
-  let text = fold(change.text)
+  // The words whole: a knock cut short costs its reader a second command,
+  // and with it a second read of its whole context.
+  let text = fold(change.text, Infinity)
   let body = `${change.what}${name ? ` by ${name}` : ''}` +
     (text ? `: ${text}` : '')
   let named = to.map((target) => ({

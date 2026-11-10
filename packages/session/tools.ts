@@ -130,7 +130,9 @@ let comp = (b: Bundle | undefined, name: string): Comp =>
 export let wakes = (id: string): string =>
   `Keep \`yak session listen --session ${id} --once\` running as a ` +
   `background command, and start it again each time it ends, so your ` +
-  `owner's mail and knocks wake you.`
+  `owner's mail and knocks wake you. When it ends, its output is everything ` +
+  `that was waiting, each item whole on one line: read all of the output, ` +
+  `and no item needs a second command to read.`
 
 /** One entity as a person reads it: its id, and its title where it has one. */
 export let line = (vocab: Vocab, b: Bundle): string => {
@@ -206,8 +208,9 @@ export let runs = (
   },
 
   // Stays up until its process stops, or with `once` until it has said
-  // something, so the call is `running` for as long as somebody is listening —
-  // the way `serve` is while it answers.
+  // something and a quiet window passed with nothing new, so the call is
+  // `running` for as long as somebody is listening — the way `serve` is while
+  // it answers.
   session_listen: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     // A command run in-process writes as its process, not as the transcript
@@ -225,6 +228,7 @@ export let runs = (
       out: (line) => console.log(line),
       every: 1000 * (Number(args.every) || 2),
       once: args.once == true,
+      quiet: 1000 * (args.quiet == null ? 5 : Number(args.quiet) || 0),
       stop: host.stopping,
     })
     return []

@@ -410,6 +410,50 @@ test('a listener told once waits for something to say, says it and ends', async 
   equal([waits, lines.length, marked()], [1, 1, ['c1']])
 })
 
+test('a listener told once stays up through the quiet window and ends with all that came', async () => {
+  let note = (eid: string): Bundle => ({
+    entity: { eid },
+    comment: { target: 't' },
+    doc: { title: '', body: eid },
+  })
+  // Each wait is a second. Something arrives after the first and the third,
+  // and the listener ends five quiet seconds after the last of them.
+  let rows: Bundle[] = [], clock = 0
+  let { graph, marked } = stub(() => rows.filter((b) => !said.has(b)))
+  let said = new Set<Bundle>()
+  let lines: string[] = []
+  await listen(graph, null, 'me', {
+    out: (line) => (lines.push(line), rows.forEach((b) => said.add(b))),
+    every: () => {
+      clock += 1000
+      if (clock == 1000) rows = [note('c1')]
+      if (clock == 3000) rows = [note('c2')]
+      return Promise.resolve()
+    },
+    once: true,
+    quiet: 5000,
+    now: () => clock,
+  })
+  equal([clock, marked()], [8000, ['c1', 'c2']])
+})
+
+test('a listener told once ends six quiet windows after its first line, however much comes', async () => {
+  let clock = 0, n = 0
+  let { graph } = stub(() => [{
+    entity: { eid: `c${n++}` },
+    comment: { target: 't' },
+    doc: { title: '', body: 'more' },
+  }])
+  await listen(graph, null, 'me', {
+    out: () => {},
+    every: () => Promise.resolve(void (clock += 1000)),
+    once: true,
+    quiet: 2000,
+    now: () => clock,
+  })
+  equal(clock, 12000)
+})
+
 // A session with a knock waiting for it.
 let waiting = office()
 await waiting.apply([
@@ -430,6 +474,34 @@ test('a listener told once says what waits for it, marks it said and ends', asyn
   })
   equal(lines.length, 1)
   equal((await waiting.get(['mail']))[0].notified != null, true)
+})
+
+test('a knock left at two addresses a session hears is one line, and both are marked said', async () => {
+  let g = office()
+  let knock = (eid: string, target: string, body: string): Bundle => ({
+    entity: { eid },
+    knock: { target },
+    doc: { body },
+    $actor: { via: 'watcher' },
+  })
+  await g.apply([
+    { entity: { eid: 'p' }, project: {} },
+    { entity: { eid: 'operator' }, persona: { home: 'p' } },
+    { entity: { eid: 'me' }, session: { id: 'me', persona: 'operator' } },
+    { entity: { eid: 'watcher' }, session: { id: 'watcher' } },
+  ], { trusted: true })
+  await g.apply([
+    knock('k1', 'me', 'T-7 completed'),
+    knock('k2', 'p', 'T-7 completed'),
+    knock('k3', 'p', 'T-8 completed'),
+  ], { trusted: true })
+  let lines: string[] = []
+  await hear(g, null, 'me', (line) => lines.push(line))
+  equal(lines.map((line) => line.split(': ')[1]), [
+    'T-7 completed',
+    'T-8 completed',
+  ])
+  equal((await g.read('.knock&!notified')).length, 0)
 })
 
 // With no project, status cannot change what is heard. Keep status unavailable

@@ -7,7 +7,7 @@ import { mailDoc } from '@yaks/mail/vocab'
 import { provenanceDoc } from '@yaks/provenance'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
-import { sessions } from '@yaks/session'
+import { sessions, statusComputed } from '@yaks/session'
 import { hear, pending } from '../session/listen.ts'
 import { counting, filler } from '../session/testing.ts'
 import { host } from './testing.ts'
@@ -18,7 +18,7 @@ let vocab = loadVocab(
   host.keywords,
 )
 let bare = (rows: Bundle[]) => {
-  let storage = ram(vocab, { number: true })
+  let storage = ram(vocab, { computed: statusComputed, number: true })
   storage.tx((tx) => tx.patch(rows))
   return graph({ vocab, storage, plugins: [sessions()] })
 }
@@ -139,6 +139,25 @@ test('replaying a completion preserves its report and delivery receipt', async (
   equal((await delivered.read('.comment.target=work')).length, 1)
   equal((await pending(delivered, 'parent')).length, 0)
   equal(heard.length, 1)
+})
+
+test('a run whose starter is over reports to the nearest session up its line', async () => {
+  // A subagent of `root` started the run and has ended since.
+  let handed = bare([
+    ...rows.map((b) =>
+      b.entity.eid == 'parent'
+        ? { ...b, session: { ended: true }, spawned: { parent: 'root' } }
+        : b
+    ),
+    { entity: { eid: 'root' }, session: {} },
+  ])
+  await complete(handed, 'child')
+  let [report] = await handed.read('.comment.target=work&*')
+  equal(report.knock, { target: 'root' })
+  let lines: string[] = []
+  await hear(handed, null, 'root', (line) => lines.push(line))
+  equal(lines.map((line) => line.split(' ')[0]), ['knock'])
+  equal(lines[0].endsWith('Fixed it; checks pass.'), true)
 })
 
 test('a failed run reports its exit and preserves the last account of its work', async () => {

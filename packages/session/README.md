@@ -631,12 +631,19 @@ id, so the MCP door writes as that run (see "Identity and HTTP attribution").
 
 The hook door speaks only after a tool call, so an agent at rest hears nothing
 there. To be woken, its own context runs the listener as a background command
-that ends at the first thing it says; the harness then wakes the agent with that
+that ends once it has said something; the harness then wakes the agent with that
 output, and the agent runs it again:
 
 ```sh
 yak session listen --session "$CLAUDE_CODE_SESSION_ID" --once
 ```
+
+A wake costs the agent a read of its whole context, so one wake carries all that
+is waiting. After each line the listener stays up through a quiet window
+(`--quiet`, 5 seconds) and ends when nothing new came in it, at most six windows
+after its first line. Each line is the item whole, so reading it takes no second
+command, and a knock left at two addresses the session hears (itself and its
+project) is one line.
 
 A listened line counts as heard once printed, so the command's output goes
 straight to the harness, never to a file another loop watches.
@@ -827,13 +834,33 @@ answered, or someone comments on it, `session_watch` knocks each watcher once:
 knock K-9 at S-4: T-8 completed by Jeff: Give the Worker a token
 ```
 
+A knock about a comment carries the comment's words whole, so its reader needs
+no second command to read it.
+
 A watcher's session is knocked while it can hear. Once it is over, the knock
 goes to its project's operator (the live session a person opened for that
-project, the one that spoke last), else to the project. A writer is never
-knocked about its own write, and a person's comment, which reaches the filer and
-the holder as a comment already, knocks neither of them. `knocks(graph, eid)`
-returns the knocks a change owes, and [`watch_test.ts`](./watch_test.ts) runs
-each case through the effect.
+project or for one it is filed under, the one that spoke last), else to the
+project. A person's comment, which reaches the filer and the holder as a comment
+already, knocks neither of them.
+
+A writer is never knocked about its own write, and its subagents write for it: a
+subagent runs inside its parent's process and hands back what it did as the
+result of the parent's own call, so a change written through one knocks no
+session up its line (`writers`).
+
+One event is one knock. A managed run that ends leaves its whole report as a
+comment on its task that knocks whoever started it, or the nearest session up
+that one's line once it is over (`reported`, which @yaks/spawn's completion
+writes by). The session that receipt knocks is knocked neither for the comment a
+second time nor for the run completing or cancelling the task a little earlier.
+The receipt is said with where the task stands:
+
+```text
+knock K-12 on T-8 (done) from S-6: S-6 — exited 0 Landed 3f9f64d. The Worker has its token.
+```
+
+`knocks(graph, eid)` returns the knocks a change owes, and
+[`watch_test.ts`](./watch_test.ts) runs each case through the effect.
 
 ## Texts back
 

@@ -16,6 +16,7 @@ import { taskDoc } from '@yaks/task'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { personaDoc } from '@yaks/persona/vocab'
 import { projectDoc } from '@yaks/project/vocab'
+import { processDoc } from '@yaks/process/vocab'
 import { equal, test } from '@yaks/testing'
 import { sessionDoc } from './comp.ts'
 import { statusComputed } from './state.ts'
@@ -34,6 +35,7 @@ let vocab = loadVocab([
   toolsDoc,
   personaDoc,
   projectDoc,
+  processDoc,
 ], [kernelKeywords, idKeywords])
 
 let JEFF = { by: 'jeff', via: 'web' }
@@ -96,8 +98,14 @@ let office = async (filer = 'worker') => {
         : line.split(' ')[0]
     )
   }
+  // The same, as the whole lines.
+  let lines = async (session: string) => {
+    let lines: string[] = []
+    await hear(g, null, session, (line) => lines.push(line))
+    return lines
+  }
   let [task] = await g.get(['t'])
-  return { g, write, heard, id: human(vocab)(task) }
+  return { g, write, heard, lines, id: human(vocab)(task) }
 }
 
 let done = [{ entity: { eid: 't' }, completed: {} }]
@@ -183,6 +191,118 @@ test("an agent's comment knocks the filer; a person's reaches it as a comment", 
     doc: { body: 'thanks' },
   }])
   equal(await o.heard('worker'), ['comment'])
+})
+
+let comment = (eid: string, body: string, more = {}): Bundle[] => [{
+  entity: { eid },
+  comment: { target: 't' },
+  doc: { body },
+  ...more,
+}]
+
+test("a comment's knock carries the comment whole", async () => {
+  let o = await office()
+  let body = `Landed 1234abc. ${'It works. '.repeat(40)}`.trim()
+  await o.write(comment('c1', body), { by: 'taskmaster', via: 'operator' })
+  let [line] = await o.heard('worker')
+  equal(line.endsWith(`by TaskMaster: ${body}`), true)
+})
+
+test("a subagent's comment knocks no session up its line", async () => {
+  let o = await office()
+  await o.g.apply([
+    { entity: { eid: 'file' }, transcript: {} },
+    {
+      entity: { eid: 'fork' },
+      session: { id: 'fork', transcript: 'file' },
+      spawned: { parent: 'worker' },
+    },
+    {
+      entity: { eid: 's1' },
+      subscription: { actor: 'operator', target: 't', mode: 'watch' },
+    },
+  ], { trusted: true })
+  await o.write(comment('c1', 'landed 1234abc'), {
+    by: 'taskmaster',
+    via: 'fork',
+  })
+  equal(await o.heard('worker'), [])
+  equal((await o.heard('operator')).length, 1)
+})
+
+// A managed run the worker started on `t`, still at work.
+let started = async () => {
+  let o = await office()
+  await o.g.apply([
+    {
+      entity: { eid: 'run' },
+      session: { id: 'run', persona: 'taskmaster' },
+      spawned: { parent: 'worker' },
+      process: { pid: 42 },
+    },
+    { entity: { eid: 't' }, claim: { session: 'run' } },
+    {
+      entity: { eid: 's1' },
+      subscription: { actor: 'operator', target: 't', mode: 'watch' },
+    },
+  ], { trusted: true })
+  return { ...o, run: { by: 'taskmaster', via: 'run' } }
+}
+
+test("a run's completion and its receipt are one knock, the report whole", async () => {
+  let o = await started()
+  await o.write(done, o.run)
+  equal(await o.heard('worker'), [])
+  equal((await o.heard('operator')).length, 1)
+  let report = `Landed 1234abc. ${'It works. '.repeat(40)}`.trim()
+  await o.write(
+    comment('receipt', report, { knock: { target: 'worker' } }),
+    o.run,
+  )
+  let [line, ...more] = await o.lines('worker')
+  equal(more, [])
+  equal(line.split(' ').slice(2, 5), ['on', o.id, '(done)'])
+  equal(line.startsWith('knock ') && line.endsWith(report), true)
+  equal((await o.heard('operator')).length, 1)
+})
+
+test('a run completing a task its receipt is not about knocks for it', async () => {
+  let o = await started()
+  await o.g.apply([{
+    entity: { eid: 'other' },
+    task: {},
+    doc: { title: 'Another' },
+    $actor: { by: 'taskmaster', via: 'worker' },
+  }], { trusted: true })
+  await o.write([{ entity: { eid: 'other' }, completed: {} }], o.run)
+  equal((await o.heard('worker')).length, 1)
+})
+
+test("a sub-project's watcher that is over is told through the operator above it", async () => {
+  let o = await office()
+  await o.g.apply([
+    { entity: { eid: 'sub' }, project: {}, filed: { project: 'p' } },
+    { entity: { eid: 'helper' }, persona: { home: 'sub' } },
+    {
+      entity: { eid: 'left' },
+      session: { id: 'left', persona: 'helper', ended: true },
+    },
+    {
+      entity: { eid: 's1' },
+      subscription: { actor: 'left', target: 't', mode: 'watch' },
+    },
+    {
+      entity: { eid: 's2' },
+      subscription: { actor: 'operator', target: 't', mode: 'watch' },
+    },
+  ], { trusted: true })
+  await o.write(done)
+  equal(await o.heard('operator'), [`${o.id} completed by Jeff: ${TITLE}`])
+  await o.write(comment('c1', 'reopening soon'), {
+    by: 'taskmaster',
+    via: 'operator',
+  })
+  equal(await o.heard('operator'), [])
 })
 
 test('a subscription watches a task, and a mute silences its watcher', async () => {

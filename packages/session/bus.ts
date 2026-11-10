@@ -40,6 +40,7 @@ import {
   knocked,
   natives,
   type News,
+  type Owed,
   pending,
   type Projects,
   projects,
@@ -253,7 +254,7 @@ let hearing = async (g: Graph, ids: Eid[]): Promise<Eid[]> => {
 
 /** A line a native transcript is owed: the item, what is said of it, and the
  * session it is said to. */
-export type Due = { session: Eid; item: Bundle; line: string }
+export type Due = { session: Eid } & Owed
 
 /** What one pass over native sessions owes them, read and not yet said: the
  * lines {@link feed} appends. A scope keeps the pass to the items it names and
@@ -283,14 +284,14 @@ export let due = async (g: Graph, at: Scope = scope(true)): Promise<Due[]> => {
  * `attention` wakes the effects role's runner. */
 export let feed = async (g: Graph, at?: Scope): Promise<number> => {
   let count = 0
-  for (let { session, item, line } of await due(g, at)) {
+  for (let { session, item, line, same } of await due(g, at)) {
     let entry: Bundle = {
       entity: { eid: derivedEid(`session bus ${session} ${item.entity.eid}`) },
       entry: { session },
       content: { body: line },
       attention: {},
     }
-    if (await deliver(g, null, item, entry)) count++
+    if (await deliver(g, null, item, entry, same)) count++
   }
   return count
 }
@@ -465,14 +466,13 @@ export let ledger = (host: Door): Ledger | undefined => {
 // Every line owed to an outside session, each marked said as it is taken.
 // The mark names the session it was said to as what carried it, as
 // `yak session listen` does, not the process whose door said it.
-let owed = async (
-  host: Door,
-  id: Eid,
-): Promise<{ item: Bundle; line: string }[]> => {
+let owed = async (host: Door, id: Eid): Promise<Owed[]> => {
   let g = host.graph
-  let out: { item: Bundle; line: string }[] = []
+  let out: Owed[] = []
   for (let said of await pending(g, id, await ledger(host)?.owed(id))) {
-    if (await deliver(g, { via: id }, said.item)) out.push(said)
+    if (await deliver(g, { via: id }, said.item, undefined, said.same)) {
+      out.push(said)
+    }
   }
   return out
 }
@@ -547,7 +547,11 @@ export let heard = async (
   let taken = await owed(host, id)
   if (!taken.length) return {}
   if (!await reaches()) {
-    await undeliver(g, null, taken.map(({ item }) => item))
+    await undeliver(
+      g,
+      null,
+      taken.flatMap(({ item, same }) => [item, ...same]),
+    )
     return {}
   }
   return {
