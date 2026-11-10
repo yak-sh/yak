@@ -1699,6 +1699,7 @@
 
 @layer sections {
   .Sidebar {
+    --sidebar-padding: .75rem;
     position: sticky;
     top: 0;
     display: flex;
@@ -1706,7 +1707,7 @@
     gap: .75rem;
     height: 100dvh;
     min-width: 0;
-    padding: 1rem .75rem;
+    padding: 1rem var(--sidebar-padding);
     background: var(--surface);
     z-index: 1;
   }
@@ -1725,25 +1726,30 @@
     font-weight: 800;
     text-decoration: none;
   }
-  /* Leave the footer in view while the navigation scrolls. The extra room
-     holds the picker's hatch without cutting off the selected tab's edge. */
+  /* Leave the footer in view while the navigation scrolls. Keep paint room
+     past the edge so overflow cannot clip the active tab's cover of the
+     wandering pencil line. Equal padding keeps the links at the edge. */
   .Sidebar_Scroll {
     --reach: calc(var(--stroke) + 6px);
+    --overlap: var(--reach);
     display: flex;
     flex: 1;
     flex-direction: column;
     gap: .75rem;
     min-height: 0;
-    margin: calc(-1 * var(--reach)) -.75rem calc(-1 * var(--reach))
+    margin: calc(-1 * var(--reach))
+      calc(-1 * (var(--sidebar-padding) + var(--overlap)))
+      calc(-1 * var(--reach))
       calc(-1 * var(--reach));
-    padding: var(--reach) .75rem var(--reach) var(--reach);
+    padding: var(--reach) calc(var(--sidebar-padding) + var(--overlap))
+      var(--reach) var(--reach);
     overflow: hidden auto;
     overscroll-behavior: contain;
   }
   .Sidebar_Nav {
     --nav-panel: var(--sidebar-panel, var(--card));
     flex: none;
-    margin-right: -.75rem;
+    margin-right: calc(-1 * var(--sidebar-padding));
   }
 
   .Sidebar_Section,
@@ -1837,18 +1843,11 @@
   }
   @media (min-width: 701px) {
     .Sidebar-rail {
-      padding-inline: .5rem;
+      --sidebar-padding: .5rem;
     }
     .Sidebar-rail .Sidebar_Top {
       flex-direction: column;
       padding: 0;
-    }
-    .Sidebar-rail .Sidebar_Scroll {
-      margin-right: -.5rem;
-      padding-right: .5rem;
-    }
-    .Sidebar-rail .Sidebar_Nav {
-      margin-right: -.5rem;
     }
     .Sidebar-rail :is(.Sidebar_Title, .Sidebar_Group, .Sidebar_None, .Sidebar_Shut) {
       display: none;
@@ -1902,6 +1901,9 @@
     }
     .Sidebar_Nav {
       margin-right: 0;
+    }
+    .Sidebar_Scroll {
+      --overlap: 0px;
     }
     .Sidebar_Whose .Menu-below {
       position: relative;
