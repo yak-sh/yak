@@ -84,3 +84,12 @@ test('public reading routes support HEAD and refuse to read a saved document or 
     'text/css; charset=utf-8',
   )
 })
+
+test('a guide whose address has a doubled slash is the same guide', async () => {
+  let answer = await publicPage(
+    new Request('https://printbound.net//terms'),
+    env,
+  )
+  equal(answer?.status, 200)
+  ok((await answer!.text()).includes('href="https://printbound.net/privacy'))
+})
