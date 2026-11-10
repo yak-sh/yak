@@ -24,6 +24,10 @@ await agent.tool('app_files', {
   files: [
     { path: 'index.html', content: '<h1>Members</h1>' },
     {
+      path: 'seed.json',
+      content: JSON.stringify([{ entity: { eid: '$a' }, doc: { title: 'S' } }]),
+    },
+    {
       path: 'vocab.json',
       content: JSON.stringify({
         join: {
@@ -164,4 +168,17 @@ test('a member who joins reads the directory, and not its sign-ups', async () =>
   )
   ok(['Ann', 'Bo', 'Cy'].every((n) => names.includes(n)), names)
   equal(await read('.registration'), [])
+})
+
+test('published, the directory shows a member Join and a stranger its sample', async () => {
+  await agent.tool('app_publish', { app, name: app })
+  let shut = await at('', ann.cookie)
+  equal(shut.status, 403)
+  ok((await shut.text()).includes('Join Directory'))
+  let sample = await at('', stranger.cookie)
+  await sample.body?.cancel()
+  equal(sample.status, 200)
+  equal((await (await at('api/me', stranger.cookie)).json()).visit, {
+    kept: false,
+  })
 })

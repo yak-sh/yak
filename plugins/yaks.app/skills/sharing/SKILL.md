@@ -222,14 +222,15 @@ without the `@`. `role` is `viewer` (the default) or `editor`. `join` needs
 `app_deploy`.
 
 Somebody signed in with a listed address or number who opens the private app
-sees a Join button instead of "Nothing here yet."; on a `public` app, where they
-can already read, `me()` returns `join` with the role pressing Join would give
-them (else `null`), so the page can offer it. Pressing it posts to the app's
-`api/join` and makes them a guest of that app at that role, exactly as an
-accepted `member_add(email, app, role)` would, and the space's people are told
-in their Updates. Everyone else is offered nothing, and their `api/join` is
-refused. The address or number is always the one the person signed in with,
-which the sign-in code proved is theirs.
+sees a Join button instead of "Nothing here yet." (or, when the app is
+published, instead of its sample); on a `public` app, where they can already
+read, `me()` returns `join` with the role pressing Join would give them (else
+`null`), so the page can offer it. Pressing it posts to the app's `api/join` and
+makes them a guest of that app at that role, exactly as an accepted
+`member_add(email, app, role)` would, and the space's people are told in their
+Updates. Everyone else is offered nothing, and their `api/join` is refused. The
+address or number is always the one the person signed in with, which the sign-in
+code proved is theirs.
 
 `member_add` still works beside it. Removing a person's row, or changing its
 address or number, stops them joining again, but access they already have stays

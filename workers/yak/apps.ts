@@ -3054,7 +3054,8 @@ let served = async (
   // A stranger at a private published app is served the app from its sample,
   // or from a store of their own once they have written (visit.ts, D-134327),
   // unless the owner already let them in: then their way through is the
-  // click in the letter, as it was. Never the app's own worker coming back,
+  // click in the letter, as it was. So too for somebody the app's own rows
+  // list (join.ts): theirs is the Join button, not a copy (T-153688). Never the app's own worker coming back,
   // nor a sandboxed app, whose page tokens each open one store, nor the form
   // door: a form is the app's own, shown and filled by anyone (forms.ts), and
   // a sample or a copy holds none of the app's forms.
@@ -3066,7 +3067,10 @@ let served = async (
         ownOf(env, visitor, who.via!, app!.eid),
         releaseFor(dir, app!),
         who.person
-          ? waiting(dir, space!, app!, who.person, 'not_a_reader')
+          ? Promise.all([
+            waiting(dir, space!, app!, who.person, 'not_a_reader'),
+            joinable(env, dir, space!, app!, who),
+          ]).then(([letter, listed]) => !!letter || !!listed)
           : false,
       ]))
     if (!invited) {
