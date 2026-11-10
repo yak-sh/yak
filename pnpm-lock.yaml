@@ -5050,6 +5050,12 @@ importers:
       '@yaks/api':
         specifier: 0.2.29
         version: link:../api
+      '@yaks/connections':
+        specifier: 0.2.28
+        version: link:../connections
+      '@yaks/effects':
+        specifier: 0.2.33
+        version: link:../effects
       '@yaks/fp':
         specifier: 0.2.23
         version: link:../fp
@@ -5059,6 +5065,9 @@ importers:
       '@yaks/process':
         specifier: 0.2.28
         version: link:../process
+      '@yaks/secrets':
+        specifier: 0.2.28
+        version: link:../secrets
       '@yaks/session':
         specifier: 0.2.33
         version: link:../session
@@ -5069,6 +5078,27 @@ importers:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
+      '@yaks/doc':
+        specifier: 0.2.24
+        version: link:../doc
+      '@yaks/kernel':
+        specifier: 0.2.28
+        version: link:../kernel
+      '@yaks/mail':
+        specifier: 0.2.23
+        version: link:../mail
+      '@yaks/notify':
+        specifier: 0.2.28
+        version: link:../notify
+      '@yaks/persona':
+        specifier: 0.2.23
+        version: link:../persona
+      '@yaks/provenance':
+        specifier: 0.2.28
+        version: link:../provenance
+      '@yaks/ram':
+        specifier: 0.2.24
+        version: link:../ram
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing

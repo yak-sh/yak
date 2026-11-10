@@ -12,6 +12,8 @@
 //                                      made
 //   POST space=ada do=adopt tunnel=… service=…   record a pair made elsewhere,
 //                                      with a gateway in front
+//   POST do=tell conversation=… key=… text=…     the machine telling its
+//                                      owner's Operator what changed there
 //
 // The space's owner connects, rotates and disconnects. Adopting is the
 // platform owner's alone (a seat in `yak`, the fee's gate, sell.ts `fees`):
@@ -34,8 +36,13 @@
 // The space's owner reaches the same gateway with no app between (`machine`
 // below): the MCP servers they keep on the machine are asked through it
 // (mcp-remote.ts), each request naming the Operator conversation it was made
-// in (`x-via`), which no app's request may say for itself. Both go through
-// the one call (`through`).
+// in (`x-via`) and whose it is (`x-yak-with`), which no app's request may say
+// for itself. Both go through the one call (`through`).
+//
+// The machine speaks back by the owner's own connection, not the tunnel: what
+// changed there that one of their conversations started or is waiting on
+// (@yaks/tunnel effects.ts) is told here (`tell` below), and their Operator
+// takes it in on its `machine` channel and decides whether they hear of it.
 //
 // Every request handed to a gateway says which of the three is asking, in a
 // word only this Worker sets (`x-yak-caller`, `Caller` below): an app's
@@ -57,6 +64,7 @@ import {
   disconnect,
   gateways,
   tunnels,
+  WITH,
 } from '@yaks/tunnel'
 import * as dirPart from './directory.ts'
 import {
@@ -74,6 +82,8 @@ import type { Answer } from './apps.ts'
 import { caught } from './defects.ts'
 import { adminWho } from './asking.ts'
 import { elapsed } from './lib/hops.ts'
+import { derivedEid } from '@yaks/graph/identity'
+import { rootOf } from './operator-root.ts'
 
 /** Where an app's worker asks for its space's machine. */
 export let TUNNELED = '/tunneled/'
@@ -123,6 +133,72 @@ let shown = (space: Space, tunnel: Tunnel | null, more = {}) =>
 // A Cloudflare id, as the API spells one: a uuid.
 let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
+/**
+ * What the machine behind a space's tunnel tells its owner's Operator: the
+ * words of a knock at the session standing there for their conversation,
+ * taken in as a request on the Operator's `machine` channel, in the space
+ * whose conversation with them `conversation` is, else the one space of
+ * theirs a tunnel goes to. Only the space's owner tells it, by their own
+ * connection, and the knock (`key`) names the request, so a knock told again
+ * is one request. The Operator decides whether they hear of it
+ * (operator-channels.ts).
+ */
+export let tell = async (
+  env: Env,
+  req: Request,
+  said: (k: string) => string,
+): Promise<Response> => {
+  let dir = dirOf(env)
+  let { person } = await adminWho(env, req, () => Promise.resolve(null))
+  if (!person) {
+    return json(403, 'not_owner', "a machine tells only its owner's Operator")
+  }
+  let [conversation, key, text] = ['conversation', 'key', 'text'].map(said)
+  if (!conversation || !key || !text.trim()) {
+    return json(
+      400,
+      'bad_tell',
+      'a knock names its conversation and itself, and says something',
+    )
+  }
+  let owned = [...await dir.sitting(person)]
+    .filter(([, role]) => role == 'owner').map(([eid]) => eid)
+  let spaces = (await Promise.all(owned.map((eid) => dir.at(eid))))
+    .filter((s): s is Space => !!s && !s.trashed && !!s.tunnel)
+  let space = spaces.find((s) => rootOf(s.eid, person) == conversation) ??
+    (spaces.length == 1 ? spaces[0] : undefined)
+  if (!space) {
+    return json(
+      404,
+      'no_conversation',
+      `no space of yours with a tunnel holds ${conversation}`,
+    )
+  }
+  let { builderOf, SPACE } = await import('./build-door.ts')
+  let r = await builderOf(env, space.eid)(() =>
+    new Request('https://builder/operator/receive', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-yak-person': person,
+        [SPACE]: space.eid,
+      },
+      body: JSON.stringify({
+        say: text,
+        request: { channel: 'machine' },
+        options: { id: derivedEid(`operator-machine|${space.eid}|${key}`) },
+      }),
+    })
+  )
+  let body = await r.json() as { request?: string; message?: string }
+  if (!r.ok) {
+    throw new Error(
+      `the Operator refused a machine's word (${r.status}): ${body.message}`,
+    )
+  }
+  return Response.json({ space: space.slug, request: body.request })
+}
+
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (req.method != 'GET' && req.method != 'POST') {
     return json(405, 'method_not_allowed', 'get the tunnel, or post a change')
@@ -130,6 +206,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let form = req.method == 'POST' ? await req.formData() : null
   let said = (k: string) =>
     String(form?.get(k) ?? new URL(req.url).searchParams.get(k) ?? '')
+  if (form && said('do') == 'tell') return await tell(env, req, said)
   let dir = dirOf(env)
   let space = said('space') ? await dir.space(said('space')) : null
   if (!space) {
@@ -206,7 +283,11 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     return shown(space, row, { token: made.token })
   }
   if (act != 'rotate' && act != 'disconnect') {
-    return json(400, 'bad_do', 'do is connect, rotate, disconnect or adopt')
+    return json(
+      400,
+      'bad_do',
+      'do is connect, rotate, disconnect, adopt or tell',
+    )
   }
   if (!held) return json(404, 'no_tunnel', `${space.slug} has no tunnel`)
   let g = front(env)
@@ -267,14 +348,14 @@ let onward = (
   path: string,
   req: Request,
   caller: Caller,
-  via?: string,
-  by?: string,
+  said: { via?: string; with?: string; by?: string } = {},
 ) => {
   let headers = new Headers()
   for (let [k, v] of req.headers) if (!OURS.test(k)) headers.set(k, v)
   headers.set(CALLER, caller)
-  if (via) headers.set(VIA, via)
-  if (by) headers.set(BY, by)
+  if (said.via) headers.set(VIA, said.via)
+  if (said.via && said.with) headers.set(WITH, said.with)
+  if (said.by) headers.set(BY, said.by)
   return new Request(`http://machine${path}`, {
     method: req.method,
     headers,
@@ -379,13 +460,11 @@ export let machine = async (
     if (!space.tunnel) return json(404, 'no_tunnel', ENDS.no_tunnel(space))
     let req = new Request(input, init)
     let { pathname, search } = new URL(req.url)
-    let out = onward(
-      pathname + search,
-      req,
-      asking.caller,
-      await asking.via?.(),
-      asking.own ? person : undefined,
-    )
+    let out = onward(pathname + search, req, asking.caller, {
+      via: await asking.via?.(),
+      with: person,
+      by: asking.own ? person : undefined,
+    })
     // Asked for the space itself, which is no app: a gateway calls nothing
     // out, so no connection is lent on this call. Its wait is the request's
     // `machine_wait` (timing.ts).

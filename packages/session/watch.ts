@@ -3,6 +3,7 @@
 // told; a tool's result is what it read, not what it said), the writer of any
 // task, comment or letter whose text mentions it, and each actor whose
 // @yaks/notify `subscription` watches it; an actor muting it hears nothing.
+// A person who commented on it watches it too: they spoke to that work.
 // When the task is completed, cancelled or answered, or someone comments on
 // it, `session_watch` knocks each of them once (./listen.ts says the knock).
 //
@@ -10,8 +11,16 @@
 // session is over, to its project's operator: the session a person opened for
 // that project (`session.operator`) that spoke last and is not over, else the
 // project itself, held for whoever works for it next. A watcher that is a
-// persona or a project is that project's from the start. A person has an
-// inbox, so nothing here knocks one.
+// persona or a project is that project's from the start.
+//
+// A person hears through their assistant: the session standing here for the
+// conversation they hold with it in another store (`session.person`,
+// ./who.ts `standIn`), which whoever keeps that door passes on (@yaks/tunnel).
+// Their comment carries no session, since a comment written through one is an
+// agent's, so the watcher is the person and the session is found from them. A
+// person with no such conversation is knocked nowhere, and nobody is told of
+// their own act. A task assigned to a person knocks that same session, and
+// nobody else: an assignment is news to the one it names.
 //
 // Each change knocks a target once, named for the target and the change, so
 // two watchers routed to one session make one knock and a run that is tried
@@ -94,6 +103,30 @@ let subscribed = async (g: G, task: Eid, mode: string): Promise<Eid[]> =>
     )).map((b) => str(comp(b, 'subscription').actor)).filter(Boolean)
     : []
 
+/** The people who commented on `task` themselves: by a person and through no
+ * session, as `session_start` reads a person's comment. */
+let spoke = async (g: G, task: Eid): Promise<Eid[]> =>
+  g.vocab.comp('person') && g.vocab.comp('comment')
+    ? (await g.read(
+      `.comment.target=${task}&.created.by.person&!created.via.${SESSION}` +
+        `&.fields=created.by&.limit=500`,
+    )).map((b) => str(comp(b, 'created').by)).filter(Boolean)
+    : []
+
+/** The session standing here for the conversation `person` holds with their
+ * assistant in another store (./who.ts `standIn`): the newest one said to
+ * be theirs. */
+export let standingFor = async (
+  g: G,
+  person: Eid,
+): Promise<Eid | undefined> =>
+  g.vocab.prop(SESSION, 'person')
+    ? (await g.read(
+      `.${SESSION}.person=${person}&.${SESSION}.door` +
+        `&.order=-created.at&.limit=1&.fields=entity.eid`,
+    ))[0]?.entity.eid
+    : undefined
+
 /** Everyone watching `task`, as sessions or actors, and those muting it. */
 export let watchers = async (
   g: G,
@@ -105,6 +138,7 @@ export let watchers = async (
       ...new Set([
         str(made.via) || str(made.by),
         ...await mentioners(g, task.entity.eid, human(g.vocab)(task)),
+        ...await spoke(g, task.entity.eid),
         ...await subscribed(g, task.entity.eid, 'watch'),
       ].filter(Boolean)),
     ],
@@ -159,19 +193,24 @@ export let operatorOf = async (
 }
 
 /** Where each watcher's knock goes: its session while that can hear, else
- * its project's operator, else the project. Persons and anyone muting the
- * task are left out, and with `relay` false, so is a session that is over. */
+ * its project's operator, else the project. A person's goes to the session
+ * standing for their conversation with their assistant ({@link standingFor}),
+ * unless the act is their own (`by`). Anyone muting the task is left out, and
+ * with `relay` false, so is a session that is over. */
 export let targets = async (
   g: G,
   watching: Eid[],
   muting: Set<Eid>,
   relay = true,
+  by?: Eid,
 ): Promise<Eid[]> => {
   let rows = new Map(
     (watching.length
       ? await g.get(
         watching,
-        [SESSION, 'persona', 'project'].filter((c) => g.vocab.comp(c)),
+        [SESSION, 'persona', 'project', 'person'].filter((c) =>
+          g.vocab.comp(c)
+        ),
       )
       : [])
       .map((b) => [b.entity.eid, b]),
@@ -198,6 +237,11 @@ export let targets = async (
     if (rows.get(w)?.[SESSION]) {
       if (!gone.has(w)) out.add(w)
       if (!gone.has(w) || !relay) continue
+    }
+    if (rows.get(w)?.person) {
+      let heard = w == by ? undefined : await standingFor(g, w)
+      if (heard) out.add(heard)
+      continue
     }
     if (!project) continue
     if (!operators.has(project)) {
@@ -346,10 +390,44 @@ let marked = (g: G, task: Bundle): Change | undefined => {
   }
 }
 
+// An open task's assignment to a person, as it stands: to whom, and by its
+// last writer. `at` is when the commit that assigned it owed its run, so each
+// assignment is a change of its own and a run tried again is the same one.
+let assigned = async (
+  g: G,
+  task: Bundle,
+  at = '',
+): Promise<Change & { to: Eid } | undefined> => {
+  let to = str(comp(task, 'filed').assignee)
+  if (!to || task.completed || task.cancelled) return
+  let [who] = await g.get(
+    [to],
+    ['doc', 'person'].filter((c) => g.vocab.comp(c)),
+  )
+  if (!who?.person) return
+  let wrote = comp(task, 'updated').by ? 'updated' : 'created'
+  return {
+    to,
+    key: `${task.entity.eid} assigned ${to} ${at}`,
+    what: `${human(g.vocab)(task)} assigned to ${
+      str(comp(who, 'doc').title) || human(g.vocab)(who)
+    }`,
+    text: str(comp(task, 'doc').title),
+    by: str(comp(task, wrote).by),
+    via: str(comp(task, wrote).via),
+  }
+}
+
+/** The change a run of `session_watch` is for: the component that moved
+ * (`filed` for an assignment) and when its commit owed the run. */
+export type Moved = { name?: string; at?: string }
+
 /**
  * The knocks a change to a task owes its watchers: the task itself (a mark)
  * or a comment on it. None where `eid` is neither, the change is not one a
- * watcher hears, or every watcher wrote it or was told already.
+ * watcher hears, or every watcher wrote it or was told already. Where what
+ * `moved` is the task's `filed`, the change is its assignment, owed to the
+ * person it names alone.
  *
  * ```ts
  * import { knocks } from '@yaks/session'
@@ -357,14 +435,23 @@ let marked = (g: G, task: Bundle): Change | undefined => {
  * // await graph.apply(await knocks(graph, task), { trusted: true })
  * ```
  */
-export let knocks = async (g: Addressing, eid: Eid): Promise<Bundle[]> => {
+export let knocks = async (
+  g: Addressing,
+  eid: Eid,
+  moved: Moved = {},
+): Promise<Bundle[]> => {
   if (!g.vocab.comp('knock')) return []
   let [row] = await g.get([eid])
   let on = row?.comment ? str(comp(row, 'comment').target) : eid
   let [task] = on != eid ? await g.get([on]) : [row]
   if (!task?.task) return []
   let made = comp(row, 'created')
-  let change: Change | undefined = row.comment
+  let given = moved.name == 'filed'
+    ? await assigned(g, task, moved.at)
+    : undefined
+  let change: Change | undefined = moved.name == 'filed'
+    ? given
+    : row.comment
     ? {
       key: `${eid} comment`,
       what: `${human(g.vocab)(row)} on ${human(g.vocab)(task)}`,
@@ -375,6 +462,7 @@ export let knocks = async (g: Addressing, eid: Eid): Promise<Bundle[]> => {
     : marked(g, task)
   if (!change) return []
   let { watching, muting } = await watchers(g, task)
+  if (given) watching = [given.to]
   // A person's comment reaches the session that filed the task, and the one
   // holding it, through ./listen.ts already.
   let [writer] = change.via ? await g.get([change.via], [SESSION]) : []
@@ -389,7 +477,7 @@ export let knocks = async (g: Addressing, eid: Eid): Promise<Bundle[]> => {
   ])
   watching = watching.filter((w) => !own.has(w))
   let worked = !!row.comment && (await taken(g, [eid])).has(eid)
-  let to = (await targets(g, watching, muting, !worked))
+  let to = (await targets(g, watching, muting, !worked, change.by))
     .filter((t) => !knows.has(t))
   if (!to.length) return []
   let [who] = change.by ? await g.get([change.by], ['doc']) : []
@@ -415,8 +503,12 @@ export let knocks = async (g: Addressing, eid: Eid): Promise<Bundle[]> => {
 }
 
 /** The code behind `session_watch`: knock the watchers of the task `eid` is,
- * or that the comment `eid` is on. */
-export let watch = async (g: Addressing, eid: Eid): Promise<void> => {
-  let owed = await knocks(g, eid)
+ * or that the comment `eid` is on, for what `moved`. */
+export let watch = async (
+  g: Addressing,
+  eid: Eid,
+  moved?: Moved,
+): Promise<void> => {
+  let owed = await knocks(g, eid, moved)
   if (owed.length) await g.apply(owed, { trusted: true })
 }

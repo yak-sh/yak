@@ -29,5 +29,5 @@ export {
   type Opened,
   opens,
 } from './filter.ts'
-export { BY, CALLER, GATEWAY, HEADER } from './gateway.ts'
+export { BY, CALLER, GATEWAY, HEADER, WITH } from './gateway.ts'
 export { docs, tunnelDoc } from './vocab.ts'

@@ -211,6 +211,7 @@ let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/stripe/graph': () => import('@yaks/stripe/graph'),
   '@yaks/telnyx/graph': () => import('@yaks/telnyx/graph'),
   '@yaks/topic/graph': () => import('@yaks/topic/graph'),
+  '@yaks/tunnel/effects': () => import('@yaks/tunnel/effects'),
   '@yaks/voipms/graph': () => import('@yaks/voipms/graph'),
   '@yaks/wake/graph': () => import('@yaks/wake/graph'),
   'yak/app/graph': () => import('./facets/app-graph.ts'),

@@ -1,7 +1,9 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { mint } from '@yaks/graph'
-import { CALLER, HEADER } from '@yaks/tunnel'
+import { CALLER, HEADER, WITH } from '@yaks/tunnel'
+import { derivedEid } from '@yaks/graph/identity'
+import { rootOf } from './operator-root.ts'
 import type { App, Space } from './directory.ts'
 import { directory, stamp } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -362,15 +364,16 @@ test('the owner’s request goes to the gateway saying who asks for them, and no
       r.url,
       r.headers.get(CALLER),
       r.headers.get('x-via'),
+      r.headers.get(WITH),
     ]),
     [
-      ['http://machine/mcp?x=1', 'operator', 'a-talk'],
-      ['http://machine/mcp', 'connector', null],
+      ['http://machine/mcp?x=1', 'operator', 'a-talk', ADA],
+      ['http://machine/mcp', 'connector', null, null],
     ],
   )
   assertEquals(await door.handed[0].text(), 'a call')
   for (let h in WORDS) {
-    if (h != 'x-via' && h != CALLER) {
+    if (h != 'x-via' && h != CALLER && h != WITH) {
       assertEquals(door.handed[0].headers.has(h), false, h)
     }
   }
@@ -396,4 +399,68 @@ test('a machine its owner cannot reach is an answer, never a throw', async () =>
   assertEquals(await ending(), [502, 'unreached'])
   await wears(null)
   assertEquals(await ending(), [404, 'no_tunnel'])
+})
+
+// ── The machine telling its owner's Operator ────────────────────────────────
+
+// Ada's space with a tunnel, and what its Operator was asked.
+let telling = async () => {
+  let asked: Request[] = []
+  let f = await spaces({
+    BUILDER: {
+      idFromName: (n: string) => n,
+      get: () => ({
+        fetch: (r: Request) => {
+          asked.push(r)
+          return Promise.resolve(
+            Response.json({ request: 'r' }, { status: 202 }),
+          )
+        },
+      }),
+    } as unknown as Env['BUILDER'],
+  })
+  let { env } = f.scenario
+  let ada = (await directory({
+    fetch: (r: Request) => dirPart.fetch(r, env),
+  }).space('ada'))!
+  let wears = (tunnel: object | null) =>
+    stamp(env, { entities: [{ entity: { eid: ada.eid }, tunnel }] })
+  await wears({ id: T, service: S, adopted: true })
+  let tell = (who: string | null, more: Record<string, string> = {}) =>
+    f.door(who, {
+      do: 'tell',
+      conversation: rootOf(ada.eid, ADA),
+      key: 'k1',
+      text: 'T-7 completed by TaskMaster: Give the Worker a token',
+      ...more,
+    })
+  return { ...f, ada, asked, tell, wears }
+}
+
+test("the machine's word is a request on its owner's Operator's machine channel, one for each knock", async () => {
+  let t = await telling()
+  await using _ = t.scenario
+  assertEquals((await t.tell(ADA)).body, { space: 'ada', request: 'r' })
+  // Another conversation of theirs: the one space their tunnel goes to.
+  assertEquals((await t.tell(ADA, { conversation: mint() })).status, 200)
+  let [first, again] = await Promise.all(t.asked.map((r) => r.json()))
+  assertEquals(new URL(t.asked[0].url).pathname, '/operator/receive')
+  assertEquals(t.asked[0].headers.get('x-yak-person'), ADA)
+  assertEquals(first, {
+    say: 'T-7 completed by TaskMaster: Give the Worker a token',
+    request: { channel: 'machine' },
+    options: { id: derivedEid(`operator-machine|${t.ada.eid}|k1`) },
+  })
+  assertEquals(again.options, first.options)
+})
+
+test('only the owner of a space with a tunnel tells its Operator, and only something', async () => {
+  let t = await telling()
+  await using _ = t.scenario
+  assertEquals((await t.tell(null)).status, 403)
+  assertEquals((await t.tell(JEFF)).body.error.code, 'no_conversation')
+  assertEquals((await t.tell(ADA, { text: ' ' })).status, 400)
+  await t.wears(null)
+  assertEquals((await t.tell(ADA)).body.error.code, 'no_conversation')
+  assertEquals(t.asked, [])
 })

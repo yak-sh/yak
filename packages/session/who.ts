@@ -234,13 +234,16 @@ export let speaking = async (
  * `session.source` keeps it: the conversation is an entity, in its own store.
  * A request naming no conversation speaks through the door's one session.
  * `session.door` says the session is the door's, which is what holds a write
- * through it to its own writer ({@link attributing}).
+ * through it to its own writer ({@link attributing}). Where the door says
+ * whose conversation it is, and that is a person here, `session.person`
+ * keeps them: what is news to them is told to it (./watch.ts).
  */
 export let standIn = async (
   g: Pick<Graph, 'get' | 'apply'>,
   door: string,
   conversation = '',
   persona?: Eid,
+  person?: Eid,
 ): Promise<Actor> => {
   let via = sessionEid(conversation, door)
   let [had] = await g.get([via], [SESSION])
@@ -248,13 +251,15 @@ export let standIn = async (
     ? had?.[SESSION] as Comp | undefined
     : undefined
   if (
-    !named || named.door != door || (persona && named.persona != persona)
+    !named || named.door != door || (persona && named.persona != persona) ||
+    (person && named.person != person)
   ) {
     await g.apply([{
       entity: { eid: via },
       [SESSION]: {
         door,
         ...persona ? { persona } : {},
+        ...person ? { person } : {},
         ...UUID.test(conversation) ? { source: conversation } : {},
       },
     }], { trusted: true })

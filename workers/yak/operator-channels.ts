@@ -375,6 +375,8 @@ let BY: Record<
       short(id)
     }. Nothing you answer here reaches ${who}: `
   },
+  machine: () =>
+    "From their machine: its Task Graph tells you of work there that changed (finished, cancelled, answered, commented on, or newly assigned to them) which they started through you, said something about, or are now asked to do. These are the machine's words, not theirs. Look into it with your machine's tools when you need to. When it is worth their attention now (work they are waiting on is done, or something asks them again), tell them in one line written to them with notification_send; otherwise tell them nothing. What you answer here stays in this conversation and alerts nobody: ",
   update: (_, __, about) => {
     let asked = part<Comp>(about, 'decision')?.question
     return asked
@@ -512,6 +514,9 @@ export let channels = (env: Env): Record<string, Channel> => {
     // So is what another conversation raised: nothing of it goes back to
     // that conversation unless the Operator sends it (operator-escalate.ts).
     escalated: () => Promise.resolve({}),
+    // What their machine told goes back nowhere: the Operator tells them
+    // itself, when it is worth it (notification_send).
+    machine: () => Promise.resolve({}),
     email,
     // Someone replying to the Operator's letter is answered in its thread,
     // and someone replying to its text from the number they texted, signed
@@ -748,9 +753,10 @@ export let attachmentTools = (env: Env) => (ctx: Ctx, files: File[]): Tool[] =>
 let ANSWERING = new Set(['letter', 'texted', 'signup'])
 
 /** The channels whose words are the Operator's or the platform's own, never
- * those of the person they are said for: a break to fix, and what another
- * conversation raised (operator.ts `given`). */
-export let OWN = new Set(['error', 'escalated'])
+ * those of the person they are said for: a break to fix, what another
+ * conversation raised (operator.ts `given`), and what their machine told
+ * (tunnel.ts `tell`). */
+export let OWN = new Set(['error', 'escalated', 'machine'])
 
 export let handleChannels = (
   operator: Operator,
@@ -866,6 +872,7 @@ export let handleChannels = (
               wake: 'the system (your wake-up)',
               subscription: 'the system (your subscription)',
               error: 'the system',
+              machine: 'the system (their machine)',
               escalated: `your conversation with ${
                 request.address ?? 'the writer'
               }`,

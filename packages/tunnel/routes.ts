@@ -23,6 +23,11 @@
 // `connector` for the owner's own assistant and `app` for an app's worker, so
 // `callers.operator` holds the paths, tools and persona of the Operator alone.
 //
+// A conversation the platform says is held with the tunnel's `owner`
+// (`x-yak-with`) is the machine's person's, and its session says so
+// (`session.person`), so what is news to them is told to it (@yaks/session
+// watch.ts) and passed back up the tunnel's platform (./effects.ts).
+//
 // One kind of marked request is the machine's person's own: one the platform
 // says is the act of the person the config names as the tunnel's `owner`
 // (`x-yak-by`, ./gateway.ts), which it does where a request carries that
@@ -44,7 +49,7 @@ import {
   offered,
   type Opened,
 } from './filter.ts'
-import { BY } from './gateway.ts'
+import { BY, WITH } from './gateway.ts'
 
 /** What a config file can set for this facet: what every request through the
  * tunnel is opened (without a persona it writes as nobody, through its
@@ -90,17 +95,18 @@ export let arrived = (host: Hosting, options: Options = {}): Arrived => {
     if (!marked(request)) return undefined
     let caller = opened(options.callers, request)
     let own = request.headers.get(BY)
+    let owner = caller.owner ?? options.owner
     if (own == null) {
+      let mine = !!owner && request.headers.get(WITH) == owner
       return await standIn(
         host.graph,
         DOOR,
         request.headers.get(VIA) ?? '',
         await named(caller.persona ?? options.persona, 'persona'),
+        mine ? await named(host.config?.person) : undefined,
       )
     }
-    let by = own == (caller.owner ?? options.owner)
-      ? await named(host.config?.person)
-      : undefined
+    let by = own == owner ? await named(host.config?.person) : undefined
     if (!by) {
       throw new Closed("the tunnel writes as nobody but its machine's owner")
     }

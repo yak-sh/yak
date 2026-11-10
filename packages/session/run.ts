@@ -879,7 +879,7 @@ export let running = (
       ? { session_wake: (e: Event) => woken(g, e) }
       : {},
     ...declared(g, 'session_watch')
-      ? { session_watch: (e: Event) => watch(g, e.entity.eid) }
+      ? { session_watch: (e: Event) => watch(g, e.entity.eid, e) }
       : {},
     ...declared(g, 'session_texted')
       ? { session_texted: (e: Event) => text(g, e.entity.eid) }

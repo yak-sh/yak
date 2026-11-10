@@ -12,7 +12,8 @@
 // whatever a caller sent. The gateway passes it on as it came, and the
 // machine opens a path to the callers it names (./filter.ts `Callers`).
 // Where a request carries its owner's own words, the platform says who that
-// is too, in `x-yak-by`.
+// is too, in `x-yak-by`, and where it was made in a conversation, whose that
+// is, in `x-yak-with`.
 
 /** The header the gateway marks every request with. */
 export let HEADER = 'x-yak-tunnel'
@@ -27,6 +28,11 @@ export let CALLER = 'x-yak-caller'
  * `x-yak-caller`. The machine's end decides whose act it then is
  * (./routes.ts). */
 export let BY = 'x-yak-by'
+
+/** The header the platform names the person a request's conversation is
+ * held with, by its own id for them: whose assistant is asking, where
+ * `x-via` names the conversation. Only the platform says it. */
+export let WITH = 'x-yak-with'
 
 /** The gateway's one module: the request as the platform passed it on, marked
  * as the tunnel's, to the machine behind the VPC Service (`BOX`). */

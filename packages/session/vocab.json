@@ -534,6 +534,13 @@
           "stamped": true,
           "description": "the door (a tunnel) a conversation held in another store reaches this graph through, on the session standing here for it. Who a write through such a session is by is that door's word: it names nobody else as the one a mark is by"
         },
+        "person": {
+          "type": "string",
+          "ref": "person",
+          "death": "release",
+          "stamped": true,
+          "description": "the person this graph knows whose conversation, held in another store, this session stands for (`door`), where the door says whose it is: what is news to them reaches that conversation through this session"
+        },
         "ended": {
           "type": "boolean",
           "description": "this session is over: its harness ended it, its process is gone, or it came to rest with no process to ask about. What its entries leave unfinished reads stopped; settled, failed and empty read as they are. A resume or a message clears it"
@@ -1056,10 +1063,14 @@
         "completed",
         "cancelled",
         "decided",
-        "comment"
+        "comment",
+        "filed"
+      ],
+      "changed": [
+        "filed.assignee"
       ],
       "target": ".task|.comment",
-      "description": "knock the sessions watching a task when it is completed, cancelled or answered, or commented on: the session that filed it, those that mention its id and the actors subscribed to watch it. A session that is over is told through its project's operator. One knock per target and change, none for the writer's own or its subagents', and none for what a managed run's receipt tells the session it knocks: the receipt comment itself, and the run completing or cancelling its task"
+      "description": "knock the sessions watching a task when it is completed, cancelled or answered, or commented on: the session that filed it, those that mention its id, the people who commented on it and the actors subscribed to watch it. A person hears through the session standing for their conversation with their assistant in another store. A task newly assigned to a person knocks that session alone. A session that is over is told through its project's operator. One knock per target and change, none for the writer's own or its subagents', and none for what a managed run's receipt tells the session it knocks: the receipt comment itself, and the run completing or cancelling its task"
     },
     "session_start": {
       "effect": true,

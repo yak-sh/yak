@@ -1,5 +1,5 @@
 // A task's watchers hear it change: the session that filed it, sessions that
-// mention it, and actors subscribed to it, each once, through a knock its bus
+// mention it, people who commented on it and actors subscribed to it, each once, through a knock its bus
 // says (./listen.ts `hear`), committed and run as `session_watch` is.
 
 import { type Bundle, graph } from '@yaks/graph'
@@ -366,6 +366,58 @@ test('a subscription watches a task, and a mute silences its watcher', async () 
   await o.write(done)
   equal(await o.heard('operator'), [`${o.id} completed by Jeff: ${TITLE}`])
   equal(await o.heard('worker'), [])
+})
+
+// Jeff's conversation with his assistant, held in another store and standing
+// here at its door.
+let his = {
+  entity: { eid: 'his' },
+  session: { door: 'tunnel', person: 'jeff' },
+}
+let assign = (to: string) => [{
+  entity: { eid: 't' },
+  filed: { project: 'p', assignee: to },
+}]
+
+test('work Jeff commented on tells his conversation when an agent finishes it, never of his own act', async () => {
+  let o = await office()
+  await o.g.apply([his], { trusted: true })
+  await o.write(comment('c1', 'use the vault key'))
+  equal(await o.heard('his'), [])
+  await o.write(done, { by: 'taskmaster', via: 'worker' })
+  equal(await o.heard('his'), [`${o.id} completed by TaskMaster: ${TITLE}`])
+  await o.write(comment('c2', 'landed 1234abc'), {
+    by: 'taskmaster',
+    via: 'worker',
+  })
+  equal((await o.heard('his')).length, 1)
+  await o.write(comment('c3', 'thanks'))
+  equal(await o.heard('his'), [])
+})
+
+test('a person with no conversation standing here is knocked nowhere', async () => {
+  let o = await office()
+  await o.write(comment('c1', 'use the vault key'))
+  await o.write(done, { by: 'taskmaster', via: 'worker' })
+  equal(await o.heard('operator'), [])
+})
+
+test('a task assigned to Jeff knocks his conversation alone, once', async () => {
+  let o = await office()
+  await o.g.apply([his], { trusted: true })
+  await o.write(assign('jeff'), { by: 'taskmaster', via: 'operator' })
+  equal(await o.heard('his'), [
+    `${o.id} assigned to Jeff by TaskMaster: ${TITLE}`,
+  ])
+  equal(await o.heard('worker'), [])
+  await o.write([{ entity: { eid: 't' }, filed: { priority: 1 } }], {
+    by: 'taskmaster',
+    via: 'operator',
+  })
+  equal(await o.heard('his'), [])
+  await o.write(assign('taskmaster'), { by: 'taskmaster', via: 'operator' })
+  equal(await o.heard('worker'), [])
+  equal(await o.heard('operator'), [])
 })
 
 test('an id is mentioned whole, never as the start of a longer one', () =>

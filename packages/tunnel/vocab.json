@@ -27,6 +27,14 @@
           "description": "made outside whatever keeps this record, which only records it: removing the record forgets the two ids and never removes or rotates what they name"
         }
       }
+    },
+    "tunnel_tell": {
+      "effect": true,
+      "created": [
+        "knock"
+      ],
+      "target": ".knock !notified .knock.target.session.door=tunnel",
+      "description": "tell the platform a tunnel's conversations are held on what a knock at the session standing here for one of them says, as the machine's person, and mark it said: the platform's assistant in that conversation hears it (yaks.app takes it in on its Operator's `machine` channel). A knock names what it tells, so it is told once"
     }
   }
 }
