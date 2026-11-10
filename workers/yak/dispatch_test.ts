@@ -1371,3 +1371,33 @@ test('a current mode still governs anonymous grants while person standing needs 
     'viewer',
   )
 })
+
+test('worker recovery instruments refresh from directory claims and replace client or stale facts', async () => {
+  let m = mirror(), env = envOf(m.get), claimed = [who.via]
+  env.STORE = {
+    idFromName: (name) => name,
+    get: () => ({
+      fetch: (req: Request) => {
+        assert(
+          new URL(req.url).searchParams.get('q')?.includes('.browser.by=p1'),
+        )
+        return Promise.resolve(Response.json(claimed.map((eid) => ({
+          entity: { eid },
+          browser: { by: who.person },
+        }))))
+      },
+    }),
+  }
+  let spoof = visit('/hello', { 'x-yak-browsers': 'forged' })
+  await ran(env, space, app, spoof, { ...who, browsers: ['stale'] })
+  assertEquals(m.seen().headers.get('x-yak-browsers'), who.via)
+  claimed = []
+  await ran(env, space, app, spoof, { ...who, browsers: [who.via] })
+  assertEquals(m.seen().headers.get('x-yak-browsers'), '')
+  await ran(env, space, app, spoof, {
+    ...nobody,
+    via: who.via,
+    browsers: ['forged'],
+  })
+  assertEquals(m.seen().headers.get('x-yak-browsers'), null)
+})

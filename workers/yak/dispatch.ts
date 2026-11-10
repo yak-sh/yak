@@ -60,6 +60,7 @@ import { accountUrl, failure, resent } from '@yaks/cloudflare/api'
 import { oops } from './pages.ts'
 import { ADDRESS, bearing, GRANT, MOUNT } from './route.ts'
 import type { Who } from './session.ts'
+import { browsersOf } from './attribution.ts'
 import type { Dispatch } from './door.ts'
 import { failed, noted, refusal } from './unseen.ts'
 import { FILED } from '@yaks/api/refuse'
@@ -100,6 +101,7 @@ let VOUCH = [
   'x-yak-app',
   'x-yak-app-eid',
   'x-yak-person',
+  'x-yak-browsers',
   'x-yak-role',
   'x-yak-via',
   'x-via',
@@ -423,7 +425,10 @@ let handed = async (
   headers.set('x-yak-app', app.slug)
   headers.set('x-yak-app-eid', app.eid)
   if (mount) headers.set(MOUNT, mount)
-  if (who.person) headers.set('x-yak-person', who.person)
+  if (who.person) {
+    headers.set('x-yak-person', who.person)
+    headers.set('x-yak-browsers', (who.browsers ?? []).join(','))
+  }
   if (who.role) headers.set('x-yak-role', who.role)
   if (who.via) headers.set('x-yak-via', who.via)
   if (call) headers.set(COMMAND_CALL, call)
@@ -563,7 +568,7 @@ export let script = (
 // what that means is the callers' — it ends the request for the app that owns
 // the path (`ran`) and is skipped for the home app's router (`ahead`).
 let called = async (
-  env: Pick<Env, 'DISPATCH' | 'SESSION_SECRET'>,
+  env: Pick<Env, 'DISPATCH' | 'SESSION_SECRET'> & Partial<Pick<Env, 'STORE'>>,
   space: Space,
   app: App,
   req: Request,
@@ -578,6 +583,9 @@ let called = async (
   // lookup of a script nobody uploaded: about 110 ms the first time a name is
   // asked in a place, which is a release's first view (T-124006).
   if (app.worker === '') return null
+  if (env.STORE && who.person !== app.eid) {
+    who = await browsersOf({ STORE: env.STORE }, who)
+  }
   let store = storeName(space, app)
   let worker
   try {

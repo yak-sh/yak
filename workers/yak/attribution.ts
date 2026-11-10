@@ -7,8 +7,21 @@ import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { KERNEL, meta } from './meta.ts'
 import type { Env } from './env.ts'
-import { browserOf } from './session.ts'
+import { browserOf, type Who } from './session.ts'
 import { instrumentEid } from './instrument.ts'
+
+/** Current directory claims, read afresh for this caller. A grant carries
+ * identity, while the directory keeps which earlier guest work it owns. */
+export let browsersOf = async (
+  env: Pick<Env, 'STORE'>,
+  who: Who,
+): Promise<Who> => ({
+  ...who,
+  browsers: who.person
+    ? (await meta(env).query(`.browser.by=${who.person}`, { live: true }))
+      .map((row) => instrumentEid(row.entity.eid))
+    : [],
+})
 
 /** Register a committed guest write. A durable app effect owes this receipt,
  * so signing in and a reset may happen before the directory learns about it.

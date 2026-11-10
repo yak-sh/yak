@@ -23,6 +23,7 @@ import { noticeComponents } from './notices-vocab.ts'
  * stand in the app as a visitor (visit.ts). */
 export type Vouch = {
   person: string | null
+  browsers?: string[]
   actor?: string
   via: string | null
   level: Level | null
@@ -59,6 +60,13 @@ export let vouchOf = (req: Request): Vouch => {
   let via = req.headers.get('x-yak-via')
   return {
     person,
+    ...(person
+      ? {
+        browsers: (req.headers.get('x-yak-browsers') ?? '').split(',').filter(
+          Boolean,
+        ),
+      }
+      : {}),
     ...(person && req.headers.get('x-yak-actor')
       ? { actor: req.headers.get('x-yak-actor')! }
       : {}),

@@ -44,6 +44,8 @@ export type Who = {
   /** Explicit platform administrative access, vouched by the kernel. */
   administrative?: boolean
   person: string | null
+  /** Earlier guest instruments this person claimed, freshly read from the directory. */
+  browsers?: string[]
   /** The writer credited for work authorized by this person. */
   actor?: string
   /** The agent this person's credential is held by (a connector client, the
@@ -154,6 +156,9 @@ export let vouched = (who: Who): Record<string, string> => ({
   ...(who.person && who.actor ? { 'x-yak-actor': who.actor } : {}),
   ...(who.role ? { 'x-yak-role': who.role } : {}),
   ...(who.via ? { 'x-yak-via': instrumentEid(who.via) } : {}),
+  ...(who.person && who.browsers
+    ? { 'x-yak-browsers': who.browsers.join(',') }
+    : {}),
   ...(who.administrative ? { 'x-yak-administrative': '1' } : {}),
   ...(who.visit ? { 'x-yak-visit': '1' } : {}),
 })

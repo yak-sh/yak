@@ -12,5 +12,12 @@ export type Owner = { by?: string | null; via?: string | null }
  * owns({}, {}) // false
  * ```
  */
-export let owns = (owner: Owner, who: Owner): boolean =>
-  owner.by ? owner.by == who.by : !!owner.via && owner.via == who.via
+export let owns = (
+  owner: Owner,
+  who: Owner & { browsers?: readonly string[] },
+): boolean =>
+  owner.by
+    ? owner.by == who.by
+    : !!owner.via && (who.by && who.browsers !== undefined
+      ? who.browsers.includes(owner.via)
+      : owner.via == who.via)

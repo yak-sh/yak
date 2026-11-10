@@ -6,7 +6,11 @@ export type DraftDoor = {
   query(q: string): Promise<Bundle[]>
   apply(rows: Bundle[]): Promise<{ bundles: Bundle[] }>
 }
-export type DraftIdentity = { person?: string | null; via?: string | null }
+export type DraftIdentity = {
+  person?: string | null
+  via?: string | null
+  browsers?: string[]
+}
 export class DraftRefused extends Error {}
 type DraftRow = Bundle & {
   draft: {
@@ -41,7 +45,7 @@ export let draftGateway = (db: DraftDoor, who: DraftIdentity): DraftGateway => {
   let by = identity(who)
   let read = (by: string) => db.query(`.draft.by=${by}`) as Promise<DraftRow[]>
   let guestRows = (via: string) =>
-    db.query(`.draft.via=${identity({ via })} !draft.by`) as Promise<
+    db.query(`.draft.via=${identity({ via })} !draft.by ?created`) as Promise<
       DraftRow[]
     >
   return {
@@ -57,7 +61,8 @@ export let draftGateway = (db: DraftDoor, who: DraftIdentity): DraftGateway => {
         let earlier = attributed.filter((row) =>
           row.draft.via && row.draft.via === row.created?.via
         )
-        let current = who.via && who.via !== by ? await guestRows(who.via) : []
+        let claimed = who.browsers ?? (who.via ? [who.via] : [])
+        let current = (await Promise.all(claimed.map(guestRows))).flat()
         let guest = [
           ...new Map([
             ...earlier,
@@ -69,10 +74,12 @@ export let draftGateway = (db: DraftDoor, who: DraftIdentity): DraftGateway => {
         recover = [
           ...new Set([
             ...earlier.map((row) => row.draft.via!),
-            ...who.via &&
-                !current.some((row) => row.created?.by && row.created.by !== by)
-              ? [who.via]
-              : [],
+            ...claimed.filter((via) =>
+              !current.some((row) =>
+                row.draft.via === via && row.created?.by &&
+                row.created.by !== by
+              )
+            ),
           ]),
         ]
         if (guest.length) {

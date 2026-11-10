@@ -1,3 +1,4 @@
+import { browsersOf } from './attribution.ts'
 import { refuse as refusedOptions, writeOptions } from '@yaks/api'
 import { decodedPath } from './request-path.ts'
 import { serves, stamped } from './site-data.ts'
@@ -2953,6 +2954,9 @@ let served = async (
           ? presented(req, env, seatOf, space!, store, paper?.token, path)
           : whoIs(req, env.SESSION_SECRET, seatOf, space!.eid),
     )
+  if (path.startsWith('/api/') && !itsApp(who, app)) {
+    who = await browsersOf(env, who)
+  }
   // And the page's own address for its relative URLs: a sandboxed page's
   // carries a token for whoever loaded it, dying with their cookie.
   let at = paper

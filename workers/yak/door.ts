@@ -190,6 +190,7 @@ let VOUCH = [
   'x-yak-speaks',
   'x-yak-base-release',
   'x-yak-person',
+  'x-yak-browsers',
   'x-yak-actor',
   'x-yak-role',
   'x-yak-title',

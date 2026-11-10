@@ -114,3 +114,28 @@ test('attributed guest text recovers on Alice retry through a later instrument w
   ])
   assertEquals(recovered.recover.includes(previousVia), true)
 })
+
+let claimedDb = fixture(), claimedVia = mint()
+await write(
+  draftGateway(claimedDb, { via: claimedVia }),
+  claimedVia,
+  'Alice waiting for attribution',
+)
+test('a fresh claimed browser list recovers pending guest rows without waiting for attribution', async () => {
+  let bob = draftGateway(claimedDb, {
+    person: mint(),
+    via: claimedVia,
+    browsers: [],
+  })
+  assertEquals((await bob.snapshot()).drafts, [])
+  let a = draftGateway(claimedDb, {
+    person: alice,
+    via: mint(),
+    browsers: [claimedVia],
+  })
+  let snapshot = await a.snapshot()
+  assertEquals(snapshot.drafts.map((row) => row.draft.text), [
+    'Alice waiting for attribution',
+  ])
+  assertEquals(snapshot.recover, [claimedVia])
+})
