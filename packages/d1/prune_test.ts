@@ -5,8 +5,10 @@ import { assertRejects } from '@std/assert'
 import { graph, Refused } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { and, eq, list } from '@yaks/query'
+import { val } from '@yaks/sql'
 import { storage } from './store.ts'
 import { d1 } from './testing.ts'
+import { prepare } from './d1.ts'
 
 let vocab = loadVocab({
   $defs: {
@@ -28,6 +30,32 @@ await store.tx((tx) =>
   ])
 )
 let g = graph({ storage: store, vocab })
+
+let binding = d1(), legacy = storage(binding, vocab)
+await legacy.install()
+await legacy.tx((tx) =>
+  tx.patch([
+    { entity: { eid: 'old' } },
+    { entity: { eid: 'kept' }, mark: { by: 'kept' } },
+  ])
+)
+await prepare(binding, {
+  t: 'update',
+  table: 'entity',
+  set: { archetype: val(null) },
+}).run()
+await legacy.install()
+let repaired = graph({ storage: legacy, vocab })
+
+test('d1: installation classifies a legacy file before guarded pruning', async () => {
+  equal(await repaired.apply([{ entity: { eid: 'old' }, $prune: true }]), [
+    { entity: { eid: 'old' }, tombstone: {} },
+  ])
+  equal(await repaired.get(['kept']), [{
+    entity: { eid: 'kept' },
+    mark: { by: 'kept' },
+  }])
+})
 
 for (let i = 0; i < 3; i++) {
   await store.tx((tx) => tx.patch([{ entity: { eid: 'warming' } }]))

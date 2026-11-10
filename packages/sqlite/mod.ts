@@ -176,6 +176,7 @@ import { checks as diagnostics } from './check.ts'
 import type { Statements } from '@yaks/sql'
 import { type MigrationControl, migrations } from './migration.ts'
 export { catalog } from './catalog.ts'
+export { pointSql } from './point.ts'
 export {
   type Deletions,
   deletions,

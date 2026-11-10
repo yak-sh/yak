@@ -69,12 +69,19 @@ import { comps, tombstoned } from '@yaks/graph/bundle'
 import { only } from '@yaks/graph/read'
 import { matcher } from '@yaks/match'
 import {
+  and,
   type BindOpts,
+  col,
+  cross,
   DEEP,
   doomSql,
+  eq,
+  isNull,
   looseSql,
   narrow,
+  select,
   type Stmt,
+  table,
   worn,
 } from '@yaks/sql'
 import {
@@ -89,6 +96,7 @@ import {
   mintSql,
   numberSql,
   patchSql,
+  pointSql,
   projected,
   pruneSql,
   refit,
@@ -196,6 +204,9 @@ export let storage = <S extends Prepared<S>>(
   vocab: Vocab,
   base: Opts = {},
 ): Store => {
+  if (!vocab.comp('archetype')) {
+    base = { ...base, bookkeeping: [...base.bookkeeping ?? [], 'archetype'] }
+  }
   let bears = deadly(vocab)
   let report = base.report ?? logged
   let prep = (s: Stmt): S => prepare(db, s)
@@ -210,6 +221,49 @@ export let storage = <S extends Prepared<S>>(
     stmts.length
       ? (await db.batch(stmts.map(prep))).map((r) => r.results.map(unbind))
       : []
+
+  let shapes = (bundles: Bundle[]) =>
+    bundles.map((b) => ({
+      eid: b.entity.eid,
+      tables: comps(b).filter(([n]) => !vocab.comp(n)?.computed).map(([n]) =>
+        n
+      ),
+    }))
+  // Explicit installation repair for files written before this adapter kept
+  // pointers. Each component is read once; ordinary reads never classify.
+  let backfill = async () => {
+    let missing = await one(select({
+      cols: [col('id'), col('eid')],
+      from: table('entity'),
+      where: isNull(col('archetype')),
+    }))
+    if (!missing.length) return
+    let owners = new Map(missing.map((r) => [Number(r.id), {
+      eid: String(r.eid),
+      tables: [] as string[],
+    }]))
+    let names = [
+      'tombstone',
+      ...vocab.comps.filter((n) =>
+        n != 'entity' && n != 'tombstone' && !vocab.comp(n)?.computed
+      ),
+    ]
+    let parts = await send(names.map((name) =>
+      select({
+        cols: [col('entity', 'c')],
+        from: table(name, 'c'),
+        joins: [cross(table('entity', 'e'))],
+        where: and(
+          eq(col('id', 'e'), col('entity', 'c')),
+          isNull(col('archetype', 'e')),
+        ),
+      })
+    ))
+    parts.forEach((rows, i) => {
+      for (let r of rows) owners.get(Number(r.entity))?.tables.push(names[i])
+    })
+    await send(pointSql([...owners.values()]))
+  }
 
   let rows = async (query: Query, opts: BindOpts = {}): Promise<Row[]> =>
     (await one(sql(vocab, query, { ...base, ...opts })))
@@ -329,6 +383,7 @@ export let storage = <S extends Prepared<S>>(
     // Send the gathered writes, then read each mint's own RETURNING back out of
     // the batch and fill in the number it handed out.
     let flush = async (): Promise<void> => {
+      pending.push(...pointSql(shapes([...dirty.values()])))
       let out = await send(pending)
       for (let b of births) {
         let e = minted(out[b.at] ?? [])
@@ -530,6 +585,9 @@ export let storage = <S extends Prepared<S>>(
       },
       prune: (eids) => {
         moved = true
+        pending.push(
+          ...pointSql(shapes(eids.flatMap((eid) => dirty.get(eid) ?? []))),
+        )
         pending.push(...pruneSql(vocab, eids))
         for (let eid of eids) {
           pruned.add(eid)
@@ -584,7 +642,8 @@ export let storage = <S extends Prepared<S>>(
         await send(stmts).catch((e) => report(unfit(comp, e)))
       }
       // The indexes last: one may stand on a table just rebuilt.
-      await send(indexed(vocab))
+      await send(indexed(vocab, true))
+      await backfill()
     },
     read,
     rows,
