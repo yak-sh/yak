@@ -573,8 +573,10 @@ test('fileOf keeps UTF-8 as text', () => {
   })
 })
 
-test('pictures, fonts and sounds are released; a checkout without one keeps the held copy', async () => {
-  let p = platform({ mail: held('index.html', 'stamp.png', 'old.js') })
+test('pictures, PDFs, fonts and sounds are released; a checkout without one keeps the held copy', async () => {
+  let p = platform({
+    mail: held('index.html', 'stamp.png', 'printable.pdf', 'old.js'),
+  })
   let said = await push(
     p.ask,
     ['index.html', 'icon.png', 'fonts/serif.woff2'].map(file),
@@ -584,6 +586,7 @@ test('pictures, fonts and sounds are released; a checkout without one keeps the 
     'fonts/serif.woff2',
     'icon.png',
     'index.html',
+    'printable.pdf',
     'stamp.png',
   ])
   assertEquals(p.writes, [['icon.png', 'fonts/serif.woff2']])

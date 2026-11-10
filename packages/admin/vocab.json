@@ -456,8 +456,8 @@
       ],
       "noun": "admin",
       "verb": "upload",
-      "title": "Upload a local file to an app's blob store",
-      "description": "Send one local file through an app's /api/blob door. It writes the content and attachment rows and returns the content-addressed URL.  its app role must allow writes. The file name defaults to the local basename and mime defaults to application/octet-stream.\n\n  yak admin upload yourname/vale /tmp/theme.mp3 --mime audio/mpeg --name mossvale-theme.mp3 --as admin@bot.yak.sh",
+      "title": "Upload a local file to an app",
+      "description": "Send one local file through an app's upload door. Public uploads use /api/blob; --private uses /api/pay/artifacts and requires --buyer or --via to name its customer or browser instrument. The app role must permit writes. Returns the content-addressed URL, byte count and MIME type. The file name defaults to the local basename and MIME defaults to application/octet-stream.",
       "input": {
         "where": {
           "type": "string",
@@ -478,6 +478,18 @@
         "as": {
           "type": "string",
           "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        },
+        "private": {
+          "type": "boolean",
+          "description": "keep the bytes private to the named customer or browser instrument"
+        },
+        "buyer": {
+          "type": "string",
+          "description": "the customer entity id for a private upload"
+        },
+        "via": {
+          "type": "string",
+          "description": "the browser instrument id for a private upload"
         }
       },
       "required": [

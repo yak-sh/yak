@@ -15,6 +15,7 @@ yak auth yaks.app
 yak admin fee
 yak admin query yourname/vale '.doc' --as admin@bot.yak.sh
 yak admin upload probe/notes ./attachment.pdf --as probe
+yak admin upload probe/notes ./invoice.pdf --private --buyer <customer-eid> --mime application/pdf --as probe
 ```
 
 `--as` accepts the full account address or an unambiguous local part. Admin has

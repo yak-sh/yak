@@ -504,3 +504,66 @@ test('an interrupted platform operation is cut off, not refused', () => {
   assertThrows(() => ended('errors', 1), Error, 'ended with status 1')
   equal(ended('errors', 0), [])
 })
+
+test('private upload binds its customer and never falls through to a public blob', async () => {
+  let { host, kept, ask } = await box()
+  let dir = Deno.makeTempDirSync({ prefix: 'private-upload-' })
+  let path = `${dir}/font.ttf`
+  let bytes = new Uint8Array([0, 1, 0, 0])
+  Deno.writeFileSync(path, bytes)
+  try {
+    await kept('probe@bot.yak.sh', 'probe-bearer')
+    await answering((url, init) => {
+      equal(
+        url,
+        'https://probe.yaks.app/prints/api/pay/artifacts?buyer=customer',
+      )
+      equal(
+        new Headers(init?.headers).get('authorization'),
+        'Bearer probe-bearer',
+      )
+      equal(init?.body, bytes)
+      return Response.json({
+        url: '/prints/api/pay/artifacts/hash',
+        mime: 'font/ttf',
+        bytes: 4,
+      })
+    }, async () => {
+      equal(
+        body(
+          await ask('admin_upload', {
+            where: 'probe/prints',
+            path,
+            private: true,
+            buyer: 'customer',
+            mime: 'font/ttf',
+          }),
+        ),
+        '/prints/api/pay/artifacts/hash — 4 bytes, font/ttf',
+      )
+    })
+    await answering(() => {
+      throw new Error('Missing customer must make no request')
+    }, async () => {
+      await assertRejects(
+        () =>
+          ask('admin_upload', { where: 'probe/prints', path, private: true }),
+        CallError,
+        'needs its buyer or browser instrument',
+      )
+      await assertRejects(
+        () =>
+          ask('admin_upload', {
+            where: 'probe/prints',
+            path,
+            buyer: 'customer',
+          }),
+        CallError,
+        'Use --private',
+      )
+    })
+  } finally {
+    await host.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
+})

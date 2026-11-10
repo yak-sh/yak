@@ -654,22 +654,41 @@ export let storeApply = (
   })
 }
 
-/** Put local bytes through an app's upload door, which writes their attachment. */
+/** Put local bytes through the app's public or customer-private upload door. */
 export let storeUpload = (
   session: string,
   at: string,
   bytes: Uint8Array,
   mime: string,
   name: string,
-): Promise<{ eid: string; url: string; mime: string; bytes: number }> =>
-  said(sent(storeUrl(at, '/blob'), session, {
-    method: 'POST',
-    headers: {
-      'content-type': mime,
-      'x-yak-name': encodeURIComponent(name),
-    },
-    body: new Uint8Array(bytes),
-  }))
+  customer?: { buyer?: string; via?: string },
+): Promise<{ eid: string; url: string; mime: string; bytes: number }> => {
+  if (customer && !customer.buyer && !customer.via) {
+    throw new CallError(
+      'arguments',
+      'A private upload needs its buyer or browser instrument',
+    )
+  }
+  let query = customer
+    ? '?' +
+      new URLSearchParams(
+        Object.entries(customer).filter(([, v]) => v != null) as [
+          string,
+          string,
+        ][],
+      ).toString()
+    : ''
+  return said(
+    sent(storeUrl(at, customer ? '/pay/artifacts' : '/blob') + query, session, {
+      method: 'POST',
+      headers: {
+        'content-type': mime,
+        'x-yak-name': encodeURIComponent(name),
+      },
+      body: new Uint8Array(bytes),
+    }),
+  )
+}
 
 // Keep an OAuth client in the platform store, sealed (@yaks/connections
 // `registration`): its id and secret go to the platform's vault, and the store

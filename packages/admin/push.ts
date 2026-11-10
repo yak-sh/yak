@@ -8,7 +8,7 @@
 // not (an icon, a .wasm). Dotfiles are left out: nothing the platform serves
 // starts with a dot, and `.DS_Store` is not part of an app.
 //
-// An app's pictures, fonts and sounds are released like its code, so an
+// An app's pictures, PDFs, fonts and sounds are released like its code, so an
 // installed copy carries them, but git does not keep their bytes
 // (apps/.gitignore). A checkout that lacks one leaves the copy the app already
 // holds, so the next release takes it again; only a checkout that has the
@@ -136,14 +136,14 @@ let shaOf = async (file: File) => {
 }
 
 let ASSET =
-  /\.(png|jpe?g|gif|webp|avif|ico|ttf|otf|woff2?|mp3|wav|ogg|m4a|mp4|webm)$/i
+  /\.(pdf|png|jpe?g|gif|webp|avif|ico|ttf|otf|woff2?|mp3|wav|ogg|m4a|mp4|webm)$/i
 
 /// asset('yaks-stamp.png') -> true
 /// asset('fonts/EBGaramond.woff2') -> true
 /// asset('icon.png') -> false
 /// asset('art/icon.png') -> true
 /// asset('main.css') -> false
-/** Whether the file at `path` is a picture, font or sound whose bytes git does
+/** Whether the file at `path` is a picture, PDF, font or sound whose bytes git does
  * not keep (apps/.gitignore): every one but the app's icon. */
 export let asset = (path: string) => ASSET.test(path) && path != 'icon.png'
 
@@ -251,7 +251,7 @@ let listed = async (
 
 /**
  * Make the app hold exactly `local`, released as a version, along with each
- * picture, font or sound it holds that `local` lacks. An app
+ * picture, PDF, font or sound it holds that `local` lacks. An app
  * that does not exist yet is created first: its file list is asked for, and a
  * list the platform refuses is answered by `app_new`, whose own refusal says
  * why when that fails too. A list that answers without its files is a broken

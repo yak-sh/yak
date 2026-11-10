@@ -477,6 +477,12 @@ export let runs = (
       if (where.split('/').length != 2) {
         throw new CallError('where', 'name an app as space/app')
       }
+      if (!a.private && (a.buyer != null || a.via != null)) {
+        throw new CallError('arguments', 'Use --private with --buyer or --via')
+      }
+      let customer = a.private
+        ? { buyer: word(a, 'buyer'), via: word(a, 'via') }
+        : undefined
       let at = await acting(a)
       let path = String(a.path)
       let name = word(a, 'name') ?? basename(path)
@@ -487,6 +493,7 @@ export let runs = (
         await fs.readFile(path),
         mime,
         name,
+        customer,
       )
       return [said(call, `${file.url} — ${file.bytes} bytes, ${file.mime}`)]
     }),
