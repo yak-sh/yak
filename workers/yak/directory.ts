@@ -69,6 +69,7 @@ import type { Alerting } from './operator-alerts.ts'
 import type { Subscription } from '@yaks/push'
 import type { Row as GrantRow } from './grant-rows.ts'
 import { principals, type Stamp, stampOf, writers } from './stamps.ts'
+import { instrumentEid } from './instrument.ts'
 
 // The slugs no space or app may take, because at `<slug>.yaks.app` and at
 // `<slug>@yaks.app` (post.ts `mailFrom`) they would read as the platform
@@ -669,6 +670,8 @@ export type Row = {
     by?: Id | null
   }
   entity: { eid: string }
+  // A browser and the person who claimed its guest work (attribution.ts).
+  browser?: { by?: Id | null }
   space?: { slug: string; store?: string | null }
   app?: {
     slug: string | null
@@ -2239,6 +2242,7 @@ export let directoryRows = (rows: {
           `|(.grant.app.app.space.space.slug=${slug}&.grant.person=${person})` +
           `|(.invite.to.space.slug=${slug}&.invite.person=${person})` +
           `|(.invite.to.app.space.space.slug=${slug}&.invite.person=${person})` +
+          `|(.browser.by=${person})` +
           (over
             ? `|(.member.space.space.slug=${META.space}&.member.person=${person})`
             : '')
@@ -2276,7 +2280,18 @@ export let directoryRows = (rows: {
       if (mine && page.space && page.roster) {
         mine.apps.set(page.space.eid, { at: epoch!, apps: page.roster })
       }
-      return page
+      // The browsers whose guest work the person claimed (attribution.ts
+      // `browsersOf`), read in this same trip.
+      let said: Page & { browsers?: string[] } = page
+      if (person) {
+        said = {
+          ...page,
+          browsers: rows.filter((row) =>
+            row.browser?.by && idOf(row.browser.by) == person
+          ).map((row) => instrumentEid(row.entity.eid)),
+        }
+      }
+      return said
     },
     // The same for a space named by its eid, as an object keyed by it knows
     // it (build.ts `#operate`): the space and the seat of whoever is asking,

@@ -2955,7 +2955,11 @@ let served = async (
           : whoIs(req, env.SESSION_SECRET, seatOf, space!.eid),
     )
   if (path.startsWith('/api/') && !itsApp(who, app)) {
-    who = await browsersOf(env, who)
+    // The route read the cookie's person's claims; any other caller asks.
+    let { browsers } = await routing
+    who = who.person && who.person == person && browsers
+      ? { ...who, browsers }
+      : await browsersOf(env, who)
   }
   // And the page's own address for its relative URLs: a sandboxed page's
   // carries a token for whoever loaded it, dying with their cookie.

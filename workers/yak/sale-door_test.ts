@@ -1,7 +1,8 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { appStore, stamp, storeName } from './directory.ts'
-import { KERNEL, metaOf } from './meta.ts'
+import { KERNEL, meta, metaOf } from './meta.ts'
+import { instrumentEid } from './instrument.ts'
 import { platform } from './directory-rows-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
 import {
@@ -221,6 +222,11 @@ let guestCookie = `${COOKIE}=${await seal('browser', {
   via: guestVia,
   exp: Math.floor(Date.now() / 1000) + 60,
 }, SECRET)}`
+// Signing in on that browser claims it in the directory (attribution.ts).
+await meta(guests.env).apply([{
+  entity: { eid: instrumentEid(guestVia) },
+  browser: { by: ANA },
+}], KERNEL)
 let continuedCookie = `${COOKIE}=${await sign({
   person: ANA,
   via: guestVia,
