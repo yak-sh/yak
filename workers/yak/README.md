@@ -984,6 +984,16 @@ goes to the box, read the box's Asks board (50 rows) in 277–642 ms of
 the box's own CLI. The read runs beside the Operator's own (`operator_wait`,
 726–1304 ms on the same loads), so it adds nothing to the page.
 
+`machine_wait` sums every request, so lists read at once add up in it. With
+Jeff's three lists (What needs you, Working now, Spend) on the `checks` page,
+the box answered all three in 51–110 ms at the box, as the tunnel's Operator
+caller. Through the tunnel, ten loads took 1,055–2,244 ms of `machine_wait`
+while each list opened its own connection and listed the server's tools before
+calling one: 15 requests a page. A server's lists now share one connection, and
+a call is sent without listing first (mcp-remote.ts `calls`): 6 requests. Ten
+loads after that read 469–1,079 ms, about 700 ms typically, beside 1,021–1,782
+ms of `operator_wait`.
+
 A Store imports its graph and effects facets before opening its boot
 transaction, then binds them with `@yaks/host` over its storage, vault, blobs
 and named mail sender. Cold reads owe no start-up work. A deployment calls the
