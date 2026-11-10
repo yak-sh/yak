@@ -1141,6 +1141,27 @@ landed 1.5 s after that. Its prompt was 73,437 input tokens, 66,464 of them
 cached. The turn before it, the same prompt uncached and answered in one word,
 took 6.1 s from the ask to its reply.
 
+Where such a step's time goes, measured the same day from the Worker's
+`yak operator ask` log lines (operator.ts `asked`) and on the machine. These are
+six one-word `sonnet` turns of about 71,000 input tokens:
+
+1. The Worker before it sends the step (`at_submit`): 0.8–1.3 s, spread over
+   about six stages of store and directory reads, the largest 0.4 s.
+2. The tunnel to the machine (`machine_wait`): 0.2–0.5 s.
+3. The machine's `yak serve` before `claude` starts: 0.05–0.2 s.
+4. The `claude` CLI's own start: 0.4–0.6 s.
+5. The model's first token: 1.3–2.6 s. A three-word `sonnet` prompt takes
+   1.35–1.45 s, and `haiku` 1.25 s, so neither the model nor a cached prompt's
+   size accounts for much of it.
+
+Each step had sent the transcript as one string, which missed the prompt cache
+whole. Since @yaks/claude sends it one item per block, a step reads all but its
+newest items from the cache: in that conversation, consecutive steps read 70,189
+of 70,717 tokens, where they had read 68,544 of 70,922. Its transcript is short,
+so first text barely moved: 2.7 and 3.5 s from the words, after 3.2 and 4.5 s
+before, within the model's own variance. The saving grows with a conversation's
+length.
+
 What the Operator is told is two personas, worn through @yaks/persona
 (operator-persona.ts). The yaks.app Operator persona is kept in the directory:
 its own text is the general guidance, written by the code only where there is
