@@ -417,7 +417,7 @@ export let fingerprinted = (request: Request, body: string): Request => {
       headers.get('x-yak-person'),
     ])),
   )
-  return new Request(request, { headers, body })
+  return new Request(request, { headers, body: opened(headers, body) })
 }
 
 /** A write the log already holds under an idempotency key. */

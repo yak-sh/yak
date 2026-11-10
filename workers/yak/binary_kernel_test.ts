@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
-// App binary admission through the store's binary normalization and HTTP
-// handler, without deployment or kernel startup in the measured cases.
+// App binary admission through an app's HTTP handler, without deployment or
+// kernel startup in the measured cases.
 import { equal, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -8,7 +8,6 @@ import { api, refuse } from '@yaks/api'
 import { loadVocab } from '@yaks/vocab'
 import { BINARY, binary, decode } from '@yaks/vocab/wire'
 import { appKeywords } from './vocab.ts'
-import { binaryRequest, isBinaryApply } from './binary.ts'
 
 let doc = {
   $defs: {
@@ -28,13 +27,9 @@ let expected = Uint8Array.of(0, 255, 128)
 let fixture = () => {
   let g = graph({ vocab, storage: ram(vocab) })
   let handler = api({ graph: g })
-  // The store normalizes binary requests before its JSON admission handler;
-  // refusals at either boundary use the same HTTP error mapping.
   let send = async (request: Request) => {
     try {
-      return await handler(
-        isBinaryApply(request) ? await binaryRequest(request, vocab) : request,
-      )
+      return await handler(request)
     } catch (error) {
       return refuse(error)
     }

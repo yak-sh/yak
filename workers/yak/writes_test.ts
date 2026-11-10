@@ -10,6 +10,7 @@ import { Store, type Time } from './graph.ts'
 import { by, lit, scan, tally } from '@yaks/sql'
 import { db, keep, named, state, titling } from './testing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
+import { BINARY, binary } from '@yaks/vocab/wire'
 import {
   fingerprinted,
   first,
@@ -229,6 +230,41 @@ test('writes a refusing store was sent apply in order, once, when it is mended',
   o.wake()
   await o.alarm()
   assertEquals(await o.title('n1'), 'two')
+})
+
+// An app whose photos are bytes, which only its words say: a store that
+// can't start can't decode them, and keeps them as they came.
+let PHOTOS = JSON.stringify({
+  $defs: {
+    photo: {
+      component: true,
+      type: 'object',
+      properties: { bytes: { type: 'string', contentEncoding: 'base64' } },
+    },
+  },
+})
+let photographed = object()
+await photographed.apply([titled('n0', 'zero')])
+await broken(photographed)
+test('a binary write a refusing store was sent is kept, and lands with its bytes when it is mended', async () => {
+  let o = photographed
+  let r = await o.fetch(
+    new Request('http://store/apply', {
+      method: 'POST',
+      headers: { ...KERNEL, 'x-store': NAME, 'content-type': BINARY },
+      body: binary([{
+        entity: { eid: 'p1' },
+        photo: { bytes: Uint8Array.of(0, 255, 128) },
+      }]),
+    }),
+  )
+  assertEquals([r.status, o.writes('pending')], [202, 1])
+  keep(o.ctx, 'vocab', PHOTOS)
+  o.wake()
+  await o.alarm()
+  assertEquals((await o.query('.entity.eid=p1'))[0]?.photo, {
+    bytes: { $bytes: 'AP+A', encoding: 'base64' },
+  })
 })
 
 test('a write the store fails on is set aside, and the writes behind it go through', async () => {

@@ -311,7 +311,7 @@ import {
 } from '@yaks/query'
 import { effectsIn, loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { decode as fromWire, stringify } from '@yaks/vocab/wire'
-import { binaryRequest, isBinaryApply, sealed } from './binary.ts'
+import { decoded, isBinaryApply, opened, taken } from './binary.ts'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
 import type { Runner } from '@yaks/tools'
@@ -4147,15 +4147,6 @@ export class Store {
         let leave = await this.#enter(base != null)
         let answer: Response
         try {
-          if (isBinaryApply(request)) {
-            // Decoding needs the start a stopped object can't run, so its
-            // write is kept as it came and decoded as it lands (`#sealed`).
-            let stop = logged(request) && this.#ceiling.refusal(true)
-            if (stop) return await this.#sealed(request, stop)
-            let no = await this.#ready(request)
-            if (no) return no
-            request = await binaryRequest(request, this.#vocab)
-          }
           if (logged(request)) answer = await this.#write(request)
           else {
             let no = await elapsed('ready_wait', () => this.#ready(request))
@@ -4265,15 +4256,19 @@ export class Store {
    * what that one was told, or waiting beside it.
    */
   async #write(request: Request): Promise<Response> {
-    let body = await readBody(request)
+    // A binary write is kept as it came, since decoding it needs a start
+    // that may not run (binary.ts), and is decoded as it lands (`#commit`).
+    let { body, told } = await taken(request)
+    let sent = () =>
+      new Request(request, { body: opened(request.headers, body) })
     let key = request.headers.get(IDEMPOTENCY)
     let seq: number
     let was: Sent | null
     let unkept = async () => {
-      let req = new Request(request, { body })
+      let req = sent()
       return await this.#ready(req) ?? this.#serve(req)
     }
-    if (!fits(body) || keyed(body)) {
+    if (!fits(body) || keyed(told)) {
       // A browser keeps retrying its intent until acceptance. Never apply it
       // without the receipt that makes a later resend safe.
       if (durable(key)) {
@@ -4287,6 +4282,8 @@ export class Store {
     }
     // Authority is the replay's to check (`#commit`), as for every kept write.
     let stop = this.#ceiling.refusal(true)
+    // An outbox's binary write waits with its caller while stopped.
+    if (stop && durable(key) && isBinaryApply(request)) return refuse(stop)
     if (stop) return this.#kept(fingerprinted(request, body), body, stop)
     if (durable(key)) {
       try {
@@ -4308,9 +4305,7 @@ export class Store {
         if (
           !was && !no && !this.#stuck && !this.#draining && !waiting(this.#sql)
         ) {
-          let r = await this.#commit(new Request(request, { body }), {
-            request,
-          })
+          let r = await this.#commit(sent(), { request })
           // Its transaction unwound when the ceiling refused it mid-way.
           let stop = r.status == 429 ? this.#ceiling.refusal(true) : null
           if (stop) return this.#kept(request, body, stop)
@@ -4404,21 +4399,6 @@ export class Store {
     }
     let seq = was?.seq ?? free(() => keep(sql, request, body, this.#now))
     return this.#waiting(seq, stop.retry.after)
-  }
-
-  /** A binary write that arrives while this object may not write, kept as
-   * `#kept` keeps any other but as its envelope (binary.ts `sealed`), since
-   * decoding it needs the words a start reads. What the log keeps of no
-   * write (too big, a secret's value) is told to wait, as is an outbox key,
-   * whose receipt binds the decoded body: its caller holds it until then. */
-  async #sealed(
-    request: Request,
-    stop: Error & { retry: { after: number } },
-  ): Promise<Response> {
-    let { body, header } = sealed(new Uint8Array(await request.arrayBuffer()))
-    let key = request.headers.get(IDEMPOTENCY)
-    if (!fits(body) || keyed(header) || durable(key)) return refuse(stop)
-    return this.#kept(request, body, stop)
   }
 
   /** The answer for a write kept while this object is stopped, `wait` ms
@@ -4663,12 +4643,8 @@ export class Store {
       return refuse(no)
     }
     try {
-      // A binary write the log kept undecoded (`#sealed`).
-      if (isBinaryApply(request)) {
-        request = await binaryRequest(request, this.#vocab)
-      }
-      let text = await readBody(request)
-      let body = fromWire(this.#vocab, JSON.parse(text))
+      let text = (await taken(request)).body
+      let body = decoded(this.#vocab, request.headers, text)
       if (!Array.isArray(body)) {
         throw new Refused('/apply takes a JSON array of bundles')
       }
@@ -5045,11 +5021,7 @@ export class Store {
       }
       let bundles: Bundle[]
       try {
-        bundles = JSON.parse(
-          isBinaryApply(original)
-            ? await (await binaryRequest(original.clone(), this.#vocab)).text()
-            : row.body,
-        )
+        bundles = decoded(this.#vocab, original.headers, row.body) as Bundle[]
         if (!Array.isArray(bundles)) throw new Error('not a batch')
       } catch {
         return refuse(new Refused('held write is not a JSON batch'))
