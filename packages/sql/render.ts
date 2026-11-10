@@ -500,7 +500,9 @@ let lit = (c: Ctx): Ctx => c.inline ? c : { ...c, inline: true }
 /**
  * A statement, or an expression, as the text SQLite runs and the parameters
  * it binds: at most `cap`, the engine's limit, and every value past it written
- * as a literal.
+ * as a literal. An engine that counts a statement's common table expressions
+ * passes `most`, its {@link DEPTH}: past it they are written where they are
+ * named.
  *
  * ```ts
  * import { col, eq, render, val } from '@yaks/sql'
@@ -514,8 +516,11 @@ let lit = (c: Ctx): Ctx => c.inline ? c : { ...c, inline: true }
  * // s.sql == 'select "v" from "meta" where "k" = ?', s.params == ['epoch']
  * ```
  */
-export let render = (node: Stmt | Expr, cap = VARIABLES): Raw =>
-  rendered(node, false, cap)
+export let render = (
+  node: Stmt | Expr,
+  cap = VARIABLES,
+  most = Infinity,
+): Raw => rendered(node, false, cap, most)
 
 /** {@link render} for a host that keeps prepared statements by their text:
  * every collection (`each`) is bound as one JSON array, so a statement's text
@@ -528,20 +533,24 @@ export let render = (node: Stmt | Expr, cap = VARIABLES): Raw =>
  * // 'select "value" from (select "value" from "json_each"(?))'
  * ```
  */
-export let renderStable = (node: Stmt | Expr, cap = VARIABLES): Raw =>
-  rendered(node, true, cap)
+export let renderStable = (
+  node: Stmt | Expr,
+  cap = VARIABLES,
+  most = Infinity,
+): Raw => rendered(node, true, cap, most)
 
 let rendered = (
   node: Stmt | Expr,
   stable: boolean,
   cap: number,
+  most: number,
   hoist = true,
 ): Raw => {
   let c: Ctx = { params: [], inline: false, stable, cap }
   let sql = isExpr(node) ? expr(node, c) : stmt(node, c)
   let top = hoist && long(sql) && !isExpr(node) &&
-    hoisted(node, (q) => rendered(q, stable, cap, false))
-  if (top) return rendered(top, stable, cap, false)
+    hoisted(node, (q) => rendered(q, stable, cap, most, false))
+  if (top) return rendered(top, stable, cap, most, false)
   return flat(
     raw(
       sql,
@@ -550,6 +559,7 @@ let rendered = (
       node.t == 'raw' ? node.origin : isExpr(node) ? undefined : node,
     ),
     cap,
+    most,
   )
 }
 
@@ -565,8 +575,9 @@ type Piece = {
 let wordy = (c: number) =>
   c == 95 || digit(c) || c >= 65 && c <= 90 || c >= 97 && c <= 122
 // A statement's text in pieces, or nothing where a placeholder is numbered:
-// its parameters are then not in the order of its text.
-let pieces = (sql: string): Piece[] | undefined => {
+// its parameters are then not in the order of its text. `counting` reads one
+// anyway, for a reader that moves no parameter.
+let pieces = (sql: string, counting = false): Piece[] | undefined => {
   let out: Piece[] = []
   for (let i = 0; i < sql.length;) {
     let c = sql.charCodeAt(i), end = i + 1
@@ -579,7 +590,7 @@ let pieces = (sql: string): Piece[] | undefined => {
       end = quoted(sql, i, c)
       kind = c == NAME ? 'name' : 'string'
     } else if (c == 63) {
-      if (digit(sql.charCodeAt(end))) return undefined
+      if (digit(sql.charCodeAt(end)) && !counting) return undefined
       kind = 'mark'
     } else if (c == 40) kind = 'open'
     else if (c == 41) kind = 'close'
@@ -600,32 +611,192 @@ let pieces = (sql: string): Piece[] | undefined => {
   return out
 }
 
+/** How far workerd, the SQLite under a Durable Object and D1, lets a
+ * statement's common table expressions count ({@link depth}): it refuses a
+ * statement at 100, its expression depth, and one short of it beside a
+ * subquery in FROM. The library this toolkit embeds counts nothing. */
+export let DEPTH = 100
+
+/**
+ * What a statement's common table expressions count against {@link DEPTH}.
+ * Workerd's SQLite counts every naming of one against its expression depth
+ * and gives none back, however flat the statement. Measured on D1,
+ * 2026-11-10, by the most terms of a list it answers:
+ *
+ * - a naming of a CTE counts 1 (98 or 99 terms);
+ * - and 1 for each source its body reads, at any depth: a table, a
+ *   table-valued function, a subquery in FROM, or another CTE at that one's
+ *   own count (49 terms over a body of one table, 25 over one of three);
+ * - and 1 for each subquery under the subquery that names it (50 terms with
+ *   one, 33 with two).
+ *
+ * A statement with no CTE counts nothing: 110 such terms over tables alone
+ * are answered, as are subqueries in FROM 105 deep. Whether a CTE is
+ * materialized changes nothing, and one never named counts nothing.
+ *
+ * ```ts
+ * import { depth } from '@yaks/sql'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal(depth('select 1 from "a" join (select 1 from "b") on 1'), 0)
+ * equal(depth('with "c" as (select 1 from "a") select 1 from "c"'), 2)
+ * equal(
+ *   depth(
+ *     'with "c" as (select 1 from "a" join "b") ' +
+ *       'select exists (select 1 from "c" where exists (select 1 from "c"))',
+ *   ),
+ *   7,
+ * )
+ * ```
+ */
+export let depth = (sql: string): number => {
+  if (!sql.includes('with')) return 0
+  let t = pieces(sql, true)!
+  let is = (i: number, kind: Piece['kind'], text?: string) =>
+    t[i]?.kind == kind && (text == null || t[i].text == text)
+  let closes = new Map<number, number>(), opens = new Map<number, number>()
+  let open: number[] = []
+  t.forEach((p, i) => {
+    if (p.kind == 'open') open.push(i)
+    else if (p.kind == 'close' && open.length) {
+      closes.set(open.at(-1)!, i)
+      opens.set(i, open.pop()!)
+    }
+  })
+  let called = (i: number) => is(i, 'name') || is(i, 'word')
+  // Each CTE's body, as the pieces it spans: `name [(columns)] as [[not]
+  // materialized] (select …)`.
+  type Span = { from: number; to: number }
+  let bodies: (Span & { name: string })[] = []
+  for (let i = 1; i < t.length; i++) {
+    if (!is(i, 'word', 'as')) continue
+    let j = i + 1
+    if (is(j, 'word', 'not')) j++
+    if (is(j, 'word', 'materialized')) j++
+    if (
+      !is(j, 'open') ||
+      !['select', 'with', 'values'].some((w) => is(j + 1, 'word', w))
+    ) continue
+    let at = is(i - 1, 'close') ? opens.get(i - 1)! - 1 : i - 1
+    if (!called(at)) continue
+    bodies.push({ name: t[at].text, from: j, to: closes.get(j) ?? t.length })
+  }
+  if (!bodies.length) return 0
+  let names = new Set(bodies.map((b) => b.name))
+  let groups: Span[] = [...closes].filter(([from]) =>
+    is(from + 1, 'word', 'select')
+  ).map(([from, to]) => ({ from, to }))
+  // The innermost of `of` that piece `i` stands in.
+  let inner = <T extends Span>(of: T[], i: number): T | undefined => {
+    let found: T | undefined
+    for (let g of of) {
+      if (g.from < i && i < g.to && (!found || g.from > found.from)) found = g
+    }
+    return found
+  }
+  // What each body reads, a source that is no CTE as `null`, and where the
+  // statement outside them names one.
+  let top: number[] = []
+  let reads = new Map(bodies.map((b) => [b, [] as (string | null)[]]))
+  for (let i = 0; i + 1 < t.length; i++) {
+    if (!is(i, 'word', 'from') && !is(i, 'word', 'join')) continue
+    let body = inner(bodies, i)
+    let named = called(i + 1) && names.has(t[i + 1].text) &&
+      !is(i + 2, 'open') && !is(i + 2, 'other', '.')
+    if (body) reads.get(body)!.push(named ? t[i + 1].text : null)
+    else if (named) top.push(i)
+  }
+  let counts = new Map<string, number>()
+  let count = (name: string): number => {
+    if (counts.has(name)) return counts.get(name)!
+    // A recursive body's name for itself counts nothing more.
+    counts.set(name, 0)
+    let n = 1 + Math.max(
+      ...bodies.filter((b) => b.name == name).map((b) =>
+        reads.get(b)!.reduce((sum, r) => sum + (r == null ? 1 : count(r)), 0)
+      ),
+    )
+    counts.set(name, n)
+    return n
+  }
+  return top.reduce((sum, i) => {
+    let g = inner(groups, i)
+    let under = 0
+    if (g) {
+      for (let k = g.from + 2; k < g.to; k++) {
+        if (is(k, 'word', 'select')) under++
+      }
+    }
+    return sum + count(t[i + 1].text) + under
+  }, 0)
+}
+
+/** Whether an engine holding {@link DEPTH} refuses `sql` for what its common
+ * table expressions count. */
+export let deep = (sql: string): boolean => depth(sql) >= DEPTH - 1
+
 // A relation written `not materialized` is a subquery wherever it is named:
-// the planner reads it so either way. An engine counts every naming of a
-// common table expression, with what its body reads, against its expression
-// depth and gives none back (workerd refuses a statement at 100), where a
-// subquery in FROM costs it nothing: measured on D1, 2026-11-10, a screen of
-// four tables is refused past 11 namings as a CTE and answered at 60 written
-// out. So such a relation is written where it is named, each copy binding its
-// own parameters while the engine's `cap` has room and writing them as
-// literals past it. One named in a way this cannot read (a recursive one, a
-// list of columns, a name another body takes) stays as it was written, and so
-// does a statement that would run past LENGTH.
+// the planner reads it so either way, and a subquery in FROM counts nothing
+// against the engine's DEPTH where a naming of a common table expression
+// counts itself and all its body reads (`depth`): measured on D1, 2026-11-10,
+// a screen of four tables is refused past 11 namings as a CTE and answered at
+// 60 written out. So such a relation is written where it is named, each copy
+// binding its own parameters while the engine's `cap` has room and writing
+// them as literals past it. For an engine that counts (`most`), a statement
+// still past the depth has its other relations written out too, one at a time
+// until it is under: a materialized one is then read once for each naming,
+// which answers the same rows where the engine would answer none; a
+// statement that cannot be brought under stays as it was. One named in a way
+// this cannot read (a recursive one, a list of columns, a name another body
+// takes) stays as it was written, and so does a statement that would run past
+// LENGTH.
 let HINT = ' as not materialized ('
-let flat = (r: Raw, cap: number): Raw => {
-  if (!r.sql.includes(HINT)) return r
+// How far under DEPTH a statement is written: `depth` agreed with the engine
+// to within one on every shape measured, and a count that falls short costs a
+// refused statement where one that overshoots costs a relation read twice.
+let MARGIN = 10
+// The texts found to need nothing, since a kept statement is rendered again
+// each time it runs.
+let settled = new Set<string>()
+let flat = (r: Raw, cap: number, most: number): Raw => {
+  let usual = most == DEPTH
+  if (
+    !r.sql.includes('with') || usual && settled.has(r.sql) ||
+    most == Infinity && !r.sql.includes(HINT)
+  ) return r
   let out = r, left = new Set<string>()
-  for (let turn = 0; turn < 64; turn++) {
-    let next = unfolded(out, cap, left)
+  for (let turn = 0; turn < 64 && out.sql.includes(HINT); turn++) {
+    let next = unfolded(out, cap, left, false)
     if (!next) break
     out = next
   }
-  return out == r || long(out.sql) ? r : out
+  if (out != r && long(out.sql)) out = r
+  let under = (sql: string) => depth(sql) <= most - MARGIN
+  if (most != Infinity && !under(out.sql)) {
+    let whole = out
+    for (let turn = 0; turn < 64 && !under(whole.sql); turn++) {
+      let next = unfolded(whole, cap, left, true)
+      if (!next) break
+      whole = next
+    }
+    if (under(whole.sql) && !long(whole.sql)) out = whole
+  }
+  if (usual) {
+    if (settled.size >= 512) settled.clear()
+    settled.add(out.sql)
+  }
+  return out
 }
 
 // The statement with the first relation it can write out written out, or
-// nothing when none is left. `left` holds those found unreadable.
-let unfolded = (r: Raw, cap: number, left: Set<string>): Raw | undefined => {
+// nothing when none is left: one written `not materialized`, or with `every`
+// one written any way. `left` holds those found unreadable.
+let unfolded = (
+  r: Raw,
+  cap: number,
+  left: Set<string>,
+  every: boolean,
+): Raw | undefined => {
   let t = pieces(r.sql)
   if (!t) return undefined
   let closes = new Map<number, number>(), open: number[] = []
@@ -649,7 +820,7 @@ let unfolded = (r: Raw, cap: number, left: Set<string>): Raw | undefined => {
     else if (not) return undefined
     if (!is(j, 'open') || !closes.has(j)) return undefined
     let to = closes.get(j)!
-    return { name: t[i].text, i, from: j, to, plain: not && !columns }
+    return { name: t[i].text, i, from: j, to, hinted: not, plain: !columns }
   }
   for (let w = 0; w < t.length; w++) {
     if (!is(w, 'word', 'with')) continue
@@ -670,7 +841,7 @@ let unfolded = (r: Raw, cap: number, left: Set<string>): Raw | undefined => {
     for (let [n, d] of list.entries()) {
       let body = r.sql.slice(t[d.from].end, t[d.to].at)
       let key = `${d.name} ${body}`
-      if (!d.plain || left.has(key)) continue
+      if (!d.plain || !(every || d.hinted) || left.has(key)) continue
       let uses = named(t, r.sql, d, body, until, defined)
       if (!uses) {
         left.add(key)

@@ -7,7 +7,17 @@ import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { driver } from '../sqlite/native.ts'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
-import { type BindOpts, col, compile, insert, type Row } from './mod.ts'
+import {
+  type BindOpts,
+  col,
+  compile,
+  deep,
+  DEPTH,
+  insert,
+  render,
+  type Row,
+  VARIABLES,
+} from './mod.ts'
 
 let vocab = loadVocab({
   $defs: {
@@ -275,4 +285,26 @@ test('a page of few owners reads them, not the index', () => {
     let { steps } = read(line, few({ comment: 2 }))
     assert(steps < 1_000, `${steps} VM instructions: ${line}`)
   }
+})
+
+// Under a screen the newest few hold the screen at every test, and a relation
+// read once and named twice counts all of that twice against workerd's depth:
+// written for it, they are written where they are named, and the page is
+// still the walk's.
+test('a page of few owners under a screen is written under the depth of an engine that counts', () => {
+  let hidden: BindOpts = {
+    visibility: {
+      entity: '(!link|.link.to=row-1)&(!comment|.content.body~=common)',
+    },
+  }
+  let line =
+    '.comment !link .content.body~=common .created.at>2025-01-01 .order=-created.at .limit=3'
+  let built = compile(parse(line), vocab, { ...few({ comment: 2 }), ...hidden })
+  let q = render(built, VARIABLES, DEPTH)
+  assertEquals([deep(built.sql), deep(q.sql)], [true, false])
+  assertEquals(
+    db.prepare(q.sql).all<Row>(...q.params).map((r) => r.eid),
+    read(line, hidden).eids,
+  )
+  assertEquals(read(line, hidden).eids, ['row-50'])
 })

@@ -13,7 +13,7 @@ import {
   when,
 } from './mod.ts'
 import { type Cte, raw } from './ast.ts'
-import { inline, LENGTH } from './render.ts'
+import { deep, DEPTH, depth, inline, LENGTH, VARIABLES } from './render.ts'
 
 test('compiled fragments inline values outside quoted text and names', () => {
   let fragment = render(select({
@@ -246,4 +246,64 @@ test('a statement that would pass the engine’s length keeps its relation in th
     render(naming([wide])).sql.startsWith('with "seen" as not materialized'),
     true,
   )
+})
+
+// A page read once and named twice, over a screen of `tables` tables.
+let paged = (tables: number): Cte => ({
+  name: 'page',
+  materialized: true,
+  q: select({
+    cols: [col('id')],
+    from: table('item'),
+    where: and(
+      eq(col('k'), val('a')),
+      ...Array.from(
+        { length: tables },
+        (_, i) => exists(select({ cols: [lit(1)], from: table(`hidden${i}`) })),
+      ),
+    ),
+  }),
+})
+let twice = (cte: Cte, most?: number) =>
+  render(
+    select({
+      with: [cte],
+      cols: [col('id')],
+      from: table('page'),
+      where: exists(select({ cols: [lit(1)], from: table('page') })),
+    }),
+    VARIABLES,
+    most,
+  )
+
+test('a materialized relation stays in the with while the engine counts the statement under its depth', () => {
+  let r = twice(paged(20), DEPTH)
+  equal([r.sql.startsWith('with "page" as materialized ('), deep(r.sql)], [
+    true,
+    false,
+  ])
+  // An engine that counts nothing is written every relation as it was built.
+  equal(twice(paged(60)).sql.startsWith('with "page" as materialized ('), true)
+})
+
+test('a statement the engine would count past its depth has its relations written where they are named', () => {
+  let r = twice(paged(60), DEPTH)
+  equal([r.sql.includes('with'), depth(r.sql), r.params], [false, 0, [
+    'a',
+    'a',
+  ]])
+  equal(
+    r.sql.startsWith(
+      'select "id" from (select "id" from "item" where ("k" = ?',
+    ),
+    true,
+  )
+})
+
+test('a recursive relation past the depth stays as it was written', () => {
+  let sql = 'with recursive "up"("id") as (select 1 union all select "id" ' +
+    'from "up" join ' +
+    Array.from({ length: 60 }, (_, i) => `"t${i}"`).join(' join ') +
+    ') select 1 from "up" where exists (select 1 from "up")'
+  equal(render(raw(sql), VARIABLES, DEPTH).sql, sql)
 })

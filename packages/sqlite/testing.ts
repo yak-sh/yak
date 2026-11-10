@@ -81,7 +81,10 @@ let schemaKey = (vocab: Vocab, derived: Derived = plain) => {
   prints.set(vocab, by)
   let held = by.get(derived)
   if (held) return held
-  let made = JSON.stringify([FIT, ...schema(vocab, derived).map(render)])
+  let made = JSON.stringify([
+    FIT,
+    ...schema(vocab, derived).map((s) => render(s)),
+  ])
   by.set(derived, made)
   return made
 }
@@ -103,7 +106,7 @@ export let snapshot = (
   if (held) return held
   let key = JSON.stringify([
     schemaKey(vocab, derived),
-    ...extra.map(render),
+    ...extra.map((s) => render(s)),
   ])
   let kept = snapshots.get(key)
   if (!kept) {

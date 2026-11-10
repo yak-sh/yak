@@ -16,7 +16,7 @@
 //   There is no interactive transaction — nothing holds a lock open while your
 //   code decides what to write next. ./store.ts is built around that.
 
-import { render, type Stmt } from '@yaks/sql'
+import { DEPTH, render, type Stmt, VARIABLES } from '@yaks/sql'
 
 /** A value D1 binds: its documented type table, and nothing else. A boolean is
  * bound as the 0/1 an integer column holds; bytes are bound as an
@@ -101,6 +101,6 @@ export let unbind = (row: Row): Row => {
  * shared write path uses (a bigint, a byte array) and D1's narrower set is
  * satisfied in exactly one place. */
 export let prepare = <S extends Prepared<S>>(db: D1Like<S>, s: Stmt): S => {
-  let r = render(s)
+  let r = render(s, VARIABLES, DEPTH)
   return db.prepare(r.sql).bind(...r.params.map(bind))
 }

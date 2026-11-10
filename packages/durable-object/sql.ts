@@ -18,6 +18,7 @@
 
 import {
   as,
+  DEPTH,
   type Driver,
   fn,
   type Param,
@@ -28,6 +29,7 @@ import {
   shape,
   statement,
   type Stmt,
+  VARIABLES,
   writing,
 } from '@yaks/sql'
 import { during, measure as traced, peek } from '@yaks/trace'
@@ -168,8 +170,9 @@ export let driver = (
     bound.admit(writing(s))
     // Workerd keeps each prepared statement by its text (SqlStorage's
     // StatementCache), so every collection binds as one JSON array: a read's
-    // text is the same whatever ids it names, and is prepared once.
-    let rendered = renderStable(s)
+    // text is the same whatever ids it names, and is prepared once. Workerd
+    // counts a statement's common table expressions against its DEPTH.
+    let rendered = renderStable(s, VARIABLES, DEPTH)
     let { sql, params } = rendered
     let cursor: SqlCursor<Row> | undefined
     let returned = 0
