@@ -584,6 +584,10 @@ let kinded = (driver: Driver, vocab: Vocab, rows: Row[]): Row[] => {
 // of a common table expression against its expression depth, never giving one
 // back (workerd refuses a statement at 100): a statement asks about PROBED
 // tables, and a wider vocabulary takes one for each PROBED its file holds.
+// A table costs more than its one naming there: the platform tracker's
+// object, 70 tables in its file, refused a statement of 64 ("VIEWs and/or
+// subqueries nested too deep", 2026-11-10), so a statement stays at 16, under
+// the depth even at six a table.
 // Globally empty tables short-circuit before the owners are walked: the test
 // is a constant term of the walk's own WHERE, which SQLite checks before the
 // loop. Beside it, as an AND outside the walk, SQLite 3.46 ran every table's
@@ -595,7 +599,7 @@ let kinded = (driver: Driver, vocab: Vocab, rows: Row[]): Row[] => {
 // arms; joined to the owners, a statement this wide would read every row of
 // it.
 let worn = new WeakMap<Vocab, Map<string, Source>>()
-let PROBED = 64
+let PROBED = 16
 let probe = (vocab: Vocab, names: string[], owners: number[]): Select =>
   select({
     with: [{ name: 'owners', q: array(owners), materialized: true }],

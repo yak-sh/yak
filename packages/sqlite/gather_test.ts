@@ -179,16 +179,17 @@ test('whole reads scale with worn components across one or 100 hits', () => {
 
   queries.length = 0
   assertEquals(s.get(['owner-0'])[0][last], {})
-  assertEquals(queries.length, 4) // spine + probe + two facets
+  // spine + a probe for each 16 of the 40 tables + two facets
+  assertEquals(queries.length, 6)
   queries.length = 0
   assertEquals(s.read(`.${first}`, {}, [first]).length, 100)
   assertEquals(queries.length, 3) // filter + spine + named facet
   assert(queries.every((sql) => !sql.includes(last)))
   queries.length = 0
   assertEquals(s.read(`.${first}`).length, 100)
-  // filter, asked again and now kept + spine + probe + the one facet the rest
-  // wear: the entity wearing both is held
-  assertEquals(queries.length, 4)
+  // filter, asked again and now kept + spine + three probes + the one facet
+  // the rest wear: the entity wearing both is held
+  assertEquals(queries.length, 6)
   queries.length = 0
   assertEquals(s.read(`.${first}`).length, 100)
   assertEquals(queries.length, 0) // the filter's answer and every entity held
