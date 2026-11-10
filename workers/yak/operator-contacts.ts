@@ -233,18 +233,37 @@ export let contactAdd = (
     },
   },
   run: async (args) => {
-    if (!args.address) {
+    if (!args.address && !args.code) {
       return JSON.stringify({
         email: await ctx.dir.emailAt(ctx.person),
         phone: await ctx.dir.phoneAt(ctx.person),
         texting: await ctx.dir.texting(ctx.person),
       })
     }
-    let address = addressOf(args.address)
     let source = await sourceOf(store, ctx, space, args.source)
-    await available(ctx, address)
     let [entry] = await store.g.get([source.eid], ['entry'])
     let session = String(comp(entry, 'entry')!.session)
+    let opened = await store.g.read(
+      `.operator_contact.person=${ctx.person} .operator_contact.session=${session} !verified !cancelled ?created .order=created.at .limit=2`,
+    )
+    let [open] = opened
+    if (
+      args.code && !args.address &&
+      (opened.length != 1 ||
+        mobile(String(comp(open, 'operator_contact')?.address ?? '')))
+    ) {
+      throw refuse(
+        'missing',
+        'Ask for an email contact verification code first.',
+      )
+    }
+    let given = args.address ??
+      (args.code ? comp(open, 'operator_contact')?.address : undefined)
+    if (!given) {
+      throw refuse('missing', 'Ask for a contact verification code first.')
+    }
+    let address = addressOf(given)
+    await available(ctx, address)
     let row = await pending(store, ctx.person, session, address)
     if (args.code) {
       if (!row || row.verified || row.cancelled) {
@@ -269,9 +288,6 @@ export let contactAdd = (
       }
       return confirmed(env, ctx, space, store, row, source.eid)
     }
-    let [open] = await store.g.read(
-      `.operator_contact.person=${ctx.person} .operator_contact.session=${session} !verified !cancelled ?created .order=created.at .limit=1`,
-    )
     let id = open?.entity.eid ?? crypto.randomUUID()
     let request = comp(open, 'operator_contact')?.request ??
       comp(open, 'operator_contact')?.source ?? source.eid

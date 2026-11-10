@@ -272,7 +272,6 @@ let injected = await assertRejects(() =>
 )
 let supplied = await guest.entry(code)
 await guestTools.run('contact_add', {
-  address: 'new@example.net',
   code,
   source: supplied,
 })
