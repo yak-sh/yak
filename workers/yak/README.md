@@ -920,6 +920,25 @@ person through no session (@yaks/tunnel `owner`). Where the server also lists
 and only with a label the decision lists, read from the machine first: an answer
 in the person's own words is their message as a comment.
 
+What needs a person is listed over the message box of their Operator's page,
+with no model turn (`operator-asks.ts`). `mcp_connect`'s `asks` names the
+server's tool that lists it and the query it is called with (`asks{tool, query}`
+on the `mcp_server` row); for Jeff that is `task_list` over the Asks board's
+query. The landing chat page reads it with one call, beside the conversation,
+and draws the first ten rows in the server's order: a line for what each is, a
+line for what it asks, its choices, and Reply, which fills the box. The rest
+wait under one line saying how many. A choice is the person's own answer, sent
+through the relay's door (`answerAsTheirs`). A list from a machine shows only on
+the page of the space whose tunnel reaches it, and a machine that is off, or
+that takes more than 3 s, is said to be.
+
+Every request through a tunnel to a machine counts in the page's `machine_wait`
+(timing.ts). On 2026-11-10, ten loads of the `checks` landing page, whose tunnel
+goes to the box, read the box's Asks board (50 rows) in 277–642 ms of
+`machine_wait`, about 400 ms typically, against 228 ms for the same read from
+the box's own CLI. The read runs beside the Operator's own (`operator_wait`,
+726–1304 ms on the same loads), so it adds nothing to the page.
+
 A Store imports its graph and effects facets before opening its boot
 transaction, then binds them with `@yaks/host` over its storage, vault, blobs
 and named mail sender. Cold reads owe no start-up work. A deployment calls the
