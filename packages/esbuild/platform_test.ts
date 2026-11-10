@@ -247,6 +247,28 @@ test('compile returns only declared package resources without npm I/O', async ()
   assertEquals(got.assets, { '__packages/@yaks/kit/Button.css': '.Button {}' })
 })
 
+test('a worker compiles in a sheet imported as text, its own or a package resource', async () => {
+  let kit = pkg()
+  kit.files['package.json'] = JSON.stringify({
+    exports: { '.': './mod.ts', './*.css': './*.css' },
+  })
+  let got = await compile({
+    files: {
+      ...files({ '@yaks/kit': 'platform' }),
+      'worker.ts': `import own from './own.css' with { type: 'text' }
+        import worn from '@yaks/kit/Button.css' with { type: 'text' }
+        export default worn + own`,
+      'own.css': '.Own {}',
+    },
+    worker: { entry: 'worker.ts', flags: [], carry: [] },
+    pages: [],
+  }, { '@yaks/kit': { ...kit, resources: { 'Button.css': '.Button {}' } } })
+  assertEquals(got.errors, [])
+  let code = encodeURIComponent(got.worker!.code)
+  let mod = await import(`data:text/javascript,${code}`)
+  assertEquals(mod.default, '.Button {}.Own {}')
+})
+
 test('package resources refuse paths escaping their namespace', () => {
   for (
     let path of [

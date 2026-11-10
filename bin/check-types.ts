@@ -274,6 +274,14 @@ export let namespace = (types: string) =>
       !lib.includes('/// <reference lib="deno.ns" />')
     ).join('')
 
+// A stylesheet imported `with { type: 'text' }` is its text, as Deno's
+// `raw-imports` and the app compiler (@yaks/esbuild) both load it.
+let TEXT = `declare module '*.css' {
+  const text: string
+  export default text
+}
+`
+
 let deno = (): Platform => {
   let { lib, ...options } = config.compilerOptions
   let other = lib.filter((l) => l.startsWith('deno.') && l != 'deno.ns')
@@ -287,6 +295,7 @@ let deno = (): Platform => {
     },
     globals: async () => ({
       'deno.d.ts': namespace((await output(['types'])).out),
+      'text.d.ts': TEXT,
     }),
     hosted: false,
     examples: true,

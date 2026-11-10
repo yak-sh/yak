@@ -167,6 +167,7 @@ export let seed = (files: Record<string, string>, catalog: Catalog): Seed => {
         throw new Error(`${name}: resource ${path} is not package-relative`)
       }
       out.assets[`${ASSETS}${name}/${path}`] = text
+      out.files[`node_modules/${name}/${path}`] = text
     }
     for (let [dep, range] of Object.entries(pkg.dependencies)) visit(dep, range)
   }

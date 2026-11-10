@@ -285,7 +285,7 @@ let virtual = (
       }
       return {
         contents,
-        loader: loader(path),
+        loader: args.with.type == 'text' ? 'text' : loader(path),
         resolveDir: path.slice(0, Math.max(0, path.lastIndexOf('/'))),
       }
     })

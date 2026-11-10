@@ -161,6 +161,9 @@ compute time, together with the sandbox's.
   browser to load, through the page's import map; the deploy reports it when the
   import map does not name it either.
 - CSS a script imports is dropped: link it from the page.
+- A file imported `with { type: 'text' }` is compiled in as its text:
+  `import sheet from './look.css' with { type: 'text' }` gives a worker its
+  stylesheet as a string, with no `env.FILES` read to answer it.
 - `./api/client.js` is not bundled. The browser imports it relative to the
   compiled script's own address, so import it from a file beside the page's
   script.

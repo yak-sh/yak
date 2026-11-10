@@ -73,11 +73,12 @@ type Config = {
 
 /** A member's deno.json as `deno publish` reads it: its JSR options, and its
  * package.json's name, version, license, description and the exports its
- * publish does not exclude.
+ * publish does not exclude. A pattern export (`./*.css`) stays out: JSR's
+ * exports name one file each.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * let pkg = { name: '@yaks/a', version: '1.0.0', license: 'MIT', description: 'A.', type: 'module', exports: { '.': './mod.ts', './testing': './testing.ts' } }
+ * let pkg = { name: '@yaks/a', version: '1.0.0', license: 'MIT', description: 'A.', type: 'module', exports: { '.': './mod.ts', './testing': './testing.ts', './*.css': './*.css' } }
  * let publish = { exclude: ['testing.ts'] }
  * assertEquals(
  *   jsr(pkg, { publish }),
@@ -99,7 +100,9 @@ export let jsr = (pkg: Record<string, unknown>, config: Config): Config => {
     license: pkg.license,
     description: pkg.description,
     exports: typeof exports == 'string' ? exports : Object.fromEntries(
-      Object.entries(exports ?? {}).filter(([, file]) => shipped(file)),
+      Object.entries(exports ?? {}).filter(([path, file]) =>
+        !path.includes('*') && shipped(file)
+      ),
     ),
   }
 }

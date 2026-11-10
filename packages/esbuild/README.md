@@ -239,8 +239,12 @@ whole graph once the page script arrives instead of one level per round trip;
 its own imports already reach each one, so nothing runs in another order. The
 server source compiles to one module; files it reaches that esbuild does not
 load (text, WebAssembly) are named in `carry` for the host to upload beside it.
-An import esbuild could not resolve is an error naming the package to add to
-`package.json`, never a module left missing.
+A file imported `with { type: 'text' }` is compiled in as its text, whatever its
+extension, and a platform package's resources are importable that way
+(`import sheet from '@yaks/ui/Button.css' with { type: 'text' }`), so a worker
+answers a stylesheet composed of them without reading a file. An import esbuild
+could not resolve is an error naming the package to add to `package.json`, never
+a module left missing.
 
 A package's file is an ES module or not as Node reads it: by its extension, or
 for `.js`, `.jsx`, `.ts` and `.tsx`, by the `type` of the nearest package.json

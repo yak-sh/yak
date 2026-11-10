@@ -54,6 +54,7 @@ equal(
 | `@yaks/ui/guide`         | `Guide`, `Specimens`, `Contents`, `Page`, `sections`, `stopsOf`, `stops`, `title`                                                                                      |
 | `@yaks/ui/routes`        | `page`, `routes`: the static browser guide at `/ui`                                                                                                                    |
 | `@yaks/ui/cli`           | `commands`: the terminal guide, `yak ui`                                                                                                                               |
+| `@yaks/ui/<Part>.css`    | A part's sheet, for a Worker that answers its own stylesheet: `import sheet from '@yaks/ui/Button.css' with { type: 'text' }`                                          |
 
 ## Building parts
 

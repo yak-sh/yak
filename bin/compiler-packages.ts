@@ -4,6 +4,7 @@
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse } from 'es-module-lexer/js'
+import { resolve as named } from 'resolve.exports'
 import type ts from 'typescript'
 import { glob, stat } from 'node:fs/promises'
 import type { Catalog } from '../packages/esbuild/platform.ts'
@@ -26,6 +27,15 @@ type Member = {
 }
 
 let read = (path: string): Manifest => JSON.parse(Deno.readTextFileSync(path))
+
+// The file a manifest's exports name for a subpath, when they name one.
+let exportedAs = (manifest: Manifest, path: string) => {
+  try {
+    return named(manifest, path)?.[0]
+  } catch {
+    return undefined
+  }
+}
 
 let optional = (
   path: string,
@@ -224,11 +234,16 @@ export let catalog = async (
   let out: Catalog = {}
   for (let [name, member] of members) {
     if (!Object.keys(member.files).length) continue
-    let exports = Object.fromEntries(
-      Object.entries(member.exports).filter(([, file]) =>
+    // The catalog's manifest names files, never a pattern, so a resource the
+    // package exports by one (`./*.css`) is exported by its own path.
+    let lent = Object.keys(member.resources).map((path) => `./${path}`)
+      .filter((path) => exportedAs(member.manifest, path) == path)
+    let exports = Object.fromEntries([
+      ...Object.entries(member.exports).filter(([, file]) =>
         relative(member.dir, resolve(member.dir, file)) in member.files
       ),
-    )
+      ...lent.map((path) => [path, path]),
+    ])
     let dependencies = ordered(member.dependencies)
     member.files['package.json'] = JSON.stringify({
       name,

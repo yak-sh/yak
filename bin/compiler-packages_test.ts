@@ -139,7 +139,7 @@ test('compiler catalog refuses unknown exports and excluded source paths', async
   }
 })
 
-test('browser catalog captures declared resource globs and their digests', async () => {
+test('browser catalog captures declared resource globs, their digests and their exports', async () => {
   let files = workspace()
   files['packages/a/browser.json'] = json({
     entries: ['.'],
@@ -156,6 +156,20 @@ test('browser catalog captures declared resource globs and their digests', async
       'parts/Button.css': '.Button {}',
       'theme.css': ':root { --color: red }',
     })
+    let { exports } = JSON.parse(a['@yaks/a'].files['package.json'])
+    assertEquals(exports['./theme.css'], undefined)
+    let manifest = JSON.parse(files['packages/a/package.json'])
+    manifest.exports['./*.css'] = './*.css'
+    await Deno.writeTextFile(`${root}/packages/a/package.json`, json(manifest))
+    let lent = JSON.parse(
+      (await catalog(root))['@yaks/a'].files['package.json'],
+    )
+    assertEquals(lent.exports['./parts/Button.css'], './parts/Button.css')
+    assertEquals(lent.exports['./*.css'], undefined)
+    await Deno.writeTextFile(
+      `${root}/packages/a/package.json`,
+      files['packages/a/package.json'],
+    )
     await Deno.writeTextFile(`${root}/packages/a/theme.css`, ':root {}')
     let b = await catalog(root)
     assertEquals(b['@yaks/a'].version == a['@yaks/a'].version, false)
