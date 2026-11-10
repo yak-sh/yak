@@ -1,5 +1,12 @@
 /** The subpaths a plugin contributes to a composed graph. */
-import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
+import type {
+  Arrived,
+  Authenticate,
+  Filter,
+  Handler,
+  Offers,
+  Route,
+} from '@yaks/api'
 import type { Eid, Plugin } from '@yaks/graph'
 import type { Backings, Derived, Extension, History, Stmt } from '@yaks/sql'
 import type { Handlers } from '@yaks/effects'
@@ -136,6 +143,12 @@ export type RoutesFacet = {
   /** a check every request passes before any route answers it; a plugin's
    * word on which requests reach this host at all (@yaks/tunnel's link) */
   filter?: (host: Host, options: Options) => Filter
+  /** who a request that came through this plugin's link is from, asked
+   * before the graph's own `authenticate` ({@link Host.who}) */
+  arrived?: (host: Host, options: Options) => Arrived
+  /** the tools a request that came through this plugin's link is offered
+   * ({@link Host.offers}) */
+  offers?: (host: Host, options: Options) => Offers
   handler?: (host: Host, options: Options) => Handler
 }
 

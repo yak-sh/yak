@@ -7,7 +7,7 @@
 // sees it. `upgrade` is the only step no web standard covers, so a runtime
 // other than Deno supplies its own.
 
-import type { Graph, ReadOpts } from '@yaks/graph'
+import type { Actor, Graph, ReadOpts } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { type Authenticate } from './actor.ts'
 import { ask, write, type WriteContext } from './doors.ts'
@@ -40,6 +40,20 @@ export type Route = {
  * (a `Denied`, say, which answers 403), and anything it does not throw at goes
  * on. */
 export type Filter = (request: Request) => void | Promise<void>
+
+/** Who a request that reached the host through a plugin's link (a tunnel) is
+ * from: its actor, `null` for nobody, or `undefined` for a request that came
+ * another way. How a request arrived outranks what it says about itself, so a
+ * host asks this before its `authenticate`: a request through a link never
+ * names one of the host's own runs. */
+export type Arrived = (
+  request: Request,
+) => Actor | null | undefined | Promise<Actor | null | undefined>
+
+/** The tools a request that reached the host through a plugin's link is
+ * offered, by name, or `undefined` for a request that came another way, which
+ * is offered every tool. */
+export type Offers = (request: Request) => string[] | undefined
 
 /** Whether a route matches this request's method and path. A GET route
  * matches a HEAD too, which is a GET answered without its body (RFC 9110

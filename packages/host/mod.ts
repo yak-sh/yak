@@ -12,7 +12,7 @@ import type {
 import type { Search } from '@yaks/graph/tools'
 import type { Vocab } from '@yaks/vocab'
 import type { Derived, Raw, Row, Statements, Stmt } from '@yaks/sql'
-import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
+import type { Authenticate, Filter, Handler, Offers, Route } from '@yaks/api'
 import type { Anatomy, AnatomyObserver } from '@yaks/code/anatomy'
 import type { Contributions } from '@yaks/ui/contributions'
 import type { Blobs } from '@yaks/blob'
@@ -248,10 +248,16 @@ export interface Host {
   me: Eid
   /** who is calling — the answer every door over this graph gets, a command
    * line and @yaks/api's endpoints alike, so what a caller writes is
-   * attributed to it (`signed` in @yaks/api) instead of to nobody. At most one
-   * plugin answers it ; where it names
-   * nobody, the answer is this host process itself (its writer). */
+   * attributed to it (`signed` in @yaks/api) instead of to nobody. A request
+   * that came through a plugin's link (a tunnel) is whoever that link says
+   * ({@link RoutesFacet.arrived}), whatever run the request names. For every
+   * other request at most one plugin answers; where it names nobody, the
+   * answer is this host process itself (its writer). */
   who: Authenticate
+  /** the tools this request is offered, by name, where the link it came
+   * through narrows them ({@link RoutesFacet.offers}); nothing for a request
+   * offered every tool. A door that lists or runs tools asks it (@yaks/mcp). */
+  offers?: Offers
   /** Every commit another host makes to this store, as the patches it applied
    * (@yaks/graph `News`): what a subscription registry or a cache over
    * {@link graph} is fed so it sees the writes its graph's `effect` phase

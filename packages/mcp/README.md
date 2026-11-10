@@ -321,6 +321,14 @@ do not override it. Return `null` for unattributed requests or throw
 supply authorization; authentication and tool metadata do not enforce access
 policy by themselves.
 
+`mcp({ offers })` is asked per request for the only tools that request is
+offered, by name, and answers nothing for a request offered them all. A tool
+left out is neither listed nor run: a call to it is answered `Tool … not
+found`.
+A composed host passes what its links say (`Host.offers`), so a request through
+a machine's tunnel reaches the tools that machine's config lists
+([@yaks/tunnel](../tunnel/README.md)).
+
 `readOnly: true` removes `graph_apply` from the generic tool list. It does not
 remove plugin or explicitly supplied tools, prevent them from writing, or
 disable call recording. Review those tools when configuring a read-only

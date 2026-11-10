@@ -184,6 +184,11 @@ export type Options = {
   answer?: { type: 'object'; [key: string]: unknown }
   /** tools to list beside the generic tier and the graph's plugins' */
   tools?: Tool[]
+  /** the only tools this server offers, by name, out of those it would list:
+   * what a door narrows one caller to (./mount.ts `offers`). A tool left out
+   * is neither listed nor run, and a call to it is answered as a call to a
+   * tool that does not exist. Every tool where absent. */
+  only?: string[]
   /** whether this server adds the generic tier itself (default: yes). Supply
    * tools to replace that tier in the same position in the roster. A
    * calling program that already has the tier in `tools` — one whose CLI runs
@@ -480,7 +485,10 @@ export let server = (
   let actor = opts.actor ?? null
   let catalog = opts.runner?.registry ?? opts.registry ??
     registry([{ name: 'local', tools: listing(opts) }])
-  let tools = () => catalog.list().filter(offered('mcp'))
+  let only = opts.only && new Set(opts.only)
+  let listed = (t: NamedTool) =>
+    offered('mcp')(t) && (!only || only.has(t.name))
+  let tools = () => catalog.list().filter(listed)
   // Where a call and its result are recorded, which is this graph unless the
   // caller passed a separate one (a server over a composition of stores, or a
   // connector that will not write a row into somebody else's store just
@@ -586,7 +594,7 @@ export let server = (
     }
     let admitted = run.admit(asked)
     let t = admitted?.tool
-    if (!admitted || !t || t.name != name || !offered('mcp')(t)) {
+    if (!admitted || !t || t.name != name || !listed(t)) {
       let err = new ProtocolError(-32602, `Tool ${name} not found`)
       await hear(err, { code: 'tool', said: err.message }, asked, name)
       throw err

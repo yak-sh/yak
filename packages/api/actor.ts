@@ -51,8 +51,9 @@ export type Authenticate = (
 // reaches for it.
 export { signed } from '@yaks/graph/provenance'
 
-/** The run a request names, in the fleet's `x-via` header. */
-let VIA = 'x-via'
+/** The header a request names the run behind it in: the fleet's own name
+ * for the instrument behind a write, never a credential. */
+export let VIA = 'x-via'
 
 /**
  * Callers named by another graph's door: a request naming a run in `x-via` is

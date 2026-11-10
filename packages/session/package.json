@@ -6,6 +6,7 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./graph": "./graph.ts",
+    "./who": "./who.ts",
     "./tools": "./tools.ts",
     "./views": "./views.ts",
     "./service": "./service.ts",

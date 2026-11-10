@@ -19,6 +19,6 @@ export {
   type Target,
   tunnels,
 } from './cloudflare.ts'
-export { Closed, filter, opens } from './filter.ts'
+export { Closed, filter, marked, offered, opens } from './filter.ts'
 export { GATEWAY, HEADER } from './gateway.ts'
 export { docs, tunnelDoc } from './vocab.ts'

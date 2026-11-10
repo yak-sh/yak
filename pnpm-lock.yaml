@@ -5045,12 +5045,21 @@ importers:
 
   packages/tunnel:
     dependencies:
+      '@yaks/api':
+        specifier: 0.2.29
+        version: link:../api
       '@yaks/fp':
         specifier: 0.2.23
         version: link:../fp
+      '@yaks/graph':
+        specifier: 0.2.33
+        version: link:../graph
       '@yaks/process':
         specifier: 0.2.28
         version: link:../process
+      '@yaks/session':
+        specifier: 0.2.33
+        version: link:../session
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab

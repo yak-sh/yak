@@ -53,7 +53,7 @@ import {
 
 /** How the HTTP handler is built: everything {@link Options} takes except the
  * actor, which is decided per HTTP request. */
-export type MountOptions = Omit<Options, 'actor'> & {
+export type MountOptions = Omit<Options, 'actor' | 'only'> & {
   /** the graph that owns MCP connection transcripts. Without one, the
    * calling application owns its own Mcp-Session-Id and this transport does
    * not create graph sessions. */
@@ -65,6 +65,10 @@ export type MountOptions = Omit<Options, 'actor'> & {
   /** The process serving this door: a login of nobody through it is the
    * host's own fallback, which opens a connection of its own. */
   me?: string
+  /** the only tools this request is offered, by name, where the way it
+   * arrived narrows them (@yaks/api `Offers`); nothing for a request offered
+   * every tool. Asked per request, as the actor is. */
+  offers?: (request: Request) => string[] | undefined
   /** Legacy one-shot call timeout in ms; modern exchanges use client cancellation. */
   timeout?: number
   /** The clock the handler keeps time by: the legacy `timeout`, and its
@@ -640,6 +644,7 @@ export let mcp = (opts: MountOptions): Handler => {
         ...opts,
         instructions: await instructed(opts, exchange),
         actor,
+        only: opts.offers?.(request),
         runner: running(),
         text: drawing(request),
       }),

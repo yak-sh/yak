@@ -13,7 +13,14 @@ import type { VocabDoc } from '@yaks/vocab'
 import type { Effects, Handlers } from '@yaks/effects'
 import type { Extension, History, Stmt } from '@yaks/sql'
 import { gather } from '@yaks/ui/contributions'
-import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
+import type {
+  Arrived,
+  Authenticate,
+  Filter,
+  Handler,
+  Offers,
+  Route,
+} from '@yaks/api'
 import type { Host, Role } from './mod.ts'
 import {
   type Config,
@@ -366,6 +373,8 @@ export let assemble = (
       let answering: Handler | undefined
       let paths: Route[] = []
       let filters: Filter[] = []
+      let arrivals: Arrived[] = []
+      let offering: Offers[] = []
       let made: Registry | undefined
       let ranked: Search | undefined
       let meant: Meaning | undefined = lent.meaning
@@ -387,7 +396,24 @@ export let assemble = (
         },
         observe: observed.observe,
         ui: gather(dressed.map(([facet]) => facet)),
-        who: (request, message) => authenticate(request, message),
+        // A link's word on a request settles who it is from: nobody through a
+        // link is this process's own writing, as nobody anywhere else is.
+        who: (request, message) =>
+          arrivals.length
+            ? (async () => {
+              for (let from of arrivals) {
+                let actor = await from(request)
+                if (actor !== undefined) return actor ?? self ?? null
+              }
+              return authenticate(request, message)
+            })()
+            : authenticate(request, message),
+        offers: (request) => {
+          for (let narrowed of offering) {
+            let tools = narrowed(request)
+            if (tools) return tools
+          }
+        },
         // Present only when a plugin offers one: a host without it polls its
         // store's revision instead (@yaks/api routes), so another process's
         // commits still reach its subscriptions.
@@ -695,6 +721,12 @@ export let assemble = (
         })
         filters = served.flatMap(([r, o]) =>
           r.filter ? [r.filter(host, o)] : []
+        )
+        arrivals = served.flatMap(([r, o]) =>
+          r.arrived ? [r.arrived(host, o)] : []
+        )
+        offering = served.flatMap(([r, o]) =>
+          r.offers ? [r.offers(host, o)] : []
         )
         answering = mod.handler(host, options ?? {})
         observed.binding(hosts[0][2], 'routes')

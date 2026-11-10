@@ -222,6 +222,40 @@ export let speaking = async (
 }
 
 /**
+ * The session standing in this graph for a conversation held in another
+ * store and reached through `door` (a tunnel), written where it is new, and
+ * the actor a request from it writes as: `by` the `persona` such a caller
+ * works as here, `via` that session. Its eid derives from the door and the
+ * conversation's id, as a subagent's does from its parent and its own, so
+ * every request from one conversation speaks through one session and no id a
+ * request sends names one of this graph's own runs. Where the id is an eid,
+ * `session.source` keeps it: the conversation is an entity, in its own store.
+ * A request naming no conversation speaks through the door's one session.
+ */
+export let standIn = async (
+  g: Pick<Graph, 'get' | 'apply'>,
+  door: string,
+  conversation = '',
+  persona?: Eid,
+): Promise<Actor> => {
+  let via = sessionEid(conversation, door)
+  let [had] = await g.get([via], [SESSION])
+  let named = had?.[TOMBSTONE] == null
+    ? had?.[SESSION] as Comp | undefined
+    : undefined
+  if (!named || (persona && named.persona != persona)) {
+    await g.apply([{
+      entity: { eid: via },
+      [SESSION]: {
+        ...persona ? { persona } : {},
+        ...UUID.test(conversation) ? { source: conversation } : {},
+      },
+    }], { trusted: true })
+  }
+  return persona ? { by: persona, via } : { via }
+}
+
+/**
  * The session of a subagent its harness knows by `id` within the session it
  * knows by `parent`: its eid, and the rows that write it where the graph has
  * not met it yet (with the parent, where that is new too), else none.

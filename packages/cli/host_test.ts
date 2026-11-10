@@ -43,6 +43,8 @@ import { meta, REQUIRED } from '@yaks/sqlite/meta'
 import { signer } from './local.ts'
 import { clock, test, until } from '@yaks/testing'
 import { claude, codex } from '@yaks/spawn'
+import { sessionEid } from '@yaks/session/who'
+import { HEADER } from '@yaks/tunnel'
 import { parse as parseToml } from 'smol-toml'
 
 // The host of these tests, as its own writes are signed: this process, whose
@@ -2162,6 +2164,106 @@ test('a spawned run is stamped with its actor from its first MCP call, on either
       let { by, via } = b.created as Comp
       assertEquals([by, via], [persona, run])
     }
+  } finally {
+    await host.close()
+  }
+})
+
+test("a call through the tunnel writes as the tunnel's persona through its conversation's session, with only the tools the machine offers", async () => {
+  let persona = mint()
+  let run = mint()
+  let host = await compose(
+    {
+      db: ':memory:',
+      plugins: ['shop', '@yaks/session', ...HTTP, {
+        use: '@yaks/tunnel',
+        with: { routes: ['/mcp'], tools: ['book_add', 'book_list'], persona },
+      }],
+    },
+    only({ shop }),
+  )
+  try {
+    // One of the machine's own runs, which a request through the tunnel may
+    // name and must never speak as.
+    await host.graph.apply([
+      { entity: { eid: persona }, book: { title: 'the assistant' } },
+      { entity: { eid: run }, session: { id: run, persona: mint() } },
+    ])
+    let ask = async (
+      method: string,
+      params: Record<string, unknown>,
+      headers: Record<string, string> = {},
+    ) => (await (await serving(host)(
+      new Request('http://h/mcp', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+      }),
+    )).json())
+    let through = (conversation?: string) => ({
+      [HEADER]: '1',
+      ...conversation ? { 'x-via': conversation } : {},
+    })
+    let names = async (headers?: Record<string, string>) => {
+      let said = await ask('tools/list', {}, headers)
+      if (!said.result) throw new Error(JSON.stringify(said))
+      return said.result.tools.map((t: { name: string }) => t.name).sort()
+    }
+    let add = async (title: string, headers?: Record<string, string>) => {
+      let said = await ask('tools/call', {
+        name: 'book_add',
+        arguments: { title },
+      }, headers)
+      assertEquals(said.error, undefined)
+      let [made] = await host.graph.read(
+        `.book.title=${JSON.stringify(title)}&?created`,
+      )
+      let { by, via } = made.created as Comp
+      return [by, via] as [string | undefined, string]
+    }
+    let session = async (eid: string) =>
+      (await host.graph.get([eid]))[0].session as Comp
+    let [first, second] = [mint(), mint()]
+    let standing = sessionEid(first, 'tunnel')
+
+    assertEquals(await names(through(first)), ['book_add', 'book_list'])
+    assertEquals(await add('Dune', through(first)), [persona, standing])
+    assertEquals(await add('Emma', through(first)), [persona, standing])
+    assertEquals(await add('Ulysses', through(second)), [
+      persona,
+      sessionEid(second, 'tunnel'),
+    ])
+    // The session standing for the conversation says whose it is and where
+    // the conversation is kept.
+    let stood = await session(standing)
+    assertEquals([stood.persona, stood.source], [persona, first])
+    // A request through the tunnel naming one of the machine's runs, or
+    // none, is still the tunnel's caller.
+    assertEquals(await add('Persuasion', through(run)), [
+      persona,
+      sessionEid(run, 'tunnel'),
+    ])
+    assertEquals(await add('Middlemarch', through()), [
+      persona,
+      sessionEid('', 'tunnel'),
+    ])
+    // A tool off the machine's list is not there to call.
+    let refused = await ask('tools/call', {
+      name: 'graph_apply',
+      arguments: { bundles: [{ entity: { eid: '$b' }, book: {} }] },
+    }, through(first))
+    assertEquals(refused.error.message, 'Tool graph_apply not found')
+
+    // A request that did not come through the tunnel is offered every tool
+    // and names its own run, as it always did.
+    assert((await names()).includes('graph_apply'))
+    assertEquals(await add('Walden', { 'x-via': run }), [
+      (await session(run)).persona,
+      run,
+    ])
+    let [by, via] = await add('Hamlet')
+    assertEquals(by, undefined)
+    assertEquals((await session(via)).fallback, true)
   } finally {
     await host.close()
   }

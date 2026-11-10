@@ -20,8 +20,10 @@ Three Cloudflare resources make the tunnel:
 
 On the machine, the server's **filter** answers a marked request only at the
 paths the machine opened to the tunnel, and refuses the rest (403) before any
-route sees them. A request without the mark did not come through the tunnel, and
-the filter leaves it alone.
+route sees them. A marked request is also never one of the machine's own
+callers: it writes as the persona the machine names for the tunnel, and is
+offered only the tools the machine lists. A request without the mark did not
+come through the tunnel, and all of this leaves it alone.
 
 ```sh
 deno add jsr:@yaks/tunnel
@@ -32,8 +34,9 @@ Entry points:
 - `@yaks/tunnel`: the account calls (`connect`, `disconnect`, `tunnels`,
   `services`, `gateways`), the tunnel's two ends (`GATEWAY`, `HEADER`, `filter`,
   `opens`) and the vocabulary.
-- `@yaks/tunnel/routes`: the filter a machine's server puts in front of its
-  routes, over the paths its config opens.
+- `@yaks/tunnel/routes`: what a machine's server puts in front of its routes:
+  the filter over the paths its config opens, who a request through the tunnel
+  writes as, and the tools it is offered.
 - `@yaks/tunnel/service`: the connector, which keeps `cloudflared` running for
   as long as its role runs.
 - `@yaks/tunnel/vocab`: the `tunnel` component alone.
@@ -102,6 +105,39 @@ read from the vault:
 nothing: `/apply` and `/query` stay closed to the tunnel unless the machine's
 owner lists them. The filter is the `web` role's, so it stands in front of every
 route of the process that serves HTTP.
+
+### Tools through the tunnel
+
+A hosted assistant uses the machine's tools by opening `/mcp` (@yaks/mcp) and
+saying which tools the tunnel offers and who its callers are:
+
+```json
+{
+  "use": "@yaks/tunnel",
+  "with": {
+    "routes": ["/mcp"],
+    "tools": ["task_list", "task_update", "graph_query"],
+    "persona": "N-153900"
+  }
+}
+```
+
+- `tools` are the only tools a request through the tunnel is listed or may call,
+  by name, and none offers nothing. A call to any other is answered as a call to
+  a tool that does not exist. The hosted side can narrow this list and cannot
+  widen it. A hosted model reads mail and web pages that strangers wrote, so
+  leave off any tool that starts an agent or runs a command.
+- `persona` is the persona every request through the tunnel writes as (`by`),
+  named by eid, number or name. Without one such a request writes as nobody.
+- The request names the conversation it comes from in `x-via`. The machine keeps
+  one session standing for each (`session{persona, source}`, its eid derived
+  from the conversation's id; @yaks/session `standIn`), and what the request
+  writes is stamped `via` that session. `source` is the conversation's id where
+  that is an eid. A request naming none speaks through one session kept for the
+  tunnel.
+
+Whatever a request through the tunnel names in `x-via`, it never speaks as one
+of the machine's own sessions, and never as the machine's person.
 
 With a token, the service runs `cloudflared` and starts it again whenever it
 exits, after a pause that grows to a minute while it keeps failing. The machine

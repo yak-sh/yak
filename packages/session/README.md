@@ -760,6 +760,13 @@ so a subagent works as the persona it runs under. A session with no persona
 anywhere up its line should be rare. A session is never an actor: one that works
 as nobody leaves `by` unsaid.
 
+`standIn()` (`@yaks/session/who`) keeps the session standing here for a
+conversation held in another store and reached through a door such as a tunnel:
+`session{persona, source}`, its eid derived from the door and the conversation's
+id, so every request from one conversation speaks through one session and none
+of them names one of this graph's own runs. It answers the actor such a request
+writes as.
+
 The `@yaks/session/graph` entry point exports `authenticate()`, for every door
 over the graph: an HTTP request and a `yak` command alike. It reads the session
 from the `x-via` header, else from a harness's tool call the hook door was told

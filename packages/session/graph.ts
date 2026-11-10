@@ -25,7 +25,7 @@
 // is left to the host's own fallback — the composer attributes those to the
 // process itself (@yaks/cli `writer`), so a write is attributed either way.
 
-import type { Authenticate } from '@yaks/api'
+import { type Authenticate, VIA } from '@yaks/api'
 import type { Actor, Bundle, Graph, Plugin } from '@yaks/graph'
 import { announced, callIn } from './announce.ts'
 import { type Door, reply as owed } from './bus.ts'
@@ -41,8 +41,7 @@ export let plugins = (): Plugin[] => [sessions()]
 export let reply = (host: Door) => (call: Bundle): Promise<Bundle[]> =>
   owed(host, call)
 
-/** The request header a caller names its run in. */
-export let VIA = 'x-via'
+export { VIA }
 
 /** What `authenticate` is given: the graph, once it is open. */
 export type Host = { graph: Graph }
