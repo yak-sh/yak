@@ -87,6 +87,7 @@ import { connectedInstructions, connectedTools } from './connected-mcp.ts'
 import { relayTools } from './operator-relay.ts'
 import { ledger } from './ledger.ts'
 import { admin, type Args, type Ctx, inSpace, refuse } from './tool.ts'
+import type { Caller } from './session.ts'
 import { adminTools } from './operator-admin.ts'
 import { platformFault } from './unseen.ts'
 import { bound, type Env } from './env.ts'
@@ -185,9 +186,15 @@ let opening = (env: Env) => () =>
     time: env.CLOCK,
   })
 
+type OperatorCtx = Ctx & { role: Role | null; pa: boolean; beyond: Reach[] }
+
 // Each space has its own Operator, working on that space and the spaces that
-// let it in (operator-reach.ts), the PA's among them.
-export let operatorContext = async (
+// let it in (operator-reach.ts), the PA's among them. Its context comes in
+// two parts: `here` reads what needs only its person and space at once, its
+// directory waiting for the reach only to look past the space (grants.ts
+// `narrowed`), and `ctx` is the whole context, with the person's role and
+// the spaces beyond, once the reach is read.
+let opened = (
   env: Env,
   held: Pick<Held, 'person' | 'administrative'>,
   space: Space,
@@ -198,26 +205,39 @@ export let operatorContext = async (
     held.person,
     held.administrative,
   ),
-): Promise<Ctx & { role: Role | null; pa: boolean; beyond: Reach[] }> => {
-  let { role, pa, beyond } = await reach
+  instrument?: string,
+) => {
   let reopen = () =>
-    narrowed(open(), space.slug, space.eid, held.administrative, beyond)
-  return {
-    env,
-    dir: reopen(),
-    reopen,
+    narrowed(
+      open(),
+      space.slug,
+      space.eid,
+      held.administrative,
+      reach.then((r) => r.beyond),
+    )
+  let who: Caller = {
     person: held.person,
+    via: 'session',
+    actor: space.eid,
+    ...instrument ? { instrument } : {},
+  }
+  let here: Ctx = { env, dir: reopen(), reopen, person: held.person, who }
+  let ctx = reach.then(({ role, pa, beyond }): OperatorCtx => ({
+    ...here,
     role,
     pa,
     beyond,
     who: {
-      person: held.person,
-      via: 'session',
+      ...who,
       ...beyond.length ? {} : { space: space.slug, spaceEid: space.eid },
-      actor: space.eid,
     },
-  }
+  }))
+  return { here, ctx }
 }
+
+export let operatorContext = (
+  ...args: Parameters<typeof opened>
+): Promise<OperatorCtx> => opened(...args).ctx
 
 // How the Operator works in its conversations, declared beside the code that
 // makes it so (`operating`): every message arrives in one conversation, which
@@ -243,7 +263,7 @@ let ASKING =
 
 // What the Operator is told of the spaces it reaches beyond its own.
 let told = (
-  ctx: Awaited<ReturnType<typeof operatorContext>>,
+  ctx: OperatorCtx,
   space: Space,
 ) =>
   ctx.beyond.length
@@ -313,11 +333,13 @@ let BULK: Record<string, string> = {
 export let operatorRoster = async (
   ctx: Ctx,
   work: Store,
-  { space, tasked = false, member = true, session }: {
+  { space, tasked = false, member = true, session, connecting }: {
     space: string
     tasked?: boolean
     member?: boolean
     session?: string
+    // The person's servers, when the step already asked for them.
+    connecting?: ReturnType<typeof connectedTools>
   },
 ): Promise<Tool[]> => {
   ctx.dir = ctx.reopen!()
@@ -327,7 +349,7 @@ export let operatorRoster = async (
   // for, so a fork's calls and a helper's are the conversation's there too.
   // What the person connected is read beside their reach, needing none of it.
   let asking = operatorAsking(work, space, session)
-  let connecting = connectedTools(ctx, asking)
+  connecting ??= connectedTools(ctx, asking)
   connecting.catch(() => {})
   let reach = reached('reach', await inReach(ctx))
   let g = reached('vocab', await reaching(ctx, reach))
@@ -713,9 +735,12 @@ let working = async (
   for (let asked of [reach, apps, platform]) asked.catch(() => {})
   let space = await (open?.() ?? directoryOf(env.STORE)).at(o.space)
   if (!space || space.trashed) throw refuse('missing', 'That space is gone.')
-  let ctx = await operatorContext(env, o, space, reading, reach)
-  ctx.who!.instrument = session
-  return { space, ctx, files: o.files ?? [] }
+  // What needs only the person and the space (their Google accounts, their
+  // servers, the space's page) is read through `here` beside the reach;
+  // `ctx` waits for it.
+  let { here, ctx } = opened(env, o, space, reading, reach, session)
+  ctx.catch(() => {})
+  return { space, here, ctx, files: o.files ?? [] }
 }
 
 let ENDED = ['settled', 'failed', 'stopped']
@@ -1594,20 +1619,31 @@ export let operating = (
         return machineAt(session)
       }
     }).catch(() => {})
-    let [{ space, ctx, files }, task, [row], [using]] = await Promise.all([
-      working(env, store, session, options.directory),
-      taskOf(store, session),
-      g.read(
-        `.entity.eid=${session}&.fields=spawned.parent,fork.from,session.topic`,
-      ),
-      last,
-    ])
+    let [{ space, here, ctx: context, files }, task, [row], [using]] =
+      await Promise.all([
+        working(env, store, session, options.directory),
+        taskOf(store, session),
+        g.read(
+          `.entity.eid=${session}&.fields=spawned.parent,fork.from,session.topic`,
+        ),
+        last,
+      ])
     let work = await workingOf(store, session)
-    if (work?.signup) return signupTools(env, space, ctx.person!, work.signup)
+    if (work?.signup) return signupTools(env, space, here.person, work.signup)
     reached('working', space)
+    // The person's servers and Google accounts need only them and the space,
+    // so they are asked beside the reach; a person who does not write here
+    // is offered their servers and not the accounts.
+    let connecting = connectedTools(
+      here,
+      operatorAsking(store, space.eid, session),
+    )
+    let accounts = googleTools(env, here, space)
+    for (let asked of [connecting, accounts]) asked.catch(() => {})
     let persona = await spaced(g.storage, space, env)
     if (persona.length) await g.apply(persona, { trusted: true })
     reached('persona', persona)
+    let ctx = await context
     // The platform admin's sessions also read the platform: who they are is
     // read through the whole directory, which the Operator's is not.
     let whole = (options.directory ?? opening(env))()
@@ -1625,11 +1661,10 @@ export let operating = (
         tasked: !!task,
         member,
         session,
+        connecting,
       })
         .then((r) => reached('roster', r)),
-      member
-        ? googleTools(env, ctx, space).then((t) => reached('google', t))
-        : [],
+      member ? accounts.then((t) => reached('google', t)) : [],
       admin({ dir: whole, person: ctx.person! }),
       replied,
       member ? [] : g.read(
@@ -1744,7 +1779,8 @@ export let operating = (
       let o = await workingOf(store, parent)
       if (!o) return {}
       if (!args.topic) return { operator_session: o }
-      let { ctx } = await working(env, store, parent, options.directory)
+      let ctx = await (await working(env, store, parent, options.directory))
+        .ctx
       if (!writes(ctx.role)) return { operator_session: o }
       let topic = await oracleTopic(ctx, g, String(args.topic))
       await oracleContext(ctx, g, topic)
@@ -1769,7 +1805,7 @@ export let operating = (
     // session opened on a topic carries that topic's compiled context.
     instructions: async (session) => {
       reached('instructing', null)
-      let [{ space, ctx }, [row]] = await Promise.all([
+      let [{ space, here, ctx: context }, [row]] = await Promise.all([
         working(env, store, session, options.directory),
         g.read(`.entity.eid=${session}&.fields=session.topic`),
       ])
@@ -1777,11 +1813,15 @@ export let operating = (
       if (work?.signup) return outside(space) + '\n\n' + SIGNUP
       let topic = topicOf(row)
       // What the person's own servers say of the tools they are offered,
-      // whatever their seat here, as those tools are.
+      // whatever their seat here, as those tools are, and what their Google
+      // accounts are, asked beside the reach.
       let servers = connectedInstructions(
-        ctx,
+        here,
         operatorAsking(store, space.eid, session),
       )
+      let google = googleTold(env, here, space)
+      for (let asked of [servers, google]) asked.catch(() => {})
+      let ctx = await context
       // Someone who does not write in the space is told none of its work.
       if (!writes(ctx.role)) {
         return reached(
@@ -1790,14 +1830,14 @@ export let operating = (
             .join('\n\n'),
         )
       }
-      let [map, google, said] = await Promise.all([
+      let [map, accounts, said] = await Promise.all([
         topic ? oracleContext(ctx, g, topic) : oracleMap(ctx, g),
-        googleTold(env, ctx, space),
+        google,
         servers,
       ])
       return reached(
         'instructions',
-        [map, told(ctx, space), google, said].filter(Boolean).join('\n\n'),
+        [map, told(ctx, space), accounts, said].filter(Boolean).join('\n\n'),
       )
     },
     each: async (step, session) => {

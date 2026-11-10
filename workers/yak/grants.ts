@@ -224,20 +224,28 @@ export let revoke = async (
 // `beyond` is each other space its holder was let into, with the role it was
 // given there, which stands in for the caller's membership in it: a space's
 // Operator is narrowed to its own space and the spaces that let it in
-// (operator-reach.ts).
+// (operator-reach.ts). It may still be on its way: what is asked of the
+// narrowed space alone is answered without it, so a step's reads that need
+// only its person and space are asked beside the reach (operator.ts
+// `working`), and only what reaches past the space waits for it.
 export let narrowed = (
   dir: Directory,
   slug: string,
   eid?: string,
   over = false,
-  beyond: Reach[] = [],
+  beyond: Reach[] | Promise<Reach[]> = [],
 ): Directory => {
   let matches = (space: Parameters<Directory['role']>[0]) =>
     eid ? space.eid == eid : space.slug == slug
-  let letIn = new Map(beyond.map((r) => [r.space.eid, r]))
-  let past = (space: { eid: string } | null | undefined) =>
-    space ? letIn.get(space.eid) : undefined
-  let also = (role?: Role) => beyond.filter((r) => !role || r.role == role)
+  let letting = Promise.resolve(beyond).then((all) => ({
+    all,
+    letIn: new Map(all.map((r) => [r.space.eid, r])),
+  }))
+  letting.catch(() => {})
+  let past = async (space: { eid: string } | null | undefined) =>
+    space ? (await letting).letIn.get(space.eid) : undefined
+  let also = async (role?: Role) =>
+    (await letting).all.filter((r) => !role || r.role == role)
   let seat = (r: Reach): Seat => ({
     space: r.space,
     role: r.role,
@@ -267,12 +275,13 @@ export let narrowed = (
   // the apps are the space's. The rest are asked together, in one round trip,
   // unless the request already read them (directory.ts `apps`).
   let reachBeyond = async (person: string) => {
-    if (!beyond.length) return []
+    let { all } = await letting
+    if (!all.length) return []
     let theirs = await dir.reachable(person)
     let sat = new Set(theirs.map((r) => r.space.eid))
-    let asked = beyond.filter((r) => !sat.has(r.space.eid))
+    let asked = all.filter((r) => !sat.has(r.space.eid))
     let apps = asked.length ? await dir.apps(asked.map((r) => r.space)) : []
-    return beyond.flatMap((r) =>
+    return all.flatMap((r) =>
       (sat.has(r.space.eid)
         ? theirs.filter((t) => t.space.eid == r.space.eid).map((t) => t.app)
         : apps.filter((app) => app.space == r.space.eid))
@@ -288,9 +297,9 @@ export let narrowed = (
   let self: Directory = {
     ...dir,
     space: async (want: string) => {
-      if (!eid && want != slug && !letIn.size) return null
+      if (!eid && want != slug && !(await letting).letIn.size) return null
       let space = await dir.space(want)
-      return space && (matches(space) || past(space)) ? space : null
+      return space && (matches(space) || await past(space)) ? space : null
     },
     page: async (want, app, person, _over, every) => {
       let got = await dir.page(want, app, person, over, every)
@@ -299,7 +308,7 @@ export let narrowed = (
         ...got,
         ...person
           ? {
-            role: here ? got.role : past(got.space)?.role ?? null,
+            role: here ? got.role : (await past(got.space))?.role ?? null,
             administrative: here && over && got.administrative === true,
           }
           : {},
@@ -309,7 +318,7 @@ export let narrowed = (
     // other space let its holder in (tool.ts `ownSpace`), read as its page.
     // Spaces it was let into are asked the long way.
     holding: async (app, person, _over, every) => {
-      if (beyond.length) return null
+      if ((await letting).all.length) return null
       let page = await self.page(slug, app, person, over, every)
       return page.space && matches(page.space)
         ? { holding: [page.space], page }
@@ -320,11 +329,11 @@ export let narrowed = (
     listing: (person: string) => listingOf(self, person),
     spaces: async (person: string, role?: Role) => [
       ...(await dir.spaces(person, role)).filter(matches),
-      ...also(role).map((r) => r.space),
+      ...(await also(role)).map((r) => r.space),
     ],
     seats: async (person: string, role?: Role) => [
       ...(await dir.seats(person, role)).filter((s) => matches(s.space)),
-      ...also(role).map(seat),
+      ...(await also(role)).map(seat),
     ],
     reachable: async (person: string) => {
       let [here, there] = await Promise.all([
@@ -335,19 +344,19 @@ export let narrowed = (
     },
     seated: async (person: string, role?: Role) => [
       ...(await dir.seated(person, role)).filter((s) => matches(s.space)),
-      ...also(role).map(seat),
+      ...(await also(role)).map(seat),
     ],
+    // The narrowed space is never one it was let into (operator-reach.ts
+    // `reachOf` leaves it out), so its role is read without the rest.
     role: async (space: Parameters<Directory['role']>[0], person: string) => {
-      let r = past(space)
-      if (r) return r.role
-      if (!matches(space)) return null
+      if (!matches(space)) return (await past(space))?.role ?? null
       if (!over) return dir.role(space, person)
       let page = await dir.page(space.slug, null, person, true)
       return page.administrative ? 'owner' : page.role ?? null
     },
     target: async (space: string, person: string, app?: string | null) => {
       let got = await dir.target(space, person, app)
-      let r = past(got.space)
+      let r = await past(got.space)
       return got.space && matches(got.space)
         ? got
         : { ...got, role: r?.role ?? null }
