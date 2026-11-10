@@ -2,7 +2,9 @@
 // they happen, and an object that refuses stops until its window ends.
 import { equal, ok, test } from '@yaks/testing'
 import { assertRejects, assertThrows } from '@std/assert'
-import { insert, select, table } from '@yaks/sql'
+import { compile, insert, select, table } from '@yaks/sql'
+import { parse } from '@yaks/query'
+import { loadVocab } from '@yaks/vocab'
 import { bounded, ceiling, type Options, Stopped } from './ceiling.ts'
 import { driver, type DurableStorage, freely } from './sql.ts'
 import { durable } from './testing.ts'
@@ -40,6 +42,61 @@ test('a statement that reads far more than it returns is told once an hour', () 
   ran(200_000, 3)
   equal(told.length, 2)
 })
+
+let vocab = loadVocab({
+  $defs: {
+    effect: {
+      component: true,
+      properties: { state: { type: 'string', index: true } },
+    },
+  },
+})
+
+// Cursor costs and answers supplied by the runtime, through the driver door.
+let aggregate = (rows: { n: number }[]) => {
+  let read = 0, told: string[] = []
+  let held: DurableStorage = {
+    sql: {
+      exec: () => ({
+        rowsRead: read,
+        rowsWritten: 0,
+        toArray: () => rows,
+        *[Symbol.iterator]() {},
+      }),
+    },
+    transactionSync: (run) => run(),
+  }
+  bounded(held, {
+    windows: [{ ms: 60_000, read: 1_000_000, written: 1_000 }],
+    report: (error) => told.push(error.name),
+  })
+  let sql = driver(held)
+  read = 146_266
+  return { sql, told }
+}
+
+for (let line of ['.effect.state=done .count', '.effect .tally=effect.state']) {
+  let rows = line.endsWith('.count')
+    ? [{ n: 48_755 }]
+    : [{ n: 40_000 }, { n: 8_755 }]
+  let { sql, told } = aggregate(rows)
+  let query = compile(parse(line), vocab)
+  test(`${line} represents its counted inputs without losing billed rows`, () => {
+    equal(sql.query(query), rows)
+    equal(told, [])
+    for (let i = 0; i < 6; i++) sql.query(query)
+    equal(told, ['Runaway'])
+  })
+}
+
+for (let n of [0, 3]) {
+  let { sql, told } = aggregate([{ n }])
+  let query = compile(parse('.effect.state=done .count'), vocab)
+  test(`an aggregate with ${n} matches still reports excess input reads`, () => {
+    sql.query(query)
+    equal(told, ['Scan'])
+  })
+}
 
 test('an object past a window is told once and takes nothing until it ends', () => {
   let { c, clock, told, ran } = bound({ refuse: true })

@@ -8,7 +8,7 @@
 // happen, never an hour later:
 //
 //   Scan     one statement read `SCAN` rows or more, and `FAR` times what it
-//            returned or wrote: no index served its condition.
+//            represented in its answer or wrote.
 //   Runaway  the object's statements together passed a window's rows.
 //
 // An object that `refuse`s takes no statement from then until the window
@@ -58,7 +58,7 @@ export let WINDOWS: Window[] = [
 
 /** The rows one statement reads before it can be a scan. */
 export let SCAN = 100_000
-/** How many times what it returned or wrote a scan reads. */
+/** How many times what its answer represents or it wrote a scan reads. */
 export let FAR = 100
 // A statement costing fewer rows than this is counted and never named: its
 // shape is not rendered for the tally.
@@ -77,7 +77,7 @@ type Span = Window & {
   mark: Record<Kind, number>
 }
 
-/** One statement read far more rows than it returned. */
+/** One statement read far more rows than its answer represents. */
 export class Scan extends Error {
   override name = 'Scan'
 }
@@ -154,6 +154,8 @@ export type Counted = {
   rowsRead: number
   rowsWritten: number
   returned: number
+  /** Selected input rows represented by aggregate answers, when known. */
+  matched?: number
 }
 
 export type Ceiling = {
@@ -284,7 +286,9 @@ export let ceiling = (
     }
     return { wait: Math.max(0, until - at), kind }
   }
-  let count = ({ shape, rowsRead, rowsWritten, returned }: Counted) => {
+  let count = (
+    { shape, rowsRead, rowsWritten, returned, matched }: Counted,
+  ) => {
     let at = now()
     let named = rowsRead + rowsWritten >= NAMED ? shape() : ''
     let cost: Cost = { calls: 1, rowsRead, rowsWritten }
@@ -346,7 +350,8 @@ export let ceiling = (
       }
     }
     if (
-      rowsRead >= SCAN && rowsRead >= FAR * Math.max(1, returned, rowsWritten)
+      rowsRead >= SCAN &&
+      rowsRead >= FAR * Math.max(1, returned, matched ?? 0, rowsWritten)
     ) {
       let key = id(named)
       if (at - (scans.get(key) ?? -Infinity) >= HOUR) {
@@ -355,7 +360,7 @@ export let ceiling = (
         tell.push([
           new Scan(
             `one statement read ${rows(rowsRead)} rows and returned ` +
-              `${rows(returned)}: no index serves its condition`,
+              `${rows(returned)}: far more than its answer represents`,
           ),
           {
             fault: `scan|${key}`,
@@ -363,6 +368,7 @@ export let ceiling = (
               statement: named.slice(0, 240),
               rows: String(rowsRead),
               returned: String(returned),
+              ...matched != null ? { matched: String(matched) } : {},
               written: String(rowsWritten),
             },
           },

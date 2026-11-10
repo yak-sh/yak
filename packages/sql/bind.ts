@@ -1812,7 +1812,7 @@ let joined = (links: Link[]): string =>
 // A statement over one source, from the dialect's own lowerings: the relation
 // every query here compiles to.
 let rel = (from: string, o: {
-  cols: string[]
+  cols: (string | Cond)[]
   joins: Link[]
   where: Cond
   group?: string
@@ -1820,7 +1820,7 @@ let rel = (from: string, o: {
   order?: string[]
 }): Select => ({
   t: 'select',
-  cols: o.cols.map((c) => raw(c)),
+  cols: o.cols.map((c) => typeof c == 'string' ? raw(c) : c),
   from: raw(from, [], 'entity'),
   joins: o.joins.map((j): Join => ({
     how: 'left',
@@ -4271,10 +4271,10 @@ let lower = (
     throw new Unsupported('.near', 'query extension is unavailable')
   }
   let filters = cs.filter((c) => !directive(c) || claims(ctx, c.kind))
-  let count = find<Count>(cs, 'count')
+  let counting = find<Count>(cs, 'count')
   // A count of one physical component needs its owners and their graves,
   // without loading every archetype or joining unused entity columns.
-  let counted = count && !spine && !ctx.eids && !ctx.correlated &&
+  let counted = counting && !spine && !ctx.eids && !ctx.correlated &&
       (!ctx.visibility || ctx.d.scoped) && !reads.length && filters.length == 1
     ? facetOf(ctx, filters[0])
     : null
@@ -4286,7 +4286,7 @@ let lower = (
     stored.table(counted.comp) == `"${counted.comp}"`
   ) {
     return rel(ctx.d.table(counted.comp), {
-      cols: [`'' as value`, 'count(*) as n'],
+      cols: [`'' as value`, as(count(), 'n')],
       joins: [],
       where: cond(ctx.d.live(ctx.d.ownerKey(counted.comp))),
     })
@@ -4335,9 +4335,9 @@ let lower = (
 
   // `.count`: how many entities the filter selects, returned under an empty
   // key so that every aggregate comes back in the same value-and-count shape.
-  if (count) {
+  if (counting) {
     return finished(relation(ctx.d.spine, {
-      cols: [`'' as value`, 'count(*) as n'],
+      cols: [`'' as value`, as(count(), 'n')],
       joins: joinsOf(ctx),
       where,
     }))
@@ -4365,7 +4365,7 @@ let lower = (
       ? `${expr} is not null`
       : `${expr} is not null and ${value} != ''`
     return finished(relation(ctx.d.spine, {
-      cols: [`${value} as value`, ...tally ? ['count(*) as n'] : []],
+      cols: [`${value} as value`, ...tally ? [as(count(), 'n')] : []],
       joins: joinsOf(ctx),
       where: and(cond({ sql: held, params: [] }), where),
       group: key ?? value,

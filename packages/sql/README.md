@@ -770,7 +770,10 @@ let page = (after: string) =>
   compile(parse(`.book .after=${after} .fields=book.price .limit=2`), vocab)
 equal(page('b1').params, ['b1', 'b1'])
 equal(page('b1').sql, page('b2').sql)
-equal(compile(parse('.book .count'), vocab).sql.includes('count(*) as n'), true)
+equal(
+  compile(parse('.book .count'), vocab).sql.includes('count(*) as "n"'),
+  true,
+)
 equal(
   compile(parse('.book .tally=book.price'), vocab).sql.includes('group by'),
   true,

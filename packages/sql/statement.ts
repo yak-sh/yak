@@ -1,6 +1,7 @@
-// Code names for statement spans, taken from structural identifiers. Lowered
-// SQL retains its origin; SQL text, aliases and values are never inspected.
+// Structural SQL observations. Lowered SQL retains its origin, so observers
+// inspect the statement's nodes without parsing its text.
 import type { Source, Stmt } from './ast.ts'
+import type { Row } from './driver.ts'
 
 let source = (s?: Source | Source[]): string => {
   if (!s) return ''
@@ -54,3 +55,26 @@ export let writing = (s: Stmt): boolean =>
   s.t == 'raw' && s.origin
     ? writing(s.origin)
     : s.t == 'insert' || s.t == 'update' || s.t == 'delete'
+
+/** Rows represented by an answer, including each group's COUNT(*) inputs.
+ * Only a direct, named COUNT(*) qualifies: nullable/distinct counts, windows
+ * and scalar subqueries do not measure the outer selection's cardinality. */
+export let cardinality = (s: Stmt, rows: Row[]): number => {
+  if (s.t == 'raw' && s.origin) return cardinality(s.origin, rows)
+  if (s.t != 'select') return rows.length
+  let counts = (s.cols ?? []).flatMap((c) =>
+    c.t == 'as' && c.e.t == 'fn' && c.e.name.toLowerCase() == 'count' &&
+      !c.e.distinct && c.e.args.length == 1 && c.e.args[0].t == 'star'
+      ? [c.name]
+      : []
+  )
+  return Math.max(
+    rows.length,
+    ...counts.map((name) =>
+      rows.reduce((sum, row) => {
+        let n = Number(row[name])
+        return sum + (Number.isFinite(n) && n >= 0 ? n : 0)
+      }, 0)
+    ),
+  )
+}

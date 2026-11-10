@@ -18,6 +18,7 @@
 
 import {
   as,
+  cardinality,
   DEPTH,
   type Driver,
   fn,
@@ -176,10 +177,12 @@ export let driver = (
     let { sql, params } = rendered
     let cursor: SqlCursor<Row> | undefined
     let returned = 0
+    let matched = 0
     try {
       cursor = durable.sql.exec(sql, ...params.map(bind))
       let rows = cursor.toArray().map(unbind)
       returned = rows.length
+      matched = cardinality(s, rows)
       if (observe && cursor.rowsRead != null && cursor.rowsWritten != null) {
         try {
           observe({
@@ -224,6 +227,7 @@ export let driver = (
           rowsRead: cursor.rowsRead,
           rowsWritten: cursor.rowsWritten,
           returned,
+          matched,
         })
       }
     }
