@@ -44,10 +44,11 @@ export let texted = async (g: G, eid: Eid): Promise<Bundle[]> => {
   let [person] = await g.read(
     `.phone.number=${q(from)}&.doc&.limit=1&.fields=doc.title`,
   )
+  let known = person?.entity.eid
   let who = str(comp(person, 'doc').title)
   return [{
     entity: { eid: knock },
-    knock: { target: to },
+    knock: { target: to, ...known ? { from: known } : {} },
     doc: {
       body:
         `text ${human(g.vocab)(row)} from ${

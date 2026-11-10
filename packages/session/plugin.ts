@@ -20,6 +20,7 @@ import { auditing, type AuditOpts } from './audit.ts'
 import { leasing } from './lease.ts'
 import { naming } from './naming.ts'
 import { reopening } from './reopen.ts'
+import { routing } from './routine.ts'
 import { runners, sessionEid } from './who.ts'
 
 /** The plugin's two injection points: a clock for both stamps, and the eid a
@@ -30,7 +31,8 @@ export type SessionOpts = AuditOpts
  * The session plugin: the vocabulary ({@link sessionDoc}), a `precondition`
  * hook that refuses a take of a held lock, refuses a component of this
  * package's that names the wrong kind of entity, and weighs a request's `cost`
- * at its model's price where the provider reported none ({@link weighing});
+ * at its model's price where the provider reported none ({@link weighing}),
+ * and marks a knock that is a helper's to take (./routine.ts);
  * and an `audit` hook that records a collision after the rollback.
  *
  * ```ts
@@ -65,7 +67,11 @@ export let sessions = (opts: SessionOpts = {}): Plugin => {
                 after(
                   weighing(placed, tx, err),
                   (weighed) =>
-                    reopening(weighed, tx, err),
+                    after(
+                      reopening(weighed, tx, err),
+                      (reopened) =>
+                        routing(reopened, tx, err, ctx),
+                    ),
                 ),
             ))),
     )

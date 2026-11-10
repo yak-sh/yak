@@ -135,7 +135,10 @@ let above = (tree: Projects, project: Eid): Eid[] => {
  * wearing a persona homed there or at a project it is filed under (the
  * projects ./listen.ts gives such a session what is held for), not over, the
  * one that spoke last. */
-let operatorOf = async (g: G, project: Eid): Promise<Eid | undefined> => {
+export let operatorOf = async (
+  g: G,
+  project: Eid,
+): Promise<Eid | undefined> => {
   if (!g.vocab.prop(SESSION, 'operator')) return
   let homes = above(await projects(g), project)
   let open = await g.read(
@@ -215,7 +218,8 @@ let placed = async (g: G, eid: Eid): Promise<Bundle | undefined> =>
   (await g.read(
     `.entity.eid=${JSON.stringify(eid)}&.${SESSION}&.fields=` +
       [`${SESSION}.source`, `${SESSION}.ended`, `${SESSION}.transcript`]
-        .concat(g.vocab.comp('spawned') ? ['spawned.parent'] : []).join(','),
+        .concat(g.vocab.comp('spawned') ? ['spawned.parent'] : [])
+        .concat(g.vocab.comp('helping') ? ['helping.project'] : []).join(','),
   ))[0]
 
 let managed = async (g: G, eid: Eid): Promise<Bundle | undefined> =>
@@ -257,7 +261,9 @@ let named = async (g: Addressing, id: string): Promise<Eid | ''> => {
  * else the tasks it holds, and the session to knock, which is the one that
  * started it or, that one being over, the nearest up its own line that can
  * still hear. @yaks/spawn's completion writes its receipt by this, and
- * {@link knocks} leaves that receipt to be the one knock.
+ * {@link knocks} leaves that receipt to be the one knock. A helper's own
+ * ending (./help.ts) knocks nobody: what it did is in the graph, and what
+ * needs its operator it handed up itself.
  *
  * ```ts
  * import { reported } from '@yaks/session'
@@ -281,6 +287,7 @@ export let reported = async (
     : g.vocab.comp('task')
     ? (await g.read(`.task&.${CLAIM}.session=${run}`)).map((b) => b.entity.eid)
     : []
+  if (row?.helping) return { tasks }
   let seen = new Set<Eid>([run])
   let at = str(comp(row, 'spawned').parent) ||
     str(comp(call, 'entry').session) || str(comp(call, 'created').via)
@@ -402,7 +409,7 @@ export let knocks = async (g: Addressing, eid: Eid): Promise<Bundle[]> => {
   )
   return named.filter((n) => !had.has(n.eid)).map((n) => ({
     entity: { eid: n.eid },
-    knock: { target: n.target },
+    knock: { target: n.target, ...change.by ? { from: change.by } : {} },
     doc: { body },
   }))
 }

@@ -67,6 +67,11 @@
 // Nothing starts a session for a held reply when none comes: it waits for
 // one. Only a person's comment on an open task does (./start.ts).
 //
+// Where a project wears `helper`, what is addressed to its operator and no
+// person wrote is a helper's to take (./routine.ts marks it `routine` as it is
+// written, ./help.ts starts the helper): no session hears a marked item, so
+// the operator's own is woken only by a person's words and a helper's hand-up.
+//
 // Each item is marked `notified` as it is said, so it is said once, including
 // one that arrived while nothing was listening: a monitor that expired and was
 // armed again hears the gap. A session never hears what it wrote itself, and a
@@ -106,6 +111,8 @@ import type { Vocab } from '@yaks/vocab'
 import { CLAIM, SESSION } from './comp.ts'
 
 let NOTIFIED = 'notified'
+// A helper's to take (./help.ts): no session's listener says it.
+let ROUTINE = 'routine'
 
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 let comp = (b: Bundle | undefined, name: string): Comp =>
@@ -135,8 +142,12 @@ let addressedTo = (
       : [],
     ...has('knock')
       ? [
-        unsaid(present('knock'), eq('knock.target', session)),
-        unsaid(present('knock'), eq(`knock.target.${CLAIM}.session`, session)),
+        unsaid(present('knock'), absent(ROUTINE), eq('knock.target', session)),
+        unsaid(
+          present('knock'),
+          absent(ROUTINE),
+          eq(`knock.target.${CLAIM}.session`, session),
+        ),
       ]
       : [],
     ...has('deliver')
@@ -357,14 +368,17 @@ export let arrived = (projects?: Eid[]): And =>
   and(
     present('mail'),
     absent('deliver'),
+    absent(ROUTINE),
     projects ? eq('mail.target', value(projects)) : present('mail.target'),
     absent(NOTIFIED),
   )
 
-/** The knocks at these projects (any project, left out), unsaid. */
+/** The knocks at these projects (any project, left out), unsaid, less those a
+ * helper takes (./help.ts `routine`). */
 export let knocked = (projects?: Eid[]): And =>
   and(
     present('knock'),
+    absent(ROUTINE),
     projects
       ? eq('knock.target', value(projects))
       : present('knock.target.project'),
@@ -665,6 +679,7 @@ export let replies = (
     and(
       present('mail.reply_to'),
       absent(NOTIFIED),
+      absent(ROUTINE),
       fields('mail.reply_to', 'mail.target'),
     ),
     'mail',
@@ -736,8 +751,20 @@ export let pending = async (
     let open = await unoperated(graph, reach, news?.projects)
     return open.length == reach.length ? found : held(graph, session, open)
   }
-  let items = await pendingItems(session, native, working, addressed, owed)
+  return owing(
+    graph,
+    await pendingItems(session, native, working, addressed, owed),
+  )
+}
+
+/** These items as what is owed: each with its line, and a knock that says
+ * the same as an earlier one from the same writer folded into that one. */
+export let owing = async (
+  graph: Pick<Graph, 'vocab' | 'get'>,
+  items: Bundle[],
+): Promise<Owed[]> => {
   if (!items.length) return []
+  let vocab = graph.vocab
   let pointed = [
     ...new Set(
       items.flatMap((b) => [

@@ -631,6 +631,63 @@
         }
       }
     },
+    "helper": {
+      "component": true,
+      "type": "object",
+      "description": "on a project: what is addressed to its operator that no person wrote (a knock at the project, or at a session a person opened for it) goes to a helper instead of waking that session: a run of its own wearing `persona`, with nothing in its context but what is waiting. One helper runs at a time and takes everything waiting. Removing it gives what is waiting back to the operator",
+      "properties": {
+        "persona": {
+          "type": "string",
+          "ref": "persona",
+          "death": "detach",
+          "description": "the persona a helper wears: the operator's"
+        },
+        "provider": {
+          "type": "string",
+          "ref": "provider",
+          "death": "detach",
+          "description": "the provider a helper runs on"
+        },
+        "model": {
+          "type": "string",
+          "ref": "model",
+          "death": "detach",
+          "description": "the model a helper runs; the provider's own where absent"
+        },
+        "effort": {
+          "type": "string",
+          "description": "the reasoning effort, where the model accepts such a setting"
+        }
+      }
+    },
+    "helping": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "description": "on a session: a helper, started to take what waited for this project's operator. A knock written through it is a hand-up, which the operator hears",
+      "properties": {
+        "project": {
+          "type": "string",
+          "ref": "project",
+          "death": "keep",
+          "description": "the project whose operator it helps"
+        }
+      }
+    },
+    "routine": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "description": "on a knock: a helper's to take, never said to the operator's session. Written with the knock when it is addressed to the operator of a project wearing `helper` and is neither a person's words nor a helper's hand-up",
+      "properties": {
+        "project": {
+          "type": "string",
+          "ref": "project",
+          "death": "keep",
+          "description": "the project whose helper takes it"
+        }
+      }
+    },
     "stop": {
       "component": true,
       "type": "object",
@@ -1022,6 +1079,18 @@
       ],
       "target": ".wake.target",
       "description": "Knock the operator of the persona a wake is aimed at, once each time it fires, with the wake's note (woken.ts reads whether the target is a persona, since @yaks/persona may not be in the vocabulary): the session a person opened wearing it, else its project, where the knock waits for the next session at work. A persona's standing duty, such as a morning standup, is such a wake"
+    },
+    "session_help": {
+      "effect": true,
+      "created": [
+        "routine",
+        "exit"
+      ],
+      "removed": [
+        "helper"
+      ],
+      "target": ".routine|.helping|.project",
+      "description": "start a project's helper when a routine knock waits and none is at work: one session wearing the project's `helper{persona}`, whose first input is every routine knock waiting, each marked notified in the same write, and whose `using` asks for its run the way session spawn does. A helper's `exit` asks again for what came while it ran; one that ended badly, or is still going after half an hour and is stopped, is handed up to the operator with the knocks it held. Removing `helper` from a project gives its waiting knocks back to the operator"
     },
     "native": {
       "component": true,

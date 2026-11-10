@@ -38,6 +38,12 @@
           "type": "string",
           "ref": "entity",
           "death": "cascade"
+        },
+        "from": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "whose act or words it tells, where it tells someone's: the actor who finished a task or commented on it, the person who sent a text"
         }
       },
       "description": "a nudge aimed at an entity, with the message that came with it"

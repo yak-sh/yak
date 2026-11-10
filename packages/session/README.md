@@ -870,7 +870,64 @@ knock K-12 on T-8 (done) from S-6: S-6 — exited 0 Landed 3f9f64d. The Worker h
 ```
 
 `knocks(graph, eid)` returns the knocks a change owes, and
-[`watch_test.ts`](./watch_test.ts) runs each case through the effect.
+[`watch_test.ts`](./watch_test.ts) runs each case through the effect. A knock
+says whose act it tells in `knock.from` (@yaks/notify): the actor who finished
+the task or wrote the comment.
+
+## An operator's helper
+
+An operator's session carries its whole context, and waking it costs a read of
+all of it. A project wearing `helper{persona, provider, model, effort}` has what
+is addressed to its operator taken by a **helper** instead: a session of its own
+wearing `persona`, whose context holds only what was waiting.
+
+**Routine** is what is addressed to the operator and is not the operator's own:
+
+| Addressed to the operator                                                                                                                                                 | The operator's own, never routine                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| a knock at the project, or at a session a person opened (`session.operator`) wearing a persona homed there                                                                | a person's act or words: `knock.from`, else the knock's writer, wears `person`; a letter's `mail.from` is a person's `email.address` |
+| a letter that arrived for the project or for an address filed under it, unless it answers a letter another session wrote that is not over (that session hears the answer) | a hand-up: a knock written through a helper's session                                                                                |
+
+The rule runs in the write that leaves the knock or letter (`routing`, a
+`precondition` hook in [`routine.ts`](./routine.ts)) and marks a routine one
+`routine{project}`. No listener says a marked item to any session, so the
+operator's session is woken only by a person's mail, comment, text or answer,
+and by a hand-up.
+
+`session_help` runs after that commit ([`help.ts`](./help.ts)). When no helper
+of the project is at work, it writes one session, `helping{project}`, wearing
+the helper's persona, with `spawned{parent}` naming the operator's session. Its
+first input says whose place it takes and how to hand up, then each waiting item
+whole, as a listener would say it. The same write marks each item `notified`,
+`via` the helper. That input carries `using{provider, model, effort}`, so the
+run starts the way any does: whatever answers a `using` runs it (@yaks/spawn for
+a command-line provider, in a checkout of its own). How each kind of item is
+handled is the persona's to say.
+
+One helper is at work at a time, and it takes everything waiting, so a storm of
+bugs is one helper's batch. What arrives while it works waits for its `exit`,
+which asks again. Two workers that race to start one hold a waiting item in
+common, and the guard on its `notified` lets one write through.
+
+A helper hands up what needs the operator's judgment or a person with
+`yak session send <operator> "<one line with the id>"`: a knock at the operator
+written through the helper, which the rule leaves unmarked. Two more hand-ups
+are written for it, each naming what it had taken: a helper that exited with
+anything but 0, and one still going after 30 minutes (`LIMIT`), which the next
+routine item asks to stop before starting another. A helper's own ending knocks
+nobody (`reported`), and a run it started that ends after it knocks the
+operator, where it is routine again.
+
+The helpers' trail is one query, newest first:
+
+```sh
+yak graph query '.helping.project=P-19&.order=-created.at&.limit=20&.fields=created.at,session.status,exit.code,brief.text'
+```
+
+`yak session peek <helper>` reads one, `.created.via=<helper>` lists what it
+wrote, and `.routine&.notified.via=<helper>` what it took. Removing `helper`
+from the project gives what is still waiting back to the operator.
+[`help_test.ts`](./help_test.ts) runs each case through the rule and the effect.
 
 ## Texts back
 
@@ -879,7 +936,8 @@ that session while it can hear, else its project's operator, else the project,
 as a watcher's knock is routed. A text from a number no session texted goes the
 same way to the project the number it reached is filed under (`filed.project` on
 the entity wearing that `phone{number}`). `session_texted` knocks once per text
-([`texted_test.ts`](./texted_test.ts)).
+([`texted_test.ts`](./texted_test.ts)), and the knock names the entity wearing
+the sender's number in `knock.from`, so a person's text is never a helper's.
 
 ## A persona's duties
 

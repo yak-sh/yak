@@ -52,6 +52,7 @@ import { cleanEnd, requested, rouse, unlinked, waits, wake } from './wake.ts'
 import { watch } from './watch.ts'
 import { text } from './texted.ts'
 import { knock } from './woken.ts'
+import { help } from './help.ts'
 import { completeCompact } from './compact_ask.ts'
 import { attemptState } from './attempt.ts'
 
@@ -885,6 +886,9 @@ export let running = (
       : {},
     ...declared(g, 'session_woken')
       ? { session_woken: (e: Event) => knock(g, e.entity.eid) }
+      : {},
+    ...declared(g, 'session_help')
+      ? { session_help: (e: Event) => help(g, e.entity.eid) }
       : {},
   }
 }
