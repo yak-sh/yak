@@ -11,7 +11,6 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { short } from '@yaks/id'
 import { h } from 'preact'
 import { Button, Card, Empty, More, Rows } from '@yaks/ui/parts'
-import { ctxOf } from './connections.ts'
 import { runConnectedCommand } from './connected-mcp.ts'
 import { caught } from './defects.ts'
 import { directoryOf } from './directory.ts'
@@ -102,7 +101,7 @@ export let askOf = (b: Bundle): Ask => {
 // this space's Operator reaches: one on a machine is reached only by the
 // Operator of the space whose tunnel goes there (tunnel.ts `machine`).
 let listing = async (env: Env, person: string, space: string) =>
-  (await ctxOf(env).graph.read(`.mcp_server.owner=${person}&.asks&*`))
+  (await directoryOf(env.STORE).listings(person))
     .find((b) => {
       let { enabled, machine } = comp(b, 'mcp_server')
       return enabled !== false && (!machine || machine == space)

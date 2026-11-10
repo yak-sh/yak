@@ -221,6 +221,7 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
           add: url.searchParams.get('detail'),
         }
         : undefined,
+      !!at.open && !url.searchParams.has('attachment'),
     )
   }
   let { space, role, administrative } = await paged
@@ -335,6 +336,7 @@ let foresee = (
   person: string,
   view: ManageView,
   here?: Ahead,
+  chat = false,
 ) => {
   let seats = dir.seats(person)
   void Promise.allSettled([
@@ -342,6 +344,9 @@ let foresee = (
     dir.nameAt(person),
     seats,
     ...view == 'shared' ? [dir.granted(person)] : [],
+    // The chat lists what needs them from the server they named for it
+    // (operator-asks.ts), once it knows the conversation is their landing.
+    ...view == 'operator' && chat ? [dir.listings(person)] : [],
     ...here ? rowsAhead(dir, person, view, seats, here) : [],
   ])
 }
