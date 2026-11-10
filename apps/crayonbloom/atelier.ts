@@ -194,9 +194,11 @@ export let atelier = (db: Store, io: AtelierIO) => {
           ...principal(caller),
           ...(old?.coloring_book.via ? { via: old.coloring_book.via } : {}),
         },
-        print_preparation: null,
-        print_review: null,
-        print_quote: null,
+        ...(!old || old.doc.title !== title || old.doc.body !== body ||
+            JSON.stringify(input(old.coloring_book)) !==
+              JSON.stringify(settings)
+          ? { print_preparation: null, print_review: null, print_quote: null }
+          : {}),
         ...(old
           ? { $was: guard(old, ['doc', 'coloring_book']) }
           : { $was: { entity: { eid: null } } }),

@@ -164,3 +164,24 @@ test('gathering owned finished pages preserves bytes and rejects another custome
   assertEquals((await gather.list(bob)).length, 0)
   await assertRejects(() => gather.assemble(target, [page.entity.eid], bob))
 })
+
+test('saving an unchanged idea keeps its preparation job while an edit invalidates review', async () => {
+  let f = await fixture(),
+    row = await f.desk.save(input, alice),
+    job = crypto.randomUUID()
+  await f.db.apply([{
+    entity: row.entity,
+    print_preparation: { source: 'a'.repeat(64), document: job },
+  }])
+  let unchanged = await f.desk.save({ ...input, id: row.entity.eid }, alice)
+  assertEquals(unchanged.print_preparation, {
+    source: 'a'.repeat(64),
+    document: job,
+  })
+  let edited = await f.desk.save({
+    ...input,
+    id: row.entity.eid,
+    prompt: 'A different river',
+  }, alice)
+  assertEquals(edited.print_preparation, undefined)
+})
