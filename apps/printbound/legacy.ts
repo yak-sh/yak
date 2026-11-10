@@ -114,20 +114,26 @@ export let legacyPage = async (
   request: Request,
   db: LegacyStore,
 ): Promise<Response | null> => {
-  let path = new URL(request.url).pathname
-  let unsubscribe = path.match(/^\/unsubscribe\/([^/]+)$/)
+  let url = new URL(request.url), path = url.pathname
+  let unsubscribe = path.match(/^\/unsubscribe(?:\/([^/]+))?$/)
   if (unsubscribe && ['GET', 'POST'].includes(request.method)) {
-    let token: string
+    // The source mailed `/unsubscribe?token=…`, which suppressed on opening
+    // and answers RFC 8058's one-click POST; the path form asks first.
+    let token = url.searchParams.get('token') ?? ''
+    let opens = !unsubscribe[1]
     try {
-      token = decodeURIComponent(unsubscribe[1])
+      if (unsubscribe[1]) token = decodeURIComponent(unsubscribe[1])
     } catch {
       return json({ error: 'This link is not available.' }, 404)
     }
-    let [row] = await db.query(
-      `.legacy_opt_out.digest=${sha256(token)}&?mail_opt_out`,
-    )
+    let [row] = token
+      ? await db.query(
+        `.legacy_opt_out.digest=${sha256(token)}&?mail_opt_out`,
+      )
+      : []
     if (!row) return json({ error: 'This link is not available.' }, 404)
-    if (request.method === 'POST' && !row.mail_opt_out) {
+    let suppress = opens || request.method === 'POST'
+    if (suppress && !row.mail_opt_out) {
       if (!db.apply) {
         throw Error('The unsubscribe write boundary is unavailable')
       }
@@ -136,7 +142,7 @@ export let legacyPage = async (
         mail_opt_out: { at: new Date().toISOString() },
       }])
     }
-    return optOut(request, request.method === 'POST' || !!row.mail_opt_out)
+    return optOut(request, suppress || !!row.mail_opt_out)
   }
   if (!['/mcp', '/legacy/order_status'].includes(path)) return null
   if (request.method !== 'POST') return json({ error: 'Use POST.' }, 405)

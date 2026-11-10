@@ -8,8 +8,11 @@ import { copy, importedEid, type Tables } from './venture-import.ts'
 import {
   printbound,
   printboundBook,
+  printboundSignup,
   printboundTables,
+  printboundWaitlist,
 } from './printbound-import.ts'
+import { inventory } from './venture-import.ts'
 import { legacyPage, legacyStatus } from '../apps/printbound/legacy.ts'
 import legacyVocab from '../apps/printbound/legacy-vocab.json' with {
   type: 'json',
@@ -227,4 +230,33 @@ test('Published quote, shipping, checkout and guide names return a supported mig
     )
     equal(result.result.structuredContent.next, 'prepare')
   }
+})
+
+test('A mailed unsubscribe link suppresses its own signup on opening, as the source did', async () => {
+  let waitlist = inventory('fixture/printbound/waitlist', {
+    signups: [
+      { id: 's-1', email: 'a@example.test', unsubscribe_token: 'aa11' },
+      { id: 's-2', email: 'b@example.test', unsubscribe_token: 'bb22' },
+    ],
+  }, printboundWaitlist)
+  for (let row of waitlist.rows) {
+    await g.apply([printboundSignup('fixture', row, () => ({ owner }))!])
+  }
+  let store = { ...db, apply: async (rows: Bundle[]) => await g.apply(rows) }
+  let open = (address: string, method = 'GET') =>
+    legacyPage(
+      new Request(`https://fixture.test${address}`, { method }),
+      store,
+    )
+  let suppressed = async (eid: string) => !!(await read(eid))?.mail_opt_out
+  let [first, second] = waitlist.rows.map((r) => r.eid)
+
+  equal((await open('/unsubscribe/bb22'))!.status, 200)
+  equal(await suppressed(second), false)
+  equal((await open('/unsubscribe?token=aa11'))!.status, 200)
+  equal(await suppressed(first), true)
+  equal((await open('/unsubscribe?token=bb22', 'POST'))!.status, 200)
+  equal(await suppressed(second), true)
+  equal((await open('/unsubscribe?token=nope'))!.status, 404)
+  equal((await open('/unsubscribe'))!.status, 404)
 })

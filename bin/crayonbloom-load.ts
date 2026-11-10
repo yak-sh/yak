@@ -13,20 +13,10 @@
 import { createHash } from 'node:crypto'
 import { compose } from '@yaks/cli/host'
 import { configPath, read as configAt } from '@yaks/cli/config'
-import type { Bundle } from '@yaks/graph'
 import { account } from '../packages/admin/account.ts'
-import {
-  storeApply,
-  storeArtifact,
-  storeQuery,
-  storeUpload,
-} from '../packages/admin/api.ts'
-import {
-  copy,
-  type Imported,
-  importedEid,
-  type Tables,
-} from './venture-import.ts'
+import { storeArtifact, storeUpload } from '../packages/admin/api.ts'
+import { type Imported, importedEid, type Tables } from './venture-import.ts'
+import { storeCopy } from './venture-store.ts'
 import { copyAssets } from './venture-assets.ts'
 import { crayonbloom, crayonbloomProjection } from './crayonbloom-import.ts'
 import { type Book, fingerprint, type Page } from '../apps/crayonbloom/model.ts'
@@ -129,7 +119,7 @@ try {
       fingerprint(book as Book, page as Page | undefined),
   })
 
-  // What the store holds of this installation, read in one pass.
+  // Everything the store holds of this installation, read in one pass.
   let components = [
     'legacy_record',
     'legacy_asset',
@@ -145,56 +135,17 @@ try {
     'character_art',
     'print_receipt',
   ]
-  let held = async () =>
-    new Map(
-      (await storeQuery(bearer, at, [
-        `.legacy_record.source=${SOURCE}`,
-        '.limit=1000',
-        ...components.map((c) => `?${c}`),
-      ]) as Bundle[]).map((row) => [row.entity.eid, row]),
-    )
-  let canonical = (value: unknown): string =>
-    JSON.stringify(
-      value,
-      (_, v) =>
-        v && typeof v === 'object' && !Array.isArray(v)
-          ? Object.fromEntries(
-            Object.entries(v).sort(([a], [b]) => a < b ? -1 : 1),
-          )
-          : v,
-    )
-  let same = (stored: Bundle, value: Bundle) =>
-    Object.keys(value).filter((c) => c !== 'entity').every((c) =>
-      canonical(stored[c]) === canonical(value[c])
-    )
-
-  let rows = await held(), pending: Bundle[] = []
-  let flush = async () => {
-    for (let i = 0; i < pending.length; i += 20) {
-      await storeApply(bearer, at, pending.slice(i, i + 20))
-    }
-    pending = []
-  }
-  let first = await copy(imported, {
+  let { written: first, reread: rerun } = await storeCopy(
+    bearer,
+    at,
+    [
+      `.legacy_record.source=${SOURCE}`,
+      '.limit=1000',
+      ...components.map((c) => `?${c}`),
+    ],
+    imported,
     project,
-    get: (eid) => rows.get(eid),
-    put: (eid, value) => {
-      pending.push(value)
-      rows.set(eid, { ...value, entity: { eid } })
-    },
-    same,
-  })
-  await flush()
-
-  // The proof reads the store again: every projected row must stand as sent.
-  let rerun = await copy(imported, {
-    project,
-    get: ((stored) => (eid: string) => stored.get(eid))(await held()),
-    put: () => {
-      throw new Error('The store does not hold what was written')
-    },
-    same,
-  })
+  )
   console.log(JSON.stringify(
     {
       at,

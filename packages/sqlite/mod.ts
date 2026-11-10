@@ -367,7 +367,11 @@ export type Store = {
   /** a query → its entities, with `comps` only where named: which entities
    * match and what they carry read as one snapshot, in a unit that takes no
    * write lock, so another process's commit is seen whole or not at all */
-  read: (query: Query, opts?: BindOpts & ReadOpts, comps?: string[]) => Bundle[]
+  read: (
+    query: Query,
+    opts?: BindOpts & ReadOpts,
+    comps?: string[],
+  ) => Bundle[]
   /** a query → the compiled statement's raw rows (counts, tallies) */
   rows: (query: Query, opts?: BindOpts & ReadOpts) => Row[]
   /** the graves a retention sweep may prune: tombstones laid before `before`
