@@ -1,0 +1,356 @@
+{
+  "tools": false,
+  "$defs": {
+    "coloring_book": {
+      "description": "A parent\u2019s saved coloring-book idea and preferences. The title and editable story live in doc. owner and via are vouched person and guest provenance.",
+      "properties": {
+        "owner": {
+          "type": "string"
+        },
+        "via": {
+          "type": "string"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "age": {
+          "type": "string"
+        },
+        "style": {
+          "type": "string"
+        },
+        "character": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "personalization": {
+          "type": "string"
+        },
+        "dedication": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "coloring_page": {
+      "description": "One ordered scene or deterministic activity in a saved book.",
+      "properties": {
+        "book": {
+          "type": "string"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "caption": {
+          "type": "string"
+        },
+        "activity": {
+          "type": "string"
+        },
+        "position": {
+          "type": "number"
+        },
+        "seed": {
+          "type": "number"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "coloring_style": {
+      "description": "A rendering style and its character portrayal and printed edge directions, ported from the source style library.",
+      "properties": {
+        "prompt_modifier": {
+          "type": "string"
+        },
+        "subject_portrayal": {
+          "type": "string"
+        },
+        "edge_direction": {
+          "type": "string"
+        },
+        "motif_vocabulary": {
+          "type": "string"
+        },
+        "page_band": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "artwork": {
+      "description": "The selected successful artwork for an exact input fingerprint; later attempts keep it until another succeeds.",
+      "properties": {
+        "blob": {
+          "type": "string"
+        },
+        "mime": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string"
+        },
+        "input": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "character_art": {
+      "description": "The selected character sheet used as the first image reference for every scene.",
+      "properties": {
+        "blob": {
+          "type": "string"
+        },
+        "mime": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string"
+        },
+        "input": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "page_job": {
+      "description": "One retained artwork attempt on a platform session. Model outputs stay with that session across interruption.",
+      "properties": {
+        "book": {
+          "type": "string"
+        },
+        "page": {
+          "type": "string"
+        },
+        "input": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "page_drawing": {
+      "description": "The artwork attempt currently selected for this page or character sheet.",
+      "properties": {
+        "job": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "page_failed": {
+      "description": "The latest artwork attempt\u2019s failure, without discarding earlier completed art.",
+      "properties": {
+        "message": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "print_review": {
+      "description": "The immutable PrintBound document returned for the selected page order.",
+      "properties": {
+        "document": {
+          "type": "object"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "print_quote": {
+      "description": "The selected PrintBound destination quote for the reviewed document.",
+      "properties": {
+        "quote": {
+          "type": "object"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "print_receipt": {
+      "description": "The PrintBound receipt snapshot; tracking and progress are provider-confirmed facts.",
+      "properties": {
+        "receipt": {
+          "type": "object"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "gallery_consent": {
+      "description": "The parent explicitly consented to publishing selected coloring art.",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "mail_opt_out": {
+      "description": "Marketing mail suppression retained from the source, independent of any print purchase.",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "coloring_runtime": {
+      "description": "Deployment settings: explicit fixture preview, typography blob, connected PrintBound service and platform model selections.",
+      "properties": {
+        "preview": {
+          "type": "boolean"
+        },
+        "font": {
+          "type": "string"
+        },
+        "printer": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "story_model": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "coloring_step": {
+      "tool": true,
+      "description": "Continue saved artwork jobs, preserving finished pages.",
+      "input": {
+        "book": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "book"
+      ],
+      "worker": "/studio/step"
+    },
+    "book_story": {
+      "description": "The retained platform session writing a suggested story for this book.",
+      "properties": {
+        "job": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "story_job": {
+      "description": "The immutable saved input for one story suggestion.",
+      "properties": {
+        "book": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "print_preparation": {
+      "description": "The PrintBound document job preparing this exact selected page edition.",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "document": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "gallery_approved": {
+      "description": "This page was reviewed and approved for the community gallery; book consent is required independently.",
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "page_printable": {
+      "description": "The saved free Letter PDF for the selected artwork.",
+      "component": true,
+      "type": "object",
+      "properties": {
+        "blob": {
+          "type": "string"
+        },
+        "input": {
+          "type": "string"
+        }
+      }
+    },
+    "page_printable_job": {
+      "description": "The retained command laying out the selected artwork as a free printable.",
+      "component": true,
+      "type": "object",
+      "properties": {
+        "job": {
+          "type": "string"
+        },
+        "input": {
+          "type": "string"
+        }
+      }
+    },
+    "printable_job": {
+      "description": "The immutable artwork selected for one printable layout request.",
+      "component": true,
+      "type": "object",
+      "properties": {
+        "book": {
+          "type": "string"
+        },
+        "page": {
+          "type": "string"
+        },
+        "input": {
+          "type": "string"
+        }
+      }
+    },
+    "coloring_printable": {
+      "tool": true,
+      "discoverable": false,
+      "description": "Lay out one saved coloring page as a free printable.",
+      "input": {
+        "job": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "job"
+      ],
+      "worker": "/studio/printable_step"
+    }
+  }
+}

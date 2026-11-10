@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@yaks/graph": "platform",
+    "@yaks/member": "platform",
+    "pdf-lib": "1.17.1",
+    "@pdf-lib/fontkit": "1.1.1",
+    "fast-png": "8.0.0",
+    "@yaks/draft": "platform"
+  }
+}

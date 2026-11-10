@@ -1,0 +1,191 @@
+[
+  {
+    "entity": {
+      "eid": "8d408afe-4763-4778-8e76-09702894dc36"
+    },
+    "doc": {
+      "title": "Folk (Scandinavian rosemaling)"
+    },
+    "alias": {
+      "name": "folk-rosemaling"
+    },
+    "coloring_style": {
+      "prompt_modifier": "Render it as a symmetric Scandinavian rosemaling folk-art painting \u2014 forms built from curved scroll strokes, C- and S-strokes and teardrops, laid out with the balanced symmetry of folk decoration.",
+      "subject_portrayal": "Stylize the main character as folk decoration, its form flowing into the scrollwork \u2014 not a realistic and not a cute animal.",
+      "motif_vocabulary": "tulips, roses, acanthus scrolls, rosettes, painted wooden bowls and chests, curling tendrils, trailing garlands, snowy timber cottages",
+      "edge_direction": "Let the outermost scrolls and tendrils curl back inward so the painted panel closes on itself, ending in bare paper rather than running past the edge."
+    }
+  },
+  {
+    "entity": {
+      "eid": "9dcffb98-7424-4196-9e92-c26ab82791ac"
+    },
+    "doc": {
+      "title": "Woodcut (intricate)"
+    },
+    "alias": {
+      "name": "woodcut-intricate"
+    },
+    "coloring_style": {
+      "prompt_modifier": "Render it as an INTRICATE traditional woodcut / wood-engraving \u2014 richly and densely carved with fine parallel gouge strokes and cross-hatched contour lines, every surface of the scene worked to the same density with carved marks and radiating cut lines, at the density of a D\u00fcrer or Thomas Bewick wood engraving. Keep every carved mark a thin black OUTLINE stroke on white \u2014 no solid black fills, no gray \u2014 so the open regions stay colorable.",
+      "subject_portrayal": "Give the main character a sturdy, boldly stylized folk relief-print character whose personality comes from the carving \u2014 never a cartoon and never plain.",
+      "motif_vocabulary": "oak and ivy, twisting vines, timbered cottages, hand tools, sheaves of wheat, songbirds, lanterns, a sky of engraved stars",
+      "edge_direction": "End the block at a clean straight boundary just inside the canvas \u2014 carved marks worked up to that line, bare paper beyond it \u2014 the way a wood engraving sits on its page.",
+      "page_band": "plate"
+    }
+  },
+  {
+    "entity": {
+      "eid": "91a9ef5d-8fc5-42ed-b595-5aecc2f565cd"
+    },
+    "doc": {
+      "title": "Art Nouveau"
+    },
+    "alias": {
+      "name": "art-nouveau"
+    },
+    "coloring_style": {
+      "prompt_modifier": "Render it in the Art Nouveau manner of Alphonse Mucha \u2014 an ornamental, almost heraldic composition of long flowing whiplash curves and organic scrollwork that grows out of whatever the scene is made of.",
+      "subject_portrayal": "Make the main character elegant and stylized as PART of the ornament, its own curves echoing the Nouveau linework \u2014 not a cute cartoon with decoration set around it.",
+      "motif_vocabulary": "halo arches, lilies and irises, peacock feathers, trailing wisteria, mosaic roundels, sweeping hair and drapery, poppies, stained lamps",
+      "edge_direction": "Close the panel the way a decorative poster does: a slim ornamental border, or an arch, whose whiplash curves carry around the composition and finish inside the canvas."
+    }
+  },
+  {
+    "entity": {
+      "eid": "da58d721-6ba6-4e49-9b9a-64a70cf93279"
+    },
+    "doc": {
+      "title": "Sumi-e ink brush"
+    },
+    "alias": {
+      "name": "sumi-e"
+    },
+    "coloring_style": {
+      "prompt_modifier": "Render it in the spare, calligraphic manner of Japanese sumi-e ink-brush painting \u2014 a few confident, gestural brush-style outlines with varied line weight, economical and expressive. Every stroke swells and tapers as the brush lifts, breaking into dry-brush texture at its tail, and most of the page is left as untouched paper.",
+      "subject_portrayal": "Capture the main character the way an ink-brush master would in a handful of strokes \u2014 an ink-brush creature, not an anime or cartoon.",
+      "motif_vocabulary": "blossom sprigs, bamboo, wave curls, drifting mist, pine boughs, cranes, distant mountains, a single moon, koi"
+    }
+  },
+  {
+    "entity": {
+      "eid": "d397f2f8-576d-4441-8b1b-978afd2ee5f2"
+    },
+    "doc": {
+      "title": "Mandala / zentangle"
+    },
+    "alias": {
+      "name": "mandala-zentangle"
+    },
+    "coloring_style": {
+      "prompt_modifier": "Render it as a symmetrical mandala / zentangle composition \u2014 forms divided into dense, intricate zentangle pattern cells (repeating dots, teardrops, scallops, waves, lattice and paisley fills), the whole design radiating outward into a circular mandala of concentric ornamental rings. Every region is an outlined pattern cell ready to color.",
+      "subject_portrayal": "Let the main character's character come from the intricate symmetry and patterning, not from cuteness \u2014 a meditative, ornamental pattern-figure.",
+      "motif_vocabulary": "lotus blooms, sunbursts, feathered wings, paisley drops, moons and stars, rosettes, elephants, henna-like hands",
+      "edge_direction": "Let the outermost ring close the composition \u2014 complete and unbroken, sitting inside the canvas with clear paper all around it, never clipped by an edge."
+    }
+  },
+  {
+    "entity": {
+      "eid": "a90d5e56-3f8a-47cb-8da4-6748a2787c5e"
+    },
+    "doc": {
+      "title": "Stained glass"
+    },
+    "alias": {
+      "name": "stained-glass"
+    },
+    "coloring_style": {
+      "prompt_modifier": "Render it as a leaded stained-glass panel \u2014 divided into clean segmented glass regions by bold, uniform-weight leading lines, the surrounding field broken into geometric glass shards the way a leaded window fills its opening, each pane an open cell to color.",
+      "subject_portrayal": "Portray the main character as a luminous, structured glass-mosaic figure, graphic and dignified, not a cartoon.",
+      "motif_vocabulary": "rose windows, quatrefoils, lanterns, sunbursts, banners, chapel doorways, candles, radiating rays of light",
+      "edge_direction": "Close the panel with its outer lead: one unbroken came line running around the whole window just inside the canvas, so every pane is whole."
+    }
+  },
+  {
+    "entity": {
+      "eid": "cdce4396-384c-49e2-afb2-b972921cfd22"
+    },
+    "doc": {
+      "title": "Papercut (Scherenschnitte)"
+    },
+    "alias": {
+      "name": "papercut-scherenschnitte"
+    },
+    "coloring_style": {
+      "prompt_modifier": "Render it as a traditional symmetric papercut / Scherenschnitte cut-paper design \u2014 the whole image reads as ONE flat sheet of paper snipped with fine scissors, strictly mirror-symmetric down a central axis. Build every form from BOLD, smooth, flat silhouette shapes with thick, clean scissor-cut edges \u2014 no naturalistic fur or texture, no 3-D shading, no sketchy or hatched strokes. All the detail is snipped OUT as negative space: lace-like windows, teardrops, crescents and dots, and mirrored filigree cut into the shapes themselves. Draw each silhouette as a bold flat shape whose paper edge is a thick even outline, its interior left open and the cut windows outlined within it so every region stays colorable \u2014 bold cut-paper shapes, never a light, open outline drawing.",
+      "subject_portrayal": "Portray the main character as a flat, stylized cut-paper silhouette \u2014 bold simple shapes with smooth scissor-cut edges, its detail snipped out as symmetric negative-space windows, folk and ornamental, never a furry naturalistic animal and never a cartoon.",
+      "motif_vocabulary": "paired songbirds, hearts, tulips, pine trees, garlands, mirrored deer, snowflakes, steepled houses",
+      "edge_direction": "Finish the sheet with its own snipped outer edge: a scalloped, mirrored cut standing just inside the canvas, with clear paper beyond it."
+    }
+  },
+  {
+    "entity": {
+      "eid": "8b5158a4-7111-4154-9b90-a1aca6d52b35"
+    },
+    "doc": {
+      "title": "Classic storybook"
+    },
+    "alias": {
+      "name": "classic-storybook"
+    },
+    "coloring_style": {
+      "prompt_modifier": "Render it in the classic mid-century storybook manner of vintage Golden Books \u2014 warm, cheerful and characterful, with gentle naturalistic proportions and soft rounded linework, and a few incidental storybook details that belong to this particular scene.",
+      "subject_portrayal": "Give the main character real animal or human character like a 1950s picture-book illustration \u2014 charming and illustrative, not a flat modern cartoon and not overly cutesy.",
+      "motif_vocabulary": "picket fences, patchwork quilts, kettles and pie tins, wildflower meadows, striped awnings, rag dolls, garden gates, wooden wagons",
+      "edge_direction": "Settle the scene into a vignette \u2014 densest in the middle, thinning to open paper before it reaches any edge, the way a picture-book illustration sits on its page. No frame or border."
+    }
+  },
+  {
+    "entity": {
+      "eid": "c177bacc-f124-4688-9e42-1858d549cfc8"
+    },
+    "doc": {
+      "title": "Botanical engraving"
+    },
+    "alias": {
+      "name": "botanical-engraving"
+    },
+    "coloring_style": {
+      "prompt_modifier": "Render it as a vintage naturalist botanical / scientific engraving \u2014 drawn with fine contour and hatch-style OUTLINE strokes (no solid shading, no gray wash), everything in the scene set out with the poised, specimen-like clarity of an antique field-guide plate.",
+      "subject_portrayal": "Portray the main character as anatomically believable and dignified, with real natural character \u2014 the realism quality bar.",
+      "motif_vocabulary": "seed pods, pressed ferns, fruiting branches, mushrooms, beetles and butterflies, roots and bulbs, feathers, tide-pool shells",
+      "edge_direction": "Close the page with a fine ruled border a little inside the canvas \u2014 a double rule with a small ornament turning each corner \u2014 the scene composed to sit within it and bare paper outside.",
+      "page_band": "plate"
+    }
+  },
+  {
+    "entity": {
+      "eid": "8f94d3c9-8b70-4114-901b-7fe3d4f0f8ed"
+    },
+    "doc": {
+      "title": "Otomi (Mexican folk)"
+    },
+    "alias": {
+      "name": "otomi-mexican-folk"
+    },
+    "coloring_style": {
+      "prompt_modifier": "Render it as a Mexican Otomi (tenango) folk-art embroidery \u2014 flat, bold, clean outlines with every form filled by dense rows of small repeated outlined shapes and banded stripes, laid out with strict folk symmetry. Every filled region is an open outlined cell to color.",
+      "subject_portrayal": "Make the main character a joyful, flat, symmetric folk figure whose character comes from the folk patterning, not a cartoon.",
+      "motif_vocabulary": "songbirds, deer, rabbits, blooms, leafy vines, fish, butterflies, the sun",
+      "edge_direction": "End the embroidered field in a complete edge, with a plain band of unworked cloth around it, so no figure is cut in half at the canvas edge."
+    }
+  },
+  {
+    "entity": {
+      "eid": "5a47db08-ee4a-4cb7-a033-65da1c9e5927"
+    },
+    "doc": {
+      "title": "Retro mid-century atomic"
+    },
+    "alias": {
+      "name": "retro-midcentury-atomic"
+    },
+    "coloring_style": {
+      "prompt_modifier": "Render it in 1950s mid-century-modern atomic style \u2014 geometric and angular, every form pared down to clean simplified shapes with tapering boomerang curves and radiating starburst lines, flat and graphic like retro atomic wallpaper, all as open outlines to color.",
+      "subject_portrayal": "Portray the main character as a cool, stylish mid-century design-figure, geometric and confident, not a cartoon.",
+      "motif_vocabulary": "sputnik lamps, kidney-shaped tables, rockets and orbits, tail-fin cars, ball clocks, potted monstera, diner counters, hi-fi consoles",
+      "edge_direction": "Sit the composition on a clean rectangular field that stops short of the canvas, the way a mid-century record sleeve keeps its border.",
+      "page_band": "rule"
+    }
+  }
+]
