@@ -6,8 +6,8 @@
 // What is proved here is the wire. A page joins and hears the conversation; a
 // line it sends becomes a build, and the build arrives as frames in the order
 // they happened, ending with the app's address; a page that reloads hears the
-// same sequence again; a second line during a build is told to wait; and a
-// socket nobody is on the end of never opens.
+// same sequence again; a second line during a build is kept and answered
+// once it ends; and a socket nobody is on the end of never opens.
 //
 // The one thing the stand-in cannot do is the 101 upgrade — `WebSocketPair`
 // and a 101 `Response` are the runtime's, not the web's — so a socket is
@@ -242,20 +242,18 @@ test('a page that reloads hears the whole conversation again', async () => {
   assertEquals(kinds(third.sent), kinds(again.sent))
 })
 
-test('a second line during a build is told to wait', async () => {
-  let o = await seeded(MAKES_ONE)
+test('a second line during a build is kept, and answered once it ends', async () => {
+  let o = await seeded([...MAKES_ONE, { text: 'A garden too.' }])
   let ws = joined(o)
   let building = o.object.say(o.held, 'a recipe box')
   o.object.webSocketMessage(ws, JSON.stringify({ say: 'and a garden one' }))
-
-  assertEquals(ws.sent.filter((f) => 'busy' in f).length, 1)
+  assertEquals(kinds(ws.sent).slice(-2), ['said:person', 'busy'])
   await building
-  await settled(ws)
-  // The second line was never said into the conversation, so nothing of it is
-  // in the replay.
-  let again = joined(o)
-  let said = again.sent.filter((f) => 'said' in f) as { text: string }[]
-  assert(!said.some((f) => f.text.includes('garden')))
+  while (o.ctx.pending.size) await Promise.all(o.ctx.pending)
+  let said = o.object.said().map((l) => l.text)
+  assertEquals(said.slice(-2), ['and a garden one', 'A garden too.'])
+  let told = ws.sent.filter((f) => 'said' in f && f.text == 'and a garden one')
+  assertEquals(told.length, 1)
 })
 
 // Ada's object over storage as a new one has it, on a window of a second

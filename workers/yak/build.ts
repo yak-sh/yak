@@ -239,8 +239,10 @@ export class Builder {
   // ends (@yaks/durable-object `bounded`): a line said meanwhile is kept
   // (`#hold`), and taken up once the window ends (`#replay`).
   #ceiling: Ceiling
-  // The kept lines being taken up, one turn at a time.
+  // The kept lines being taken up, one turn at a time, and whether a line
+  // was kept while a build ran, for its end to take up.
   #replaying?: Promise<void>
+  #queued = false
   #arming?: Promise<void>
   // The Operator's pool, once this incarnation has made it (`#work`).
   #fx?: { running(): unknown[] }
@@ -382,19 +384,21 @@ export class Builder {
    * to one that is not pays a look in memory for that.
    */
   async say(held: Held, text: string): Promise<Frame[]> {
-    if (this.#building) return this.#say([{ busy: WAIT }])
     let stop = this.#ceiling.refusal(true)
-    if (stop) return await this.#hold(held, text, stop)
+    if (stop || this.#building) return await this.#hold(held, text, stop)
     return await this.#turn(held, text)
   }
 
-  // A build, raised as `#building` until it ends. A line kept while the
-  // object was stopped names its place in the log (`kept`), which it leaves
-  // as the conversation takes it.
+  // A build, raised as `#building` until it ends, when what was said while
+  // it ran is taken up. A kept line names its place in the log (`kept`),
+  // which it leaves as the conversation takes it.
   #turn(held: Held, text: string, kept?: number): Promise<Frame[]> {
     let turn = this.#build(held, text, kept)
     this.#building = turn
-    return turn.finally(() => this.#building = undefined)
+    return turn.finally(() => {
+      this.#building = undefined
+      if (this.#queued) this.#replay()
+    })
   }
 
   async #build(held: Held, text: string, kept?: number): Promise<Frame[]> {
@@ -459,21 +463,27 @@ export class Builder {
     return frames
   }
 
-  /** A line said while this object may not write (`#ceiling`): kept in the
-   * write log, which the ceiling lets through (`free`), and taken up as a
-   * turn of its own once the window ends, by the alarm armed for then
-   * (`#replay`). Everyone watching sees it said, and when it will be
-   * answered. */
-  async #hold(held: Held, text: string, stop: Stopped): Promise<Frame[]> {
+  /** A line this object can't answer now: said while it may not write
+   * (`#ceiling`, `stop`), or while a build runs. Kept in the write log, which
+   * the ceiling lets through (`free`), and taken up as a turn of its own once
+   * the window ends, by the alarm armed for then, or once the build ends
+   * (`#replay`), with the alarm a minute on in case this object dies under
+   * it. Everyone watching sees it said, and when it will be answered. */
+  async #hold(
+    held: Held,
+    text: string,
+    stop: Stopped | null,
+  ): Promise<Frame[]> {
     this.#ceiling.free(() => {
       for (let stmt of log.schema()) this.#sql.query(stmt)
       log.keep(this.#sql, saying(held, text), JSON.stringify({ say: text }))
     })
+    this.#queued ||= !stop
     let told = this.#say([
       { said: 'person', text },
-      { busy: HELD(Math.ceil(stop.retry.after / 1000)) },
+      { busy: stop ? HELD(Math.ceil(stop.retry.after / 1000)) : WAIT },
     ])
-    await this.#rest(stop.retry.after)
+    await this.#rest(stop ? stop.retry.after : AGAIN)
     return told
   }
 
@@ -483,13 +493,17 @@ export class Builder {
     await sooner(this.#ctx.storage, Date.now() + ms)
   }
 
-  // The lines kept while this object was stopped (`#hold`), taken up behind
-  // the alarm, since a build takes minutes. A log that holds none is looked
-  // at once an incarnation (writes.ts `next`), and stands from the store's
-  // fitting (operator-store.ts), so the look runs no DDL.
+  // The lines kept (`#hold`), taken up behind the alarm or the build that
+  // ended, since a build takes minutes. A stopped object's wait for them is
+  // its alarm's. A log that holds none is looked at once an incarnation
+  // (writes.ts `next`), and stands from the store's fitting
+  // (operator-store.ts), so the look runs no DDL.
   #replay() {
-    if (this.#replaying || !log.waiting(this.#sql)) return
-    let going = this.#replaying = this.#replays()
+    if (this.#replaying || this.#ceiling.stopped(true)) return
+    this.#queued = false
+    let going = this.#replaying = (async () => {
+      if (log.waiting(this.#sql)) await this.#replays()
+    })()
       .catch((e) => caught(e, { request: 'build replay' }))
       .finally(() => this.#replaying = undefined)
     this.#ctx.waitUntil?.(going)

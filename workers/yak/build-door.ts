@@ -67,11 +67,12 @@ export let carried = (url: string, req: Request): Request => {
  * exactly who the builder is for. */
 export let BUILD = '/api/build'
 
-/** A second build, asked for while the first is running. A wait, said as the
- * builder says everything: a sentence. */
+/** A line said while a build is running (build.ts `#hold`): kept, and
+ * taken up once the build ends, said as the builder says everything: a
+ * sentence. */
 export let WAIT =
-  'I am still building the last thing you asked for — let me finish, and ' +
-  'then say that again.'
+  'I am still building the last thing you asked for. I have kept what you ' +
+  'said, and I will take it up as soon as I finish.'
 
 /** A line said while the space's Builder is stopped for the rows it spent,
  * `s` seconds more (build.ts `#hold`): kept, and taken up then. */
