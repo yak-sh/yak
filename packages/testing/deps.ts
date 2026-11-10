@@ -440,7 +440,8 @@ export let seal = (
  * change is the imports between them, never through a module wider than
  * `WIDE`; given each path's package (`owner`), a file of a changed package
  * is 0 when changes in that package reach it, and 1 otherwise. A file
- * importing a changed package from another is at most 1. */
+ * importing a changed package from another is at most 1. `distance` follows
+ * runtime imports by default; `false` includes type-only imports. */
 export type Survey = {
   // Exact resolution metadata from this snapshot. Inputs regenerated after
   // it was taken must still hold; unknown roots need a fresh resolution.
@@ -463,6 +464,7 @@ export type Survey = {
   distance: (
     changed: string[],
     owner?: (path: string) => string | undefined,
+    runtime?: boolean,
   ) => (root: string) => number
 }
 
@@ -601,20 +603,21 @@ export let survey = async (
   // `WIDE`: a whole platform is thousands of modules, and its importers are
   // hundreds, each asking.
   let wides = new Map<string, boolean>()
-  let wide = (node: string) => {
-    if (!wides.has(node)) {
+  let wide = (node: string, run: boolean) => {
+    let key = `${run} ${node}`, edges = run ? runtime : next
+    if (!wides.has(key)) {
       let seen = new Set([node])
       let go = [node]
       while (go.length && seen.size <= WIDE) {
-        for (let n of runtime.get(go.pop()!) ?? []) {
+        for (let n of edges.get(go.pop()!) ?? []) {
           if (seen.has(n)) continue
           seen.add(n)
           go.push(n)
         }
       }
-      wides.set(node, seen.size > WIDE)
+      wides.set(key, seen.size > WIDE)
     }
-    return wides.get(node)!
+    return wides.get(key)!
   }
   return {
     info: async (roots, refreshed = []) => {
@@ -694,14 +697,14 @@ export let survey = async (
       let reached = closures.get(cache)!
       return roots.some((p) => reached.has(p) || reached.has(at(url(p))))
     },
-    distance: (changed, owner = () => undefined) => {
-      let edges = incoming(runtime)
+    distance: (changed, owner = () => undefined, run = true) => {
+      let deps = run ? runtime : next, edges = incoming(deps)
       let walk = (paths: string[]) => {
         let far = new Map<string, number>()
         for (let p of paths) far.set(p, 0).set(at(url(p)), 0)
         for (let node of far.keys()) {
           let d = far.get(node)!
-          if (d && wide(node)) continue
+          if (d && wide(node, run)) continue
           for (let from of edges.get(node) ?? []) {
             if (!far.has(from)) far.set(from, d + 1)
           }
@@ -723,7 +726,7 @@ export let survey = async (
         let home = owner(root)
         let own = home && mine.get(home)
         if (own) return own.has(root) || own.has(at(url(root))) ? 0 : 1
-        let uses = (runtime.get(at(url(root))) ?? []).some((n) => {
+        let uses = (deps.get(at(url(root))) ?? []).some((n) => {
           let to = owner(rel(n))
           return to && to != home && mine.has(to)
         })

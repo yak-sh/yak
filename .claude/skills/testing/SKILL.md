@@ -137,12 +137,15 @@ formatting to changed files and lints them. It dry-runs the publish of each
 package the change touches, so an export without its declared type fails the
 run (a second or so a package); every package's public API at once is main's
 CI's (`deno task check:publish`). Beside the tests it checks the types of source and doc comments the
-change reaches, each changed module, each importing one, and each of its package importing one however far, as
-`deno task check:types` does alone: TypeScript's native compiler (tsgo) checks
-them in the project Deno's resolution describes, in seconds where the whole
-repository takes about fifteen. Each `conform.ts` beside a `workers.json` that
-reaches the change is checked at once in a second program, under Cloudflare's
-Workers types, where `cloudflare:workers` is typed. Tests and examples run untyped, so a type error fails the run there.
+change reaches: each changed module, direct importers (including type-only
+imports), and transitive importers within its package, stopping at a module
+composing a whole platform. `deno task check:types` does the same alone.
+TypeScript's native compiler (tsgo) resolves the complete program through Deno,
+then checks diagnostics only in those sources; dependencies supply their full
+inferred types without checking their unrelated bodies. Host entries follow
+the same scope. A selected `conform.ts` beside a `workers.json` is checked in a
+separate program under Cloudflare's Workers types, where `cloudflare:workers`
+is typed. Tests and examples run untyped, so a type error fails the run there.
 Main's CI checks every module after the push (`deno task check:types --all`). Markdown
 examples and custom `///` doctests run through the example runner. Package
 compiler libraries can differ from the Deno runtime these examples use.

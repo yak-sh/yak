@@ -108,11 +108,15 @@ test('hosts share generation and retain failures without blocking independent ch
   equal(generated, [['run', '--no-lock', '-A', catalog]])
 })
 
-test('a change checks its importers, and its own package past a module loading a whole platform', async () => {
+let scoped = await (async () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yaks-scope-' })
   let world = Array.from({ length: WIDE }, (_, i) => `world${i}.ts`)
   let imports: Record<string, string[]> = {
     'pkg/lock.ts': [],
+    'pkg/near.ts': ['pkg/lock.ts'],
+    'pkg/far.ts': ['pkg/near.ts'],
+    'pkg/typed.ts': [],
+    'app/typed.ts': [],
     'pkg/host.ts': ['pkg/lock.ts', ...world],
     'pkg/host_test.ts': ['pkg/host.ts'],
     'pkg/apart.ts': [],
@@ -130,22 +134,39 @@ test('a change checks its importers, and its own package past a module loading a
       modules: Object.entries(imports).map(([m, deps]) => ({
         specifier: `file://${at(m)}`,
         local: at(m),
-        dependencies: deps.map((d) => ({
-          code: { specifier: `file://${at(d)}` },
-        })),
+        dependencies: [
+          ...deps.map((d) => ({ code: { specifier: `file://${at(d)}` } })),
+          ...m.endsWith('/typed.ts')
+            ? [{ type: { specifier: `file://${at('pkg/lock.ts')}` } }]
+            : [],
+        ],
       })),
       redirects: {},
     })
   let all = Object.keys(imports).filter((m) => !m.startsWith('world')).map(at)
   let s = (await survey(all, info))!
+  Deno.removeSync(dir, { recursive: true })
+  return { s, all, at }
+})()
+
+test('a source change checks consumers and types within its package, stopping at a whole platform', () => {
+  let { s, all, at } = scoped
   let owner = (p: string) => /\/(pkg|app)\//.exec(p)?.[1]
+  let prefix = at('')
   equal(
     scope(s, all, [at('pkg/lock.ts')], owner).map((p) =>
-      p.slice(dir.length + 1)
+      p.slice(prefix.length)
     ),
-    ['pkg/lock.ts', 'pkg/host.ts', 'pkg/host_test.ts', 'app/direct.ts'],
+    [
+      'pkg/lock.ts',
+      'pkg/near.ts',
+      'pkg/far.ts',
+      'pkg/typed.ts',
+      'app/typed.ts',
+      'pkg/host.ts',
+      'app/direct.ts',
+    ],
   )
-  Deno.removeSync(dir, { recursive: true })
 })
 
 // A program: each module of the checkout by path, and what it imports.

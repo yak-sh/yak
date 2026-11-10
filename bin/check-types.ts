@@ -1,43 +1,20 @@
-// `deno task check:types [--all] [paths…]`: the types of source and of the
-// code in its doc comments, checked by TypeScript's native compiler (tsgo) in
-// the project Deno's resolution describes (./tsconfig.ts). With no paths it
-// checks what the branch and working changes reach: each changed module, the
-// rest of its package that imports one, and each module importing one
-// (`types`), as `deno task test` does on every run with no paths. The
-// consumers past those are main's CI's: `deno task check --all` runs `--all`,
-// every module, after the push. Raycast is a Node/React host
-// with its own tsconfig, checked by check:raycast, so it is not among DIRS.
-// The release's public types as Deno's publisher reads them are checked where
-// a release is published (.github/workflows/publish.yml): Deno's publisher
-// type-checks every package at once with its own compiler, about a minute,
-// and `deno task check:publish` checks the rest of what it reads.
+// `deno task check:types [--all] [paths…]` checks source and doc examples
+// with the native TypeScript compiler, using Deno's resolution (tsconfig.ts).
+// A scoped run checks changed modules, direct importers, and their package's
+// transitive importers up to a module composing a whole platform. Type-only
+// imports participate too; each host's entries follow the same scope.
 //
-// Three platforms, three programs, checked at once. Deno's holds the modules
-// with Deno's globals. Each host's holds the entries of the packages that name
-// it, by a `workers.json` or `browser.json` beside their package.json
-// (check-platform.ts merges those configs), and checks what a change reaches
-// from there under that host's globals alone. The Workers program holds each
-// `conform.ts`, under Cloudflare's own Workers types, `cloudflare:workers`
-// included, which Deno's program can only call `any`. The browser program
-// holds each package's browser-facing exports, with only the web platform's
-// libs, so a page's import of one never meets a Deno, Node or Workers global.
-// Globals never share a program with another platform's.
+// The native program API checks diagnostics only in those sources. Imports
+// still supply their complete inferred types, without checking thousands of
+// unrelated dependency bodies merely because a root imports a kernel fixture
+// or a barrel. Main CI's `--all` checks every source through the compiler's
+// incremental command line; build info is shared across checkouts.
 //
-// Each run's project lies in `.types/` with its process id; the links into
-// Deno's caches there are shared. Each platform keeps a pool of incremental
-// build info, shared by the repository's checkouts: the compiler reuses
-// unchanged work and validates source versions, options and resolutions
-// itself. Checks hold no lock and compile against a private copy of the build
-// info naming most of their program's files, publishing their next
-// atomically (./check-incremental.ts). The project names no path of its
-// checkout in a file every module sees, so that shared work stays valid there.
-//
-// A program starts no compiler when each of its roots passed while it,
-// everything it and its examples reach, the compiler, its options and its
-// globals held what they hold now (`proofs`); every checkout on the machine
-// shares those passes (`TYPED`). A host program's resolution is kept as the
-// Deno program's is (@yaks/testing's `remembered`), and the compiler's
-// native binary starts without a Deno process running its launcher.
+// Deno, browser and Workers programs keep their globals separate. Each run's
+// project and examples are private; resolution, dependency digests and proven
+// roots are shared across checkouts. A root whose source, dependencies,
+// examples, compiler, options and globals all match a passing proof is skipped.
+// Raycast's Node/React host has its own tsconfig and check:raycast command.
 import { dirname } from 'node:path'
 import config from '../deno.json' with { type: 'json' }
 import { createHash } from 'node:crypto'
@@ -370,10 +347,10 @@ export let scope = (
   changed: string[],
   owner: (path: string) => string | undefined = member,
 ) => {
-  let far = s.distance(changed)
+  let far = s.distance(changed, undefined, false)
   let homes = new Set(changed.map(owner).filter(Boolean))
   return all.filter((f) =>
-    far(f) <= 1 || homes.has(owner(f)) && s.reaches([f], changed)
+    far(f) <= 1 || homes.has(owner(f)) && far(f) < Infinity
   )
 }
 
@@ -398,7 +375,7 @@ let reached = async (
   let roots = scope(s, all, changed)
   let hosted = on.map((h) => ({
     ...h,
-    entries: h.entries.filter((e) => s.reaches([e], changed)),
+    entries: scope(s, h.entries, changed),
   }))
   return { roots, hosted, survey: s }
 }
@@ -509,6 +486,17 @@ let compile = compiler(async (args, env) => {
     : await output(['run', '-A', TSC, ...args], env)
 }, Deno.env.toObject())
 
+// The API host inherits the same Go budget as the command-line compiler.
+// It asks the native program for diagnostics only in the selected sources.
+let source = compiler((args, env) =>
+  execute(Deno.execPath(), [
+    'run',
+    '--no-lock',
+    '-A',
+    `${CHECKOUT}/bin/check-source.ts`,
+    ...args,
+  ], env), Deno.env.toObject())
+
 /** Writes each example of `roots` beside its page, and names them. */
 let examples = async (roots: string[]) =>
   (await Promise.all(roots.map(async (page) => {
@@ -589,7 +577,12 @@ let manifest = (path: string) => {
 
 /** Check the types of `roots` in a platform's program, and of their doc
  * comment examples where it checks those. */
-let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
+let program = async (
+  on: Platform,
+  roots: string[],
+  snapshot?: Survey,
+  all = false,
+) => {
   let docs = on.examples ? await examples(roots) : []
   let graph = `${on.dir}/graph.${Deno.pid}.ts`
   let tsconfig = `${on.dir}/tsconfig.${Deno.pid}.json`
@@ -644,11 +637,10 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
       snapshot?.bytes ?? digest,
     )
     let kept = passed(TYPED)
-    // A program of only the roots left would differ from run to run, and
-    // build info for one program spares little of another's: dropping a root
-    // can have the compiler check every file again. So it checks them all,
-    // whose unchanged files its build info spares.
-    if (roots.every((r) => kept.has(proven.get(r)!))) return true
+    let left = roots.filter((r) => !kept.has(proven.get(r)!))
+    if (!left.length) return true
+    // Keep the full project context, but ask for diagnostics only in roots
+    // without a passing proof. The --all CLI reuses its incremental build.
     let manifests = Object.fromEntries(
       [...new Set(graphed.modules.flatMap((m) => m.npmPackage ?? []))]
         .map((id) => [id, manifest(graphed.npmPackages[id].localPath)]),
@@ -668,27 +660,36 @@ let program = async (on: Platform, roots: string[], snapshot?: Survey) => {
       put(`${on.dir}/${name}`, text)
     }
     put(tsconfig, JSON.stringify(p.config, null, 1))
-    let tsc = await incremental(
-      on.dir,
-      await pool(on),
-      (info) =>
-        compile([
-          '-p',
-          tsconfig,
-          '--pretty',
-          'false',
-          '--incremental',
-          '--tsBuildInfoFile',
-          info,
-        ]),
-      graphed.modules.flatMap((m) =>
-        m.specifier.startsWith(`file://${CHECKOUT}/`)
-          ? [
-            relative(on.dir, decodeURIComponent(new URL(m.specifier).pathname)),
-          ]
-          : []
-      ),
-    )
+    let tsc = all
+      ? await incremental(
+        on.dir,
+        await pool(on),
+        (info) =>
+          compile([
+            '-p',
+            tsconfig,
+            '--pretty',
+            'false',
+            '--incremental',
+            '--tsBuildInfoFile',
+            info,
+          ]),
+        graphed.modules.flatMap((m) =>
+          m.specifier.startsWith(`file://${CHECKOUT}/`)
+            ? [
+              relative(
+                on.dir,
+                decodeURIComponent(new URL(m.specifier).pathname),
+              ),
+            ]
+            : []
+        ),
+      )
+      : await source([
+        tsconfig,
+        ...[...left, ...docs.filter((d) => left.includes(paged(d)))]
+          .map((r) => `${CHECKOUT}/${r}`),
+      ])
     let errors = reported(tsc.out)
     if (errors.length) console.error(errors.join('\n'))
     if (!tsc.success && !/error TS/.test(tsc.out)) {
@@ -755,6 +756,7 @@ let check = async (
   run: Run,
   prepared: Prepared = [],
   snapshot?: Survey,
+  all = false,
 ) => {
   let made = (roots: string[]) =>
     snapshot
@@ -765,11 +767,14 @@ let check = async (
   return await programs(
     [
       ...roots.length
-        ? [{ made: made(roots), check: () => program(deno(), roots, snapshot) }]
+        ? [{
+          made: made(roots),
+          check: () => program(deno(), roots, snapshot, all),
+        }]
         : [],
       ...hosted.filter((h) => h.entries.length).map((h) => ({
         made: made(h.entries),
-        check: () => program(h.platform, h.entries, snapshot),
+        check: () => program(h.platform, h.entries, snapshot, all),
       })),
     ],
     run,
@@ -807,6 +812,9 @@ if (import.meta.main) {
         entries: all ? h.entries : h.entries.filter((e) => paths.includes(e)),
       })),
       spawn,
+      [],
+      undefined,
+      all,
     )
     : await types(await changes())
   if (!ok) Deno.exit(1)
