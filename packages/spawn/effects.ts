@@ -19,12 +19,14 @@
 // no handler stays open while the agent works.
 //
 // Config sets the checkout agents work from, the directory each run's own
-// checkout is cut under, and how often its log is read:
+// checkout is cut under, how often its log is read, the MCP servers a run is
+// connected to, and the ones of a provider's own it goes without:
 //
 // ```json
 // { "use": "@yaks/spawn",
 //   "with": { "cwd": "/srv/repo", "worktrees": "/srv/runs", "poll": 250,
-//     "mcp": { "tasks": "http://localhost:5173/mcp" } } }
+//     "mcp": { "tasks": "http://localhost:5173/mcp" },
+//     "without": { "claude": ["claude.ai Google Drive"] } } }
 // ```
 //
 // Providers are not in it: an adapter is a function, so a server with one of
@@ -62,6 +64,9 @@ export type Options = {
   /** the MCP servers a run is connected to, by name to URL, each told the
    * run's session in `x-via` (@yaks/spawn `Opts`) */
   mcp?: Record<string, string>
+  /** the MCP servers of a provider's own configuration its runs go without,
+   * by provider name (@yaks/spawn `Opts`) */
+  without?: Record<string, string[]>
 }
 
 let comp = (b: Bundle | undefined, name: string) =>

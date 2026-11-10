@@ -17,6 +17,10 @@
 // the session in `x-via` (@yaks/session `VIA`), through the provider's own way
 // of configuring a connection, so a door stamps what the agent writes with its
 // actor from its first call, and the agent says nothing for it.
+//
+// A provider's CLI also connects every server its own configuration and its
+// account name, and tells the model each one's tools on every turn. A run goes
+// `without` the ones it is told to, again through the provider's own way.
 
 import { type Reader, readers } from '@yaks/session'
 import { VIA } from '@yaks/session/graph'
@@ -41,6 +45,10 @@ export type Job = {
   /** the MCP servers it is connected to, by name to URL, each told the
    * session in `x-via`; a name the provider already has is replaced */
   mcp?: Record<string, string>
+  /** the MCP servers of its provider's own configuration it goes without, each
+   * by the name the provider lists it under (`claude mcp list`, `codex mcp
+   * list`) */
+  without?: string[]
 }
 
 /** A provider that is run as a command. */
@@ -75,6 +83,21 @@ let connected = (j: Job): string[] =>
     ]
     : []
 
+// Claude names a server's tools `mcp__<server>__<tool>`, the server's name with
+// every character outside these made an underscore: `claude.ai Google Drive`
+// is `mcp__claude_ai_Google_Drive`.
+let prefix = (server: string): string =>
+  `mcp__${server.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+
+// Claude has no flag that leaves one server of an account unconnected, so a
+// run goes without a server by a deny rule on all its tools: none of them is
+// offered, and none is named in the list of tools the model can look up. The
+// server still connects, and its instructions still reach the model.
+let lacking = (j: Job): string[] =>
+  j.without?.length
+    ? ['--disallowedTools', j.without.map(prefix).join(',')]
+    : []
+
 /** `claude -p --output-format stream-json`, carrying on its thread with
  * `--resume`. */
 export let claude: Adapter = {
@@ -89,6 +112,7 @@ export let claude: Adapter = {
     ...(j.effort ? ['--effort', j.effort] : []),
     ...(j.persona ? ['--append-system-prompt', j.persona] : []),
     ...connected(j),
+    ...lacking(j),
     '--permission-mode',
     'bypassPermissions', // it owns its worktree; nobody is at the prompt
     // -- ends the options: the instruction is a positional, so content that
@@ -114,9 +138,11 @@ let toml = (s: string): string =>
 // instruction file a person keeps comes near a mebibyte.
 let WHOLE = 1 << 20
 
-// Codex's `-c` sets a key of its TOML config, over the person's own.
-let configured = (j: Job): string[] =>
-  servers(j).flatMap(([name, url]) => {
+// Codex's `-c` sets a key of its TOML config, over the person's own. A server
+// it goes without is one its config has, set not `enabled`: codex refuses to
+// start over a server that has that key and no transport.
+let configured = (j: Job): string[] => [
+  ...servers(j).flatMap(([name, url]) => {
     let key = `mcp_servers.${toml(name)}`
     return [
       '-c',
@@ -124,7 +150,12 @@ let configured = (j: Job): string[] =>
       '-c',
       `${key}.http_headers={${toml(VIA)}=${toml(j.session)}}`,
     ]
-  })
+  }),
+  ...(j.without ?? []).flatMap((name) => [
+    '-c',
+    `mcp_servers.${toml(name)}.enabled=false`,
+  ]),
+]
 
 /** `codex exec --json`, carrying on its thread with `codex exec resume`. */
 export let codex: Adapter = {

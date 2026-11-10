@@ -184,7 +184,8 @@ from the graph.
         "cwd": "/srv/repo",
         "worktrees": "/srv/runs",
         "poll": 250,
-        "mcp": { "tasks": "http://localhost:5173/mcp" }
+        "mcp": { "tasks": "http://localhost:5173/mcp" },
+        "without": { "claude": ["claude.ai Google Drive", "railway"] }
       }
     }
   ]
@@ -203,6 +204,17 @@ person's own config, and with an `x-via` header naming the run's session. The
 door resolves that header (@yaks/session `authenticate`), so what the agent
 writes is stamped `by` its actor and `via` its session from its first call, with
 nothing asked of the agent.
+
+`without` names the MCP servers of a provider's own configuration its runs go
+without, by the provider's name and then the names that provider lists them
+under (`claude mcp list`, `codex mcp list`). A provider's CLI connects every
+server its configuration and its account name, and each one's tools cost every
+run context whether it calls them or not. Claude is given a deny rule on the
+server's tools (`--disallowedTools mcp__<server>`), so none is offered or named
+to the model; the server still connects and its instructions still reach the
+model, because claude has no flag that leaves one account connector out. Codex
+is given `-c mcp_servers.<name>.enabled=false`, which must name a server its
+config has. The person's own sessions and configuration are untouched.
 
 Effects also accept process-file `dir`, polling interval `poll`, and kill
 `grace`. Tools accept `poll`, a human-readable default `timeout` such as `45m`,

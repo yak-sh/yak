@@ -235,7 +235,7 @@ await stopped.g.apply([
 await stopped.fx.idle()
 // Two starts of one session, as two requests' effects make them, over a
 // launch the test lends; `fail` is how many launches throw first.
-let starting = async (fail = 0) => {
+let starting = async (fail = 0, more: Opts = {}) => {
   let { g } = tracked()
   let where = dir()
   let l = launching()
@@ -248,6 +248,7 @@ let starting = async (fail = 0) => {
     adapters: { fake },
     launch: (...a) =>
       fail-- > 0 ? Promise.reject(new Error('no')) : l.launch(...a),
+    ...more,
   }
   await g.apply(asking('S1', 'E1', 'do the thing'))
   let twice = () => Promise.allSettled([start(g, 'S1', o), start(g, 'S1', o)])
@@ -264,6 +265,19 @@ test('a session two requests start at once launches once', async () => {
   try {
     await s.twice()
     assertEquals(s.started.length, 1)
+  } finally {
+    s.done()
+  }
+})
+
+test("a run goes without the servers named for its provider, not another's", async () => {
+  let s = await starting(0, {
+    adapters: { fake: { ...fake, argv: (j) => ['fake', ...j.without ?? []] } },
+    without: { fake: ['drive'], codex: ['sentry'] },
+  })
+  try {
+    await s.twice()
+    assertEquals(s.started, [['fake', 'drive']])
   } finally {
     s.done()
   }

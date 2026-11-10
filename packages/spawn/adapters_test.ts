@@ -66,3 +66,27 @@ test('a persona reaches each provider through its own instruction flag', () => {
   assert(!claude.argv(job).includes('--append-system-prompt'))
   assertEquals(setting(codex.argv(job), 'developer_instructions'), undefined)
 })
+
+test("a run goes without a server through its provider's own way of leaving one out", () => {
+  let without = ['claude.ai Google Drive', 'plugin:stripe:stripe', 'yaks.app']
+  // Claude reads a comma-separated list of deny rules, one per server, each
+  // the prefix it gives that server's tools.
+  let said = claude.argv({ ...job, without })
+  assertEquals(said[said.indexOf('--disallowedTools') + 1].split(','), [
+    'mcp__claude_ai_Google_Drive',
+    'mcp__plugin_stripe_stripe',
+    'mcp__yaks_app',
+  ])
+  assertEquals(said.slice(-2), ['--', '-x fix it'])
+  // Codex reads each as a key of its config, the server's name quoted.
+  let keys = codex.argv({ ...job, without })
+    .filter((a, i, all) => all[i - 1] == '-c' && a.startsWith('mcp_servers.'))
+  assertEquals(parse(keys.join('\n')).mcp_servers, {
+    'claude.ai Google Drive': { enabled: false },
+    'plugin:stripe:stripe': { enabled: false },
+    'yaks.app': { enabled: false },
+  })
+  // Nothing to go without, nothing said.
+  assert(!claude.argv(job).includes('--disallowedTools'))
+  assert(!codex.argv(job).some((a) => a.startsWith('mcp_servers.')))
+})

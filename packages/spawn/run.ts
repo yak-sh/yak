@@ -127,6 +127,10 @@ export type Opts = {
    * run's session in `x-via` so the server stamps its writes with the
    * session's actor (./adapters.ts `Job.mcp`) */
   mcp?: Record<string, string>
+  /** the MCP servers of a provider's own configuration its runs go without,
+   * by the provider's name and then the names that provider lists them under
+   * (./adapters.ts `Job.without`) */
+  without?: Record<string, string[]>
   /** how a command is started (default @yaks/process `launch`): the one
    * place a run touches the machine's processes, so a host that starts them
    * another way, or a test that starts none, lends its own */
@@ -512,7 +516,12 @@ export let start = async (
   try {
     let cwd = o.worktrees ? await cut(g, session, o) : o.cwd
     let persona = await given(g, session, cwd ?? system.cwd(), adapter)
-    let argv = adapter.argv({ ...job, persona, mcp: o.mcp })
+    let argv = adapter.argv({
+      ...job,
+      persona,
+      mcp: o.mcp,
+      without: o.without?.[job.provider],
+    })
     // Placed before the child writes a line: a log cleaned since the last run
     // is new, and its lines are numbered on from where the transcript stands.
     t = await tail(g, paths(session, o).out, { session })
