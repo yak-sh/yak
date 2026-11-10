@@ -224,6 +224,7 @@
       "properties": {
         "grouped": {
           "type": "string",
+          "index": true,
           "stamped": true,
           "description": "When grouping reached it: the receipt its sender reads.",
           "format": "date-time"

@@ -3,6 +3,7 @@
 // transaction as the entity. Ordinary component property writes do no work.
 import { type And, bare, parse } from '@yaks/query/core'
 import type { Vocab } from '@yaks/vocab'
+import { type Filter, filter } from '@yaks/match'
 import {
   and,
   as,
@@ -387,6 +388,7 @@ export let cardinality = (
   tally: boolean
   comp?: string
   visible: (tables: string[]) => boolean
+  archetype?: Filter
 } | undefined => {
   let cs = parsed.clauses
   let accepts = visible(vocab, opts)
@@ -398,16 +400,34 @@ export let cardinality = (
     cs[0].path.join('.') == 'entity.archetype'
   let count = cs.some((c) => c.kind == 'count')
   let filters = cs.filter((c) => c.kind != 'count' && !idle(vocab, c))
+  let metadata = !opts.backed?.entity &&
+    vocab.prop('entity', 'archetype')?.ref == 'archetype' &&
+    !vocab.prop('entity', 'archetype')?.computed &&
+    !derivedOf(vocab, opts.derived)['entity.archetype'] &&
+    !opts.visibility?.entity && filters.length > 0 &&
+    filters.every((c) =>
+      c.kind == 'pred' && !c.not && !c.where &&
+      c.path.join('.') == 'entity.archetype' &&
+      (c.op == '!' && !c.value || ['=', '!='].includes(c.op) &&
+          (!c.value || c.value.kind == 'scalar' && c.value.raw == ''))
+    )
   let f = filters[0]
   let comp = filters.length == 1 && f.kind == 'pred' && !f.not &&
       f.op == '!' && !f.value && f.path.length == 1
     ? f.path[0]
     : undefined
-  let plain = count && (!filters.length || !!comp)
+  let plain = count && (!filters.length || !!comp || metadata)
   // A component with no table is worn by nobody, and so by no bucket.
   if (
     !(tally || plain) || comp && (!vocab.comp(comp) || opts.backed?.[comp] ||
         vocab.comp(comp)?.computed || derivedOf(vocab, opts.derived)[comp])
   ) return
-  return { tally, comp, visible: accepts }
+  return {
+    tally,
+    comp,
+    visible: accepts,
+    ...metadata
+      ? { archetype: filter({ kind: 'and', clauses: filters }, vocab) }
+      : {},
+  }
 }

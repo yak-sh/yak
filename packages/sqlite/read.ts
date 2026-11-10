@@ -109,10 +109,12 @@ export let rows = (
       shape && (!opts.archetypes || opts.archetypes({}) != undefined) &&
       classified(driver)
     ) {
-      if (shape.tally || opts.visibility?.entity) {
-        let buckets = populations(driver)?.filter((b) =>
-          shape.visible(b.tables)
-        )
+      if (shape.tally || shape.archetype || opts.visibility?.entity) {
+        let buckets = populations(driver)?.filter((b) => {
+          let row = { entity: { eid: b.value, archetype: b.value } }
+          return shape.visible(b.tables) &&
+            (!shape.archetype || shape.archetype(row))
+        })
         if (buckets) {
           return shape.tally
             ? buckets.map(({ value, n }) => ({ value, n }))
