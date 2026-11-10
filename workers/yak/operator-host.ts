@@ -336,7 +336,11 @@ let seenOf = async (
 }
 
 // Only a closing notice exposes a connector chat in its parent's transcript.
-// Read its own entries, never the inherited main-thread prefix.
+// Read its own entries, never the inherited main-thread prefix, each chat's
+// at once. A fold leaves out what the chat's model was told (its asks and
+// notes): it is the Operator's own context, drawn above in the conversation
+// and on the chat's own page, and drawn again in each fold it made the
+// `checks` page 4 MB, 3.4 MB of it in 12 folds, and its read 0.9-1.7 s of CPU.
 let threadsOf = async (
   store: Store,
   entries: Bundle[],
@@ -344,28 +348,31 @@ let threadsOf = async (
   called?: string,
   opens?: string,
 ): Promise<Record<string, Thread>> => {
-  let threads: Record<string, Thread> = {}
-  for (let notice of entries.filter((b) => b.notice && b.delivery)) {
+  let notices = entries.filter((b) => b.notice && b.delivery)
+  let read = await Promise.all(notices.map(async (notice) => {
     let session = String(comp(notice, 'delivery')?.child ?? '')
     let [row] = await store.g.get([session], ['spawned'])
     let spawned = comp(row, 'spawned')
     if (
       spawned?.quiet == null || spawned.parent != comp(notice, 'entry')?.session
-    ) continue
-    let own = await linesOf(store, session, SHOWN)
+    ) return []
+    let own = (await linesOf(store, session, SHOWN))
+      .filter((b) => !b.ask && !b.prompt)
     let helped = await seenOf(store, [row], own)
     let naming = await namingOf(store, withHelpers(own, helped.helpers), named)
     let seen = { ...helped, ...naming, called, opens }
     let from = own.find((b) => comp(b, 'entry')?.from)
     let who = String(comp(from, 'entry')?.from ?? 'An outside agent')
-    threads[notice.entity.eid] = {
-      session,
-      who: who[0].toUpperCase() + who.slice(1) +
-        (naming.person ? ` for ${naming.person}` : ''),
-      lines: wire(drawnLines(own, namer(seen), seen), own, seen),
-    }
-  }
-  return threads
+    return [
+      [notice.entity.eid, {
+        session,
+        who: who[0].toUpperCase() + who.slice(1) +
+          (naming.person ? ` for ${naming.person}` : ''),
+        lines: wire(drawnLines(own, namer(seen), seen), own, seen),
+      }] as const,
+    ]
+  }))
+  return Object.fromEntries(read.flat())
 }
 
 // The task holding a session, by the link a task keeps to it.
@@ -914,7 +921,8 @@ export let conversationOf = async (
   begun: string
   title: string
   html: string
-  lines: Lines | null
+  // drawn again only for a reader that asks for its lines as data
+  lines: () => Lines | null
   now?: string
   waiting: Bundle[]
   making: Underway | null
@@ -964,7 +972,7 @@ export let conversationOf = async (
         names,
         seen,
       ),
-      lines: wire(drawnLines(shown, names, seen), shown, seen),
+      lines: () => wire(drawnLines(shown, names, seen), shown, seen),
       now: now(entries, names),
       waiting: [],
       making: making(entries, seen.helpers),
@@ -977,14 +985,14 @@ export let conversationOf = async (
       begun: open,
       title: firstLine(found.waiting[0]),
       html: '',
-      lines: null,
+      lines: () => null,
       waiting: found.waiting,
       making: null,
       standing: '',
     }
   }
   let held = found.task
-  if (!held) return NONE
+  if (!held) return { ...NONE, lines: () => null }
   let task = held.entity.eid
   let requests = await requested(store)
   let sessions = await sessionsOf(store, task)
@@ -1015,7 +1023,7 @@ export let conversationOf = async (
     begun: asked[0]?.entity.eid ?? task,
     title: String(comp(held, 'doc')?.title ?? 'A request'),
     html: talk(held, entries, names, seen),
-    lines: wire(drawnLines(entries, names, seen), entries, seen),
+    lines: () => wire(drawnLines(entries, names, seen), entries, seen),
     now: now(entries, names),
     waiting: [],
     making: making(entries, seen.helpers),
@@ -1666,7 +1674,7 @@ export let operatorRequest = async (
     return Response.json({
       root,
       ...talked,
-      ...args.lines ? { lines } : {},
+      ...args.lines ? { lines: lines() } : {},
       ...await news(),
     })
   }

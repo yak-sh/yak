@@ -11,6 +11,8 @@ import { mcpConnect } from './connected-mcp.ts'
 import { machineOf } from './machine-testing.ts'
 import { answered, type Listed, listOf, listsOf } from './operator-lists.ts'
 import { operatorContext } from './operator.ts'
+import { chatPage, operatorAnswer } from './operator-page.ts'
+import { operatorModel, operatorService } from './operator-testing.ts'
 
 let { box, env, dir, space, ada, bob, person } = await machineOf(
   'operator-lists',
@@ -220,5 +222,46 @@ test('a server’s lists are read on one connection, each call sent without list
   assertEquals(
     [count('initialize'), count('tools/list'), count('tools/call')],
     [1, 0, 2],
+  )
+})
+
+test('the page draws without lists its machine has not answered, and they fill in after', async () => {
+  await connect([needs])
+  let held = { person: ada, role: 'owner' as const, space: space.eid }
+  let { binding } = operatorService(
+    env,
+    held,
+    operatorModel(() => Promise.reject(new Error('no turn here'))),
+  )
+  let open!: () => void
+  let gate = new Promise<void>((go) => open = go)
+  let at = env.DISPATCH!
+  let slow = {
+    ...env,
+    BUILDER: binding,
+    DISPATCH: {
+      ...at,
+      get: (...a: Parameters<typeof at.get>) => ({
+        fetch: async (r: Request) => (await gate, at.get(...a).fetch(r)),
+      }),
+    },
+  } as typeof env
+  let page = await chatPage(slow, space, held, 'new')
+  let { document } = parseHTML(await page.text())
+  let slot = document.querySelector('[data-later=waits]')!
+  assertEquals(slot.textContent, 'Reading your lists…')
+  assertEquals(document.querySelector('.Asks_Item'), null)
+  open()
+  let from = `https://yaks.app${slot.getAttribute('data-from')}&had=2`
+  let got = await (await operatorAnswer(new Request(from), slow, space, held))!
+    .json()
+  let asks = (await one()).asks.length
+  let rows = parseHTML(`<div>${got.waits}</div>`).document
+  assertEquals(rows.querySelectorAll('.Asks_Item').length, asks)
+  assertEquals([got.count, got.other], [asks + 2, ''])
+  assertEquals(
+    parseHTML(`<div>${got.bar}</div>`).document.querySelector('.Talk_Waits')
+      ?.getAttribute('data-count'),
+    String(asks + 2),
   )
 })

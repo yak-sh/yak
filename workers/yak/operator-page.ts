@@ -116,8 +116,14 @@ import {
   updatesOf,
   visitsOf,
 } from './updates.ts'
-import { answered, listOf, listsOf } from './operator-lists.ts'
-import { counted, type List, talkBeside, waitsButton } from './talk-beside.ts'
+import { answered, type Listed, listingOf, listOf } from './operator-lists.ts'
+import {
+  counted,
+  type List,
+  nothing,
+  talkBeside,
+  waitsButton,
+} from './talk-beside.ts'
 
 // What this page draws, as markup: the edge where its parts become text.
 let html = (node: Node) => renderToString(h(Fragment, null, node))
@@ -1000,6 +1006,26 @@ export let operatorAnswer = async (
       ...talked.aside ? { aside: talked.aside } : {},
     }, { headers: { 'cache-control': 'private, no-store' } })
   }
+  // The lists beside a conversation that were not in when its page was
+  // drawn (`chatPage`), each part for its place, and how many of their rows
+  // wait on the person.
+  if (q.has('lists') && req.method == 'GET') {
+    let { read } = await listingOf(env, who.person, space.eid)
+    let listed = await read()
+    let back = backTo(env, q.get('back') ?? '', chatPath(space.slug))
+    let part = (waits: boolean) =>
+      html(besides(listed, at, back, waits).map((l) => l.node))
+    // The bar's count adds theirs to what the page counted (`had`).
+    let count = Number(q.get('had')) +
+      counted(besides(listed, at, back, true))
+    return Response.json({
+      waits: part(true),
+      other: part(false),
+      nothing: html(nothing),
+      bar: html(waitsButton(count)),
+      count,
+    }, { headers: { 'cache-control': 'private, no-store' } })
+  }
   // An app beside the chat drawn again as the Operator works on it, and the
   // bar's way to it on a phone, for a page that has none yet.
   if (q.has('made') && req.method == 'GET') {
@@ -1742,7 +1768,7 @@ let talkPage = (
             ),
             page.app ? showing(page.app) : null,
             page.aside,
-            page.lists ? waitsButton(page.lists) : null,
+            page.lists ? waitsButton(counted(page.lists)) : null,
           ),
           page.main,
         ),
@@ -1830,6 +1856,30 @@ let hello = (heading: string, said: string) =>
     h('p', null, said),
   )
 
+// Lists not in yet when a page is drawn: a page draws without them.
+let LATER = Promise.resolve(null)
+
+// The lists beside a conversation that wait on the person, or the others,
+// drawn for the page `here`, whose choices are sent to `at`.
+let besides = (listed: Listed[], at: string, here: string, waits: boolean) =>
+  listed.filter((l) => l.waits == waits).map((l) =>
+    listOf(l, `${at}?asks=1`, here)
+  )
+
+// Where lists not in yet are drawn once the page has them (`?lists`): those
+// that wait on the person above their Updates, the others below.
+let later = (at: string, here: string, waits: boolean): List => ({
+  count: 0,
+  node: h(
+    'div',
+    {
+      'data-later': waits ? 'waits' : 'other',
+      'data-from': `${at}?${new URLSearchParams({ lists: '1', back: here })}`,
+    },
+    waits ? h(Empty, null, h('p', null, 'Reading your lists…')) : null,
+  ),
+})
+
 /**
  * One conversation with the Operator in its chat app, a page of its own
  * (route.ts `chatPath`): the product's side (`side`) with the person's chats
@@ -1857,15 +1907,22 @@ export let chatPage = async (
   let at = managePath('operator', space.slug)
   // The space's address opens the person's one conversation, and a new chat
   // only until they have one (T-141349).
-  // Their lists are read beside every conversation, at once with it.
-  let [talked, newcomer, listed, alerting] = await Promise.all([
+  // Their lists are read beside every conversation, at once with it, and
+  // never hold it back: those their servers have not answered when it is
+  // drawn are filled in by the page (`?lists`).
+  let listing = listingOf(env, who.person, space.eid)
+  let reading = listing.then((l) => l.read())
+  let [talked, newcomer, { size, mentions }, alerting] = await Promise.all([
     conversationOf(env, space, who, at, open == 'new' ? '' : open, {
       updates: true,
     }),
     who.person ? directoryOf(env.STORE).newcomer(who.person) : false,
-    listsOf(env, who.person, space.eid),
+    listing,
     who.person ? directoryOf(env.STORE).alerts(who.person) : null,
   ])
+  let listed = size ? await Promise.race([reading, LATER]) : []
+  // The page reads them again; this read's own failure is told there.
+  if (!listed) reading.catch(() => {})
   let news = talked.updates!
   // Their one conversation, as the store names it: what an empty `open` asks
   // for (operator-host.ts `/operator/conversation`).
@@ -1900,9 +1957,7 @@ export let chatPage = async (
   // Beside the conversation (talk-beside.ts): the lists their servers offer
   // that wait on them, their Updates that need them, then the other lists.
   let drawn = (waits: boolean) =>
-    listed.lists.filter((l) => l.waits == waits).map((l) =>
-      listOf(l, `${at}?asks=1`, here)
-    )
+    listed ? besides(listed, at, here, waits) : [later(at, here, waits)]
   let lists = [...drawn(true), needsList(space, news), ...drawn(false)]
   return talkPage(env, space, who, beside, {
     title: fresh
@@ -1961,7 +2016,7 @@ export let chatPage = async (
       follows,
       talked.standing,
       !!speechOf(env),
-      listed.mentions,
+      mentions,
     ),
     app,
   })
@@ -2128,6 +2183,28 @@ if (box && mentions) {
   new MutationObserver((seen) => {
     for (let r of seen) if (r.target.nodeType == 1) mention(r.target, mentions)
   }).observe(box, { childList: true, subtree: true })
+}
+// Lists their servers had not answered when the page was drawn come in
+// now, each in its place, and the bar counts what waits in them.
+let later = [...document.querySelectorAll('[data-later]')]
+let waits = document.querySelector('.Talk_Waits')
+if (later.length) {
+  let from = later[0].dataset.from + '&had=' + (waits?.dataset.count ?? 0)
+  fetch(from).then((r) => r.ok ? r.json() : null).catch(() => null).then((got) => {
+    let drawn = (html) => {
+      let made = document.createElement('template')
+      made.innerHTML = html
+      return made.content
+    }
+    let column = later[0].parentElement
+    for (let slot of later) {
+      slot.replaceWith(drawn(got?.[slot.dataset.later] ?? (slot.dataset.later == 'waits' ? '<p>Your lists could not be read. Open this page again to try.</p>' : '')))
+    }
+    if (!got) return
+    if (!column.children.length) column.append(drawn(got.nothing))
+    waits?.replaceWith(drawn(got.bar))
+    navigator.setAppBadge?.(got.count)?.catch(() => {})
+  })
 }
 let heading = document.querySelector('[data-title]')
 let form = document.querySelector('#ask')

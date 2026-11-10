@@ -53,6 +53,11 @@ await store.g.apply([
     content: { body: 'Check the calendar.' },
     entry: { session: chat, from: 'an outside agent' },
   }),
+  // What the chat's model was told: the Operator's own context.
+  entry(chat, crypto.randomUUID(), {
+    ask: {},
+    sending: { instructions: 'Answer calendar questions briefly.' },
+  }),
   entry(chat, reply, { output: {}, content: { body: 'Tuesday is free.' } }),
   entry(privateChat, crypto.randomUUID(), {
     content: { body: 'Another person’s private words.' },
@@ -145,6 +150,7 @@ test('a sub-thread appears once at its closing notice, with who, when and its su
     fold.textContent!.includes('Main conversation stays here'),
     false,
   )
+  assertEquals(fold.textContent!.includes('calendar questions briefly'), false)
   assertEquals(first.html.includes('Another person’s private words'), false)
 })
 

@@ -20,17 +20,25 @@ export let NEEDS = 'needs'
  * button and the installed page's icon show. */
 export let counted = (lists: List[]) => lists.reduce((n, l) => n + l.count, 0)
 
-/** The bar's way to the column, with how many wait. */
-export let waitsButton = (lists: List[]) => {
-  let n = counted(lists)
+/** The bar's way to the column, with how many wait, `n`. */
+export let waitsButton = (n: number) => {
   let said = n ? `What needs you: ${n}` : 'What needs you'
   return h(
     Button,
-    { href: `#${NEEDS}`, class: 'Talk_Waits', title: said, 'aria-label': said },
+    {
+      href: `#${NEEDS}`,
+      class: 'Talk_Waits',
+      title: said,
+      'aria-label': said,
+      'data-count': n,
+    },
     h(Icon, { of: icons.bell }),
     n ? h(Badge, null, n) : null,
   )
 }
+
+/** What the column says when no list has anything in it. */
+export let nothing = h(Empty, null, h('p', null, 'Nothing needs you.'))
 
 /** The column: the lists, each under its own title and count, or that
  * nothing needs them. It has no heading of its own, which would repeat the
@@ -54,7 +62,7 @@ export let talkBeside = (lists: List[]) => {
     h(
       'div',
       { class: 'Talk_Lists' },
-      drawn.length ? drawn : h(Empty, null, h('p', null, 'Nothing needs you.')),
+      drawn.length ? drawn : nothing,
     ),
   )
 }

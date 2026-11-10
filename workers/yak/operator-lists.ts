@@ -184,7 +184,7 @@ let heard = (listed: Listed, asked: Asked): Listed => {
 // The lists one server offers, read as `space`'s Operator, which is whom a
 // machine opens its tools to: all at once on one connection, so a machine
 // behind a tunnel is opened once for the page and not once a list.
-let read = async (
+let served = async (
   env: Env,
   person: string,
   space: string,
@@ -227,6 +227,46 @@ let said = (rows: Bundle[]) =>
   rows.flatMap((b) => String(comp(b, 'content').body ?? '').split('\n'))
     .map((l) => l.trim()).filter(Boolean)
 
+/** What `person`'s servers offer `space`'s Operator page, in two steps: how
+ * many lists it reaches and where their ids open, from the directory, and
+ * `read`, which asks every server at once and gives each list in its order.
+ * A page draws without waiting on `read` (operator-page.ts `chatPage`). */
+export type Listing = {
+  size: number
+  mentions?: string
+  read: (wait?: number) => Promise<Listed[]>
+}
+
+export let listingOf = async (
+  env: Env,
+  person: string | null | undefined,
+  space: string,
+): Promise<Listing> => {
+  if (!person) return { size: 0, read: () => Promise.resolve([]) }
+  let { servers, lists } = await listings(env, person, space)
+  let mentions = servers.map((s) => String(comp(s, 'mentions').url ?? ''))
+    .find(Boolean)
+  // Each server's lists together, then all of them back in their order.
+  let read = async (wait = WAIT) => {
+    let groups = Map.groupBy(lists, (l) => l.server.entity.eid).values()
+    let got = new Map(
+      (await Promise.all([...groups].map(async (group) => {
+        let listed = await served(
+          env,
+          person,
+          space,
+          group[0].server,
+          group.map((l) => l.list),
+          wait,
+        )
+        return group.map((l, i) => [l.list, listed[i]] as const)
+      }))).flat(),
+    )
+    return lists.map((l) => got.get(l.list)!)
+  }
+  return { size: lists.length, ...mentions ? { mentions } : {}, read }
+}
+
 /** What `person`'s servers offer `space`'s Operator page: each list read at
  * once and in their order, and where their ids open; nothing where they set
  * nothing it reaches. */
@@ -236,29 +276,8 @@ export let listsOf = async (
   space: string,
   wait = WAIT,
 ): Promise<Beside> => {
-  if (!person) return { lists: [] }
-  let { servers, lists } = await listings(env, person, space)
-  let mentions = servers.map((s) => String(comp(s, 'mentions').url ?? ''))
-    .find(Boolean)
-  // Each server's lists together, then all of them back in their order.
-  let groups = Map.groupBy(lists, (l) => l.server.entity.eid).values()
-  let got = new Map(
-    (await Promise.all([...groups].map(async (group) => {
-      let listed = await read(
-        env,
-        person,
-        space,
-        group[0].server,
-        group.map((l) => l.list),
-        wait,
-      )
-      return group.map((l, i) => [l.list, listed[i]] as const)
-    }))).flat(),
-  )
-  return {
-    lists: lists.map((l) => got.get(l.list)!),
-    ...mentions ? { mentions } : {},
-  }
+  let { mentions, read } = await listingOf(env, person, space)
+  return { lists: await read(wait), ...mentions ? { mentions } : {} }
 }
 
 /** The id of an ask's row on the page, which an alert about it opens at
