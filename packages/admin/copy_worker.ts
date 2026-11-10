@@ -1,9 +1,8 @@
 /// <reference no-default-lib="true" />
 /// <reference lib="deno.worker" />
-import * as fs from '@yaks/file/io'
-import { open } from '@yaks/sqlite/db'
 import { type Port, portLink } from '@yaks/sync/port'
 import { copy, type Copying } from './copy.ts'
+import { copyFile } from './copy_file.ts'
 import { copyErrors, type CopyPage, type CopyPlan } from './copy_thread.ts'
 
 let stopping = new AbortController()
@@ -19,17 +18,7 @@ let link = portLink(self as unknown as Port, {
         await link.request('page', { space, asked } satisfies CopyPage, {
           timeout: null,
         }) as Copying,
-      open: (slug) => {
-        let path = `${to}/${slug}.db`
-        for (let file of [path, `${path}-wal`, `${path}-shm`]) {
-          try {
-            fs.removeSync(file)
-          } catch (error) {
-            if (!fs.isNotFound(error)) throw error
-          }
-        }
-        return open(path, { wal: false })
-      },
+      open: (slug) => copyFile(to, slug),
       out: async (line) => {
         await link.request('out', line, { timeout: null })
       },

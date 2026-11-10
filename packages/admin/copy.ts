@@ -20,6 +20,9 @@ import { Interrupted } from '@yaks/tools/errors'
 /** One answer of the door: a space's plan, or a page of one of its tables. */
 export type Copying = { plan: Plan } | { rows: Cell[][]; last: number | null }
 
+/** A private destination, published on close only after every table arrived. */
+export type Target = Driver & { close: (complete: boolean) => void }
+
 /** Each space's store into the file `open` makes for its slug, a line said
  * for each: its tables and rows, or that it holds none. The file is one, to
  * be copied or opened anywhere: `open` makes it with a rollback journal. A
@@ -31,7 +34,7 @@ export let copy = async (o: {
     space: string,
     asked: { table?: string; after?: number },
   ) => Promise<Copying>
-  open: (slug: string) => Driver & { close: () => void }
+  open: (slug: string) => Target
   out: (line: string) => unknown
   stopping: AbortSignal
 }) => {
@@ -47,9 +50,9 @@ export let copy = async (o: {
       continue
     }
     let sql = o.open(space.slug)
+    let rows = 0, complete = false
     try {
       copied(sql, plan)
-      let rows = 0
       for (let t of plan.tables) {
         for (let after = 0;;) {
           going()
@@ -65,9 +68,10 @@ export let copy = async (o: {
         }
       }
       ending(sql, plan)
-      await o.out(`${space.slug}  ${plan.tables.length} tables, ${rows} rows`)
+      complete = true
     } finally {
-      sql.close()
+      sql.close(complete)
     }
+    await o.out(`${space.slug}  ${plan.tables.length} tables, ${rows} rows`)
   }
 }
