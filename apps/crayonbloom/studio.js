@@ -8,6 +8,7 @@ let book = null,
   saving = null,
   pageId = null,
   opening = 0,
+  watching = null,
   recovering
 let freshId = () => {
   let id = location.hash.split('/')[1]
@@ -238,11 +239,15 @@ let draw = () => {
       : ''
   }${
     book
-      ? `<h3>Add a puzzle</h3><div class="Actions"><button data-act="puzzle" data-kind="maze">Maze</button><button data-act="puzzle" data-kind="connect_the_dots">Dot-to-dot</button>${
+      ? `${
+        s.mode === 'free'
+          ? '<button data-act=freebook>Build a book from this page</button>'
+          : ''
+      }<h3>Add a puzzle</h3><div class="Actions"><button data-act="puzzle" data-kind="maze">Maze</button><button data-act="puzzle" data-kind="connect_the_dots">Dot-to-dot</button>${
         s.age !== '2-4'
           ? '<button data-act="puzzle" data-kind="word_search">Word search</button>'
           : ''
-      }</div><h3>Prepare for print</h3><button data-act="connect">Connect PrintBound</button><button data-act="prepare">Prepare print document</button><p class="Caption">You review the complete document before requesting a destination quote.</p>`
+      }</div><h3>Gather saved pages</h3><button data-act="choose">Choose pages from your shelf</button><div data-collection></div><h3>Prepare for print</h3><button data-act="connect">Connect PrintBound</button><button data-act="prepare">Prepare print document</button><p class="Caption">You review the complete document before requesting a destination quote.</p>`
       : ''
   }</section></div>${
     pages.length
@@ -310,6 +315,7 @@ let open = async () => {
     book = value.book
     pages = value.pages
     draw()
+    if (book.page_drawing || pages.some((p) => p.page_drawing)) watch(id)
     return
   }
   let shelf = await request('shelf')
@@ -320,7 +326,7 @@ let open = async () => {
     settings.preview
       ? '<p class="Caption">Fixture preview · no paid generation, payment or print fulfillment.</p>'
       : ''
-  }<h1 class="Title">Your personal shelf</h1><p>Start with your child’s idea. Save a page, build a story, or gather completed pages into a book.</p><div class="Actions"><a class="Action" href="#new">Start an idea</a></div><ul class="Shelf">${
+  }<h1 class="Title">Your personal shelf</h1><p>Start with your child’s idea. Save a page, build a story, or gather completed pages into a book.</p><div class="Actions"><a class="Action" href="#new">Start an idea</a><a class="Action" href="./free_pages/resume">Resume a free page</a></div><ul class="Shelf">${
     shelf.map((book) =>
       `<li><a class="Shelf_Link" href="#book/${book.entity.eid}"><h2>${
         esc(book.doc.title)
@@ -370,7 +376,12 @@ desk.addEventListener('submit', async (event) => {
       return
     }
     let value = Object.fromEntries(new FormData(event.target))
-    if (event.target.matches('[data-page]')) {
+    if (event.target.matches('[data-collection-form]')) {
+      await request('assemble', {
+        id: pageId,
+        pages: [...new FormData(event.target).getAll('page')],
+      })
+    } else if (event.target.matches('[data-page]')) {
       await request('edit', {
         ...value,
         id: book.entity.eid,
@@ -402,6 +413,36 @@ desk.addEventListener('click', async (event) => {
       sourceInput()
       let saved = await save()
       id = saved.entity.eid
+    }
+    if (act === 'choose') {
+      let selected = await request('collection')
+      if (pageId !== id) return
+      desk.querySelector('[data-collection]').innerHTML =
+        `<form data-collection-form>${
+          selected.map((item) =>
+            `<label><input type=checkbox name=page value="${item.page.entity.eid}"> ${
+              esc(item.title)
+            } · page ${item.page.coloring_page.position}</label>`
+          ).join('')
+        }<button>Gather selected pages</button></form>`
+      return
+    }
+    if (act === 'freebook') {
+      sourceInput()
+      let saved = await save(),
+        original = await request('book?id=' + saved.entity.eid)
+      let next = await request('save', {
+        ...saved.coloring_book,
+        title: saved.doc.title,
+        body: '',
+        mode: 'coloring',
+      })
+      await request('assemble', {
+        id: next.entity.eid,
+        pages: original.pages.filter((p) => p.artwork).map((p) => p.entity.eid),
+      })
+      location.hash = '#book/' + next.entity.eid
+      return
     }
     if (act === 'connect') {
       let response = await fetch('./api/service/connect', {
@@ -466,12 +507,38 @@ desk.addEventListener('click', async (event) => {
       }
     }
     await open()
+    if (act === 'draw' && pageId === id) watch(id, true)
   } catch (e) {
     tell(e.message)
   } finally {
     button.disabled = false
   }
 })
+let watch = (id, queued = false) => {
+  clearTimeout(watching)
+  watching = setTimeout(async () => {
+    if (pageId !== id) return
+    try {
+      let value = await request('book?id=' + id)
+      let active = value.book.page_drawing ||
+        value.pages.some((p) => p.page_drawing)
+      // Preserve edits in the current form while background artwork finishes.
+      if (
+        !saving && !document.activeElement?.matches('input,textarea,select')
+      ) {
+        book = value.book
+        pages = value.pages
+        draw()
+      }
+      if (active || queued) watch(id, false)
+      else {tell(
+          'Saved artwork progress is ready. Reopen this book to review it.',
+        )}
+    } catch (e) {
+      tell(e.message)
+    }
+  }, 1500)
+}
 let pollStory = async (id) => {
   let result = await request('story', { id })
   if (result.pending) {

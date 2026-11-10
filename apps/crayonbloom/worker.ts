@@ -1,10 +1,10 @@
 import { draftGateway, DraftRefused } from '@yaks/draft'
+import { collection } from './collection.ts'
 import { gallery } from './gallery.ts'
 import { story } from './story.ts'
 import { printable, printableRequest } from './printable.ts'
 import { atelier } from './atelier.ts'
 import {
-  allowed,
   type Binding,
   guard,
   identifier,
@@ -17,7 +17,7 @@ import { generation, put, puzzle, settings } from './generation.ts'
 import { printer, printing } from './printing.ts'
 import { publicPage } from './public.ts'
 import { legacyPage } from './legacy.ts'
-import type { Book, Page } from './model.ts'
+import type { Book } from './model.ts'
 
 export type Env = { APP: Binding; STORE: Binding; FILES: Binding }
 let path = (request: Request) => new URL(request.url).pathname
@@ -68,7 +68,8 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
   if (leaf === 'gallery') return file(env, 'gallery.html')
   if (leaf === 'studio') return file(env, 'studio.html')
   if (publicFiles.has(leaf)) return file(env, leaf)
-  let action = path(request).split('/studio/')[1]
+  let action = path(request).split('/studio/')[1] ??
+    (path(request).endsWith('/free_pages/resume') ? 'resume_free' : null)
   if (!action) return new Response('Not found', { status: 404 })
   try {
     if (action === 'gallery') return reply(await gallery(db, env.APP).list())
@@ -96,6 +97,15 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
       printer(env.STORE, runtime.printer),
       runtime,
     )
+    if (action === 'resume_free') {
+      let saved = (await engine.shelf(caller)).find((b) =>
+        b.coloring_book.mode === 'free'
+      )
+      let base = new URL(request.headers.get('x-yak-address') ?? request.url)
+      base.pathname = base.pathname.replace(/free_pages\/resume$/, 'studio')
+      base.hash = saved ? 'book/' + saved.entity.eid : 'new'
+      return Response.redirect(base.toString(), 303)
+    }
     if (action === 'settings') {
       let styles = await db.query('.coloring_style&?coloring_style&?doc')
       return reply({
@@ -103,6 +113,9 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
         printer: runtime.printer,
         styles,
       })
+    }
+    if (action === 'collection') {
+      return reply(await collection(db, engine).list(caller))
     }
     if (action === 'shelf') return reply(await engine.shelf(caller))
     if (action === 'book') {
@@ -242,7 +255,7 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
     else if (action === 'consent') {
       result = await engine.consent(value.id, value.agree === true, caller)
     } else if (action === 'assemble') {
-      result = await assemble(db, engine, book, value.pages, caller)
+      result = await collection(db, engine).assemble(book, value.pages, caller)
     } else return new Response('Not found', { status: 404 })
     return reply(result ?? { ok: true })
   } catch (error) {
@@ -257,45 +270,4 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
   }
 }
 
-let assemble = async (
-  db: ReturnType<typeof store>,
-  engine: ReturnType<typeof atelier>,
-  book: Book,
-  ids: unknown,
-  caller: Who,
-) => {
-  if (!Array.isArray(ids) || !ids.length) {
-    throw new Refusal('Choose the saved pages to gather into this book.')
-  }
-  let changes = [],
-    existing = await engine.pages(book),
-    position = existing.length
-  for (let id of ids) {
-    let [page] = await db.query(
-      `.entity.eid=${identifier(id)}&?coloring_page&?artwork`,
-    ) as Page[]
-    if (!page?.coloring_page) {
-      throw new Refusal('One of those pages is not available.', 403)
-    }
-    let source = await engine.owned(page.coloring_page.book, caller)
-    if (!allowed(source.coloring_book, caller)) {
-      throw new Refusal('One of those pages is not available.', 403)
-    }
-    changes.push({
-      entity: { eid: crypto.randomUUID() },
-      coloring_page: {
-        ...page.coloring_page,
-        book: book.entity.eid,
-        position: ++position,
-      },
-      ...(page.artwork ? { artwork: page.artwork } : {}),
-    })
-  }
-  await db.apply([...changes, {
-    entity: book.entity,
-    print_review: null,
-    print_quote: null,
-  }])
-  return { ok: true }
-}
 export default { fetch: fetchApp }

@@ -3,6 +3,7 @@ import { test } from '@yaks/testing'
 import { sha256 } from '@yaks/graph'
 import manifest from './vocab.json' with { type: 'json' }
 import { atelier, type Generator } from './atelier.ts'
+import { collection } from './collection.ts'
 import { fingerprint, type Job } from './model.ts'
 import { memory } from '../printbound/storefront_fixture.ts'
 
@@ -144,4 +145,22 @@ test('a toddler gets age-appropriate puzzles and another customer cannot change 
     }, bob)
   )
   assertEquals(pages.at(-1)!.coloring_page.activity, 'maze')
+})
+
+test('gathering owned finished pages preserves bytes and rejects another customer', async () => {
+  let f = await fixture(),
+    source = await f.desk.save({ ...input, mode: 'free' }, alice)
+  await f.desk.outline(source.entity.eid, alice)
+  await f.desk.advance(source.entity.eid, alice)
+  await f.desk.advance(source.entity.eid, alice)
+  let [page] = await f.desk.pages(source)
+  let target = await f.desk.save({ ...input, title: 'Gathered pages' }, alice)
+  let gather = collection(f.db, f.desk)
+  await gather.assemble(target, [page.entity.eid], alice)
+  let [copy] = await f.desk.pages(target)
+  assertEquals(copy.artwork?.blob, page.artwork?.blob)
+  assertEquals(copy.artwork?.input, fingerprint(target, copy))
+  assertEquals((await f.desk.advance(target.entity.eid, alice)).complete, true)
+  assertEquals((await gather.list(bob)).length, 0)
+  await assertRejects(() => gather.assemble(target, [page.entity.eid], bob))
 })

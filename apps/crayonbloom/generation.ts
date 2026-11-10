@@ -53,18 +53,27 @@ let sample = (seed: number) => {
   let width = 2400,
     height = 3040,
     data = new Uint8Array(width * height).fill(255)
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let ring =
-        Math.abs(Math.hypot(x / 4.6875 - 256, y / 4.75 - 290) - 135) < 2
-      let ground = y / 4.75 > 490 && y / 4.75 < 494 && x / 4.6875 > 50 &&
-        x / 4.6875 < 462
-      let detail = Math.abs(
-        Math.hypot(x / 4.6875 - (160 + seed % 150), y / 4.75 - 240) - 27,
-      ) < 2
-      if (ring || ground || detail) data[y * width + x] = 0
+  let stroke = (left: number, right: number, y: number) => {
+    data.fill(
+      0,
+      y * width + Math.max(0, Math.floor(left)),
+      y * width + Math.min(width, Math.ceil(right)),
+    )
+  }
+  let ellipse = (cx: number, cy: number, rx: number, ry: number) => {
+    for (let y = Math.ceil(cy - ry); y <= Math.floor(cy + ry); y++) {
+      let dy = y - cy,
+        outer = rx * Math.sqrt(Math.max(0, 1 - dy * dy / (ry * ry)))
+      let inner = Math.abs(dy) >= ry - 12
+        ? 0
+        : (rx - 12) * Math.sqrt(1 - dy * dy / ((ry - 12) * (ry - 12)))
+      stroke(cx - outer, cx - inner, y)
+      stroke(cx + inner, cx + outer, y)
     }
   }
+  ellipse(1200, 1380, 640, 650)
+  ellipse(760 + seed % 700, 1140, 132, 135)
+  for (let y = 2328; y < 2340; y++) stroke(240, 2160, y)
   return encode({ width, height, data, channels: 1, depth: 8 })
 }
 export let generation = (
@@ -87,7 +96,13 @@ export let generation = (
       ...(!runtime.preview
         ? {
           using: { provider: 'openai', model: runtime.model },
-          sending: { input: { size: '2400x3040', quality: 'medium' } },
+          sending: {
+            input: {
+              size: '2400x3040',
+              quality: 'medium',
+              output_format: 'png',
+            },
+          },
         }
         : {}),
     }]

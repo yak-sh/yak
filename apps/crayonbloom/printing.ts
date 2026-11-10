@@ -83,6 +83,7 @@ export let printing = (
       product: 'coloring',
       frontBleed: false,
     })
+    if (document.error) throw new Refusal(String(document.error))
     if (document.pending) {
       await db.apply([{
         entity: book.entity,
@@ -139,6 +140,7 @@ export let printing = (
         document: pending.document,
       })
       if (doc.pending) return doc
+      if (doc.error) throw new Refusal(String(doc.error))
       await db.apply([{
         entity: book.entity,
         print_preparation: null,

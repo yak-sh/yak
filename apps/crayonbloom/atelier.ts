@@ -328,6 +328,7 @@ export let atelier = (db: Store, io: AtelierIO) => {
       all = await pages(book)
       let active = all.filter((p) => p.page_drawing).length
       if (book.page_drawing) return { book, pages: all, complete: false }
+      if (complete(book, all)) return { book, pages: all, complete: true }
       let selectedStyle = await style(book)
       if (
         book.coloring_book.mode !== 'free' &&
