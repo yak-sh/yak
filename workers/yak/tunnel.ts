@@ -242,16 +242,17 @@ let OURS = /^(cookie|x-via)$|^x-yak-/
 export type Caller = 'app' | 'operator' | 'connector'
 
 /** Who asks a machine for its owner: their connector unless it says their
- * Operator, which also names the conversation it asks in (`via`), where there
- * is one. A request that carries the owner's own words as they gave them, and
+ * Operator, which also names its space and the conversation it asks in
+ * (`via`), where there is one. An Operator reaches only the machine of its own
+ * space's tunnel: another space's members shape its instructions and memory,
+ * so the owner's machine is no tool of theirs. A request that carries the owner's own words as they gave them, and
  * nobody's reading of them, is their `own` act: the machine is told who they
  * are (@yaks/tunnel `BY`), and writes it as theirs. Only the host says so, of
  * words it read itself: nothing a model or an app sends does. */
-export type Calling = {
-  caller: Exclude<Caller, 'app'>
-  via?: () => Promise<string | undefined> | string | undefined
-  own?: boolean
-}
+export type Calling =
+  & { via?: () => Promise<string | undefined> | string | undefined }
+  & { own?: boolean }
+  & ({ caller: 'connector' } | { caller: 'operator'; space: string })
 
 /** The header that names the conversation a request to a machine was made in:
  * an Operator's conversation with the tunnel's owner, by the id of its session
@@ -372,6 +373,7 @@ export let machine = async (
   let [space, seats] = await Promise.all([dir.at(at), dir.sitting(person)])
   let role = seats.get(at)
   if (!space || space.trashed || role != 'owner') return null
+  if (asking.caller == 'operator' && asking.space != at) return null
   return async (input, init) => {
     if (!space.tunnel) return json(404, 'no_tunnel', ENDS.no_tunnel(space))
     let req = new Request(input, init)

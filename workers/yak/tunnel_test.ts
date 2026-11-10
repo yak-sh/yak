@@ -347,6 +347,7 @@ test('the owner’s request goes to the gateway saying who asks for them, and no
   let said = { method: 'POST', headers: WORDS, body: 'a call' }
   let talking = await tunnel.machine(env, ada.eid, ADA, {
     caller: 'operator',
+    space: ada.eid,
     via: () => 'a-talk',
   })
   let res = await talking!('http://anywhere/mcp?x=1', said)

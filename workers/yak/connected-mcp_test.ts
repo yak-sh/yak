@@ -44,17 +44,24 @@ await stamp(env, {
   }],
 })
 let space = (await dir.at(eid))!
+// Another space Ada owns, whose members are not the machine's.
+let elsewhere = (await dir.at(
+  await dir.mint(ada, 'adas-club', 'Club', {
+    'x-yak-person': ada,
+    'x-yak-role': 'owner',
+  }),
+))!
 
-// A turn of the space's Operator with `person`, in a fork of `talk`.
+// A turn of `space`'s Operator with `person`, in a fork of `talk`.
 let talk = mint(), fork = mint()
 let store = operatorMemory()
 await store.g.apply([
   { entity: { eid: talk }, session: {} },
   { entity: { eid: fork }, session: {}, spawned: { parent: talk } },
 ], { trusted: true })
-let turn = async (person: string) => {
-  let ctx = await operatorContext(env, { person }, space, () => dir)
-  let tools = await operatorRoster(ctx, store, { space: eid, session: fork })
+let turn = async (person: string, at = space) => {
+  let ctx = await operatorContext(env, { person }, at, () => dir)
+  let tools = await operatorRoster(ctx, store, { space: at.eid, session: fork })
   let run = (name: string, args: Record<string, unknown>) =>
     tools.find((t) => t.name == name)!.run(args, {
       session: fork,
@@ -135,6 +142,22 @@ test('a member’s turn is offered nothing of the owner’s machine, whatever ro
       'not connected for you',
     )
   }
+  assertEquals(box.requests, [])
+})
+
+test('the owner’s turn with another space’s Operator is offered nothing of their machine', async () => {
+  box.requests.length = 0
+  let { ctx, named } = await turn(ada, elsewhere)
+  assertEquals(named, [])
+  await assertRejects(
+    () =>
+      runConnectedCommand(ctx, at, 'publish_mockup', { html: 'x' }, {
+        caller: 'operator',
+        space: elsewhere.eid,
+      }),
+    Error,
+    'not connected for you',
+  )
   assertEquals(box.requests, [])
 })
 

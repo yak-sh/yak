@@ -395,12 +395,14 @@ export let operatorRoster = async (
   // Every tool the connector lists for the person (agent.ts `connected`), to
   // the conversation and each of its forks alike: the list heads the request,
   // so one list keeps the conversation's cached prefix for every fork. A
-  // server on the person's own machine (tunnel.ts `machine`) is told that
+  // server on the person's own machine (tunnel.ts `machine`) is offered only
+  // to the Operator of the space whose tunnel reaches it, and is told that
   // their Operator asks, and which conversation: the one this session works
   // for, so a fork's calls and a helper's are the conversation's there too.
   let top: Promise<string> | undefined
   let asking: Calling = {
     caller: 'operator',
+    space,
     via: session ? () => top ??= topOf(work, session) : undefined,
   }
   let remote = await connectedTools(ctx, asking)
@@ -586,6 +588,7 @@ export let machineFor = async (
   if (!await admin({ dir: open(), person })) return null
   return (await import('./tunnel.ts')).machine(env, space.eid, person, {
     caller: 'operator',
+    space: space.eid,
     via,
   })
 }
