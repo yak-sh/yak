@@ -2136,6 +2136,19 @@ let found = () => {
 // of them, as of where it stood in its directory writes before reading.
 let keep = (spaces: Iterable<string>, apps: App[], since?: number) => {
   let mine = found()
+  // TODO(T-155323): the second half of the diagnostic in `apps`.
+  let all = [...spaces]
+  if (all.length > 1) {
+    console.log(
+      'yak apps keep',
+      JSON.stringify({
+        tally: !!ambient(),
+        since: since ?? null,
+        spaces: all.map((k) => k.slice(0, 8)),
+      }),
+    )
+  }
+  spaces = all
   if (!mine || since == null) return
   for (let space of spaces) {
     mine.apps.set(space, {
