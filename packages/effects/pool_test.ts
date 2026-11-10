@@ -592,6 +592,51 @@ test('a process that stops leaves what it writes next for the others', async () 
   assert(!(await run(a.g, 'post_note')).lease_owner)
 })
 
+test('repeated live work calls share a worker until its owning signal stops it', async () => {
+  let watches = 0, left = 0
+  let a = proc(store(), {
+    watch: () => {
+      watches++
+      return () => {
+        left++
+      }
+    },
+  })
+  a.fx.handle({ post_note: a.note })
+  let up = new AbortController(), other = new AbortController()
+  let serving = a.fx.work(a.g, up.signal)
+  let sharing = a.fx.work(a.g, other.signal)
+  try {
+    await until(() => watches > 0)
+    other.abort()
+    await a.g.apply([post('p1')])
+    a.fx.wake()
+    await until(() => a.ran.length == 1)
+    assertEquals(watches, 1)
+    assertEquals(left, 0)
+  } finally {
+    up.abort()
+    other.abort()
+    await Promise.all([serving, sharing])
+    await a.fx.stop()
+  }
+  assertEquals(left, 1)
+  assertEquals(a.oops, [])
+  let next = new AbortController()
+  let resumed = a.fx.work(a.g, next.signal)
+  try {
+    await until(() => watches == 2)
+    await a.g.apply([post('p2')])
+    a.fx.wake()
+    await until(() => a.ran.length == 2)
+  } finally {
+    next.abort()
+    await resumed
+    await a.fx.stop()
+  }
+  assertEquals(left, 2)
+})
+
 test('a worker told to stop claims nothing more, and keeps what it is running until it ends', async () => {
   let s = store()
   let t = 0

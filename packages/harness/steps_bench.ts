@@ -9,7 +9,7 @@ import { textOf, transcript } from '@yaks/session'
 import { standaloneMain } from '../../bench/standalone-main.ts'
 import { seed } from './agent.ts'
 import { agent } from './agent.ts'
-import { harness, working } from './testing.ts'
+import { harness } from './testing.ts'
 import { unfinishedEach } from './unfinished.ts'
 
 const ROUNDS = 3
@@ -31,7 +31,7 @@ let round = async (steps: number) => {
     const final = (text: string) =>
       request.items.some((item) =>
         item.kind == 'result'
-          ? item.output.split('\n')[0] == text
+          ? item.output.split('\n').includes(text)
           : item.kind == 'user' && item.text.includes(text)
       )
     let completed = 0
@@ -61,9 +61,9 @@ let round = async (steps: number) => {
   await h.g.apply(seed({ provider: 'openai', model: 'scripted', tools }), {
     trusted: true,
   })
-  const a = agent({ h, name: 'scripted', tools, model })
-  const runner = working(h, {
-    asyncTools: true,
+  const a = agent({
+    h,
+    name: 'scripted',
     tools,
     model,
     each: unfinishedEach({ graph: h.g } as Host),
@@ -135,11 +135,7 @@ let round = async (steps: number) => {
     }
   } finally {
     clearTimeout(timer)
-    try {
-      await runner.stop()
-    } finally {
-      await a.close()
-    }
+    await a.close()
   }
 }
 

@@ -312,7 +312,8 @@ export type Pool = {
   /** Work the pool: with a live signal, until it aborts; with an aborted
    * one, pass after pass until nothing is left to start, giving way to the
    * host between them — and none at all where a process that stays up is
-   * already working it. */
+   * already working it. Repeated live calls share the current worker; its
+   * first signal owns its lifetime. */
   work: (
     g: Access,
     signal?: AbortSignal,
@@ -1113,7 +1114,6 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       if (pending !== passing) continue
       if (!running.size && !(loop?.signal.aborted && loop.done)) return
       let stopping = loop?.signal.aborted ? loop.done : undefined
-      if (stopping) loop = undefined
       let settled = Promise.allSettled([
         stopping,
         ...[...running.values()].map((h) => h.run),
@@ -1216,12 +1216,20 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
       // Leaving is the moment the signal aborts, not the end of the pass in
       // flight: what this process commits from then on is the others'.
-      let joining = join(g, requested.startup)
-      signal.addEventListener('abort', () => member = false, { once: true })
-      let opening = await joining
-      let done = stay(g, signal, page - opening.length)
-      loop = { done, signal }
-      await done
+      if (loop) return await loop.done
+      let done = (async () => {
+        let joining = join(g, requested.startup)
+        signal.addEventListener('abort', () => member = false, { once: true })
+        let opening = await joining
+        await stay(g, signal, page - opening.length)
+      })()
+      let worker = { done, signal }
+      loop = worker
+      try {
+        await done
+      } finally {
+        if (loop === worker) loop = undefined
+      }
     },
     wake: () => nap?.abort(),
     idle,
