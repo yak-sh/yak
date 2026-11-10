@@ -110,18 +110,20 @@ export let timing = {
 // connection, a DNS failure and a broken TLS handshake alike. Sending it
 // again can do nothing twice, whatever its method, so it is sent again after
 // each pause, which `sleep` spends. A failure after connecting may have
-// arrived, and is thrown.
+// arrived, and is thrown, unless the call only reads (`rereads`): a copy's
+// page, asked again on a pooled connection that broke as it was sent, is the
+// same page.
 export let reconnect = { pauses: [200, 1000, 3000], sleep }
 
 let connecting = (err: unknown) =>
   /\(Connect\)/.test(String((err as Error)?.message ?? err))
 
-let again = async (go: () => Promise<Response>) => {
+let again = async (go: () => Promise<Response>, rereads = false) => {
   for (let pause of reconnect.pauses) {
     try {
       return await go()
     } catch (err) {
-      if (!connecting(err)) throw err
+      if (!connecting(err) && !(rereads && err instanceof TypeError)) throw err
     }
     await reconnect.sleep(pause)
   }
@@ -134,15 +136,19 @@ let again = async (go: () => Promise<Response>) => {
 let sent = async (
   url: string,
   session?: string,
-  init: RequestInit & { headers?: Record<string, string> } = {},
+  init: RequestInit & {
+    headers?: Record<string, string>
+    rereads?: boolean
+  } = {},
   quiet = false,
   browser = false,
 ) => {
+  let { rereads, ...rest } = init
   let asked = {
-    ...init,
+    ...rest,
     headers: { ...init.headers, ...(session ? head(session, browser) : {}) },
   }
-  let go = () => again(() => fetch(url, asked))
+  let go = () => again(() => fetch(url, asked), rereads)
   let r = timing.on && !quiet
     ? await timed(timing.say, go)(new Request(url, asked))
     : await go()
@@ -428,7 +434,7 @@ export let OPERATOR_COPY = '/api/operator-copy'
 export let operatorSpaces = (
   session: string,
 ): Promise<{ eid: string; slug: string }[]> =>
-  said(sent(apex(OPERATOR_COPY), session))
+  said(sent(apex(OPERATOR_COPY), session, { rereads: true }))
 
 export let operatorPage = <T>(
   session: string,
@@ -442,6 +448,7 @@ export let operatorPage = <T>(
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(asked),
+      rereads: true,
     },
   ))
 
@@ -453,7 +460,7 @@ export let STORE_COPY = '/api/store-copy'
 export let appStores = (
   session: string,
 ): Promise<{ store: string; at: string }[]> =>
-  said(sent(apex(STORE_COPY), session))
+  said(sent(apex(STORE_COPY), session, { rereads: true }))
 
 export let storePage = <T>(
   session: string,
@@ -467,6 +474,7 @@ export let storePage = <T>(
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(asked),
+      rereads: true,
     },
   ))
 

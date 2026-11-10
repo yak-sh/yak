@@ -33,6 +33,7 @@ import {
   rpc,
   saidBy,
   saidOn,
+  storePage,
   storeQuery,
   storeUrl,
   timing,
@@ -355,7 +356,8 @@ test('a renewed cookie is handed on, and an ordinary answer is quiet', async () 
 })
 
 // A connection that failed while connecting is sent again; a failure after
-// it may have arrived, so it is thrown on the first try.
+// it may have arrived, so it is thrown on the first try, unless the call only
+// reads.
 let failing = (fails: Error[]) => {
   let real = globalThis.fetch
   let tries = 0
@@ -391,12 +393,26 @@ test('a request that never connected is sent again, and nothing else is', async 
   } finally {
     down.done()
   }
-  let cut = failing([new TypeError('error reading a body from connection')])
+  let pipe = new TypeError(
+    'error sending request: client error (SendRequest): connection error: ' +
+      'stream closed because of a broken pipe',
+  )
+  let cut = failing([pipe])
   try {
-    await assertRejects(() => feeNow('a.token'), TypeError, 'reading a body')
+    await assertRejects(() => feeNow('a.token'), TypeError, 'broken pipe')
     assertEquals([cut.tries(), paused], [1, []])
   } finally {
     cut.done()
+  }
+  let page = failing([pipe, pipe])
+  try {
+    assertEquals(
+      (await storePage<{ bps: number }>('a.token', 'ada/app', {})).bps,
+      250,
+    )
+    assertEquals([page.tries(), paused], [3, [1, 2]])
+  } finally {
+    page.done()
     Object.assign(reconnect, was)
   }
 })
