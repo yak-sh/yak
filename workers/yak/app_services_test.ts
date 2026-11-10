@@ -4,7 +4,8 @@ import { parseTools } from '@yaks/tools/declared'
 import { keepDeclaration } from './declaration.ts'
 import { releaseOf } from './directory.ts'
 import { serviceOffer } from './app-services.ts'
-import { platform, seeded } from './serving-probe.ts'
+import { as, platform, seeded, visit } from './serving-probe.ts'
+import * as apps from './apps.ts'
 
 test('app service catalog follows the declaration without copying a command schema', async () => {
   await using p = platform()
@@ -57,7 +58,7 @@ import { assertRejects } from '@std/assert'
 test('service customers retain their identity and lose authority after revocation', async () => {
   await using p = platform()
   let { env } = p
-  let source = await seeded(env, 'public')
+  let source = await seeded(env, 'private')
   let { dir } = source
   let eli = mint()
   await dir.apply({
@@ -120,9 +121,22 @@ test('service customers retain their identity and lose authority after revocatio
     app.eid,
     ['order'],
   )).connection
-  await connectService(env, dir, source, { person: eli, role: null }, app.eid, [
-    'order',
-  ])
+  let connect = await apps.fetch(
+    visit('/cookbook/api/service/connect', {
+      method: 'POST',
+      headers: { cookie: await as(eli), 'content-type': 'application/json' },
+      body: JSON.stringify({ service: app.eid, operations: ['order'] }),
+    }),
+    env,
+  )
+  assertEquals(connect.status, 200, await connect.text())
+  let graph = await apps.fetch(
+    visit('/cookbook/api/query?.doc', {
+      headers: { cookie: await as(eli) },
+    }),
+    env,
+  )
+  assertEquals(graph.status, 403)
   await assertRejects(() =>
     connectService(env, dir, source, { person: ADA, role: 'owner' }, app.eid, [
       'admin',

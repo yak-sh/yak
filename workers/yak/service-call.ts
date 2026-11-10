@@ -19,7 +19,6 @@ import { meta } from './meta.ts'
 import { asCaller, type Ctx, refuse } from './tool.ts'
 import { vouched, type Who } from './session.ts'
 import type { Command } from './declared.ts'
-import { mode, reads } from '@yaks/member'
 import { opened, seal } from './lib/token.ts'
 
 let read = (env: Env): Read => (q) =>
@@ -37,9 +36,6 @@ export let verifyService = async (
     !source || source.app.trashed || source.space.trashed ||
     source.space.eid != a.space
   ) return false
-  if (!reads(mode(source.app.access), await dir.role(source.space, a.person))) {
-    return false
-  }
   let target = await dir.appAt(a.service)
   if (!target || target.app.trashed || target.space.trashed) return false
   let tool = (await toolsOf(env, target.space, target.app))[a.operation]
@@ -60,7 +56,7 @@ export let connectService = async (
   service: string,
   operations: string[],
 ) => {
-  if (!who.person || !reads(mode(source.app.access), who.role)) {
+  if (!who.person) {
     throw refuse('access', 'Sign in to connect a service')
   }
   let target = await dir.appAt(service)
