@@ -37,7 +37,14 @@ let storeOf = ({ env, space, app }: Asked) =>
 let accessOf = (row: Bundle) => row.sale_access as SaleAccess | undefined
 let customer = (at: Asked, subject?: Buyer): Buyer =>
   subject ??
-    { person: at.who.service?.person ?? at.who.person, via: at.who.via }
+    {
+      person: at.who.service?.person ?? at.who.person,
+      via: at.who.via,
+      ...(at.who.service?.person == null ||
+          at.who.service.person === at.who.person
+        ? { browsers: at.who.browsers }
+        : {}),
+    }
 let allowed = (at: Asked, row: Bundle, subject?: Buyer) =>
   (!subject && editor(at)) || mayReceive(
     accessOf(row) ?? {},

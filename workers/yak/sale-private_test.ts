@@ -48,3 +48,29 @@ test('artifact tickets cannot change tenant, content, expiry or purpose', async 
     assertEquals(await artifactPermit(token, app, sha, secret, now), false)
   }
 })
+
+test('earlier guest artifact entitlement follows only its person’s fresh browser claims', () => {
+  assertEquals(
+    mayReceive({ via: '00000000-0000-4000-8000-000000000001' }, {
+      person: 'ana',
+      via: '00000000-0000-4000-8000-000000000002',
+      browsers: ['00000000-0000-4000-8000-000000000001'],
+    }),
+    true,
+  )
+  assertEquals(
+    mayReceive({ via: '00000000-0000-4000-8000-000000000001' }, {
+      person: 'bo',
+      via: '00000000-0000-4000-8000-000000000001',
+      browsers: [],
+    }),
+    false,
+  )
+  assertEquals(
+    mayReceive({ buyer: 'ana', via: '00000000-0000-4000-8000-000000000001' }, {
+      person: 'bo',
+      browsers: ['00000000-0000-4000-8000-000000000001'],
+    }),
+    false,
+  )
+})

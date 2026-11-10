@@ -7,7 +7,11 @@ import { instrumentEid } from './instrument.ts'
 import { opened, seal } from './lib/token.ts'
 
 export type SaleAccess = { buyer?: string | null; via?: string | null }
-export type Buyer = { person?: string | null; via?: string | null }
+export type Buyer = {
+  person?: string | null
+  via?: string | null
+  browsers?: string[]
+}
 
 export let saleAccess = (who: SaleAccess): SaleAccess => ({
   buyer: who.buyer || null,
@@ -17,7 +21,11 @@ export let saleAccess = (who: SaleAccess): SaleAccess => ({
 export let mayReceive = (access: SaleAccess, who: Buyer): boolean =>
   owns(
     { by: access.buyer, via: access.via ? instrumentEid(access.via) : null },
-    { by: who.person, via: who.via ? instrumentEid(who.via) : null },
+    {
+      by: who.person,
+      via: who.via ? instrumentEid(who.via) : null,
+      browsers: who.browsers,
+    },
   )
 
 export let protectedSale = (rows: Bundle[], access: SaleAccess): Bundle[] =>
