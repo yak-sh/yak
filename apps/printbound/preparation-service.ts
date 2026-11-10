@@ -11,6 +11,7 @@ export type PreparationRow = {
   print_preparation: {
     state: Preparation
     run: string
+    continuation?: string
     person?: string
     via?: string
     source: string
@@ -18,7 +19,7 @@ export type PreparationRow = {
     authority?: string
   }
   print_document?: { manifest: Prepared }
-  print_preparation_failed?: { at: string; reason: string }
+  print_preparation_failed?: { at?: string; reason: string; call?: string }
 }
 let key = (value: unknown): string => {
   if (
@@ -111,10 +112,12 @@ export let prepareCommand = async (
   if (args.document) {
     let row = await owned(ports, args.document, who)
     if (row.print_document) return status(ports, row)
+    let nextCall = await continuation(ports, row.entity.eid)
     await compare(ports.store, [{
       entity: row.entity,
       print_preparation: {
         ...row.print_preparation,
+        continuation: nextCall.entity.eid,
         state: renewal(row.print_preparation.state, args),
         run: crypto.randomUUID(),
         ...(who.authority ? { authority: who.authority } : {}),
@@ -127,17 +130,19 @@ export let prepareCommand = async (
           authority: token(row.print_preparation.authority),
         },
       },
-    }, await continuation(ports, row.entity.eid)])
+    }, nextCall])
     return status(ports, await read(ports, row.entity.eid))
   }
   if (typeof args.title !== 'string' || !args.title.trim()) {
     throw new InputError('Give the document a title')
   }
   let state = await ports.begin(args, who), eid = crypto.randomUUID()
+  let nextCall = await continuation(ports, eid)
   await apply(ports.store, [{
     entity: { eid },
     print_preparation: {
       state,
+      continuation: nextCall.entity.eid,
       run: crypto.randomUUID(),
       person: who.person,
       via: who.via,
@@ -145,7 +150,7 @@ export let prepareCommand = async (
       seller: who.seller,
       authority: who.authority,
     },
-  }, await continuation(ports, eid)])
+  }, nextCall])
   return { id: eid, pending: true, preview: ports.preview }
 }
 
@@ -170,18 +175,20 @@ export let prepareStep = async (ports: ServicePorts, value: unknown) => {
         authority: token(row.print_preparation.authority),
       },
     }
+    let nextCall = 'revision' in next ? null : await continuation(ports, id)
     let changes = 'revision' in next
       ? [{
         entity: row.entity,
         print_document: { manifest: next },
+        print_preparation: { continuation: null },
         print_preparation_done: { at: ports.now() },
         $was: guard,
       }]
       : [{
         entity: row.entity,
-        print_preparation: { state: next },
+        print_preparation: { state: next, continuation: nextCall!.entity.eid },
         $was: guard,
-      }, await continuation(ports, id)]
+      }, nextCall!]
     await compare(ports.store, changes)
     return status(ports, await read(ports, id))
   } catch (error) {
