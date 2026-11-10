@@ -1,14 +1,14 @@
-// A space's Operator store, read out for the platform's admin a page at a
-// time, so a migration over Operator stores is rehearsed on copies before it
-// runs (`yak admin copy`). The Builder's object holds the store, and nothing
-// else reaches its file: the store mover and the relocation copy are an app
-// store's. A copy is what the file holds, every table under its own rowids
-// (@yaks/durable-object's copy protocol), read while the store serves, so
-// tables read at different moments; it rehearses a migration, it is no backup.
+// A store's file read out for the platform's admin a page at a time, so a
+// migration is rehearsed on copies before it runs (`yak admin copy`): a
+// space's Operator store, which its Builder's object holds (build.ts), or an
+// app's store, which its Store object holds (graph.ts). A copy is what the
+// file holds, every table under its own rowids (@yaks/durable-object's copy
+// protocol), read while the store serves, so tables read at different
+// moments; it rehearses a migration, it is no backup.
 import type { Driver } from '@yaks/sql'
 import { type Cell, page, type Plan, plan, raised } from '@yaks/durable-object'
 
-/** The path the Builder answers a copy on, for the kernel alone. */
+/** The path an object answers a copy on, for the kernel alone. */
 export let COPY = '/copy'
 
 /** What a copy asks: the file's plan, or a table's rows past a rowid. */

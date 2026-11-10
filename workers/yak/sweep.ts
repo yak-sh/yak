@@ -17,7 +17,10 @@
 //                                           test account may end itself
 //   GET  /api/operator-copy                 every space
 //   POST /api/operator-copy?space=<eid>     a page of that space's Operator
-//                                           store (operator-copy.ts)
+//                                           store (store-copy.ts)
+//   GET  /api/store-copy                    every app's store, its sample's
+//                                           and its visitors'
+//   POST /api/store-copy?store=<name>       a page of that store
 //
 // The gate is the one the fee answers to (sell.ts `fees`): an owner of the
 // platform's own space, read off a website session or an OAuth token. A store is named by the
@@ -35,13 +38,14 @@ import { vouched, type Who } from './session.ts'
 import { LEAVE, WHERE } from './relocate.ts'
 import { visits } from './visit.ts'
 import { builderOf } from './build-door.ts'
-import { COPY } from './operator-copy.ts'
+import { COPY } from './store-copy.ts'
 
 export let PATH = '/api/move'
 export let RELOCATE_PATH = '/api/relocate'
 export let IDLE_PATH = '/api/idle-spaces'
 export let ACCOUNT_PATH = '/api/account'
 export let OPERATOR_PATH = '/api/operator-copy'
+export let STORE_COPY_PATH = '/api/store-copy'
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
@@ -169,7 +173,7 @@ let relocating = async (
   return Response.json({ ...await r.json(), app: app.eid, forgot: true })
 }
 
-// A space's Operator store read out (operator-copy.ts), for a rehearsal on
+// A space's Operator store read out (store-copy.ts), for a rehearsal on
 // a copy: GET lists every space, and a POST naming `space=<eid>` is that
 // space's Builder answering the asked page. A space the directory does not
 // hold wakes no object.
@@ -211,6 +215,33 @@ let appAt = async (dir: ReturnType<typeof dirOf>, store: string) => {
   }) ?? null
 }
 
+// An app's store read out the same way: GET lists every app's store, its
+// sample's and its visitors' (`stores`), and a POST naming `store=<name>` is
+// that store's object answering the asked page from its file as it stands.
+// A name the listing does not hold wakes no object.
+let storeCopying = async (req: Request, env: Env): Promise<Response> => {
+  let all = (await stores(env)).filter((s) =>
+    s.store != GIT_STORE && s.store != PLATFORM_STORE
+  )
+  if (req.method == 'GET') {
+    return Response.json(all, {
+      headers: { 'cache-control': 'private, no-store' },
+    })
+  }
+  if (req.method != 'POST') {
+    return json(405, 'method_not_allowed', 'list the stores, or post to one')
+  }
+  let name = new URL(req.url).searchParams.get('store') ?? ''
+  if (!all.some((s) => s.store == name)) {
+    return json(404, 'no_store', `no app's store is ${name || '(nothing)'}`)
+  }
+  return await storeOf(env.STORE, name)(COPY, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: await req.text(),
+  }, KERNEL)
+}
+
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let dir = dirOf(env)
   let meta = await dir.space(dirPart.META.space)
@@ -243,6 +274,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   if (new URL(req.url).pathname == OPERATOR_PATH) {
     return copying(req, env, dir)
+  }
+  if (new URL(req.url).pathname == STORE_COPY_PATH) {
+    return storeCopying(req, env)
   }
   let all = await stores(env)
   if (req.method == 'GET') return Response.json(all)

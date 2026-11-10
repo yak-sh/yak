@@ -26,6 +26,7 @@ import { Refused } from './refusal.ts'
 export { Refused } from './refusal.ts'
 import {
   acceptInvite,
+  appStores,
   budgetNow,
   close,
   compNow,
@@ -47,6 +48,7 @@ import {
   setTunnel,
   standing,
   storeApply,
+  storePage,
   storeQuery,
   storesNow,
   storeUpload,
@@ -636,16 +638,30 @@ export let runs = (
       let a = argsOf(call)
       let at = await acting(a)
       let where = word(a, 'space')
-      let to = word(a, 'to') ?? '.scratch/operators'
-      let spaces = (await operatorSpaces(at.bearer))
-        .filter((s) => !where || s.slug == where)
+      let apps = a.apps === true
+      let to = word(a, 'to') ??
+        (apps ? '.scratch/stores' : '.scratch/operators')
+      // An app's store is named for where it stands (`space/app`, a sample's
+      // or a visitor's after it), as a file name.
+      let spaces = apps
+        ? (await appStores(at.bearer)).filter((s) =>
+          !where || s.at.split('/')[0] == where
+        ).map((s) => ({
+          eid: s.store,
+          slug: s.at.replaceAll('/', '--').replaceAll(' ', '-'),
+        }))
+        : (await operatorSpaces(at.bearer))
+          .filter((s) => !where || s.slug == where)
       if (where && !spaces.length) {
         throw new CallError('space', `no space is ${where}`)
       }
       let each = kept()
       await copy({
         spaces,
-        page: (space, asked) => operatorPage<Copying>(at.bearer, space, asked),
+        page: (space, asked) =>
+          apps
+            ? storePage<Copying>(at.bearer, space, asked)
+            : operatorPage<Copying>(at.bearer, space, asked),
         open: (slug) => {
           let path = `${to}/${slug}.db`
           // A copy is made anew: what an earlier one left goes first.

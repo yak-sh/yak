@@ -152,7 +152,7 @@ let atApex = async (req: Request, env: Env, path: string) => {
   if (
     path == sweep.PATH || path == sweep.IDLE_PATH ||
     path == sweep.ACCOUNT_PATH || path == sweep.RELOCATE_PATH ||
-    path == sweep.OPERATOR_PATH
+    path == sweep.OPERATOR_PATH || path == sweep.STORE_COPY_PATH
   ) {
     return sweep.fetch(req, env)
   }

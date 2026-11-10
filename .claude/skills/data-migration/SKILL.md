@@ -154,6 +154,11 @@ alarm once it serves, fifty rows to a transaction. workers/yak/README.md,
   every space's Operator store (or one) to `.scratch/operators/<slug>.db`, the
   copies to rehearse a pass on and count; they hold people's words, so remove
   them once the proof is done.
+- `yak admin copy --apps [space]` copies every app's store the same way (its
+  sample's and its visitors' too) to `.scratch/stores/<space>--<app>.db`, read
+  out of each Store object's file as it stands. A pass that changes what a
+  read admits is proved on these before its rule goes live: the read before
+  and after the pass, compared for every reader, with the counts said.
 
 The owner's standing word for these, on D-45640 and D-59037, verbatim on the
 latter: "and let's ensure that the migrations don't bring down yaks apps".

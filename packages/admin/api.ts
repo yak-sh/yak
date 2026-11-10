@@ -421,7 +421,7 @@ export let relocateIn = (
   ))
 
 /** A space's Operator store read out a page at a time (workers/yak/sweep.ts
- * `copying`, operator-copy.ts): every space there is, and one space's plan or
+ * `copying`, store-copy.ts): every space there is, and one space's plan or
  * a page of one of its tables. An owner of the `yak` space is answered. */
 export let OPERATOR_COPY = '/api/operator-copy'
 
@@ -437,6 +437,31 @@ export let operatorPage = <T>(
 ): Promise<T> =>
   said(sent(
     apex(`${OPERATOR_COPY}?${new URLSearchParams({ space })}`),
+    session,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(asked),
+    },
+  ))
+
+/** An app's store read out the same way (workers/yak/sweep.ts
+ * `storeCopying`): every app's store, its sample's and its visitors', and one
+ * store's plan or a page of one of its tables. */
+export let STORE_COPY = '/api/store-copy'
+
+export let appStores = (
+  session: string,
+): Promise<{ store: string; at: string }[]> =>
+  said(sent(apex(STORE_COPY), session))
+
+export let storePage = <T>(
+  session: string,
+  store: string,
+  asked: { table?: string; after?: number },
+): Promise<T> =>
+  said(sent(
+    apex(`${STORE_COPY}?${new URLSearchParams({ store })}`),
     session,
     {
       method: 'POST',

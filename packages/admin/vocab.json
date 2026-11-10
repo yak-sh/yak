@@ -276,8 +276,8 @@
       "tool": true,
       "noun": "admin",
       "verb": "copy",
-      "title": "Copy a space's Operator store, or every space's, to this machine",
-      "description": "Each space's Operator store is read out of its Builder object a page at a time and written to a SQLite file here, <to>/<space>.db, every table under its own rowids, so a migration over Operator stores is rehearsed on copies before it runs. The store serves while it is read, so its tables are read at different moments: a copy rehearses, it is no backup. A space with no store says so and writes nothing. A copy holds people's private words: remove it once its proof is done. The platform’s act, so the selected account must have the platform role.\n\n  yak admin copy --as admin@bot.yak.sh\n  yak admin copy ada --to .scratch/operators --as admin@bot.yak.sh",
+      "title": "Copy a space's Operator store, or every space's, or every app's store, to this machine",
+      "description": "Each space's Operator store is read out of its Builder object a page at a time and written to a SQLite file here, <to>/<space>.db, every table under its own rowids, so a migration over Operator stores is rehearsed on copies before it runs. With --apps, every app's store is read out of its Store object the same way, its sample's and its visitors' too, to <to>/<space>--<app>.db. The store serves while it is read, so its tables are read at different moments: a copy rehearses, it is no backup. A space with no store says so and writes nothing. A copy holds people's private words: remove it once its proof is done. The platform’s act, so the selected account must have the platform role.\n\n  yak admin copy --as admin@bot.yak.sh\n  yak admin copy ada --to .scratch/operators --as admin@bot.yak.sh\n  yak admin copy --apps --as admin@bot.yak.sh",
       "input": {
         "space": {
           "type": "string",
@@ -285,7 +285,11 @@
         },
         "to": {
           "type": "string",
-          "description": "the directory the copies are written to (default .scratch/operators)"
+          "description": "the directory the copies are written to (default .scratch/operators, or .scratch/stores with --apps)"
+        },
+        "apps": {
+          "type": "boolean",
+          "description": "copy every app's store instead, or a space's apps' stores"
         },
         "as": {
           "type": "string",

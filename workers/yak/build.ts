@@ -96,7 +96,7 @@ import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
 import { managePath } from './route.ts'
 import { WAKE } from './door.ts'
-import { COPY, copying } from './operator-copy.ts'
+import { COPY, copying } from './store-copy.ts'
 import {
   type Frame,
   HELD,

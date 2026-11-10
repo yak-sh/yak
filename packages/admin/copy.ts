@@ -3,7 +3,7 @@
 // rehearsed on copies before it runs (data-migration). Nothing else reaches
 // an Operator's file: it stands in its space's Builder object, which the
 // kernel reads out for the platform's admin a page at a time
-// (workers/yak/operator-copy.ts), and each page lands here under its rowids as
+// (workers/yak/store-copy.ts), and each page lands here under its rowids as
 // a relocation's far end takes it (@yaks/durable-object's copy protocol). The
 // store serves while it is read, so its tables are read at different moments.
 // A copy holds people's private words: it is removed once its proof is done.

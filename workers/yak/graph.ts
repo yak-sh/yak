@@ -339,6 +339,8 @@ import { type Host as PluginHost, type Load } from '@yaks/host'
 import { type Config, given, meet, used } from '@yaks/host/config'
 import { configs, posts } from './config.ts'
 import { privacyRules } from './privacy-move.ts'
+import { COPY as READ_OUT, copying } from './store-copy.ts'
+import { freely } from '@yaks/durable-object/sql'
 import { load } from './load.ts'
 import { metering } from './meter.ts'
 import { appTexter } from './app-texts.ts'
@@ -4100,6 +4102,14 @@ export class Store {
       } catch (e) {
         return refuse(e)
       }
+    }
+    // The platform's admin's, through the kernel (sweep.ts): the file read
+    // out a page at a time as it stands (store-copy.ts), whether or not the
+    // store is awake, made by no graph, counted and never stopped.
+    if (kernel && path == READ_OUT && request.method == 'POST') {
+      return Response.json(
+        copying(freely(this.#ctx.storage), await request.json()),
+      )
     }
     if (kernel && path == '/dormant' && request.method == 'POST') {
       await this.#sleep()

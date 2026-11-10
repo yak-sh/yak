@@ -58,6 +58,7 @@ let spaces = async () => {
     query = '',
     method = 'GET',
     path = sweep.PATH,
+    body?: unknown,
   ) => {
     let cookie = `yak_session=${await sign(
       { person: who, space: null, exp: Date.now() + 60_000 },
@@ -67,6 +68,7 @@ let spaces = async () => {
       new Request(`https://yaks.app${path}${query}`, {
         method,
         headers: { cookie },
+        body: body ? JSON.stringify(body) : undefined,
       }),
       env,
     )
@@ -144,6 +146,32 @@ test('the platform’s owner reads a space’s Operator store out, a table at a 
     true,
   )
   assertEquals((await ask('?space=nobody', {})).body.error.code, 'no_space')
+})
+
+test('the platform’s owner reads an app’s store out, a table at a time, and nobody else does', async () => {
+  let { scenario, door } = await spaces()
+  await using _ = scenario
+  let ask = (who: string, query: string, body?: unknown) =>
+    door(who, query, body ? 'POST' : 'GET', sweep.STORE_COPY_PATH, body)
+  let listed = (await ask(JEFF, '')).body as Swept[]
+  assertEquals(
+    listed.find((s) => s.at == 'ada/notes')?.store,
+    'ada/notes.abc123',
+  )
+  assertEquals(listed.some((s) => s.at == 'git' || s.at == 'directory'), false)
+  let { plan } = (await ask(JEFF, '?store=ada/notes.abc123', {})).body
+  let entity = plan.tables.find((t: { name: string }) => t.name == 'entity')
+  let read = (await ask(JEFF, '?store=ada/notes.abc123', { table: 'entity' }))
+    .body
+  assertEquals(
+    read.rows.every((r: unknown[]) => r.length == entity.cols.length + 1),
+    true,
+  )
+  assertEquals(
+    (await ask(JEFF, '?store=ada/nothing', {})).body.error.code,
+    'no_store',
+  )
+  assertEquals((await ask(ADA, '')).status, 403)
 })
 
 // Three test accounts and a person: `probe` alone in its own space and seated

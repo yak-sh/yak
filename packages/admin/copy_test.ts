@@ -5,7 +5,7 @@ import { col, select, table, val } from '@yaks/sql'
 import { copy, type Copying } from './copy.ts'
 
 // A source over a file of its own, read out the way the Builder's door reads
-// one (workers/yak/operator-copy.ts), a page of two rows at a time.
+// one (workers/yak/store-copy.ts), a page of two rows at a time.
 let source = open(':memory:')
 source.query({ t: 'create table', name: 'note', cols: [{ name: 'body' }] })
 for (let body of ['a', 'b', 'c']) {
