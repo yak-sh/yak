@@ -64,8 +64,10 @@ let failed = async (store: Store, row: Bundle, text: string, error: string) => {
   )
 }
 
-/** Finish once, retaining the result in the run and the person's Updates.
- * A failed scheduled operation also asks their Operator to recover it. */
+/** Finish once, retaining the result in the run, and in the person's Updates
+ * unless a helper wrote it: a helper tells them itself with notification_send
+ * when they should hear, so a run with nothing to say tells nobody. A failed
+ * scheduled operation also asks their Operator to recover it. */
 export let finished = async (
   store: Store,
   row: Bundle,
@@ -76,7 +78,8 @@ export let finished = async (
   let [current] = await g.get([row.entity.eid])
   if (current?.completed || current?.failed) return
   let ask = part(row, 'operator_session') as Ask
-  error ??= (part(current, 'operator_work') as Work).error
+  let work = part(current, 'operator_work') as Work
+  error ??= work.error
   if (error) await failed(store, row, text, error)
   await g.apply([
     { entity: row.entity, ...error ? { failed: {} } : { completed: {} } },
@@ -86,13 +89,13 @@ export let finished = async (
       content: { body: text },
       notice: {},
     },
-    notification({
+    ...work.helper ? [] : [notification({
       to: ask.person,
       by: ask.space,
       words: text,
       about: row.entity.eid,
       id: row.entity.eid,
-    }),
+    })],
   ], { trusted: true })
 }
 

@@ -1616,7 +1616,7 @@ export let operating = (
           given(
             session,
             input,
-            `You are a scheduled helper. Do this work here and give a short report.\n\n${brief}`,
+            `You are a scheduled helper. Do this work here and give a short report. Your report stays with this run and reaches nobody: when the person should hear something, tell them yourself with notification_send.\n\n${brief}`,
             ask.space,
             { from: 'the system', ...selected },
           ),

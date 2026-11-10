@@ -225,6 +225,16 @@ let startupRecovery = await store.g.read(
   `.operator_request.about=${cannotStart.entity.eid}&*`,
 )
 
+let told = async (run: Bundle) =>
+  (await store.g.read(`.notification.about=${run.entity.eid}`)).length
+let scriptTold = await told(scriptRun)
+let helperTold = await told(helperRun)
+
+test('a call run tells the person its outcome; a helper run tells only through notification_send', () => {
+  equal(scriptTold, 1)
+  equal(helperTold, 0)
+})
+
 test('a weekly code_mode call keeps its outcome without asking a model', () => {
   equal(afterScript, before)
   ok(scriptRun.completed)
