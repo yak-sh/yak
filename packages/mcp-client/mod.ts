@@ -231,8 +231,8 @@ export const connect = (server: Server, options: Options = {}): Connection => {
         ])
         : AbortSignal.timeout(options.timeout ?? 60000),
     })
-    unauthorized = response.status === 401
-    if (unauthorized) {
+    if (response.status === 401) {
+      unauthorized = true
       const found = (await loaded()).challenge(response)
       challenge = {
         resourceMetadataUrl: found.resourceMetadataUrl?.href,
@@ -273,6 +273,7 @@ export const connect = (server: Server, options: Options = {}): Connection => {
   const list = async (): Promise<RemoteTool[]> => {
     const sdk = await ensure()
     if (!listing) {
+      unauthorized = false
       const observed = generation
       const pending = (async () => {
         const all: RemoteTool[] = [], cursors = new Set<string>()
@@ -302,7 +303,12 @@ export const connect = (server: Server, options: Options = {}): Connection => {
           seen.add(t.name)
         }
         return all.filter((t) => !server.allow || server.allow.includes(t.name))
-      })()
+      })().catch((e) => {
+        if (unauthorized) {
+          throw new MCPAuthorizationRequired(server.name, challenge)
+        }
+        throw e
+      })
       listing = pending
       pending.catch(() => {
         if (listing === pending) listing = undefined
@@ -322,12 +328,16 @@ export const connect = (server: Server, options: Options = {}): Connection => {
     if (server.allow && !server.allow.includes(name)) {
       throw new MCPError('Tool not allowed', server.name)
     }
+    unauthorized = false
     try {
       return await sdk.callTool({ name, arguments: args }, undefined, {
         signal,
         timeout: options.timeout ?? 60000,
       }) as CallToolResult
     } catch {
+      if (unauthorized) {
+        throw new MCPAuthorizationRequired(server.name, challenge)
+      }
       // Do not expose endpoint response bodies or credentials, or retry uncertain writes.
       throw new MCPError(
         'MCP call failed; remote outcome may be unknown. No retry was performed.',

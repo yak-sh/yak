@@ -235,6 +235,7 @@ export let directoryConfig: Config = {
     },
     { use: '@yaks/topic', facets: ['vocab', 'graph'], words: ['topic'] },
     { use: '@yaks/connections', facets: toolFacets },
+    { use: '@yaks/mcp-client', facets: ['vocab'] },
     // Each call out through a `uses` link counted on it (outbound.ts).
     { use: '@yaks/egress', facets: ['vocab', 'graph'] },
     '@yaks/secrets',

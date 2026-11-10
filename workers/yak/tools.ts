@@ -2,6 +2,7 @@ import { base64, unbase64 } from './bytes.ts'
 import { groupBy } from '@yaks/fp'
 import { tell } from './operator-updates.ts'
 import { operatorTools } from './operator-tools.ts'
+import { mcpConnect } from './connected-mcp.ts'
 import { libraryTools } from './library-tools.ts'
 import { numberTools } from './numbers.ts'
 import { ownedPrefix, rootedPrefix } from './file-root.ts'
@@ -5318,8 +5319,8 @@ let OURS: Row[] = [
       properties: {
         app: str(
           'one app to ask about: its slug, or <space>/<app> when two of ' +
-            'their spaces have an app with that slug. Leave it out for ' +
-            'every app they can reach',
+            'their spaces have an app with that slug; service:<app eid> ' +
+            'or mcp:<server eid> for a connected service. Omit for all commands.',
         ),
       },
     },
@@ -5330,6 +5331,13 @@ let OURS: Row[] = [
       // said for a model, grouped and shortened.
       let value = { commands: all }
       if (!all.length) {
+        if (/^(mcp|service):/.test(said)) {
+          return {
+            value,
+            text:
+              `No commands available at ${said}. Check your access or connection.`,
+          }
+        }
         return {
           value,
           text: said
@@ -5384,8 +5392,8 @@ let OURS: Row[] = [
         name: str('the command name, as commands lists it, e.g. add_recipe'),
         app: str(
           'the app whose command it is: its slug, or <space>/<app> when ' +
-            'two of their spaces have an app with that slug. Leave it out ' +
-            'when only one app has the command',
+            'two spaces have that slug. For a connected service, pass the ' +
+            'service:<app eid> or mcp:<server eid> address from commands.',
         ),
         // Open on purpose: the arguments are the app's own, and a schema that
         // declared them would be this tool's shape moving every time somebody
@@ -6937,5 +6945,6 @@ export let TOOLS: Tool[] = [
   ...libraryTools.map(worded),
   ...viewsTools,
   ...connectionTools,
+  worded(mcpConnect),
   ...numberTools.map(worded),
 ]

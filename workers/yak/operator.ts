@@ -78,6 +78,7 @@ import { writes } from '@yaks/member'
 import { inReach } from './declared.ts'
 import { connected, reaching } from './agent.ts'
 import { coded } from './agent-code.ts'
+import { connectedTools } from './connected-mcp.ts'
 import { ledger } from './ledger.ts'
 import { admin, type Args, type Ctx, inSpace, refuse } from './tool.ts'
 import { adminTools } from './operator-admin.ts'
@@ -381,6 +382,7 @@ export let operatorRoster = async (
   // Every tool the connector lists for the person (agent.ts `connected`), to
   // the conversation and each of its forks alike: the list heads the request,
   // so one list keeps the conversation's cached prefix for every fork.
+  let remote = await connectedTools(ctx)
   let apps = listing(coded(
     {
       ...connected(ctx, reach, g),
@@ -389,9 +391,14 @@ export let operatorRoster = async (
     },
     ctx,
     { graph: work.g, person: ctx.person, space },
+    remote,
   )).map(namedTool)
     .filter((t) => !ownNamed.has(t.name) && (member || t.readOnly))
   return [
+    ...remote.map(namedTool).map((t): Tool => ({
+      ...shaped(t),
+      run: run(t, g, landing),
+    })),
     ...apps.map((t): Tool => {
       let ours = own.get(t.name)
       let there = run(t, g, landing)

@@ -71,6 +71,7 @@ import {
   type Server,
 } from '@yaks/mcp'
 import { coded } from './agent-code.ts'
+import { connectedTools } from './connected-mcp.ts'
 import { translated } from '@yaks/mcp/tools'
 import { connected, named, reaching, ROWS, searching } from './agent.ts'
 import { scope as queryScope } from './query-line.ts'
@@ -452,7 +453,7 @@ let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
     extend: (server: Server, exchange?: Exchange) =>
       c.time('extend', () => extend(ctx, stood)(server, exchange)),
   }
-  let shared = coded(opts, ctx)
+  let shared = coded(opts, ctx, undefined, await connectedTools(ctx))
   // What this connector lists right now, and the version naming that list.
   // `about` returns both (tools.ts), so a client that suspects its list is old
   // has one call that settles it without reconnecting.

@@ -6,6 +6,12 @@
       "type": "object",
       "description": "A shared remote MCP server. Entity identity and tool display names are separate.",
       "properties": {
+        "owner": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "description": "The person who configured this server; hosted discovery and calls use only their own definition and credentials."
+        },
         "name": {
           "type": "string",
           "description": "Display name; normalized into a readable local tool namespace."

@@ -286,6 +286,11 @@ export let SAYS: Record<string, Said> = {
 
 /** What every tool says about itself, by name. */
 export let WORDS: Record<string, Words> = {
+  'mcp_connect': {
+    'title': 'Connect an MCP server',
+    'description':
+      'Connect or update your own MCP server. Its commands become available to your Operator and through commands/command. Sign in at the returned connection page when asked; credentials never pass through this tool. Name servers distinctly.',
+  },
   'space_new': {
     'title': 'Create a space',
     'description':
@@ -587,22 +592,22 @@ export let WORDS: Record<string, Words> = {
       "What the person already has here, short enough to pass on as it is: every space of theirs and which app its address opens, a line of what its month has counted against each of its limits and what models and voice spent there (and, near or at a limit, where its plan is settled), then each app in a line with its address, its access (public, open or private), how many errors are still open in it (app_errors lists them) and how much of the space's app data and photos and files it holds, so the person can see where the space's storage goes before it fills. In a space they own, it names every invitation not accepted yet with the day its latest letter went, so \"my friend can't get in\" starts here (member_add sends another letter, member_remove withdraws one), and counts everyone else; people: true names them. Name an app to list it alone and in full: its email address, version, bindings, month's usage and everyone who can open it. Deleted apps are listed with the days each has left and what each still holds, until app_restore brings it back or the 30 days run out. Documentation: https://yaks.app/docs.",
   },
   'commands': {
-    'title': 'List app commands',
+    'title': 'List commands',
     'step': {
       'doing': 'Listing the commands of %{app}…',
       'done': 'Listed the commands of %{app}',
     },
     'description':
-      "The commands yaks apps declare, with the arguments each one accepts. An app's own commands (the ones its vocab.json declares, and the two every component it holds gets, such as add_recipe and find_recipe) are listed here rather than in this tool list, which is the same for everybody. command runs one of them. Omit app to list all reachable apps, or pass an app slug (space/app if ambiguous). The result groups commands by app and says whether each reads or writes. Documentation: https://yaks.app/docs/tools.",
+      "The commands yaks apps, connected app services and your MCP servers offer, with the arguments each one accepts. An app's own commands (the ones its vocab.json declares, and the two every component it holds gets, such as add_recipe and find_recipe) are listed here rather than in this tool list, which is the same for everybody. command runs one of them. Omit app to list all reachable apps, or pass an app slug (space/app if ambiguous), service:<app eid> or mcp:<server eid>. The result gives each command's address and says whether it reads or writes. Documentation: https://yaks.app/docs/tools.",
   },
   'command': {
-    'title': 'Run an app command',
+    'title': 'Run a command',
     'step': {
       'doing': 'Running %{name} in %{app}…',
       'done': 'Ran %{name} in %{app}',
     },
     'description':
-      "Run one of an app's own commands: name it and pass its arguments as args, exactly as commands lists them. app is only needed when two apps here declare the same command name. The command runs through the app's ordinary API endpoints as the person calling it, so it can do what they could do on the page and never more. To undo whatever it wrote: store_restore, to the moment just before it ran. Returns the command result from the app. Its description in commands says what it does; restoring data cannot undo an external effect such as an email or payment. Documentation: https://yaks.app/docs/tools.",
+      "Run a command: name it and pass its arguments as args, exactly as commands lists them. Set app to the listed address for a connected service or MCP server, or when two apps declare the same name. MCP tools use your own connection and may ask you to sign in. App commands run through the app's ordinary API endpoints as the person calling it, so it can do what they could do on the page and never more. To undo whatever it wrote: store_restore, to the moment just before it ran. Returns the command result from the app. Its description in commands says what it does; restoring data cannot undo an external effect such as an email or payment. Documentation: https://yaks.app/docs/tools.",
   },
   'domain_attach': {
     'title': 'Attach a custom domain',

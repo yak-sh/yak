@@ -19,6 +19,13 @@
 # recipes…" and not the title of everything the tool can do (@yaks/tools
 # `stepOf`).
 
+mcp_connect:
+  title: Connect an MCP server
+  description: >-
+    Connect or update your own MCP server. Its commands become available to
+    your Operator and through commands/command. Sign in at the returned
+    connection page when asked; credentials never pass through this tool.
+    Name servers distinctly.
 space_new:
   title: Create a space
   description: >-
@@ -760,28 +767,30 @@ app_list:
     the 30 days run out.
     Documentation: https://yaks.app/docs.
 commands:
-  title: List app commands
+  title: List commands
   step:
     doing: 'Listing the commands of %{app}…'
     done: 'Listed the commands of %{app}'
   description: >-
-    The commands yaks apps declare, with the arguments each one accepts. An
+    The commands yaks apps, connected app services and your MCP servers offer,
+    with the arguments each one accepts. An
     app's own commands (the ones its vocab.json declares, and the two every
     component it holds gets, such as add_recipe and find_recipe) are listed
     here rather than in this tool list, which is the same for everybody.
     command runs one of them. Omit app to list all reachable apps, or pass
-    an app slug (space/app if ambiguous). The result groups commands by app
-    and says whether each reads or writes. Documentation:
+    an app slug (space/app if ambiguous), service:<app eid> or mcp:<server eid>.
+    The result gives each command's address and says whether it reads or writes. Documentation:
     https://yaks.app/docs/tools.
 command:
-  title: Run an app command
+  title: Run a command
   step:
     doing: 'Running %{name} in %{app}…'
     done: 'Ran %{name} in %{app}'
   description: >-
-    Run one of an app's own commands: name it and pass its arguments as
-    args, exactly as commands lists them. app is only needed when two apps
-    here declare the same command name. The command runs through the app's
+    Run a command: name it and pass its arguments as args, exactly as commands
+    lists them. Set app to the listed address for a connected service or MCP
+    server, or when two apps declare the same name. MCP tools use your own
+    connection and may ask you to sign in. App commands run through the app's
     ordinary API endpoints as the person calling it, so it can do what they
     could do on the page and never more. To undo whatever it wrote:
     store_restore, to the moment just before it ran. Returns the command

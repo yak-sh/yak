@@ -8,12 +8,14 @@ import { ledger } from './ledger.ts'
 import { argsOf } from '@yaks/graph'
 import { type Ctx, refuse, SPACE } from './tool.ts'
 import { type ResultHost, resultStore, resultTools } from './result-tools.ts'
+import type { Tool } from '@yaks/graph'
 // Both agent doors offer short executions over the connector's tools. Each
 // nested call reads the caller's reach anew, including apps just deployed.
 export let coded = <T extends Options>(
   opts: T,
   ctx: Ctx,
   local?: ResultHost,
+  remote: Tool[] = [],
 ) => {
   let catalog = registry([{
     name: 'yaks',
@@ -22,8 +24,17 @@ export let coded = <T extends Options>(
       ...resultTools(ctx, local),
     ],
   }])
+  let codeCatalog = registry([
+    { name: 'yaks', tools: catalog.list() },
+    { name: 'mcp', tools: remote },
+  ])
   let run = runner(opts.calls ?? opts.graph, {
     tools: catalog,
+    host: opts.graph,
+    report: opts.report,
+  })
+  let codeRun = runner(opts.calls ?? opts.graph, {
+    tools: codeCatalog,
     host: opts.graph,
     report: opts.report,
   })
@@ -32,8 +43,8 @@ export let coded = <T extends Options>(
   }
   let offered = (args = {}) =>
     codeMode(
-      catalog,
-      run,
+      codeCatalog,
+      codeRun,
       ctx.env.CODE_MODE ?? unavailable,
       ctx.env.ESBUILD ? stripping(ctx.env) : unavailable,
       ctx.env.CLOCK,
@@ -47,7 +58,7 @@ export let coded = <T extends Options>(
             ...listing({ ...opts, graph, search: searching(now, reach) }),
             ...resultTools(now, local),
           ],
-        }])
+        }, { name: 'mcp', tools: remote }])
         return runner(ledger(graph, opts.calls), {
           tools: catalog,
           host: graph,
@@ -73,5 +84,6 @@ export let coded = <T extends Options>(
     ) => offered(argsOf(call)).run(call, graph),
   }
   catalog.replace('code', [code])
+  codeCatalog.replace('code', [code])
   return { ...opts, registry: catalog, runner: run }
 }

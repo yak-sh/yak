@@ -44,6 +44,7 @@ import type { Who } from './session.ts'
 import { r2Objects } from './lib/objects.ts'
 import { prefixOf } from './files.ts'
 import { told } from './stream.ts'
+import { listConnectedCommands, runConnectedCommand } from './connected-mcp.ts'
 import { listServiceCommands, runServiceCommand } from './service-call.ts'
 
 /** One app, as a command names it: `recipes`, or `yourname/recipes` where two
@@ -128,6 +129,9 @@ export let runCommand = async (
   name: string,
   args: Record<string, unknown>,
 ): Promise<Out> => {
+  if (said.startsWith('mcp:')) {
+    return runConnectedCommand(ctx, said, name, args)
+  }
   if (said.startsWith('service:')) {
     return runServiceCommand(ctx, said, name, args)
   }
@@ -217,8 +221,12 @@ export let listCommands = async (
   ctx: Ctx,
   said = '',
 ): Promise<Command[]> => {
+  if (said.startsWith('mcp:')) return listConnectedCommands(ctx, said)
   if (said.startsWith('service:')) return listServiceCommands(ctx, said)
-  let out: Command[] = await listServiceCommands(ctx, said)
+  let out: Command[] = [
+    ...await listServiceCommands(ctx, said),
+    ...await listConnectedCommands(ctx, said),
+  ]
   // Every app's declaration at once: one round trip for the reach, not one
   // per app (T-34986).
   let apps = picked(await reachable(ctx), said)

@@ -730,23 +730,24 @@ The complete list of reserved names:
     home hook hostname image inference installed integration
     integration_install interrupted invite inviting key last_deploy lease
     lines listed mail mail_answered mail_dismissed mail_post mail_task
-    member memory meter model model_reservation model_result newcomer
-    newcomer_builds notice notice_confirmed notice_letter notice_posted
-    notice_subscription notified notify_deaths notify_trash oauth_grant
-    occupancy offer openai opened openrouter operator operator_alerts
-    operator_reach order output output_of own_number parent pending person
-    persona phone phone_line plan price product project provider provisional
-    public_file published push_subscription quarantined question questions
-    reads recalled ref referenced refusal register_writes registration
-    release_remake report repository representation requires restored result
-    retired revision rtc rtc_lapse satisfies screen screenshot secret seeded
-    seller sender sending serves session session_input session_result
-    session_run sfu signed_in signin sms_consent space space_logo spend
-    staged started starter stop stream_item submitted subscription
-    supersedes supervises sweep switched task text text_post theme tool
-    topic trashed tree_entry trend tunnel typed unchecked updated usage uses
-    using verified visit visitor_build visitor_calls visitor_share volume
-    waitlisted wake wants web worked worktree written
+    mcp_server member memory meter model model_reservation model_result
+    newcomer newcomer_builds notice notice_confirmed notice_letter
+    notice_posted notice_subscription notified notify_deaths notify_trash
+    oauth_grant occupancy offer openai opened openrouter operator
+    operator_alerts operator_reach order output output_of own_number parent
+    pending person persona phone phone_line plan price product project
+    provider provisional public_file published push_subscription quarantined
+    question questions reads recalled ref referenced refusal register_writes
+    registration release_remake report repository representation requires
+    restored result retired revision rtc rtc_lapse satisfies screen
+    screenshot secret seeded seller sender sending serves session
+    session_input session_result session_run sfu signed_in signin
+    sms_consent space space_logo spend staged started starter stop
+    stream_item submitted subscription supersedes supervises sweep switched
+    task text text_post theme tool topic trashed tree_entry trend tunnel
+    typed unchecked updated usage uses using verified visit visitor_build
+    visitor_calls visitor_share volume waitlisted wake wants web worked
+    worktree written
 
 When your first choice is reserved, name the component for its specific purpose:
 the reserved name is the general one, and yours is the specific one. Not

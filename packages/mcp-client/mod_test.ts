@@ -4,7 +4,13 @@ import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { cli } from '@yaks/cli'
 import { validateToolInput } from '@yaks/vocab/tools'
-import { checkToolNames, clients, connect, nameOf } from './mod.ts'
+import {
+  checkToolNames,
+  clients,
+  connect,
+  MCPAuthorizationRequired,
+  nameOf,
+} from './mod.ts'
 
 import { edge, fixture } from './testing.ts'
 
@@ -200,8 +206,31 @@ test('401 does not retry a call, and error text excludes credential and body', a
   try {
     await c.tools()
     const err = await assertRejects(() => c.call('publish_mockup', {}))
+    assert(err instanceof MCPAuthorizationRequired)
     assert(!String(err).includes('secret'))
     assertEquals(rejected, 1)
+  } finally {
+    await c.close()
+  }
+})
+
+test('an anonymous initialization followed by protected discovery asks for authorization', async () => {
+  let f = fixture()
+  let c = connect({ name: 'books', url: 'https://books.test/mcp' }, {
+    fetch: async (input, init) => {
+      let req = new Request(input, init)
+      if (
+        req.method == 'POST' &&
+        (await req.clone().json()).method == 'tools/list'
+      ) {
+        return new Response(null, { status: 401 })
+      }
+      return f.fetcher(req)
+    },
+  })
+  try {
+    let error = await assertRejects(() => c.list())
+    assert(error instanceof MCPAuthorizationRequired)
   } finally {
     await c.close()
   }

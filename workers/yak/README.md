@@ -868,6 +868,17 @@ The shared directory selects the space-bound memory save/recall loop, with space
 supplied by its host, and connections validate the selected owner and app. The
 Worker's own store facets live under `facets/`.
 
+`mcp_connect` configures a person's remote MCP server in the directory as
+`mcp_server{owner,name,url,enabled,allow,client_id}`. `mcp-remote.ts` uses
+`@yaks/mcp-client` for discovery and calls, and `@yaks/connections` for that
+person's sign-in and vaulted credential. Operators receive namespaced tools; the
+connector discovers the same commands at `mcp:<server eid>` through `commands`
+and invokes them through `command`. Code mode lists them under its `mcp` object
+while the connector's published tool roster stays fixed. Discovery failures
+report to the tracker and leave a retryable connection status command. Calls
+recheck ownership and the current configuration, and never retry a remote
+mutation after a missing response or a sign-in challenge.
+
 A Store imports its graph and effects facets before opening its boot
 transaction, then binds them with `@yaks/host` over its storage, vault, blobs
 and named mail sender. Cold reads owe no start-up work. A deployment calls the
