@@ -132,7 +132,7 @@ export let threads = <R extends Row>(
     if (who.muting?.has(eid)) continue
     let root = byId.get(eid) ?? group[0]
     let messages = group.filter((r) =>
-      r.comps.comment || r.comps.mail ||
+      r.comps.comment || (r.comps.mail && !r.comps.notification) ||
       (r.comps.entry &&
         (saidBy(who, r, byId) || (r.comps.output && !r.comps.reasoning)))
     )
@@ -156,7 +156,8 @@ export let threads = <R extends Row>(
     // A notification tells its reader what happened, unless they did it.
     let told = !!root.comps.notification && to(root) && !started
     let direct = group.some((r) => !r.comps.notification && to(r)) ||
-      (root.comps.mail && root.comps.deliver?.to == who.actor)
+      (!root.comps.notification && root.comps.mail &&
+        root.comps.deliver?.to == who.actor)
     let assigned = !!who.actor && root.comps.filed?.assignee == who.actor
     let alert = !!root.comps.bug && !root.comps.resolved &&
       (who.operator == true) &&

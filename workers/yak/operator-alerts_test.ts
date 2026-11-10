@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
 import type { Binding } from '@yaks/cloudflare-mail'
 import type { Item } from '@yaks/model'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf, stamp } from './directory.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
@@ -130,6 +130,10 @@ test('an alert to a person who chose nothing and has an address is an email from
   assertEquals(letter.subject, 'The build finished.')
   assertStringIncludes(String(letter.text), 'Open it from your Updates.')
   assertStringIncludes(String(letter.text), '/manage/ana/updates')
+  let envelope = byMail.row.mail as Comp
+  assertEquals(envelope.from, 'ana@yaks.app')
+  assertEquals(envelope.to, ADDRESS)
+  assertEquals(typeof envelope.at, 'string')
   assertEquals(typeof (byMail.row.delivered as { at: string }).at, 'string')
 })
 test('what everyone in a space is told, or a person wrote, is sent to nobody', () => {

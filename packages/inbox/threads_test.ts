@@ -276,3 +276,27 @@ test('a notification tells its person, or everyone in its project, unless they d
     [false],
   )
 })
+
+test('an emailed notification stays in Updates when its delivery receipt arrives', () => {
+  let note = row('told', {
+    notification: {},
+    deliver: { to: 'person' },
+    doc: { body: 'Your app is ready.' },
+  })
+  let [before] = threads([note], who)
+  let attention = ({ lane, reason, unread, messages }: typeof before) => ({
+    lane,
+    reason,
+    unread,
+    messages,
+  })
+  for (
+    let mail of [{ from: 'operator@example.com' }, {
+      from: 'operator@example.com',
+      message_id: 'receipt@example.com',
+    }]
+  ) {
+    let [after] = threads([{ ...note, comps: { ...note.comps, mail } }], who)
+    assertEquals(attention(after), attention(before))
+  }
+})

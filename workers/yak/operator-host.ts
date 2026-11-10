@@ -1732,7 +1732,10 @@ export let operatorReceipt = async (
 ): Promise<Response> => {
   let [row] = await operator.store.g.get([args.letter])
   let name = args.kind == 'answer' ? 'operator_answer' : 'mail'
-  if (!row?.[name]) {
+  // An alert's recorded words are a notification. Its email envelope joins
+  // that same row when the provider supplies its Message-ID.
+  let alert = args.kind == 'alert' && row?.notification && row?.deliver
+  if (!row?.[name] && !alert) {
     throw new Error('Operator receipt awaits its recorded letter')
   }
   let before = comp(row, name)?.message_id

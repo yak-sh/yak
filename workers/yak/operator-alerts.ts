@@ -160,7 +160,7 @@ export let alert = async (env: Env, store: Store, eid: string) => {
   if (!route) return
   let outcome: Bundle
   try {
-    await sent(env, dir, space, to, route, words, eid)
+    await sent(env, store, dir, space, to, route, words, eid)
     outcome = {
       entity: row.entity,
       delivered: { at: new Date().toISOString() },
@@ -181,6 +181,7 @@ export let alert = async (env: Env, store: Store, eid: string) => {
 // it goes the way they are reached next.
 let sent = async (
   env: Env,
+  store: Store,
   dir: Directory,
   space: Space,
   person: string,
@@ -192,7 +193,7 @@ let sent = async (
   if (route.by == 'push') {
     if (await pushed(env, dir, route.to, space, words, updates, id)) return
     let next = await routeFor(dir, person)
-    if (next) return sent(env, dir, space, person, next, words, id)
+    if (next) return sent(env, store, dir, space, person, next, words, id)
     throw refuse('gone', 'No browser they allowed takes notifications now.')
   }
   if (route.by == 'text') {
@@ -202,6 +203,10 @@ let sent = async (
   let { htmlOf, postOf, signed } = await import('./operator-channels.ts')
   let { from, sender } = postOf(env, space, 'alert')
   let text = `${words}\n\nYour Updates: ${updates}\n\n${signed(space)}`
+  await store.g.apply([{
+    entity: { eid: id },
+    mail: { from, to: route.to, at: new Date().toISOString() },
+  }], { trusted: true })
   return sender.send({
     id,
     from,
