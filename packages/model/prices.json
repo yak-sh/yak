@@ -1,6 +1,6 @@
 {
   "source": "https://openrouter.ai/api/v1/models",
-  "day": "2026-11-06",
+  "day": "2026-11-10",
   "prices": {
     "claude-fable-5": {
       "input": 10,
@@ -17,6 +17,14 @@
       "cache_write": 12.5,
       "web_search": 0.01,
       "cache_write_1h": 20
+    },
+    "claude-fable-5-2": {
+      "input": 8,
+      "output": 40,
+      "cached": 0.2,
+      "cache_write": 10,
+      "web_search": 0.01,
+      "cache_write_1h": 16
     },
     "claude-haiku-4-5": {
       "input": 1,
@@ -436,9 +444,9 @@
       "web_search": 0.01
     },
     "gpt-oss-120b": {
-      "input": 0.028,
-      "output": 0.103,
-      "cached": 0.025
+      "input": 0.15,
+      "output": 0.6,
+      "cached": 0.075
     },
     "gpt-oss-20b": {
       "input": 0.03,
