@@ -46,6 +46,8 @@ export type Spending = {
 /** A provider's own door: one call to a model, as the provider's API takes
  * it, answered with what the model said. */
 export type Native = {
+  /** whether it answers `model`; a door that doesn't say answers every name */
+  serves?: (model: string) => boolean
   run: (
     model: string,
     input: unknown,

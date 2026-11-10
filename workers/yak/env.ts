@@ -283,6 +283,9 @@ export type Env = {
   // Optional key scoped to OpenAI text models for Operator conversations.
   // The shared OPENAI_API_KEY remains the image service's credential.
   OPENAI_OPERATOR_API_KEY?: string
+  // The "yaks.app models" project's key, limited to the OpenAI models that
+  // answer the chat names apps ask ./api/ai/run for (config.ts `answering`).
+  OPENAI_MODELS_KEY?: string
   OPENAI_API?: string
   BUILDER_MODEL_FREE?: string
   BUILDER_MODEL_PAID?: string

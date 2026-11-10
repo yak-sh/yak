@@ -4,14 +4,17 @@
 // artifact store and searching the web. A config may aim it at another
 // OpenAI-compatible endpoint instead (`base`), or reach OpenAI through a
 // Cloudflare AI Gateway (`gateway`), and pay with a key of its own (`key`).
-// Its transport loads on the first ask.
+// Its transport loads on the first ask. Its own door (`native`) answers the
+// names a config aliases to OpenAI models, one Chat Completions call each.
 
 import { Refused } from '@yaks/graph/errors'
 import {
   deferredModel,
   type Lent,
   type Model,
+  type Native,
   prefixCacheMark,
+  type Spending,
 } from '@yaks/model'
 import {
   CODEX,
@@ -24,6 +27,7 @@ import type { ImageGeneration, Images } from './images.ts'
 import { generations, image, imageListed, imageQuote } from './generations.ts'
 import type { TransportCredential } from './transport.ts'
 import { openaiDoc } from './vocab.ts'
+import { native as door } from './native.ts'
 import { reads } from './reads.ts'
 
 /** How the harness signs in to OpenAI over what it was lent. */
@@ -98,6 +102,9 @@ export type Options = {
   gateway?: { account?: string; id?: string; token?: string }
   /** the API key to call with, before `OPENAI_API_KEY` and the lent key */
   key?: string
+  /** names its own door answers (`native`), each the OpenAI model that
+   * answers it */
+  aliases?: Record<string, string>
 }
 
 // The endpoint options aim at, or none for OpenAI's own.
@@ -202,4 +209,24 @@ export let providers = (
       },
     ),
   }
+}
+
+/** Its own door (native.ts): one Chat Completions call for each name
+ * `aliases` gives an OpenAI model, on the key and endpoint `providers` calls
+ * with, held to what `spending` affords. */
+export let native = (
+  lent: Lent,
+  options: Options,
+  spending: Spending,
+): Native => {
+  let token = options.gateway?.token
+  return door(lent, {
+    aliases: options.aliases,
+    base: aimed(options),
+    key: options.key ?? fromEnv(lent.env)?.token,
+    headers: {
+      ...options.headers,
+      ...token ? { 'cf-aig-authorization': `Bearer ${token}` } : {},
+    },
+  }, spending)
 }

@@ -27,7 +27,7 @@ import {
   type Spending,
 } from '@yaks/model'
 import { sentinel } from '@yaks/secrets'
-import { providing, serving } from './config.ts'
+import { answering, providing, serving } from './config.ts'
 import { providerFacets } from './load.ts'
 import { ctxOf } from './connections.ts'
 import { vaultOf } from './vault.ts'
@@ -105,17 +105,25 @@ export let ready = (env: object, provider: string, config: Config): boolean => {
     named(found.plug, 'secret').every((name) => setting(env, name))
 }
 
-/** The own door of the first provider `config` names that has one (@yaks/model
- * `Native`), lent `lent` and held to `spending`, or none. */
+/** The own door (@yaks/model `Native`) of the first provider `config` names
+ * whose door answers `model` and whose credentials the Worker holds, lent
+ * `lent` and held to `spending`, or none. */
 export let native = (
   env: object,
   lent: Lent,
   spending: Spending,
-  config: Config = serving,
+  model: string,
+  config: Config = answering,
 ): (Native & { provider: string }) | undefined => {
-  let found = plugged(env, config).find((p) => p.facet?.native)
-  let door = found?.facet?.native?.(lent, found.options, spending)
-  return door && { ...door, provider: found!.names[0] }
+  for (let found of plugged(env, config)) {
+    if (!named(found.plug, 'secret').every((name) => setting(env, name))) {
+      continue
+    }
+    let door = found.facet?.native?.(lent, found.options, spending)
+    if (door && (door.serves?.(model) ?? true)) {
+      return { ...door, provider: found.names[0] }
+    }
+  }
 }
 
 /** Every model `config`'s providers serve, by the name each serves under,

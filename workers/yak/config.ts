@@ -493,6 +493,34 @@ export let serving: Config = {
   plugins: [workersAi, '@yaks/openrouter', openai()],
 }
 
+/** The names a yaks app already asks `./api/ai/run` and its worker's `AI`
+ * binding for, each the OpenAI model of matching ability that answers it:
+ * GPT-6 Luna for chat with tools and for pictures, GPT-6.1 Terra for GLM's
+ * larger model. */
+export let aliases: Record<string, string> = {
+  '@cf/zai-org/glm-5.3-flash': 'gpt-6-luna',
+  '@cf/meta/llama-4-scout-17b-16e-instruct': 'gpt-6-luna',
+  '@cf/google/gemma-4-26b-a4b-it': 'gpt-6-luna',
+  '@cf/openai/gpt-oss-120b': 'gpt-6-luna',
+  '@cf/zai-org/glm-5.3': 'gpt-6.1-terra',
+}
+
+/** The providers `./api/ai/run` asks, each through its own door (meter.ts
+ * `metered`): the first whose door answers the model asked for and whose key
+ * the Worker holds. OpenAI answers the names in `aliases`, on the "yaks.app
+ * models" project's key, which may use only the models they name; Workers AI
+ * answers the rest, embeddings among them, since an app's stored vectors were
+ * made by the model it names. */
+export let answering: Config = {
+  plugins: [
+    {
+      use: '@yaks/openai',
+      with: { key: { secret: 'OPENAI_MODELS_KEY' }, aliases },
+    },
+    workersAi,
+  ],
+}
+
 /** The embedders a store's vectors may be made by (embedding.ts): each a
  * plugin whose graph facet lends one by name (@yaks/host `Host.embedders`),
  * given the store's `AI` binding, which the store holds to its space's

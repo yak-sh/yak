@@ -283,8 +283,24 @@ a transcript, POSTs the model's name and its input to `./api/ai/run`:
 
 `input` is what Workers AI takes for that model (its page at
 <https://developers.cloudflare.com/workers-ai/models/>), and the response is the
-model's output. Nothing is stored; use a transcript to keep what was said. An
-app's worker calls a model the same way through a binding:
+model's output. These chat models are answered by OpenAI's model of matching
+ability, at its price:
+
+| model                                     | answered by     | per million tokens in | out   |
+| ----------------------------------------- | --------------- | --------------------- | ----- |
+| `@cf/zai-org/glm-5.3-flash`               | `gpt-6-luna`    | $0.125                | $0.50 |
+| `@cf/meta/llama-4-scout-17b-16e-instruct` | `gpt-6-luna`    | $0.125                | $0.50 |
+| `@cf/google/gemma-4-26b-a4b-it`           | `gpt-6-luna`    | $0.125                | $0.50 |
+| `@cf/openai/gpt-oss-120b`                 | `gpt-6-luna`    | $0.125                | $0.50 |
+| `@cf/zai-org/glm-5.3`                     | `gpt-6.1-terra` | $1.25                 | $5    |
+
+Their answer is OpenAI's chat completion, with the text also in `response` and
+any tool calls also in a flat `tool_calls`, so code that reads either keeps
+working. `max_tokens` is the most the answer may use, and the model does no
+reasoning first unless `reasoning_effort` asks for some; `temperature` and the
+other sampling settings are not used. Every other model, the embedding models
+among them, is Workers AI's. Nothing is stored; use a transcript to keep what
+was said. An app's worker calls a model the same way through a binding:
 `"ai": { "binding": "AI" }` in its `wrangler.jsonc` gives it
 `env.AI.run(model, input)` (see [Backend Code](/docs/code)), which calls the
 model as the app itself.

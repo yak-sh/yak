@@ -37,7 +37,16 @@ application.
   endpoint is opened by the key, the lent `openai` key, or by nothing, which
   leaves the gateway to authenticate the call. `hosts(options)` says where those
   models call, so a host sends a credential it lends them nowhere else.
-  `@yaks/openai/vocab` exports `openaiDoc` and `docs` for schema loading.
+  `native(lent, options, spending)` is its own door (@yaks/model `Native`) for a
+  host that passes a caller's chat input on: it answers only the names
+  `options.aliases` maps to OpenAI models, as one Chat Completions call each,
+  taking the dialect OpenAI-compatible servers share (`prompt`, `max_tokens`,
+  flat tools, a bare JSON schema; sampling and template settings dropped, no
+  reasoning unless asked) and answering OpenAI's completion with the text as
+  `response` and its calls flat beside it. Each call is held to the model's list
+  price and published window before it is made and settled at its usage; nothing
+  OpenAI refused is paid for. `@yaks/openai/vocab` exports `openaiDoc` and
+  `docs` for schema loading.
 
 ## Install
 

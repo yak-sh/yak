@@ -17,6 +17,8 @@ import { accounted, countedMedia } from './meter.ts'
 import { identityEid } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import {
+  listPrice,
+  measured,
   mediaReceipts,
   type MediaRecord,
   type Model,
@@ -938,6 +940,62 @@ test('./api/ai/run answers what the model said, and the space pays for it', asyn
     200,
   )
   assertEquals(v.asked.length, 2)
+})
+
+test('./api/ai/run answers a chat name apps already use from OpenAI, at its rate, and the rest from Workers AI', async () => {
+  let posted: Request[] = []
+  let completion = {
+    choices: [{ message: { role: 'assistant', content: 'Welcome.' } }],
+    usage: { prompt_tokens: 2_000, completion_tokens: 50 },
+  }
+  let v = await vale(() => ({ response: 'from Workers AI' }), {
+    env: {
+      OPENAI_MODELS_KEY: 'models-key',
+      MODEL_FETCH: (input, init) => {
+        let req = new Request(input, init)
+        if (req.method == 'POST') posted.push(req)
+        return Promise.resolve(
+          req.method == 'POST' ? Response.json(completion) : new Response(
+            req.url.includes('openai.com')
+              ? '- 1,050,000 context window'
+              : 'Context Window | 100,000 tokens\nUnit Pricing | $0.15 per M input tokens, $0.5 per M output tokens',
+          ),
+        )
+      },
+    },
+  })
+  let messages = [{ role: 'user', content: 'hello' }]
+  assertEquals(
+    await v.run({
+      model: FLASH,
+      input: { messages, max_tokens: 400, temperature: 0.2 },
+    }),
+    { status: 200, said: { ...completion, response: 'Welcome.' } },
+  )
+  assertEquals(v.asked, [])
+  assertEquals(
+    posted.map((r) => [r.url, r.headers.get('authorization')]),
+    [['https://api.openai.com/v1/chat/completions', 'Bearer models-key']],
+  )
+  assertEquals(await posted[0].json(), {
+    model: 'gpt-6-luna',
+    messages,
+    reasoning_effort: 'none',
+    max_completion_tokens: 400,
+  })
+  assertAlmostEquals(
+    (await v.spent()).meter!.models,
+    measured(
+      { usage: { input_tokens: 2_000, output_tokens: 50 } },
+      listPrice('gpt-6-luna'),
+    )!.dollars,
+  )
+  assertEquals(
+    (await v.run({ model: '@cf/example/new-release', input: { messages } }))
+      .said,
+    { response: 'from Workers AI' },
+  )
+  assertEquals(posted.length, 1)
 })
 
 test('./api/ai/run answers embeddings and bills their published input-only rate', async () => {

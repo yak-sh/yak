@@ -1219,8 +1219,9 @@ export let metering = (
 
 /**
  * The door an app reaches its models' own API through: the own door of the
- * first provider config.ts `serving` names that has one (providers.ts
- * `native`), as Workers AI's binding is, and the only one: `./api/ai/run`,
+ * first provider config.ts `answering` names whose door answers the model
+ * asked for (providers.ts `native`), OpenAI's for the chat models apps
+ * already name and Workers AI's binding for the rest: `./api/ai/run`,
  * documents and embeddings are lent it. A call that could not be counted, with
  * no namespace to count it in or no space to count it against, is refused
  * before anything is spent, since nothing reaches a provider unmetered.
@@ -1264,7 +1265,7 @@ export let metered = (
               fault: `model-price:${model}`,
             })
             : defect(e, { request: `model ${model}`, space: space.slug }),
-      })
+      }, model)
       : undefined
     if (!door) {
       throw new ModelError(
