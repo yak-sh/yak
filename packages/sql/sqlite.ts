@@ -50,6 +50,9 @@ export type Dialect = {
   // somewhere else (the CTEs @yaks/sqlite overlays a pending transaction with)
   // declares that here, and every subquery in the binder follows it.
   source?: (comp: string) => string
+  /** A scoped dialect's relation for a component before its scope narrows
+   * it: the base dialect's `source`. */
+  unscoped?: (comp: string) => string
   /** Scoped relations retain ordinary keyed component selection. */
   scoped?: boolean
   // A spine lookup for keys already selected by this dialect's scoped

@@ -1429,12 +1429,18 @@ let refsUnion = (ctx: Ctx, r: Refs): Cond => {
   }
   if (ctx.spine) throw new Unsupported('.refs', `over ${ctx.spine} entities`)
   let held = referrers(ctx, r.value)
-  return held
-    ? cond({
-      sql: `${ctx.d.ownerKey('entity')} in (${held.sql})`,
-      params: held.params,
-    })
-    : FALSE
+  if (!held) return FALSE
+  // The target is one the scope admits, asked once: its lookup in each arm
+  // is the identity's alone, so an engine that refuses a relation named past
+  // its cursors (@yaks/sql `cursors`) can have it written out at each arm.
+  let entity = source(ctx, 'entity')
+  let seen = !ctx.d.unscoped || ctx.d.unscoped('entity') == entity
+    ? ''
+    : ` and exists (select 1 from ${entity} as "__refs_seen" where "__refs_seen"."eid" = ?)`
+  return cond({
+    sql: `${ctx.d.ownerKey('entity')} in (${held.sql})${seen}`,
+    params: seen ? [...held.params, r.value] : held.params,
+  })
 }
 
 // A vocabulary's reference properties by table, cut to what one compound
@@ -1479,10 +1485,12 @@ let referrers = (ctx: Ctx, value: string): Frag | undefined => {
   if (!groups[0].length) return
   let name = '__refs_target'
   while (ctx.v.comp(name)) name += '_'
-  // Every arm shares this scoped lookup. Inlining it per table can exceed
-  // the engine’s instruction limit even when there is only one target.
+  // Every arm shares this lookup of the target's identity; whether the scope
+  // admits it is asked once beside them (`refsUnion`), since a scope's
+  // relation copied at every arm made a wide vocabulary's statement too long
+  // to write out, and too deep for workerd to take named.
   let target = `with "${name}" as materialized (select id from ${
-    source(ctx, 'entity')
+    ctx.d.unscoped?.('entity') ?? source(ctx, 'entity')
   } where eid = ?)`
   let term = ([c, props]: Arm) =>
     `select ${ctx.d.ownerKey(c)} from "${name}" join ${
@@ -5543,6 +5551,7 @@ let visible = (
         ? `${source(comp)} as ${quoted(comp)}`
         : base.table(comp),
     source,
+    unscoped: (comp) => base.source?.(comp) ?? quoted(comp),
     scoped: true,
     // The scoped entity relation already excludes graves, including every
     // referenced target. Its outer selector need not probe them again.
