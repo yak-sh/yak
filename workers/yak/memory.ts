@@ -29,7 +29,7 @@ import { listedIn } from './package-tools.ts'
  * the newest, whole.
  *
  * The heading is named after whoever spoke most recently, off the byline the
- * store already answered with — a space is almost always one person, and the
+ * store names when asked to — a space is almost always one person, and the
  * entries name anybody else who spoke. So no name is looked up for this. The
  * tools it names are named as the connector lists them.
  */
@@ -38,6 +38,7 @@ export let told = async (env: Env, space: Space): Promise<string> => {
   // without counting them.
   let held = (await meta(env).query(
     line({ space: space.eid, limit: LAST + 1 }),
+    { names: true },
   ) as Bundle[]).map(heard)
   return listedIn(
     passage({ name: held[0]?.by ?? '', space: space.slug }, held),
