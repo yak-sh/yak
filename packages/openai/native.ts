@@ -135,7 +135,8 @@ export let usage = (out: Body): Usage => {
 // project may not use (404, 403 on the allow-list), the account's own credit
 // spent, or OpenAI busy; anything else is the host's.
 let refused = async (res: Response, model: string) => {
-  let error = Object((await res.json().catch(() => ({}))).error)
+  let body = await res.json().catch(() => ({})) as Body
+  let error = Object(body.error)
   let said = String(error.message ?? `OpenAI says ${res.status}`)
   if (res.status == 400) {
     return new ModelError('bad_request', `${model} refused this input: ${said}`)

@@ -17,7 +17,7 @@
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import type { Feed } from '@yaks/host'
-import { sleep } from '@yaks/fp'
+import { resolvers, sleep } from '@yaks/fp'
 import { derivedEid } from '@yaks/graph/identity'
 import { who } from '@yaks/graph/call'
 import {
@@ -320,7 +320,7 @@ export let follow = async (
 ): Promise<void> => {
   let { every = 1000, wait = sleep } = options
   let next = scope(true)
-  let bell = Promise.withResolvers<void>()
+  let bell = resolvers<void>()
   let ring = () => bell.resolve()
   signal.addEventListener('abort', ring, { once: true })
   let stop = signal.aborted
@@ -344,7 +344,7 @@ export let follow = async (
       if (signal.aborted) return
       if (!stop) await wait(every, signal)
       else if (idle(next)) await bell.promise
-      bell = Promise.withResolvers()
+      bell = resolvers()
     }
   } finally {
     stop?.()
