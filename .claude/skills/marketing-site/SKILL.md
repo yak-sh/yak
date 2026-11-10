@@ -203,6 +203,27 @@ the Operator once they have it. "$9 a month for more" left every reader
 asking more of what. And any page that holds people's details has to say who
 can see them.
 
+The same words stopped 114 readers of 32 first screens, whatever the pitch
+(T-156524):
+
+- "App" and "web app": "I'd think of something from an app store, not a
+  link." Name the thing: a sign-up sheet, a website, a member list.
+- "Builds it": "a person or a computer?" Say which.
+- "At your own address": "a street address or a website?"
+- The product's domain as the subject of a sentence "reads like a website
+  address, not a company".
+- "Inviting them is free" makes a reader ask what isn't.
+- A site rebuilt from theirs: "does it replace ours?", until the page says
+  their own site stays as it is.
+
+Every reader looked for a price, an example and who is behind the product
+before pressing anything. The first screens they acted on held something to
+try: a working example above the box, or a box for their own site's address.
+A question as the heading ("What would you change about your website?") left
+readers unsure who the page was for; the same question as the label on a box,
+under a heading that says what they get, was answered with their own
+complaint.
+
 **Plain beats clever.** Mannered prose (M-33081) is a heading or a line
 arranged for effect: a metaphor, a pun, a pair of short punchy fragments. On a
 marketing page it costs the most, because the visitor won't stay to decode it.
