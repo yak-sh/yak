@@ -90,8 +90,12 @@ test('every guide page draws under its own heading', async () => {
   for (let p of CONTENTS) {
     let html = await read(pathOf(p.slug))
     let name = heading(p.slug)
+    let { document } = parseHTML(html)
     assertStringIncludes(html, `<title>${esc(name)} · yaks.app</title>`)
-    assertStringIncludes(html, `content="${esc(p.description)}"`)
+    assertEquals(
+      document.querySelector('meta[name=description]')?.getAttribute('content'),
+      p.description,
+    )
     assertEquals((html.match(/<h1[\s>]/g) ?? []).length, 1, p.slug)
     // The document itself, not its frontmatter: the heading opens the
     // article, which is what the sidebar and the contents list sit beside.
@@ -100,7 +104,7 @@ test('every guide page draws under its own heading', async () => {
       `>${esc(name)}</h1>`,
     )
     assertEquals(
-      parseHTML(html).document.querySelector('.Docs_Back a')?.textContent,
+      document.querySelector('.Docs_Back a')?.textContent,
       '← Documentation',
     )
     assertStringIncludes(html, '<nav class="Nav"')
