@@ -212,3 +212,55 @@ let secondStep = asks.length - before
 test('input arriving during a model step is consumed by its own owed step', () => {
   equal([firstStep, secondStep], [1, 2])
 })
+
+// Stopped once its calls were written: each is answered as not run, so new
+// words find nothing owed.
+await g.apply([
+  { entity: { eid: 'x' }, session: { id: 'x' } },
+  {
+    entity: { eid: 'input-x' },
+    entry: { session: 'x' },
+    content: { body: 'read both' },
+    using: { model: M, provider: P },
+  },
+])
+let x = handlers()
+let at = (handler: string, target: string, name = 'session') =>
+  x[handler](
+    { kind: 'matched', entity: { eid: target }, name },
+    g.outside,
+    (rows) => g.apply(rows),
+  )
+await at('session_run', 'input-x', 'using')
+await g.apply([{
+  entity: { eid: 'stop-x' },
+  entry: { session: 'x' },
+  stop: {},
+}])
+started = []
+for (let call of (await entries('x')).filter((b) => b.call)) {
+  await at('session_tool', call.entity.eid)
+}
+await g.apply([{
+  entity: { eid: 'again-x' },
+  entry: { session: 'x' },
+  content: { body: 'go on' },
+}])
+await at('session_run', 'again-x', 'using')
+
+test('a call a stop kept from starting is answered as not run', async () => {
+  equal(started, [])
+  equal((await entries('x')).map(kindOf), [
+    'input',
+    'ask',
+    'call',
+    'call',
+    'stop',
+    'result',
+    'result',
+    'input',
+    'ask',
+    'output',
+  ])
+  equal((await g.get(['x']))[0]?.session, { id: 'x', status: 'settled' })
+})

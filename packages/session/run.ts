@@ -812,14 +812,20 @@ export let running = (
       runCall: call.entity.eid,
     }
     let { read, status } = await readied(g, String(session), deps)
-    if (['stopped', 'failed'].includes(status)) return
+    if (status == 'failed') return
+    // A stopped session starts nothing, but a call it never started is still
+    // answered, as not run (./react.ts): left open, it reads as owed once new
+    // words reopen the session.
+    let stopped = status == 'stopped'
+    if (stopped && call.execution) return
     // A call a result answers is done.
     let open = openCalls(read.entries)
     if (!open.some((b) => b.entity.eid == call.entity.eid)) return
     const source = (call.call as Comp | undefined)?.source
     const asked = read.entries.find((b) => b.entity.eid == source)
     if (
-      r.answers && !await r.answers(asked?.using as Comp | undefined)
+      !stopped && r.answers &&
+      !await r.answers(asked?.using as Comp | undefined)
     ) {
       await attempt?.defer?.(1000)
       return
