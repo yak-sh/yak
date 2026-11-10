@@ -146,6 +146,14 @@ alarm once it serves, fifty rows to a transaction. workers/yak/README.md,
   still while code runs (`yaks-app`).
 - `store_restore` brings one store back to a moment before, if a move went
   wrong.
+- A space's Operator store stands in its Builder object, which the mover
+  doesn't reach. Its passes run from the Builder's alarm in bounded batches
+  beside one another (workers/yak/attachment-move.ts, owner-move.ts), each
+  with a mark in the store's meta, and a reader that needs the moved shape
+  checks that mark. `yak admin copy [space] --as admin@bot.yak.sh` copies
+  every space's Operator store (or one) to `.scratch/operators/<slug>.db`, the
+  copies to rehearse a pass on and count; they hold people's words, so remove
+  them once the proof is done.
 
 The owner's standing word for these, on D-45640 and D-59037, verbatim on the
 latter: "and let's ensure that the migrations don't bring down yaks apps".

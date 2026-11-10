@@ -990,6 +990,7 @@ export class Builder {
       this.#draining = true
       try {
         let { attachmentBackfill } = await import('./attachment-move.ts')
+        let { ownerBackfill } = await import('./owner-move.ts')
         let more = false
         let retry: number | undefined
         try {
@@ -997,6 +998,13 @@ export class Builder {
         } catch (e) {
           if (stopped(e)) throw e
           caught(e, { request: 'operator attachment backfill' })
+          retry = Date.now() + 60_000
+        }
+        try {
+          more = await ownerBackfill(store) || more
+        } catch (e) {
+          if (stopped(e)) throw e
+          caught(e, { request: 'operator owner backfill' })
           retry = Date.now() + 60_000
         }
         let next = await drain(store, this.#until = Date.now() + SLICE)

@@ -249,7 +249,7 @@ let first = await run(now - 60_000)
 feed.items[0].snippet.title = 'Hope for tomorrow — edited'
 let second = await run(now - 30_000)
 let runs = await store.g.read('.operator_work&*')
-let hidden = await seenBy(store.g, crypto.randomUUID()).read('.operator_work')
+let hidden = await seenBy(store, crypto.randomUUID()).read('.operator_work')
 let checked = asked.filter((request) => {
   let last = request.items.findLast((item) => item.kind == 'user')
   return last?.kind == 'user' && last.text.includes(helper) &&

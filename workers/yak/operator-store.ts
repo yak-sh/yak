@@ -42,6 +42,7 @@ import { channeled } from './channel-move.ts'
 import { mailDoc } from '@yaks/mail/vocab'
 import { notifyDoc } from '@yaks/notify/vocab'
 import { operatorDoc } from './operator-vocab.ts'
+import { OWNERS, owning } from './operator-owner.ts'
 import { draftDoc, drafts } from '@yaks/draft'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { topicDoc } from '@yaks/topic'
@@ -148,12 +149,15 @@ export let operatorStore = (
     ...beside(),
     ...searching,
   ])
-  stood = installed(sql) != null && meta(sql).get(FITTED) == print
+  let born = installed(sql) == null
+  stood = !born && meta(sql).get(FITTED) == print
   if (!stood) {
     for (let stmt of beside()) sql.query(stmt)
     let left = store.install()
     adopt(sql, text, derived, { heal: false })
     if (!left.length) meta(sql).set(FITTED, print)
+    // A new file holds nothing written before the rule that keeps owners.
+    if (born) meta(sql).set(OWNERS, 'done')
   }
   return {
     // How a run ended is written while the object is stopped too, so a run
@@ -197,6 +201,7 @@ export let operatorGraph = (
     vocab,
     plugins: [
       ...sessions(),
+      owning(),
       drafts(),
       ids(vocab),
       wakes(),

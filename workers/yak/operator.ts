@@ -337,7 +337,7 @@ export let operatorRoster = async (
   // who writes in the space: its memories, tasks and conversations are the
   // space's work, none of a stranger's business (D-151808).
   let landing = ledger(g)
-  let self = seenBy(work.g, ctx.person)
+  let self = seenBy(work, ctx.person)
   let own = new Map(
     member
       ? [
@@ -990,7 +990,7 @@ export let operating = (
   // space through their reach, as their graph_query reads it, or over this
   // store (operator-subscriptions.ts).
   let watching: Watching = async (ask, query, mine) => {
-    if (mine) return await seenBy(g, ask.person).read(query)
+    if (mine) return await seenBy(store, ask.person).read(query)
     let space = await dir().at(ask.space)
     if (!space || space.trashed) throw refuse('missing', 'That space is gone.')
     let ctx = await operatorContext(

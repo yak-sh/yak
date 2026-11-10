@@ -55,6 +55,8 @@ export let copy = async (o: {
         }
       }
       ending(sql, plan)
+      // One file, its log folded in, to be copied or opened anywhere.
+      sql.query({ t: 'pragma', name: 'journal_mode', value: 'delete' })
       o.out(`${space.slug}  ${plan.tables.length} tables, ${rows} rows`)
     } finally {
       sql.close()

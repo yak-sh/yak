@@ -333,11 +333,11 @@ test('a saved draft is told only to its owner’s pages in its space', async () 
 
 test("the Operator's own store, read for one person, shows none of another's conversations", async () => {
   let words = async (person: string, query: string) =>
-    JSON.stringify(await seenBy(store.g, person).read(query))
+    JSON.stringify(await seenBy(store, person).read(query))
   for (let query of ['.entry&*', '.operator_request&*', '.session&*']) {
     assertEquals((await words(bea, query)).includes(secret), false, query)
   }
-  assertEquals((await seenBy(store.g, bea).get([root, helper])).length, 0)
+  assertEquals((await seenBy(store, bea).get([root, helper])).length, 0)
   assertStringIncludes(await words(ada, '.entry&*'), secret)
   // What nobody owns, such as a task, stays in view.
   assertStringIncludes(await words(bea, `.entity.eid=${task}&*`), secret)

@@ -139,6 +139,22 @@ export let operatorDoc: VocabDoc = {
         files: { type: 'array', items: { type: 'object' } },
       },
     },
+    // Kept by the store's rule (operator-owner.ts `owning`) in the commit
+    // that makes or changes what it is read from; nobody else writes it.
+    owner: {
+      component: true,
+      journal: false,
+      description:
+        "Whose this is in the Operator's store, the one person who reads it: named by it or by what it hangs on (its conversation, its session, the session a helper works for, the request files came with). Without a person it is named as more than one person's, or by something that names nobody, and nobody reads it. An entity without an owner is nobody's, and everyone who reads the store sees it.",
+      properties: {
+        person: {
+          type: 'string',
+          ref: 'person',
+          death: 'keep',
+          stamped: true,
+        },
+      },
+    },
     operator_files: {
       component: true,
       description:

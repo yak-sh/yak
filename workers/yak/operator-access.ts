@@ -1,5 +1,7 @@
 import type { Graph, ReadOpts } from '@yaks/graph'
+import type { Meta } from '@yaks/sqlite'
 import { absent, and, eq, or } from '@yaks/query/core'
+import { MADE, ON, OWNED, OWNERS } from './operator-owner.ts'
 import type { Held } from './build-door.ts'
 import type { operatorStore } from './operator-store.ts'
 
@@ -87,33 +89,10 @@ export let owns = async (store: Store, open: string, who: Owner) => {
   return !!owner && owner.person == who.person && owner.space == who.space
 }
 
-// What a person owns in the Operator's store, by the component that names
-// them: their conversations and the sessions working for them, their
-// requests, the wake-ups and subscriptions they set, the letters and texts
-// sent for them, what they were told, and their drafts.
-const OWNED: [string, string][] = [
-  ['operator_session', 'person'],
-  ['operator_request', 'person'],
-  ['operator_ask', 'person'],
-  ['operator_letter', 'person'],
-  ['operator_text', 'person'],
-  ['operator_contact', 'person'],
-  ['context_output', 'reader'],
-  ['deliver', 'to'],
-  ['draft', 'by'],
-]
-// And what is theirs by what it hangs on: a helper's session by the session
-// it works for, an entry by its session, the files that came with a request
-// by the request.
-const ON = [
-  'spawned.parent.',
-  'entry.session.',
-  'entry.session.spawned.parent.',
-  'operator_files.request.',
-]
-// The entities `person` may read: each names nobody else as its owner, here
-// or on what it hangs on.
-let theirs = (person: string) =>
+// The entities `person` may read, by the paths an owner is named on: each
+// names nobody else, here or on what it hangs on (operator-owner.ts). A store
+// is read by this only until every entity's owner is written there.
+let claimed = (person: string) =>
   and(
     ...['', ...ON].flatMap((at) =>
       OWNED.map(([name, by]) =>
@@ -121,18 +100,42 @@ let theirs = (person: string) =>
       )
     ),
     or(
-      and(absent('call'), absent('result'), absent('output')),
+      and(...MADE.map((c) => absent(c))),
       absent('created.via.operator_session'),
       eq('created.via.operator_session.person', person),
     ),
   )
 
+// The same entities, by the owner each keeps: theirs, or nobody's.
+let theirs = (person: string) =>
+  and(or(absent('owner'), eq('owner.person', person)))
+
+// A store seen to have every owner written, which never goes back.
+let written = new WeakSet<Graph>()
+
+/** Whether `store` keeps every entity's owner: once its marks say the pass
+ * has written them (operator-owner.ts `OWNERS`), and always for a store kept
+ * nowhere, which is made in memory with the rule. */
+export let owned = (store: { g: Graph; marks?: Pick<Meta, 'get'> }) => {
+  if (written.has(store.g)) return true
+  if (store.marks && store.marks.get(OWNERS) != 'done') return false
+  written.add(store.g)
+  return true
+}
+
 /** The Operator's store as `person` reads it: what is another person's
  * there is out of sight, wherever a read reaches it from. The memories, tasks
  * and persona nobody owns stay in view. Only its reads are narrowed; a write
- * goes to the store as it stands. */
-export let seenBy = (g: Graph, person: string): Graph => {
-  let visibility = { entity: theirs(person) }
+ * goes to the store as it stands. A store whose owners are not all written
+ * yet is read by the paths they are named on. */
+export let seenBy = (
+  store: { g: Graph; marks?: Pick<Meta, 'get'> },
+  person: string,
+): Graph => {
+  let { g } = store
+  let visibility = {
+    entity: owned(store) ? theirs(person) : claimed(person),
+  }
   let narrow = (opts?: ReadOpts): ReadOpts => ({ ...opts, visibility })
   return {
     ...g,
