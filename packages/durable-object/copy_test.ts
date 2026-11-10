@@ -14,6 +14,28 @@ import {
 } from './copy.ts'
 import { driver } from './sql.ts'
 import { durable } from './testing.ts'
+import { open } from '@yaks/sqlite/db'
+import { assertThrows } from '@std/assert'
+
+let native = open(':memory:')
+let managed = driver(durable())
+let note = {
+  name: 'note',
+  sql: 'create table note (body check(body > 0))',
+  cols: ['body'],
+}
+for (let d of [native, managed]) d.query({ t: 'catalogued', sql: note.sql })
+
+for (let [name, d] of [['native', native], ['durable', managed]] as const) {
+  test(`a copied page rolls back every row on failure with ${name} storage`, () => {
+    assertThrows(() => arrived(d, note, [[1, 1], [2, -1]]))
+    equal(d.query(select({ cols: [col('body')], from: table('note') })), [])
+    arrived(d, note, [[1, 1], [2, 2]])
+    equal(d.query(select({ cols: [col('body')], from: table('note') })), [{
+      body: 1,
+    }, { body: 2 }])
+  })
+}
 
 let ddl = (d: ReturnType<typeof driver>, sql: string) =>
   d.query({ t: 'catalogued', sql })

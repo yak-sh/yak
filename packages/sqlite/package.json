@@ -7,6 +7,7 @@
     "./vocab": "./vocab.ts",
     "./tools": "./tools.ts",
     "./db": "./db.ts",
+    "./unit": "./unit.ts",
     "./reader": "./reader.ts",
     "./read-db": "./read-db.ts",
     "./budget": "./budget.ts",

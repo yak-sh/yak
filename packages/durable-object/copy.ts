@@ -25,6 +25,7 @@ import {
   val,
 } from '@yaks/sql'
 import { reserved } from './sql.ts'
+import { unit } from '@yaks/sqlite/unit'
 
 /** A value on its way between objects: a blob travels as base64. */
 export type Cell = string | number | null | { bytes: string }
@@ -235,7 +236,7 @@ export let overwritten = (
 ): void => {
   let t = p.tables.find((t) => t.name == c.table)!
   driver.query({ t: 'pragma', name: 'foreign_keys', value: 'off' })
-  txOf(driver, () => {
+  unit(driver, () => {
     driver.query({
       t: 'delete',
       from: t.name,
@@ -258,14 +259,11 @@ export let tallied = (driver: Driver, t: Plan['tables'][number]): Copied => {
   }
 }
 
-let txOf = <R>(driver: Driver, body: () => R) =>
-  driver.tx ? driver.tx(body) : body()
-
 /** The far end's first step: its tables made, empty, with foreign keys off for
  * this connection until `ending` turns them back on. */
 export let copied = (driver: Driver, p: Plan): void => {
   driver.query({ t: 'pragma', name: 'foreign_keys', value: 'off' })
-  txOf(driver, () => {
+  unit(driver, () => {
     for (let t of p.tables) driver.query({ t: 'catalogued', sql: t.sql })
   })
 }
@@ -277,7 +275,7 @@ export let arrived = (
   rows: Cell[][],
 ): void => {
   driver.query({ t: 'pragma', name: 'foreign_keys', value: 'off' })
-  txOf(driver, () => {
+  unit(driver, () => {
     for (let row of rows) {
       driver.query({
         t: 'insert',
@@ -293,7 +291,7 @@ export let arrived = (
 /** The far end's last step: indexes, triggers, views, counters and statistics,
  * foreign keys on, and every table's tally to compare with the source's. */
 export let ending = (driver: Driver, p: Plan): Record<string, Copied> => {
-  txOf(driver, () => {
+  unit(driver, () => {
     for (let sql of p.views) driver.query({ t: 'catalogued', sql })
     for (let { name, sql } of p.fts) {
       driver.query({ t: 'catalogued', sql })
