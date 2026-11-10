@@ -259,6 +259,35 @@ test('deadline revokes bridge; completed scripts cannot leave new calls behind',
   equal((await three.g.read('.call')).length, 0)
 })
 
+// What the bridge says to a call of `set.name`, with `live` as the registry
+// a nested call reaches.
+let refusal = async (set: string, name: string, live = one.run) =>
+  (await execute(
+    '',
+    one.catalog,
+    one.run,
+    one.asked,
+    async (_, b) => JSON.stringify({ value: await b.call(set, name, '{}') }),
+    strip,
+    undefined,
+    () => Promise.resolve(live),
+  )).error
+let gone = runner(one.g, { tools: registry([{ name: 'yaks', tools: [] }]) })
+test('a refused nested call names the tool the script asked for', async () => {
+  equal(
+    await refusal('yaks', 'nope'),
+    'tool yaks.nope is outside this execution scope',
+  )
+  equal(
+    await refusal('mcp', 'echo'),
+    'tool mcp.echo is outside this execution scope',
+  )
+  equal(
+    await refusal('yaks', 'echo', gone),
+    'tool yaks.echo is no longer available',
+  )
+})
+
 test('declarations preserve exact paths and resolve nested unions without recursive expansion', async () => {
   let names = catalog(one.catalog)
   ok(declarations(names).includes('"echo": (args: { "text": string }'))

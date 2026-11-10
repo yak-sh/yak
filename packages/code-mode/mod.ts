@@ -137,9 +137,15 @@ export let execute = async (
     } catch {
       throw new CallError('args', 'tool arguments must be JSON')
     }
+    // A refusal names the tool the script asked for, as `tools[set][name]`
+    // spells it, so its words say which call was refused.
+    let path = `${set}.${name}`
     let tool = allowed.get(JSON.stringify([set, name]))
     if (!tool) {
-      throw new CallError('tool', 'tool is outside this execution scope')
+      throw new CallError(
+        'tool',
+        `tool ${path} is outside this execution scope`,
+      )
     }
     if (calls.length >= LIMITS.calls) {
       throw new CallError('limit', TOO.calls)
@@ -161,7 +167,7 @@ export let execute = async (
       }
       let admitted = live.admit(nested)
       if (!admitted || admitted.tool.name != name) {
-        throw new CallError('tool', 'tool is no longer available')
+        throw new CallError('tool', `tool ${path} is no longer available`)
       }
       await admitted.ensure()
       if (!active) throw new CallError('expired', 'execution has ended')
