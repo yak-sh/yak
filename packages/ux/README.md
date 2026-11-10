@@ -1,8 +1,9 @@
 # @yaks/ux
 
 Controlled Preact components for editing properties, opening disclosures,
-completing input and filling in sign-up forms. Component state lives in a page
-graph; drafts and emitted bundles belong to the caller.
+completing input, rendering controlled fields and submitting durable drafts.
+Component state lives in a page graph; drafts and emitted bundles belong to the
+caller.
 
 A **UX component** supplies behavior between [@yaks/ui](../ui/README.md)'s
 presentation and an application's data. It takes a
@@ -96,14 +97,14 @@ try {
 
 ## Exports
 
-| Entry point           | Provides                                                                                                                                                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@yaks/ux`            | `Edit`, `Text`, `Disclosure`, `Order`, `Signup`; `Ux`, `useHost`, `useOwner`; `useEdit`; state, emission, formatting and picker helpers; `defineKit`, `kitDocs`; `completion`; their types |
-| `@yaks/ux/views`      | `editorViews`, `views`: editor registrations and their registry                                                                                                                            |
-| `@yaks/ux/vocab`      | `uxDoc`, `docs`, `description`: the UX vocabulary documents and package summary                                                                                                            |
-| `@yaks/ux/ui`         | `kit`, `ux`: the base UX kit and `{ base: kit }`                                                                                                                                           |
-| `@yaks/ux/completion` | `completion`; `typed`, `placed`, `moved`, `taken`, `dismissed`, `act`, `CAP`; controller, input and transition types                                                                       |
-| `@yaks/ux/keys`       | `walk`, `keymap`, `walkKeys`, `chord`, `land`, `items`, `front`, `typing`; `Box`, `Move`: vim's keys walking a page                                                                        |
+| Entry point           | Provides                                                                                                                                                                                             |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/ux`            | `Edit`, `Text`, `Disclosure`, `Order`, `Fields`, `Submit`; `Ux`, `useHost`, `useOwner`; `useEdit`; state, emission, formatting and picker helpers; `defineKit`, `kitDocs`; `completion`; their types |
+| `@yaks/ux/views`      | `editorViews`, `views`: editor registrations and their registry                                                                                                                                      |
+| `@yaks/ux/vocab`      | `uxDoc`, `docs`, `description`: the UX vocabulary documents and package summary                                                                                                                      |
+| `@yaks/ux/ui`         | `kit`, `ux`: the base UX kit and `{ base: kit }`                                                                                                                                                     |
+| `@yaks/ux/completion` | `completion`; `typed`, `placed`, `moved`, `taken`, `dismissed`, `act`, `CAP`; controller, input and transition types                                                                                 |
+| `@yaks/ux/keys`       | `walk`, `keymap`, `walkKeys`, `chord`, `land`, `items`, `front`, `typing`; `Box`, `Move`: vim's keys walking a page                                                                                  |
 
 ## Kits from outside
 
@@ -188,7 +189,7 @@ for page-only state rather than requesting a server subscription.
 
 A package's `./ui` facet exports `ux = {toggle}` beside any `kits`, `themes` and
 `skins` it contributes. `@yaks/ux/ui` exports `kit` and `ux = {base: kit}`:
-`Edit`, `Disclosure`, `Order`, `Signup` and `Text`, with labelled Preact
+`Edit`, `Disclosure`, `Order`, `Submit` and `Text`, with labelled Preact
 specimens. `Text` shares `Edit` state. **Refused** is the transient event
 component emitted when input cannot be read; its `said` property is the reason.
 The guide reads `components[name].description` and `specimens()` without
@@ -296,115 +297,63 @@ tree.props.onChange(opened)
 equal(sent, [opened])
 ```
 
-## Signup
+## Fields and submissions
 
-`Signup` draws any sign-up form from its `question` rows
-([@yaks/forms](../forms/README.md)) with @yaks/ui's `Form`, `Field` and `Check`,
-and sends it to the app's form door. `at` is the door's address:
-`./api/form/<alias>` in the page's own app, or another app's, such as
-`/directory/api/form/kids-club`. Signup reads the form with `GET at`, which
-answers `{doc, form, open, questions}`, and posts `{answers}` to the same
-address. An app adds a form by writing rows; its page writes no form code.
+`Fields` renders controlled text fields, choices, checkboxes, file inputs and
+repeat groups using @yaks/ui's `Form`, `Field`, `Check` and `Card`. A
+`FieldSpec` names the input by `path`, `label` and interface `kind`; optional
+`required`, `hint`, `type`, `autocomplete` and `inputMode` describe its control.
+Choices supply `options` and `multiple`; repeats supply visible `entries` and
+`blank`, the values for an added entry. The caller supplies visibility,
+validation and the values themselves.
 
 ```ts
 import { h } from 'preact'
-import { type Door, Signup, signupAt, signupOf } from '@yaks/ux'
+import { Fields, type FieldSpec, putValue, type Values } from '@yaks/ux'
 import { equal } from '@yaks/testing'
 
-let door: Door = {
-  doc: { title: 'Contact' },
-  form: { thanks: 'Thanks, we’ll write back.' },
-  open: true,
-  questions: [{
-    entity: { eid: 'name' },
-    question: {
-      form: 'contact',
-      label: 'Your name',
-      kind: 'line',
-      required: true,
-    },
-  }],
-}
-let at = './api/form/contact'
-let e = { entity: { eid: signupAt(at) }, Signup: { door } }
-let tree = h(Signup, {
-  at,
-  e,
-  onChange: (b) => e = b as typeof e,
-  read: () => Promise.resolve(door),
+let fields: FieldSpec[] = [
+  { path: ['title'], label: 'Title', kind: 'text', required: true },
+  {
+    path: ['layout'],
+    label: 'Layout',
+    kind: 'choice',
+    options: ['Compact', 'Comfortable'],
+  },
+]
+let values: Values = { title: 'Notebook' }
+let tree = h(Fields, {
+  at: 'settings',
+  fields,
+  values,
+  onChange: (path, value) => values = putValue(values, path, value),
 })
-equal(tree.props.at, at)
-equal(signupOf(e).door?.doc?.title, 'Contact')
+tree.props.onChange(['title'], 'Notes')
+equal(values, { title: 'Notes' })
 ```
 
-Mount `tree` under `Ux`, as with `Edit` and `Text`. The host's `drafts` is
-required: answers are read from it and kept synchronously on every change,
-including repeat entries and hidden follow-up answers. The page graph keeps
-loading and send status, with `Signup.answers` mirroring the draft for readers;
-it is not the draft's source.
+`onChange(path, value)` emits edits; `onFile(path, file)` hands a selected file
+to its caller. `owed` is a set of dot-separated paths requiring an answer;
+`disabled` holds all controls while an operation is pending. Fields hold no page
+state and require no host.
 
-A connected page supplies its store client, person and scoped recovery storage
-to the existing [draft desk](../draft/README.md). This binding needs the page's
-live connection and host:
+`Submit` loads content through `read(at)` and keeps draft values through the
+supplied `drafts` desk, or the enclosing `Ux` host. Its caller chooses a stable
+`place` for that draft. The `render` callback receives the loaded `content`,
+`state`, `change`, `send` and `file` operations and composes the form. It owns
+validation and the form's labels. `initial(content)` supplies empty repeat
+values; `feedback()` optionally consumes native navigation feedback.
 
-```ts ignore
-import { h, render } from 'preact'
-import { Ux } from '@yaks/ux'
-import { desk } from '@yaks/draft'
+State is `Submit{content, unread, values, tried, sending, sent, said}` on
+`submitAt(at)`, emitted through `onChange` and read with `submitOf(e)`. Values
+mirror the durable draft. A successful send spends that draft only if nobody
+edited it while the send waited; a refusal retains it. The supplied uploader
+returns `{value}` for a selected file, or a refusal string. The component has no
+endpoint or question vocabulary of its own.
 
-let typed = desk(client, {
-  by: () => person,
-  stash: storage,
-})
-render(h(Ux, { host: { ...host, drafts: typed } }, tree), root)
-// On page teardown, after unmounting:
-// typed.close()
-```
-
-The draft place names the resolved absolute form door, so a reload, another tab
-or another interface finds the same answers, and different apps' relative form
-addresses stay separate. A closed tab keeps pending typing in the desk's
-recovery storage until the store accepts it. A successful send spends the draft;
-a refusal keeps it. A newer edit made while a send waits remains a draft.
-
-What it draws:
-
-- **Each kind its control.** `line`, `email`, `phone` and `date` are one-line
-  fields typed for a phone's keyboard; `lines` and `address` are several lines
-  (@yaks/ui's `Address` is a web address, not a postal one). `choose` is a row
-  of radios to press, or a list to pick from past six choices; `choices` is a
-  box for each; `check` is one box, and unticked is no answer, so a required one
-  must be ticked. `file` uploads the chosen file to the form app and keeps its
-  blob reference as the answer.
-- **Repeat groups.** Each entry of a `repeat` is a card of its own questions,
-  numbered from its label ("Child 1"), with Add and Remove. A required repeat
-  starts with one entry and keeps at least one.
-- **Conditions.** A question shows only while its `when` holds, from `asked()`.
-  What is sent is `kept()`: an answer whose question has since hidden is not
-  sent.
-- **Required and optional.** An optional question's label says "(optional)".
-  Sending checks `missing()` first; what is owed says so under its question, and
-  nothing is sent.
-- **Closed and thanks.** A form its door says is not `open` shows `form.closed`
-  (or "This form is closed."). A sent one shows `form.thanks`, and a button to
-  fill it in again. A JavaScript submission's refusal shows the door's own words
-  and keeps every answer.
-- **Without JavaScript.** It is a native `<form method="post" action={at}>`,
-  each control named by its answer's path (`children.0.born`), with `required`
-  set. The door takes URL-encoded controls as well as JSON. A native post
-  redirects with 303 to the referring page (the app root without a same-origin
-  referrer), preserving its query and fragment. Its `yak-form` query parameter
-  is JSON containing the absolute form door URL as `at`, and either `sent: true`
-  or `said` with the refusal. The page can render that feedback without script;
-  Signup consumes its own feedback when mounted and removes the parameter, so
-  filling it in again starts fresh. Without script, native redirects do not
-  retain answers; a mounted Signup retains its draft across a refusal and spends
-  it after a successful native return.
-
-Its state is `Signup{door, unread, answers, tried, sending, sent, said}` on
-`signupAt(at)`: the form as the door answered it, why it could not be read, the
-current draft snapshot, and how sending went. `read` and `send` replace the door
-calls (`get`, `post`).
+[@yaks/forms/fill](../forms/README.md#filling-forms) supplies a complete adapter
+for form questions, including conditional fields, required answers, repeat
+groups, upload URLs, native posts and thanks.
 
 ## Dragging an entity
 
@@ -452,17 +401,17 @@ equal(list.type, Order)
 
 ## State and events
 
-| component    | on                                | what it holds                                                   |
-| ------------ | --------------------------------- | --------------------------------------------------------------- |
-| `Edit`       | `at(owner, eid, comp, prop)`      | `open` while it is changed here, `query` in its picker          |
-| `Disclosure` | `disclosureAt(owner)`             | `open`, whether its content is shown                            |
-| `Order`      | `orderAt(owner)`                  | `at`, where an entity dragged over it would land                |
-| `Signup`     | `signupAt(at)`, its door          | `door`, `unread`, `answers`, `tried`, `sending`, `sent`, `said` |
-| `Completion` | field id                          | `caret`, `from`, `to`, `cands`, `pick`                          |
-| `Refused`    | the entity whose value it changes | an event: `said`, why what was typed could not be read          |
+| component    | on                                | what it holds                                                     |
+| ------------ | --------------------------------- | ----------------------------------------------------------------- |
+| `Edit`       | `at(owner, eid, comp, prop)`      | `open` while it is changed here, `query` in its picker            |
+| `Disclosure` | `disclosureAt(owner)`             | `open`, whether its content is shown                              |
+| `Order`      | `orderAt(owner)`                  | `at`, where an entity dragged over it would land                  |
+| `Submit`     | `submitAt(at)`, its submission    | `content`, `unread`, `values`, `tried`, `sending`, `sent`, `said` |
+| `Completion` | field id                          | `caret`, `from`, `to`, `cands`, `pick`                            |
+| `Refused`    | the entity whose value it changes | an event: `said`, why what was typed could not be read            |
 
 Each state component is `sync: none`: nothing leaves the page. `Edit`,
-`Disclosure`, `Order`, `Signup` and `Completion` are `durable: connection`, gone
+`Disclosure`, `Order`, `Submit` and `Completion` are `durable: connection`, gone
 with the page and kept across every remount before that; closing an `Edit`
 removes it. What is typed over a value is not its state but the person's draft,
 in the value's own place (`place(eid, comp, prop)`), kept by the host's
@@ -741,7 +690,7 @@ browser); without it a popout paints in the flow, as a terminal wants.
 ## Limits
 
 UX components do not fetch bodies, keep persistent drafts or decide navigation
-URLs. `Signup` alone reads and writes, and only through its form's door. The
+URLs. `Submit` calls the reader, sender and uploader supplied by its caller. The
 host supplies those policies. Styling belongs to [@yaks/ui](../ui/README.md);
 vocabulary declarations belong to [@yaks/vocab](../vocab/README.md); query
 syntax and query completion belong to [@yaks/query](../query/README.md).
@@ -752,7 +701,7 @@ syntax and query completion belong to [@yaks/query](../query/README.md).
 | --------------------- | -------------------------------------------------------------------------- |
 | `kit.ts`              | external kit metadata, boundary validation and vocabulary documents        |
 | `ui.ts`               | the base kit and its browser-safe `./ui` facet and specimens               |
-| `vocab.json`          | the `Edit`, `Disclosure`, `Order`, `Signup`, `Completion`, `Refused` words |
+| `vocab.json`          | the `Edit`, `Disclosure`, `Order`, `Submit`, `Completion`, `Refused` words |
 | `state.ts`            | the bundles: an `Edit`'s eid, its patches, what it emits                   |
 | `live.ts`             | `useEdit`: an `Edit`'s state and its value's draft, read live              |
 | `emit.ts`             | typed or picked input, read as its type, sent as a bundle                  |
@@ -760,7 +709,8 @@ syntax and query completion belong to [@yaks/query](../query/README.md).
 | `Edit.ts`             | `Edit`, its controls and faces, `views`                                    |
 | `Text.ts`             | `Edit.Text`                                                                |
 | `Order.ts`            | `Order`, rows put in order by dragging                                     |
-| `Signup.ts`           | `Signup`, a sign-up form drawn from its questions, and its door            |
+| `Fields.ts`           | controlled inputs and repeat groups                                        |
+| `Submit.ts`           | `Submit`, loading, durable drafts and submission callbacks                 |
 | `hits.ts`             | a picker's line and its debounced search                                   |
 | `read.ts`             | what a property is, off the vocabulary                                     |
 | `completion.ts`       | shared completion controller, field, list and input binding                |

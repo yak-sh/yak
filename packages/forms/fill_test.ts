@@ -1,24 +1,19 @@
-/** Signup draws Locust Grove's Kids Club and membership card forms from
+/** Submit draws Locust Grove's Kids Club and membership card forms from
  * their door's answer, as a person on a phone would fill them in. */
 import { equal, test } from '@yaks/testing'
 import { type Bundle, mint } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { client } from '@yaks/client'
 import { desk, draftDoc, type Drafts, drafts, type Stash } from '@yaks/draft'
 import { loadVocab } from '@yaks/vocab'
-import { type Host, Ux } from './host.ts'
+import { type Host, Ux } from '@yaks/ux'
 import type { Answers, Question } from '@yaks/forms'
 import { type ComponentChildren, h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { mount } from '../tui/testing.ts'
-import {
-  type Door,
-  Signup,
-  signupAt,
-  signupOf,
-  signupReturned,
-  type Upload,
-} from './Signup.ts'
+import { Submit, submitAt, submitOf } from '@yaks/ux'
+import { type Door, fill, returned, type Upload } from './fill.ts'
 
 let ask = (
   eid: string,
@@ -84,7 +79,7 @@ let words = (el: Node): string =>
 
 let { document, Event } = parseHTML('<html><body><main></main></body></html>')
 
-// A page holding one Signup: its state kept as the page graph would keep it,
+// A page holding one Submit: its state kept as the page graph would keep it,
 // its door answered by the given rows, and every send remembered.
 let vocab = loadVocab([draftDoc])
 let hosted = (typed: Drafts, child: ComponentChildren) => {
@@ -144,17 +139,18 @@ let page = async (
     configurable: true,
   })
   let root = document.querySelector('main')!
-  let e: Bundle = { entity: { eid: signupAt(at) } }
+  let e: Bundle = { entity: { eid: submitAt(at) } }
   let sent: Answers[] = [], reads: string[] = []
   let draw = () =>
     render(
-      hosted(
-        typed,
-        h(Signup, {
+      h(
+        Submit<Door>,
+        fill({
           at,
           e,
+          drafts: typed,
           onChange: (b) => {
-            equal(b.entity.eid, signupAt(at))
+            equal(b.entity.eid, submitAt(at))
             e = b
             queueMicrotask(draw)
           },
@@ -184,7 +180,7 @@ let page = async (
     reads,
     $,
     $$,
-    state: () => signupOf(e),
+    state: () => submitOf<Door>(e),
     url: () => url,
     text: () => words(root),
     names: () => $$('[name]').map((el) => el.getAttribute('name')),
@@ -224,6 +220,20 @@ let page = async (
   }
 }
 
+test('a standalone form recovers the draft kept by the previous component', async () => {
+  let typed = own()
+  let place = `signup:${
+    derivedEid('Signup|https://church.example/directory/api/form/kids-club')
+  }`
+  typed.type(place, JSON.stringify({ name: 'Ruth', texts: true }))
+  await using p = await page(card, undefined, undefined, typed)
+  equal(p.$('[name=name]').value, 'Ruth')
+  equal(p.$('[name=texts]').hasAttribute('checked'), true)
+  await p.submit()
+  equal(p.sent, [{ name: 'Ruth', texts: true }])
+  equal(typed.text(place), '')
+})
+
 test('native return feedback shows thanks once, and preserves unrelated page state', async () => {
   await using p = await page({ ...card, open: false }, undefined, {
     at: 'https://church.example/directory/api/form/kids-club',
@@ -256,7 +266,7 @@ test('native feedback belongs only to the posted door', () => {
       sent: true,
     }),
   )
-  equal(signupReturned('/api/form/kids-club', url.href), undefined)
+  equal(returned('/api/form/kids-club', url.href), undefined)
   url.searchParams.set(
     'yak-form',
     JSON.stringify({
@@ -265,7 +275,7 @@ test('native feedback belongs only to the posted door', () => {
     }),
   )
   equal(
-    signupReturned(
+    returned(
       './api/form/kids-club',
       url.href,
       'https://church.example/directory/',
@@ -273,7 +283,7 @@ test('native feedback belongs only to the posted door', () => {
     { sent: true },
   )
   url.searchParams.set('yak-form', 'invalid')
-  equal(signupReturned('/api/form/kids-club', url.href), undefined)
+  equal(returned('/api/form/kids-club', url.href), undefined)
 })
 
 test('Kids Club asks for each child, shows a question only for its answer, and sends what shows', async () => {
@@ -436,7 +446,7 @@ test('a closed tab recovers unsent repeated and conditional answers before the s
       p.$('[name="children.1.allergic"][value=No]').hasAttribute('checked'),
       true,
     )
-    equal(p.state().answers?.parent, 'Ruth')
+    equal(p.state().values?.parent, 'Ruth')
   }
 })
 
@@ -562,13 +572,16 @@ test('drafts follow the resolved form door, across spelling changes and apart fr
 test('a terminal draws the same form from the same state', async () => {
   let typed = own()
   let e: Bundle = {
-    entity: { eid: signupAt('./api/form/card') },
-    Signup: { door: card },
+    entity: { eid: submitAt('./api/form/card') },
+    Submit: { content: card },
   }
   let App = () =>
     hosted(
       typed,
-      h(Signup, { at: './api/form/card', e, onChange: (b) => e = b }),
+      h(
+        Submit<Door>,
+        fill({ at: './api/form/card', e, onChange: (b) => e = b }),
+      ),
     )
   let ui = await mount(App, 40, 30)
   try {
@@ -618,7 +631,7 @@ test('a chosen file becomes its repeat answer, while pending uploads hold editin
   equal(p.sent, [])
   pending.resolve({ eid: 'file-reference' })
   await p.settle()
-  equal(p.state().answers, { people: [{}, { resume: 'file-reference' }] })
+  equal(p.state().values, { people: [{}, { resume: 'file-reference' }] })
   equal(p.$('[name="people.1.resume"]').hasAttribute('required'), false)
   await p.file('people.0.resume', chosen)
   await p.submit()
@@ -666,7 +679,7 @@ test('an uploaded file answer survives closing its tab', async () => {
   }
   {
     await using p = await page(files, undefined, undefined, open())
-    equal(p.state().answers, { people: [{ resume: 'kept-file' }] })
+    equal(p.state().values, { people: [{ resume: 'kept-file' }] })
     equal(p.$('[name="people.0.resume"]').hasAttribute('required'), false)
   }
 })

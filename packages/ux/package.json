@@ -13,11 +13,10 @@
     "./sort": "./sort-browser.ts"
   },
   "license": "Apache-2.0",
-  "description": "Controlled Preact components for editing properties, opening disclosures, completing input and filling in sign-up forms. Component state lives in a page graph; drafts and emitted bundles belong to the caller.",
+  "description": "Controlled Preact components for editing, navigation, fields and submissions. Page state lives in graph bundles; durable drafts belong to the host.",
   "dependencies": {
     "@preact/signals": "2.9.4",
     "@yaks/client": "0.2.24",
-    "@yaks/forms": "0.2.33",
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.33",
     "@yaks/id": "0.2.23",

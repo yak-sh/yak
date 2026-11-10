@@ -1,14 +1,14 @@
 import { equal, test } from '@yaks/testing'
-import { signupBlob, upload } from './Signup-file.ts'
+import { blobAt, upload } from './file.ts'
 
 test('file uploads resolve alongside the form, including other apps and origins', () => {
   let base = 'https://church.example/join/'
   equal(
-    signupBlob('../directory/api/form/kids%20club', 'resume', base),
+    blobAt('../directory/api/form/kids%20club', 'resume', base),
     'https://church.example/directory/api/blob?form=kids+club&question=resume',
   )
   equal(
-    signupBlob(
+    blobAt(
       'https://other.example/app/api/form/signup?x=1#here',
       'photo',
       base,

@@ -6,7 +6,7 @@ export type Upload = (
 ) => Promise<{ eid: string } | string>
 
 /** The blob door alongside the form, including another app's absolute door. */
-export let signupBlob = (
+export let blobAt = (
   at: string,
   question: string,
   base: string | undefined = globalThis.document?.baseURI ||
@@ -28,7 +28,7 @@ export let upload = async (
   request: typeof fetch = fetch,
 ): Promise<{ eid: string } | string> => {
   try {
-    let r = await request(signupBlob(at, question), {
+    let r = await request(blobAt(at, question), {
       method: 'POST',
       headers: {
         'content-type': file.type || 'application/octet-stream',

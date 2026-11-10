@@ -52,6 +52,9 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/forms](./forms)** — Form, question and registration rows, with pure
   functions for question progress and sign-up availability.
 
+  Its `./fill` adapter supplies @yaks/ux `Submit` and `Fields` with question
+  visibility, validation and form transport.
+
 - **[@yaks/code-mode](./code-mode)** — Typed tool objects from a scoped registry
   and bounded short JS/TS executions through an isolated evaluator.
 
@@ -211,7 +214,8 @@ grouped approximately by function, **not** by dependency order.
   nothing moves, or picked from a popout, each control selected by the
   property's type through @yaks/render and drawn with @yaks/ui, under the host a
   page hands down (web's and the inspector's alike). `Disclosure` is a summary
-  opening optional content.
+  opening optional content. `Fields` renders controlled inputs and repeat
+  groups; `Submit` keeps durable drafts and calls supplied readers and senders.
 - **[@yaks/inspect](./inspect)** — Inspect views for entities, vocabulary
   components, packages, properties, query rows and the map. Browse mounts them
   in its shared renderer registry; the views know neither door nor store.

@@ -12,12 +12,13 @@ import { loadVocab } from '@yaks/vocab'
 import { Disclosure, disclosureAt } from './Disclosure.ts'
 import { Edit } from './Edit.ts'
 import { Order, orderAt } from './Order.ts'
-import { type Door, Signup, signupAt } from './Signup.ts'
+import { Submit, submitAt, type SubmitProps } from './Submit.ts'
+import { Fields, type FieldSpec } from './Fields.ts'
+import { put } from './field-values.ts'
 import { Text } from './Text.ts'
 import { Save } from './Save.ts'
 import { Sort, sortAt } from './Sort.ts'
-import { Table } from '@yaks/ui/parts'
-import type { Question } from '@yaks/forms'
+import { Button, Form, Notice, Table } from '@yaks/ui/parts'
 import { type Host, Ux } from './host.ts'
 import { defineKit, type Kit } from './kit.ts'
 import { uxDoc } from './vocab.ts'
@@ -110,54 +111,59 @@ let SortSample = (): JSX.Element => {
   })
 }
 
-// A sign-up read from a sample door and sent nowhere; its state is the
-// specimen's own.
-let card: Door = {
-  doc: {
-    title: 'Membership card',
-    body: 'Tell us a little about you, and what you’d like to do next.',
+let controls: FieldSpec[] = [
+  { path: ['name'], label: 'Name', kind: 'text', required: true },
+  {
+    path: ['layout'],
+    label: 'Layout',
+    kind: 'choice',
+    options: ['Compact', 'Comfortable'],
   },
-  form: {
-    thanks: 'Thank you. We’ll be in touch this week.',
-    closed: 'Membership cards are back in January.',
-  },
-  open: true,
-  questions: [
-    ['name', 'line', 'Your name', { required: true }],
-    ['phone', 'phone', 'Phone', { order: 1, hint: 'For a call back.' }],
-    ['next', 'choices', 'Next steps', {
-      order: 2,
-      choices: ['Baptism', 'Membership class', 'Serving', 'Church directory'],
-    }],
-    ['children', 'repeat', 'Child', { order: 3 }],
-    ['child', 'line', 'Name', { within: 'children', required: true }],
-    ['texts', 'check', 'Announcements by text', { order: 4 }],
-  ].map(([eid, kind, label, more]) => ({
-    entity: { eid: eid as string },
-    question: {
-      form: 'card',
-      label: label as string,
-      kind: kind as Question['question']['kind'],
-      ...more as object,
-    },
-  })),
-}
+  { path: ['notes'], label: 'Notes', kind: 'lines' },
+]
 
-let SignupSample = ({ open }: { open: boolean }): JSX.Element => {
-  let at = `guide/signup/${open}`
-  let row = useSignal<Bundle>({ entity: { eid: signupAt(at) } })
-  return h(Signup, {
+let SubmitSample = (): JSX.Element => {
+  let at = 'guide/submit'
+  let row = useSignal<Bundle>({ entity: { eid: submitAt(at) } })
+  let props: SubmitProps<object> = {
     at,
+    place: at,
     e: row.value,
     onChange: (b) => row.value = b,
-    read: () => Promise.resolve({ ...card, open }),
+    read: () => Promise.resolve({}),
     send: () => Promise.resolve(undefined),
-  })
+    render: ({ state, change, send }) =>
+      state.sent ? h(Notice, { role: 'status' }, 'Saved.') : h(
+        Form,
+        {
+          onSubmit: async (e: Event) => {
+            e.preventDefault()
+            change({ sending: true })
+            let said = await send(at, state.values ?? {})
+            change({ sending: false, sent: !said, said })
+          },
+        },
+        h(Fields, {
+          at,
+          fields: controls,
+          values: state.values ?? {},
+          disabled: state.sending,
+          onChange: (path, value) =>
+            change({ values: put(state.values ?? {}, path, value) }),
+        }),
+        h(
+          Form.Actions,
+          {},
+          h(Button, { type: 'submit', disabled: state.sending }, 'Save'),
+        ),
+      ),
+  }
+  return h(Submit<object>, props)
 }
 
 // Specimen drafts belong to the guide; an app supplies its persistent desk.
 let Sample = (
-  { part, open }: { part: 'Edit' | 'Text' | 'Signup'; open?: boolean },
+  { part }: { part: 'Edit' | 'Text' | 'Submit' },
 ): JSX.Element => {
   let words = useSignal<Record<string, string>>({})
   let front = useMemo(
@@ -182,8 +188,8 @@ let Sample = (
     }
   }, [])
   useEffect(() => () => front.close(), [])
-  let node = part == 'Signup'
-    ? h(SignupSample, { open: !!open })
+  let node = part == 'Submit'
+    ? h(SubmitSample, {})
     : part == 'Edit'
     ? h(Edit, { e: value, comp: 'Sample', prop: 'title' })
     : h(Text, { e: value, comp: 'Sample', prop: 'title', readOnly: true })
@@ -250,21 +256,32 @@ export let kit: Kit = defineKit({
         h('div', {}, h(OrderSample, {})),
       ]],
     },
-    Signup: {
-      Component: Signup,
-      description:
-        'Any sign-up form, drawn from its questions and sent to its form door',
-      state: ['Signup'],
-      specimens: () => [
-        [
-          'A membership card; send it to see its thanks',
-          h('div', {}, h(Sample, { part: 'Signup', open: true })),
-        ],
-        [
-          'A closed form says its own words',
-          h('div', {}, h(Sample, { part: 'Signup', open: false })),
-        ],
-      ],
+    Fields: {
+      Component: Fields,
+      description: 'Controlled typed inputs, choices and repeat groups',
+      state: [],
+      specimens: () => [[
+        'Typed inputs and choices',
+        h(
+          'div',
+          {},
+          h(Fields, {
+            at: 'guide/fields',
+            fields: controls,
+            values: {},
+            onChange: () => {},
+          }),
+        ),
+      ]],
+    },
+    Submit: {
+      Component: Submit,
+      description: 'Loading, durable drafts and submission feedback',
+      state: ['Submit'],
+      specimens: () => [[
+        'Fill and submit',
+        h('div', {}, h(Sample, { part: 'Submit' })),
+      ]],
     },
     Edit: {
       Component: Edit,

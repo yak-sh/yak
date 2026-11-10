@@ -2,7 +2,8 @@
 
 Form, question and registration rows, with pure functions for question progress
 and sign-up availability. The caller supplies the rows, answers, time and count;
-these functions read no storage and perform no effects.
+these functions read no storage and perform no effects. The `./fill` export
+adapts form rows and HTTP calls to the interface components in @yaks/ux.
 
 A **question** is a graph bundle with `entity.eid` and
 `question{form, label,
@@ -135,5 +136,119 @@ equal(kept(form, answers), { children: [{ name: 'Ada', allergic: 'No' }] })
 accepted-registration count. Opening is inclusive, closing exclusive, and
 capacity is reached when `count >= capacity`. Absent dates or capacity impose no
 limit; zero capacity accepts nobody. Invalid dates or a non-finite instant
-return false. While `open` is false a page shows `form.closed`. This package
-implements no HTTP door, rendering, tools or registration side effects.
+return false. While `open` is false a page shows `form.closed`. The core
+implements no HTTP door, tools or registration side effects.
+
+## Filling forms
+
+`fill()` adapts form `question` rows to the kit's `Submit` and `Fields`,
+providing question interpretation and calls to the app's form door. `at` is the
+door's address: `./api/form/<alias>` in the page's own app, or another app's,
+such as `/directory/api/form/kids-club`. The adapter reads the form with
+`GET at`, which answers `{doc, form, open, questions}`, and posts `{answers}` to
+the same address. An app adds a form by writing rows; its page writes no form
+code.
+
+```ts
+import { h } from 'preact'
+import { Submit, submitAt, submitOf } from '@yaks/ux'
+import { type Door, fill } from '@yaks/forms/fill'
+import { equal } from '@yaks/testing'
+
+let door: Door = {
+  doc: { title: 'Contact' },
+  form: { thanks: 'Thanks, we’ll write back.' },
+  open: true,
+  questions: [{
+    entity: { eid: 'name' },
+    question: {
+      form: 'contact',
+      label: 'Your name',
+      kind: 'line',
+      required: true,
+    },
+  }],
+}
+let at = './api/form/contact'
+let e = { entity: { eid: submitAt(at) }, Submit: { content: door } }
+let tree = h(
+  Submit<Door>,
+  fill({
+    at,
+    e,
+    onChange: (b) => e = b as typeof e,
+    read: () => Promise.resolve(door),
+  }),
+)
+equal(tree.props.at, at)
+equal(submitOf<Door>(e).content?.doc?.title, 'Contact')
+```
+
+Pass a durable draft desk as `fill({…, drafts})`, or mount `tree` under `Ux`
+with the host's `drafts`: answers are read from it and kept synchronously on
+every change, including repeat entries and hidden follow-up answers. The page
+graph keeps loading and send status, with `Submit.values` mirroring the draft
+for readers; it is not the draft's source.
+
+A connected page supplies its store client, person and scoped recovery storage
+to the existing [draft desk](../draft/README.md). This binding needs the page's
+live connection and host:
+
+```ts ignore
+import { h, render } from 'preact'
+import { Ux } from '@yaks/ux'
+import { desk } from '@yaks/draft'
+
+let typed = desk(client, {
+  by: () => person,
+  stash: storage,
+})
+render(h(Ux, { host: { ...host, drafts: typed } }, tree), root)
+// On page teardown, after unmounting:
+// typed.close()
+```
+
+The draft place names the resolved absolute form door, so a reload, another tab
+or another interface finds the same answers, and different apps' relative form
+addresses stay separate. A closed tab keeps pending typing in the desk's
+recovery storage until the store accepts it. A successful send spends the draft;
+a refusal keeps it. A newer edit made while a send waits remains a draft.
+
+What it draws:
+
+- **Each kind its control.** `line`, `email`, `phone` and `date` are one-line
+  fields typed for a phone's keyboard; `lines` and `address` are several lines
+  (@yaks/ui's `Address` is a web address, not a postal one). `choose` is a row
+  of radios to press, or a list to pick from past six choices; `choices` is a
+  box for each; `check` is one box, and unticked is no answer, so a required one
+  must be ticked. `file` uploads the chosen file to the form app and keeps its
+  blob reference as the answer.
+- **Repeat groups.** Each entry of a `repeat` is a card of its own questions,
+  numbered from its label ("Child 1"), with Add and Remove. A required repeat
+  starts with one entry and keeps at least one.
+- **Conditions.** A question shows only while its `when` holds, from `asked()`.
+  What is sent is `kept()`: an answer whose question has since hidden is not
+  sent.
+- **Required and optional.** An optional question's label says "(optional)".
+  Sending checks `missing()` first; what is owed says so under its question, and
+  nothing is sent.
+- **Closed and thanks.** A form its door says is not `open` shows `form.closed`
+  (or "This form is closed."). A sent one shows `form.thanks`, and a button to
+  fill it in again. A JavaScript submission's refusal shows the door's own words
+  and keeps every answer.
+- **Without JavaScript.** It is a native `<form method="post" action={at}>`,
+  each control named by its answer's path (`children.0.born`), with `required`
+  set. The door takes URL-encoded controls as well as JSON. A native post
+  redirects with 303 to the referring page (the app root without a same-origin
+  referrer), preserving its query and fragment. Its `yak-form` query parameter
+  is JSON containing the absolute form door URL as `at`, and either `sent: true`
+  or `said` with the refusal. The page can render that feedback without script;
+  Submit consumes its own feedback when mounted and removes the parameter, so
+  filling it in again starts fresh. Without script, native redirects do not
+  retain answers; a mounted Submit retains its draft across a refusal and spends
+  it after a successful native return.
+
+Its page state is `Submit{content, unread, values, tried, sending, sent, said}`
+on `submitAt(at)`: the form as the door answered it, why it could not be read,
+the current draft snapshot, and how sending went. `read` and `send` replace the
+door calls (`get`, `post`).

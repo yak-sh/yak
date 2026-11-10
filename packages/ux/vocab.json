@@ -100,45 +100,6 @@
       },
       "description": "Completion at a caret, in the host page graph: the replacement span and choices. Text is the host-owned durable draft, not this component."
     },
-    "Signup": {
-      "component": true,
-      "type": "object",
-      "sync": "none",
-      "durable": "connection",
-      "description": "a sign-up being filled in (@yaks/ux Signup), on the entity derived from its form's door address: the form as the door answered, the answers so far, and how sending went",
-      "properties": {
-        "door": {
-          "type": "object",
-          "additionalProperties": true,
-          "description": "the form as its door answered GET: doc, form, open and questions"
-        },
-        "unread": {
-          "type": "string",
-          "description": "why the form could not be read"
-        },
-        "answers": {
-          "type": "object",
-          "additionalProperties": true,
-          "description": "answers keyed by question id, as registration.answers takes them"
-        },
-        "tried": {
-          "type": "boolean",
-          "description": "a send was tried, so required questions still owed say so"
-        },
-        "sending": {
-          "type": "boolean",
-          "description": "a send is on its way"
-        },
-        "sent": {
-          "type": "boolean",
-          "description": "the door took the answers; the form's thanks show"
-        },
-        "said": {
-          "type": "string",
-          "description": "why the door refused the answers, in its words"
-        }
-      }
-    },
     "Sort": {
       "component": true,
       "type": "object",
@@ -157,6 +118,45 @@
             "desc"
           ],
           "description": "ascending or descending values"
+        }
+      }
+    },
+    "Submit": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "Loading and submission in the page graph; values mirror the durable draft owned by the host.",
+      "properties": {
+        "unread": {
+          "type": "string",
+          "description": "Why loading failed"
+        },
+        "tried": {
+          "type": "boolean",
+          "description": "Submission was attempted; show validation feedback"
+        },
+        "sending": {
+          "type": "boolean",
+          "description": "a send is on its way"
+        },
+        "sent": {
+          "type": "boolean",
+          "description": "Submission succeeded"
+        },
+        "said": {
+          "type": "string",
+          "description": "Feedback from the supplied sender"
+        },
+        "content": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Content returned by the supplied reader"
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Current draft values, including nested repeat entries"
         }
       }
     }

@@ -140,3 +140,11 @@ export let useHost = (): Host => {
 /** The consumer that owns what is drawn here: every `Ux`'s `at` above it,
  * outermost first. */
 export let useOwner = (): string => useContext(Given).at
+
+/** Drafts supplied directly by a control's caller or inherited from its host. */
+export let useDrafts = (drafts?: Drafts): Drafts => {
+  let host = useContext(Given).host
+  let found = drafts ?? host?.drafts
+  if (!found) throw new Error('@yaks/ux: supply drafts or wrap the tree in Ux')
+  return found
+}

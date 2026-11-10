@@ -12,9 +12,8 @@
  *   stands, typed over in place, or its control alone (./Edit.ts, ./Text.ts).
  * - `Disclosure`: a summary opening optional content; `disclosureAt`,
  *   `isOpen`, `disclosed`, its page eid and bundles, pure (./Disclosure.ts).
- * - `Signup`: any sign-up form drawn from its questions, read from and sent
- *   to its form door; `signupAt`, `signupOf`, its page eid and state, and
- *   `get`, `post`, the default door calls (./Signup.ts).
+ * - `Fields`: controlled inputs and repeat groups (./Fields.ts).
+ * - `Submit`: loading, durable drafts and submission lifecycle (./Submit.ts).
  * - `Ux`, `useHost`, `Host`: what a page hands down, once per tree
  *   (./host.ts).
  * - `drag`, `drags`, `dragged`: an entity dragged from one place to
@@ -41,6 +40,7 @@ export {
   type Float,
   type Front,
   type Host,
+  useDrafts,
   useHost,
   useOwner,
   Ux,
@@ -66,21 +66,21 @@ export {
   type DisclosureProps,
   isOpen,
 } from './Disclosure.ts'
+export { Fields, type FieldSpec, type FieldsProps } from './Fields.ts'
 export {
-  type Door,
-  get,
-  post,
+  type Feedback,
   type Read,
   type Send,
-  Signup,
-  signupAt,
-  signupBlob,
-  signupOf,
-  type SignupProps,
-  type SignupState,
+  Submit,
+  submitAt,
+  submitOf,
+  type SubmitProps,
+  type SubmitState,
+  type SubmitView,
   type Upload,
-  upload,
-} from './Signup.ts'
+} from './Submit.ts'
+export { type Path, put as putValue, type Values } from './field-values.ts'
+
 export { drag, DRAGGED, dragged, drags } from './drag.ts'
 export {
   among,
