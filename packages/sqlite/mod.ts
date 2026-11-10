@@ -986,8 +986,11 @@ export let storage = (
         unindexed: o.missingIndexes,
       })
     },
+    // A rule reads the file as this snapshot's reads do: a word no write
+    // has raised a table for, or a property derived from one, reads as worn
+    // by nobody (./raise.ts).
     bindings: (matches, bundles, covers) =>
-      bindings(driver, vocab, matches, bundles, covers, base),
+      bindings(driver, vocab, matches, bundles, covers, opts()),
     patch: (given) => {
       let bundles = readied(given)
       return memo.patch(

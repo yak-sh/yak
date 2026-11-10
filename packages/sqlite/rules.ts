@@ -76,6 +76,14 @@ export let bindings = (
 ): Binding[][] => {
   if (!matches.length) return []
   let over = overlay(driver, vocab, bundles, covers)
+  // A component the batch writes reads through its overlay, which already
+  // answers for a table no write has raised; only the rest read as absent.
+  if (opts.absent) {
+    opts = {
+      ...opts,
+      absent: opts.absent.filter((c) => !over.covers.includes(c)),
+    }
+  }
   // What the batch is about, as the ids the overlay speaks in: the anchor
   // every match is narrowed to, so a rule asks about this batch rather than
   // about the file. With no batch there is nothing to be about and nothing to

@@ -21,7 +21,7 @@ import { meta, TABLES } from './meta.ts'
 import { reader } from './reader.ts'
 import { storage } from './mod.ts'
 
-let vocab = loadVocab({
+let words = {
   $defs: {
     doc: {
       component: true,
@@ -36,7 +36,8 @@ let vocab = loadVocab({
     },
     mark: { component: true, properties: {} },
   },
-})
+}
+let vocab = loadVocab(words)
 // A computed property read from another component's rows.
 let derived = {
   'doc.loud': {
@@ -210,4 +211,25 @@ test('a reader of a file sees the tables another connection raised', () => {
     r.close()
     Deno.removeSync(path)
   }
+})
+
+test('a rule reading a property derived from a word nobody wrote lets the write land', async () => {
+  let ruled = loadVocab({
+    $defs: {
+      ...words.$defs,
+      noted: {
+        rule: true,
+        match: '$d .doc.loud=RED, !mark; $d +mark',
+      },
+    },
+  })
+  let d = mem(), s = storage(d, ruled, { derived })
+  s.install()
+  let g = graph({ storage: s, vocab: ruled })
+  await g.apply([{ entity: { eid: 'a' }, doc: { title: 'red' } }])
+  equal((await g.read('.doc'))[0].doc, { title: 'red' })
+  equal(await g.read('.mark'), [])
+  await g.apply([{ entity: { eid: 'b' }, tag: { name: 'red' } }])
+  await g.apply([{ entity: { eid: 'b' }, doc: { title: 'b' } }])
+  equal((await g.read('.mark')).map((b) => b.entity.eid), ['b'])
 })
