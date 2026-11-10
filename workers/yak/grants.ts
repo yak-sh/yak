@@ -33,8 +33,9 @@ import {
   type Reach,
   type Role,
   type Seat,
+  type Space,
 } from './directory.ts'
-import { refuse } from './tool.ts'
+import { admin, refuse } from './tool.ts'
 
 // What a grant token opens with, so identity.ts knows to open it here.
 export let GRANT = 'yaks_'
@@ -227,15 +228,16 @@ export let revoke = async (
 // (operator-reach.ts). It may still be on its way: what is asked of the
 // narrowed space alone is answered without it, so a step's reads that need
 // only its person and space are asked beside the reach (operator.ts
-// `working`), and only what reaches past the space waits for it.
+// `working`), and only what reaches past the space waits for it. Named by
+// its eid, the space needs no slug: one is read with it where asked.
 export let narrowed = (
   dir: Directory,
-  slug: string,
+  slug: string | undefined,
   eid?: string,
   over = false,
   beyond: Reach[] | Promise<Reach[]> = [],
 ): Directory => {
-  let matches = (space: Parameters<Directory['role']>[0]) =>
+  let matches = (space: Pick<Space, 'eid' | 'slug'>) =>
     eid ? space.eid == eid : space.slug == slug
   let letting = Promise.resolve(beyond).then((all) => ({
     all,
@@ -252,21 +254,28 @@ export let narrowed = (
     seat: r.eid,
     own: false,
   })
+  // The narrowed space's role, for an administrative holder: the platform's
+  // admin stands as its owner, which their seats say (tool.ts `admin`).
+  let ownRole = async (space: Pick<Space, 'eid'>, person: string) =>
+    over && await admin({ dir, person }) ? 'owner' : dir.role(space, person)
+  // An administrative holder reaches every app of the space: those of a space
+  // they sit in are in their own reach, read with their seats; the rest are
+  // asked.
   let reachHere = async (person: string) => {
     if (!over) {
       return (await dir.reachable(person)).filter((r) => matches(r.space))
     }
-    let space = eid ? await dir.at(eid) : await dir.space(slug)
+    let [space, theirs] = await Promise.all([
+      eid ? dir.at(eid) : dir.space(slug!),
+      dir.reachable(person),
+    ])
     if (!space || space.trashed) return []
-    let page = await dir.page(space.slug, null, person, true)
-    let role = page.administrative ? 'owner' as const : page.role
-    return role
-      ? page.roster!.filter((app) => !app.trashed).map((app) => ({
-        space,
-        app,
-        role,
-      }))
-      : []
+    let role = await ownRole(space, person)
+    if (!role) return []
+    let sat = theirs.filter((r) => r.space.eid == space.eid).map((r) => r.app)
+    return (sat.length ? sat : await dir.apps([space]))
+      .filter((app) => !app.trashed)
+      .map((app) => ({ space, app, role }))
   }
   // The apps of each space that let the holder in, with the role it gave. A
   // space the person also sits in is in their own reach, which the request
@@ -290,8 +299,8 @@ export let narrowed = (
     )
   }
   let narrowedTo = async () => {
-    let space = eid ? await dir.at(eid) : await dir.space(slug)
-    if (!space) throw refuse('missing', `no space ${slug}`)
+    let space = eid ? await dir.at(eid) : await dir.space(slug!)
+    if (!space) throw refuse('missing', `no space ${slug ?? eid}`)
     return space
   }
   let self: Directory = {
@@ -319,7 +328,8 @@ export let narrowed = (
     // Spaces it was let into are asked the long way.
     holding: async (app, person, _over, every) => {
       if ((await letting).all.length) return null
-      let page = await self.page(slug, app, person, over, every)
+      let at = eid ? (await narrowedTo()).slug : slug!
+      let page = await self.page(at, app, person, over, every)
       return page.space && matches(page.space)
         ? { holding: [page.space], page }
         : null
@@ -347,12 +357,15 @@ export let narrowed = (
       ...(await also(role)).map(seat),
     ],
     // The narrowed space is never one it was let into (operator-reach.ts
-    // `reachOf` leaves it out), so its role is read without the rest.
-    role: async (space: Parameters<Directory['role']>[0], person: string) => {
-      if (!matches(space)) return (await past(space))?.role ?? null
-      if (!over) return dir.role(space, person)
-      let page = await dir.page(space.slug, null, person, true)
-      return page.administrative ? 'owner' : page.role ?? null
+    // `reachOf` leaves it out), so its role is read without the rest. Asked
+    // by eid, a space narrowed by its slug is read to say whether it is the
+    // one.
+    role: async (space: Pick<Space, 'eid'>, person: string) => {
+      let here = eid
+        ? space.eid == eid
+        : (await dir.space(slug!))?.eid == space.eid
+      if (!here) return (await past(space))?.role ?? null
+      return ownRole(space, person)
     },
     target: async (space: string, person: string, app?: string | null) => {
       let got = await dir.target(space, person, app)

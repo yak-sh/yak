@@ -7,7 +7,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { seal } from './lib/token.ts'
-import type { Directory } from './directory.ts'
+import type { Directory, Space } from './directory.ts'
 import {
   GRANT,
   type Grant,
@@ -162,7 +162,7 @@ test('no ledger is no grants at all', () => {
 let spaces = [
   { eid: 'e-dana', slug: 'dana' },
   { eid: 'e-other', slug: 'other' },
-] as unknown as Parameters<Directory['role']>[0][]
+] as unknown as Space[]
 
 let dir = {
   space: (slug: string) => Promise.resolve(spaces.find((s) => s.slug == slug)),

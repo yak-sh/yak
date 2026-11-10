@@ -226,7 +226,13 @@ let asking = async (
 // Each Google integration as the platform holds it, and the person's
 // connection through it: read once for a step's tools and its instructions,
 // all at once (lib/hops.ts `recall`).
-let accounts = (env: Env, ctx: Ctx, space: Space) =>
+// A person's Google accounts, read once a step whoever asks: the step asks
+// as it starts, knowing only its space's eid (operator.ts `working`).
+export let googleAccounts = (
+  env: Env,
+  ctx: Pick<Ctx, 'person' | 'dir'>,
+  space: Pick<Space, 'eid'>,
+) =>
   recall(
     PLATFORM_STORE,
     `operator google ${ctx.person} ${space.eid}`,
@@ -261,7 +267,7 @@ export let googleTools = async (
   ctx: Ctx,
   space: Space,
 ): Promise<Tool[]> => {
-  let [{ held: calendar }, { held: mail, i: gmail }] = await accounts(
+  let [{ held: calendar }, { held: mail, i: gmail }] = await googleAccounts(
     env,
     ctx,
     space,
@@ -285,7 +291,7 @@ export let googleTools = async (
  * they have not. */
 export let googleTold = async (env: Env, ctx: Ctx, space: Space) => {
   let said = await Promise.all(
-    (await accounts(env, ctx, space)).map(async ({ i, held, client }) => {
+    (await googleAccounts(env, ctx, space)).map(async ({ i, held, client }) => {
       if (!i) return []
       if (held) {
         let account = str(comp(held, CONNECTION).account)

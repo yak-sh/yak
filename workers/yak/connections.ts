@@ -1079,7 +1079,7 @@ export let addingAt = (env: Env, space: string, i: Integration) =>
 export let ownConnection = async (
   env: Env,
   ctx: Pick<Asking, 'person' | 'dir'>,
-  space: Space,
+  space: Pick<Space, 'eid'>,
   integration: string,
 ): Promise<Bundle | undefined> => {
   // Both owners' and the person's role are asked at once; the space's is

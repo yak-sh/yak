@@ -151,7 +151,7 @@ let fixture = () => {
           roster: apps,
         }
       },
-      role: async (where: Space) =>
+      role: async (where: Pick<Space, 'eid'>) =>
         where.eid == 'meta' ? 'owner' : await read<Role | null>('role'),
       sitting: () =>
         Promise.resolve(new Map<string, Role>([['meta', 'owner']])),

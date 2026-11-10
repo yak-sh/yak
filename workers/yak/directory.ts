@@ -3000,7 +3000,7 @@ export let directoryRows = (rows: {
     // A person's membership row: the eid, so an invite can revise or remove
     // the one that stands, and the role, which is the same question asked
     // shorter.
-    member: async (space: Space, person: string) => {
+    member: async (space: Pick<Space, 'eid'>, person: string) => {
       // Nobody is a member of nothing. An empty person is a caller who has not
       // signed in (anon.ts), and it must never be asked: `.member.person=`
       // reads as that property being absent, which is a question that could
@@ -3011,7 +3011,7 @@ export let directoryRows = (rows: {
       )
       return row?.member ? { eid: row.entity.eid, role: row.member.role } : null
     },
-    role: async (space: Space, person: string) =>
+    role: async (space: Pick<Space, 'eid'>, person: string) =>
       (await self.member(space, person))?.role ?? null,
     // What one person holds on one app, by a grant rather than a seat
     // (T-37615): a guest invited to this app and nothing else in the space.
