@@ -304,8 +304,9 @@ A query that works on the box can be refused in a store.
   written rows only, it still reads. Its alarm, `tick`, effects, embedding,
   moves, lexicon and statistics wait for the window's end and mark nothing
   failed: `defect` hears no `Stopped`, a boot that meets one runs again
-  (`#failed`), and an effect that meets one runs again as the same attempt
-  (@yaks/effects `deferral`). A Builder answers 429 the same way and its alarm
+  (`#failed`), an effect that meets one runs again as the same attempt
+  (@yaks/effects `deferral`), and how a run ended that the stop would not let
+  the pool write down is written once the window ends (`unwritten`). A Builder answers 429 the same way and its alarm
   comes back then. The directory is spared (`#start`): every door reads it.
   A relocation runs on `freely` drivers: it never stops half way, nor leaves
   either end stopped. A page's

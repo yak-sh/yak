@@ -733,7 +733,8 @@ while stopped, plus the statement that passed it. What a stopped object answers:
 - Its alarm and `tick` do nothing but come back when the window ends; replays,
   wakes, effects, embedding, moves, the lexicon and planner statistics wait and
   are marked neither failed nor stuck. An effect stopped mid-run is due again
-  after the wait as the same attempt (@yaks/effects).
+  after the wait as the same attempt, and one that ended while stopped is not
+  run again: the pool writes down how it ended after the wait (@yaks/effects).
 - A Builder answers each door 429 the same way; its alarm comes back then.
 - The directory is told of a runaway and never stopped: every door reads it, so
   stopping it would stop the platform. A relocation counts its rows, is never

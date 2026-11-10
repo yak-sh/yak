@@ -394,35 +394,45 @@ test('a run its store stopped waits it out as the same attempt, however often', 
   assertEquals((await a.g.read('.effect&*')).length, 0)
 })
 
-test('a run whose store refuses to write down its wait runs again as the same attempt', async () => {
-  let t = 0, stopped = false
+// A single-owner store refusing the pool's own writes for 5 s once a run
+// `shut`s it, worked at each of `at`: how often the run went, and the rows
+// left behind.
+let shutting = async (
+  run: (n: number, shut: () => void) => void,
+  at: number[],
+) => {
+  let t = 0, until = 0, tries = 0
   let a = proc(store(), {
     singleOwner: true,
     clock: { ...system, now: () => t },
   })
-  let tries = 0
-  a.fx.handle({
-    post_note: () => {
-      if (++tries > 3) return
-      stopped = true
-      throw stop()
-    },
-  })
-  // The pool's own writes, refused while the store is stopped.
+  a.fx.handle({ post_note: () => run(++tries, () => void (until = t + 5_000)) })
   let refusing: Access = {
     ...a.g,
-    apply: (b, o) => stopped ? Promise.reject(stop()) : a.g.apply(b, o),
+    apply: (b, o) => t < until ? Promise.reject(stop()) : a.g.apply(b, o),
   }
   await a.fx.work(refusing)
   await a.g.apply([post('p1')])
   await a.fx.idle()
-  for (t of [4_999, 5_000, 10_000, 15_000]) {
-    stopped = false
+  for (t of at) {
     await a.fx.work(refusing)
     await a.fx.idle()
   }
-  assertEquals(tries, 4)
-  assertEquals((await a.g.read('.effect&*')).length, 0)
+  return { tries, left: (await a.g.read('.effect&*')).length, oops: a.oops }
+}
+
+test('a run whose store refuses to write down its wait runs again as the same attempt', async () => {
+  let ran = await shutting((n, shut) => {
+    if (n > 3) return
+    shut()
+    throw stop()
+  }, [4_999, 5_000, 10_000, 15_000])
+  assertEquals(ran, { tries: 4, left: 0, oops: [] })
+})
+
+test('a run that finished is not run again when its store refuses to write that down', async () => {
+  let ran = await shutting((_, shut) => shut(), [4_999, 5_000, 10_000])
+  assertEquals(ran, { tries: 1, left: 0, oops: [] })
 })
 
 test('an error asking to be retried that passes on its next try is never reported', async () => {

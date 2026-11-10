@@ -72,9 +72,10 @@
 // whose `retry` also says `defer` is no failure at all, as a handler's own
 // `defer` is not: its object refused it for a while (@yaks/durable-object
 // `Stopped`), and the run is due again after the wait as the same attempt.
-// When the pool cannot write that down either, because the same object
-// refuses its bookkeeping, the run is remembered as deferred and its claim
-// read as such, not as an interruption.
+// When the same object refuses the pool's own write of how a run ended, the
+// pool keeps that write and makes it once the wait is up, and starts nothing
+// for the run meanwhile: one that finished is not run again, and one that
+// failed keeps its attempt.
 //
 // A handler is told which attempt it is ({@link Attempt}): whether this is its
 // last, so the failure it records there is the one that stands; and a way to
@@ -430,12 +431,31 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let member = false
   let graph: Access | undefined
   let running = new Map<Eid, Held>()
-  // Runs deferred (`deferral`) whose row could not say so: the attempts their
-  // claim left, and when they are due again.
-  let paused = new Map<
+  // How runs ended that their object refused to write down for a while
+  // (`deferral`), by run, and when to write each again.
+  let unwritten = new Map<
     Eid,
-    { attempts: number; token?: string; until: number }
+    { write: () => unknown; until: number }
   >()
+  // Each that is due, written: while its object still refuses, the rest wait
+  // with it.
+  let rewrite = async (now: number) => {
+    for (let [eid, { write, until }] of unwritten) {
+      if (until > now) continue
+      try {
+        await write()
+      } catch (why) {
+        if (deferral(why)) {
+          return void unwritten.set(eid, { write, until: now + asked(why) })
+        }
+        ctx.report(why, {
+          handler: POOL,
+          event: { kind: 'created', entity: { eid }, name: EFFECT },
+        })
+      }
+      unwritten.delete(eid)
+    }
+  }
   let admitting = 0
   // Runs that ended here, however they ended: in all, by the second, and how
   // many threw. What a worker says of itself (./worker.ts).
@@ -612,6 +632,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           ? { before: { ...before, entity } }
           : {}),
       }
+      // How the run ended, for its row.
+      let ended: (() => unknown) | undefined
       try {
         if (!s?.run) throw new Error(`no effect is handled as ${row.handler}`)
         await s.run(
@@ -624,18 +646,13 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           attempt,
         )
         if (peek(g) && span?.active) span.end({ counts: { runs: 1 } })
-        // Pool bookkeeping follows the completed handler, not its trace.
         if (deferred != null) {
+          let next = stamp(deferred)
           tries = Math.max(0, tries - 1)
-          await settle({ state: 'pending', next: stamp(deferred), ...free })
+          ended = () => settle({ state: 'pending', next, ...free })
         } else if (kept) {
-          await scope(undefined, () =>
-            swap(
-              g,
-              eid,
-              { lease_token: held.token, attempts: held.attempts },
-              null,
-            ))
+          let was = { lease_token: held.token, attempts: held.attempts }
+          ended = () => swap(g, eid, was, null)
         }
       } catch (err) {
         errors++
@@ -643,38 +660,35 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           span.end({ outcome: outcome(err), counts: { runs: 1 } })
         }
         // A deferral gives its attempt back and is due after its wait.
-        let deferred = deferral(err)
-        if (deferred) tries = Math.max(0, tries - 1)
+        let waits = deferral(err)
+        if (waits) tries = Math.max(0, tries - 1)
         // An error that asks to be tried again is the handler waiting on
         // something outside, expected and kept on the row; it is reported
         // only once nothing will try it again.
-        let last = !deferred && attempt.last()
+        let last = !waits && attempt.last()
         if (last || !retried(err)) {
           ctx.report(err, { handler: String(row.handler), event, slot: s })
         }
-        let due = deferred ? asked(err) : Math.max(wait(tries), asked(err))
-        try {
-          await scope(undefined, () =>
-            settle(
-              last
-                ? { state: 'failed', error: said(err), next: null, ...free }
-                : {
-                  state: 'pending',
-                  error: said(err),
-                  next: stamp(clock() + due),
-                  ...free,
-                },
-            ))
-        } catch (why) {
-          if (deferral(why)) {
-            paused.set(eid, {
-              attempts: held.attempts,
-              token: held.token ?? undefined,
-              until: clock() + Math.max(due, asked(why)),
-            })
+        let due = waits ? asked(err) : Math.max(wait(tries), asked(err))
+        let patch = last
+          ? { state: 'failed', error: said(err), next: null, ...free }
+          : {
+            state: 'pending',
+            error: said(err),
+            next: stamp(clock() + due),
+            ...free,
           }
-          throw why
-        }
+        ended = () => settle(patch)
+      }
+      // Pool bookkeeping follows the completed handler, not its trace, and
+      // waits out an object that refuses it (`unwritten`).
+      if (!ended) return
+      let write = () => scope(undefined, ended!)
+      try {
+        await write()
+      } catch (why) {
+        if (!deferral(why)) throw why
+        unwritten.set(eid, { write, until: clock() + asked(why) })
       }
     }
     // A host's task-local carrier retains this effect's ancestry across
@@ -711,6 +725,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   type Pass = { started: Promise<void>[]; more: boolean }
   let due = async (g: Access, budget = page): Promise<Pass> => {
     let now = clock()
+    if (unwritten.size) await rewrite(now)
     let started: Promise<void>[] = []
     let claims: { eid: Eid; row: Comp; mine: Comp }[] = []
     let reserved = 0
@@ -765,27 +780,19 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         return
       }
       let s = handled(String(row.handler))
-      if (!s || running.has(eid)) return
-      let attempts = Number(row.attempts ?? 0)
-      // A deferral its row could not record (`paused`) waits, then runs again
-      // as the attempt it was, under the claim it still holds (a shared
-      // store reads the row again once that claim's lease runs out).
-      let pause = paused.get(eid)
-      paused.delete(eid)
-      let resumed = pause?.attempts == attempts &&
-        pause.token == (row.lease_token ?? undefined)
-      if (resumed && pause!.until > now) return void paused.set(eid, pause!)
+      // A run whose end is still to be written down has run.
+      if (!s || running.has(eid) || unwritten.has(eid)) return
       let expiry = row.lease_expiry ? Date.parse(String(row.lease_expiry)) : 0
       if (
-        !resumed && !opts.singleOwner && row.lease_owner && expiry > now
+        !opts.singleOwner && row.lease_owner && expiry > now
       ) return
       if (row.next && Date.parse(String(row.next)) > now) return
+      let attempts = Number(row.attempts ?? 0)
       // Claimed and no `next`: interrupted, not reported, so how far it got
       // is unknown — and a second run is not the same as a first. Started
       // under other code, a deploy cut it off; under this code, it crashed.
-      let interrupted = !resumed && attempts > 0 && !row.next
-      let cut = resumed ||
-        interrupted && !!opts.version && row.version != opts.version
+      let interrupted = attempts > 0 && !row.next
+      let cut = interrupted && !!opts.version && row.version != opts.version
       // An interruption left failed is a failure no handler threw, so the
       // pool reports it itself.
       let abandon = async (error: string) => {
