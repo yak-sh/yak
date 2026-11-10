@@ -1086,6 +1086,13 @@ the hosted model writes a line there (`operator_hosted{code}`) telling the model
 to say so once; the line stands until the machine answers that conversation
 again, which marks it `completed`.
 
+Measured on 2026-11-10 on the Operator page's socket, in the owner's own
+conversation: a step on `sonnet`, served by the `claude` CLI on his machine,
+typed its first text 4.1 s after the page was sent his words, and its reply had
+landed 1.5 s after that. Its prompt was 73,437 input tokens, 66,464 of them
+cached. The turn before it, the same prompt uncached and answered in one word,
+took 6.1 s from the ask to its reply.
+
 What the Operator is told is two personas, worn through @yaks/persona
 (operator-persona.ts). The yaks.app Operator persona is kept in the directory:
 its own text is the general guidance, written by the code only where there is
