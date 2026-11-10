@@ -13,7 +13,7 @@ import { env } from '@yaks/process/env'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import { parse } from '@yaks/id'
-import { accountEid, type Price } from '@yaks/model'
+import { accountEid, listPrice, type Price } from '@yaks/model'
 import { type Home, home } from '@yaks/session/files'
 import { absolute } from '@yaks/file/local'
 import { after, dayEid } from './window.ts'
@@ -267,10 +267,29 @@ export let requests = (g: Graph, day: string): Promise<Bundle[]> =>
     `.ask .usage .created.at>=${quoted(day)} .created.at<${quoted(after(day))}`,
   )
 
-/** Tally a day from the graph and keep it on its row. */
+/** Give each of these models its list price on its row, where the table
+ * holds its name: a row made before the table knew it, or by a writer that
+ * names a model by its row. Says whether any took one. */
+let listed = async (g: Graph, models: Eid[]): Promise<boolean> => {
+  let prices = (await g.get(models.filter(Boolean), ['model'])).flatMap(
+    (b): Bundle[] => {
+      let price = listPrice(str(comp(b, 'model').name))
+      return price ? [{ entity: { eid: b.entity.eid }, price }] : []
+    },
+  )
+  if (prices.length) await g.apply(prices, { trusted: true })
+  return prices.length > 0
+}
+
+/** Tally a day from the graph and keep it on its row. A model it meets with
+ * no price takes its list price first, so only a model the table lacks is
+ * left unpriced. */
 export let recompute = async (g: Graph, day: string): Promise<Spend> => {
   let rows = await requests(g, day)
   let spend = tally(day, rows, await known(g, day, rows))
+  if (await listed(g, spend.unpriced)) {
+    spend = tally(day, rows, await known(g, day, rows))
+  }
   await g.apply([{ entity: { eid: dayEid(day) }, spend }], { trusted: true })
   return spend
 }
