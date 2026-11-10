@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { appStore, stamp } from './directory.ts'
+import { appStore, stamp, storeName } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { platform } from './directory-rows-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
@@ -15,6 +15,7 @@ import {
 import { fetch } from './apps.ts'
 import * as sell from './sell.ts'
 import { protectedSale } from './sale-private.ts'
+import { GRANT, owning } from './dispatch.ts'
 import { COOKIE, seal, sign } from './lib/token.ts'
 
 let ANA = 'a0000000-0000-4000-8000-000000000001'
@@ -238,4 +239,103 @@ test('guest receipts follow the verified browser through sign-in', async () => {
     headers: { 'x-yak-via': guestVia },
   })
   assertEquals(forged.status, 404)
+})
+
+let customerOnly = await upload(ANA, 'Only customer A may supply these bytes')
+let artifactGuest = crypto.randomUUID()
+let guestFileResponse = await files.ask(
+  `pay/artifacts?via=${artifactGuest}`,
+  ADA,
+  {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain' },
+    body: 'Guest source bytes',
+  },
+)
+assertEquals(guestFileResponse.status, 200)
+let guestFile = await guestFileResponse.json() as { eid: string }
+let appGrant = await owning(
+  SECRET,
+  storeName(files.space, files.app),
+  files.app,
+)
+let scheduled = (path: string, init: RequestInit = {}) =>
+  files.ask(path, undefined, {
+    ...init,
+    headers: { ...init.headers, [GRANT]: appGrant },
+  })
+let restricted = (sha: string, customer: Record<string, string>) =>
+  `pay/artifacts/${sha}?${new URLSearchParams({
+    subject: 'customer',
+    ...customer,
+  })}`
+
+test('scheduled artifact reads restrict merchant authority to the original person or guest', async () => {
+  for (
+    let [sha, customer, status] of [
+      [customerOnly.eid, { buyer: ANA }, 200],
+      [second.eid, { buyer: ANA }, 404],
+      [customerOnly.eid, { buyer: BO }, 404],
+      [second.eid, { buyer: BO }, 200],
+      [guestFile.eid, { via: artifactGuest }, 200],
+      [customerOnly.eid, { via: artifactGuest }, 404],
+      [customerOnly.eid, { buyer: BO, via: artifactGuest }, 404],
+      [guestFile.eid, { buyer: ANA, via: artifactGuest }, 200],
+    ] as [string, Record<string, string>, number][]
+  ) {
+    assertEquals((await scheduled(restricted(sha, customer))).status, status)
+  }
+  let head = await scheduled(restricted(customerOnly.eid, { buyer: ANA }), {
+    method: 'HEAD',
+  })
+  assertEquals(head.status, 200)
+  assertEquals(await head.text(), '')
+  assertEquals((await scheduled(`pay/artifacts/${second.eid}`)).status, 200)
+})
+
+test('restricted artifact reads fail closed on missing subjects and unprivileged subject selection', async () => {
+  for (
+    let query of [
+      'subject=customer',
+      'subject=',
+      `buyer=${ANA}`,
+      'subject=customer&buyer=&via=',
+    ]
+  ) {
+    assertEquals(
+      (await scheduled(`pay/artifacts/${customerOnly.eid}?${query}`)).status,
+      400,
+    )
+  }
+  for (let person of [undefined, ANA, BO]) {
+    assertEquals(
+      (await files.ask(restricted(customerOnly.eid, { buyer: ANA }), person, {
+        headers: { 'x-yak-role': 'editor' },
+      })).status,
+      403,
+    )
+  }
+  assertEquals(
+    (await files.ask(`pay/artifacts/${customerOnly.eid}`, BO)).status,
+    404,
+  )
+})
+
+test('restricted artifact tickets require customer entitlement even beside a valid ticket', async () => {
+  let wrong = restricted(second.eid, { buyer: ANA }).replace('?', '/link?')
+  assertEquals((await scheduled(wrong, { method: 'POST' })).status, 404)
+  let right = restricted(second.eid, { buyer: BO }).replace('?', '/link?')
+  let response = await scheduled(right, { method: 'POST' })
+  assertEquals(response.status, 200)
+  let ticket = new URL((await response.json()).url)
+  assertEquals(ticket.searchParams.has('buyer'), false)
+  assertEquals(ticket.searchParams.has('subject'), false)
+  ticket.searchParams.set('subject', 'customer')
+  ticket.searchParams.set('buyer', ANA)
+  assertEquals(
+    (await scheduled(
+      ticket.pathname.slice('/cookbook/api/'.length) + ticket.search,
+    )).status,
+    404,
+  )
 })

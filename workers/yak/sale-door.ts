@@ -12,6 +12,7 @@ import {
   ARTIFACT_LIFE,
   artifactPermit,
   artifactTicket,
+  type Buyer,
   mayReceive,
   protectedArtifact,
   type SaleAccess,
@@ -32,11 +33,14 @@ let storeOf = ({ env, space, app }: Asked) =>
     'x-yak-role': 'editor',
   })
 let accessOf = (row: Bundle) => row.sale_access as SaleAccess | undefined
-let allowed = (at: Asked, row: Bundle) =>
-  editor(at) || !!accessOf(row) && mayReceive(accessOf(row)!, {
+let allowed = (at: Asked, row: Bundle, subject?: Buyer) =>
+  (!subject && editor(at)) || mayReceive(
+    accessOf(row) ?? {},
+    subject ?? {
       person: at.who.service?.person ?? at.who.person,
       via: at.who.via,
-    })
+    },
+  )
 let artifactRows = (rows: Bundle[], sha: string, bytes: number) => {
   let attachment = rows.find((row) => row.attachment)!.attachment as Comp
   return rows.map((row) =>
@@ -129,19 +133,54 @@ let upload = async (at: Asked) => {
   })
 }
 
-let entitled = async (at: Asked, sha: string) => {
+let entitled = async (at: Asked, sha: string, subject?: Buyer) => {
   let rows = await storeOf(at).query(
     `.sale_artifact.artifact=${sha} ?sale_access`,
   )
-  return rows.some((row) => allowed(at, row))
+  return rows.some((row) => allowed(at, row, subject))
+}
+
+/** Scheduled app work narrows its merchant authority to the captured customer.
+ * A missing customer in this mode never falls back to the seller. */
+let artifactSubject = (at: Asked): Buyer | Response | undefined => {
+  let params = new URL(at.req.url).searchParams
+  let mode = params.get('subject')
+  if (!params.has('subject') && !params.has('buyer') && !params.has('via')) {
+    return undefined
+  }
+  if (mode != 'customer') {
+    return at.json(
+      400,
+      'subject',
+      'Use subject=customer to restrict an artifact read',
+    )
+  }
+  if (!editor(at)) {
+    return at.json(
+      403,
+      'subject',
+      'Only the seller app or an editor selects a customer subject',
+    )
+  }
+  let person = params.get('buyer'), via = params.get('via')
+  if (!person && !via) {
+    return at.json(
+      400,
+      'missing_customer',
+      'A customer subject needs its buyer or browser instrument',
+    )
+  }
+  return { person, via }
 }
 
 let artifacts = async (at: Asked, sha: string, link: boolean) => {
   let { req, env, app, space } = at
+  let subject = artifactSubject(at)
+  if (subject instanceof Response) return subject
   let token = new URL(req.url).searchParams.get('ticket')
-  let signed = !link && !!token && !!env.SESSION_SECRET &&
+  let signed = !subject && !link && !!token && !!env.SESSION_SECRET &&
     await artifactPermit(token, app.eid, sha, env.SESSION_SECRET)
-  if (!signed && !await entitled(at, sha)) return missing()
+  if (!signed && !await entitled(at, sha, subject)) return missing()
   if (link) {
     if (req.method != 'POST') return at.json(405, 'method_not_allowed')
     if (!env.SESSION_SECRET) return at.json(503, 'signing_unavailable')

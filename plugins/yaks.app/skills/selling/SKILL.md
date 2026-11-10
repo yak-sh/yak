@@ -214,6 +214,24 @@ its customer entitlement together, without publishing an ordinary blob URL.
 Identical files can belong to several customers independently.
 
 `GET ./api/pay/artifacts/<eid>` reads the file for its customer or the seller.
+
+Scheduled work handling a customer's supplied file restricts its seller
+authority explicitly:
+
+    let subject = new URLSearchParams({subject: 'customer'})
+    if (customer.person) subject.set('buyer', customer.person)
+    if (customer.via) subject.set('via', customer.via)
+    await env.APP.fetch('/pay/artifacts/' + sha + '?' + subject)
+
+The subject comes from the original verified customer, retained with the work.
+This read uses the existing artifact entitlement check even though `env.APP`
+holds seller authority. A person-bound file needs that person; a guest file
+needs its browser instrument. At least `buyer` or `via` is required. Only the
+seller app or a seller editor may select a restricted subject; ordinary clients
+continue using their own inferred identity. The same restriction works on
+`/link`. Trusted seller configuration, such as a licensed font, uses the
+ordinary seller read without a subject.
+
 `POST ./api/pay/artifacts/<eid>/link` returns `{url, expires}`: a signed URL
 allowing a provider to fetch that exact artifact in that app for fifteen
 minutes. Renewing a link checks the current customer entitlement again. Receipt
