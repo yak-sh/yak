@@ -311,7 +311,7 @@ import {
 } from '@yaks/query'
 import { effectsIn, loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { decode as fromWire, stringify } from '@yaks/vocab/wire'
-import { binaryRequest, isBinaryApply } from './binary.ts'
+import { binaryRequest, isBinaryApply, sealed } from './binary.ts'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
 import type { Runner } from '@yaks/tools'
@@ -4148,6 +4148,10 @@ export class Store {
         let answer: Response
         try {
           if (isBinaryApply(request)) {
+            // Decoding needs the start a stopped object can't run, so its
+            // write is kept as it came and decoded as it lands (`#sealed`).
+            let stop = logged(request) && this.#ceiling.refusal(true)
+            if (stop) return await this.#sealed(request, stop)
             let no = await this.#ready(request)
             if (no) return no
             request = await binaryRequest(request, this.#vocab)
@@ -4402,6 +4406,21 @@ export class Store {
     return this.#waiting(seq, stop.retry.after)
   }
 
+  /** A binary write that arrives while this object may not write, kept as
+   * `#kept` keeps any other but as its envelope (binary.ts `sealed`), since
+   * decoding it needs the words a start reads. What the log keeps of no
+   * write (too big, a secret's value) is told to wait, as is an outbox key,
+   * whose receipt binds the decoded body: its caller holds it until then. */
+  async #sealed(
+    request: Request,
+    stop: Error & { retry: { after: number } },
+  ): Promise<Response> {
+    let { body, header } = sealed(new Uint8Array(await request.arrayBuffer()))
+    let key = request.headers.get(IDEMPOTENCY)
+    if (!fits(body) || keyed(header) || durable(key)) return refuse(stop)
+    return this.#kept(request, body, stop)
+  }
+
   /** The answer for a write kept while this object is stopped, `wait` ms
    * more, and the alarm that comes back for it then. */
   #waiting(seq: number, wait: number): Response {
@@ -4618,7 +4637,8 @@ export class Store {
    * ever reached through a request the Worker builds from scratch, and
    * door.ts `storeOf` strips the whole vouch set from any request it is
    * handed, so it can never arrive from outside. An NDJSON import is
-   * @yaks/api's `pour`, chunk by chunk.
+   * @yaks/api's `pour`, chunk by chunk, and a binary envelope is decoded
+   * here, in the words it lands in.
    */
   async #commit(
     request: Request,
@@ -4643,6 +4663,10 @@ export class Store {
       return refuse(no)
     }
     try {
+      // A binary write the log kept undecoded (`#sealed`).
+      if (isBinaryApply(request)) {
+        request = await binaryRequest(request, this.#vocab)
+      }
       let text = await readBody(request)
       let body = fromWire(this.#vocab, JSON.parse(text))
       if (!Array.isArray(body)) {
@@ -5021,7 +5045,11 @@ export class Store {
       }
       let bundles: Bundle[]
       try {
-        bundles = JSON.parse(row.body)
+        bundles = JSON.parse(
+          isBinaryApply(original)
+            ? await (await binaryRequest(original.clone(), this.#vocab)).text()
+            : row.body,
+        )
         if (!Array.isArray(bundles)) throw new Error('not a batch')
       } catch {
         return refuse(new Refused('held write is not a JSON batch'))

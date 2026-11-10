@@ -16,6 +16,7 @@ import { KERNEL, metaOf } from './meta.ts'
 import { WAKE } from './door.ts'
 import { db, state, titling } from './testing.ts'
 import { Pending } from './writes.ts'
+import { BINARY, binary } from '@yaks/vocab/wire'
 
 let NAME = 'ada/notes'
 let MINUTE = 60_000
@@ -42,10 +43,20 @@ let held = () => {
   return { at, ctx, ceiling, spend }
 }
 
-// A store with one note in it, and the last answer its door gave.
-let object = async () => {
+// A store with one note in it, speaking `words` beside the platform's, and
+// the last answer its door gave.
+let object = async (words?: unknown) => {
   let h = held()
   let store = new Store(h.ctx, {}, undefined, { now: () => h.at.t })
+  if (words) {
+    await store.fetch(
+      new Request('http://store/vocab', {
+        method: 'POST',
+        headers: { ...KERNEL, 'x-store': NAME },
+        body: JSON.stringify(words),
+      }),
+    )
+  }
   let last: Response | undefined
   let door = metaOf(
     doorOf(async (r) => (last = await store.fetch(r)).clone(), NAME),
@@ -152,6 +163,61 @@ test('a write to a store past what it may read is kept too', async () => {
   o.at.t = MINUTE
   await o.alarm()
   assertEquals(await o.title('n1'), 'kept')
+})
+
+// A photo's bytes, sent as the binary door takes them. Decoding them needs
+// the store's words, and the door they come through tells the store something
+// new (its access mode), which a stopped store can't write down.
+let PHOTOS = {
+  $defs: {
+    photo: {
+      component: true,
+      type: 'object',
+      properties: { bytes: { type: 'string', contentEncoding: 'base64' } },
+    },
+  },
+}
+let photo = (o: Awaited<ReturnType<typeof object>>, body: BodyInit) =>
+  o.store.fetch(
+    new Request('http://store/apply', {
+      method: 'POST',
+      headers: {
+        ...KERNEL,
+        'x-store': NAME,
+        'x-yak-access': 'public',
+        'content-type': BINARY,
+      },
+      body,
+    }),
+  )
+let snapped = binary([{
+  entity: { eid: 'p1' },
+  photo: { bytes: Uint8Array.of(0, 255, 128) },
+}])
+for (let kind of ['read', 'written'] as const) {
+  let o = await object(PHOTOS)
+  test(`a binary write to a store past what it may ${kind == 'read' ? 'read' : 'write'} is kept, and lands with its bytes when the window ends`, async () => {
+    o.spend(kind)
+    let answer = await photo(o, snapped)
+    assertEquals([answer.status, o.writes('pending')], [202, 1])
+    o.at.t = MINUTE
+    await o.alarm()
+    let [found] = await (await o.store.fetch(
+      new Request('http://store/query?q=.entity.eid=p1', {
+        headers: { ...KERNEL, 'x-store': NAME },
+      }),
+    )).json()
+    assertEquals(found?.photo, {
+      bytes: { $bytes: 'AP+A', encoding: 'base64' },
+    })
+  })
+}
+
+let torn = await object(PHOTOS)
+test('a stopped store refuses a binary write it cannot read, keeping nothing', async () => {
+  torn.spend('written')
+  let answer = await photo(torn, snapped.slice(0, 2))
+  assertEquals([answer.status, torn.writes('pending')], [400, 0])
 })
 
 let tipped = await object()

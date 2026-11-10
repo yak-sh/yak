@@ -42,6 +42,7 @@ import {
   val,
 } from '@yaks/sql'
 import { IDEMPOTENCY } from './door.ts'
+import { opened } from './binary.ts'
 
 let LOG = 'yak_writes'
 let KEY = 'idempotency_key'
@@ -646,13 +647,16 @@ export let dead = (db: Driver, seq: number, why: string) =>
     where: at(seq),
   })
 
-/** The request a kept write was, to apply again. */
-export let replayed = (k: Kept): Request =>
-  new Request('http://store/apply', {
+/** The request a kept write was, to apply again: a binary one's envelope as
+ * it came (binary.ts `sealed`). */
+export let replayed = (k: Kept): Request => {
+  let headers = new Headers(JSON.parse(k.headers))
+  return new Request('http://store/apply', {
     method: 'POST',
-    headers: JSON.parse(k.headers),
-    body: k.body,
+    headers,
+    body: opened(headers, k.body),
   })
+}
 
 /** A constraint the batch broke — a unique name already taken, a required
  * column left empty — is the batch's own refusal, not the store failing, and
