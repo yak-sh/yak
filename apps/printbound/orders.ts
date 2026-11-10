@@ -1,3 +1,4 @@
+import { checked } from './store.ts'
 import { token } from '@yaks/graph/sha256'
 import { type Order, type Patch, type Repository } from './fulfillment.ts'
 
@@ -7,10 +8,7 @@ export type Store = {
 
 export let query = async <T>(store: Store, line: string): Promise<T[]> => {
   let response = await store.fetch(`/query?q=${encodeURIComponent(line)}`)
-  if (!response.ok) {
-    throw new Error(`PrintBound graph read failed (${response.status})`)
-  }
-  return response.json()
+  return (await checked(response, 'PrintBound graph read failed')).json()
 }
 
 export let apply = async (store: Store, entities: unknown[]) => {
@@ -19,9 +17,7 @@ export let apply = async (store: Store, entities: unknown[]) => {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ entities }),
   })
-  if (!response.ok) {
-    throw new Error(`PrintBound graph write failed (${response.status})`)
-  }
+  await checked(response, 'PrintBound graph write failed')
 }
 
 /** Compare-and-set conflicts mean another continuation already progressed. */
@@ -35,12 +31,13 @@ export let compare = async (
     body: JSON.stringify({ entities }),
   })
   if (response.ok) return true
-  let body = await response.json()
+  let body = response.status === 409 ? await response.clone().json() : null
   if (
     response.status === 409 &&
     (body.error?.name === 'Stale' || body.error === 'Stale')
   ) return false
-  throw new Error(`PrintBound guarded write failed (${response.status})`)
+  await checked(response, 'PrintBound guarded write failed')
+  return false
 }
 
 export let repository = (store: Store): Repository => ({
@@ -82,11 +79,12 @@ export let repository = (store: Store): Repository => ({
     if (response.ok) return true
     // Only a compare-and-set loser is expected. A closed graph or malformed
     // write remains a failure and reaches the platform reporter.
-    let body = await response.json()
+    let body = response.status === 409 ? await response.clone().json() : null
     if (
       response.status === 409 &&
       (body.error?.name === 'Stale' || body.error === 'Stale')
     ) return false
-    throw new Error(`PrintBound submission claim failed (${response.status})`)
+    await checked(response, 'PrintBound submission claim failed')
+    return false
   },
 })

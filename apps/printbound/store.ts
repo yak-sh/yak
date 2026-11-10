@@ -42,12 +42,26 @@ export let principal = (caller: Who) => {
     ...(caller.via ? { via: caller.via } : {}),
   }
 }
-export let json = async <T>(answer: Response): Promise<T> => {
-  if (answer.ok) return await answer.json()
+/** Keep upstream diagnostics out of the grouping message and in its cause. */
+export let checked = async (
+  answer: Response,
+  message = 'PrintBound graph request failed',
+): Promise<Response> => {
+  if (answer.ok) return answer
   let body = await answer.text()
-  if (answer.status >= 500) throw new Error(body)
+  if (answer.status >= 500) {
+    throw new Error(`${message} (${answer.status})`, {
+      cause: {
+        status: answer.status,
+        requestId: answer.headers.get('x-request-id'),
+        body,
+      },
+    })
+  }
   throw new Refusal(body, answer.status)
 }
+export let json = async <T>(answer: Response): Promise<T> =>
+  (await checked(answer)).json()
 export let store = (binding: Binding) => ({
   query: (q: string) =>
     binding.fetch('/query?q=' + encodeURIComponent(q)).then(json<Bundle[]>),
