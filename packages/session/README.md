@@ -762,10 +762,14 @@ as nobody leaves `by` unsaid.
 
 `standIn()` (`@yaks/session/who`) keeps the session standing here for a
 conversation held in another store and reached through a door such as a tunnel:
-`session{persona, source}`, its eid derived from the door and the conversation's
-id, so every request from one conversation speaks through one session and none
-of them names one of this graph's own runs. It answers the actor such a request
-writes as.
+`session{door, persona, source}`, its eid derived from the door and the
+conversation's id, so every request from one conversation speaks through one
+session and none of them names one of this graph's own runs. It answers the
+actor such a request writes as. That actor is the door's word, so a write
+through a session holding `door` names nobody else as the one a mark is by: the
+plugin's `authorize` hook (`attributing`) drops a `$decider` from it, and a
+decision answered through a tunnel is `decided.by` the caller's persona, whoever
+the answer named.
 
 The `@yaks/session/graph` entry point exports `authenticate()`, for every door
 over the graph: an HTTP request and a `yak` command alike. It reads the session

@@ -11,7 +11,9 @@
 // callers and `via` a session standing here for the conversation it came from
 // (its `x-via`, @yaks/session `standIn`), so what a hosted assistant does on
 // the machine is recorded as that assistant's, and never as the machine's
-// person or one of its agents. And where an opened path lists and runs tools
+// person or one of its agents: a `by` it sends a tool, asking for a mark
+// recorded as somebody else's, is dropped from what it writes (@yaks/session
+// `attributing`). And where an opened path lists and runs tools
 // (`/mcp`), it is offered only the ones the config names (`tools`).
 //
 // The config's own `routes`, `tools` and `persona` are what every request

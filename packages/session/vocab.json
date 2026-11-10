@@ -529,6 +529,11 @@
           "stamped": true,
           "description": "true for an MCP connection opened by the host's own process fallback, a request that named no caller; it speaks for nobody, and a door that trusts the host's perimeter may read it as the host's person (@yaks/harness conversations)"
         },
+        "door": {
+          "type": "string",
+          "stamped": true,
+          "description": "the door (a tunnel) a conversation held in another store reaches this graph through, on the session standing here for it. Who a write through such a session is by is that door's word: it names nobody else as the one a mark is by"
+        },
         "ended": {
           "type": "boolean",
           "description": "this session is over: its harness ended it, its process is gone, or it came to rest with no process to ask about. What its entries leave unfinished reads stopped; settled, failed and empty read as they are. A resume or a message clears it"

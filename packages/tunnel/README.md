@@ -183,7 +183,12 @@ saying which tools the tunnel offers and who its callers are:
   tunnel.
 
 Whatever a request through the tunnel names in `x-via`, it never speaks as one
-of the machine's own sessions, and never as the machine's person.
+of the machine's own sessions, and never as the machine's person. Nor does an
+argument it sends: a tool's `by` (`decision_answer`, `design_decide`), which
+asks for a mark recorded as somebody else's, is dropped from a write through the
+tunnel's session (@yaks/session `attributing`), and the answer is `decided.by`
+the caller's persona. Only [the owner's own words](#the-owners-own-words) are
+recorded as the owner's.
 
 ### The owner's own words
 

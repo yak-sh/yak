@@ -21,7 +21,7 @@ import { leasing } from './lease.ts'
 import { naming } from './naming.ts'
 import { reopening } from './reopen.ts'
 import { routing } from './routine.ts'
-import { runners, sessionEid } from './who.ts'
+import { attributing, runners, sessionEid } from './who.ts'
 
 /** The plugin's two injection points: a clock for both stamps, and the eid a
  * conflict row is minted under. */
@@ -33,6 +33,8 @@ export type SessionOpts = AuditOpts
  * package's that names the wrong kind of entity, and weighs a request's `cost`
  * at its model's price where the provider reported none ({@link weighing}),
  * and marks a knock that is a helper's to take (./routine.ts);
+ * an `authorize` hook that holds a write through a door's session to its own
+ * writer ({@link attributing});
  * and an `audit` hook that records a collision after the rollback.
  *
  * ```ts
@@ -79,6 +81,8 @@ export let sessions = (opts: SessionOpts = {}): Plugin => {
     name: '@yaks/session',
     admission: () => true,
     vocab: [sessionDoc],
+    // A write through a session standing at a door is by who the door said.
+    authorize: attributing,
     hooks: { precondition, audit: auditing(opts) },
     // A session written under an alias with the harness's own id for it is
     // the entity that id names (./who.ts `sessionEid`); one with no id is

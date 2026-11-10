@@ -35,7 +35,9 @@
 
 import { after } from '@yaks/fp'
 import { and, eq, fields, limit, list, or, present } from '@yaks/query'
-import type { Actor, Bundle, Comp, Eid, Graph, Tx } from '@yaks/graph'
+import type { Actor, Bundle, Comp, Eid, Graph, Hook, Tx } from '@yaks/graph'
+import { writers } from '@yaks/graph'
+import { hook } from '@yaks/graph/plugin'
 import { addressed } from '@yaks/graph/call'
 import { identityEid } from '@yaks/graph/identity'
 import { TOMBSTONE } from '@yaks/graph/bundle'
@@ -231,6 +233,8 @@ export let speaking = async (
  * request sends names one of this graph's own runs. Where the id is an eid,
  * `session.source` keeps it: the conversation is an entity, in its own store.
  * A request naming no conversation speaks through the door's one session.
+ * `session.door` says the session is the door's, which is what holds a write
+ * through it to its own writer ({@link attributing}).
  */
 export let standIn = async (
   g: Pick<Graph, 'get' | 'apply'>,
@@ -243,10 +247,13 @@ export let standIn = async (
   let named = had?.[TOMBSTONE] == null
     ? had?.[SESSION] as Comp | undefined
     : undefined
-  if (!named || (persona && named.persona != persona)) {
+  if (
+    !named || named.door != door || (persona && named.persona != persona)
+  ) {
     await g.apply([{
       entity: { eid: via },
       [SESSION]: {
+        door,
         ...persona ? { persona } : {},
         ...UUID.test(conversation) ? { source: conversation } : {},
       },
@@ -254,6 +261,34 @@ export let standIn = async (
   }
   return persona ? { by: persona, via } : { via }
 }
+
+/**
+ * Who a write through a session standing at a door is by is the door's word,
+ * and nothing the write says: a request naming somebody else as the one a mark
+ * is by (`$decider`, @yaks/kernel) is dropped from it, so the mark is its
+ * writer's. A hosted assistant answering a decision through a tunnel answers
+ * as itself, whoever it names; the person's own answer arrives as the person
+ * (@yaks/tunnel `x-yak-by`), through no session.
+ */
+export let attributing: Hook = hook(['$decider'], (bundles, tx) => {
+  let writer = writers(bundles)
+  let through = (b: Bundle) =>
+    b.$decider == null ? undefined : writer(b.entity.eid).via
+  let vias = [...new Set(bundles.flatMap((b) => through(b) ?? []))]
+  if (!vias.length) return bundles
+  return after(tx.get(vias, [SESSION]), (rows) => {
+    let doors = new Set(
+      rows.filter((s) => (s[SESSION] as Comp | undefined)?.door)
+        .map((s) => s.entity.eid),
+    )
+    return bundles.map((b) => {
+      let via = through(b)
+      if (!via || !doors.has(via)) return b
+      let { $decider: _, ...own } = b
+      return own
+    })
+  })
+})
 
 /**
  * The session of a subagent its harness knows by `id` within the session it

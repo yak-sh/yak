@@ -49,13 +49,13 @@ let config = {
   ],
 }
 let box = await compose(config, every(config))
-let [task, decision] = [mint(), mint()]
+let [task, decision, second] = [mint(), mint(), mint()]
 await box.graph.apply([
   { entity: { eid: person }, person: {}, doc: { title: 'Ada, at her box' } },
   { entity: { eid: persona }, persona: {}, doc: { title: 'the Operator' } },
   { entity: { eid: task }, task: {}, doc: { title: 'Ship the page' } },
-  {
-    entity: { eid: decision },
+  ...[decision, second].map((eid) => ({
+    entity: { eid },
     task: {},
     doc: { title: 'Which day?' },
     decision: {
@@ -66,7 +66,7 @@ await box.graph.apply([
       ],
       recommended: 'Friday',
     },
-  },
+  })),
 ], { trusted: true })
 
 // The tunnel's gateway, as @yaks/tunnel's own marks a request.
@@ -243,6 +243,21 @@ test('a message that picks a listed choice answers the decision as the person, a
   let { choice, by, via } = answered.decided as Comp
   assertEquals([choice, by, via], ['Friday', person, box.me])
   assertEquals(await comments(decision), [['Friday is fine.', person, box.me]])
+})
+
+test("the Operator's own answer to a decision is the persona's, whoever it says the answer is by", async () => {
+  await run('box__decision_answer', {
+    decision: second,
+    choice: 'She would want Monday.',
+    by: person,
+  })
+  let [answered] = await box.graph.get([second], ['decided'])
+  let { choice, by, via } = answered.decided as Comp
+  assertEquals([choice, by], ['She would want Monday.', persona])
+  assertEquals(
+    ((await box.graph.get([String(via)]))[0].session as Comp).source,
+    talk,
+  )
 })
 
 test('a member who does not own the space is offered no way to their machine', async () => {
