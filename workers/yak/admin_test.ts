@@ -453,7 +453,7 @@ let page = async (path: string) => {
     menu: [
       document.querySelector('.Desk_Bar a')?.getAttribute('href'),
       document.querySelector('#menu')?.getAttribute('aria-label'),
-      document.querySelector('#menu .Desk_Close')?.getAttribute('href'),
+      document.querySelector('#menu .Sidebar_Close')?.getAttribute('href'),
     ],
     signedUp: tiles('Signed up through an invite'),
     starters: tiles('Given the starter'),

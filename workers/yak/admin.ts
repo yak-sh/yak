@@ -1124,6 +1124,20 @@ export let answer = async (
       404,
     )
   }
+  // The same bounded spending read as the page, with every helper retained
+  // for audits rather than the page's first few and a combined remainder.
+  if (
+    part == 'operator' && !open && asked.searchParams.get('format') == 'json'
+  ) {
+    let spending = await asking(env, spaceOf(r), who, 'spending', {
+      everyone: true,
+      details: true,
+      open: asked.searchParams.get('conversation') ?? undefined,
+    })
+    return spending instanceof Error
+      ? Response.json({ message: spending.message }, { status: 503 })
+      : Response.json(spending)
+  }
   return part
     ? await operatorPage(d, env, r, who, open)
     : await page(d, dir, r, env)

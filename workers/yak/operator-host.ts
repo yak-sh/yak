@@ -582,17 +582,20 @@ export let spendingOf = async (
   person: string,
   everyone: Named,
   now = Date.now(),
+  audit: { details?: boolean; open?: string } = {},
 ): Promise<Spending> => {
   let since = new Date(now - SPENT_DAYS * 86_400_000).toISOString()
   let [asks, sessions, tasks, edges, prices, providers, conversations] =
     await Promise.all([
       store.g.read(
         `.ask .created.at>=${JSON.stringify(since)} .fields=` +
-          'ask.to,entry.session,using.provider,usage.input_tokens,' +
+          'ask.to,entry.session,using.provider,attempt.state,usage.input_tokens,' +
           'usage.cached_tokens,usage.output_tokens,cost.dollars,' +
           'context_parts.parts,created.at,updated.at',
       ),
-      store.g.read('.session .fields=spawned.parent,fixed.parts'),
+      store.g.read(
+        '.session .fields=spawned.parent,fixed.parts,session.status,session.source',
+      ),
       store.g.read('.task .fields=doc.title'),
       store.g.read('.contains .fields=edge.from,edge.to'),
       store.g.read(
@@ -606,6 +609,18 @@ export let spendingOf = async (
     tasks.map((t) => [t.entity.eid, String(comp(t, 'doc')?.title ?? '')]),
   )
   let carried = new Map<string, string>()
+  let sourceCalls = await store.g.get(
+    sessions.flatMap((s) =>
+      comp(s, 'session')?.source ? [String(comp(s, 'session')!.source)] : []
+    ),
+    ['call'],
+  )
+  let sourceEntries = await store.g.get(
+    sourceCalls.flatMap((s) =>
+      comp(s, 'call')?.source ? [String(comp(s, 'call')!.source)] : []
+    ),
+    ['entry'],
+  )
   for (let e of edges) {
     let { from, to } = comp(e, 'edge') ?? {}
     if (titled.has(String(from))) carried.set(String(to), String(from))
@@ -627,6 +642,8 @@ export let spendingOf = async (
     ),
   ])
   return spent({
+    ...audit,
+    sources: [...sourceCalls, ...sourceEntries],
     asks,
     sessions,
     tasks: carried,
@@ -1496,7 +1513,12 @@ export let operatorRequest = async (
   // What its Operator spent, for the platform's admin alone.
   if (path == '/operator/spending') {
     return everyone
-      ? Response.json(await spendingOf(store, spaceId, person, everyone))
+      ? Response.json(
+        await spendingOf(store, spaceId, person, everyone, Date.now(), {
+          details: args.details === true,
+          open: typeof args.open == 'string' ? args.open : undefined,
+        }),
+      )
       : missing()
   }
   // Their Updates from the Operator, and what they do there.

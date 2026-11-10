@@ -18,6 +18,7 @@ import type { Bundle } from '@yaks/graph'
 export type Usage = {
   cost: number
   turns: number
+  unpriced: number
   input: number
   cached: number
   output: number
@@ -28,7 +29,13 @@ export type Usage = {
 
 /** A session of the Operator's, what it opens on in the admin, what it is
  * called, and what its requests came to. */
-export type Ran = Usage & { open: string; title: string }
+export type Ran = Usage & {
+  open: string
+  title: string
+  session?: string
+  parent?: string
+  status?: string
+}
 
 /** A conversation or a task with what it spent, its helpers' included, and
  * each helper on its own. */
@@ -53,6 +60,10 @@ export type Part = {
 /** Everything the page reads of one space's Operator. */
 export type Spending = {
   runs: Run[]
+  /** Local request receipts, when an admin asks for an audit. */
+  requests?: Bundle[]
+  /** All local sessions in the audit, including helpers not yet asking. */
+  sessions?: Bundle[]
   /** dollars by day, YYYY-MM-DD, by provider */
   days: Record<string, Record<string, number>>
   /** the pieces of the fixed part every request carries */
@@ -65,6 +76,10 @@ export type Spending = {
 
 /** The rows `spent` counts, as the host reads them. */
 export type Rows = {
+  open?: string
+  details?: boolean
+  /** Calls and entries named by auxiliary sessions' session.source. */
+  sources?: Bundle[]
   /** the model requests, each with `ask`, `entry`, `using`, `usage`,
    * `cost`, `context_parts`, `created` and `updated` where it has them */
   asks: Bundle[]
@@ -98,6 +113,7 @@ let stamp = (b: Bundle, name: 'created' | 'updated') =>
 export let none = (): Usage => ({
   cost: 0,
   turns: 0,
+  unpriced: 0,
   input: 0,
   cached: 0,
   output: 0,
@@ -117,6 +133,7 @@ let one = (ask: Bundle): Usage => {
   return {
     cost: n(comp(ask, 'cost')?.dollars),
     turns: 1,
+    unpriced: comp(ask, 'cost')?.dollars == null ? 1 : 0,
     input: Math.max(0, n(usage.input_tokens) - n(usage.cached_tokens)),
     cached: n(usage.cached_tokens),
     output: n(usage.output_tokens),
@@ -130,6 +147,7 @@ let one = (ask: Bundle): Usage => {
 export let plus = (a: Usage, b: Usage): Usage => ({
   cost: a.cost + b.cost,
   turns: a.turns + b.turns,
+  unpriced: a.unpriced + b.unpriced,
   input: a.input + b.input,
   cached: a.cached + b.cached,
   output: a.output + b.output,
@@ -238,11 +256,26 @@ let shared = (tokens: number[], pieces: Record<string, number>) => {
  */
 export let spent = (rows: Rows): Spending => {
   let sessions = new Map(rows.sessions.map((s) => [s.entity.eid, s]))
+  let sources = new Map(
+    [...rows.asks, ...rows.sources ?? []].map((s) => [s.entity.eid, s]),
+  )
+  let owner = (eid: string, seen = new Set<string>()): string => {
+    let source = comp(sessions.get(eid), 'session')?.source
+    let call = source ? sources.get(String(source)) : undefined
+    let ask = comp(call, 'call')?.source
+    let session = ask
+      ? comp(sources.get(String(ask)), 'entry')?.session
+      : undefined
+    if (!session || seen.has(String(session))) return eid
+    seen.add(eid)
+    return owner(String(session), seen)
+  }
   let parent = (eid: string) =>
     comp(sessions.get(eid), 'spawned')?.parent as string | undefined
   // The session a helper works for, up its `spawned` links, as far as the
   // store still holds them.
   let top = (eid: string, seen = new Set<string>()): string => {
+    eid = owner(eid)
     let up = parent(eid)
     if (!up || seen.has(up) || !sessions.has(up)) return eid
     seen.add(eid)
@@ -250,6 +283,13 @@ export let spent = (rows: Rows): Spending => {
   }
   let openOf = (session: string) => rows.tasks.get(session) ?? session
   let titleOf = (open: string) => rows.titles.get(open) ?? 'A conversation'
+  let lineage = (session: string) => ({
+    session,
+    ...parent(session) ? { parent: parent(session) } : {},
+    ...comp(sessions.get(session), 'session')?.status
+      ? { status: String(comp(sessions.get(session), 'session')!.status) }
+      : {},
+  })
 
   let runs = new Map<string, Run>()
   let helpers = new Map<string, Ran>()
@@ -257,19 +297,27 @@ export let spent = (rows: Rows): Spending => {
   let prompt: Record<string, Part> = {}
   let rest: Record<string, Part> = {}
   let split: string | null = null
+  let requests: Bundle[] = []
   for (let ask of rows.asks) {
     let session = String(comp(ask, 'entry')?.session ?? '')
     if (!session) continue
     let used = one(ask)
     let root = top(session)
     let open = openOf(root)
+    if (rows.open && root != rows.open && open != rows.open) continue
+    if (rows.details) {
+      requests.push(Object.fromEntries(
+        Object.entries(ask).filter(([key]) => key != 'context_parts'),
+      ) as Bundle)
+    }
     let run = runs.get(open) ??
-      { ...none(), open, title: titleOf(open), helpers: [] }
+      { ...none(), ...lineage(root), open, title: titleOf(open), helpers: [] }
     runs.set(open, { ...run, ...plus(run, used) })
-    if (root != session) {
-      let mine = openOf(session)
+    let owned = owner(session)
+    if (root != owned) {
+      let mine = openOf(owned)
       let helper = helpers.get(mine) ??
-        { ...none(), open: mine, title: titleOf(mine) }
+        { ...none(), ...lineage(owned), open: mine, title: titleOf(mine) }
       helpers.set(mine, { ...helper, ...plus(helper, used) })
       if (!run.helpers.some((h) => h.open == mine)) {
         runs.get(open)!.helpers.push({ ...none(), open: mine, title: '' })
@@ -302,6 +350,19 @@ export let spent = (rows: Rows): Spending => {
   let newest = <T extends Usage>(all: T[]) =>
     all.sort((a, b) => b.until.localeCompare(a.until))
   return {
+    ...rows.details
+      ? {
+        requests,
+        sessions: rows.sessions.filter((s) =>
+          !rows.open || top(s.entity.eid) == rows.open ||
+          openOf(top(s.entity.eid)) == rows.open
+        ).map((s) =>
+          Object.fromEntries(
+            Object.entries(s).filter(([key]) => key != 'fixed'),
+          ) as Bundle
+        ),
+      }
+      : {},
     runs: newest([...runs.values()].map((r) => ({
       ...r,
       helpers: newest(r.helpers.map((h) => helpers.get(h.open)!)),
