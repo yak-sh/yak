@@ -34,6 +34,9 @@ queue = "yak-errors"
 max_batch_size = 100
 max_batch_timeout = 1
 max_retries = 10
+# One Tracker object takes each scope's intake, a message at a time: more
+# consumers at once only queue behind it until it answers "overloaded".
+max_concurrency = 1
 dead_letter_queue = "yak-errors-dead"
 
 [[send_email]]

@@ -266,6 +266,9 @@ export class Tracker {
   recover = async (error: unknown, entrypoint: string, request?: Request) => {
     console.error(entrypoint, error)
     await this.#report(error, entrypoint, request)
+    await this.#soon()
+  }
+  #soon = async () => {
     try {
       await this.ctx.storage.setAlarm(this.now() + 1000)
     } catch { /* next queue delivery retries */ }
@@ -285,7 +288,11 @@ export class Tracker {
       await tracker.ingest(rows)
       await this.#arm()
     } catch (error) {
-      await this.recover(error, 'Tracker.ingest')
+      // The caller hears this failure and reports it: the queue's consumer
+      // once a batch, the door for its request. Reported here as well, every
+      // failed intake sent a second report back through intake.
+      console.error('Tracker.ingest', error)
+      await this.#soon()
       throw error
     }
   }
@@ -541,11 +548,15 @@ export class Tracker {
   // Sleep until durable work is due. A healthy monitor and an empty alarm owe
   // no storage writes; future wakes and retry backoff do not poll each second.
   #arm = async () => {
+    // Intake may owe the same work again. Keep its earlier return instead of
+    // moving grouping a second away on every delivery. A second from now is
+    // the soonest next() answers, so an alarm due by then has nothing to
+    // bring forward and the read is spared: behind a backlog it is every
+    // intake's, and it reads the backlog.
+    let alarm = await this.ctx.storage.getAlarm()
+    if (alarm != null && alarm <= this.now() + 1000) return
     let next = await this.tracker!.next(this.now())
     if (next == null) return
-    // Intake may owe the same work again. Keep its earlier return instead of
-    // moving grouping a second away on every delivery.
-    let alarm = await this.ctx.storage.getAlarm()
     if (alarm == null || next < alarm) await this.ctx.storage.setAlarm(next)
   }
   webSocketMessage = (ws: Wire, data: string | ArrayBuffer) =>

@@ -71,6 +71,11 @@ export let consume = async (
   reject: (message: Message, error: unknown) => Promise<void>,
   trace?: (scope: string, rows: Bundle[]) => Promise<unknown>,
 ): Promise<void> => {
+  // A failed intake is the queue's to retry, and is said once a batch, never
+  // once a message: its report travels this same queue, so one for every
+  // message that failed multiplied the backlog with each pass of an outage
+  // (2026-11-10: 9,700 dead letters in half an hour).
+  let told = false
   for (let message of messages.slice(0, 100)) {
     let tracing = Array.isArray(message.body) &&
       message.body.some((row) => row?.trace || row?.span)
@@ -107,7 +112,8 @@ export let consume = async (
       message.retry()
       // An unavailable authority may retry transport, but tracing its failure
       // through the error queue would feed the snowball this guard prevents.
-      if (tracing) continue
+      if (tracing || told) continue
+      told = true
       try {
         await report(error)
       } catch { /* intake still retries */ }

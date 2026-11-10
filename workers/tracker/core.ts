@@ -266,10 +266,13 @@ export let store = (storage: Storage, config: Config) => {
     since: tags.since,
     ingest: (rows: Bundle[]) => ingest(g, rows),
     // One aborted pool pass handles a bounded window. Several passes let
-    // grouping's newly owed notifications finish in this wake too.
+    // grouping's newly owed notifications finish in this wake too, and work
+    // a backlog off: at four passes a wake the object grouped five
+    // occurrences a second, and new failures waited behind an outage's tens
+    // of thousands (2026-11-10).
     drain: async (now = Date.now()) => {
       await tick(g, now)
-      await fx.work(g, AbortSignal.abort(), 4)
+      await fx.work(g, AbortSignal.abort(), 32)
     },
     // Published app_errors archives occurrences and stamps agent delivery,
     // separately from a bug's mail notification and resolution.

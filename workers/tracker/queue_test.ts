@@ -112,3 +112,21 @@ test('queue redelivery keeps the rejection report identity', async () => {
   equal(f.reported[0][0].entity.eid, f.reported[1][0].entity.eid)
   equal(f.reported[0][1].entity.eid, f.reported[1][1].entity.eid)
 })
+
+test('a batch whose intake fails is retried whole and reported once', async () => {
+  let reported: Bundle[][] = [], retried = 0
+  let { queue } = worker({
+    TRACKERS: {
+      getByName: () =>
+        ({ ingest: () => Promise.reject(Error('object down')) }) as never,
+    },
+    ERRORS: { send: (rows) => Promise.resolve(void reported.push(rows)) },
+  })
+  let failure = () => capture(Error('missing row'), { sink: () => {} })
+  await queue([1, 2, 3].map(() => ({
+    body: failure(),
+    ack: () => {},
+    retry: () => retried++,
+  })))
+  equal([retried, reported.length], [3, 1])
+})
