@@ -39,6 +39,14 @@ git but do not describe this deployed store. The importer reports these tables
 as unavailable, without assigning them zero counts. The waitlist query reported
 `changed_db=false` and `rows_written=0`.
 
+All 38 source signup rows were copied through `printboundSignup` into an
+in-process RAM graph: first run wrote 38, second run wrote 0 and reconciled 38
+unchanged rows. An original source unsubscribe token resolved and changed
+suppression only in that isolated graph. A disposable rehearsal steward owned
+these staged records; this proves copy/capability continuity without claiming a
+production customer-to-platform identity mapping. No source row or delivery was
+changed, and no customer data was published.
+
 The D1 export was _not_ a wholly read-only availability check.
 `wrangler d1 export printbound-orders --remote --output <checkout>/.scratch/printbound-orders.sql`
 started an export before displaying its warning that queries can be unavailable
