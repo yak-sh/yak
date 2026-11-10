@@ -3285,8 +3285,10 @@ export let directoryRows = (rows: {
       if (!person) return []
       let mine = `.members_space.member.person=${person}`
       let since = wrote(META_STORE)
+      // Each row with the parts `spaceOf` and `appOf` read, and no others:
+      // an app's whole row is much more than the reach says of it.
       let rows = await query(
-        `(.member.person=${person})|(.space&${mine})|(.app.space${mine}&${ABOUT})&*`,
+        `(.member.person=${person})|(.space&${mine}&${SPACE_ABOUT})|(.app.space${mine}&${ABOUT})`,
       )
       let spaces = new Map(
         rows.filter((r) => r.space).map((r) => [r.entity.eid, spaceOf(r)]),
