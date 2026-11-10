@@ -239,6 +239,8 @@ let door = async (rows: Bundle[]) => {
         projects: [...projects].sort(),
       }
     },
+    /** the door's whole answer to the end of the session's turn */
+    stop: () => heard(host, { session_id: 'outside', hook_event_name: 'Stop' }),
     elsewhere: async (rows: Bundle[]) => {
       for (let b of rows) if (b.project) made.add(b.entity.eid)
       store.tx((tx) => tx.patch(rows))
@@ -283,6 +285,24 @@ test('the hook door reads what its session is owed and what was written since, n
   equal(lines.map((l) => l.split(': ')[1]), ['later'])
   equal(read, ['later', 'other'])
   equal(await d.hook(), { lines: [], read: [], projects: [] })
+})
+
+test('at the end of a turn, what is owed blocks the stop as its reason, and then the turn may end', async () => {
+  let d = await door([
+    { entity: { eid: 'outside' }, session: { id: 'outside' } },
+    { entity: { eid: 'person' }, doc: { title: 'Person' } },
+    {
+      entity: { eid: 'mine' },
+      task: {},
+      $actor: { by: 'outside', via: 'outside' },
+    },
+  ])
+  await d.elsewhere([human('late', 'mine')])
+  equal(await d.stop(), {
+    decision: 'block',
+    reason: 'comment #late on #mine from #person: late',
+  })
+  equal(await d.stop(), {})
 })
 
 test('the hook door reads its projects again only after a project is written', async () => {

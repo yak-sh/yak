@@ -525,7 +525,8 @@ export type Hook = {
 /**
  * The hook door's answer to one event: the lines owed to the session, when
  * the event came from the session's own line of work, as the context the
- * harness adds to it. An event from a subagent hears nothing, so what the
+ * harness adds to it, or at the end of a turn (`Stop`) as the reason the stop
+ * is blocked, so the agent takes them up before its run ends. An event from a subagent hears nothing, so what the
  * session is owed waits for the session. The first event, a subagent's too,
  * marks the session `hooked`, and from then on the bus says nothing in a tool
  * reply to it, which cannot tell the session from its subagents.
@@ -559,10 +560,11 @@ export let heard = async (
     )
     return {}
   }
-  return {
-    hookSpecificOutput: {
-      hookEventName: String(hook.hook_event_name ?? 'PostToolUse'),
-      additionalContext: taken.map(({ line }) => line).join('\n'),
-    },
-  }
+  let text = taken.map(({ line }) => line).join('\n')
+  let event = String(hook.hook_event_name ?? 'PostToolUse')
+  // A turn's end takes no added context: what is owed blocks the stop, and
+  // the harness hands its reason to the agent as the next turn.
+  return event == 'Stop'
+    ? { decision: 'block', reason: text }
+    : { hookSpecificOutput: { hookEventName: event, additionalContext: text } }
 }

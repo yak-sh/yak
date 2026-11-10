@@ -148,6 +148,7 @@ export let lifecycle = (
     UserPromptSubmit: [relay(door, `${yak} session context --hook -`, 5)],
     PreToolUse: [post(door, 'mcp__.*')],
     PostToolUse: [post(door)],
+    Stop: [post(door)],
     SessionEnd: [relay(door, `${yak} session wrap --hook -`, 5)],
   }
 }

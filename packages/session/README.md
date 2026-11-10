@@ -625,14 +625,21 @@ and a subagent's with nothing. The first event, a subagent's too, marks the
 session `hooked{}`, and from then on the bus says nothing beside a tool reply to
 it, since a tool call cannot say which context made it.
 
+A Stop HTTP hook posts the end of each turn to the same door. A line owed then,
+such as a person's comment written while the agent wrote its last answer, blocks
+the stop (`decision: "block"`) with the lines as its reason, which the harness
+gives the agent as its next turn; with nothing owed the turn ends. A `claude -p`
+run would otherwise end without hearing it, and a comment on a task it holds is
+said to nobody else.
+
 A PreToolUse HTTP hook on MCP tools (`mcp__.*`) posts to the same door before
 each call, which remembers the session or subagent making it under the call's
 id, so the MCP door writes as that run (see "Identity and HTTP attribution").
 
-The hook door speaks only after a tool call, so an agent at rest hears nothing
-there. To be woken, its own context runs the listener as a background command
-that ends once it has said something; the harness then wakes the agent with that
-output, and the agent runs it again:
+The hook door speaks only after a tool call or at a turn's end, so an agent at
+rest hears nothing there. To be woken, its own context runs the listener as a
+background command that ends once it has said something; the harness then wakes
+the agent with that output, and the agent runs it again:
 
 ```sh
 yak session listen --session "$CLAUDE_CODE_SESSION_ID" --once

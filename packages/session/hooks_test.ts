@@ -59,6 +59,7 @@ test('a settings file keeps the keys nobody asked about', () => {
     'PreToolUse',
     'SessionEnd',
     'SessionStart',
+    'Stop',
     'SubagentStart',
     'UserPromptSubmit',
   ])
@@ -81,7 +82,7 @@ test('an install takes out the turn hooks an older one wrote', () => {
     { Stop: [spooled, theirs], UserPromptSubmit: [spooled] },
     ours,
   )
-  assertEquals(out.Stop, [theirs])
+  assertEquals(out.Stop, [...ours.Stop, theirs])
   assertEquals(out.UserPromptSubmit, ours.UserPromptSubmit)
 })
 
