@@ -895,7 +895,7 @@
       "noun": "hooks",
       "verb": "install",
       "title": "Install the lifecycle hooks",
-      "description": "Install Claude-compatible lifecycle hooks: session/subagent start reads context, prompt submission adds transcript timing, and session end wraps up. PreToolUse posts MCP calls to the server for session attribution; PostToolUse delivers notifications to the parent agent. Transcript import supplies intervening turns. Replaces this install\u2019s hooks, preserving unrelated settings. Also writes this graph's MCP server into Claude Code's config, its headersHelper naming the session behind every call, so a write is stamped with its caller whether or not its hook arrives. Writes on this machine; answers the paths written and what to do next. remove uninstalls both.",
+      "description": "Install Claude-compatible lifecycle hooks: session/subagent start reads context, prompt submission adds transcript timing, and session end wraps up. PreToolUse posts MCP calls to the server for session attribution; PostToolUse delivers notifications to the parent agent, and Stop delivers what arrived during its last answer. Transcript import supplies intervening turns. Replaces this install\u2019s hooks, preserving unrelated settings. Also writes this graph's MCP server into Claude Code's config, its headersHelper naming the session behind every call, so a write is stamped with its caller whether or not its hook arrives. Writes on this machine; answers the paths written and what to do next. remove uninstalls both.",
       "input": {
         "path": {
           "type": "string",
