@@ -2,7 +2,13 @@
 // caller as a reply, through the graph interfaces both use.
 
 import { assertEquals } from '@std/assert'
-import { type Bundle, type Graph, graph, type Storage } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  type Graph,
+  graph,
+  type Storage,
+} from '@yaks/graph'
 import { processDoc } from '@yaks/process'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { provenanceDoc } from '@yaks/provenance'
@@ -253,6 +259,8 @@ let posted = await scene(async () => {
       'A letter',
     ),
     toldSaid: await said(g, 'letter'),
+    // the mark names the session that heard it, not the door's process
+    carrier: ((await g.get(['letter']))[0].notified as Comp).via,
     // and from then on it is a hooked session
     hooked: !!(await g.get(['outside']))[0].hooked,
   }
@@ -265,6 +273,7 @@ test('a session hears at its own hook, never through a subagent', () => {
     replySaid: false,
     told: true,
     toldSaid: true,
+    carrier: 'outside',
     hooked: true,
   })
 })

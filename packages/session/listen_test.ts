@@ -302,6 +302,92 @@ test('a native transcript at rest hears only what is addressed to it, never what
 test('a native transcript at work hears what is held for its project', async () =>
   equal(await resting('working'), ['alert', 'news']))
 
+// The box as TaskMaster runs it: the platform's project filed under the
+// graph's, hello@yaks.app filed under the platform, and one persona worn by
+// the session a person opened (TaskMaster) and by the agents it started, one
+// outside and one native at work. Feedback arrives at hello, a bug knocks the
+// platform, and a worker is knocked itself.
+let platform = async (...more: Bundle[]) => {
+  let g = office()
+  await g.apply([
+    { entity: { eid: 'graph' }, project: {} },
+    { entity: { eid: 'app' }, project: {}, filed: { project: 'graph' } },
+    { entity: { eid: 'common' }, persona: { home: 'graph' } },
+    { entity: { eid: 'hello' }, email: { address: 'hello@example.app' } },
+    { entity: { eid: 'hello' }, filed: { project: 'app' } },
+    {
+      entity: { eid: 'master' },
+      session: { id: 'master', persona: 'common', operator: true },
+    },
+    {
+      entity: { eid: 'worker' },
+      session: { id: 'worker', persona: 'common', operator: false },
+    },
+    ...transcript('busy-worker', 'common', 'working'),
+    {
+      entity: { eid: 'feedback' },
+      mail: { from: 'bot@example.app', target: 'hello' },
+      doc: { title: 'feedback: a space has no icon' },
+    },
+    { entity: { eid: 'bug' }, knock: { target: 'app' }, doc: { body: 'bug' } },
+    {
+      entity: { eid: 'nudge' },
+      knock: { target: 'worker' },
+      doc: { body: 'you' },
+    },
+    ...more,
+  ])
+  return async (session: string) =>
+    (await pending(g, session)).map(({ item }) => item.entity.eid).sort()
+}
+let live = await platform()
+let away = await platform(
+  { entity: { eid: 'master' }, session: { ended: true } },
+  {
+    entity: { eid: 'returned' },
+    session: { id: 'returned', persona: 'common', operator: true },
+  },
+)
+let gone = await platform(
+  { entity: { eid: 'master' }, session: { ended: true } },
+)
+for (
+  let [hears, session, heard, what] of [
+    [
+      live,
+      'master',
+      ['bug', 'feedback'],
+      'the operator hears what is held for the project it operates',
+    ],
+    [
+      live,
+      'worker',
+      ['nudge'],
+      'an agent wearing the operator’s persona hears only what is addressed to it',
+    ],
+    [
+      live,
+      'busy-worker',
+      [],
+      'a native agent at work hears nothing held for an operated project',
+    ],
+    [
+      gone,
+      'worker',
+      ['nudge'],
+      'while no operator can hear, what is held stays owed rather than going to an agent',
+    ],
+    [
+      away,
+      'returned',
+      ['bug', 'feedback'],
+      'the next session a person opens hears what was owed meanwhile',
+    ],
+  ] as const
+) {
+  test(what, async () => equal(await hears(session), [...heard]))
+}
+
 test('a listener told once waits for something to say, says it and ends', async () => {
   let reply: Bundle = {
     entity: { eid: 'c1' },

@@ -463,6 +463,8 @@ export let ledger = (host: Door): Ledger | undefined => {
 }
 
 // Every line owed to an outside session, each marked said as it is taken.
+// The mark names the session it was said to as what carried it, as
+// `yak session listen` does, not the process whose door said it.
 let owed = async (
   host: Door,
   id: Eid,
@@ -470,7 +472,7 @@ let owed = async (
   let g = host.graph
   let out: { item: Bundle; line: string }[] = []
   for (let said of await pending(g, id, await ledger(host)?.owed(id))) {
-    if (await deliver(g, null, said.item)) out.push(said)
+    if (await deliver(g, { via: id }, said.item)) out.push(said)
   }
   return out
 }

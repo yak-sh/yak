@@ -38,6 +38,15 @@
 // held the same way: the graph's own news for whoever works for it, such as
 // a bug the tracker opened (@yaks/heal knocks with the task it files).
 //
+// What is held for a project a person operates is the operator's alone: a
+// project is operated when a session a person opened (`session.operator`)
+// wears a persona homed at it or at a project it is filed under. TaskMaster is
+// such a session, and the agents it starts wear the same persona, so without
+// this the first of them to call a tool would take the platform's feedback
+// at its hook. While no operator can hear, the item stays held, and the next
+// session a person opens for the project hears it. Only a project nobody has
+// ever operated gives what is held for it to any session that works for it.
+//
 // "The next session" is one at work. A native transcript at rest (settled
 // between turns, however long ago) hears only what is addressed to it, never
 // what is held for its project: a settled transcript is never over, so every
@@ -240,6 +249,29 @@ export let worksFor = async (
   )
   let home = str(comp(worn, 'persona').home)
   return home ? below(tree ?? await projects(graph), home) : []
+}
+
+/** The projects among `reach` that no person operates: none of them is the
+ * home, or filed under the home, of a persona a session a person opened
+ * (`session.operator`) wears, whether or not that session can hear now. What
+ * is held for an operated project waits for its operator. */
+let unoperated = async (
+  graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
+  reach: Eid[],
+  tree?: Projects,
+): Promise<Eid[]> => {
+  if (!reach.length || !graph.vocab.prop(SESSION, 'operator')) return reach
+  let worn = await graph.read(
+    `.${SESSION}.operator=true&.${SESSION}.persona` +
+      `&.fields=${SESSION}.persona`,
+  )
+  let personas = [...new Set(worn.map((b) => str(comp(b, SESSION).persona)))]
+  let homes = personas.length ? await graph.get(personas, ['persona']) : []
+  let run = homes.map((b) => str(comp(b, 'persona').home)).filter(Boolean)
+  if (!run.length) return reach
+  let known = tree ?? await projects(graph)
+  let operated = new Set(run.flatMap((home) => below(known, home)))
+  return reach.filter((p) => !operated.has(p))
 }
 
 /** The native transcripts at work that may hear these items once they are
@@ -568,7 +600,7 @@ export let pending = async (
   let [owner] = await graph.read(
     and(
       eq('entity.eid', session),
-      fields('session.persona'),
+      fields('session.persona', 'session.operator'),
     ),
   )
   let [process] = vocab.comp('process')
@@ -600,13 +632,17 @@ export let pending = async (
   let reach = await worksFor(graph, owner, news?.projects)
   let working = !native ||
     (reach.length > 0 && (await atWork(graph, [session])).length > 0)
-  let items = await pendingItems(
-    session,
-    native,
-    working,
-    addressed,
-    () => held(graph, session, reach),
-  )
+  // A session a person opened hears all that is held for its projects; any
+  // other only what is held for projects nobody operates. Most passes find
+  // nothing held, so the operators are read only when something is.
+  let operator = comp(owner, SESSION).operator == true
+  let owed = async () => {
+    let found = await held(graph, session, reach)
+    if (operator || !found.length) return found
+    let open = await unoperated(graph, reach, news?.projects)
+    return open.length == reach.length ? found : held(graph, session, open)
+  }
+  let items = await pendingItems(session, native, working, addressed, owed)
   if (!items.length) return []
   let pointed = [
     ...new Set(

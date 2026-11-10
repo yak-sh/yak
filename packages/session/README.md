@@ -919,6 +919,17 @@ filed under the platform's project) is held for the project the same way. Such a
 letter is also filed as a task on the project's board (@yaks/mail `mail_task`),
 so it stays in sight until it is answered after a session has heard it.
 
+What is held for a project a person operates goes to its operator alone. A
+project is operated when a session a person opened (`session.operator`) wears a
+persona homed at it or at a project it is filed under, as TaskMaster's is. The
+agents it starts wear the same persona and hear only what is addressed to them,
+so the platform's feedback reaches TaskMaster rather than whichever agent calls
+a tool first. While no operator can hear, the item stays held, and the next
+session a person opens for the project hears it. Only a project nobody has ever
+operated gives what is held for it to any session that works for it. A mark said
+at the hook door or beside a tool reply names the session that heard it as
+`notified.via`, as `yak session listen` does.
+
 The next session is one at work. An outside session hears what is held on its
 own calls; a native transcript hears it only mid-turn (`pending` or `running`).
 One settled between turns hears only what is addressed to it, since a settled
