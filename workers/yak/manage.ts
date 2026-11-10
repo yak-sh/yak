@@ -345,8 +345,8 @@ let foresee = (
     dir.nameAt(person),
     seats,
     ...view == 'shared' ? [dir.granted(person)] : [],
-    // The chat lists what needs them from the server they named for it
-    // (operator-asks.ts), once it knows the conversation is their landing.
+    // The chat draws the lists their servers offer (operator-lists.ts), once
+    // it knows the conversation is their landing.
     ...view == 'operator' && chat ? [dir.listings(person)] : [],
     ...here ? rowsAhead(dir, person, view, seats, here) : [],
   ])

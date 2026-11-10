@@ -97,7 +97,13 @@ let named = async (g: Graph, eids: Eid[]) => {
 /** A span's report, as text. */
 export let report = async (
   g: Graph,
-  o: { since?: string; until?: string; top?: number; now?: number } = {},
+  o: {
+    since?: string
+    until?: string
+    top?: number
+    now?: number
+    plans?: boolean
+  } = {},
 ): Promise<string> => {
   let { spend: s, limits, rate, accounts, from, to } = await read(
     g,
@@ -105,6 +111,16 @@ export let report = async (
     o.until,
     o.now,
   )
+  let now = o.now ?? Date.now()
+  let paced = limits.filter((l) => current(l, now)).map((l) => {
+    let pace = paceOf(l, now)
+    return `${l.name} ${l.window == 10080 ? 'week' : 'five hours'}: ${
+      Math.round(l.used)
+    }% used, ${Math.round(pace * 100)}% of it gone${
+      l.resets ? `, resets ${l.resets.slice(0, 16).replace('T', ' ')} UTC` : ''
+    }`
+  })
+  if (o.plans) return paced.join('\n') || 'No plan limit has been read.'
   let top = o.top ?? 10
   let pick = (m: Record<string, number[]>, at: number) =>
     ranked(m, at).slice(0, top)
@@ -132,16 +148,7 @@ export let report = async (
     } written to it, ${tokens(s.tokens[2])} fresh, ${
       tokens(s.tokens[3])
     } generated)`,
-    ...limits.filter((l) => current(l, o.now ?? Date.now())).map((l) => {
-      let pace = paceOf(l, o.now ?? Date.now())
-      return `${l.name} ${l.window == 10080 ? 'week' : 'five hours'}: ${
-        Math.round(l.used)
-      }% used, ${Math.round(pace * 100)}% of it gone${
-        l.resets
-          ? `, resets ${l.resets.slice(0, 16).replace('T', ' ')} UTC`
-          : ''
-      }`
-    }),
+    ...paced,
     ...Object.keys(s.plans).length
       ? [
         '',
@@ -210,6 +217,7 @@ export let runs = (host?: { config?: { person?: string } }): Runs => ({
         since: dayArg(a.since),
         until: dayArg(a.until),
         top: a.top == null ? undefined : Number(a.top),
+        plans: a.plans === true,
       }),
     )
   },

@@ -101,7 +101,7 @@ let COMMENT = 'comment_new', ANSWER = 'decision_answer', SHOW = 'graph_show'
 
 /**
  * A person's own answer to a decision on their machine: the choice they
- * pressed beside it on `space`'s Operator page (operator-asks.ts), sent on
+ * pressed beside it on `space`'s Operator page (operator-lists.ts), sent on
  * through `at`, their server there, as their own act, the way a message of
  * theirs is.
  */

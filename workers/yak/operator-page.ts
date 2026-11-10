@@ -116,7 +116,7 @@ import {
   updatesOf,
   visitsOf,
 } from './updates.ts'
-import { answered, asksList, asksOf } from './operator-asks.ts'
+import { answered, listOf, listsOf } from './operator-lists.ts'
 import { counted, type List, talkBeside, waitsButton } from './talk-beside.ts'
 
 // What this page draws, as markup: the edge where its parts become text.
@@ -707,7 +707,7 @@ export let operatorAnswer = async (
       return Response.json({ message: e.message }, { status: 400 })
     }
   }
-  // A choice pressed beside what needs them (operator-asks.ts), sent on as
+  // A choice pressed beside a row of their lists (operator-lists.ts), sent on as
   // their own answer; the page it was pressed on is drawn again without it.
   if (q.has('asks') && req.method == 'POST') {
     let form = await req.formData()
@@ -1857,13 +1857,13 @@ export let chatPage = async (
   let at = managePath('operator', space.slug)
   // The space's address opens the person's one conversation, and a new chat
   // only until they have one (T-141349).
-  // What needs them is read beside every conversation, at once with it.
-  let [talked, newcomer, asks, alerting] = await Promise.all([
+  // Their lists are read beside every conversation, at once with it.
+  let [talked, newcomer, listed, alerting] = await Promise.all([
     conversationOf(env, space, who, at, open == 'new' ? '' : open, {
       updates: true,
     }),
     who.person ? directoryOf(env.STORE).newcomer(who.person) : false,
-    asksOf(env, who.person, space.eid),
+    listsOf(env, who.person, space.eid),
     who.person ? directoryOf(env.STORE).alerts(who.person) : null,
   ])
   let news = talked.updates!
@@ -1897,12 +1897,13 @@ export let chatPage = async (
       `What can I do for you${first ? `, ${first}` : ''}?`,
       `Ask ${operator} to make an app, change one, or find something out. You can send a photo or a document too.`,
     )
-  // What waits on them, beside the conversation (talk-beside.ts): what
-  // their server lists, then their Updates that need them.
-  let lists = [
-    ...asks ? [asksList(asks, `${at}?asks=1`, here)] : [],
-    needsList(space, news),
-  ]
+  // Beside the conversation (talk-beside.ts): the lists their servers offer
+  // that wait on them, their Updates that need them, then the other lists.
+  let drawn = (waits: boolean) =>
+    listed.lists.filter((l) => l.waits == waits).map((l) =>
+      listOf(l, `${at}?asks=1`, here)
+    )
+  let lists = [...drawn(true), needsList(space, news), ...drawn(false)]
   return talkPage(env, space, who, beside, {
     title: fresh
       ? app ? app.title || app.slug : `Message ${operator}`
@@ -1960,7 +1961,7 @@ export let chatPage = async (
       follows,
       talked.standing,
       !!speechOf(env),
-      asks?.mentions,
+      listed.mentions,
     ),
     app,
   })

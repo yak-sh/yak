@@ -710,7 +710,7 @@ one is refused entirely:
 The complete list of reserved names:
 
     _change _pace _tx about access account_alert account_usage acts_for
-    alias answer app archetype archived artifact ask asks attachment attempt
+    alias answer app archetype archived artifact ask attachment attempt
     attribute_writes belief binding blob bounced browser budget build
     build_of builder builder_answer builder_dep builder_edit
     builder_model_answer builder_open builder_ring built call call_ready
@@ -724,8 +724,8 @@ The complete list of reserved names:
     grant grants_listed home hook hostname image inference installed
     integration integration_install interrupted invite inviting key
     last_deploy lease lines listed mail mail_answered mail_dismissed
-    mail_post mail_task mcp_server member memory mentions meter model
-    model_reservation model_result newcomer newcomer_builds notice
+    mail_post mail_task mcp_list mcp_server member memory mentions meter
+    model model_reservation model_result newcomer newcomer_builds notice
     notice_confirmed notice_letter notice_posted notice_subscription
     notified notify_deaths notify_trash oauth_grant occupancy offer openai
     opened openrouter operator operator_alerts operator_reach order output

@@ -959,17 +959,22 @@ person through no session (@yaks/tunnel `owner`). Where the server also lists
 and only with a label the decision lists, read from the machine first: an answer
 in the person's own words is their message as a comment.
 
-What needs a person is listed over the message box of their Operator's page,
-with no model turn (`operator-asks.ts`). `mcp_connect`'s `asks` names the
-server's tool that lists it and the query it is called with (`asks{tool, query}`
-on the `mcp_server` row); for Jeff that is `task_list` over the Asks board's
-query. The landing chat page reads it with one call, beside the conversation,
-and draws the first ten rows in the server's order: a line for what each is, a
-line for what it asks, its choices, and Reply, which fills the box. The rest
-wait under one line saying how many. A choice is the person's own answer, sent
-through the relay's door (`answerAsTheirs`). A list from a machine shows only on
-the page of the space whose tunnel reaches it, and a machine that is off, or
-that takes more than 3 s, is said to be.
+A server a person connected can offer their Operator's page lists, drawn beside
+the conversation with no model turn (`operator-lists.ts`). `mcp_connect`'s
+`lists` sets them in order, each a title, the server's tool and the arguments it
+is called with, and whether its rows wait on the person; each is a row of its
+own, `doc{title}` + `mcp_list{server, tool, args, waits, ord}`. Jeff's are What
+needs you (`task_list` over the Asks board's query, waiting), Working now
+(`task_list` over the tasks a session holds) and Spend (`spend_show` with
+`plans`, his plan limits against their pace). The chat page reads them all at
+once, beside the conversation, and draws each under its title: the first ten
+rows in the server's order, a line for what each is, a line for what it asks,
+its choices, and Reply, which fills the box, the rest under one line saying how
+many; an answer of words alone is drawn as its lines. Only the rows of a list
+that waits count on the bar and the installed page's icon. A choice is the
+person's own answer, sent through the relay's door (`answerAsTheirs`). A list
+from a machine shows only on the page of the space whose tunnel reaches it, and
+a machine that is off, or that takes more than 3 s, is said to be.
 
 Every request through a tunnel to a machine counts in the page's `machine_wait`
 (timing.ts). On 2026-11-10, ten loads of the `checks` landing page, whose tunnel

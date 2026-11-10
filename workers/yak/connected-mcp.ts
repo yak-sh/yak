@@ -1,7 +1,7 @@
 import { ctxOf } from './connections.ts'
 import { caught } from './defects.ts'
 import { url } from './host.ts'
-import { remoteCommands } from './mcp-remote.ts'
+import { type Offered, remoteCommands } from './mcp-remote.ts'
 import { asCaller, type Ctx, refuse, str } from './tool.ts'
 import type { Row } from './tool-words.ts'
 import type { Calling } from './tunnel.ts'
@@ -81,15 +81,26 @@ export let connectedTools = async (
     },
   }))
 
-// The list of what needs the person a server is asked for, as mcp_connect
-// takes it: none said leaves it, an empty tool takes it away.
-let asked = (said: unknown) => {
-  if (!said || typeof said != 'object') return {}
-  let { tool, query } = said as Record<string, unknown>
+// The lists a server offers the person's Operator page, as mcp_connect takes
+// them: none said leaves them, and each said replaces them all.
+let offered = (said: unknown): { lists?: Offered[] } => {
+  if (!Array.isArray(said)) return {}
   return {
-    asks: String(tool ?? '').trim()
-      ? { tool: String(tool).trim(), query: String(query ?? '') }
-      : null,
+    lists: said.map((l: Record<string, unknown>) => {
+      let { title, tool, args, waits } = l ?? {}
+      if (!String(title ?? '').trim() || !String(tool ?? '').trim()) {
+        throw refuse('arguments', 'Each list says its title and its tool.')
+      }
+      if (args != null && (typeof args != 'object' || Array.isArray(args))) {
+        throw refuse('arguments', 'A list’s args is an object.')
+      }
+      return {
+        title: String(title).trim(),
+        tool: String(tool).trim(),
+        args: (args ?? {}) as Record<string, unknown>,
+        waits: waits === true,
+      }
+    }),
   }
 }
 
@@ -118,15 +129,28 @@ export let mcpConnect: Row = {
         description:
           'Exact remote tool names to expose; omission keeps the existing selection.',
       },
-      asks: {
-        type: 'object',
+      lists: {
+        type: 'array',
         description:
-          "What needs you, listed over your Operator's message box with no model turn: the server's tool that lists it, called with query, whose rows are shown in its order. An empty tool lists nothing.",
-        properties: {
-          tool: str('The tool that lists what needs you, such as task_list.'),
-          query: str("The query it is called with, in the server's own words."),
+          "The lists this server offers your Operator's page, drawn beside the conversation in this order with no model turn: each the server's tool called with args, whose rows are shown in its order. They replace the lists set before; [] removes them, and omission keeps them.",
+        items: {
+          type: 'object',
+          properties: {
+            title: str('What the list is called, such as What needs you.'),
+            tool: str('The tool that answers its rows, such as task_list.'),
+            args: {
+              type: 'object',
+              description:
+                "What the tool is called with, in the server's own words, such as { query: '.task.status=open' }.",
+            },
+            waits: {
+              type: 'boolean',
+              description:
+                'True where its rows wait on you, so the count beside the conversation and on the installed page includes them.',
+            },
+          },
+          required: ['title', 'tool'],
         },
-        required: ['tool'],
       },
       mentions: str(
         "Where an id this server's rows carry, such as T-123, opens: an address with {id} where the id goes, such as https://tasks.yak.sh/{id}. Each such id in your Operator's replies is then a link there. An empty one links none.",
@@ -148,7 +172,7 @@ export let mcpConnect: Row = {
       ...typeof args.client_id == 'string' ? { client_id: args.client_id } : {},
       ...typeof args.enabled == 'boolean' ? { enabled: args.enabled } : {},
       ...Array.isArray(args.allow) ? { allow: args.allow.map(String) } : {},
-      ...asked(args.asks),
+      ...offered(args.lists),
       ...typeof args.mentions == 'string'
         ? { mentions: args.mentions.trim() || null }
         : {},

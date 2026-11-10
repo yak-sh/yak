@@ -3190,13 +3190,17 @@ export let directoryRows = (rows: {
             }]
             : []
         ),
-    // The MCP servers this person named to list what needs them
-    // (operator-asks.ts), each as its row: asked beside the page that draws
-    // the list (manage.ts `foresee`), so it travels in that page's trip.
-    listings: async (person: string): Promise<Bundle[]> =>
-      (await query(`.mcp_server.owner=${person}&.asks&*`)).map((
-        { policy: _, ...row },
-      ) => row as Bundle),
+    // This person's MCP servers and the lists they offer the Operator's page
+    // (operator-lists.ts), each as its row: asked beside the page that draws
+    // them (manage.ts `foresee`), so they travel in that page's trip.
+    listings: async (person: string) => {
+      let bare = ({ policy: _, ...row }: ReadRow) => row as Bundle
+      let [servers, lists] = await Promise.all([
+        query(`.mcp_server.owner=${person}&*`),
+        query(`.mcp_list.server.mcp_server.owner=${person}&*`),
+      ])
+      return { servers: servers.map(bare), lists: lists.map(bare) }
+    },
     // The OAuth grants this person holds, as their agents are listed
     // (grant-rows.ts), and whether those rows are whole.
     grants: async (person: string) => {

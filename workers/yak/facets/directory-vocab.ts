@@ -192,17 +192,26 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { collapsed: { type: 'boolean' } },
     },
-    // What needs a person, read from an MCP server they connected
-    // (`mcp_server`, the entity it sits on) and listed over their Operator's
-    // message box with no model turn (operator-asks.ts): the server's `tool`
-    // called with `query`, whose rows are what needs them, in its order.
-    asks: {
+    // One list an MCP server a person connected offers their Operator's page,
+    // drawn beside the conversation with no model turn (operator-lists.ts),
+    // on an entity of its own whose `doc{title}` heads it: the `server`'s
+    // `tool` called with `args` (a JSON object, read whole), whose rows are
+    // drawn in its order. `waits` says its rows wait on the person, so the
+    // bar and the installed page's icon count them; `ord` is its place among
+    // the server's lists.
+    mcp_list: {
       component: true,
       type: 'object',
-      properties: { tool: text, query: text },
+      properties: {
+        server: ref('cascade'),
+        tool: text,
+        args: text,
+        waits: bool,
+        ord: num,
+      },
     },
-    // Where an id the same server's rows carry (T-123) opens, on the row
-    // beside `asks`: `url` with `{id}` where the id goes. The Operator page
+    // Where an id the same server's rows carry (T-123) opens, on its
+    // `mcp_server` row: `url` with `{id}` where the id goes. The Operator page
     // makes each such id in a reply a link there (operator-rows.ts `mention`).
     mentions: {
       component: true,

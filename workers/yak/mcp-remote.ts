@@ -46,11 +46,18 @@ type Settings = {
   enabled?: boolean
   allow?: string[]
   client_id?: string
-  // What needs the person, read from this server (operator-asks.ts); null
-  // lists nothing.
-  asks?: { tool: string; query: string } | null
+  // The lists this server offers the person's Operator page, in order
+  // (operator-lists.ts): each replaces the ones before, and none says none.
+  lists?: Offered[]
   // Where an id it names opens, `{id}` where the id goes; null opens none.
   mentions?: string | null
+}
+/** One list a server offers, as `mcp_connect` takes it. */
+export type Offered = {
+  title: string
+  tool: string
+  args: Record<string, unknown>
+  waits: boolean
 }
 // `machine` is the space whose tunnel reaches the server, where it is on one.
 type RemoteCommand = Command & { namespace: string; machine?: string }
@@ -412,7 +419,6 @@ export let remoteCommands = (
         ...settings.allow ? { allow: JSON.stringify(settings.allow) } : {},
         ...settings.client_id ? { client_id: settings.client_id } : {},
       },
-      ...settings.asks !== undefined ? { asks: settings.asks } : {},
       ...settings.mentions !== undefined
         ? { mentions: settings.mentions ? { url: settings.mentions } : null }
         : {},
@@ -428,7 +434,26 @@ export let remoteCommands = (
     } catch (e) {
       throw refuse('arguments', e instanceof Error ? e.message : String(e))
     }
-    await host.graph.apply([row])
+    // The server's lists, where they were said, are these and no others.
+    let lists = settings.lists
+      ? [
+        ...(await host.graph.read(`.mcp_list.server=${row.entity.eid}`)).map(
+          (b): Bundle => ({ entity: b.entity, $delete: true }),
+        ),
+        ...settings.lists.map((l, ord): Bundle => ({
+          entity: { eid: mint() },
+          doc: { title: l.title },
+          mcp_list: {
+            server: row.entity.eid,
+            tool: l.tool,
+            args: JSON.stringify(l.args),
+            waits: l.waits,
+            ord,
+          },
+        })),
+      ]
+      : []
+    await host.graph.apply([row, ...lists])
     return {
       server: row.entity.eid,
       commands: row.mcp_server.enabled

@@ -24,7 +24,7 @@ import { type Directory, directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { url } from './host.ts'
 import { chatPath, managePath } from './route.ts'
-import { askAnchor, asksOf, needCount } from './operator-asks.ts'
+import { askAnchor, listsOf, needCount } from './operator-lists.ts'
 import { caught } from './defects.ts'
 import { type Ctx, refuse } from './tool.ts'
 import type { Texting } from './operator-texts.ts'
@@ -152,7 +152,7 @@ let subjectOf = (words: string) => lineOf(words, 60)
 /**
  * Where pressing an alert opens: the person's conversation, at what it is
  * about where it names something (the row of What needs you with that id,
- * operator-asks.ts `askAnchor`).
+ * operator-lists.ts `askAnchor`).
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -280,10 +280,10 @@ let waitingOn = async (
   try {
     let { updatesOf } = await import('./operator-updates.ts')
     let [listed, read] = await Promise.all([
-      asksOf(env, person, space),
+      listsOf(env, person, space),
       updatesOf(store, person, space),
     ])
-    return needCount(listed, read.updates)
+    return needCount(listed.lists, read.updates)
   } catch (e) {
     caught(e, { request: 'alert count' })
     return null
