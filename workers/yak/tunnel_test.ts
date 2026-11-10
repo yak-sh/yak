@@ -446,8 +446,13 @@ test("the machine's word is a request on its owner's Operator's machine channel,
   let t = await telling()
   await using _ = t.scenario
   assertEquals((await t.tell(ADA)).body, { space: 'ada', request: 'r' })
-  // A session working for her conversation is found where it is held.
-  assertEquals((await t.tell(ADA, { conversation: HELPER })).status, 200)
+  // A session working for her conversation is found where it is held, and
+  // what a knock is about rides with its request.
+  let task = mint()
+  assertEquals(
+    (await t.tell(ADA, { conversation: HELPER, about: task })).status,
+    200,
+  )
   let [first, again] = await Promise.all(t.asked.map((r) => r.json()))
   assertEquals(new URL(t.asked[0].url).pathname, '/operator/receive')
   assertEquals(t.asked[0].headers.get('x-yak-person'), ADA)
@@ -457,6 +462,7 @@ test("the machine's word is a request on its owner's Operator's machine channel,
     options: { id: derivedEid(`operator-machine|${t.ada.eid}|k1`) },
   })
   assertEquals(again.options, first.options)
+  assertEquals(again.request, { channel: 'machine', about: task })
 })
 
 test('only the owner of a space with a tunnel tells its Operator, and only something', async () => {

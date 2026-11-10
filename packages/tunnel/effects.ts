@@ -24,8 +24,9 @@ export type Options = {
 }
 
 /** What a knock tells the platform: the conversation it is news for, the
- * knock that names it, and its words. */
-export type Told = { conversation: string; key: Eid; text: string }
+ * knock that names it, its words, and what it tells of, where it names one
+ * entity here (`knock{about}`), so an alert about it opens at its row. */
+export type Told = { conversation: string; key: Eid; text: string; about?: Eid }
 
 /** Telling the platform one thing. */
 export type Tell = (told: Told) => Promise<void>
@@ -61,7 +62,13 @@ export let telling = async (
   let session = comp(at, 'session')
   let conversation = str(session.source)
   if (session.door != DOOR || !conversation) return
-  return { conversation, key: eid, text: str(comp(knock, 'doc').body) }
+  let about = str(comp(knock, 'knock').about)
+  return {
+    conversation,
+    key: eid,
+    text: str(comp(knock, 'doc').body),
+    ...about ? { about } : {},
+  }
 }
 
 /** Tell the platform what the knock `eid` says, and mark it said. */
@@ -94,7 +101,9 @@ async (told) => {
   let r = await fetching(new URL(TELL, origin), {
     method: 'POST',
     headers: { authorization: `Bearer ${at.bearer}` },
-    body: new URLSearchParams({ do: 'tell', ...told }),
+    body: new URLSearchParams(
+      { do: 'tell', ...told } as Record<string, string>,
+    ),
   })
   if (r.ok) return void await r.body?.cancel()
   let body = await r.text()

@@ -12,8 +12,9 @@
 //                                      made
 //   POST space=ada do=adopt tunnel=… service=…   record a pair made elsewhere,
 //                                      with a gateway in front
-//   POST do=tell conversation=… key=… text=…     the machine telling its
-//                                      owner's Operator what changed there
+//   POST do=tell conversation=… key=… text=… [about=…]   the machine
+//                                      telling its owner's Operator what
+//                                      changed there, and the row it is about
 //
 // The space's owner connects, rotates and disconnects. Adopting is the
 // platform owner's alone (a seat in `yak`, the fee's gate, sell.ts `fees`):
@@ -140,8 +141,10 @@ let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * theirs with a tunnel whose Operator holds `conversation` (their one
  * conversation, or a session that works for it). Only the space's owner
  * tells it, by their own connection, and the knock (`key`) names the
- * request, so a knock told again is one request. The Operator decides
- * whether they hear of it (operator-channels.ts).
+ * request, so a knock told again is one request. What it tells of (`about`),
+ * an eid on the machine, rides with the request, so an alert about it opens
+ * at its row. The Operator decides whether they hear of it
+ * (operator-channels.ts).
  */
 export let tell = async (
   env: Env,
@@ -199,7 +202,10 @@ export let tell = async (
   }
   let r = await asked(space, '/operator/receive', {
     say: text,
-    request: { channel: 'machine' },
+    request: {
+      channel: 'machine',
+      ...UUID.test(said('about')) ? { about: said('about') } : {},
+    },
     options: { id: derivedEid(`operator-machine|${space.eid}|${key}`) },
   })
   let body = await r.json() as { request?: string; message?: string }

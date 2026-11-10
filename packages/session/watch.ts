@@ -525,7 +525,11 @@ export let knocks = async (
   )
   return named.filter((n) => !had.has(n.eid)).map((n) => ({
     entity: { eid: n.eid },
-    knock: { target: n.target, ...change.by ? { from: change.by } : {} },
+    knock: {
+      target: n.target,
+      about: task.entity.eid,
+      ...change.by ? { from: change.by } : {},
+    },
     doc: { body },
   }))
 }

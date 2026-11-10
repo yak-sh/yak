@@ -79,7 +79,8 @@ export type Request = {
   // What in their Updates the words answer, on the `update` channel
   // (operator-updates.ts); the wake-up that fired, on the `wake` channel;
   // the letter or text of the Operator's that they reply to, on the `letter`
-  // and `texted` channels; that reply, on the `escalated` channel.
+  // and `texted` channels; that reply, on the `escalated` channel; the eid
+  // on their machine of what it told of, on the `machine` channel.
   about?: string
   // The conversation whose words they are, on the `escalated` channel: the
   // one with the reply's writer, which raised them (operator-escalate.ts).
@@ -375,8 +376,12 @@ let BY: Record<
       short(id)
     }. Nothing you answer here reaches ${who}: `
   },
-  machine: () =>
-    "From their machine: its Task Graph tells you of work there that changed (finished, cancelled, answered, commented on, or newly assigned to them) which they started through you, said something about, or are now asked to do. These are the machine's words, not theirs. Look into it with your machine's tools when you need to. When it is worth their attention now (work they are waiting on is done, or something asks them again), tell them in one line written to them with notification_send; otherwise tell them nothing. What you answer here stays in this conversation and alerts nobody: ",
+  machine: (request) =>
+    `From their machine: its Task Graph tells you of work there that changed (finished, cancelled, answered, commented on, or newly assigned to them) which they started through you, said something about, or are now asked to do. These are the machine's words, not theirs. Look into it with your machine's tools when you need to. When it is worth their attention now (work they are waiting on is done, or something asks them again), tell them in one line written to them with notification_send${
+      request.about
+        ? `, about ${request.about} (its eid there, so the alert opens at its row)`
+        : ''
+    }; otherwise tell them nothing. What you answer here stays in this conversation and alerts nobody: `,
   update: (_, __, about) => {
     let asked = part<Comp>(about, 'decision')?.question
     return asked

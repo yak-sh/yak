@@ -61,10 +61,10 @@ let office = async () => {
         },
       }),
     )
-  let knock = async (eid: string, target: string) => {
+  let knock = async (eid: string, target: string, about?: string) => {
     await g.apply([{
       entity: { eid },
-      knock: { target },
+      knock: { target, ...about ? { about } : {} },
       doc: { body: 'T-7 completed by TaskMaster: Give the Worker a token' },
     }], { trusted: true })
     await fx.idle()
@@ -85,13 +85,20 @@ test("a conversation the platform says is the owner's stands here as the machine
   equal((await o.session(other.via!)).door, 'tunnel')
 })
 
-test("a knock at a conversation's session is told up the tunnel once, and marked said", async () => {
+test("a knock at a conversation's session is told up the tunnel once, and marked said, with what it is about", async () => {
   let o = await office()
   let { via } = (await o.asked(HIS, 'u-jeff'))!
-  await o.knock('k1', via!)
+  let task = crypto.randomUUID()
+  await o.knock('k1', via!, task)
+  await o.knock('k2', via!)
   equal(o.told, [{
     conversation: HIS,
     key: 'k1',
+    text: 'T-7 completed by TaskMaster: Give the Worker a token',
+    about: task,
+  }, {
+    conversation: HIS,
+    key: 'k2',
     text: 'T-7 completed by TaskMaster: Give the Worker a token',
   }])
   equal(!!(await o.g.get(['k1']))[0].notified, true)

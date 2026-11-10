@@ -115,9 +115,13 @@ let office = async (filer = 'worker', more: Bundle[] = []) => {
 let done = [{ entity: { eid: 't' }, completed: {} }]
 let TITLE = 'Give the Worker a token'
 
-test('Jeff completing a task an agent filed knocks that session once', async () => {
+test('Jeff completing a task an agent filed knocks that session once, about the task', async () => {
   let o = await office()
   await o.write(done)
+  equal(
+    (await o.g.read('.knock.target=worker')).map((k) => k.knock),
+    [{ target: 'worker', about: 't', from: 'jeff' }],
+  )
   equal(await o.heard('worker'), [`${o.id} completed by Jeff: ${TITLE}`])
   await watch(o.g, 't')
   equal(await o.heard('worker'), [])
