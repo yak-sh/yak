@@ -7,20 +7,38 @@ export let memory = (manifest: VocabDoc) => {
   let vocab = loadVocab([manifest, {
     $defs: {
       doc: {
+        component: true,
+        type: 'object',
         properties: { title: { type: 'string' }, body: { type: 'string' } },
       },
-      session: { properties: { status: { type: 'string' } } },
+      session: {
+        component: true,
+        type: 'object',
+        properties: { status: { type: 'string' } },
+      },
       entry: {
+        component: true,
+        type: 'object',
         properties: { session: { type: 'string' }, seq: { type: 'number' } },
       },
-      content: { properties: { body: { type: 'string' } } },
+      content: {
+        component: true,
+        type: 'object',
+        properties: { body: { type: 'string' } },
+      },
       attachment: {
+        component: true,
+        type: 'object',
         properties: {
           artifact: { type: 'string' },
           audience: { type: 'string' },
         },
       },
-      output: { properties: { source: { type: 'string' } } },
+      output: {
+        component: true,
+        type: 'object',
+        properties: { source: { type: 'string' } },
+      },
     },
   }])
   let g = graph({ vocab, storage: ram(vocab) })

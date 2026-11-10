@@ -1,3 +1,4 @@
+import { draftGateway, DraftRefused } from '@yaks/draft'
 import { type Binding, identifier, Refusal, store, who } from './store.ts'
 import { type Service, studio } from './source.ts'
 
@@ -11,11 +12,22 @@ export let storefront = async (
   if (!route) return null
   let caller = who(request), desk = studio(store(env.APP), service)
   try {
+    if (route === 'drafts') {
+      let gateway = draftGateway(store(env.APP), caller)
+      return Response.json(
+        request.method === 'GET'
+          ? await gateway.snapshot()
+          : await gateway.write(await request.json()),
+        { headers: { 'cache-control': 'private, no-store' } },
+      )
+    }
     if (route === 'shelf' && request.method === 'GET') {
       return Response.json(await desk.shelf(caller))
     }
     if (route === 'book' && request.method === 'GET') {
-      return Response.json(await desk.owned(url.searchParams.get('id'), caller))
+      return Response.json(
+        await desk.owned(url.searchParams.get('id'), caller),
+      )
     }
     if (route === 'file' && request.method === 'GET') {
       let book = await desk.owned(url.searchParams.get('id'), caller)
@@ -45,7 +57,9 @@ export let storefront = async (
     let result
     if (route === 'save') result = await desk.save(value, caller)
     else if (route === 'prepare') result = await desk.prepare(value.id, caller)
-    else if (route === 'quote') {
+    else if (route === 'preparation') {
+      result = await desk.preparation(value.id, caller)
+    } else if (route === 'quote') {
       result = await desk.quote(value.id, value, caller)
     } else if (route === 'purchase') {
       result = await desk.purchase(value.id, caller)
@@ -55,6 +69,9 @@ export let storefront = async (
     else return new Response('Not found', { status: 404 })
     return Response.json(result)
   } catch (error) {
+    if (error instanceof DraftRefused) {
+      return Response.json({ error: error.message }, { status: 409 })
+    }
     if (!(error instanceof Refusal)) throw error
     return Response.json({ error: error.message }, {
       status: error.status,
@@ -68,6 +85,7 @@ let files = new Set([
   'studio.html',
   'studio.js',
   'studio.css',
+  'recovery.js',
   'public.js',
   'styles.css',
   'favicon.svg',

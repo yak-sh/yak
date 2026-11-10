@@ -125,3 +125,29 @@ test('an edit racing preparation preserves the edit and does not attach a stale 
   assertEquals(after.book_source.markdown, 'The newer text')
   assertEquals(after.book_prepared, undefined)
 })
+
+test('pending preparation resumes one stored job and never becomes a reviewed document early', async () => {
+  let starts = 0,
+    polls = 0,
+    { desk } = fixture(async (name) => {
+      if (name === 'prepare') {
+        starts++
+        return { id: doc.id, pending: true }
+      }
+      if (name === 'document_status') {
+        return ++polls < 2 ? { id: doc.id, pending: true } : doc
+      }
+      throw new Error('Payment was reached before review')
+    })
+  let row = await desk.save(text, alice)
+  await desk.prepare(row.entity.eid, alice)
+  await desk.prepare(row.entity.eid, alice)
+  assertEquals(starts, 1)
+  await assertRejects(() => desk.purchase(row.entity.eid, alice))
+  assertEquals((await desk.preparation(row.entity.eid, alice))?.pending, true)
+  await desk.preparation(row.entity.eid, alice)
+  assertEquals(
+    (await desk.owned(row.entity.eid, alice)).book_prepared?.document.id,
+    doc.id,
+  )
+})

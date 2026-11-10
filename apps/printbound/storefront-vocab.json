@@ -18,7 +18,9 @@
         "dedication": {
           "type": "string"
         }
-      }
+      },
+      "component": true,
+      "type": "object"
     },
     "book_prepared": {
       "description": "The immutable document selected for this source revision; an edit clears the selection.",
@@ -29,7 +31,9 @@
         "document": {
           "type": "object"
         }
-      }
+      },
+      "component": true,
+      "type": "object"
     },
     "book_quote": {
       "description": "The exact destination quote selected for this reviewed document.",
@@ -37,7 +41,9 @@
         "quote": {
           "type": "object"
         }
-      }
+      },
+      "component": true,
+      "type": "object"
     },
     "book_receipt": {
       "description": "The print service receipt returned by the most recent purchase; progress is read from the print provider.",
@@ -45,7 +51,22 @@
         "receipt": {
           "type": "object"
         }
-      }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "book_preparation": {
+      "description": "The retained PrintBound document job preparing this exact source revision.",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "document": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
     }
   }
 }

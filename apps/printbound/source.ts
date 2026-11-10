@@ -18,6 +18,8 @@ export type Source = {
 }
 export type Document = {
   id: string
+  pending?: false
+  preview?: boolean
   revision: string
   pages: { number: number; role: string; blob: string; hash: string }[]
   interior: { blob: string }
@@ -44,12 +46,19 @@ export type Receipt = {
 export type Book = Bundle & {
   doc: { title: string }
   book_source: Source
+  book_preparation?: { source: string; document: string }
   book_prepared?: { source: string; document: Document }
   book_quote?: { quote: Quote }
   book_receipt?: { receipt: Receipt }
 }
 export type Service = (
-  name: 'prepare' | 'quote' | 'purchase' | 'order_status' | 'cancel',
+  name:
+    | 'prepare'
+    | 'quote'
+    | 'purchase'
+    | 'order_status'
+    | 'cancel'
+    | 'document_status',
   args: Record<string, unknown>,
   caller: Who,
 ) => Promise<unknown>
@@ -74,7 +83,7 @@ export let studio = (db: Store, service: Service) => {
     let [row] = await db.query(
       `.entity.eid=${
         identifier(id)
-      }&.book_source&?doc&?book_prepared&?book_quote&?book_receipt`,
+      }&.book_source&?doc&?book_prepared&?book_quote&?book_receipt&?book_preparation`,
     ) as Book[]
     if (!row || !allowed(row.book_source, caller)) {
       throw new Refusal('That saved book is not available.', 403)
@@ -110,7 +119,7 @@ export let studio = (db: Store, service: Service) => {
       let rows = (await Promise.all(
         filters.map((filter) =>
           db.query(
-            `${filter}&?doc&?book_source&?book_prepared&?book_quote&?book_receipt`,
+            `${filter}&?doc&?book_source&?book_prepared&?book_quote&?book_receipt&?book_preparation`,
           )
         ),
       )).flat() as Book[]
@@ -119,8 +128,24 @@ export let studio = (db: Store, service: Service) => {
     async save(value: Record<string, unknown>, caller: Who) {
       let input = source(value)
       if (!input.title.trim()) throw new Refusal('Give your book a title.')
-      let row = value.id ? await owned(value.id, caller) : null
-      let entity = row?.entity ?? { eid: crypto.randomUUID() }
+      let draft = value.draft ? identifier(value.draft) : crypto.randomUUID()
+      let [existing] = value.id
+        ? []
+        : await db.query(`.entity.eid=${draft}&.book_source`)
+      let row = value.id || existing
+        ? await owned(value.id ?? draft, caller)
+        : null
+      let entity = row?.entity ?? { eid: draft }
+      let content = {
+        entity,
+        doc: { title: input.title },
+        book_source: {
+          author: input.author,
+          markdown: input.markdown,
+          dedication: input.dedication,
+        },
+      } as Book
+      let changed = !row || revision(row) !== revision(content)
       let changes = {
         entity,
         doc: { title: input.title },
@@ -131,12 +156,15 @@ export let studio = (db: Store, service: Service) => {
           markdown: input.markdown,
           dedication: input.dedication,
         },
-        book_prepared: null,
-        book_quote: null,
+        ...(changed
+          ? { book_preparation: null, book_prepared: null, book_quote: null }
+          : {}),
       }
       await db.apply([{
         ...changes,
-        ...(row ? { $was: guard(row, ['doc', 'book_source']) } : {}),
+        ...(row
+          ? { $was: guard(row, ['doc', 'book_source']) }
+          : { $was: { entity: { eid: null } } }),
       }])
       return await owned(entity.eid, caller)
     },
@@ -147,16 +175,50 @@ export let studio = (db: Store, service: Service) => {
           'Paste your conversation or Markdown before preparing the book.',
         )
       }
+      if (book.book_preparation?.source === revision(book)) {
+        return { id: book.book_preparation.document, pending: true }
+      }
       let document = await service('prepare', {
         title: book.doc.title,
         ...book.book_source,
-      }, caller) as Document
+      }, caller) as Document | { id: string; pending: true }
+      if (document?.pending) {
+        await write(book, {
+          entity: book.entity,
+          book_preparation: { source: revision(book), document: document.id },
+          book_quote: null,
+        })
+        return document
+      }
       if (!document?.revision || !document.pages?.length) {
         throw new Error('Preparation returned no reviewable document.')
       }
       await write(book, {
         entity: book.entity,
         book_prepared: { source: revision(book), document },
+        book_quote: null,
+      })
+      return document
+    },
+    async preparation(id: unknown, caller: Who) {
+      let book = await owned(id, caller), pending = book.book_preparation
+      if (!pending) return book.book_prepared?.document ?? null
+      if (pending.source !== revision(book)) {
+        throw new Refusal(
+          'Your source changed. Prepare the saved edition again.',
+        )
+      }
+      let document = await service('document_status', {
+        document: pending.document,
+      }, caller) as Document | { id: string; pending: true }
+      if (document.pending) return document
+      if (!document.revision || !document.pages?.length) {
+        throw new Error('Preparation returned no reviewable document.')
+      }
+      await write(book, {
+        entity: book.entity,
+        book_preparation: null,
+        book_prepared: { source: pending.source, document },
         book_quote: null,
       })
       return document
@@ -194,7 +256,9 @@ export let studio = (db: Store, service: Service) => {
     async progress(id: unknown, caller: Who) {
       let book = await owned(id, caller)
       if (!book.book_receipt) return null
-      if (book.book_receipt.receipt.historical) return book.book_receipt.receipt
+      if (book.book_receipt.receipt.historical) {
+        return book.book_receipt.receipt
+      }
       let receipt = await service('order_status', {
         order: book.book_receipt.receipt.id,
       }, caller) as Receipt
@@ -203,7 +267,9 @@ export let studio = (db: Store, service: Service) => {
     },
     async cancel(id: unknown, caller: Who) {
       let book = await owned(id, caller)
-      if (!book.book_receipt) throw new Refusal('This book has no print order.')
+      if (!book.book_receipt) {
+        throw new Refusal('This book has no print order.')
+      }
       if (book.book_receipt.receipt.historical) {
         throw new Refusal(
           'Contact PrintBound about changes to this earlier order.',

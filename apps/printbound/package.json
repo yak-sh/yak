@@ -6,6 +6,7 @@
     "fast-png": "8.0.0",
     "@yaks/member": "platform",
     "@yaks/graph": "platform",
-    "@yaks/host": "platform"
+    "@yaks/host": "platform",
+    "@yaks/draft": "platform"
   }
 }
