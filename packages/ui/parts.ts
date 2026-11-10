@@ -10,6 +10,7 @@
  */
 
 export { block, el, type Part, type Props, Surround } from './el.ts'
+export { Surface } from './Surface.ts'
 export { Address } from './Address.ts'
 export { At } from './At.ts'
 export { Body, bodyClass } from './Body.ts'

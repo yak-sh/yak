@@ -98,7 +98,7 @@ let dot = h(Shell.Glyph, { width: 16, height: 16, viewBox: '0 0 16 16' }, [
 let place = (label: string, on?: boolean, count?: string) =>
   h(
     Item,
-    { href: `#${label}`, mod: on && 'on' },
+    { href: '#', mod: on && 'on' },
     h(Icon, {}, dot),
     h(Label, {}, label),
     count && h(Count, {}, count),
@@ -134,7 +134,7 @@ export let specimens = (): Specimen[] => [
       h(
         Side,
         {},
-        h(Brand, { href: '#home' }, 'Yak'),
+        h(Brand, { href: '#' }, 'Yak'),
         h(
           Find,
           {},
