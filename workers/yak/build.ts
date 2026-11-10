@@ -650,6 +650,16 @@ export class Builder {
     // Its steps run on the pool, as every other Operator session's do: words
     // given while it works land in it.
     let operator = await this.#work()
+    if (new URL(request.url).pathname == '/operator/contact') {
+      return Response.json(
+        await operator.confirmContact(
+          held,
+          String(args.id ?? ''),
+          String(args.number ?? ''),
+          args.agreed === true,
+        ),
+      )
+    }
     return Response.json(
       await (new URL(request.url).pathname == '/operator/helper'
         ? operator.helper(held, space, args)

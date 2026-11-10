@@ -33,6 +33,9 @@ import type { Env } from './env.ts'
 import { ai, modelPage, platform, state, type Turn } from './testing.ts'
 import { test, until } from '@yaks/testing'
 import { sign } from './lib/token.ts'
+import { manage } from './manage.ts'
+import { operatorStore } from './operator-store.ts'
+import { endpoints } from './endpoints.ts'
 
 let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -314,6 +317,68 @@ test('a form posted with no script is answered the conversation', async () => {
   )
   assertEquals(live.status, 200)
   assertStringIncludes(await live.text(), 'Lemon cake')
+})
+
+test('the inline contact form reaches the Builder’s contact confirmation command', async () => {
+  let o = await seeded()
+  let session = crypto.randomUUID(),
+    source = crypto.randomUUID(),
+    contact = crypto.randomUUID(),
+    number = '+12695550142'
+  let store = operatorStore(o.ctx.storage)
+  await store.g.apply([
+    {
+      entity: { eid: session },
+      session: {},
+      operator_session: { person: ADA, space: o.space.eid, conversation: true },
+    },
+    {
+      entity: { eid: source },
+      entry: { session },
+      content: { body: `Text me at ${number} when done.` },
+    },
+    {
+      entity: { eid: contact },
+      operator_contact: { person: ADA, address: number, source, session },
+    },
+  ], { trusted: true })
+  o.env.BUILDER = {
+    idFromName: (name) => name,
+    get: () => ({ fetch: (req: Request) => o.object.fetch(req) }),
+  }
+  let sent: unknown[] = []
+  let phone = endpoints(globalThis).open(async (req) => {
+    let path = new URL(req.url).pathname
+    if (path == '/messaging_profiles') {
+      return Response.json({ data: [{ id: 'profile' }] })
+    }
+    if (path.endsWith('/phone_numbers')) {
+      return Response.json({ data: [{ phone_number: '+18885550100' }] })
+    }
+    sent.push(await req.json())
+    return Response.json({ data: { id: crypto.randomUUID() } })
+  })
+  Object.assign(o.env, {
+    PHONE_SENDER: { via: 'telnyx' },
+    TELNYX_API: phone.url,
+    TELNYX_API_KEY: 'key',
+  })
+  let body = new FormData()
+  body.set('contact', contact)
+  body.set('number', number)
+  body.set('agreed', 'yes')
+  let response = await manage(
+    new Request('https://yaks.app/manage/ada/operator?texts=1', {
+      method: 'POST',
+      headers: { cookie: await as(ADA), origin: 'https://yaks.app' },
+      body,
+    }),
+    o.env,
+  )
+  assertEquals(response.status, 200)
+  assertEquals(await response.json(), { confirmed: number })
+  assertEquals((await dirOf(o.env).texting(ADA))?.number, number)
+  assertEquals(sent.length, 1)
 })
 
 test('the door refuses a stranger before it reaches the object', async () => {

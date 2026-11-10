@@ -1405,9 +1405,7 @@ let told = async (
  * asks the Operator itself, which its object makes for what it runs
  * (build.ts `#work`). */
 export let operatorRequest = async (
-  operator:
-    & Pick<Operator, 'store' | 'named' | 'stop'>
-    & Partial<Pick<Operator, 'confirmContact'>>,
+  operator: Pick<Operator, 'store' | 'named' | 'stop'>,
   held: Held,
   path: string,
   args: Record<string, unknown>,
@@ -1416,16 +1414,6 @@ export let operatorRequest = async (
 ): Promise<Response | null> => {
   let { person, space: spaceId } = held
   let { store } = operator
-  if (path == '/operator/contact' && operator.confirmContact) {
-    return Response.json(
-      await operator.confirmContact(
-        held,
-        String(args.id ?? ''),
-        String(args.number ?? ''),
-        args.agreed === true,
-      ),
-    )
-  }
   await phoneTexts(store.g)
   await channeled(store.g, store.marks)
   let access = held
