@@ -94,10 +94,16 @@ export let story = (db: Store, runtime: Runtime) => async (book: Book) => {
   let result: Story
   if (runtime.preview) result = fixture(book)
   else {
+    let [session] = await db.query(`.entity.eid=${selected.job}&?failed`)
     let rows = await db.query(
       `.entry.session=${selected.job}&?content&?output&?refusal`,
     )
-    if (rows.some((r) => r.refusal)) {
+    if (session?.failed || rows.some((r) => r.refusal)) {
+      await db.apply([{
+        entity: book.entity,
+        book_story: null,
+        $was: guard(book, ['book_story']),
+      }])
       throw new Refusal(
         'The story could not be suggested. Your saved idea is kept.',
       )

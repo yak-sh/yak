@@ -197,7 +197,12 @@ export let atelier = (db: Store, io: AtelierIO) => {
         ...(!old || old.doc.title !== title || old.doc.body !== body ||
             JSON.stringify(input(old.coloring_book)) !==
               JSON.stringify(settings)
-          ? { print_preparation: null, print_review: null, print_quote: null }
+          ? {
+            print_preparation: null,
+            print_review: null,
+            print_quote: null,
+            book_story: null,
+          }
           : {}),
         ...(old
           ? { $was: guard(old, ['doc', 'coloring_book']) }

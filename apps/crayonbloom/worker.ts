@@ -45,7 +45,17 @@ let publicFiles = new Set([
   'gallery.js',
 ])
 export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
-  let db = store(env.APP), caller = who(request), url = new URL(request.url)
+  let address = request.url, url = new URL(address)
+  let mount = request.headers.get('x-yak-mount') ??
+    `/${request.headers.get('x-yak-app') ?? ''}/`
+  if (mount !== '/' && url.pathname === mount.replace(/\/$/, '')) {
+    url.pathname = '/'
+  } else if (url.pathname.startsWith(mount)) {
+    url.pathname = '/' + url.pathname.slice(mount.length)
+  }
+  request = new Request(url, request)
+  request.headers.set('x-yak-address', address)
+  let db = store(env.APP), caller = who(request)
   let old = await legacyPage(request, db, {
     owner: caller.person ?? undefined,
     via: caller.via ?? undefined,
