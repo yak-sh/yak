@@ -1,7 +1,8 @@
 /**
  * @yaks/model is the interface between a conversation and whoever serves it:
  * the shape of a request, the shape of a reply, and the two entities a graph
- * stores about serving — `provider` and `model`. It implements no transport,
+ * stores about serving — `provider` and `model`. It implements no provider's
+ * transport (`@yaks/model/step` carries a step between two hosts instead),
  * and it declares no component another package owns: `tool` belongs to
  * @yaks/tools and `artifact` to @yaks/blob, each composed beside this one.
  * A provider package ({@link https://jsr.io/@yaks/openai | @yaks/openai},
@@ -65,6 +66,7 @@ export { listPrice } from './prices.ts'
 export { deferredModel } from './deferred.ts'
 export { type ModelResult, type ModelResults, modelResults } from './results.ts'
 export { message } from './message.ts'
+export { type Offer, offerFor, offers, serving } from './offers.ts'
 export type { Lent, Native, ProviderFacet, Spending } from './provider.ts'
 export {
   type Executor,

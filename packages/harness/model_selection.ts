@@ -2,8 +2,7 @@
  * model, its `serves` edge. */
 import { type Bundle, type Comp, type Graph } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
-import type { Model } from '@yaks/model'
-import { offerFor, offers } from '@yaks/session'
+import { type Model, offerFor, offers } from '@yaks/model'
 
 export type ModelSelection = { choices: Bundle[]; current?: string }
 

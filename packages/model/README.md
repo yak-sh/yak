@@ -2,7 +2,9 @@
 
 Defines provider-neutral model request and reply types, vocabulary for providers
 and models, and helpers for billing and recovering generated media. Use it
-between a conversation and a provider adapter; it implements no transport.
+between a conversation and a provider adapter. It implements no provider's
+transport; `@yaks/model/step` carries one model step from one host to another's
+providers.
 
 ## Model interface
 
@@ -76,13 +78,14 @@ deno add jsr:@yaks/model
 
 ## Exports
 
-| Export              | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/model`       | `listPrice`, `deferredModel`, `message`; `Lent`, `ProviderFacet`; `Executor`, `Inference`, `InferenceHost`, `InferenceReceipt`, `FrozenModelRequest`, `infer`, `inferenceReply`, `frozenRequest`, `thawedRequest`; `Model`, `Request`, `Reply`, `Item`, `Tool`, `TextDelta`, `Question`, `Questions`, `Answer`, `Usage`, `Price`, `Mark`, `Answered`, `Listed`; `ModelError`; `models`, `modelDoc`, `addressed`, `requesting`, `confirmed`; `weigh`, `billed`, `limitEid`, `dollars`, `hourly`, `attribute`, `generated`, `merged`, `Paid`, `Part`; `submitted`, `acknowledged`, `submitCall`; `MediaReceipt`, `MediaReceipts`, `MediaRecord`, `mediaReceipts`, `receivedMedia`, `recoveredMedia`; component-name constants `PROVIDER`, `MODEL`, `TOOL`, `QUESTIONS`, `ANSWER`, `USAGE`, `PRICE`, `COST`, `RATE_LIMIT`, `RESPONSE` |
-| `@yaks/model/vocab` | `modelDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `@yaks/model/graph` | `plugins()`, returning `[models()]`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `@yaks/model/sse`   | `jsonFrames(body, fault, check?, done?)`: the JSON events of a server-sent event stream                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `@yaks/model/stall` | `STALL_TIMEOUT`, `stallMs(req)`, `Stalled`, `watchdog(ms, clock?, stop?)`, `watched(fetch, ms)`, `watchedBody(body, ms)`: a request whose stream goes quiet fails as stalled                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Export              | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/model`       | `listPrice`, `deferredModel`, `message`; `Offer`, `offers`, `offerFor`, `serving`; `Lent`, `ProviderFacet`; `Executor`, `Inference`, `InferenceHost`, `InferenceReceipt`, `FrozenModelRequest`, `infer`, `inferenceReply`, `frozenRequest`, `thawedRequest`; `Model`, `Request`, `Reply`, `Item`, `Tool`, `TextDelta`, `Question`, `Questions`, `Answer`, `Usage`, `Price`, `Mark`, `Answered`, `Listed`; `ModelError`; `models`, `modelDoc`, `addressed`, `requesting`, `confirmed`; `weigh`, `billed`, `limitEid`, `dollars`, `hourly`, `attribute`, `generated`, `merged`, `Paid`, `Part`; `submitted`, `acknowledged`, `submitCall`; `MediaReceipt`, `MediaReceipts`, `MediaRecord`, `mediaReceipts`, `receivedMedia`, `recoveredMedia`; component-name constants `PROVIDER`, `MODEL`, `TOOL`, `QUESTIONS`, `ANSWER`, `USAGE`, `PRICE`, `COST`, `RATE_LIMIT`, `RESPONSE` |
+| `@yaks/model/vocab` | `modelDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `@yaks/model/graph` | `plugins()`, returning `[models()]`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `@yaks/model/sse`   | `jsonFrames(body, fault, check?, done?)`: the JSON events of a server-sent event stream                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `@yaks/model/stall` | `STALL_TIMEOUT`, `stallMs(req)`, `Stalled`, `watchdog(ms, clock?, stop?)`, `watched(fetch, ms)`, `watchedBody(body, ms)`: a request whose stream goes quiet fails as stalled                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `@yaks/model/step`  | `PATH`, `BEAT`, `answering(serve, report, clock?)`, `forwarding(lent, options?)`, `forwarded(graph, reach)`: one model step forwarded by one host and answered from the providers of another                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ## Items and delivery
 
@@ -677,6 +680,80 @@ in the future, so a context that changed mid-conversation does not rewrite a
 prefix still in the cache. Once it has expired, or where it is unknown, the
 instructions are read again and the conversation is replayed on them
 (@yaks/session `cachedInstructions`).
+
+## A provider served by a machine
+
+A provider can be another machine:
+`provider{name, transport: 'machine',
+machine}`, where `machine` names the
+`machine{address}` ([@yaks/machine](../machine/README.md)) whose own providers
+answer. One host forwards each model request and the other answers it, so the
+forwarding host needs none of the serving host's credentials or command lines.
+
+The serving host mounts `answering(serve, report)` at `PATH` (`/model/step`): a
+web handler that answers one model request from `serve` and streams the reply.
+`serving(graph, implementations)` is the `serve` for a host's own providers. It
+finds the model by its own name (`model.name`, the same row in every graph) and
+asks the one of `implementations` whose provider the graph's `serves` edges say
+serves it, under the name that provider calls it. Which providers answer is
+therefore the serving host's choice of `implementations`. `offers` and
+`offerFor` are the lookups beneath it.
+
+The forwarding host builds a `Model` with `forwarding(lent)`, which sends each
+model request through `lent.fetch` to `PATH` under `options.base`. Where that
+`fetch` goes (a tunnel, a private network, the same process) is the host's
+concern. `forwarded(graph, reach)` builds one for every provider row a machine
+serves, keyed by `provider.name`, from the `fetch` that `reach(machine)` gives;
+a row naming no machine, or one `reach` gives nothing for, is left out.
+
+```ts
+import { type Model, ModelError } from '@yaks/model'
+import { answering, forwarding } from '@yaks/model/step'
+import { equal } from '@yaks/testing'
+
+const local: Model = async (request) => {
+  request.onText?.({ index: 0, text: 'Hello' })
+  return {
+    id: 'r1',
+    model: request.model,
+    items: [{ kind: 'assistant', text: 'Hello' }],
+    usage: { input_tokens: 4, output_tokens: 1 },
+    cost: 0.01,
+  }
+}
+const answer = answering(local, console.error)
+const model = forwarding({
+  fetch: (at, init) => answer(new Request(at, init)),
+})
+let text = ''
+const reply = await model({
+  model: 'example',
+  items: [{ kind: 'user', text: 'Hi' }],
+  tools: [],
+  onText: (delta) => text += delta.text,
+})
+equal(text, 'Hello')
+equal(reply.usage, { input_tokens: 4, output_tokens: 1 })
+equal(reply.cost, undefined)
+```
+
+The reply keeps the `usage` the serving provider counted and drops its `cost`:
+what a model request cost the serving host is not what it costs the forwarding
+one, which weighs the usage at its own price for the model. Text reaches
+`Request.onText` as it streams, and `Request.signal` stops the model request on
+both hosts.
+
+A `ModelError` the serving provider throws reaches the forwarding host with its
+code, message, retry and response. Anything else is the serving host's bug: it
+goes to `report` there, and the forwarding host is told only that the model
+request failed (`serving`). A machine that does not answer, refuses the path or
+drops the stream fails as `unreachable`, and one that goes quiet as `stalled`;
+both may pass, so a caller can ask again or ask another provider. A quiet model
+request sends a comment every `BEAT` milliseconds, so the forwarding host's
+stall timeout measures the connection between the hosts while the serving host's
+own measures its provider. A model request for image or audio output is refused
+(`modalities`) before it is sent, since generated media would stay in the
+serving host's store.
 
 ## Hosted inference
 

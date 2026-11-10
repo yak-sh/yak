@@ -39,8 +39,16 @@
           "type": "string",
           "enum": [
             "process",
-            "http"
-          ]
+            "http",
+            "machine"
+          ],
+          "description": "how its models are reached: `process` is a command line this host runs, `http` an API it calls, `machine` another machine's own providers, asked one step at a time"
+        },
+        "machine": {
+          "type": "string",
+          "ref": "machine",
+          "death": "keep",
+          "description": "the machine whose providers answer, where `transport` is `machine`; a row naming none is served by nobody"
         },
         "credential": {
           "type": "string"
@@ -398,7 +406,8 @@
     "transports": {
       "enum": [
         "process",
-        "http"
+        "http",
+        "machine"
       ]
     },
     "inference": {

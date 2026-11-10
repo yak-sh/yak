@@ -3,7 +3,6 @@ import type { Handlers } from '@yaks/effects'
 import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
 import {
-  offers,
   providerResolver,
   running,
   type Tool,
@@ -21,6 +20,7 @@ import {
   type Model,
   ModelError,
   modelResults,
+  offers,
   type Price,
 } from '@yaks/model'
 import { records } from '@yaks/secrets'

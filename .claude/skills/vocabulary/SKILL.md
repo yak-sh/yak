@@ -260,11 +260,11 @@ can be spot-checked.
 ## Configuration that varies is rows
 
 What differs by deployment or changes without a release is data, not code: a
-provider is `provider{name, transport, credential, base, api, fallback,
-context, offered, cache_retention}`, a model `model{name, vendor, grade, label,
-modalities, efforts, effort, context, offered, enforced}`, joined by
-`serves{name}` edges (M-36709). Adding a model, moving one to another
-server or switching the embedder is then a write.
+provider is `provider{name, transport, machine, credential, base, api,
+fallback, context, offered, cache_retention, stall_timeout}`, a model
+`model{name, vendor, grade, label, modalities, efforts, effort, context,
+offered, enforced}`, joined by `serves{name}` edges (M-36709). Adding a model,
+moving one to another server or switching the embedder is then a write.
 
 ## One home per word, and per description
 

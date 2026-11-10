@@ -7,10 +7,11 @@
     "./vocab": "./vocab.ts",
     "./graph": "./graph.ts",
     "./sse": "./sse.ts",
-    "./stall": "./stall.ts"
+    "./stall": "./stall.ts",
+    "./step": "./step.ts"
   },
   "license": "Apache-2.0",
-  "description": "Defines provider-neutral model request and reply types, vocabulary for providers and models, and helpers for billing and recovering generated media. Implements no transport, but decodes the server-sent events providers stream.",
+  "description": "Defines provider-neutral model request and reply types, vocabulary for providers and models, and helpers for billing and recovering generated media. Implements no provider's transport, but decodes the server-sent events providers stream and carries one model step from one host to another's providers.",
   "dependencies": {
     "@yaks/blob": "0.2.30",
     "@yaks/edge": "0.2.24",
