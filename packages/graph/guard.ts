@@ -49,14 +49,17 @@ export let guard = (
       let stored = at.get(b.entity.eid)
       let buried = !!stored && dead(stored)
       for (let [comp, props] of Object.entries(b.$was!)) {
-        if (!vocab.comp(comp)) {
+        if (comp != 'entity' && !vocab.comp(comp)) {
           throw new Refused(`unknown component in $was: ${comp}`)
         }
         for (let [prop, want] of Object.entries(props)) {
-          if (!vocab.prop(comp, prop)) {
+          let identity = comp == 'entity' && prop == 'eid'
+          if (!identity && !vocab.prop(comp, prop)) {
             throw new Refused(`unknown property in $was: ${comp}.${prop}`)
           }
-          if (buried) continue
+          // First creation requires an unused identity, including no grave.
+          // Other guards keep the existing delete-race semantics below.
+          if (buried && !(identity && want === null)) continue
           let cur = (stored?.[comp] as Comp | undefined)?.[prop] ?? null
           if (token(cur) == want) continue
           // A value read from an id that names nothing was never read: the

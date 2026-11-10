@@ -379,6 +379,13 @@ equal((await g.get(['b1']))[0].book, { title: 'Returned' })
 `token(value)` produces the hash for `$was`, with `null` for an absent value. A
 failed precondition throws `Stale`, whose `current` is the committed value.
 
+`$was: { entity: { eid: null } }` creates a client-generated id only when that
+identity does not exist. A live row, a bare identity and a tombstone all count
+as present. This protects first creation from overwriting an unrelated row, even
+when it has none of the new row's components. A retry after successful creation
+throws `Stale`; read the retained id under the caller's authority to recover the
+saved row. Ordinary edits continue using their property tokens.
+
 ```ts
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'

@@ -51,6 +51,8 @@ export type Comp = Record<string, unknown>
  * `apply()` refuses the whole transaction if any named property has changed
  * since. It is carried on a bundle as `$was`, and works like git's
  * `--ff-only`: the write applies only onto the state it was based on.
+ * `$was: {entity: {eid: null}}` requires that the identity is absent; a live
+ * row, bare identity or tombstone counts as present.
  */
 export type Was = Record<string, Record<string, string | null>>
 
