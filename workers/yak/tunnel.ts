@@ -31,6 +31,12 @@
 // machine's server answers a marked request only at the paths its owner
 // opened to the tunnel (@yaks/tunnel filter.ts).
 //
+// The space's owner reaches the same gateway with no app between (`machine`
+// below): the MCP servers they keep on the machine are asked through it
+// (mcp-remote.ts), each request naming the Operator conversation it was made
+// in (`x-via`), which no app's request may say for itself. Both go through
+// the one call (`through`).
+//
 // A tunnel's token is answered to the caller once and never kept or logged:
 // the machine's `yak` puts it straight into its own vault. A website session
 // or an OAuth token opens this door, never a pasted grant. Under `/api/`, the same-origin
@@ -38,7 +44,14 @@
 // of the fee.
 import { type Api, connect, disconnect, gateways, tunnels } from '@yaks/tunnel'
 import * as dirPart from './directory.ts'
-import { directory, type Space, stamp, type Tunnel } from './directory.ts'
+import {
+  type App,
+  directory,
+  type Space,
+  stamp,
+  type Tunnel,
+} from './directory.ts'
+import type { Who } from './session.ts'
 import { itsApp, namespace, nowhere, script } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { resent } from '@yaks/cloudflare/api'
@@ -82,7 +95,7 @@ let NO_GATEWAY =
 /** The script a space's gateway is, in the apps' namespace: an app's script
  * name always holds an underscore (dispatch.ts `scriptName`), and this never
  * does. */
-export let gatewayOf = (space: Space) => `tunnel-${space.eid}`
+export let gatewayOf = (space: Pick<Space, 'eid'>) => `tunnel-${space.eid}`
 
 // Written through the kernel's door: every property of `tunnel` is stamped.
 let wrote = (env: Env, space: Space, row: Tunnel | null) =>
@@ -201,8 +214,60 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
 }
 
 // The platform's own words about a request (the grants, who is looking), none
-// of which is the machine's business.
-let OURS = /^x-yak-/
+// of which is the machine's business, and the one word it says to the machine
+// itself: no caller's request names the conversation it was made in.
+let OURS = /^(cookie|x-via)$|^x-yak-/
+
+/** The header that names the conversation a request to a machine was made in:
+ * an Operator's conversation with the tunnel's owner, by the id of its session
+ * in the Operator's store. A request made in none carries no such header. */
+export let VIA = 'x-via'
+
+// A request as it goes on to a machine: `req`'s method, body and headers at
+// `path` there, with the platform's own words taken off.
+let onward = (path: string, req: Request, via?: string) => {
+  let headers = new Headers()
+  for (let [k, v] of req.headers) if (!OURS.test(k)) headers.set(k, v)
+  if (via) headers.set(VIA, via)
+  return new Request(`http://machine${path}`, {
+    method: req.method,
+    headers,
+    body: req.body,
+    redirect: 'manual',
+    signal: req.signal,
+  })
+}
+
+/** The one call through a space's tunnel: `out` handed to the space's gateway,
+ * which marks it as the tunnel's and passes it to the machine. The namespace
+ * runs every script for an app and its visitor (dispatch.ts `script`), so the
+ * call names who asks. Null for a tunnel with no gateway; a throw is the
+ * tunnel or the machine not answering. */
+export let through = async (
+  env: Pick<Env, 'DISPATCH'>,
+  space: Pick<Space, 'eid'>,
+  app: Pick<App, 'eid'>,
+  who: Pick<Who, 'person' | 'role'>,
+  out: Request,
+): Promise<Response | null> => {
+  if (!env.DISPATCH) return null
+  try {
+    return await script(env.DISPATCH, gatewayOf(space), app, who).fetch(out)
+  } catch (e) {
+    if (nowhere(e)) return null
+    throw e
+  }
+}
+
+// How a call that reached no machine ends, said the same to an app's worker
+// and to the tunnel's owner.
+let ENDS = {
+  no_tunnel: (space: Space) => `${space.slug} has no tunnel`,
+  no_gateway: (space: Space) =>
+    `${space.slug}'s tunnel has no gateway; its owner rotates the tunnel to make one`,
+  unreached: (space: Space) =>
+    `the machine ${space.slug}'s tunnel goes to did not answer`,
+}
 
 /** An app's own worker reaching the machine its space's tunnel goes to, as
  * the app itself: nothing a visitor holds opens it, and an installed copy's
@@ -227,34 +292,52 @@ export let reach: Answer = async (
       `${app.slug} is an installed copy, and only an app built in ${space.slug} reaches the machine its tunnel goes to`,
     )
   }
-  if (!space.tunnel) {
-    return json(404, 'no_tunnel', `${space.slug} has no tunnel`)
-  }
-  let headers = new Headers()
-  for (let [k, v] of req.headers) if (!OURS.test(k)) headers.set(k, v)
-  headers.delete('cookie')
-  let out = new Request(
-    `http://machine${path.slice(TUNNELED.length - 1)}${
-      new URL(req.url).search
-    }`,
-    { method: req.method, headers, body: req.body, redirect: 'manual' },
+  if (!space.tunnel) return json(404, 'no_tunnel', ENDS.no_tunnel(space))
+  let out = onward(
+    path.slice(TUNNELED.length - 1) + new URL(req.url).search,
+    req,
   )
-  let none = () =>
-    json(
-      503,
-      'no_gateway',
-      `${space.slug}'s tunnel has no gateway; its owner rotates the tunnel to make one`,
-    )
-  if (!env.DISPATCH) return none()
   try {
-    return await script(env.DISPATCH, gatewayOf(space), app, who).fetch(out)
+    return await through(env, space, app, who, out) ??
+      json(503, 'no_gateway', ENDS.no_gateway(space))
   } catch (e) {
-    if (nowhere(e)) return none()
     caught(e, { request: 'tunnel', space: space.slug, app: app.slug })
-    return json(
-      502,
-      'unreached',
-      `the machine ${space.slug}'s tunnel goes to did not answer`,
-    )
+    return json(502, 'unreached', ENDS.unreached(space))
+  }
+}
+
+/** The machine a space's tunnel goes to, as a `fetch` for the space's owner
+ * and nobody else: null to a member, to a stranger, and for a space that is
+ * gone. Who owns the space is read from the whole directory as this call
+ * finds it, never from a narrowed view of it or from a row written earlier.
+ * Only the path of what it is asked for is meant, and each request goes on
+ * with the conversation it is made in (`via`), where there is one. Every
+ * ending is an answer, as `reach` gives it: a space with no tunnel, a tunnel
+ * with no gateway and a machine that is off are the machine being unavailable
+ * to its owner, and no fault of the platform's to report. */
+export let machine = async (
+  env: Env,
+  at: string,
+  person: string,
+  via?: () => Promise<string | undefined> | string | undefined,
+): Promise<typeof globalThis.fetch | null> => {
+  if (!person || !at) return null
+  let dir = dirOf(env)
+  let [space, seats] = await Promise.all([dir.at(at), dir.sitting(person)])
+  let role = seats.get(at)
+  if (!space || space.trashed || role != 'owner') return null
+  return async (input, init) => {
+    if (!space.tunnel) return json(404, 'no_tunnel', ENDS.no_tunnel(space))
+    let req = new Request(input, init)
+    let { pathname, search } = new URL(req.url)
+    let out = onward(pathname + search, req, await via?.())
+    // Asked for the space itself, which is no app: a gateway calls nothing
+    // out, so no connection is lent on this call.
+    try {
+      return await through(env, space, space, { person, role }, out) ??
+        json(503, 'no_gateway', ENDS.no_gateway(space))
+    } catch {
+      return json(502, 'unreached', ENDS.unreached(space))
+    }
   }
 }

@@ -870,15 +870,26 @@ supplied by its host, and connections validate the selected owner and app. The
 Worker's own store facets live under `facets/`.
 
 `mcp_connect` configures a person's remote MCP server in the directory as
-`mcp_server{owner,name,url,enabled,allow,client_id}`. `mcp-remote.ts` uses
-`@yaks/mcp-client` for discovery and calls, and `@yaks/connections` for that
-person's sign-in and vaulted credential. Operators receive namespaced tools; the
-connector discovers the same commands at `mcp:<server eid>` through `commands`
-and invokes them through `command`. Code mode lists them under its `mcp` object
-while the connector's published tool roster stays fixed. Discovery failures
-report to the tracker and leave a retryable connection status command. Calls
-recheck ownership and the current configuration, and never retry a remote
+`mcp_server{owner,name,url,machine,enabled,allow,client_id}`. `mcp-remote.ts`
+uses `@yaks/mcp-client` for discovery and calls, and `@yaks/connections` for
+that person's sign-in and vaulted credential. Operators receive namespaced
+tools; the connector discovers the same commands at `mcp:<server eid>` through
+`commands` and invokes them through `command`. Code mode lists them under its
+`mcp` object while the connector's published tool roster stays fixed. Discovery
+failures report to the tracker and leave a retryable connection status command.
+Calls recheck ownership and the current configuration, and never retry a remote
 mutation after a missing response or a sign-in challenge.
+
+A server with `machine` runs on the machine a space's tunnel goes to: `machine`
+is that space, `url` the server's path on the machine, and `mcp_connect` takes
+the space's slug. It is asked through the tunnel's gateway (`tunnel.ts`
+`machine`) with no discovery, sign-in, integration or connection. Each list and
+each call reads anew that the row's owner owns that space, from the whole
+directory; to anyone else the server is not connected. A request made in an
+Operator conversation carries that conversation's session id as `x-via`, a
+fork's or a helper's included, and a call from `command` carries none. A machine
+that is off, a tunnel with no gateway and a path the machine has not opened
+leave the connection status command and report nothing to the tracker.
 
 A Store imports its graph and effects facets before opening its boot
 transaction, then binds them with `@yaks/host` over its storage, vault, blobs

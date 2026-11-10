@@ -154,6 +154,12 @@ the graph to generate a UUID. `enabled: false` disables the definition. `allow`
 contains JSON text for an array of exact remote names. OAuth fields are
 `redirect_url`, `client_id`, `client_metadata_url`, and `scope`.
 
+A definition with `machine` is a server on a machine behind a tunnel: `machine`
+is the entity whose tunnel reaches it, and `url` is the server's path there
+(`/mcp`). Its `Server` stands at `MACHINE` with that path. Only a host holding
+the tunnel can ask it, so `connect` refuses such a server without the host's
+`fetch`, and a 401 from it asks for no sign-in.
+
 `graphToolName` creates the displayed tool name, which is also the tool's
 identity in a graph: a `tool` entity's id is derived from its name. Renaming the
 label changes future exposed tool names.

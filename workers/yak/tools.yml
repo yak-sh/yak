@@ -25,7 +25,10 @@ mcp_connect:
     Connect or update your own MCP server. Its commands become available to
     your Operator and through commands/command. Sign in at the returned
     connection page when asked; credentials never pass through this tool.
-    Name servers distinctly.
+    Name servers distinctly. For a server on your own machine, pass machine
+    (a space you own whose tunnel goes to it) and the server's path there as
+    url, such as /mcp: it is reached through the tunnel with no sign-in, and
+    only for you.
 space_new:
   title: Create a space
   description: >-

@@ -1,5 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
+import { mint } from '@yaks/graph'
 import { HEADER } from '@yaks/tunnel'
 import type { App, Space } from './directory.ts'
 import { directory, stamp } from './directory.ts'
@@ -220,14 +221,11 @@ let mail: App = {
 }
 let itself: Who = { person: mail.eid, role: 'editor' }
 
-// The request an app's worker sends back through its binding, and what the
-// gateway it lands at was handed; `gone` is a tunnel with no gateway yet. The
-// namespace refuses a `get` without the caller its outbound Worker declares,
-// the way Cloudflare's does.
-let reach = async (
-  over: { space?: Space; app?: App; who?: Who } = {},
-  gone = false,
-) => {
+// The apps' namespace with a gateway in it, and what that gateway was handed;
+// `gone` is a tunnel with no gateway yet, and `off` a machine that does not
+// answer. The namespace refuses a `get` without the caller its outbound Worker
+// declares, the way Cloudflare's does.
+let gateway = (state: 'up' | 'gone' | 'off' = 'up') => {
   let handed: Request[] = []
   let named: string[] = []
   let get = (
@@ -239,29 +237,44 @@ let reach = async (
     if (!options?.outbound?.CALLER) {
       throw new TypeError('Missing one or more required arguments to worker.')
     }
-    if (gone) throw new Error(`Worker not found: ${n}`)
+    if (door.state == 'gone') throw new Error(`Worker not found: ${n}`)
     return {
       fetch: (r: Request) => {
         handed.push(r)
-        return Promise.resolve(new Response('from the machine'))
+        return door.state == 'off'
+          ? Promise.reject(new Error('the tunnel is down'))
+          : Promise.resolve(new Response('from the machine'))
       },
     }
   }
+  let DISPATCH = { get } as unknown as Env['DISPATCH']
+  let door = { DISPATCH, handed, named, state }
+  return door
+}
+
+// What a caller's request says that is not the machine's business, and what
+// it may not say for itself.
+let WORDS = {
+  'x-yak-grant': 'the-app-grant',
+  'x-yak-person': 'a-liar',
+  [HEADER]: 'forged',
+  'x-via': 'a-forged-conversation',
+  cookie: 'theme=dark',
+}
+
+// The request an app's worker sends back through its binding.
+let reach = async (
+  over: { space?: Space; app?: App; who?: Who } = {},
+  gone = false,
+) => {
+  let { DISPATCH, handed, named } = gateway(gone ? 'gone' : 'up')
   let res = await tunnel.reach({
-    env: {
-      DISPATCH: { get },
-    } as unknown as Env,
+    env: { DISPATCH } as unknown as Env,
     req: new Request(
       'https://jeff.yaks.app/mail/api/tunneled/mail/inbound?to=a',
       {
         method: 'POST',
-        headers: {
-          'x-yak-grant': 'the-app-grant',
-          'x-yak-person': 'a-liar',
-          [HEADER]: 'forged',
-          cookie: 'theme=dark',
-          'content-type': 'text/plain',
-        },
+        headers: { ...WORDS, 'content-type': 'text/plain' },
         body: 'a letter',
       },
     ),
@@ -295,13 +308,72 @@ test('the app’s request goes to its space’s gateway with the platform’s wo
   assertEquals(r.method, 'POST')
   assertEquals(await r.text(), 'a letter')
   assertEquals(r.headers.get('content-type'), 'text/plain')
-  for (let h of ['x-yak-grant', 'x-yak-person', HEADER, 'cookie']) {
-    assertEquals(r.headers.has(h), false, h)
-  }
+  for (let h in WORDS) assertEquals(r.headers.has(h), false, h)
 })
 
 test('a tunnel with no gateway yet says so', async () => {
   let { res } = await reach({}, true)
   assertEquals(res.status, 503)
   assertEquals(await code(res), 'no_gateway')
+})
+
+// ── The machine as its space's owner reaches it ─────────────────────────────
+
+let BOB = 'a0000000-0000-4000-8000-0000000000b0'
+
+// Ada's space with a tunnel and Bob writing in it, behind a gateway.
+let door = gateway()
+let home = await spaces({ DISPATCH: door.DISPATCH })
+let { env } = home.scenario
+let ada = (await directory({
+  fetch: (r: Request) => dirPart.fetch(r, env),
+}).space('ada'))!
+let wears = (tunnel: object | null) =>
+  stamp(env, { entities: [{ entity: { eid: ada.eid }, tunnel }] })
+await wears({ id: T, service: S, adopted: true })
+await stamp(env, {
+  entities: [{
+    entity: { eid: '$seat' },
+    member: { space: ada.eid, person: BOB, role: 'editor' },
+  }],
+})
+
+test('the owner’s request goes to the gateway naming its conversation and nothing of the platform’s', async () => {
+  let said = { method: 'POST', headers: WORDS, body: 'a call' }
+  let talking = await tunnel.machine(env, ada.eid, ADA, () => 'a-talk')
+  let res = await talking!('http://anywhere/mcp?x=1', said)
+  assertEquals(await res.text(), 'from the machine')
+  let alone = await tunnel.machine(env, ada.eid, ADA)
+  await alone!('http://anywhere/mcp', said)
+  assertEquals(door.named, [`tunnel-${ada.eid}`, `tunnel-${ada.eid}`])
+  assertEquals(door.handed.map((r) => [r.url, r.headers.get('x-via')]), [
+    ['http://machine/mcp?x=1', 'a-talk'],
+    ['http://machine/mcp', null],
+  ])
+  assertEquals(await door.handed[0].text(), 'a call')
+  for (let h in WORDS) {
+    if (h != 'x-via') assertEquals(door.handed[0].headers.has(h), false, h)
+  }
+})
+
+test('nobody but the owner is answered a space’s machine', async () => {
+  let asked = door.named.length
+  for (let person of [BOB, JEFF, mint(), '']) {
+    assertEquals(await tunnel.machine(env, ada.eid, person), null, person)
+  }
+  assertEquals(await tunnel.machine(env, mint(), ADA), null)
+  assertEquals(door.named.length, asked)
+})
+
+test('a machine its owner cannot reach is an answer, never a throw', async () => {
+  let ending = async () => {
+    let res = await (await tunnel.machine(env, ada.eid, ADA))!('http://m/mcp')
+    return [res.status, await code(res)]
+  }
+  door.state = 'gone'
+  assertEquals(await ending(), [503, 'no_gateway'])
+  door.state = 'off'
+  assertEquals(await ending(), [502, 'unreached'])
+  await wears(null)
+  assertEquals(await ending(), [404, 'no_tunnel'])
 })

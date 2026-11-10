@@ -93,6 +93,11 @@ export type Server = {
   /** Local namespace for public tool names; defaults to name. */
   namespace?: string
   url: string
+  /** The entity whose tunnel reaches the machine this server runs on. Its
+   * `url` then stands at {@link MACHINE} and only its path is meant, and only
+   * a host holding that tunnel can ask it, through the `fetch` it gives
+   * `connect`. */
+  machine?: string
   /** Exact remote names; omission exposes all discovered tools. */
   allow?: string[]
   /** Explicit OAuth settings; tokens stay in the application's own storage. */
@@ -124,6 +129,10 @@ export class MCPAuthorizationRequired extends MCPError {
     super('MCP sign-in required; open authorization in the host', server)
   }
 }
+/** Where a server on a machine stands: a tunnel reaches one machine whatever
+ * host a request names, so its address is this origin and the server's path. */
+export const MACHINE = 'http://machine'
+
 /** Normalize only the local namespace, never the server's opaque tool name. */
 export const namespaceOf = (name: string): string => {
   const namespace = name.trim().replace(/[^a-zA-Z0-9_-]+/g, '_')
@@ -196,6 +205,12 @@ export const connect = (server: Server, options: Options = {}): Connection => {
   if (
     !['http:', 'https:'].includes(url.protocol) || url.username || url.password
   ) throw new Error('MCP requires an HTTP(S) URL without embedded credentials')
+  if (server.machine && !options.fetch) {
+    throw new MCPError(
+      'An MCP server on a machine is asked through its tunnel',
+      server.name,
+    )
+  }
   let ready: Promise<void> | undefined, closed = false, generation = 0
   let closePromise: Promise<void> | undefined
   let listing: Promise<RemoteTool[]> | undefined
@@ -231,7 +246,8 @@ export const connect = (server: Server, options: Options = {}): Connection => {
         ])
         : AbortSignal.timeout(options.timeout ?? 60000),
     })
-    if (response.status === 401) {
+    // A machine's tunnel is its host's already: a 401 there asks for no sign-in.
+    if (response.status === 401 && !server.machine) {
       unauthorized = true
       const found = (await loaded()).challenge(response)
       challenge = {
@@ -264,7 +280,9 @@ export const connect = (server: Server, options: Options = {}): Connection => {
         throw new MCPAuthorizationRequired(server.name, challenge)
       }
       throw new MCPError(
-        'MCP connection failed; check server URL and sign-in',
+        server.machine
+          ? 'MCP connection failed; the machine may be off, or not open this path to its tunnel'
+          : 'MCP connection failed; check server URL and sign-in',
         server.name,
       )
     }))

@@ -535,8 +535,8 @@ let hostOnly = (res: Response): Response => {
 export let script = (
   dispatch: Dispatch,
   name: string,
-  app: App,
-  who: Who,
+  app: Pick<App, 'eid'>,
+  who: Pick<Who, 'person' | 'role'>,
   cpuMs?: number,
 ) =>
   dispatch.get(name, {}, {

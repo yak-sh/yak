@@ -178,6 +178,65 @@ test('an unavailable MCP server is reported without blocking another server and 
   )
 })
 
+test('a server on a machine is asked through the tunnel its host answers, with no sign-in', async () => {
+  let { host, person, failures } = await setup()
+  let f = fixture(), space = mint(), mine = true, up = true
+  // A machine that is off is asked for a sign-in by nobody, whatever answers.
+  let off = () =>
+    Promise.resolve(
+      new Response(null, {
+        status: 401,
+        headers: { 'www-authenticate': 'Bearer resource_metadata="/x"' },
+      }),
+    )
+  let machine = (at: string) =>
+    Promise.resolve(mine && at == space ? up ? f.fetcher : off : null)
+  let elsewhere: string[] = []
+  let remote = remoteCommands(person, { ...host, machine }, {
+    fetch: (input) => {
+      elsewhere.push(String(input))
+      return Promise.resolve(new Response(null, { status: 404 }))
+    },
+  })
+  let tasks = { name: 'tasks', url: '/mcp', machine: space }
+  await assertRejects(
+    () => remote.configure({ ...tasks, url: 'https://box.test/mcp' }),
+    Error,
+    'its path there',
+  )
+  let made = await remote.configure({ ...tasks, allow: ['publish_mockup'] })
+  assertEquals((await remote.configure(tasks)).server, made.server)
+  assertEquals(made.commands.map((c) => c.name), ['publish_mockup'])
+  let at = `mcp:${made.server}`
+  let out = await remote.call(at, 'publish_mockup', { html: 'x' })
+  assertEquals(out.value?.structuredContent, { saved: 'x' })
+  assertEquals([...new Set(f.requests.map((r) => r.url))], [
+    'http://machine/mcp',
+  ])
+  assertEquals(f.requests.some((r) => r.headers.has('authorization')), false)
+  up = false
+  assertEquals((await remote.list()).map((c) => c.name), ['connection_status'])
+  assertEquals((await remote.call(at, 'connection_status', {})).value, {
+    unavailable: true,
+  })
+  await assertRejects(
+    () => remote.call(at, 'publish_mockup', {}),
+    Error,
+    'the machine may be off',
+  )
+  assertEquals(elsewhere, [])
+  assertEquals(await host.graph.read('.integration|.connection'), [])
+  assertEquals(failures, [])
+  mine = false
+  assertEquals(await remote.list(), [])
+  await assertRejects(
+    () => remote.call(at, 'publish_mockup', {}),
+    Error,
+    'not connected for you',
+  )
+  await assertRejects(() => remote.configure(tasks), Error, 'Only the owner')
+})
+
 test('ambiguous exposed MCP names leave both connections visible without choosing one', async () => {
   let { host, person, failures } = await setup()
   let f = fixture()

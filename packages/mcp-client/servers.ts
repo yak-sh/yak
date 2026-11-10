@@ -1,6 +1,6 @@
 /** Persisted MCP server definitions. Connections and credentials are not graph data. */
 import type { Bundle, Comp } from '@yaks/graph'
-import { nameOf, namespaceOf, type Server } from './mod.ts'
+import { MACHINE, nameOf, namespaceOf, type Server } from './mod.ts'
 
 export type GraphServer = { id: string; label: string; server: Server }
 
@@ -13,11 +13,17 @@ export const serverOf = (row: Bundle): GraphServer | undefined => {
   ) {
     throw new Error('MCP server requires a name and URL')
   }
+  const machine = c.machine == null ? undefined : String(c.machine)
   let url: URL
   try {
-    url = new URL(c.url)
+    url = machine ? new URL(c.url, MACHINE) : new URL(c.url)
   } catch {
     throw new Error('Invalid MCP URL')
+  }
+  if (machine && (!c.url.startsWith('/') || url.origin !== MACHINE)) {
+    throw new Error(
+      'An MCP server on a machine needs its path there, such as /mcp',
+    )
   }
   if (
     !['http:', 'https:'].includes(url.protocol) || url.username || url.password
@@ -46,6 +52,7 @@ export const serverOf = (row: Bundle): GraphServer | undefined => {
       label: c.name,
       namespace: namespaceOf(c.name),
       url: url.href,
+      ...machine ? { machine } : {},
       ...allow ? { allow } : {},
       ...Object.keys(oauth!).length ? { oauth } : {},
     },

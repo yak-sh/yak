@@ -18,7 +18,13 @@
         },
         "url": {
           "type": "string",
-          "description": "Streamable HTTP endpoint without embedded credentials."
+          "description": "Streamable HTTP endpoint without embedded credentials; with `machine`, its path on that machine's own server."
+        },
+        "machine": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "description": "The entity whose tunnel (`tunnel{id, service, adopted}`) reaches the machine this server runs on, a space on a hosting platform. The server is then asked through that tunnel with no sign-in, and only for the tunnel's owner; absent for a server on the public internet."
         },
         "enabled": {
           "type": "boolean",

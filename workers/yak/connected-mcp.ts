@@ -2,30 +2,45 @@ import { ctxOf } from './connections.ts'
 import { caught } from './defects.ts'
 import { url } from './host.ts'
 import { remoteCommands } from './mcp-remote.ts'
-import { asCaller, type Ctx, str } from './tool.ts'
+import { asCaller, type Ctx, refuse, str } from './tool.ts'
 import type { Row } from './tool-words.ts'
+import type { machine } from './tunnel.ts'
 import { argsOf, type Tool as GraphTool } from '@yaks/graph'
 import { nameOf } from '@yaks/mcp-client'
 
-let commands = (ctx: Ctx) =>
+/** The conversation commands are asked in, read when a call to a machine
+ * needs it: an Operator's conversation, by its session's id. */
+export type Via = Parameters<typeof machine>[3]
+
+// The tunnel's code is loaded by the first server on a machine, which almost
+// nobody has.
+let commands = (ctx: Ctx, via?: Via) =>
   remoteCommands(ctx.person, {
     ...ctxOf(ctx.env, asCaller(ctx, null)),
     report: (e) => caught(e, { request: 'connected MCP' }),
     signIn: url(ctx.env, '/manage/connections'),
+    machine: async (space) =>
+      (await import('./tunnel.ts')).machine(ctx.env, space, ctx.person, via),
   })
 
-export let listConnectedCommands = (ctx: Ctx, said = '') =>
-  commands(ctx).list(said)
+export let listConnectedCommands = (ctx: Ctx, said = '', via?: Via) =>
+  commands(ctx, via).list(said)
 export let runConnectedCommand = (
   ctx: Ctx,
   said: string,
   name: string,
   args: Record<string, unknown>,
-) => commands(ctx).call(said, name, args)
+  via?: Via,
+) => commands(ctx, via).call(said, name, args)
 
-/** The same commands as named tools inside an Operator or code execution. */
-export let connectedTools = async (ctx: Ctx): Promise<GraphTool[]> =>
-  (await listConnectedCommands(ctx)).map((command) => ({
+/** The same commands as named tools inside an Operator or code execution.
+ * `via` is the conversation they are offered in, which a machine is told with
+ * each request made there. */
+export let connectedTools = async (
+  ctx: Ctx,
+  via?: Via,
+): Promise<GraphTool[]> =>
+  (await listConnectedCommands(ctx, '', via)).map((command) => ({
     name: nameOf(command.namespace, command.name),
     title: command.title,
     description: command.description,
@@ -39,6 +54,7 @@ export let connectedTools = async (ctx: Ctx): Promise<GraphTool[]> =>
         command.at,
         command.name,
         argsOf(call),
+        via,
       )
       return [{
         entity: { eid: '$said' },
@@ -58,7 +74,12 @@ export let mcpConnect: Row = {
     type: 'object',
     properties: {
       name: str('A short, distinct name for this MCP server.'),
-      url: str('The HTTPS Streamable HTTP MCP endpoint.'),
+      url: str(
+        'The HTTPS Streamable HTTP MCP endpoint; with machine, its path on that machine, such as /mcp.',
+      ),
+      machine: str(
+        'A space you own whose tunnel goes to the machine this server runs on, by its slug. The server is then reached through the tunnel with no sign-in, and only for you.',
+      ),
       client_id: str(
         'An existing public OAuth client id, when the server does not support registration.',
       ),
@@ -73,9 +94,16 @@ export let mcpConnect: Row = {
     required: ['name', 'url'],
   },
   run: async (ctx, args) => {
+    let on = typeof args.machine == 'string'
+      ? await ctx.dir.space(args.machine)
+      : undefined
+    if (on === null) {
+      throw refuse('missing', `No space is called ${args.machine}.`)
+    }
     let value = await commands(ctx).configure({
       name: String(args.name),
       url: String(args.url),
+      ...on ? { machine: on.eid } : {},
       ...typeof args.client_id == 'string' ? { client_id: args.client_id } : {},
       ...typeof args.enabled == 'boolean' ? { enabled: args.enabled } : {},
       ...Array.isArray(args.allow) ? { allow: args.allow.map(String) } : {},

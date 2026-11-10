@@ -1,5 +1,12 @@
 // Person-owned remote commands. The host supplies graph, vault and transport;
 // OAuth and invocation remain in the existing connections and MCP packages.
+//
+// A server is reached one of two ways. One on the public internet is an HTTPS
+// address its person signs in to. One on a machine (`mcp_server.machine`, the
+// space whose tunnel goes there) is a path on that machine's own server, asked
+// through the tunnel with no sign-in: the host answers the tunnel as a `fetch`
+// to the space's owner alone, so such a server is its person's only while the
+// space is, and to anyone else it is not connected.
 import {
   credential,
   type Ctx,
@@ -14,6 +21,7 @@ import {
   checkToolNames,
   connect,
   MCPAuthorizationRequired,
+  MCPError,
   nameOf,
   type Options,
   unsaid,
@@ -23,16 +31,54 @@ import { type GraphServer, serverOf } from '@yaks/mcp-client/servers'
 import { type Out, refuse } from './tool.ts'
 import type { Command } from './declared.ts'
 
-type Host = Ctx & { report: (e: unknown) => void; signIn: string }
+type Host = Ctx & {
+  report: (e: unknown) => void
+  signIn: string
+  /** The machine a space's tunnel goes to, as a fetch for this person when
+   * the space is theirs, and null to anyone else. A host without one reaches
+   * no machine. */
+  machine?: (space: string) => Promise<typeof fetch | null>
+}
 type Settings = {
   name: string
   url: string
+  machine?: string
   enabled?: boolean
   allow?: string[]
   client_id?: string
 }
 type RemoteCommand = Command & { namespace: string }
 type Listed = Awaited<ReturnType<ReturnType<typeof connect>['list']>>
+// A server with the way to its machine, where it is on one.
+type Reached = GraphServer & { fetch?: typeof fetch }
+// A server on a machine that did not answer as one: the machine is off, its
+// tunnel has no gateway, or it opened no such path. Its owner sees that, and
+// it is no fault of the platform's to report.
+let away = (s: GraphServer, e: unknown): e is MCPError =>
+  !!s.server.machine && e instanceof MCPError
+// A challenge to sign in, which only a server on the public internet makes: a
+// machine's tunnel is its owner's already.
+let challenged = (
+  s: GraphServer,
+  e: unknown,
+): e is MCPAuthorizationRequired =>
+  !s.server.machine && e instanceof MCPAuthorizationRequired
+// The address of a server on the public internet, as it is kept.
+let https = (said: string) => {
+  let url: URL
+  try {
+    url = new URL(said)
+  } catch {
+    throw refuse('arguments', 'An MCP server needs an HTTPS URL.')
+  }
+  if (url.protocol != 'https:' || url.username || url.password) {
+    throw refuse(
+      'arguments',
+      'An MCP server needs an HTTPS URL without credentials.',
+    )
+  }
+  return url.href
+}
 let comp = (row: Bundle | undefined, name: string) =>
   (row?.[name] ?? {}) as Comp
 let integration = (id: string) => `mcp:${id}`
@@ -68,8 +114,15 @@ export let remoteCommands = (
 ) => {
   let rows = async () =>
     person ? await host.graph.read(`.mcp_server.owner=${person}&*`) : []
+  let reached = async (s: GraphServer): Promise<Reached | null> => {
+    if (!s.server.machine) return s
+    let fetch = await host.machine?.(s.server.machine)
+    return fetch ? { ...s, fetch } : null
+  }
   let servers = async () => {
-    let all = (await rows()).map(serverOf).filter((s) => s != null)
+    let all = (await Promise.all(
+      (await rows()).map(serverOf).filter((s) => s != null).map(reached),
+    )).filter((s) => s != null)
     checkNamespaces(all.map((s) => s.server))
     return all
   }
@@ -159,52 +212,57 @@ export let remoteCommands = (
     }
   }
   let using = async <T>(
-    s: GraphServer,
+    s: Reached,
     run: (c: ReturnType<typeof connect>) => Promise<T>,
   ) => {
-    let client = connect(s.server, {
-      ...options,
-      token: async () => {
-        let current = await owned(s.id)
-        if (JSON.stringify(current.server) != JSON.stringify(s.server)) {
-          throw refuse(
-            'access',
-            'The MCP connection changed; discover its tools again.',
-          )
-        }
-        let i = await known(host.graph.read, integration(s.id))
-        if (i && (i.owner != person || i.resource != s.server.url)) {
-          throw refuse(
-            'access',
-            'This MCP credential belongs to another connection.',
-          )
-        }
-        let held = await pick(host.graph.read, person, integration(s.id))
-        if (!held || comp(held, 'connection').status != 'connected') return null
-        return await credential(host, held.entity.eid) ?? null
+    let client = connect(
+      s.server,
+      s.fetch ? { ...options, fetch: s.fetch } : {
+        ...options,
+        token: async () => {
+          let current = await owned(s.id)
+          if (JSON.stringify(current.server) != JSON.stringify(s.server)) {
+            throw refuse(
+              'access',
+              'The MCP connection changed; discover its tools again.',
+            )
+          }
+          let i = await known(host.graph.read, integration(s.id))
+          if (i && (i.owner != person || i.resource != s.server.url)) {
+            throw refuse(
+              'access',
+              'This MCP credential belongs to another connection.',
+            )
+          }
+          let held = await pick(host.graph.read, person, integration(s.id))
+          if (!held || comp(held, 'connection').status != 'connected') {
+            return null
+          }
+          return await credential(host, held.entity.eid) ?? null
+        },
       },
-    })
+    )
     try {
       return await run(client)
     } finally {
       await client.close().catch(host.report)
     }
   }
-  let listing = async (s: GraphServer): Promise<RemoteCommand[]> => {
+  let listing = async (s: Reached): Promise<RemoteCommand[]> => {
     try {
       return await using(s, async (c) => described(s, await c.list()))
     } catch (e) {
-      let auth = e instanceof MCPAuthorizationRequired
+      let auth = challenged(s, e)
       let description =
         `${s.label} is unavailable. Check the connection to discover its tools again.`
-      if (e instanceof MCPAuthorizationRequired) {
+      if (challenged(s, e)) {
         try {
           description = (await authorization(s, e.challenge)).text
         } catch (failure) {
           host.report(failure)
           auth = false
         }
-      } else host.report(e)
+      } else if (!away(s, e)) host.report(e)
       return [{
         at: integration(s.id),
         name: auth ? 'sign_in' : 'connection_status',
@@ -264,11 +322,11 @@ export let remoteCommands = (
         return { text, value: reply }
       })
     } catch (e) {
-      if (e instanceof MCPAuthorizationRequired) {
-        return authorization(s, e.challenge)
+      if (challenged(s, e)) return authorization(s, e.challenge)
+      if (name != 'connection_status') {
+        throw away(s, e) ? refuse('unavailable', `${s.label}: ${e.message}`) : e
       }
-      if (name != 'connection_status') throw e
-      host.report(e)
+      if (!away(s, e)) host.report(e)
       return {
         text: `${s.label} is unavailable; try this command again later.`,
         value: { unavailable: true },
@@ -277,26 +335,26 @@ export let remoteCommands = (
   }
   let configure = async (settings: Settings) => {
     if (!person) throw refuse('access', 'Sign in to connect an MCP server.')
-    let url: URL
-    try {
-      url = new URL(settings.url)
-    } catch {
-      throw refuse('arguments', 'An MCP server needs an HTTPS URL.')
-    }
-    if (url.protocol != 'https:' || url.username || url.password) {
+    let { machine } = settings
+    if (machine && !await host.machine?.(machine)) {
       throw refuse(
-        'arguments',
-        'An MCP server needs an HTTPS URL without credentials.',
+        'access',
+        'Only the owner of a space connects an MCP server on its machine.',
       )
     }
+    let url = machine ? settings.url : https(settings.url)
     let all = await rows()
-    let same = all.find((r) => comp(r, 'mcp_server').url == url.href)
+    let same = all.find((r) => {
+      let c = comp(r, 'mcp_server')
+      return c.url == url && (c.machine ?? undefined) == machine
+    })
     let row = {
       entity: { eid: same?.entity.eid ?? mint() },
       mcp_server: {
         owner: person,
         name: settings.name,
-        url: url.href,
+        url,
+        ...machine ? { machine } : {},
         enabled: settings.enabled ?? true,
         ...settings.allow ? { allow: JSON.stringify(settings.allow) } : {},
         ...settings.client_id ? { client_id: settings.client_id } : {},

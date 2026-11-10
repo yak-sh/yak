@@ -382,8 +382,15 @@ export let operatorRoster = async (
   })
   // Every tool the connector lists for the person (agent.ts `connected`), to
   // the conversation and each of its forks alike: the list heads the request,
-  // so one list keeps the conversation's cached prefix for every fork.
-  let remote = await connectedTools(ctx)
+  // so one list keeps the conversation's cached prefix for every fork. A
+  // server on the person's own machine (tunnel.ts `machine`) is told which
+  // conversation asks: the one this session works for, so a fork's calls and
+  // a helper's are the conversation's there too.
+  let top: Promise<string> | undefined
+  let remote = await connectedTools(
+    ctx,
+    session ? () => top ??= topOf(work, session) : undefined,
+  )
   let apps = listing(coded(
     {
       ...connected(ctx, reach, g),
