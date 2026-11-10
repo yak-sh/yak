@@ -1,6 +1,6 @@
 // A Vale objective, from the person's command through the app Store's wake
 // and worker, while no page runs. Only Jev's outside answer is scripted.
-import { clock, test } from '@yaks/testing'
+import { clock, test, until } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { flat } from '../../apps/vale/terrain.ts'
 import { rows as themes } from '../../apps/vale/themes_fixture.ts'
@@ -161,8 +161,10 @@ test('a companion works off-page across pause, restart and retry', async () => {
       let ticked = await store.tick(time.now())
       let done = false
       let work = p.settled().then(() => done = true)
-      for (let i = 0; !done && i < 1000; i++) await time.advance(BEAT)
-      assert(done, 'the firing settles on the controlled clock')
+      await until(async () => {
+        await time.advance(BEAT)
+        return done
+      }, { poll: 0, label: 'the firing settles on the controlled clock' })
       await work
       return ticked
     }
@@ -264,8 +266,10 @@ test('a companion works off-page across pause, restart and retry', async () => {
       disposed = true
     })
     // A Store keeps a new query line a beat after its answer was read.
-    for (let n = 0; !disposed && n < 1000; n++) await time.advance(BEAT)
-    assert(disposed, 'Store disposal drains on the controlled clock')
+    await until(async () => {
+      await time.advance(BEAT)
+      return disposed
+    }, { poll: 0, label: 'Store disposal drains on the controlled clock' })
     await dispose
   }
 })

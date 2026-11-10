@@ -167,3 +167,31 @@ test('settling includes due alarm events rearmed by the preceding delivery', asy
   await p.settled()
   assertEquals(delivered, 3)
 })
+
+test('settling keeps a future alarm timer until its scheduled delivery', async () => {
+  let time = clock(), scheduled = 0
+  await using p = lasting('alarm-future-probe', {
+    CLOCK: {
+      ...time,
+      after: (ms, callback) => {
+        scheduled++
+        return time.after(ms, callback)
+      },
+    },
+  })
+  let object = p.object('alarm-future/later')
+  let { storage } = p.states.get('alarm-future/later')!
+  let delivered = 0
+  object.alarm = () => {
+    delivered++
+    return Promise.resolve()
+  }
+  await storage.setAlarm(1000)
+  await Promise.all([p.settled(), p.settled()])
+  assertEquals(delivered, 0)
+  assertEquals(scheduled, 1)
+  assertEquals(await storage.getAlarm(), 1000)
+  await time.advance(1000)
+  await p.settled()
+  assertEquals(delivered, 1)
+})

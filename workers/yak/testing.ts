@@ -382,9 +382,10 @@ export let lasting = (
     if (disposed) return
     if (failed.length) throw failed.shift()
     await Promise.all(
-      [...armed].filter((name) => !ringing.has(name)).map((name) =>
-        event(() => deliver(name))
-      ),
+      [...armed].filter((name) => !ringing.has(name)).map(async (name) => {
+        let at = await states.get(name)!.storage.getAlarm()
+        if (at != null && at <= time.now()) await event(() => deliver(name))
+      }),
     )
   }
   // Every store's waitUntil work, and the alarm deliveries under way: what a
