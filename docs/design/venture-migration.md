@@ -31,7 +31,7 @@ values were read or transferred.
 | canary_runs                                                                     |                  4,427 | Current D1 export; operational history                        |
 | signups                                                                         |                     38 | Read-only waitlist count; zero suppressed, zero unsent guides |
 | R2 objects                                                                      |                      0 | `wrangler r2 bucket info printbound-pdfs`; bucket size 0 B    |
-| Cloudflare queue messages                                                       |                unknown | One source producer and consumer; metadata gives no backlog   |
+| Cloudflare queue messages                                                       |                      0 | Queue and DLQ metrics, 2026-11-10T07:18:40Z                   |
 | CrayonBloom source backup                                                       | 3,417 rows; 15 objects | Verified existing Railway backup; rehearsal below             |
 
 The exported PrintBound schema lacks `drafts`, `stripe_delivery_verified`,
@@ -150,6 +150,41 @@ platform admin):
 
 The backup directory supplies `bucket-inventory.json` and `objects/`.
 
+## PrintBound production store
+
+The production app is `printbound/printbound` (private, the space's front page;
+space `printbound`, owner `printbound@bot.yak.sh`, Plus comped). Its
+`print_service` is `{preview: true, product: picture, margin: 0}`, so quotes and
+receipts come from the fixture printer, no Lulu order can start, and no merchant
+is connected. Bounded reads on 2026-11-10 found 0 orders, quotes, addresses,
+fulfilment jobs, legal holds and erasure requests, so no customer book or
+payment exists to move. `bin/printbound-load.ts` loads the 38 waitlist signups
+under installation `cloudflare/printbound-waitlist`, each with its consent
+evidence and its unsubscribe digest, staged under that installation's private
+instrument; the source rows hash to
+`8fdbf7f76766f200e85cd83e725cc5623a5a3df9d9668812aae7dd667e65d199`. The old
+`/unsubscribe?token=…` link suppresses on opening and on RFC 8058's one-click
+POST, as the source did. A delta replay is the same read and load:
+
+    wrangler d1 execute printbound-waitlist --remote --json \
+      --command "SELECT * FROM signups ORDER BY id" > signups.json
+    deno run -A bin/printbound-load.ts signups.json
+
+The 41 activations (MCP caller hashes), 11 undelivered alert rows and canary
+history are operational state of the old Worker; they stay in the source D1 and
+the private scratch export, and none is imported or delivered.
+
+printbound.net's apex was a Worker custom domain on `printbound-web`
+(`069d3df620baf0f8801ffd3b063e88155b5202fe`). It is now a DNS-only CNAME to
+`origin.saas.yaks.app`, with TXT `_cf-custom-hostname`; `www` still 301s to the
+apex, and `account.`, `h.`, `checkout.` and mail records are unchanged. The old
+payments Worker's path routes no longer see apex traffic. Rollback: delete the
+apex CNAME and re-attach the custom domain from
+`~/.yak/backups/printbound/workers-domains-20261110.json`
+(`wrangler deploy -c wrangler.web.toml` in bindery, or the Workers domains API
+with that service and hostname). Both old Workers, both D1s and the R2 bucket
+keep running only as that rollback, for T-152787.
+
 ## Import contracts
 
 `bin/venture-import.ts` assigns UUIDs through `derivedEid`, namespaced by the
@@ -248,8 +283,6 @@ signed download still works.
    through the import mapping before declaring rollback reconciled. Delete
    neither store nor its assets.
 
-Live Stripe/Lulu account connection, a capped paid proof, source-service changes
-and each domain cutover remain separate owner decisions. PrintBound queue and
-both provider ledgers, production principal binding, deployed customer-session
-continuity and fresh final-delta/rollback rehearsal remain unverified; the two
-migration tasks stay open.
+Both domains now serve their yaks.app apps. Live Stripe/Lulu account connection,
+prices and a capped paid proof remain the owner's to turn on. Production
+principal binding and old signed sessions did not carry over.
