@@ -242,6 +242,19 @@ for (
   })
 }
 
+test('a push the remote declines lands nothing and refuses the caller with its words', async () => {
+  let declined = 'remote: - Push cannot contain secrets\n' +
+    ' ! [remote rejected] work -> main (push declined due to repository rule violations)'
+  let f = refusal({
+    'push --quiet origin work:main': { code: 1, err: declined },
+  })
+  await assertRejects(f.invoke, LandError, 'Push cannot contain secrets')
+  assertEquals(pushes(f), 1)
+  assert(!f.calls.some((c) => c.args[0] == 'merge'))
+  assertEquals(f.commands().filter((c) => c == 'release').length, 1)
+  assertEquals(f.reports, [])
+})
+
 test('a push refused because the upstream moved brings the base up to it and rebases', async () => {
   let f = refusal({ 'merge-base --is-ancestor up work': { code: 1 } })
   assertEquals(await f.invoke(), { diverged: true, conflict: false })

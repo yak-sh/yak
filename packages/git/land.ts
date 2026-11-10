@@ -69,7 +69,8 @@ export type Run = (args: string[], cwd: string) => Promise<Ran>
 
 /** A landing refused for the caller's own state: not in a linked worktree on
  * a branch, a dirty worktree, local changes in the shared checkout that the
- * landing would overwrite, or a revert the guard caught. It is a `CallError`,
+ * landing would overwrite, a revert the guard caught, or commits the base's
+ * upstream declined. It is a `CallError`,
  * so whatever tool lands, a refusal reaches its caller as an answer and never
  * as a fault. An unexpected Git command failure is a plain `Error`, a fault
  * somebody has to hear about. */
@@ -675,8 +676,13 @@ let upstream = async (
 // the landing to rebase onto rather than merge. A push the remote answers with
 // a 5xx, or whose connection drops, is tried again after a backoff, up to
 // {@link tries} times: a retry of a push that did reach the remote finds it
-// up to date. Any other failure, an unreachable remote included, leaves the
-// work to land locally: the push only publishes bytes. It is still a failure,
+// up to date. A push the remote declined (`[remote rejected]` with no server
+// fault: a secret it found, a rule of the repository) refuses the landing, and
+// the base stays where it was: the remote read those commits and will decline
+// every later landing that carries them, so landing them here would stop
+// everyone's pushes, not just this one. Any other failure, an unreachable
+// remote included, leaves the work to land locally: the push only publishes
+// bytes. It is still a failure,
 // so it is reported with the remote's whole account, once. The push runs to
 // completion with no deadline: its exit code is the only report of whether the
 // remote has the commit, and a killed push may already have reached it.
@@ -718,6 +724,12 @@ let publish = async (
     if (behind.code == 1) return sha
   }
   let label = `land: publish to ${up.remote}/${up.branch}`
+  if (declined(sent)) {
+    throw new LandError(
+      `${label} was declined, so nothing landed. Rewrite the commits it ` +
+        `names, then land again:\n${(sent.err || sent.out).trim()}`,
+    )
+  }
   write(`${message(label, sent)} — landed locally, publish separately`, true)
   let said = (sent.err || sent.out).trim()
   await ops.report?.(
@@ -737,6 +749,11 @@ let tries = 4
 let transient = (r: Ran) =>
   /(error|HTTP)[: ]+5\d\d\b|internal server error|bad gateway|service unavailable|gateway time-?out|the remote end hung up|early eof|connection (reset|timed out|refused)|RPC failed/i
     .test(r.err + r.out)
+
+// The remote received the push and declined it, for a reason no retry
+// changes.
+let declined = (r: Ran) =>
+  !transient(r) && /\[remote rejected\]/.test(r.err + r.out)
 
 // Bring the base up to `to`, where its upstream moved. Only a fast-forward:
 // every commit the base holds came through a landing that pushed it, so a base
