@@ -149,6 +149,52 @@ let CONNECTIONS: Row[] = [
     },
   },
   {
+    name: 'service_connect',
+    destructive: false,
+    idempotent: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        service: str('the stable service app id from integration_list'),
+        operations: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'the selected service commands; an empty list revokes this connection',
+        },
+      },
+      required: ['app', 'service', 'operations'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, who } = await inApp(ctx, args)
+      if (!who.person) throw refuse('access', 'Sign in to connect a service')
+      let service = text(args.service, 'service')
+      if (!Array.isArray(args.operations)) {
+        throw refuse('arguments', 'Give selected operations as a list')
+      }
+      let { connectService } = await import('./service-call.ts')
+      let value = await connectService(
+        ctx.env,
+        ctx.dir,
+        { space, app },
+        who,
+        service,
+        args.operations as string[],
+      )
+      return {
+        space,
+        text: `${
+          args.operations.length ? 'Connected' : 'Revoked'
+        } service for this person in ${
+          app.title || app.slug
+        }. Purchases still require checkout or explicit purchase authority.`,
+        value,
+      }
+    },
+  },
+  {
     name: 'integration_publish',
     destructive: false,
     idempotent: true,

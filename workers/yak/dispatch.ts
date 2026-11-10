@@ -98,6 +98,7 @@ export let SELF = 'x-yak-app-grant'
 // either.
 let VOUCH = [
   'x-yak-app',
+  'x-yak-app-eid',
   'x-yak-person',
   'x-yak-role',
   'x-yak-via',
@@ -114,6 +115,7 @@ VOUCH.push(COMMAND_CALL, COMMAND_AT, COMMAND_SOURCE)
 let LIFE = 60
 
 type Grant = {
+  service?: Who['service']
   policy?: number
   store: string
   person: string | null
@@ -295,6 +297,7 @@ export let granting = (
     {
       store,
       ...(policy == null ? {} : { policy }),
+      ...(who.service ? { service: who.service } : {}),
       person: who.person,
       role: who.role,
       ...(who.via ? { via: who.via } : {}),
@@ -366,6 +369,7 @@ export let granted = async (
     role = await seat(g.person)
   }
   return {
+    ...(g.service ? { service: g.service } : {}),
     person: g.person ?? null,
     role,
     via: instrumentEid(
@@ -404,6 +408,7 @@ let handed = async (
   for (let h of [...VOUCH, GRANT, SELF]) headers.delete(h)
   uncookied(headers)
   headers.set('x-yak-app', app.slug)
+  headers.set('x-yak-app-eid', app.eid)
   if (app.mount) headers.set('x-yak-mount', app.mount)
   if (who.person) headers.set('x-yak-person', who.person)
   if (who.role) headers.set('x-yak-role', who.role)

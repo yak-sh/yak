@@ -1866,6 +1866,10 @@ export let api = async (
       throw e
     }
   }
+  if (path == '/service' || path.startsWith('/service/')) {
+    let { serviceRoute } = await import('./service-api.ts')
+    return serviceRoute(req, env, dir, { space, app }, who, path)
+  }
   if (path == '/commands') {
     if (req.method != 'GET') return json(405, 'method_not_allowed')
     if (!mayRead) return refused('not_a_reader')
@@ -2886,6 +2890,17 @@ let served = async (
       'not_a_reader',
       'This worker grant does not open this app',
     )
+  }
+  if (itself?.service) {
+    let { verifyService } = await import('./service-call.ts')
+    if (
+      itself.service.service != app.eid ||
+      itself.person != itself.service.person ||
+      !await verifyService(env, dir, itself.service)
+    ) {
+      return json(403, 'access', 'This service authority was revoked')
+    }
+    itself.role = null
   }
   // Machine clients use the same login bearer as the connector. Verify it
   // at the app door too, before the cookie/page-token path, and read the

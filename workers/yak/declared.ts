@@ -44,6 +44,7 @@ import type { Who } from './session.ts'
 import { r2Objects } from './lib/objects.ts'
 import { prefixOf } from './files.ts'
 import { told } from './stream.ts'
+import { listServiceCommands, runServiceCommand } from './service-call.ts'
 
 /** One app, as a command names it: `recipes`, or `yourname/recipes` where two
  * spaces spell one slug. */
@@ -127,6 +128,9 @@ export let runCommand = async (
   name: string,
   args: Record<string, unknown>,
 ): Promise<Out> => {
+  if (said.startsWith('service:')) {
+    return runServiceCommand(ctx, said, name, args)
+  }
   let all = await reachable(ctx)
   let mine = picked(all, said)
   if (said && !mine.length) {
@@ -213,7 +217,8 @@ export let listCommands = async (
   ctx: Ctx,
   said = '',
 ): Promise<Command[]> => {
-  let out: Command[] = []
+  if (said.startsWith('service:')) return listServiceCommands(ctx, said)
+  let out: Command[] = await listServiceCommands(ctx, said)
   // Every app's declaration at once: one round trip for the reach, not one
   // per app (T-34986).
   let apps = picked(await reachable(ctx), said)

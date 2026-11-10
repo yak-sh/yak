@@ -42,3 +42,66 @@ test('service publication updates one identity and withdrawal preserves customer
   assertEquals(await listing(g.read), [])
   assertEquals((await g.read('.connection')).length, 1)
 })
+
+test('service authority is person and operation scoped and revocation reaches delayed work', async () => {
+  let { edgeDoc, edgeEid } = await import('@yaks/edge')
+  let { grantService, serviceAuthority, serviceName } = await import(
+    './services.ts'
+  )
+  let vocab = loadVocab([kernelDoc, provenanceDoc, connectionsDoc, edgeDoc])
+  let g = graph({ vocab, storage: ram(vocab) })
+  let person = mint(),
+    stranger = mint(),
+    app = mint(),
+    service = mint(),
+    space = mint(),
+    connection = mint()
+  await g.apply([{
+    entity: { eid: connection },
+    connection: {
+      owner: person,
+      integration: serviceName(service),
+      status: 'needed',
+    },
+  }, {
+    entity: { eid: edgeEid(app, 'uses', connection) },
+    edge: { from: app, to: connection },
+    uses: { each: true },
+  }])
+  let authority = {
+    person,
+    app,
+    space,
+    service,
+    connection,
+    operation: 'status',
+  }
+  assertEquals(await serviceAuthority(g.read, authority), false)
+  await g.apply(
+    await grantService(g.read, { person, connection, operations: ['status'] }),
+  )
+  assertEquals(await serviceAuthority(g.read, authority), true)
+  assertEquals(
+    await serviceAuthority(g.read, { ...authority, person: stranger }),
+    false,
+  )
+  assertEquals(
+    await serviceAuthority(g.read, { ...authority, operation: 'purchase' }),
+    false,
+  )
+  assertEquals(
+    await serviceAuthority(g.read, { ...authority, app: mint() }),
+    false,
+  )
+  await assertRejects(() =>
+    grantService(g.read, {
+      person: stranger,
+      connection,
+      operations: ['purchase'],
+    })
+  )
+  await g.apply(
+    await grantService(g.read, { person, connection, operations: [] }),
+  )
+  assertEquals(await serviceAuthority(g.read, authority), false)
+})

@@ -331,6 +331,11 @@ export let parseTools = (
     ) {
       wrong.push(`${name}.service names its pricing terms as {pricing: string}`)
     }
+    if (entry.service != null && entry.worker == null) {
+      wrong.push(
+        `${name}.service requires a worker command to authorize customer data`,
+      )
+    }
     if (entry.revision != null && typeof entry.revision != 'string') {
       wrong.push(`${name}.revision is a source version string`)
     }

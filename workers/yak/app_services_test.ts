@@ -40,3 +40,162 @@ test('app service catalog follows the declaration without copying a command sche
   assertEquals(found?.commands[0].revision, 'v2')
   assertEquals(found?.commands[0].pricing, words.$defs.quote.service.pricing)
 })
+
+import { mint } from '@yaks/graph'
+import { grantService, publishService } from '@yaks/connections'
+import {
+  callService,
+  connectService,
+  serviceFrom,
+  verifyService,
+} from './service-call.ts'
+import { meta } from './meta.ts'
+import { ADA, ADA_OWNS } from './serving-probe.ts'
+import type { Dispatch } from './door.ts'
+import { assertRejects } from '@std/assert'
+
+test('service customers retain their identity and lose authority after revocation', async () => {
+  await using p = platform()
+  let { env } = p
+  let source = await seeded(env, 'public')
+  let { dir } = source
+  let eli = mint()
+  await dir.apply({
+    entities: [
+      {
+        entity: { eid: '$merchant' },
+        space: { slug: 'printbound', store: 'printbound' },
+      },
+      { entity: { eid: eli }, person: {} },
+      {
+        entity: { eid: '$prints' },
+        app: {
+          space: '$merchant',
+          slug: 'prints',
+          version: 1,
+          access: 'private',
+          store: 'printbound/prints.aaa111',
+        },
+      },
+    ],
+  }, ADA_OWNS)
+  let merchant = (await dir.space('printbound'))!
+  let app = (await dir.app(merchant, 'prints'))!
+  let tools = parseTools({
+    $defs: {
+      order: {
+        tool: true,
+        description: 'This customer order',
+        floor: 'person',
+        worker: '/order',
+        service: { pricing: 'Checkout required for purchases' },
+      },
+      admin: {
+        tool: true,
+        description: 'Merchant operation',
+        floor: 'owner',
+        worker: '/admin',
+        service: { pricing: 'Internal' },
+      },
+    },
+  }, [])
+  await keepDeclaration(env, merchant, app, releaseOf(app), {
+    vocab: {},
+    tools,
+  })
+  let g = meta(env)
+  let read = (q: unknown) => g.query(String(q))
+  await g.apply(
+    await publishService(read, {
+      app: app.eid,
+      owner: merchant.eid,
+      listed: true,
+    }),
+  )
+  let adaConnection = (await connectService(
+    env,
+    dir,
+    source,
+    { person: ADA, role: 'owner' },
+    app.eid,
+    ['order'],
+  )).connection
+  await connectService(env, dir, source, { person: eli, role: null }, app.eid, [
+    'order',
+  ])
+  await assertRejects(() =>
+    connectService(env, dir, source, { person: ADA, role: 'owner' }, app.eid, [
+      'admin',
+    ])
+  )
+  let requests: Request[] = []
+  env.DISPATCH = {
+    get: () => ({
+      fetch: (req: Request) => {
+        requests.push(req)
+        return Promise.resolve(
+          Response.json({
+            order: `private-${req.headers.get('x-yak-person')}`,
+          }),
+        )
+      },
+    }),
+  } as Dispatch
+  let ada = await callService(
+    env,
+    dir,
+    source,
+    { person: ADA, role: 'owner' },
+    app.eid,
+    'order',
+    {},
+  )
+  let other = await callService(
+    env,
+    dir,
+    source,
+    { person: eli, role: null },
+    app.eid,
+    'order',
+    {},
+  )
+  assertEquals(JSON.parse(String(ada.value.answer)).order, `private-${ADA}`)
+  assertEquals(JSON.parse(String(other.value.answer)).order, `private-${eli}`)
+  assertEquals(requests[0].headers.get('x-yak-role'), null)
+  assertEquals(requests[0].headers.get('x-yak-app-eid'), app.eid)
+  let provenance = JSON.parse(requests[0].headers.get('x-yak-command-source')!)
+  let authority = (await serviceFrom(env, provenance.authority))!
+  assertEquals(authority.person, ADA)
+  assertEquals(authority.app, source.app.eid)
+  assertEquals(await verifyService(env, dir, authority), true)
+  await assertRejects(() =>
+    callService(
+      env,
+      dir,
+      source,
+      { person: ADA, role: 'owner' },
+      app.eid,
+      'admin',
+      {},
+    )
+  )
+  await g.apply(
+    await grantService(read, {
+      person: ADA,
+      connection: adaConnection,
+      operations: [],
+    }),
+  )
+  assertEquals(await verifyService(env, dir, authority), false)
+  await assertRejects(() =>
+    callService(
+      env,
+      dir,
+      source,
+      { person: ADA, role: 'owner' },
+      app.eid,
+      'order',
+      {},
+    )
+  )
+})

@@ -36,7 +36,11 @@ import { agentEid, agentRow, instrumentEid } from './instrument.ts'
 import type { Bundle } from '@yaks/graph'
 import { sha256 } from '@yaks/graph/sha256'
 
+import type { ServiceAuthority } from '@yaks/connections'
+
 export type Who = {
+  /** A customer operation, never merchant store membership. */
+  service?: ServiceAuthority
   /** Explicit platform administrative access, vouched by the kernel. */
   administrative?: boolean
   person: string | null

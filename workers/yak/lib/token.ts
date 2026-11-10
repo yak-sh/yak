@@ -67,6 +67,7 @@ export type Use =
   | 'review' // a gallery review ticket (gallery.ts)
   | 'invite' // an invitation's accept link (workers/yak/invite.ts)
   | 'page' // a sandboxed app's page speaking to its own API (installed.ts)
+  | 'service' // retained cross-app customer authority, rechecked against its connection
   | 'connect' // a connection's sign-in, on its way back (connections.ts)
   | 'line' // a person's own number's SMS callback (operator-line.ts)
   | 'call' // a call's audio stream, from its ring to its space (operator-calls.ts)

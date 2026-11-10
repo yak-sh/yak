@@ -613,6 +613,13 @@ connection_lend:
     own using connection_attach. A direct key, a connection each person
     connects, and a borrowed connection cannot be lent. Documentation:
     https://yaks.app/docs/sharing.
+service_connect:
+  title: Connect selected app service operations
+  description: >-
+    Connect an app to selected operations of a published app service, as the
+    signed-in person. This grants those operations only, never merchant store
+    membership. Pass an empty operations list to revoke the connection.
+    Purchases still require checkout or the payer's explicit purchase authority.
 integration_publish:
   title: Publish an app service
   description: >-
