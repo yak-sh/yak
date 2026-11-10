@@ -308,7 +308,12 @@ A query that works on the box can be refused in a store.
   (@yaks/effects `deferral`). A Builder answers 429 the same way and its alarm
   comes back then. The directory is spared (`#start`): every door reads it.
   A relocation runs on `freely` drivers and never stops half way. A page's
-  outbox and socket wait as long as `retry-after` says (client.js).
+  outbox and socket wait as long as `retry-after` says (client.js). The
+  tracker's objects refuse too: a report that meets a stop goes back on
+  `yak-errors` delayed until the window ends, a new message that spends no
+  delivery (workers/tracker/README.md). A stop thrown across a stub arrives
+  without its class, so a caller asks @yaks/durable-object `stopped`, never
+  `instanceof Stopped`.
 - **A boot is all or nothing.** It runs in one transaction. A schema that won't
   stand unwinds, and the store answers every request 503 with the reason
   (`graph.ts` `#stalled`), still keeping the writes it is sent (`writes.ts`),

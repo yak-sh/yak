@@ -115,3 +115,9 @@ test('every driver over one storage counts against its one ceiling', () => {
   assertThrows(() => b.query(keep), Stopped)
   bounded(held).free(() => b.query(keep))
 })
+
+test('an object that spent nothing takes every statement, whatever its clock reads', () => {
+  let { c, clock } = bound({ refuse: true })
+  clock.at = -1
+  equal([c.stopped(), c.stopped(true)], [0, 0])
+})

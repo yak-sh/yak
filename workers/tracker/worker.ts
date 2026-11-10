@@ -7,7 +7,14 @@ import { sha256 } from '@yaks/graph/sha256'
 import { Unsigned } from '@yaks/host/senders'
 import { sign } from './auth.ts'
 import { capture, caught, origin, queue, type Sink } from '@yaks/tracker/report'
-import { evicted, jittered, opaque, retried } from '@yaks/durable-object'
+import {
+  evicted,
+  jittered,
+  opaque,
+  retried,
+  stopped,
+} from '@yaks/durable-object'
+import { waits } from '@yaks/api'
 import { type Clock, system } from '@yaks/fp'
 import { platform } from './core.ts'
 import { consume, type Message } from './queue.ts'
@@ -222,15 +229,26 @@ export let worker = (
       (error) => evicted(error) || opaque(error),
       wait,
     )
+  // A message's body back on the queue, to arrive once a stopped object's
+  // window ends.
+  let later = env.ERRORS &&
+    ((body: unknown, delaySeconds: number) =>
+      env.ERRORS!.send(body as Bundle[], { delaySeconds }))
   // What the queue's consumer could not take is told to the platform's object
   // itself, never through the queue it came from: sent back through intake it
-  // is one more message for a refusing object to fail. An object that cannot
-  // take the report either leaves it in this Worker's log, and the box's syncs
-  // say from outside that the tracker is down.
-  let told = reporting(
-    env,
-    (rows) => call(platform, (stub) => stub.ingest(rows)),
-  )
+  // is one more message for a refusing object to fail. A platform object
+  // stopped past its rows takes the report once its window ends: only then
+  // does it arrive on the queue, one message. An object that cannot take the
+  // report for any other reason leaves it in this Worker's log, and the box's
+  // syncs say from outside that the tracker is down.
+  let told = reporting(env, async (rows) => {
+    try {
+      await call(platform, (stub) => stub.ingest(rows))
+    } catch (error) {
+      if (!later || !stopped(error)) throw error
+      await later(rows, waits(error) ?? 1)
+    }
+  })
   // A space tracker that took intake or answered a door joins the platform's
   // list of them, which every bug door reads (`/scopes`), once an isolate,
   // behind the answer: it is a second object's call, often 50 ms, that the
@@ -450,6 +468,7 @@ export let worker = (
         },
         (scope, rows) =>
           env.TRACKERS.getByName(platform).admitTrace(scope, rows),
+        later,
       ),
     scheduled: async () => {
       try {

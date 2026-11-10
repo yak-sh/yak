@@ -148,6 +148,44 @@ is one more message for a refusing object to fail (2026-11-10: 685,603 in 25
 minutes). When the platform's object is the one refusing, the report stays in
 the Worker's log and the box's syncs report the tracker down from outside.
 
+### Stopped past its rows
+
+Each object refuses past its ceiling (@yaks/durable-object `bounded`,
+`refuse: true`): 50 million rows read or 100,000 written in a minute, 200
+million or 500,000 in an hour. A stopped object takes no statement until the
+window ends (past its written rows only, it still reads), and a stop is no
+failure: nothing reports it, and nothing spends an attempt on it.
+
+- Intake that meets a stop is put back on `yak-errors` as a new message, delayed
+  until the window ends (queue.ts `consume`, `later`), and the message is
+  acknowledged. So a stop spends none of a message's hundred deliveries, never
+  lengthens its next failure's wait, and never makes it a dead letter. The rest
+  of a batch for that object waits as long without asking it. A message the
+  queue can't take back is retried after the same wait.
+- A report the consumer tells the platform's object (above) that meets a stop is
+  put on `yak-errors` delayed until the window ends, one message, and is taken
+  then. The object's own runaway report travels the queue the same way.
+- A door answers 429 with `retry-after` and
+  `{error: 'Stopped', message,
+  retry}`; a box reporter's outbox keeps its
+  captures until intake admits them.
+- The alarm does nothing while stopped but come back when the window ends; a
+  failed intake arms it for then, not a second out. An effect that meets a stop
+  runs again as the same attempt (@yaks/effects).
+- A trace capture the platform's object can't reserve for is dropped, as any
+  over-ceiling capture is.
+
+A stop crosses from the object to the Worker as a new error carrying its name,
+message, `status` and `retry` (enhanced error serialization, on from
+compatibility date 2026-04-21), never its class, so the Worker knows it by those
+(@yaks/durable-object `stopped`).
+
+Stopped, an object costs at most about $0.20 of reads and $0.50 of writes an
+hour, plus the statement that stopped it: at the 2.4 million rows a CPU-second a
+Store's scan ran (T-154469), about 72 million rows, $0.07, before the default 30
+s CPU limit ends it. A message set back on the queue costs three queue
+operations each time (about $1.20 a million), once a stop.
+
 A failure in an app whose space is not a probe's is recorded twice: in the
 space's store for its owner, and in the platform's as its own occurrence, with
 no space or app in `during` and `error.tags.source=app`, so `yak admin errors`

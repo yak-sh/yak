@@ -3,6 +3,7 @@
 
 import {
   bounded,
+  type Ceiling,
   driver,
   type DurableStorage,
   type Hibernation,
@@ -11,10 +12,12 @@ import {
   reserved,
   type Sockets,
   sockets,
+  stopped,
   storage,
+  type Window,
   type Wire,
 } from '@yaks/durable-object'
-import { subscriptions } from '@yaks/api'
+import { refuse, subscriptions } from '@yaks/api'
 import { caught, origin, queue, report, type Sink } from '@yaks/tracker/report'
 import {
   type Config,
@@ -83,7 +86,9 @@ export type Settings = {
     }
   }
   TRACKER_SECRET?: string
-  ERRORS?: { send: (rows: Bundle[]) => Promise<void> }
+  ERRORS?: {
+    send: (rows: Bundle[], options?: { delaySeconds?: number }) => Promise<void>
+  }
 } & Mailbox
 
 let TRACE_READY = 'trace-archetypes-v2'
@@ -142,10 +147,12 @@ export class Tracker {
     this.#rows.run(kind, work)
   #sql = () => this.#driver ??= driver(this.ctx.storage, this.#rows.observe)
   #traceMeta = () => meta(this.#sql())
+  #ceiling: Ceiling
   constructor(
     public ctx: State,
     public env: Settings = {},
     private now: () => number = Date.now,
+    windows?: Window[],
   ) {
     this.scope = ctx.id.name ?? platform
     this.sink = env.ERRORS
@@ -153,9 +160,14 @@ export class Tracker {
       : (rows) => console.error(JSON.stringify(rows))
     // A statement of this tracker's that scans, and the tracker past the rows
     // it may read or write, told where the statement ran: a scan is one bug
-    // for its statement, a runaway one for its scope.
-    bounded(ctx.storage, {
+    // for its statement, a runaway one for its scope. Past a window it takes
+    // no statement until the window ends: a door answers how long to wait,
+    // intake is delivered again then (./queue.ts), and the alarm comes back
+    // then for the work it owes.
+    this.#ceiling = bounded(ctx.storage, {
       now: this.now,
+      windows,
+      refuse: true,
       report: (error, { fault, tags }) => {
         let from = this.#origin('Tracker.sql')
         void report(error, {
@@ -288,9 +300,12 @@ export class Tracker {
     await this.#report(error, entrypoint, request)
     await this.#soon()
   }
+  // A second from now, or once a stopped tracker's window ends.
   #soon = async () => {
     try {
-      await this.ctx.storage.setAlarm(this.now() + 1000)
+      await this.ctx.storage.setAlarm(
+        this.now() + Math.max(1000, this.#ceiling.stopped(true)),
+      )
     } catch { /* next queue delivery retries */ }
   }
   ingest = (rows: Bundle[]): Promise<void> =>
@@ -516,6 +531,8 @@ export class Tracker {
       if (request.method == 'POST' && answer.ok) await this.#arm()
       return answer
     } catch (error) {
+      // A stopped tracker's answer says how long to wait.
+      if (stopped(error)) return refuse(error)
       await this.recover(error, 'Tracker.fetch', request)
       return json({ error: 'tracker temporarily unavailable' }, 503)
     }
@@ -557,6 +574,8 @@ export class Tracker {
   alarm = () => this.#run('alarm', this.#alarm)
   #alarm = async () => {
     try {
+      // A stopped tracker's alarm owes nothing until its window ends.
+      if (this.#ceiling.stopped(true)) return await this.#soon()
       let tracker = await this.boot()
       await this.live?.wake()
       await tracker.drain(this.now())

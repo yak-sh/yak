@@ -59,6 +59,13 @@ object whose stopping costs more than its rows is `spare()`d: told, never
 refused. The tallies live in the instance's memory, so an object evicted between
 bursts starts its windows over.
 
+A `Stopped` that crosses a stub reaches its caller as a new error with the name,
+message and own properties it was thrown with, never its class
+([RPC error handling](https://developers.cloudflare.com/workers/runtime-apis/rpc/error-handling/),
+enhanced error serialization, on from compatibility date 2026-04-21), so a
+caller asks `stopped(error)`, which knows it by its name and its `retry.after`.
+`crossed(error)` in `./testing.ts` hands an error over the same way.
+
 `sockets(subs, ctx)` connects hibernatable WebSockets to
 [@yaks/api](../api/README.md) subscriptions. The API registry re-evaluates saved
 queries after committed changes; this adapter accepts sockets, dispatches
@@ -274,6 +281,7 @@ storage that holds no socket imports `@yaks/durable-object/sql` (`driver`),
 | `freely(ctx.storage, observe?)`                         | A `driver` the ceiling counts and never refuses     |
 | `profile(emit)`                                         | Aggregates cursor costs into bounded summaries      |
 | `bounded(ctx.storage, options?)`, `ceiling(options?)`   | Report a scan or a runaway, and stop the object     |
+| `stopped(error)`                                        | Whether a failure is a stop, here or across a stub  |
 | `sockets(subs, ctx)`                                    | Returns `accept`, `message`, `close`, and `wake`    |
 | `prohibited`, `reserved`                                | Identify internal runtime tables                    |
 | `moved`, `replaced`, `evicted`, `killed`, `opaque`      | Tell a reset of this instance from a failure        |

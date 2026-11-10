@@ -81,6 +81,27 @@ export class Stopped extends Error {
   }
 }
 
+/** Whether a failure is a statement an object refused as `Stopped`, met in
+ * that object or through its stub. An RPC hands its caller a new error with
+ * the name, message and own properties it was thrown with, never its class
+ * (https://developers.cloudflare.com/workers/runtime-apis/rpc/error-handling/,
+ * from compatibility date 2026-04-21), so it is known by those: its name and
+ * the wait it asks for. Another package's error of the same name asks none.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { crossed } from './testing.ts'
+ * let stop = new Stopped(42_000, 'written'), over = crossed(stop)
+ * equal([stopped(stop), stopped(over), over instanceof Stopped], [true, true, false])
+ * equal(over.message, stop.message)
+ * equal(stopped(over) && over.retry, { after: 42_000, defer: true })
+ * equal(stopped(Object.assign(Error('esbuild ended'), { name: 'Stopped' })), false)
+ * ```
+ */
+export let stopped = (error: unknown): error is Stopped =>
+  error instanceof Error && error.name == 'Stopped' &&
+  typeof (error as { retry?: { after?: unknown } }).retry?.after == 'number'
+
 /** What a report is filed under: `fault` groups its occurrences on one bug
  * (a scan by its statement, a runaway by which rows), and `tags` name the
  * statement. The host adds which object. */
@@ -181,7 +202,7 @@ export let ceiling = (
   }
   // How long a statement waits, and for which rows.
   let held = (writing: boolean) => {
-    let at = now(), until = 0, kind: Kind = 'read'
+    let at = now(), until = at, kind: Kind = 'read'
     for (let s of spans) {
       if (at - s.since >= s.ms) continue
       let end = s.since + s.ms

@@ -5,6 +5,8 @@ import type { Bundle } from '@yaks/graph'
 import { minted } from '@yaks/graph/identity'
 import { platform } from './core.ts'
 import { traceBatch } from '@yaks/tracker/intake'
+import { stopped } from '@yaks/durable-object/ceiling'
+import { waits } from '@yaks/api'
 
 export type Message = {
   id?: string
@@ -21,6 +23,9 @@ export type Message = {
  * message outlasts an outage of about eight hours before it is a dead letter. */
 export let wait = (attempts = 1) => Math.min(2 ** attempts, 300)
 export type Destination = { ingest: (rows: Bundle[]) => Promise<void> }
+/** Puts a message's body back on its queue, to arrive `seconds` from now as a
+ * new message. */
+export type Later = (body: unknown, seconds: number) => Promise<void>
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export let batch = (body: unknown): { scope: string; rows: Bundle[] } => {
   if (!Array.isArray(body) || !body.length || body.length > 100) {
@@ -78,12 +83,28 @@ export let consume = async (
   report: (error: unknown) => Promise<void>,
   reject: (message: Message, error: unknown) => Promise<void>,
   trace?: (scope: string, rows: Bundle[]) => Promise<unknown>,
+  later?: Later,
 ): Promise<void> => {
   // A failed intake is the queue's to retry, each message after its wait, and
   // is said once a batch. `report` never sends through this queue (worker.ts):
   // on 2026-11-10 each failed message's report came back as a message to
   // fail, with no wait, and one refused intake was 685,603 in 25 minutes.
   let told = false
+  // An object past its rows (@yaks/durable-object `Stopped`) failed nothing:
+  // its message comes back when the window ends, put back on the queue as a
+  // new one, so no stop spends a delivery of the hundred it has, lengthens its
+  // next failure's wait or makes it a dead letter. Nothing is told of it, and
+  // the rest of the batch for that object waits as long without asking it.
+  let stops = new Map<string, number>()
+  let defer = async (message: Message, seconds: number) => {
+    try {
+      if (later) {
+        await later(message.body, seconds)
+        return message.ack()
+      }
+    } catch { /* the queue holds it that long instead */ }
+    message.retry({ delaySeconds: seconds })
+  }
   for (let message of messages.slice(0, 100)) {
     let tracing = Array.isArray(message.body) &&
       message.body.some((row) => row?.trace || row?.span)
@@ -103,6 +124,11 @@ export let consume = async (
         continue
       }
     }
+    let held = accepted && stops.get(accepted.scope)
+    if (held) {
+      await defer(message, held)
+      continue
+    }
     try {
       if (
         tracing
@@ -117,6 +143,12 @@ export let consume = async (
       }
       message.ack()
     } catch (error) {
+      if (accepted && stopped(error)) {
+        let seconds = waits(error) ?? 1
+        stops.set(accepted.scope, seconds)
+        await defer(message, seconds)
+        continue
+      }
       message.retry({ delaySeconds: wait(message.attempts) })
       // An unavailable authority may retry transport, but its failure is not
       // told as an error of the tracker's.

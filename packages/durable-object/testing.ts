@@ -241,3 +241,19 @@ export let store = (vocab: Vocab = shop): Store => {
   s.install()
   return s
 }
+
+/** An error as a Durable Object's stub hands it to its caller: a new `Error`
+ * with the name, message and own serializable properties it was thrown with,
+ * and none of its class or stack (enhanced error serialization, on from
+ * compatibility date 2026-04-21:
+ * https://developers.cloudflare.com/workers/runtime-apis/rpc/error-handling/). */
+export let crossed = (error: Error): Error => {
+  let own = Object.getOwnPropertyNames(error).filter((k) => k != 'stack')
+  return Object.assign(
+    new Error(error.message),
+    structuredClone(Object.fromEntries(
+      own.map((k) => [k, (error as unknown as Record<string, unknown>)[k]]),
+    )),
+    { name: error.name },
+  )
+}

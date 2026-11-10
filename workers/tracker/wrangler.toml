@@ -35,8 +35,10 @@ max_batch_size = 100
 max_batch_timeout = 1
 # A message whose intake failed waits two seconds, doubling to five minutes
 # (queue.ts `wait`), so a hundred retries hold it through an outage of about
-# eight hours before it is a dead letter. `retry_delay` is the wait of a retry
-# that names none: a delivery the consumer threw on, or left past its hundred.
+# eight hours before it is a dead letter. One its object stopped for comes back
+# as a new message once the window ends, and spends none. `retry_delay` is the
+# wait of a retry that names none: a delivery the consumer threw on, or left
+# past its hundred.
 max_retries = 100
 retry_delay = 30
 # One Tracker object takes each scope's intake, a message at a time: more

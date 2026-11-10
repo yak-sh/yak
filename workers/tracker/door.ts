@@ -9,6 +9,7 @@ import { CallError } from '@yaks/tools/errors'
 import { minted } from '@yaks/graph/identity'
 import { BARE } from '@yaks/id'
 import { status } from '@yaks/graph/errors'
+import { stopped } from '@yaks/durable-object/ceiling'
 import type { Bundle } from '@yaks/graph'
 import { platform } from './core.ts'
 import { receipted } from '@yaks/mail'
@@ -205,7 +206,10 @@ async (request: Request): Promise<Response> => {
       if (error instanceof CallError && error.code == 'bug') {
         return json({ error: 'bug not found' }, 404)
       }
-      if (status(error) < 500) return json({ error: String(error) }, 400)
+      // A stopped tracker's wait is the object's to answer.
+      if (status(error) < 500 && !stopped(error)) {
+        return json({ error: String(error) }, 400)
+      }
       throw error
     }
   }
@@ -289,7 +293,9 @@ async (request: Request): Promise<Response> => {
         return json({ error: 'bug not found' }, 404)
       }
       // An unexplained resolution is the caller's to fix, and says so.
-      if (status(error) < 500) return json({ error: String(error) }, 400)
+      if (status(error) < 500 && !stopped(error)) {
+        return json({ error: String(error) }, 400)
+      }
       throw error
     }
     return json({ ok: true })

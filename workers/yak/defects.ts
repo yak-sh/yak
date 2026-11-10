@@ -22,6 +22,7 @@ import type { Env } from './env.ts'
 import { isTestAddress } from '@yaks/platform/bots'
 import { Pending } from './writes.ts'
 import { moved } from '@yaks/durable-object/resets'
+import { stopped } from '@yaks/durable-object/ceiling'
 import type { Ctx } from './tools.ts'
 import { type Clock, system } from '@yaks/fp'
 import { watching } from './lib/waits.ts'
@@ -236,12 +237,10 @@ export let redone = (error: unknown, replaced?: () => boolean): boolean =>
   moved(error) && !!replaced?.()
 
 /** Whether a failure is a statement its object refused for the rows it
- * already spent (@yaks/durable-object `Stopped`): the `Runaway` that stopped
+ * already spent (@yaks/durable-object `stopped`): the `Runaway` that stopped
  * it was told as it happened, and every catch it meets after is waiting, not
- * breaking. Known by its name, as @yaks/graph `status` knows it. */
-export let stopped = (error: unknown): error is Error & {
-  retry: { after: number }
-} => error instanceof Error && error.name == 'Stopped'
+ * breaking. */
+export { stopped }
 
 /** Only exception data and explicit tags leave. One thrown object can pass
  * several catches; a later invocation reusing it is another occurrence. An

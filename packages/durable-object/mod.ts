@@ -98,6 +98,7 @@ export {
   SCAN,
   Scan,
   Stopped,
+  stopped,
   type Told,
   type Window,
   WINDOWS,
