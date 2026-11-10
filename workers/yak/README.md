@@ -1057,13 +1057,16 @@ call. Model requests charge the space's shared dollar budget as they answer;
 there is no round limit.
 
 The result includes `task`, `session`, `text`, `status`, `model` and `cost` in
-USD. `operator_read({space, task})` returns the task, comments and conversation;
-a conversation's session returns its newest 64 lines, and while lines come
-before them, `earlier: {count, before}` says how many and the `before` to pass
-for the 64 preceding. `context: true` also includes model instruction snapshots.
-Omit `task` to list recent tasks. Continue with
-`operator_chat({space, task, say})`. A settled model turn may be a question: the
-operator explicitly completes a task through `task_update` after finishing it.
+USD. After 25 seconds of work, a call returns its progress while the task keeps
+running. A settled call returns its answer; otherwise use `operator_read` for
+the progress and eventual answer. `cost` counts model use recorded so far.
+`operator_read({space, task})` returns the task, comments and conversation; a
+conversation's session returns its newest 64 lines, and while lines come before
+them, `earlier: {count, before}` says how many and the `before` to pass for the
+64 preceding. `context: true` also includes model instruction snapshots. Omit
+`task` to list recent tasks. Continue with `operator_chat({space, task, say})`.
+A settled model turn may be a question: the operator explicitly completes a task
+through `task_update` after finishing it.
 
 The fork inherits the main conversation's completed context. Each caller input
 and reply stays in the fork. Five minutes without another input closes a settled

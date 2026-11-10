@@ -824,7 +824,7 @@ export let WORDS: Record<string, Words> = {
   'operator_chat': {
     'title': "Ask your space's operator",
     'description':
-      "Give this space's operator a request or a design to implement. It reads and writes this space's apps with the same tools your agent uses, including rows and deployments, and charges model use to the space's budget. The operator on your own space is your personal assistant: it also reaches your other spaces, with your role in each. Any space's owner may let another space's operator work there too, from its People page. Returns the private task and session ids, its answer and model cost in dollars. Pass task to continue an earlier request; operator_read reads its work. Ships changes live; app_rollback can undo a deployment. Only members who write may ask.",
+      "Give this space's operator a request or a design to implement. It reads and writes this space's apps with the same tools your agent uses, including rows and deployments, and charges model use to the space's budget. The operator on your own space is your personal assistant: it also reaches your other spaces, with your role in each. Any space's owner may let another space's operator work there too, from its People page. Returns the private task and session ids, its answer and model cost in dollars. After 25 seconds of work it returns progress while the task continues; use operator_read with task for its eventual answer. Cost is recorded use so far. Pass task to continue an earlier request; operator_read reads its work. Ships changes live; app_rollback can undo a deployment. Only members who write may ask.",
   },
   'operator_run': {
     'title': "Ask your space's operator (alias)",

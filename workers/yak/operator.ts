@@ -1,4 +1,5 @@
 import { inputSource } from './operator-provenance.ts'
+import { system } from '@yaks/fp'
 import { chatFork } from './operator-chat.ts'
 import { helperParent, questionNotice } from './operator-helpers.ts'
 import {
@@ -91,7 +92,7 @@ import { platformFault } from './unseen.ts'
 import { bound, type Env } from './env.ts'
 import type { Held } from './build-door.ts'
 import { accounted, resultOf } from './meter.ts'
-import { caught, defect } from './defects.ts'
+import { background, caught, defect } from './defects.ts'
 import { hearing } from './refusals.ts'
 import {
   ambient,
@@ -1998,21 +1999,42 @@ export let operating = (
       ...files.length ? { files } : {},
       ...o,
     })
-    let entries = await transcript(g, session)
-    while (!ENDED.includes(statusOf(entries))) {
-      let next = await drain(store)
-      entries = await transcript(g, session)
-      if (ENDED.includes(statusOf(entries)) || next == null) break
-      await new Promise((ok) =>
-        setTimeout(ok, Math.min(1000, Math.max(0, next - Date.now())))
-      )
+    let time = env.CLOCK ?? system
+    let work = (async () => {
+      let entries = await transcript(g, session)
+      while (!ENDED.includes(statusOf(entries))) {
+        let next = await drain(store)
+        entries = await transcript(g, session)
+        if (ENDED.includes(statusOf(entries)) || next == null) break
+        await new Promise<void>((ok) =>
+          time.after(Math.min(1000, Math.max(0, next - time.now())), ok)
+        )
+      }
+    })()
+    // The task outlives its caller's HTTP request; a long turn is read with
+    // operator_read rather than holding every HTTP door until it ends.
+    background(
+      work.catch((e) => caught(e, { request: 'operator run', session })),
+    )
+    let cancel = () => {}
+    try {
+      await Promise.race([
+        work,
+        new Promise<void>((done) => cancel = time.after(25_000, done)),
+      ])
+    } finally {
+      cancel()
     }
+    let entries = await transcript(g, session)
     let mine = entries.slice(entries.findIndex((b) => b.entity.eid == input))
+    let status = statusOf(entries)
     return {
       task,
       session,
-      text: replyOf(mine).text,
-      status: statusOf(entries),
+      text: ENDED.includes(status)
+        ? replyOf(mine).text
+        : `The Operator is still working. Use operator_read with task ${task} to read its progress and answer.`,
+      status,
       cost: mine.reduce(
         (sum, b) => sum + Number(comp(b, 'cost')?.dollars ?? 0),
         0,
@@ -2249,8 +2271,8 @@ export type Operator = {
     open: string,
     by: string,
   ) => Promise<{ task: string; session: string; stopped: boolean }>
-  /** operator_chat's door: the words, then the answer once the session ends,
-   * working the pool meanwhile as the object's alarm does. */
+  /** operator_chat's door: work the pool for up to 25 seconds, then return
+   * the answer or the running task, whose work continues behind the reply. */
   run: (held: Asker, space: Space, args: Args, o?: Asking) => Promise<{
     task: string
     session: string
