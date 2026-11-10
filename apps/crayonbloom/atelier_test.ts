@@ -208,3 +208,31 @@ test('a puzzle-only book completes without requesting a character image', async 
   assertEquals(result.book.page_drawing, undefined)
   assertEquals(f.drawn, [])
 })
+
+test('the personal shelf restores unopened guest books from vouched prior browsers', async () => {
+  let f = await fixture(), row = await f.desk.save(input, { via: alice.via })
+  let signed = {
+    person: alice.person,
+    via: crypto.randomUUID(),
+    browsers: [alice.via],
+  }
+  assertEquals((await f.desk.shelf(signed)).map((b) => b.entity.eid), [
+    row.entity.eid,
+  ])
+  assertEquals(
+    (await f.desk.shelf({ person: bob.person, via: crypto.randomUUID() }))
+      .length,
+    0,
+  )
+  assertEquals(
+    (await f.desk.owned(row.entity.eid, signed)).coloring_book.owner,
+    alice.person,
+  )
+  await assertRejects(() =>
+    f.desk.owned(row.entity.eid, {
+      person: bob.person,
+      via: crypto.randomUUID(),
+      browsers: [alice.via],
+    })
+  )
+})

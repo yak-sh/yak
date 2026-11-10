@@ -166,12 +166,18 @@ export let atelier = (db: Store, io: AtelierIO) => {
     pages,
     async shelf(caller: Who) {
       principal(caller)
+      let vias = [
+        ...new Set([
+          caller.via,
+          ...(caller.person ? caller.browsers ?? [] : []),
+        ]),
+      ].filter(Boolean).map(identifier)
       let filters = [
         caller.person
           ? `.coloring_book.owner=${identifier(caller.person)}`
           : '',
-        caller.via
-          ? `.coloring_book.via=${identifier(caller.via)}&!coloring_book.owner`
+        vias.length
+          ? `.coloring_book.via=${vias.join(',')}&!coloring_book.owner`
           : '',
       ].filter(Boolean)
       let all = (await Promise.all(
