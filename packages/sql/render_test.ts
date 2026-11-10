@@ -134,3 +134,116 @@ test('a statement past the engine’s length in UTF-8 bytes writes a shared rela
   let v = shared(9_000, 'é')
   equal(copies(render(scopes([v, v, v])).sql), 1)
 })
+
+// A statement naming the relation `seen`, written `not materialized`, as a
+// source in two scopes.
+let seen: Cte = {
+  name: 'seen',
+  materialized: false,
+  q: select({
+    cols: [col('id')],
+    from: table('item'),
+    where: eq(col('k'), val('a')),
+  }),
+}
+let naming = (ctes: Cte[]) =>
+  select({
+    with: ctes,
+    cols: [col('id', 's')],
+    from: table('seen', 's'),
+    where: and(
+      eq(col('n', 's'), val('b')),
+      exists(select({ cols: [lit(1)], from: table('seen') })),
+    ),
+  })
+
+test('a relation written not materialized is a subquery wherever it is named, each binding its own values in order', () => {
+  let r = render(naming([seen]))
+  equal({ sql: r.sql, params: r.params }, {
+    sql:
+      'select "s"."id" from (select "id" from "item" where "k" = ?) as "s" ' +
+      'where ("s"."n" = ? and exists (select 1 from ' +
+      '(select "id" from "item" where "k" = ?) as "seen"))',
+    params: ['a', 'b', 'a'],
+  })
+})
+
+test('the relations beside one written out stay in the statement’s with', () => {
+  let kept: Cte = {
+    name: 'kept',
+    materialized: true,
+    q: select({ cols: [val('m')] }),
+  }
+  let r = render(naming([kept, seen]))
+  equal([
+    r.sql.startsWith('with "kept" as materialized (select ?) select'),
+    r.params,
+  ], [
+    true,
+    ['m', 'a', 'b', 'a'],
+  ])
+  equal(render(naming([seen, kept])).params, ['m', 'a', 'b', 'a'])
+})
+
+test('a relation one written out names is written out inside it', () => {
+  let through: Cte = {
+    name: 'through',
+    materialized: false,
+    q: select({ cols: [col('id')], from: table('seen') }),
+  }
+  let r = render(
+    select({
+      with: [seen, through],
+      cols: [col('id')],
+      from: table('through'),
+    }),
+  )
+  equal({ sql: r.sql, params: r.params }, {
+    sql: 'select "id" from (select "id" from ' +
+      '(select "id" from "item" where "k" = ?) as "seen") as "through"',
+    params: ['a'],
+  })
+})
+
+test('a copy past the engine’s parameters is written as literals', () => {
+  let r = render(naming([seen]), 2)
+  equal([r.params, r.sql.endsWith(`where "k" = 'a') as "seen"))`)], [
+    ['a', 'b'],
+    true,
+  ])
+})
+
+test('a table’s index hint is left off a relation written out', () => {
+  let r = render(select({
+    with: [seen],
+    cols: [col('id')],
+    from: raw('"seen" as "s" not indexed'),
+  }))
+  equal(
+    r.sql,
+    'select "id" from (select "id" from "item" where "k" = ?) as "s"',
+  )
+})
+
+test('a relation that names its columns, or leaves the planner to choose, stays in the with', () => {
+  for (
+    let cte of [{ ...seen, cols: ['id'] }, { ...seen, materialized: undefined }]
+  ) {
+    equal(render(naming([cte])).sql.startsWith('with "seen"'), true)
+  }
+})
+
+test('a statement that would pass the engine’s length keeps its relation in the with', () => {
+  let wide: Cte = {
+    ...seen,
+    q: select({
+      cols: [col('id')],
+      from: table('item'),
+      where: eq(lit('x'.repeat(60_000)), lit('y')),
+    }),
+  }
+  equal(
+    render(naming([wide])).sql.startsWith('with "seen" as not materialized'),
+    true,
+  )
+})

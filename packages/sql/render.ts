@@ -542,12 +542,255 @@ let rendered = (
   let top = hoist && long(sql) && !isExpr(node) &&
     hoisted(node, (q) => rendered(q, stable, cap, false))
   if (top) return rendered(top, stable, cap, false)
-  return raw(
-    sql,
-    c.params,
-    node.t == 'raw' ? node.table : undefined,
-    node.t == 'raw' ? node.origin : isExpr(node) ? undefined : node,
+  return flat(
+    raw(
+      sql,
+      c.params,
+      node.t == 'raw' ? node.table : undefined,
+      node.t == 'raw' ? node.origin : isExpr(node) ? undefined : node,
+    ),
+    cap,
   )
+}
+
+// One piece of a statement's text: a quoted name (`text` is the name), a
+// string, a placeholder, a parenthesis, a word (`text` in lower case) or any
+// other character.
+type Piece = {
+  kind: 'name' | 'string' | 'mark' | 'open' | 'close' | 'word' | 'other'
+  at: number
+  end: number
+  text: string
+}
+let wordy = (c: number) =>
+  c == 95 || digit(c) || c >= 65 && c <= 90 || c >= 97 && c <= 122
+// A statement's text in pieces, or nothing where a placeholder is numbered:
+// its parameters are then not in the order of its text.
+let pieces = (sql: string): Piece[] | undefined => {
+  let out: Piece[] = []
+  for (let i = 0; i < sql.length;) {
+    let c = sql.charCodeAt(i), end = i + 1
+    let kind: Piece['kind'] = 'other'
+    if (c == 32 || c == 10 || c == 9 || c == 13) {
+      i++
+      continue
+    }
+    if (c == QUOTE || c == NAME) {
+      end = quoted(sql, i, c)
+      kind = c == NAME ? 'name' : 'string'
+    } else if (c == 63) {
+      if (digit(sql.charCodeAt(end))) return undefined
+      kind = 'mark'
+    } else if (c == 40) kind = 'open'
+    else if (c == 41) kind = 'close'
+    else if (wordy(c)) {
+      while (end < sql.length && wordy(sql.charCodeAt(end))) end++
+      kind = 'word'
+    }
+    let text = kind == 'name'
+      ? sql.slice(i + 1, end - 1).replaceAll('""', '"')
+      : kind == 'word'
+      ? sql.slice(i, end).toLowerCase()
+      : kind == 'other'
+      ? sql[i]
+      : ''
+    out.push({ kind, at: i, end, text })
+    i = end
+  }
+  return out
+}
+
+// A relation written `not materialized` is a subquery wherever it is named:
+// the planner reads it so either way. An engine counts every naming of a
+// common table expression, with what its body reads, against its expression
+// depth and gives none back (workerd refuses a statement at 100), where a
+// subquery in FROM costs it nothing: measured on D1, 2026-11-10, a screen of
+// four tables is refused past 11 namings as a CTE and answered at 60 written
+// out. So such a relation is written where it is named, each copy binding its
+// own parameters while the engine's `cap` has room and writing them as
+// literals past it. One named in a way this cannot read (a recursive one, a
+// list of columns, a name another body takes) stays as it was written, and so
+// does a statement that would run past LENGTH.
+let HINT = ' as not materialized ('
+let flat = (r: Raw, cap: number): Raw => {
+  if (!r.sql.includes(HINT)) return r
+  let out = r, left = new Set<string>()
+  for (let turn = 0; turn < 64; turn++) {
+    let next = unfolded(out, cap, left)
+    if (!next) break
+    out = next
+  }
+  return out == r || long(out.sql) ? r : out
+}
+
+// The statement with the first relation it can write out written out, or
+// nothing when none is left. `left` holds those found unreadable.
+let unfolded = (r: Raw, cap: number, left: Set<string>): Raw | undefined => {
+  let t = pieces(r.sql)
+  if (!t) return undefined
+  let closes = new Map<number, number>(), open: number[] = []
+  t.forEach((p, i) => {
+    if (p.kind == 'open') open.push(i)
+    else if (p.kind == 'close' && open.length) closes.set(open.pop()!, i)
+  })
+  let is = (i: number, kind: Piece['kind'], text?: string) =>
+    t[i]?.kind == kind && (text == null || t[i].text == text)
+  // A definition that starts at piece `i`: its body's parentheses, and
+  // whether it is one this can write out.
+  let defined = (i: number) => {
+    if (!is(i, 'name')) return undefined
+    let j = i + 1, columns = is(j, 'open')
+    if (columns) j = closes.get(j)! + 1
+    if (!is(j++, 'word', 'as')) return undefined
+    let not = is(j, 'word', 'not')
+    if (not) j++
+    let hinted = is(j, 'word', 'materialized')
+    if (hinted) j++
+    else if (not) return undefined
+    if (!is(j, 'open') || !closes.has(j)) return undefined
+    let to = closes.get(j)!
+    return { name: t[i].text, i, from: j, to, plain: not && !columns }
+  }
+  for (let w = 0; w < t.length; w++) {
+    if (!is(w, 'word', 'with')) continue
+    let recursive = is(w + 1, 'word', 'recursive')
+    let list: NonNullable<ReturnType<typeof defined>>[] = []
+    for (let i = recursive ? w + 2 : w + 1;;) {
+      let d = defined(i)
+      if (!d) break
+      list.push(d)
+      if (!is(d.to + 1, 'other', ',')) break
+      i = d.to + 2
+    }
+    if (!list.length) continue
+    // The relation stands until the parentheses its `with` is in close.
+    let outer = [...closes].filter(([from, to]) => from < w && w < to)
+      .sort((a, b) => b[0] - a[0])[0]
+    let until = outer ? outer[1] : t.length
+    for (let [n, d] of list.entries()) {
+      let body = r.sql.slice(t[d.from].end, t[d.to].at)
+      let key = `${d.name} ${body}`
+      if (!d.plain || left.has(key)) continue
+      let uses = named(t, r.sql, d, body, until, defined)
+      if (!uses) {
+        left.add(key)
+        continue
+      }
+      // The definition goes with the comma beside it, or with the `with`.
+      let gone = list.length == 1
+        ? [t[w].at, t[d.to].end + 1]
+        : n == 0
+        ? [t[d.i].at, t[list[1].i].at]
+        : [t[list[n - 1].to].end, t[d.to].end]
+      return spliced(r, t, gone, [t[d.from].end, t[d.to].at], uses, cap)
+    }
+  }
+  return undefined
+}
+
+// One naming of a relation as a source: its name's place, whether the source
+// is given another name there, and the place of a `not indexed` after it.
+type Use = { at: number; end: number; alias: boolean; hint?: number[] }
+
+// Where the statement names `d` as a source before piece `until`, each with
+// whether it gives the source another name there, or nothing where it is
+// named in a way that is not read.
+let named = (
+  t: Piece[],
+  sql: string,
+  d: { name: string; from: number; to: number },
+  body: string,
+  until: number,
+  defined: (i: number) => { from: number; to: number } | undefined,
+): Use[] | undefined => {
+  let uses: Use[] = []
+  for (let k = d.from; k < until; k++) {
+    let p = t[k]
+    if (p.kind != 'name' || p.text != d.name) continue
+    // Its own body naming it is a recursion.
+    if (k < d.to) return undefined
+    let before = t[k - 1], after = t[k + 1]
+    if (after?.kind == 'other' && after.text == '.') continue
+    let source = before.kind == 'word' &&
+      (before.text == 'from' || before.text == 'join')
+    if (source && after?.kind != 'open') {
+      let alias = after?.kind == 'name' ||
+        after?.kind == 'word' && after.text == 'as'
+      // `not indexed` is said of a table, and a subquery has no index.
+      let hint = k + (!alias ? 1 : after.kind == 'name' ? 2 : 3)
+      let unindexed = t[hint]?.kind == 'word' && t[hint].text == 'not' &&
+        t[hint + 1]?.kind == 'word' && t[hint + 1].text == 'indexed'
+      uses.push({
+        at: p.at,
+        end: p.end,
+        alias,
+        ...unindexed ? { hint: [t[hint - 1].end, t[hint + 1].end] } : {},
+      })
+      continue
+    }
+    if (before.kind == 'word' && before.text == 'as') continue
+    // The same relation defined again in a scope below reads the same rows.
+    let again = defined(k)
+    if (again && sql.slice(t[again.from].end, t[again.to].at) == body) {
+      k = again.to
+      continue
+    }
+    return undefined
+  }
+  return uses
+}
+
+// The statement without the text at `gone`, and with the text at `body` in
+// parentheses at each of `uses`.
+let spliced = (
+  r: Raw,
+  t: Piece[],
+  gone: number[],
+  body: number[],
+  uses: Use[],
+  cap: number,
+): Raw => {
+  let marks = t.filter((p) => p.kind == 'mark').map((p) => p.at)
+  // How many parameters the text before `at` binds.
+  let bound = (at: number) => {
+    let lo = 0, hi = marks.length
+    while (lo < hi) {
+      let mid = (lo + hi) >> 1
+      if (marks[mid] < at) lo = mid + 1
+      else hi = mid
+    }
+    return lo
+  }
+  let part = (from: number, to: number): Raw =>
+    raw(r.sql.slice(from, to), r.params.slice(bound(from), bound(to)))
+  let copy = part(body[0], body[1])
+  let name = r.sql.slice(uses[0]?.at, uses[0]?.end)
+  // What the statement binds apart from the relation, then each copy's own.
+  let room = cap - (r.params.length - copy.params.length)
+  let sql = '', params: Param[] = [], at = 0
+  let keep = (to: number) => {
+    let kept = part(at, to)
+    sql += kept.sql
+    params.push(...kept.params)
+  }
+  keep(gone[0])
+  at = gone[1]
+  for (let use of uses) {
+    keep(use.at)
+    at = use.end
+    let binds = copy.params.length <= room
+    if (binds) room -= copy.params.length
+    sql += `(${binds ? copy.sql : literals(copy)})${
+      use.alias ? '' : ` as ${name}`
+    }`
+    if (binds) params.push(...copy.params)
+    if (use.hint) {
+      keep(use.hint[0])
+      at = use.hint[1]
+    }
+  }
+  keep(r.sql.length)
+  return raw(sql, params, r.table, r.origin)
 }
 
 // The statements that open with their own `with`.

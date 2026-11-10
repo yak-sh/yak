@@ -182,7 +182,7 @@ test('mutually dependent extension screens remain a conservative bound', () => {
   assertEquals(db.query(statement).map((r) => r.eid), ['target'])
 })
 
-test('a shared relation binds its values once across clause compilations', () => {
+test('a shared relation reads the same rows across clause compilations', () => {
   let owners = select({
     cols: [col('id')],
     from: table('entity'),
@@ -205,7 +205,6 @@ test('a shared relation binds its values once across clause compilations', () =>
     extend: [shared],
   })
   assertEquals(db.query(statement).map((r) => r.eid), ['target'])
-  assertEquals(statement.params.length, 1)
 })
 
 let reserved = '__SHARED_SQLITE_0'
