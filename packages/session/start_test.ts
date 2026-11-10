@@ -254,3 +254,31 @@ let moved = await scene(async () => {
 test('a task taken before the start runs gets no second session: its holder hears the comment', () => {
   equal(moved(), { begun: [], told: [FIRST] })
 })
+
+// Filed by a session that is over, held by a spawned outside run: the
+// operator's listener asks first, and the comment is still the run's.
+let relayed = await scene(async () => {
+  let b = await box(stores[0][1]())
+  await b.g.apply([
+    { entity: { eid: 'filer' }, session: { id: 'filer', ended: true } },
+    {
+      entity: { eid: 'run' },
+      session: { id: 'run', persona: 'taskmaster' },
+      process: {},
+    },
+    task('job', {
+      claim: { session: 'run' },
+      $actor: { by: 'taskmaster', via: 'filer' },
+    }),
+  ], { trusted: true })
+  await b.say(comment('first', 'job'))
+  await b.work()
+  return {
+    operator: await b.heard('operator'),
+    run: await b.heard('run'),
+    begun: await b.begun(),
+  }
+})
+test('his comment on a task an outside run holds is the run’s, though its filer is over and the operator asks first', () => {
+  equal(relayed(), { operator: [], run: [FIRST], begun: [] })
+})
