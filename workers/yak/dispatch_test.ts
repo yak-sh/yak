@@ -518,7 +518,10 @@ test('a worker is handed the app itself, and only on its own store', async () =>
   await ran(envOf(m.get), space, app, visit(), who)
   let mine = m.seen().headers.get('x-yak-app-grant')!
   assert(mine, 'the worker was handed no grant of its own')
-  assert(mine != m.seen().headers.get('x-yak-grant'), 'the visitor grant again')
+  assert(
+    mine != m.seen().headers.get('x-yak-grant'),
+    'the visitor grant again',
+  )
   let back = (grant: string, store = 'jeff/recipes') =>
     granted(
       new Request('https://jeff.yaks.app/recipes/api/apply', {
@@ -574,9 +577,11 @@ test('the app acting as itself is told apart from any visitor', () => {
 })
 
 test('a 404 from the worker, and no worker, both mean the files', async () => {
+  // The worker's 404 comes back whole: it is the app's answer where the
+  // files hold nothing either.
   assertEquals(
-    await ran(envOf(mirror(404).get), space, app, visit(), who),
-    null,
+    (await ran(envOf(mirror(404).get), space, app, visit(), who))?.status,
+    404,
   )
   let gone = () => {
     throw new Error("Worker not found: 'jeff_recipes'")

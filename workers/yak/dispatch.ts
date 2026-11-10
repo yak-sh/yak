@@ -709,10 +709,10 @@ let saying = async (res: Response) => {
   return typeof m == 'string' && m ? `: ${m.slice(0, 500)}` : ''
 }
 
-// What the worker's answer means, whichever caller asked for it: a 404 is the
-// pass verdict — null, so the files answer behind it — a 4xx is the app's own
-// deliberate no and files nothing (unseen.ts `refusal`), and a 5xx is not a
-// throw and would otherwise go unseen, so it is written here.
+// What the worker's answer means, whichever caller asked for it: a 4xx —
+// its 404 too, which is its pass — is the app's own deliberate no and files
+// nothing (unseen.ts `refusal`), and a 5xx is not a throw and would otherwise
+// go unseen, so it is written here.
 let verdict = async (
   env: Env,
   space: Space,
@@ -721,10 +721,6 @@ let verdict = async (
   res: Response | null,
 ) => {
   if (!res) return null
-  if (res.status == 404) {
-    await res.body?.cancel()
-    return null
-  }
   if (!failed(res.status)) return res
   let message = `the app's worker answered ${res.status}${await saying(res)}`
   await workerBreak(env, space, app, req, new Error(message))
@@ -738,11 +734,12 @@ let verdict = async (
   })
 }
 
-// The app's own worker, or null to serve the files instead — which is what
-// no worker means, and what a worker's own 404 means, so an app can answer
-// its routes and leave its pages to the platform. A throw ends the request:
-// this app is the one that owes an answer, so the visitor gets the soft page,
-// which is what the catch-all gave them before and all it ever gave them.
+// The app's own worker, or null where it has none. Its 404 is its pass — an
+// app answers its routes and leaves its pages to the platform — and comes
+// back whole, because it is also the app's answer for an address its files
+// do not hold either (apps.ts `passed`). A throw ends the request: this app
+// is the one that owes an answer, so the visitor gets the soft page, which is
+// what the catch-all gave them before and all it ever gave them.
 export let ran = async (
   env: Env,
   space: Space,
@@ -809,7 +806,10 @@ export let ahead = async (
     await threw(env, space, home, req, e)
     return null
   }
-  return verdict(env, space, home, req, res)
+  let said = await verdict(env, space, home, req, res)
+  if (said?.status != 404) return said
+  await said.body?.cancel()
+  return null
 }
 
 // ── The upload side: what app_deploy does with a worker.js ─────────────────

@@ -1,0 +1,4 @@
+{
+  // The worker answers every page; an address it passes is no page.
+  "assets": { "not_found_handling": "none" }
+}

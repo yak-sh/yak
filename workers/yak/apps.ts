@@ -1006,6 +1006,25 @@ export let refresh = (
   return work
 }
 
+// Whether the app's files hold `path` — a file, or a folder to send it to —
+// asked of the bucket without reading the bytes. The app's own 404.html is
+// not a page at the address asked.
+let held = async (env: Env, space: Space, app: App, path: string) => {
+  let decoded = decodedPath(path)
+  if (decoded == null || inside(decoded)) return false
+  let got = await files.fileBytes(
+    env,
+    app.eid,
+    prefixOf(space, app),
+    path,
+    app.source ?? '',
+    null,
+    'HEAD',
+  )
+  await got.body?.cancel()
+  return got.status != 404
+}
+
 let asset = async (
   req: Request,
   env: Env,
@@ -1060,12 +1079,13 @@ let asset = async (
     await got.body?.cancel()
     return folderMove(to, new URL(req.url).search, keeping(app))
   }
-  // The app's own 404.html answering a page that is not there.
+  // The app's own 404.html answering a page that is not there. With none,
+  // the files hold nothing here, and the answer is the caller's: null.
   let lost = got.status == 404 && got.headers.has(files.FILE)
   if (![200, 206, 416].includes(got.status) && !lost) {
     await got.body?.cancel()
     return await unwritten(req, env, space, app, path, bare) ??
-      nothingHere(env)
+      (got.status == 404 ? null : nothingHere(env))
   }
   let type = got.headers.get('content-type') ?? 'application/octet-stream'
   if (!type.startsWith('text/html')) {
@@ -1843,10 +1863,13 @@ export let api = async (
       let url = new URL(req.url)
       url.pathname = url.pathname.slice(0, -`/api${path}`.length) +
         versioned.path
-      return await c.time(
+      let own = await c.time(
         'worker',
         () => ran(env, space, app, new Request(url, req), who),
-      ) ?? refused('not_a_reader')
+      )
+      if (own && own.status != 404) return own
+      await own?.body?.cancel()
+      return refused('not_a_reader')
     }
     let source = `${space.store}/.releases/${app.eid}/${versioned.release}`
     if (source != app.source && !await dir.released(app, source)) {
@@ -3280,8 +3303,14 @@ let served = async (
   let own = itself
     ? null
     : await c.time('worker', () => ran(env, space!, app!, req, who))
+  // The worker's 404 is its pass. The files answer behind it, and where they
+  // hold nothing either, that 404 is the app's answer: a stranger is sent to
+  // sign in for a page the app has, never for one it does not.
+  let pass = own?.status == 404 ? own : null
+  if (pass) own = null
   // The worker passed, and the files are not this visitor's to see.
-  if (!own && !file) {
+  if (!own && !file && (!pass || await held(env, space, app, path))) {
+    await pass?.body?.cancel()
     if (door == 'sign-in') return redirect(signInAt(req.url, env), 303)
     return await shut(
       env,
@@ -3292,23 +3321,25 @@ let served = async (
       bare,
     )
   }
+  // The worker's page, else the files', else the worker's 404.
+  let page = own ?? (file && await file) ?? pass ?? nothingHere(env)
+  if (page != pass) await pass?.body?.cancel()
   // File pages already pass through woven(). Worker pages use the same
   // reporter, without buffering or changing their navigation and asset URLs.
   if (
-    own?.body &&
-    own.headers.get('content-type')?.startsWith('text/html')
+    (page == own || page == pass) && page.body &&
+    page.headers.get('content-type')?.startsWith('text/html')
   ) {
-    own = await reported(
+    page = await reported(
       env,
       at,
-      own,
+      page,
       app.version ?? 0,
       wearing(space, app, env, who),
       appPreview(app, bare),
       req.headers.get(ADDRESS) ?? req.url,
     )
   }
-  let page = own ?? await file!
   // Rung 4, and it is last rather than fourth in the code because rungs 3 and
   // 5 are the one call above: the space's index answers `/` when the home app
   // has nothing there — its worker passed and its files have no front page.

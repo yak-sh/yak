@@ -94,7 +94,10 @@ let released = async (
 ) => {
   let release = staged(r2RawObjects(env.BLOBS), {}, source)
   for (let [path, text] of Object.entries(files)) {
-    await release.files.put(`${source}/${path}`, new TextEncoder().encode(text))
+    await release.files.put(
+      `${source}/${path}`,
+      new TextEncoder().encode(text),
+    )
   }
   await release.finish()
 }
@@ -665,7 +668,10 @@ test('a refresh after the page changes is sent the page, and one before is not',
     new TextEncoder().encode('<!doctype html><head></head><body>hi'),
   )
   let refresh = (etag = '') =>
-    apps.fetch(visit('/cookbook/', { headers: { 'if-none-match': etag } }), env)
+    apps.fetch(
+      visit('/cookbook/', { headers: { 'if-none-match': etag } }),
+      env,
+    )
   let first = await refresh()
   let etag = first.headers.get('etag') ?? ''
   await first.body?.cancel()
@@ -1107,7 +1113,10 @@ test('a subscription is that query still answering', async () => {
     { id: '1:.doc', bundles: [], coverage: {}, transientReset: [] },
   ])
 
-  await page.apply([{ entity: { eid: CAKE }, doc: { title: 'Lemon drizzle' } }])
+  await page.apply([{
+    entity: { eid: CAKE },
+    doc: { title: 'Lemon drizzle' },
+  }])
   assertEquals(sent.length, 2)
   let frame = sent[1] as { id: string; bundles: Record<string, unknown>[] }
   assertEquals(frame.id, '1:.doc')
@@ -1231,7 +1240,10 @@ test('DELETE / empties the app store and bears it again', async () => {
   let { env, object, files } = scenario
   let { space, app } = await seeded(env, 'public', scenario.dir)
   let page = client(env, await as(ADA))
-  await page.apply([{ entity: { eid: CAKE }, doc: { title: 'Lemon drizzle' } }])
+  await page.apply([{
+    entity: { eid: CAKE },
+    doc: { title: 'Lemon drizzle' },
+  }])
   assertEquals((await page.query('.doc')).length, 1)
   files.held.set('ada/cookbook/index.html', new Uint8Array([1]))
 
@@ -1568,7 +1580,10 @@ test('rung 1: a platform path never reaches an app', async () => {
   // app's bare root alike: a home worker that answers everything else does not
   // answer these.
   for (let path of ['/cookbook/api/graph', '/api/graph']) {
-    assertEquals((await (await k.at(path)).json()).db, 'do:ada/cookbook.aaa111')
+    assertEquals(
+      (await (await k.at(path)).json()).db,
+      'do:ada/cookbook.aaa111',
+    )
   }
   // And `/<x>/api/…` at an app that is not here is a 404 rather than the home
   // app's page: a page asking a store at a wrong address must not be handed
@@ -1772,7 +1787,10 @@ test("rung 1½: the router's own onward request is not intercepted again", async
   }, ['/cookbook/print'])
   env = k.env
   k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
-  assertStringIncludes(await (await k.at('/cookbook/print')).text(), 'cookbook')
+  assertStringIncludes(
+    await (await k.at('/cookbook/print')).text(),
+    'cookbook',
+  )
   assertEquals(ran, 1)
 })
 
@@ -1795,7 +1813,10 @@ test('an app in the trash releases its address for visitors and its owner', asyn
   assertEquals((await k.at('/garden/index.html')).status, 404)
 
   let cookie = await as(ADA)
-  let mine = await apps.fetch(visit('/garden/', { headers: { cookie } }), k.env)
+  let mine = await apps.fetch(
+    visit('/garden/', { headers: { cookie } }),
+    k.env,
+  )
   assertEquals(mine.status, 404)
   let said = await mine.text()
   assertStringIncludes(said, 'Nothing here yet')
@@ -1889,7 +1910,10 @@ test('a space in the trash serves nothing, and its owner restores it', async () 
   // The owner, and only them: the page says where the space went, how long
   // they have, and it says it at every address rather than only at `/`.
   let cookie = await as(ADA)
-  let mine = await apps.fetch(visit('/garden/', { headers: { cookie } }), k.env)
+  let mine = await apps.fetch(
+    visit('/garden/', { headers: { cookie } }),
+    k.env,
+  )
   assertEquals(mine.status, 404)
   let said = await mine.text()
   assertStringIncludes(said, 'ada is in the trash')
@@ -1978,6 +2002,15 @@ test('env.APP: a private app is written by its own worker, and by nobody else', 
   // sign-in bounce a private app gives a stranger.
   assertStringIncludes(await (await k.at('/card')).text(), 'rsvp')
   assertEquals((await k.at('/index.html')).status, 303)
+  // An address neither the worker nor the files hold is the worker's own
+  // 404, whoever asks: nothing there is to sign in for.
+  for (let cookie of ['', await as(ADA), await as('bea')]) {
+    let gone = await apps.fetch(
+      visit('/old-flyer.pdf', { headers: { cookie } }),
+      env,
+    )
+    assertEquals([gone.status, await gone.text()], [404, 'no'])
+  }
   // And the store door is still shut: `env.APP` is a door on the worker's own
   // path, never a hole in the app's mode.
   assertEquals((await k.at('/api/query?.doc')).status, 401)
@@ -2394,7 +2427,10 @@ test("a published app's badge opens its own page", async () => {
     published: { name: 'recipes', version: 1, at: '', about: '' },
   } as unknown as App
   let unshared = { published: null } as unknown as App
-  assertEquals(apps.badgeOf(space, shared, {}), 'https://yaks.app/apps/recipes')
+  assertEquals(
+    apps.badgeOf(space, shared, {}),
+    'https://yaks.app/apps/recipes',
+  )
   assertEquals(apps.badgeOf(space, unshared, {}), 'https://yaks.app/')
   let { tags } = await pageScript(
     ASSETS,
