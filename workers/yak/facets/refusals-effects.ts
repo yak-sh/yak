@@ -1,9 +1,10 @@
 // The directory's refusal reports (refusals.ts), counted when the hourly wake
-// fires. Each is a platform letter, which the pool sends (@yaks/mail).
+// fires. Each is a platform letter, which the pool sends (@yaks/mail). The
+// same firing forgets the occurrences delivered letters counted long ago.
 import type { Comp } from '@yaks/graph'
 import type { Handlers } from '@yaks/effects'
 import type { Options } from './store.ts'
-import { reported } from '../refusals.ts'
+import { forgotten, reported } from '../refusals.ts'
 
 export let effects = (_host: unknown, options: Options): Handlers => {
   let at = options.store
@@ -12,7 +13,9 @@ export let effects = (_host: unknown, options: Options): Handlers => {
     report_refusals: async (event, tx) => {
       let [row] = await tx.get([event.entity.eid])
       let fired = (row?.fired as Comp | undefined)?.at
-      if (fired) await reported(at.graph, at.env, String(fired))
+      if (!fired) return
+      await reported(at.graph, at.env, String(fired))
+      await forgotten(at.graph, String(fired))
     },
   }
 }

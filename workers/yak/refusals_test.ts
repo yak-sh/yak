@@ -11,7 +11,14 @@ import { mailDoc } from '@yaks/mail'
 import { platformDoc } from '@yaks/platform/vocab'
 import { identityEid } from '@yaks/graph/identity'
 import { FROM } from './mail-config.ts'
-import { cause, countedIn, occurrence, reported, reportOf } from './refusals.ts'
+import {
+  cause,
+  countedIn,
+  forgotten,
+  occurrence,
+  reported,
+  reportOf,
+} from './refusals.ts'
 
 let vocab = loadVocab(
   [kernelDoc, toolsDoc, docDoc, mailDoc, platformDoc],
@@ -167,6 +174,39 @@ test('a report counts at most its most, and the rest wait', async () => {
   let one = await reported(crowded, env, '2026-11-10T11:00:00.000Z', 3)
   let two = await reported(crowded, env, '2026-11-10T12:00:00.000Z', 3)
   equal([await counted(crowded, one!), await counted(crowded, two!)], [3, 2])
+})
+
+// Occurrences a month and more old: counted in a letter that left, in one
+// still waiting on the mail, and in none yet; and one refused this week.
+let kept = store()
+let old = { at: '2026-10-01T10:00:00.000Z' }
+let aged = heard('a', 'b', 'c', old),
+  recent = heard('a', 'b', 'c', {
+    at: '2026-11-05T10:00:00.000Z',
+  })
+await kept.apply([aged, recent], { trusted: true })
+let left = await reported(kept, env, '2026-11-05T11:00:00.000Z')
+await kept.apply([{
+  entity: { eid: left! },
+  delivered: { at: '2026-11-05T11:01:00.000Z' },
+}], {
+  trusted: true,
+})
+let waiting = heard('a', 'b', 'c', old), uncounted = heard('a', 'b', 'c', old)
+await kept.apply([waiting], { trusted: true })
+await reported(kept, env, '2026-11-05T12:00:00.000Z')
+await kept.apply([uncounted], { trusted: true })
+let forgot = await forgotten(kept, '2026-11-10T12:00:00.000Z')
+
+test('a month after it was refused, an occurrence a delivered letter counted is forgotten', async () => {
+  equal(forgot, 1)
+  let eids = (b: { entity: { eid: string } }[]) => b.map((r) => r.entity.eid)
+  equal(await kept.get([aged.entity.eid]), [])
+  equal(
+    eids(await kept.read('.tool_refusal')).sort(),
+    eids([recent, waiting, uncounted]).sort(),
+  )
+  equal((await doc(kept, left!)).title, 'yaks.app tool refusals: 2 in 1 group')
 })
 
 test('a report is its own letter to TaskMaster, for the pool to send', async () => {

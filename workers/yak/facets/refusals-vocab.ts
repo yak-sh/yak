@@ -9,7 +9,7 @@ export let docs: VocabDoc[] = [{
       changed: ['fired'],
       target: '.sweep.kind=refusals',
       description:
-        'count the tool refusals no report has counted into one letter to TaskMaster, at the hour its wake fires',
+        'count the tool refusals no report has counted into one letter to TaskMaster, at the hour its wake fires, and delete those a delivered letter counted that were refused 30 days before it',
     },
   },
 }]

@@ -527,7 +527,7 @@
           "description": "when it was refused"
         }
       },
-      "description": "one time a yaks.app tool refused a call, worn with the call's `refusal{code}` and its cause as `content{body}`: the words of the refusal with the values in them taken out. It keeps no arguments. Never a bug: refusals reach TaskMaster in an hourly `refusal_report`",
+      "description": "one time a yaks.app tool refused a call, worn with the call's `refusal{code}` and its cause as `content{body}`: the words of the refusal with the values in them taken out. It keeps no arguments. Never a bug: refusals reach TaskMaster in an hourly `refusal_report`, and one counted in a delivered report is deleted 30 days after it was refused",
       "before": [
         "content"
       ]
@@ -555,7 +555,7 @@
           "description": "the report"
         }
       },
-      "description": "the `refusal_report` a tool refusal was counted in; one without it waits for the next report"
+      "description": "the `refusal_report` a tool refusal was counted in; one without it waits for the next report, and is never deleted"
     },
     "support": {
       "component": true,

@@ -3,7 +3,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { connector, kernel, letter, meta, seed, unique } from './probe.ts'
 import { replyTo } from './host.ts'
-import { countedIn } from './refusals.ts'
+import { countedIn, KEPT } from './refusals.ts'
 
 let k = await kernel()
 let space = unique('refusing')
@@ -66,4 +66,15 @@ test('the hourly wake sends TaskMaster what it counted', async () => {
   // The letter is the report, and says it left.
   let [held] = await meta(k).query(`.entity.eid=${report} *`)
   ok(held.refusal_report && held.delivered)
+})
+
+test('a firing a month on forgets what a delivered letter counted, and keeps the letter', async () => {
+  let { report } = (await heard(nobody))[0].counted!
+  await meta(k).apply([{
+    entity: { eid: 'yak-refusals' },
+    fired: { at: new Date(Date.now() + KEPT + 3_600_000).toISOString() },
+  }])
+  await k.settled()
+  equal(await heard(nobody), [])
+  ok((await meta(k).query(`.entity.eid=${report} .refusal_report`)).length)
 })

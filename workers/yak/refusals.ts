@@ -23,6 +23,11 @@
 // nothing and sends nothing. The store's pool sends the letter as it sends
 // every platform letter (@yaks/mail `mail_post`), waiting out a mail outage,
 // and `delivered{at}` says it left.
+//
+// The letter is the record: it keeps the grouped counts for good. So the same
+// firing forgets the occurrences behind them once their report has left and
+// they are `KEPT` old (`forgotten`). One never counted, or counted in a
+// letter still waiting on the mail, stays until it is reported.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { argsOf, derivedEid, who } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
@@ -37,6 +42,12 @@ import type { Ctx } from './tool.ts'
 
 /** The most occurrences one report counts; the rest wait for the next. */
 export let MOST = 500
+
+let DAY = 86_400_000
+
+/** How old an occurrence grows before it is forgotten, once the letter that
+ * counted it has left. */
+export let KEPT = 30 * DAY
 
 /** The most groups a letter spells out; the rest are counted in one line. */
 let GROUPS = 40
@@ -204,7 +215,8 @@ export let letter = (report: string, rows: Row[]) => {
       'place a tool, its schema or its description failed its caller.',
       ...said,
       ...rest > 0 ? [`and ${rest} more groups`] : [],
-      `Every occurrence: yak admin query yak/platform '${
+      `Every occurrence, for ${KEPT / DAY} days: ` +
+      `yak admin query yak/platform '${
         countedIn(report)
       }' --as admin@bot.yak.sh`,
     ].join('\n\n'),
@@ -235,4 +247,30 @@ export let reported = async (
     ...rows.map((row) => ({ entity: row.entity, counted: { report } })),
   ], { trusted: true })
   return report
+}
+
+/** Forget the occurrences, at most `most`, that a delivered letter counted
+ * and that were refused `KEPT` before `at`. Each is deleted and pruned in one
+ * transaction, leaving no tombstone: a tombstone swallows a write racing its
+ * delete, and none can race this one, since only the same call heard again
+ * writes its eid and only an uncounted occurrence is marked counted. Answers
+ * how many went. */
+export let forgotten = async (
+  g: Pick<Graph, 'read' | 'apply'>,
+  at: string,
+  most = MOST,
+): Promise<number> => {
+  let before = new Date(Date.parse(at) - KEPT).toISOString()
+  let rows = await g.read(
+    `.tool_refusal.at<="${before}" .counted.report.delivered .limit=${most}`,
+  )
+  if (!rows.length) return 0
+  await g.apply(
+    rows.flatMap(({ entity: { eid } }) => [
+      { entity: { eid }, $delete: true as const },
+      { entity: { eid }, $prune: true as const },
+    ]),
+    { trusted: true },
+  )
+  return rows.length
 }
