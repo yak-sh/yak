@@ -155,9 +155,11 @@ let SignupSample = ({ open }: { open: boolean }): JSX.Element => {
   })
 }
 
-// Read-only text specimens do not type drafts. A real editor uses the
-// consumer's persistent drafts through its host, not this guide's graph.
-let Sample = ({ part }: { part: 'Edit' | 'Text' }): JSX.Element => {
+// Specimen drafts belong to the guide; an app supplies its persistent desk.
+let Sample = (
+  { part, open }: { part: 'Edit' | 'Text' | 'Signup'; open?: boolean },
+): JSX.Element => {
+  let words = useSignal<Record<string, string>>({})
   let front = useMemo(
     () => client(loadVocab([uxDoc]), [], { vault: false, wireVault: false }),
     [],
@@ -166,7 +168,11 @@ let Sample = ({ part }: { part: 'Edit' | 'Text' }): JSX.Element => {
     return {
       vocab: loadVocab([domain]),
       front,
-      drafts: { text: () => '', type: () => {}, spend: () => {} },
+      drafts: {
+        text: (place) => words.value[place] ?? '',
+        type: (place, text) => words.value = { ...words.value, [place]: text },
+        spend: (place) => words.value = { ...words.value, [place]: '' },
+      },
       write: () => {},
       name: (eid) => eid,
       id: (e) => e.entity.eid,
@@ -176,7 +182,9 @@ let Sample = ({ part }: { part: 'Edit' | 'Text' }): JSX.Element => {
     }
   }, [])
   useEffect(() => () => front.close(), [])
-  let node = part == 'Edit'
+  let node = part == 'Signup'
+    ? h(SignupSample, { open: !!open })
+    : part == 'Edit'
     ? h(Edit, { e: value, comp: 'Sample', prop: 'title' })
     : h(Text, { e: value, comp: 'Sample', prop: 'title', readOnly: true })
   return h(Ux, { host, at: `guide/${part}` }, node)
@@ -250,11 +258,11 @@ export let kit: Kit = defineKit({
       specimens: () => [
         [
           'A membership card; send it to see its thanks',
-          h('div', {}, h(SignupSample, { open: true })),
+          h('div', {}, h(Sample, { part: 'Signup', open: true })),
         ],
         [
           'A closed form says its own words',
-          h('div', {}, h(SignupSample, { open: false })),
+          h('div', {}, h(Sample, { part: 'Signup', open: false })),
         ],
       ],
     },

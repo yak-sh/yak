@@ -1,9 +1,13 @@
 /** Signup draws Locust Grove's Kids Club and membership card forms from
  * their door's answer, as a person on a phone would fill them in. */
 import { equal, test } from '@yaks/testing'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, mint } from '@yaks/graph'
+import { client } from '@yaks/client'
+import { desk, draftDoc, type Drafts, drafts, type Stash } from '@yaks/draft'
+import { loadVocab } from '@yaks/vocab'
+import { type Host, Ux } from './host.ts'
 import type { Answers, Question } from '@yaks/forms'
-import { h, render } from 'preact'
+import { type ComponentChildren, h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { mount } from '../tui/testing.ts'
@@ -82,10 +86,36 @@ let { document, Event } = parseHTML('<html><body><main></main></body></html>')
 
 // A page holding one Signup: its state kept as the page graph would keep it,
 // its door answered by the given rows, and every send remembered.
+let vocab = loadVocab([draftDoc])
+let hosted = (typed: Drafts, child: ComponentChildren) => {
+  let host: Host = {
+    drafts: typed,
+    vocab,
+    front: {
+      mutate: () => {},
+      watch: () => ({ value: [], subscribe: () => () => {} }),
+      ent: () => undefined,
+    },
+    write: () => {},
+    name: (eid) => eid,
+    id: (b) => b.entity.eid,
+    kind: () => 'form',
+    when: (at) => at,
+    find: () => Promise.resolve([]),
+  }
+  return h(Ux, { host }, child)
+}
+let store = client(vocab, [drafts()], { vault: false, wireVault: false })
+let own = () => {
+  let by = mint()
+  return desk(store, { by: () => by })
+}
 let page = async (
   door: Door | string,
-  refuse?: string,
+  refuse?: string | Promise<string | undefined>,
   feedback?: object,
+  typed = own(),
+  at = '/directory/api/form/kids-club',
   upload?: Upload,
 ) => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -114,26 +144,28 @@ let page = async (
     configurable: true,
   })
   let root = document.querySelector('main')!
-  let at = '/directory/api/form/kids-club'
   let e: Bundle = { entity: { eid: signupAt(at) } }
   let sent: Answers[] = [], reads: string[] = []
   let draw = () =>
     render(
-      h(Signup, {
-        at,
-        e,
-        onChange: (b) => {
-          equal(b.entity.eid, signupAt(at))
-          e = b
-          queueMicrotask(draw)
-        },
-        upload,
-        read: (to) => (reads.push(to), Promise.resolve(door)),
-        send: (
-          to,
-          answers,
-        ) => (equal(to, at), sent.push(answers), Promise.resolve(refuse)),
-      }),
+      hosted(
+        typed,
+        h(Signup, {
+          at,
+          e,
+          onChange: (b) => {
+            equal(b.entity.eid, signupAt(at))
+            e = b
+            queueMicrotask(draw)
+          },
+          upload,
+          read: (to) => (reads.push(to), Promise.resolve(door)),
+          send: (
+            to,
+            answers,
+          ) => (equal(to, at), sent.push(answers), Promise.resolve(refuse)),
+        }),
+      ),
       root,
     )
   let settle = () => act(() => new Promise((r) => setTimeout(r, 0)))
@@ -181,6 +213,7 @@ let page = async (
     submit: async () => await fire($('form'), 'submit'),
     [Symbol.asyncDispose]: async () => {
       await act(() => render(null, root))
+      typed.close()
       if (prior) Object.defineProperty(globalThis, 'document', prior)
       else Reflect.deleteProperty(globalThis, 'document')
       if (location) Object.defineProperty(globalThis, 'location', location)
@@ -358,13 +391,185 @@ test('a closed form says its own words, and an unread one offers to try again', 
   }
 })
 
+// Reloading opens another desk over the same store and synchronous recovery.
+let recovery = (): Stash => {
+  let items = new Map<string, string>()
+  return {
+    get length() {
+      return items.size
+    },
+    key: (i) => [...items.keys()][i] ?? null,
+    getItem: (key) => items.get(key) ?? null,
+    setItem: (key, value) => void items.set(key, value),
+    removeItem: (key) => void items.delete(key),
+  }
+}
+let returning = (offline = false) => {
+  let by = mint(), stash = recovery()
+  let line = offline
+    ? { watch: store.watch, mutate: () => new Promise<Bundle[]>(() => {}) }
+    : store
+  return Object.assign(() => desk(line, { by: () => by, stash, pace: 0 }), {
+    by,
+  })
+}
+
+test('a closed tab recovers unsent repeated and conditional answers before the store accepts them', async () => {
+  let open = returning(true)
+  {
+    await using p = await page(kids, undefined, undefined, open())
+    await p.type('parent', 'Ruth')
+    await p.type('children.0.name', 'Ada')
+    await p.pick('children.0.allergic', 'Yes')
+    await p.type('children.0.allergies', 'peanuts')
+    await p.press('Add another')
+    await p.type('children.1.name', 'Sam')
+    await p.pick('children.1.allergic', 'No')
+  }
+  {
+    await using p = await page(kids, undefined, undefined, open())
+    equal(p.$('[name=parent]').value, 'Ruth')
+    equal(p.$('[name="children.0.name"]').value, 'Ada')
+    equal(p.$('[name="children.0.allergies"]').value, 'peanuts')
+    equal(p.$('[name="children.1.name"]').value, 'Sam')
+    equal(
+      p.$('[name="children.1.allergic"][value=No]').hasAttribute('checked'),
+      true,
+    )
+    equal(p.state().answers?.parent, 'Ruth')
+  }
+})
+
+test('a refusal keeps text, choices and checkboxes through reload; acceptance clears them', async () => {
+  let open = returning()
+  {
+    await using p = await page(card, 'Try again.', undefined, open())
+    await p.type('name', 'Ruth')
+    await p.pick('next', 'Serving')
+    await p.pick('texts', 'true')
+    await p.submit()
+    equal(p.$('[role=alert]').textContent, 'Try again.')
+  }
+  {
+    await using p = await page(card, undefined, undefined, open())
+    equal(p.$('[name=name]').value, 'Ruth')
+    equal(p.$('[name=next][value=Serving]').hasAttribute('checked'), true)
+    equal(p.$('[name=texts]').hasAttribute('checked'), true)
+    await p.submit()
+    equal(
+      p.text(),
+      'Membership card Thank you. Your answers are in. Fill it in again',
+    )
+  }
+  {
+    await using p = await page(card, undefined, undefined, open())
+    equal(p.$('[name=name]').value, '')
+    equal(p.$('[name=next][value=Serving]').hasAttribute('checked'), false)
+    equal(p.$('[name=texts]').hasAttribute('checked'), false)
+  }
+})
+
+test('typing while a send waits remains a draft after that send succeeds', async () => {
+  let finish!: (said?: string) => void
+  let answer = new Promise<string | undefined>((resolve) => finish = resolve)
+  let open = returning()
+  {
+    await using p = await page(card, answer, undefined, open())
+    await p.type('name', 'Ruth')
+    await p.submit()
+    let peer = open()
+    let held = store.watch(`.draft.by=${open.by}`)
+    let place = (held.value[0].draft as { place: string }).place
+    peer.type(place, JSON.stringify({ name: 'Ruth Jones' }))
+    held.close()
+    peer.close()
+    await p.settle()
+    finish()
+    await p.settle()
+    equal(p.sent, [{ name: 'Ruth' }])
+    await p.press('Fill it in again', 'section')
+    equal(p.$('[name=name]').value, 'Ruth Jones')
+  }
+  {
+    await using p = await page(card, undefined, undefined, open())
+    equal(p.$('[name=name]').value, 'Ruth Jones')
+  }
+})
+
+test('native acceptance clears its draft, while native refusal leaves it available', async () => {
+  let open = returning()
+  let at = 'https://church.example/directory/api/form/kids-club'
+  {
+    await using p = await page(card, undefined, undefined, open())
+    await p.type('name', 'Ruth')
+  }
+  {
+    await using p = await page(
+      card,
+      undefined,
+      { at, said: 'Try again.' },
+      open(),
+    )
+    equal(p.$('[name=name]').value, 'Ruth')
+  }
+  {
+    await using p = await page(card, undefined, { at, sent: true }, open())
+    equal(
+      p.text(),
+      'Membership card Thank you. Your answers are in. Fill it in again',
+    )
+  }
+  {
+    await using p = await page(card, undefined, undefined, open())
+    equal(p.$('[name=name]').value, '')
+  }
+})
+
+test('drafts follow the resolved form door, across spelling changes and apart from other apps', async () => {
+  let open = returning()
+  {
+    await using p = await page(
+      card,
+      undefined,
+      undefined,
+      open(),
+      './api/form/card',
+    )
+    await p.type('name', 'Ruth')
+  }
+  {
+    await using p = await page(
+      card,
+      undefined,
+      undefined,
+      open(),
+      'https://church.example/api/form/card',
+    )
+    equal(p.$('[name=name]').value, 'Ruth')
+  }
+  {
+    await using p = await page(
+      card,
+      undefined,
+      undefined,
+      open(),
+      '/directory/api/form/card',
+    )
+    equal(p.$('[name=name]').value, '')
+  }
+})
+
 test('a terminal draws the same form from the same state', async () => {
+  let typed = own()
   let e: Bundle = {
     entity: { eid: signupAt('./api/form/card') },
     Signup: { door: card },
   }
   let App = () =>
-    h(Signup, { at: './api/form/card', e, onChange: (b) => e = b })
+    hosted(
+      typed,
+      h(Signup, { at: './api/form/card', e, onChange: (b) => e = b }),
+    )
   let ui = await mount(App, 40, 30)
   try {
     let text = ui.text()
@@ -373,6 +578,7 @@ test('a terminal draws the same form from the same state', async () => {
     }
   } finally {
     ui.free()
+    typed.close()
   }
 })
 
@@ -391,6 +597,8 @@ test('a chosen file becomes its repeat answer, while pending uploads hold editin
   await using p = await page(
     files,
     undefined,
+    undefined,
+    own(),
     undefined,
     (at, question, file) => {
       calls.push([at, question, file.name])
@@ -425,6 +633,8 @@ test('a refused file upload keeps the form and lets the same file be tried again
     files,
     undefined,
     undefined,
+    own(),
+    undefined,
     () =>
       Promise.resolve(
         ++calls == 1 ? 'This file is too large.' : { eid: 'retry' },
@@ -439,4 +649,24 @@ test('a refused file upload keeps the form and lets the same file be tried again
   await p.file('people.0.resume', chosen)
   await p.submit()
   equal(p.sent, [{ people: [{ resume: 'retry' }] }])
+})
+
+test('an uploaded file answer survives closing its tab', async () => {
+  let open = returning()
+  {
+    await using p = await page(
+      files,
+      undefined,
+      undefined,
+      open(),
+      undefined,
+      () => Promise.resolve({ eid: 'kept-file' }),
+    )
+    await p.file('people.0.resume', new File(['file'], 'resume.pdf'))
+  }
+  {
+    await using p = await page(files, undefined, undefined, open())
+    equal(p.state().answers, { people: [{ resume: 'kept-file' }] })
+    equal(p.$('[name="people.0.resume"]').hasAttribute('required'), false)
+  }
 })

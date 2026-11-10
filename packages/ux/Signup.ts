@@ -2,12 +2,13 @@
  * form parts. It reads the form from its door (`GET ./api/form/<form>`, in
  * this app or another) and sends the answers there. The consumer keeps the
  * emitted Signup{…} bundles on `signupAt(at)` and supplies them again, so a
- * remount finds what was typed.
+ * remount finds its status. Answers live in the host's durable drafts.
  * @module
  */
 
 import { type ComponentChildren, h, type JSX } from 'preact'
 import { useEffect, useRef } from 'preact/hooks'
+import { useHost } from './host.ts'
 import type { Bundle } from '@yaks/graph'
 import { type Upload, upload } from './Signup-file.ts'
 export { signupBlob, type Upload, upload } from './Signup-file.ts'
@@ -49,7 +50,7 @@ export type SignupState = {
   door?: Door
   /** why the form could not be read */
   unread?: string
-  /** answers keyed by question eid, as `registration.answers` takes them */
+  /** the current draft's answers, mirrored for the consumer */
   answers?: Answers
   /** a send was tried, so required questions still owed say so */
   tried?: boolean
@@ -210,9 +211,17 @@ export let Signup = (
   { at, e, onChange, read = get, send = post, upload: sendFile = upload }:
     SignupProps,
 ): JSX.Element => {
+  let { drafts } = useHost()
+  let base = globalThis.document?.baseURI || globalThis.location?.href
+  let place = `signup:${signupAt(base ? new URL(at, base).href : at)}`
+  let text = drafts.text(place)
+  let answers: Answers | undefined = text ? JSON.parse(text) : undefined
   let state = signupOf(e)
   let latest = useRef(state)
-  latest.current = state
+  // A draft signal can repaint before the consumer returns emitted state.
+  let prior = useRef(e)
+  if (e !== prior.current) latest.current = state
+  prior.current = e
   let emit = (change: SignupState) => {
     latest.current = { ...latest.current, ...change }
     onChange({ entity: { eid: signupAt(at) }, Signup: latest.current })
@@ -224,10 +233,16 @@ export let Signup = (
   }
   let door = state.door
   useEffect(() => {
+    if (JSON.stringify(state.answers) != JSON.stringify(answers)) {
+      emit({ answers })
+    }
+  }, [text])
+  useEffect(() => {
     let page = globalThis.location?.href
     let result = page &&
       signupReturned(at, page, globalThis.document?.baseURI || page)
     if (result) {
+      if (result.sent) drafts.spend(place)
       emit(result)
       let url = new URL(page)
       url.searchParams.delete('yak-form')
@@ -251,9 +266,13 @@ export let Signup = (
         : h(Loading, {}, 'Loading the form…'),
     )
   }
+  let change = (next: SignupState) => {
+    if (next.answers) drafts.type(place, JSON.stringify(next.answers))
+    emit(next)
+  }
   let file = async (path: (string | number)[], chosen: File) => {
     if (latest.current.sending) return
-    emit({
+    change({
       sending: true,
       said: undefined,
       answers: put(
@@ -263,7 +282,7 @@ export let Signup = (
       ),
     })
     let result = await sendFile(at, String(path.at(-1)), chosen)
-    emit(
+    change(
       typeof result == 'string' ? { sending: false, said: result } : {
         sending: false,
         answers: put(
@@ -274,7 +293,13 @@ export let Signup = (
       },
     )
   }
-  return drawn(at, door, state, emit, send, file)
+  let sent: Send = async (at, answers) => {
+    let before = drafts.text(place)
+    let said = await send(at, answers)
+    if (said == null && drafts.text(place) == before) drafts.spend(place)
+    return said
+  }
+  return drawn(at, door, { ...state, answers }, change, sent, file)
 }
 
 let drawn = (
@@ -301,8 +326,7 @@ let drawn = (
         {},
         h(Button, {
           type: 'button',
-          onClick: () =>
-            emit({ answers: fresh(questions), sent: false, tried: false }),
+          onClick: () => emit({ sent: false, tried: false }),
         }, 'Fill it in again'),
       ),
     )

@@ -337,6 +337,36 @@ equal(tree.props.at, at)
 equal(signupOf(e).door?.doc?.title, 'Contact')
 ```
 
+Mount `tree` under `Ux`, as with `Edit` and `Text`. The host's `drafts` is
+required: answers are read from it and kept synchronously on every change,
+including repeat entries and hidden follow-up answers. The page graph keeps
+loading and send status, with `Signup.answers` mirroring the draft for readers;
+it is not the draft's source.
+
+A connected page supplies its store client, person and scoped recovery storage
+to the existing [draft desk](../draft/README.md). This binding needs the page's
+live connection and host:
+
+```ts ignore
+import { h, render } from 'preact'
+import { Ux } from '@yaks/ux'
+import { desk } from '@yaks/draft'
+
+let typed = desk(client, {
+  by: () => person,
+  stash: storage,
+})
+render(h(Ux, { host: { ...host, drafts: typed } }, tree), root)
+// On page teardown, after unmounting:
+// typed.close()
+```
+
+The draft place names the resolved absolute form door, so a reload, another tab
+or another interface finds the same answers, and different apps' relative form
+addresses stay separate. A closed tab keeps pending typing in the desk's
+recovery storage until the store accepts it. A successful send spends the draft;
+a refusal keeps it. A newer edit made while a send waits remains a draft.
+
 What it draws:
 
 - **Each kind its control.** `line`, `email`, `phone` and `date` are one-line
@@ -344,7 +374,8 @@ What it draws:
   (@yaks/ui's `Address` is a web address, not a postal one). `choose` is a row
   of radios to press, or a list to pick from past six choices; `choices` is a
   box for each; `check` is one box, and unticked is no answer, so a required one
-  must be ticked. `file` says files can't be sent with a form yet.
+  must be ticked. `file` uploads the chosen file to the form app and keeps its
+  blob reference as the answer.
 - **Repeat groups.** Each entry of a `repeat` is a card of its own questions,
   numbered from its label ("Child 1"), with Add and Remove. A required repeat
   starts with one entry and keeps at least one.
@@ -366,12 +397,14 @@ What it draws:
   is JSON containing the absolute form door URL as `at`, and either `sent: true`
   or `said` with the refusal. The page can render that feedback without script;
   Signup consumes its own feedback when mounted and removes the parameter, so
-  filling it in again starts fresh. Native redirects do not retain answers.
+  filling it in again starts fresh. Without script, native redirects do not
+  retain answers; a mounted Signup retains its draft across a refusal and spends
+  it after a successful native return.
 
 Its state is `Signup{door, unread, answers, tried, sending, sent, said}` on
 `signupAt(at)`: the form as the door answered it, why it could not be read, the
-answers so far, and how sending went. `read` and `send` replace the door calls
-(`get`, `post`).
+current draft snapshot, and how sending went. `read` and `send` replace the door
+calls (`get`, `post`).
 
 ## Dragging an entity
 
