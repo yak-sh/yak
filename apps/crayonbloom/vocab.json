@@ -351,6 +351,73 @@
         "job"
       ],
       "worker": "/studio/printable_step"
+    },
+    "legacy_record": {
+      "description": "A private source row retained for migration reconciliation and customer-link continuity. It never schedules generation, mail or fulfillment.",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "table": {
+          "type": "string"
+        },
+        "key": {
+          "type": "array"
+        },
+        "snapshot": {
+          "type": "object"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "via": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "legacy_asset": {
+      "description": "A verified copy of a source attachment, linked to its original book, page or free printable.",
+      "properties": {
+        "record": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "blob": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string"
+        },
+        "mime": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "legacy_page": {
+      "description": "The digest of an existing free-printable capability; it opens only that printable.",
+      "properties": {
+        "digest": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "legacy_opt_out": {
+      "description": "The digest of an existing unsubscribe capability, preserving suppression without sending a message.",
+      "properties": {
+        "digest": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
     }
   }
 }

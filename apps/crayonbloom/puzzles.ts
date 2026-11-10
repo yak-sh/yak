@@ -146,7 +146,7 @@ let incidental = (
   return false
 }
 export let dots = (text: string, budget: number, seed: number, index = 0) => {
-  let terms = text.toUpperCase().match(/[A-Z]+/g) ?? [],
+  let terms: string[] = text.toUpperCase().match(/[A-Z]+/g) ?? [],
     available = shapes.filter((shape) => shape.points.length <= budget)
   let themed = available.filter((shape) =>
     shape.keywords.some((word) => terms.includes(word))

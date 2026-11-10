@@ -106,7 +106,7 @@ test('the consumer renews original artwork tickets on resume and only reviews a 
   failed = true
   await assertRejects(
     () => press.preparation(pending, [f.page]),
-    undefined,
+    Error,
     'Reconnect PrintBound',
   )
   assertEquals((await f.read()).print_review, undefined)

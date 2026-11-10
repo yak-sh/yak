@@ -180,7 +180,7 @@ test('a preparation input error preserves its job and resumes the same document 
   await desk.prepare(row.entity.eid, alice)
   await assertRejects(
     () => desk.preparation(row.entity.eid, alice),
-    undefined,
+    Error,
     'Reconnect the source',
   )
   await assertRejects(() => desk.purchase(row.entity.eid, alice))
