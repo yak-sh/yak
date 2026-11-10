@@ -18,7 +18,8 @@
 //
 // A connection saved before numbers were listed names the one it took as its
 // `connection.account`, its callback already pointed here: it is used both
-// ways until the person chooses (`chosen`).
+// ways until the person chooses (`chosen`), and its numbers are listed the
+// first time the Operator reads them (`phoneNumbers`).
 //
 // voip.ms's API answers only addresses its allowlist names, and a Worker
 // calls from Cloudflare's, which change: the person enters 0.0.0.0 there,
@@ -518,6 +519,19 @@ export let phoneNumbers = (
     }
     let connection = held.line.entity.eid
     let numbers = await numbersOf(env, connection)
+    // A connection saved before numbers were listed keeps none: they are
+    // listed now as saving it again would, changing none of them.
+    if (!numbers.length) {
+      let account = await accountOf(ctxOf(env), held.own, held.via, connection)
+      if (!account) throw refuse('connection', held.own.said.unopened)
+      try {
+        await listed(env, held.via, connection, await account.lines())
+      } catch (error) {
+        if (error instanceof Denied) throw refuse('connection', error.message)
+        throw error
+      }
+      numbers = await numbersOf(env, connection)
+    }
     let used = await chosen(store.g, held.line)
     let wanted = String(args.number ?? '').trim()
     if (wanted) {

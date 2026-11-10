@@ -319,6 +319,12 @@ await answerText(env, space, {
   reply_to: '+12695550111',
 }, 'Legacy signup answer')
 let legacyAnswer = of('sendSMS').at(-1)!
+let pointedBeforeRead = of('setSMS').length
+let legacyListed = JSON.parse(await numbered.run({}) as string) as {
+  number: string
+}[]
+let legacyKept = await numbersOf(env, connection.entity.eid)
+let pointedByRead = of('setSMS').length - pointedBeforeRead
 await local.apply([
   {
     entity: connection.entity,
@@ -545,6 +551,13 @@ test('a legacy voip.ms account-number connection answers without own_number rows
   assertEquals(legacyAnswer.get('did'), '2695550111')
   assertEquals(legacyAnswer.get('dst'), '2695550198')
   assertStringIncludes(legacyAnswer.get('message')!, 'Legacy signup answer')
+})
+
+test('the Operator lists the numbers of a connection saved before numbers were listed, changing none', () => {
+  let all = ['+12695550100', '+12695550111', '+12695550122']
+  assertEquals(legacyListed.map((n) => n.number).sort(), all)
+  assertEquals(legacyKept.map((n) => n.number).sort(), all)
+  assertEquals(pointedByRead, 0)
 })
 
 test("a member's text to the inbound number is their own Operator's, answered from that number", () => {
