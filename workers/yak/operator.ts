@@ -321,6 +321,19 @@ export let operatorRoster = async (
   },
 ): Promise<Tool[]> => {
   ctx.dir = ctx.reopen!()
+  // A server on the person's own machine (tunnel.ts `machine`) is offered only
+  // to the Operator of the space whose tunnel reaches it, and is told that
+  // their Operator asks, and which conversation: the one this session works
+  // for, so a fork's calls and a helper's are the conversation's there too.
+  // What the person connected is read beside their reach, needing none of it.
+  let top: Promise<string> | undefined
+  let asking: Calling = {
+    caller: 'operator',
+    space,
+    via: session ? () => top ??= topOf(work, session) : undefined,
+  }
+  let connecting = connectedTools(ctx, asking)
+  connecting.catch(() => {})
   let reach = reached('reach', await inReach(ctx))
   let g = reached('vocab', await reaching(ctx, reach))
   // A tool's answer in words is the call's own, as at the connector's door:
@@ -398,18 +411,8 @@ export let operatorRoster = async (
   })
   // Every tool the connector lists for the person (agent.ts `connected`), to
   // the conversation and each of its forks alike: the list heads the request,
-  // so one list keeps the conversation's cached prefix for every fork. A
-  // server on the person's own machine (tunnel.ts `machine`) is offered only
-  // to the Operator of the space whose tunnel reaches it, and is told that
-  // their Operator asks, and which conversation: the one this session works
-  // for, so a fork's calls and a helper's are the conversation's there too.
-  let top: Promise<string> | undefined
-  let asking: Calling = {
-    caller: 'operator',
-    space,
-    via: session ? () => top ??= topOf(work, session) : undefined,
-  }
-  let remote = await connectedTools(ctx, asking)
+  // so one list keeps the conversation's cached prefix for every fork.
+  let remote = reached('connected', await connecting)
   let apps = listing(coded(
     {
       ...connected(ctx, reach, g),
@@ -696,14 +699,16 @@ let working = async (
   let o = await workingOf(store, session)
   if (!o) throw new Error(`Operator session ${session} names no space`)
   let reading = open ?? opening(env)
-  // The space, the person's reach in it, and the apps the step's roster and
-  // map read next are asked at once: the directory answers them together,
-  // and the step's later asks are answered from these (lib/hops.ts
-  // `recall`).
+  // The space, the person's reach in it, the apps the step's roster and
+  // map read next, and whether the person is the platform's admin (which
+  // the roster and the machine ask) are asked at once: the directory answers
+  // them together, and the step's later asks are answered from these
+  // (lib/hops.ts `recall`).
   let dir = reading()
   let reach = reachOf(dir, { eid: o.space }, o.person, o.administrative)
   let apps = o.administrative ? undefined : dir.reachable(o.person)
-  for (let asked of [reach, apps]) asked?.catch(() => {})
+  let platform = admin({ dir, person: o.person })
+  for (let asked of [reach, apps, platform]) asked?.catch(() => {})
   let space = await (open?.() ?? directoryOf(env.STORE)).at(o.space)
   if (!space || space.trashed) throw refuse('missing', 'That space is gone.')
   let ctx = await operatorContext(env, o, space, reading, reach)
