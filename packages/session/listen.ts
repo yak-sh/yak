@@ -16,7 +16,9 @@
 //
 // Person-written comments on records a session created follow it without a
 // claim; once it ends they are held for the project the record is filed under,
-// just like mail.
+// just like mail. On a record a session holds, an outside session hears every
+// comment but its own, and a native transcript only a person's: each input
+// wakes it for a model turn.
 // A reply is the old session's while it may still hear it, and the project's
 // once it cannot. The session that wrote a letter hears the answer, wherever
 // the far side sent it, until that session is over (its harness ended it, or
@@ -111,7 +113,8 @@ let comp = (b: Bundle | undefined, name: string): Comp =>
 let fold = (text: string): string => text.replace(/\s+/g, ' ').trim()
 let value = (eids: Eid[]): Input => eids.length == 1 ? eids[0] : list(...eids)
 
-/** The queries for what is addressed to one session and not yet said. Each
+/** The queries for what is addressed to one session and not yet said, with
+ * every comment on what it holds unless `claimedComments` is false. Each
  * asks about one component the graph declares; a graph without knocks or
  * letters has nothing to hear about them. */
 let addressedTo = (
@@ -544,7 +547,13 @@ export let pendingItems = async (
   return items
 }
 
-export type Routes = { items: Bundle[]; creators: Map<Eid, string> }
+/** Unsaid items, and for the record each answers the session that created it
+ * and, where asked, the session holding it. */
+export type Routes = {
+  items: Bundle[]
+  creators: Map<Eid, string>
+  holders: Map<Eid, string>
+}
 /** What a caller already read for {@link pending}: the unsaid comments and
  * replies it may route, and the graph's projects when it keeps them. */
 export type News = { comments: Routes; replies: Routes; projects?: Projects }
@@ -555,8 +564,10 @@ let routed = async (
   name: string,
   prop: string,
   ids?: Eid[],
+  claimed = false,
 ): Promise<Routes> => {
-  if (ids && !ids.length) return { items: [], creators: new Map() }
+  let none = new Map<Eid, string>()
+  if (ids && !ids.length) return { items: [], creators: none, holders: none }
   let items = graph.vocab.comp(name)
     ? await graph.read(
       ids ? and(eq('entity.eid', value(ids)), ...query.clauses) : query,
@@ -566,19 +577,20 @@ let routed = async (
   let rows = targets.length
     ? await graph.read(and(
       eq('entity.eid', value(targets)),
-      fields('created.via'),
+      fields('created.via', ...claimed ? [`${CLAIM}.session`] : []),
     ))
     : []
+  let by = (name: string, prop: string) =>
+    new Map(rows.map((b) => [b.entity.eid, str(comp(b, name)[prop])]))
   return {
     items,
-    creators: new Map(
-      rows.map((b) => [b.entity.eid, str(comp(b, 'created').via)]),
-    ),
+    creators: by('created', 'via'),
+    holders: claimed ? by(CLAIM, 'session') : none,
   }
 }
 
-/** Unread human comments and their targets' creators, through the caller's
- * scope: every one, or those among `ids`. */
+/** Unread human comments, their targets' creators and the sessions holding
+ * those targets, through the caller's scope: every one, or those among `ids`. */
 export let comments = (
   graph: Pick<Graph, 'vocab' | 'read'>,
   ids?: Eid[],
@@ -594,6 +606,7 @@ export let comments = (
     'comment',
     'target',
     ids,
+    true,
   )
 
 /** Unread replies and the writers they answer, without walking a writer's
@@ -627,8 +640,9 @@ export let pending = async (
   news?: News,
 ): Promise<Owed[]> => {
   let vocab = graph.vocab
-  // Ordinary claimed-thread comments stay out of native transcripts. Replies
-  // on records a session created reach native and outside sessions alike.
+  // A person's comment on a record the session created or holds reaches
+  // native and outside sessions alike. An agent's comment on a held record
+  // reaches an outside session only.
   let [owner] = await graph.read(
     and(
       eq('entity.eid', session),
@@ -648,8 +662,10 @@ export let pending = async (
   let received = news ??
     { comments: await comments(graph), replies: await replies(graph) }
   let mine = (r: Routes, name: string, prop: string) =>
-    r.items.filter((b) => r.creators.get(str(comp(b, name)[prop])) == session)
-      .map((b) => b.entity.eid)
+    r.items.filter((b) => {
+      let on = str(comp(b, name)[prop])
+      return r.creators.get(on) == session || r.holders.get(on) == session
+    }).map((b) => b.entity.eid)
   let ids = [
     ...mine(received.comments, 'comment', 'target'),
     ...mine(received.replies, 'mail', 'reply_to'),

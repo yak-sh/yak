@@ -884,20 +884,22 @@ session, and the duty's work is the operator's to do
 
 ## Claimed-work comments
 
-The session bus delivers no comment to a native transcript: a comment stays a
-message in its thread. Direct comments to a session remain thread messages.
-Knocks and addressed deliveries retain their bus. An outside harness claiming
-work can still hear comments on that work:
+A person's comment on a record a session holds a claim on reaches that session:
+a native transcript gets it as an input, once, and an outside harness hears it
+from `yak session listen`, at its hook door, or beside its next tool reply. A
+person's comment is one whose own `created.via` is not a session.
+
+An agent's comment on a claimed record reaches an outside session only, never a
+native transcript, which wakes for each input and spends a model turn on it. A
+comment at a session itself stays a message in its thread, and no bus delivers
+it.
 
 ```sh
 yak claim take <task> --session <outside-session>
 yak session listen --session <outside-session>
 ```
 
-A native transcript is recognized by a `using` entry and no `process`. Its
-claimed-work comments stay unmarked by the bus. A listener on an outside
-transcript uses the claimed-work exception; it does not hear comments merely
-addressed to that session.
+A native transcript is recognized by a `using` entry and no `process`.
 
 ## When the bus looks
 

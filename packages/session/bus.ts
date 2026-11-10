@@ -193,11 +193,11 @@ let candidates = async (
     )
   )
   let items = [
-    ...news.comments.items.filter((b) =>
-      sessions.has(
-        news.comments.creators.get(String(comp(b, 'comment').target)) ?? '',
-      )
-    ),
+    ...news.comments.items.filter((b) => {
+      let on = String(comp(b, 'comment').target)
+      return sessions.has(news.comments.creators.get(on) ?? '') ||
+        !!news.comments.holders.get(on)
+    }),
     ...queries.length
       ? await g.read(and(
         or(...queries),

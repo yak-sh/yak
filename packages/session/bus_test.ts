@@ -23,7 +23,7 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { taskDoc } from '@yaks/task/vocab'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { test, until } from '@yaks/testing'
-import { due, feed, heard, reply } from './bus.ts'
+import { due, feed, heard, noted, reply, scope } from './bus.ts'
 import { PATH, routes } from './routes.ts'
 import { pending, pendingItems } from './listen.ts'
 import { statusOf } from './state.ts'
@@ -119,30 +119,34 @@ test('native bus delivery appends input and marks the item once', async () => {
   let wakes: string[] = []
   let g = await fresh(undefined, (eid) => wakes.push(eid))
   wakes.length = 0
-  assertEquals(await feed(g), 1)
+  assertEquals(await feed(g), 2)
   let entries = await g.read('.entry.session=native&*')
-  assertEquals(entries.length, 2)
   assertEquals(
-    (entries[1].content as { body: string }).body.includes('child finished'),
-    true,
+    entries.slice(1).map((e) => (e.content as { body: string }).body).sort(),
+    [
+      'comment #note on #page: please check',
+      'knock #knock at #native: child finished',
+    ],
   )
   assertEquals(entries.slice(1).every((e) => !!e.attention), true)
   assertEquals(
     entries.slice(1).every((e) => wakes.includes(e.entity.eid)),
     true,
   )
-  assertEquals((await g.get(['note']))[0].notified != null, false)
-  assertEquals((await g.get(['knock']))[0].notified != null, true)
+  assertEquals(
+    (await g.get(['note', 'knock'])).map((b) => !!b.notified),
+    [true, true],
+  )
   assertEquals(await feed(g), 0)
-  assertEquals((await g.read('.entry.session=native')).length, 2)
+  assertEquals((await g.read('.entry.session=native')).length, 3)
 })
 
 test('SQLite finds the same addressed comment and knock', async () => {
   let g = await fresh(lite())
-  assertEquals(await feed(g), 1)
+  assertEquals(await feed(g), 2)
   assertEquals(
     (await g.get(['note', 'knock'])).map((b) => !!b.notified),
-    [false, true],
+    [true, true],
   )
 })
 
@@ -169,7 +173,7 @@ for (let [name, storage] of [['RAM', memory], ['SQLite', lite]] as const) {
     return { before, queued, after: await feed(g) }
   })
   test(`${name} leaves bus messages queued after a stop until explicit input`, () => {
-    assertEquals(stopped(), { before: 0, queued: true, after: 1 })
+    assertEquals(stopped(), { before: 0, queued: true, after: 2 })
   })
 }
 
@@ -347,15 +351,17 @@ test('the session duty delivers without a Claude transcript directory', async ()
   let stop = new AbortController()
   let run = service({ graph: g }, { find: false }, stop.signal)
   try {
-    await until(async () => (await g.get(['knock']))[0].notified)
-    assertEquals((await g.read('.entry.session=native')).length, 2)
+    await until(async () =>
+      (await g.get(['knock', 'note'])).every((b) => b.notified)
+    )
+    assertEquals((await g.read('.entry.session=native')).length, 3)
   } finally {
     stop.abort()
     await run
   }
 })
 
-test('native comments never feed through the bus; outside task claims retain their listener', async () => {
+test('a comment at a session itself is never fed; an outside session hears every comment on what it holds', async () => {
   let g = await fresh()
   await g.apply([
     {
@@ -381,10 +387,53 @@ test('native comments never feed through the bus; outside task claims retain the
   assertEquals(first.length, 2) // letter and claimed comment, never direct comment
   assertEquals((await g.get(['direct']))[0].notified != null, false)
   assertEquals((await g.get(['claimed-note']))[0].notified != null, true)
+  await g.apply([{
+    entity: { eid: 'at-native' },
+    comment: { target: 'native' },
+    doc: { body: 'direct words' },
+  }], { trusted: true })
   await feed(g)
-  assertEquals((await g.get(['note']))[0].notified != null, false)
-  assertEquals((await g.read('.entry.session=native')).length, 2)
+  assertEquals((await g.get(['at-native']))[0].notified != null, false)
 })
+
+// A task a native transcript holds, filed by a person, and a comment on it.
+let holding = async (store: Storage, via?: string) => {
+  let g = await fresh(store)
+  await g.apply([
+    { entity: { eid: 'owner' }, doc: { title: 'Owner' } },
+    { entity: { eid: 'agent' }, session: { id: 'agent' } },
+    {
+      entity: { eid: 'held' },
+      task: {},
+      doc: { title: 'Held' },
+      claim: { session: 'native' },
+    },
+  ], { trusted: true })
+  // The pass a commit starts asks about what it wrote; the next, everything.
+  let wrote = await g.apply([{
+    entity: { eid: 'word' },
+    comment: { target: 'held' },
+    doc: { body: 'try the other way' },
+    $actor: { by: via ?? 'owner', via: via ?? 'owner' },
+  }])
+  await feed(g, noted(scope(), wrote))
+  await feed(g)
+  return (await g.read('.entry.session=native&.attention&*'))
+    .map((e) => (e.content as { body: string }).body)
+    .filter((body) => body.includes('word'))
+}
+for (let [name, storage] of [['RAM', memory], ['SQLite', lite]] as const) {
+  let person = await scene(() => holding(storage()))
+  let agent = await scene(() => holding(storage(), 'agent'))
+  let own = await scene(() => holding(storage(), 'native'))
+  test(`${name}: a native transcript gets a person's comment on a task it holds as one input, never an agent's`, () => {
+    assertEquals(person(), [
+      'comment #word on #held from #owner: try the other way',
+    ])
+    assertEquals(agent(), [])
+    assertEquals(own(), [])
+  })
+}
 
 test('a process-backed harness claim still hears comments with a using entry', async () => {
   let g = await fresh(lite())
@@ -459,7 +508,8 @@ for (
       1,
     )
     assertEquals(await said(g, 'answer-outside'), true)
-    assertEquals(await feed(g), 2) // the knock, and the native session's reply
+    // the knock, the comment on its page, and the native session's reply
+    assertEquals(await feed(g), 3)
     let input = await g.read('.entry.session=native&*')
     assertEquals(
       input.some((e) =>
