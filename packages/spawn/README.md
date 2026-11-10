@@ -211,12 +211,11 @@ nothing asked of the agent.
 without, by the provider's name and then the names that provider lists them
 under (`claude mcp list`, `codex mcp list`). A provider's CLI connects every
 server its configuration and its account name, and each one's tools cost every
-run context whether it calls them or not. Claude is given a deny rule on the
-server's tools (`--disallowedTools mcp__<server>`), so none is offered or named
-to the model; the server still connects and its instructions still reach the
-model, because claude has no flag that leaves one account connector out. Codex
-is given `-c mcp_servers.<name>.enabled=false`, which must name a server its
-config has. The person's own sessions and configuration are untouched.
+run context whether it calls them or not. Claude is given the names as settings
+for the run (`--settings` with `deniedMcpServers`) and never connects them, so
+neither their tools nor their instructions reach the model. Codex is given
+`-c mcp_servers.<name>.enabled=false`, which must name a server its config has.
+The person's own sessions and configuration are untouched.
 
 Effects also accept process-file `dir`, polling interval `poll`, and kill
 `grace`. Tools accept `poll`, a human-readable default `timeout` such as `45m`,

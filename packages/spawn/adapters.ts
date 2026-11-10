@@ -83,19 +83,18 @@ let connected = (j: Job): string[] =>
     ]
     : []
 
-// Claude names a server's tools `mcp__<server>__<tool>`, the server's name with
-// every character outside these made an underscore: `claude.ai Google Drive`
-// is `mcp__claude_ai_Google_Drive`.
-let prefix = (server: string): string =>
-  `mcp__${server.replace(/[^a-zA-Z0-9_-]/g, '_')}`
-
-// Claude has no flag that leaves one server of an account unconnected, so a
-// run goes without a server by a deny rule on all its tools: none of them is
-// offered, and none is named in the list of tools the model can look up. The
-// server still connects, and its instructions still reach the model.
+// Claude reads settings for one run as JSON (`--settings`), over the person's
+// own files. A server its `deniedMcpServers` names is never connected, whether
+// the person's configuration, a plugin or their account lists it: none of its
+// tools is named to the model, and neither are its instructions.
 let lacking = (j: Job): string[] =>
   j.without?.length
-    ? ['--disallowedTools', j.without.map(prefix).join(',')]
+    ? [
+      '--settings',
+      JSON.stringify({
+        deniedMcpServers: j.without.map((serverName) => ({ serverName })),
+      }),
+    ]
     : []
 
 /** `claude -p --output-format stream-json`, carrying on its thread with
