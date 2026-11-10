@@ -7,6 +7,9 @@
     "@yaks/member": "platform",
     "@yaks/graph": "platform",
     "@yaks/host": "platform",
-    "@yaks/draft": "platform"
+    "@yaks/draft": "platform",
+    "@yaks/ui": "platform",
+    "preact": "^10.29.1",
+    "preact-render-to-string": "^6.7.0"
   }
 }

@@ -251,9 +251,13 @@ test('A mailed unsubscribe link suppresses its own signup on opening, as the sou
   let suppressed = async (eid: string) => !!(await read(eid))?.mail_opt_out
   let [first, second] = waitlist.rows.map((r) => r.eid)
 
-  equal((await open('/unsubscribe/bb22'))!.status, 200)
+  let asked = (await open('/unsubscribe/bb22'))!
+  equal(asked.status, 200)
+  match(await asked.text(), /<form method="post">.*Unsubscribe.*<\/form>/s)
   equal(await suppressed(second), false)
-  equal((await open('/unsubscribe?token=aa11'))!.status, 200)
+  let opened = (await open('/unsubscribe?token=aa11'))!
+  equal(opened.status, 200)
+  match(await opened.text(), /You are unsubscribed/)
   equal(await suppressed(first), true)
   equal((await open('/unsubscribe?token=bb22', 'POST'))!.status, 200)
   equal(await suppressed(second), true)

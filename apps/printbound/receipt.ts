@@ -1,14 +1,13 @@
+import { h } from 'preact'
+import { Button, Card, Notice } from '@yaks/ui/parts'
 import { type Order, progress } from './fulfillment.ts'
 import { query } from './orders.ts'
 import { appBase } from './request.ts'
 import { caller, commands } from './service.ts'
 import { type Environment, runtime } from './runtime.ts'
+import { note } from './site/note.ts'
+import { Slip } from './site/parts.ts'
 
-let esc = (value: string) =>
-  value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll(
-    '"',
-    '&quot;',
-  )
 let labels: Record<string, string> = {
   payment_pending: 'Waiting for payment',
   paid: 'Payment received',
@@ -72,37 +71,53 @@ export let receiptPage = async (
   let links = (order.print_receipt?.tracking ?? []).filter((value) =>
     /^https?:\/\//.test(value)
   )
-  let body =
-    `<!doctype html><html lang="en"><meta name="viewport" content="width=device-width"><title>Your PrintBound order</title>
-<style>.Receipt{max-width:42rem;margin:3rem auto;padding:1.5rem;font:1rem/1.6 system-ui}.Receipt_Preview{padding:1rem;background:#fff2c2}.Receipt_Status{font-weight:600}.Receipt_Button{font:inherit;padding:.5rem 1rem}</style>
-<main class="Receipt"><h1>Your PrintBound order</h1>${
-      preview
-        ? '<p class="Receipt_Preview">Preview simulation. No payment was taken and no print order was sent.</p>'
-        : ''
-    }
-<h2>${esc(order.print_order.print.title)}</h2><p class="Receipt_Status">${
-      esc(labels[status] ?? status.replaceAll('_', ' '))
-    }</p>
-<p>Quantity: ${order.print_order.print.quantity}</p><p>Document revision: ${
-      esc(order.print_order.manifest.revision)
-    }</p>
-${
-      links.map((link) =>
-        `<p><a href="${esc(link)}" rel="noreferrer">Track shipment</a></p>`
-      ).join('')
-    }
-${
-      order.print_cancel_denied
-        ? '<p>The printer could not cancel this order before production.</p>'
-        : ''
-    }
-<p><a href="">Refresh status</a></p>${
-      !['refunded', 'cancelled', 'shipped', 'delivered', 'expired'].includes(
+  let base = appBase(request).href
+  let line = (name: string, value: string | number) =>
+    h(Slip.Line, {}, h(Slip.Name, {}, name), h(Slip.Value, {}, value))
+  let body = note(
+    base,
+    'Your PrintBound order',
+    h(
+      Card,
+      {},
+      h(Card.Head, {}, h(Card.Title, {}, order.print_order.print.title)),
+      preview &&
+        h(
+          Notice,
+          {},
+          'Preview simulation. No payment was taken and no print order was sent.',
+        ),
+      h(
+        Slip,
+        {},
+        line('Status', labels[status] ?? status.replaceAll('_', ' ')),
+        line('Quantity', order.print_order.print.quantity),
+        line('Document revision', order.print_order.manifest.revision),
+      ),
+      order.print_cancel_denied &&
+        h(
+          'p',
+          {},
+          'The printer could not cancel this order before production.',
+        ),
+      h(
+        Card.Actions,
+        {},
+        links.map((href) =>
+          h(Button, { href, rel: 'noreferrer' }, 'Track shipment')
+        ),
+        h(Button, { href: `${base}receipt?order=${id}` }, 'Refresh status'),
+        !['refunded', 'cancelled', 'shipped', 'delivered', 'expired'].includes(
           status,
-        )
-        ? '<form method="post"><button class="Receipt_Button">Request cancellation</button></form>'
-        : ''
-    }</main></html>`
+        ) &&
+          h(
+            Card.Form,
+            { method: 'post' },
+            h(Button, { mod: 'danger' }, 'Request cancellation'),
+          ),
+      ),
+    ),
+  )
   return new Response(request.method === 'HEAD' ? null : body, {
     headers: {
       'content-type': 'text/html; charset=utf-8',

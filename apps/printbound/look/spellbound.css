@@ -1,0 +1,137 @@
+/* Spellbound, PrintBound's theme: a storybook's dusk sky lit by moonlight
+   gold, over warm parchment for reading. Light is the page: parchment under
+   cream cards, written in a blue-black ink, with moonflower indigo for a link
+   and what is lit. Night is the same roles turned for the dusk sky (the hero
+   and its kin, site.css): moonlight for the words, gold for what is lit. spellbound.md
+   has the design's reasons.
+
+   A theme has more roles than this palette has paints, so roles share them:
+   indigo is a link, what is lit, something to know and a moment; gold ink is
+   a number, what is under way and who; coral a fault and what needs
+   watching. */
+
+/* Fraunces draws the headings and Newsreader the words. Both are variable,
+   one file a subset, served beside this sheet. */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('fonts/fraunces-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('fonts/fraunces-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF,
+    U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('fonts/newsreader-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('fonts/newsreader-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF,
+    U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  color-scheme: light;
+  --gap: 1.3rem;
+  --radius: 16px;
+  --measure: 68ch;
+  --shadow: 0 2px 6px rgba(13, 19, 48, .08), 0 18px 40px rgba(13, 19, 48, .12);
+
+  --font: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --size: 1.075rem;
+  --small: .94rem;
+  --scale: 1.26;
+
+  /* The paints, named for what they look like. */
+  --night-900: #0d1330; /* deepest midnight */
+  --night-800: #131a3c; /* a dusk panel */
+  --night-600: #2b3768; /* a lifted edge on night */
+  --parchment: #f6f0e4;
+  --parchment-2: #ece2cf;
+  --cream: #fdfaf2;
+  --ink: #1c2033;
+  --ink-soft: #54586b;
+  --moon: #f5f1e7;
+  --moon-soft: rgba(245, 241, 231, .74);
+  --moon-faint: rgba(245, 241, 231, .55);
+  --gold: #ecc079; /* moonlight gold */
+  --gold-bright: #f6d79a; /* a firefly */
+  --gold-ink: #8a5a16; /* gold that reads on parchment */
+  --indigo: #3a3f8f; /* moonflower indigo */
+  --indigo-lift: #565cc0;
+  --moonflower: #8ea4ec;
+  --coral-ink: #b5482a; /* the red boots, as ink */
+  --rule: #ddd0b8;
+  --rule-night: rgba(245, 241, 231, .16);
+
+  --pill: 999px;
+  --ease: cubic-bezier(.22, .61, .36, 1);
+  --shadow-sm: 0 1px 2px rgba(13, 19, 48, .06), 0 4px 12px rgba(13, 19, 48, .06);
+  --shadow-lg: 0 8px 20px rgba(13, 19, 48, .12), 0 40px 80px rgba(13, 19, 48, .22);
+  --glow: 0 0 0 1px rgba(236, 192, 121, .35), 0 8px 30px rgba(236, 192, 121, .28);
+
+  /* The roles. */
+  --bg: var(--parchment);
+  --surface: var(--parchment-2);
+  --card: var(--cream);
+  --border: var(--rule);
+  --border2: var(--rule);
+
+  --text: var(--ink);
+  --muted: var(--ink-soft);
+  --dim: #8b8ea0;
+
+  --accent: var(--indigo);
+  --link: var(--indigo);
+  --heading: var(--ink);
+
+  --info: var(--indigo);
+  --active: var(--gold-ink);
+  --positive: #2f6b4f;
+  --negative: var(--coral-ink);
+  --caution: var(--coral-ink);
+  --special: var(--indigo-lift);
+
+  --number: var(--gold-ink);
+  --literal: var(--coral-ink);
+  --time: var(--indigo);
+  --who: var(--gold-ink);
+
+  --keyword: var(--coral-ink);
+  --string: #2f6b4f;
+  --fn: var(--indigo);
+  --type: var(--gold-ink);
+  --attr: var(--ink-soft);
+
+  --hue-0: var(--indigo);
+  --hue-1: var(--gold-ink);
+  --hue-2: var(--coral-ink);
+  --hue-3: #2f6b4f;
+  --hue-4: var(--indigo-lift);
+  --hue-5: var(--ink-soft);
+}

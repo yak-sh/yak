@@ -1,6 +1,10 @@
 // Existing order capabilities resolve to their imported historical receipt.
 // This door has no payment, rendering, fulfillment, membership or mail effects.
 import { type Bundle, sha256 } from '@yaks/graph'
+import { h } from 'preact'
+import { Button } from '@yaks/ui/parts'
+import { appBase } from './request.ts'
+import { note } from './site/note.ts'
 
 export type Historical = {
   id: string
@@ -36,18 +40,22 @@ let optOut = (request: Request, unsubscribed: boolean): Response => {
   if (request.headers.get('accept')?.includes('application/json')) {
     return json({ unsubscribed })
   }
-  let body = unsubscribed
-    ? '<p>You are unsubscribed from commercial messages.</p>'
-    : '<p>You can stop commercial messages from PrintBound.</p><form method="post"><button>Unsubscribe</button></form>'
-  return new Response(
-    `<!doctype html><html lang="en"><meta name="viewport" content="width=device-width"><title>Unsubscribe</title><main><h1>Unsubscribe</h1>${body}</main></html>`,
-    {
-      headers: {
-        'content-type': 'text/html; charset=utf-8',
-        'cache-control': 'no-store, private',
-      },
-    },
+  let page = note(
+    appBase(request).href,
+    'Unsubscribe',
+    unsubscribed
+      ? h('p', {}, 'You are unsubscribed from commercial messages.')
+      : [
+        h('p', {}, 'You can stop commercial messages from PrintBound.'),
+        h('form', { method: 'post' }, h(Button, { mod: 'go' }, 'Unsubscribe')),
+      ],
   )
+  return new Response(page, {
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store, private',
+    },
+  })
 }
 
 /** A token proves access to one order, never to its owner's other records. */

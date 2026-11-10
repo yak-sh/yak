@@ -77,32 +77,3 @@ export let storefront = async (
     })
   }
 }
-
-let files = new Set([
-  'index.html',
-  'studio.html',
-  'studio.js',
-  'studio.css',
-  'recovery.js',
-  'public.js',
-  'styles.css',
-  'favicon.svg',
-  'privacy.html',
-  'terms.html',
-  'refund.html',
-  'make-a-picture-book-in-chatgpt.html',
-  'print-your-chatgpt-book.html',
-  'can-you-print-ai-images.html',
-])
-export let publicFile = async (
-  request: Request,
-  env: Env,
-): Promise<Response | null> => {
-  if (request.method !== 'GET') return null
-  let path = new URL(request.url).pathname.split('/').filter(Boolean).at(-1) ??
-    ''
-  if (!path || path === request.headers.get('x-yak-app')) path = 'index.html'
-  if (path === 'studio') path = 'studio.html'
-  if (!path.includes('.')) path += '.html'
-  return files.has(path) ? await env.FILES.fetch('/' + path) : null
-}

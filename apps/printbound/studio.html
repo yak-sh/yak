@@ -4,17 +4,19 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Your books · PrintBound</title>
-    <link rel="stylesheet" href="./studio.css">
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+    <link rel="preload" href="./fonts/fraunces-latin.woff2" as="font"
+      type="font/woff2" crossorigin>
+    <link rel="preload" href="./fonts/newsreader-latin.woff2" as="font"
+      type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="./look.css">
   </head>
   <body>
-    <header
-      class="Mast"><a class="Mast_Name" href="./">PrintBound</a><nav><a href="./studio">Your books</a><a href="./print-your-chatgpt-book">Printing guide</a><a data-account href="https://yaks.app/login">Sign in to order</a></nav></header>
+    <!--mast-->
     <main class="Desk" id="desk">
       <p>Opening your saved books…</p>
     </main>
-    <p class="Notice" id="notice" role="status" aria-live="polite"></p>
-    <footer
-      class="Foot"><a href="./terms">Terms</a><a href="./privacy">Privacy</a><a href="./refund">Refunds</a><a href="mailto:hello@printbound.net">Contact</a></footer>
-    <script type="module" src="./studio.js"></script>
+    <!--foot-->
+    <script type="module" src="./studio.ts"></script>
   </body>
 </html>

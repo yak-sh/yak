@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
+    <loc>__APP_BASE__</loc>
+  </url>
+  <url>
     <loc>__APP_BASE__make-a-picture-book-in-chatgpt</loc>
   </url>
   <url>

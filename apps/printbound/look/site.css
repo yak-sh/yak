@@ -1,0 +1,875 @@
+/* PrintBound's own parts (site/parts.ts) and the layout of its pages, in the
+   Spellbound theme's paints. */
+
+:root {
+  --wide: 1120px;
+  --pad: clamp(1.25rem, 4vw, 2.5rem);
+  --link-lift: var(--indigo-lift);
+}
+html {
+  scroll-behavior: smooth;
+}
+/* The foot stands at the bottom of a short page. */
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+body > main {
+  flex: 1 0 auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+a:hover {
+  color: var(--link-lift);
+}
+
+/* The dusk sky: every role turned for night, so a kit part inside reads on
+   it as it stands. What the kit derives at the root from a role is derived
+   again here. */
+:is(.Hero, .Band-night, .Price, .Prompt, .Foot) {
+  --bg: var(--night-900);
+  --surface: var(--night-800);
+  --card: rgba(245, 241, 231, .05);
+  --border: var(--night-600);
+  --border2: var(--night-600);
+  --text: var(--moon);
+  --muted: var(--moon-soft);
+  --dim: var(--moon-faint);
+  --accent: var(--gold-bright);
+  --link: var(--gold-bright);
+  --link-lift: #fff;
+  --heading: var(--moon);
+  --negative: #ff9e85;
+  --edge-color: var(--border2);
+  --soft: color-mix(in srgb, var(--text) 8%, transparent);
+  --well: rgba(245, 241, 231, .07);
+  --shadow-sm: 0 0 0 transparent;
+  color: var(--text);
+  background-color: var(--night-900);
+}
+:is(.Hero, .Band-night) {
+  position: relative;
+  isolation: isolate;
+  background-image:
+    radial-gradient(1200px 600px at 80% -10%, rgba(142, 164, 236, .18),
+    transparent 60%),
+    radial-gradient(900px 500px at 10% 110%, rgba(236, 192, 121, .1),
+    transparent 55%);
+}
+/* A quiet field of stars. */
+:is(.Hero, .Band-night)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .9;
+  background-image:
+    radial-gradient(1.4px 1.4px at 12% 22%, rgba(255, 255, 255, .9), transparent
+    60%),
+    radial-gradient(1.2px 1.2px at 28% 64%, rgba(255, 255, 255, .7), transparent
+    60%),
+    radial-gradient(1.6px 1.6px at 44% 16%, rgba(246, 215, 154, .9), transparent
+    60%),
+    radial-gradient(1.1px 1.1px at 62% 48%, rgba(255, 255, 255, .65),
+    transparent 60%),
+    radial-gradient(1.5px 1.5px at 76% 28%, rgba(255, 255, 255, .85),
+    transparent 60%),
+    radial-gradient(1.2px 1.2px at 88% 70%, rgba(142, 164, 236, .9), transparent
+    60%),
+    radial-gradient(1px 1px at 36% 84%, rgba(255, 255, 255, .6), transparent
+    60%),
+    radial-gradient(1.3px 1.3px at 54% 76%, rgba(246, 215, 154, .7), transparent
+    60%),
+    radial-gradient(1px 1px at 8% 52%, rgba(255, 255, 255, .55), transparent
+    60%),
+    radial-gradient(1.2px 1.2px at 70% 88%, rgba(255, 255, 255, .6), transparent
+    60%);
+}
+/* A card on night lights its edge in gold under the pointer. */
+.Band-night .Card {
+  transition: transform .28s var(--ease), box-shadow .28s var(--ease),
+    background-color .28s var(--ease);
+}
+.Band-night .Card:hover {
+  background: rgba(245, 241, 231, .08);
+  box-shadow: var(--glow);
+}
+
+/* The one width every band keeps. */
+:is(.Mast_Inner, .Band_Inner, .Hero_Inner, .Strip_Inner, .Cover_Inner, .Foot_Inner) {
+  width: 100%;
+  max-width: var(--wide);
+  margin-inline: auto;
+  padding-inline: var(--pad);
+}
+
+/* The name. */
+.Wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  color: var(--text);
+  text-decoration: none;
+}
+.Wordmark:hover {
+  color: var(--text);
+}
+.Wordmark_Mark {
+  display: inline-flex;
+  color: var(--gold-ink);
+}
+.Wordmark_Text {
+  font-family: var(--display);
+  font-optical-sizing: auto;
+  font-size: 1.42rem;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  white-space: nowrap;
+}
+.Wordmark_Bound {
+  color: var(--gold-ink);
+}
+.Foot :is(.Wordmark_Mark, .Wordmark_Bound) {
+  color: var(--gold);
+}
+
+/* The bar across the top: it stays as the page scrolls under it. */
+.Mast {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  border-bottom: 1px solid var(--border2);
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  backdrop-filter: saturate(1.3) blur(10px);
+}
+.Mast_Inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 66px;
+}
+.Mast_Nav {
+  display: flex;
+  align-items: center;
+  gap: 1.6rem;
+}
+.Mast_Link {
+  color: var(--text);
+  font-size: .98rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.Mast_Link:hover {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.Mast_Link-quiet {
+  color: var(--muted);
+}
+.Mast .Button {
+  padding: .55rem 1.15rem;
+  font-size: .94rem;
+}
+@media (max-width: 1080px) {
+  .Mast_Nav {
+    gap: 1.1rem;
+  }
+  .Mast_Link {
+    font-size: .92rem;
+  }
+}
+/* A narrow bar keeps the name and the one press. */
+@media (max-width: 900px) {
+  .Mast_Link:not(.Mast_Link-quiet) {
+    display: none;
+  }
+}
+@media (max-width: 560px) {
+  .Mast_Link-quiet {
+    display: none;
+  }
+  .Wordmark_Text {
+    font-size: 1.25rem;
+  }
+  .Mast .Button {
+    padding: .55rem .95rem;
+    font-size: .9rem;
+  }
+}
+
+/* A band of a page. */
+.Band {
+  padding: clamp(3.75rem, 8vw, 6.5rem) 0;
+}
+.Band-paper {
+  border-block: 1px solid var(--border2);
+  background: var(--surface);
+}
+.Band-narrow > .Band_Inner {
+  max-width: 860px;
+}
+.Band_Eyebrow,
+.Cover_Eyebrow,
+.Hero_Copy > .Band_Eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5em;
+  max-width: none;
+  margin: 0 0 1rem;
+  color: var(--link);
+  font-family: var(--display);
+  font-optical-sizing: auto;
+  font-size: .8rem;
+  font-weight: 600;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+:is(.Band_Eyebrow, .Cover_Eyebrow)::before {
+  content: '✦' / '';
+  color: var(--coral-ink);
+  font-size: .72em;
+  letter-spacing: 0;
+}
+:is(.Hero, .Band-night) .Band_Eyebrow {
+  color: var(--gold);
+}
+:is(.Hero, .Band-night) .Band_Eyebrow::before {
+  color: var(--gold-bright);
+}
+.Band_Title {
+  max-width: none;
+  margin: 0 0 1.4rem;
+  font-size: clamp(1.85rem, 4.4vw, 2.85rem);
+  line-height: 1.08;
+  letter-spacing: -.015em;
+  text-align: center;
+  text-wrap: balance;
+}
+.Band_Lede {
+  max-width: 60ch;
+  margin: 0 auto 2.6rem;
+  color: var(--muted);
+  font-size: 1.15rem;
+  text-align: center;
+  text-wrap: pretty;
+}
+.Band_Lede-after {
+  margin: 2.4rem auto 0;
+}
+.Band_Actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .8rem;
+  margin-top: 2.4rem;
+}
+.Band_Note {
+  max-width: 60ch;
+  margin: 1.4rem auto 0;
+  color: var(--muted);
+  font-size: var(--small);
+  text-align: center;
+  text-wrap: pretty;
+}
+.Band_Note-faint {
+  color: var(--dim);
+}
+/* Beside something, a band's words keep to the left. */
+.Split :is(.Band_Eyebrow, .Cover_Eyebrow) {
+  justify-content: flex-start;
+}
+.Split :is(.Band_Title, .Band_Lede, .Band_Note) {
+  margin-inline: 0;
+  text-align: left;
+}
+.Split .Band_Actions {
+  justify-content: flex-start;
+}
+
+/* The home page's opening. */
+.Hero {
+  padding: clamp(3.5rem, 9vw, 6.5rem) 0 clamp(3rem, 7vw, 5rem);
+  overflow: hidden;
+}
+.Hero_Inner {
+  display: grid;
+  grid-template-columns: 1.05fr .95fr;
+  align-items: center;
+  gap: clamp(2rem, 5vw, 4.5rem);
+}
+.Hero_Copy > .Band_Eyebrow {
+  justify-content: flex-start;
+}
+.Hero_Title {
+  max-width: none;
+  margin: 0 0 1.2rem;
+  font-size: clamp(2.5rem, 6vw, 4.25rem);
+  line-height: 1.03;
+  letter-spacing: -.02em;
+  text-wrap: balance;
+}
+.Hero_Spark {
+  color: var(--gold);
+}
+.Hero_Sub {
+  max-width: 38ch;
+  margin: 0 0 2rem;
+  color: var(--muted);
+  font-size: 1.2rem;
+  text-wrap: pretty;
+}
+.Hero_Actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .8rem;
+  margin-bottom: 1rem;
+}
+.Hero_Aside {
+  margin: 0 0 1.2rem;
+  color: var(--muted);
+  font-size: .95rem;
+}
+.Hero_Note {
+  margin: 0;
+  color: var(--muted);
+  font-size: .96rem;
+}
+.Hero_Note strong {
+  color: var(--gold-bright);
+  font-weight: 600;
+}
+@media (max-width: 860px) {
+  .Hero_Inner {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+  .Hero_Copy > .Band_Eyebrow,
+  .Hero_Actions {
+    justify-content: center;
+  }
+  .Hero_Sub {
+    max-width: none;
+    margin-inline: auto;
+  }
+  .Hero .Bookshot {
+    order: -1;
+    margin-bottom: .5rem;
+  }
+}
+
+/* A bound hardcover floating over a moonlit glow: square corners, fine cream
+   leaves on the fore-edge, the cover board capping them. */
+.Bookshot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.1rem;
+  margin: 0;
+  perspective: 1800px;
+}
+.Bookshot_Book {
+  position: relative;
+  width: min(380px, 92%);
+  aspect-ratio: 1120 / 860;
+  transform: rotateY(-16deg) rotateX(4deg) rotateZ(-.8deg);
+  border-radius: 2px 3px 3px 2px;
+  box-shadow: 1px 0 0 #efe4c9, 2px 0 0 #e2d3ad, 3px 0 0 #efe4c9,
+    4px 1px 0 #d8c79f, 5px 1px 0 #e7d8b3, 6px 1px 0 #cdb98e,
+    7px 1px 1px rgba(40, 30, 18, .45), 24px 30px 46px rgba(0, 0, 0, .5);
+}
+.Bookshot_Book::after {
+  content: '';
+  position: absolute;
+  inset: -14% -10% -16% -10%;
+  z-index: -1;
+  background: radial-gradient(closest-side, rgba(246, 215, 154, .42), rgba(236,
+    192, 121, .12) 55%, transparent 72%);
+  filter: blur(8px);
+}
+.Bookshot_Cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 2px 3px 3px 2px;
+}
+.Bookshot_Spine {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 18px;
+  border-radius: 2px 0 0 2px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, .34), rgba(0, 0, 0, .06) 55%,
+    rgba(255, 255, 255, .16));
+  pointer-events: none;
+}
+.Bookshot_Caption {
+  max-width: 28ch;
+  color: var(--muted);
+  font-size: .92rem;
+  text-align: center;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .Bookshot_Book {
+    transition: transform .6s var(--ease);
+  }
+  .Bookshot_Book:hover {
+    transform: rotateY(-9deg) rotateX(2deg) rotateZ(-.3deg);
+  }
+}
+@media (max-width: 860px) {
+  .Bookshot_Caption {
+    display: none;
+  }
+  .Bookshot_Book {
+    transform: rotateY(-11deg) rotateX(2deg);
+  }
+}
+
+/* Facts at a glance. */
+.Strip {
+  border-block: 1px solid var(--border2);
+  background: var(--card);
+}
+.Strip_Inner {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  padding-block: 1.5rem;
+  text-align: center;
+}
+.Strip_Item {
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+  padding-inline: .5rem;
+}
+.Strip_Item + .Strip_Item {
+  border-left: 1px solid var(--border2);
+}
+.Strip_Name {
+  font-family: var(--display);
+  font-size: 1.12rem;
+  font-weight: 600;
+}
+.Strip_Note {
+  color: var(--muted);
+  font-size: .86rem;
+  letter-spacing: .01em;
+}
+@media (max-width: 640px) {
+  .Strip_Inner {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.3rem .5rem;
+  }
+  .Strip_Item:nth-child(odd) {
+    border-left: 0;
+  }
+}
+
+/* Cards a set number abreast, fewer as the page narrows. */
+.Abreast {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  gap: clamp(1.2rem, 2.4vw, 1.8rem);
+}
+.Abreast-two {
+  grid-template-columns: repeat(2, 1fr);
+}
+.Abreast-three {
+  grid-template-columns: repeat(3, 1fr);
+}
+.Abreast-four {
+  grid-template-columns: repeat(4, 1fr);
+}
+@media (max-width: 900px) {
+  .Abreast-three,
+  .Abreast-four {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 620px) {
+  .Abreast-two,
+  .Abreast-three,
+  .Abreast-four {
+    grid-template-columns: 1fr;
+  }
+}
+/* A card's title after a spark. */
+.Abreast-sparked .Card_Title {
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+}
+.Abreast-sparked .Card_Title::before {
+  content: '✦' / '';
+  color: var(--gold-ink);
+  font-size: .8em;
+}
+.Band-night .Abreast-sparked .Card_Title::before {
+  color: var(--gold);
+}
+.Abreast em {
+  color: var(--coral-ink);
+}
+
+.Numeral {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  margin-bottom: .4rem;
+  border: 1px solid color-mix(in srgb, var(--gold-ink) 30%, transparent);
+  border-radius: var(--pill);
+  background: color-mix(in srgb, var(--gold) 22%, var(--cream));
+  color: var(--gold-ink);
+  font-family: var(--display);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.Sparks {
+  max-width: none;
+  margin: 1.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.Sparks_Item {
+  position: relative;
+  margin-bottom: .8rem;
+  padding-left: 1.7rem;
+  color: var(--muted);
+}
+.Sparks_Item::before {
+  content: '✦' / '';
+  position: absolute;
+  top: .05em;
+  left: 0;
+  color: var(--gold-ink);
+  font-size: .95rem;
+}
+:is(.Hero, .Band-night) .Sparks_Item::before {
+  color: var(--gold);
+}
+.Sparks_Item strong {
+  color: var(--text);
+}
+/* What is said aside, under the list. */
+.Sparks_Item-aside {
+  margin-top: 1.2rem;
+  padding: 1.1rem 0 0;
+  border-top: 1px solid var(--border2);
+  font-size: .95rem;
+  font-style: italic;
+}
+.Sparks_Item-aside::before {
+  content: none;
+}
+
+.Split {
+  display: grid;
+  grid-template-columns: 1.2fr .8fr;
+  align-items: center;
+  gap: clamp(2rem, 5vw, 4rem);
+}
+.Split-top {
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .Split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The price, on a dusk card. */
+.Price {
+  --card-pad: 2.4rem 2rem;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 24px;
+  background-color: var(--night-800);
+  background-image: radial-gradient(120% 90% at 70% -10%, rgba(142, 164, 236,
+    .22), transparent 60%);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+.Price_Eyebrow {
+  margin: 0 0 .7rem;
+  color: var(--gold);
+  font-family: var(--display);
+  font-size: .74rem;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+}
+.Price_Amount {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: 3.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.Price_From {
+  margin-right: .18em;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: .29em;
+  font-style: italic;
+  font-weight: 400;
+  vertical-align: .5em;
+}
+.Price_Cents {
+  color: var(--gold);
+  font-size: 1.6rem;
+  vertical-align: super;
+}
+.Price_Unit {
+  margin: .55rem 0 1.5rem;
+  color: var(--muted);
+  font-size: .93rem;
+}
+.Price > .Button {
+  justify-self: stretch;
+}
+.Price_Fine {
+  margin: 1rem 0 0;
+  color: var(--dim);
+  font-size: .84rem;
+}
+
+/* Pages of a printed book. */
+.Pages {
+  max-width: 920px;
+  margin-inline: auto;
+  text-align: center;
+}
+.Pages_Spread {
+  max-width: 780px;
+  margin: 2.6rem auto 0;
+}
+.Pages_Spread img {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+.Pages_Caption {
+  margin-top: 1rem;
+  color: var(--muted);
+  font-size: .92rem;
+}
+.Pages_Grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.3rem;
+  max-width: none;
+  margin: 2rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.Pages_Page img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1120 / 860;
+  object-fit: cover;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  transition: transform .28s var(--ease);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .Pages_Page img:hover {
+    transform: translateY(-4px) scale(1.01);
+  }
+}
+@media (max-width: 680px) {
+  .Pages_Grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 420px) {
+  .Pages_Grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.Faq {
+  max-width: 780px;
+  margin: 0 auto;
+}
+.Faq_Item {
+  padding: 1.4rem 0;
+  border-top: 1px solid var(--border2);
+}
+.Faq_Item:last-child {
+  border-bottom: 1px solid var(--border2);
+}
+.Faq_Question {
+  margin-bottom: .45rem;
+  font-family: var(--display);
+  font-size: 1.14rem;
+  font-weight: 600;
+}
+.Faq_Answer {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* The top of a guide or a policy, and the column it is read in. */
+.Cover {
+  padding: clamp(2.6rem, 6vw, 4rem) 0 clamp(1.9rem, 4vw, 2.6rem);
+  border-bottom: 1px solid var(--border2);
+  background: var(--surface);
+}
+.Cover_Inner,
+.Reading {
+  max-width: 860px;
+}
+.Cover_Eyebrow {
+  justify-content: flex-start;
+  margin-bottom: .8rem;
+}
+.Cover_Title {
+  max-width: none;
+  margin: 0;
+  font-size: clamp(2.1rem, 5vw, 3rem);
+  line-height: 1.06;
+  letter-spacing: -.015em;
+}
+.Cover_Meta {
+  margin: 1.1rem 0 0;
+  color: var(--muted);
+  font-size: .92rem;
+}
+.Reading {
+  width: 100%;
+  margin-inline: auto;
+  padding: clamp(2.4rem, 5vw, 3.5rem) var(--pad) clamp(3rem, 7vw, 5rem);
+}
+.Reading > .Body {
+  margin-inline: auto;
+}
+.Reading > .Body > p:first-of-type {
+  color: var(--text);
+  font-size: 1.14rem;
+}
+
+/* A short page's title over what it holds. */
+.Reading > h1 {
+  margin: 0 0 var(--gap);
+  font-size: clamp(2.1rem, 5vw, 3rem);
+  line-height: 1.06;
+  letter-spacing: -.015em;
+}
+.Reading > :is(p, form) {
+  margin: 0 0 var(--gap);
+}
+
+/* Words to take away. */
+.Prompt {
+  margin: 1.6rem 0 2rem;
+  overflow: hidden;
+  border: 1px solid var(--border2);
+  border-radius: 24px;
+  background-color: var(--night-800);
+  background-image: radial-gradient(120% 90% at 70% -10%, rgba(142, 164, 236,
+    .16), transparent 60%);
+  box-shadow: var(--shadow);
+}
+.Prompt_Bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .75rem .9rem .75rem 1.4rem;
+  border-bottom: 1px solid var(--border2);
+}
+.Prompt_Bar .Button {
+  padding: .5rem 1.1rem;
+  font-size: .94rem;
+}
+.Prompt_Label {
+  margin: 0;
+  color: var(--gold);
+  font-family: var(--display);
+  font-size: .74rem;
+  font-weight: 600;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+}
+.Body .Prompt_Text {
+  margin: 0;
+  padding: 1.3rem 1.4rem 1.5rem;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 1rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+/* The foot of every page. */
+.Foot {
+  padding: 3rem 0 2.6rem;
+}
+.Foot_Inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem 2rem;
+}
+.Foot_Tag {
+  margin: .5rem 0 0;
+  color: var(--muted);
+  font-size: .93rem;
+}
+.Foot_Nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+}
+.Foot_Nav a {
+  color: var(--muted);
+  font-size: .95rem;
+  text-decoration: none;
+}
+.Foot_Nav a:hover {
+  color: var(--gold-bright);
+  text-decoration: underline;
+}
+.Foot_Legal {
+  flex-basis: 100%;
+  max-width: none;
+  margin: .8rem 0 0;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--rule-night);
+  color: var(--dim);
+  font-size: .84rem;
+}
+.Foot_Legal a {
+  color: var(--muted);
+}
+
+@media print {
+  .Mast,
+  .Foot,
+  .Skip,
+  .Form_Actions,
+  .Card_Actions {
+    display: none;
+  }
+}

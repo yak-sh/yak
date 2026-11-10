@@ -1,0 +1,242 @@
+/* PrintBound's skin: how the kit's parts (@yaks/ui) look in Spellbound, laid
+   over each part's own sheet. Headings and what is pressed are set in the
+   display face; a press is a pill, and the one to press glows moonlight gold
+   on parchment and on night alike. */
+
+:root {
+  --edge-color: var(--border2);
+  --raised-shadow: var(--shadow-sm);
+  --well: var(--cream);
+}
+
+body {
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--heading);
+}
+a {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color .14s var(--ease);
+}
+a:hover {
+  color: var(--indigo-lift);
+}
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* A press. */
+.Button {
+  --ink: var(--text);
+  --line: color-mix(in srgb, var(--text) 28%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: .8rem 1.5rem;
+  border-radius: var(--pill);
+  font-family: var(--display);
+  font-optical-sizing: auto;
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: .005em;
+  line-height: 1.3;
+  text-decoration: none;
+  transition: transform .14s var(--ease), background-color .28s var(--ease),
+    box-shadow .28s var(--ease);
+}
+.Button:focus-visible {
+  border-radius: var(--pill);
+}
+.Button:hover:not(:disabled) {
+  --ink: var(--text);
+  transform: translateY(-2px);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.Button:active:not(:disabled) {
+  transform: none;
+}
+.Button-go,
+.Button-go:hover:not(:disabled) {
+  --ink: #211a08;
+  --line: transparent;
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+  box-shadow: var(--shadow-sm);
+}
+.Button-go:hover:not(:disabled) {
+  box-shadow: var(--glow);
+}
+.Button-quiet {
+  padding: .3rem .6rem;
+  font-family: inherit;
+  font-size: var(--small);
+  font-weight: 400;
+}
+.Button-danger,
+.Button-danger:hover:not(:disabled) {
+  --ink: var(--negative);
+}
+
+/* A card: cream on parchment, on a soft shadow. */
+.Card {
+  --card-pad: 1.6rem;
+  box-shadow: var(--shadow-sm);
+}
+.Card_Title {
+  font-family: var(--display);
+  font-optical-sizing: auto;
+  font-size: 1.24rem;
+  font-weight: 600;
+}
+.Card > :where(p) {
+  color: var(--muted);
+}
+a.Card,
+.Card[role='link'] {
+  color: var(--text);
+  text-decoration: none;
+  transition: transform .28s var(--ease), box-shadow .28s var(--ease);
+}
+a.Card:hover,
+.Card[role='link']:hover {
+  color: var(--text);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+}
+
+/* A field: a cream well with room to type in. */
+.Field {
+  padding: .65rem .9rem;
+  border-radius: 12px;
+  border-color: color-mix(in srgb, var(--text) 22%, transparent);
+  background: var(--well);
+  font-size: 1.02rem;
+  line-height: 1.5;
+}
+.Field:focus {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+.Form_Label {
+  font-family: var(--display);
+  font-size: .9rem;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+
+.Notice {
+  font-size: var(--small);
+}
+
+.Empty {
+  border-color: color-mix(in srgb, var(--gold-ink) 40%, var(--border2));
+  background: color-mix(in srgb, var(--cream) 60%, transparent);
+}
+.Empty_Title {
+  font-family: var(--display);
+}
+
+/* Prose, read at its measure: a section's heading ruled off from the one
+   before, the words a shade back from their headings. */
+.Body {
+  line-height: 1.65;
+  overflow-wrap: break-word;
+}
+.Body :where(p, li, td) {
+  color: var(--muted);
+}
+.Body :where(strong, th) {
+  color: var(--text);
+}
+.Body h2 {
+  margin: 2.6rem 0 .4rem;
+  padding-top: 1.3rem;
+  border-top: 1px solid var(--border2);
+  font-size: clamp(1.35rem, 3vw, 1.65rem);
+  line-height: 1.2;
+}
+.Body h2:first-of-type {
+  margin-top: .5rem;
+  padding-top: 0;
+  border-top: 0;
+}
+.Body h3 {
+  margin: 1.7rem 0 .3rem;
+  font-size: 1.1rem;
+}
+.Body p {
+  margin: .75rem 0;
+}
+.Body :is(ul, ol) {
+  margin: .75rem 0;
+  padding-left: 1.3rem;
+}
+.Body li {
+  margin: .4rem 0;
+}
+.Body li::marker {
+  color: var(--gold-ink);
+}
+.Body code {
+  padding: .08em .35em;
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: .86em;
+  color: var(--text);
+}
+.Body blockquote {
+  max-width: none;
+  margin: 0 0 1.5rem;
+  padding: 1rem 1.2rem;
+  border-left: 3px solid var(--gold-ink);
+  border-radius: 0 9px 9px 0;
+  background: var(--card);
+  font-size: var(--small);
+}
+.Body table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 1.2rem 0;
+  font-size: var(--small);
+}
+.Body :is(th, td) {
+  padding: .5rem .8rem;
+  border-color: var(--border2);
+  vertical-align: top;
+}
+.Body th {
+  background: var(--surface);
+  font-family: var(--display);
+  font-weight: 600;
+}
+.Body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+}
+
+.Skip {
+  top: -6rem;
+  left: 0;
+  z-index: 100;
+  border-radius: 0 0 9px 0;
+  background: var(--night-900);
+  color: var(--moon);
+}
+.Skip:focus {
+  top: 0;
+}

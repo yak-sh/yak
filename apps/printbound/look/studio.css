@@ -1,0 +1,159 @@
+/* The studio's own parts (site/parts.ts), in the theme's paints. */
+
+/* The desk: the page's column, as wide as the bar above it, its head and its
+   sheets a gap apart. */
+.Desk {
+  display: grid;
+  align-content: start;
+  gap: var(--gap);
+  width: 100%;
+  max-width: var(--wide, 70rem);
+  min-height: 60vh;
+  margin-inline: auto;
+  padding: calc(2 * var(--gap)) var(--pad, var(--gap)) calc(3 * var(--gap));
+}
+.Desk_Head {
+  display: grid;
+  justify-items: start;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Desk_Back {
+  color: var(--muted);
+  font-size: var(--small);
+  text-decoration: none;
+}
+.Desk_Back:hover {
+  text-decoration: underline;
+}
+.Desk_Title {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+/* Two sheets side by side, each as tall as what it holds; one over the other
+   on a phone. */
+.Desk_Spread {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--gap);
+}
+.Desk_Column {
+  display: grid;
+  gap: var(--gap);
+  min-width: 0;
+}
+@media (max-width: 760px) {
+  .Desk_Spread {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* A book's words are pasted in whole: the field is tall before any are. */
+.Desk_Words {
+  min-height: 18rem;
+}
+/* What the desk says back stays in sight at the foot of the window, however
+   far down the sheet being typed in is. Nothing said, it is not there. */
+.Desk_Said {
+  position: sticky;
+  bottom: var(--half-gap);
+  justify-self: start;
+  padding: calc(var(--half-gap) / 2) var(--gap);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.Desk_Said:has(.Notice:empty) {
+  display: none;
+}
+
+/* A printer's proof: the composed pages one under another in a frame that
+   scrolls, each lying on the desk over its caption, then its files. */
+.Proof {
+  display: grid;
+  gap: var(--gap);
+  min-width: 0;
+}
+.Proof_Pages {
+  display: grid;
+  gap: var(--gap);
+  max-height: 56rem;
+  padding: var(--gap);
+  overflow: auto;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.Proof_Page {
+  display: grid;
+  gap: var(--half-gap);
+  margin: 0;
+}
+.Proof_Image {
+  display: block;
+  width: 100%;
+  max-height: 40rem;
+  object-fit: contain;
+  border: 1px solid var(--border2);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.Proof_Caption {
+  color: var(--muted);
+  font-size: var(--small);
+  text-align: center;
+}
+.Proof_Files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--half-gap);
+}
+
+/* What a quote or an order comes to: each line its name, small and muted,
+   across from its value, ruled off from the next; the total in the heading's
+   face. */
+.Slip {
+  display: grid;
+  margin: 0;
+}
+.Slip_Line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 var(--gap);
+  padding: var(--half-gap) 0;
+  border-bottom: 1px solid var(--border2);
+}
+.Slip_Line:last-child {
+  border-bottom: 0;
+}
+.Slip_Name {
+  color: var(--muted);
+  font-size: var(--small);
+}
+.Slip_Value {
+  margin: 0 0 0 auto;
+  color: var(--text);
+  text-align: right;
+}
+.Slip_Value-total {
+  font-family: var(--display);
+  font-size: var(--h2);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* On paper the proof is every page, each on a sheet of its own. */
+@media print {
+  .Desk_Said {
+    display: none;
+  }
+  .Proof_Pages {
+    max-height: none;
+    overflow: visible;
+  }
+  .Proof_Page {
+    break-after: page;
+  }
+}

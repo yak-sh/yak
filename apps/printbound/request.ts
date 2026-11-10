@@ -1,9 +1,15 @@
+// Where the app is mounted: the platform's word for it, else under its own
+// name, else at the root.
+let mounted = (request: Request) => {
+  let app = request.headers.get('x-yak-app')
+  return request.headers.get('x-yak-mount') ?? (app ? `/${app}/` : '/')
+}
+
 /** Normalize the trusted app mount once, preserving bodies and the original
  * public address for links and payment returns. */
 export let relative = (request: Request): Request => {
   let url = new URL(request.url)
-  let mount = request.headers.get('x-yak-mount') ??
-    `/${request.headers.get('x-yak-app') ?? ''}/`
+  let mount = mounted(request)
   if (mount !== '/' && url.pathname === mount.replace(/\/$/, '')) {
     url.pathname = '/'
   } else if (url.pathname.startsWith(mount)) {
@@ -16,7 +22,6 @@ export let relative = (request: Request): Request => {
 
 export let appBase = (request: Request): URL =>
   new URL(
-    request.headers.get('x-yak-mount') ??
-      `/${request.headers.get('x-yak-app') ?? ''}/`,
+    mounted(request),
     request.headers.get('x-yak-address') ?? request.url,
   )

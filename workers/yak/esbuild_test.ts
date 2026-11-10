@@ -559,7 +559,10 @@ let privateDraft = await (async () => {
     broken ? { errors: ['main.ts cannot compile'] } : compiles(ask)
   )
   let page = (name: string) => `<h1>${name}</h1>${PAGE}`
-  await s.write({ 'index.html': page('first'), 'main.ts': 'let n: number = 1' })
+  await s.write({
+    'index.html': page('first'),
+    'main.ts': 'let n: number = 1',
+  })
   await s.tool('app_deploy')
   await s.write({
     'index.html': page('second'),
@@ -831,7 +834,10 @@ test('package assets serve with their MIME and survive reuse and rollback', asyn
   // An npm package's home, which a compile names and the door fills from the
   // registry's tarball the first time a page asks for one of its files.
   let wasm = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 255])
-  let tarball = await tgz({ 'package.json': new Uint8Array(2), 'a.wasm': wasm })
+  let tarball = await tgz({
+    'package.json': new Uint8Array(2),
+    'a.wasm': wasm,
+  })
   let home = await sha256(tarball)
   let registry = 'https://registry.npmjs.org/viewer/-/viewer-1.0.0.tgz'
   // A home its tarball is not.
@@ -894,7 +900,9 @@ test('package assets serve with their MIME and survive reuse and rollback', asyn
   let sharedHead = await publicAsset(first, { method: 'HEAD' })
   assertEquals(sharedHead.headers.get('content-length'), '16')
   assertEquals(await sharedHead.text(), '')
-  let sharedPart = await publicAsset(first, { headers: { range: 'bytes=0-5' } })
+  let sharedPart = await publicAsset(first, {
+    headers: { range: 'bytes=0-5' },
+  })
   assertEquals(sharedPart.status, 206)
   assertEquals(await sharedPart.text(), 'export')
   assertEquals((await publicAsset(first, { method: 'POST' })).status, 405)

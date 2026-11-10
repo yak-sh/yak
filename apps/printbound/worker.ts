@@ -1,7 +1,7 @@
 import { caller, commands, printService } from './service.ts'
 import { type Environment, runtime } from './runtime.ts'
-import { publicFile, storefront } from './storefront.ts'
-import { publicPage } from './public.ts'
+import { storefront } from './storefront.ts'
+import { site } from './site.ts'
 import { legacyPage } from './legacy.ts'
 import { store } from './store.ts'
 import { InputError } from './refusal.ts'
@@ -21,7 +21,7 @@ export default {
         return await printService(request, await runtime(env, request))
       }
       return await receiptPage(request, env) ??
-        await publicPage(request, env) ??
+        await site(request, env) ??
         await legacyPage(request, store(env.APP)) ??
         await storefront(
           request,
@@ -29,7 +29,6 @@ export default {
           async (name, args) =>
             commands(await runtime(env, request))(name, args, caller(request)),
         ) ??
-        await publicFile(request, env) ??
         new Response('not found', { status: 404 })
     } catch (error) {
       if (error instanceof InputError || error instanceof DocumentInputError) {

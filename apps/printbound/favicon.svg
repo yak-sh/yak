@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32"
+  height="32" role="img" aria-label="PrintBound">
+  <defs>
+    <radialGradient id="sky" cx="50%" cy="36%" r="75%">
+      <stop offset="0%" stop-color="#1e2750" />
+      <stop offset="100%" stop-color="#0d1330" />
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6d79a" />
+      <stop offset="100%" stop-color="#ecc079" />
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="url(#sky)" />
+  <!-- crescent moon -->
+  <path d="M23.5 9.2a7 7 0 1 0 0 13.6 8.2 8.2 0 0 1 0-13.6Z"
+    fill="url(#gold)" />
+  <!-- main sparkle -->
+  <path
+    d="M13 6.5c.4 3.4 1.8 4.8 5.2 5.2.4.05.4.65 0 .7-3.4.4-4.8 1.8-5.2 5.2-.05.4-.65.4-.7 0-.4-3.4-1.8-4.8-5.2-5.2-.4-.05-.4-.65 0-.7 3.4-.4 4.8-1.8 5.2-5.2.05-.4.65-.4.7 0Z"
+    fill="#f6d79a" />
+  <!-- small stars -->
+  <circle cx="9.5" cy="22.5" r="1" fill="#f5f1e7" />
+  <circle cx="20.5" cy="24" r="0.9" fill="#8ea4ec" />
+</svg>
