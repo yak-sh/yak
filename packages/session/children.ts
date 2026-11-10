@@ -196,7 +196,8 @@ let delegation = (
         // A model is named by its id or by its own name. The provider in force
         // stays only while it serves the model; otherwise the resolver picks
         // one of the model's providers. A name nothing knows yet becomes a
-        // model the provider in force serves under that name.
+        // requested model (@yaks/model `requesting`): the provider in force is
+        // asked for it, and only its answer records that it serves it.
         let said = String(args.model)
         let known = await row(g, said)
         let model = known?.model ? said : identityEid('model', [said])
@@ -207,13 +208,11 @@ let delegation = (
             delete using.provider
           }
         } else {
-          models.push({ entity: { eid: model }, model: { name: said } })
-          if (using.provider) {
-            models.push({
-              ...link(String(using.provider), 'serves', model),
-              serves: { name: said },
-            })
-          }
+          models.push({
+            entity: { eid: model },
+            model: { name: said, offered: false },
+            pending: {},
+          })
         }
       }
       // Legacy base instructions are inherited; child guidance is additive.

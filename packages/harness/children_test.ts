@@ -498,3 +498,31 @@ test('a fork that forks again is told to do the task itself, and starts no child
   assertEquals(told.some((t) => t.includes('You are a fork already')), true)
   await a.close()
 })
+
+test('a child naming a model nothing knows asks the provider in force, which serves it only once it answers', async () => {
+  let h = await harness()
+  let rows = seed({ provider: 'openai', model: 'gpt' })
+  let provider = rows[0].entity.eid
+  let using = {
+    entity: { eid: 'u' },
+    entry: { session: 'p', seq: 1 },
+    using: { provider },
+  }
+  h.g.apply([
+    ...rows,
+    { entity: { eid: 'p' }, session: {} },
+    using,
+    { entity: { eid: 'call' }, entry: { session: 'p', seq: 2 }, call: {} },
+  ])
+  let spawn = sessionTools(h.g).find((t) => t.name == 'spawn')!
+  await spawn.run({ prompt: 'one', model: 'opus' }, {
+    session: 'p',
+    call: { entity: { eid: 'call' } },
+    entries: [using],
+  })
+  let [opus] = await h.g.read('.model.name=opus&*')
+  assertEquals(opus.model, { name: 'opus', offered: false })
+  assert(opus.pending)
+  assertEquals(await h.g.read(`.serves .edge.to=${opus.entity.eid}`), [])
+  h.close()
+})
