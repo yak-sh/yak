@@ -62,7 +62,7 @@ import {
 } from './stamps.ts'
 import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
 import { Button, Card, Empty, Field, Group } from '@yaks/ui/parts'
-import { esc, markup, raw } from './html.ts'
+import { day, esc, markup, raw } from './html.ts'
 import { lost, shell } from './pages.ts'
 import { deskFrame } from './desk-pages.ts'
 import { type IconName } from './icons.ts'
@@ -995,7 +995,7 @@ let funnelPage = (
     : h(
       Fragment,
       null,
-      h(Group, null, 'How far strangers got'),
+      h(Group, null, `How far strangers got since ${day(f.since)}`),
       facts(way(f)),
       h(Group, null, 'Each step'),
       facts(f.steps.map((s) => [
@@ -1004,7 +1004,7 @@ let funnelPage = (
           s.share == null
             ? ''
             : ` · ${Math.round(s.share * 100)}% of ${of(s.name)}`
-        }`,
+        }${s.since ? ` · counted since ${day(s.since)}` : ''}`,
       ])),
       f.from.length
         ? h(

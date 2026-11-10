@@ -351,14 +351,14 @@ test("the admin's funnel shows each step's count", async () => {
   )
   try {
     let on = { ...env, CF_ANALYTICS_TOKEN: 't', CF_ACCOUNT: 'a' } as Env
-    let [req, , path] = asking('/admin/funnel?days=30', 'root')
+    let [req, , path] = asking('/admin/funnel?days=1', 'root')
     let page = (await answer(req, on, path, dir))!
     assertEquals(page.status, 200)
     let { document } = parseHTML(await page.text())
     assertEquals(figures(document)['Home page visits'], '12')
-    // Thirty days back, in the seconds the SQL API's toDateTime takes.
+    // A day back, in the seconds the SQL API's toDateTime takes.
     let at = Number(/toDateTime\((\d+)\)/.exec(sql.asked[0])![1]) * 1000
-    assertEquals(Math.round((Date.now() - at) / 86_400_000), 30)
+    assertEquals(Math.round((Date.now() - at) / 86_400_000), 1)
   } finally {
     sql.done()
   }

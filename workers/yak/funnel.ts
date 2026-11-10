@@ -30,12 +30,29 @@ import {
   whole,
 } from './views.ts'
 
-/** Each step, in the order a person meets them, what the admin calls it, and
- * the step it is a share of. */
+/** When the funnel began to count (T-135225 went live). A window never starts
+ * before it (`start`), so a count is never of days nothing was counted on: a
+ * plan bought in October read as none bought in thirty days (T-153604). Once
+ * it is further back than a step is kept, it bounds nothing and goes. */
+export let BEGAN = '2026-11-03T04:47:14Z'
+
+/** Each step, in the order a person meets them, what the admin calls it, the
+ * step it is a share of, and for one added after the funnel began, when its
+ * own count began (`since`). */
 export let STEPS = [
   { name: 'home', say: 'Home page visits' },
-  { name: 'click', say: 'Calls to action clicked', of: 'home' },
-  { name: 'started', say: 'Builds started from the home page', of: 'home' },
+  {
+    name: 'click',
+    say: 'Calls to action clicked',
+    of: 'home',
+    since: '2026-11-07T04:48:35Z',
+  },
+  {
+    name: 'started',
+    say: 'Builds started from the home page',
+    of: 'home',
+    since: '2026-11-07T05:08:33Z',
+  },
   { name: 'code_sent', say: 'Sign-in codes sent', of: 'home' },
   { name: 'signed_in', say: 'Sign-ins finished', of: 'code_sent' },
   { name: 'signup', say: 'First sign-ins', of: 'signed_in' },
@@ -49,8 +66,18 @@ export let STEPS = [
   { name: 'install_done', say: 'Installs finished', of: 'install' },
   { name: 'first_app', say: "Spaces' first apps", of: 'signup' },
   { name: 'first_deploy', say: "Apps' first deploys", of: 'first_app' },
-  { name: 'checkout', say: 'Checkouts started', of: 'signup' },
-  { name: 'paid', say: 'Plans bought', of: 'checkout' },
+  {
+    name: 'checkout',
+    say: 'Checkouts started',
+    of: 'signup',
+    since: '2026-11-07T05:00:31Z',
+  },
+  {
+    name: 'paid',
+    say: 'Plans bought',
+    of: 'checkout',
+    since: '2026-11-07T05:00:31Z',
+  },
   { name: 'returned', say: 'People back a day or more later' },
 ] as const
 
@@ -156,14 +183,30 @@ let DAY = 86_400_000
 
 /**
  * Where a window starts: `days` before now, or at a moment, and never further
- * back than a step is kept.
+ * back than a step is kept or than the funnel has counted (`BEGAN`).
+ *
+ * @example
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let now = Date.parse('2026-11-10T00:00:00Z')
+ * let at = (window: number | Date) => start(window, now).toISOString()
+ * assertEquals(at(2), '2026-11-08T00:00:00.000Z')
+ * assertEquals(at(30), '2026-11-03T04:47:14.000Z')
+ * assertEquals(at(new Date('2026-10-11T00:00:00Z')), '2026-11-03T04:47:14.000Z')
+ * assertEquals(at(new Date('2026-11-09T00:00:00Z')), '2026-11-09T00:00:00.000Z')
+ * ```
  */
 export let start = (window: number | Date, now = Date.now()) =>
-  new Date(
-    typeof window == 'number'
-      ? now - whole(window, KEPT_DAYS) * DAY
-      : Math.min(now, Math.max(now - KEPT_DAYS * DAY, window.getTime())),
-  )
+  new Date(Math.min(
+    now,
+    Math.max(
+      Date.parse(BEGAN),
+      now - KEPT_DAYS * DAY,
+      typeof window == 'number'
+        ? now - whole(window, KEPT_DAYS) * DAY
+        : window.getTime(),
+    ),
+  ))
 
 // Who took a step: the client it was written with, or `test` for one whose
 // arrival names an agent's check as its source (@yaks/platform/bots `CHECK`),
@@ -228,7 +271,9 @@ let split = (rows: Record<string, unknown>[]): FunnelSplit[] =>
   })
 
 /** The funnel from `since`, from the counts as the SQL API answers them: a
- * step nobody took is a zero, not a gap. */
+ * step nobody took is a zero, not a gap. A step whose own count began inside
+ * the window says when (`since`), and no share: the step it follows was
+ * counted for longer. */
 export let shaped = (
   since: Date,
   rows: Record<string, unknown>[],
@@ -251,12 +296,18 @@ export let shaped = (
         ? { share: sums[i] / sums[i - 1], of: STAGES[i - 1].name }
         : {},
     })),
-    steps: STEPS.map((s) => ({
-      name: s.name,
-      say: s.say,
-      n: n(s.name),
-      ...'of' in s && n(s.of) ? { share: n(s.name) / n(s.of), of: s.of } : {},
-    })),
+    steps: STEPS.map((s) => {
+      let late = 'since' in s && since < new Date(s.since) ? s.since : null
+      return {
+        name: s.name,
+        say: s.say,
+        n: n(s.name),
+        ...late ? { since: late } : {},
+        ...!late && 'of' in s && n(s.of)
+          ? { share: n(s.name) / n(s.of), of: s.of }
+          : {},
+      }
+    }),
     apart: others.map((r) => ({
       client: String(r.client),
       step: String(r.step),

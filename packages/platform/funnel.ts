@@ -3,13 +3,15 @@
 // else it is shown in lines.
 
 /** One step's count over the window, and its share of the step it is
- * measured against (`of`), where that step was taken. */
+ * measured against (`of`), where that step was taken. A step whose count
+ * began inside the window says when (`since`): it is a count from then. */
 export type FunnelCount = {
   name: string
   say: string
   n: number
   share?: number
   of?: string
+  since?: string
 }
 
 /** The home page's visits, clicks, sign-ups and checkouts under one campaign
@@ -90,6 +92,7 @@ let split = (s: FunnelSplit) =>
  *   steps: [
  *     { name: 'home', say: 'Home page visits', n: 40 },
  *     { name: 'click', say: 'Calls to action clicked', n: 10, share: 0.25, of: 'home' },
+ *     { name: 'paid', say: 'Plans bought', n: 0, since: '2026-11-07T05:00:31Z' },
  *   ],
  *   apart: [{ client: 'test', step: 'signup', n: 2 }],
  *   from: [], buttons: [], campaigns: [], variants: [],
@@ -102,6 +105,7 @@ let split = (s: FunnelSplit) =>
  *   'People since 2026-11-07T00:00:00.000Z:',
  *   '  Home page visits: 40',
  *   '  Calls to action clicked: 10 (25% of home)',
+ *   '  Plans bought: 0, counted since 2026-11-07T05:00:31Z',
  *   'Not people, counted apart:',
  *   '  test signup: 2',
  * ])
@@ -112,7 +116,8 @@ export let funnelLines = (f: Funnel): string[] => {
     rows.length ? [say, ...rows.map(line)] : []
   let count = (s: FunnelCount) =>
     `  ${s.say}: ${s.n}` +
-    (s.share == null ? '' : ` (${pct(s.share)} of ${s.of})`)
+    (s.share == null ? '' : ` (${pct(s.share)} of ${s.of})`) +
+    (s.since ? `, counted since ${s.since}` : '')
   let stop = stopped(f.stages)
   return [
     ...group(`How far strangers got since ${f.since}:`, f.stages ?? [], count),

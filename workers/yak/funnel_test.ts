@@ -352,6 +352,25 @@ let read = (points: { indexes?: string[]; blobs?: string[] }[]) => {
   )
 }
 
+test('a step added after the funnel began says when its own count began, and no share, in a window that starts before it', () => {
+  let rows = [{ step: 'signup', n: 4 }, { step: 'checkout', n: 1 }]
+  let checkout = (since: string) =>
+    shaped(new Date(since), rows).steps.find((s) => s.name == 'checkout')
+  assertEquals(checkout('2026-11-03T05:00:00Z'), {
+    name: 'checkout',
+    say: 'Checkouts started',
+    n: 1,
+    since: '2026-11-07T05:00:31Z',
+  })
+  assertEquals(checkout('2026-11-08T00:00:00Z'), {
+    name: 'checkout',
+    say: 'Checkouts started',
+    n: 1,
+    share: 0.25,
+    of: 'signup',
+  })
+})
+
 test("a stranger's way is read stage by stage, a crawler's and Meta's reviewer's left out, and where they stop is the stage most go no further than", async () => {
   let k = await kernel()
   let before = k.views.points.length
