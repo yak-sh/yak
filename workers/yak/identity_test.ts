@@ -272,7 +272,8 @@ let customHandoff = async (k: Kernel, person: string, full: string) => {
       at: new Date().toISOString(),
     },
   }])
-  let back = `https://${host}/notes/`
+  let next = '/notes/?mode=preview#new/00000000-0000-4000-8000-000000000001'
+  let back = `https://${host}${next}`
   let asked = await k.at(
     k.host,
     `/login?return=${encodeURIComponent(back)}`,
@@ -316,7 +317,7 @@ let customHandoff = async (k: Kernel, person: string, full: string) => {
   await allowed.body?.cancel()
   let hand = await k.at(host, to.pathname + to.search, { redirect: 'manual' })
   equal(hand.status, 303)
-  equal(hand.headers.get('location'), '/notes/')
+  equal(hand.headers.get('location'), next)
   let set = ok(hand.headers.get('set-cookie'))
   ok(!set.includes('Domain='))
   let cookie = set.split(';')[0]

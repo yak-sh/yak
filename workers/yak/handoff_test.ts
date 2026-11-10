@@ -161,3 +161,12 @@ test('handoff consent belongs to its person, destination and space', async () =>
     ]
   ) assertEquals(await consented(SECRET, person, to, space, consent), false)
 })
+
+test('custom-domain handoff retains query and selected draft or book fragment', async () => {
+  for (let route of ['new', 'book']) {
+    let next =
+      `/studio?mode=preview#${route}/00000000-0000-4000-8000-000000000001`
+    let to = await handoffTo(SECRET, dir, 'u-1', 'https://good.com' + next)
+    assertEquals(new URL(to!).searchParams.get('next'), next)
+  }
+})

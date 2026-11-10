@@ -101,7 +101,7 @@ export let handoffTo = async (
   }
   let to = new URL(`https://${host}${HANDOFF}`)
   to.searchParams.set('t', await seal('handoff', hand, secret))
-  to.searchParams.set('next', safeNext(url.pathname + url.search))
+  to.searchParams.set('next', safeNext(url.pathname + url.search + url.hash))
   return to.href
 }
 
