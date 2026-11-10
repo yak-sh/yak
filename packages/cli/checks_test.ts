@@ -3,8 +3,8 @@
 // (@yaks/tools `checks`): add a plugin and its checks arrive, drop it and they
 // go, and no list anywhere can fall out of date.
 //
-// So this composes a real host over a real file, makes two impossible states
-// real — a lock held by a transcript that stopped, a board whose query no
+// So this composes a host over a file, makes two impossible states —
+// a lock held by a transcript that stopped, a board whose query no
 // longer routes — and asks every check the host has. Each one is called the
 // way any caller calls a tool: a `call` entity through the runner, and the
 // prose it answered read back off the result.
@@ -112,9 +112,9 @@ test('a composed host finds exactly the two states we broke', async () => {
     )
     let storage = await ask(h, 'storage_check')
     assert(storage.endsWith('— nothing to report'), storage)
-    // One that cannot run says so: this host composes no archetype plugin.
+    // Storage keeps archetypes even without the graph's archetype plugin.
     let archetype = await ask(h, 'archetype_check')
-    assert(archetype.includes('keeps no archetypes'), archetype)
+    assert(archetype.endsWith('— nothing to report'), archetype)
   } finally {
     h.close()
   }

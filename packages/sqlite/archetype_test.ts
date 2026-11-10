@@ -254,6 +254,15 @@ test('classification begins the next presence comparison in a ledger', () => {
   assertEquals(l.owed(), [])
 })
 
+test('a birth minted in its learned class keeps its pointer in cached reads', () => {
+  let s = storage(mem(), vocab)
+  s.install()
+  for (let eid of ['first', 'second', 'third']) {
+    s.tx((tx) => tx.patch([{ entity: { eid }, doc: { title: eid } }]))
+    assertEquals(s.get([eid])[0].entity.archetype, eidOf(['doc']))
+  }
+})
+
 test("an outer storage read uses the open writer's pending archetypes", () => {
   let driver = mem(), reports: Error[] = []
   let s = storage(driver, vocab, { report: (e) => void reports.push(e) })

@@ -107,6 +107,7 @@ import { enter } from '@yaks/graph/enter'
 import { busy } from './error.ts'
 import { options } from './reader.ts'
 import { catalog } from './catalog.ts'
+import { eidOf as shapeEid } from '@yaks/archetype/sets'
 import {
   backfill,
   classify,
@@ -1141,6 +1142,7 @@ export let storage = (
       let owed = l.owed().filter((eid) => {
         let held = l.held(eid, null)
         if (!held || !remembered.settled(eid, held)) return true
+        if (classified) memo.pointed(eid, shapeEid(held))
         l.pointed(eid)
         return false
       })

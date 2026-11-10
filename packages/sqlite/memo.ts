@@ -120,6 +120,9 @@ export type Memo = {
    * them go, and what each now holds is kept once the transaction commits.
    * `body` is told what memory says each entity held before it. */
   patch: (bundles: Bundle[], body: (known: Known) => Entity[]) => Entity[]
+  /** A birth's mint already wrote its final pointer. Keep that metadata with
+   * the authoritative after-state before it becomes a committed cache row. */
+  pointed: (eid: string, archetype: string) => void
   /** Run a removal of the entities `eids`, buried at `at`: they are let go as
    * `writes` lets them go, and an answer that selected none of them, alive
    * or buried, stands. */
@@ -1287,6 +1290,12 @@ export let memoized = (
   }
   let stored = new Set(['tombstone', ...tables(vocab)])
   return {
+    pointed: (eid, archetype) => {
+      let b = k.after.get(eid)
+      if (b && b !== LOST) {
+        k.after.set(eid, { ...b, entity: { ...b.entity, archetype } })
+      }
+    },
     presence: (eid, tables) => {
       sync()
       if (c.blind || !tables.every((name) => stored.has(name))) {
