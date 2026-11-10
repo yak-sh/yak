@@ -102,7 +102,6 @@ try {
     preview: true,
     font: await font(coloring, config.font),
     printer: printer.id,
-    model: 'gpt-image-2.6-flare',
   })
   await tool(printer, 'integration_publish', {
     ...target(printer),
@@ -116,6 +115,7 @@ try {
     service: printer.id,
     operations: [
       'prepare',
+      'document_status',
       'quote',
       'purchase',
       'order_status',
