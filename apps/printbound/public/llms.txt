@@ -1,0 +1,11 @@
+# PrintBound
+
+Prepare and review a book from saved text, PDF documents or ordered page artwork. PrintBound provides destination quotes, checkout, order progress and cancellation.
+
+- Book studio: __APP_BASE__studio
+- Printing guide: __APP_BASE__print-your-chatgpt-book
+- Picture-book guide: __APP_BASE__make-a-picture-book-in-chatgpt
+- Image copyright guide: __APP_BASE__can-you-print-ai-images
+- Terms: __APP_BASE__terms
+- Privacy: __APP_BASE__privacy
+- Refunds: __APP_BASE__refund

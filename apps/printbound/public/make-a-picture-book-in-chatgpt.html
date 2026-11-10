@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>How to make a picture book in ChatGPT — PrintBound</title>
+    <meta name="description"
+      content="A step-by-step guide to making a picture book in ChatGPT: a copy-paste starter prompt, the character-and-style-sheet trick that keeps your hero looking the same on every page, and the print specs (size, margins, lettering) that make pages worth printing.">
+    <link rel="stylesheet" href="/public.css">
+  </head>
+  <body
+    class="Public Public-printbound"><a class="Public_Skip" href="#main">Skip to content</a><header class="Public_Header"><a class="Public_Brand" href="/">PrintBound</a><nav class="Public_Nav" aria-label="Main navigation"><a class="Public_Link" href="/studio">Your book</a> <a class="Public_Link" href="/make-a-picture-book-in-chatgpt">Picture-book guide</a> <a class="Public_Link" href="/print-your-chatgpt-book">Printing guide</a></nav></header><main class="Public_Main" id="main"><article class="Public_Body">
+    
+    <section class="Public_Section">
+      <div class="Public_Text">
+        <p class="Public_Paragraph">Free guide</p>
+        <h1 class="Public_Title">How to make a picture book in ChatGPT</h1>
+        <p class="Public_Paragraph">
+          Everything you need is ChatGPT and an afternoon: no signup, no tool to install.
+          This is the same playbook our own print system follows.
+        </p>
+      </div>
+    </section>
+
+    <section class="Public_Section">
+      <div class="Public_Text">
+        <article class="Public_Body">
+          <p class="Public_Paragraph">
+            ChatGPT can write a story starring your own kid and paint every page. The catch:
+            ask it casually and you get a hero whose hair changes color on page 4, words that
+            drift off the edge, and art too small to print. This guide fixes all three: a
+            starter prompt to paste in, the consistency trick that does most of the work, and
+            the specs that make each page sharp enough for paper, where a phone screen forgives
+            and a printed page doesn't.
+          </p>
+
+          <nav class="Public_Contents" aria-label="On this page">
+            <a class="Public_Link" href="#prompt">The starter prompt</a> ·
+            <a class="Public_Link" href="#style-sheet">The style sheet</a> ·
+            <a class="Public_Link" href="#outline">Outline</a> ·
+            <a class="Public_Link" href="#generate">Generating pages</a> ·
+            <a class="Public_Link" href="#lettering">Lettering</a> ·
+            <a class="Public_Link" href="#proofread">Proofreading</a> ·
+            <a class="Public_Link" href="#cover">The cover</a> ·
+            <a class="Public_Link" href="#print-ready">What makes a page print-ready</a>
+          </nav>
+
+          <h2 class="Public_Heading" id="prompt">The starter prompt (copy and paste)</h2>
+          <p class="Public_Paragraph">
+            Paste this into ChatGPT and it walks you through the whole process in the right
+            order. Every rule in it is explained in the steps below.
+          </p>
+
+          <div class="Public_Text">
+            <div class="Public_Text">
+              <p class="Public_Paragraph">Starter prompt</p>
+              <button class="Public_Text" type="button">Copy prompt</button>
+            </div>
+            <pre class="Public_Source" id="starter-prompt">I want to make an illustrated picture book for my child, about 32 pages. Work with me step by step.
+
+1. First, help me write a one-paragraph character and style sheet: my child's first name, age, hair, eyes, skin tone, one signature clothing detail (like a yellow raincoat), the color palette, and the art medium (for example: soft warm watercolor with gentle outlines). We will reuse this paragraph word for word in every image prompt.
+
+2. Next, outline the story: one beat per page, with one or two short sentences of story text for each page.
+
+3. Then generate the pages ONE AT A TIME, at your highest image quality, landscape (wider than tall), about 2784 x 2176 pixels. Begin every image prompt with the character and style sheet repeated word for word. Paint the page's story text into the illustration: large, clean, high-contrast lettering on a quiet part of the art, spelled exactly as written. Let the background art run all the way to the edges, but keep faces, characters, and every word at least 10% in from each edge.
+
+4. Show me each page and wait for my OK before the next one. If I say a word is misspelled or something looks off, regenerate that page.</pre>
+          </div>
+
+          <p class="Public_Paragraph">
+            One note before you start: if any character is drawn from a photo of a real person,
+            your child included, make sure you have that person's OK (or, for a child, that
+            you're their parent or guardian). It matters even for a book that never leaves
+            your house.
+          </p>
+
+          <h2 class="Public_Heading" id="style-sheet">Step 1: Write one character and style sheet</h2>
+          <p class="Public_Paragraph">
+            Inconsistent characters are the single most common way homemade AI picture books go
+            wrong: the model has no memory of what your hero looked like two pages ago unless
+            you tell it, every time. The fix is one paragraph, written once:
+          </p>
+          <ul class="Public_List">
+            <li class="Public_Item">Name, age, hair, eyes, skin tone</li>
+            <li class="Public_Item">One signature clothing detail: a yellow raincoat, red boots</li>
+            <li class="Public_Item">The color palette: say, moonlit blues with warm gold accents</li>
+            <li class="Public_Item">The art medium: for example, "soft warm watercolor, gentle outlines"</li>
+          </ul>
+          <p class="Public_Paragraph">
+            Then the rule that does the work: <strong class="Public_Text">repeat that paragraph word for word at the
+            top of every single image prompt.</strong> Not paraphrased, not "same character as
+            before" — verbatim. Paraphrase it once and page 9's Maya gets a different raincoat.
+          </p>
+
+          <h2 class="Public_Heading" id="outline">Step 2: Outline the story, one beat per page</h2>
+          <p class="Public_Paragraph">
+            Plan about <strong class="Public_Text">32 pages</strong>, the classic picture-book length, the same
+            count as most of the books already on your kid's shelf. One story beat per page,
+            one or two short sentences of text. Short lines matter twice over: they read well
+            aloud, and they're what the image model letters most reliably. If you're planning
+            to print with us, 32 pages is also our minimum; don't stop short.
+          </p>
+          <p class="Public_Paragraph">
+            Get the outline finished and approved before generating a single image. Changing the
+            story midway means regenerating pages, and each page takes a minute or two.
+          </p>
+
+          <h2 class="Public_Heading" id="generate">Step 3: Generate pages one at a time, at high quality</h2>
+          <p class="Public_Paragraph">Two settings decide whether the pages survive printing:</p>
+          <ul class="Public_List">
+            <li class="Public_Item"><strong class="Public_Text">Highest image quality, every page.</strong> Ask for it explicitly.
+              Draft-quality images garble lettering and smear fine detail.</li>
+            <li class="Public_Item"><strong class="Public_Text">Landscape, about 2784 × 2176 pixels.</strong> That's the size a 9×7-inch
+              printed page needs at 300 DPI. Smaller images look fine on screen and blurry on
+              paper; upscaling can sharpen a big image, not invent a small one.</li>
+          </ul>
+          <p class="Public_Paragraph">
+            Generate one page at a time and look at each before moving on. Batch-generating ten
+            pages feels faster right up until you notice page 3 drifted and everything after it
+            inherited the drift.
+          </p>
+
+          <h2 class="Public_Heading" id="lettering">Step 4: Put the words in the art</h2>
+          <p class="Public_Paragraph">
+            The best-looking picture books have the story text painted into the illustration:
+            hand-lettered across a night sky, tucked into a quiet corner of the meadow. Modern
+            image models letter well at high quality, but they render exactly what you type, so
+            direct them like a typographer:
+          </p>
+          <ul class="Public_List">
+            <li class="Public_Item"><strong class="Public_Text">Spell every word exactly</strong> as it should appear. A typo in the
+              prompt is a typo in the book.</li>
+            <li class="Public_Item"><strong class="Public_Text">Say where the words go and how they look</strong>: "two short lines,
+              hand-lettered in the calm sky, off to the side, not over her face."</li>
+            <li class="Public_Item"><strong class="Public_Text">Ask for large, clean, high-contrast lettering</strong> on a quiet part
+              of the art. If the background is busy there, ask for a soft translucent panel
+              behind the words.</li>
+            <li class="Public_Item"><strong class="Public_Text">Keep the whole text block at least 10% in from every edge</strong> and
+              biased toward the center, never tucked in a corner. (Why: see the print-ready
+              specs below.)</li>
+          </ul>
+
+          <h2 class="Public_Heading" id="proofread">Step 5: Proofread like a print shop</h2>
+          <p class="Public_Paragraph">
+            Review every page against three questions: is every word spelled right and easy to
+            read? Does the character match the style sheet: same hair, same raincoat, same
+            medium? Did the palette hold? Any miss, regenerate that one page; tweak the wording
+            or placement in the prompt and go again. Model-drawn text deserves a proofread; a
+            regeneration takes a minute, and a misspelled page lasts as long as the book does.
+          </p>
+
+          <h2 class="Public_Heading" id="cover">Step 6: Make the cover</h2>
+          <p class="Public_Paragraph">
+            Generate one more landscape image: the front cover, with <strong class="Public_Text">the title lettered
+            into the illustration, and nothing else</strong>. No subtitle, no author credit;
+            covers read best when the title stars the hero's name (<em class="Public_Text">Maya &amp; the Moon
+            Garden</em>). Keep the lettering well inside the safe area and spelled exactly. If
+            you want a back cover too, make it a quiet wordless pattern that echoes the book's
+            palette: no scene, no characters.
+          </p>
+
+          <h2 class="Public_Heading" id="print-ready">What makes a page print-ready</h2>
+          <p class="Public_Paragraph">
+            If the book only ever lives on a screen, you can relax all of this. If it might ever
+            become a printed book, these four specs are the difference:
+          </p>
+          <ul class="Public_List">
+            <li class="Public_Item"><strong class="Public_Text">Resolution: about 2784 × 2176 pixels, landscape.</strong> A 9×7-inch page
+              printed at 300 DPI needs every one of those pixels.</li>
+            <li class="Public_Item"><strong class="Public_Text">Bleed: background art runs to every edge.</strong> Print presses trim
+              about an eighth of an inch off each side, so art must overshoot the page; a white
+              rim where the art stopped short looks homemade.</li>
+            <li class="Public_Item"><strong class="Public_Text">Safe area: faces and characters stay ~7–9% in from every edge.</strong>
+              Anything closer risks the trim clipping it.</li>
+            <li class="Public_Item"><strong class="Public_Text">Text stays 10% in from every edge</strong>, a step further than the art,
+              because a clipped letter is far more noticeable than a clipped leaf.</li>
+          </ul>
+          <p class="Public_Paragraph">
+            Follow those while you generate and every page comes out ready for paper, with no
+            rework later. When the book's done and you're weighing how to print it, from
+            do-it-yourself print-on-demand to handing us the job, the companion page walks
+            the whole landscape: <a class="Public_Link" href="/print-your-chatgpt-book">print
+            your ChatGPT story as a real book</a>. And if anyone at your house is wondering
+            whether printing AI-generated art is allowed at all, the answer for your own family is yes;
+            <a class="Public_Link" href="/can-you-print-ai-images">the copyright
+            guide</a> has the plain-English answer with sources.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    
+    
+  </article></main><footer class="Public_Footer"><a class="Public_Link" href="/privacy">Privacy</a> <a class="Public_Link" href="/terms">Terms</a> <a class="Public_Link" href="/refund">Refunds</a> <a class="Public_Link" href="/contact">Contact</a><p class="Public_Paragraph">PrintBound · Yak Shaving LLC</p></footer></body>
+</html>
