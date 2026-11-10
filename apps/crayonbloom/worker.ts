@@ -4,15 +4,7 @@ import { gallery } from './gallery.ts'
 import { story } from './story.ts'
 import { printable, printableRequest } from './printable.ts'
 import { atelier } from './atelier.ts'
-import {
-  type Binding,
-  guard,
-  identifier,
-  Refusal,
-  store,
-  type Who,
-  who,
-} from './db.ts'
+import { type Binding, guard, identifier, Refusal, store, who } from './db.ts'
 import { generation, put, puzzle, settings } from './generation.ts'
 import { printer, printing } from './printing.ts'
 import { publicPage } from './public.ts'

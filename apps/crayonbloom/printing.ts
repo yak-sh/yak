@@ -55,6 +55,15 @@ export let printing = (
     )
     return answer.url
   }
+  let reviewable = (document: Record<string, unknown>) => {
+    if (document.error) throw new Refusal(String(document.error))
+    if (
+      !document.revision || !Array.isArray(document.pages) ||
+      !document.pages.length || !document.interior || !document.cover
+    ) {
+      throw new Error('Preparation returned no reviewable document.')
+    }
+  }
   let prepare = async (book: Book, pages: Page[]) => {
     if (!complete(book, pages)) {
       throw new Refusal(
@@ -81,7 +90,7 @@ export let printing = (
       pages: assets,
       front: await link(selected[0].artwork!.blob),
       product: 'coloring',
-      frontBleed: false,
+      front_bleed: false,
     })
     if (document.error) throw new Refusal(String(document.error))
     if (document.pending) {
@@ -96,6 +105,7 @@ export let printing = (
       }])
       return document
     }
+    reviewable(document)
     await db.apply([{
       entity: book.entity,
       print_review: { document: { ...document, source: edition(book, pages) } },
@@ -140,7 +150,7 @@ export let printing = (
         document: pending.document,
       })
       if (doc.pending) return doc
-      if (doc.error) throw new Refusal(String(doc.error))
+      reviewable(doc)
       await db.apply([{
         entity: book.entity,
         print_preparation: null,
