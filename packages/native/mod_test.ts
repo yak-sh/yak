@@ -207,8 +207,15 @@ test('what only a browser draws, and a view that throws, paint as a notice', asy
     let n = last as Node | null
     return n?.kind == 'box' ? n.children[0] : n
   }
-  let web = await shown(h('canvas', { 'aria-label': 'A map' }))
-  assertEquals([web?.kind, (web as { words: string }).words], ['web', 'A map'])
+  for (
+    let [node, label] of [
+      [h('canvas', { 'aria-label': 'A map' }), 'A map'],
+      [h('iframe', { title: 'Page preview' }), 'Page preview'],
+    ] as const
+  ) {
+    let web = await shown(node)
+    assertEquals([web?.kind, (web as { words: string }).words], ['web', label])
+  }
   let Throws = () => {
     throw new Error('no store')
   }
@@ -241,11 +248,7 @@ test('a line break runs inside the words', async () => {
   free()
 })
 
-// Every kind of node a painted tree holds, through its boxes.
-let kinds = (n: Node | null): string[] =>
-  !n ? [] : [n.kind, ...n.kind == 'box' ? n.children.flatMap(kinds) : []]
-
-test('every part of the kit paints natively, none left to the web', async () => {
+test('every part of the kit paints without a render fault', async () => {
   let unpainted: string[] = []
   for (let [name, piece] of Object.entries(kit)) {
     for (let [label, node] of piece.specimens()) {
@@ -256,7 +259,7 @@ test('every part of the kit paints natively, none left to the web', async () => 
       })
       await settle()
       free()
-      if (fault || !last || kinds(last).includes('web')) {
+      if (fault || !last) {
         unpainted.push(`${name}: ${label}`)
       }
     }

@@ -25,7 +25,7 @@ reads that tree into the kinds of node a native host draws with its own widgets:
 
 A tree that throws while it renders paints as a `web` notice saying what went
 wrong, so a broken view never takes its host down. Every part of @yaks/ui's kit
-paints as these nodes, none left to the web (mod_test.ts).
+paints as these nodes; embedded browser content paints as a `web` notice.
 
 A closed `details` paints its `summary` alone, which a press opens, as a
 browser's does.
