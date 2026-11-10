@@ -92,11 +92,12 @@ export let appRead = (options: Options): Handler => {
     if (!answer.ok) return options.taught(answer)
     let rows = await answer.json()
     if (!Array.isArray(rows)) return json(rows)
+    let visible = ranked(decode(vocab, rows) as Bundle[], line, opts)
+      .map((row) => kinded(vocab, row))
     return json(
-      await options.speak(
-        ranked(decode(vocab, rows) as Bundle[], line, opts)
-          .map((row) => kinded(vocab, row)),
-      ),
+      url.searchParams.get('names') == '0'
+        ? visible
+        : await options.speak(visible),
     )
   }
 }

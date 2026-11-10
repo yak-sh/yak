@@ -99,6 +99,7 @@ export let reading = async (
   let rows = await metaOf(store, { ...vouched(who), ...headers }).query(line, {
     live,
     listing: true,
+    names: true,
   })
   return shown(rows, line)
 }
@@ -142,7 +143,11 @@ export let queryFrom = async (
     : await store.consume('/uses', usesAnswer)
   if (borrows(line, uses)) return borrowed(uses)
   return shown(
-    await metaOf(store, headers).query(line, { live, listing: true }),
+    await metaOf(store, headers).query(line, {
+      live,
+      listing: true,
+      names: true,
+    }),
     line,
   )
 }

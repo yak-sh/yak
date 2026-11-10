@@ -33,11 +33,17 @@ import { FILED } from '@yaks/api/refuse'
 export type Meta = {
   /** The same transport for reads whose response carries serving metadata. */
   door?: Door
-  /** A filter line → the entities it selects, whole. A listing asks the Store
+  /** A filter line → the entities it selects, with canonical reference ids.
+   * Public page adapters request names explicitly. A listing asks the Store
    * to screen platform bookkeeping using its authoritative vocabulary. */
   query: (
     line: string,
-    opts?: { live?: boolean; listing?: boolean; trusted?: boolean },
+    opts?: {
+      live?: boolean
+      listing?: boolean
+      trusted?: boolean
+      names?: boolean
+    },
   ) => Promise<Bundle[]>
   /** a batch of bundles → the batch as applied, aliases resolved */
   apply: (
@@ -120,9 +126,11 @@ export let metaOf = (
   door: store,
   query: (line, opts) => {
     return store.consume(
-      `/query?q=${encodeURIComponent(line)}${opts?.live ? '&live=1' : ''}${
-        opts?.listing ? '&listing=1' : ''
-      }${opts?.trusted ? '&trusted=1' : ''}`,
+      `/query?q=${encodeURIComponent(line)}${opts?.names ? '' : '&names=0'}${
+        opts?.live ? '&live=1' : ''
+      }${opts?.listing ? '&listing=1' : ''}${
+        opts?.trusted ? '&trusted=1' : ''
+      }`,
       async (r) => {
         if (!r.ok) throw await answered(r)
         return await r.json() as Bundle[]
