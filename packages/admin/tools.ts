@@ -60,8 +60,8 @@ import {
   zone,
 } from './api.ts'
 import { deploys, rollback, table } from './deploys.ts'
-import { copy, type Copying } from './copy.ts'
-import { open } from '@yaks/sqlite/db'
+import type { Copying } from './copy.ts'
+import { copyThread } from './copy_thread.ts'
 import { gateway } from './gateway.ts'
 import { erase } from './erase.ts'
 import { select, sweep } from './move.ts'
@@ -656,22 +656,13 @@ export let runs = (
         throw new CallError('space', `no space is ${where}`)
       }
       let each = kept()
-      await copy({
+      await copyThread({
         spaces,
+        to,
         page: (space, asked) =>
           apps
             ? storePage<Copying>(at.bearer, space, asked)
             : operatorPage<Copying>(at.bearer, space, asked),
-        open: (slug) => {
-          let path = `${to}/${slug}.db`
-          // A copy is made anew: what an earlier one left goes first.
-          for (let file of [path, `${path}-wal`, `${path}-shm`]) {
-            try {
-              fs.removeSync(file)
-            } catch { /* none was there */ }
-          }
-          return open(path, { wal: false })
-        },
         out: each.out,
         stopping: host.stopping,
       })

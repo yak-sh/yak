@@ -460,6 +460,9 @@ importers:
       '@yaks/sqlite':
         specifier: 0.2.30
         version: link:../sqlite
+      '@yaks/sync':
+        specifier: 0.2.24
+        version: link:../sync
       '@yaks/tools':
         specifier: 0.2.30
         version: link:../tools

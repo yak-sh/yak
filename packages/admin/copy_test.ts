@@ -71,3 +71,27 @@ test('a copy stops at the next page once its process stops', async () => {
   )
   equal(asked, 2)
 })
+
+test('a copy stopped during a page releases its file without writing that page', async () => {
+  let made = open(':memory:')
+  let stopping = new AbortController()
+  let closed = false
+  let page = asking(source)
+  await assertRejects(
+    () =>
+      copy({
+        spaces: [{ eid: 'ada', slug: 'ada' }],
+        page: (space, asked) => {
+          if (asked.table) stopping.abort()
+          return page(space, asked)
+        },
+        open: () => ({ ...made, close: () => void (closed = true) }),
+        out: () => {},
+        stopping: stopping.signal,
+      }),
+    Interrupted,
+  )
+  equal(closed, true)
+  equal(made.query(select({ cols: [col('body')], from: table('note') })), [])
+  made.close()
+})

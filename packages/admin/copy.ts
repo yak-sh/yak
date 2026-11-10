@@ -32,7 +32,7 @@ export let copy = async (o: {
     asked: { table?: string; after?: number },
   ) => Promise<Copying>
   open: (slug: string) => Driver & { close: () => void }
-  out: (line: string) => void
+  out: (line: string) => unknown
   stopping: AbortSignal
 }) => {
   let going = () => {
@@ -41,8 +41,9 @@ export let copy = async (o: {
   for (let space of o.spaces) {
     going()
     let { plan } = await o.page(space.eid, {}) as { plan: Plan }
+    going()
     if (!plan.tables.length) {
-      o.out(`${space.slug}  no store`)
+      await o.out(`${space.slug}  no store`)
       continue
     }
     let sql = o.open(space.slug)
@@ -56,6 +57,7 @@ export let copy = async (o: {
             rows: Cell[][]
             last: number | null
           }
+          going()
           if (next.last == null) break
           arrived(sql, t, next.rows)
           rows += next.rows.length
@@ -63,7 +65,7 @@ export let copy = async (o: {
         }
       }
       ending(sql, plan)
-      o.out(`${space.slug}  ${plan.tables.length} tables, ${rows} rows`)
+      await o.out(`${space.slug}  ${plan.tables.length} tables, ${rows} rows`)
     } finally {
       sql.close()
     }
