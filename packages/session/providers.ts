@@ -226,7 +226,10 @@ export let providerResolver = (
  * every provider but a command line (`transport: process`), which is
  * @yaks/spawn's to launch, and a `using` naming nothing at all. A session a
  * command line runs (it has a `process`) goes on there whatever a follow-up
- * names, so no host answers it here.
+ * names, so no host answers it here; a command line's provider this host has
+ * an implementation for (@yaks/claude) answers a `native` session alone.
+ * Asked of no session, as a native call's own effect asks (./run.ts
+ * `session_tool`), the answer is whether this host has the provider at all.
  *
  * ```ts
  * import { answers } from '@yaks/session'
@@ -247,7 +250,9 @@ async (using: Comp | undefined, session?: Eid): Promise<boolean> => {
     let [row] = await g.get([String(provider)])
     let named = row?.provider as Comp | undefined
     if (!named) return false
-    if (named.transport == 'process' && !owner?.native) return false
+    if (named.transport == 'process' && session && !owner?.native) {
+      return false
+    }
     if (override) return named.transport != 'process'
     return typeof named.name == 'string' &&
       Object.hasOwn(implementations, named.name)

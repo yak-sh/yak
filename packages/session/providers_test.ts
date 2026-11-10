@@ -351,7 +351,7 @@ test('metadata without pricing refreshes after five minutes', () => {
   assertEquals(infoCache.afterExpiry, 2)
 })
 
-test('process providers with native implementations do not take managed sessions', async () => {
+test('process providers with native implementations do not take managed sessions, and answer a native call asked of no session', async () => {
   let { sessionDoc } = await import('./vocab.ts')
   let vocab = loadVocab([kernelDoc, edgeDoc, modelDoc, sessionDoc], [
     kernelKeywords,
@@ -372,4 +372,6 @@ test('process providers with native implementations do not take managed sessions
   let check = answers(g, { claude: fake })
   assertEquals(await check({ provider }, 'managed'), false)
   assertEquals(await check({ provider }, 'native'), true)
+  assertEquals(await check({ provider }), true)
+  assertEquals(await answers(g, {})({ provider }), false)
 })

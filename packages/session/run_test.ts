@@ -488,6 +488,55 @@ test('a transcript asking for a provider this host was lent nothing for is left 
   }
 })
 
+// A native session asking a command line's provider this host has an
+// implementation for (@yaks/claude's `claude -p`), run by a pool worker to its
+// end before the case is timed: the model calls a tool, then says done.
+let cli = await (async () => {
+  let asks = 0
+  let model: Model = (req) =>
+    Promise.resolve({
+      id: `r${++asks}`,
+      model: req.model,
+      items: asks == 1
+        ? [{ kind: 'call', id: 'c1', name: 'echo', args: '{}' }]
+        : [{ kind: 'assistant', text: 'done' }],
+    })
+  let has!: ReturnType<typeof answers>
+  let p = proc(store(), 'w1', model, {
+    tools: [{
+      name: 'echo',
+      description: 'say it back',
+      parameters: { type: 'object', properties: {} },
+      run: () => 'echoed',
+    }],
+    answers: (using, session) => has(using, session),
+  })
+  has = answers(p.g, { claude: model })
+  let stop = new AbortController()
+  let working = p.fx.work(p.g, stop.signal)
+  let [session, input] = ask('s1', 'hi', CLI)
+  await p.g.apply([
+    { entity: { eid: toolEid('echo') }, tool: { name: 'echo' } },
+    { ...session, native: {} },
+    input,
+  ])
+  await p.fx.idle()
+  stop.abort()
+  await working
+  let entries = await transcript(p.g, 's1')
+  return {
+    kinds: entries.filter((b) => !b.tool_progress).map(kindOf),
+    background: entries.filter((b) => b.call).map((b) => !!b.tool_async),
+  }
+})()
+
+test("a native session on a command line's provider has its background call run", () => {
+  assertEquals(cli, {
+    kinds: ['input', 'ask', 'call', 'result', 'ask', 'output'],
+    background: [true],
+  })
+})
+
 test('an input landing while its transcript is being run elsewhere is answered after', async () => {
   let s = store()
   let open!: () => void
