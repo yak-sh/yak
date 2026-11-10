@@ -690,6 +690,25 @@ export let storeUpload = (
   )
 }
 
+/** The bytes of an app's customer-private artifact, read with the seller's
+ * authority, or undefined when the app holds none at that address. */
+export let storeArtifact = async (
+  session: string,
+  at: string,
+  sha: string,
+): Promise<Uint8Array | undefined> => {
+  let r = await sent(storeUrl(at, `/pay/artifacts/${sha}`), session)
+  if (r.status == 404) {
+    await r.body?.cancel()
+    return undefined
+  }
+  if (!r.ok) {
+    let refusal = refusedResponse(r, await bodyOf(r))
+    throw new CallError(refusal.code, refusal.message)
+  }
+  return new Uint8Array(await r.arrayBuffer())
+}
+
 // Keep an OAuth client in the platform store, sealed (@yaks/connections
 // `registration`): its id and secret go to the platform's vault, and the store
 // holds the handle. The graph tier is the door, as for a query of it; it keeps

@@ -130,6 +130,26 @@ session `a22444a6-4b9a-430e-a2bb-990bbb50e825` received preservation knock
 declare: production bindings, original customer sessions, provider-ledger
 reconciliation, fresh source delta and destination handoff remain unverified.
 
+## CrayonBloom production store
+
+The production app is `crayonbloom/crayonbloom` (private, the space's front
+page), with `coloring_runtime{preview: false, printer: ""}`, so no checkout or
+print order can start. `bin/pg-export.ts` restores a custom-format dump in a
+throwaway PostgreSQL container and writes every public table as JSON;
+`bin/crayonbloom-load.ts` copies the 15 objects through the app's private
+artifact door, then the 256 mapped rows under installation
+`railway/crayonbloom/production`, rereads the store and fails unless every row
+stands as written. Each source user is staged under a private instrument derived
+from its row; no person is bound. A delta replay is the same two commands
+against a fresh dump, run as a space member (the HTTP artifact door refuses the
+platform admin):
+
+    deno run -A bin/pg-export.ts <fresh railway.dump> <fresh.json>
+    deno run -A bin/crayonbloom-load.ts <fresh.json> <backup dir> \
+      --at=crayonbloom/crayonbloom --as=crayonbloom@bot.yak.sh
+
+The backup directory supplies `bucket-inventory.json` and `objects/`.
+
 ## Import contracts
 
 `bin/venture-import.ts` assigns UUIDs through `derivedEid`, namespaced by the

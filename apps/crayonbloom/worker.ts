@@ -55,10 +55,16 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
   request = new Request(url, request)
   request.headers.set('x-yak-address', address)
   let db = store(env.APP), caller = who(request)
-  let old = await legacyPage(request, db, {
-    owner: caller.person ?? undefined,
-    via: caller.via ?? undefined,
-  })
+  let old = await legacyPage(
+    request,
+    db,
+    {
+      owner: caller.person ?? undefined,
+      via: caller.via ?? undefined,
+    },
+    undefined,
+    { asset: (blob) => env.APP.fetch('/pay/artifacts/' + blob) },
+  )
   if (old) return old
   let published = await publicPage(request, env)
   if (published) return published
