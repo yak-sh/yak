@@ -139,3 +139,29 @@
 .Rows_Form {
   display: contents;
 }
+
+/* A row with an action at the end and an optional full-width detail. */
+.Rows_Item.Rows_Item-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0;
+  padding: 0;
+  border-top: 0;
+  border-bottom: 1px solid var(--border);
+}
+.Rows_Detail-inset {
+  display: block;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--gap);
+  border: 0;
+  background: var(--card);
+}
+.Rows_Note {
+  color: var(--muted);
+  margin: 0;
+  padding-block: var(--half-gap);
+  font-size: inherit;
+  font-weight: normal;
+}

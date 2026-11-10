@@ -4,6 +4,8 @@
  * caller's (an icon, a word), and so is what pressing it does. `Tabs.Badge`,
  * inside a tab, counts what waits behind it.
  *
+ * `Tab-line` gives each control its own line in a terminal.
+ *
  * Tabs can hold what they show: a `TabSet` is the same block on a fieldset,
  * `TabSet.Legend` naming the choice and each `TabSet.Item` a radio, its `Tab`
  * (the radio's label) and its `Panel`. The radios own which tab is on, arrow
@@ -53,6 +55,7 @@ export let description = 'A row of tabs, one of them on.'
 export let sheet = (c: Colors): Sheet => ({
   Tabs: { spaced: true },
   Tabs_Tab: { fg: c.muted, spaced: true },
+  'Tabs_Tab-line': { block: true },
   'Tabs_Tab-hover': { fg: c.text },
   'Tabs_Tab-on': { fg: c.text, bg: c.card },
   Tabs_Badge: { fg: c.bg, bg: c.accent },
@@ -76,6 +79,15 @@ let item = (id: string, tab: string, panel: string, checked = false) =>
 /** A row with one tab on, one under the pointer, and one with a badge; and
  * a set whose first tab is checked. */
 export let specimens = (): Specimen[] => [
+  [
+    'Tabs, Tab-line',
+    h(
+      Tabs,
+      {},
+      h(Tab, { mod: ['line', 'on'] }, 'All'),
+      h(Tab, { mod: 'line' }, 'Selected'),
+    ),
+  ],
   [
     'Tabs, Tab-on, Tab-hover, Badge',
     h(

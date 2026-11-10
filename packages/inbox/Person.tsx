@@ -12,7 +12,17 @@
 
 import { type ComponentChild, Fragment, type JSX } from 'preact'
 import { useRef, useState } from 'preact/hooks'
-import { Button, Dot, Field, Inbox as Frame, Say, Stamp, Tabs } from '@yaks/ui'
+import {
+  Button,
+  Dot,
+  Field,
+  Rows,
+  Say,
+  Section,
+  Stamp,
+  Tabs,
+  Toolbar,
+} from '@yaks/ui'
 import type { Bundle } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import type { Io } from '@yaks/inspect'
@@ -91,14 +101,14 @@ let Conversation = (
     !r.comps.comment && r.eid != t.eid && r.comps.entry?.session != t.eid
   )
   return (
-    <Frame.Detail>
+    <Rows.Detail mod='inset'>
       {show(io, t.eid, 'Inbox.Full', { talkback: false })}
       {other.map((r) => (
         <Fragment key={r.eid}>{show(io, r.eid, 'Full')}</Fragment>
       ))}
       <Branches rows={notes} />
       <Composer eid={t.eid} />
-    </Frame.Detail>
+    </Rows.Detail>
   )
 }
 
@@ -109,7 +119,7 @@ let ThreadRow = (
   let open = !!view.value?.open
   let root = io.get(t.eid) ?? bundleOf(t.row)
   return (
-    <Frame.Thread data-thread={t.eid} mod={t.unread && 'unread'}>
+    <Rows.Item as='article' data-thread={t.eid} mod='split'>
       <div>
         {show(io, t.eid, 'Inbox.List.Tile')}
         <Button
@@ -127,10 +137,10 @@ let ThreadRow = (
           />
           {open ? 'Collapse thread' : 'Expand thread'}
         </Button>{' '}
-        <Frame.Reason>
+        <Rows.Meta>
           {t.blocking ? 'blocking · ' : ''}
           {t.reason}
-        </Frame.Reason>{' '}
+        </Rows.Meta>{' '}
         <Stamp>{io.when(t.at)}</Stamp>
         {t.latest.eid != t.eid && show(io, t.latest.eid, 'Inbox.List.Tile')}
       </div>
@@ -143,7 +153,7 @@ let ThreadRow = (
         archive
       </Button>
       {open && <Conversation thread={t} actor={actor} io={io} />}
-    </Frame.Thread>
+    </Rows.Item>
   )
 }
 
@@ -163,15 +173,15 @@ export let InboxThreads = (
 ): JSX.Element => {
   let shown = limit == null ? threads : threads.slice(0, limit)
   return (
-    <Frame>
-      <Frame.Tools>
+    <section>
+      <Toolbar as='div' mod='plain'>
         {find}
         <Tabs aria-label='Search direction'>
           {([undefined, 'said', 'received'] as const).map((direction) => (
-            <Frame.Mode
+            <Tabs.Tab
               type='button'
               key={direction || 'both'}
-              mod={direction == search.direction && 'on'}
+              mod={['line', direction == search.direction && 'on']}
               aria-pressed={direction == search.direction}
               onClick={() => onSearch({ ...search, direction })}
             >
@@ -180,7 +190,7 @@ export let InboxThreads = (
                 : direction == 'received'
                 ? 'Received'
                 : 'Both'}
-            </Frame.Mode>
+            </Tabs.Tab>
           ))}
         </Tabs>
         <Button
@@ -191,28 +201,28 @@ export let InboxThreads = (
         >
           {search.all ? 'Hide archived' : 'Include archived'}
         </Button>
-      </Frame.Tools>
-      {!ready && <Frame.Empty role='status'>Loading inbox…</Frame.Empty>}
+      </Toolbar>
+      {!ready && <Rows.Note role='status'>Loading inbox…</Rows.Note>}
       {lanes.map((lane) => {
         let items = shown.filter((t) => t.lane == lane)
         return (
-          <Frame.Lane key={lane} aria-label={lane}>
-            <Frame.Heading>
+          <Section mod='compact' key={lane} aria-label={lane}>
+            <Section.Title mod='compact'>
               {lane} · {items.length}
-            </Frame.Heading>
+            </Section.Title>
             {items.map((t) => (
               <ThreadRow key={t.eid} thread={t} actor={actor} io={io} />
             ))}
-            {ready && !items.length && (
-              <Frame.Empty>No threads here.</Frame.Empty>
-            )}
-          </Frame.Lane>
+            {ready && !items.length && <Rows.Note>No threads here.</Rows.Note>}
+          </Section>
         )
       })}
       {shown.length < threads.length && (
-        <Frame.Empty>+{threads.length - shown.length} more</Frame.Empty>
+        <Rows.Note>
+          +{threads.length - shown.length} more
+        </Rows.Note>
       )}
-    </Frame>
+    </section>
   )
 }
 

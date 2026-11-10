@@ -87,7 +87,7 @@ test('a person’s inbox lanes policy threads, shows the newest words and answer
   ])
   let seen = mount(node())
   try {
-    assertEquals(texts(seen.root, '.Inbox_Heading'), [
+    assertEquals(texts(seen.root, '.Section_Title'), [
       'Needs you · 1',
       'Replies · 0',
       'Updates · 0',
@@ -98,7 +98,7 @@ test('a person’s inbox lanes policy threads, shows the newest words and answer
       'Choose route',
       'Take the train.',
     ])
-    assertEquals(texts(seen.root, '.Inbox_Reason'), ['blocking · decision'])
+    assertEquals(texts(seen.root, '.Rows_Meta'), ['blocking · decision'])
     assertStringIncludes(
       seen.root.querySelector('[data-thread]')!.textContent!,
       'Expand thread blocking · decision at 2026-10-02T13:00:00Z',
@@ -165,7 +165,7 @@ test('an opened ask shows its whole body, and stays open with its unsent words a
     filed: { assignee: 'person' },
   }])
   let detail = (root: Element) =>
-    root.querySelector('.Inbox_Detail')?.textContent?.includes(
+    root.querySelector('.Rows_Detail')?.textContent?.includes(
       'Use the scratch account only.',
     )
   let seen = mount(node())
@@ -305,7 +305,7 @@ test('roots and newest messages are drawn by the contextual shared renderers, wi
     assertEquals(seen.root.textContent?.includes('Newest reply'), true)
     assertEquals(seen.root.querySelector('button a, button button'), null)
     await expand(seen.root)
-    let detail = seen.root.querySelector('.Inbox_Detail')!
+    let detail = seen.root.querySelector('.Rows_Detail')!
     assertEquals(
       detail.textContent?.includes('Contextual conversation full'),
       true,
@@ -373,7 +373,7 @@ test('a person’s inbox draws summary rows and reads a thread’s history only 
     <h.Door e={{ entity: { eid: actor }, person: {} }} view='Inbox' />,
   )
   let opened = summaryQuery(actor, { all: true }, root)
-  let detail = () => seen.root.querySelector('.Inbox_Detail')
+  let detail = () => seen.root.querySelector('.Rows_Detail')
   try {
     await wait(
       () => seen.root.textContent?.includes('Take the train.') == true,

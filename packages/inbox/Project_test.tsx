@@ -25,7 +25,7 @@ let drawn = async (rows: Bundle[], ctx = {}) => {
   let g = await shop([project, ...rows])
   let h = host({ read: (l) => g.read(l) })
   let seen = mount(<h.Door e={project} view='Inbox' ctx={ctx} />)
-  await wait(() => !!seen.root.querySelector('.Inbox_Summary'), 'the list')
+  await wait(() => !!seen.root.querySelector('.Section_Sub'), 'the list')
   return { h, seen }
 }
 
@@ -39,20 +39,20 @@ test('a line is in the policy’s order, and reading or archiving it marks its t
   )
   try {
     assertEquals(texts(seen.root, '.Tile_Title'), ['Work 1', 'Work 0'])
-    assertEquals(texts(seen.root, '.Inbox_Summary'), ['2 items · 1 unread'])
+    assertEquals(texts(seen.root, '.Section_Sub'), ['2 items · 1 unread'])
     assertEquals(
-      [...seen.root.querySelectorAll('.Inbox_Thread .Dot')].map((d) =>
+      [...seen.root.querySelectorAll('.Rows_Item .Dot')].map((d) =>
         d.getAttribute('title')
       ),
       ['read', 'unread'],
     )
-    assertEquals(texts(seen.root, '.Inbox_Reason'), [
+    assertEquals(texts(seen.root, '.Rows_Meta'), [
       'assigned to you',
       'assigned to you',
     ])
     assertEquals(seen.root.querySelectorAll('.Stamp').length, 2)
     // Opening the unread one reads it; the read one is left as it is.
-    let lines = seen.root.querySelectorAll('.Inbox_Thread > div')
+    let lines = seen.root.querySelectorAll('.Rows_Item > div')
     await press(lines[0])
     await press(lines[1])
     await wait(() => h.applied.length == 1, 'one read mark')
@@ -84,9 +84,9 @@ test('a line is in the policy’s order, and reading or archiving it marks its t
 test('a limited list keeps the whole count and bounds its lines', async () => {
   let { seen } = await drawn(assigned(10), { limit: 8 })
   try {
-    assertEquals(texts(seen.root, '.Inbox_Summary'), ['10 items · 10 unread'])
-    assertEquals(seen.root.querySelectorAll('.Inbox_Thread').length, 8)
-    assertEquals(texts(seen.root, '.Inbox_Empty'), ['+2 more'])
+    assertEquals(texts(seen.root, '.Section_Sub'), ['10 items · 10 unread'])
+    assertEquals(seen.root.querySelectorAll('.Rows_Item').length, 8)
+    assertEquals(texts(seen.root, '.Rows_Note'), ['+2 more'])
   } finally {
     seen.free()
   }
@@ -131,7 +131,7 @@ test('a knock names and opens its target, with its own id beside', async () => {
       '/printbound',
     )
     assertEquals(texts(seen.root, '.Id'), ['#30', '#2'])
-    assertEquals(texts(seen.root, '.Inbox_Reason'), ['knock'])
+    assertEquals(texts(seen.root, '.Rows_Meta'), ['knock'])
     assertEquals(
       seen.root.querySelector('.Dot')?.getAttribute('title'),
       'unread',

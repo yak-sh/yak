@@ -3,6 +3,8 @@
  * is about, then what it holds. The title line is one heading, so it stays
  * one line in a terminal too: the words, a `Count` of what the section holds,
  * a `Note`, and anything else the line offers (a button), all inside `Title`.
+ * `Section-compact` stacks sections without a gap; `Title-compact` is a
+ * small heading padded above and below.
  * A `Note-refused` says what went wrong there. A section never folds: what it
  * holds shows.
  *
@@ -35,6 +37,8 @@ export let description =
 /** A blank line after it, as the margin after it in a browser. */
 export let sheet = (c: Colors): Sheet => ({
   Section: { gap: true },
+  'Section-compact': { gap: false },
+  'Section_Title-compact': { bold: true, gap: true, spaced: false },
   Section_Title: { fg: c.heading, spaced: true },
   Section_Count: { fg: c.muted, bold: false },
   Section_Note: { fg: c.muted, bold: false },
@@ -46,6 +50,15 @@ let { Title, Count, Note, Sub } = Section
 
 /** A section with all it says of itself, and one that went wrong. */
 export let specimens = (): Specimen[] => [
+  [
+    'Section-compact, Title-compact',
+    h(
+      Section,
+      { mod: 'compact' },
+      h(Title, { mod: 'compact' }, 'Available · 2'),
+      h(Sub, {}, 'Choose an item.'),
+    ),
+  ],
   [
     'Section, Title, Count, Note, Sub',
     h(

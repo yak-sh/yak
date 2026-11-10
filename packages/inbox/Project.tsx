@@ -10,7 +10,7 @@
  */
 
 import type { JSX } from 'preact'
-import { Button, Dot, Inbox as Frame, Stamp } from '@yaks/ui'
+import { Button, Dot, Rows, Section, Stamp } from '@yaks/ui'
 import type { Io, Props } from '@yaks/inspect'
 import type { Row } from './reader.ts'
 import type { Thread } from './threads.ts'
@@ -21,13 +21,13 @@ let Line = ({ t, io, actor }: { t: Thread<Row>; io: Io; actor: string }) => {
   let knock = t.row.comps.knock
   let subject = knock ? String(knock.target) : t.eid
   return (
-    <Frame.Thread data-thread={t.eid} mod={t.unread && 'unread'}>
+    <Rows.Item as='article' data-thread={t.eid} mod='split'>
       <div onClick={() => t.unread && mark(io, actor, t.eid, 'opened')}>
         <Dot
           mod={t.unread ? 'accent' : undefined}
           title={t.unread ? 'unread' : 'read'}
         />
-        <Frame.Reason>{t.reason}</Frame.Reason>
+        <Rows.Meta>{t.reason}</Rows.Meta>
         {show(io, subject, 'Inbox.List.Tile')}
         <Stamp>{io.when(t.at)}</Stamp>
         {subject != t.eid && show(io, t.eid, 'Id')}
@@ -43,7 +43,7 @@ let Line = ({ t, io, actor }: { t: Thread<Row>; io: Io; actor: string }) => {
       >
         ✕
       </Button>
-    </Frame.Thread>
+    </Rows.Item>
   )
 }
 
@@ -53,29 +53,31 @@ export let ProjectInbox = ({ e, io, ctx }: Props): JSX.Element => {
   let { threads } = useThreads(io, eid)
   if (!threads.length) {
     return (
-      <Frame>
-        <Frame.Empty>
+      <section>
+        <Rows.Note>
           nothing addressed to {show(io, eid, 'Inbox.Recipient.Inline')} yet
-        </Frame.Empty>
-      </Frame>
+        </Rows.Note>
+      </section>
     )
   }
   let unread = threads.filter((t) => t.unread).length
   let shown = limit == null ? threads : threads.slice(0, limit)
   return (
-    <Frame>
+    <section>
       {
         /* The whole count, never a page: a number that lies about how much
           is waiting is worse than a long list. */
       }
-      <Frame.Summary>
+      <Section.Sub>
         {threads.length} item{threads.length == 1 ? '' : 's'}
         {unread ? ` · ${unread} unread` : ''}
-      </Frame.Summary>
+      </Section.Sub>
       {shown.map((t) => <Line key={t.eid} t={t} io={io} actor={eid} />)}
       {shown.length < threads.length && (
-        <Frame.Empty>+{threads.length - shown.length} more</Frame.Empty>
+        <Rows.Note>
+          +{threads.length - shown.length} more
+        </Rows.Note>
       )}
-    </Frame>
+    </section>
   )
 }

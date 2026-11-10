@@ -60,3 +60,11 @@
 .Toolbar-narrow {
   padding: .6rem 1rem;
 }
+
+.Toolbar-plain {
+  flex-wrap: wrap;
+  gap: var(--gap);
+  padding: var(--half-gap) 0;
+  border: 0;
+  background: none;
+}

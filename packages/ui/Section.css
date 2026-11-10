@@ -37,3 +37,16 @@
   font-size: var(--small);
   max-width: var(--measure);
 }
+
+.Section-compact {
+  display: block;
+}
+.Section-compact + .Section-compact {
+  margin-top: 0;
+}
+.Section_Title-compact {
+  display: block;
+  font-size: 16px;
+  font-weight: bold;
+  padding-block: var(--gap) var(--half-gap);
+}

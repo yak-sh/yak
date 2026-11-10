@@ -14,6 +14,10 @@
  * `Rows.Toggle` (a glyph, pressed to open and close it) beside what it says,
  * then, while open, a `Rows.Detail` beneath it.
  *
+ * `Item-split` puts an action beside the row's content; `Detail-inset`
+ * spans both columns on a padded background. `Rows.Note` is a full-size
+ * line below the rows, whether none are present or more were left out.
+ *
  * @module
  */
 
@@ -31,6 +35,7 @@ export let Rows:
   & Record<
     | 'Item'
     | 'More'
+    | 'Note'
     | 'Kind'
     | 'Link'
     | 'Line'
@@ -48,6 +53,7 @@ export let Rows:
     {
       Item: 'div',
       More: 'div',
+      Note: 'p',
       Kind: 'div',
       Link: 'div',
       Line: 'div',
@@ -68,6 +74,7 @@ export let description = 'A list of rows, and what was left out.'
 export let sheet = (c: Colors): Sheet => ({
   'Rows-nested': { indent: 2 },
   Rows_More: { fg: c.muted },
+  Rows_Note: { fg: c.muted },
   Rows_Kind: { fg: c.muted },
   'Rows-ruled': { gap: true },
   'Rows-quiet': { fg: c.muted },
@@ -125,6 +132,21 @@ let person = (name: string, meta: string, ...actions: string[]) =>
 
 /** A list, one of people, one nested under it, and tiles to pick from. */
 export let specimens = (): Specimen[] => [
+  [
+    'Rows, Item-split, Meta, Detail-inset, Note',
+    h(
+      Rows,
+      {},
+      h(
+        Item,
+        { as: 'article', mod: 'split' },
+        h('div', {}, 'An item', h(Rows.Meta, {}, 'Available')),
+        h(Button, { type: 'button' }, 'Hide'),
+        h(Rows.Detail, { mod: 'inset' }, 'More about this item.'),
+      ),
+      h(Rows.Note, {}, '2 more'),
+    ),
+  ],
   [
     'Rows, Item, More',
     h(

@@ -47,7 +47,6 @@ import * as head from './Head.ts'
 import * as icon from './Icon.ts'
 import * as id from './Id.ts'
 import * as index from './Index.ts'
-import * as inbox from './Inbox.ts'
 import * as menu from './Menu.ts'
 import * as meter from './Meter.ts'
 import * as metrics from './Metrics.ts'
@@ -151,7 +150,6 @@ let modules = {
     Turns: turns,
     Passage: passage,
     Notes: notes,
-    Inbox: inbox,
   },
   Page: {
     Identity: identity,

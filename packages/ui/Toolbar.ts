@@ -1,4 +1,5 @@
-/** A compact heading and its adjacent controls. @module */
+/** A compact heading and its adjacent controls. `Toolbar-plain` wraps
+ * controls in a row without a background or edge. @module */
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
 import { block, type Part } from './el.ts'
@@ -18,12 +19,22 @@ export let description = 'A compact heading and its adjacent controls.'
 /** The same parts in a terminal. */
 export let sheet = (c: Colors): Sheet => ({
   Toolbar: { row: true, spaced: true },
+  'Toolbar-plain': { row: false, spaced: false },
   Toolbar_Text: { col: true },
   Toolbar_Title: { bold: true },
   Toolbar_Sub: { fg: c.muted },
 })
 /** A complete example. */
 export let specimens = (): Specimen[] => [
+  [
+    'Toolbar-plain',
+    h(
+      Toolbar,
+      { as: 'div', mod: 'plain' },
+      h(Button, {}, 'Refresh'),
+      h(Button, {}, 'Show all'),
+    ),
+  ],
   [
     'Toolbar, variants',
     h(
