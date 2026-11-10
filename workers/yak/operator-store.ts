@@ -359,11 +359,11 @@ let working = async (
   for (;;) {
     await fx.work(g, undefined, { until })
     await fx.idle()
-    let [next] = await g.read(
-      `.effect.state=pending .effect.handler=${
-        handled.join(',')
-      } .order=effect.next .limit=1`,
-    )
+    // The soonest pending run: one nobody has started holds no `next` and
+    // is due now, and an order puts what lacks its value last.
+    let pending = `.effect.state=pending .effect.handler=${handled.join(',')}`
+    let [next] = await g.read(`${pending} !effect.next .limit=1`)
+    next ??= (await g.read(`${pending} .order=effect.next .limit=1`))[0]
     if (!next) return null
     let at = Date.parse(String((next.effect as { next?: string }).next)) ||
       Date.now()

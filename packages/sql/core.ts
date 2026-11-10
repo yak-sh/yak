@@ -46,6 +46,7 @@ export {
   join,
   jsonable,
   type Key,
+  last,
   le,
   left,
   lit,

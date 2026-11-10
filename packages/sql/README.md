@@ -782,10 +782,11 @@ equal(
 ```
 
 `.after` reads the anchor's order value even if it no longer matches the
-filters. NULL sorts first ascending and last descending; ties include NULL
-values. With explicit ordering, a missing anchor starts at the first page.
-Numeric cursors require a vocabulary declaring `entity.num`; an eid cursor also
-works without numbering.
+filters. An entity lacking the ordered value, missing or empty text, sorts after
+every entity holding it in either direction, and those lacking it tie. With
+explicit ordering, a missing anchor starts at the first page. Numeric cursors
+require a vocabulary declaring `entity.num`; an eid cursor also works without
+numbering.
 
 `.count` returns `value: ''` and `n`. `.distinct` returns `value`, and `.tally`
 returns `value` and `n` per group. `tallied` permits numbers as numbers and

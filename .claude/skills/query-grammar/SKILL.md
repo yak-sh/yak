@@ -169,7 +169,10 @@ A directive belongs to the whole line wherever it is written.
 | `.near=`            | `.task .near=T-6461 .limit=3`               | ranked by meaning (`search-and-embeddings`)                                                                      |
 | `.edges`            | `.edges[requires]`                          | a retired spelling: it answers as if absent; read edges as rows (`.requires&.edge.from=T-1`)                     |
 
-`.order`, `.limit` and `.after` shape rows, so an aggregate ignores them:
+An entity lacking the ordered value, missing or empty, comes after every one
+holding it, ascending or descending: `.order=filed.priority` puts the tasks with
+no priority last. `.order`, `.limit` and `.after` shape rows, so an aggregate
+ignores them:
 `.count&.limit=20` counts every match. With no `.order`, a window (`.limit`,
 `.after`) of a query with words is ranked by `search` (best match first, a
 title that is exactly the words before all); any other window is newest first,

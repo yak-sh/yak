@@ -164,20 +164,19 @@ let pages: [string, string, string[]][] = [
     'row-50',
     'row-3000',
   ]],
-  ['without a value first, oldest first', '.entry .order=created.at .limit=3', [
-    'row-4000',
-    'row-3000',
-    'row-2000',
+  ['oldest first', '.entry .order=created.at .limit=3', [
+    'row-1',
+    'row-2',
+    'row-3',
   ]],
   [
-    'an empty value once, after none',
-    '.entry .order=created.at .limit=6',
-    ['row-4000', 'row-3000', 'row-2000', 'row-1000', 'row-3001', 'row-1'],
+    'oldest first, without a value last',
+    '.comment .order=created.at .limit=3',
+    [
+      'row-50',
+      'row-3000',
+    ],
   ],
-  ['oldest first after them', '.comment .order=created.at .limit=3', [
-    'row-3000',
-    'row-50',
-  ]],
   ['one rare match', '.entry .content.body~=rare .order=-created.at .limit=3', [
     'row-7',
   ]],
@@ -202,10 +201,27 @@ for (let [name, line, eids] of pages) {
     assertEquals(read(line).eids, eids))
 }
 
+// Missing or empty, a value is absent, and the absent come last either way,
+// once each, newest first among themselves.
+test('a page in an indexed order ends with the entities lacking its value', () => {
+  for (let line of ['.entry .order=created.at', '.entry .order=-created.at']) {
+    let { eids } = read(`${line} .limit=4000`)
+    assertEquals(new Set(eids).size, 4000, line)
+    assertEquals(eids.slice(-5), [
+      'row-4000',
+      'row-3000',
+      'row-3001',
+      'row-2000',
+      'row-1000',
+    ], line)
+  }
+})
+
 test('a page in an indexed order stops at the page', () => {
   for (
     let line of [
       '.entry ?created .order=-created.at .limit=3',
+      '.entry .order=created.at .limit=3',
       '.entry .content.body~=common .order=-created.at .limit=3',
       '.entry .content.body~=common .created.at>2026-01-01T00:00:00Z .order=-created.at .limit=3',
       `.entry .content.body~=common .created.at>${

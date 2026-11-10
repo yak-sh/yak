@@ -69,7 +69,7 @@ test('binary projection sorting and aggregates retain bytes and group by content
     matcher('.document .order=document.bytes', vocab)(all).map((b) =>
       b.entity.eid
     ),
-    ['absent', 'empty', 'two', 'one'],
+    ['empty', 'two', 'one', 'absent'],
   )
 })
 

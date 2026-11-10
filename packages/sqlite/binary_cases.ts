@@ -152,11 +152,11 @@ export let binaryCases = async (make: () => Store): Promise<void> => {
   await put(aggregates, 'null', null)
   test('binary ordering retains byte values and content identity', () => {
     assertEquals(ids(aggregates, '.document .order=document.bytes'), [
-      'null',
       'empty',
       'c',
       'b',
       'a',
+      'null',
     ])
   })
   test('binary distinct retains byte values and content identity', () => {

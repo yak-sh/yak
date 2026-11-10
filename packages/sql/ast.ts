@@ -99,6 +99,7 @@ export type Expr =
   | { t: 'cast'; e: Expr; as: string }
   | { t: 'as'; e: Expr; name: string }
   | { t: 'desc'; e: Expr }
+  | { t: 'last'; e: Expr }
   | { t: 'over'; fn: Expr; partition?: Expr[]; order?: Expr[] }
   | { t: 'raise'; how: Refusal; msg?: string }
 
@@ -485,6 +486,8 @@ export let iff = (cond: Expr, then: Expr, otherwise: Expr): Expr =>
 export let cast = (e: Expr, as: string): Expr => ({ t: 'cast', e, as })
 export let as = (e: Expr, name: string): Expr => ({ t: 'as', e, name })
 export let desc = (e: Expr): Expr => ({ t: 'desc', e })
+/** An order term whose NULLs come after every value: `e nulls last`. */
+export let last = (e: Expr): Expr => ({ t: 'last', e })
 
 /** A window function: `fn over (partition by … order by …)`. */
 export let over = (
