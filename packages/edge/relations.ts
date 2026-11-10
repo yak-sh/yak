@@ -39,6 +39,16 @@ export let relations = (v: Vocab): Record<string, string> => {
 }
 
 /**
+ * The relations a link here can be kept as: every one {@link relations}
+ * finds, or none in a vocabulary without the {@link EDGE} component each link
+ * carries. A graph composing @yaks/task but not @yaks/edge declares
+ * `contains`, yet holds no link of it, and a read of `edge.from` there is a
+ * read of a property it does not have.
+ */
+export let linkable = (v: Vocab): Record<string, string> =>
+  v.comp(EDGE) ? relations(v) : {}
+
+/**
  * The same declarations the other way round, as component name → query name.
  * This is what reads a stored link back: a bundle carrying `references` is a
  * `referenced` link.

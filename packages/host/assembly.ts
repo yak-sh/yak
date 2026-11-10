@@ -416,9 +416,19 @@ export let assemble = (
             if (tools) return tools
           }
         },
+        // A link that fails to say what a request is told tells it nothing and
+        // is reported: what a door is told first never costs it its answer.
         told: async (request) => {
           for (let tell of telling) {
-            let said = await tell(request)
+            let said = await (async () => await tell(request))().catch(
+              (error) =>
+                void host.report?.(error, {
+                  during: {
+                    request: new URL(request.url).pathname,
+                    process: host.me,
+                  },
+                }),
+            )
             if (said !== undefined) return said
           }
         },

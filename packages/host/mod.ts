@@ -269,7 +269,8 @@ export interface Host {
   /** what this request is told before a door's own instructions, where the
    * link it came through says so ({@link RoutesFacet.told}): the text of the
    * persona a tunnel's caller writes as. A door that instructs its callers
-   * asks it (@yaks/mcp). */
+   * asks it (@yaks/mcp). It never fails: a link that cannot say is reported
+   * ({@link report}) and tells nothing. */
   told?: Told
   /** Every commit another host makes to this store, as the patches it applied
    * (@yaks/graph `News`): what a subscription registry or a cache over

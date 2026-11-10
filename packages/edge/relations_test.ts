@@ -4,12 +4,22 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { edgeKeywords } from './keywords.ts'
-import { names, relations } from './relations.ts'
+import { linkable, names, relations } from './relations.ts'
 import { blog } from './testing.ts'
 
 test('a relation is whatever the vocabulary says is one', () => {
   assertEquals(relations(blog), { cites: 'cites', linked: 'links' })
   assertEquals(names(blog), { cites: 'cites', links: 'linked' })
+})
+
+test('a relation declared where no edge can carry it keeps no link', () => {
+  let edgeless = loadVocab(
+    [{ $defs: { cites: { component: true, type: 'object', edge: true } } }],
+    [edgeKeywords],
+  )
+  assertEquals(relations(edgeless), { cites: 'cites' })
+  assertEquals(linkable(edgeless), {})
+  assertEquals(linkable(blog), relations(blog))
 })
 
 test('an ordinary component is not a relation', () => {

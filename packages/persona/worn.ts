@@ -40,7 +40,7 @@
 import { and, eq, type Input, list, present } from '@yaks/query'
 import { after, each, isPromise } from '@yaks/fp'
 import type { Bundle, Eid, Storage } from '@yaks/graph'
-import { EDGE, relations } from '@yaks/edge'
+import { EDGE, linkable } from '@yaks/edge'
 import { DOC } from '@yaks/doc'
 import type { Vocab } from '@yaks/vocab'
 import { PERSONA } from './comp.ts'
@@ -160,7 +160,7 @@ let gathered = (
   storage: Reads,
   vocab: Vocab,
 ): (eid: Eid) => Worn | undefined | Promise<Worn | undefined> => {
-  let tags = relations(vocab)
+  let tags = linkable(vocab)
   // A level's links, both relations read at once.
   let linked = (level: Eid[]) =>
     both(

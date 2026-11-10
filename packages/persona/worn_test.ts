@@ -6,7 +6,16 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { isPromise } from '@yaks/fp'
 import { type Bundle, type Graph } from '@yaks/graph'
-import { held, link, memory, said, thin, voiced, world } from './testing.ts'
+import {
+  edgeless,
+  held,
+  link,
+  memory,
+  said,
+  thin,
+  voiced,
+  world,
+} from './testing.ts'
 import { offer, wear } from './worn.ts'
 import { voice, type Worn } from './voice.ts'
 
@@ -178,6 +187,17 @@ test('a relation this vocabulary never declares contributes nothing', () => {
   let worn = now(g, 'n1', thin)!
   assertEquals(ids(worn.contains), [])
   assertEquals(ids(worn.names), ['m1'])
+})
+
+test('a graph that keeps no links has its persona speak alone', () => {
+  let g = world(edgeless)
+  g.apply([voiced('n1', 'TaskMaster', 'the voice'), memory('m1', 'one', 'x')])
+  let worn = now(g, 'n1', edgeless)!
+  assertEquals([worn.persona.entity.eid, worn.contains, worn.names], [
+    'n1',
+    [],
+    [],
+  ])
 })
 
 // n1 contains the tool topic_find and the persona n2, which contains search;

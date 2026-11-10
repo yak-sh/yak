@@ -33,7 +33,7 @@ import {
   walk,
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
-import { EDGE, relations } from './relations.ts'
+import { EDGE, linkable } from './relations.ts'
 
 // The links of one relation, as the pairs of integer ids they join. Joining
 // against the relation's own table is the filter, so there is no union and
@@ -54,14 +54,13 @@ let linked = (tag: string): Query =>
  * reference-property walk.
  */
 export let traverse = (vocab: Vocab): Extension => {
-  let rels = relations(vocab)
-  let tag = (name: string) => vocab.comp(EDGE) && rels[name]
+  let rels = linkable(vocab)
   return {
     name: '@yaks/edge',
     compile: {
       walk: (clause, site) => {
         if (clause.kind != 'walk' || clause.path.length != 1) return null
-        let t = tag(clause.path[0])
+        let t = rels[clause.path[0]]
         return t ? walk(site.owner, clause, linked(t)) : null
       },
     },

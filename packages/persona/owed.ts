@@ -25,7 +25,7 @@
 import { and, eq, type Input, list, present } from '@yaks/query'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
-import { relations } from '@yaks/edge'
+import { linkable } from '@yaks/edge'
 import { DOC, TITLE } from '@yaks/doc'
 import { human } from '@yaks/id'
 import { safe } from '@yaks/text'
@@ -51,7 +51,7 @@ export let commons = async (
   projects: Eid[],
 ): Promise<Map<Eid, Bundle>> => {
   let out = new Map<Eid, Bundle>()
-  let tag = relations(g.vocab)[CONTAINS]
+  let tag = linkable(g.vocab)[CONTAINS]
   if (!tag || !projects.length) return out
   let homed = await g.storage.read(
     and(present(PERSONA), eq(`${PERSONA}.home`, value(projects))),

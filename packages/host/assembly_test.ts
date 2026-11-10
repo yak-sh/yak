@@ -686,6 +686,30 @@ test('a host carries a feed only when a plugin offers one', async () => {
   equal(heard, [[{ entity: { eid: 'x' } }]])
 })
 
+test('a link that cannot say what a request is told tells nothing, and is reported', async () => {
+  let broke = new Error('the persona could not be read')
+  let reported: unknown[] = []
+  let telling: Load = (_, name) =>
+    Promise.resolve(
+      name == 'routes'
+        ? {
+          handler: () => () => new Response(),
+          told: () => (request) => {
+            if (request.url.endsWith('/said')) return 'Tend the asks.'
+            throw broke
+          },
+        }
+        : facets[name] ?? null,
+    )
+  let { host } = (await assembly(config, ['graph', 'web'], telling)).bind({
+    ...binding(),
+    host: { ...binding().host, report: (e) => void reported.push(e) },
+  })
+  equal(await host.told!(new Request('http://h/said')), 'Tend the asks.')
+  equal(await host.told!(new Request('http://h/mcp')), undefined)
+  equal(reported, [broke])
+})
+
 test('plugins lend senders beside the host’s, one sender per name', async () => {
   let sender = (id: string) => ({ send: () => Promise.resolve({ id }) })
   let lending = (names: string[]): Load => (plugin, name) =>

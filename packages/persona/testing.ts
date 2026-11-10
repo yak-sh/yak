@@ -105,6 +105,13 @@ export let thin: Vocab = loadVocab(
   [edgeKeywords, idKeywords],
 )
 
+/** {@link said} without the edge every link carries — a server that composed
+ * @yaks/task, which declares `contains`, and not @yaks/edge. */
+export let edgeless: Vocab = loadVocab(
+  [machineDoc, fileDoc, docDoc, personaDoc, doc],
+  [edgeKeywords, idKeywords],
+)
+
 let pooled = loadVocab([...said.docs, effectDoc], [
   edgeKeywords,
   idKeywords,
