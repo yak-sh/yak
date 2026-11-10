@@ -8,7 +8,7 @@ import {
   prepareStep,
 } from './preparation-service.ts'
 import type { Quote } from '@yaks/host/payments'
-import { owns as ownedBy } from '@yaks/member'
+import { allowed } from './store.ts'
 import {
   fulfill,
   type Fulfillment,
@@ -74,9 +74,9 @@ let object = (value: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>
 }
 let owns = (row: DocumentRow, who: Who) =>
-  ownedBy(
-    { by: row.print_preparation.person, via: row.print_preparation.via },
-    { by: who.person, via: who.via, browsers: who.browsers },
+  allowed(
+    { owner: row.print_preparation.person, via: row.print_preparation.via },
+    who,
   )
 let requirePerson = (who: Who): string => {
   if (!who.person) {

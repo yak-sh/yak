@@ -1,5 +1,5 @@
 import { token } from '@yaks/graph/sha256'
-import { owns } from '@yaks/member'
+import { allowed } from './store.ts'
 import { DocumentInputError, type Preparation } from './document.ts'
 import { apply, compare, query } from './orders.ts'
 import { InputError } from './refusal.ts'
@@ -50,12 +50,9 @@ let owned = async (
 ): Promise<PreparationRow> => {
   let row = await read(ports, value)
   if (
-    !owns(
-      { by: row.print_preparation.person, via: row.print_preparation.via },
-      {
-        by: who.person,
-        via: who.via,
-      },
+    !allowed(
+      { owner: row.print_preparation.person, via: row.print_preparation.via },
+      who,
     ) ||
     row.print_preparation.source !== who.source
   ) throw new InputError('This prepared document is not available')

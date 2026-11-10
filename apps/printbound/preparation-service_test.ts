@@ -1,3 +1,4 @@
+import { assertRejects } from '@std/assert'
 import { equal, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -10,6 +11,8 @@ import {
   prepareStep,
 } from './preparation-service.ts'
 import { InputError } from './refusal.ts'
+import { query } from './orders.ts'
+import type { PreparationRow } from './preparation-service.ts'
 import type { ServicePorts, Who } from './service.ts'
 import manifest from './vocab.json' with { type: 'json' }
 
@@ -102,4 +105,51 @@ test('a delayed revoked preparation cannot fail a newer reconnected attempt', as
   let status = await documentStatus(ports, { document: job.id }, who)
   equal(status.pending, true)
   equal('error' in status, false)
+})
+
+test('a prior browser restores a pending guest document to its person without granting another buyer', async () => {
+  let store = await fixture(), old = crypto.randomUUID()
+  let ports = {
+    store,
+    preview: true,
+    begin: () =>
+      Promise.resolve(
+        start(products.text, { title: 'Saved book', markdown: 'Kept text' }),
+      ),
+  } as unknown as ServicePorts
+  let guest: Who = {
+    via: old,
+    source: crypto.randomUUID(),
+    seller: crypto.randomUUID(),
+  }
+  let job = await prepareCommand(ports, { title: 'Saved book' }, guest)
+  let alice: Who = {
+    ...guest,
+    person: crypto.randomUUID(),
+    via: crypto.randomUUID(),
+    browsers: [old],
+  }
+  let bob: Who = {
+    ...guest,
+    person: crypto.randomUUID(),
+    via: old,
+    browsers: [],
+  }
+  await assertRejects(
+    () => documentStatus(ports, { document: job.id }, bob),
+    InputError,
+  )
+  equal(
+    (await documentStatus(ports, { document: job.id }, alice)).pending,
+    true,
+  )
+  equal((await prepareCommand(ports, { document: job.id }, alice)).id, job.id)
+  await assertRejects(
+    () =>
+      documentStatus(ports, { document: job.id }, { ...bob, browsers: [old] }),
+    InputError,
+  )
+  let [saved] = await query<PreparationRow>(store, `.entity.eid=${job.id}`)
+  equal(saved.print_preparation.person, alice.person)
+  equal('browsers' in saved.print_preparation, false)
 })
