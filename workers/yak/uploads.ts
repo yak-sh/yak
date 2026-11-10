@@ -228,7 +228,13 @@ export let uploaded = async (
   app: App,
   graph: Meta,
   bytes: Uint8Array<ArrayBuffer>,
-  o: { mime: string; name: string; source?: string; accepts?: Accepts },
+  o: {
+    mime: string
+    name: string
+    source?: string
+    accepts?: Accepts
+    protect?: (rows: Bundle[], sha: string) => Bundle[]
+  },
 ): Promise<File> => {
   let accepts = o.accepts ?? await acceptsOf(env, space, app)
   let stopped = await fullFiles(env, space, [{
@@ -253,6 +259,7 @@ export let uploaded = async (
         : b
     )
   }
+  if (o.protect) file.bundles = o.protect(file.bundles, file.sha)
   try {
     await graph.apply(file.bundles, KERNEL)
   } catch (e) {

@@ -48,6 +48,7 @@ import { actorOf as writerOf } from '@yaks/graph/provenance'
 import { comps, dead } from '@yaks/graph/bundle'
 import type { Vocab } from '@yaks/vocab'
 import { GOVERNED, GRANT, MEMBER } from './comp.ts'
+import { owns } from './owns.ts'
 import { levelOn, modeOn, type Viewer, type Where } from './policy.ts'
 import { Denied } from './deny.ts'
 import { floorsIn, type Permits, permitsIn } from './keywords.ts'
@@ -131,9 +132,10 @@ let mine = (
 ) => {
   let created = row.created as Comp | undefined
   return !!who && row.entity.eid == who ||
-    (created?.by ? created.by == who : !!via &&
-      typeof created?.via == 'string' &&
-      instrument(created.via) == instrument(via))
+    owns({
+      by: typeof created?.by == 'string' ? created.by : null,
+      via: typeof created?.via == 'string' ? instrument(created.via) : null,
+    }, { by: who, via: via ? instrument(via) : null })
 }
 
 // Nothing this bundle says differs from the row it names.

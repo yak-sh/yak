@@ -178,6 +178,7 @@ export let appsDoc: VocabDoc = {
       component: true,
       type: 'object',
       kind: true,
+      readers: 'editor',
       before: ['doc'],
       properties: {
         session: owned(text),
@@ -192,6 +193,22 @@ export let appsDoc: VocabDoc = {
           enum: ['paid', 'partially_refunded', 'refunded', 'disputed', 'lost'],
         }),
       },
+    },
+    sale_access: {
+      component: true,
+      type: 'object',
+      readers: 'editor',
+      floor: 'editor',
+      description: 'Customer authority for private sale records and artifacts.',
+      properties: { buyer: owned(ref('keep')), via: owned(ref('keep')) },
+    },
+    sale_artifact: {
+      component: true,
+      type: 'object',
+      readers: 'editor',
+      floor: 'editor',
+      description: 'A customer’s entitlement to one private sale artifact.',
+      properties: { artifact: owned(ref('cascade')) },
     },
     web: {
       component: true,
