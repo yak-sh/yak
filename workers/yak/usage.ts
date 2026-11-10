@@ -113,7 +113,7 @@ export let QUERY =
       accountPeriodic: durableObjectsPeriodicGroups(
         limit: 1
         filter: {datetime_geq: $since, datetime_lt: $until}
-      ) { sum { rowsRead duration inboundWebsocketMsgCount } }
+      ) { sum { rowsRead rowsWritten duration inboundWebsocketMsgCount } }
       accountWorkers: workersInvocationsAdaptive(
         limit: 1
         filter: {datetime_geq: $since, datetime_lt: $until}
@@ -211,6 +211,7 @@ export let accountOf = (answer: Answer, now: Date): Usage | null => {
     requests: (account.accountInvocations[0]?.sum?.requests ?? 0) +
       (account.accountPeriodic[0]?.sum?.inboundWebsocketMsgCount ?? 0),
     rows_read: account.accountPeriodic[0]?.sum?.rowsRead ?? 0,
+    rows_written: account.accountPeriodic[0]?.sum?.rowsWritten ?? 0,
     duration: account.accountPeriodic[0]?.sum?.duration ?? 0,
     workers: account.accountWorkers?.[0]?.sum?.requests ?? 0,
     cpu: (account.accountWorkers?.[0]?.sum?.cpuTimeUs ?? 0) / 1000,

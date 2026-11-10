@@ -19,6 +19,7 @@ let usage = (hour: number, values: Partial<Usage> = {}): Usage => ({
   at: at(hour).toISOString(),
   requests: 0,
   rows_read: 0,
+  rows_written: 0,
   duration: 0,
   workers: 0,
   cpu: 0,
@@ -63,6 +64,23 @@ test('account warning rises once per threshold and rearms after a rate spike', (
   let requests = warning(null, usage(10, { requests: 800_000 }), null)
   assertStringIncludes(requests.body, '800,000 raw')
   assertStringIncludes(requests.body, 'early-warning proxy')
+})
+
+test('a storm of rows written is a letter, priced a thousand times a row read', () => {
+  let storm = warning(usage(10), usage(11, { rows_written: 5e6 }), null)
+  assertStringIncludes(storm.body, 'Recent rate projects up to $120/day')
+  assertEquals(warning(usage(10), usage(11, { rows_read: 5e6 }), null).body, '')
+  assertStringIncludes(
+    warning(null, usage(10, { rows_written: 40e6 }), null).body,
+    'DO rows written: 40,000,000 of 50,000,000 included (near)',
+  )
+  // The first reading after rows written joined the readings holds the whole
+  // month's, which is no hour's storm.
+  let { rows_written: _, ...before } = usage(10)
+  assertEquals(
+    warning(before as Usage, usage(11, { rows_written: 30e6 }), null).body,
+    '',
+  )
 })
 
 test('a spike of visits through the Workers is a letter before it is money', () => {

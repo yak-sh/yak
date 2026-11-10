@@ -95,6 +95,7 @@ let ANSWER = {
         accountPeriodic: [{
           sum: {
             rowsRead: 920783,
+            rowsWritten: 9500,
             duration: 125,
             inboundWebsocketMsgCount: 11,
           },
@@ -244,6 +245,7 @@ test('account usage includes the directory and active-socket messages', () => {
     at: '2026-09-28T10:00:00.000Z',
     requests: 2251,
     rows_read: 920783,
+    rows_written: 9500,
     duration: 125,
     workers: 30000,
     cpu: 45000,

@@ -4,50 +4,23 @@
 // a letter. The hourly sweep keeps the previous reading and sent levels. A
 // letter is all a spike earns: no visitor is ever refused to keep a bill down.
 
-export type Usage = {
-  month: string
-  at: string
-  requests: number
-  rows_read: number
-  duration: number
-  workers: number
-  cpu: number
+// What the Workers Paid plan includes each month, and what a million more of
+// each costs (workers/yak/README.md, What a million views cost). A row written
+// costs what a thousand rows read do.
+let plan = {
+  requests: { name: 'DO incoming events', included: 1_000_000, price: 0.15 },
+  rows_read: { name: 'DO rows read', included: 25e9, price: 0.001 },
+  rows_written: { name: 'DO rows written', included: 50e6, price: 1 },
+  duration: { name: 'DO duration (GB-s)', included: 400_000, price: 12.5 },
+  workers: { name: 'Workers requests', included: 10_000_000, price: 0.30 },
+  cpu: { name: 'Workers CPU (ms)', included: 30_000_000, price: 0.02 },
 }
+type Metric = keyof typeof plan
+let metrics = Object.keys(plan) as Metric[]
 
-export type Alerts = {
-  month: string
-  requests: string
-  rows_read: string
-  duration: string
-  workers: string
-  cpu: string
-  rate: string
-}
+export type Usage = { month: string; at: string } & Record<Metric, number>
+export type Alerts = { month: string; rate: string } & Record<Metric, string>
 
-// What the Workers Paid plan includes each month, and what more of each costs
-// per unit (workers/yak/README.md, What a million views cost).
-let limits = {
-  requests: 1_000_000,
-  rows_read: 25e9,
-  duration: 400_000,
-  workers: 10_000_000,
-  cpu: 30_000_000,
-}
-let prices = {
-  requests: 0.15 / 1e6,
-  rows_read: 0.001 / 1e6,
-  duration: 12.5 / 1e6,
-  workers: 0.30 / 1e6,
-  cpu: 0.02 / 1e6,
-}
-let names = {
-  requests: 'DO incoming events',
-  rows_read: 'DO rows read',
-  duration: 'DO duration (GB-s)',
-  workers: 'Workers requests',
-  cpu: 'Workers CPU (ms)',
-}
-let metrics = ['requests', 'rows_read', 'duration', 'workers', 'cpu'] as const
 let rank = (level: string) => level == 'over' ? 2 : level == 'near' ? 1 : 0
 let level = (used: number, included: number) =>
   used >= included ? 'over' : used >= included * 0.8 ? 'near' : ''
@@ -60,9 +33,12 @@ let daily = (before: Usage | null, now: Usage) => {
   if (!before || before.month != now.month) return 0
   let hours = (Date.parse(now.at) - Date.parse(before.at)) / 3_600_000
   if (hours < 0.5 || hours > 3) return 0
-  let delta = (key: typeof metrics[number]) =>
+  let delta = (key: Metric) =>
     before[key] == null ? 0 : Math.max(0, now[key] - before[key]) / hours * 24
-  return metrics.reduce((sum, key) => sum + delta(key) * prices[key], 0)
+  return metrics.reduce(
+    (sum, key) => sum + delta(key) * plan[key].price / 1e6,
+    0,
+  )
 }
 
 export let warning = (
@@ -71,26 +47,23 @@ export let warning = (
   sent: Alerts | null,
 ) => {
   let old = sent?.month == now.month ? sent : null
-  let next: Alerts = {
+  let next = {
     month: now.month,
-    requests: old?.requests ?? '',
-    rows_read: old?.rows_read ?? '',
-    duration: old?.duration ?? '',
-    workers: old?.workers ?? '',
-    cpu: old?.cpu ?? '',
     rate: old?.rate ?? '',
-  }
+    ...Object.fromEntries(metrics.map((key) => [key, old?.[key] ?? ''])),
+  } as Alerts
   let lines: string[] = []
   for (let key of metrics) {
-    let standing = level(now[key], limits[key])
+    let { name, included } = plan[key]
+    let standing = level(now[key], included)
     if (rank(standing) > rank(next[key])) {
       let used = now[key].toLocaleString('en-US')
-      let limit = limits[key].toLocaleString('en-US')
+      let limit = included.toLocaleString('en-US')
       lines.push(
         key == 'requests'
           ? `DO incoming events: ${used} raw (${standing} the ${limit}-event ` +
             'early-warning proxy; the allowance is 1M billable request units)'
-          : `${names[key]}: ${used} of ${limit} included (${standing})`,
+          : `${name}: ${used} of ${limit} included (${standing})`,
       )
       next[key] = standing
     }

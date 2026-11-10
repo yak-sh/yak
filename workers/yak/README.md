@@ -687,16 +687,17 @@ guess, about $0.10).
 
 The plan includes, each month and for the whole account: 10 million Workers
 requests, 30 million CPU ms, 1 million Durable Object requests, 400,000 GB-s, 25
-billion rows read, 10 million Analytics Engine points and 10 million R2 class B
-reads. October used 2.7 million requests and 21 million CPU ms. The busiest day
-so far, the Hacker News share of companygardener/openai-math on Oct 15 (before
+billion rows read, 50 million rows written ($1 a million after, a thousand times
+a row read), 10 million Analytics Engine points and 10 million R2 class B reads.
+October used 2.7 million requests and 21 million CPU ms. The busiest day so far,
+the Hacker News share of companygardener/openai-math on Oct 15 (before
 yak-front), was 748,000 kernel requests, 5 million CPU ms, 1.43 million Durable
 Object requests, 24,700 GB-s and 1.1 million rows written: about $2 at overage
 rates even if none of it had been included.
 
 **The alert.** Every hour the meter's sweep (usage.ts, usage-alert.ts) reads the
-account's Durable Object requests, rows read and duration, and every Worker's
-requests and CPU, and mails `hello@yaks.app` (Email Routing hands it to
+account's Durable Object requests, rows read and written and duration, and every
+Worker's requests and CPU, and mails `hello@yaks.app` (Email Routing hands it to
 holdco-inbox) when one passes 80% and again 100% of what the plan includes, or
 when the last hour's rate projects $25 a day or more at overage prices.
 Cloudflare's own Billing Budget Alerts (dashboard, Notifications) mail too, when
