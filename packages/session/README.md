@@ -913,9 +913,12 @@ A helper hands up what needs the operator's judgment or a person with
 `yak session send <operator> "<one line with the id>"`: a knock at the operator
 written through the helper, which the rule leaves unmarked. Two more hand-ups
 are written for it, each naming what it had taken: a helper that exited with
-anything but 0, and one still going after 30 minutes (`LIMIT`), which the next
-routine item asks to stop before starting another. A helper's own ending knocks
-nobody (`reported`), and a run it started that ends after it knocks the
+anything but 0, and one the next routine item asks to stop before starting
+another, because its transcript gained no entry for 5 minutes (`QUIET`) or it
+was still going after 30 (`LIMIT`). That hand-up carries the helper's last
+words. A run that has said its last words can linger for good on a background
+command it started, and everything behind it would wait. A helper's own ending
+knocks nobody (`reported`), and a run it started that ends after it knocks the
 operator, where it is routine again.
 
 The helpers' trail is one query, newest first:

@@ -24,7 +24,7 @@ import { equal, test } from '@yaks/testing'
 import { sessionDoc } from './comp.ts'
 import { statusComputed } from './state.ts'
 import { sessions } from './plugin.ts'
-import { help, LIMIT } from './help.ts'
+import { help, LIMIT, QUIET } from './help.ts'
 import { hear } from './listen.ts'
 import { reported } from './watch.ts'
 
@@ -264,6 +264,32 @@ test('a helper still going past the limit is stopped, and the next knock starts 
   equal((await o.heard()).map((line) => line.replace(/#\w+|[A-Z]-\d+/g, '#')), [
     'helper # was still going after 30 min and was stopped, with 1 taken ' +
     'and maybe not handled: #',
+  ])
+})
+
+test('a helper that said nothing for a while is stopped with its last words', async () => {
+  let o = await office()
+  await o.knock('bug a')
+  let [h] = await o.helpers()
+  // Its run said its last words and lingers, its process still up.
+  await o.write([
+    { entity: { eid: h.eid }, process: { pid: 1 } },
+    {
+      entity: { eid: 'said' },
+      entry: { session: h.eid },
+      content: { body: 'A fixer is running on it.' },
+      output: {},
+    },
+  ])
+  o.later(QUIET + 1)
+  await o.knock('bug b')
+  equal((await o.helpers()).map((h) => [h.told, h.stopped]), [
+    [['bug a'], true],
+    [['bug b'], false],
+  ])
+  equal((await o.heard()).map((line) => line.replace(/#\w+|[A-Z]-\d+/g, '#')), [
+    'helper # said nothing for 5 min and was stopped, with 1 taken and ' +
+    'maybe not handled: #. Its last words: A fixer is running on it.',
   ])
 })
 

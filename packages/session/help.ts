@@ -17,9 +17,11 @@
 //
 // Only a hand-up reaches the operator: a knock written through a helper,
 // which ./routine.ts leaves unmarked. The helper writes its own with
-// `yak session send`. This file writes two: a helper that ended badly, and one
-// still going after {@link LIMIT} that the next knock stops, each naming the
-// knocks it had taken.
+// `yak session send`. This file writes two, each naming what the helper had
+// taken: one that ended badly, and one the next routine item stops because it
+// said nothing for {@link QUIET} or was still going after {@link LIMIT}. A run
+// that has said its last words can linger for good on a background command
+// it started, and everything behind it would wait.
 //
 // The helpers' trail is `.helping.project=<project>`: each session, with what
 // it wrote under `.created.via=<session>` and the knocks it took under
@@ -40,12 +42,16 @@ import { operatorOf } from './watch.ts'
 
 type G = Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>
 
-/** How long a helper may go on before the next routine knock stops it and
+/** How long a helper may go on before the next routine item stops it and
  * starts another (ms). */
 export let LIMIT = 30 * 60_000
 
-/** What a test holds still: the clock, and {@link LIMIT}. */
-export type Opts = { now?: () => number; limit?: number }
+/** How long a helper may say nothing, its transcript gaining no entry, before
+ * the next routine item stops it and starts another (ms). */
+export let QUIET = 5 * 60_000
+
+/** What a test holds still: the clock, {@link LIMIT} and {@link QUIET}. */
+export type Opts = { now?: () => number; limit?: number; quiet?: number }
 
 let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
@@ -117,25 +123,45 @@ let going = async (g: G, project: Eid): Promise<Bundle[]> => {
   )
 }
 
-// Whether a helper is at work for the project. One past the limit is asked
-// to stop and handed up, and does not count: the knocks waiting behind it
-// would otherwise wait for good.
+// A transcript's newest entry.
+let newest = async (g: G, session: Eid): Promise<Bundle | undefined> =>
+  (await g.read(`.entry.session=${session}&.order=-entry.seq&.limit=1&*`))[0]
+
+let fold = (text: string, max: number): string => {
+  let line = text.replace(/\s+/g, ' ').trim()
+  return line.length > max ? `${line.slice(0, max)}…` : line
+}
+
+// Whether a helper is at work for the project. One that said nothing for
+// `quiet`, or is past the limit, is asked to stop and handed up with its last
+// words, and does not count: what waits behind it would otherwise wait for
+// good.
 let atWork = async (g: G, project: Eid, o: Opts): Promise<boolean> => {
-  let now = (o.now ?? Date.now)(), limit = o.limit ?? LIMIT
+  let now = (o.now ?? Date.now)()
+  let limit = o.limit ?? LIMIT, quiet = o.quiet ?? QUIET
+  let since = (b: Bundle | undefined) =>
+    now - Date.parse(str(comp(b, 'created').at))
+  let min = (ms: number) => Math.round(ms / 60_000)
   let busy = false
   for (let b of await going(g, project)) {
-    if (now - Date.parse(str(comp(b, 'created').at)) < limit) {
+    let last = await newest(g, b.entity.eid)
+    let over = since(b) >= limit
+    if (!over && since(last ?? b) < quiet) {
       busy = true
       continue
     }
     await g.apply([{ entity: { eid: b.entity.eid }, stop: {} }])
+    let words = last?.output ? fold(str(comp(last, 'content').body), 200) : ''
     await handUp(
       g,
       b,
       'overdue',
-      `helper ${human(g.vocab)(b)} was still going after ` +
-        `${Math.round(limit / 60_000)} min and was stopped, with ` +
-        await taken(g, b.entity.eid),
+      `helper ${human(g.vocab)(b)} ` +
+        (over
+          ? `was still going after ${min(limit)} min`
+          : `said nothing for ${min(quiet)} min`) +
+        ` and was stopped, with ${await taken(g, b.entity.eid)}` +
+        (words ? `. Its last words: ${words}` : ''),
     )
   }
   return busy

@@ -1090,7 +1090,7 @@
         "helper"
       ],
       "target": ".routine|.helping|.project",
-      "description": "start a project's helper when a routine knock waits and none is at work: one session wearing the project's `helper{persona}`, whose first input is every routine knock waiting, each marked notified in the same write, and whose `using` asks for its run the way session spawn does. A helper's `exit` asks again for what came while it ran; one that ended badly, or is still going after half an hour and is stopped, is handed up to the operator with the knocks it held. Removing `helper` from a project gives its waiting knocks back to the operator"
+      "description": "start a project's helper when a routine knock waits and none is at work: one session wearing the project's `helper{persona}`, whose first input is every routine knock waiting, each marked notified in the same write, and whose `using` asks for its run the way session spawn does. A helper's `exit` asks again for what came while it ran; one that ended badly, or that said nothing for five minutes or is still going after half an hour and is stopped, is handed up to the operator with what it held. Removing `helper` from a project gives its waiting knocks back to the operator"
     },
     "native": {
       "component": true,
