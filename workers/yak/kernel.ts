@@ -356,8 +356,22 @@ let unmounted = (req: Request) => {
 // export below).
 export type Lent = { waitUntil: (work: Promise<unknown>) => void }
 
+// One page, one address: a doubled slash (`/printbound//refund`, from a typed
+// link or a crawler's join) names the page its single slash names. Collapsed
+// before anything routes on it, no part below and no app's code ever reads a
+// path that starts `//`, which `new URL` takes for a host and throws on
+// (T-153266, T-153429).
+let collapsed = (req: Request) => {
+  let url = new URL(req.url)
+  let path = url.pathname.replace(/\/{2,}/g, '/')
+  if (path == url.pathname) return req
+  url.pathname = path
+  return new Request(url, req)
+}
+
 let router = {
   async fetch(req: Request, env: Env): Promise<Response> {
+    req = collapsed(req)
     let host = hostOf(req, env)
     let r = route(host, new URL(req.url).pathname, env)
     try {

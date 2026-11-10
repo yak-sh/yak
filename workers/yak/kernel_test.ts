@@ -5,8 +5,8 @@ import { HANDOFF } from './handoff.ts'
 import { handler } from './kernel.ts'
 
 let policy = 'max-age=31536000; includeSubDomains'
-let env = (answer: () => Response) => {
-  let door = { fetch: () => Promise.resolve(answer()) }
+let env = (answer: (req: Request) => Response) => {
+  let door = { fetch: (req: Request) => Promise.resolve(answer(req)) }
   return {
     SITE: door,
     APPS: door,
@@ -111,4 +111,19 @@ test('a custom domain keeps its own transport policy', async () => {
     ),
   )
   equal(res.headers.get('strict-transport-security'), 'max-age=60')
+})
+
+test('an app is never handed a doubled slash, at any mount', async () => {
+  for (
+    let address of [
+      'https://pb.yaks.app/printbound//refund?x=1',
+      'https://pb.yaks.app//printbound///refund?x=1',
+    ]
+  ) {
+    let res = await handler.fetch(
+      new Request(address),
+      env((req) => new Response(req.url)),
+    )
+    equal(await res.text(), 'https://pb.yaks.app/printbound/refund?x=1')
+  }
 })
