@@ -52,11 +52,15 @@ one. Like other process integrations this is not an OS security sandbox.
 We deliberately do **not** use `--resume`. A resumed CLI conversation would own
 context, compaction, instructions and tool results outside the graph. Instead,
 the graph history is replayed as data on every ask (not native Anthropic
-assistant/tool-result wire blocks); this sacrifices exact cache/prompt fidelity
-for a single source of truth. `--no-session-persistence` prevents saved CLI
-conversation threads. CLI aliases may change with Claude Code. `--bare` cannot
-be used for this subscription-backed path: its help explicitly disables OAuth.
-Images, typed questions and model-native inputs fail explicitly before spending.
+assistant/tool-result wire blocks), for a single source of truth. Each item is
+its own text block of the one user message, so the next ask's message begins
+with this one's and the prompt cache holds all but the items since. Sent as one
+string, the whole transcript missed the cache on every ask: a second ask on a
+27K-token transcript wrote 27,741 tokens to the cache, and as blocks it writes
+614 and reads 34,857. `--no-session-persistence` prevents saved CLI conversation
+threads. CLI aliases may change with Claude Code. `--bare` cannot be used for
+this subscription-backed path: its help explicitly disables OAuth. Images, typed
+questions and model-native inputs fail explicitly before spending.
 
 A `native` marker on harness-created/delegated transcripts distinguishes them
 from unmarked managed Claude sessions. Spawn ignores the former; the native

@@ -32,13 +32,21 @@ export let listing = (): Listed[] =>
     modalities: ['text'],
   }))
 
-/** Full graph history is data in one stream-json user message, not --resume. */
+/** Full graph history is data in one stream-json user message, not --resume:
+ * one text block per item, oldest first. The CLI marks the message's last
+ * block for the prompt cache, and the next step's message begins with the same
+ * blocks, so the cache finds this step's prefix there and only the items since
+ * are read anew. One string of the whole transcript differs from the last
+ * step's at its end, and the cache found none of it. */
 export let input = (req: Request): string =>
   JSON.stringify({
     type: 'user',
     message: {
       role: 'user',
-      content: JSON.stringify({ transcript: req.items }),
+      content: req.items.map((item) => ({
+        type: 'text',
+        text: JSON.stringify(item),
+      })),
     },
   }) + '\n'
 
@@ -214,7 +222,7 @@ export let claude = (opts: Options = {}): Model =>
     let stderr: Promise<string> | undefined
     try {
       let prompt = [
-        'You are the model of a graph-native harness. The user message contains the authoritative transcript as JSON.',
+        'You are the model of a graph-native harness. The user message contains the authoritative transcript, one JSON item per block, oldest first.',
         'Continue that transcript, responding to its latest user or tool result. Prior assistant/call/result items are history, not new requests.',
         'Use only the offered harness MCP tools. The graph harness executes your calls after this turn. Do not simulate tool results.',
         req.instructions ?? '',

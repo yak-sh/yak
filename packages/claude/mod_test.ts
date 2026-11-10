@@ -1,7 +1,7 @@
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { test } from '@yaks/testing'
 import { ModelError } from '@yaks/model'
-import type { TextDelta } from '@yaks/model'
+import type { Request, TextDelta } from '@yaks/model'
 import { claude, type Frame, input, items, listing, read } from './mod.ts'
 let tool = {
   name: 'graph_query',
@@ -50,7 +50,20 @@ test('input replays the complete transcript including tool results', () => {
   let message = JSON.parse(input({ ...req, items: transcript }))
   assertEquals(message.type, 'user')
   assertEquals(message.message.role, 'user')
-  assertEquals(JSON.parse(message.message.content), { transcript })
+  assertEquals(
+    message.message.content.map((b: { text: string }) => JSON.parse(b.text)),
+    transcript,
+  )
+})
+
+test("a step's message begins with the last step's, which the cache holds", () => {
+  let blocks = (r: Request) => JSON.parse(input(r)).message.content
+  let later = [...req.items, { kind: 'assistant' as const, text: 'hi' }, {
+    kind: 'user' as const,
+    text: 'again',
+  }]
+  let before = blocks(req)
+  assertEquals(blocks({ ...req, items: later }).slice(0, before.length), before)
 })
 
 test('unknown built-ins fail closed and unsupported requests never submit', async () => {
