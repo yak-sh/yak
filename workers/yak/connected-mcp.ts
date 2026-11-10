@@ -165,7 +165,13 @@ export let mcpConnect: Row = {
     if (on === null) {
       throw refuse('missing', `No space is called ${args.machine}.`)
     }
-    let value = await commands(ctx).configure({
+    // A server on a machine is there for the space's Operator, and the
+    // machine may open it to no other caller: its tools are discovered as
+    // that Operator sees them.
+    let asking: Calling | undefined = on
+      ? { caller: 'operator', space: on.eid }
+      : undefined
+    let value = await commands(ctx, asking).configure({
       name: String(args.name),
       url: String(args.url),
       ...on ? { machine: on.eid } : {},

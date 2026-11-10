@@ -121,6 +121,21 @@ test('a call from the owner’s connector says so, and names no conversation', a
   )
 })
 
+test('connecting a server on a machine discovers its tools as the space’s Operator, which the machine may alone be open to', async () => {
+  box.requests.length = 0
+  let again = await mcpConnect.run(owner.ctx, tasks)
+  assertEquals(
+    (again.value as { commands: { name: string }[] }).commands.map((c) =>
+      c.name
+    ),
+    ['publish_mockup'],
+  )
+  assertEquals(
+    [...new Set(box.requests.map((r) => r.headers.get('x-yak-caller')))],
+    ['operator'],
+  )
+})
+
 test('a member’s turn is offered nothing of the owner’s machine, whatever row names it', async () => {
   let member = await turn(bob)
   assertEquals(member.named, [])
