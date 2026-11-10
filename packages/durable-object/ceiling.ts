@@ -15,8 +15,9 @@
 // ends: each is refused as `Stopped`, a 429 that says how long to wait, so a
 // caller sends it again and a pool or a queue redelivers after the wait. Past
 // its written rows it still reads; past its read rows it takes nothing. What a
-// host must still write while stopped (keeping a person's write for later) it
-// runs in `free`, which counts against windows of its own: told past them,
+// host must still write while stopped (keeping a person's write for later,
+// or a pool's word on how a run ended) it runs in `free`, synchronously or
+// across awaits, which counts against windows of its own: told past them,
 // it stops nothing, so work that must not stop leaves no stop behind it. A
 // host asks `stopped` at its doors, so a stopped object answers there rather
 // than failing deep inside, and one whose stopping costs more than its rows
@@ -32,6 +33,7 @@
 // instance reads that row once, at its first statement. An instance that ends
 // unkept loses less than half a window.
 
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { type Cost, finish, type Group, group, id, tally } from './profile.ts'
 
 /** A span of time and the rows an object may read and write within it. */
@@ -162,8 +164,9 @@ export type Ceiling = {
   refusal: (writing?: boolean) => Stopped | null
   /** How long until a statement is admitted, in ms: 0 when one is now. */
   stopped: (writing?: boolean) => number
-  /** Run statements a stopped object must still take. What they cost is
-   * told, and stops nothing. */
+  /** Run statements a stopped object must still take: `body`'s own, and
+   * those of the work it awaits until it settles. What they cost is told,
+   * and stops nothing. */
   free: <T>(body: () => T) => T
   /** Refuse nothing from now on, and go on telling: for an object whose
    * stopping costs more than its rows. */
@@ -251,7 +254,12 @@ export let ceiling = (
   let loose = windows.map((w) => turned(w, -Infinity))
   // When each scanning statement was last told, by its shape.
   let scans = new Map<string, number>()
-  let freed = 0
+  // The work running in `free`, and how many such are running: a statement
+  // is free when it runs in one's async context while that work is open. A
+  // timer or task the work leaves behind runs charged once it ends.
+  let freeing = new AsyncLocalStorage<{ open: boolean }>()
+  let open = 0
+  let freed = () => open > 0 && freeing.getStore()?.open == true
   let broken = false
   let say = (error: Scan | Runaway, told: Told) => {
     console.error('storage', told.fault, error.message, JSON.stringify(told))
@@ -281,7 +289,7 @@ export let ceiling = (
     let named = rowsRead + rowsWritten >= NAMED ? shape() : ''
     let cost: Cost = { calls: 1, rowsRead, rowsWritten }
     let tell: [Scan | Runaway, Told][] = []
-    let charged = !freed, list = charged ? live() : loose, moved = false
+    let charged = !freed(), list = charged ? live() : loose, moved = false
     for (let i = 0; i < list.length; i++) {
       let s = list[i]
       if (at - s.since >= s.ms) s = list[i] = turned(s, at)
@@ -381,9 +389,9 @@ export let ceiling = (
     for (let [error, told] of tell) say(error, told)
   }
   let refusal = (writing = true) => {
-    if (!refuse || freed) return null
+    if (!refuse) return null
     let { wait, kind } = held(writing)
-    return wait ? new Stopped(wait, kind) : null
+    return wait && !freed() ? new Stopped(wait, kind) : null
   }
   return {
     admit: (writing) => {
@@ -394,12 +402,21 @@ export let ceiling = (
     refusal,
     stopped: (writing) => refusal(writing)?.retry.after ?? 0,
     free: (body) => {
-      freed++
-      try {
-        return body()
-      } finally {
-        freed--
+      let work = { open: true }
+      open++
+      let end = () => {
+        work.open = false
+        open--
       }
+      let out
+      try {
+        out = freeing.run(work, body)
+      } catch (e) {
+        end()
+        throw e
+      }
+      if (!(out instanceof Promise)) return end(), out
+      return out.finally(end) as typeof out
     },
     spare: () => {
       refuse = false

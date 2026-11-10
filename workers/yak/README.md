@@ -734,7 +734,8 @@ while stopped, plus the statement that passed it. What a stopped object answers:
   wakes, effects, embedding, moves, the lexicon and planner statistics wait and
   are marked neither failed nor stuck. An effect stopped mid-run is due again
   after the wait as the same attempt, and one that ended while stopped is not
-  run again: the pool writes down how it ended after the wait (@yaks/effects).
+  run again: the pool writes down how it ended inside the ceiling's `free`
+  (@yaks/effects `PoolOpts.free`), so an eviction can't lose the word.
 - A Builder answers each door 429 the same way; its alarm comes back then. A
   chat line said to it meanwhile is kept in its own write log (build.ts
   `#hold`), told back as said with when it will be answered, and taken up as its

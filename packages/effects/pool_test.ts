@@ -394,34 +394,55 @@ test('a run its store stopped waits it out as the same attempt, however often', 
   assertEquals((await a.g.read('.effect&*')).length, 0)
 })
 
-// A single-owner store refusing the pool's own writes for 5 s once a run
-// `shut`s it, worked at each of `at`: how often the run went, and the rows
-// left behind.
+// A single-owner store refusing every write for 5 s once a run `shut`s it,
+// but the pool's own word on how a run ended, which it writes `free`
+// (@yaks/durable-object `Ceiling.free`). Each of `at` is a new instance over
+// the same storage, as an object evicted between wakes is: how often the run
+// went, and the rows left behind.
 let shutting = async (
   run: (n: number, shut: () => void) => void,
   at: number[],
 ) => {
-  let t = 0, until = 0, tries = 0
-  let a = proc(store(), {
-    singleOwner: true,
-    clock: { ...system, now: () => t },
-  })
-  a.fx.handle({ post_note: () => run(++tries, () => void (until = t + 5_000)) })
-  let refusing: Access = {
-    ...a.g,
-    apply: (b, o) => t < until ? Promise.reject(stop()) : a.g.apply(b, o),
+  let t = 0, until = 0, tries = 0, freed = 0
+  let storage = store()
+  let wake = () => {
+    let a = proc(storage, {
+      singleOwner: true,
+      clock: { ...system, now: () => t },
+      free: async (write) => {
+        freed++
+        try {
+          return await write()
+        } finally {
+          freed--
+        }
+      },
+    })
+    a.fx.handle({
+      post_note: () => run(++tries, () => void (until = t + 5_000)),
+    })
+    let refusing: Access = {
+      ...a.g,
+      apply: (b, o) =>
+        t < until && !freed ? Promise.reject(stop()) : a.g.apply(b, o),
+    }
+    return { ...a, refusing }
   }
-  await a.fx.work(refusing)
+  let a = wake()
+  await a.fx.work(a.refusing)
   await a.g.apply([post('p1')])
   await a.fx.idle()
+  let oops = [...a.oops]
   for (t of at) {
-    await a.fx.work(refusing)
+    a = wake()
+    await a.fx.work(a.refusing)
     await a.fx.idle()
+    oops.push(...a.oops)
   }
-  return { tries, left: (await a.g.read('.effect&*')).length, oops: a.oops }
+  return { tries, left: (await a.g.read('.effect&*')).length, oops }
 }
 
-test('a run whose store refuses to write down its wait runs again as the same attempt', async () => {
+test('a run its store stopped mid-run runs again after the wait as the same attempt, on the next instance', async () => {
   let ran = await shutting((n, shut) => {
     if (n > 3) return
     shut()
@@ -430,7 +451,7 @@ test('a run whose store refuses to write down its wait runs again as the same at
   assertEquals(ran, { tries: 4, left: 0, oops: [] })
 })
 
-test('a run that finished is not run again when its store refuses to write that down', async () => {
+test('a run that finished while its store was stopped is not run again by the next instance', async () => {
   let ran = await shutting((_, shut) => shut(), [4_999, 5_000, 10_000])
   assertEquals(ran, { tries: 1, left: 0, oops: [] })
 })

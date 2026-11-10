@@ -181,6 +181,9 @@ export class Tracker {
     this.#config = {
       sink: this.sink,
       report: (error) => this.#report(error, 'Tracker.effect'),
+      // How a run ended is written while this object is stopped too, so a
+      // run that finished never runs again.
+      free: (write) => this.#ceiling.free(write),
       store: this.scope,
       // The box's tracker web reads platform bugs through. The box tracker
       // writes the letters for the box's own bugs, and a space's tracker for

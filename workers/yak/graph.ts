@@ -1438,6 +1438,9 @@ export class Store {
       clock: clockOf(this.#time),
       singleOwner: true,
       startup: 'manual',
+      // How a run ended is written while this object is stopped too, so a
+      // run that finished never runs again (`#ceiling`).
+      free: (write) => this.#ceiling.free(write),
       // A write owes its runs and the alarm starts them (`#owedEffects`):
       // none starts in the request that wrote it.
       defer: true,

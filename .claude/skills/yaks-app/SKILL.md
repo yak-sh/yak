@@ -305,8 +305,9 @@ A query that works on the box can be refused in a store.
   moves, lexicon and statistics wait for the window's end and mark nothing
   failed: `defect` hears no `Stopped`, a boot that meets one runs again
   (`#failed`), an effect that meets one runs again as the same attempt
-  (@yaks/effects `deferral`), and how a run ended that the stop would not let
-  the pool write down is written once the window ends (`unwritten`). A Builder answers 429 the same way and its alarm
+  (@yaks/effects `deferral`), and the pool writes how a run ended inside the
+  ceiling's `free` (@yaks/effects `PoolOpts.free`), so a run that finished
+  never runs again. A Builder answers 429 the same way and its alarm
   comes back then; a chat line said to it is kept in its own write log and
   taken up as a turn once the window ends (build.ts `#hold`, `#replay`). The directory is spared (`#start`): every door reads it.
   A relocation runs on `freely` drivers: it never stops half way, nor leaves

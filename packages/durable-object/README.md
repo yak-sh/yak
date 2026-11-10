@@ -53,11 +53,13 @@ its read rows it takes nothing. A host asks `stopped(writing)` (the wait in
 milliseconds, 0 when a statement is admitted) or `refusal(writing)` at its
 doors, so a stopped object answers there rather than failing deep inside.
 Statements a stopped object must still take, such as keeping a person's write
-for later, run inside the ceiling's `free(body)`; work that must not stop half
-way runs on `freely(ctx.storage)`, a driver that counts and never refuses. What
-runs free counts against windows of its own: it is told past them and stops
-nothing, so a relocation's new object takes writes once it serves. An object
-whose stopping costs more than its rows is `spare()`d: told, never refused.
+for later or an effect pool's word on how a run ended, run inside the ceiling's
+`free(body)`, which holds across the awaits of an asynchronous body until it
+settles and not for the timers it leaves; work that must not stop half way runs
+on `freely(ctx.storage)`, a driver that counts and never refuses. What runs free
+counts against windows of its own: it is told past them and stops nothing, so a
+relocation's new object takes writes once it serves. An object whose stopping
+costs more than its rows is `spare()`d: told, never refused.
 
 The tallies outlive the instance, so an object evicted or restarted mid-window
 goes on where it stood. `bounded` keeps them in one row of the object's

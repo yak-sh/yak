@@ -1,7 +1,7 @@
 // An object's SQL is counted where it runs: a scan and a runaway are told as
 // they happen, and an object that refuses stops until its window ends.
 import { equal, ok, test } from '@yaks/testing'
-import { assertThrows } from '@std/assert'
+import { assertRejects, assertThrows } from '@std/assert'
 import { insert, select, table } from '@yaks/sql'
 import { bounded, ceiling, type Options, Stopped } from './ceiling.ts'
 import { driver, type DurableStorage, freely } from './sql.ts'
@@ -72,6 +72,21 @@ test('past its written rows an object still reads, and keeps what it must', () =
   assertThrows(() => c.admit(true), Stopped)
   equal(c.free(() => (c.admit(true), 'kept')), 'kept')
   equal(c.stopped(false), 0)
+})
+
+test('work a stopped object runs free takes statements across its awaits, and what it leaves behind does not', async () => {
+  let { c, ran } = bound({ refuse: true })
+  ran(0, 0, 1_001)
+  let later: Promise<void> | undefined
+  let kept = await c.free(async () => {
+    await Promise.resolve()
+    c.admit(true)
+    later = new Promise((r) => setTimeout(r, 0)).then(() => c.admit(true))
+    return 'kept'
+  })
+  equal(kept, 'kept')
+  await assertRejects(() => later!, Stopped)
+  assertThrows(() => c.admit(true), Stopped)
 })
 
 test('an object that does not refuse is told and goes on', () => {

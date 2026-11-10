@@ -66,6 +66,9 @@ export type Config = Options & {
    * after hibernating answers a reader as the one before did; without it,
    * the tag lives as long as the store */
   kept?: Kept
+  /** How the pool writes how a run ended while the object refuses
+   * statements (@yaks/effects `PoolOpts.free`). */
+  free?: <T>(write: () => Promise<T>) => Promise<T>
 }
 // What a reader of the bugs needs to read again: a commit that writes
 // anything beyond the effect pool's and the scheduler's bookkeeping, where a
@@ -215,6 +218,7 @@ export let store = (storage: Storage, config: Config) => {
     singleOwner: true,
     defer: true,
     max: 4,
+    free: config.free,
     write: (rows) => g.apply(rows, { trusted: true }),
     report: (error) => {
       if (config.report) void config.report(error)

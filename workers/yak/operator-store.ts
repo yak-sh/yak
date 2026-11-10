@@ -2,6 +2,7 @@ import { statements } from '@yaks/sqlite'
 // The space's private work stays beside its builder, outside app restores.
 import { type Graph, graph, type Plugin, type Storage } from '@yaks/graph'
 import { driver, type DurableStorage } from '@yaks/durable-object/sql'
+import { bounded } from '@yaks/durable-object/ceiling'
 import { storage } from '@yaks/durable-object/store'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
@@ -155,7 +156,12 @@ export let operatorStore = (
     if (!left.length) meta(sql).set(FITTED, print)
   }
   return {
-    ...operatorGraph(store, blobs({ vocab, blobs: kept }), options),
+    // How a run ended is written while the object is stopped too, so a run
+    // that finished never runs again (@yaks/durable-object `bounded`).
+    ...operatorGraph(store, blobs({ vocab, blobs: kept }), {
+      free: (write) => bounded(durable).free(write),
+      ...options,
+    }),
     marks: meta(sql),
   }
 }
