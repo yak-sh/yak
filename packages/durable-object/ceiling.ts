@@ -18,18 +18,28 @@
 // host must still write while stopped (keeping a person's write for later) it
 // runs in `free`, which counts against windows of its own: told past them,
 // it stops nothing, so work that must not stop leaves no stop behind it. A
-// host asks `stopped` at its doors, so a stopped object
-// answers there rather than failing deep inside, and one whose stopping costs
-// more than its rows (every door reads it) is `spare`d: told, never refused.
+// host asks `stopped` at its doors, so a stopped object answers there rather
+// than failing deep inside, and one whose stopping costs more than its rows
+// (every door reads it) is `spare`d: told, never refused.
 //
-// The tallies live in the instance's memory. A storm keeps its object awake,
-// so they hold through one; an object evicted between bursts starts its
-// windows over.
+// The tallies outlive the instance that counted them, so an object evicted
+// or restarted mid-window (a deploy restarts every object) goes on where it
+// stood rather than spending another window's rows. Keeping them costs no row
+// a statement: a window is kept, in one row of the object's own key-value
+// storage (`ctx.storage.kv`), only as its rows pass half of what it may and as
+// they pass all of it. That is at most two rows written a window for reads and
+// two for writes, and none for an object that spends under half; a new
+// instance reads that row once, at its first statement. An instance that ends
+// unkept loses less than half a window.
 
-import { type Cost, finish, group, id, tally } from './profile.ts'
+import { type Cost, finish, type Group, group, id, tally } from './profile.ts'
 
 /** A span of time and the rows an object may read and write within it. */
 export type Window = { ms: number; read: number; written: number }
+
+/** What a window spent since it began, as an object keeps it past its
+ * instance. */
+export type Spent = { ms: number; since: number; read: number; written: number }
 
 /** A minute and an hour. At Cloudflare's prices ($0.001 a million rows read,
  * $1.00 a million written,
@@ -54,6 +64,16 @@ let NAMED = 1_000
 let HOUR = 3_600_000
 
 type Kind = 'read' | 'written'
+let KINDS: Kind[] = ['read', 'written']
+
+// A window as it is counted: since when, what it spent and by which
+// statements, whether it is past its rows, and at which rows it is kept next.
+type Span = Window & {
+  since: number
+  all: Group
+  past: Record<Kind, boolean>
+  mark: Record<Kind, number>
+}
 
 /** One statement read far more rows than it returned. */
 export class Scan extends Error {
@@ -117,6 +137,12 @@ export type Options = {
   report?: Report
   /** Whether a statement past a window is refused, or only reported. */
   refuse?: boolean
+  /** What an earlier instance of the object kept, asked at its first
+   * statement. */
+  kept?: () => Spent[] | undefined
+  /** Keep what the windows spent past this instance: asked as a window's
+   * rows pass half of what it may, and as they pass it. */
+  keep?: (spent: Spent[]) => void
 }
 
 /** One statement as the driver counts it. `shape` is asked only of a
@@ -180,18 +206,48 @@ let span = (ms: number) => ms >= HOUR ? `${ms / HOUR} h` : `${ms / 60_000} min`
  * ```
  */
 export let ceiling = (
-  { windows = WINDOWS, now = Date.now, report, refuse = false }: Options = {},
+  { windows = WINDOWS, now = Date.now, report, refuse = false, kept, keep }:
+    Options = {},
 ): Ceiling => {
-  let turned = (w: Window, since: number) => ({
-    ...w,
-    since,
-    all: group(),
-    past: { read: false, written: false },
-  })
+  let spent = (s: Span, k: Kind) =>
+    k == 'read' ? s.all.total.rowsRead : s.all.total.rowsWritten
+  // Whether a span is past its rows of a kind, and the rows at which it is
+  // kept next: half of what it may, then all of it.
+  let marked = (s: Span, k: Kind) => {
+    let n = spent(s, k)
+    s.past[k] = n > s[k]
+    s.mark[k] = s.past[k] ? Infinity : n > s[k] / 2 ? s[k] : s[k] / 2
+  }
+  let turned = (w: Window, since: number, was?: Spent): Span => {
+    let s = {
+      ...w,
+      since,
+      all: group(),
+      past: { read: false, written: false },
+      mark: { read: 0, written: 0 },
+    }
+    if (was) {
+      for (let to of [s.all.total, s.all.other]) {
+        to.rowsRead = was.read
+        to.rowsWritten = was.written
+      }
+    }
+    for (let k of KINDS) marked(s, k)
+    return s
+  }
   // What the object's own statements spent, which stops it, and what it ran
   // in `free`, which is told and stops nothing: a relocation's new object
-  // writes its whole file before it serves, and serves from then on.
-  let spans = windows.map((w) => turned(w, -Infinity))
+  // writes its whole file before it serves, and serves from then on. The
+  // first is taken up from where an earlier instance kept it.
+  let spans: Span[] | undefined
+  let begun = () => {
+    let was = kept?.() ?? []
+    return windows.map((w) => {
+      let k = was.find((k) => k.ms == w.ms)
+      return turned(w, k?.since ?? -Infinity, k)
+    })
+  }
+  let live = () => spans ??= begun()
   let loose = windows.map((w) => turned(w, -Infinity))
   // When each scanning statement was last told, by its shape.
   let scans = new Map<string, number>()
@@ -210,7 +266,7 @@ export let ceiling = (
   // How long a statement waits, and for which rows.
   let held = (writing: boolean) => {
     let at = now(), until = at, kind: Kind = 'read'
-    for (let s of spans) {
+    for (let s of live()) {
       if (at - s.since >= s.ms) continue
       let end = s.since + s.ms
       if (s.past.read && end >= until) [until, kind] = [end, 'read']
@@ -225,7 +281,7 @@ export let ceiling = (
     let named = rowsRead + rowsWritten >= NAMED ? shape() : ''
     let cost: Cost = { calls: 1, rowsRead, rowsWritten }
     let tell: [Scan | Runaway, Told][] = []
-    let charged = !freed, list = charged ? spans : loose
+    let charged = !freed, list = charged ? live() : loose, moved = false
     for (let i = 0; i < list.length; i++) {
       let s = list[i]
       if (at - s.since >= s.ms) s = list[i] = turned(s, at)
@@ -237,10 +293,13 @@ export let ceiling = (
           to.rowsWritten += cost.rowsWritten
         }
       }
-      for (let k of ['read', 'written'] as Kind[]) {
-        let n = k == 'read' ? s.all.total.rowsRead : s.all.total.rowsWritten
-        if (n <= s[k] || s.past[k]) continue
-        s.past[k] = true
+      for (let k of KINDS) {
+        let n = spent(s, k)
+        if (n <= s.mark[k]) continue
+        let was = s.past[k]
+        marked(s, k)
+        moved = true
+        if (was || !s.past[k]) continue
         let top = finish(
           {
             ...s.all,
@@ -302,6 +361,22 @@ export let ceiling = (
         ])
       }
     }
+    if (charged && moved) {
+      try {
+        keep?.(
+          live().map((s) => ({
+            ms: s.ms,
+            since: s.since,
+            read: s.all.total.rowsRead,
+            written: s.all.total.rowsWritten,
+          })),
+        )
+      } catch (e) {
+        // Keeping fails as reporting does: the windows still stand here.
+        if (!broken) console.error('storage ceiling keep failed', e)
+        broken = true
+      }
+    }
     // Told once the tallies stand: a reporter may run statements of its own.
     for (let [error, told] of tell) say(error, told)
   }
@@ -336,6 +411,48 @@ export let ceiling = (
 // (./sql.ts), so they count against the same windows.
 let ceilings = new WeakMap<object, Ceiling>()
 
+/** The synchronous key-value storage of a SQLite-backed object
+ * (`ctx.storage.kv`), as far as a ceiling keeps its windows in it. */
+export type Kv = {
+  get(key: string): unknown
+  put(key: string, value: unknown): void
+}
+
+// Where an object keeps what its windows spent.
+let KEPT = 'ceiling:spent'
+
+// A ceiling's windows kept in an object's own storage. A window is kept once
+// the turn that passed its mark is over: a statement's transaction can unwind
+// after it was counted (the `Stopped` it passed unwinds it), and the engine
+// read and wrote its rows all the same.
+let lasting = (kv: Kv | undefined): Pick<Options, 'kept' | 'keep'> => {
+  if (!kv) return {}
+  let due: Spent[] | undefined
+  let put = () => {
+    let spent = due
+    due = undefined
+    try {
+      kv.put(KEPT, spent)
+    } catch (e) {
+      console.error('storage ceiling keep failed', e)
+    }
+  }
+  return {
+    kept: () => {
+      try {
+        let spent = kv.get(KEPT)
+        return Array.isArray(spent) ? spent : undefined
+      } catch (e) {
+        console.error('storage ceiling kept unread', e)
+      }
+    },
+    keep: (spent) => {
+      if (!due) queueMicrotask(put)
+      due = spent
+    },
+  }
+}
+
 /** The ceiling of the object whose storage this is. A host names its
  * reporter and whether it refuses once, as it is constructed, before its
  * first driver; a storage nobody spoke for is counted and reported on the
@@ -347,7 +464,10 @@ let ceilings = new WeakMap<object, Ceiling>()
  * ```
  */
 export let bounded = (durable: object, options?: Options): Ceiling => {
-  let made = options ? ceiling(options) : ceilings.get(durable) ?? ceiling()
+  let kv = (durable as { kv?: Kv }).kv
+  let made = options
+    ? ceiling({ ...lasting(kv), ...options })
+    : ceilings.get(durable) ?? ceiling(lasting(kv))
   ceilings.set(durable, made)
   return made
 }

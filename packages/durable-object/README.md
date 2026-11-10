@@ -57,9 +57,16 @@ for later, run inside the ceiling's `free(body)`; work that must not stop half
 way runs on `freely(ctx.storage)`, a driver that counts and never refuses. What
 runs free counts against windows of its own: it is told past them and stops
 nothing, so a relocation's new object takes writes once it serves. An object
-whose stopping costs more than its rows is `spare()`d: told, never refused. The
-tallies live in the instance's memory, so an object evicted between bursts
-starts its windows over.
+whose stopping costs more than its rows is `spare()`d: told, never refused.
+
+The tallies outlive the instance, so an object evicted or restarted mid-window
+goes on where it stood. `bounded` keeps them in one row of the object's
+`ctx.storage.kv` as a window's rows pass half of what it may and as they pass
+it, once the turn that passed it is over (a transaction its `Stopped` unwound
+still read and wrote its rows), and a new instance reads that row at its first
+statement. That costs no row a statement: at most two rows written a window for
+reads and two for writes, none for an object spending under half. `ceiling`
+takes the same as `kept()` and `keep(spent)`.
 
 A `Stopped` that crosses a stub reaches its caller as a new error with the name,
 message and own properties it was thrown with, never its class

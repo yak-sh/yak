@@ -5,6 +5,7 @@ import { assertThrows } from '@std/assert'
 import { insert, select, table } from '@yaks/sql'
 import { bounded, ceiling, type Options, Stopped } from './ceiling.ts'
 import { driver, type DurableStorage, freely } from './sql.ts'
+import { durable } from './testing.ts'
 
 // A ceiling on a clock the test moves, and what it told.
 let bound = (options: Options = {}) => {
@@ -139,4 +140,65 @@ test('an object that spent nothing takes every statement, whatever its clock rea
   let { c, clock } = bound({ refuse: true })
   clock.at = -1
   equal([c.stopped(), c.stopped(true)], [0, 0])
+})
+
+// One object's storage, and each instance of it as it starts: a minute of
+// 1,000 rows read and 10 written, on a clock the case moves, and how often
+// the object kept its windows.
+let lasting = () => {
+  let held = durable(), clock = { at: 0 }, told: string[] = [], kept = 0
+  let put = held.kv.put
+  held.kv.put = (key, value) => (kept++, put(key, value))
+  let instance = () => {
+    let c = bounded(held, {
+      windows: [{ ms: 60_000, read: 1_000, written: 10 }],
+      now: () => clock.at,
+      report: (e, { fault }) => told.push(`${e.name} ${fault}`),
+      refuse: true,
+    })
+    let ran = (rowsRead: number, rowsWritten = 0) =>
+      c.count({ shape: () => 'spent', rowsRead, rowsWritten, returned: 0 })
+    return { c, ran }
+  }
+  return { held, clock, told, instance, kept: () => kept }
+}
+
+test('an object stopped before its instance ended is stopped after it', async () => {
+  let { held, clock, told, instance } = lasting()
+  let { ran } = instance()
+  // The statement that passes the window unwinds its own transaction.
+  assertThrows(() =>
+    held.transactionSync(() => {
+      ran(0, 11)
+      throw new Error('stopped')
+    })
+  )
+  await null
+  clock.at = 15_000
+  let { c, ran: again } = instance()
+  equal(c.stopped(true), 45_000)
+  again(0, 1)
+  equal(told, ['Runaway runaway|written'])
+})
+
+test('an object restarted half way through a window spends only the rest of it', async () => {
+  let { instance } = lasting()
+  instance().ran(600)
+  await null
+  let { c, ran } = instance()
+  ran(500)
+  equal(c.stopped(), 60_000)
+})
+
+test('an object keeps its windows only as they pass half, and all, of what they may', async () => {
+  let { clock, instance, kept } = lasting()
+  let { ran } = instance()
+  for (let i = 0; i < 4; i++) ran(100)
+  await null
+  equal(kept(), 0)
+  for (let i = 0; i < 20; i++) (ran(100), await null)
+  equal(kept(), 2)
+  clock.at = 60_000
+  let { c } = instance()
+  equal(c.stopped(), 0)
 })

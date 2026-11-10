@@ -36,6 +36,7 @@ import {
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { type Limits, shop, type Snapshot, textual } from '../sqlite/testing.ts'
+import type { Kv } from './ceiling.ts'
 import { type DurableStorage, prohibited, type SqlValue } from './sql.ts'
 import { storage, type Store } from './store.ts'
 
@@ -102,10 +103,11 @@ let out = (row: Record<string, unknown>) => {
 /**
  * A stand-in for `ctx.storage` over a fresh in-memory database.
  *
- * Members beyond {@link DurableStorage}: two because the runtime has
- * them and an object may ask: `databaseSize`, how many bytes it holds, and
- * `deleteAll`, the one way to empty it — dropping the tables leaves metadata
- * behind, and an object whose storage is empty ceases to exist. The object's
+ * Members beyond {@link DurableStorage}: three because the runtime has
+ * them and an object may ask: `databaseSize`, how many bytes it holds, `kv`,
+ * its synchronous key-value storage, and `deleteAll`, the one way to empty it
+ * — dropping the tables leaves metadata behind, and an object whose storage
+ * is empty ceases to exist. The object's
  * one alarm is here for the same reason: an object that schedules its own
  * return arms it, and a test that drives `alarm()` by hand reads the instant
  * back off `getAlarm` rather than waiting for a runtime to deliver it.
@@ -118,6 +120,7 @@ export let durable = (from?: Snapshot): DurableStorage & {
   deleteAll(): Promise<void>
   get<T>(key: string): Promise<T | undefined>
   put(key: string, value: unknown): Promise<void>
+  kv: Kv
   getAlarm(): Promise<number | null>
   setAlarm(at: number): Promise<void>
   deleteAlarm(): Promise<void>
@@ -205,6 +208,31 @@ export let durable = (from?: Snapshot): DurableStorage & {
         }
       }
       return Promise.resolve()
+    },
+    // The synchronous key-value storage of a SQLite-backed object, in the
+    // table the runtime keeps it in, so a transaction that unwinds takes back
+    // what it put, as the runtime's does.
+    kv: {
+      get: (key) => {
+        try {
+          let [row] = run('select value from _cf_KV where key = ?', [key])
+          return row ? JSON.parse(String(row.value)) : undefined
+        } catch (e) {
+          // Nothing was ever put: the runtime makes the table on the first.
+          if (/no such table/.test(String(e))) return undefined
+          throw e
+        }
+      },
+      put: (key, value) => {
+        run(
+          'create table if not exists _cf_KV (key text primary key, value text)',
+          [],
+        )
+        run('insert or replace into _cf_KV (key, value) values (?, ?)', [
+          key,
+          JSON.stringify(value),
+        ])
+      },
     },
     getAlarm: () => Promise.resolve(alarm),
     setAlarm: (at: number) => Promise.resolve(void (alarm = at)),
