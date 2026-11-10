@@ -4,7 +4,11 @@ import { owns } from '@yaks/member'
 export type Binding = {
   fetch(path: string, init?: RequestInit): Promise<Response>
 }
-export type Who = { person?: string | null; via?: string | null }
+export type Who = {
+  person?: string | null
+  via?: string | null
+  browsers?: string[]
+}
 export class Refusal extends Error {
   constructor(message: string, public status = 422) {
     super(message)
@@ -13,11 +17,21 @@ export class Refusal extends Error {
 export let who = (request: Request): Who => ({
   person: request.headers.get('x-yak-person'),
   via: request.headers.get('x-yak-via'),
+  ...(request.headers.get('x-yak-person')
+    ? {
+      browsers: (request.headers.get('x-yak-browsers') ?? '').split(',').map((
+        id,
+      ) => id.trim()).filter(
+        (id) => /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id),
+      ),
+    }
+    : {}),
 })
 export let allowed = (access: { owner?: string; via?: string }, caller: Who) =>
   owns({ by: access.owner, via: access.via }, {
     by: caller.person,
     via: caller.via,
+    browsers: caller.browsers,
   })
 export let principal = (caller: Who) => {
   if (!caller.person && !caller.via) {

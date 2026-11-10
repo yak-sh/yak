@@ -205,3 +205,29 @@ test('a signed continuation binds a guest book before its quote or receipt can b
     alice.person,
   )
 })
+
+test('a prior vouched browser restores an unopened guest book only to its person', async () => {
+  let { desk } = fixture(), row = await desk.save(text, { via: alice.via })
+  let signed = {
+    person: alice.person,
+    via: crypto.randomUUID(),
+    browsers: [alice.via],
+  }
+  assertEquals((await desk.shelf(signed)).map((b) => b.entity.eid), [
+    row.entity.eid,
+  ])
+  await assertRejects(() =>
+    desk.owned(row.entity.eid, { person: bob.person, via: crypto.randomUUID() })
+  )
+  assertEquals(
+    (await desk.owned(row.entity.eid, signed)).book_source.owner,
+    alice.person,
+  )
+  await assertRejects(() =>
+    desk.owned(row.entity.eid, {
+      person: bob.person,
+      via: crypto.randomUUID(),
+      browsers: [alice.via],
+    })
+  )
+})

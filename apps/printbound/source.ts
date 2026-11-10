@@ -118,10 +118,16 @@ export let studio = (db: Store, service: Service) => {
     owned,
     async shelf(caller: Who) {
       principal(caller)
+      let vias = [
+        ...new Set([
+          caller.via,
+          ...(caller.person ? caller.browsers ?? [] : []),
+        ]),
+      ].filter(Boolean).map(identifier)
       let filters = [
         caller.person ? `.book_source.owner=${identifier(caller.person)}` : '',
-        caller.via
-          ? `.book_source.via=${identifier(caller.via)}&!book_source.owner`
+        vias.length
+          ? `.book_source.via=${vias.join(',')}&!book_source.owner`
           : '',
       ].filter(Boolean)
       let rows = (await Promise.all(
