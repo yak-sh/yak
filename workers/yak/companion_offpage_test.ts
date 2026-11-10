@@ -157,20 +157,14 @@ test('a companion works off-page across pause, restart and retry', async () => {
     let store = p.object(name)
     // A firing's call runs in the Store's effect pool after the firing commits,
     // so a tick is read once every call its firings asked for has run.
-    let asked = 0
     let fire = async () => {
       let ticked = await store.tick(time.now())
-      asked += ticked.fired.length
-      for (let i = 0; i < 1000; i++) {
-        await p.ring()
-        let calls = await read(door, `.call.source=${eid}&?execution`)
-        let ran = calls.filter((c: { execution?: { state: string } }) =>
-          c.execution && c.execution.state != 'running'
-        )
-        if (ran.length == asked) return ticked
-        await time.advance(0)
-      }
-      throw new Error(`the ${asked} calls the firings asked for never ran`)
+      let done = false
+      let work = p.settled().then(() => done = true)
+      for (let i = 0; !done && i < 1000; i++) await time.advance(BEAT)
+      assert(done, 'the firing settles on the controlled clock')
+      await work
+      return ticked
     }
     await time.advance(5_000)
     let first = await fire()

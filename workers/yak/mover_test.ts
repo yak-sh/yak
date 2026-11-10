@@ -188,12 +188,12 @@ test('builder take rehearsal preserves a store, then conversion moves with no ca
     was: { word: 'gameplay moved' },
   }])
   assertEquals(await count(s, '.call'), 1)
-  let before = await s.query('*')
+  let before = await s.query('*&!effect&!archetype')
   let [report] = await s.rehearse()
   assertEquals([report.rows, report.moved, report.failed], [2, 2, undefined])
-  assertEquals(await s.query('*'), before)
+  assertEquals(await s.query('*&!effect&!archetype'), before)
   await s.alarm()
-  assertEquals(await s.query('*'), before)
+  assertEquals(await s.query('*&!effect&!archetype'), before)
   s.wake({ ...takeRule, live: 'apps' })
   await s.alarm()
   let [take] = await s.query('.entity.eid=take&*')
@@ -213,10 +213,10 @@ test('builder take rehearsal preserves a store, then conversion moves with no ca
   )
   let [key] = await s.query('.output_of&.key.of=take&*')
   assertEquals(key.key, { of: 'take', value: 'build/kind/call' })
-  let after = await s.query('*')
+  let after = await s.query('*&!effect&!archetype')
   let [second] = await s.rehearse()
   assertEquals(second.failed, undefined)
-  assertEquals(await s.query('*'), after)
+  assertEquals(await s.query('*&!effect&!archetype'), after)
 })
 
 test('a live rule moves every row from the alarm, and says it is done', async () => {

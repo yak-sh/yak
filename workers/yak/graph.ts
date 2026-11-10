@@ -301,6 +301,7 @@ import {
   eq as equals,
   fields as project,
   list,
+  ne,
   parse,
   present,
   retired,
@@ -688,17 +689,17 @@ let ANALYSES = 50
 
 /// due([], 0) -> null
 /// due([{ entity: { eid: 'a' }, effect: { next: '1970-01-01T00:00:05.000Z' } }], 0) -> 5000
-/// due([{ entity: { eid: 'a' }, effect: { next: '1970-01-01T00:00:00.000Z' } }], 9000) -> 10000
-/// due([{ entity: { eid: 'a' }, effect: {} }], 0) -> 60000
-/** When the earliest of these pending runs is due: its `next`, or a minute on
- * for a run with none, and never sooner than a second from `now`. */
+/// due([{ entity: { eid: 'a' }, effect: { next: '1970-01-01T00:00:00.000Z' } }], 9000) -> 9000
+/// due([{ entity: { eid: 'a' }, effect: {} }], 0) -> 0
+/** When the earliest pending run is ready. A run with no retry time is ready
+ * now; each batch still starts in its own alarm event. */
 export let due = (pending: Bundle[], now: number): number | null =>
   pending.length
     ? Math.max(
-      now + 1000,
+      now,
       Math.min(...pending.map((b) => {
         let next = (b.effect as Comp).next
-        return next ? Date.parse(String(next)) : now + 60_000
+        return next ? Date.parse(String(next)) : now
       })),
     )
     : null
@@ -788,6 +789,8 @@ installContext({
 // query, never through the copy, and nothing points at one. So a write to
 // one, the stamps on it included, changes no answer the copy could give, and
 // asking, every guess and the burial a right one writes raise none (T-148651).
+// Effect rows and their stamps likewise belong only to the pool; recording,
+// claiming and completing an errand change no copied authorization.
 // A stamp on any other entity is as fenced as what it stamps. Any other
 // delete or component fences.
 //
@@ -806,10 +809,15 @@ installContext({
 // out to (`Unraised`). `$own` mints a person's space and seat
 // (facets/directory-graph.ts) whenever it is asked, so it fences from the
 // start.
-let UNNAMED = new Set(['signin'])
+let UNNAMED = new Set(['signin', 'effect'])
 let STAMPS = new Set(['created', 'updated'])
-let UNFENCED = new Set([...RECEIPTS, 'signed_in', 'archetype', ...UNNAMED])
-let UNHELD = new Set([...UNFENCED, 'effect', ...STAMPS])
+let UNFENCED = new Set([
+  ...RECEIPTS,
+  'signed_in',
+  'archetype',
+  ...UNNAMED,
+])
+let UNHELD = new Set([...UNFENCED, ...STAMPS])
 let DECIDED = ['$own']
 let CORE = new Set(REQUESTS)
 let deciding = (bundles: Bundle[]) =>
@@ -2830,6 +2838,7 @@ export class Store {
       ? await this.#graph.read(and(
         equals('effect.state', 'pending'),
         equals('effect.handler', list(...handlers)),
+        ...this.#effects.running().map((run) => ne('entity.eid', run.eid)),
         project('effect.handler', 'effect.next'),
       ))
       : []

@@ -136,7 +136,7 @@ test('a command that takes an argument runs in its store', async () => {
     )
     assertEquals(res.status, 200, await res.text())
     await p.object(storeName(space, app)).alarm()
-    await Promise.all([...p.states.get(storeName(space, app))!.pending])
+    await p.settled()
   }
   let record = async (
     person: string,
@@ -228,7 +228,7 @@ test('a command that takes an argument runs in its store', async () => {
   }])
   count = dispatched.length
   await p.object(storeName(space, app)).tick(future)
-  await Promise.all([...p.states.get(storeName(space, app))!.pending])
+  await p.settled()
   assertStringIncludes(String((await answer(editedRead)).body), '0 rows')
   assertEquals((await failureOf(altered)).refusal, { code: 'access' })
   assertStringIncludes(String((await answer(mine)).body), 'welcome')
@@ -295,7 +295,7 @@ test('a command that takes an argument runs in its store', async () => {
   )
   count = dispatched.length
   await p.object(storeName(space, app)).tick(Date.parse(later))
-  await Promise.all([...p.states.get(storeName(space, app))!.pending])
+  await p.settled()
   assertEquals(((await failureOf(delayed)).refusal as Comp)?.code, 'Denied')
   assertEquals(dispatched.length, count)
 
@@ -309,7 +309,7 @@ test('a command that takes an argument runs in its store', async () => {
     }]),
   }, { 'x-yak-kernel': '1' })
   await p.object(storeName(space, app)).alarm()
-  await Promise.all([...p.states.get(storeName(space, app))!.pending])
+  await p.settled()
   assertStringIncludes(String((await answer(automated)).body), 'editor')
   assertEquals(dispatched.at(-1)?.headers.get('x-yak-person'), app.eid)
 })

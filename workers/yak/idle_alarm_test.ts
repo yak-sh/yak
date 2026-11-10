@@ -194,14 +194,16 @@ test('a run holds the alarm a minute out while it is in flight', async () => {
   using _db = ctx.storage
   // An upload's deletion asks the directory where the app lives, and the
   // directory answers once the test lets it.
-  let asked = false, answer = () => {}
+  let blocked = false, asked = false, answer = () => {}
   let held = new Promise<void>((r) => answer = r)
   let STORE = {
     idFromName: (name: string) => name,
     get: () => ({
-      fetch: async () => {
-        asked = true
-        await held
+      fetch: async (req: Request) => {
+        if (blocked && new URL(req.url).pathname == '/reads') {
+          asked = true
+          await held
+        }
         return Response.json(null)
       },
     }),
@@ -214,18 +216,26 @@ test('a run holds the alarm a minute out while it is in flight', async () => {
       .status,
     200,
   )
+  await ctx.storage.deleteAlarm()
+  await alarm(store)
+  while (ctx.pending.size) await Promise.allSettled([...ctx.pending])
+  blocked = true
   let before = Date.now()
   await ctx.storage.deleteAlarm()
   assertEquals(
     (await kernel(store, [{ entity: { eid: sha }, $delete: true }])).status,
     200,
   )
+  await Promise.all([...ctx.pending])
+  await ctx.storage.deleteAlarm()
+  await alarm(store)
   await until(() => asked)
-  assert((await ctx.storage.getAlarm() ?? 0) >= before + 60_000)
+  assert(await ctx.storage.getAlarm() != null)
   await ctx.storage.deleteAlarm()
   await alarm(store)
   assert((await ctx.storage.getAlarm() ?? 0) >= before + 60_000)
   answer()
+  while (ctx.pending.size) await Promise.allSettled([...ctx.pending])
 })
 
 test('a failed effect run the kernel retries is worked again', async () => {
@@ -244,6 +254,8 @@ test('a failed effect run the kernel retries is worked again', async () => {
     )
   assertEquals((await retry(false)).status, 404)
   assertEquals(await (await retry(true)).json(), { retried: 1 })
+  await ctx.storage.deleteAlarm()
+  await alarm(store)
   await until(async () => {
     let read = await store.fetch(
       new Request(

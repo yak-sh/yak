@@ -79,7 +79,7 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
       get: () => ({ fetch: (req: Request) => store.fetch(req) }),
     },
   } as Partial<Env>
-  store = new Store(ctx, env, rules)
+  store = new Store(ctx, env, [])
   let at = metaOf(doorOf((req) => store.fetch(req), PLATFORM_STORE))
   let read = (mend = false) =>
     store.fetch(
@@ -106,11 +106,19 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
   // fences are its own however long they take. On a clock of its own, the
   // pool's pauses between passes are kept on it, so it is moved meanwhile.
   let settle = async () => {
-    while (ctx.pending.size) {
+    for (;;) {
+      let alarm = await ctx.storage.getAlarm()
+      if (alarm != null && alarm <= (time?.now() ?? Date.now())) {
+        await ctx.storage.deleteAlarm()
+        await store.alarm()
+      } else if (!ctx.pending.size) return
       await (time?.advance(0) ?? Promise.allSettled([...ctx.pending]))
     }
   }
+  await ctx.storage.deleteAlarm()
+  await store.alarm()
   await settle()
+  if (rules.length) store = new Store(ctx, env, rules)
   let answer = await read()
   let initial = Number(answer.headers.get(EPOCH))
   let body = await answer.text()

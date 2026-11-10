@@ -736,7 +736,7 @@ test('an upload under the files warning line never waits on a busy bucket', asyn
 })
 
 test('R2 accounting sweeps without analytics, follows deletion and survives the month', async () => {
-  let { env, files } = platform('files-sweep')
+  let { env, files, settled } = platform('files-sweep')
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   await dir.apply({
     entities: [
@@ -771,6 +771,7 @@ test('R2 accounting sweeps without analytics, follows deletion and survives the 
   let writes = async () =>
     (await meta(env).query('.space.slug=jeff ?created ?updated'))
       .map(({ created, updated }) => ({ created, updated }))
+  await settled()
   let before = await writes()
   assert((await sweep(env, NOW)) >= 1)
   assertEquals(await writes(), before)
