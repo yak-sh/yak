@@ -18,7 +18,8 @@ import {
   retryAbsent,
 } from './fulfillment.ts'
 import { type Address, type Print, validPrint } from './lulu.ts'
-import { apply, query, type Store } from './orders.ts'
+import { token } from '@yaks/graph/sha256'
+import { apply, compare, query, type Store } from './orders.ts'
 
 export type Prepared = Manifest & {
   title: string
@@ -94,16 +95,38 @@ let summary = (order: Order) => ({
   quote: order.print_order.quote,
 })
 
+let ownedDocument = async (
+  ports: ServicePorts,
+  document: string,
+  who: Who,
+): Promise<DocumentRow> => {
+  let [row] = await query<DocumentRow>(ports.store, `.entity.eid=${document}`)
+  if (!row?.print_document || !owns(row, who)) {
+    throw new InputError('This document is not available to this buyer')
+  }
+  if (who.person && !row.print_preparation.person) {
+    await compare(ports.store, [{
+      entity: row.entity,
+      print_preparation: { person: who.person },
+      $was: {
+        print_preparation: {
+          person: null,
+          via: token(row.print_preparation.via),
+        },
+      },
+    }])
+    return ownedDocument(ports, document, who)
+  }
+  return row
+}
+
 let documentFile = async (
   ports: ServicePorts,
   args: Record<string, unknown>,
   who: Who,
 ) => {
   let document = id(args.document)
-  let [row] = await query<DocumentRow>(ports.store, `.entity.eid=${document}`)
-  if (!row?.print_document || !owns(row, who)) {
-    throw new InputError('This document is not available to this buyer')
-  }
+  let row = await ownedDocument(ports, document, who)
   let manifest = row.print_document.manifest, blob = String(args.blob ?? '')
   if (
     ![manifest.interior, manifest.cover, ...manifest.pages].some((file) =>
@@ -123,17 +146,7 @@ let quoted = async (
   who: Who,
 ) => {
   let person = requirePerson(who), document = id(args.document)
-  let [row] = await query<DocumentRow>(ports.store, `.entity.eid=${document}`)
-  if (!row?.print_document || !owns(row, who)) {
-    throw new InputError('This document is not available to this buyer')
-  }
-  if (!row.print_preparation.person) {
-    await apply(ports.store, [{
-      entity: row.entity,
-      print_preparation: { person },
-      $was: { print_preparation: { person: null } },
-    }])
-  }
+  let row = await ownedDocument(ports, document, who)
   let manifest = row.print_document.manifest
   let print: Print = {
     title: manifest.title,

@@ -42,7 +42,11 @@ let read = async (ports: ServicePorts, value: unknown) => {
   }
   return row
 }
-let owned = async (ports: ServicePorts, value: unknown, who: Who) => {
+let owned = async (
+  ports: ServicePorts,
+  value: unknown,
+  who: Who,
+): Promise<PreparationRow> => {
   let row = await read(ports, value)
   if (
     !owns(
@@ -54,6 +58,19 @@ let owned = async (ports: ServicePorts, value: unknown, who: Who) => {
     ) ||
     row.print_preparation.source !== who.source
   ) throw new InputError('This prepared document is not available')
+  if (who.person && !row.print_preparation.person) {
+    await compare(ports.store, [{
+      entity: row.entity,
+      print_preparation: { person: who.person },
+      $was: {
+        print_preparation: {
+          person: null,
+          via: token(row.print_preparation.via),
+        },
+      },
+    }])
+    return owned(ports, value, who)
+  }
   return row
 }
 let status = (ports: ServicePorts, row: PreparationRow) =>
