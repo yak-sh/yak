@@ -174,6 +174,12 @@ export let appsDoc: VocabDoc = {
     // Every property is server-owned: the webhook writes it through the
     // kernel's door (sell.ts `asApp`), and no page, member or visitor can say
     // an order was paid (T-37881). Who may remove one is graph.ts `FLOORS`.
+    service_quote: {
+      component: true,
+      type: 'object',
+      readers: 'editor',
+      properties: { snapshot: owned(text), hash: owned(text) },
+    },
     order: {
       component: true,
       type: 'object',
@@ -185,6 +191,16 @@ export let appsDoc: VocabDoc = {
         intent: owned(text),
         account: owned(text),
         items: owned(text),
+        quote: owned(ref('keep')),
+        document: owned(ref('keep')),
+        revision: owned(text),
+        specification: owned(text),
+        buyer: owned(ref('keep')),
+        source: owned(ref('keep')),
+        quantity: owned(num),
+        currency: owned(text),
+        shipping_cents: owned(num),
+        tax_cents: owned(num),
         total_cents: owned(num),
         fee_cents: owned(num),
         email: owned(text),

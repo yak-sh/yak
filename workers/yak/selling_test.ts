@@ -320,6 +320,16 @@ test('a sale is filed, refunded, disputed and restored on its order', async () =
     await heard('charge.refunded', charge),
     'shop: partially_refunded',
   )
+  assertEquals(
+    await heard('checkout.session.completed', {
+      id: 'cs_shop',
+      payment_intent: 'pi_shop',
+      payment_status: 'paid',
+      amount_total: 2800,
+      metadata: tags,
+    }),
+    'unchanged',
+  )
   let real = globalThis.fetch
   let asked: string[] = []
   using _ = stub(globalThis, 'fetch', (url, init) => {

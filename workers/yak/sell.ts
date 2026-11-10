@@ -61,6 +61,15 @@ import { type Host, url as hostUrl } from './host.ts'
 import { adminWho } from './asking.ts'
 import { refuse } from './tool.ts'
 import { caught, refusing } from './defects.ts'
+import {
+  checkedQuote,
+  issueQuote,
+  quotedOrder,
+  quotedSale,
+  readQuote,
+} from './service-quotes.ts'
+import type { Quote } from '@yaks/host/payments'
+import { protectedSale } from './sale-private.ts'
 
 // ---- the fee ---------------------------------------------------------------
 
@@ -388,6 +397,9 @@ export let sale = (at: {
   email?: string
   success: string
   cancel: string
+  buyer?: string | null
+  via?: string | null
+  source?: string
 }): Sale => ({
   lines: at.lines,
   currency: 'usd',
@@ -399,6 +411,9 @@ export let sale = (at: {
     space: at.space,
     app: at.app,
     items: at.packed,
+    ...(at.buyer ? { buyer: at.buyer } : {}),
+    ...(at.via ? { via: at.via } : {}),
+    ...(at.source ? { source: at.source } : {}),
     fee: String(at.bps),
   },
 })
@@ -416,7 +431,15 @@ export let sale = (at: {
  */
 export let buying = async (
   env: Env,
-  at: { space: Space; app: string; root: string },
+  at: {
+    space: Space
+    app: string
+    root: string
+    buyer?: string | null
+    via?: string | null
+    source?: string
+    merchant?: boolean
+  },
   rows: (line: string) => Promise<Product[]>,
   body: unknown,
 ) => {
@@ -442,20 +465,47 @@ export let buying = async (
     )
   }
   let items: Item[]
-  let priceless: ReturnType<typeof priced>
+  let quote: Quote | undefined
+  let priceless: ReturnType<typeof priced> | undefined
   let success: string
   let cancel: string
   try {
-    items = cart(body)
-    // One read, whatever the cart's length: the products it names, whole.
-    // `.entity.eid=` and not `id=` — the bare form is the page's grammar and this
-    // is a line built for the store (wire.ts `RIDERS` is the translation, and
-    // this side of it never sees one).
-    priceless = priced(
-      await rows(`.entity.eid=${items.map((i) => i.product).join(',')}`),
-      items,
-      lent.tag,
-    )
+    let requested = body as {
+      quote?: unknown
+      quantity?: unknown
+      destination?: unknown
+    } | null
+    if (requested?.quote != null) {
+      let app = await inApp(env, at.space, at.app)
+      if (!app) throw refuse('quote', 'seller app not found')
+      let issued = await readQuote(
+        asApp(env, at.space, app),
+        String(requested.quote),
+      )
+      quote = checkedQuote(
+        issued,
+        {
+          buyer: at.merchant ? issued.buyer : at.buyer,
+          source: at.merchant || at.source == app.eid
+            ? issued.source
+            : at.source,
+          seller: app.eid,
+        },
+        requested,
+        Date.now(),
+      )
+    } else {
+      items = cart(body)
+      // One read, whatever the cart's length: the products it names, whole.
+      // `.entity.eid=` and not `id=` — the bare form is the page's grammar and this
+      // is a line built for the store (wire.ts `RIDERS` is the translation, and
+      // this side of it never sees one).
+      priceless = priced(
+        await rows(`.entity.eid=${items.map((i) => i.product).join(',')}`),
+        items,
+        lent.tag,
+      )
+    }
     let asked = body as {
       success?: unknown
       cancel?: unknown
@@ -475,22 +525,43 @@ export let buying = async (
     let url = await lent.checkout(
       // The seller's account, which makes it their charge rather than ours.
       at.space.seller!.account,
-      sale({
-        space: at.space.eid,
-        app: at.app,
-        lines: priceless.lines,
-        total: priceless.total,
-        packed: priceless.packed,
-        // The rate as it stands right now, read fresh (`dirOf`): a sale is
-        // charged what the owner set a moment ago, never what a cached row
-        // still says.
-        bps: await feeOf(dirOf(env)),
-        ...(email ? { email } : {}),
-        success,
-        cancel,
-      }),
+      quote
+        ? quotedSale(quote, {
+          space: at.space.eid,
+          app: at.app,
+          bps: await feeOf(dirOf(env)),
+          done: success,
+          cancel,
+          ...(email ? { email } : {}),
+        })
+        : sale({
+          space: at.space.eid,
+          app: at.app,
+          lines: priceless!.lines,
+          total: priceless!.total,
+          packed: priceless!.packed,
+          // The rate as it stands right now, read fresh (`dirOf`): a sale is
+          // charged what the owner set a moment ago, never what a cached row
+          // still says.
+          bps: await feeOf(dirOf(env)),
+          ...(email ? { email } : {}),
+          success,
+          cancel,
+          buyer: at.buyer,
+          via: at.via,
+          source: at.source,
+        }),
     )
-    return Response.json({ url })
+    return Response.json({
+      url,
+      ...(quote
+        ? {
+          quote: quote.id,
+          source: quote.source,
+          receipt: `${at.root.replace(/\/$/, '')}/api/pay/orders/${quote.id}`,
+        }
+        : {}),
+    })
   } catch (e) {
     await fault(env, `POST /${at.app}/api/pay/checkout`, e)
     return no(
@@ -498,6 +569,39 @@ export let buying = async (
       'checkout_failed',
       "we couldn't start that — it's been logged, try again in a minute",
     )
+  }
+}
+
+/** The app's trusted service binding issues quotes before it asks a buyer
+ * to pay. The HTTP caller is checked as the merchant by apps.ts. */
+export let quoteDoor = async (
+  req: Request,
+  env: Env,
+  at: { space: Space; app: App },
+  id?: string,
+): Promise<Response> => {
+  let store = asApp(env, at.space, at.app)
+  try {
+    if (req.method == 'GET' && id) {
+      return Response.json({ quote: await readQuote(store, id) })
+    }
+    if (req.method != 'POST' || id) {
+      return Response.json({ error: 'method_not_allowed' }, { status: 405 })
+    }
+    let quote = await req.json() as Quote
+    if (quote.seller != at.app.eid) {
+      throw refuse('quote', 'quote seller must be this app')
+    }
+    return Response.json({ quote: await issueQuote(store, quote) })
+  } catch (e) {
+    return Response.json({
+      error: {
+        code: 'quote_failed',
+        message: e instanceof Error ? e.message : String(e),
+      },
+    }, {
+      status: refusing(e, { request: '/api/pay/quotes', app: at.app.slug }),
+    })
   }
 }
 
@@ -695,10 +799,17 @@ let sold = async (env: Env, space: Space, account: string, o: Paid) => {
   let slug = String(o.tags.app ?? '')
   let app = await inApp(env, space, slug)
   if (!app) return `no app ${slug || '?'} in ${space.slug}`
-  let order = orderOf(o, account)
+  let store = asApp(env, space, app)
+  let quote = o.tags.quote ? await readQuote(store, o.tags.quote) : undefined
+  if (quote && quote.seller != app.eid) {
+    throw new Error('quote names another seller')
+  }
+  let order = {
+    ...orderOf(o, account),
+    ...(quote ? quotedOrder(quote, o) : {}),
+  }
   if (!order.session) return 'a session with no id'
   let items = unpacked(order.items)
-  let store = asApp(env, space, app)
   // What the products are called, for the letter. Read from the app's own
   // store, because the checkout carries the name the buyer saw and this is the
   // name the seller wrote — and a product renamed between the sale and the
@@ -712,14 +823,30 @@ let sold = async (env: Env, space: Space, account: string, o: Paid) => {
     ) named.set(row.entity.eid, row.doc?.title ?? '')
   }
   let eid = orderEid(order.session)
-  let letter = receipt(
-    app.title || app.slug,
-    order,
-    items,
-    (p) => named.get(p) || 'Item',
-  )
-  await store.apply([
-    { entity: { eid }, doc: { title: letter.title }, order },
+  let [existing] = await store.query(`.entity.eid=${eid}`)
+  if (existing?.order) return 'unchanged'
+  let letter = quote
+    ? {
+      title: `Your order from ${app.title || app.slug}`,
+      body: `${quote.name} × ${quote.quantity}\n\n` +
+        `Total ${
+          (quote.total / 100).toFixed(2)
+        } ${quote.currency.toUpperCase()}\n\n` +
+        `Document ${quote.revision}\nQuote ${quote.id}\nSource ${quote.source}`,
+    }
+    : receipt(
+      app.title || app.slug,
+      order,
+      items,
+      (p) => named.get(p) || 'Item',
+    )
+  await store.apply(protectedSale([
+    {
+      entity: { eid },
+      doc: { title: letter.title },
+      order,
+      $was: { order: { session: null } },
+    },
     // The buyer as a row of their own, and the letter hanging off it — the
     // shape every app's mailbox uses (docs/mail.md). No `deliver` where there
     // is no address to deliver to, which is a sale the provider took without one; the
@@ -735,7 +862,7 @@ let sold = async (env: Env, space: Space, account: string, o: Paid) => {
         },
       ]
       : []),
-  ])
+  ], { buyer: o.tags.buyer, via: o.tags.via }))
   return `${app.slug}: paid ${order.total_cents}`
 }
 

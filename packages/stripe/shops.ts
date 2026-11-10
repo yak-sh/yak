@@ -192,6 +192,23 @@ export let back = (url: string): string =>
  */
 export let session = (sale: Sale): Record<string, unknown> => ({
   mode: 'payment',
+  ...(sale.expires
+    ? { expires_at: Math.floor(Date.parse(sale.expires) / 1000) }
+    : {}),
+  ...(sale.shipping
+    ? {
+      shipping_options: [{
+        shipping_rate_data: {
+          type: 'fixed_amount',
+          display_name: sale.shipping.name,
+          fixed_amount: {
+            amount: sale.shipping.cents,
+            currency: sale.currency,
+          },
+        },
+      }],
+    }
+    : {}),
   line_items: Object.fromEntries(sale.lines.map((l, i) => [i, {
     price_data: {
       currency: sale.currency,
@@ -207,6 +224,7 @@ export let session = (sale: Sale): Record<string, unknown> => ({
   payment_intent_data: {
     ...(sale.fee > 0 ? { application_fee_amount: sale.fee } : {}),
     metadata: sale.tags,
+    ...(sale.destination ? { shipping: sale.destination } : {}),
   },
 })
 
@@ -218,6 +236,7 @@ export let session = (sale: Sale): Record<string, unknown> => ({
  * processing (a bank debit, say), and `paid` is the word Stripe documents as
  * "the funds are available". */
 export let paidOf = (o: Session): Paid => ({
+  ...(o.currency ? { currency: o.currency } : {}),
   paid: o.payment_status == 'paid',
   status: String(o.payment_status ?? ''),
   checkout: String(o.id ?? ''),
@@ -256,8 +275,11 @@ export let shops = (options: Keyed): Shops => {
     path: string,
     fields: Record<string, unknown>,
     on?: string,
+    key?: string,
   ) => {
-    let url = String((await ask(options, path, fields, on)).url ?? '')
+    let url = String(
+      (await ask(options, path, fields, on, 'POST', key)).url ?? '',
+    )
     if (!url) throw new Error(`stripe made ${what} with no url`)
     return url
   }
@@ -274,7 +296,13 @@ export let shops = (options: Keyed): Shops => {
     // On the seller's account: that one header is the whole of what makes it
     // their charge rather than the platform's.
     checkout: (on, sale) =>
-      made('a checkout session', '/v1/checkout/sessions', session(sale), on),
+      made(
+        'a checkout session',
+        '/v1/checkout/sessions',
+        session(sale),
+        on,
+        sale.key,
+      ),
   }
 }
 

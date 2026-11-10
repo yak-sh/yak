@@ -228,3 +228,30 @@ test('a refund or a dispute moves its payment', async () => {
   equal(await moved('charge.dispute.updated', { charge: 'ch_1' }), 'other')
   equal(await moved('payout.paid', {}), 'other')
 })
+
+test('a physical checkout fixes its shipping address and charge, with retry identity', async () => {
+  using s = stripe(() => ({ url: 'https://checkout.stripe.com/physical' }))
+  await lent.checkout('acct_1', {
+    ...sale,
+    key: 'quote_1',
+    expires: '2026-11-11T00:00:00Z',
+    destination: {
+      name: 'Ana',
+      address: {
+        line1: '1 Main St',
+        city: 'Austin',
+        postal_code: '78701',
+        country: 'US',
+      },
+    },
+    shipping: { name: 'Ground', cents: 500 },
+  })
+  let body = s.asked[0].body
+  equal(body['payment_intent_data[shipping][address][line1]'], '1 Main St')
+  equal(
+    body['shipping_options[0][shipping_rate_data][fixed_amount][amount]'],
+    '500',
+  )
+  equal(body.expires_at, String(Date.parse('2026-11-11T00:00:00Z') / 1000))
+  equal('shipping_address_collection[allowed_countries][0]' in body, false)
+})

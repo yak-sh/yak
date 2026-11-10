@@ -147,8 +147,49 @@ export type Seller = { account: string; ready: boolean; submitted: boolean }
  * currency's smallest unit, and how many. */
 export type Line = { name: string; cents: number; qty: number }
 
+/** The delivery address verified when a physical service was quoted. */
+export type Shipping = {
+  name: string
+  phone?: string
+  address: {
+    line1: string
+    line2?: string
+    city: string
+    state?: string
+    postal_code: string
+    country: string
+  }
+}
+
+/** An immutable seller quote. All amounts are in the currency's smallest unit;
+ * subtotal covers the complete quantity, and total includes shipping and tax. */
+export type Quote = {
+  id: string
+  buyer: string
+  source: string
+  seller: string
+  document: string
+  revision: string
+  specification: string
+  name: string
+  quantity: number
+  currency: string
+  destination: Shipping
+  shipping: { id: string; name: string; cents: number }
+  subtotal: number
+  tax: number
+  total: number
+  expires: string
+}
+
 /** A hosted checkout on a seller's account. */
 export type Sale = {
+  /** A durable request identity: retries address the same checkout. */
+  key?: string
+  /** A fixed physical quote; the provider does not offer address edits. */
+  destination?: Shipping
+  shipping?: { name: string; cents: number }
+  expires?: string
   lines: Line[]
   currency: string
   /** what the host takes of it, in the same unit; none when 0 */
@@ -168,6 +209,7 @@ export type Sale = {
 
 /** A completed checkout, as its provider reads it. */
 export type Paid = {
+  currency?: string
   /** whether the money is there: a checkout can complete with its payment
    * still processing */
   paid: boolean

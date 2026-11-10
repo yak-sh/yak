@@ -69,13 +69,16 @@ export let ask = async (
   fields?: Record<string, unknown>,
   on?: string,
   method = fields ? 'POST' : 'GET',
+  key?: string,
 ): Promise<Record<string, unknown>> => {
   if (!at.key) throw new Error('stripe: no key was lent')
   let body = fields ? new URLSearchParams(form(fields)).toString() : undefined
   let headers = {
     authorization: `Bearer ${at.key}`,
     ...(on ? { 'stripe-account': on } : {}),
-    ...(method == 'POST' ? { 'idempotency-key': crypto.randomUUID() } : {}),
+    ...(method == 'POST'
+      ? { 'idempotency-key': key ?? crypto.randomUUID() }
+      : {}),
     ...(body == null
       ? {}
       : { 'content-type': 'application/x-www-form-urlencoded' }),
