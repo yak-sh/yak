@@ -22,8 +22,10 @@ let options = given(member) as { personal?: Personal; through?: Personal }
 export let PRIVACY_MARK = 'yak/store/privacy/1'
 
 /** The passes for this vocabulary's declarations, one for each line its
- * stale entities are found by, so each batch is read from an index. They
- * are rehearsed only, until the copies of every store prove them. */
+ * stale entities are found by, so each batch is read from an index. They run
+ * in every app store: copies of the production stores proved that each
+ * reader sees by the privacy the pass writes what the declarations showed
+ * them (T-156154). */
 export let privacyRules = (vocab: Vocab): Rule[] => {
   let p = privacy(
     declarationsOf(vocab, options.personal, options.through),
@@ -36,6 +38,7 @@ export let privacyRules = (vocab: Vocab): Rule[] => {
   return p.stale.map((line, i) => ({
     mark: `${PRIVACY_MARK}/${p.hash}/${i}` as Mark,
     stores: 'apps',
+    live: 'apps',
     find: `${line}&*`,
     move: (row, read) => {
       if (!read) throw new Error('privacy reckoning reads its sources')

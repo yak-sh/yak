@@ -359,6 +359,10 @@ export let BOUNDARIES = [
   'yak/store/seller/1',
   // Every space's $49 plan is Pro (T-151637).
   'yak/store/pro-plan/1',
+  // Every app-store entity a personal, inherited or `readers` component
+  // bears keeps its privacy, and a person's read is screened by it
+  // (privacy-move.ts, T-156154).
+  'yak/store/privacy/1',
 ]
 
 /** A column dropped from a table. */
