@@ -105,6 +105,17 @@ test('native answers mask references to foreign private entities', () =>
       person: { name: 'Bob', friend: null },
     }],
   ))
+test('native answers preserve retained references to another store', () =>
+  equal(
+    read.answer([{
+      entity: { eid: 'bob' },
+      person: { name: 'Bob', friend: 'person-in-another-store' },
+    }], { person: 'bob', native: true }),
+    [{
+      entity: { eid: 'bob' },
+      person: { name: 'Bob', friend: 'person-in-another-store' },
+    }],
+  ))
 // A deleted draft holds nothing left to say whose it was. A store that keeps
 // a history (@yaks/journal) says it, so its author's answers name it and no
 // one else's do; where no history is kept, nobody's do.

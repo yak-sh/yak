@@ -181,11 +181,43 @@ The whole query syntax works on orders (<https://yaks.app/docs/querying.md>):
 search. An agent runs the same query through `graph_query`, so "what sold this
 week" is one call with no page open.
 
-**Who else can read orders is set by the app's `access`, not by the page's
-`if`.** An order carries a buyer's email address, and in an app anyone can read,
-anyone can read the orders. If that is not wanted, set the app `private` and
-have a `worker.js` serve the product list to visitors who are not members; the
-RSVP pattern in <https://yaks.app/docs/code.md> shows how.
+## Customer privacy
+
+Orders, quotes and receipt mail are private to the seller's editors and owners,
+including when the app's catalog is public. A visitor's graph queries cannot
+read those rows. The platform records the verified buyer or guest browser at
+checkout; an email address or a payment session id grants no access.
+
+`GET ./api/pay/orders/<order-eid>` returns the buyer's own receipt: its title,
+items, total and payment status, with document quote details when applicable. It
+also accepts the quote eid returned by checkout. A guest uses the browser that
+started checkout; a signed-in buyer can use another signed-in browser. Another
+customer or a visitor without that authority receives `404`. Provider account
+and payment identifiers remain on the seller's graph.
+
+### Private artifacts
+
+A worker that has checked its customer's authority can store private print files
+through `env.APP`:
+
+    await env.APP.fetch('/pay/artifacts?buyer=' + person + '&via=' + via, {
+      method: 'POST',
+      headers: { 'content-type': 'application/pdf', 'x-yak-name': 'interior.pdf' },
+      body: pdfBytes,
+    })
+
+The response includes `{eid, attachment, url, mime, bytes}`. `person` and `via`
+come from the platform's authenticated request headers, never browser input. At
+least one is required; omit `buyer` for a guest. The upload endpoint requires
+seller editor authority, which `env.APP` supplies. It stores the artifact and
+its customer entitlement together, without publishing an ordinary blob URL.
+Identical files can belong to several customers independently.
+
+`GET ./api/pay/artifacts/<eid>` reads the file for its customer or the seller.
+`POST ./api/pay/artifacts/<eid>/link` returns `{url, expires}`: a signed URL
+allowing a provider to fetch that exact artifact in that app for fifteen
+minutes. Renewing a link checks the current customer entitlement again. Receipt
+and artifact responses use `Cache-Control: private, no-store`.
 
 ## Testing with Stripe test mode
 

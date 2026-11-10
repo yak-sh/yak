@@ -16,7 +16,7 @@ export let saleAccess = (who: SaleAccess): SaleAccess => ({
 
 export let mayReceive = (access: SaleAccess, who: Buyer): boolean =>
   owns(
-    { by: access.buyer, via: access.via },
+    { by: access.buyer, via: access.via ? instrumentEid(access.via) : null },
     { by: who.person, via: who.via ? instrumentEid(who.via) : null },
   )
 
@@ -44,6 +44,7 @@ export let protectedArtifact = (
 }
 
 export type ArtifactTicket = { app: string; sha: string; exp: number }
+export let ARTIFACT_LIFE = 15 * 60_000
 
 /** A provider may fetch exactly these bytes until expiry. Renewal goes through
  * the authenticated artifact door and checks current ownership again. */
@@ -52,7 +53,7 @@ export let artifactTicket = (
   sha: string,
   secret: string,
   now = Date.now(),
-) => seal('artifact', { app, sha, exp: now + 15 * 60_000 }, secret)
+) => seal('artifact', { app, sha, exp: now + ARTIFACT_LIFE }, secret)
 
 export let artifactPermit = async (
   token: string,

@@ -383,21 +383,22 @@ invitation handler.
 
 The main export includes:
 
-| Exports                                                                                   | Purpose                                                                        |
-| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `memberDoc`                                                                               | Vocabulary document containing access components and pacing metadata.          |
-| `MEMBER`, `GRANT`, `ACCESS`, `GOVERNED`                                                   | Component names and the list requiring owner permission.                       |
-| `Role`, `Level`, `Mode`; `ROLES`, `LEVELS`, `MODES`                                       | Value types and their supported values.                                        |
-| `role`, `level`, `mode`                                                                   | Read a value with its default: member, viewer or private.                      |
-| `reads`, `edits`, `callsOut`, `writes`, `reaches`                                         | Pure permission checks.                                                        |
-| `members(guard)`                                                                          | Graph plugin with the vocabulary, permission-read requirements and write hook. |
-| `guarding(guard)`, `wanting(guard)`, `actorOf`, `asks`                                    | Write hook and supporting helpers.                                             |
-| `policy(storage, where)`                                                                  | Read and write checks bound to storage.                                        |
-| `modeOn`, `levelOn`, `readsOn`, `writesOn`                                                | Checks using an existing graph transaction.                                    |
-| `Guard`, `Floors`, `Viewer`, `Where`, `Policy`                                            | Configuration and policy types.                                                |
-| `Denied`                                                                                  | Error with `actor`, `app`, `need` and `act` fields.                            |
-| `memberKeywords`, `floorsIn`, `readersIn`, `floored`, `permitsIn`, `permitted`; `Permits` | Permission declarations, their validation and loaded forms.                    |
-| `personal`, `personalsIn`, `unowned`; `Personal`                                          | Person-owned policy, its validated declarations and their refusals.            |
+| Exports                                                                                   | Purpose                                                                                                         |
+| ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `memberDoc`                                                                               | Vocabulary document containing access components and pacing metadata.                                           |
+| `MEMBER`, `GRANT`, `ACCESS`, `GOVERNED`                                                   | Component names and the list requiring owner permission.                                                        |
+| `Role`, `Level`, `Mode`; `ROLES`, `LEVELS`, `MODES`                                       | Value types and their supported values.                                                                         |
+| `role`, `level`, `mode`                                                                   | Read a value with its default: member, viewer or private.                                                       |
+| `reads`, `edits`, `callsOut`, `writes`, `reaches`                                         | Pure permission checks.                                                                                         |
+| `members(guard)`                                                                          | Graph plugin with the vocabulary, permission-read requirements and write hook.                                  |
+| `guarding(guard)`, `wanting(guard)`, `actorOf`, `asks`                                    | Write hook and supporting helpers.                                                                              |
+| `policy(storage, where)`                                                                  | Read and write checks bound to storage.                                                                         |
+| `modeOn`, `levelOn`, `readsOn`, `writesOn`                                                | Checks using an existing graph transaction.                                                                     |
+| `Guard`, `Floors`, `Viewer`, `Where`, `Policy`                                            | Configuration and policy types.                                                                                 |
+| `Denied`                                                                                  | Error with `actor`, `app`, `need` and `act` fields.                                                             |
+| `owns(owner, who)`, `Owner`                                                               | Match verified `{by, via}` against a row's recorded owner; a bound person takes precedence over its instrument. |
+| `memberKeywords`, `floorsIn`, `readersIn`, `floored`, `permitsIn`, `permitted`; `Permits` | Permission declarations, their validation and loaded forms.                                                     |
+| `personal`, `personalsIn`, `unowned`; `Personal`                                          | Person-owned policy, its validated declarations and their refusals.                                             |
 
 ## What is deliberately not here
 

@@ -410,18 +410,39 @@ export let personal = (
                   ]
                     .map((b) => b.entity.eid),
                 )
-                return visible.map((b) => {
-                  let out = b
-                  for (let [name, prop, eid] of references(b)) {
-                    if (!allowed.has(eid)) {
-                      out = {
-                        ...out,
-                        [name]: { ...out[name] as Comp, [prop]: null },
+                let retained = [
+                  ...new Set(
+                    visible.flatMap((b) =>
+                      references(b).filter(([name, prop, eid]) =>
+                        !allowed.has(eid) &&
+                        vocab.prop(name, prop)?.death == 'keep'
+                      ).map(([, , eid]) => eid)
+                    ),
+                  ),
+                ]
+                return after(
+                  retained.length ? tx.get(retained, []) : [],
+                  (local) => {
+                    let present = new Set(local.map((b) => b.entity.eid))
+                    return visible.map((b) => {
+                      let out = b
+                      for (let [name, prop, eid] of references(b)) {
+                        // Retained references can name another store. A missing
+                        // target carries no local private data to conceal; a
+                        // target present here must still pass its visibility.
+                        let external = !present.has(eid) &&
+                          vocab.prop(name, prop)?.death == 'keep'
+                        if (!allowed.has(eid) && !external) {
+                          out = {
+                            ...out,
+                            [name]: { ...out[name] as Comp, [prop]: null },
+                          }
+                        }
                       }
-                    }
-                  }
-                  return out
-                })
+                      return out
+                    })
+                  },
+                )
               })
             },
           )

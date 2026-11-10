@@ -254,6 +254,7 @@ export type Answer = (
 // page compiles none of them (T-148886). Each still answers null to a path of
 // its segment it does not serve.
 let DOORS = new Map<string, () => Promise<Answer>>([
+  ['pay', async () => (await import('./sale-door.ts')).saleDoor],
   ['stats', async () => (await import('./views.ts')).stats],
   ['connections', async () => (await import('./connections.ts')).own],
   ['env', async () => (await import('./outbound.ts')).envDoor],
@@ -1970,7 +1971,15 @@ export let api = async (
     let body = await req.json().catch(() => null)
     return buying(
       env,
-      { space, app: app.slug, root: urlOf(space, app) },
+      {
+        space,
+        app: app.slug,
+        root: urlOf(space, app),
+        buyer: who.person,
+        via: who.via,
+        source: app.eid,
+        merchant: who.person == app.eid,
+      },
       async (line) => await metaOf(store, headers).query(line) as Product[],
       body,
     )
