@@ -9,8 +9,9 @@ two, so a rerun replaces the score.
 
 - `unasked`: the needed entity was among what the variant put in front of the
   agent before its entry.
-- `asked`: a search with the words of the message the agent was answering
-  returns it among the first five rows that predate the entry.
+- `asked`: a search with the first twelve words of the message the agent was
+  answering (the latest entry someone wrote to it: a person's input or its
+  brief) returns it among the first five rows that predate the entry.
 - `tokens`: the size of what was put in front, at four characters a token.
 
 ## What was in front

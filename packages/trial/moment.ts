@@ -94,10 +94,12 @@ export let moment = async (
   return { session: e.session, seq: e.seq, at: createdAt(b) }
 }
 
-// What a model turn answers: a person's input, a brief, or a notice; never the
-// agent's own output, calls, reasoning or the results of what it called.
+// What a model turn answers: words someone wrote to the agent, a person's
+// input or the brief it was spawned with. Harness text (a notice, a skill
+// loaded, a child's delivery) and the agent's own entries have no author.
 let own = ['output', 'call', 'result', 'reasoning', 'ask', 'checkpoint']
-let prompt = (b: Bundle): boolean => !own.some((c) => b[c]) && !!text(b).trim()
+let prompt = (b: Bundle): boolean =>
+  !own.some((c) => b[c]) && !!str(comp(b, 'created').by) && !!text(b).trim()
 
 let seqOf = (b: Bundle): number => Number(comp(b, 'entry').seq ?? 0)
 
@@ -180,10 +182,15 @@ export let front = async (
   ]
 }
 
-/** The words of the message the agent was answering: the latest input or
- * notice before its entry. */
+/** How many of a message's words a search is asked: an agent searches with a
+ * phrase, not a page, and a page of words takes the search seconds. */
+export let WORDS = 12
+
+/** The words of the message the agent was answering: the first
+ * {@link WORDS} of the latest words someone wrote to it before its entry. */
 export let asking = (had: Bundle[]): string =>
-  text(had.findLast(prompt) ?? { entity: { eid: '' } })
+  (text(had.findLast(prompt) ?? { entity: { eid: '' } })
+    .match(/[\p{L}\p{N}][\p{L}\p{N}'-]*/gu) ?? []).slice(0, WORDS).join(' ')
 
 /** What a search with these words finds of the graph as it stood at the
  * moment, best first. */
@@ -195,7 +202,7 @@ export let found = async (
   at: string,
 ): Promise<Eid[]> => {
   if (!words.trim()) return []
-  let ranked = (await search(words, { limit: 50 })).map((b) => b.entity.eid)
+  let ranked = (await search(words, { limit: 20 })).map((b) => b.entity.eid)
   let held = new Set(
     (await asOf(storage, vocab, at).get(ranked)).map((b) => b.entity.eid),
   )

@@ -11,7 +11,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { tally, trialDoc } from './mod.ts'
-import { before, cases, run } from './moment.ts'
+import { asking, before, cases, run, WORDS } from './moment.ts'
 
 let obj = { component: true, type: 'object' }
 let props = (p: Record<string, string>) => ({
@@ -24,7 +24,7 @@ let vocab = loadVocab([edgeDoc, docDoc, personaDoc, memoryDoc, trialDoc, {
   $defs: {
     contains: { ...obj, edge: true },
     content: props({ body: 'string' }),
-    created: props({ at: 'string' }),
+    created: props({ at: 'string', by: 'string' }),
     completed: props({ at: 'string' }),
     notified: props({ at: 'string', via: 'string' }),
     task: { ...obj, status: { completed: 'done', default: 'open' } },
@@ -59,6 +59,11 @@ let entry = (
   ...at(`2026-11-10T11:${String(10 + seq).padStart(2, '0')}:00.000Z`),
   ...kind,
 })
+// Words someone wrote to the agent: an entry with an author.
+let said = (seq: number, body: string) => {
+  let e = entry(seq, body)
+  return { ...e, created: { ...e.created, by: 'jeff' } }
+}
 let hitRow = (eid: string) =>
   JSON.stringify({
     result: [{ entity: { eid }, hit: { id: eid, near: 'new' } }],
@@ -87,7 +92,7 @@ await g.apply([
   { entity: { eid: 's' }, session: { persona: 'p' }, ...at(early) },
   entry(1, 'old notice', { notice: {} }),
   entry(2, 'summary', { checkpoint: {} }),
-  entry(3, 'how do I pay', {}),
+  said(3, 'how do I pay'),
   entry(4, 'pace notice', { notice: {} }),
   entry(5, hitRow('hidden'), { result: {} }),
   entry(
@@ -135,10 +140,10 @@ for (let [needed, what, unasked, found] of cases_) {
   })
 }
 
-test('trial: the search is asked the words of the latest input or notice', async () => {
+test('trial: the search is asked the words someone last wrote to the agent', async () => {
   asked.length = 0
   await score('m')
-  assertEquals(asked, ['pace notice'])
+  assertEquals(asked, ['how do I pay'])
 })
 
 test('trial: a status reads from the marks stamped before the moment', () => {
@@ -168,4 +173,9 @@ test('trial: the cases are the misses, and their tally', async () => {
     asked: 0,
     tokens,
   })
+})
+
+test('trial: the search is asked a phrase, the first words of a long message', () => {
+  let long = Array.from({ length: 30 }, (_, i) => `w${i}`).join(', ')
+  assertEquals(asking([said(1, long)]).split(' ').length, WORDS)
 })

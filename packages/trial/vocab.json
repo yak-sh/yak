@@ -28,7 +28,7 @@
         },
         "asked": {
           "type": "boolean",
-          "description": "a search with the words of the message the agent was answering returns the needed entity among its first five rows that predate the entry"
+          "description": "a search with the words of the message the agent was answering (its first twelve words) returns the needed entity among its first five rows that predate the entry"
         },
         "tokens": {
           "type": "integer",
