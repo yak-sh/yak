@@ -49,11 +49,24 @@ export let printing = (
   service: Printer,
   runtime: Runtime,
 ) => {
-  let link = async (blob: string) => {
-    let answer = await json<{ url: string }>(
-      await app.fetch('/pay/artifacts/' + blob + '/link', { method: 'POST' }),
+  let links = async (blobs: string[]) => {
+    let answer = await json<{ links: { artifact: string; url: string }[] }>(
+      await app.fetch('/pay/artifacts/links', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ artifacts: [...new Set(blobs)] }),
+      }),
     )
-    return answer.url
+    let indexed = new Map(answer.links.map((link) => [link.artifact, link.url]))
+    return (blob: string) => {
+      let url = indexed.get(blob)
+      if (!url) {
+        throw new Error(
+          'A selected artwork link was missing from the signed batch.',
+        )
+      }
+      return url
+    }
   }
   let reviewable = (document: Record<string, unknown>) => {
     if (document.error) throw new Refusal(String(document.error))
@@ -73,10 +86,12 @@ export let printing = (
     let pending = book.print_preparation as
       | { source: string; document: string }
       | undefined
-    let selected = ordered(pages), assets = []
+    let selected = ordered(pages),
+      link = await links(selected.map((page) => page.artwork!.blob)),
+      assets = []
     for (let page of selected) {
       assets.push({
-        blob: await link(page.artwork!.blob),
+        blob: link(page.artwork!.blob),
         caption: page.coloring_page.caption,
         kind: page.coloring_page.activity ? 'puzzle' : 'image',
       })
@@ -88,7 +103,7 @@ export let printing = (
       title: book.doc.title,
       dedication: book.coloring_book.dedication,
       pages: assets,
-      front: await link(selected[0].artwork!.blob),
+      front: link(selected[0].artwork!.blob),
       product: 'coloring',
       front_bleed: false,
     })

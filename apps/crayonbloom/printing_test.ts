@@ -61,13 +61,17 @@ test('the consumer renews original artwork tickets on resume and only reviews a 
     cover: { blob: 'e'.repeat(64) },
   }
   let press = printing(f.db, {
-    fetch: (path) =>
-      Promise.resolve(
+    fetch: (_path, init) => {
+      let ids = JSON.parse(String(init?.body)).artifacts as string[]
+      return Promise.resolve(
         Response.json({
-          url: 'https://assets.example/' + path.split('/')[3] + '?ticket=' +
-            ++links,
+          links: ids.map((artifact) => ({
+            artifact,
+            url: 'https://assets.example/' + artifact + '?ticket=' + ++links,
+          })),
         }),
-      ),
+      )
+    },
   }, (name, args) => {
     requests.push([name, args])
     if (name === 'prepare') return Promise.resolve({ id: job, pending: true })
