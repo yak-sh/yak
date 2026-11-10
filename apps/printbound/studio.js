@@ -43,7 +43,7 @@ let field = (name, title, value = '', area = false) =>
 let file = (id, blob) =>
   './studio/file?id=' + encodeURIComponent(id) + '&blob=' +
   encodeURIComponent(blob)
-let book = null, pageId = null, recovering
+let book = null, pageId = null, recovering, opening = 0
 let freshId = () => {
   let id = location.hash.split('/')[1]
   if (!/^[a-f0-9-]{36}$/i.test(id ?? '')) {
@@ -160,6 +160,7 @@ let draw = () => {
   if (destinationForm) recovering.bind(destinationForm, 'shipping:' + pageId)
 }
 let open = async () => {
+  let turn = ++opening
   if (saving != null && desk.querySelector('[data-source]')) {
     clearTimeout(saving)
     saving = null
@@ -172,12 +173,16 @@ let open = async () => {
     return
   }
   if (location.hash.startsWith('#book/')) {
-    pageId = location.hash.slice(6)
-    book = await request('book?id=' + encodeURIComponent(pageId))
+    let id = location.hash.slice(6)
+    let value = await request('book?id=' + encodeURIComponent(id))
+    if (turn !== opening) return
+    pageId = id
+    book = value
     draw()
     return
   }
   let rows = await request('shelf')
+  if (turn !== opening) return
   recovering.unbind()
   pageId = null
   desk.innerHTML =
@@ -207,6 +212,7 @@ desk.addEventListener('input', (event) => {
 desk.addEventListener('submit', async (event) => {
   event.preventDefault()
   clearTimeout(saving)
+  saving = null
   try {
     if (event.target.matches('[data-source]')) {
       await save()
@@ -230,11 +236,12 @@ desk.addEventListener('click', async (event) => {
   if (!button) return
   button.disabled = true
   clearTimeout(saving)
+  saving = null
   try {
     let act = button.dataset.act
     if (act === 'prepare') {
-      await save()
-      let id = book.entity.eid, result = await request('prepare', { id })
+      let saved = await save(), id = saved.entity.eid
+      let result = await request('prepare', { id })
       if (result.pending) {
         tell('Preparing composed pages…')
         await preparation(id)

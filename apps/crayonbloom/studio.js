@@ -7,6 +7,7 @@ let book = null,
   queued = Promise.resolve(),
   saving = null,
   pageId = null,
+  opening = 0,
   recovering
 let freshId = () => {
   let id = location.hash.split('/')[1]
@@ -285,6 +286,7 @@ let sourceInput = () => {
   hidden.value = body.value
 }
 let open = async () => {
+  let turn = ++opening
   if (saving != null && desk.querySelector('[data-source]')) {
     clearTimeout(saving)
     saving = null
@@ -292,6 +294,7 @@ let open = async () => {
     save().catch((error) => tell(error.message))
   }
   settings ??= await request('settings')
+  if (turn !== opening) return
   if (location.hash.startsWith('#new')) {
     pageId = freshId()
     book = null
@@ -300,14 +303,17 @@ let open = async () => {
     return
   }
   if (location.hash.startsWith('#book/')) {
-    pageId = location.hash.slice(6)
-    let value = await request('book?id=' + encodeURIComponent(pageId))
+    let id = location.hash.slice(6)
+    let value = await request('book?id=' + encodeURIComponent(id))
+    if (turn !== opening) return
+    pageId = id
     book = value.book
     pages = value.pages
     draw()
     return
   }
   let shelf = await request('shelf')
+  if (turn !== opening) return
   recovering.unbind()
   pageId = null
   desk.innerHTML = `${
@@ -356,6 +362,7 @@ desk.addEventListener('change', async (event) => {
 desk.addEventListener('submit', async (event) => {
   event.preventDefault()
   clearTimeout(saving)
+  saving = null
   try {
     if (event.target.matches('[data-source]')) {
       sourceInput()
@@ -388,14 +395,13 @@ desk.addEventListener('click', async (event) => {
   if (!button) return
   button.disabled = true
   clearTimeout(saving)
+  saving = null
   try {
-    let act = button.dataset.act
+    let act = button.dataset.act, id = pageId, hadPages = pages.length > 0
     if (['outline', 'draw', 'story', 'prepare'].includes(act)) {
       sourceInput()
-      await save()
-      if (!location.hash.startsWith('#book/')) {
-        history.replaceState(null, '', '#book/' + book.entity.eid)
-      }
+      let saved = await save()
+      id = saved.entity.eid
     }
     if (act === 'connect') {
       let response = await fetch('./api/service/connect', {
@@ -422,36 +428,36 @@ desk.addEventListener('click', async (event) => {
       let form = button.closest('[data-page]')
       await request('edit', {
         ...Object.fromEntries(new FormData(form)),
-        id: book.entity.eid,
+        id,
         page: button.dataset.page,
       })
     }
-    if (act === 'draw' && !pages.length) {
-      await request('outline', { id: book.entity.eid })
+    if (act === 'draw' && !hadPages) {
+      await request('outline', { id })
     }
     if (act === 'puzzle') {
       await request('puzzle', {
-        id: book.entity.eid,
+        id,
         activity: button.dataset.kind,
       })
     } else if (act === 'up' || act === 'down') {
       await request('move', {
-        id: book.entity.eid,
+        id,
         page: button.dataset.page,
         delta: act === 'up' ? -1 : 1,
       })
     } else {
       let result = await request(act, {
-        id: book.entity.eid,
+        id,
         page: button.dataset.page,
       })
       if (act === 'story' && result.pending) {
         tell('Writing a suggestion from your saved idea…')
-        return pollStory()
+        return pollStory(id)
       }
       if (act === 'prepare' && result.pending) {
         tell('Preparing composed pages…')
-        await preparation(book.entity.eid)
+        await preparation(id)
         return
       }
       if (act === 'purchase' && result.checkout) {
@@ -466,14 +472,16 @@ desk.addEventListener('click', async (event) => {
     button.disabled = false
   }
 })
-let pollStory = async () => {
-  let result = await request('story', { id: book.entity.eid })
+let pollStory = async (id) => {
+  let result = await request('story', { id })
   if (result.pending) {
-    setTimeout(() => pollStory().catch((e) => tell(e.message)), 1000)
+    setTimeout(() => pollStory(id).catch((e) => tell(e.message)), 1000)
     return
   }
-  tell('Your suggested story is saved. Edit anything before drawing.')
-  await open()
+  if (pageId === id) {
+    tell('Your suggested story is saved. Edit anything before drawing.')
+    await open()
+  }
 }
 let preparation = async (id) => {
   let result = await request('preparation', { id })
