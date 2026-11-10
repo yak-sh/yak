@@ -34,6 +34,7 @@ import {
 // its own store.
 import { knownOptions } from '@yaks/graph/errors'
 import type { Reload } from '@yaks/platform'
+import type { Comp } from '@yaks/platform/comp'
 import { type Host as HostEnv, spaceHost } from './host.ts'
 import type { Actor, Bundle } from '@yaks/graph'
 import { type Listed, listing } from '@yaks/connections/integrations'
@@ -214,13 +215,9 @@ export let paid = (tier: Tier | null | undefined) =>
 // home page links to. Neither has app/data or visitor ceilings (meter.ts
 // `ceilings`); platform traffic must not shut the directory's public doors.
 //
-// A comp is a constant, read here and written nowhere. `plan` is stamped
-// precisely so that a person cannot lift their own ceilings (billing.ts), and
-// that has to hold for a comp too: comping is a deploy, reviewable in the
-// diff, rather than a request anybody can make. T-33164 asks for the operator
-// door that would make this a decision instead of a list — a comp, a support
-// credit and a demo all want one, and the payment provider owns only the
-// paying case.
+// These two platform spaces keep their unlimited app/data/visit exemption.
+// Operational comps are stamped comp{tier, reason, by} rows, managed through
+// the platform-only comp.ts door independently of Stripe's subscription.
 export let COMPED = ['yourname', 'yak']
 
 // Paid features and mail/build allowances: `plus` also applies to comps.
@@ -232,12 +229,15 @@ export let tierOf = (
   tier: Tier | null,
   comped: string | null = null,
   now = Date.now(),
-): Tier | null =>
-  COMPED.includes(slug)
+  comp?: Comp | null,
+): Tier | null => {
+  let base = COMPED.includes(slug)
     ? 'plus'
     : !paid(tier) && comped && Date.parse(comped) > now
     ? 'plus'
     : tier
+  return comp?.tier == 'pro' || base == 'pro' ? 'pro' : comp?.tier ?? base
+}
 
 // What a space pays and what the payment provider knows about it (platform.rs
 // `Plan`, billing.ts derives and writes it). The whole row, because the webhook
@@ -320,6 +320,7 @@ export type Space = {
   // The day the Plus plan given free runs through (`comped`, reward.ts),
   // past or to come; absent or null where none was ever given.
   comped?: string | null
+  comp?: Comp | null
   // What this space sells through (sell.ts, T-34524): the connected account,
   // and whether its provider says it may take money yet. Null for a space
   // that has never asked to sell, which is almost all of them.
@@ -790,6 +791,7 @@ export type Row = {
     subscription?: string | null
   }
   comped?: { until: string }
+  comp?: { tier: 'plus' | 'pro'; reason: string; by: Id }
   person?: Record<string, unknown>
   email?: { address: string }
   sender?: { via: string }
@@ -1221,6 +1223,7 @@ export let SPACE_PARTS = [
   'sender',
   'phone',
   'comped',
+  'comp',
   'space_logo',
 ]
 let SPACE_ABOUT = SPACE_PARTS.map((part) => `?${part}`).join('&')
@@ -1326,7 +1329,13 @@ export let spaceOf = (r: Row): Space => ({
       sender: { ...r.sender, ...(r.phone ? { number: r.phone.number } : {}) },
     }
     : {}),
-  tier: tierOf(r.space!.slug, r.plan?.tier ?? null, r.comped?.until),
+  tier: tierOf(
+    r.space!.slug,
+    r.plan?.tier ?? null,
+    r.comped?.until,
+    Date.now(),
+    r.comp ? { ...r.comp, by: idOf(r.comp.by) } : null,
+  ),
   plan: planOf(r),
   credit: r.credit
     ? {
@@ -1336,6 +1345,7 @@ export let spaceOf = (r: Row): Space => ({
     }
     : null,
   comped: r.comped?.until ?? null,
+  ...(r.comp ? { comp: { ...r.comp, by: idOf(r.comp.by) } } : {}),
   seller: sellerOf(r),
   fee: r.fee?.bps ?? 0,
   budget: r.budget?.dollars ?? null,

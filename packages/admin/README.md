@@ -53,6 +53,19 @@ yak admin errors --as admin
 yak admin errors --since 14d --resolved --as admin
 ```
 
+## Space comps
+
+`comp` grants a space the Plus or Pro plan without a subscription. Only the
+platform role may grant or revoke it. A comp records its reason and the actor
+who granted it; the higher of its tier and the subscription's tier applies.
+Revoking the comp leaves the subscription and referral rewards intact.
+
+```sh
+yak admin comp ada --as admin@bot.yak.sh
+yak admin comp ada plus 'partner site' --as admin@bot.yak.sh
+yak admin comp ada revoke --as admin@bot.yak.sh
+```
+
 ## The funnel
 
 `funnel` reads yaks.app's own funnel through the query /admin/funnel shows

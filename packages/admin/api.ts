@@ -274,6 +274,18 @@ export let setBudget = (
 ): Promise<SpaceBudget> =>
   said(posted(apex(BUDGET), { space, dollars }, session))
 
+/** A platform comp is separate from a space's subscription. */
+import type { SpaceComp } from '@yaks/platform/comp'
+export let compNow = (session: string, space: string): Promise<SpaceComp> =>
+  said(sent(apex(`/api/comp?space=${encodeURIComponent(space)}`), session))
+export let setComp = (
+  session: string,
+  space: string,
+  tier: string,
+  reason: string,
+): Promise<SpaceComp> =>
+  said(posted(apex('/api/comp'), { space, tier, reason }, session))
+
 /** Refund dollars the space spent this month, and why: they come off its
  * month and its starter's draw, its budget left as it is. */
 export let refund = (

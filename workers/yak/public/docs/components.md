@@ -721,8 +721,8 @@ The complete list of reserved names:
     build_of builder builder_answer builder_dep builder_edit
     builder_model_answer builder_open builder_ring built call call_ready
     call_woken called calls cancel cancelled checkout chosen cites
-    code_review comment commit compat completed connection contains content
-    cost created credit credit_block delegates delete_upload deliver
+    code_review comment commit comp compat completed connection contains
+    content cost created credit credit_block delegates delete_upload deliver
     delivered demo deploy desk_sidebar dispatch doc document_extract
     document_page document_text draft edge effect email entity entry error
     event exception execution failed favorite fee feed feedback file filed

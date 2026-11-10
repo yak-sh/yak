@@ -7,6 +7,7 @@ import * as apps from './apps.ts'
 import { packageAt } from './cache.ts'
 import * as billing from './billing.ts'
 import * as budget from './budget.ts'
+import * as comp from './comp.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { copyOf } from './directory-copy.ts'
@@ -132,6 +133,7 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // A space's model budget, set by the same owner (budget.ts, T-137556),
   // before the connector for the same reason as the fee's.
   if (path == '/api/budget') return budget.fetch(req, env)
+  if (path == '/api/comp') return comp.fetch(req, env)
   // The tunnel a space has to a machine (tunnel.ts, T-39585): the owner's own
   // door, before the connector for the same reason as the fee's.
   if (path == '/api/tunnel') return tunnel.fetch(req, env)

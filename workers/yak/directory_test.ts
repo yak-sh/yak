@@ -410,10 +410,8 @@ for (
   })
 }
 
-// A comp is the platform holding one of its own spaces to no ceiling. It is a
-// constant read here and a property nowhere: what makes that safe is that
-// nothing on the wire can reach it, which is the same reason `plan` is
-// stamped (billing.ts).
+// Platform-owned spaces retain their fixed exemption. Operational comps
+// are granted through the platform-only door (comp_test.ts).
 test('a comped space reads as plus, everyone else as what they pay', () => {
   assertEquals(dirPart.tierOf('yourname', null), 'plus')
   assertEquals(dirPart.tierOf('yourname', 'free'), 'plus')

@@ -28,6 +28,7 @@ import {
   acceptInvite,
   budgetNow,
   close,
+  compNow,
   doomedIn,
   feeNow,
   funnelNow,
@@ -39,6 +40,7 @@ import {
   rpc,
   saidBy,
   setBudget,
+  setComp,
   setFee,
   setTunnel,
   standing,
@@ -334,6 +336,26 @@ export let runs = (
         ? await budgetNow(at.bearer, space)
         : await setBudget(at.bearer, space, dollars == 'plan' ? '' : dollars)
       return [said(call, budgetLines(now))]
+    }),
+
+    admin_comp: verb(async (call) => {
+      let a = argsOf(call)
+      let space = String(a.space)
+      let tier = word(a, 'tier')
+      if (tier != null && !['plus', 'pro', 'revoke'].includes(tier)) {
+        throw new CallError('tier', 'choose plus, pro or revoke')
+      }
+      let at = await acting(a)
+      let now = tier == null
+        ? await compNow(at.bearer, space)
+        : await setComp(at.bearer, space, tier, word(a, 'reason') ?? '')
+      return [said(
+        call,
+        `${now.space}: ${now.tier ?? 'free'}; ` +
+          (now.comp
+            ? `comped: ${now.comp.reason} (${now.comp.by})`
+            : 'no comp'),
+      )]
     }),
 
     admin_funnel: verb(async (call) => {

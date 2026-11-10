@@ -665,6 +665,32 @@
           "stamped": true
         }
       }
+    },
+    "comp": {
+      "component": true,
+      "type": "object",
+      "description": "a revocable plan granted by the platform, independent of any subscription",
+      "properties": {
+        "tier": {
+          "type": "string",
+          "enum": [
+            "plus",
+            "pro"
+          ],
+          "stamped": true
+        },
+        "reason": {
+          "type": "string",
+          "stamped": true
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        }
+      },
+      "wire": false
     }
   }
 }

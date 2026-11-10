@@ -690,6 +690,47 @@
         "app",
         "decision"
       ]
+    },
+    "admin_comp": {
+      "tool": true,
+      "destructive": false,
+      "idempotent": true,
+      "noun": "admin",
+      "verb": "comp",
+      "title": "Read, grant or revoke a space comp",
+      "description": "A plan granted by the platform, separate from a subscription. Read it, grant plus or pro with a reason, or revoke it. Only the platform role may grant or revoke.\n\n  yak admin comp ada plus 'partner site' --as admin@bot.yak.sh\n  yak admin comp ada revoke --as admin@bot.yak.sh",
+      "input": {
+        "space": {
+          "type": "string",
+          "description": "the space, by its subdomain"
+        },
+        "tier": {
+          "type": "string",
+          "enum": [
+            "plus",
+            "pro",
+            "revoke"
+          ],
+          "description": "the granted tier, or revoke to remove the comp"
+        },
+        "reason": {
+          "type": "string",
+          "description": "why the platform grants the comp"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "required": [
+        "space"
+      ],
+      "openWorld": true,
+      "positional": [
+        "space",
+        "tier",
+        "reason"
+      ]
     }
   }
 }
