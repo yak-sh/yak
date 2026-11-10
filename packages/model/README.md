@@ -82,6 +82,7 @@ deno add jsr:@yaks/model
 | `@yaks/model/vocab` | `modelDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `@yaks/model/graph` | `plugins()`, returning `[models()]`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `@yaks/model/sse`   | `jsonFrames(body, fault, check?, done?)`: the JSON events of a server-sent event stream                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `@yaks/model/stall` | `STALL_TIMEOUT`, `stallMs(req)`, `Stalled`, `watchdog(ms, clock?, stop?)`, `watched(fetch, ms)`, `watchedBody(body, ms)`: a request whose stream goes quiet fails as stalled                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ## Items and delivery
 
@@ -657,6 +658,19 @@ provider's own `mark`, which @yaks/session calls with the dispatch instant
 (`CacheContext.requestedAt`): @yaks/anthropic knows its documented five minutes,
 and a provider that knows none records the expiry unknown. Existing asks without
 expiry remain cold, so no backfill is needed.
+
+## Stalls
+
+Every provider stream fails as `stalled` (a `ModelError` coded `stalled`) once
+its connection, its first byte or any gap after goes `Request.stallTimeout`
+seconds without progress, five minutes (`STALL_TIMEOUT`) where the request names
+none. The session provider resolver fills `stallTimeout` from the provider row's
+`stall_timeout` at dispatch, so a row may name its own; 0 waits for ever. A
+provider reads its stream through `watched(fetch, ms)` or
+`watchedBody(body,
+ms)` (@yaks/model/stall), or keeps a `watchdog` of its own
+where its retries need one (@yaks/openai's transport), and a session reports an
+exhausted stall as the failure it is.
 
 A session keeps the instructions its newest ask sent while that ask's expiry is
 in the future, so a context that changed mid-conversation does not rewrite a

@@ -46,6 +46,7 @@ import {
   submitted,
   type Usage,
 } from '@yaks/model'
+import { Stalled, stallMs, watchedBody } from '@yaks/model/stall'
 import { generatedBytes, mediaRoom, type MediaStore } from '@yaks/openai'
 import {
   audioPrice,
@@ -538,14 +539,22 @@ export let streamed = async (
     // The summary has no choices: what the whole request used.
     if (used && !at(chunk, 'choices')) usage = used
   }
-  let reader = body.getReader()
+  // A stream that goes quiet fails as stalled rather than waiting for ever.
+  let reader = watchedBody(body, stallMs(req)).getReader()
   let words = new TextDecoder()
   let stop = () => void reader.cancel().catch(() => {})
   req.signal?.addEventListener('abort', stop, { once: true })
   let held = ''
   try {
     for (;;) {
-      let { value, done } = await reader.read()
+      let { value, done } = await reader.read().catch((error) => {
+        if (!(error instanceof Stalled)) throw error
+        throw new ModelError(
+          'stalled',
+          `Workers AI stream stalled — ${error.message}`,
+          {},
+        )
+      })
       if (done) break
       held += words.decode(value, { stream: true })
       let lines = held.split('\n')

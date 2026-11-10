@@ -4,6 +4,7 @@
 import { type Clock, sleep, system } from '@yaks/fp'
 import { CODEX, type Credential as ProviderCredential } from './credential.ts'
 import { jsonFrames } from '@yaks/model/sse'
+import { STALL_TIMEOUT, watchdog } from '@yaks/model/stall'
 
 /** A bearer; omitted base uses the public API (or the transport's base). */
 export type TransportCredential = Omit<ProviderCredential, 'base'> & {
@@ -102,7 +103,8 @@ export type ResponseOptions = {
   /** Replace default body shaping for compatible providers. */
   shape?: (request: ResponseRequest) => Record<string, unknown>
   /** Abort a connection, first frame, or inter-frame gap with no progress for
-   * this long. 0 (the default) disables the watchdog. */
+   * this long, in milliseconds; default @yaks/model/stall `STALL_TIMEOUT`.
+   * 0 disables the watchdog. */
   stallMs?: number
 }
 
@@ -119,6 +121,8 @@ export type RunOptions = {
    * remains the provider's decision, never guaranteed by this header. */
   conversation?: string
   signal?: AbortSignal
+  /** This exchange's own `ResponseOptions.stallMs`. */
+  stallMs?: number
   event?: (event: ResponseEvent) => unknown
 }
 
@@ -160,48 +164,6 @@ let knownItems = new Set([
 
 let record = (value: unknown): value is Record<string, unknown> =>
   value != null && typeof value == 'object' && !Array.isArray(value)
-
-// A resettable idle deadline for one provider exchange. It aborts its own signal
-// — never the caller's stop — when `ms` passes with no progress, and each frame
-// calls kick() to push the deadline forward. The caller reads stalled() to turn
-// that self-abort into a diagnosable fault instead of a silent hang. A relayed
-// stop aborts too, but leaves stalled() false so the caller keeps its own path.
-let watchdog = (ms: number, clock: Clock, stop?: AbortSignal) => {
-  // With no deadline and nothing to relay, there is nothing to abort. A relayed
-  // stop still goes through a signal of its own, so it arrives as an abort.
-  if (!ms && !stop) {
-    return {
-      signal: undefined,
-      kick: () => {},
-      stalled: () => false,
-      close: () => {},
-    }
-  }
-  let control = new AbortController()
-  let stalled = false
-  let cancel = () => {}
-  let relay = () => control.abort()
-  let kick = () => {
-    if (!ms || control.signal.aborted) return
-    cancel()
-    cancel = clock.after(ms, () => {
-      stalled = true
-      control.abort()
-    })
-  }
-  if (stop?.aborted) control.abort()
-  else stop?.addEventListener('abort', relay, { once: true })
-  kick()
-  return {
-    signal: control.signal,
-    kick,
-    stalled: () => stalled,
-    close: () => {
-      cancel()
-      stop?.removeEventListener('abort', relay)
-    },
-  }
-}
 
 /** An HTTP or connection failure. `kind` is stable even when the provider
  * supplies no code. */
@@ -472,11 +434,18 @@ let limits = (headers: Headers): RateLimits => {
 export let frames = (
   body: ReadableStream<Uint8Array>,
 ): AsyncGenerator<ResponseEvent> =>
-  jsonFrames(body, fault, (value) => {
-    if (typeof value.type != 'string') {
-      throw fault('malformed_stream', 'responses: stream event has no type')
-    }
-  }) as AsyncGenerator<ResponseEvent>
+  jsonFrames(
+    body,
+    (kind, message) =>
+      kind == 'stalled'
+        ? fault(kind, 'responses: stream stalled')
+        : fault(kind, message),
+    (value) => {
+      if (typeof value.type != 'string') {
+        throw fault('malformed_stream', 'responses: stream event has no type')
+      }
+    },
+  ) as AsyncGenerator<ResponseEvent>
 
 let usage = (value: unknown): ResponseUsage | undefined => {
   if (!record(value)) return undefined
@@ -632,7 +601,7 @@ export let transport = (options: ResponseOptions): {
   let base = options.base?.replace(/\/$/, '')
   let retries = Math.max(0, options.retries ?? 2)
   let patienceMs = Math.max(0, options.patienceMs ?? 0)
-  let stallMs = Math.max(0, options.stallMs ?? 0)
+  let stallMs = Math.max(0, options.stallMs ?? STALL_TIMEOUT * 1000)
   let clock = options.clock ?? system
   let pause = options.pause ?? ((ms: number) => sleep(ms, undefined, clock))
   let id = options.id ?? (() => crypto.randomUUID())
@@ -704,7 +673,11 @@ export let transport = (options: ResponseOptions): {
       // first frame, and every mid-stream gap — each frame pushing it forward.
       // A trip aborts its own signal (not run.signal), so the throw below is a
       // named stall the caller can fail on, never a silent hang.
-      let dog = watchdog(stallMs, clock, run.signal)
+      let dog = watchdog(
+        Math.max(0, run.stallMs ?? stallMs),
+        clock,
+        run.signal,
+      )
       try {
         let response: Response
         try {

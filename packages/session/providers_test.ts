@@ -110,6 +110,53 @@ test('resolved provider snapshots dispatch retention on every reply and keeps ex
   assertEquals(reply.cacheExpiresAt, null)
 })
 
+test("a provider row's stall timeout reaches each request, unless the request names its own", async () => {
+  let vocab = loadVocab([kernelDoc, edgeDoc, modelDoc], [
+    kernelKeywords,
+    edgeKeywords,
+  ])
+  let g = graph({ storage: ram(vocab), vocab })
+  let provider = identityEid('provider', ['quiet'])
+  let model = identityEid('model', ['slow'])
+  await g.apply([
+    { entity: { eid: provider }, provider: { name: 'quiet' } },
+    {
+      entity: { eid: model },
+      model: { name: 'slow' },
+      price: { input: 0, output: 0 },
+    },
+    {
+      entity: { eid: edgeEid(provider, 'serves', model) },
+      edge: { from: provider, to: model },
+      serves: { name: 'slow' },
+    },
+  ])
+  let seen: (number | undefined)[] = []
+  let fake: Model = (req) => {
+    seen.push(req.stallTimeout)
+    return Promise.resolve({ id: 'r', model: req.model, items: [] })
+  }
+  let served = await providerResolver(g, { quiet: fake })(
+    { provider },
+    (await g.get([model]))[0],
+  )
+  let ask = (own?: number) =>
+    served.model({
+      model: served.name,
+      items: [],
+      tools: [],
+      ...own == null ? {} : { stallTimeout: own },
+    })
+  await ask()
+  await g.apply([{
+    entity: { eid: provider },
+    provider: { stall_timeout: 60 },
+  }])
+  await ask()
+  await ask(5)
+  assertEquals(seen, [undefined, 60, 5])
+})
+
 let discovery = async (pending = true, time = clock()) => {
   let vocab = loadVocab([kernelDoc, edgeDoc, modelDoc], [
     kernelKeywords,

@@ -1,19 +1,25 @@
 /**
  * The server-sent events a provider streams a reply as, each `data:` field
  * read as one JSON object. Providers frame them alike and fail differently, so
- * the caller names its own errors: `fault` makes one for a dropped connection
- * or a frame that is not JSON, and `check` may throw one for an event the
- * provider sends to say it failed.
+ * the caller names its own errors: `fault` makes one for a dropped connection,
+ * a stream that went quiet (a body read through `@yaks/model/stall`) or a
+ * frame that is not JSON, and `check` may throw one for an event the provider
+ * sends to say it failed.
  *
  * @module
  */
+
+import { Stalled } from './stall.ts'
 
 /** JSON SSE frames across arbitrary byte chunks, CRLF and a final frame with
  * no blank line after it; `done` hears a `[DONE]` sentinel. The reader is
  * released even if a consumer stops early or throws. */
 export let jsonFrames = async function* (
   body: ReadableStream<Uint8Array>,
-  fault: (kind: 'transport' | 'malformed_stream', message: string) => Error,
+  fault: (
+    kind: 'transport' | 'stalled' | 'malformed_stream',
+    message: string,
+  ) => Error,
   check?: (value: Record<string, unknown>) => void,
   done?: () => void,
 ): AsyncGenerator<Record<string, unknown>> {
@@ -50,6 +56,9 @@ export let jsonFrames = async function* (
         part = await reader.read()
       } catch (error) {
         if ((error as Error)?.name == 'AbortError') throw error
+        if (error instanceof Stalled) {
+          throw fault('stalled', `stream stalled — ${error.message}`)
+        }
         throw fault('transport', 'error reading a body from connection')
       }
       pending += decoder.decode(part.value, { stream: !part.done })

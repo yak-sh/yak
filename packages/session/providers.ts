@@ -172,14 +172,31 @@ export let providerResolver = (
       return (await describeOnce(serve, serve.info ? found.name : undefined))
         .find((m) => m.name == found.name)
     }
-    let prepare = (req: Parameters<Model>[0], listing?: Listed) => {
+    // The provider's row, read per dispatch, so an edit to it applies to the
+    // next request without a restart.
+    let row = async () =>
+      found.provider
+        ? (await g.get([found.provider], ['provider']))[0]?.provider as
+          | Comp
+          | undefined
+        : undefined
+    let prepare = (
+      req: Parameters<Model>[0],
+      listing?: Listed,
+      provider?: Comp,
+    ) => {
       let modalities = listing?.modalities?.filter(
         (m): m is 'text' | 'image' | 'audio' =>
           m == 'text' || m == 'image' || m == 'audio',
       )
+      // A stall timeout the row names, else the provider's default.
+      let stall = provider?.stall_timeout
       return {
         ...req,
         ...!req.modalities && modalities?.length ? { modalities } : {},
+        ...req.stallTimeout == null && typeof stall == 'number'
+          ? { stallTimeout: stall }
+          : {},
       }
     }
     let confirm = async (listing?: Listed) => {
@@ -199,17 +216,16 @@ export let providerResolver = (
     }
     let wrapped: Model = Object.assign(async (req: Parameters<Model>[0]) => {
       let listing = await describe()
-      // Read retention per dispatch, not at startup or completion. The answer's
-      // explicit expiry wins; a row naming no retention leaves the expiry to
-      // the provider's own mark, which knows its documented lifetime if any.
-      let [providerRow] = found.provider
-        ? await g.get([found.provider], ['provider'])
-        : []
+      // Retention is read at dispatch, not at startup or completion. The
+      // answer's explicit expiry wins; a row naming no retention leaves the
+      // expiry to the provider's own mark, which knows its documented lifetime
+      // if any.
+      let provider = await row()
       let cache = {
         requestedAt: clock.now(),
-        retention: (providerRow?.provider as Comp | undefined)?.cache_retention,
+        retention: provider?.cache_retention,
       }
-      let reply = await serve(prepare(req, listing))
+      let reply = await serve(prepare(req, listing, provider))
       await confirm(listing)
       return reply.cacheExpiresAt === undefined && cache.retention == null
         ? reply
@@ -246,7 +262,7 @@ export let providerResolver = (
                   ...price ? { price } : {},
                 }], { trusted: true })
               }
-              await executor.submit(call, prepare(req, listing))
+              await executor.submit(call, prepare(req, listing, await row()))
             },
             resume: async (call) => {
               let reply = await executor.resume(call)

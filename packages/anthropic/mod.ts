@@ -37,6 +37,7 @@ import {
   type Tool,
   type Usage,
 } from '@yaks/model'
+import { stallMs, watched } from '@yaks/model/stall'
 import { anthropicDoc } from './vocab.ts'
 import { mark } from './mark.ts'
 import { READS } from './reads.ts'
@@ -361,7 +362,12 @@ export let messages = (options: Options): Model => {
     }
     let started = Date.now()
     await submitted(req)
-    let message = await send(options, key, '/v1/messages', {
+    // The reply streams through a fetch that fails once it goes quiet.
+    let watching = {
+      ...options,
+      fetch: watched(options.fetch ?? fetch, stallMs(req)),
+    }
+    let message = await send(watching, key, '/v1/messages', {
       method: 'POST',
       body: JSON.stringify(body),
       signal: req.signal,

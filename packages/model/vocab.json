@@ -69,6 +69,11 @@
           "type": "integer",
           "minimum": 1,
           "description": "documented cached-prefix retention in seconds for this provider\u2019s configured endpoint and models; used from request start only when the answer has no explicit expiry. Missing means unknown"
+        },
+        "stall_timeout": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "how long, in seconds, a stream from this provider may go without progress before its request fails as stalled; 0 for no limit. Missing means the default, five minutes"
         }
       }
     },

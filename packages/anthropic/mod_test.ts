@@ -247,6 +247,15 @@ test('an error event, a stream cut short or a failed connection is busy', async 
   }
 })
 
+test('a stream that goes quiet after its head is stalled, and asked again', async () => {
+  let quiet = () =>
+    Promise.resolve(new Response(new ReadableStream({ start() {} })))
+  let e = await messages({ key: () => 'k', fetch: quiet })(
+    ask({ stallTimeout: 0.01 }),
+  ).catch((e) => e)
+  equal([e.name, e.code, !!e.retry], ['ModelError', 'stalled', true])
+})
+
 test('a reply stopped at its output limit is cut, its last call as far as written', async () => {
   let stopped = (stop_reason: string, partial: string, ended = true) =>
     reply().flatMap((e): unknown[] =>

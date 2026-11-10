@@ -3,6 +3,7 @@
 // refusal means, and the message a reply's event stream builds.
 import { ModelError } from '@yaks/model'
 import { jsonFrames } from '@yaks/model/sse'
+import { Stalled } from '@yaks/model/stall'
 
 /** The API version every request names. */
 export let VERSION = '2026-10-21'
@@ -159,7 +160,8 @@ export let failure = (
 }
 
 /** A request to the API, refused as {@link failure} says. A connection that
- * fails is `busy`; a stop the caller asked for is thrown as its reason. */
+ * fails is `busy`, one a watched fetch gave up on `stalled`
+ * (@yaks/model/stall); a stop the caller asked for is thrown as its reason. */
 export let send = async (
   wire: Wire,
   key: string,
@@ -180,6 +182,7 @@ export let send = async (
     response = await (wire.fetch ?? fetch)(url, { ...init, headers })
   } catch (e) {
     init.signal?.throwIfAborted()
+    if (e instanceof Stalled) throw fault('stalled', `stalled — ${e.message}`)
     throw new ModelError('busy', (e as Error)?.message ?? String(e), {})
   }
   if (response.ok) return response
@@ -187,13 +190,18 @@ export let send = async (
   throw failure(response.status, body, response.headers)
 }
 
+// A dropped connection is the API being busy; one that went quiet is a stall.
+// Both told us nothing about the request, so either is asked again.
 let fault = (kind: string, message: string) =>
   kind == 'transport'
     ? new ModelError('busy', message, {})
+    : kind == 'stalled'
+    ? new ModelError('stalled', message, {})
     : new ModelError(kind, message)
 
 /** A reply's events as they arrive; an error event is thrown as
- * {@link failure} reads it, and a dropped connection is `busy`. */
+ * {@link failure} reads it, a dropped connection is `busy` and one that went
+ * quiet `stalled`. */
 export let events = (body: ReadableStream<Uint8Array>) =>
   jsonFrames(body, fault, (e) => {
     if (typeof e.type != 'string') {

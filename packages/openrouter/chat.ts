@@ -12,9 +12,15 @@ import {
   submitted,
 } from '@yaks/model'
 import { jsonFrames } from '@yaks/model/sse'
+import { Stalled, stallMs, watched } from '@yaks/model/stall'
 import { mediaRoom, type MediaStore } from '@yaks/openai'
 import { chatTools, messages } from './prompt.ts'
 import { deliver, type Output } from './media.ts'
+
+// A media answer that went quiet. Not asked again: the provider may already
+// have made what it was paid for.
+let stalled = (error: Stalled) =>
+  new ModelError('stalled', `OpenRouter media stalled — ${error.message}`)
 
 export type MediaOptions = MediaStore & {
   /** Audio settings vary by model; Lyria uses MP3 without a voice. */
@@ -134,7 +140,8 @@ export let chat = async (
   if (media) await mediaRoom(options.media)
   await submitted(req)
   try {
-    response = await (options.fetch ?? fetch)(
+    // The answer streams through a fetch that fails once it goes quiet.
+    response = await watched(options.fetch ?? fetch, stallMs(req))(
       'https://openrouter.ai/api/v1/chat/completions',
       init,
     )
@@ -143,6 +150,7 @@ export let chat = async (
       req.signal?.aborted || options.signal?.aborted ||
       (error instanceof Error && error.name == 'AbortError')
     ) throw error
+    if (error instanceof Stalled) throw stalled(error)
     throw new ModelError(
       'transport',
       'OpenRouter media connection failed',
@@ -267,7 +275,13 @@ export let chat = async (
         'OpenRouter audio stream ended before completion',
       )
     }
-  } else await receive(obj(await response.json()))
+  } else {
+    await receive(obj(
+      await response.json().catch((error) => {
+        throw error instanceof Stalled ? stalled(error) : error
+      }),
+    ))
+  }
   if (!id) {
     throw new ModelError('media_response', 'OpenRouter returned no response ID')
   }

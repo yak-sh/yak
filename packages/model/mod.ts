@@ -267,6 +267,11 @@ export type Request = {
    * it caches; a provider offers a few lifetimes and keeps the longest one
    * not over this, or its default where none fits or this is absent */
   cacheRetention?: number
+  /** how long, in seconds, the reply's stream may go without progress (the
+   * connection, its first byte, any gap after) before the request fails as
+   * `stalled`; `@yaks/model/stall` `STALL_TIMEOUT` where absent, 0 for no
+   * limit. Its provider's row may name its own (`provider{stall_timeout}`). */
+  stallTimeout?: number
 }
 
 /** One typed question, in Jev's terms: a `noul` is answered with the

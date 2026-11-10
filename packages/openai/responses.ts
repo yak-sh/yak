@@ -308,6 +308,9 @@ let ask = (opts: Options) => {
             : req.signal ?? opts.signal,
           noRetry: () => checkpointed || !!req.onText && textIndexes.size > 0,
           conversation: req.conversation,
+          ...req.stallTimeout == null
+            ? {}
+            : { stallMs: Math.max(0, req.stallTimeout) * 1000 },
           // Image payloads must never escape through diagnostic/event subscribers.
           event: async (event) => {
             let response = record(event.response) ? event.response : undefined
