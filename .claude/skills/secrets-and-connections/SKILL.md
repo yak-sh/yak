@@ -3,7 +3,8 @@ name: secrets-and-connections
 description: >
   Use for API keys, tokens, passwords, credentials, vaults, secrets,
   connections, integrations, OAuth, egress, environment reads for
-  credentials, or auth failures (401/403, not connected). Covers local and
+  credentials, auth failures (401/403, not connected), or choosing which
+  outside provider a feature calls (comped credits). Covers local and
   yaks.app secrets. Re-keying stored links/tokens is data-migration.
 ---
 
@@ -174,6 +175,17 @@ has to be given again. The original failure reaches the host's reporter; the
 secret holds its operation's outcome. A successful seal removes `failed`.
 Deleting the entity, or its `secret` component, drops it from the vault
 (`unsealed(name)` is that bundle).
+
+## Choosing a provider: comped credits
+
+Several vendors gave us free credit, so a call to them costs us nothing while
+it lasts, and list price is the wrong number to plan with. D-153914 "Comped
+credits" has a row per program: the amount, when it ends, what the owner said
+it may be spent on (Anthropic's is for product use, not our own coding), what
+is left, and the title of the 1Password item that holds its key. Read it
+(`graph_show` D-153914) before choosing which provider a feature calls or
+estimating what one costs. When you learn an amount, an end date or a balance
+it lacks, or a new program arrives, edit its row.
 
 ## Connections: a credential for an outside service
 
