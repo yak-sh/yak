@@ -697,7 +697,8 @@ finds the model by its own name (`model.name`, the same row in every graph) and
 asks the one of `implementations` whose provider the graph's `serves` edges say
 serves it, under the name that provider calls it. Which providers answer is
 therefore the serving host's choice of `implementations`. `offers` and
-`offerFor` are the lookups beneath it.
+`offerFor` are the lookups beneath it. [@yaks/harness](../harness/README.md)
+mounts it for a `yak` config, over the providers the config names to `serve`.
 
 The forwarding host builds a `Model` with `forwarding(lent)`, which sends each
 model request through `lent.fetch` to `PATH` under `options.base`. Where that

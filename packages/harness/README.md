@@ -123,15 +123,16 @@ budgets.
 
 ## Exports
 
-| Import                  | Main exports                                                                   |
-| ----------------------- | ------------------------------------------------------------------------------ |
-| `@yaks/harness`         | `agent`, `seed`, `sessionTitle`, `titleOf`, and their types; web platform only |
-| `@yaks/harness/default` | `defaultUsing(graph)` and `HARNESS`, alone, for packages that request sessions |
-| `@yaks/harness/local`   | `local`, `hosted`, `harnessTools`, `graphTools`, and their types               |
-| `@yaks/harness/tui`     | `views`: a lone session or entry, drawn as the terminal app                    |
-| `@yaks/harness/vocab`   | `docs`, the harness's own words                                                |
-| `@yaks/harness/tools`   | `runs(host)`, the functions behind the tools `vocab.json` declares             |
-| `@yaks/harness/cli`     | `commands`, the session terminal control                                       |
+| Import                  | Main exports                                                                        |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| `@yaks/harness`         | `agent`, `seed`, `sessionTitle`, `titleOf`, and their types; web platform only      |
+| `@yaks/harness/default` | `defaultUsing(graph)` and `HARNESS`, alone, for packages that request sessions      |
+| `@yaks/harness/local`   | `local`, `hosted`, `harnessTools`, `graphTools`, and their types                    |
+| `@yaks/harness/tui`     | `views`: a lone session or entry, drawn as the terminal app                         |
+| `@yaks/harness/vocab`   | `docs`, the harness's own words                                                     |
+| `@yaks/harness/tools`   | `runs(host)`, the functions behind the tools `vocab.json` declares                  |
+| `@yaks/harness/cli`     | `commands`, the session terminal control                                            |
+| `@yaks/harness/routes`  | `routes(host, options)`: `POST /model/step`, answered from this machine's providers |
 
 ## Use
 
@@ -992,13 +993,13 @@ compatibility check when an older binary first opens the file.
 ## The harness as a plugin module
 
 A `yak` config lists `@yaks/harness` as one plugin among the packages it runs
-over, and `@yaks/cli`'s `compose` takes three facets from it: `/vocab`, whose
+over, and `@yaks/cli`'s `compose` takes four facets from it: `/vocab`, whose
 `docs` are the harness's own words (`home` and its tools), `/tools`, the
-functions behind them, and `/effects`, the runner lent this machine. Every other
-word a harness graph speaks is its own package's plugin. The terminal app's
-worker composes the graph its command's config names, for the graph role, and
-lends it the runner itself. Importing the facets does not run a session, open a
-database, or start a server.
+functions behind them, `/effects`, the runner lent this machine, and `/routes`,
+where it answers another host's model steps. Every other word a harness graph
+speaks is its own package's plugin. The terminal app's worker composes the graph
+its command's config names, for the graph role, and lends it the runner itself.
+Importing the facets does not run a session, open a database, or start a server.
 
 `session_new` and `session_send` are offered through MCP and the command line.
 Pass `wait: false` to either tool to return the session immediately; the runner
@@ -1015,6 +1016,25 @@ Both word orders (`session list`, `list
 session`) derive from the same noun and
 verb, without alias declarations. See
 [the command-line entry point and the export shape](../cli/README.md).
+
+### Answering another host's model steps
+
+A machine can serve its providers to another host
+([@yaks/model](../model/README.md#a-provider-served-by-a-machine)). Where the
+config names providers to `serve`, a process serving `web` takes
+`@yaks/harness/routes` and answers `POST /model/step` from them, streaming each
+reply as it arrives:
+
+```json
+{ "use": "@yaks/harness", "with": { "serve": ["claude", "openai"] } }
+```
+
+`serve` lists providers by `provider.name`, each one a provider plugin the same
+config names. Without it there is no route, so listing the harness lends no
+subscription, and a model only an unlisted provider serves is refused
+(`provider`). The providers load at the first step. The route does not say who
+may ask: the machine opens the path to the other host as it opens any other, for
+example in [@yaks/tunnel](../tunnel/README.md)'s `routes`.
 
 Mouse clicks select session rows, **New session**, and browser controls.
 Clicking a row focuses the sidebar without changing the current mode or

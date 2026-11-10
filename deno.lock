@@ -3673,6 +3673,7 @@
             "npm:@yaks/topic@0.2.23",
             "npm:@yaks/tracker@0.2.33",
             "npm:@yaks/tui@0.2.24",
+            "npm:@yaks/tunnel@0.2.24",
             "npm:@yaks/ui@0.2.30",
             "npm:@yaks/vocab@0.2.32",
             "npm:preact@10.29.7"

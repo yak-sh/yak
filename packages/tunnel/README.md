@@ -139,6 +139,15 @@ saying which tools the tunnel offers and who its callers are:
 Whatever a request through the tunnel names in `x-via`, it never speaks as one
 of the machine's own sessions, and never as the machine's person.
 
+### Model steps through the tunnel
+
+A hosted space runs model steps on the machine's own providers by opening
+`/model/step` (@yaks/model/step), which
+[@yaks/harness](../harness/README.md#answering-another-hosts-model-steps)
+answers from the providers its `serve` option names. The gateway hands back the
+machine's answer as it arrives, so the reply streams to the platform piece by
+piece.
+
 With a token, the service runs `cloudflared` and starts it again whenever it
 exits, after a pause that grows to a minute while it keeps failing. The machine
 needs `cloudflared` on its `PATH`, or `cloudflared` in the options names the one

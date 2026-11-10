@@ -47,10 +47,12 @@ test('changing opened routes changes the same filter', () => {
   only(req)
 })
 
+// The gateway's module, loaded as the platform uploads it.
+let { default: gateway } = await import(
+  `data:application/javascript,${encodeURIComponent(GATEWAY)}`
+)
+
 test('the gateway marks every request it passes on, whatever it said', async () => {
-  let { default: gateway } = await import(
-    `data:application/javascript,${encodeURIComponent(GATEWAY)}`
-  )
   let reached: Request[] = []
   let env = {
     BOX: {
@@ -74,4 +76,41 @@ test('the gateway marks every request it passes on, whatever it said', async () 
   assertEquals(reached.map((r) => r.headers.get(HEADER)), ['1', '1'])
   assertEquals(new URL(reached[0].url).pathname, '/mail/inbound')
   assertEquals(await reached[0].text(), 'a letter')
+})
+
+// A streamed answer, read through the gateway as the file loads: the first
+// piece while the machine still holds the rest.
+let streamed = await (async () => {
+  let more = Promise.withResolvers<void>()
+  let said = (text: string) => new TextEncoder().encode(text)
+  let env = {
+    BOX: {
+      fetch: () =>
+        Promise.resolve(
+          new Response(
+            new ReadableStream<Uint8Array>({
+              async start(out) {
+                out.enqueue(said('first'))
+                await more.promise
+                out.enqueue(said('last'))
+                out.close()
+              },
+            }),
+          ),
+        ),
+    },
+  }
+  let response: Response = await gateway.fetch(
+    new Request('http://tunnel/model/step', { method: 'POST', body: '{}' }),
+    env,
+  )
+  let reader = response.body!.getReader()
+  let read = async () => new TextDecoder().decode((await reader.read()).value)
+  let first = await read()
+  more.resolve()
+  return [first, await read()]
+})()
+
+test('the gateway passes a streamed answer on as it arrives', () => {
+  assertEquals(streamed, ['first', 'last'])
 })
