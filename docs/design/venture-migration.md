@@ -27,10 +27,11 @@ values were read or transferred.
 | account_link_sends, consumed_link_tokens, account_revocations, reorder_attempts |  0 each | Current D1 export                                             |
 | erasure_requests, orderable                                                     |  0 each | Current D1 export                                             |
 | activations                                                                     |      41 | Current D1 export                                             |
-| ops_alert_outbox                                                                |      11 | Current D1 export; dispositions unverified                    |
+| ops_alert_outbox                                                                |      11 | 1 canary and 10 monitor failures, all undelivered             |
 | canary_runs                                                                     |   4,427 | Current D1 export; operational history                        |
 | signups                                                                         |      38 | Read-only waitlist count; zero suppressed, zero unsent guides |
-| R2 objects and Cloudflare queue messages                                        | unknown | No object/queue inventory obtained                            |
+| R2 objects                                                                      |       0 | `wrangler r2 bucket info printbound-pdfs`; bucket size 0 B    |
+| Cloudflare queue messages                                                       | unknown | One source producer and consumer; metadata gives no backlog   |
 | CrayonBloom production rows and assets                                          | unknown | `railway status --json` returned Unauthorized                 |
 
 The exported PrintBound schema lacks `drafts`, `stripe_delivery_verified`,
@@ -118,7 +119,7 @@ signed download still works.
 
 ## Cutover and rollback
 
-1. Obtain an authorized CrayonBloom production inventory, PrintBound R2/queue
+1. Obtain an authorized CrayonBloom production inventory, PrintBound queue
    counts, both merchant/refund ledgers and outstanding provider receipts. Save
    source checkpoints privately. Reconcile the 11 PrintBound alert rows without
    activating their deliveries.
