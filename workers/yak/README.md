@@ -1165,16 +1165,19 @@ the hosted model writes a line there (`operator_hosted{code}`) telling the model
 to say so once; the line stands until the machine answers that conversation
 again, which marks it `completed`.
 
-Only the owner's own words fall that far. A turn nobody asked for at that moment
-(a knock from his machine, a wake-up, a subscription, a break to fix: the
-channels operator-channels.ts `UNASKED` names, and scheduled work's helper) has
-no hosted leg, so the space never pays for it. Its ask is left owed
-(`provisional`), and the runner leaves it alone (`answers`) until the machine
-looks able: once a `HEAD` of `/model/step` through the tunnel answers under 500,
-looked at once a minute at most, or, where the machine's providers refused it,
-an hour after it failed. Each ask again spends one of its run's three tries; a
-look spends none. Words the owner gives meanwhile owe a run of their own, which
-does not wait.
+Only the owner's own words, and words that tell him something failed (a break to
+fix, what another conversation raised), fall that far. A turn bringing routine
+news nobody asked for at that moment (a knock from his machine, a wake-up, a
+subscription: the channels operator-channels.ts `UNASKED` names, and scheduled
+work's helper) has no hosted leg, so the space never pays for it. Its ask is
+left owed (`provisional`) as a wait (`retry.defer`), which spends none of its
+run's tries and files nothing, however many days the machine is away. The runner
+leaves it alone (`answers`) until the machine looks able: once a `HEAD` of
+`/model/step` through the tunnel answers under 500, looked at once a minute at
+most, or, where the machine's providers refused it, an hour after it failed.
+Knocks that arrive meanwhile are lines of the same conversation, so when the
+machine serves it, one turn answers all of them. Words the owner gives meanwhile
+owe a run of their own, which does not wait.
 
 Measured on 2026-11-10 on the Operator page's socket, in the owner's own
 conversation: a step on `sonnet`, served by the `claude` CLI on his machine,

@@ -396,14 +396,16 @@ export type Answered = {
 export class ModelError extends Error {
   code: string
   /** The failure may pass: the caller can ask again, no sooner than `after`
-   * milliseconds where the provider said how long to wait. */
-  retry?: { after?: number }
+   * milliseconds where the provider said how long to wait. With `defer`, it
+   * is no failure but a wait for something outside: asked again as the same
+   * attempt, however long that takes (@yaks/effects spends no try on it). */
+  retry?: { after?: number; defer?: boolean }
   /** what the provider sent, where it sent anything */
   response?: Answered
   constructor(
     code: string,
     message = code,
-    retry?: { after?: number },
+    retry?: { after?: number; defer?: boolean },
     response?: Answered,
   ) {
     super(message)

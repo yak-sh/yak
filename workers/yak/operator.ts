@@ -1029,8 +1029,8 @@ export let operating = (
     return reachMachine(space, o.person, () => topOf(store, session))
   }
   // Whether the turn a session takes was started without its person asking
-  // at that moment: the newest words of its conversation came on a channel
-  // nobody typed in (operator-channels.ts `UNASKED`), or it is scheduled
+  // at that moment: the newest words of its conversation are routine news
+  // (operator-channels.ts `UNASKED`), or it is scheduled
   // work's helper (operator-work.ts). Such a turn never falls to a hosted
   // model, which would spend the space's money nobody chose to spend: it
   // waits for its person's machine.
@@ -1268,8 +1268,8 @@ export let operating = (
   // not asked again until the machine looks able: one the tunnel did not
   // reach (`unreachable`, `stalled`) once the tunnel reaches it, looked at
   // once per AWAY at most; one whose providers refused it (an allowance
-  // spent), SPENT after it failed. A look is free, and an ask spends one of
-  // its run's tries.
+  // spent), SPENT after it failed. Neither a look nor an ask spends a try:
+  // the machine's failure is a wait (operator-machine.ts `away`).
   let looked = new Map<string, { at: number; up: Promise<boolean> }>()
   let up = (session: string, reach: typeof globalThis.fetch) => {
     let held = looked.get(session)

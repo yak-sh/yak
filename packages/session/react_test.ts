@@ -1414,6 +1414,29 @@ test('outside the pool, a failure that may pass stands at once as an interruptio
   }
 })
 
+test('a wait for something outside stays owed on its last try, files nothing, and one turn answers what came meanwhile', async () => {
+  let g = world(), reported: unknown[] = []
+  let away = () =>
+    new ModelError('stalled', 'machine away', { after: 0, defer: true })
+  let deps = {
+    model: failing(away).model,
+    tools: [],
+    mint,
+    report: (e: unknown) => void reported.push(e),
+    attempt: { last: () => true, progressed: () => Promise.resolve() },
+  }
+  let error = await react(g, ids.s, deps).catch((e) => e)
+  assertEquals(error.retry, { after: 0, defer: true })
+  let [ask] = (await transcript(g, ids.s)).filter((b) => b.ask)
+  assertEquals(ask.provisional != null, true)
+  assertEquals(reported, [])
+  for (let i = 0; i < 20; i++) await appendEntry(g, ids.s, `knock ${i}`)
+  let { model, asked } = scripted([says('r1', 'all seen')])
+  await react(g, ids.s, { ...deps, model })
+  assertEquals(asked.length, 1)
+  assertEquals(JSON.stringify(asked[0].items).includes('knock 19'), true)
+})
+
 test('a provider’s refusal is final and keeps its own code, streamed or not', async () => {
   for (
     let [code, said] of [

@@ -72,8 +72,9 @@ export let namesFor = (
  * are thrown as they came. `fell` is told before a hosted leg is asked after
  * another failed, with the request it will be sent and the failure, and
  * answers the request to send. A step with no hosted leg waits for the
- * machine: its last failure before any output is thrown as one that may pass
- * (`retry`, after {@link AWAY} at the least), so whoever runs it asks again.
+ * machine: its last failure before any output is thrown as a wait
+ * (`retry.defer`, after {@link AWAY} at the least), so whoever runs it asks
+ * again, however long the machine is away, and counts no failure.
  *
  * ```ts
  * import { type Model, ModelError } from '@yaks/model'
@@ -90,7 +91,10 @@ export let namesFor = (
  * let waits = falling(() => [{ model: off, name: 'mine' }])
  * let error = await waits({ model: 'mine', items: [], tools: [] })
  *   .catch((e) => e)
- * equal([error.code, error.retry], ['unreachable', { after: 60_000 }])
+ * equal([error.code, error.retry], ['unreachable', {
+ *   after: 60_000,
+ *   defer: true,
+ * }])
  * ```
  */
 export let falling = (
@@ -128,12 +132,12 @@ async (req) => {
   throw failed ?? new ModelError('provider', 'No model answers this step')
 }
 
-// A machine's failure as one that may pass: asked again after the machine's
-// own wait, or after AWAY.
+// A machine's failure as a wait: asked again after the machine's own wait, or
+// after AWAY, spending none of its run's tries.
 let away = (error: ModelError) =>
   new ModelError(
     error.code,
     error.message,
-    { after: Math.max(error.retry?.after ?? 0, AWAY) },
+    { after: Math.max(error.retry?.after ?? 0, AWAY), defer: true },
     error.response,
   )

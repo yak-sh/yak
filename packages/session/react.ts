@@ -475,6 +475,10 @@ let lost =
   /^(transport|media_response|media_payload|media_storage|http_408|http_5\d\d)$/
 let passing = (e: unknown): e is ModelError =>
   e instanceof ModelError && (!!e.retry || lost.test(e.code))
+// A failure that is a wait for something outside (`retry.defer`): owed again
+// however many times it comes, and no incident.
+let deferring = (e: unknown): e is ModelError =>
+  e instanceof ModelError && e.retry?.defer === true
 
 // What a failed request's line carries: the provider's code, and what it sent
 // where this graph keeps it (@yaks/model `response{body, headers}`).
@@ -2021,7 +2025,8 @@ export let react = async (
       ? e
       : undefined
     let retried = !overflow && passing(e) && !modalities?.includes('audio') &&
-      !stream.size && !!deps.attempt && !deps.attempt.last()
+      !stream.size && !!deps.attempt &&
+      (deferring(e) || !deps.attempt.last())
     let defect = !(e instanceof ModelError) &&
       !(e instanceof Error && e.name == 'AbortError')
     let failed = await finish(
@@ -2069,7 +2074,9 @@ export let react = async (
             'Response interrupted: ' + String(e),
           ),
       ],
-      defect || transportFailure(e) ? { error: e, phase } : undefined,
+      (defect || transportFailure(e)) && !deferring(e)
+        ? { error: e, phase }
+        : undefined,
     )
     // Text streamed before the failure stays, unless recovery took the
     // attempt from this worker.
