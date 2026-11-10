@@ -2,6 +2,7 @@
 // The wrapper verifies legacy signed sessions/cookies at its authentication
 // boundary and passes only the resolved principal; source secrets stay there.
 import { type Bundle, sha256 } from '@yaks/graph'
+import type { Rails } from './rails.ts'
 
 export type LegacyPrincipal = { owner?: string; via?: string }
 export type LegacyStore = {
@@ -10,11 +11,57 @@ export type LegacyStore = {
 }
 type LegacyRow = Bundle & {
   legacy_record?: { snapshot: Record<string, unknown> }
-  legacy_asset?: { role: string }
+  legacy_asset?: {
+    role: string
+    blob: string
+    mime: string
+    source_blob?: string
+  }
   print_receipt?: { receipt: Record<string, unknown> }
+}
+export type LegacyPorts = {
+  credentials?: Rails
+  asset?: (blob: string) => Promise<Response>
+  bind?: (
+    claim: { kind: 'user' | 'guest'; id: string },
+    caller: LegacyPrincipal,
+  ) => Promise<LegacyPrincipal>
+}
+
+/** A source signature and a vouched platform principal are both required by
+ * the binding boundary. A client-supplied email never participates. */
+export let legacyIdentity = async (
+  request: Request,
+  caller: LegacyPrincipal,
+  ports: LegacyPorts,
+  now: string,
+): Promise<LegacyPrincipal> => {
+  if (!ports.credentials || !ports.bind) return caller
+  let claims = await ports.credentials.identity(request, now)
+  if ((!caller.owner && !caller.via) || (!claims.user && !claims.guest)) {
+    return caller
+  }
+  return ports.bind(
+    claims.user
+      ? { kind: 'user', id: claims.user }
+      : { kind: 'guest', id: claims.guest! },
+    caller,
+  )
 }
 let records = async (db: LegacyStore, q: string): Promise<LegacyRow[]> =>
   await db.query(q) as LegacyRow[]
+let artifact = async (ports: LegacyPorts, blob: string): Promise<Response> => {
+  if (!ports.asset) {
+    throw Error('The legacy asset read boundary is unavailable')
+  }
+  let response = await ports.asset(blob)
+  if (!response.ok) {
+    throw Error(`Imported asset read failed (${response.status})`)
+  }
+  let headers = new Headers(response.headers)
+  headers.set('cache-control', 'no-store, private')
+  return new Response(response.body, { status: response.status, headers })
+}
 let json = (value: unknown, status = 200): Response =>
   Response.json(value, {
     status,
@@ -50,7 +97,7 @@ let valid = (value?: string): boolean =>
 let principal = (who: LegacyPrincipal): string[] => [
   ...(valid(who.owner) ? [`.legacy_record.owner=${who.owner}`] : []),
   ...(valid(who.via)
-    ? [`.legacy_record.via=${who.via}&!.legacy_record.owner`]
+    ? [`.legacy_record.via=${who.via}&!legacy_record.owner`]
     : []),
 ]
 
@@ -60,9 +107,23 @@ export let legacyPage = async (
   db: LegacyStore,
   who: LegacyPrincipal,
   now = new Date().toISOString(),
+  ports: LegacyPorts = {},
 ): Promise<Response | null> => {
   let path = new URL(request.url).pathname
-  let page = path.match(/^\/free_pages\/([^/]+)$/)
+  let blob = path.match(
+    /^\/rails\/active_storage\/blobs\/(?:redirect|proxy)\/([^/]+)\/[^/]+$/,
+  )
+  if (blob && request.method === 'GET') {
+    let value = decoded(blob[1])
+    let id = value && ports.credentials
+      ? await ports.credentials.blob(value, now)
+      : undefined
+    if (!id) return missing()
+    let [asset] = await records(db, `.legacy_asset.source_blob=${id}`)
+    if (!asset?.legacy_asset) return missing()
+    return artifact(ports, asset.legacy_asset.blob)
+  }
+  let page = path.match(/^\/free_pages\/([^/]+)(\/artwork)?$/)
   if (page && request.method === 'GET') {
     let token = decoded(page[1])
     if (!token) return missing()
@@ -72,6 +133,12 @@ export let legacyPage = async (
     )
     if (!row) return missing()
     let assets = await records(db, `.legacy_asset.record=${row.entity.eid}`)
+    if (page[2]) {
+      let asset = assets.find((r) => r.legacy_asset?.role === 'artwork')
+        ?.legacy_asset
+      if (!asset) return missing()
+      return artifact(ports, asset.blob)
+    }
     return json({
       prompt: row.legacy_record?.snapshot.prompt,
       status: row.legacy_record?.snapshot.status,

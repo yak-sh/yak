@@ -245,6 +245,27 @@ test('Cross-customer orders and missing source assets cannot be silently importe
   )
 })
 
+test('ActiveStorage variants retain their original blob and attachment links', () => {
+  let sourceRows = tables()
+  sourceRows.active_storage_variant_records = [{ id: 1, blob_id: 1 }]
+  sourceRows.active_storage_attachments.push({
+    id: 4,
+    blob_id: 2,
+    record_type: 'ActiveStorage::VariantRecord',
+    record_id: 1,
+    name: 'image',
+  })
+  let data = crayonbloom(source, sourceRows)
+  let variant = data.rows.find((r) =>
+    r.table === 'active_storage_variant_records'
+  )!
+  let attachment = data.rows.find((r) =>
+    r.table === 'active_storage_attachments' && r.data.id === 4
+  )!
+  equal(attachment.refs.record_id, variant.eid)
+  equal(variant.refs.blob_id, row('active_storage_blobs', 1).eid)
+})
+
 test('Historical order links require the mapped owner or guest principal', async () => {
   let request = new Request('https://fixture.test/orders/1')
   equal((await legacyPage(request, db, { via: guest }))!.status, 200)

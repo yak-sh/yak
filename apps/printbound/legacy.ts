@@ -96,6 +96,18 @@ let tool = {
     required: ['order_id', 'access_token'],
   },
 }
+let migrated = [
+  'get_print_quote',
+  'collect_shipping_address',
+  'create_checkout',
+  'storybook_guide',
+]
+let migrationTools = migrated.map((name) => ({
+  name,
+  description:
+    'Continue an existing PrintBound client into the reviewed-document storefront before pricing or checkout.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: true },
+}))
 
 /** The app wrapper supplies its trusted store; responses contain receipt fields only. */
 export let legacyPage = async (
@@ -156,11 +168,27 @@ export let legacyPage = async (
       serverInfo: { name: 'printbound-orders', version: '1' },
     })
   }
-  if (value.method === 'tools/list') return reply({ tools: [tool] })
+  if (value.method === 'tools/list') {
+    return reply({ tools: [tool, ...migrationTools] })
+  }
   let params = value.params as {
     name?: string
     arguments?: Record<string, unknown>
   } | undefined
+  if (
+    value.method === 'tools/call' && params?.name &&
+    migrated.includes(params.name)
+  ) {
+    let address =
+      new URL('.', request.headers.get('x-yak-address') ?? request.url).href
+    let message =
+      `Open ${address} to sign in, prepare your book and review its exact print files before requesting a quote or checkout. Existing order_id/access_token pairs continue to work with get_order_status.`
+    return reply({
+      isError: true,
+      structuredContent: { next: 'prepare', sign_in_url: address },
+      content: [{ type: 'text', text: message }],
+    })
+  }
   if (value.method !== 'tools/call' || params?.name !== 'get_order_status') {
     return json({
       jsonrpc: '2.0',

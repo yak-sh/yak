@@ -15,6 +15,7 @@
       "description": "A verified copy of a source attachment, linked to its original book, page or free printable.",
       "properties": {
         "record": { "type": "string" },
+        "source_blob": { "type": "string" },
         "role": { "type": "string" },
         "blob": { "type": "string" },
         "hash": { "type": "string" },

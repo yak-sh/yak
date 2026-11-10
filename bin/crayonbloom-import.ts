@@ -9,6 +9,11 @@ import { sha256 } from '@yaks/graph'
 
 export let crayonbloomTables: Catalog = {
   users: { key: ['id'] },
+  admin_notes: { key: ['id'], refs: { author_id: { table: 'users' } } },
+  support_requests: { key: ['id'] },
+  feedbacks: { key: ['id'] },
+  generation_requests: { key: ['id'] },
+  dot_shapes: { key: ['id'] },
   styles: { key: ['id'] },
   free_pages: {
     key: ['id'],
@@ -85,6 +90,7 @@ let records: Record<string, string> = {
   Book: 'books',
   BookPage: 'book_pages',
   FreePage: 'free_pages',
+  'ActiveStorage::VariantRecord': 'active_storage_variant_records',
 }
 
 /** Includes Rails' polymorphic attachment ownership in the resolved references. */
@@ -248,17 +254,18 @@ export let crayonbloomProjection = (
     }
     assets.set(row.eid, {
       ...archive(row),
-      legacy_asset: { record: record.eid, role: text(row.data.name), ...blob },
+      legacy_asset: {
+        record: record.eid,
+        role: text(row.data.name),
+        source_blob: text(row.data.blob_id),
+        ...blob,
+      },
     })
   }
   return (row) => {
     if (books.has(row.eid)) return books.get(row.eid)
     if (pages.has(row.eid)) return pages.get(row.eid)
     if (assets.has(row.eid)) return assets.get(row.eid)
-    if (
-      ['styles', 'active_storage_blobs', 'active_storage_variant_records']
-        .includes(row.table)
-    ) return undefined
     return {
       ...archive(row),
       ...(row.table === 'orders'

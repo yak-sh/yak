@@ -402,6 +402,9 @@
         },
         "mime": {
           "type": "string"
+        },
+        "source_blob": {
+          "type": "string"
         }
       },
       "component": true,

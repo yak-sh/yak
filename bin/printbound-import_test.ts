@@ -184,3 +184,47 @@ test('The existing MCP status call answers through its original tool name and ar
   equal(result.result.structuredContent.order_id, 'order-1')
   equal(response!.headers.get('cache-control'), 'no-store, private')
 })
+
+test('Published quote, shipping, checkout and guide names return a supported migration step', async () => {
+  for (
+    let name of [
+      'get_print_quote',
+      'collect_shipping_address',
+      'create_checkout',
+      'storybook_guide',
+    ]
+  ) {
+    let response = await legacyPage(
+      new Request('https://fixture.test/mcp', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-yak-address': 'https://fixture.test/printbound/mcp',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 9,
+          method: 'tools/call',
+          params: {
+            name,
+            arguments: { quote_id: 'old-quote', email: 'reader@example.test' },
+          },
+        }),
+      }),
+      {
+        query: () => {
+          throw Error(
+            'Migration must not read a private order or initiate checkout',
+          )
+        },
+      },
+    )
+    let result = await response!.json()
+    equal(result.error, undefined)
+    equal(
+      result.result.structuredContent.sign_in_url,
+      'https://fixture.test/printbound/',
+    )
+    equal(result.result.structuredContent.next, 'prepare')
+  }
+})
