@@ -563,9 +563,23 @@ export let cli = async (
     // asked of the host, exactly as a line aimed there would ask it.
     let far: Ctx = { ...c, config: undefined }
     let at = c
-    let found = commandFor(tools, rest) ??
-      commandFor(await fetched(), rest) ??
-      commandFor(await fetched(true), rest)
+    // A held list is trusted for what it holds, never for what it lacks: a
+    // word it lacks is asked of its source again at once, and a line the
+    // schema it holds refuses (an argument added since) is read against the
+    // source's list once more before it is refused (`again`).
+    let lookup = async (list: (fresh: boolean) => Promise<Command[]>) => {
+      let held = await list(false)
+      let found = commandFor(held, rest)
+      if (found) {
+        let again = async () => commandFor(await list(true), rest)
+        return { found, list: held, again }
+      }
+      let now = await list(true)
+      return { found: commandFor(now, rest), list: now, again: undefined }
+    }
+    let found = commandFor(tools, rest)
+    let again: (() => Promise<typeof found>) | undefined
+    if (!found) ({ found, again } = await lookup(fetched))
     let page = !found
       ? nounUsage(await c.all(), rest[0], opts.globalFlags)
       : undefined
@@ -580,12 +594,12 @@ export let cli = async (
       if (stray) found = { verb: stray, args: rest.slice(1) }
       else if (onward && opts.more) {
         let more = opts.more
-        let theirs: Command[]
-        let ask = async (fresh: boolean) => [...await more(far, { fresh })]
+        let theirs: Awaited<ReturnType<typeof lookup>>
         try {
-          // The host's list is a cache too: a word it lacks is asked again.
-          theirs = await ask(false)
-          if (!commandFor(theirs, rest)) theirs = await ask(true)
+          // The host's list is a cache too.
+          theirs = await lookup(async (fresh) => [
+            ...await more(far, { fresh }),
+          ])
         } catch (e) {
           // Most often a typo, and the host only a second place to look: say
           // where the commands are listed, then what asking the host needs.
@@ -597,9 +611,9 @@ export let cli = async (
                 : (e as Error).message),
           )
         }
-        found = commandFor(theirs, rest)
+        ;({ found, again } = theirs)
         page = !found
-          ? nounUsage([...tools, ...theirs], rest[0], opts.globalFlags)
+          ? nounUsage([...tools, ...theirs.list], rest[0], opts.globalFlags)
           : undefined
         if (!found && !page) {
           let stray = await opts.stray?.(rest[0], rest.slice(1), far)
@@ -631,17 +645,12 @@ export let cli = async (
       return 0
     }
     try {
-      // A held list is trusted for what it holds, never for what it lacks: a
-      // line its tool's cached schema refuses (an argument added since) is
-      // read against the server's list once before it is refused.
       let given = await argsFor(found.verb, found.args, c.reads).catch(
         async (e) => {
-          let held = extra?.includes(found!.verb) && !asked
-          if (!(e instanceof Usage) || !held) throw e
-          let again = commandFor(await fetched(true), rest)
-          if (!again) throw e
-          found = again
-          return await argsFor(again.verb, again.args, c.reads)
+          let now = e instanceof Usage && await again?.()
+          if (!now) throw e
+          found = now
+          return await argsFor(now.verb, now.args, c.reads)
         },
       )
       return await found.verb.run(

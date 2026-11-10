@@ -299,17 +299,24 @@ test('an argument a cached schema lacks is read against the server\u2019s list o
     },
     run: (args) => (args.into ? 7 : 0),
   })
+  // The host's list, asked from the host itself or past a graph at home that
+  // lacks the tool.
   let fresh: boolean[] = []
-  let more: Opts['more'] = (_c, o) => {
+  let more: Opts['more'] = (c, o) => {
+    if (c.config) return []
     fresh.push(!!o?.fresh)
     return [ship(o?.fresh ? ['app', 'into'] : ['app'])]
   }
-  assertEquals(await ran([], ['ship', '--into=web'], { more }), 7)
-  assertEquals(fresh, [false, true])
-  // Still unknown on the server's own list: refused, after one extra ask.
-  fresh = []
-  assertEquals(await ran([], ['ship', '--nope=1'], { more }), 2)
-  assertEquals(fresh, [false, true])
+  let home = (name: string) => name == 'YAK_CONFIG' ? 'home.json' : undefined
+  for (let env of [() => undefined, home]) {
+    fresh = []
+    assertEquals(await ran([], ['ship', '--into=web'], { more, env }), 7)
+    assertEquals(fresh, [false, true])
+    // Still unknown on the server's own list: refused, after one extra ask.
+    fresh = []
+    assertEquals(await ran([], ['ship', '--nope=1'], { more, env }), 2)
+    assertEquals(fresh, [false, true])
+  }
 })
 
 test('`yak command` builds the command call, with the app it was given', async () => {

@@ -8,7 +8,7 @@ import { human } from '@yaks/id'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { cli } from './run.ts'
-import { tokenFor } from './store.ts'
+import { cached, remember, tokenFor } from './store.ts'
 import { own, YAK } from './main.ts'
 import { close, opened } from './local.ts'
 
@@ -130,5 +130,94 @@ test('init writes a config whose graph knows its person', async () => {
     )
   } finally {
     Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+// A host a release has moved on from what this machine cached: its `connect`
+// now takes `asks`, which the cached schema lacks, and its `about` names
+// roster v2 where the cache is stamped `version`. What comes back is every
+// exit code, every method and tool asked, and the cache after the lines ran.
+let moved = async (version: string | undefined, lines: string[][]) => {
+  let home = Deno.makeTempDirSync()
+  let connect = (...props: string[]) => ({
+    name: 'connect',
+    inputSchema: {
+      type: 'object',
+      properties: Object.fromEntries(props.map((p) => [p, { type: 'object' }])),
+    },
+  })
+  let tools = [{ name: 'about' }, connect('name', 'asks')]
+  let about = {
+    content: [{ type: 'text', text: 'roster v2' }],
+    structuredContent: {
+      result: [{
+        entity: { eid: '$said' },
+        output: { value: { roster: { version: 'v2' } } },
+      }],
+    },
+  }
+  let asked: string[] = []
+  try {
+    let old = [{ name: 'about' }, connect('name')]
+    await remember('yaks.test', { version, tools: old }, home)
+    let codes = []
+    for (let argv of lines) {
+      codes.push(
+        await cli(own, {
+          ...YAK,
+          argv,
+          env: (name) => name == 'YAKS_HOME' ? home : undefined,
+          host: 'yaks.test',
+          reads: { file: () => '', stdin: () => '' },
+          out: () => {},
+          note: () => {},
+          ask: (method, params) => {
+            let name = (params as { name?: string } | undefined)?.name
+            asked.push(name ?? method)
+            if (method == 'tools/list') return Promise.resolve({ tools })
+            if (method != 'tools/call') return Promise.resolve({})
+            return Promise.resolve(
+              name == 'about'
+                ? about
+                : { content: [{ type: 'text', text: 'ok' }] },
+            )
+          },
+        }),
+      )
+    }
+    let now = await cached('yaks.test', home)
+    let asks = now?.tools.find((t) => t.name == 'connect')?.inputSchema
+      ?.properties?.asks
+    return { codes, asked, version: now?.version, asks: !!asks }
+  } finally {
+    Deno.removeSync(home, { recursive: true })
+  }
+}
+
+test('a cached schema that lacks an argument is listed again before the line is refused', async () => {
+  assertEquals(
+    await moved('v1', [['connect', '--asks', '{}'], [
+      'connect',
+      '--asks',
+      '{}',
+    ]]),
+    {
+      codes: [0, 0],
+      asked: ['initialize', 'tools/list', 'connect', 'connect'],
+      version: undefined,
+      asks: true,
+    },
+  )
+})
+
+test('an about that does not confirm the cached list lists again, stamped', async () => {
+  // Stamped with another version, or with none: either may be any release.
+  for (let version of ['v1', undefined]) {
+    assertEquals(await moved(version, [['about'], ['about']]), {
+      codes: [0, 0],
+      asked: ['about', 'initialize', 'tools/list', 'about'],
+      version: 'v2',
+      asks: true,
+    })
   }
 })

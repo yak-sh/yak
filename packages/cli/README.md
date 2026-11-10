@@ -792,7 +792,10 @@ echo '{"hook_event_name":"UserPromptSubmit"}' | yak session context --hook -
 | `tools.json`                   | Per-host tool schemas, protocol version, roster version, and vocabulary |
 
 The tool cache avoids an MCP round trip for ordinary calls. A server response
-that reports a changed roster invalidates or updates the cache.
+that reports a changed roster invalidates the cache, and an `about` naming a
+version the cache is not stamped with lists the tools again and stamps them with
+it. A command line the cached schema refuses, such as an argument a release
+added, is read against a fresh list once before it is refused.
 
 The package exports eight entry points:
 

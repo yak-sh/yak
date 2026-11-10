@@ -23,24 +23,27 @@ import type { Command, Ctx } from './run.ts'
 import type { Drawn } from './answer.ts'
 import { initialize, type Rpc } from './rpc.ts'
 import { schemaOf } from './member.ts'
-import { type Result, rosterAfter, saidBy } from './roster.ts'
+import { type Result, rosterAfter, saidBy, versionIn } from './roster.ts'
 import { cached, forget, remember, type Roster } from './store.ts'
 import { type Listed, spelling } from './tool.ts'
 
 /** The tool list for a host: the cached one, or an `initialize` handshake
  * followed by `tools/list` — always the latter when `fresh`. The protocol
- * version is negotiated on that same path and cached beside the list. */
+ * version is negotiated on that same path and cached beside the list, and so
+ * is the roster `version` an `about` answered just before it (roster.ts). */
 export let rosterOf = async (
   host: string,
   ask: Rpc,
   state?: string,
   fresh = false,
+  version?: string,
 ): Promise<Roster> => {
   let kept = fresh ? null : await cached(host, state)
   if (kept) return kept
   let hello = await initialize(ask)
   let listed = await ask('tools/list')
   let roster: Roster = {
+    ...version ? { version } : {},
     protocol: String(hello.protocolVersion ?? ''),
     tools: (listed.tools ?? []) as Listed[],
   }
@@ -117,21 +120,19 @@ export let printed = async (
   drawing?: Drawing,
 ): Promise<number> => {
   let { text, stale } = saidBy(said)
-  let held = stale || !roster
-    ? undefined
-    : rosterAfter(roster, name, said) ?? undefined
   // What this result reported about the tool list this client is holding
   // (roster.ts). A staleness notice alone is enough to drop the cache; a
   // caller holding no list has nothing of its own to keep fresh, and must not
-  // throw away somebody else's.
-  if (stale) {
-    await forget(c.host, c.state)
-    c.note(stale)
-  } else if (roster) {
-    let next = rosterAfter(roster, name, said)
-    if (!next) await forget(c.host, c.state)
-    else if (next != roster) await remember(c.host, next, c.state)
+  // throw away somebody else's. An `about` that did not confirm the list is
+  // the moment to list again: the version it named is the one to stamp.
+  let held = roster && rosterAfter(roster, name, said)
+  let seen = name == 'about' ? versionIn(said) : undefined
+  if (roster && !held && seen) {
+    held = await rosterOf(c.host, c.ask, c.state, true, seen)
+      .catch(() => null)
   }
+  if ((roster || stale) && !held) await forget(c.host, c.state)
+  if (stale) c.note(stale)
   if (said.isError) {
     c.note(text || 'the tool erred and said nothing')
     return 1
@@ -141,7 +142,7 @@ export let printed = async (
     return 0
   }
   let answer = answered(said)
-  let vocab = answer && await vocabOf(c, held)
+  let vocab = answer && await vocabOf(c, held ?? undefined)
   if (answer && vocab) {
     // Imported only to draw, so a command that never does pays nothing.
     let [{ show }, { reported }] = await Promise.all([

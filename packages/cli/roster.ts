@@ -8,7 +8,9 @@
 // answer it and both arrive for free — a tool result carrying the server's
 // roster notice, and an `about` result naming a version this cache is not
 // stamped with. Nothing here asks the server on purpose: asking costs a round
-// trip.
+// trip. The list is asked for again past the cache only once `about` has said
+// the one held is not current, or the held schema refuses a command line
+// (run.ts).
 //
 // The roster notice is also not part of the tool's own output. It is news
 // about this program, so `saidBy` separates it from the result: the caller
@@ -49,9 +51,12 @@ export let versionIn = (out: Result): string | undefined => {
 }
 
 /**
- * The roster to keep after a result: the same one, the same one stamped with
- * the version `about` just named, or `null` — drop the cache and call
- * `tools/list` again.
+ * The roster to keep after a result: the same one, or `null` — drop the cache
+ * and call `tools/list` again. Only an `about` naming the version the list is
+ * stamped with confirms it. A list nobody stamped may come from any release,
+ * however long ago it was listed, so `about` drops it too; the caller lists
+ * again at once and stamps that list with the version `about` named
+ * (platform.ts `printed`).
  *
  * ```ts
  * let about = {
@@ -62,8 +67,10 @@ export let versionIn = (out: Result): string | undefined => {
  *     }],
  *   },
  * }
- * rosterAfter({ tools: [] }, 'about', about)
+ * rosterAfter({ tools: [], version: '1a2b3c4d' }, 'about', about)
  * // { tools: [], version: '1a2b3c4d' }
+ * rosterAfter({ tools: [] }, 'about', about)
+ * // null
  * ```
  */
 export let rosterAfter = (
@@ -73,7 +80,5 @@ export let rosterAfter = (
 ): Roster | null => {
   if (saidBy(out).stale) return null
   let seen = name == 'about' ? versionIn(out) : undefined
-  if (!seen) return roster
-  if (!roster.version) return { ...roster, version: seen }
-  return roster.version == seen ? roster : null
+  return !seen || roster.version == seen ? roster : null
 }

@@ -58,9 +58,6 @@ test('a cached list is dropped on the news, and never asked about', () => {
   // An `about` naming this version confirms it; naming another drops it.
   assertEquals(rosterAfter(held, 'about', about('1a2b3c4d')), held)
   assertEquals(rosterAfter(held, 'about', about('ffffffff')), null)
-  // A list nobody has stamped yet takes the version it just heard.
-  assertEquals(rosterAfter({ tools: [] }, 'about', about('1a2b3c4d')), {
-    tools: [],
-    version: '1a2b3c4d',
-  })
+  // A list nobody stamped may be from any release: `about` cannot confirm it.
+  assertEquals(rosterAfter({ tools: [] }, 'about', about('1a2b3c4d')), null)
 })
