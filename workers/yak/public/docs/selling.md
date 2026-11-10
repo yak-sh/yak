@@ -247,6 +247,13 @@ allowing a provider to fetch that exact artifact in that app for fifteen
 minutes. Renewing a link checks the current customer entitlement again. Receipt
 and artifact responses use `Cache-Control: private, no-store`.
 
+`POST ./api/pay/artifacts/links` accepts `{artifacts: [eid, ...]}` and returns
+`{links: [{artifact, url, expires}, ...], expires}`. It signs up to 800 selected
+artifacts in one app request, removing duplicate ids while preserving their
+order. Every artifact must be available to the caller or the whole request
+returns 404. It supports the same restricted customer subject and fifteen-minute
+expiry as `/link`; repeat the request to renew the links.
+
 ## Document quotes
 
 A service worker issues a physical-service quote through

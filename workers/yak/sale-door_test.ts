@@ -17,6 +17,8 @@ import * as sell from './sell.ts'
 import { protectedSale } from './sale-private.ts'
 import { GRANT, owning } from './dispatch.ts'
 import { COOKIE, seal, sign } from './lib/token.ts'
+import { artifactPermit, protectedArtifact } from './sale-private.ts'
+import { sha256 } from '@yaks/graph/sha256'
 
 let ANA = 'a0000000-0000-4000-8000-000000000001'
 let BO = 'b0000000-0000-4000-8000-000000000002'
@@ -338,4 +340,158 @@ test('restricted artifact tickets require customer entitlement even beside a val
     )).status,
     404,
   )
+})
+
+let batch = (artifacts: unknown) => ({
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ artifacts }),
+})
+test('batch artifact links preserve buyer, guest and restricted-subject authority', async () => {
+  let endpoint = 'pay/artifacts/links'
+  for (
+    let [artifacts, person, status] of [
+      [[first.eid, customerOnly.eid], ANA, 200],
+      [[first.eid, second.eid], BO, 200],
+      [[first.eid, second.eid], ANA, 404],
+      [[first.eid, customerOnly.eid], BO, 404],
+      [[customerOnly.eid], undefined, 404],
+      [[first.eid, 'f'.repeat(64)], ANA, 404],
+    ] as [string[], string | undefined, number][]
+  ) {
+    let response = await files.ask(endpoint, person, batch(artifacts))
+    assertEquals(response.status, status)
+    let body = await response.json()
+    if (status != 200) assertEquals(body.links, undefined)
+    else {
+      assertEquals(
+        body.links.map((link: { artifact: string }) => link.artifact),
+        artifacts,
+      )
+      assertEquals(response.headers.get('cache-control'), 'private, no-store')
+      for (let link of body.links) {
+        let url = new URL(link.url)
+        assertEquals(link.expires, body.expires)
+        assertEquals(
+          await artifactPermit(
+            url.searchParams.get('ticket')!,
+            files.app.eid,
+            link.artifact,
+            SECRET,
+          ),
+          true,
+        )
+      }
+    }
+  }
+  let cookie = `${COOKIE}=${await seal('browser', {
+    via: artifactGuest,
+    exp: Math.floor(Date.now() / 1000) + 60,
+  }, SECRET)}`
+  assertEquals(
+    (await files.ask(endpoint, undefined, {
+      ...batch([guestFile.eid]),
+      headers: { cookie },
+    })).status,
+    200,
+  )
+  assertEquals(
+    (await files.ask(endpoint, undefined, {
+      ...batch([guestFile.eid, customerOnly.eid]),
+      headers: { cookie },
+    })).status,
+    404,
+  )
+  let restrictedEndpoint = `${endpoint}?subject=customer&buyer=${ANA}`
+  assertEquals(
+    (await scheduled(restrictedEndpoint, batch([customerOnly.eid]))).status,
+    200,
+  )
+  assertEquals(
+    (await scheduled(restrictedEndpoint, batch([second.eid]))).status,
+    404,
+  )
+  assertEquals(
+    (await files.ask(restrictedEndpoint, ANA, batch([customerOnly.eid])))
+      .status,
+    403,
+  )
+  assertEquals(
+    (await scheduled(`${endpoint}?subject=customer`, batch([first.eid])))
+      .status,
+    400,
+  )
+})
+
+test('batch link input is complete, bounded and duplicate artifact ids sign once', async () => {
+  for (
+    let input of [
+      undefined,
+      null,
+      [],
+      [null],
+      ['bad'],
+      Array(801).fill(first.eid),
+    ]
+  ) {
+    assertEquals(
+      (await files.ask('pay/artifacts/links', ANA, batch(input))).status,
+      400,
+    )
+  }
+  let response = await files.ask(
+    'pay/artifacts/links',
+    ANA,
+    batch([first.eid, first.eid]),
+  )
+  let result = await response.json()
+  assertEquals(result.links.length, 1)
+  assertEquals(result.links[0].artifact, first.eid)
+})
+
+let large = await setup()
+let pages = Array.from({ length: 800 }, (_, i) => sha256(`selected-page-${i}`))
+await large.graph.apply(pages.flatMap((sha) =>
+  protectedArtifact(
+    [{
+      entity: { eid: sha },
+      artifact: { address: sha, media_type: 'image/png', size: 1 },
+    }],
+    sha,
+    { buyer: ANA },
+  )
+))
+let namespace = large.env.STORE
+let reads: { url: string; values: number }[] = []
+large.env.STORE = {
+  idFromName: (name) => namespace.idFromName(name),
+  get: (id, options) => {
+    let object = namespace.get(id, options)
+    return {
+      fetch: async (req) => {
+        if (req.url.length > 12_000) return new Response(null, { status: 414 })
+        let response = await object.fetch(req)
+        if (
+          req.headers.get('x-store') == storeName(large.space, large.app) &&
+          new URL(req.url).pathname == '/query'
+        ) {
+          let body = await response.clone().json()
+          reads.push({ url: req.url, values: body.distinct?.length ?? 0 })
+        }
+        return response
+      },
+    }
+  },
+}
+test('a complete supported book signs in one app call with bounded store reads and results', async () => {
+  let response = await large.ask('pay/artifacts/links', ANA, batch(pages))
+  assertEquals(response.status, 200, await response.clone().text())
+  let result = await response.json()
+  assertEquals(
+    result.links.map((link: { artifact: string }) => link.artifact),
+    pages,
+  )
+  assertEquals(reads.length, 7)
+  assert(reads.every((r) => r.values <= 128))
+  assertEquals(reads.reduce((n, r) => n + r.values, 0), pages.length)
 })

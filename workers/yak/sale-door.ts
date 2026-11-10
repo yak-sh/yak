@@ -1,6 +1,7 @@
 // The customer door returns one checked receipt or artifact. The seller's
 // graph remains behind its existing editor authority.
 import type { Bundle, Comp } from '@yaks/graph'
+import { listed } from '@yaks/query'
 import type { Answer, Asked } from './apps.ts'
 import { appStore } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
@@ -8,6 +9,7 @@ import { blobPrefix } from './blob-key.ts'
 import { blobBytes } from './files.ts'
 import { Untaken, uploaded, useOf } from './uploads.ts'
 import { quoteDoor, refundDoor } from './sell.ts'
+import { instrumentEid } from './instrument.ts'
 import {
   ARTIFACT_LIFE,
   artifactPermit,
@@ -33,13 +35,13 @@ let storeOf = ({ env, space, app }: Asked) =>
     'x-yak-role': 'editor',
   })
 let accessOf = (row: Bundle) => row.sale_access as SaleAccess | undefined
+let customer = (at: Asked, subject?: Buyer): Buyer =>
+  subject ??
+    { person: at.who.service?.person ?? at.who.person, via: at.who.via }
 let allowed = (at: Asked, row: Bundle, subject?: Buyer) =>
   (!subject && editor(at)) || mayReceive(
     accessOf(row) ?? {},
-    subject ?? {
-      person: at.who.service?.person ?? at.who.person,
-      via: at.who.via,
-    },
+    customer(at, subject),
   )
 let artifactRows = (rows: Bundle[], sha: string, bytes: number) => {
   let attachment = rows.find((row) => row.attachment)!.attachment as Comp
@@ -173,6 +175,91 @@ let artifactSubject = (at: Asked): Buyer | Response | undefined => {
   return { person, via }
 }
 
+let accessFilter = (who: Buyer) => {
+  let clauses = [
+    ...who.person ? [`.sale_access.buyer=${listed([who.person])}`] : [],
+    ...who.via
+      ? [
+        `(!sale_access.buyer .sale_access.via=${
+          listed([instrumentEid(who.via)])
+        })`,
+      ]
+      : [],
+  ]
+  return clauses.length ? `(${clauses.join('|')})` : null
+}
+
+// One returned value per selected address, even if many customers or browser
+// instruments hold it. Chunked reads keep query URLs and returned rows bounded.
+let linkedArtifacts = async (
+  read: (line: string) => Promise<unknown>,
+  artifacts: string[],
+  who?: Buyer,
+): Promise<Set<string>> => {
+  let filter = who ? accessFilter(who) : ''
+  if (filter === null) return new Set()
+  let found = new Set<string>()
+  for (let at = 0; at < artifacts.length; at += 128) {
+    let chunk = artifacts.slice(at, at + 128)
+    let rows = await read(
+      `.sale_artifact.artifact=${
+        listed(chunk)
+      } ${filter} .distinct=sale_artifact.artifact`,
+    ) as { distinct: string[] }
+    for (let sha of rows.distinct) found.add(sha)
+  }
+  return found
+}
+
+let artifactUrl = async (at: Asked, sha: string, now: number) => {
+  let url = new URL(at.req.url)
+  url.pathname = url.pathname.slice(0, url.pathname.lastIndexOf('/artifacts')) +
+    `/artifacts/${sha}`
+  url.search = ''
+  url.searchParams.set(
+    'ticket',
+    await artifactTicket(at.app.eid, sha, at.env.SESSION_SECRET!, now),
+  )
+  return { artifact: sha, url: url.href, expires: now + ARTIFACT_LIFE }
+}
+
+let artifactLinks = async (at: Asked) => {
+  if (at.req.method != 'POST') return at.json(405, 'method_not_allowed')
+  let subject = artifactSubject(at)
+  if (subject instanceof Response) return subject
+  let body = await at.req.json().catch(() => null) as
+    | { artifacts?: unknown }
+    | null
+  let input = body?.artifacts
+  if (
+    !Array.isArray(input) || !input.length || input.length > 800 ||
+    !input.every((sha) => typeof sha == 'string' && /^[0-9a-f]{64}$/.test(sha))
+  ) {
+    return at.json(
+      400,
+      'artifacts',
+      'artifacts must contain 1 to 800 content-addressed artifact ids',
+    )
+  }
+  let artifacts = [...new Set(input)] as string[]
+  let graph = storeOf(at)
+  let found = await linkedArtifacts(
+    (line) => graph.query(line),
+    artifacts,
+    !subject && editor(at) ? undefined : customer(at, subject),
+  )
+  if (artifacts.some((sha) => !found.has(sha))) return missing()
+  if (!at.env.SESSION_SECRET) return at.json(503, 'signing_unavailable')
+  let now = Date.now()
+  // Warm the signing key once before parallel signing, including in a cold
+  // isolate; the shared key cache deliberately does not keep pending imports.
+  let first = await artifactUrl(at, artifacts[0], now)
+  let rest = await Promise.all(
+    artifacts.slice(1).map((sha) => artifactUrl(at, sha, now)),
+  )
+  return privateJson({ links: [first, ...rest], expires: now + ARTIFACT_LIFE })
+}
+
 let artifacts = async (at: Asked, sha: string, link: boolean) => {
   let { req, env, app, space } = at
   let subject = artifactSubject(at)
@@ -185,14 +272,8 @@ let artifacts = async (at: Asked, sha: string, link: boolean) => {
     if (req.method != 'POST') return at.json(405, 'method_not_allowed')
     if (!env.SESSION_SECRET) return at.json(503, 'signing_unavailable')
     let now = Date.now()
-    let url = new URL(req.url)
-    url.pathname = url.pathname.slice(0, -'/link'.length)
-    url.search = ''
-    url.searchParams.set(
-      'ticket',
-      await artifactTicket(app.eid, sha, env.SESSION_SECRET, now),
-    )
-    return privateJson({ url: url.href, expires: now + ARTIFACT_LIFE })
+    let { url, expires } = await artifactUrl(at, sha, now)
+    return privateJson({ url, expires })
   }
   if (req.method != 'GET' && req.method != 'HEAD') {
     return at.json(405, 'method_not_allowed')
@@ -223,6 +304,7 @@ let artifacts = async (at: Asked, sha: string, link: boolean) => {
 }
 
 export let saleDoor: Answer = async (at) => {
+  if (at.path == '/pay/artifacts/links') return artifactLinks(at)
   let quote = /^\/pay\/quotes(?:\/([0-9a-f-]{36,64}))?$/.exec(at.path)
   if (quote) {
     return editor(at)
