@@ -721,15 +721,15 @@ while stopped, plus the statement that passed it. What a stopped object answers:
 
 - A Store's read (`/query`, `/call`, a socket's watch) is 429 with `retry-after`
   in seconds and `{error: 'Stopped', message, retry: {after}}`; the kernel
-  relays both (apps.ts `rejection`, kernel.ts), and a page's watch is declared
+  relays both (apps.ts `waited`, kernel.ts), and a page's watch is declared
   again after the wait (client.js).
 - A Store's write (`/apply`) is kept in its write log as `pending` and answered
-  202 `Pending` with `retry-after` (graph.ts `#kept`); a write the window
-  stopped as it applied, or as the alarm replayed it, waits the same way, its
-  try uncounted (writes.ts `unstarted`). The alarm, armed for the window's end,
-  replays them in order. A page's outbox sends again no sooner than
-  `retry-after` (@yaks/sync `outbox`). Past its written rows only, a store still
-  reads.
+  202 `Pending` with `retry-after` (graph.ts `#kept`), which the kernel's
+  `/api/apply` passes on (meta.ts `written`); a write the window stopped as it
+  applied, or as the alarm replayed it, waits the same way, its try uncounted
+  (writes.ts `unstarted`). The alarm, armed for the window's end, replays them
+  in order. A page's outbox sends again no sooner than `retry-after` (@yaks/sync
+  `outbox`). Past its written rows only, a store still reads.
 - Its alarm and `tick` do nothing but come back when the window ends; replays,
   wakes, effects, embedding, moves, the lexicon and planner statistics wait and
   are marked neither failed nor stuck. An effect stopped mid-run is due again

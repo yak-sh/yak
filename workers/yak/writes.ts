@@ -693,11 +693,15 @@ export let held = (db: Driver, seq: number): boolean =>
 
 /** A kept write, as the door that sent it hears it (meta.ts): not applied
  * yet, and not lost. The failure that held it back was reported where it
- * happened, so this is not a defect of its own (defects.ts `refused`). */
+ * happened, so this is not a defect of its own (defects.ts `refused`). A
+ * store that kept it while stopped says how long until it lands
+ * (`retry.after`, in ms), which a door passes on as `retry-after`. */
 export class Pending extends Error {
-  constructor(message: string) {
+  retry?: { after: number }
+  constructor(message: string, after = 0) {
     super(message)
     this.name = 'Pending'
+    if (after > 0) this.retry = { after }
   }
 }
 

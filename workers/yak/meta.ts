@@ -106,8 +106,12 @@ export let written = async (r: Response): Promise<Bundle[]> => {
     throw new Stale(s.eid, s.comp, s.prop, s.current)
   }
   // Kept by the store's write log and applied later (writes.ts): the batch as
-  // applied does not exist yet, so there is nothing to return.
-  if (r.status == 202) throw new Pending(await said(r))
+  // applied does not exist yet, so there is nothing to return, but how long
+  // a stopped store keeps it waiting.
+  if (r.status == 202) {
+    let after = Number(r.headers.get('retry-after')) * 1000
+    throw new Pending(await said(r), after)
+  }
   if (!r.ok) throw await answered(r)
   return await r.json() as Bundle[]
 }

@@ -404,23 +404,34 @@ export let json = (
     { status },
   )
 
-// A refusal, or a store's answer it relays, keeps its HTTP status through the
-// page's error envelope, and the wait it asks for (a stopped store's). A failure raised here is reported with the door's
-// tags and thrown on, never answered as the page's mistake (defects.ts
-// `refusing`).
-let rejection = (error: unknown, tags: Record<string, string>) => {
+// The wait an error asks for (a stopped store's), as the header a page reads.
+export let waited = (error: unknown): Record<string, string> => {
   let wait = waits(error)
-  return Response.json({
+  return wait == null ? {} : { 'retry-after': String(wait) }
+}
+
+// A refusal, or a store's answer it relays, keeps its HTTP status through the
+// page's error envelope, and the wait it asks for. A failure raised here is
+// reported with the door's tags and thrown on, never answered as the page's
+// mistake (defects.ts `refusing`).
+let rejection = (error: unknown, tags: Record<string, string>) =>
+  Response.json({
     error: {
       code: 'refused',
       message: error instanceof Error ? error.message : String(error),
       ...(error instanceof Error ? { name: error.name } : {}),
     },
-  }, {
-    status: refusing(error, tags),
-    headers: wait == null ? {} : { 'retry-after': String(wait) },
-  })
-}
+  }, { status: refusing(error, tags), headers: waited(error) })
+
+// A store's answer read as `read` reads it, or, where it refused, the answer
+// itself to relay as it came: its status, and a stopped store's wait.
+let readOr = <T>(read: (res: Response) => Promise<T>) =>
+async (
+  res: Response,
+): Promise<{ read: T } | { failed: Response }> =>
+  res.ok
+    ? { read: await read(res) }
+    : { failed: new Response(await res.text(), res) }
 
 // What the page's own code got wrong, as the store refused it: a break in the
 // app, filed here at its door because the page may catch the refusal and the
@@ -2018,11 +2029,12 @@ export let api = async (
     if (!mayRead) return refused('not_a_reader')
     let r = await store.consume(
       '/graph',
-      (res) => res.json() as Promise<Record<string, unknown>>,
+      readOr((res) => res.json() as Promise<Record<string, unknown>>),
       {},
       headers,
     )
-    return Response.json({ ...r, person: who.person, role: who.role })
+    if ('failed' in r) return r.failed
+    return Response.json({ ...r.read, person: who.person, role: who.role })
   }
   // The vocabulary a page's local graph loads: this store's words and the
   // borrowed words its own manifest uses, from their component homes.
@@ -2031,17 +2043,16 @@ export let api = async (
     if (!mayRead) return refused('not_a_reader')
     let wire = await store.consume(
       '/api/vocab',
-      async (res) =>
-        res.ok
-          ? { keywords: (await res.json() as { keywords: unknown[] }).keywords }
-          : { failed: new Response(await res.text(), res) },
+      readOr(async (res) =>
+        (await res.json() as { keywords: unknown[] }).keywords
+      ),
       {},
       headers,
     )
-    if (wire.failed) return wire.failed
+    if ('failed' in wire) return wire.failed
     let docs = await vocabulary(env, space, app, who, headers)
     if (!docs.ok) return docs
-    return Response.json({ docs: await docs.json(), keywords: wire.keywords })
+    return Response.json({ docs: await docs.json(), keywords: wire.read })
   }
   if (path == '/vocab.json') {
     if (!mayRead) return refused('not_a_reader')
@@ -2208,7 +2219,7 @@ export let api = async (
             aliases: {},
             bundles: [],
           },
-          { status: 202 },
+          { status: 202, headers: waited(e) },
         )
       }
       // A write the store's words cannot keep is the page's code wrong about

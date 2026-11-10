@@ -34,6 +34,7 @@ export { app, declared, owned, space } from './directory-fixture.ts'
 // the directory, the tools, the serving door — is the kernel's own code,
 // called directly.
 import { driver, type DurableStorage, type Wire } from '@yaks/durable-object'
+import { bounded } from '@yaks/durable-object/ceiling'
 import {
   among,
   by,
@@ -308,6 +309,9 @@ export let lasting = (
       let ctx = Object.assign(ownedState(name), {
         id: { toString: () => name },
       })
+      // It refuses past its windows on the platform's clock, as the
+      // runtime's objects do (defects-runtime.ts `instrument`).
+      bounded(ctx.storage, { refuse: true, now: () => time.now() })
       held = register(
         name,
         ctx,

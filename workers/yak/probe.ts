@@ -12,6 +12,7 @@ import type { Load } from '@yaks/host'
 import type { Env, Vars } from './env.ts'
 import type { Purgers } from './purge.ts'
 import type { Builder } from './build.ts'
+import { bounded, type Ceiling } from '@yaks/durable-object/ceiling'
 import { type Directory, directoryOf, spaceHandle } from './directory.ts'
 import { valueIn } from '@yaks/tools/value'
 import { parse } from 'smol-toml'
@@ -99,6 +100,9 @@ export type Kernel = Door & {
   // A space's Builder object, by the space's eid: a socket's frames are
   // delivered to it the way the runtime delivers them (`webSocketMessage`).
   builder: (space: string) => Builder
+  // A store's ceiling, by the object's name (`app.store`): what its rows have
+  // spent, and whether it is stopped (@yaks/durable-object `bounded`).
+  ceiling: (store: string) => Ceiling
 }
 
 /** What reading a letter needs: the log, and what to wait on when there is one. */
@@ -254,6 +258,7 @@ let boot = async (
       flushReports: () => reportClock.advance(10_000),
       settled,
       builder: p.builder,
+      ceiling: (store: string) => bounded(p.states.get(store)!.storage),
       deliveries,
       close,
     }
