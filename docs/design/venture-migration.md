@@ -1,0 +1,146 @@
+# PrintBound and CrayonBloom migration
+
+T-152801 and T-152802 implement the migration portion of D-152760. The import
+modules take exported rows, verified identity mappings and copied assets. They
+make no live-account calls. Rehearsal evidence and source access have different
+scopes; neither authorizes a domain change or a paid print.
+
+## Source inventory
+
+The inspected repositories are bindery at
+`10aaf7cbe0b54f548a3f014687388b55d4b8bc40` and coloring-book-maker at
+`2250bce73af5d54072e271a067d5d2034a92ffb8`.
+
+The PrintBound inventory on 2026-11-10 used the deployed Worker version
+`12726a54-4fe7-4131-a812-e146b4192c34`, D1 `printbound-orders`
+(`ca6bd147-fd2f-47d8-9898-e427fed7f871`), and D1 `printbound-waitlist`
+(`f19a7f64-06a7-46ee-b4ab-9be5395ea1fc`). Version metadata confirms
+`ORDERS_ENABLED=off`, `EMAIL_SENDING_ENABLED=off`,
+`LULU_API_BASE_URL=https://api.sandbox.lulu.com`, the fulfillment queue and
+private `printbound-pdfs` bucket bindings. Secret names were listed; no secret
+values were read or transferred.
+
+| Source rows                                                                     |   Count | Evidence                                                      |
+| ------------------------------------------------------------------------------- | ------: | ------------------------------------------------------------- |
+| orders, quotes, addresses                                                       |  0 each | Current D1 export                                             |
+| fulfilment_jobs, legal_hold_events                                              |  0 each | Current D1 export                                             |
+| account_link_sends, consumed_link_tokens, account_revocations, reorder_attempts |  0 each | Current D1 export                                             |
+| erasure_requests, orderable                                                     |  0 each | Current D1 export                                             |
+| activations                                                                     |      41 | Current D1 export                                             |
+| ops_alert_outbox                                                                |      11 | Current D1 export; dispositions unverified                    |
+| canary_runs                                                                     |   4,427 | Current D1 export; operational history                        |
+| signups                                                                         |      38 | Read-only waitlist count; zero suppressed, zero unsent guides |
+| R2 objects and Cloudflare queue messages                                        | unknown | No object/queue inventory obtained                            |
+| CrayonBloom production rows and assets                                          | unknown | `railway status --json` returned Unauthorized                 |
+
+The exported PrintBound schema lacks `drafts`, `stripe_delivery_verified`,
+`free_draft_caps` and `global_free_draw_budget`. Their later migrations exist in
+git but do not describe this deployed store. The importer reports these tables
+as unavailable, without assigning them zero counts. The waitlist query reported
+`changed_db=false` and `rows_written=0`.
+
+The D1 export was _not_ a wholly read-only availability check.
+`wrangler d1 export printbound-orders --remote --output <checkout>/.scratch/printbound-orders.sql`
+started an export before displaying its warning that queries can be unavailable
+during export; Wrangler accepted its own noninteractive prompt. Its download
+failed because the destination directory was missing. The existing download was
+then retrieved locally, without a second export. A subsequent `/health` request
+returned HTTP 200 in 0.439 seconds. No outage was observed, but no request
+overlapped the export, so a brief unavailable interval has not been ruled out.
+The export is 792,664 bytes and is retained only in private ignored scratch. Use
+bounded D1 reads for further inventory instead of repeating this export.
+
+## Import contracts
+
+`bin/venture-import.ts` assigns UUIDs through `derivedEid`, namespaced by the
+source installation and original table/key. Keep the installation name identical
+between snapshot and delta imports. Composite keys are encoded unambiguously.
+Every required table is explicit, including empty tables. Missing references,
+duplicate keys and cross-customer book/order ownership are reported before copy.
+
+`bin/printbound-import.ts` projects orders and drafts onto
+`book_source{owner,via,author,markdown,dedication}` and `doc{title}`. Original
+records stay in private `book_legacy{source,table,key,snapshot}` so rendered
+source, picture-book inputs, payment evidence, legal holds and retention/erasure
+history are retained. Historical `book_receipt{receipt}` contains
+merchant/provider ids and the source's recorded status. It creates no active
+print order, payment mark, submission intent, wake or mail job. Remaining source
+tables have explicit inventory counts; their operational disposition is part of
+cutover reconciliation.
+
+`bin/crayonbloom-import.ts` maps books/pages onto the consumer's current
+vocabulary. The consumer supplies its fingerprint function, so completed artwork
+remains current without regenerating it. Original user ids distinguish guests;
+verified owner/via mappings are required and email matching never grants access.
+Source prompts, stories, consent evidence, suppression, reference art, PDFs,
+Stripe/Lulu ids, refunds and job evidence remain in private
+`legacy_record{source,table,key,snapshot,owner,via}`. Copies of attachments use
+`legacy_asset{record,role,blob,hash,mime}`. Historical purchases remain
+historical; the import does not submit an owed job.
+
+`bin/venture-assets.ts` accepts private attachment keys or public seed paths,
+verifies source size/digest when supplied, hashes the bytes, copies by content
+address, then reads and verifies the destination. Repeating it preserves the
+source-path-to-blob mapping without another upload. No source asset is deleted.
+The exported ActiveStorage checksum must also be reconciled against the source
+provider's checksum inventory; fixture byte verification is not that inventory.
+
+The copy boundary skips identical destination projections and verifies every
+written projection by reading it back. It is for an isolated destination before
+customer traffic. Do not replay a source snapshot over a destination receiving
+customer edits; the final source/destination handoff needs one writer per
+record.
+
+## Existing links
+
+PrintBound's compatibility door keeps `get_order_status(order_id, access_token)`
+and its MCP result envelope. A digest of the original order/token pair
+identifies one imported receipt; it grants no store membership. It returns only
+status, title, format and tracking, never payment evidence or another customer's
+records. Historical progress reads do not invoke active fulfillment.
+
+CrayonBloom's compatibility helper preserves `/free_pages/:token`, numeric
+`/orders/:id` under a verified mapped principal, and `/unsubscribe/:token`.
+Unsubscribe changes suppression without sending mail. Existing Rails signed
+sessions, guest/resume cookies, magic links and ActiveStorage signatures need
+their verifier and signing-key continuity at the authentication boundary. The
+fixture principal does not prove these deployed signatures. A domain change
+cannot treat ordinary yaks.app sign-in as proof that an old guest cookie or
+signed download still works.
+
+## Cutover and rollback
+
+1. Obtain an authorized CrayonBloom production inventory, PrintBound R2/queue
+   counts, both merchant/refund ledgers and outstanding provider receipts. Save
+   source checkpoints privately. Reconcile the 11 PrintBound alert rows without
+   activating their deliveries.
+2. Rehearse complete exports and all referenced bytes in isolated destination
+   stores. Compare table/key/owner sets and content digests, then rerun to show
+   unchanged destinations. Exercise old order, guest, account, printable,
+   unsubscribe and signed-asset links against their original credentials.
+3. Record one fulfillment writer for each outstanding order. Keep source jobs
+   serving their existing provider ids until their handoff is explicit;
+   importing a paid source row must never order it again. Reconcile refunds
+   against the original merchant account. Do not move or close merchant history.
+4. Before each separately approved domain change, capture a consistent source
+   checkpoint and final delta. Preserve input arriving during the handoff in a
+   durable journal, forward it to its selected writer and reconcile it before
+   retiring source jobs. Keep source deployments, signing continuity and private
+   buckets available. Do not disable drafts or discard edits to simplify
+   copying.
+5. Change only the approved domain's routing. Check original customer links,
+   owner/guest access, asset bytes, outstanding orders and tracker failures
+   through the destination. Keep the source checkpoint and the destination
+   journal.
+6. If the agent chooses rollback, restore that domain's prior routing,
+   preserving both stores and stopping only the destination's newly assigned
+   fulfillment work by its known job ids. Existing provider jobs continue to be
+   reconciled by their assigned writer. Keep destination-created drafts
+   reachable at the preview hostname and replay its recorded customer edits
+   through the import mapping before declaring rollback reconciled. Delete
+   neither store nor its assets.
+
+Live Stripe/Lulu account connection, a capped paid proof, source-service changes
+and each domain cutover remain separate owner decisions. Railway access,
+complete live asset/queue inventory, deployed signature compatibility and final
+delta/rollback rehearsal remain unverified; the two migration tasks stay open.

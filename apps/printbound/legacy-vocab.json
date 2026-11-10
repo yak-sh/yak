@@ -1,0 +1,37 @@
+{
+  "$defs": {
+    "legacy_signup": {
+      "description": "A private imported marketing signup, including original consent and delivery evidence; import sends no message.",
+      "properties": {
+        "source": { "type": "string" },
+        "snapshot": { "type": "object" },
+        "owner": { "type": "string" },
+        "via": { "type": "string" }
+      }
+    },
+    "legacy_opt_out": {
+      "description": "The digest of an existing unsubscribe capability, preserving suppression without sending mail.",
+      "properties": { "digest": { "type": "string" } }
+    },
+    "mail_opt_out": {
+      "description": "The customer opted out of commercial messages.",
+      "properties": { "at": { "type": "string" } }
+    },
+    "book_legacy": {
+      "description": "The original imported book or order record, retained privately for reconciliation. It never authorizes payment or fulfillment.",
+      "properties": {
+        "source": { "type": "string" },
+        "table": { "type": "string" },
+        "key": { "type": "array" },
+        "snapshot": { "type": "object" }
+      }
+    },
+    "legacy_order": {
+      "description": "A migrated order's capability digest and retained shipping format. Reading a legacy status never schedules fulfillment.",
+      "properties": {
+        "digest": { "type": "string" },
+        "binding": { "type": "string" }
+      }
+    }
+  }
+}
