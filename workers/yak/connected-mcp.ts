@@ -45,7 +45,12 @@ export let connectedTools = async (
     inputSchema: command.input as Record<string, unknown>,
     readOnly: command.readOnly,
     openWorld: true,
-    meta: { server: command.at, remoteName: command.name },
+    meta: {
+      server: command.at,
+      remoteName: command.name,
+      namespace: command.namespace,
+      ...command.machine ? { machine: command.machine } : {},
+    },
     run: async (call) => {
       let out = await runConnectedCommand(
         ctx,

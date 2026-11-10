@@ -44,7 +44,7 @@ import { signer } from './local.ts'
 import { clock, test, until } from '@yaks/testing'
 import { claude, codex } from '@yaks/spawn'
 import { sessionEid } from '@yaks/session/who'
-import { CALLER, HEADER } from '@yaks/tunnel'
+import { BY, CALLER, HEADER } from '@yaks/tunnel'
 import { parse as parseToml } from 'smol-toml'
 
 // The host of these tests, as its own writes are signed: this process, whose
@@ -2329,6 +2329,69 @@ test("what a machine opens to its owner's Operator, no app in the space reaches 
       .map((b) => [(b.book as Comp).title, (b.created as Comp).by])
       .filter(([title]) => String(title).startsWith('by '))
     assertEquals(made, [['by operator', operator]])
+  } finally {
+    await host.close()
+  }
+})
+
+test("a request through the tunnel that the platform says is its owner's own act writes as the machine's person through its process, and anybody else's is refused", async () => {
+  let [persona, person, owner] = [mint(), mint(), mint()]
+  let host = await compose(
+    {
+      db: ':memory:',
+      person,
+      plugins: ['shop', '@yaks/session', ...HTTP, {
+        use: '@yaks/tunnel',
+        with: {
+          callers: {
+            operator: { routes: ['/mcp'], tools: ['book_add'], persona, owner },
+          },
+        },
+      }],
+    },
+    only({ shop }),
+  )
+  try {
+    let add = (title: string, headers: Record<string, string>) =>
+      serving(host)(
+        new Request('http://h/mcp', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...headers },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name: 'book_add', arguments: { title } },
+          }),
+        }),
+      )
+    let conversation = mint()
+    let through = { [HEADER]: '1', [CALLER]: 'operator', 'x-via': conversation }
+    let stamped = async (title: string) => {
+      let [made] = await host.graph.read(
+        `.book.title=${JSON.stringify(title)}&?created`,
+      )
+      let { by, via } = (made?.created ?? {}) as Comp
+      return [by, via]
+    }
+    // Their own words: by the machine's person, and through no session.
+    await (await add('Dune', { ...through, [BY]: owner })).text()
+    assertEquals(await stamped('Dune'), [person, host.me])
+    assertEquals((await host.graph.get([host.me]))[0]?.session, undefined)
+    // The same conversation's assistant is still the persona.
+    await (await add('Emma', through)).text()
+    assertEquals(await stamped('Emma'), [
+      persona,
+      sessionEid(conversation, 'tunnel'),
+    ])
+    // Nobody else's act is the owner's, and no request outside the tunnel
+    // names a person this way.
+    let other = await add('Ulysses', { ...through, [BY]: mint() })
+    assertEquals(other.status, 403)
+    await other.text()
+    assertEquals(await host.graph.read('.book.title=Ulysses'), [])
+    await (await add('Walden', { [BY]: owner })).text()
+    assertEquals((await stamped('Walden'))[0], undefined)
   } finally {
     await host.close()
   }

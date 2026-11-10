@@ -47,7 +47,8 @@ type Settings = {
   allow?: string[]
   client_id?: string
 }
-type RemoteCommand = Command & { namespace: string }
+// `machine` is the space whose tunnel reaches the server, where it is on one.
+type RemoteCommand = Command & { namespace: string; machine?: string }
 type Listed = Awaited<ReturnType<ReturnType<typeof connect>['list']>>
 // A server with the way to its machine, where it is on one.
 type Reached = GraphServer & { fetch?: typeof fetch }
@@ -92,6 +93,20 @@ let status = (s: GraphServer, description: string): RemoteCommand => ({
   readOnly: true,
   input,
 })
+// A server's schema as this host reads it. A graph's own MCP door says `ref`
+// on each argument that takes an id, naming a kind in its graph, and a host
+// resolves every `ref` it reads in its own (@yaks/tools `resolved`): left on,
+// an id only the server knows is refused here before the call leaves.
+let foreign = (schema: unknown): unknown =>
+  Array.isArray(schema)
+    ? schema.map(foreign)
+    : schema && typeof schema == 'object'
+    ? Object.fromEntries(
+      Object.entries(schema)
+        .filter(([k, v]) => k != 'ref' || typeof v != 'string')
+        .map(([k, v]) => [k, foreign(v)]),
+    )
+    : schema
 let described = (s: GraphServer, tools: Listed): RemoteCommand[] =>
   tools.map((t) => {
     nameOf(s.server.namespace!, t.name)
@@ -99,10 +114,11 @@ let described = (s: GraphServer, tools: Listed): RemoteCommand[] =>
       at: integration(s.id),
       name: t.name,
       namespace: s.server.namespace!,
+      ...s.server.machine ? { machine: s.server.machine } : {},
       title: `${s.label}: ${t.title ?? t.name}`,
       description: `[${s.label}] ${t.description ?? t.name}`,
       readOnly: t.annotations?.readOnlyHint === true,
-      input: t.inputSchema,
+      input: foreign(t.inputSchema) as typeof t.inputSchema,
     }
   })
 

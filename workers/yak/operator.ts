@@ -83,6 +83,7 @@ import { inReach } from './declared.ts'
 import { connected, reaching } from './agent.ts'
 import { coded } from './agent-code.ts'
 import { connectedTools } from './connected-mcp.ts'
+import { relayTools } from './operator-relay.ts'
 import { ledger } from './ledger.ts'
 import { admin, type Args, type Ctx, inSpace, refuse } from './tool.ts'
 import { adminTools } from './operator-admin.ts'
@@ -398,10 +399,11 @@ export let operatorRoster = async (
   // their Operator asks, and which conversation: the one this session works
   // for, so a fork's calls and a helper's are the conversation's there too.
   let top: Promise<string> | undefined
-  let remote = await connectedTools(ctx, {
+  let asking: Calling = {
     caller: 'operator',
     via: session ? () => top ??= topOf(work, session) : undefined,
-  })
+  }
+  let remote = await connectedTools(ctx, asking)
   let apps = listing(coded(
     {
       ...connected(ctx, reach, g),
@@ -419,6 +421,11 @@ export let operatorRoster = async (
       ...shaped(t),
       run: run(t, g, landing),
     })),
+    // Their own words, sent on to their machine as theirs: only someone who
+    // writes in the space, as the rest of what changes anything is.
+    ...member
+      ? relayTools(ctx, work, remote, (s) => topOf(work, s), asking)
+      : [],
     ...apps.map((t): Tool => {
       let ours = own.get(t.name)
       let there = run(t, g, landing)

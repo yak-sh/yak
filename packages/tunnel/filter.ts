@@ -24,6 +24,10 @@ export type Opened = {
   tools?: string[]
   /** the persona written as, by eid, number or name */
   persona?: string
+  /** the platform's id for the person the machine's own config names as its
+   * `person`: a request the platform says is that person's own act
+   * (./gateway.ts `BY`) writes as them. Without one no request does */
+  owner?: string
 }
 
 /** What a machine's owner opens to one kind of caller on top of what every

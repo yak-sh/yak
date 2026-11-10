@@ -898,6 +898,27 @@ a call from `command` carries none. A machine that is off, a tunnel with no
 gateway and a path the machine has not opened leave the connection status
 command and report nothing to the tracker.
 
+A server's schema loses each `ref` it says on an argument (`mcp-remote.ts`
+`foreign`): a graph's own MCP door names a kind in its graph there, and this
+host would resolve it in the person's graph and refuse an id only the server
+knows.
+
+A machine's server that lists `comment_new` gives its owner's Operator one more
+tool, `<server>__message_relay` (`operator-relay.ts`): one of the person's own
+messages in the conversation becomes their comment on an entity on the machine.
+The model names the entity and the message (its id, the Sent time its header
+shows, or none for their newest) and supplies no words: the host reads the line
+from the Operator's store, takes it only if the person wrote it (`ownWords`:
+their `created.by`, an input or what they said aloud on a call, never the
+Operator's, a helper's, the platform's or an outside agent's), and calls the
+machine's `comment_new` with those words. That one request says whose act it is
+(`Calling.own`, sent as `x-yak-by` with the person's id), which nothing a model
+or an app sends can, and the machine writes it by its own person through no
+session (@yaks/tunnel `owner`). Where the server also lists `decision_answer`
+and `graph_show`, `choice` answers a decision the same way, and only with a
+label the decision lists, read from the machine first: an answer in the person's
+own words is their message as a comment.
+
 A Store imports its graph and effects facets before opening its boot
 transaction, then binds them with `@yaks/host` over its storage, vault, blobs
 and named mail sender. Cold reads owe no start-up work. A deployment calls the

@@ -51,6 +51,7 @@
 // of the fee.
 import {
   type Api,
+  BY,
   CALLER,
   connect,
   disconnect,
@@ -242,10 +243,14 @@ export type Caller = 'app' | 'operator' | 'connector'
 
 /** Who asks a machine for its owner: their connector unless it says their
  * Operator, which also names the conversation it asks in (`via`), where there
- * is one. */
+ * is one. A request that carries the owner's own words as they gave them, and
+ * nobody's reading of them, is their `own` act: the machine is told who they
+ * are (@yaks/tunnel `BY`), and writes it as theirs. Only the host says so, of
+ * words it read itself: nothing a model or an app sends does. */
 export type Calling = {
   caller: Exclude<Caller, 'app'>
   via?: () => Promise<string | undefined> | string | undefined
+  own?: boolean
 }
 
 /** The header that names the conversation a request to a machine was made in:
@@ -256,11 +261,18 @@ export let VIA = 'x-via'
 // A request as it goes on to a machine: `req`'s method, body and headers at
 // `path` there, with the platform's own words taken off and its word on who
 // is asking put on.
-let onward = (path: string, req: Request, caller: Caller, via?: string) => {
+let onward = (
+  path: string,
+  req: Request,
+  caller: Caller,
+  via?: string,
+  by?: string,
+) => {
   let headers = new Headers()
   for (let [k, v] of req.headers) if (!OURS.test(k)) headers.set(k, v)
   headers.set(CALLER, caller)
   if (via) headers.set(VIA, via)
+  if (by) headers.set(BY, by)
   return new Request(`http://machine${path}`, {
     method: req.method,
     headers,
@@ -369,6 +381,7 @@ export let machine = async (
       req,
       asking.caller,
       await asking.via?.(),
+      asking.own ? person : undefined,
     )
     // Asked for the space itself, which is no app: a gateway calls nothing
     // out, so no connection is lent on this call.

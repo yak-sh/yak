@@ -20,18 +20,29 @@
 // (./gateway.ts `CALLER`): yaks.app says `operator` for the owner's Operator,
 // `connector` for the owner's own assistant and `app` for an app's worker, so
 // `callers.operator` holds the paths, tools and persona of the Operator alone.
+//
+// One kind of marked request is the machine's person's own: one the platform
+// says is the act of the person the config names as the tunnel's `owner`
+// (`x-yak-by`, ./gateway.ts), which it does where a request carries that
+// person's own words and nobody's reading of them. It writes `by` the
+// config's `person` and `via` this process, as what they type at the
+// machine's own page does, and never through a session: a comment written
+// through a session is an agent's, to every reader of the graph. A request
+// said to be anybody else's act is refused.
 import type { Arrived, Offers } from '@yaks/api'
 import { VIA } from '@yaks/api'
 import type { Eid, Graph } from '@yaks/graph'
 import { standIn } from '@yaks/session/who'
 import {
   type Callers,
+  Closed,
   filter as only,
   marked,
   named as opened,
   offered,
   type Opened,
 } from './filter.ts'
+import { BY } from './gateway.ts'
 
 /** What a config file can set for this facet: what every request through the
  * tunnel is opened (without a persona it writes as nobody, through its
@@ -43,8 +54,12 @@ export type Options = Opened & {
 }
 
 /** What this facet reads off the host: the graph a caller's session is kept
- * in. */
-export type Hosting = { graph: Pick<Graph, 'address' | 'get' | 'apply'> }
+ * in, the person the machine's config names, and its own process. */
+export type Hosting = {
+  graph: Pick<Graph, 'address' | 'get' | 'apply'>
+  config?: { person?: string }
+  me?: Eid
+}
 
 /** The session a tunnel's callers stand in is named within this door. */
 export let DOOR = 'tunnel'
@@ -57,28 +72,38 @@ export let filter = (
 
 /** Who a request through the tunnel is from: the persona the config names for
  * its caller, or else for every request, through the session standing for the
- * conversation its `x-via` names. */
+ * conversation its `x-via` names. One the platform says is the own act of the
+ * tunnel's `owner` is from the config's `person`, through this process. */
 export let arrived = (host: Hosting, options: Options = {}): Arrived => {
-  let personas = new Map<string, Promise<Eid>>()
-  let address = async (said: string) =>
-    ((await host.graph.address([said], 'persona')).get(said) ?? said) as Eid
+  let found = new Map<string, Promise<Eid>>()
+  let address = async (said: string, kind?: string) =>
+    ((await host.graph.address([said], kind)).get(said) ?? said) as Eid
   // Addressed by the first marked request that writes as it: the graph is
   // open by then.
-  let named = (said?: string) =>
+  let named = (said?: string, kind?: string) =>
     said
-      ? personas.get(said) ?? personas.set(said, address(said)).get(said)
+      ? found.get(said) ?? found.set(said, address(said, kind)).get(said)
       : undefined
-  return async (request) =>
-    marked(request)
-      ? await standIn(
+  return async (request) => {
+    if (!marked(request)) return undefined
+    let caller = opened(options.callers, request)
+    let own = request.headers.get(BY)
+    if (own == null) {
+      return await standIn(
         host.graph,
         DOOR,
         request.headers.get(VIA) ?? '',
-        await named(
-          opened(options.callers, request).persona ?? options.persona,
-        ),
+        await named(caller.persona ?? options.persona, 'persona'),
       )
+    }
+    let by = own == (caller.owner ?? options.owner)
+      ? await named(host.config?.person)
       : undefined
+    if (!by) {
+      throw new Closed("the tunnel writes as nobody but its machine's owner")
+    }
+    return { by, via: host.me }
+  }
 }
 
 /** The tools a request through the tunnel is offered: the config's, for every

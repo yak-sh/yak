@@ -185,6 +185,40 @@ saying which tools the tunnel offers and who its callers are:
 Whatever a request through the tunnel names in `x-via`, it never speaks as one
 of the machine's own sessions, and never as the machine's person.
 
+### The owner's own words
+
+One kind of request is the machine's person's own: a hosted assistant passing on
+what its person wrote, word for word, where the platform read the words and who
+wrote them itself. The platform then names that person in `x-yak-by`, by its own
+id for them, and the machine's config says which of the platform's people is its
+own:
+
+```json
+{
+  "use": "@yaks/tunnel",
+  "with": {
+    "callers": {
+      "operator": {
+        "routes": ["/mcp"],
+        "tools": ["comment_new", "decision_answer"],
+        "persona": "N-153900",
+        "owner": "3f0c9a52-6d1e-4b7a-9c58-2a4d7e61b0f3"
+      }
+    }
+  }
+}
+```
+
+- `owner` is the platform's id for the person the machine's config names as its
+  `person`. A request naming them in `x-yak-by` writes `by` that `person` and
+  `via` the machine's own process, as what they type at the machine's own page
+  does, and through no session. So a comment it writes reads as the person's
+  everywhere a graph tells a person's comment from an agent's.
+- A request naming anybody else, or any at all where the config names no `owner`
+  or no `person`, is refused (403) and writes nothing.
+- It is offered the same tools as its caller. Only the platform sets the header,
+  and takes it off whatever an app or a model sends.
+
 ### Model steps through the tunnel
 
 A hosted space runs model steps on the machine's own providers by opening
