@@ -2688,6 +2688,19 @@ export let directoryRows = (rows: {
       if (read.every((r) => r && r.at === wrote(META_STORE))) {
         return structuredClone(read.flatMap((r) => r!.apps))
       }
+      // TODO(T-155323): a diagnostic for one deploy, to say why an Operator
+      // step's apps of several spaces miss what its reach read; removed next.
+      if (eids.length > 1) {
+        console.log(
+          'yak apps miss',
+          JSON.stringify({
+            held: held ? [...held.keys()].map((k) => k.slice(0, 8)) : null,
+            asked: eids.map((e) => e.slice(0, 8)),
+            at: read.map((r) => r?.at ?? null),
+            now: wrote(META_STORE) ?? null,
+          }),
+        )
+      }
       return (await query(`.app.space=${eids.join(',')}&${ABOUT}`))
         .map(appOf)
     },
