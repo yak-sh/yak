@@ -3221,8 +3221,8 @@ export class Store {
     }
     this.#effectsReady = true
     // The pass starts as many start-up runs as the pool has slots; the rest
-    // are pending, and run now rather than at the next write.
-    this.#owedEffects()
+    // are pending, and run when due rather than at the next write.
+    await this.#armPending()
     this.#embedding()
     this.#put(
       'deployed',
@@ -3529,6 +3529,24 @@ export class Store {
     )
   }
 
+  // The alarm for the runs still pending, at the soonest one's due time.
+  #armPending = async () => {
+    let now = this.#now(), pending = await this.#pendingEffects()
+    if (!pending.length) return
+    if (this.#profile) {
+      let handlers: Record<string, number> = {}
+      for (let b of pending) {
+        let handler = String((b.effect as Comp).handler)
+        handlers[handler] = (handlers[handler] ?? 0) + 1
+      }
+      console.log(
+        'yak store pending',
+        JSON.stringify({ store: this.#name(), handlers }),
+      )
+    }
+    await this.#arming(new Date(due(pending, now)!).toISOString(), 'effects')
+  }
+
   // The pool at work, started only from the alarm (`#owedEffects`).
   #workingEffects = () => {
     if (this.#dormant) return
@@ -3549,21 +3567,7 @@ export class Store {
       await this.#effects.work(this.#stored(this.#graph).graph, undefined, {
         passes: 1,
       })
-      if (this.#dormant) return
-      let now = this.#now(), pending = await this.#pendingEffects()
-      if (!pending.length) return
-      if (this.#profile) {
-        let handlers: Record<string, number> = {}
-        for (let b of pending) {
-          let handler = String((b.effect as Comp).handler)
-          handlers[handler] = (handlers[handler] ?? 0) + 1
-        }
-        console.log(
-          'yak store pending',
-          JSON.stringify({ store: this.#name(), handlers }),
-        )
-      }
-      await this.#arming(new Date(due(pending, now)!).toISOString(), 'effects')
+      if (!this.#dormant) await this.#armPending()
     }).catch(async (error) => {
       defect(error, { request: 'effect pool', store: this.#name() })
       await this.#arming(
