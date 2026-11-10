@@ -2,7 +2,7 @@ import { lasting } from './testing.ts'
 // The in-memory runtime keeps a store's native storage alive for background
 // work, just as a Durable Object retains its waitUntil context.
 import { assertEquals, assertThrows } from '@std/assert'
-import { test, until } from '@yaks/testing'
+import { clock, test, until } from '@yaks/testing'
 import { DIM } from './embedding.ts'
 import { bucket, platform } from './testing.ts'
 import { sha256 } from './versions.ts'
@@ -154,3 +154,16 @@ test('alarm delivery skips idle objects and delivers a rearm on the next tick', 
 })
 test("an object's alarm still running holds back no other object's", () =>
   assertEquals(stuckDeliveries, ['stuck', 'due']))
+
+test('settling includes due alarm events rearmed by the preceding delivery', async () => {
+  await using p = lasting('alarm-chain-probe', { CLOCK: clock() })
+  let object = p.object('alarm-chain/due')
+  let { storage } = p.states.get('alarm-chain/due')!
+  let delivered = 0
+  object.alarm = async () => {
+    if (++delivered < 3) await storage.setAlarm(0)
+  }
+  await storage.setAlarm(0)
+  await p.settled()
+  assertEquals(delivered, 3)
+})

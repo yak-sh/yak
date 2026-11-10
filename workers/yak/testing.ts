@@ -398,7 +398,13 @@ export let lasting = (
     for (;;) {
       await ring()
       let work = pending()
-      if (!work.length) return
+      if (!work.length) {
+        let due = await Promise.all([...armed].map(async (name) => {
+          let at = await states.get(name)!.storage.getAlarm()
+          return at != null && at <= time.now()
+        }))
+        if (!due.some(Boolean)) return
+      }
       await Promise.allSettled(work)
     }
   }
