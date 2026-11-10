@@ -48,8 +48,6 @@ test('the cached blob door streams bytes and bounds uncached seeks', async () =>
 
 test('a blob is read in-process when the cache in front of the door fails', async () => {
   let rows: Bundle[] = []
-  let retained: Promise<void>[] = []
-  let calls: Request[] = []
   let failing = {
     ...env,
     ERRORS: {
@@ -59,11 +57,10 @@ test('a blob is read in-process when the cache in front of the door fails', asyn
       },
     },
     FILES: {
-      fetch: (req: Request) => {
-        calls.push(req)
-        return Promise.resolve(
+      fetch: () =>
+        Promise.resolve(
           new Response(null, {
-            status: calls.length == 1 ? 520 : 404,
+            status: 520,
             headers: {
               'cf-cache-status': 'BYPASS',
               'cf-error-type': '520',
@@ -71,8 +68,7 @@ test('a blob is read in-process when the cache in front of the door fails', asyn
               'cf-ray': 'ray-IAD',
             },
           }),
-        )
-      },
+        ),
     },
   }
   let got = await within(
@@ -80,13 +76,7 @@ test('a blob is read in-process when the cache in front of the door fails', asyn
     {},
     () => blobBytes(failing, { eid }, prefix, sha),
     clock(),
-    {
-      retain: (p) => {
-        retained.push(p)
-      },
-    },
   )
-  await Promise.all(retained)
   assertEquals(got.status, 200)
   assertEquals(new Uint8Array(await got.arrayBuffer()), bytes)
   assertEquals((rows[0].error as { tags: unknown }).tags, {
@@ -96,12 +86,7 @@ test('a blob is read in-process when the cache in front of the door fails', asyn
     cache_error: '520',
     cache_origin: 'cache',
     cache_ray: 'ray-IAD',
-    cache_probe_status: '404',
-    cache_probe_cache: 'BYPASS',
   })
-  let probe = new URL(blobAt(eid, sha))
-  probe.searchParams.set('cache_probe', '1')
-  assertEquals(calls.map((r) => r.url), [blobAt(eid, sha), probe.href])
 })
 
 test('the blob door reads no bytes for HEAD and keeps missing blobs private', async () => {

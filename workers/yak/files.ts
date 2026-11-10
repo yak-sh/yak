@@ -30,7 +30,7 @@ import { at, blobAt, immutable, keptAt, servableAt } from './cache.ts'
 import { elapsed, hop } from './lib/hops.ts'
 import { type Served, storeOf } from './door.ts'
 import { answered, metaOf } from './meta.ts'
-import { background, caught, relayed, responding } from './defects.ts'
+import { caught, relayed, responding } from './defects.ts'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from './versions.ts'
 import { drawn, ICON_SVG } from './raster.ts'
@@ -280,56 +280,18 @@ let through = async (env: Env, req: Request) => {
     let cached = await env.FILES.fetch(req)
     if (cached.status < 520 || cached.status > 530) return relayed(cached)
     await cached.body?.cancel()
-    background(
-      cacheFailed(
-        env,
-        req,
-        cached,
-        new Error(`the files cache answered ${cached.status}`),
-      ),
-    )
+    caught(new Error(`the files cache answered ${cached.status}`), {
+      request: `${req.method} files`,
+      cache_url: req.url,
+      cache_status: cached.headers.get('cf-cache-status'),
+      cache_error: cached.headers.get('cf-error-type'),
+      cache_origin: cached.headers.get('cf-error-origin'),
+      cache_ray: cached.headers.get('cf-ray'),
+    })
   } catch (e) {
     if ((e as Error | null)?.name != 'DataCloneError') throw e
   }
   return relayed(await fetch(req, env))
-}
-
-// Temporary diagnostic for T-152885: an equivalent key distinguishes a
-// provider's per-key state from a request it cannot dispatch. Remove once
-// that distinction is observed live; neither its answer nor its wait serves
-// the caller, which reads R2 as before.
-let cacheFailed = async (
-  env: Env,
-  req: Request,
-  cached: Response,
-  error: Error,
-) => {
-  let tags: Record<string, string | null> = {
-    request: `${req.method} files`,
-    cache_url: req.url,
-    cache_status: cached.headers.get('cf-cache-status'),
-    cache_error: cached.headers.get('cf-error-type'),
-    cache_origin: cached.headers.get('cf-error-origin'),
-    cache_ray: cached.headers.get('cf-ray'),
-  }
-  let at = new URL(req.url)
-  at.searchParams.set('cache_probe', '1')
-  try {
-    let probe = await env.FILES!.fetch(
-      new Request(at, {
-        method: req.method,
-        headers: req.headers,
-        redirect: req.redirect,
-        signal: AbortSignal.timeout(1000),
-      }),
-    )
-    tags.cache_probe_status = String(probe.status)
-    tags.cache_probe_cache = probe.headers.get('cf-cache-status')
-    await probe.body?.cancel()
-  } catch (e) {
-    tags.cache_probe_error = String(e)
-  }
-  caught(error, tags)
 }
 
 // The files that are the app's platform manifest rather than its page: the

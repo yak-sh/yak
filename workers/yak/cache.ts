@@ -111,8 +111,10 @@ export let packageAt = (path: string) =>
 // immutable bytes, but how Files frames them (a type, a header, a compiled
 // script) is code: a change to that for addresses already answered bumps this
 // number, which moves every address to a new key and lets the old entries
-// expire unread.
-let GENERATION = 2
+// expire unread. The same namespace replacement repairs provider state a
+// path purge cannot clear: T-152885's old key kept answering 520 while an
+// equivalent key reached Files and returned 404.
+let GENERATION = 3
 let generation = (address: string) =>
   `${address}${address.includes('?') ? '&' : '?'}g=${GENERATION}`
 
