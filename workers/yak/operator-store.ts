@@ -47,7 +47,7 @@ import { topicDoc } from '@yaks/topic'
 import { topics } from '@yaks/topic/graph'
 import { wakeDoc } from '@yaks/wake/vocab'
 import { due, soonest, tick, wakes } from '@yaks/wake'
-import { caught } from './defects.ts'
+import { caught, stopped } from './defects.ts'
 import { adopt, indexed, schema as ftsSchema, search } from '@yaks/fts'
 import { installed, type Meta, meta, printOf } from '@yaks/sqlite'
 
@@ -241,7 +241,9 @@ export let BACKSTOP = 15_000
  * open when its object is reset holds back every alarm after it until
  * Cloudflare gives up on it, fourteen minutes for Jeff's (T-145428), the
  * backstop that would take the step up included. Work that fails is
- * reported, and the backstop it leaves armed tries it again. The work, going
+ * reported, and the backstop it leaves armed tries it again; work its object
+ * stopped (@yaks/durable-object `Stopped`) comes back when the object's
+ * window ends, and is no failure. The work, going
  * on after the alarm answers, is handed to `keep` (the object's `waitUntil`).
  */
 export let waking = (
@@ -263,7 +265,8 @@ export let waking = (
             await storage.deleteAlarm()
           }
         } catch (e) {
-          report(e)
+          if (stopped(e)) await storage.setAlarm(Date.now() + e.retry.after)
+          else report(e)
         } finally {
           going = undefined
         }

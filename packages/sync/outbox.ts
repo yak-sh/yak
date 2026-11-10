@@ -107,12 +107,15 @@ export let durableOutbox = <T, R>(opts: {
   let notify = () => {
     for (let fn of listeners) fn()
   }
-  let arm = () => {
+  // The next drain, `wait` ms on, or as long as the failure asked for
+  // (`retry.after`, a store past its rows' Retry-After), whichever is longer.
+  let arm = (error?: unknown) => {
     if (closed || alarm !== undefined) return
+    let asked = (error as { retry?: { after?: unknown } } | null)?.retry?.after
     alarm = (opts.timer ?? setTimeout)(() => {
       alarm = undefined
       void drain()
-    }, opts.wait ?? 1000)
+    }, Math.max(opts.wait ?? 1000, typeof asked == 'number' ? asked : 0))
   }
   let ready = (disk?.load() ?? Promise.resolve([])).then((rows) => {
     rows.sort((a, b) => (a.at ?? 0) - (b.at ?? 0))
@@ -159,7 +162,7 @@ export let durableOutbox = <T, R>(opts: {
           waiting.delete(key)
           if (!refused) {
             report(error)
-            arm()
+            arm(error)
             break
           }
         }

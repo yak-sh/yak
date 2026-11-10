@@ -16,6 +16,10 @@
 //   - a batch that fails unwinds and is reported, and the store keeps serving
 //     the shape it holds. This incarnation leaves that rule alone; the next
 //     one, which a fix arrives as, tries again.
+//   - a batch its store's ceiling refuses (@yaks/durable-object `Stopped`)
+//     unwinds too, and is no failure: the alarm moves on once the window
+//     ends (graph.ts `#moveRows`). A move stands between batches, never in
+//     one, so unlike a relocation (relocate.ts `freely`) it can stop there.
 //   - how far a rule got is its {@link Stamp} in the store's memory, under the
 //     rule's mark, written in the batch's own transaction.
 //

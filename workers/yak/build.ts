@@ -64,6 +64,7 @@
 // it.
 import type { Hibernation, Wire } from '@yaks/durable-object'
 import { driver, type DurableStorage } from '@yaks/durable-object/sql'
+import { bounded } from '@yaks/durable-object/ceiling'
 import type { Alarms } from './operator-store.ts'
 import { level, writes } from '@yaks/member'
 import {
@@ -81,7 +82,8 @@ import * as dirPart from './directory.ts'
 import type { Settings } from './operator-persona.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
-import { caught, refusing } from './defects.ts'
+import { caught, refusing, stopped } from './defects.ts'
+import { refuse } from '@yaks/api/refuse'
 import { reported, type Tally, tallying } from './lib/hops.ts'
 import { headed } from './timing.ts'
 import { type Browsers, browsers, type Lent } from './operator-browser.ts'
@@ -383,6 +385,8 @@ export class Builder {
       this.#keep(out.lines.slice(was.length + 1))
       return end
     } catch (e) {
+      // A stopped object says when to try again.
+      if (stopped(e)) return this.#say([{ done: e.message }])
       // The loop answers its own refusals in sentences; anything that reaches
       // here is ours breaking, and the person is owed a sentence for that too.
       caught(e, { request: 'build', space: held.space })
@@ -417,8 +421,13 @@ export class Builder {
     try {
       answer = await tallying(tally, () => this.#answer(request))
     } catch (e) {
-      this.#gone()
-      throw e
+      // An object past the rows it may read or write (@yaks/durable-object
+      // `bounded`) answers how long to wait, at whichever door met it.
+      if (!stopped(e)) {
+        this.#gone()
+        throw e
+      }
+      answer = refuse(e)
     }
     let headers = new Headers(answer.headers)
     for (let [name, value] of Object.entries(reported(tally))) {
@@ -479,6 +488,7 @@ export class Builder {
           args.reader,
         ) ?? no(404, 'no result route')
       } catch (error) {
+        if (stopped(error)) throw error
         return no(
           refusing(error, { request: 'result' }),
           error instanceof Error ? error.message : String(error),
@@ -532,6 +542,7 @@ export class Builder {
         }
         return await this.#operate(request)
       } catch (e) {
+        if (stopped(e)) throw e
         return no(
           refusing(e, { request: 'operator' }),
           e instanceof Error ? e.message : String(e),
@@ -690,97 +701,105 @@ export class Builder {
   // (its model, its tools, its harness) is loaded and made for what it runs
   // (`#work`). A chat page's first visit made both before its answer.
   #stored() {
-    return this.#store ??= (async () => {
-      let { operatorStore, owing, SLICE } = await import(
-        './operator-store.ts'
-      )
-      let { operatorFrames } = await import('./operator-host.ts')
-      // A write that owes work starts it now, beside a step in flight, so a
-      // person's words reach the session they are for at once, within a
-      // slice; the alarm is there for what this wake leaves. The work goes on
-      // after the write answers, held by the object (`waitUntil`), once the
-      // Operator whose handlers do it is made.
-      let nudge = () => {
-        this.#arming = this.#ctx.storage.setAlarm(Date.now())
-        if (!this.#draining && Date.now() >= this.#until) {
-          this.#until = Date.now() + SLICE
-        }
-        if (Date.now() >= this.#until) return
-        let until = this.#until
-        this.#ctx.waitUntil?.(
-          this.#work().then(() => store.fx.work(store.g, undefined, { until }))
-            .catch((e) => caught(e, { request: 'operator effects' })),
+    return this.#store ??= unstopped(
+      () => this.#store = undefined,
+      async () => {
+        let { operatorStore, owing, SLICE } = await import(
+          './operator-store.ts'
         )
-      }
-      let store = operatorStore(this.#ctx.storage, {
-        version: this.#env.CF_VERSION_METADATA?.id,
-        report: (e, where) =>
-          caught(e, { request: 'operator effects', handler: where.handler }),
-        nudge,
-      })
-      this.#fx = store.fx
-      owing(store.fx, () => this.#work())
-      // What a person is called, as the Operator asks it (operator.ts
-      // `named`).
-      let named = (person: string) =>
-        dirPart.directoryOf(this.#env.STORE).nameAt(person)
-      this.#frames = operatorFrames(
-        store,
-        () => this.#ctx.getWebSockets(),
-        named,
-      )
-      // An incarnation takes up what the one before it left: a step a deploy
-      // reset under its reply runs again at once, on the wake its first
-      // request's caller sends once it has the answer (a page reconnecting,
-      // build-door.ts `builderOf`), rather than whenever the person next says
-      // something. Worked, not only armed: an alarm the reset cut off can hold
-      // the next one back for minutes.
-      this.#owed = nudge
-      return {
-        store,
-        named,
-        // Stopping a task is the Operator's own.
-        stop: async (task: string, by: string) =>
-          (await this.#work()).stop(task, by),
-      }
-    })()
+        let { operatorFrames } = await import('./operator-host.ts')
+        // A write that owes work starts it now, beside a step in flight, so a
+        // person's words reach the session they are for at once, within a
+        // slice; the alarm is there for what this wake leaves. The work goes on
+        // after the write answers, held by the object (`waitUntil`), once the
+        // Operator whose handlers do it is made.
+        let nudge = () => {
+          this.#arming = this.#ctx.storage.setAlarm(Date.now())
+          if (!this.#draining && Date.now() >= this.#until) {
+            this.#until = Date.now() + SLICE
+          }
+          if (Date.now() >= this.#until) return
+          let until = this.#until
+          this.#ctx.waitUntil?.(
+            this.#work().then(() =>
+              store.fx.work(store.g, undefined, { until })
+            )
+              .catch((e) => caught(e, { request: 'operator effects' })),
+          )
+        }
+        let store = operatorStore(this.#ctx.storage, {
+          version: this.#env.CF_VERSION_METADATA?.id,
+          report: (e, where) =>
+            caught(e, { request: 'operator effects', handler: where.handler }),
+          nudge,
+        })
+        this.#fx = store.fx
+        owing(store.fx, () => this.#work())
+        // What a person is called, as the Operator asks it (operator.ts
+        // `named`).
+        let named = (person: string) =>
+          dirPart.directoryOf(this.#env.STORE).nameAt(person)
+        this.#frames = operatorFrames(
+          store,
+          () => this.#ctx.getWebSockets(),
+          named,
+        )
+        // An incarnation takes up what the one before it left: a step a deploy
+        // reset under its reply runs again at once, on the wake its first
+        // request's caller sends once it has the answer (a page reconnecting,
+        // build-door.ts `builderOf`), rather than whenever the person next says
+        // something. Worked, not only armed: an alarm the reset cut off can hold
+        // the next one back for minutes.
+        this.#owed = nudge
+        return {
+          store,
+          named,
+          // Stopping a task is the Operator's own.
+          stop: async (task: string, by: string) =>
+            (await this.#work()).stop(task, by),
+        }
+      },
+    )
   }
 
   #work() {
-    return this.#operator ??= (async () => {
-      let { store } = await this.#stored()
-      let frames = this.#frames!
-      let { attachmentTools, handleChannels } = await import(
-        './operator-channels.ts'
-      )
-      let { operating } = await import('./operator.ts')
-      let operator = operating(store, this.#env, {
-        tools: attachmentTools(this.#env),
-        browsers: this.#lent,
-        tell: (session) => {
-          void frames.tell(session).catch((e) =>
-            caught(e, { request: 'operator socket' })
-          )
-          void import('./operator-calls.ts').then(({ moved }) =>
-            moved(store, session)
-          ).catch((e) => caught(e, { request: 'operator call' }))
-        },
-        typing: (session, text) => {
-          void frames.typing(session, text).catch((e) =>
-            caught(e, { request: 'operator socket' })
-          )
-          void import('./operator-calls.ts').then(({ typed }) =>
-            typed(store, session, text)
-          ).catch((e) => caught(e, { request: 'operator call' }))
-        },
-        stepped: (session) =>
-          void import('./operator-calls.ts').then(({ stepped }) =>
-            stepped(store, session)
-          ).catch((e) => caught(e, { request: 'operator call' })),
-      })
-      handleChannels(operator, this.#env)
-      return operator
-    })()
+    return this.#operator ??= unstopped(
+      () => this.#operator = undefined,
+      async () => {
+        let { store } = await this.#stored()
+        let frames = this.#frames!
+        let { attachmentTools, handleChannels } = await import(
+          './operator-channels.ts'
+        )
+        let { operating } = await import('./operator.ts')
+        let operator = operating(store, this.#env, {
+          tools: attachmentTools(this.#env),
+          browsers: this.#lent,
+          tell: (session) => {
+            void frames.tell(session).catch((e) =>
+              caught(e, { request: 'operator socket' })
+            )
+            void import('./operator-calls.ts').then(({ moved }) =>
+              moved(store, session)
+            ).catch((e) => caught(e, { request: 'operator call' }))
+          },
+          typing: (session, text) => {
+            void frames.typing(session, text).catch((e) =>
+              caught(e, { request: 'operator socket' })
+            )
+            void import('./operator-calls.ts').then(({ typed }) =>
+              typed(store, session, text)
+            ).catch((e) => caught(e, { request: 'operator call' }))
+          },
+          stepped: (session) =>
+            void import('./operator-calls.ts').then(({ stepped }) =>
+              stepped(store, session)
+            ).catch((e) => caught(e, { request: 'operator call' })),
+        })
+        handleChannels(operator, this.#env)
+        return operator
+      },
+    )
   }
 
   // The sockets of pages watching a build (pages.ts `chat`), not the
@@ -810,7 +829,21 @@ export class Builder {
     }
   }
 
+  // A stopped object's alarm does nothing but come back when its window ends
+  // (@yaks/durable-object `bounded`), and one stopped as it starts comes back
+  // then too; one stopped as its work goes is `waking`'s.
   async alarm() {
+    try {
+      let wait = bounded(this.#ctx.storage).stopped(true)
+      if (wait) await this.#ctx.storage.setAlarm(Date.now() + wait)
+      else await this.#ring()
+    } catch (e) {
+      if (!stopped(e)) throw e
+      await this.#ctx.storage.setAlarm(Date.now() + e.retry.after)
+    }
+  }
+
+  async #ring() {
     let { drain, SLICE, waking } = await import('./operator-store.ts')
     let { store } = await this.#work()
     this.#resume()
@@ -828,6 +861,7 @@ export class Builder {
         try {
           more = await attachmentBackfill(store, this.#env)
         } catch (e) {
+          if (stopped(e)) throw e
           caught(e, { request: 'operator attachment backfill' })
           retry = Date.now() + 60_000
         }
@@ -937,6 +971,15 @@ let read = (data: string | ArrayBuffer): string | null => {
   } catch {
     return null
   }
+}
+
+// What `make` makes, held by the caller, unless the object was stopped
+// (@yaks/durable-object `Stopped`) making it: then `forget` drops it, so the
+// first call after the window makes it again. Any other failure stands.
+let unstopped = <T>(forget: () => void, make: () => Promise<T>): Promise<T> => {
+  let made = make()
+  made.catch((e) => stopped(e) && forget())
+  return made
 }
 
 let no = (status: number, message: string) =>

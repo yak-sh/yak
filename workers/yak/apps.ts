@@ -1,5 +1,5 @@
 import { browsersOf } from './attribution.ts'
-import { refuse as refusedOptions, writeOptions } from '@yaks/api'
+import { refuse as refusedOptions, waits, writeOptions } from '@yaks/api'
 import { decodedPath } from './request-path.ts'
 import { serves, stamped } from './site-data.ts'
 import { BINARY } from '@yaks/vocab/wire'
@@ -405,17 +405,22 @@ export let json = (
   )
 
 // A refusal, or a store's answer it relays, keeps its HTTP status through the
-// page's error envelope. A failure raised here is reported with the door's
+// page's error envelope, and the wait it asks for (a stopped store's). A failure raised here is reported with the door's
 // tags and thrown on, never answered as the page's mistake (defects.ts
 // `refusing`).
-let rejection = (error: unknown, tags: Record<string, string>) =>
-  Response.json({
+let rejection = (error: unknown, tags: Record<string, string>) => {
+  let wait = waits(error)
+  return Response.json({
     error: {
       code: 'refused',
       message: error instanceof Error ? error.message : String(error),
       ...(error instanceof Error ? { name: error.name } : {}),
     },
-  }, { status: refusing(error, tags) })
+  }, {
+    status: refusing(error, tags),
+    headers: wait == null ? {} : { 'retry-after': String(wait) },
+  })
+}
 
 // What the page's own code got wrong, as the store refused it: a break in the
 // app, filed here at its door because the page may catch the refusal and the

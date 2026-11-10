@@ -711,6 +711,34 @@ Cloudflare's own Billing Budget Alerts (dashboard, Notifications) mail too, when
 the month's usage charges reach $0.01, $20 and $50; Cloudflare offers no
 spending cap to set beside them.
 
+**The ceiling.** So the cap is kept where statements run. Every object's driver
+counts its statements against a minute and an hour of rows (@yaks/durable-object
+`bounded`, `WINDOWS`: 50 million read or 100,000 written in a minute, 200
+million or 500,000 in an hour), and every object but the directory stops when it
+passes one (defects-runtime.ts `instrument`), until the window ends. At these
+prices an object costs at most about $0.20 of reads and $0.50 of writes an hour
+while stopped, plus the statement that passed it. What a stopped object answers:
+
+- A Store's read (`/query`, `/call`, a socket's watch) is 429 with `retry-after`
+  in seconds and `{error: 'Stopped', message, retry: {after}}`; the kernel
+  relays both (apps.ts `rejection`, kernel.ts), and a page's watch is declared
+  again after the wait (client.js).
+- A Store's write (`/apply`) is kept in its write log as `pending` and answered
+  202 `Pending` with `retry-after` (graph.ts `#kept`); a write the window
+  stopped as it applied, or as the alarm replayed it, waits the same way, its
+  try uncounted (writes.ts `unstarted`). The alarm, armed for the window's end,
+  replays them in order. A page's outbox sends again no sooner than
+  `retry-after` (@yaks/sync `outbox`). Past its written rows only, a store still
+  reads.
+- Its alarm and `tick` do nothing but come back when the window ends; replays,
+  wakes, effects, embedding, moves, the lexicon and planner statistics wait and
+  are marked neither failed nor stuck. An effect stopped mid-run is due again
+  after the wait as the same attempt (@yaks/effects).
+- A Builder answers each door 429 the same way; its alarm comes back then.
+- The directory is told of a runaway and never stopped: every door reads it, so
+  stopping it would stop the platform. A relocation counts its rows and is never
+  stopped half way (relocate.ts `freely`).
+
 ## A reviewer's sign-in link
 
 An app directory's reviewer gets a link, never a mailbox: OpenAI rejects

@@ -295,6 +295,20 @@ A query that works on the box can be refused in a store.
   statement's condition goes without an index (the owner, verbatim: "no
   scanning tables. and no scanning *all* tables"): the fix for a `Scan` bug is
   an index or a different read, never a higher threshold.
+- **A runaway object stops until its window ends.** Every yaks.app object
+  refuses past a window (`instrument`), so a miss costs at most its window's
+  rows. A stopped Store answers a read 429 with `retry-after` and
+  `{error: 'Stopped', message, retry}`, and keeps a person's write in its log
+  as `pending` (graph.ts `#kept`, in the ceiling's `free`), answered 202 with
+  `retry-after`; its alarm, armed for the window's end, replays it. Past its
+  written rows only, it still reads. Its alarm, `tick`, effects, embedding,
+  moves, lexicon and statistics wait for the window's end and mark nothing
+  failed: `defect` hears no `Stopped`, a boot that meets one runs again
+  (`#failed`), and an effect that meets one runs again as the same attempt
+  (@yaks/effects `deferral`). A Builder answers 429 the same way and its alarm
+  comes back then. The directory is spared (`#start`): every door reads it.
+  A relocation runs on `freely` drivers and never stops half way. A page's
+  outbox and socket wait as long as `retry-after` says (client.js).
 - **A boot is all or nothing.** It runs in one transaction. A schema that won't
   stand unwinds, and the store answers every request 503 with the reason
   (`graph.ts` `#stalled`), still keeping the writes it is sent (`writes.ts`),

@@ -212,9 +212,11 @@ export let behind = async (
 }
 
 /** Whether an answer refuses its caller: what an object on an older deploy
- * may say only because its code does not know what the caller's does. */
+ * may say only because its code does not know what the caller's does. A 429
+ * asks for a wait (a pace, an object past its rows), which no deploy changes,
+ * and a restart would forget the rows that stopped the object. */
 export let refused = (answer: Response): boolean =>
-  answer.status >= 400 && answer.status < 500
+  answer.status >= 400 && answer.status < 500 && answer.status != 429
 
 /** How long an object's work behind an answer waits once its caller has read
  * the answer through (`onceRead`), so the runtime has sent it on: the runtime

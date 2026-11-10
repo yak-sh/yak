@@ -205,6 +205,8 @@ import {
   storage as sqliteStorage,
 } from '@yaks/sqlite'
 import {
+  bounded,
+  type Ceiling,
   driver,
   type DurableSql,
   type DurableStorage,
@@ -363,7 +365,7 @@ import { borrows } from '@yaks/reach'
 import { BEAT, owed, ran, refused, skewed } from './running.ts'
 import { type Relocating, relocation } from './relocate.ts'
 import { type Meta, metaOf, minted } from './meta.ts'
-import { caught, defect, refusing } from './defects.ts'
+import { caught, defect, refusing, stopped } from './defects.ts'
 import { noted } from './unseen.ts'
 import {
   apart,
@@ -434,6 +436,7 @@ import {
   said,
   type Sent,
   started,
+  unstarted,
   waiting,
   writes,
 } from './writes.ts'
@@ -619,6 +622,11 @@ export type Bindings = Partial<Env> & {
  * runtime's clock, so a test that moves one Store's time gives it a clock of
  * its own instead of faking the runtime's. */
 export type Time = { now?: () => number; timer?: Timer }
+
+// How long work that failed waits before it is tried again: `ms`, or the rest
+// of the window of an object that refused it for the rows it spent.
+let resting = (error: unknown, ms: number) =>
+  stopped(error) ? Math.max(ms, error.retry.after) : ms
 
 // The kernel's clock as a Store's time, and a Store's time as a clock.
 let timeOf = (clock?: Clock): Time =>
@@ -1070,6 +1078,7 @@ export class Store {
     this.#ctx = ctx
     this.#bind = bind
     this.#rules = rules
+    this.#ceiling = bounded(ctx.storage)
     let { getAlarm, setAlarm } = ctx.storage
     if (getAlarm && setAlarm) {
       this.#alarm = {
@@ -1079,6 +1088,11 @@ export class Store {
     }
   }
 
+  // What this object's statements may cost before it stops until a window
+  // ends (@yaks/durable-object `bounded`, refusing as defects-runtime.ts
+  // `instrument` made it): its doors ask it first, so a stopped store answers
+  // there (`#door`, `#write`, `#alarmRequest`).
+  #ceiling: Ceiling
   #started = once()
   #startedDormant = false
   #facets = new Map<string, Prepared>()
@@ -1192,7 +1206,13 @@ export class Store {
     }
     this.#reshaping()
     let remembered = this.#get('name')
-    await this.#prepare(request?.headers.get('x-store') ?? remembered ?? '')
+    let name = request?.headers.get('x-store') ?? remembered ?? ''
+    // The directory is never stopped, only told of: every door reads it, so
+    // stopping it would stop the whole platform, which costs more than its
+    // rows. Its name is first known here, after a handful of statements a new
+    // instance's empty windows always take.
+    if (name == PLATFORM_STORE) this.#ceiling.spare()
+    await this.#prepare(name)
     this.#atomic(() => {
       // The waking request supplies the capabilities the first binding needs.
       // Remember them before building, rather than replacing that binding in
@@ -2968,6 +2988,12 @@ export class Store {
    */
   async tick(now = this.#now()): Promise<Ticked> {
     if (!await this.#awake()) return { fired: [], refused: [] }
+    // A stopped object's wakes fire once its window ends, from the alarm.
+    let wait = this.#ceiling.stopped(true)
+    if (wait) {
+      await this.#later(wait)
+      return { fired: [], refused: [] }
+    }
     await this.#ensureStarted()
     let run = async () => {
       let leave = await this.#enter(false)
@@ -3002,7 +3028,22 @@ export class Store {
     return this.#traced('alarm', () => this.#alarmRequest())
   }
 
+  // A stopped object's alarm does nothing but come back when the window
+  // ends (`#ceiling`), and one stopped as it ran comes back then too: its
+  // replays, wakes, effects, embedding, moves, lexicon and statistics stand
+  // as they were, owed and unmarked.
   async #alarmRequest(): Promise<void> {
+    try {
+      let wait = this.#ceiling.stopped(true)
+      if (wait) await this.#later(wait)
+      else await this.#ring()
+    } catch (e) {
+      if (!stopped(e)) throw e
+      await this.#later(e.retry.after)
+    }
+  }
+
+  async #ring(): Promise<void> {
     let expires = await this.#ctx.storage.get<Expiry>?.('expires')
     if (expires && expires.at <= this.#now()) {
       await this.#expiring(expires)
@@ -3134,6 +3175,8 @@ export class Store {
       }
     } catch (e) {
       this.#unanalyzed = null
+      // A stopped object's alarm comes back for the rest (`#alarmRequest`).
+      if (stopped(e)) throw e
       defect(e, { request: 'planner statistics', store: this.#name() })
       return
     }
@@ -3470,6 +3513,9 @@ export class Store {
             : moved()
         } catch (e) {
           this.#kv.clear()
+          // Stopped, the batch unwound and the rule is no failure: the alarm
+          // moves it on once the window ends (`#alarmRequest`).
+          if (stopped(e)) throw e
           this.#halted.add(rule.mark)
           defect(e, { request: `move ${rule.mark}`, store: name })
           try {
@@ -3571,7 +3617,7 @@ export class Store {
     }).catch(async (error) => {
       defect(error, { request: 'effect pool', store: this.#name() })
       await this.#arming(
-        new Date(this.#now() + Store.RETRY).toISOString(),
+        new Date(this.#now() + resting(error, Store.RETRY)).toISOString(),
         'effects retry',
       )
         .catch((e) =>
@@ -3702,7 +3748,7 @@ export class Store {
       }
     })().catch(async (error) => {
       this.#ride(name, failed(error))
-      this.#vectorRetry = this.#now() + Store.RETRY
+      this.#vectorRetry = this.#now() + resting(error, Store.RETRY)
       await this.#arming(
         new Date(this.#vectorRetry).toISOString(),
         'embedding retry',
@@ -3788,6 +3834,7 @@ export class Store {
       for (let w of words) lexis.told.add(w)
       this.#put('lexicon', lexis.fields)
     } catch (e) {
+      if (stopped(e)) throw e
       defect(e, { request: 'lexicon read', store })
     }
   }
@@ -3893,6 +3940,13 @@ export class Store {
   }
 
   #failed(e: unknown) {
+    // A statement refused for the rows this object already spent is a wait,
+    // not a schema that refused: the start runs again once the window ends,
+    // and whoever met it is answered as stopped.
+    if (stopped(e)) {
+      this.#started.forget()
+      throw e
+    }
     let message = 'the schema refused'
     try {
       message = (e instanceof Error ? e.message : String(e)) || message
@@ -4074,7 +4128,13 @@ export class Store {
       }
       return this.#missing()
     }
-    await this.#ensureStarted(request)
+    // A stopped object (`#ceiling`) answers a read at once with how long to
+    // wait, and keeps a person's write for the window's end (`#write`), which
+    // needs nothing of the start but its log.
+    let writing = logged(request)
+    let stop = this.#ceiling.refusal(writing)
+    if (stop && (!writing || !this.#sql)) return refuse(stop)
+    if (!stop) await this.#ensureStarted(request)
     let tally = this.#pending
     this.#pending = new Map()
     waited(tally, waking, woke, this.#now())
@@ -4153,6 +4213,9 @@ export class Store {
       if (error instanceof Error && error.name == 'Refused') {
         return refuse(new Refused(error.message))
       }
+      // The invocation that passed a window meets the ceiling mid-way: a
+      // read answers as a stopped one does.
+      if (stopped(error)) return refuse(error)
       throw error
     }
   }
@@ -4215,11 +4278,15 @@ export class Store {
       }
       return unkept()
     }
+    // Authority is the replay's to check (`#commit`), as for every kept write.
+    let stop = this.#ceiling.refusal(true)
+    if (stop) return this.#kept(fingerprinted(request, body), body, stop)
     if (durable(key)) {
       try {
         await this.#outboxAuthority(request)
         request = fingerprinted(request, body)
       } catch (e) {
+        if (stopped(e)) return this.#kept(fingerprinted(request, body), body, e)
         return refuse(e)
       }
     }
@@ -4237,6 +4304,9 @@ export class Store {
           let r = await this.#commit(new Request(request, { body }), {
             request,
           })
+          // Its transaction unwound when the ceiling refused it mid-way.
+          let stop = r.status == 429 ? this.#ceiling.refusal(true) : null
+          if (stop) return this.#kept(request, body, stop)
           if (r.status < 500) return this.#callerResponse(request, r)
           // An error after the transaction must not enqueue its mutation again.
           let committed = key ? first(this.#sql, key, request) : null
@@ -4258,6 +4328,7 @@ export class Store {
           ? json({ error: e.name, message: e.message }, 503)
           : refuse(e)
       }
+      if (stopped(e)) return this.#kept(request, body, e)
       defect(e, { request: 'write log', store: this.#name() })
       // Readiness can throw too. Keep that input if storage still works;
       // never bypass a keyed receipt after an error and risk a second mutation.
@@ -4308,6 +4379,43 @@ export class Store {
     return answer.then((response) => this.#callerResponse(request, response))
   }
 
+  /** A write that arrives while this object may not write (`#ceiling`): kept
+   * in the log, which the ceiling lets through (`free`), as `pending`, and
+   * told when to look again. The alarm, armed for the window's end, replays
+   * it. A resend of one kept so is told the same; one of a write the log
+   * already settled waits, and hears what it was once the object writes. */
+  #kept(
+    request: Request,
+    body: string,
+    stop: Error & { retry: { after: number } },
+  ): Response {
+    let { free } = this.#ceiling, sql = this.#sql
+    let key = request.headers.get(IDEMPOTENCY)
+    let was = free(() => key ? first(sql, key, request) : null)
+    if (was && was.state != 'pending' && was.state != 'running') {
+      return refuse(stop)
+    }
+    let seq = was?.seq ?? free(() => keep(sql, request, body, this.#now))
+    return this.#waiting(seq, stop.retry.after)
+  }
+
+  /** The answer for a write kept while this object is stopped, `wait` ms
+   * more, and the alarm that comes back for it then. */
+  #waiting(seq: number, wait: number): Response {
+    void this.#later(wait)
+    let s = Math.ceil(wait / 1000)
+    let answer = parked(
+      seq,
+      `this app is past the rows it may write for ${s} s`,
+    )
+    answer.headers.set('retry-after', String(s))
+    return answer
+  }
+
+  // The alarm, `wait` ms from now: when this object's window ends.
+  #later = (wait: number) =>
+    this.#arming(new Date(this.#now() + wait).toISOString(), 'stopped')
+
   /** The log from its oldest waiting write to its newest, one at a time. A
    * write that fails is set aside (`#land`) and the ones behind it go on;
    * only the log itself failing stops the pass, and then the alarm or the
@@ -4321,11 +4429,22 @@ export class Store {
       // Yield once, so `#draining` is set before the loop can end and clear
       // it: a write that arrives in between must find the loop running.
       await null
+      let at: Kept | null = null
       try {
-        for (let k = next(sql); k; k = next(sql, k.seq)) {
+        for (let k = at = next(sql); k; k = at = next(sql, k.seq)) {
           let live = this.#callers.has(k.seq)
           started(sql, k.seq)
           let r = await this.#land(k, live)
+          // Stopped before it applied (`#ceiling`): it waits again as it was,
+          // and every write behind it with it, until the window ends.
+          let wait = r.status == 429 ? this.#ceiling.stopped(true) : 0
+          if (wait) {
+            this.#ceiling.free(() => unstarted(sql, k.seq))
+            let caller = this.#callers.get(k.seq)
+            this.#callers.delete(k.seq)
+            caller?.(this.#waiting(k.seq, wait))
+            break
+          }
           let kept = r.status >= 500 && held(sql, k.seq)
           let answer = kept ? parked(k.seq, await said(r)) : r
           // A storage failure can escape even the write log's error handler.
@@ -4336,15 +4455,26 @@ export class Store {
           caller?.(answer)
         }
       } catch (e) {
-        this.#stuck = true
-        defect(e, { request: 'write replay', store: this.#name() })
+        if (stopped(e)) {
+          let seq = at?.seq
+          if (seq != null) this.#ceiling.free(() => unstarted(sql, seq))
+        } else {
+          this.#stuck = true
+          defect(e, { request: 'write replay', store: this.#name() })
+        }
       }
       // Synchronously after the last look at the log: nothing can be kept
       // between that look and this line without finding the loop gone.
       this.#draining = null
+      let wait = this.#ceiling.stopped(true)
       for (let [seq, caller] of this.#callers) {
-        caller(this.#park(seq, 'earlier writes to this app are still waiting'))
+        caller(
+          wait
+            ? this.#waiting(seq, wait)
+            : this.#park(seq, 'earlier writes to this app are still waiting'),
+        )
       }
+      if (wait && !this.#callers.size) void this.#later(wait)
       this.#callers.clear()
     }
     return this.#draining = this.#stage('replay', run)
@@ -4359,6 +4489,8 @@ export class Store {
     let sql = this.#sql
     try {
       let r = await this.#commit(replayed(k), k.seq)
+      // The ceiling's to wait out (`#drain`), never the write's refusal.
+      if (r.status == 429 && this.#ceiling.stopped(true)) return r
       if (r.status < 300) done(sql, k.seq)
       else if (r.status >= 500) aside(sql, k.seq, await said(r.clone()))
       else if (live) done(sql, k.seq)
@@ -4372,6 +4504,7 @@ export class Store {
       }
       return r
     } catch (e) {
+      if (stopped(e)) throw e
       defect(e, { request: 'write replay', store: this.#name() })
       if (held(sql, k.seq)) aside(sql, k.seq, String(e))
       return refuse(e)
@@ -4383,6 +4516,8 @@ export class Store {
   #settle(): Promise<unknown> | void {
     let draining = this.#draining
     if (draining) return this.#stage('settle', () => draining, false)
+    // While stopped, what the log holds waits for the alarm (`#kept`).
+    if (this.#ceiling.stopped(true)) return
     if (!this.#stuck && waiting(this.#sql)) return this.#drain()
   }
 

@@ -235,12 +235,21 @@ export let relayed = async (answer: Response): Promise<Response> => {
 export let redone = (error: unknown, replaced?: () => boolean): boolean =>
   moved(error) && !!replaced?.()
 
+/** Whether a failure is a statement its object refused for the rows it
+ * already spent (@yaks/durable-object `Stopped`): the `Runaway` that stopped
+ * it was told as it happened, and every catch it meets after is waiting, not
+ * breaking. Known by its name, as @yaks/graph `status` knows it. */
+export let stopped = (error: unknown): error is Error & {
+  retry: { after: number }
+} => error instanceof Error && error.name == 'Stopped'
+
 /** Only exception data and explicit tags leave. One thrown object can pass
  * several catches; a later invocation reusing it is another occurrence. An
  * occurrence about other code than the running version (a failed build)
  * names the commit it concerns. What an instance the runtime moved meets in
  * its own invocations is no defect: its work is run again by whoever owns it
- * (@yaks/durable-object `moved`). The same words met by a live object, or by
+ * (@yaks/durable-object `moved`), and neither is a statement a stopped object
+refused (`stopped`). The same words met by a live object, or by
  * the Worker, are a call that ran out of retries, and are reported, one bug
  * for each wording: the deploy it names and the caller it reached are the
  * occurrence's, not the failure's. */
@@ -256,7 +265,10 @@ export let defect = (
   } = {},
 ) => {
   let invocation = context.getStore()
-  if (!invocation?.env.ERRORS || redone(error, invocation.replaced)) return
+  if (
+    !invocation?.env.ERRORS || redone(error, invocation.replaced) ||
+    stopped(error)
+  ) return
   if (error && typeof error == 'object') {
     if (invocation.seen.has(error)) return
     invocation.seen.add(error)

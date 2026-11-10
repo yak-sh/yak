@@ -154,6 +154,32 @@ test('outbox retains unknown outcomes and automatically retries the same key and
   }
 })
 
+// A store past the rows it may write for now keeps the write and says how
+// long to wait (workers/yak graph.ts `#kept`).
+let stopped = Object.assign(new Error('kept until the window ends'), {
+  retry: { after: 5_000 },
+})
+let waitedCalls: string[] = []
+let waited = await fixture((key) => {
+  waitedCalls.push(key)
+  return waitedCalls.length == 1
+    ? Promise.reject(stopped)
+    : Promise.resolve('saved')
+})
+test('outbox sends again no sooner than the wait its answer asked for', async () => {
+  try {
+    await throws(() => waited.box.submit(intent(), 'waited-key'))
+    await waited.time.advance(4_999)
+    equal(waitedCalls, ['waited-key'])
+    let drained = changedTo(waited.box, () => !waited.box.pending().length)
+    await waited.time.advance(1)
+    await drained
+    equal(waitedCalls, ['waited-key', 'waited-key'])
+  } finally {
+    waited.box.close()
+  }
+})
+
 let refusal = Object.assign(new Error('write not allowed'), {
   outcome: 'refused',
 })

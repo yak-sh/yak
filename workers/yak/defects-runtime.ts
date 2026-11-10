@@ -109,9 +109,13 @@ export let instrument = <C>(Original: C): C => {
   return new Proxy(Tracked, {
     construct(target, args, newTarget) {
       let [state, env = {}] = args as [unknown, Partial<Env>?]
+      // Every object refuses past its windows (@yaks/durable-object
+      // `bounded`), so a runaway costs at most its window's rows. The
+      // platform's directory is spared by its Store once it knows its name
+      // (graph.ts `#start`): no id says it before then.
       if (own(state)) {
         let { id } = state as { id?: { name?: string } }
-        bounded(state.storage, { report: costly(Base.name, id) })
+        bounded(state.storage, { report: costly(Base.name, id), refuse: true })
       }
       return entry(
         env,

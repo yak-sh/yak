@@ -91,6 +91,7 @@ import { origin } from '@yaks/tracker/report'
 import { caught, within } from './defects.ts'
 import { CallError, refused as toolRefusal } from '@yaks/tools/errors'
 import { Stale } from '@yaks/graph/errors'
+import { waits } from '@yaks/api/refuse'
 import * as apps from './apps.ts'
 import { sealed } from './cache.ts'
 import * as dirPart from './directory.ts'
@@ -484,7 +485,14 @@ let router = {
           } catch {
             answer = { error: { code: 'refused', message: said } }
           }
-          return sealed(Response.json(answer, { status }), env)
+          let wait = waits(e)
+          return sealed(
+            Response.json(answer, {
+              status,
+              headers: wait == null ? {} : { 'retry-after': String(wait) },
+            }),
+            env,
+          )
         }
         let page = oops(env)
         return sealed(

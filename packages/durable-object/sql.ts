@@ -261,3 +261,28 @@ export let driver = (
     connection: durable,
   }
 }
+
+/**
+ * A {@link driver} whose statements are counted against the object's ceiling
+ * (./ceiling.ts) and never refused, its transactions included: for work that
+ * must not stop half way, such as a copy of the whole object an admin
+ * started. What it costs is still told as it runs.
+ *
+ * ```ts
+ * // let sql = freely(ctx.storage)
+ * ```
+ */
+export let freely = (
+  durable: DurableStorage,
+  observe?: Observe,
+  measure?: Measure,
+): Driver => {
+  let { free } = bounded(durable)
+  let d = free(() => driver(durable, observe, measure))
+  return {
+    ...d,
+    query: (s) => free(() => d.query(s)),
+    run: (s) => free(() => d.run!(s)),
+    tx: (body) => free(() => d.tx!(body)),
+  }
+}

@@ -28,6 +28,15 @@
 // which is what makes it one instant without a hold. The copy arms no alarm and
 // owes nothing its source owed (graph.ts `#forgiven`): it comes up when it is
 // first asked, and its wakes resume then.
+//
+// Both ends run every statement through `freely`: counted against the
+// object's ceiling, so what a move costs is told as it runs, and never
+// refused (@yaks/durable-object `bounded`). A move is an admin's, as long as
+// its store, and its steps are asynchronous, so `free` around each one would
+// miss what runs between; stopped half way, the copy left behind is neither
+// object, and the far end of a large store writes past its window by design.
+// What a move wrote stays in its window: a copy that passed it waits that out
+// before it writes, keeping what it is sent meanwhile (graph.ts `#kept`).
 import {
   arrived,
   type Cell,
@@ -35,9 +44,10 @@ import {
   chunks,
   type Copied,
   copied,
-  driver,
+  type driver,
   type DurableStorage,
   ending,
+  freely,
   overwritten,
   page,
   type Plan,
@@ -108,7 +118,7 @@ type Arrived = { written: number; tallies?: Record<string, Copied> }
 let arrive = async (storage: Relocating, told: Told): Promise<Response> => {
   let written = 0
   let measure = (_: unknown, w?: number) => written += w ?? 0
-  let sql = driver(storage, undefined, measure)
+  let sql = freely(storage, undefined, measure)
   let refused = (error: string) => Response.json({ error }, { status: 409 })
   if (told.op == 'begin') {
     if (serving(sql) && !await storage.get('arriving')) {
@@ -116,7 +126,7 @@ let arrive = async (storage: Relocating, told: Told): Promise<Response> => {
     }
     await storage.deleteAll()
     await storage.put('arriving', true)
-    copied(driver(storage, undefined, measure), told.plan)
+    copied(freely(storage, undefined, measure), told.plan)
     return Response.json({ written })
   }
   if (!await storage.get('arriving')) return refused('nothing is arriving here')
@@ -219,7 +229,7 @@ export let relocation = (o: {
   // The far end's tallies must be the source's, row for row.
   let copy = async (from: string, to: string): Promise<Response> => {
     let start = Date.now()
-    let { plan: made, sends, tallies } = snapshot(driver(o.storage()))
+    let { plan: made, sends, tallies } = snapshot(freely(o.storage()))
     let written = 0
     let told = async (said: Told) => {
       let answer: Arrived = await (await send(to, said)).json()
@@ -250,7 +260,7 @@ export let relocation = (o: {
   // Every table across while this object serves.
   let prepare = async (to: string): Promise<Response> => {
     let start = Date.now()
-    let sql = driver(o.storage())
+    let sql = freely(o.storage())
     let made = plan(sql)
     await send(to, { op: 'begin', plan: made })
     let rows = 0
@@ -269,7 +279,7 @@ export let relocation = (o: {
   let hold = async (to: string): Promise<Response> => {
     let start = Date.now()
     let storage = o.storage()
-    let sql = driver(storage)
+    let sql = freely(storage)
     let made = plan(sql)
     let source = chunks(sql, made)
     let resent = 0

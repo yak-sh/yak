@@ -199,6 +199,19 @@ export let started = (db: Driver, seq: number) =>
     where: and(at(seq), PENDING),
   })
 
+/** A started write its store stopped before it could apply it (graph.ts
+ * `#drain`): waiting again, its try not counted, so the replay after the wait
+ * takes it as it was. Its transaction unwound, so nothing of it landed. */
+export let unstarted = (db: Driver, seq: number) => {
+  idle.delete(of(db))
+  db.query({
+    t: 'update',
+    table: LOG,
+    set: { state: lit('pending'), tries: op('-', col('tries'), lit(1)) },
+    where: and(at(seq), RUNNING),
+  })
+}
+
 // A running marker survives a reset. Older code could leave a pending write
 // after starting it, so every row it left is unreviewed until someone reads
 // the body and deliberately retries. New writes carry a generation and retain

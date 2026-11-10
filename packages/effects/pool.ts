@@ -68,7 +68,13 @@
 // `retry`, as @yaks/model's `ModelError` does for a provider's transient
 // failure) is expected: it is kept on the row and reported only once nothing
 // will try it again, and where it says when to come back (`retry.after`, a
-// provider's Retry-After in milliseconds) it is due no sooner than that.
+// provider's Retry-After in milliseconds) it is due no sooner than that. One
+// whose `retry` also says `defer` is no failure at all, as a handler's own
+// `defer` is not: its object refused it for a while (@yaks/durable-object
+// `Stopped`), and the run is due again after the wait as the same attempt.
+// When the pool cannot write that down either, because the same object
+// refuses its bookkeeping, the run is remembered as deferred and its claim
+// read as such, not as an interruption.
 //
 // A handler is told which attempt it is ({@link Attempt}): whether this is its
 // last, so the failure it records there is the one that stands; and a way to
@@ -178,6 +184,9 @@ let asked = (err: unknown): number => {
   let after = retryOf(err)?.after
   return typeof after == 'number' && after > 0 ? after : 0
 }
+// An error that asks for a wait and is no failure: it spends no attempt.
+let deferral = (err: unknown): boolean =>
+  (retryOf(err) as { defer?: unknown } | undefined)?.defer === true
 
 /** A run the pool started, as its handler sees it. */
 export type Attempt = {
@@ -421,6 +430,12 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let member = false
   let graph: Access | undefined
   let running = new Map<Eid, Held>()
+  // Runs deferred (`deferral`) whose row could not say so: the attempts their
+  // claim left, and when they are due again.
+  let paused = new Map<
+    Eid,
+    { attempts: number; token?: string; until: number }
+  >()
   let admitting = 0
   // Runs that ended here, however they ended: in all, by the second, and how
   // many threw. What a worker says of itself (./worker.ts).
@@ -627,25 +642,39 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         if (peek(g) && span?.active) {
           span.end({ outcome: outcome(err), counts: { runs: 1 } })
         }
+        // A deferral gives its attempt back and is due after its wait.
+        let deferred = deferral(err)
+        if (deferred) tries = Math.max(0, tries - 1)
         // An error that asks to be tried again is the handler waiting on
         // something outside, expected and kept on the row; it is reported
         // only once nothing will try it again.
-        let last = attempt.last()
+        let last = !deferred && attempt.last()
         if (last || !retried(err)) {
           ctx.report(err, { handler: String(row.handler), event, slot: s })
         }
-        let due = Math.max(wait(tries), asked(err))
-        await scope(undefined, () =>
-          settle(
-            last
-              ? { state: 'failed', error: said(err), next: null, ...free }
-              : {
-                state: 'pending',
-                error: said(err),
-                next: stamp(clock() + due),
-                ...free,
-              },
-          ))
+        let due = deferred ? asked(err) : Math.max(wait(tries), asked(err))
+        try {
+          await scope(undefined, () =>
+            settle(
+              last
+                ? { state: 'failed', error: said(err), next: null, ...free }
+                : {
+                  state: 'pending',
+                  error: said(err),
+                  next: stamp(clock() + due),
+                  ...free,
+                },
+            ))
+        } catch (why) {
+          if (deferral(why)) {
+            paused.set(eid, {
+              attempts: held.attempts,
+              token: held.token ?? undefined,
+              until: clock() + Math.max(due, asked(why)),
+            })
+          }
+          throw why
+        }
       }
     }
     // A host's task-local carrier retains this effect's ancestry across
@@ -737,17 +766,26 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
       let s = handled(String(row.handler))
       if (!s || running.has(eid)) return
+      let attempts = Number(row.attempts ?? 0)
+      // A deferral its row could not record (`paused`) waits, then runs again
+      // as the attempt it was, under the claim it still holds (a shared
+      // store reads the row again once that claim's lease runs out).
+      let pause = paused.get(eid)
+      paused.delete(eid)
+      let resumed = pause?.attempts == attempts &&
+        pause.token == (row.lease_token ?? undefined)
+      if (resumed && pause!.until > now) return void paused.set(eid, pause!)
       let expiry = row.lease_expiry ? Date.parse(String(row.lease_expiry)) : 0
       if (
-        !opts.singleOwner && row.lease_owner && expiry > now
+        !resumed && !opts.singleOwner && row.lease_owner && expiry > now
       ) return
       if (row.next && Date.parse(String(row.next)) > now) return
-      let attempts = Number(row.attempts ?? 0)
       // Claimed and no `next`: interrupted, not reported, so how far it got
       // is unknown — and a second run is not the same as a first. Started
       // under other code, a deploy cut it off; under this code, it crashed.
-      let interrupted = attempts > 0 && !row.next
-      let cut = interrupted && !!opts.version && row.version != opts.version
+      let interrupted = !resumed && attempts > 0 && !row.next
+      let cut = resumed ||
+        interrupted && !!opts.version && row.version != opts.version
       // An interruption left failed is a failure no handler threw, so the
       // pool reports it itself.
       let abandon = async (error: string) => {

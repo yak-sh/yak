@@ -16,7 +16,9 @@
 // caller sends it again and a pool or a queue redelivers after the wait. Past
 // its written rows it still reads; past its read rows it takes nothing. What a
 // host must still write while stopped (keeping a person's write for later) it
-// runs in `free`.
+// runs in `free`. A host asks `stopped` at its doors, so a stopped object
+// answers there rather than failing deep inside, and one whose stopping costs
+// more than its rows (every door reads it) is `spare`d: told, never refused.
 //
 // The tallies live in the instance's memory. A storm keeps its object awake,
 // so they hold through one; an object evicted between bursts starts its
@@ -62,19 +64,20 @@ export class Runaway extends Error {
 }
 
 /** A statement refused because its object is past a window: the caller's to
- * send again once `retry.after` milliseconds have run (@yaks/effects reads
- * the same field), and no defect of its own, since the `Runaway` that stopped
- * the object was told when it happened. */
+ * send again once `retry.after` milliseconds have run, and no defect of its
+ * own, since the `Runaway` that stopped the object was told when it happened.
+ * `retry.defer` says the wait is no failure: @yaks/effects runs the attempt
+ * again as the same one, as it does a handler's `defer`. */
 export class Stopped extends Error {
   override name = 'Stopped'
   status = 429
-  retry: { after: number }
+  retry: { after: number; defer: true }
   constructor(after: number, kind: Kind) {
     super(
       `this store ${kind == 'read' ? 'read' : 'wrote'} more rows than it ` +
         `may for now; try again in ${Math.ceil(after / 1000)} s`,
     )
-    this.retry = { after }
+    this.retry = { after, defer: true }
   }
 }
 
@@ -106,10 +109,15 @@ export type Ceiling = {
   /** Refuse a statement while its object is stopped. */
   admit: (writing: boolean) => void
   count: (statement: Counted) => void
+  /** What a statement would be refused with now, if anything. */
+  refusal: (writing?: boolean) => Stopped | null
   /** How long until a statement is admitted, in ms: 0 when one is now. */
   stopped: (writing?: boolean) => number
   /** Run statements a stopped object must still take. */
   free: <T>(body: () => T) => T
+  /** Refuse nothing from now on, and go on telling: for an object whose
+   * stopping costs more than its rows. */
+  spare: () => void
 }
 
 // An amount of rows as a person reads it: 264.5M, 480,000.
@@ -142,6 +150,7 @@ let span = (ms: number) => ms >= HOUR ? `${ms / HOUR} h` : `${ms / 60_000} min`
  * equal(said.at(-1), 'Runaway runaway|read')
  * equal((await throws(() => c.admit(false))) instanceof Stopped, true)
  * equal(c.free(() => (c.admit(true), 'kept')), 'kept')
+ * equal(c.stopped(), 60_000)
  * at = 60_000
  * c.admit(false)
  * ```
@@ -264,14 +273,19 @@ export let ceiling = (
     // Told once the tallies stand: a reporter may run statements of its own.
     for (let [error, told] of tell) say(error, told)
   }
+  let refusal = (writing = true) => {
+    if (!refuse || freed) return null
+    let { wait, kind } = held(writing)
+    return wait ? new Stopped(wait, kind) : null
+  }
   return {
     admit: (writing) => {
-      if (!refuse || freed) return
-      let { wait, kind } = held(writing)
-      if (wait) throw new Stopped(wait, kind)
+      let no = refusal(writing)
+      if (no) throw no
     },
     count,
-    stopped: (writing = true) => held(writing).wait,
+    refusal,
+    stopped: (writing) => refusal(writing)?.retry.after ?? 0,
     free: (body) => {
       freed++
       try {
@@ -279,6 +293,9 @@ export let ceiling = (
       } finally {
         freed--
       }
+    },
+    spare: () => {
+      refuse = false
     },
   }
 }

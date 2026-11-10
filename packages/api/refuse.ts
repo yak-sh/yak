@@ -105,7 +105,15 @@ export let json = (body: unknown, code = 200): Response =>
     headers: { 'content-type': 'application/json' },
   })
 
-/** A thrown error as its response: the refusal body, at its HTTP status. A
+/** The seconds an error asks its caller to wait (`retry.after`, in
+ * milliseconds, as @yaks/effects reads it), for an answer's `retry-after`. */
+export let waits = (err: unknown): number | null => {
+  let after = (err as { retry?: { after?: unknown } } | null)?.retry?.after
+  return typeof after == 'number' && after > 0 ? Math.ceil(after / 1000) : null
+}
+
+/** A thrown error as its response: the refusal body, at its HTTP status, with
+ * a `retry-after` when the error asks for a wait (`retry.after`). A
  * server failure is reported once: by the watch the request is answered under
  * (`served`), with its request, or else here ({@link fault}), with the method
  * and path when a request is supplied, never the query string, headers or
@@ -114,6 +122,8 @@ export let json = (body: unknown, code = 200): Response =>
 export let refuse = (err: unknown, request?: Request): Response => {
   let code = status(err)
   let answer = json(refusal(err), code)
+  let wait = waits(err)
+  if (wait != null) answer.headers.set('retry-after', String(wait))
   if (request && watched.has(request)) {
     if (code >= 500) watched.set(request, err)
   } else {

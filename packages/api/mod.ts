@@ -88,6 +88,7 @@ export {
   refusal,
   refuse,
   Unauthorized,
+  waits,
 } from './refuse.ts'
 export {
   type Ask,

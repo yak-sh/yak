@@ -33,6 +33,37 @@ let settled = async (ready: () => boolean) => {
 }
 let base = 'https://outbox-client.test/notes/api/'
 
+// A store past the rows it may write keeps the write and says how long to
+// wait (graph.ts `#kept`): the outbox sends it again no sooner.
+let waitsAsAsked = await (async () => {
+  let calls = 0
+  let time = clock()
+  using _fetch = wire(() =>
+    ++calls == 1
+      ? new Response(
+        JSON.stringify({ error: 'Pending', message: 'kept', pending: 1 }),
+        { status: 202, headers: { 'retry-after': '5' } },
+      )
+      : json(receipt)
+  )
+  let client = store(base, { clock: time })
+  try {
+    await client.outbox.ready
+    await assertRejects(() => client.apply(payload), Error, 'kept')
+    await settled(() => time.pending() == 1)
+    await time.advance(4_999)
+    let early = calls
+    await time.advance(1)
+    await settled(() => client.outbox.pending().length == 0)
+    return [early, calls]
+  } finally {
+    client.outbox.close()
+  }
+})()
+test('a kept write is sent again no sooner than its retry-after', () => {
+  assertEquals(waitsAsAsked, [1, 2])
+})
+
 let retriesPreserveReceipt = await (async () => {
   let calls: { key: string; body: string }[] = []
   // The store's own clock: the outbox waits on it after each answer that was

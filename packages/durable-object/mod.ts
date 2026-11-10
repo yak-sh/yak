@@ -48,6 +48,7 @@ export {
   driver,
   type DurableSql,
   type DurableStorage,
+  freely,
   type Measure,
   type Observe,
   prohibited,

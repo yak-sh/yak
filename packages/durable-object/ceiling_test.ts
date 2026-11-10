@@ -48,7 +48,7 @@ test('an object past a window is told once and takes nothing until it ends', () 
   ran(600_000)
   equal(told, ['Runaway read 1 min'])
   let refused = assertThrows(() => c.admit(false), Stopped)
-  equal(refused.retry, { after: 60_000 })
+  equal(refused.retry, { after: 60_000, defer: true })
   equal(refused.status, 429)
   assertThrows(() => c.admit(true), Stopped)
   clock.at = 45_000
@@ -78,7 +78,16 @@ test('an object that does not refuse is told and goes on', () => {
   ran(2_000_000)
   equal(told, ['Runaway read 1 min'])
   c.admit(true)
-  equal(c.stopped(), 60_000)
+  equal([c.stopped(), c.refusal()], [0, null])
+})
+
+test('an object spared after it stopped takes every statement again', () => {
+  let { c, ran } = bound({ refuse: true })
+  ran(2_000_000)
+  ok(c.refusal(false) instanceof Stopped)
+  c.spare()
+  c.admit(false)
+  equal(c.stopped(), 0)
 })
 
 test('every driver over one storage counts against its one ceiling', () => {

@@ -157,3 +157,29 @@ test('a write made while the connection is away waits for who is writing', async
   assertEquals(wire.paths.filter((p) => p == 'me').length > 8, true)
   assertEquals(wire.heard, [true, false])
 })
+
+test('a watch a stopped store refused is declared again after the wait it asked', async () => {
+  let sent: { subscribe?: string; id?: string }[] = []
+  let sock: { onmessage?: (e: { data: string }) => void } = {}
+  using _fetch = stub(globalThis, 'fetch', () => new Promise(() => {}))
+  using _socket = stub(globalThis, 'WebSocket', function () {
+    return Object.assign(sock, {
+      readyState: 1,
+      send: (frame: string) => void sent.push(JSON.parse(frame)),
+      close() {},
+    })
+  })
+  let time = clock()
+  store(base, { clock: time }).subscribe('.house_item', () => {})
+  let [{ id, subscribe }] = sent
+  sock.onmessage!({
+    data: JSON.stringify({
+      id,
+      refused: { error: 'Stopped', retry: { after: 5_000 } },
+    }),
+  })
+  await time.advance(4_999)
+  assertEquals(sent.length, 1)
+  await time.advance(1)
+  assertEquals(sent, [{ subscribe, id }, { subscribe, id }])
+})

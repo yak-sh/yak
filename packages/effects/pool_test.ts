@@ -371,6 +371,60 @@ test('an error asking to be retried waits as long as it asks, unreported until i
   assertEquals(a.oops.length, 1)
 })
 
+// What a store past the rows it may spend throws (@yaks/durable-object
+// `Stopped`): a wait that is no failure.
+let stop = () =>
+  Object.assign(new Error('stopped'), { retry: { after: 5_000, defer: true } })
+
+test('a run its store stopped waits it out as the same attempt, however often', async () => {
+  let t = 0
+  let a = proc(store(), { clock: { ...system, now: () => t } })
+  let tries = 0
+  a.fx.handle({
+    post_note: () => {
+      if (++tries < 4) throw stop()
+    },
+  })
+  await a.fx.work(a.g)
+  await a.g.apply([post('p1')])
+  await a.fx.idle()
+  for (t of [4_999, 5_000, 10_000, 15_000]) await a.fx.work(a.g)
+  await a.fx.idle()
+  assertEquals([tries, a.oops], [4, []])
+  assertEquals((await a.g.read('.effect&*')).length, 0)
+})
+
+test('a run whose store refuses to write down its wait runs again as the same attempt', async () => {
+  let t = 0, stopped = false
+  let a = proc(store(), {
+    singleOwner: true,
+    clock: { ...system, now: () => t },
+  })
+  let tries = 0
+  a.fx.handle({
+    post_note: () => {
+      if (++tries > 3) return
+      stopped = true
+      throw stop()
+    },
+  })
+  // The pool's own writes, refused while the store is stopped.
+  let refusing: Access = {
+    ...a.g,
+    apply: (b, o) => stopped ? Promise.reject(stop()) : a.g.apply(b, o),
+  }
+  await a.fx.work(refusing)
+  await a.g.apply([post('p1')])
+  await a.fx.idle()
+  for (t of [4_999, 5_000, 10_000, 15_000]) {
+    stopped = false
+    await a.fx.work(refusing)
+    await a.fx.idle()
+  }
+  assertEquals(tries, 4)
+  assertEquals((await a.g.read('.effect&*')).length, 0)
+})
+
 test('an error asking to be retried that passes on its next try is never reported', async () => {
   let t = 0
   let a = proc(store(), { clock: { ...system, now: () => t } })

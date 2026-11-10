@@ -47,12 +47,17 @@ hour (`WINDOWS`). Two failures are reported as they happen:
 A host names where the reports go once, before its first driver:
 `bounded(ctx.storage, { report, refuse })`. Every driver over that storage
 counts against the same ceiling. With `refuse`, a statement past a window is
-refused as `Stopped` (status 429, `retry.after` in milliseconds) until the
-window ends: past its written rows the object still reads, and past its read
-rows it takes nothing. Statements a stopped object must still take, such as
-keeping a person's write for later, run inside the ceiling's `free(body)`. The
-tallies live in the instance's memory, so an object evicted between bursts
-starts its windows over.
+refused as `Stopped` (status 429, `retry.after` in milliseconds, `retry.defer`)
+until the window ends: past its written rows the object still reads, and past
+its read rows it takes nothing. A host asks `stopped(writing)` (the wait in
+milliseconds, 0 when a statement is admitted) or `refusal(writing)` at its
+doors, so a stopped object answers there rather than failing deep inside.
+Statements a stopped object must still take, such as keeping a person's write
+for later, run inside the ceiling's `free(body)`; work that must not stop half
+way runs on `freely(ctx.storage)`, a driver that counts and never refuses. An
+object whose stopping costs more than its rows is `spare()`d: told, never
+refused. The tallies live in the instance's memory, so an object evicted between
+bursts starts its windows over.
 
 `sockets(subs, ctx)` connects hibernatable WebSockets to
 [@yaks/api](../api/README.md) subscriptions. The API registry re-evaluates saved
@@ -266,6 +271,7 @@ storage that holds no socket imports `@yaks/durable-object/sql` (`driver`),
 | ------------------------------------------------------- | --------------------------------------------------- |
 | `storage(ctx.storage, vocab, base?)`                    | Creates an `@yaks/sqlite` `Store`                   |
 | `driver(ctx.storage, observe?)`                         | Creates the underlying synchronous SQLite `Driver`  |
+| `freely(ctx.storage, observe?)`                         | A `driver` the ceiling counts and never refuses     |
 | `profile(emit)`                                         | Aggregates cursor costs into bounded summaries      |
 | `bounded(ctx.storage, options?)`, `ceiling(options?)`   | Report a scan or a runaway, and stop the object     |
 | `sockets(subs, ctx)`                                    | Returns `accept`, `message`, `close`, and `wake`    |

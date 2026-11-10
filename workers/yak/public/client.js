@@ -95,6 +95,14 @@ let refused = (r, body) => {
   )
   if (said?.signIn) e.signIn = said.signIn
   e.status = r.status
+  return waits(e, r)
+}
+
+// The wait an answer asks for (`retry-after`, a store past the rows it may
+// spend for now), on the error it is thrown as, the shape the outbox reads.
+let waits = (e, r) => {
+  let s = Number(r.headers.get('retry-after'))
+  if (s > 0) e.retry = { after: s * 1000 }
   return e
 }
 
@@ -152,8 +160,11 @@ let answered = (path, { r, body }) => {
       typeof receipt.aliases != 'object' || Array.isArray(receipt.aliases) ||
       !Array.isArray(receipt?.bundles))
   ) {
-    throw new Error(
-      receipt?.message || 'Write is still unsaved; its outcome is unknown',
+    throw waits(
+      new Error(
+        receipt?.message || 'Write is still unsaved; its outcome is unknown',
+      ),
+      r,
     )
   }
   return receipt
@@ -703,6 +714,16 @@ export let store = (base, { clock = system } = {}) => {
       // The store filed a refusal that is the page's mistake, and a failure
       // of ours, where it caught them; a no meant for the visitor is no
       // break. The page hears it through `ready`.
+      // A store past its rows for now says how long to wait: the watch is
+      // declared again then, and its first rows are still to come.
+      let after = f.refused?.retry?.after
+      if (after > 0) {
+        clock.after(after, () =>
+          subs.get(f.id) == sub && tell(
+            { subscribe: sub.q, id: f.id },
+          ))
+        return
+      }
       if (f.refused) {
         sub.first.reject(new Error(f.refused.message ?? f.refused.error))
         return
