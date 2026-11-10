@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { system } from '@yaks/fp'
 import { durable } from './store-state-probe.ts'
 export { durable } from './store-state-probe.ts'
 import { bindings, kvStorage } from './binding-probe.ts'
@@ -238,6 +240,30 @@ export let lasting = (
   let armed = new Set<string>()
   // Each armed object's own alarm, by the name its state is kept under.
   let alarms = new Map<string, () => Promise<void>>()
+  let time = vars.CLOCK ?? system
+  let event = AsyncLocalStorage.snapshot()
+  let timers = new Map<string, () => void>()
+  let failed: unknown[] = []
+  let cancel = (name: string) => {
+    timers.get(name)?.()
+    timers.delete(name)
+  }
+  let schedule = (name: string, at: number) => {
+    cancel(name)
+    if (disposed || closing) return
+    timers.set(
+      name,
+      time.after(Math.max(0, at - time.now()), () => {
+        timers.delete(name)
+        if (disposed || ringing.has(name)) return
+        let work = event(() => deliver(name))
+        states.get(name)!.waitUntil(work)
+        return work.catch((error) => {
+          failed.push(error)
+        })
+      }),
+    )
+  }
   // An object's state whose alarm the runtime delivers: arming it indexes
   // the object, and `alarm` is what a delivery calls.
   let alarmed = (
@@ -250,10 +276,12 @@ export let lasting = (
     ctx.storage.setAlarm = async (...args) => {
       await setAlarm(...args)
       armed.add(name)
+      schedule(name, +args[0])
     }
     ctx.storage.deleteAlarm = async () => {
       await deleteAlarm()
       armed.delete(name)
+      cancel(name)
     }
     states.set(name, ctx)
     alarms.set(name, alarm)
@@ -328,25 +356,35 @@ export let lasting = (
   // instant cleared, then the object's `alarm()`, which may arm the next.
   // Each object's delivery is its own, as in the runtime: an object is never
   // delivered to twice at once, and one whose alarm is still running holds
-  // back no other object's. A test drives this by hand; a kernel (probe.ts)
-  // on a timer, shared by every test in the process.
+  // back no other object's. The injected clock delivers them automatically;
+  // ring() also lets a fixture explicitly settle the currently due events.
   let ringing = new Map<string, Promise<void>>()
   let deliver = (name: string) => {
+    let held = ringing.get(name)
+    if (held) return held
     let ctx = states.get(name)!
     let delivery = (async () => {
       let at = await ctx.storage.getAlarm()
-      if (at == null || at > (env.CLOCK?.now() ?? Date.now())) return
+      if (at == null || at > time.now()) return
       await ctx.storage.deleteAlarm()
       await alarms.get(name)!()
-    })().finally(() => ringing.delete(name))
+    })().finally(async () => {
+      ringing.delete(name)
+      if (disposed) return
+      let at = await ctx.storage.getAlarm()
+      if (at != null) schedule(name, at)
+    })
     ringing.set(name, delivery)
     return delivery
   }
   let disposed = false
   let ring = async (): Promise<void> => {
     if (disposed) return
+    if (failed.length) throw failed.shift()
     await Promise.all(
-      [...armed].filter((name) => !ringing.has(name)).map(deliver),
+      [...armed].filter((name) => !ringing.has(name)).map((name) =>
+        event(() => deliver(name))
+      ),
     )
   }
   // Every store's waitUntil work, and the alarm deliveries under way: what a
@@ -369,19 +407,23 @@ export let lasting = (
     if (closing) return closing
     let release = () => {
       disposed = true
+      for (let name of timers.keys()) cancel(name)
       for (let ctx of stores) ctx.storage[Symbol.dispose]()
       stores.length = 0
     }
     // A Durable Object's runtime retains its storage for waitUntil work.
     // An alarm delivery can start such work or call another store before it
     // settles, so closing waits through the active delivery as well.
-    if (!pending().length) {
+    if (!pending().length && !failed.length) {
       release()
       return closing = Promise.resolve()
     }
     return closing = (async () => {
-      await settled()
-      release()
+      try {
+        await settled()
+      } finally {
+        release()
+      }
     })()
   }
   return {

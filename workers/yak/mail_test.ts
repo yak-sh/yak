@@ -17,8 +17,7 @@ import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Frame } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
-import type { Wire } from '@yaks/durable-object'
-import { durable } from './testing.ts'
+import { platform as runtime, state } from './testing.ts'
 import { type Namespace, storeOf } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Env } from './env.ts'
@@ -196,19 +195,6 @@ let outbox = (refuse?: string) => {
   }
 }
 
-// One object's whole state, with the socket list the runtime holds for it —
-// the stand-in cannot do the 101 upgrade, so a socket is driven the way the
-// runtime drives a hibernated one, through `webSocketMessage`.
-let state = (name = '') => {
-  let live: Wire[] = []
-  return {
-    storage: durable(name),
-    live,
-    acceptWebSocket: (ws: Wire) => void live.push(ws),
-    getWebSockets: () => live,
-  }
-}
-
 // A hibernatable socket, faked: what it was sent, in order.
 let wire = (received = (_frame: Frame) => {}) => {
   let sent: Frame[] = []
@@ -267,8 +253,16 @@ let post = (store: Store, path: string, body: unknown, v?: Vouch) =>
 // nothing about the count is stubbed either.
 let SPACE = 'e0000000-0000-4000-8000-000000000005'
 
+let hosted = (
+  ctx = state(),
+  bindings: ConstructorParameters<typeof Store>[1] = {},
+) => {
+  let p = runtime('mail fixture')
+  return p.register('mail store', ctx, () => new Store(ctx, bindings))
+}
+
 let platform = async (meter?: Record<string, unknown>) => {
-  let dir = new Store(state(PLATFORM_STORE), {})
+  let dir = hosted(state(PLATFORM_STORE))
   let ns: Namespace = {
     idFromName: (name: string) => name,
     get: () => ({ fetch: (req: Request) => dir.fetch(req) }),
@@ -299,7 +293,7 @@ let cookbook = async (
   ctx = state(),
   ns?: Namespace,
 ) => {
-  let store = new Store(ctx, { MAIL: mail, ...(ns ? { STORE: ns } : {}) })
+  let store = hosted(ctx, { MAIL: mail, ...(ns ? { STORE: ns } : {}) })
   assertEquals((await post(store, '/vocab', {}, v)).status, 200)
   return { store, mail, ctx }
 }
@@ -456,7 +450,7 @@ test('a provider failure comes to rest on the letter', async () => {
 })
 
 test('a deploy with no binding bounces rather than swallows', async () => {
-  let store = new Store(state(), {})
+  let store = hosted()
   assertEquals((await post(store, '/vocab', {}, owner)).status, 200)
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
   await settled(store)

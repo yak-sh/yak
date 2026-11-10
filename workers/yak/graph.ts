@@ -3497,8 +3497,7 @@ export class Store {
     }
   }
 
-  // Effects owed by a write: the pool already working takes them on, and
-  // otherwise the alarm starts it. The pool never works inside the request
+  // Effects owed by a write run in the next alarm batch. The pool never works inside the request
   // that nudged it: the runtime counts every call an effect makes as a level
   // below that request, so a step whose call comes back into this store as a
   // write, nudging the next step, would chain each step one level deeper
@@ -3530,12 +3529,14 @@ export class Store {
       this.#effectAgain = true
       return
     }
-    // The pool's work is the store's own, not the request that nudged it.
+    // One admitted batch per platform event. Refilling slots here would run
+    // a whole continuation chain inside one alarm's I/O lineage. Persisted
+    // work left by this batch is admitted only after the next alarm starts.
     this.#effectWork = apart(async () => {
-      do {
-        this.#effectAgain = false
-        await this.#effects.work(this.#stored(this.#graph).graph)
-      } while (this.#effectAgain && !this.#dormant)
+      this.#effectAgain = false
+      await this.#effects.work(this.#stored(this.#graph).graph, undefined, {
+        passes: 1,
+      })
       if (this.#dormant) return
       let now = this.#now(), pending = await this.#pendingEffects()
       if (!pending.length) return
@@ -3562,7 +3563,7 @@ export class Store {
         )
     }).finally(() => {
       this.#effectWork = null
-      if (this.#effectAgain) this.#workingEffects()
+      if (this.#effectAgain) this.#owedEffects()
     })
     this.#ctx.waitUntil?.(this.#effectWork)
   }
