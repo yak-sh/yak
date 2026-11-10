@@ -1,8 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { appStore, stamp, storeName } from './directory.ts'
-import { KERNEL, meta, metaOf } from './meta.ts'
-import { instrumentEid } from './instrument.ts'
+import { KERNEL, metaOf } from './meta.ts'
 import { platform } from './directory-rows-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
 import {
@@ -17,7 +16,9 @@ import { fetch } from './apps.ts'
 import * as sell from './sell.ts'
 import { protectedSale } from './sale-private.ts'
 import { GRANT, owning } from './dispatch.ts'
-import { COOKIE, seal, sign } from './lib/token.ts'
+import { COOKIE, seal } from './lib/token.ts'
+import { claimed } from './attribution.ts'
+import { minted } from './session.ts'
 import { artifactPermit, protectedArtifact } from './sale-private.ts'
 import { sha256 } from '@yaks/graph/sha256'
 
@@ -222,17 +223,15 @@ let guestCookie = `${COOKIE}=${await seal('browser', {
   via: guestVia,
   exp: Math.floor(Date.now() / 1000) + 60,
 }, SECRET)}`
-// Signing in on that browser claims it in the directory (attribution.ts).
-await meta(guests.env).apply([{
-  entity: { eid: instrumentEid(guestVia) },
-  browser: { by: ANA },
-}], KERNEL)
-let continuedCookie = `${COOKIE}=${await sign({
-  person: ANA,
-  via: guestVia,
-  space: null,
-  exp: Math.floor(Date.now() / 1000) + 60,
-}, SECRET)}`
+let continuedAs = async (person: string) => {
+  let request = new Request('https://yaks.app/', {
+    headers: { cookie: guestCookie },
+  })
+  await claimed(request, guests.env, person)
+  return (await minted(request, guests.env, SECRET, person)).split(';')[0]
+}
+let continuedCookie = await continuedAs(ANA)
+let anotherPersonCookie = await continuedAs(BO)
 test('guest receipts follow the verified browser through sign-in', async () => {
   for (let cookie of [guestCookie, continuedCookie]) {
     let response = await fetch(
@@ -243,6 +242,13 @@ test('guest receipts follow the verified browser through sign-in', async () => {
     )
     assertEquals(response.status, 200)
   }
+  let borrowed = await fetch(
+    visit(`/cookbook/api/pay/orders/${guestOrder}`, {
+      headers: { cookie: anotherPersonCookie },
+    }),
+    guests.env,
+  )
+  assertEquals(borrowed.status, 404)
   let forged = await guests.ask(`pay/orders/${guestOrder}`, BO, {
     headers: { 'x-yak-via': guestVia },
   })
