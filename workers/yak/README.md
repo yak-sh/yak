@@ -994,6 +994,24 @@ a call is sent without listing first (mcp-remote.ts `calls`): 6 requests. Ten
 loads after that read 469–1,079 ms, about 700 ms typically, beside 1,021–1,782
 ms of `operator_wait`.
 
+The lists never hold the conversation back: the page waits on the directory for
+which lists there are (operator-lists.ts `listingOf`), and those whose servers
+have not answered when the conversation is in are drawn as a place the page
+fills from `?lists`, which also brings the bar's count (operator-page.ts
+`chatPage`).
+
+That `operator_wait` was the Builder drawing the conversation, on CPU. On
+2026-11-10 the `checks` page was 4.07 MB, 3.4 MB of it in 12 folds of outside
+chats, each drawing the Operator's whole context again (114–121 tools), and each
+read drew everything once more for its lines as data, which only the iOS shell
+asks for. Five warm loads: `operator_wait` 1,114–2,117 ms, the Builder's CPU
+989–1,285 ms a read. A fold now leaves out what its chat's model was told, which
+the conversation draws above and the chat's own page draws in full
+(operator-host.ts `threadsOf`), and a read draws its lines as data only when
+asked. Ten loads after: the page 834 KB, `operator_wait` 249–592 ms (most
+260–400), the Builder's CPU 179–478 ms. What remains is mostly the
+conversation's own first context, about 240 KB, drawn once.
+
 A Store imports its graph and effects facets before opening its boot
 transaction, then binds them with `@yaks/host` over its storage, vault, blobs
 and named mail sender. Cold reads owe no start-up work. A deployment calls the
