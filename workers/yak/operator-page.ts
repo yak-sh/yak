@@ -117,7 +117,7 @@ import {
   visitsOf,
 } from './updates.ts'
 import { answered, asksList, asksOf } from './operator-asks.ts'
-import { type List, talkBeside, waitsButton } from './talk-beside.ts'
+import { counted, type List, talkBeside, waitsButton } from './talk-beside.ts'
 
 // What this page draws, as markup: the edge where its parts become text.
 let html = (node: Node) => renderToString(h(Fragment, null, node))
@@ -431,6 +431,57 @@ export let alertsCard = (
     ),
   )
 }
+
+/**
+ * Alerts on this device, offered in the conversation (alerts-browser.ts
+ * `offer`): one press allows this browser's notifications and chooses them as
+ * how the person is alerted. On an iPhone's browser it says to add the page
+ * to the Home Screen first, since Apple pushes only to a page opened from
+ * there. Every part is hidden until the script knows what this device can do
+ * and whether it already brings alerts (`on`: notifications are the person's
+ * choice). `count` is how many things need them, which the installed page's
+ * icon shows. Nothing is offered where yaks.app has no VAPID key (`key`).
+ */
+export let alertsOffer = (
+  at: string,
+  key: string | null,
+  on: boolean,
+  count: number | null = null,
+) =>
+  key
+    ? h(
+      'div',
+      {
+        class: 'Talk_Alerts',
+        'data-alerts-offer': '',
+        'data-push': key,
+        'data-at': at,
+        'data-on': on ? '' : undefined,
+        'data-badge': count ?? undefined,
+      },
+      h(
+        Card,
+        { 'data-shows': 'offer', hidden: true },
+        h('p', null, 'Get an alert on this device when something needs you.'),
+        h(Button, { type: 'button', mod: 'go' }, 'Turn on alerts'),
+        h('p', { 'data-status': '', role: 'status' }),
+      ),
+      h(
+        Card,
+        { 'data-shows': 'install', hidden: true },
+        h(
+          'p',
+          null,
+          'To get alerts on this iPhone, add this page to your Home Screen first: press Share, then Add to Home Screen, and open it from there. Apple sends alerts only to a page on the Home Screen.',
+        ),
+      ),
+      h(
+        'p',
+        { 'data-shows': 'on', hidden: true, role: 'status' },
+        'Alerts are on for this device.',
+      ),
+    )
+    : null
 
 // Where a space's people change what its Operator is called.
 export let nameCard = (at: string, name: string) =>
@@ -1807,12 +1858,13 @@ export let chatPage = async (
   // The space's address opens the person's one conversation, and a new chat
   // only until they have one (T-141349).
   // What needs them is read beside every conversation, at once with it.
-  let [talked, newcomer, asks] = await Promise.all([
+  let [talked, newcomer, asks, alerting] = await Promise.all([
     conversationOf(env, space, who, at, open == 'new' ? '' : open, {
       updates: true,
     }),
     who.person ? directoryOf(env.STORE).newcomer(who.person) : false,
     asksOf(env, who.person, space.eid),
+    who.person ? directoryOf(env.STORE).alerts(who.person) : null,
   ])
   let news = talked.updates!
   // Their one conversation, as the store names it: what an empty `open` asks
@@ -1869,6 +1921,14 @@ export let chatPage = async (
       newcomer ? keepCard(here) : null,
       talked.helper ? helperCard(talked.helper, operator) : null,
       talked.html ? column(talked.html) : column('', greeting),
+      fresh || talked.title
+        ? alertsOffer(
+          at,
+          who.person ? pushKey(env) : null,
+          alerting == 'push',
+          counted(lists),
+        )
+        : null,
       fresh || talked.title
         ? composer(env, at, here, operator, app, !!talked.helper, fresh)
         : null,

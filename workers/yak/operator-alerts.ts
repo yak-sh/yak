@@ -23,13 +23,14 @@ import { CallError } from '@yaks/tools/errors'
 import { type Directory, directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { url } from './host.ts'
-import { managePath } from './route.ts'
+import { chatPath, managePath } from './route.ts'
+import { askAnchor, asksOf, needCount } from './operator-asks.ts'
 import { caught } from './defects.ts'
 import { type Ctx, refuse } from './tool.ts'
 import type { Texting } from './operator-texts.ts'
 import type { operatorStore } from './operator-store.ts'
 
-type Store = Pick<ReturnType<typeof operatorStore>, 'g'>
+type Store = ReturnType<typeof operatorStore>
 
 /** The ways a person may choose to be alerted. */
 export let ALERTING = ['push', 'text', 'email', 'updates'] as const
@@ -84,16 +85,25 @@ export let routeOf = (
   return ORDER[wanted].map((way) => ways[way]).find(Boolean) ?? null
 }
 
-/** Where an alert reaches `person` now, as the directory has them. */
-export let routeFor = async (dir: Directory, person: string) => {
+/** Where an alert written at `at` reaches `person` now, as the directory
+ * has them. A browser allowed after it was written is not told it: turning
+ * alerts on brings what happens next, never what was already owed. */
+export let routeFor = async (dir: Directory, person: string, at?: string) => {
   let [chosen, texting, email, pushes] = await Promise.all([
     dir.alerts(person),
     dir.texting(person),
     dir.emailAt(person),
     dir.pushes(person),
   ])
-  return routeOf(chosen, texting, email, pushes)
+  let before = at ? pushes.filter((b) => !b.since || b.since <= at) : pushes
+  return routeOf(chosen, texting, email, before.map(subscription))
 }
+
+// A browser as a push goes to it, without when it was allowed.
+let subscription = ({ endpoint, keys }: Subscription): Subscription => ({
+  endpoint,
+  keys,
+})
 
 /** The directory row keeping how `person` chose to be alerted. */
 export let alertsRow = (person: string, channel: string): Bundle => {
@@ -130,11 +140,29 @@ export let vapidOf = (env: Env): Vapid | null =>
     ? { key: JSON.parse(env.PUSH_VAPID_KEY), subject: 'mailto:hello@yaks.app' }
     : null
 
-// An email's subject: the alert's first line, cut to a glance.
-let subjectOf = (words: string) => {
-  let line = words.split('\n')[0].trim()
-  return line.length > 60 ? line.slice(0, 59).trimEnd() + '…' : line
+// An alert's first line, cut to `most` characters.
+let lineOf = (words: string, most: number) => {
+  let line = words.split('\n').map((l) => l.trim()).find(Boolean) ?? ''
+  return line.length > most ? line.slice(0, most - 1).trimEnd() + '…' : line
 }
+
+// An email's subject: the alert's first line, cut to a glance.
+let subjectOf = (words: string) => lineOf(words, 60)
+
+/**
+ * Where pressing an alert opens: the person's conversation, at what it is
+ * about where it names something (the row of What needs you with that id,
+ * operator-asks.ts `askAnchor`).
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { openAt } from './operator-alerts.ts'
+ * equal(openAt('https://yaks.app/manage/ana', 'e1'), 'https://yaks.app/manage/ana#ask-e1')
+ * equal(openAt('https://yaks.app/manage/ana'), 'https://yaks.app/manage/ana')
+ * ```
+ */
+export let openAt = (conversation: string, about?: string) =>
+  about ? `${conversation}#${askAnchor(about)}` : conversation
 
 let part = (row: Bundle, name: string) => row[name] as Comp | undefined
 
@@ -165,11 +193,14 @@ export let alert = async (
   let dir = directoryOf(env.STORE)
   let space = by ? await dir.at(by) : null
   if (!space || space.trashed || !to || to == space.eid || !words) return
-  let route = await routeFor(dir, to)
+  let written = String(part(row, 'created')?.at ?? '') || undefined
+  let route = await routeFor(dir, to, written)
   if (!route) return
+  let about = String(part(row, 'notification')?.about ?? '') || undefined
+  let note = { words, id: eid, about, at: written }
   let outcome: Bundle
   try {
-    await sent(env, store, dir, space, to, route, words, eid)
+    await sent(env, store, dir, space, to, route, note)
     outcome = {
       entity: row.entity,
       delivered: { at: new Date().toISOString() },
@@ -185,6 +216,10 @@ export let alert = async (
   await store.g.apply([outcome], { trusted: true })
 }
 
+// One alert: its words, its notification's eid, what it is about and when
+// it was written.
+type Note = { words: string; id: string; about?: string; at?: string }
+
 // An alert on its way: a notification on each browser allowed, a text, or a
 // letter with a link to their Updates. When every browser allowed is gone,
 // it goes the way they are reached next.
@@ -195,14 +230,17 @@ let sent = async (
   space: Space,
   person: string,
   route: Route,
-  words: string,
-  id: string,
+  note: Note,
 ): Promise<unknown> => {
+  let { words, id } = note
   let updates = url(env, managePath('updates', space.slug))
   if (route.by == 'push') {
-    if (await pushed(env, dir, route.to, space, words, updates, id)) return
-    let next = await routeFor(dir, person)
-    if (next) return sent(env, store, dir, space, person, next, words, id)
+    let open = openAt(url(env, chatPath(space.slug)), note.about)
+    let count = await waitingOn(env, store, person, space.eid)
+    let told = { words, open, id, count }
+    if (await pushed(env, dir, route.to, space, told)) return
+    let next = await routeFor(dir, person, note.at)
+    if (next) return sent(env, store, dir, space, person, next, note)
     throw refuse('gone', 'No browser they allowed takes notifications now.')
   }
   if (route.by == 'text') {
@@ -227,29 +265,51 @@ let sent = async (
   })
 }
 
-// The most of an alert's words a notification shows.
-let SHOWN = 1000
+// The most of an alert's line a notification shows.
+let SHOWN = 200
+
+// How many things wait on the person, as the bar beside their conversation
+// counts them, which the installed page's icon shows; null when that could
+// not be read. Never fails the alert it rides on.
+let waitingOn = async (
+  env: Env,
+  store: Store,
+  person: string,
+  space: string,
+) => {
+  try {
+    let { updatesOf } = await import('./operator-updates.ts')
+    let [listed, read] = await Promise.all([
+      asksOf(env, person, space),
+      updatesOf(store, person, space),
+    ])
+    return needCount(listed, read.updates)
+  } catch (e) {
+    caught(e, { request: 'alert count' })
+    return null
+  }
+}
 
 // Whether an alert reached any of `browsers`, each pushed the Operator's
-// name, the words and where they open. A browser whose subscription is gone
-// is dropped; one the push service refused is reported, and when none took
-// it the first refusal is the alert's.
+// name, the alert in a line, where it opens and how many things wait on the
+// person. A browser whose subscription is gone is dropped; one the push
+// service refused is reported, and when none took it the first refusal is
+// the alert's.
 let pushed = async (
   env: Env,
   dir: Directory,
   browsers: Subscription[],
   space: Space,
-  words: string,
-  open: string,
-  id: string,
+  told: { words: string; open: string; id: string; count: number | null },
 ) => {
   let vapid = vapidOf(env)
   if (!vapid) throw refuse('push', 'Browser notifications are not switched on.')
   let payload = JSON.stringify({
     title: space.operator,
-    body: words.length > SHOWN ? words.slice(0, SHOWN - 1) + '…' : words,
-    url: open,
-    tag: id,
+    body: lineOf(told.words, SHOWN),
+    url: told.open,
+    tag: told.id,
+    ...told.count == null ? {} : { count: told.count },
   })
   let outcomes = await Promise.allSettled(
     browsers.map((b) => push(b, payload, vapid)),

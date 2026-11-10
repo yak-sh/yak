@@ -16,7 +16,9 @@ export type List = { node: Node; count: number }
 /** Where the column is, which the bar's button opens on a phone. */
 export let NEEDS = 'needs'
 
-let counted = (lists: List[]) => lists.reduce((n, l) => n + l.count, 0)
+/** How many things wait on the person across `lists`, which the bar's
+ * button and the installed page's icon show. */
+export let counted = (lists: List[]) => lists.reduce((n, l) => n + l.count, 0)
 
 /** The bar's way to the column, with how many wait. */
 export let waitsButton = (lists: List[]) => {

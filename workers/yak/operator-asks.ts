@@ -164,6 +164,30 @@ export let asksOf = async (
   }
 }
 
+/** The id of an ask's row on the page, which an alert about it opens at
+ * (operator-alerts.ts `openAt`). */
+export let askAnchor = (eid: string) => `ask-${eid}`
+
+/**
+ * How many things need the person, as the bar beside their conversation
+ * counts them (talk-beside.ts `counted`): what their server listed, then
+ * their Updates that ask them something.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { needCount } from './operator-asks.ts'
+ * let ask = { eid: 'e', title: 'T', ask: '', choices: [] }
+ * let updates = [{ needs: true }, { needs: false }]
+ * equal(needCount({ server: 's', asks: [ask, ask] }, updates), 3)
+ * equal(needCount({ server: 's', asks: [], off: 'it is off' }, updates), 1)
+ * equal(needCount(null, []), 0)
+ * ```
+ */
+export let needCount = (
+  listed: Listed | null,
+  updates: { needs: boolean }[],
+) => (listed?.asks.length ?? 0) + updates.filter((u) => u.needs).length
+
 /** The person's press of a choice beside a row on `space`'s Operator page:
  * their answer, as theirs. */
 export let answered = (
@@ -181,7 +205,7 @@ export let answered = (
 let row = (a: Ask, action: string, server: string, back: string) =>
   h(
     Rows.Item,
-    { as: 'li', class: 'Asks_Item' },
+    { as: 'li', class: 'Asks_Item', id: askAnchor(a.eid) },
     h(
       Rows.Main,
       null,

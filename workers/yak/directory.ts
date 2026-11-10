@@ -3158,18 +3158,20 @@ export let directoryRows = (rows: {
     collapsed: async (person: string): Promise<boolean> =>
       !!(await one(`.entity.eid=${person}`))?.desk_sidebar?.collapsed,
     // The browsers this person allowed notifications on (@yaks/push), each
-    // as its `PushSubscription` gave it.
-    pushes: async (person: string): Promise<Subscription[]> =>
-      (await theirs(person, `.push_subscription.person=${person}`)).flatMap((
-        { push_subscription: sub },
-      ) =>
-        sub
-          ? [{
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth },
-          }]
-          : []
-      ),
+    // as its `PushSubscription` gave it, and since when.
+    pushes: async (
+      person: string,
+    ): Promise<(Subscription & { since?: string })[]> =>
+      (await theirs(person, `.push_subscription.person=${person}&?created`))
+        .flatMap(({ push_subscription: sub, created }) =>
+          sub
+            ? [{
+              endpoint: sub.endpoint,
+              keys: { p256dh: sub.p256dh, auth: sub.auth },
+              ...created?.at ? { since: created.at } : {},
+            }]
+            : []
+        ),
     // The MCP servers this person named to list what needs them
     // (operator-asks.ts), each as its row: asked beside the page that draws
     // the list (manage.ts `foresee`), so it travels in that page's trip.

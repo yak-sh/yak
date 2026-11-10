@@ -796,6 +796,14 @@
   .Asks .Rows_Actions {
     flex-wrap: wrap;
   }
+  /* The row an alert was about, which pressing the alert opens at
+     (operator-alerts.ts `openAt`); where the column is one press away, it
+     opens with it. */
+  .Asks_Item:target {
+    background: color-mix(in srgb, var(--card), var(--accent) 12%);
+    border-radius: var(--radius);
+    scroll-margin-block: 4rem;
+  }
   /* Over a helper's conversation, what it is and where words go
      (operator-page.ts `helperCard`). */
   .Talk_Helper {
@@ -998,10 +1006,10 @@
     .Talk-app .Talk_Waits {
       display: inline-flex;
     }
-    .Talk-app .Talk_Beside:not(:target) {
+    .Talk-app .Talk_Beside:not(:target, :has(:target)) {
       display: none;
     }
-    .Talk-app .Talk_Beside:target {
+    .Talk-app .Talk_Beside:is(:target, :has(:target)) {
       position: fixed;
       inset: 0 0 0 auto;
       z-index: 3;
@@ -1010,7 +1018,7 @@
       box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--text) 18%,
         transparent);
     }
-    .Talk-app .Talk_Beside:target .Talk_Close {
+    .Talk-app .Talk_Beside:is(:target, :has(:target)) .Talk_Close {
       display: inline-flex;
     }
   }
@@ -1021,10 +1029,10 @@
     .Talk-beside .Talk_Waits {
       display: inline-flex;
     }
-    .Talk_Beside:not(:target) {
+    .Talk_Beside:not(:target, :has(:target)) {
       display: none;
     }
-    .Talk_Beside:target {
+    .Talk_Beside:is(:target, :has(:target)) {
       position: fixed;
       inset: 0 0 0 auto;
       z-index: 3;
@@ -1033,7 +1041,7 @@
       box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--text) 18%,
         transparent);
     }
-    .Talk_Beside:target .Talk_Close {
+    .Talk_Beside:is(:target, :has(:target)) .Talk_Close {
       display: inline-flex;
     }
   }

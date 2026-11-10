@@ -9,8 +9,8 @@ import { operatorModel, operatorService } from './operator-testing.ts'
 import { operatorContext } from './operator.ts'
 import { receive, textSigned } from './operator-channels.ts'
 import { notification } from './operator-updates.ts'
-import { notificationSend } from './operator-alerts.ts'
-import { operatorAnswer, operatorBody } from './operator-page.ts'
+import { notificationSend, routeFor } from './operator-alerts.ts'
+import { chatPage, operatorAnswer, operatorBody } from './operator-page.ts'
 import { endpoints } from './endpoints.ts'
 import { PER_SEGMENT } from './text-spend.ts'
 import { vapidKey } from '@yaks/push'
@@ -82,8 +82,10 @@ env.BUILDER = service.binding
 let { store } = service
 let ctx = await operatorContext(env, held, space, () => dir)
 let notify = notificationSend(ctx, space, store)
-let told = async (text: string) => {
-  let said = JSON.parse(String(await notify.run({ text }))) as {
+let told = async (text: string, about?: string) => {
+  let said = JSON.parse(
+    String(await notify.run({ text, ...about ? { about } : {} })),
+  ) as {
     notification: string
     reaches: string
   }
@@ -205,9 +207,12 @@ let [laptop, phone] = await Promise.all([
   browser(`${pushService.url}/laptop`),
   browser(`${pushService.url}/phone`),
 ])
+let chatted = async () => await (await chatPage(env, space, held, 'new')).text()
 let offerless = await operatorBody(env, space, held)
+let chatOfferless = await chatted()
 env.PUSH_VAPID_KEY = JSON.stringify(await vapidKey())
 let offered = await operatorBody(env, space, held)
+let chatOffered = await chatted()
 let notAllowed = await page('push', { endpoint: 'http://push.invalid' })
 let allowed = [
   await page('push', laptop.subscription),
@@ -216,6 +221,10 @@ let allowed = [
 ]
 await page('alerts', { channel: 'push' })
 let chosePush = await operatorBody(env, space, held)
+let chatOn = await chatted()
+// What was written before a browser was allowed is not pushed to it.
+let owed = await routeFor(dir, person, '2000-01-01T00:00:00.000Z')
+let since = await routeFor(dir, person, new Date().toISOString())
 let opened = async () =>
   Object.fromEntries(
     await Promise.all(
@@ -225,7 +234,8 @@ let opened = async () =>
       }),
     ),
   )
-let byPush = await told('Your report is ready.')
+let about = crypto.randomUUID()
+let byPush = await told('Your report is ready.\nIt has three charts.', about)
 let onBoth = await opened()
 pushes['/laptop'] = 410
 let afterGone = await told('The laptop is gone.')
@@ -248,16 +258,34 @@ test('a person allows browser notifications on the Operator page, one subscripti
   assertMatch(chosePush, /value="push"[^>]*checked/)
   assertStringIncludes(chosePush, 'on the 2 browsers you allowed')
 })
+test('the conversation offers alerts on this device in one press, once yaks.app can push', () => {
+  assertEquals(chatOfferless.includes('data-alerts-offer'), false)
+  assertStringIncludes(chatOffered, 'data-alerts-offer')
+  assertStringIncludes(chatOffered, 'data-at="/manage/ana/operator"')
+  assertStringIncludes(chatOffered, '_alerts')
+  assertStringIncludes(chatOffered, 'add this page to your Home Screen first')
+  assertEquals(chatOffered.includes('data-on'), false)
+  assertStringIncludes(chatOn, 'data-on')
+  assertMatch(chatOn, /data-badge="0"/)
+})
+test('a browser allowed after an alert was written is not told it', () => {
+  assertEquals(owed?.by, 'text')
+  assertEquals(since?.by == 'push' && since.to.length, 2)
+})
 test('an alert to a person who chose push is a notification on each browser they allowed', () => {
   assertEquals(byPush.reaches, 'push')
   assertEquals(Object.keys(onBoth).sort(), ['laptop', 'phone'])
   let shown = onBoth.phone
+  // The alert in a line, opening the conversation at what it is about, and
+  // how many things need them for the installed icon.
   assertEquals([shown.title, shown.body], [
     space.operator,
     'Your report is ready.',
   ])
-  assertStringIncludes(shown.url, '/manage/ana/updates')
+  assertEquals(new URL(shown.url).pathname, '/manage/ana')
+  assertEquals(new URL(shown.url).hash, `#ask-${about}`)
   assertEquals(shown.tag, byPush.notification)
+  assertEquals(shown.count, 0)
   assertEquals(typeof (byPush.row.delivered as { at: string }).at, 'string')
 })
 test('a browser that took back its subscription is dropped, and the rest still hear', () => {

@@ -245,6 +245,10 @@ ${links(env, 'pages.css', undefined, assets)}${
     main.includes('data-save=')
       ? `<script type="module" src="${file('_settings.js')}"></script>`
       : ''
+  }${
+    main.includes('data-alerts-offer')
+      ? `<script type="module" src="${file('_alerts.js')}"></script>`
+      : ''
   }<script src="${file('drop.js')}" defer></script>${deployed(env)}</body>
 </html>`
   return new Response(

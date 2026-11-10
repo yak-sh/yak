@@ -40,6 +40,7 @@ export let FILES = [
   'apple-touch-icon.png',
   '_client.js',
   '_settings.js',
+  '_alerts.js',
 ]
 
 /** The kit's sheet among the sources. */

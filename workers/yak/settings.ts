@@ -4,6 +4,7 @@ import { bindSave, type SaveBinding } from '@yaks/ux/save'
 import { tips } from '@yaks/ui/parts'
 import { CallError } from '@yaks/tools/errors'
 import { settingsDrafts } from './settings-draft-browser.ts'
+import { allow } from './alerts-browser.ts'
 
 let report = (error: unknown) =>
   queueMicrotask(() => {
@@ -13,44 +14,6 @@ let rejected = (response: Response, message: string) =>
   response.status >= 500
     ? new Error(message)
     : new CallError('arguments', message)
-
-let allow = async (offer: HTMLInputElement) => {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    throw new CallError(
-      'arguments',
-      'This browser cannot show notifications. Choose another way.',
-    )
-  }
-  if (await Notification.requestPermission() != 'granted') {
-    throw new CallError(
-      'arguments',
-      'Notifications are blocked for yaks.app in this browser. Allow them in its settings, then save again.',
-    )
-  }
-  let worker = await navigator.serviceWorker.register('/push.js')
-  await navigator.serviceWorker.ready
-  let key = Uint8Array.from(
-    atob(offer.dataset.push!.replaceAll('-', '+').replaceAll('_', '/')),
-    (c) => c.charCodeAt(0),
-  )
-  let sub = await worker.pushManager.getSubscription() ??
-    await worker.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: key,
-    })
-  let response = await fetch(offer.dataset.at!, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(sub),
-  })
-  if (!response.ok) {
-    throw rejected(
-      response,
-      (await response.json().catch(() => null))?.message ??
-        'This browser could not be allowed. Try again.',
-    )
-  }
-}
 
 let refused = async (response: Response) => {
   let type = response.headers.get('content-type') ?? ''
@@ -86,7 +49,7 @@ export let settings = (root: Document = document) => {
     },
     save: async (form: HTMLFormElement, body: FormData) => {
       let offer = form.querySelector<HTMLInputElement>('[data-push]:checked')
-      if (offer) await allow(offer)
+      if (offer) await allow(offer.dataset.push!, offer.dataset.at!)
       let response = await fetch(form.action, {
         method: 'POST',
         body,

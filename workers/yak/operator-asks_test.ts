@@ -61,6 +61,7 @@ let drawn = (listed: Listed) => {
         e.textContent
       )
     ),
+    ids: [...document.querySelectorAll('.Asks_Item')].map((r) => r.id),
     text: document.querySelector('div')!.textContent ?? '',
   }
 }
@@ -84,11 +85,13 @@ test('the list is what the server answers, in its order, the first ten shown and
     ),
     'Which day?',
   ])
-  let { rows, text, count, back } = drawn(listed)
+  let { rows, ids, text, count, back } = drawn(listed)
   assertEquals(rows[0], ['Ask 00', 'Do it.', 'Reply'])
   assertEquals([rows.length, count], [13, 13])
   // A choice comes back to the page it was pressed on.
   assertEquals(back, '/manage/here')
+  // An alert about one opens the page at its row (operator-alerts.ts).
+  assertEquals(ids.at(-1), `ask-${decision}`)
   assertEquals(text.includes('3 more'), true)
   assertEquals(rows.at(-1), [
     'Which day?',
