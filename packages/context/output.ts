@@ -32,9 +32,11 @@ export const outputView = async (
   let kept = (entry.result as Comp | undefined)?.value ??
     (entry.output as Comp | undefined)?.value
   let value = kept ?? outputValue(text)
+  // The model receives the tool's prose. A concise view (search hits, for
+  // example) stays useful even when its backing rows carry large bodies.
   if (
-    resultBytes(value) <= limit &&
-    new TextEncoder().encode(text).length <= limit
+    new TextEncoder().encode(text).length <= limit &&
+    (text.length > 0 || resultBytes(value) <= limit)
   ) return text
   if (keep) return JSON.stringify(await keep(value, entry))
   let body = kept == null ? text : JSON.stringify(value)

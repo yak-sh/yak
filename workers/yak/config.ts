@@ -126,6 +126,7 @@ export let appConfig: Config = {
         'dispatch',
         'session_input',
         'session_run',
+        'session_result',
       ],
     },
     {
@@ -138,6 +139,8 @@ export let appConfig: Config = {
         'questions',
         'answer',
         'inference',
+        'model_result',
+        'stream_item',
       ],
     },
     { use: '@yaks/blob', words: ['artifact', 'representation'] },

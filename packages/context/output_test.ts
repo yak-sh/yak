@@ -33,3 +33,13 @@ test('bounded output replay reuses its stored snapshot', async () => {
   assertEquals(await outputView(g, entry, 512), view)
   assertEquals((await g.read('.context_output')).length, 1)
 })
+
+test('concise tool prose survives large structured backing data', async () => {
+  let text = 'entry-1 · entry — Their dentist is Dr Alvarez.'
+  let compact = {
+    entity: { eid: crypto.randomUUID() },
+    content: { body: text },
+    result: { value: { result: [{ content: { body } }] } },
+  }
+  assertEquals(await outputView(g, compact, 512), text)
+})
