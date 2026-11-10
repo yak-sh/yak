@@ -125,6 +125,16 @@ test('what hung on a deleted conversation is nobody’s, as its paths say', asyn
   await agree()
 })
 
+test('a snapshot kept for a public reader is nobody’s to read', async () => {
+  let e = id()
+  await write([{
+    entity: { eid: e },
+    context_output: { source: said, reader: 'public:' + id(), body: '1' },
+  }])
+  equal(await owners(e), ['nobody'])
+  await agree()
+})
+
 test('an owner written by anyone but the rule is put back', async () => {
   await store.g.apply([{ entity: { eid: said }, owner: { person: bea } }], {
     trusted: true,

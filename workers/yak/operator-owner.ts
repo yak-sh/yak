@@ -19,6 +19,7 @@
 // it is done (operator-access.ts `owned`).
 import type { Bundle, Comp, Plugin, Tx } from '@yaks/graph'
 import { dead } from '@yaks/graph/bundle'
+import { minted } from '@yaks/graph/identity'
 import { after, each } from '@yaks/fp'
 
 /** What names its person as an owner, by the property that names them:
@@ -71,11 +72,14 @@ let ref = (b: Bundle | undefined, comp: string, prop: string) => {
 }
 
 // Whom an entity's own components name: one for each that names an owner,
-// null where it names nobody.
+// null where it names nobody. A person is named by their id; a reader that
+// is a key, a public snapshot's `public:<app>` (result-tools.ts), names
+// nobody.
 let named = (b: Bundle | undefined): (string | null)[] =>
   !b || dead(b) ? [] : OWNED.flatMap(([name, by]) => {
     let c = b[name] as Comp | undefined
-    return c ? [c[by] == null ? null : String(c[by])] : []
+    let v = c?.[by]
+    return c ? [typeof v == 'string' && minted(v) ? v : null] : []
   })
 
 /** Everyone named as an entity's owner: by it, and by what it hangs on, read
