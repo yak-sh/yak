@@ -1021,29 +1021,20 @@ await proof(
 await proof(
   'a platform move skips a component declared by the app',
   async (equal) => {
-    let s = await store(1, rule({ core: ['was'] }))
-    equal(await s.rehearse(), [{
-      mark: 'yak/store/session-sending/2',
-      batches: 0,
-      moved: 0,
-      rows: 0,
-      unspoken: 'using.input',
-    }])
+    // It owes what the same store without the rule owes, and moves nothing.
+    let s = await store(1, rule({ core: ['was'] })), bare = await store(1)
+    equal(await s.rehearse(), await bare.rehearse())
     await s.alarm()
+    await bare.alarm()
     equal(await count(s, '.was'), 1)
     equal(await count(s, '.now'), 0)
-    equal(
-      (await s.moves()).map(({ mark, moved, unspoken }) => ({
+    let owed = async (o: typeof s) =>
+      (await o.moves()).map(({ mark, moved, unspoken }) => ({
         mark,
         moved,
         unspoken,
-      })),
-      [{
-        mark: 'yak/store/session-sending/2',
-        moved: 0,
-        unspoken: 'using.input',
-      }],
-    )
+      }))
+    equal(await owed(s), await owed(bare))
   },
 )
 
