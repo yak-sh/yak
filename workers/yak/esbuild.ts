@@ -463,7 +463,9 @@ export let compiled = async (
     caught(error, { request: 'esbuild', app: app.slug })
     throw refuse('unavailable', 'the compiler returned an incomplete build')
   }
-  let assets = pending.worker || pending.pages.length
+  // A worker reads its packages' resources beside it, and a compile of pages
+  // alone answers none: a worker kept as compiled keeps the ones it has.
+  let assets = pending.worker || !ask.worker && pending.pages.length
     ? Object.keys(answer.assets ?? {})
     : old?.assets ?? []
   await writeResources(blobs, prefix, paths, assets, answer)

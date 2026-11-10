@@ -201,7 +201,13 @@ test('TypeScript and npm imports compile at deploy, and serve as JavaScript', as
 // Run each deployment history once per module load; timed cases check the
 // observations captured before the next edit changes the app.
 let reuse = await (async () => {
-  await using s = await scenario(compiles)
+  // As the compiler does, a compile of pages alone answers no package
+  // resources: they stand beside the worker that reads them.
+  let KIT = '__packages/@yaks/kit/Button.css'
+  await using s = await scenario((ask) => ({
+    ...compiles(ask),
+    assets: ask.worker ? { [KIT]: '.Button {}' } : {},
+  }))
   await s.write({
     'index.html': PAGE,
     'main.ts': 'let n: number = 1',
@@ -210,6 +216,7 @@ let reuse = await (async () => {
   })
   await s.tool('app_deploy')
   let served = await s.served('main.ts')
+  let kit = await s.served(KIT)
   let worker = await (s.uploads.at(-1)!.get('worker.js') as File).text()
   let spent = await s.seconds()
 
@@ -235,6 +242,7 @@ let reuse = await (async () => {
     asks: s.asks.length,
     ask: s.asks.at(-1)!,
     worker: await (s.uploads.at(-1)!.get('worker.js') as File).text(),
+    kit: await s.served(KIT),
   }
 
   await s.write({
@@ -248,6 +256,7 @@ let reuse = await (async () => {
   let compilerChanged = s.asks.at(-1)!
   return {
     served,
+    kit,
     worker,
     spent,
     unchanged,
@@ -260,6 +269,7 @@ let reuse = await (async () => {
 test('a deploy reuses unchanged compiled entries', () => {
   let {
     served,
+    kit,
     worker,
     spent,
     unchanged,
@@ -276,6 +286,8 @@ test('a deploy reuses unchanged compiled entries', () => {
   assertEquals(pageChanged.ask.worker, undefined)
   assertEquals(pageChanged.ask.pages, ['main.ts'])
   assertEquals(pageChanged.worker, worker)
+  assertEquals(kit.body, '.Button {}')
+  assertEquals(pageChanged.kit, kit)
   assertEquals(workerChanged.worker?.entry, 'worker.ts')
   assertEquals(workerChanged.pages, [])
   assertEquals(compilerChanged.worker?.entry, 'worker.ts')
