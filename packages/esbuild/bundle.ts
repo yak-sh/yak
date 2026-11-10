@@ -8,8 +8,8 @@
 // Every file a build reads comes out of the files, in the `virtual` namespace
 // (an error names `virtual:main.ts`, and ./said.ts strips it). A relative
 // import tries the path, then each extension, then an index file. A package
-// import reads the package's package.json: its `exports` under the `import`
-// and `browser` conditions, then `module` and `main`, then an index file. An
+// import reads the package's package.json: its `exports` for the target
+// environment and import kind, then `module` and `main`, then an index file. An
 // import that resolves to nothing, or a `cloudflare:` one, is left an import,
 // for ./compile.ts to judge.
 import * as esbuild from 'esbuild'
@@ -98,7 +98,11 @@ let inside = (name: string, path: string) =>
 
 /** The file a package import names, or undefined when the package is not
  * installed or names no file. Throws for a package.json that is not JSON. */
-export let packaged = (files: Source, spec: string) => {
+export let packaged = (
+  files: Source,
+  spec: string,
+  { node = false, require = false }: { node?: boolean; require?: boolean } = {},
+) => {
   let name = packageOf(spec)
   if (!name) return
   let manifest = files.read(`node_modules/${name}/package.json`)
@@ -107,7 +111,8 @@ export let packaged = (files: Source, spec: string) => {
   let subpath = spec.slice(name.length + 1)
   try {
     let [hit] = resolve(pkg, subpath ? `./${subpath}` : '.', {
-      conditions: ['import', 'browser'],
+      browser: !node,
+      require,
     }) ?? []
     if (hit && files.read(inside(name, hit)) != null) return inside(name, hit)
   } catch {
@@ -218,7 +223,7 @@ let loader = (path: string): esbuild.Loader =>
 
 let virtual = (
   files: Source,
-  { external, alias, moved }: Options,
+  { external, alias, moved, node = false }: Options,
 ): esbuild.Plugin => ({
   name: 'virtual-fs',
   setup(build) {
@@ -251,7 +256,10 @@ let virtual = (
         }
         if (path.startsWith('cloudflare:')) return left(path)
         try {
-          let hit = packaged(files, path)
+          let hit = packaged(files, path, {
+            node,
+            require: kind == 'require-call' || kind == 'require-resolve',
+          })
           if (hit) return found(hit)
         } catch {
           // A package.json that is not JSON resolves nothing.
