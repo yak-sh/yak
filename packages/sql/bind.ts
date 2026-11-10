@@ -3196,7 +3196,7 @@ let indexedRelation = (
             `"entity"."eid" ${
               down ? '<=' : '>='
             } coalesce((select "__eid_anchor"."eid" from ${
-              ctx.d.admitted ?? from
+              source(ctx, 'entity')
             } as "__eid_anchor" where "__eid_anchor"."eid" = ?), ${
               down ? "X'FF'" : "''"
             })`,

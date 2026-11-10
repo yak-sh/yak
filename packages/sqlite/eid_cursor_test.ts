@@ -7,6 +7,7 @@ import { storage } from './mod.ts'
 import { stepping } from './testing.ts'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { archetypeDoc } from '@yaks/archetype'
+import type { ReadOpts } from '@yaks/graph'
 
 let vocab = loadVocab([kernelDoc, archetypeDoc, {
   $defs: {
@@ -36,14 +37,14 @@ let fixture = (
       })),
     )
   )
-  let page = (q: string) => store.rows(`.session ${q} .fields=entity.eid`)
-  let cost = (q: string) => {
-    page(q)
+  let page = (q: string, opts?: ReadOpts) =>
+    store.rows(`.session ${q} .fields=entity.eid`, opts)
+  let cost = (q: string, opts?: ReadOpts) => {
     let before = steps()
-    let rows = page(q)
+    let rows = page(q, opts)
     return { eids: rows.map((r) => r.eid), steps: steps() - before }
   }
-  return { page, cost }
+  return { page, cost, store }
 }
 
 let dense = fixture(5000, 1)
@@ -100,3 +101,31 @@ test('sparse EID cursor pages retain absence and reverse ordering', () => {
   equal(sparseVisible, [eid(10_000), eid(11_000)])
   equal(sparseReverse, [eid(9500), eid(9000)])
 })
+
+// The box's receipt policy scopes every read, including its cursor's anchor.
+// A hidden, deleted or missing anchor starts at the first visible row.
+let scoped: ReadOpts = { visibility: { entity: '!hidden' } }
+dense.store.tx((tx) => tx.remove([{ eid: eid(3000) }]))
+let scopedPages: [string, string, string[]][] = [
+  ['first', '.order=entity.eid', [eid(0), eid(2)]],
+  ['forward', `.order=entity.eid .after=${eid(4000)}`, [eid(4002), eid(4004)]],
+  ['reverse', `.order=-entity.eid .after=${eid(4000)}`, [eid(3998), eid(3996)]],
+  ['hidden anchor', `.order=entity.eid .after=${eid(4001)}`, [eid(0), eid(2)]],
+  ['deleted anchor', `.order=entity.eid .after=${eid(3000)}`, [eid(0), eid(2)]],
+  ['missing anchor', `.order=entity.eid .after=${eid(6000)}`, [eid(0), eid(2)]],
+  [
+    'missing anchor in reverse',
+    `.order=-entity.eid .after=${eid(6000)}`,
+    [eid(4998), eid(4996)],
+  ],
+]
+for (let [name, q, expected] of scopedPages) {
+  let read = dense.cost(`${q} .limit=2`, scoped)
+  test(`scoped EID pages seek the index: ${name}`, () => {
+    equal(read.eids, expected)
+    ok(
+      read.steps < 3000,
+      `${read.steps} VM instructions for two scoped EID rows`,
+    )
+  })
+}
