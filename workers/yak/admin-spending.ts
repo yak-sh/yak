@@ -284,29 +284,50 @@ let opens = (base: string, r: { space: Counted; open: string }) =>
   `${base}/${r.space.eid}/operator/${r.open}`
 
 let used = (u: Ran) => [
-  dollars(u.cost),
+  h(
+    'span',
+    null,
+    dollars(u.settled ?? u.cost),
+    u.unsettled ? ` · ${count(u.unsettled)} unsettled` : '',
+    u.held ? ` · ${dollars(u.held)} held` : '',
+  ),
   count(u.turns),
   tokens(u.input),
   tokens(u.cached),
   tokens(u.output),
   lasted(u.ms),
 ]
-let USED = ['Cost', 'Requests', 'Input', 'Cached', 'Output', 'Wall time']
+let USED = [
+  'Settled cost',
+  'Request attempts',
+  'Input',
+  'Cached',
+  'Output',
+  'Wall time',
+]
 
 let topRuns = (runs: Placed[], base: string) => {
-  let top = [...runs].sort((a, b) => b.cost - a.cost).slice(0, TOP)
+  let top = [...runs].sort((a, b) =>
+    (b.settled ?? b.cost) - (a.settled ?? a.cost)
+  ).slice(0, TOP)
   return top.length
     ? table(
       [null, null, 'num', 'num', 'num'],
-      ['Conversation', 'Space', 'Cost', 'Requests', 'Helpers'],
+      ['Conversation', 'Space', 'Settled cost', 'Request attempts', 'Helpers'],
       top.map((r) => ({
-        values: [r.title, r.space.slug, r.cost, r.turns, r.helpers.length],
+        values: [
+          r.title,
+          r.space.slug,
+          r.settled ?? r.cost,
+          r.turns,
+          r.helpers.length,
+        ],
         content: h(
           Table.Row,
           null,
           h(Table.Cell, null, link(opens(base, r), r.title)),
           h(Table.Cell, null, r.space.slug),
-          h(Table.Cell, { mod: 'num' }, dollars(r.cost)),
+          h(Table.Cell, { mod: 'num' }, used(r)[0]),
           h(Table.Cell, { mod: 'num' }, count(r.turns)),
           h(Table.Cell, { mod: 'num' }, count(r.helpers.length)),
         ),
@@ -351,7 +372,7 @@ let sessions = (runs: Placed[], base: string) => {
         values: [
           r.title,
           r.space.slug,
-          r.cost,
+          r.settled ?? r.cost,
           r.turns,
           r.input,
           r.cached,

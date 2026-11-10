@@ -19,6 +19,9 @@ export type Usage = {
   cost: number
   turns: number
   unpriced: number
+  settled?: number
+  held?: number
+  unsettled?: number
   input: number
   cached: number
   output: number
@@ -64,6 +67,9 @@ export type Spending = {
   requests?: Bundle[]
   /** All local sessions in the audit, including helpers not yet asking. */
   sessions?: Bundle[]
+  owners?: Record<string, string>
+  receipts?: Bundle[]
+  providers?: Record<string, string>
   /** dollars by day, YYYY-MM-DD, by provider */
   days: Record<string, Record<string, number>>
   /** the pieces of the fixed part every request carries */
@@ -77,6 +83,7 @@ export type Spending = {
 /** The rows `spent` counts, as the host reads them. */
 export type Rows = {
   open?: string
+  since?: string
   details?: boolean
   /** Calls and entries named by auxiliary sessions' session.source. */
   sources?: Bundle[]
@@ -148,6 +155,13 @@ export let plus = (a: Usage, b: Usage): Usage => ({
   cost: a.cost + b.cost,
   turns: a.turns + b.turns,
   unpriced: a.unpriced + b.unpriced,
+  ...a.settled != null || b.settled != null
+    ? {
+      settled: (a.settled ?? a.cost) + (b.settled ?? b.cost),
+      held: n(a.held) + n(b.held),
+      unsettled: n(a.unsettled) + n(b.unsettled),
+    }
+    : {},
   input: a.input + b.input,
   cached: a.cached + b.cached,
   output: a.output + b.output,
@@ -317,7 +331,12 @@ export let spent = (rows: Rows): Spending => {
     if (root != owned) {
       let mine = openOf(owned)
       let helper = helpers.get(mine) ??
-        { ...none(), ...lineage(owned), open: mine, title: titleOf(mine) }
+        {
+          ...none(),
+          ...lineage(owned),
+          open: mine,
+          title: rows.titles.get(mine) ?? `Helper ${owned.slice(0, 8)}`,
+        }
       helpers.set(mine, { ...helper, ...plus(helper, used) })
       if (!run.helpers.some((h) => h.open == mine)) {
         runs.get(open)!.helpers.push({ ...none(), open: mine, title: '' })
@@ -347,12 +366,37 @@ export let spent = (rows: Rows): Spending => {
       } else add(name == 'fixed' ? prompt : rest, name, priced(tokens, price))
     }
   }
+  // A started helper counts even if it was stopped before its first request.
+  for (let session of rows.sessions) {
+    let eid = session.entity.eid
+    if (!parent(eid) || rows.since && stamp(session, 'created') < rows.since) {
+      continue
+    }
+    let root = top(eid)
+    let run = runs.get(openOf(root))
+    let mine = openOf(eid)
+    if (!run || root == eid || helpers.has(mine)) continue
+    let helper = {
+      ...none(),
+      ...lineage(eid),
+      open: mine,
+      title: rows.titles.get(mine) ?? `Helper ${eid.slice(0, 8)}`,
+      at: stamp(session, 'created'),
+      until: stamp(session, 'updated'),
+    }
+    helpers.set(mine, helper)
+    run.helpers.push(helper)
+  }
   let newest = <T extends Usage>(all: T[]) =>
     all.sort((a, b) => b.until.localeCompare(a.until))
   return {
     ...rows.details
       ? {
         requests,
+        providers: Object.fromEntries(rows.providers ?? []),
+        owners: Object.fromEntries(
+          rows.sessions.map((s) => [s.entity.eid, owner(s.entity.eid)]),
+        ),
         sessions: rows.sessions.filter((s) =>
           !rows.open || top(s.entity.eid) == rows.open ||
           openOf(top(s.entity.eid)) == rows.open
@@ -371,5 +415,62 @@ export let spent = (rows: Rows): Spending => {
     prompt,
     rest,
     split,
+  }
+}
+
+/** Directory settlements survive an interrupted transcript write. Missing
+ * receipts remain unknown; reservations are held budget, not measured cost. */
+export let reconciled = (
+  spending: Spending,
+  receipts: Map<string, Bundle>,
+): Spending => {
+  let days = structuredClone(spending.days)
+  let extra = new Map<
+    string,
+    { settled: number; held: number; unsettled: number }
+  >()
+  for (let ask of spending.requests ?? []) {
+    if (comp(ask, 'cost')?.dollars != null) continue
+    let session = String(comp(ask, 'entry')?.session)
+    let owner = spending.owners?.[session] ?? session
+    let tally = extra.get(owner) ?? { settled: 0, held: 0, unsettled: 0 }
+    let receipt = receipts.get(ask.entity.eid)
+    let cost = comp(receipt, 'cost')?.dollars
+    if (cost != null) {
+      tally.settled += Number(cost)
+      let day = stamp(ask, 'created').slice(0, 10)
+      let from = String(comp(ask, 'using')?.provider ?? '')
+      let provider = spending.providers?.[from] ?? (from || 'models')
+      let on = days[day] ??= {}
+      on[provider] = n(on[provider]) + Number(cost)
+    } else {
+      tally.held += n(comp(receipt, 'model_reservation')?.dollars)
+      tally.unsettled++
+    }
+    extra.set(owner, tally)
+  }
+  let counted = (run: Ran) => ({
+    ...run,
+    settled: run.cost + n(extra.get(run.session ?? '')?.settled),
+    held: n(extra.get(run.session ?? '')?.held),
+    unsettled: n(extra.get(run.session ?? '')?.unsettled),
+  })
+  return {
+    ...spending,
+    days,
+    receipts: [...receipts.values()],
+    runs: spending.runs.map((run) => {
+      let helpers = run.helpers.map(counted)
+      let own = counted(run)
+      return {
+        ...own,
+        settled: own.settled +
+          helpers.reduce((sum, h) => sum + h.settled - h.cost, 0),
+        held: own.held + helpers.reduce((sum, h) => sum + h.held, 0),
+        unsettled: own.unsettled +
+          helpers.reduce((sum, h) => sum + h.unsettled, 0),
+        helpers,
+      }
+    }),
   }
 }

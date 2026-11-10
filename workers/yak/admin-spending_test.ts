@@ -16,6 +16,7 @@ import { receive } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
 import { COOKIE, sign } from './lib/token.ts'
 import { monthOf } from './meter.ts'
+import { receiptEid } from './model-spend.ts'
 
 let p = platform('admin-spending', { SESSION_SECRET: 'secret' })
 let dir = directoryOf(p.env.STORE)
@@ -149,8 +150,8 @@ test('every conversation says its cost, requests and tokens, newest first', () =
   assertEquals(runs[0].slice(0, 8), [
     'Conversation or helper',
     'Space',
-    'Cost',
-    'Requests',
+    'Settled cost',
+    'Request attempts',
     'Input',
     'Cached',
     'Output',
@@ -184,14 +185,29 @@ test('nobody but the admin reads it', () => {
 // retains each one, with its direct parent and its own recorded cost.
 let helpers = Array.from({ length: 6 }, () => crypto.randomUUID())
 let helperAsks = helpers.map(() => crypto.randomUUID())
+let helperCalls = helpers.map(() => crypto.randomUUID())
 let conversation = rootOf(eid, jeff)
 let model = crypto.randomUUID()
+await service.store.g.apply(
+  helperCalls.map((eid, i) => ({
+    entity: { eid },
+    entry: { session: conversation },
+    call: {
+      to: model,
+      args: { prompt: `Check helper ${i}\nReport what changed.` },
+    },
+  })),
+  { trusted: true },
+)
 await service.store.g.apply(
   helpers.flatMap((session, i) => [
     {
       entity: { eid: session },
       session: {},
-      spawned: { parent: i ? helpers[i - 1] : conversation },
+      spawned: {
+        parent: i ? helpers[i - 1] : conversation,
+        call: helperCalls[i],
+      },
     },
     {
       entity: { eid: helperAsks[i] },
@@ -203,10 +219,17 @@ await service.store.g.apply(
   ]),
   { trusted: true },
 )
-let [compaction, source, summary, unrelated] = helpers.slice(0, 4).map(() =>
-  crypto.randomUUID()
+let [compaction, source, summary, unrelated, queued] = helpers.slice(0, 5).map(
+  () => crypto.randomUUID(),
 )
+let uncertain = crypto.randomUUID()
 await service.store.g.apply([
+  {
+    entity: { eid: uncertain },
+    entry: { session: helpers[1] },
+    ask: { to: model },
+  },
+  { entity: { eid: queued }, session: {}, spawned: { parent: conversation } },
   { entity: { eid: source }, call: { to: model, source: helperAsks[5] } },
   { entity: { eid: compaction }, session: { source } },
   {
@@ -224,6 +247,15 @@ await service.store.g.apply([
     cost: { dollars: 99 },
   },
 ], { trusted: true })
+await dir.apply({
+  entities: [
+    { entity: { eid: receiptEid(helperAsks[0]) }, cost: { dollars: 0.5 } },
+    {
+      entity: { eid: receiptEid(uncertain) },
+      model_reservation: { space: eid, month, what: 'models', dollars: 0.75 },
+    },
+  ],
+}, kernel)
 let audit = async (person: string) => {
   let path = `/admin/${eid}/operator`
   return (await answer(
@@ -241,14 +273,22 @@ let audit = async (person: string) => {
 let exported = await audit(root)
 let spending = await exported.json()
 let denied = await audit(jeff)
+let summaryPage = await get(`/admin/${eid}/operator/${compaction}`)
 test('the admin reads every helper’s cost, lineage and standing as structured spending', () => {
   assertEquals(exported.status, 200)
   assertEquals(denied.status, 404)
+  assertEquals(summaryPage.status, 200)
+  assertEquals(
+    summaryPage.document.querySelector('.Desk_Head h1')?.textContent,
+    'Context summary',
+  )
   let [run] = spending.runs
-  assertEquals([run.turns, run.unpriced, run.helpers.length], [8, 1, 6])
+  assertEquals([run.turns, run.unpriced, run.helpers.length], [9, 2, 7])
   assertEquals(run.cost.toFixed(4), '15.2505')
+  assertEquals(run.settled.toFixed(4), '15.7505')
+  assertEquals([run.held, run.unsettled], [0.75, 1])
   assertEquals(spending.runs.length, 1)
-  assertEquals(spending.requests.length, 8)
+  assertEquals(spending.requests.length, 9)
   assertEquals(
     spending.requests.some((r: { entity: { eid: string } }) =>
       r.entity.eid == summary
@@ -262,12 +302,14 @@ test('the admin reads every helper’s cost, lineage and standing as structured 
   let bySession = new Map(
     run.helpers.map((h: Record<string, unknown>) => [h.session, h]),
   )
+  assertEquals((bySession.get(queued) as Record<string, unknown>).turns, 0)
   for (let [i, session] of helpers.entries()) {
     let helper = bySession.get(session) as Record<string, unknown>
     assertEquals(helper.parent, i ? helpers[i - 1] : conversation)
+    assertEquals(helper.title, `Check helper ${i}`)
     assertEquals(helper.cost, i == 5 ? 5.25 : i)
-    assertEquals(helper.turns, i == 5 ? 2 : 1)
-    assertEquals(helper.unpriced, i ? 0 : 1)
+    assertEquals(helper.turns, i == 5 || i == 1 ? 2 : 1)
+    assertEquals(helper.unpriced, i < 2 ? 1 : 0)
     assertEquals(typeof helper.status, 'string')
   }
 })

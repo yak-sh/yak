@@ -1,5 +1,5 @@
 import { updatesOf, updating } from './operator-updates.ts'
-import { addressed, type Bundle, type Graph } from '@yaks/graph'
+import { addressed, type Bundle, type Comp, type Graph } from '@yaks/graph'
 import { refuse } from './tool.ts'
 import { remove } from './operator-remove.ts'
 import { draftEid } from '@yaks/draft'
@@ -623,7 +623,7 @@ export let spendingOf = async (
           'context_parts.parts,created.at,updated.at',
       ),
       store.g.read(
-        '.session .fields=spawned.parent,fixed.parts,session.status,session.source',
+        '.session .fields=spawned.parent,spawned.call,fixed.parts,session.status,session.source,created.at,updated.at',
       ),
       store.g.read('.task .fields=doc.title'),
       store.g.read('.contains .fields=edge.from,edge.to'),
@@ -662,16 +662,35 @@ export let spendingOf = async (
       asks.map((a) => String(comp(a, 'entry')?.session ?? ''))
         .filter((s) => spawned.has(s) && !carried.has(s)),
     ),
-  ].slice(0, NAMED)
+  ]
+  let calls = await store.g.get(
+    sessions.flatMap((s) =>
+      comp(s, 'spawned')?.call ? [String(comp(s, 'spawned')!.call)] : []
+    ),
+    ['call'],
+  )
+  let briefs = new Map(calls.map((c) => [
+    c.entity.eid,
+    String((comp(c, 'call')?.args as Comp | undefined)?.prompt ?? '').split(
+      '\n',
+    )[0].slice(0, 80),
+  ]))
+  let called = new Map(sessions.flatMap((s) => {
+    let brief = briefs.get(String(comp(s, 'spawned')?.call))
+    return brief ? [[s.entity.eid, brief] as const] : []
+  }))
   let titles = new Map([
     ...conversations.map(({ root, title }) => [root, title] as const),
     ...titled,
     ...await Promise.all(
-      helpers.map(async (h) => [h, await askedAt(store, h)] as const),
+      helpers.filter((h) => !called.has(h)).slice(0, NAMED)
+        .map(async (h) => [h, await askedAt(store, h)] as const),
     ),
+    ...called,
   ])
   return spent({
     ...audit,
+    since,
     sources: [...sourceCalls, ...sourceEntries],
     asks,
     sessions,
@@ -897,6 +916,8 @@ export let conversationOf = async (
       begun: open,
       title: helper
         ? await askedAt(store, eid)
+        : comp(row, 'session')?.source
+        ? 'Context summary'
         : everyone
         ? await whose(row, everyone)
         : CONVERSATION,

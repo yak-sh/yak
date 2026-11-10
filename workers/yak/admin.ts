@@ -36,6 +36,7 @@ import {
   appAbout,
   type Directory,
   directory,
+  directoryOf,
   fetch as directoryFetch,
   idOf,
   META,
@@ -78,7 +79,8 @@ import { admin } from './tool.ts'
 import { adminWho } from './asking.ts'
 import { type Item, Sidebar } from './sidebar.ts'
 import { type Asked, type Counted, spendingBody } from './admin-spending.ts'
-import type { Spending } from './operator-spending.ts'
+import { reconciled, type Spending } from './operator-spending.ts'
+import { receiptEid } from './model-spend.ts'
 
 export let PATH = ADMIN
 
@@ -746,6 +748,42 @@ let asking = (
   })
 let failed = (e: Error) => empty(`The Operator could not be read: ${e.message}`)
 
+let spendingRead = async (
+  env: Env,
+  space: Space,
+  person: string,
+  open?: string,
+) => {
+  let spending = await asking(env, space, person, 'spending', {
+    everyone: true,
+    details: true,
+    open,
+  }) as Spending | Error
+  if (spending instanceof Error) return spending
+  let missing =
+    spending.requests?.filter((r) =>
+      (r.cost as { dollars?: number } | undefined)?.dollars == null
+    ) ?? []
+  let ids = new Map(
+    missing.map((r) => [receiptEid(r.entity.eid), r.entity.eid]),
+  )
+  let batches: string[][] = []
+  let keys = [...ids.keys()]
+  for (let i = 0; i < keys.length; i += 50) batches.push(keys.slice(i, i + 50))
+  let dir = directoryOf(env.STORE)
+  let receipts = (await Promise.all(batches.map((batch) =>
+    dir.read(
+      `.entity.eid=${
+        batch.join(',')
+      }&.fields=cost.dollars,model_reservation.dollars`,
+    )
+  ))).flat()
+  return reconciled(
+    spending,
+    new Map(receipts.map((r) => [ids.get(r.entity.eid)!, r])),
+  )
+}
+
 // A space's Operator, inspected: every person's conversation with it and the
 // work each started, or, with `open`, one of them drawn as its chat app
 // draws it. Each is read when asked, so a reload shows what has happened.
@@ -888,12 +926,10 @@ let spendingPage = async (d: Reading, env: Env, person: string) => {
       .slice(0, SPENDERS)
       .map(async (space) => ({
         space,
-        spending: await asking(
+        spending: await spendingRead(
           env,
           d.spaces.get(space.eid)!,
           person,
-          'spending',
-          { everyone: true },
         ) as Spending | Error,
       })),
   )
@@ -1130,11 +1166,12 @@ export let answer = async (
   if (
     part == 'operator' && !open && asked.searchParams.get('format') == 'json'
   ) {
-    let spending = await asking(env, spaceOf(r), who, 'spending', {
-      everyone: true,
-      details: true,
-      open: asked.searchParams.get('conversation') ?? undefined,
-    })
+    let spending = await spendingRead(
+      env,
+      spaceOf(r),
+      who,
+      asked.searchParams.get('conversation') ?? undefined,
+    )
     return spending instanceof Error
       ? Response.json({ message: spending.message }, { status: 503 })
       : Response.json(spending)
