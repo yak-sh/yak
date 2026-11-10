@@ -13,6 +13,7 @@ import { BASE, personaFor } from './operator-persona.ts'
 import { spaced } from './operator-persona.ts'
 import { link } from '@yaks/edge'
 import { KERNEL, meta } from './meta.ts'
+import { derivedEid } from '@yaks/graph/identity'
 
 let owner = crypto.randomUUID()
 // The platform holds Anthropic's key, so the Operator is on Claude.
@@ -44,6 +45,12 @@ let said = async (say: string, task?: string) => {
   return asked.at(-1)!
 }
 
+// A doc an earlier deploy's code declared, which this one does not.
+let retired = derivedEid('operator-persona|retired')
+await meta(env).apply([
+  { entity: { eid: retired }, doc: { title: 'Retired', body: 'Gone now.' } },
+  link(BASE, 'contains', retired, 99),
+], KERNEL)
 let first = await said('Hi')
 await meta(env).apply([{
   entity: { eid: BASE },
@@ -76,6 +83,10 @@ test('the base comes first, then the space persona worn on it, then where it is'
     `You are ${space.operator}, the Operator of home`,
   )
   assertEquals(persona.persona, { base: BASE, home: space.eid })
+})
+
+test('a doc the code no longer declares leaves the base', () => {
+  assertEquals(String(first.instructions).includes('Gone now.'), false)
 })
 
 test('the guidance is a doc in the directory: an edit reaches the next turn', () => {

@@ -16,7 +16,7 @@
 // its next turn, with nothing copied into the spaces.
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { link } from '@yaks/edge'
+import { link, unlink } from '@yaks/edge'
 import { short } from '@yaks/id'
 import type { Reads } from '@yaks/persona'
 import { stringify } from '@yaks/query'
@@ -76,7 +76,8 @@ let docs = (from: Eid, declared: Declared[], key: (k: string) => Eid) =>
 /**
  * Keep the base as the code declares it: the persona, with its guidance where
  * it has none, and each declared doc it contains, written only where the
- * directory holds something else.
+ * directory holds something else. Everything it contains is declared by code,
+ * so a doc the code no longer declares leaves it.
  */
 export let declare = async (
   env: Pick<Env, 'STORE' | 'META' | 'CLOCK'>,
@@ -87,9 +88,19 @@ export let declare = async (
     declared,
     (k) => derivedEid('operator-persona|' + k),
   )
-  let held = await bases(env).get([BASE, ...wanted.map((b) => b.entity.eid)])
+  let [held, contained] = await Promise.all([
+    bases(env).get([BASE, ...wanted.map((b) => b.entity.eid)]),
+    meta(env).query(`.edge.from=${BASE}&.contains`),
+  ])
+  let kept = new Set(
+    declared.map((d) => derivedEid('operator-persona|' + d.key)),
+  )
   let writes = [
-    ...held.some((b) => b.entity.eid == BASE) ? [] : [{
+    ...contained
+      .map((e) => String((e.edge as Comp).to))
+      .filter((to) => !kept.has(to))
+      .map((to) => unlink(BASE, 'contains', to)),
+    ...held.some((b) => b.entity.eid == BASE && b.persona) ? [] : [{
       entity: { eid: BASE },
       persona: {},
       doc: { title: 'yaks.app Operator', body: GUIDANCE },
