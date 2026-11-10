@@ -133,7 +133,14 @@ export let prepareCommand = async (
   let state = await ports.begin(args, who), eid = crypto.randomUUID()
   await apply(ports.store, [{
     entity: { eid },
-    print_preparation: { state, ...who },
+    print_preparation: {
+      state,
+      person: who.person,
+      via: who.via,
+      source: who.source,
+      seller: who.seller,
+      authority: who.authority,
+    },
   }, await continuation(ports, eid)])
   return { id: eid, pending: true, preview: ports.preview }
 }

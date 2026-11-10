@@ -32,6 +32,7 @@ export type Who = {
   source: string
   seller: string
   authority?: string
+  browsers?: string[]
 }
 export type ServicePorts = Fulfillment & {
   store: Store
@@ -75,7 +76,7 @@ let object = (value: unknown): Record<string, unknown> => {
 let owns = (row: DocumentRow, who: Who) =>
   ownedBy(
     { by: row.print_preparation.person, via: row.print_preparation.via },
-    { by: who.person, via: who.via },
+    { by: who.person, via: who.via, browsers: who.browsers },
   )
 let requirePerson = (who: Who): string => {
   if (!who.person) {
@@ -346,10 +347,14 @@ export let commands =
 
 export let caller = (request: Request): Who => {
   let seller = request.headers.get('x-yak-app-eid') ?? ''
+  let person = request.headers.get('x-yak-person') ?? undefined
   let raw = request.headers.get('x-yak-command-source'), origin
   if (raw?.startsWith('{')) origin = JSON.parse(raw)
   return {
-    person: request.headers.get('x-yak-person') ?? undefined,
+    person,
+    browsers: person
+      ? request.headers.get('x-yak-browsers')?.split(',').filter(Boolean)
+      : undefined,
     via: request.headers.get('x-yak-via') ?? undefined,
     seller,
     source: origin?.app ?? seller,
