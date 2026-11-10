@@ -1,0 +1,85 @@
+:root {
+  color-scheme: light dark;
+  --background: #ddd;
+  --text: #182433;
+  --link: #0054a6;
+  --red: #a53b00;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #151f2c;
+    --text: #dce1e7;
+    --link: #6db5ff;
+    --red: #ff8c7f;
+  }
+}
+
+.Page {
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  font: 1.5rem/1.5 system-ui, sans-serif;
+  overflow-wrap: break-word;
+}
+
+.Page_Content {
+  max-width: 40em;
+  margin: 0 auto;
+  padding: 0 1em 3em;
+}
+
+.Page_Cross {
+  text-align: center;
+  font-size: 10em;
+  line-height: 1.5;
+}
+
+.Page_Title {
+  text-align: center;
+  font-size: clamp(1.5em, 6vw, 2em);
+}
+
+.Page_Verse {
+  margin: 3em 0 0;
+}
+
+.Page_Citation {
+  text-align: right;
+}
+
+.Page_Link {
+  color: var(--link);
+  text-underline-offset: 0.15em;
+}
+
+.Page_Link:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}
+
+.Page_Jesus {
+  color: var(--red);
+}
+
+.Page:has(.Page_All:hover) .Page_All,
+.Page:has(.Page_Nothing:hover) .Page_Nothing,
+.Page:has(.Page_ForNothing:hover):not(:has(.Page_ForNothing *:hover)) .Page_ForNothing {
+  text-decoration: underline;
+  text-underline-offset: 0.1em;
+}
+
+@media (max-width: 30em) {
+  .Page {
+    font-size: 1.125rem;
+  }
+
+  .Page_Cross {
+    font-size: 7em;
+  }
+}
+
+.Page_Footer {
+  margin-top: 4em;
+  font-size: 0.625em;
+}
