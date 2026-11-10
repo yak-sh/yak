@@ -32,13 +32,16 @@
 // task completed or cancelled.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { argsOf } from '@yaks/graph/call'
+import { addressed, argsOf } from '@yaks/graph/call'
+import { Refused } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
 import { human } from '@yaks/id'
 import { CLAIM, SESSION } from './comp.ts'
 import { ended, type Projects, projects } from './listen.ts'
 
 type G = Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>
+// A reader that also resolves the ids a call was given (`T-12`) to eids.
+type Addressing = G & Pick<Graph, 'address'>
 
 let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
@@ -237,6 +240,17 @@ export let writers = async (g: G, via: Eid): Promise<Set<Eid>> => {
   return own
 }
 
+// The task an id a call was given names, or none where it names nothing now.
+let named = async (g: Addressing, id: string): Promise<Eid | ''> => {
+  if (!id) return ''
+  try {
+    return (await addressed(g, [id], 'task'))[0]
+  } catch (error) {
+    if (error instanceof Refused) return ''
+    throw error
+  }
+}
+
 /**
  * Where a managed run's ending is reported: the task its spawn call names,
  * else the tasks it holds, and the session to knock, which is the one that
@@ -251,15 +265,16 @@ export let writers = async (g: G, via: Eid): Promise<Set<Eid>> => {
  * ```
  */
 export let reported = async (
-  g: G,
+  g: Addressing,
   run: Eid,
 ): Promise<{ tasks: Eid[]; to?: Eid }> => {
   let row = await placed(g, run)
   let source = str(comp(row, SESSION).source)
   let [call] = source ? await g.get([source], ['call', 'entry', 'created']) : []
   // Claims may already have been released by the terminal-entry effect, or
-  // by the agent itself. The originating spawn call still names its task.
-  let task = call?.call ? str(argsOf(call).task) : ''
+  // by the agent itself. The originating spawn call still names its task, as
+  // its caller wrote it (`T-12`).
+  let task = call?.call ? await named(g, str(argsOf(call).task)) : ''
   let tasks = task
     ? [task]
     : g.vocab.comp('task')
@@ -281,7 +296,12 @@ export let reported = async (
 // Who hears a change another way, so is not knocked for it: the session a
 // comment itself knocks, and, for a mark a managed run made while still at
 // work on the task, whoever its receipt will knock.
-let told = async (g: G, row: Bundle, task: Eid, via: Eid): Promise<Eid[]> => {
+let told = async (
+  g: Addressing,
+  row: Bundle,
+  task: Eid,
+  via: Eid,
+): Promise<Eid[]> => {
   if (row.comment) return [str(comp(row, 'knock').target)].filter(Boolean)
   let run = via ? await managed(g, via) : undefined
   if (!run?.process || run.exit) return []
@@ -329,7 +349,7 @@ let marked = (g: G, task: Bundle): Change | undefined => {
  * // await graph.apply(await knocks(graph, task), { trusted: true })
  * ```
  */
-export let knocks = async (g: G, eid: Eid): Promise<Bundle[]> => {
+export let knocks = async (g: Addressing, eid: Eid): Promise<Bundle[]> => {
   if (!g.vocab.comp('knock')) return []
   let [row] = await g.get([eid])
   let on = row?.comment ? str(comp(row, 'comment').target) : eid
@@ -386,7 +406,7 @@ export let knocks = async (g: G, eid: Eid): Promise<Bundle[]> => {
 
 /** The code behind `session_watch`: knock the watchers of the task `eid` is,
  * or that the comment `eid` is on. */
-export let watch = async (g: G, eid: Eid): Promise<void> => {
+export let watch = async (g: Addressing, eid: Eid): Promise<void> => {
   let owed = await knocks(g, eid)
   if (owed.length) await g.apply(owed, { trusted: true })
 }

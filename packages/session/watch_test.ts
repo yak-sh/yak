@@ -6,13 +6,15 @@ import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { effects } from '@yaks/effects'
-import { human, idKeywords } from '@yaks/id'
+import { human, idDoc, idKeywords } from '@yaks/id'
+import { ids } from '@yaks/id/graph'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { mailDoc } from '@yaks/mail/vocab'
 import { notifyDoc } from '@yaks/notify/vocab'
 import { taskDoc } from '@yaks/task'
+import { toolEid } from '@yaks/tools'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { personaDoc } from '@yaks/persona/vocab'
 import { projectDoc } from '@yaks/project/vocab'
@@ -26,6 +28,7 @@ import { mentions, watch } from './watch.ts'
 
 let vocab = loadVocab([
   kernelDoc,
+  idDoc,
   provenanceDoc,
   docDoc,
   mailDoc,
@@ -54,7 +57,7 @@ let office = async (filer = 'worker') => {
   let g = graph({
     storage: ram(vocab, { computed: statusComputed, number: true }),
     vocab,
-    plugins: [fx],
+    plugins: [ids(vocab), fx],
   })
   let { session_watch } = running(g, {
     holder: 'w',
@@ -230,17 +233,28 @@ test("a subagent's comment knocks no session up its line", async () => {
   equal((await o.heard('operator')).length, 1)
 })
 
-// A managed run the worker started on `t`, still at work.
+let SPAWN = toolEid('session_spawn')
+
+// A managed run the worker started on `t`, still at work: its spawn call
+// names the task as the worker typed it, and completing the task lets its
+// claim go.
 let started = async () => {
   let o = await office()
   await o.g.apply([
+    { entity: { eid: SPAWN }, tool: { name: 'session_spawn' } },
+  ], { trusted: true })
+  await o.g.apply([
+    {
+      entity: { eid: 'spawn-call' },
+      call: { to: SPAWN, args: { task: o.id } },
+      $actor: { by: 'taskmaster', via: 'worker' },
+    },
     {
       entity: { eid: 'run' },
-      session: { id: 'run', persona: 'taskmaster' },
+      session: { id: 'run', persona: 'taskmaster', source: 'spawn-call' },
       spawned: { parent: 'worker' },
       process: { pid: 42 },
     },
-    { entity: { eid: 't' }, claim: { session: 'run' } },
     {
       entity: { eid: 's1' },
       subscription: { actor: 'operator', target: 't', mode: 'watch' },
