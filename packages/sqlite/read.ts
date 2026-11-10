@@ -1335,6 +1335,7 @@ export let read = (
   comps?: string[],
   ask: (query: And) => Row[] = (q) => rows(driver, vocab, q, opts),
   fetch?: (eids: string[], comps?: string[], answered?: boolean) => Bundle[],
+  unsettled?: Unsettled,
 ): Bundle[] => {
   let parsed = ast(query)
   let eids = ask(parsed).filter((r) => r.eid != null).map((r) => String(r.eid))
@@ -1353,7 +1354,7 @@ export let read = (
     eids,
     { ...opts, derived: asked },
     comps,
-    undefined,
+    unsettled,
     undefined,
     true,
   )

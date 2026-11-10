@@ -995,6 +995,7 @@ export let storage = (
           comps,
           (q) => asked(q, o),
           fetched(o),
+          unsettled,
         ), { what: named(query) })
     },
     get: identity,
@@ -1189,6 +1190,7 @@ export let storage = (
                   comps,
                   (q) => rows(driver, vocab, q, bound),
                   fetched(o, getting, owed),
+                  unsettled,
                 )
               ),
             { what: named(query) },

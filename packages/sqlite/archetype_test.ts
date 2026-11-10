@@ -261,6 +261,13 @@ test("an outer storage read uses the open writer's pending archetypes", () => {
   s.tx((tx) => {
     tx.patch([{ entity: { eid: 'new' }, doc: { title: 'pending' } }])
     assertEquals(s.read('.doc').map((b) => b.entity.eid), ['new'])
+    assertEquals(s.read('.doc', { eids: ['new'] }).map((b) => b.entity.eid), [
+      'new',
+    ])
+    assertEquals(
+      (tx.read('.doc', { eids: ['new'] }) as Bundle[]).map((b) => b.entity.eid),
+      ['new'],
+    )
     assertEquals(s.rows('.doc').map((b) => b.eid), ['new'])
     assertEquals(s.rows('.doc&.count').map((b) => b.n), [1])
     assertEquals(driver.query(s.screen('.doc')!).length, 1)
