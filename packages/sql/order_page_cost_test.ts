@@ -13,7 +13,10 @@ let vocab = loadVocab({
   $defs: {
     entity: { component: true, properties: { num: { type: 'number' } } },
     entry: { component: true, properties: {} },
-    comment: { component: true, properties: {} },
+    comment: {
+      component: true,
+      properties: { kind: { type: 'string' } },
+    },
     created: {
       component: true,
       properties: {
@@ -34,7 +37,7 @@ let db = new Database(':memory:'), sql = driver(db)
 let tables: Record<string, string[]> = {
   entity: ['eid', 'num'],
   entry: [],
-  comment: [],
+  comment: ['kind'],
   created: ['at'],
   content: ['body'],
   link: ['to'],
@@ -81,7 +84,11 @@ for (let id = 1; id <= 4096; id++) {
     sql.query(insert('created', { entity: id, at: id == 3001 ? '' : at(id) }))
   }
   if (id <= 4000) sql.query(insert('entry', { entity: id }))
-  if (id == 50 || id == 3000) sql.query(insert('comment', { entity: id }))
+  if (id == 50 || id == 3000) {
+    sql.query(
+      insert('comment', { entity: id, kind: id == 50 ? 'note' : 'ask' }),
+    )
+  }
   // Three entities, one with no moment, point at the first.
   if ([20, 1000, 2001].includes(id)) {
     sql.query(insert('link', { entity: id, to: 1 }))
@@ -241,6 +248,11 @@ let counted: [string, string, BindOpts][] = [
     '.comment !link .created.at>2025-01-01 .order=-created.at .limit=3',
     few({ comment: 2 }),
   ],
+  [
+    'named only by a test of its property',
+    '.comment.kind=note !link .order=-created.at .limit=3',
+    few({ comment: 2 }),
+  ],
 ]
 for (let [name, line, opts] of counted) {
   test(`a page of few owners: ${name}`, () =>
@@ -251,11 +263,16 @@ for (let [name, line, opts] of counted) {
 // reads every moment to learn it, 188,483 VM steps, and the census sends the
 // page to the comments.
 test('a page of few owners reads them, not the index', () => {
-  for (let bound of ['', '.created.at>2025-01-01']) {
-    let { steps } = read(
-      `.comment !link ${bound} .order=-created.at .limit=3`,
-      few({ comment: 2 }),
-    )
-    assert(steps < 1_000, `${steps} VM instructions`)
+  for (
+    let line of [
+      '.comment !link .order=-created.at .limit=3',
+      '.comment !link .created.at>2025-01-01 .order=-created.at .limit=3',
+      // A test of a property names its component as surely as `.comment`
+      // does (bug e48e7967: `.session.operator=true !session.ended`, 34 s).
+      '.comment.kind=note !link .order=-created.at .limit=3',
+    ]
+  ) {
+    let { steps } = read(line, few({ comment: 2 }))
+    assert(steps < 1_000, `${steps} VM instructions: ${line}`)
   }
 })

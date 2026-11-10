@@ -1482,6 +1482,22 @@ let referrers = (ctx: Ctx, value: string): Frag | undefined => {
   return { sql: `${target} ${list.sql}`, params: [value, ...list.params] }
 }
 
+// Whether a read can be driven from a component's own table.
+let spined = (ctx: Ctx, comp: string): boolean =>
+  comp != 'entity' && !!ctx.v.comp(comp) && !computed(ctx.v, comp) &&
+  (ctx.d.scoped || source(ctx, comp) == `"${comp}"` &&
+      ctx.d.table(comp) == `"${comp}"`)
+
+// The component a test of its property requires, where no clause names one
+// outright: `.session.operator=true` holds only for a session.
+let subject = (ctx: Ctx, cs: Clause[], but: string): string | undefined =>
+  flattened(cs).flatMap((c) =>
+    c.kind == 'pred' && !c.not && !c.where && c.path.length == 2 &&
+      c.path[0] != but && needs(opOf(c), c.value) && spined(ctx, c.path[0])
+      ? [c.path[0]]
+      : []
+  )[0]
+
 let presence = (ctx: Ctx, cs: Clause[]): string | undefined => {
   if (
     ctx.spine || ctx.eids || ctx.correlated || claims(ctx, 'pred') ||
@@ -1500,10 +1516,6 @@ let presence = (ctx: Ctx, cs: Clause[]): string | undefined => {
       needs(opOf(p), p.value)
     )
   )
-  let spined = (comp: string) =>
-    comp != 'entity' && !!ctx.v.comp(comp) && !computed(ctx.v, comp) &&
-    (ctx.d.scoped || source(ctx, comp) == `"${comp}"` &&
-        ctx.d.table(comp) == `"${comp}"`)
   // Of several required components, the one the fewest entities hold drives,
   // as the census counts them: `.call&.entry&.tool_async` read from `call`
   // probed all 498,620 calls for their 45,890 background ones (T-147328).
@@ -1511,7 +1523,7 @@ let presence = (ctx: Ctx, cs: Clause[]): string | undefined => {
     ...new Set(
       cs.flatMap((c) =>
         c.kind == 'pred' && !c.not && !c.where && c.path.length == 1 &&
-          opOf(c) == EXISTS && spined(c.path[0])
+          opOf(c) == EXISTS && spined(ctx, c.path[0])
           ? [c.path[0]]
           : []
       ),
@@ -1536,7 +1548,7 @@ let presence = (ctx: Ctx, cs: Clause[]): string | undefined => {
     let root = ctx.v.turn(c.path) > 0
       ? { comp: c.path[0], prop: c.path[1] }
       : aimed(ctx, c)?.[0]
-    if (root?.prop && spined(root.comp)) return root.comp
+    if (root?.prop && spined(ctx, root.comp)) return root.comp
   }
 }
 
@@ -4005,6 +4017,15 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
   // owner. A derived test, `.session.status=stopped`, then probes a few
   // hundred sessions rather than selecting every one: 109 ms, from 5.7 s.
   let driven = presence(ctx, ast.clauses)
+  // A test of a property names its component as surely as `.session` does.
+  // Unnamed, the page walked every moment for the few sessions that pass
+  // `.session.operator=true !session.ended`: 34 s (bug e48e7967). Named, it
+  // is the tested page of a component below.
+  let unnamed = driven ? undefined : subject(ctx, filters, comp)
+  if (unnamed) {
+    let named: Pred = { kind: 'pred', path: [unnamed], op: '!', value: null }
+    return inOrder({ ...ast, clauses: [named, ...ast.clauses] }, ctx)
+  }
   let tests = (c: Clause) =>
     c.kind != 'pred' || c.not || c.where || opOf(c) != 'want' &&
       !(c.path.length == 1 && c.path[0] == driven && opOf(c) == EXISTS)
