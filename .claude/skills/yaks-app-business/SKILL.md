@@ -174,9 +174,17 @@ assistants' connector directories for those who already use one.
   provider's webhook doors are @yaks/stripe's, served by
   workers/yak/payment-doors.ts. How metering and refusals work is
   `yaks-app`.
-- **The site.** There is one home page. Ad tests get landing pages of their
-  own and never split or change the home page (variant.ts shares, with the
-  Operator page at /operator drawn by nobody new). The home page is
+- **The site.** A home page is data in workers/yak/variant.ts: a name, the
+  page it is drawn from and its share of the visitors `/` draws. A page with a
+  share is one `/` is split with (today's page, and site/build.tsx, which
+  leads with the app a visitor gets). A page with none is a landing page for
+  one audience, shown only at its own address, where an ad for that audience
+  points: site/churches.tsx at /churches, and the Operator page at /operator.
+  An ad test gets a landing page and never changes the home page. A visit to
+  any of them is a home page visit in the funnel under that page's name, and
+  so are the click, the build begun and the sign-up that follow
+  (`yak admin funnel`, "By home page variant"). A page names an audience only
+  with what yaks.app has built for one, and never names a customer. The home page is
   workers/yak/site/home.tsx (drawn from the kit's parts into public/index.html
   at deploy), which carries a JSON-LD copy
   of the plans and a card for each of the three, as site/pricing.tsx has; a

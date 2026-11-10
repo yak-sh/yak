@@ -139,10 +139,16 @@ export let EXAMPLES = [
   ],
 ]
 
-/** The examples, one card at a time (carousel.js): the apps in yourname's
- * space, which the served page swaps for the gallery's cards (gallery.ts
- * `showcase`), and under them what a visitor can do with one. */
-export let Examples = ({ children }: { children: ComponentChildren }) => (
+/** The examples, one card at a time (carousel.js): apps in yourname's space,
+ * each named by its address there (`data-demo`), which the served page swaps
+ * for the gallery's cards (gallery.ts `showcase`), and under them what a
+ * visitor can do with one. */
+export let Examples = (
+  { children, apps = EXAMPLES }: {
+    children: ComponentChildren
+    apps?: string[][]
+  },
+) => (
   <section
     class='Demo'
     aria-labelledby='examples'
@@ -151,8 +157,8 @@ export let Examples = ({ children }: { children: ComponentChildren }) => (
   >
     <h2 class='Demo_Title' id='examples'>Apps made with yaks.app</h2>
     <ul class='Demo_Slides'>
-      {EXAMPLES.map(([slug, title, sub]) => (
-        <Card as='li' class='Make_Card'>
+      {apps.map(([slug, title, sub]) => (
+        <Card as='li' class='Make_Card' data-demo={slug}>
           <Card.Head>
             <Card.Title as='h3'>
               <Card.Link href={`https://yourname.yaks.app/${slug}/`}>
@@ -185,6 +191,96 @@ export let Examples = ({ children }: { children: ComponentChildren }) => (
       <Button class='Demo_Pause' type='button'>Pause</Button>
     </div>
     <p class='Note Note-small'>{children}</p>
+  </section>
+)
+
+/** What a space costs: what one is, a card for each plan, and where the
+ * limits are. */
+export let Cost = () => (
+  <section class='Cost' aria-labelledby='cost'>
+    <h2 class='Title' id='cost'>Free to start, a plan for more</h2>
+    <p class='Note'>
+      A space is your address, like{' '}
+      <Yours />, with its apps, their data and the people you invite. Your first
+      space is free.
+    </p>
+    <div class='Plans'>
+      <Card as='div' class='Plan'>
+        <h3 class='Plan_Price'>Free</h3>
+        <p class='Note Note-small'>Your first space.</p>
+        <ul class='Plan_List'>
+          <li class='Plan_Item'>5 apps</li>
+          <li class='Plan_Item'>Unlimited visitors</li>
+          <li class='Plan_Item'>
+            1 GB of app data, 1 GB of photos and files
+          </li>
+          <li class='Plan_Item'>100 emails a month</li>
+          <li class='Plan_Item'>
+            An address like <Yours />
+          </li>
+        </ul>{' '}
+        <Button mod='go' href='/login'>Start Free</Button>
+      </Card>
+      <Card as='div' class='Plan Plan-plus'>
+        <h3 class='Plan_Price'>
+          $9
+          <span class='Plan_Per'>&#32;a month</span>
+        </h3>
+        <p class='Note Note-small'>
+          The Plus plan, for each space. Take payments with Stripe.
+        </p>
+        <ul class='Plan_List'>
+          <li class='Plan_Item'>Unlimited apps</li>
+          <li class='Plan_Item'>Unlimited visitors</li>
+          <li class='Plan_Item'>
+            10 GB of app data, 50 GB of photos and files
+          </li>
+          <li class='Plan_Item'>2,500 emails a month</li>
+          <li class='Plan_Item'>
+            Your own domain, like <b>ourbookclub.com</b>
+          </li>
+        </ul>{' '}
+        <Button
+          mod='go'
+          href={GET_PLAN}
+          data-cta='plus'
+        >
+          Get Started
+        </Button>
+      </Card>
+      <Card as='div' class='Plan Plan-pro'>
+        <h3 class='Plan_Price'>
+          $49
+          <span class='Plan_Per'>&#32;a month</span>
+        </h3>
+        <p class='Note Note-small'>
+          The Pro plan, or $490 a year. Your staff ask the Operator by email or
+          chat, and it makes the change.
+        </p>
+        <ul class='Plan_List'>
+          <li class='Plan_Item'>Unlimited apps</li>
+          <li class='Plan_Item'>Unlimited visitors</li>
+          <li class='Plan_Item'>
+            10 GB of app data, 50 GB of photos and files
+          </li>
+          <li class='Plan_Item'>2,500 emails a month</li>
+          <li class='Plan_Item'>
+            Your own domain, like <b>ourtownship.org</b>
+          </li>
+        </ul>{' '}
+        <Button
+          mod='go'
+          href={GET_PLAN}
+          data-cta='pro'
+        >
+          Get Started
+        </Button>
+      </Card>
+    </div>
+    <p class='Note Note-small'>
+      Tax is included. Going over a limit never deletes your apps or data.{' '}
+      <a href='/pricing'>Compare plans and limits</a>.
+    </p>
   </section>
 )
 
@@ -301,92 +397,7 @@ export let Home = () => (
         into it, and it can build your apps too.
       </p>
     </section>
-    <section class='Cost' aria-labelledby='cost'>
-      <h2 class='Title' id='cost'>Free to start, a plan for more</h2>
-      <p class='Note'>
-        A space is your address, like{' '}
-        <Yours />, with its apps, their data and the people you invite. Your
-        first space is free.
-      </p>
-      <div class='Plans'>
-        <Card as='div' class='Plan'>
-          <h3 class='Plan_Price'>Free</h3>
-          <p class='Note Note-small'>Your first space.</p>
-          <ul class='Plan_List'>
-            <li class='Plan_Item'>5 apps</li>
-            <li class='Plan_Item'>Unlimited visitors</li>
-            <li class='Plan_Item'>
-              1 GB of app data, 1 GB of photos and files
-            </li>
-            <li class='Plan_Item'>100 emails a month</li>
-            <li class='Plan_Item'>
-              An address like <Yours />
-            </li>
-          </ul>{' '}
-          <Button mod='go' href='/login'>Start Free</Button>
-        </Card>
-        <Card as='div' class='Plan Plan-plus'>
-          <h3 class='Plan_Price'>
-            $9
-            <span class='Plan_Per'>&#32;a month</span>
-          </h3>
-          <p class='Note Note-small'>
-            The Plus plan, for each space. Take payments with Stripe.
-          </p>
-          <ul class='Plan_List'>
-            <li class='Plan_Item'>Unlimited apps</li>
-            <li class='Plan_Item'>Unlimited visitors</li>
-            <li class='Plan_Item'>
-              10 GB of app data, 50 GB of photos and files
-            </li>
-            <li class='Plan_Item'>2,500 emails a month</li>
-            <li class='Plan_Item'>
-              Your own domain, like <b>ourbookclub.com</b>
-            </li>
-          </ul>{' '}
-          <Button
-            mod='go'
-            href={GET_PLAN}
-            data-cta='plus'
-          >
-            Get Started
-          </Button>
-        </Card>
-        <Card as='div' class='Plan Plan-pro'>
-          <h3 class='Plan_Price'>
-            $49
-            <span class='Plan_Per'>&#32;a month</span>
-          </h3>
-          <p class='Note Note-small'>
-            The Pro plan, or $490 a year. Your staff ask the Operator by email
-            or chat, and it makes the change.
-          </p>
-          <ul class='Plan_List'>
-            <li class='Plan_Item'>Unlimited apps</li>
-            <li class='Plan_Item'>Unlimited visitors</li>
-            <li class='Plan_Item'>
-              10 GB of app data, 50 GB of photos and files
-            </li>
-            <li class='Plan_Item'>2,500 emails a month</li>
-            <li class='Plan_Item'>
-              Your own domain, like <b>ourtownship.org</b>
-            </li>
-          </ul>{' '}
-          <Button
-            mod='go'
-            href={GET_PLAN}
-            data-cta='pro'
-          >
-            Get Started
-          </Button>
-        </Card>
-      </div>
-      <p class='Note Note-small'>
-        Tax is included. Going over a limit never deletes your apps or data.
-        {' '}
-        <a href='/pricing'>Compare plans and limits</a>.
-      </p>
-    </section>
+    <Cost />
     <Card class='Join' aria-labelledby='join'>
       <h2 class='Title' id='join'>What would you like your Operator to do?</h2>
       <p class='Join_Doors'>

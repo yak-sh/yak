@@ -79,6 +79,7 @@ export let CONNECTOR = connector()
 // and a search result for it helps nobody.
 export let SITE = [
   '/',
+  '/churches',
   '/pricing',
   '/help',
   '/terms',

@@ -87,6 +87,7 @@ let parsed = (name: string): Document => {
 // here is the site's own HTML files.
 let pages = [
   'index.html',
+  'churches.html',
   'help.html',
   'pricing.html',
   'terms.html',
@@ -654,23 +655,67 @@ test('every public page hands a stranger sign-in, never /connect', () => {
   ], 'a home-page door misses sign-in')
 })
 
-test("the home page's box posts an idea to be built", () => {
-  let box = parsed('index.html').querySelector('form.Hello_Ask')!
-  assertEquals(
-    [box.getAttribute('method'), box.getAttribute('action')],
-    ['post', START],
-  )
-  assertEquals(box.querySelector('textarea[name="say"][required]')?.id, 'say')
-  assertEquals(
-    box.querySelector('button[type="submit"]')?.textContent,
-    'Build it',
-  )
+// Each page that asks for an idea posts it to be built, under the button its
+// hero names.
+test("a home page's box posts an idea to be built", () => {
+  for (
+    let [name, button] of [
+      ['index.html', 'Build it'],
+      ['build.html', 'Build it'],
+      ['churches.html', 'Build it free'],
+    ]
+  ) {
+    let box = parsed(name).querySelector('form.Hello_Ask')!
+    assertEquals(
+      [box.getAttribute('method'), box.getAttribute('action')],
+      ['post', START],
+      name,
+    )
+    assertEquals(
+      box.querySelector('textarea[name="say"][required]')?.id,
+      'say',
+      name,
+    )
+    assertEquals(
+      box.querySelector('button[type="submit"]')?.textContent,
+      button,
+      name,
+    )
+    // The box has a label a screen reader says, in the hero.
+    assert(parsed(name).querySelector('.Hello label[for="say"]'), name)
+  }
+})
+
+// A home page `/` is split with is indexed as the home page; a landing page
+// is its own address. Both count their calls to action as the home page does.
+test('the pages beside the home page say where they live and count their buttons', () => {
+  let at = (name: string) => ({
+    canonical: parsed(name).querySelector('link[rel="canonical"]')
+      ?.getAttribute('href'),
+    ctas: [...parsed(name).querySelectorAll('[data-cta]')]
+      .map((b) => b.getAttribute('data-cta')),
+  })
+  assertEquals(at('build.html'), {
+    canonical: 'https://yaks.app/',
+    ctas: ['start', 'examples', 'plus', 'pro', 'join'],
+  })
+  assertEquals(at('churches.html'), {
+    canonical: 'https://yaks.app/churches',
+    ctas: ['start', 'examples', 'pro', 'join'],
+  })
 })
 
 // An ad visitor on a phone meets the ask first: each home page's heading is
 // the label of the box its hero asks them to fill.
 test("each home page's heading asks for what its box takes", () => {
-  for (let name of ['index.html', 'operator.html', 'operator-email.html']) {
+  for (
+    let name of [
+      'index.html',
+      'build.html',
+      'operator.html',
+      'operator-email.html',
+    ]
+  ) {
     let document = parsed(name)
     let label = document.querySelector('h1 label')!
     let box = document.getElementById(label.getAttribute('for')!)!

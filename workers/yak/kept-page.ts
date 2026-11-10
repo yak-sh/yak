@@ -322,10 +322,9 @@ export let isListing = (path: string) =>
   LISTINGS.includes(path) || path.startsWith(PICTURES) || isStatic(path) ||
   path == LOGIN
 
-/** The listing a visit to this apex path is answered with: the home page
- * variant its visitor is shown (variant.ts) for `/`, else the path's own. */
-export let listed = (req: Request, path: string) =>
-  path == '/' ? shown(req).path : path
+/** The listing a visit to this apex path is answered with: the home page its
+ * visitor is shown (variant.ts), else the path's own. */
+export let listed = (req: Request, path: string) => shown(req)?.path ?? path
 
 /** Where Site keeps one of them. The hostname is a placeholder for a service
  * binding; the apex is in the path because Workers Caching keys by path and

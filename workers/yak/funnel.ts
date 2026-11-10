@@ -175,8 +175,9 @@ export let clicked = async (
 
 // The steps counted for each campaign and variant: those a request takes, so
 // its arrival and its variant name them. A plan bought is heard from the
-// payment provider and names neither.
-let PER = ['home', 'click', 'signup', 'checkout'] as const
+// payment provider and names neither, and a first app is made by an Operator
+// or an assistant, away from the browser that holds them.
+let PER = ['home', 'click', 'started', 'signup', 'checkout'] as const
 let per = PER.map((s) => `'${s}'`).join(', ')
 
 let DAY = 86_400_000
@@ -237,20 +238,20 @@ export let sources = (since: Date, dataset = DATASET) =>
   `${SLUG} = 'home' AND ${FROM} != '' ` +
   `GROUP BY site ORDER BY n DESC LIMIT ${TOP}`
 
-// The home page's visits, clicks, sign-ups and checkouts by what a step says
-// in `column`, busiest first.
+// The home page's visits, clicks, builds begun, sign-ups and checkouts by what
+// a step says in `column`, busiest first.
 let by = (column: string) => (since: Date, dataset = DATASET) =>
   `SELECT ${column} AS key, ${SLUG} AS step, ${COUNT} AS n ` +
   `${over(since, dataset)} AND ${SLUG} IN (${per}) AND ${column} != '' ` +
   `GROUP BY key, step ORDER BY n DESC LIMIT ${TOP * PER.length}`
 
 /** The campaigns that brought people to the home page, and how many of them
- * clicked a call to action, signed up and started a checkout (arrival.ts
- * `campaign`). */
+ * clicked a call to action, began a build, signed up and started a checkout
+ * (arrival.ts `campaign`). */
 export let campaigns = by(CAMPAIGN)
 
-/** The home page variants visitors were shown, and how many of them clicked a
- * call to action, signed up and started a checkout (variant.ts). */
+/** The home pages visitors were shown, and how many of them clicked a call to
+ * action, began a build, signed up and started a checkout (variant.ts). */
 export let variants = by(VARIANT)
 
 /** How many times each call to action was clicked, busiest first. */

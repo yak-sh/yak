@@ -8,6 +8,8 @@ import { type FunctionComponent, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { join } from 'node:path'
 import { AcceptableUse } from './acceptable-use.tsx'
+import { Build } from './build.tsx'
+import { Churches } from './churches.tsx'
 import { Cookies } from './cookies.tsx'
 import { Help } from './help.tsx'
 import { Home } from './home.tsx'
@@ -24,6 +26,10 @@ export let PAGES: Record<string, FunctionComponent> = {
   // texted, an email (site.ts `drawn`).
   'operator.html': () => h(Operator, { by: 'text' }),
   'operator-email.html': () => h(Operator, { by: 'email' }),
+  // The home page that leads with the app a visitor gets, and the landing
+  // page for a church office (variant.ts).
+  'build.html': Build,
+  'churches.html': Churches,
   'pricing.html': Pricing,
   'help.html': Help,
   'terms.html': Terms,

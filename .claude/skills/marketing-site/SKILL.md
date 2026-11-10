@@ -190,6 +190,19 @@ code, and a test holds the page to it (yaks.app: `workers/yak/site_test.ts`
 against `meter.ts`). A number that nothing pins, such as a fee that is a
 setting, either comes from the code at serve time or stays off the page.
 
+**Read it cold before it ships.** Give the page's text, first screen alone
+and then the rest, to readers who know nothing: small-model subagents told
+only who they are (a church secretary, a shop owner, a developer), with the
+product's name swapped for a made-up one, since a subagent's context names
+ours. Ask what it is, whether it is for them, what they would get, what it
+costs and what they would do next. It is a proxy: these readers are more
+patient than a person on a phone. What it catches is a word nobody
+understood. Every reader of "An Operator that does things for you" asked what
+an Operator was and what it builds; say what the visitor gets first, and name
+the Operator once they have it. "$9 a month for more" left every reader
+asking more of what. And any page that holds people's details has to say who
+can see them.
+
 **Plain beats clever.** Mannered prose (M-33081) is a heading or a line
 arranged for effect: a metaphor, a pun, a pair of short punchy fragments. On a
 marketing page it costs the most, because the visitor won't stay to decode it.

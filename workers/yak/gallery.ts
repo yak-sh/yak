@@ -884,7 +884,7 @@ export let answer = async (
 
 // ---- the home page's examples ------------------------------------------
 
-// These are the examples promised in the home page's carousel, in its order:
+// The examples a home page's carousel shows when it names none of its own:
 // things for home, for a group, and for fun. Gallery approval and listing
 // recency do not decide which apps the platform features.
 export let DEMOS = [
@@ -902,11 +902,17 @@ export let DEMOS = [
 export let featured = (space: Space, app: App) =>
   space.slug == DEMO && DEMOS.includes(app.slug)
 
-export let examples = async (dir: Directory, env: Host = {}) => {
+/** The demo space's apps at these addresses, in this order, as cards; none
+ * unless every one is published. */
+export let examples = async (
+  dir: Directory,
+  env: Host = {},
+  slugs = DEMOS,
+) => {
   let space = await dir.space(DEMO)
   if (!space) return [] as Shown[]
   let apps = await dir.apps(space)
-  let chosen = DEMOS.map((slug) => apps.find((app) => app.slug == slug))
+  let chosen = slugs.map((slug) => apps.find((app) => app.slug == slug))
   return chosen.every((app) => app?.published && !app.trashed)
     ? chosen.map((app) => shownOf(space, app!, env))
     : []
@@ -917,24 +923,40 @@ export let examples = async (dir: Directory, env: Host = {}) => {
 // showcase is one `<ul>` in it, the carousel beside the hero.
 export let LIST = '<ul class="Demo_Slides">'
 
-export let showcase = (file: string, all: Shown[]) => {
-  if (!all.length) return file
+// The showcase's place in a page's file: where its cards start and end.
+let listIn = (file: string) => {
   let from = file.indexOf(LIST)
-  if (from < 0) return file
-  let to = file.indexOf('</ul>', from)
-  if (to < 0) return file
-  return file.slice(0, from + LIST.length) +
-    all.map((a) => markup(card(a))).join('') +
-    file.slice(to)
+  let to = from < 0 ? -1 : file.indexOf('</ul>', from)
+  return to < 0 ? null : { from: from + LIST.length, to }
 }
 
-// The home page as served: every demo is its app's card, with the app's chosen
-// screenshot. The file remains the fallback when the directory does not
-// answer.
+/** The demos a page's file names, each card by its `data-demo`, in order. */
+export let named = (file: string) => {
+  let at = listIn(file)
+  return at
+    ? [...file.slice(at.from, at.to).matchAll(/ data-demo="([\w-]+)"/g)]
+      .map((m) => m[1])
+    : []
+}
+
+export let showcase = (file: string, all: Shown[]) => {
+  let at = all.length ? listIn(file) : null
+  return at
+    ? file.slice(0, at.from) + all.map((a) => markup(card(a))).join('') +
+      file.slice(at.to)
+    : file
+}
+
+// A home page as served: every demo its file names is its app's card, with the
+// app's chosen screenshot. The file remains the fallback when the directory
+// does not answer, and a page with no showcase is served as its file.
 export let made = async (env: Env, dir: Directory, file: Response) => {
   let html = sheeted(hosted(await file.text(), env), env)
   let failed = false
-  let shown = await examples(dir, env)
+  let slugs = named(html)
+  let shown = await Promise.resolve(
+    slugs.length ? examples(dir, env, slugs) : [],
+  )
     .then((demos) => pictures(demos, env))
     .catch((e) => {
       failed = true

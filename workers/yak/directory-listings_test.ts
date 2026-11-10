@@ -111,7 +111,10 @@ let fixture = async () => {
         assets++
         return Promise.resolve(
           new Response(
-            `<html><body>${LIST}<li>asset fallback</li></ul></body></html>`,
+            `<html><body>${LIST}${
+              DEMOS.map((slug) => `<li data-demo="${slug}">asset fallback</li>`)
+                .join('')
+            }</ul></body></html>`,
             { headers: { 'content-type': 'text/html' } },
           ),
         )

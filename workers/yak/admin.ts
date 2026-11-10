@@ -69,7 +69,7 @@ import { type IconName } from './icons.ts'
 import { type Host, spaceHost, url } from './host.ts'
 import { DAYS, NOT_ON, statsOf } from './views.ts'
 import { type Funnel, funnel, STEPS } from './funnel.ts'
-import { stopped } from '@yaks/platform/funnel'
+import { splitSays, stopped } from '@yaks/platform/funnel'
 import { type ByDay, series, summed } from '@yaks/ui/chart'
 import { caught } from './defects.ts'
 import { operatorDoor } from './build-door.ts'
@@ -1031,11 +1031,7 @@ let funnelPage = (
             Fragment,
             null,
             h(Group, null, say),
-            facts(all.map((r) => [
-              r.name,
-              `${r.home} visits · ${r.click} clicks · ${r.signup} sign-ups · ` +
-              `${r.checkout} checkouts`,
-            ])),
+            facts(all.map((r) => [r.name, splitSays(r)])),
           )
           : null
       ),

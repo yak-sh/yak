@@ -4,7 +4,7 @@
 // import only @yaks/platform/cookie, so the front Worker can hold it.
 import { arrival, campaign } from './arrival.ts'
 import { classed, isPerson, type Visited } from './crawlers.ts'
-import { variant } from './variant.ts'
+import { PATHS, variant } from './variant.ts'
 
 export type { Visited }
 
@@ -125,9 +125,10 @@ export let isPage = (req: Request, res: Response) =>
   req.method == 'GET' && (res.status == 304 || isView(res)) &&
   isPerson(req)
 
-/** Whether this answer at the apex is a person visiting the home page: a GET
- * of `/` that was answered, from a browser rather than a crawler. A 304 is a
- * browser coming back to a page it holds, and is a visit too. */
+/** Whether this answer at the apex is a person visiting a home page: a GET
+ * of `/` or of a home page's own address (variant.ts) that was answered, from
+ * a browser rather than a crawler. A 304 is a browser coming back to a page it
+ * holds, and is a visit too. */
 export let isHome = (req: Request, path: string, res: Response) =>
-  path == '/' && req.method == 'GET' && res.status < 400 &&
+  PATHS.includes(path) && req.method == 'GET' && res.status < 400 &&
   isPerson(req)

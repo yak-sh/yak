@@ -11,11 +11,12 @@ export let Cookies = () => (
     <div class='Prose_Head'>
       <h1 class='Title Title-page'>Cookies</h1>
       <p class='Prose_When Prose_Text'>
-        Last updated <Time written timeZone='UTC' at='2026-11-06T00:00:00Z' />
+        Last updated <Time written timeZone='UTC' at='2026-11-10T00:00:00Z' />
       </p>
       <p class='Prose_Text'>
-        yaks.app sets one cookie, and a second one when an ad or a campaign link
-        brought you. This page explains what they do.
+        yaks.app sets one cookie, a second one when an ad or a campaign link
+        brought you, and a third when you open our home page. This page explains
+        what they do.
       </p>
     </div>
     <section class='Prose_Section'>
@@ -49,6 +50,19 @@ export let Cookies = () => (
         (the <a class='Prose_Link' href='/privacy'>privacy policy</a>{' '}
         says exactly what). It expires after ninety days, and a later campaign
         link replaces it. Clearing or refusing it changes nothing you can see.
+      </p>
+    </section>
+    <section class='Prose_Section'>
+      <h2 class='Prose_Heading'>The home page cookie</h2>
+      <p class='Prose_Text'>
+        We sometimes show different visitors different versions of our home
+        page, to learn which one explains yaks.app best. When you open one, we
+        set <code class='Prose_Code'>yak_home</code>{' '}
+        on yaks.app. It holds the name of the version you saw, and nothing else:
+        no name, address or session. It lets us show you the same version next
+        time, and count how many visitors to each version went on to sign up. It
+        expires after ninety days. Clearing or refusing it changes only which
+        version of the home page you see.
       </p>
     </section>
     <section class='Prose_Section'>

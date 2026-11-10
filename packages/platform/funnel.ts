@@ -14,12 +14,14 @@ export type FunnelCount = {
   since?: string
 }
 
-/** The home page's visits, clicks, sign-ups and checkouts under one campaign
- * or variant. */
+/** The home page's visits, clicks, builds begun in its box, sign-ups and
+ * checkouts under one campaign or variant. A Worker older than the builds
+ * begun has none. */
 export type FunnelSplit = {
   name: string
   home: number
   click: number
+  started?: number
   signup: number
   checkout: number
 }
@@ -71,9 +73,12 @@ export let stopped = (stages: FunnelCount[] = []): Stop | undefined =>
 
 let pct = (share: number) => `${Math.round(share * 100)}%`
 
-let split = (s: FunnelSplit) =>
-  `  ${s.name}: ${s.home} visits · ${s.click} clicks · ${s.signup} ` +
-  `sign-ups · ${s.checkout} checkouts`
+/** What one campaign or variant brought, in a line. */
+export let splitSays = (s: FunnelSplit) =>
+  `${s.home} visits · ${s.click} clicks · ${s.started ?? 0} builds begun · ` +
+  `${s.signup} sign-ups · ${s.checkout} checkouts`
+
+let split = (s: FunnelSplit) => `  ${s.name}: ${splitSays(s)}`
 
 /**
  * The funnel in lines: how far strangers got, stage by stage, and where most

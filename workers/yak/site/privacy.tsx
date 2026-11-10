@@ -11,7 +11,7 @@ export let Privacy = () => (
     <div class='Prose_Head'>
       <h1 class='Title Title-page'>Privacy policy</h1>
       <p class='Prose_When Prose_Text'>
-        Last updated <Time written timeZone='UTC' at='2026-11-06T00:00:00Z' />
+        Last updated <Time written timeZone='UTC' at='2026-11-10T00:00:00Z' />
       </p>
       <p class='Prose_Text'>
         We collect as little information as we can. This policy lists all of it.
@@ -61,6 +61,15 @@ export let Privacy = () => (
           ninety days, so a sign-up can be counted against the campaign that
           brought it. Our own counts of each step from the home page to signing
           up keep the campaign's name, never who took the step. The{' '}
+          <a class='Prose_Link' href='/cookies'>cookies page</a>{' '}
+          has the details.
+        </li>
+        <li class='Prose_Item'>
+          <strong>Which home page you saw.</strong>{' '}
+          We sometimes show different visitors different versions of our home
+          page. A third cookie keeps the name of the version you saw for ninety
+          days, so you see the same one next time, and our counts of each step
+          keep that name, never who took the step. The{' '}
           <a class='Prose_Link' href='/cookies'>cookies page</a>{' '}
           has the details.
         </li>

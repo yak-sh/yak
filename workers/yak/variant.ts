@@ -1,16 +1,18 @@
-// Which home page a visitor to yaks.app is shown, when the home page is split
-// between variants to see which one brings more people in. A variant is data:
-// a name, the page Site keeps it at, and its share of the visitors drawn. The
-// first visit to `/` draws one by the shares and keeps it in a cookie of its
-// own on the apex, beside the arrival's (arrival.ts), so a visitor keeps
-// seeing the page they were first shown, and their sign-up later counts under
-// it (funnel.ts).
+// Which home page a visitor to yaks.app is shown, and which one every step
+// they take counts under (funnel.ts). A home page is data: a name, the page
+// Site keeps it at, and its share of the visitors `/` draws. A page with a
+// share is one `/` is split between. A page with none is a landing page: only
+// its own address shows it, which is where an ad for one audience points.
 //
-// The home page is split only while two variants or more have a share. Until
-// then `/` shows the one that has, no cookie is kept, and no step counts under
-// a variant. A variant whose share is 0 is drawn by nobody new, but whoever
-// holds it keeps it. Nothing here imports past @yaks/platform/cookie, so yak-front
-// (front/) holds it.
+// A visit to `/` shows the page its visitor holds, when that page has a
+// share, else one drawn by the shares; a visit to a page's own address shows
+// that page. Whichever is shown is kept in a cookie of its own on the apex,
+// beside the arrival's (arrival.ts), so the click, the build and the sign-up
+// that follow count under the page the visitor last saw. A crawler is drawn
+// nothing and keeps nothing: `/` answers it with the first page that has a
+// share, so an engine indexes one home page. Nothing here imports past
+// @yaks/platform/cookie and crawlers.ts, so yak-front (front/) holds it.
+import { isPerson } from './crawlers.ts'
 import { cookieValue } from '@yaks/platform/cookie'
 
 /** The cookie a visitor's variant is kept in. */
@@ -20,25 +22,24 @@ export let COOKIE = 'yak_home'
 export let DAYS = 90
 
 /** One home page: its name in the funnel, where Site keeps it, and its share
- * of the visitors drawn. */
+ * of the visitors `/` draws. */
 export type Variant = { name: string; path: string; share: number }
 
 /** The page that pitches the Operator (site/operator.tsx). */
 export let OPERATOR = '/operator'
 
-/** The home pages `/` is split between. */
+/** The home pages: the two `/` is split between, and the landing pages. */
 export let VARIANTS: Variant[] = [
   { name: 'ask', path: '/', share: 1 },
+  { name: 'describe', path: '/build', share: 1 },
   { name: 'operator', path: OPERATOR, share: 0 },
+  { name: 'church', path: '/churches', share: 0 },
 ]
 
 /** The pages Site keeps for the home page (kept-page.ts `LISTINGS`). */
 export let PATHS = [...new Set(VARIANTS.map((v) => v.path))]
 
 let drawable = (all: Variant[]) => all.filter((v) => v.share > 0)
-
-/** Whether the home page is split: two variants or more have a share. */
-export let split = (all = VARIANTS) => drawable(all).length > 1
 
 /**
  * The variant `roll` (a number in [0, 1)) lands on, by the shares.
@@ -69,34 +70,40 @@ let held = (req: Request, all: Variant[]) => {
 }
 
 /**
- * The home page this request is shown: the variant its visitor holds, else
- * one drawn for it.
+ * The home page this request is shown, or none when it asks for no home
+ * page: at `/`, the one its visitor holds if `/` still draws it, else one
+ * drawn, and for a crawler the first; at a page's own address, that page.
  */
 export let shown = (
   req: Request,
   all = VARIANTS,
   roll = Math.random,
-): Variant => {
-  let was = decided.get(req)?.variant
-  if (was) return was
-  if (!split(all)) return drawable(all)[0] ?? all[0]
-  let kept = held(req, all), variant = kept ?? drawn(all, roll())
-  decided.set(req, { variant, fresh: !kept })
+): Variant | undefined => {
+  let was = decided.get(req)
+  if (was) return was.variant
+  let path = new URL(req.url).pathname, kept = held(req, all)
+  let person = isPerson(req)
+  let variant = path != '/'
+    ? all.find((v) => v.path == path)
+    : kept && kept.share > 0
+    ? kept
+    : drawn(all, person ? roll() : 0)
+  if (variant) decided.set(req, { variant, fresh: person && variant != kept })
   return variant
 }
 
 /**
- * The variant a step of this request counts under (funnel.ts): the one its
- * home page was shown, else the one its visitor holds, else '' while the home
- * page is not split or the visitor never saw it.
+ * The home page a step of this request counts under (funnel.ts): the one it
+ * was shown, else the one its visitor holds, else '' for a visitor who never
+ * saw one.
  */
 export let variant = (req: Request, all = VARIANTS): string =>
-  (decided.get(req)?.variant ??
-    (split(all) ? held(req, all) : undefined))?.name ?? ''
+  (decided.get(req)?.variant ?? held(req, all))?.name ?? ''
 
 /**
- * The answer to the home page, keeping the variant drawn for it; any other
- * answer as it was. Apex only: no app's host ever sees it.
+ * The answer to a home page, keeping the one shown where its visitor held
+ * another or none; any other answer as it was. Apex only: no app's host ever
+ * sees it.
  */
 export let keep = (req: Request, res: Response): Response => {
   let was = decided.get(req)

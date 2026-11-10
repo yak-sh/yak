@@ -372,8 +372,25 @@ test('the homepage paints every chosen screenshot', async () => {
   } as unknown as Directory
   let found = await examples(dir)
   assertEquals(found.map((a) => a.app.slug), DEMOS)
-  let file = new Response(`${LIST}<li>fallback</li></ul>`)
-  let html = await (await made({} as Env, dir, file)).text()
+  // A page names the demos it shows, and is served their cards in its order.
+  let naming = (slugs: string[]) =>
+    new Response(
+      `${LIST}${
+        slugs.map((s) => `<li data-demo="${s}">fallback</li>`).join('')
+      }</ul>`,
+    )
+  let two = await (await made({} as Env, dir, naming(['trip', 'garden'])))
+    .text()
+  assertEquals(cards(two), 2)
+  assert(two.indexOf('trip-image') < two.indexOf('garden-image'))
+  // A page that names none is served as its file.
+  let none = await (await made(
+    {} as Env,
+    dir,
+    new Response(`${LIST}<li>fallback</li></ul>`),
+  )).text()
+  assertEquals(cards(none), 0)
+  let html = await (await made({} as Env, dir, naming(DEMOS))).text()
   assertEquals(cards(html), DEMOS.length)
   for (let a of apps) {
     assertStringIncludes(
