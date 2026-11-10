@@ -111,12 +111,20 @@ has no green and two pinks, so a hue posing as a role shows at once.
   optional terminal entries; the rest fall back to their kit.
   packages/ui/paper.ts, the default, lays yak.sh's grain over `base`;
   packages/ui/ledger.ts replaces four parts, deliberately partial so the guide
-  shows both; packages/ui/pencil.ts is yaks.app's pencil on paper, drawing
-  every part its pages wear.
+  shows both; packages/ui/pencil.ts is yaks.app's pencil on paper, setting the shared surface paint and the details of its named parts.
 - A tool or app that has no look of its own wears `composition` (the defaults),
   never a theme by name; naming one pins it.
 - A **kit** is a set of parts. A plugin contributes kits, themes, skins and UX
   specimens through its `./ui` facet (`Contributions` in theme.ts).
+
+A new part gets its paint by composing `Surface`, `Surface.Raised`,
+`Surface.Press` or `Surface.Well` (`packages/ui/Surface.ts`), the way
+`block(Surface, 'Example', { Title: 'h2' })` makes a flat surface. These
+primitives own the edge, elevation, hover and pressed states; the part adds
+its layout. `Surface` is included even in a host's subset of the kit, in browser and terminal.
+The skin sets their tokens, so pencil reaches a part it has never named.
+Use `--hover` for a selectable row's wash. When a treatment is missing, add
+it to the shared primitive rather than copying a pencil recipe into the part.
 
 A consumer imports the parts and never learns which theme or skin paints them.
 
@@ -242,7 +250,7 @@ never at the end of a sentence; what few people change folds under Advanced
 options with its default in place. A stamp is said with its `at` and its `by`
 through stamps.ts `said`, the names coming from the directory's `writers`, so
 every page says a person, or an agent for its person, the same way. A part a page lacks goes into the kit,
-drawn by pencil, with an example in the style guide (site_test checks every
+composed from the shared primitives, with an example in the style guide (site_test checks every
 worn part has one), not into one page's stylesheet.
 
 The site's static pages (home, pricing, help, the legal pages and the style

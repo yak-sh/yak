@@ -3,11 +3,13 @@
 .Button {
   --ink: var(--accent);
   --line: var(--border2);
+  --pencil: var(--line);
+  --raised-shadow: none;
   font: inherit;
   font-size: var(--small);
   color: var(--ink);
   background: none;
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--radius);
   padding: 2px var(--half-gap);
   cursor: pointer;
@@ -24,7 +26,7 @@
 /* offers what is not there yet */
 .Button-add {
   --ink: var(--muted);
-  border-style: dashed;
+  --pencil-style: dashed;
 }
 .Button-add:hover {
   --ink: var(--text);
@@ -44,7 +46,7 @@
 /* a glyph that waits for the pointer */
 .Button-quiet {
   --ink: var(--muted);
-  border-color: transparent;
+  --pencil: transparent;
   padding: 0 4px;
 }
 .Button-quiet:hover {

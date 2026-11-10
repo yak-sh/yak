@@ -11,6 +11,7 @@
 
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
+import { Surface } from './Surface.ts'
 import { Button } from './Button.ts'
 import { block, type Part } from './el.ts'
 import { State } from './State.ts'
@@ -23,7 +24,7 @@ export let Card:
     'Head' | 'Mark' | 'Title' | 'Link' | 'Actions' | 'Form' | 'Sub',
     Part
   > = block(
-    'section',
+    Surface,
     'Card',
     {
       Head: 'header',

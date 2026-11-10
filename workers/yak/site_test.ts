@@ -1030,10 +1030,15 @@ test('every plan card is a price, a note, a list and a button', () => {
   for (let page of Object.keys(CARDS)) {
     let { document } = parseHTML(read(page))
     for (let card of document.querySelectorAll('.Plan')) {
-      assertEquals(
-        [...card.children].map((part) => part.className),
-        ['Plan_Price', 'Note Note-small', 'Plan_List', 'Button Button-go'],
-        page,
+      let selectors = [
+        '.Plan_Price',
+        '.Note.Note-small',
+        '.Plan_List',
+        '.Button.Button-go',
+      ]
+      assertEquals(card.children.length, selectors.length, page)
+      selectors.forEach((selector, i) =>
+        assert(card.children[i].matches(selector), page)
       )
     }
   }

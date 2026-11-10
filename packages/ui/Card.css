@@ -9,7 +9,7 @@
   gap: var(--half-gap);
   min-width: 0;
   padding: var(--card-pad);
-  border: 1px solid var(--border2);
+  border: 1px solid transparent;
   border-radius: var(--radius);
   background: var(--card);
   overflow-wrap: break-word;

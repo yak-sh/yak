@@ -11,12 +11,11 @@
 
 import type { Sheet } from '@yaks/tui/theme'
 import { type FunctionComponent, h } from 'preact'
+import { Surface } from './Surface.ts'
 import { el, type Props } from './el.ts'
 import type { Colors, Native, Specimen } from './theme.ts'
 
-let Line = el('input', 'Field')
-let Area = el('textarea', 'Field')
-let Pick = el('select', 'Field')
+let Input = el(Surface.Well, 'Field')
 
 /** What a field takes besides a part's props. */
 export type FieldProps = Props & {
@@ -31,7 +30,12 @@ export type FieldProps = Props & {
 /** A text field. */
 export let Field: FunctionComponent<FieldProps> = (
   { lines, choose, caret, ...p },
-) => h(choose ? Pick : lines ? Area : Line, { ...p, 'data-caret': caret })
+) =>
+  h(Input, {
+    as: choose ? 'select' : lines ? 'textarea' : 'input',
+    ...p,
+    'data-caret': caret,
+  })
 
 /** What it is, in a line. */
 export let description =

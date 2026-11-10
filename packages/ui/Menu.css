@@ -3,9 +3,9 @@
 .Menu {
   position: relative;
   min-width: 10rem;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: var(--raised-shadow);
 }
 .Menu_List {
   position: relative;
@@ -35,10 +35,10 @@
 .Menu_Item:hover,
 .Menu_Item-hover,
 .Menu_Item:focus-visible {
-  background: var(--soft);
+  background: var(--hover, var(--soft));
 }
 .Menu_Item[aria-current='true'] {
-  background: var(--soft);
+  background: var(--hover, var(--soft));
 }
 .Menu_Item-danger {
   color: var(--negative);
@@ -67,7 +67,7 @@
 .Menu_Summary {
   position: relative;
   padding: var(--half-gap) var(--gap);
-  border: 1px solid var(--border2);
+  border: 1px solid var(--surface-border, var(--border2));
   border-radius: var(--radius);
   background: var(--card);
   color: var(--text);

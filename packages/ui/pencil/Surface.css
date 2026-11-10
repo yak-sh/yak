@@ -1,0 +1,45 @@
+/* Pencil paint for every surface, independent of the parts a page wears. */
+:root {
+  --grain: url(paper.webp);
+  --grain-opacity: .07;
+  --drawn: url(pencil.svg#line);
+  --surface-outline: '';
+  --surface-border: transparent;
+  --edge-width: var(--stroke);
+  --edge-color: var(--graphite);
+  --edge-filter: var(--drawn);
+  --raised-shadow: none;
+  --raised-hatch: var(--hatch);
+  --raised-lift: 4px;
+  --raised-hover-lift: 5px;
+  --raised-down-lift: 1.5px;
+  --press-shift: translate(-1px, -1px);
+  --press-down: translate(2.5px, 2.5px);
+  --press-wash: white;
+  --press-wash-weight: 10%;
+  --hover: var(--well);
+
+  --graphite: color-mix(in srgb, var(--text) 88%, transparent);
+  --stroke: 1.5px; /* the weight of a drawn line */
+  --lift: 4px; /* how far what can be pressed sits off its hatch */
+  --hatch: repeating-linear-gradient(-45deg, var(--graphite) 0 1px,
+    transparent 1px 3px);
+  /* A drawn rule is a line through the middle of a box --room taller on
+     each side, so the pencil's wander stays inside what it draws. */
+  --room: 4px;
+  --rule: linear-gradient(var(--graphite) 0 0) center / 100% var(--stroke)
+    no-repeat;
+  /* A well: a fill a little darker than the paper, pressed in. */
+  --well: light-dark(
+    color-mix(in srgb, var(--card), var(--border) 45%),
+    color-mix(in srgb, var(--card), var(--bg) 65%)
+  );
+  --shade: light-dark(
+    color-mix(in srgb, #523828 24%, transparent),
+    color-mix(in srgb, #1d1714 70%, transparent)
+  ); /* coffee; soot: what a well's hollow is */
+  --hollow: inset 0 2px 4px var(--shade); /* how deep a well sits */
+  /* How tall a press or a field stands; a part that holds a row of them
+     smaller re-points it. */
+  --control-height: 2.25rem;
+}

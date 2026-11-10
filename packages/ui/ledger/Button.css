@@ -1,58 +1,3 @@
-/* A press: a small bordered word in the accent. The variants re-point its
-   colour and its border, never its size. */
-.Button {
-  --ink: var(--accent);
-  --line: var(--border2);
-  font: inherit;
-  font-size: var(--small);
-  color: var(--ink);
-  background: none;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 2px var(--half-gap);
-  cursor: pointer;
-  min-height: var(--tap);
-  white-space: nowrap;
-}
-.Button:hover {
-  background: var(--soft);
-}
-.Button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-/* offers what is not there yet */
-.Button-add {
-  --ink: var(--muted);
-  border-style: dashed;
-}
-.Button-add:hover {
-  --ink: var(--text);
-}
-.Button-danger {
-  --ink: var(--negative);
-}
-/* the one to press, where a sheet offers one */
-.Button-go {
-  --ink: var(--bg);
-  --line: var(--accent);
-  background: var(--accent);
-}
-.Button-go:hover {
-  background: color-mix(in srgb, var(--accent) 85%, var(--text));
-}
-/* a glyph that waits for the pointer */
-.Button-quiet {
-  --ink: var(--muted);
-  border-color: transparent;
-  padding: 0 4px;
-}
-.Button-quiet:hover {
-  --ink: var(--text);
-}
-.Button-quiet.Button-danger:hover {
-  --ink: var(--negative);
-}
 /* Ledger: a crisp printed label, with a lifted rule rather than a soft chip. */
 .Button {
   border-radius: 0;
@@ -60,6 +5,9 @@
   font-family: var(--mono);
   font-weight: 600;
   background: var(--card);
+}
+.Button::after {
+  border-width: 1px 1px 3px;
 }
 .Button:focus-visible {
   outline: 2px solid var(--accent);

@@ -34,3 +34,20 @@
     --tap: 2.5rem;
   }
 }
+
+/* The shared surface paint; a skin supplies its own values. */
+:where(:root) {
+  --edge-width: 1px;
+  --edge-color: var(--border2);
+  --edge-filter: none;
+  --raised-shadow: var(--shadow);
+  --raised-hatch: none;
+  --raised-lift: 0px;
+  --press-wash: var(--soft);
+  --press-wash-weight: 100%;
+  --press-shift: none;
+  --press-down: none;
+  --hover: var(--soft);
+  --well: var(--surface);
+  --hollow: none;
+}

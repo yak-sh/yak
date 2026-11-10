@@ -59,29 +59,33 @@ equal(
 
 `el(tag, base)` makes a part. Falsy `mod` values drop, `class` adds classes,
 `elRef` supplies the element's ref, and other props pass to the element.
-`block(tag, base, elements)` attaches parts by name.
+`block(tag, base, elements)` attaches parts by name. Compose a surface from
+`Surface`, `Surface.Raised`, `Surface.Press` or `Surface.Well`: they supply
+flat, elevated, interactive and inset paint. A part adds its layout, while the
+skin supplies the shared edge, shadow and interaction tokens. Every composition
+includes these primitives, including a subset kit.
 
 ```ts
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
-import { block, el } from '@yaks/ui'
+import { block, el, Surface } from '@yaks/ui'
 import { equal } from '@yaks/testing'
 
 const Mark = el('span', 'Mark')
-const Card = block('article', 'Card', { Title: 'h2' })
+const Receipt = block(Surface, 'Receipt', { Title: 'h2' })
 equal(
   renderToString(
     h(
-      Card,
+      Receipt,
       {},
       h(
-        Card.Title,
+        Receipt.Title,
         {},
         h(Mark, { mod: ['active', false], class: 'extra' }, 'Ready'),
       ),
     ),
   ),
-  '<article class="Card"><h2 class="Card_Title"><span class="Mark Mark-active extra">Ready</span></h2></article>',
+  '<section class="Surface Receipt"><h2 class="Receipt_Title"><span class="Mark Mark-active extra">Ready</span></h2></section>',
 )
 ```
 
@@ -237,7 +241,7 @@ equal(
 )
 equal(
   renderToString(h(Field, { lines: true, caret: 0, placeholder: 'Notes' })),
-  '<textarea placeholder="Notes" data-caret="0" class="Field"></textarea>',
+  '<textarea placeholder="Notes" data-caret="0" class="Surface_Well Field"></textarea>',
 )
 ```
 
@@ -323,8 +327,8 @@ replacements (`Skin`). An entry's `css` replaces the piece's own; its `over` is
 laid on top of whichever the piece wears, so a skin adds to a piece without
 copying it. A missing entry uses the kit's rendering. `paper`, the default, lays
 yak.sh's paper grain, fine link underlines and medium headings over the
-document's defaults (`base`); `ledger` replaces Button, Head and Tile with
-printed labels and ruled records, and lays its labels over Tabs. Other pieces
+document's defaults (`base`); `ledger` replaces Head and Tile with printed
+labels and ruled records, and lays its labels over Button and Tabs. Other pieces
 retain the kit's rendering.
 
 A **composition** supplies `{ kits, theme, skin?, ux? }` to render a page and

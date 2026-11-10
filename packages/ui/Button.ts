@@ -10,11 +10,12 @@
 
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
+import { Surface } from './Surface.ts'
 import { el, type Part } from './el.ts'
 import type { Colors, Native, Specimen } from './theme.ts'
 
 /** A button. */
-export let Button: Part = el('button', 'Button')
+export let Button: Part = el(Surface.Press, 'Button')
 
 /** What it is, in a line. */
 export let description = 'A word or a glyph that does something when pressed.'

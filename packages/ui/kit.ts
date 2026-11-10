@@ -20,6 +20,7 @@ import type { Sheet } from '@yaks/tui/theme'
 import * as address from './Address.ts'
 import * as at from './At.ts'
 import * as base from './base.ts'
+import * as surface from './Surface.ts'
 import * as body from './Body.ts'
 import * as button from './Button.ts'
 import * as card from './Card.ts'
@@ -106,7 +107,7 @@ import type {
  * what frames a page. A group's name is never a part's: each is a place in
  * the guide. */
 let modules = {
-  Prose: { base, Body: body, Doc: doc, Quote: quote },
+  Prose: { base, Surface: surface, Body: body, Doc: doc, Quote: quote },
   Marks: {
     Dot: dot,
     State: state,
@@ -238,19 +239,27 @@ export let rendering = (
 }
 
 let pieces = (c: Composition) => {
+  // Surface is the paint every kit composes, including a host's subset.
+  let hasSurface = Object.values(c.kits).some((kit) =>
+    Object.values(kit).some((part) => part.Component == surface.Surface)
+  )
   let counts = new Map<string, number>()
   for (let kit of Object.values(c.kits)) {
     for (let name of Object.keys(kit)) {
       counts.set(name, (counts.get(name) ?? 0) + 1)
     }
   }
-  return Object.entries(c.kits).flatMap(([kit, parts]) =>
+  let selected = Object.entries(c.kits).flatMap(([kit, parts]) =>
     Object.entries(parts).map(([name, part]) => ({
       name: counts.get(name) == 1 ? name : `${kit}/${name}`,
       part,
       skin: rendering(c, kit, name),
     }))
   )
+  return hasSurface ? selected : [
+    { name: 'Surface', part: kit.Surface, skin: c.skin?.Surface },
+    ...selected,
+  ]
 }
 
 /** Unique names retain their spelling; shared names are qualified by kit. */

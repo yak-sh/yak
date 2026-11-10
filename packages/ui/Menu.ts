@@ -8,11 +8,12 @@
 
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
+import { Surface } from './Surface.ts'
 import { block, type Part, type Props } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 
 let Base = block(
-  'div',
+  Surface.Raised,
   'Menu',
   {
     Trigger: 'button',

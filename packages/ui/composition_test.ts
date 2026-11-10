@@ -6,6 +6,7 @@ import { print } from '@yaks/tui/print'
 // deno-lint-ignore no-control-regex -- read the terminal's words
 let plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
 import { el } from './el.ts'
+import { sheet as surfaces } from './Surface.ts'
 import { Guide, Page, stopsOf, Worn } from './guide.ts'
 import {
   gather,
@@ -232,12 +233,14 @@ test('shared part names retain both kits in browser, terminal, native and guide 
   let css = await sheets(collision)
   assertEquals(css.map(([name]) => name), [
     'theme',
+    'Surface',
     'first/Grid',
     'second/Grid',
   ])
-  assert(css[1][1].includes('.First'))
-  assert(css[2][1].includes('.Second'))
+  assert(css[2][1].includes('.First'))
+  assert(css[3][1].includes('.Second'))
   assertEquals(sheet(collision), {
+    ...surfaces(everforest.colors),
     First: { bold: true },
     Second: { bold: true },
   })
@@ -271,9 +274,10 @@ test('scoped skins target one shared name and override bare skin entries in ever
     },
   }
   let dressedCss = await sheets(dressed)
-  assert(dressedCss[1][1].includes('.Legacy'))
-  assert(dressedCss[2][1].includes('.Scoped'))
+  assert(dressedCss[2][1].includes('.Legacy'))
+  assert(dressedCss[3][1].includes('.Scoped'))
   assertEquals(sheet(dressed), {
+    ...surfaces(everforest.colors),
     Legacy: { inverse: true },
     Scoped: { dim: true },
   })
@@ -295,7 +299,10 @@ test('scoped skins target one shared name and override bare skin entries in ever
   assert(worn.includes('id="ui/second/Grid"'))
   // Scoped names also work before another kit contributes the same part name.
   let unique = { ...targeted, kits: { second: collision.kits.second } }
-  assertEquals(sheet(unique), { Scoped: { dim: true } })
+  assertEquals(sheet(unique), {
+    ...surfaces(everforest.colors),
+    Scoped: { dim: true },
+  })
   assertEquals(parts(unique).Grid, collision.kits.second.Grid)
 })
 

@@ -8,7 +8,7 @@ import type { Skin } from './theme.ts'
 
 export let ledger: Skin = {
   Button: {
-    css: new URL('./ledger/Button.css', import.meta.url),
+    over: new URL('./ledger/Button.css', import.meta.url),
     sheet: (c) => ({ ...buttons(c), Button: { fg: c.accent, bold: true } }),
   },
   Tabs: {

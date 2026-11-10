@@ -35,6 +35,7 @@
  */
 
 export { block, el, type Part, type Props, Surround } from './el.ts'
+export { Surface } from './Surface.ts'
 export { Dot, shapes, tones } from './Dot.ts'
 export { Id } from './Id.ts'
 export { Menu } from './Menu.ts'

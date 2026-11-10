@@ -1,14 +1,13 @@
-/** Pencil, yaks.app's skin: pencil on paper. Its document is its own
- * (pencil/base.css: the pencil's tokens and yaks.app's defaults, with the
- * grain paper/grain.css shares, re-pointed at yaks.app's tile), and each part
- * it names is drawn in graphite through pencil.svg: a line around what is
- * worth outlining, a hatch under what can be pressed, a well for what is
- * typed into. Every part it does not name keeps the kit's rendering. */
+/** Pencil, yaks.app's skin. Its Surface entry sets the shared paint: drawn
+ * edges, hatched elevation and inset wells. Those tokens reach every kit,
+ * including parts this skin does not name. Entries below supply layout and
+ * component-specific details. */
 import type { Skin } from './theme.ts'
 
 let at = (path: string) => new URL(path, import.meta.url)
 
 export let pencil: Skin = {
+  Surface: { over: at('./pencil/Surface.css') },
   base: { css: at('./pencil/base.css'), over: at('./paper/grain.css') },
   Tabs: { css: at('./pencil/Tabs.css') },
   SideNav: { css: at('./pencil/SideNav.css') },

@@ -1,43 +1,4 @@
-/* Pencil: yaks.app's drawing, in place of the kit's document defaults. A
-   part worth outlining is drawn: a graphite line around it with slightly
-   rounded corners (--radius), given the paper's tooth by pencil.svg, which
-   every drawn line goes through (--drawn). What can be pressed sits on a
-   hatch it slides onto. What is typed into is a well pressed into the
-   paper. A surface is flat. One grain of paper, yaks.app's own tile, lies
-   over every page (paper/grain.css, laid over this).
-
-   Everything here is :where() or a custom property, so any part's rule, and
-   any page's, still wins. */
-:root {
-  --grain: url(paper.webp);
-  --grain-opacity: .07;
-  --drawn: url(pencil.svg#line);
-
-  --graphite: color-mix(in srgb, var(--text) 88%, transparent);
-  --stroke: 1.5px; /* the weight of a drawn line */
-  --lift: 4px; /* how far what can be pressed sits off its hatch */
-  --hatch: repeating-linear-gradient(-45deg, var(--graphite) 0 1px,
-    transparent 1px 3px);
-  /* A drawn rule is a line through the middle of a box --room taller on
-     each side, so the pencil's wander stays inside what it draws. */
-  --room: 4px;
-  --rule: linear-gradient(var(--graphite) 0 0) center / 100% var(--stroke)
-    no-repeat;
-  /* A well: a fill a little darker than the paper, pressed in. */
-  --well: light-dark(
-    color-mix(in srgb, var(--card), var(--border) 45%),
-    color-mix(in srgb, var(--card), var(--bg) 65%)
-  );
-  --shade: light-dark(
-    color-mix(in srgb, #523828 24%, transparent),
-    color-mix(in srgb, #1d1714 70%, transparent)
-  ); /* coffee; soot: what a well's hollow is */
-  --hollow: inset 0 2px 4px var(--shade); /* how deep a well sits */
-  /* How tall a press or a field stands; a part that holds a row of them
-     smaller re-points it. */
-  --control-height: 2.25rem;
-}
-
+/* Document defaults. Surface.css supplies the skin's shared paint. */
 :where(body) {
   margin: 0;
   background: var(--bg);
@@ -55,23 +16,4 @@
 :where(button, summary, label, select, [role='button'], [role='tab'], [role='menuitem'], .Button) {
   -webkit-user-select: none;
   user-select: none;
-}
-
-/* What is drawn wears its outline on ::after: a graphite line through the
-   pencil, in --pencil where a part asks for another colour and dashed where
-   --pencil-style says so. Each starts from a solid graphite line, so none
-   takes the line of a box it sits in. */
-:where(.Button, .Card, a.Chip, .Empty, .Drop_Zone) {
-  --pencil: initial;
-  --pencil-style: initial;
-}
-:where(.Button, .Card, a.Chip, .Empty, .Drop_Zone)::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border: var(--stroke) var(--pencil-style, solid)
-    var(--pencil, var(--graphite));
-  border-radius: var(--radius);
-  filter: var(--drawn);
-  pointer-events: none;
 }
