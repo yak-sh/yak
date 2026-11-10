@@ -450,10 +450,12 @@ export let operatorProviders = (separate = false): Config =>
  * and `BUILDER_MODEL_PAID` name, and the Operator's choices, the first taken
  * whose provider the Worker holds every credential of, with the stronger
  * model it hands coding to. `OPERATOR_MODEL` and `OPERATOR_DELEGATE` name
- * other models of that provider. */
+ * other models of that provider. `machine` is what the Operator of someone
+ * whose own machine serves it asks that machine for instead. */
 export let agents: {
   builder: string
   operator: { provider: string; model: string; delegate?: string }[]
+  machine: { model: string; delegate?: string }[]
 } = {
   builder: 'workers-ai',
   operator: [
@@ -463,6 +465,14 @@ export let agents: {
       delegate: 'claude-opus-5-5',
     },
     { provider: 'workers-ai', model: '@cf/zai-org/glm-5.3' },
+  ],
+  // What an Operator asks its person's own machine for (operator-machine.ts):
+  // a model for each provider a machine lends, by the model's own name, in
+  // the order asked, with the stronger model of that provider. The machine
+  // says which of its providers answers each.
+  machine: [
+    { model: 'sonnet', delegate: 'claude-opus-5-5' },
+    { model: 'gpt-6-sol', delegate: 'gpt-6-astra' },
   ],
 }
 

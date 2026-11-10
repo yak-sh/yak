@@ -103,6 +103,11 @@ and setup; this is the map and the feel.
   paying plan covered; /admin/spending (admin-spending.ts) reads those and each
   Operator's ask rows (operator-spending.ts). A new thing that costs money names
   its source too. An app's builders are `builders-and-builds`.
+- **A person's machine**: a space's tunnel (`tunnel.ts`) reaches its owner's
+  machine. The Operator of a platform admin who owns one asks that machine for
+  its model steps (operator.ts `machineFor`, the provider `machine`), charged
+  to nobody, and falls to the hosted model a step at a time when the machine
+  can't answer (operator-machine.ts). Everyone else's turn there stays hosted.
 - **Drawing**: yak-raster (`raster/`), the Worker behind RASTER, draws an app's
   icon.svg as the icon.png a home screen reads (`raster.ts`). It is its own
   Worker because resvg is 2.4 MB of WebAssembly, which every isolate of the

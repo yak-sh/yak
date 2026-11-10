@@ -221,12 +221,14 @@ async (req) => {
     }
     for await (let told of jsonFrames(response.body, fault)) {
       let event = told as Told
-      began(req)
-      if ('text' in event) req.onText?.(event.text)
+      // A failure is no output: a step that failed before any is one its
+      // caller may still ask of another provider.
       if ('error' in event) {
         let { code, message, retry, response } = event.error
         throw new ModelError(code, message, retry, response)
       }
+      began(req)
+      if ('text' in event) req.onText?.(event.text)
       if ('reply' in event) {
         let { cost: _cost, costReported: _reported, ...reply } = event.reply
         return reply

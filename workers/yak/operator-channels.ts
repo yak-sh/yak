@@ -822,7 +822,12 @@ export let handleChannels = (
         // What the model reads as it is goes to it as it is (operator.ts
         // `shown`); the rest is read as its text.
         if (!extracted) {
-          let reads = await operator.reads(request.model, request.provider)
+          let reads = await operator.reads(
+            request.model,
+            request.provider,
+            { person: request.person, administrative: access.administrative },
+            space,
+          )
           for (let file of request.files ?? []) {
             if (asIs(reads, file)) continue
             attachments.push({

@@ -164,6 +164,18 @@ export let operatorDoc: VocabDoc = {
         },
       },
     },
+    operator_hosted: {
+      component: true,
+      description:
+        "A line telling a conversation that a hosted model answers it in place of its person's own machine, which did not answer a step (operator-machine.ts). It stands until the machine answers again, which marks it `completed`; while it stands the conversation is not told again.",
+      properties: {
+        code: {
+          type: 'string',
+          description:
+            "The code of the machine's failure (@yaks/model `ModelError`): `unreachable`, `stalled`, or its provider's own.",
+        },
+      },
+    },
     operator_call: {
       component: true,
       description:

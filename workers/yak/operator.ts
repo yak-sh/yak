@@ -44,7 +44,11 @@ import {
   modelReads,
   modelResults,
   type Price,
+  type Request as Step,
 } from '@yaks/model'
+import { forwarding } from '@yaks/model/step'
+import { falling, MACHINE, namesFor } from './operator-machine.ts'
+import type { Via } from './connected-mcp.ts'
 import { platform, ready, served } from './providers.ts'
 import { attachmentRows } from './operator-attachments.ts'
 import { attached, fileContext } from './operator-inputs.ts'
@@ -146,6 +150,13 @@ export type Options = {
   providers?: Record<string, Model>
   name?: string
   price?: Price
+  // The machine that answers a person's steps in a space, where not the
+  // space's tunnel ({@link machineFor}).
+  machine?: (
+    space: Space,
+    person: string,
+    via?: Via,
+  ) => Promise<typeof fetch | null>
   tools?: (ctx: Ctx, files: File[]) => Tool[]
   // Told each time a session moved (a step landed, words were given), so a
   // page watching it hears at once (the Builder object's socket).
@@ -528,7 +539,13 @@ export let platformBug = (ctx: Ctx, space: Space): Tool => ({
  * platform's Anthropic key, handing coding and tricky work to Opus, and
  * without the key GLM on Workers AI. `OPERATOR_MODEL` and
  * `OPERATOR_DELEGATE` name other models of the provider chosen. */
-export let operatorChoice = (env: Env) => {
+export let operatorChoice = (env: Env, machine = false) => {
+  // On its person's own machine ({@link machineFor}) it asks for the first
+  // model config.ts `agents.machine` names, of the provider `machine`.
+  if (machine) {
+    let [first] = agents.machine
+    return { provider: MACHINE, name: first.model, delegate: first.delegate }
+  }
   let config = operatorProviders(!!env.OPENAI_OPERATOR_API_KEY)
   let chosen = agents.operator.find((c) => ready(env, c.provider, config)) ??
     agents.operator.at(-1)!
@@ -537,6 +554,29 @@ export let operatorChoice = (env: Env) => {
     name: env.OPERATOR_MODEL ?? chosen.model,
     delegate: chosen.delegate && (env.OPERATOR_DELEGATE ?? chosen.delegate),
   }
+}
+
+/**
+ * The machine that answers an Operator's model steps for `person` in `space`,
+ * as the `fetch` that reaches it through the space's tunnel, or null: the
+ * space has a tunnel, the person is its owner (tunnel.ts `machine`), and they
+ * are a platform admin. The provider and the step's route are anyone's
+ * (@yaks/model/step); this is the one place that says only an admin's
+ * Operator is served by a machine (D-153799). Everyone else's turn in the
+ * same space, a member's or a stranger's, is answered by a hosted model: an
+ * Operator has the permissions of the person it is talking with, and a
+ * subscription is its owner's alone.
+ */
+export let machineFor = async (
+  env: Env,
+  space: Pick<Space, 'eid' | 'tunnel'>,
+  person: string,
+  open: () => Directory = opening(env),
+  via?: Via,
+): Promise<typeof fetch | null> => {
+  if (!space.tunnel || !person) return null
+  if (!await admin({ dir: open(), person })) return null
+  return (await import('./tunnel.ts')).machine(env, space.eid, person, via)
 }
 
 /** This space's operator work as operator_read answers it: the latest tasks
@@ -784,6 +824,10 @@ let REFUSED: Record<string, string> = {
   credit: 'the Operator is unavailable for now',
 }
 let couldnt = (why: string) => `I couldn't finish this: ${why}.`
+// What a conversation is told when its person's own machine could not answer
+// a step and a hosted model answers instead (`operating`'s `fell`).
+let HOSTED =
+  "The person's own machine did not answer this request, so a hosted model is answering instead of their subscription, and the space pays for it. Tell them so in one short sentence in your reply, once. Carry on with what they asked."
 let TOLD = ' The people who run yaks.app have been told.'
 
 /**
@@ -914,14 +958,20 @@ export let operating = (
   // Coding and tricky work go to a stronger model of the same provider, in a
   // child session (`spawn`) whose answer comes back to the one that asked.
   let delegate = choice.delegate
+  // What it asks its person's own machine for, where one serves them.
+  let mine = operatorChoice(env, true)
+  let reachMachine = options.machine ??
+    ((space: Space, person: string, via?: Via) =>
+      machineFor(env, space, person, options.directory ?? opening(env), via))
   let spawn = sessionTools(g, { childProperties: { topic: TOPIC } })
     .find((t) => t.name == 'spawn')!
-  let delegated = (same: boolean): Tool => ({
+  // `to` is the stronger model of the provider the session is on, if any.
+  let delegated = (to?: string): Tool => ({
     ...spawn,
     description:
       `${spawn.description} To consult an app or space oracle, supply topic from the Oracles map and the question as prompt. Its answer comes back automatically.` +
-      (same && delegate
-        ? ` For writing or fixing code, or work that needs careful reasoning, use spawn with model ${delegate} and a prompt that carries everything it needs; its answer comes back to you.`
+      (to
+        ? ` For writing or fixing code, or work that needs careful reasoning, use spawn with model ${to} and a prompt that carries everything it needs; its answer comes back to you.`
         : ''),
   })
   // The model an input asks for, once its provider lists it (`chosen`).
@@ -930,15 +980,49 @@ export let operating = (
     model: identityEid('model', [model]),
   })
   let using = usingOf()
-  let implementations = {
+  // The session an ask is an entry of.
+  let sessionOf = async (ask?: string) => {
+    let [row] = ask ? await g.get([ask], ['entry']) : []
+    let session = comp(row, 'entry')?.session
+    return session ? String(session) : undefined
+  }
+  // The machine a step is asked of: the one that serves the person its
+  // session works for, read as the step is asked, so a session is never
+  // answered by a machine its person has no claim to.
+  let machineOf = async (ask?: string) => {
+    let session = await sessionOf(ask)
+    let o = session ? await workingOf(store, session) : undefined
+    let space = o ? await dir().at(o.space) : undefined
+    if (!session || !o || !space || space.trashed) return null
+    return reachMachine(space, o.person, () => topOf(store, session))
+  }
+  let machine: Model = async (req) => {
+    let fetch = await machineOf(req.call)
+    if (!fetch) {
+      throw new ModelError(
+        'unreachable',
+        'No machine serves the person this conversation is with',
+      )
+    }
+    return forwarding({ fetch })(req)
+  }
+  let implementations: Record<string, Model> = {
     ...options.model
       ? { [provider]: options.model }
       : served(env, () =>
         platform(env), operatorProviders(!!env.OPENAI_OPERATOR_API_KEY)),
+    [MACHINE]: machine,
     ...options.providers,
   }
-  let reads = async (model?: string, from?: string) => {
-    let selected = await chosen(model, from)
+  // Whether a machine serves this person in this space.
+  let servedTo = (held: Asker, space: Space) => async () =>
+    !!await reachMachine(space, held.person)
+  let reads: Operator['reads'] = async (model, from, held, space) => {
+    let selected = await chosen(
+      model,
+      from,
+      held && space ? servedTo(held, space) : undefined,
+    )
     return modelReads(implementations[selected.provider], selected.model)
   }
   let shown = fileContext(store, env, async (session) => {
@@ -991,7 +1075,25 @@ export let operating = (
   }
   // An explicitly selected provider/model must be available; legacy channels
   // naming an unavailable model of the default provider retain their fallback.
-  let chosen = async (model?: string, from = provider) => {
+  // Words that name neither are answered on the person's own machine where
+  // one serves them (`served`), and only they may name it.
+  let chosen = async (
+    model?: string,
+    asked?: string,
+    served?: () => Promise<boolean>,
+  ) => {
+    if (!model && !asked && await served?.()) {
+      return { provider: MACHINE, model: mine.name }
+    }
+    let from = asked ?? provider
+    if (from == MACHINE && !await served?.()) {
+      throw refuse(
+        'arguments',
+        `The Operator has no available ${from} provider.`,
+      )
+    }
+    // A machine lists nothing: it answers the model or refuses the step.
+    if (from == MACHINE && model) return { provider: from, model }
     if (!implementations[from]) {
       throw refuse(
         'arguments',
@@ -1015,17 +1117,19 @@ export let operating = (
     return { provider, model: name }
   }
   // Each ask is charged to the space of the session asking, at the price of
-  // the model it asks.
-  let accounting = (base: Model, from: string): Model =>
+  // the model it asks. One a machine answers (`free`) is its owner's own, on
+  // their subscription: the space is charged nothing, and no price is asked
+  // of a machine, which lists none.
+  let accounting = (base: Model, from: string, free = false): Model =>
     Object.assign(
       async (req: Parameters<Model>[0]) => {
         reached('request', req)
         let [price, [ask], space] = await Promise.all([
-          priced(req.model, from),
+          free ? undefined : priced(req.model, from),
           req.call ? g.get([req.call]) : [],
           payerOf(store, req.call),
         ])
-        if (!options.model && !price) {
+        if (!free && !options.model && !price) {
           throw new Error(`No catalogue price for operator model ${req.model}`)
         }
         reached('payer', space)
@@ -1034,7 +1138,7 @@ export let operating = (
         let [own] = space ? await g.get([personaFor(space)], ['operator']) : []
         let kept = comp(own, 'operator')?.cache_retention as number | undefined
         let session = comp(ask, 'entry')?.session
-        let reply = await accounted(
+        let charged = free ? base : accounted(
           env,
           (dir) => space ? dir.at(space) : Promise.resolve(null),
           base,
@@ -1042,7 +1146,8 @@ export let operating = (
           undefined,
           from,
           modelResults(g),
-        )({
+        )
+        let reply = await charged({
           ...req,
           ...kept ? { cacheRetention: kept } : {},
           onSubmit: async () => {
@@ -1054,6 +1159,7 @@ export let operating = (
             req.onFirst?.()
           },
         }).finally(() => asked(session ? String(session) : undefined))
+        if (free && session) await returned(String(session))
         if (session && req.onText) options.stepped?.(String(session))
         return reply
       },
@@ -1062,8 +1168,67 @@ export let operating = (
         result: resultOf(env, modelResults(g)),
       },
     )
+  // The line that tells a conversation a hosted model is answering it
+  // (`operator_hosted`), while its machine has not answered since: said once,
+  // until the machine answers again. A helper's step says nothing of its own;
+  // its conversation's next step meets the same machine.
+  let hosting = async (session: string) => {
+    let [line] = await g.read(
+      `.entry.session=${session}&.operator_hosted&!completed&.limit=1&.fields=entity.eid`,
+    )
+    return line?.entity.eid
+  }
+  // The sessions read this wake with no such line standing.
+  let clear = new Set<string>()
+  let returned = async (session: string) => {
+    if (clear.has(session)) return
+    let line = await hosting(session)
+    if (line) {
+      await g.apply([{ entity: { eid: line }, completed: {} }], {
+        trusted: true,
+      })
+    }
+    clear.add(session)
+  }
+  let fell = async (req: Step, error: ModelError): Promise<Step> => {
+    let session = await sessionOf(req.call)
+    if (
+      !session || await topOf(store, session) != session ||
+      await hosting(session)
+    ) return req
+    clear.delete(session)
+    await g.apply([{
+      entity: { eid: mint() },
+      entry: { session, from: 'the system' },
+      notice: {},
+      content: { body: HOSTED },
+      operator_hosted: { code: error.code },
+    }], { trusted: true })
+    return {
+      ...req,
+      items: [...req.items, {
+        kind: 'user',
+        text: 'From the system:\n' + HOSTED,
+      }],
+    }
+  }
   let models = Object.fromEntries(
-    Object.entries(implementations).map(([p, m]) => [p, accounting(m, p)]),
+    Object.entries(implementations).filter(([p]) => p != MACHINE)
+      .map(([p, m]) => [p, accounting(m, p)]),
+  )
+  // A step asked of the machine goes to each provider it lends and then to
+  // the hosted model (operator-machine.ts), which is charged as any hosted
+  // step is.
+  let lent = accounting(implementations[MACHINE], MACHINE, true)
+  models[MACHINE] = Object.assign(
+    falling((req) => {
+      let names = namesFor(req.model, agents.machine, { model: name, delegate })
+      return [
+        ...names.machine.map((name) => ({ model: lent, name })),
+        { model: models[provider], name: names.hosted, hosted: true },
+      ]
+    }, fell),
+    { result: resultOf(env, modelResults(g)) },
   )
   // The base persona as this code declares it, written once per wake; one
   // that could not be written is reported and tried again on the next ask,
@@ -1118,17 +1283,32 @@ export let operating = (
           },
           () => {},
         ).catch((e) => caught(e, { request: 'operator model price' }))
-      await g.apply(seed({ provider: from, model: m }), { trusted: true })
+      await g.apply([
+        ...seed({ provider: from, model: m }),
+        ...from == MACHINE
+          ? [{
+            entity: { eid: identityEid('provider', [MACHINE]) },
+            provider: { name: MACHINE, transport: 'machine' },
+          }]
+          : [],
+      ], { trusted: true })
     })()
     seeded.set(key, held)
     held.catch(() => seeded.delete(key))
     return held
   }
+  // A session on the machine may hand work to any model the machine is asked
+  // for, so each is a model the provider `machine` serves.
   let seeding = (model: string, from = provider) =>
     Promise.all([
       ...[...new Set([name, delegate])]
         .filter((m): m is string => !!m)
         .map((m) => seedOf(m)),
+      ...from == MACHINE
+        ? agents.machine.flatMap((l) => [l.model, l.delegate])
+          .filter((m): m is string => !!m)
+          .map((m) => seedOf(m, MACHINE))
+        : [],
       seedOf(model, from),
     ])
 
@@ -1353,8 +1533,10 @@ export let operating = (
       ...!(row?.spawned && !row.fork && !topicOf(row))
         ? [
           delegated(
-            comp(using, 'using')?.provider ==
-              identityEid('provider', [provider]),
+            new Map([
+              [identityEid('provider', [provider]), delegate],
+              [identityEid('provider', [MACHINE]), mine.delegate],
+            ]).get(String(comp(using, 'using')?.provider)),
           ),
         ]
         : [],
@@ -1412,7 +1594,7 @@ export let operating = (
         if (!space || space.trashed) {
           throw refuse('missing', 'That space is gone.')
         }
-        await readying(ask, space)
+        let selected = await readying(ask, space)
         await started(session, ask.space, space)
         await g.apply([
           { entity: { eid: session }, operator_work: { helper: session } },
@@ -1421,7 +1603,7 @@ export let operating = (
             input,
             `You are a scheduled helper. Do this work here and give a short report.\n\n${brief}`,
             ask.space,
-            { from: 'the system' },
+            { from: 'the system', ...selected },
           ),
         ], { trusted: true })
         options.tell?.(session)
@@ -1580,7 +1762,7 @@ export let operating = (
     asked?: string,
     from?: string,
   ) => {
-    let selected = await chosen(asked, from)
+    let selected = await chosen(asked, from, servedTo(held, space))
     await Promise.all([seeding(selected.model, selected.provider), basing()])
     await g.apply([
       ...await spaced(g.storage, space, env),
@@ -1789,6 +1971,7 @@ export let operating = (
       o.model ?? (typeof args.model == 'string' ? args.model : undefined),
       o.provider ??
         (typeof args.provider == 'string' ? args.provider : undefined),
+      servedTo(held, space),
     )
     if (typeof args.model == 'string' && selected.model != args.model) {
       throw await unknown(args.model, selected.provider)
@@ -2012,8 +2195,14 @@ export type Operator = {
     number: string,
     agreed: boolean,
   ) => Promise<{ confirmed: string }>
-  /** What its model reads as it is, beside text (@yaks/model `Model.reads`). */
-  reads: (model?: string, provider?: string) => Promise<Record<string, number>>
+  /** What the model that answers `held`'s words in `space` reads as it is,
+   * beside text (@yaks/model `Model.reads`). */
+  reads: (
+    model?: string,
+    provider?: string,
+    held?: Asker,
+    space?: Space,
+  ) => Promise<Record<string, number>>
   /** Words given: the next input of the person's conversation, or on a task
    * a new task and session or the next input of the task's newest session.
    * Answers at once with where they went (`task` is '' in a conversation). */

@@ -1057,6 +1057,29 @@ Picture attachments and the email, chat and SMS interfaces are separate work.
 Interrupted requests remain in the graph and can be continued explicitly; they
 do not resume automatically.
 
+A platform admin who owns a space with a tunnel is answered by their own machine
+instead (operator.ts `machineFor`, the one place that says admins only): words
+of theirs that name no model record `using{provider: machine, model}`, the first
+model config.ts `agents.machine` names. The provider `machine`
+(`provider{name, transport: 'machine'}`) is @yaks/model's forwarding provider
+over the space's tunnel (tunnel.ts `machine`), so each step is a POST to
+`/model/step` on the machine, which answers it from the providers its own config
+serves, by the model's name. The space is charged nothing for such a step, and
+no price is asked for its model. Anyone else's turn in the same space (a
+member's, a stranger's text, a form) runs on the hosted model as before, and so
+do words that name their own model, as a call's do. `operator_chat` takes
+`provider: "machine"` with a `model` from the machine's owner alone.
+
+A step the machine fails before its first output (the tunnel or the machine does
+not answer, a provider's allowance is spent, a provider takes no such input) is
+asked of the next model `agents.machine` names, which is the machine's other
+provider, and then of the hosted model, which the space pays for
+(operator-machine.ts `falling`). Every step asks the machine first, so nothing
+needs resetting once it is back. The first step of a conversation that falls to
+the hosted model writes a line there (`operator_hosted{code}`) telling the model
+to say so once; the line stands until the machine answers that conversation
+again, which marks it `completed`.
+
 What the Operator is told is two personas, worn through @yaks/persona
 (operator-persona.ts). The yaks.app Operator persona is kept in the directory:
 its own text is the general guidance, written by the code only where there is

@@ -186,12 +186,15 @@ test('a failure the serving provider expects reaches the caller as it was thrown
     body: '{"type":"rate_limit_error"}',
   })
   let served = await caller(await box(() => Promise.reject(limited)))
-  assertEquals(await fails(served.box(ask())), {
+  let firsts = 0
+  assertEquals(await fails(served.box(ask({ onFirst: () => firsts++ }))), {
     code: 'busy',
     message: 'slow down',
     retry: { after: 2000 },
     response: { body: '{"type":"rate_limit_error"}' },
   })
+  // A failure is no output: the caller may still ask another provider.
+  assertEquals(firsts, 0)
 })
 
 test('a model no provider of the serving host serves is refused', async () => {
