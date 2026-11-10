@@ -117,7 +117,12 @@ let lines = [
   line(1, ada, FIRST + sourceReference('a'.repeat(64))),
   line(2, eid, 'On it.', { output: { source: mint() } }),
   line(3, ada, 'An app of yours broke.', { system: {} }),
-  line(4, ada, 'Friday is fine.'),
+  line(4, ada, 'Ship it Friday.', {
+    entry: { session: talk, seq: 4, from: 'an outside agent' },
+  }),
+  line(5, ada, 'By text: Friday is fine.', {
+    operator_channel: { channel: 'text', framing: 'By text: ' },
+  }),
 ]
 await store.g.apply([{ entity: { eid: talk }, session: {} }, ...lines], {
   trusted: true,
@@ -187,7 +192,7 @@ test('an earlier message is named by its id or by the time its header says it wa
 
 test('a line the person did not write is refused, and nothing is written', async () => {
   let before = await comments(task)
-  for (let seq of [2, 3]) {
+  for (let seq of [2, 3, 4]) {
     await assertRejects(
       () =>
         run('box__message_relay', {

@@ -16,9 +16,8 @@ import type { Bundle, Comp, Tool as GraphTool } from '@yaks/graph'
 import { nameOf } from '@yaks/mcp-client'
 import { kindOf, textOf, type Tool } from '@yaks/session'
 import { type Calling, runConnectedCommand } from './connected-mcp.ts'
-import { sourceWords } from './operator-source.ts'
+import { spoken } from './operator-draw.ts'
 import type { operatorStore } from './operator-store.ts'
-import { HEARD } from './operator-view.ts'
 import { type Ctx, refuse } from './tool.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
@@ -31,47 +30,40 @@ type Store = ReturnType<typeof operatorStore>
 /**
  * The words of a conversation's line as `person` gave them, or undefined for
  * a line that is not their own: the Operator's, a helper's, the platform's,
- * words another writer was named for, and what a call's talking model asked
- * for them. What they said aloud on a call is theirs, without the framing the
- * model reads before it.
+ * and words another writer is named for (an outside agent's, a letter's, a
+ * caller's on the phone, which the platform does not take for the person's).
+ * They come as the conversation draws them (operator-draw.ts `spoken`):
+ * without the framing the model reads before them and the notes put after.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
  * import { ownWords } from './operator-relay.ts'
- * import { HEARD } from './operator-view.ts'
  * let line = (b: object) => ({
  *   entity: { eid: 'e' }, entry: { session: 's' }, created: { by: 'ada' },
  *   content: { body: 'Ship it.' }, ...b,
  * })
  * equal(ownWords(line({}), 'ada'), 'Ship it.')
+ * equal(ownWords(line({
+ *   content: { body: 'By text: Ship it.' },
+ *   operator_channel: { channel: 'text', framing: 'By text: ' },
+ * }), 'ada'), 'Ship it.')
  * equal(ownWords(line({}), 'bob'), undefined)
  * equal(ownWords(line({ system: {} }), 'ada'), undefined)
  * equal(ownWords(line({ output: { source: 'a' } }), 'ada'), undefined)
- * equal(ownWords(line({ entry: { session: 's', from: 'a letter' } }), 'ada'), undefined)
+ * equal(ownWords(line({ entry: { session: 's', from: 'an outside agent' } }), 'ada'), undefined)
  * equal(ownWords(line({ operator_call: { call: 'c', asked: true } }), 'ada'), undefined)
- * equal(ownWords(line({
- *   notice: {}, operator_call: { call: 'c' }, content: { body: HEARD + 'Ship it.' },
- * }), 'ada'), 'Ship it.')
  * ```
  */
 export let ownWords = (
   line: Bundle | undefined,
   person: string,
-): string | undefined => {
-  if (!line || !person || comp(line, 'created')?.by != person || line.system) {
-    return undefined
-  }
-  let body = textOf(line)
-  let call = comp(line, 'operator_call')
-  if (call) {
-    return line.notice && !call.said && !call.began && body.startsWith(HEARD)
-      ? body.slice(HEARD.length).trim() || undefined
-      : undefined
-  }
-  return kindOf(line) == 'input' && !line.notice && !comp(line, 'entry')?.from
-    ? sourceWords(body).trim() || undefined
+): string | undefined =>
+  line && person && comp(line, 'created')?.by == person &&
+    kindOf(line) == 'input' &&
+    !['system', 'notice', 'operator_call'].some((c) => c in line) &&
+    !comp(line, 'entry')?.from
+    ? spoken(line, textOf(line)).trim() || undefined
     : undefined
-}
 
 // How far back the newest of their messages is looked for.
 let RECENT = 64
