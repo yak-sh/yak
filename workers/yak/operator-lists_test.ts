@@ -78,6 +78,7 @@ let drawn = (listed: Listed) => {
       )
     ),
     title: document.querySelector('.Card_Title')?.textContent,
+    badge: document.querySelector('.Card_Head .Badge')?.textContent,
     ids: [...document.querySelectorAll('.Asks_Item')].map((r) => r.id),
     text: document.querySelector('div')!.textContent ?? '',
   }
@@ -99,8 +100,8 @@ test('the list is what the server answers, in its order, the first ten shown and
     ),
     'Which day?',
   ])
-  let { rows, ids, text, count, back, title } = drawn(list)
-  assertEquals(title, 'What needs you')
+  let { rows, ids, text, count, back, title, badge } = drawn(list)
+  assertEquals([title, badge], ['What needs you', '13'])
   assertEquals(rows[0], ['Ask 00', 'Do it.', 'Reply'])
   assertEquals([rows.length, count], [13, 13])
   // A choice comes back to the page it was pressed on.
@@ -170,7 +171,7 @@ test('lists are read in their order, and only those that wait are counted, where
   ])
   assertEquals(second.asks.map((a) => a.title), ['Ask 11', 'Ask 10'])
   let shown = drawn(second)
-  assertEquals([shown.count, shown.ids], [0, ['', '']])
+  assertEquals([shown.count, shown.ids, shown.badge], [0, ['', ''], undefined])
   // Set again, they are the new ones and no others.
   await connect([{ ...needs, title: 'Asks' }])
   assertEquals((await listed()).map((l) => l.title), [

@@ -12,7 +12,7 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import { short } from '@yaks/id'
 import { type ComponentChildren as Node, h } from 'preact'
-import { Button, Card, Empty, More, Rows } from '@yaks/ui/parts'
+import { Badge, Button, Card, Empty, More, Rows } from '@yaks/ui/parts'
 import { runConnectedCommand } from './connected-mcp.ts'
 import { caught } from './defects.ts'
 import { directoryOf } from './directory.ts'
@@ -339,7 +339,12 @@ export let listOf = (listed: Listed, action: string, back: string): List => {
     h(
       Card,
       { class: 'Talk_List' },
-      h(Card.Head, {}, h(Card.Title, { as: 'h3' }, title)),
+      h(
+        Card.Head,
+        {},
+        h(Card.Title, { as: 'h3' }, title),
+        waits ? h(Badge, null, asks.length) : null,
+      ),
       ...body,
     )
   return {

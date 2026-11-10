@@ -32,28 +32,23 @@ export let waitsButton = (lists: List[]) => {
   )
 }
 
-/** The column: its name and count over the lists, or that nothing needs
- * them; Close takes it away where it is opened over the conversation. */
+/** The column: the lists, each under its own title and count, or that
+ * nothing needs them. It has no heading of its own, which would repeat the
+ * first list's; its bar holds only Close, which takes it away where it is
+ * opened over the conversation. */
 export let talkBeside = (lists: List[]) => {
-  let n = counted(lists)
   let drawn = lists.map((l) => l.node).filter((node) => node != null)
   return h(
     'aside',
     {
       class: 'Talk_Beside',
       id: NEEDS,
-      'aria-labelledby': `${NEEDS}-title`,
+      'aria-label': 'What needs you',
       'data-needs': '',
     },
     h(
       Toolbar,
       { class: 'Talk_BesideBar' },
-      h(
-        Toolbar.Text,
-        {},
-        h(Toolbar.Title, { as: 'h2', id: `${NEEDS}-title` }, 'What needs you'),
-      ),
-      n ? h(Badge, null, n) : null,
       h(Button, { href: '#', class: 'Talk_Close' }, '✕ Close'),
     ),
     h(

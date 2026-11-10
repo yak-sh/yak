@@ -836,11 +836,12 @@ test('what needs the person is beside every conversation, counted, with the menu
     )
     let { document } = parseHTML(await page.text())
     let aside = document.querySelector('aside#needs')!
+    assertEquals(aside.getAttribute('aria-label'), 'What needs you')
+    assertEquals(aside.querySelector('h2'), null)
     assertEquals(
-      aside.querySelector('.Toolbar_Title')?.textContent,
-      'What needs you',
+      document.querySelector('.Talk_Waits .Badge')?.textContent,
+      '1',
     )
-    assertEquals(aside.querySelector('.Badge')?.textContent, '1')
     let card = aside.querySelector(`#u-${needs.eid}`)!
     assertEquals(card.querySelector('.Update_Words em')?.textContent, 'notice')
     assertEquals(

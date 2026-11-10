@@ -697,8 +697,9 @@
     display: none;
   }
   /* What waits on the person, at the right of the conversation, held in
-     place while it scrolls: its name and count level with the bar, and the
-     lists under them scrolling within the window. */
+     place while it scrolls: the lists, each under its own title and count,
+     scrolling within the window. Its bar holds only Close, so it shows only
+     where the column is opened over the conversation. */
   .Talk_Beside {
     display: flex;
     flex-direction: column;
@@ -708,6 +709,7 @@
     background: var(--bg);
   }
   .Talk_BesideBar {
+    display: none;
     flex: none;
   }
   .Talk_Lists {
@@ -715,7 +717,7 @@
     align-content: start;
     gap: .75rem;
     min-height: 0;
-    padding: .25rem 1rem 1rem;
+    padding: 1rem;
     overflow-y: auto;
     overscroll-behavior: contain;
   }
@@ -1018,6 +1020,9 @@
       box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--text) 18%,
         transparent);
     }
+    .Talk-app .Talk_Beside:is(:target, :has(:target)) .Talk_BesideBar {
+      display: flex;
+    }
     .Talk-app .Talk_Beside:is(:target, :has(:target)) .Talk_Close {
       display: inline-flex;
     }
@@ -1040,6 +1045,9 @@
       height: auto;
       box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--text) 18%,
         transparent);
+    }
+    .Talk_Beside:is(:target, :has(:target)) .Talk_BesideBar {
+      display: flex;
     }
     .Talk_Beside:is(:target, :has(:target)) .Talk_Close {
       display: inline-flex;
