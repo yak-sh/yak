@@ -1,0 +1,30 @@
+/* A field is a white page inked round, roomy enough for a thumb. */
+.Field {
+  padding: 0.75rem 0.95rem;
+  border: var(--stroke) solid var(--text);
+  border-radius: var(--radius);
+  background: var(--card);
+  font-size: 1rem;
+  line-height: 1.45;
+}
+.Field::placeholder {
+  color: var(--dim);
+}
+.Field:focus {
+  border-color: var(--text);
+  outline: 4px solid var(--info);
+  outline-offset: 3px;
+}
+textarea.Field {
+  min-height: 5.5em;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.Field-bare,
+.Field-bare:focus {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  outline: 0;
+}

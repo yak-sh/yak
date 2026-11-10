@@ -1,0 +1,65 @@
+/* A press is a sticker pill: white, inked round, set in the display face.
+   The one to press is coral with a glow of its own under it. */
+.Button {
+  --ink: var(--text);
+  --line: var(--text);
+  --raised-shadow: var(--shadow);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45em;
+  padding: 0.68em 1.3em;
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--raised-shadow);
+  font-family: var(--display);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-decoration: none;
+}
+.Button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--card), var(--surface) 70%);
+  box-shadow: var(--shadow-lift);
+}
+.Button:active:not(:disabled) {
+  box-shadow: 2px 2px 0 #241d1729;
+}
+.Button:focus-visible {
+  outline: 4px solid var(--info);
+  outline-offset: 3px;
+}
+.Button-go {
+  --ink: #fff;
+  --line: var(--text);
+  background: var(--accent);
+  box-shadow: var(--raised-shadow), 0 14px 26px -12px var(--accent);
+}
+.Button-go:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent), var(--link) 30%);
+  box-shadow: var(--shadow-lift), 0 18px 30px -12px var(--accent);
+}
+.Button-add {
+  --ink: var(--muted);
+  box-shadow: none;
+}
+.Button-danger {
+  --ink: var(--negative);
+}
+/* A quiet press is a word in deep coral, no sticker round it. */
+.Button-quiet {
+  --ink: var(--link);
+  --pencil: transparent;
+  padding: 0.3em 0.5em;
+  background: none;
+  box-shadow: none;
+  font-family: var(--font);
+  font-weight: 700;
+}
+.Button-quiet:hover:not(:disabled) {
+  --ink: var(--text);
+  background: none;
+  box-shadow: none;
+  transform: none;
+  text-decoration: underline;
+}

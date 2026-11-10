@@ -1,6 +1,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { DOMParser, parseHTML } from 'linkedom'
 import { publicPage } from './public.ts'
+import { written } from './pages/prose.ts'
 import routes from './public-routes.json' with { type: 'json' }
 import assets from './public-assets.json' with { type: 'json' }
 
@@ -45,10 +46,15 @@ test('a post and feed preserve published text and mounted links', async () => {
   equal(
     parseHTML(html).document.querySelector('article')!.textContent,
     parseHTML(
-      content.get('/public/blog--unicorn-coloring-pages-for-kids.html')!,
+      `<article>${
+        written(
+          content.get('/public/blog--unicorn-coloring-pages-for-kids.html')!,
+        ).html
+      }</article>`,
     ).document.querySelector('article')!.textContent,
   )
-  ok(html.includes(`href="${base}/coloring-pages/unicorns"`))
+  ok(html.includes('href="/crayonbloom-preview/coloring-pages/unicorns"'))
+  ok(html.includes('href="/crayonbloom-preview/look.css"'))
   ok(!html.includes('<script'))
   let feed = await publicPage(new Request(base + '/blog.rss'), env)
   equal(
@@ -73,7 +79,7 @@ test('a public seed grid and its printable expose only curated asset paths', asy
     env,
   )
   let html = await response!.text()
-  ok(html.includes(`src="${base}/${seed.key}"`))
+  ok(html.includes(`src="/crayonbloom-preview/${seed.key}"`))
   let printable = await publicPage(
     new Request(
       `${base}/coloring-pages/${seed.theme}/printables/${seed.page}.pdf`,
@@ -100,11 +106,8 @@ test('a public seed grid and its printable expose only curated asset paths', asy
 test('a doubled slash serves the page with links at the mount', async () => {
   for (
     let [address, base] of [
-      ['https://crayonbloom.com//contact', 'https://crayonbloom.com/'],
-      [
-        'https://crayonbloom.yaks.app/crayonbloom//terms',
-        'https://crayonbloom.yaks.app/crayonbloom/',
-      ],
+      ['https://crayonbloom.com//contact', '/'],
+      ['https://crayonbloom.yaks.app/crayonbloom//terms', '/crayonbloom/'],
     ]
   ) {
     let response = await publicPage(new Request(address), env)

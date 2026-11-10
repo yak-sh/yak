@@ -1,0 +1,9 @@
+.Empty {
+  border: var(--stroke) dashed var(--dim);
+  border-radius: 26px;
+  font-weight: 500;
+}
+.Empty_Title {
+  font-family: var(--display);
+  font-weight: 600;
+}

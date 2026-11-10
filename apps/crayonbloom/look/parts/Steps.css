@@ -1,0 +1,40 @@
+.Steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1.4rem;
+  max-width: none;
+  padding: 0;
+  list-style: none;
+}
+.Steps_Step {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  padding: 1.6rem 1.5rem 1.75rem;
+  border: var(--stroke) solid var(--text);
+  border-radius: 26px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  color: var(--muted);
+  font-weight: 500;
+}
+.Steps_Step > * {
+  margin: 0;
+}
+.Steps_Number {
+  color: var(--accent);
+  font-family: var(--display);
+  font-size: 3.2rem;
+  font-weight: 600;
+  line-height: 0.9;
+}
+.Steps_Step:nth-child(3n + 2) .Steps_Number {
+  color: var(--info);
+}
+.Steps_Step:nth-child(3n) .Steps_Number {
+  color: var(--grass);
+}
+.Steps_Title {
+  color: var(--heading);
+  font-size: 1.4rem;
+}

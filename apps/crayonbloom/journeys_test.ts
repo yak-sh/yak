@@ -9,7 +9,12 @@ import manifest from './vocab.json' with { type: 'json' }
 import { type Book, fingerprint, type Page } from './model.ts'
 import { story } from './story.ts'
 import { printable, printableRequest } from './printable.ts'
+import { placed } from './pages/chrome.ts'
 
+let place = placed(
+  'https://crayonbloom.test/studio/printable',
+  '/studio/printable',
+)
 let runtime = { preview: true, font: 'f'.repeat(64), printer: '', model: '' }
 let fixture = async () => {
   let { db } = memory({
@@ -168,11 +173,17 @@ test('free printable requests enqueue one retained job and perform no layout in 
       throw new Error('Layout or bytes were fetched in the ordinary request')
     },
   }
-  assertEquals((await printableRequest(f.db, app, f.book, page)).status, 202)
+  assertEquals(
+    (await printableRequest(f.db, app, f.book, page, place)).status,
+    202,
+  )
   let [saved] = await f.db.query(
     `.entity.eid=${page.entity.eid}&?coloring_page&?artwork&?page_printable_job`,
   ) as Page[]
-  assertEquals((await printableRequest(f.db, app, f.book, saved)).status, 202)
+  assertEquals(
+    (await printableRequest(f.db, app, f.book, saved, place)).status,
+    202,
+  )
   let jobs = await f.db.query('.printable_job&?call&?wake')
   assertEquals(jobs.length, 1)
   assertEquals((jobs[0].call as { args: unknown }).args, {

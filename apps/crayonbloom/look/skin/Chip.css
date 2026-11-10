@@ -1,0 +1,48 @@
+/* A chip is a small sticker: a word in a pill, inked round. A chip that
+   links lifts like a press; the one that is current is marigold. */
+.Chip {
+  --hue: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.38em 0.85em;
+  border: 2px solid var(--text);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.Chip-0,
+.Chip-1,
+.Chip-2,
+.Chip-3,
+.Chip-4,
+.Chip-5 {
+  background: color-mix(in srgb, var(--hue) 14%, var(--card));
+}
+a.Chip {
+  box-shadow: 4px 5px 0 #241d1721;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+a.Chip:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 7px 0 #241d1726;
+  text-decoration: none;
+}
+a.Chip[aria-current='true'] {
+  background: var(--caution);
+  box-shadow: 2px 2px 0 #241d1729;
+}
+.Chip-ghost {
+  border-style: dashed;
+  outline: 0;
+  color: var(--muted);
+}
+.Chip-quiet {
+  border-color: transparent;
+  background: none;
+  color: var(--muted);
+}

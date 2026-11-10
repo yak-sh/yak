@@ -1,0 +1,35 @@
+.Kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  margin: 0;
+  padding: 0.46em 1em;
+  border: var(--stroke) solid var(--text);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--link);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  line-height: 1.5;
+  text-decoration: none;
+  text-transform: uppercase;
+  rotate: -2deg;
+}
+.Kicker-sun {
+  background: var(--caution);
+  color: var(--text);
+  rotate: 2deg;
+}
+.Kicker-dot {
+  background: var(--caution);
+  color: var(--text);
+}
+.Kicker-dot::before {
+  content: '';
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: var(--accent);
+}

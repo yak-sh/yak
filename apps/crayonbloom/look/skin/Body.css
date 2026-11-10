@@ -1,0 +1,35 @@
+/* Prose reads as a page of the storybook: display headings, coral links,
+   pictures inked round like the pages they are. */
+.Body {
+  font-size: 1.0625rem;
+  line-height: 1.7;
+}
+.Body :where(h1) {
+  font-size: clamp(2.2rem, 5.2vw, 3.4rem);
+  line-height: 1.06;
+  margin-bottom: 0.5em;
+}
+.Body :where(h2) {
+  font-size: clamp(1.5rem, 3vw, 1.9rem);
+  margin-top: 1.8em;
+}
+.Body :where(h3) {
+  font-size: 1.3rem;
+  margin-top: 1.5em;
+}
+.Body :where(img) {
+  display: block;
+  height: auto;
+  border: var(--stroke) solid var(--text);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.Body :where(li) {
+  margin: 0.35em 0;
+}
+.Body :where(blockquote) {
+  border-left: 4px solid var(--caution);
+  padding-left: var(--gap);
+  font-style: italic;
+}

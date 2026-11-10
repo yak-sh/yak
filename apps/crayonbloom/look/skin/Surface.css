@@ -1,0 +1,28 @@
+/* The sticker paint: every surface is drawn round in ink and rests on the
+   paper with a warm drop; a press lifts toward the pointer and sets down
+   under it; a field is a white page to write on. */
+:where(:root) {
+  --edge-width: var(--stroke);
+  --edge-color: var(--text);
+  --raised-shadow: var(--shadow);
+  --press-wash: var(--surface);
+  --press-shift: translate(-2px, -2px);
+  --press-down: translate(3px, 4px);
+  --hover: var(--surface);
+  --well: var(--card);
+}
+:is(.Surface_Raised, .Surface_Press, .Button, .Card-button) {
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.15s
+    ease;
+}
+:where(.Surface_Well, .Field):focus-visible {
+  border-color: var(--edge-color);
+  box-shadow: none;
+  outline: 4px solid var(--info);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.Surface_Raised, .Surface_Press, .Button, .Card-button) {
+    transition: none;
+  }
+}

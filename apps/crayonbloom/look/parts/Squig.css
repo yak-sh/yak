@@ -1,0 +1,14 @@
+.Squig {
+  position: relative;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.Squig_Line {
+  position: absolute;
+  left: -2%;
+  bottom: -0.22em;
+  width: 104%;
+  height: 0.46em;
+  overflow: visible;
+  stroke: var(--accent);
+}

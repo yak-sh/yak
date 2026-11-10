@@ -1,0 +1,93 @@
+.Doodles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.Doodles ~ * {
+  position: relative;
+  z-index: 1;
+}
+.Doodles_Doodle {
+  position: absolute;
+  overflow: visible;
+  fill: none;
+  stroke: var(--doodle);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation: Doodles-float 8s ease-in-out infinite;
+}
+.Doodles_Doodle-fill {
+  fill: var(--doodle);
+  stroke: var(--text);
+  stroke-width: 2.3;
+}
+.Doodles_Doodle-spark {
+  --doodle: var(--caution);
+  top: -4%;
+  left: -2%;
+  width: 2.6rem;
+  rotate: -8deg;
+}
+.Doodles_Doodle-swirl {
+  --doodle: var(--info);
+  top: -6%;
+  right: 6%;
+  width: 4.2rem;
+  rotate: 6deg;
+  animation-delay: 0.6s;
+}
+.Doodles_Doodle-glint {
+  --doodle: var(--accent);
+  top: 46%;
+  right: -1%;
+  width: 1.8rem;
+  animation-delay: 1.2s;
+}
+.Doodles_Doodle-loop {
+  --doodle: var(--grass);
+  bottom: -3%;
+  left: 42%;
+  width: 4.6rem;
+  rotate: -4deg;
+  animation-delay: 0.3s;
+}
+.Doodles_Doodle-dots {
+  bottom: 2%;
+  right: 8%;
+  width: 3rem;
+  rotate: -10deg;
+  animation-delay: 0.9s;
+}
+.Doodles_Doodle-dots > path:nth-child(1) {
+  fill: var(--special);
+}
+.Doodles_Doodle-dots > path:nth-child(2) {
+  fill: var(--caution);
+}
+.Doodles_Doodle-dots > path:nth-child(3) {
+  fill: var(--accent);
+}
+@keyframes Doodles-float {
+  50% {
+    translate: 0 -6px;
+  }
+}
+@media (max-width: 860px) {
+  .Doodles_Doodle-swirl,
+  .Doodles_Doodle-loop,
+  .Doodles_Doodle-dots {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .Doodles_Doodle {
+    animation: none;
+  }
+}
+@media print {
+  .Doodles {
+    display: none;
+  }
+}

@@ -1,0 +1,83 @@
+.Mast {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 0 var(--border);
+}
+.Mast_Inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.25rem;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0.7rem clamp(1rem, 3vw, 2rem);
+}
+.Mast_Brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+}
+.Mast_Mark {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 16px;
+}
+.Mast_Name {
+  color: var(--accent);
+  font-family: var(--display);
+  font-size: 1.85rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+.Mast_Nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem 1.1rem;
+}
+.Mast_Link {
+  position: relative;
+  color: var(--text);
+  font-weight: 400;
+  text-decoration: none;
+}
+.Mast_Link:hover,
+.Mast_Link[aria-current='page'] {
+  color: var(--link);
+}
+.Mast_Link[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -0.4rem;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+@media (max-width: 720px) {
+  .Mast {
+    position: static;
+  }
+  .Mast_Mark {
+    width: 2.4rem;
+    height: 2.4rem;
+  }
+  .Mast_Name {
+    font-size: 1.5rem;
+  }
+  .Mast_Nav {
+    justify-content: flex-start;
+    font-size: var(--small);
+  }
+}
+@media print {
+  .Mast {
+    display: none;
+  }
+}

@@ -9,6 +9,10 @@ import { printer, printing } from './printing.ts'
 import { publicPage } from './public.ts'
 import { legacyPage } from './legacy.ts'
 import type { Book } from './model.ts'
+import { stylesheet } from './look/look.ts'
+import { placed } from './pages/chrome.ts'
+import { galleryPage } from './pages/gallery.ts'
+import { home } from './pages/home.ts'
 
 export type Env = { APP: Binding; STORE: Binding; FILES: Binding }
 let path = (request: Request) => new URL(request.url).pathname
@@ -34,15 +38,29 @@ let schedule = async (
     wake: { at: new Date(Date.now() + 1000).toISOString(), every: '30s' },
   }])
 }
-let publicFiles = new Set([
-  'index.html',
-  'studio.html',
-  'studio.js',
-  'studio.css',
-  'recovery.js',
-  'gallery.html',
-  'gallery.js',
-])
+// What the pages load besides themselves: the look's fonts, the art the home
+// page shows, the marks, and the studio's shell and script.
+let STATIC =
+  /^\/(look\/fonts\/[\w-]+\.ttf|art\/[\w/-]+\.(png|webp)|(icon|favicon)\.svg|studio\.ts)$/
+// The look is the same for every request an isolate serves.
+let look: Promise<string> | undefined
+let styled = async (env: Env): Promise<Response> => {
+  look ??= stylesheet(async (path) => {
+    let response = await file(env, path)
+    if (!response.ok) {
+      throw new Error(`The stylesheet ${path} answered ${response.status}`)
+    }
+    return await response.text()
+  })
+  // A failed read is not kept: the next request reads again.
+  look.catch(() => look = undefined)
+  return new Response(await look, {
+    headers: {
+      'content-type': 'text/css; charset=utf-8',
+      'cache-control': 'public, max-age=300',
+    },
+  })
+}
 export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
   let address = request.url, url = new URL(address)
   let mount = request.headers.get('x-yak-mount') ??
@@ -72,13 +90,16 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
   if (old) return old
   let published = await publicPage(request, env)
   if (published) return published
-  let leaf = url.pathname.split('/').filter(Boolean).at(-1) ?? ''
-  if (!leaf || leaf === request.headers.get('x-yak-app')) {
-    return file(env, 'index.html')
+  let place = placed(address, url.pathname)
+  if (['GET', 'HEAD'].includes(request.method)) {
+    if (place.path == '/') return home(place)
+    if (place.path == '/look.css') return await styled(env)
+    if (place.path == '/studio') return file(env, 'studio.html')
+    if (place.path == '/gallery') {
+      return galleryPage(place, await gallery(db, env.APP).list())
+    }
+    if (STATIC.test(place.path)) return file(env, place.path.slice(1))
   }
-  if (leaf === 'gallery') return file(env, 'gallery.html')
-  if (leaf === 'studio') return file(env, 'studio.html')
-  if (publicFiles.has(leaf)) return file(env, leaf)
   let action = path(request).split('/studio/')[1] ??
     (path(request).endsWith('/free_pages/resume') ? 'resume_free' : null)
   if (!action) return new Response('Not found', { status: 404 })
@@ -142,7 +163,7 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
           p.entity.eid === identifier(url.searchParams.get('page'))
         )
       if (!page) throw new Refusal('That page is not available.', 403)
-      return await printableRequest(db, env.APP, book, page)
+      return await printableRequest(db, env.APP, book, page, place)
     }
     if (action === 'file') {
       let book = await engine.owned(url.searchParams.get('id'), caller)

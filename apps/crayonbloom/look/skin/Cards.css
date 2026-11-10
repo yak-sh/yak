@@ -1,0 +1,6 @@
+/* Pages side by side are three across on a wide window, each big enough to
+   see the drawing. */
+.Cards {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  gap: 1.4rem;
+}

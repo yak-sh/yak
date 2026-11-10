@@ -1,0 +1,27 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none"
+  xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CrayonBloom logo">
+  <rect width="512" height="512" rx="112" fill="#FFF3DC" />
+  <g stroke="#3A2E25" stroke-width="18" stroke-linecap="round"
+    stroke-linejoin="round">
+    <!-- crayon stem -->
+    <path
+      d="M256 250 L300 312 L300 416 Q300 440 276 440 L236 440 Q212 440 212 416 L212 312 Z"
+      fill="#E8654E" />
+    <path d="M212 330 H300" stroke-width="15" />
+    <!-- petals -->
+    <g fill="#FFB22E">
+      <ellipse cx="256" cy="118" rx="68" ry="48"
+        transform="rotate(90 256 118)" />
+      <ellipse cx="324" cy="167" rx="68" ry="48"
+        transform="rotate(-18 324 167)" />
+      <ellipse cx="188" cy="167" rx="68" ry="48"
+        transform="rotate(18 188 167)" />
+      <ellipse cx="298" cy="247" rx="68" ry="48"
+        transform="rotate(54 298 247)" />
+      <ellipse cx="214" cy="247" rx="68" ry="48"
+        transform="rotate(126 214 247)" />
+    </g>
+    <!-- flower center -->
+    <circle cx="256" cy="186" r="54" fill="#E8654E" />
+  </g>
+</svg>

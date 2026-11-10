@@ -1,0 +1,68 @@
+.Foot {
+  border-top: var(--stroke) solid var(--text);
+  background: var(--bg);
+}
+.Foot_Inner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2rem;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 2.75rem clamp(1rem, 3vw, 2rem) 1.5rem;
+}
+.Foot_About {
+  display: grid;
+  gap: 0.85rem;
+  max-width: 24rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+.Foot_About > * {
+  margin: 0;
+}
+.Foot_Cols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2.5rem;
+}
+.Foot_Col {
+  display: grid;
+  align-content: start;
+  gap: 0.55rem;
+}
+.Foot_Heading {
+  margin: 0 0 0.15rem;
+  font-family: var(--font);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.Foot_Link {
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.Foot_Link:hover {
+  color: var(--link);
+}
+.Foot_Fine {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.6rem;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 1.1rem clamp(1rem, 3vw, 2rem) 2rem;
+  border-top: 2px dashed var(--border);
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+@media print {
+  .Foot {
+    display: none;
+  }
+}

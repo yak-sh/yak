@@ -1,0 +1,42 @@
+[
+  {
+    "file": "01-capybara-mail",
+    "title": "Capybara mail",
+    "spark": "Capybara mail carrier",
+    "prompt": "A capybara mail carrier delivering birthday cards around a cheerful riverside town",
+    "alt": "Coloring page line art of a capybara postal carrier delivering birthday cards along a cheerful riverside town"
+  },
+  {
+    "file": "02-lantern-festival-rabbit",
+    "title": "Lantern festival rabbit",
+    "spark": "Lantern-festival rabbit",
+    "prompt": "A rabbit lantern-maker lighting a moonlit festival in a treetop village",
+    "alt": "Coloring page line art of a rabbit lantern-maker lighting paper lanterns at a moonlit treetop village festival"
+  },
+  {
+    "file": "03-otter-boardwalk-band",
+    "title": "Otter boardwalk band",
+    "spark": "Otter boardwalk band",
+    "prompt": "An otter musician starting a boardwalk band on a bright seaside afternoon",
+    "alt": "Coloring page line art of otters playing instruments in a band on a bright seaside boardwalk"
+  },
+  {
+    "file": "04-turtle-parade-workshop",
+    "title": "Turtle parade workshop",
+    "prompt": "A turtle inventor building playful parade floats in a cozy forest workshop",
+    "alt": "Coloring page line art of a turtle inventor building parade floats in a forest workshop"
+  },
+  {
+    "file": "05-fox-story-picnic",
+    "title": "Fox story picnic",
+    "spark": "Fox story picnic",
+    "prompt": "A fox librarian hosting a story picnic beside a lighthouse harbor",
+    "alt": "Coloring page line art of a fox librarian reading a storybook at a picnic beside a lighthouse harbor"
+  },
+  {
+    "file": "06-panda-kite-festival",
+    "title": "Panda kite festival",
+    "prompt": "A panda kite-maker preparing a windy hilltop kite festival with friends",
+    "alt": "Coloring page line art of a panda kite-maker flying kites at a hilltop festival"
+  }
+]

@@ -1,0 +1,46 @@
+/* The page under everything: cream paper with the faintest sun-washed
+   blooms, headings in the display face, marigold where text is selected. */
+:where(body) {
+  background:
+    radial-gradient(58rem 40rem at 88% -6%, #ffb22e29, transparent 60%),
+    radial-gradient(48rem 36rem at -8% 8%, #f24a5c17, transparent 58%),
+    var(--bg);
+  background-attachment: fixed;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+::selection {
+  background: var(--caution);
+  color: var(--text);
+}
+:where(h1, h2, h3) {
+  font-family: var(--display);
+  font-weight: 600;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+:where(a) {
+  font-weight: 700;
+  text-underline-offset: 3px;
+}
+:where(img) {
+  max-width: 100%;
+}
+/* The keyboard's place is ringed in cornflower, the one colour no sticker
+   wears, so it shows on every one of them. */
+:where([data-cursor], :focus-visible) {
+  outline: 4px solid var(--info);
+  outline-offset: 3px;
+}
+/* A jump inside the page lands clear of the header that stays on top. */
+:where([id]) {
+  scroll-margin-top: 6.5rem;
+}
+:where(html) {
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(html) {
+    scroll-behavior: auto;
+  }
+}

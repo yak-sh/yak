@@ -1,0 +1,8 @@
+.Check {
+  font-weight: 500;
+}
+.Check_Input {
+  width: 1.2em;
+  height: 1.2em;
+  accent-color: var(--accent);
+}

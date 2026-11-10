@@ -1,0 +1,32 @@
+/* A card is a white page with round corners on the paper. */
+.Card {
+  --card-pad: 1.5rem;
+  gap: var(--gap);
+  border-radius: 26px;
+  box-shadow: var(--shadow);
+}
+.Card_Head {
+  border-bottom: 2px dashed var(--border);
+}
+.Card_Title {
+  font-family: var(--display);
+  font-size: var(--h3);
+  font-weight: 600;
+  line-height: 1.15;
+}
+.Card_Sub {
+  font-size: var(--size);
+  font-weight: 500;
+  line-height: 1.5;
+}
+.Card-button {
+  --card-pad: 1.25rem;
+  justify-items: start;
+  text-align: left;
+}
+.Card-button:hover {
+  box-shadow: var(--shadow-lift);
+}
+.Card-accent {
+  background: var(--surface);
+}

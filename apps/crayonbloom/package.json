@@ -5,6 +5,9 @@
     "pdf-lib": "1.17.1",
     "@pdf-lib/fontkit": "1.1.1",
     "fast-png": "8.0.0",
-    "@yaks/draft": "platform"
+    "@yaks/draft": "platform",
+    "@yaks/ui": "platform",
+    "preact": "^10.29.1",
+    "preact-render-to-string": "6.7.0"
   }
 }

@@ -3,6 +3,8 @@ import fontkit from '@pdf-lib/fontkit'
 import { type Binding, guard, Refusal, type Store } from './db.ts'
 import { type Runtime } from './generation.ts'
 import { type Book, current, type Page } from './model.ts'
+import type { Place } from './pages/chrome.ts'
+import { preparing } from './pages/free.ts'
 
 /** One letter-size sheet: the artwork fit within print margins, captioned. */
 export let sheet = async (
@@ -75,6 +77,7 @@ export let printableRequest = async (
   app: Binding,
   book: Book,
   page: Page,
+  place: Place,
 ) => {
   if (!current(book, page) || !page.artwork) {
     throw new Refusal('Finish this page before downloading its printable.')
@@ -109,14 +112,6 @@ export let printableRequest = async (
       $was: guard(page, ['artwork']),
     }])
   }
-  return new Response(
-    '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="2"><title>Preparing your free printable</title><p>Your free printable is being laid out. This page will open the PDF when it is ready. Your artwork is saved.</p>',
-    {
-      status: 202,
-      headers: {
-        'content-type': 'text/html; charset=utf-8',
-        'cache-control': 'private, no-store',
-      },
-    },
-  )
+  let waiting = preparing(place)
+  return new Response(waiting.body, { status: 202, headers: waiting.headers })
 }

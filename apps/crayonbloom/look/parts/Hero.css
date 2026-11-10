@@ -1,0 +1,98 @@
+.Hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
+  align-items: center;
+  gap: clamp(2rem, 5vw, 3.4rem);
+}
+.Hero_Copy {
+  display: grid;
+  justify-items: start;
+  gap: 1.1rem;
+  min-width: 0;
+}
+.Hero_Copy > * {
+  margin: 0;
+}
+.Hero_Title {
+  max-width: none;
+  font-size: clamp(2.7rem, 6.3vw, 4.6rem);
+  line-height: 1.05;
+}
+.Hero_Line {
+  display: block;
+}
+.Hero_Lede {
+  max-width: 40ch;
+  color: var(--muted);
+  font-size: 1.2rem;
+  font-weight: 500;
+  line-height: 1.62;
+}
+.Hero_Actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 1.2rem;
+  margin-top: 0.4rem;
+}
+.Hero_Actions > .Button-go {
+  padding: 0.86em 1.55em;
+  font-size: 1.08rem;
+}
+.Hero_Start {
+  display: grid;
+  gap: 0.9rem;
+  width: 100%;
+  max-width: 600px;
+  margin-top: 0.9rem;
+  padding-top: 1.5rem;
+  border-top: 2px dashed var(--border);
+}
+.Hero_Start > * {
+  margin: 0;
+}
+.Hero_Note {
+  max-width: 46ch;
+  color: var(--muted);
+  font-size: 0.98rem;
+  font-weight: 500;
+}
+.Hero_Note strong {
+  color: var(--text);
+}
+.Hero_Trust {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  max-width: none;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+.Hero_Trust > li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+}
+.Hero_Trust > li::before {
+  content: '';
+  width: 0.5em;
+  height: 0.95em;
+  margin: 0 0.25em 0.2em;
+  border: solid var(--grass);
+  border-width: 0 3px 3px 0;
+  border-radius: 1px;
+  rotate: 42deg;
+}
+.Hero_Visual {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+@media (max-width: 860px) {
+  .Hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

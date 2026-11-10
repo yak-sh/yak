@@ -1,0 +1,359 @@
+[
+  {
+    "slug": "dinosaurs",
+    "name": "Dinosaurs",
+    "blurb": "Dinosaur coloring pages starring the dino only your kid would dream up. Describe it, color a page free, then turn a favorite into a printed book we mail to you.",
+    "title": "Dinosaur Coloring Pages, Starring Your Kid's Own Dino — CrayonBloom",
+    "heading": "Dinosaur coloring pages, starring your kid’s own dino",
+    "description": "Dinosaur coloring pages starring the dino only your kid would dream up. Describe it, color a page free, then turn a favorite into a printed book we mail to you.",
+    "intro": [
+      "Some kids go through a dinosaur phase that never really ends — so give them a dinosaur no one else has. Describe the one your kid is dreaming up, a T. rex in a party hat or a triceratops who runs a bakery, and CrayonBloom draws a clean, printable page just for them, free. Love it? It's the first page of a real printed book we can make from their idea — their own story, pages to color, and activities. Browse the dinosaurs below to get the crayons going while you dream one up."
+    ],
+    "pages": [
+      {
+        "title": "T. Rex Birthday Bake",
+        "image": "/marketing/coloring-pages/dinosaurs/line-art/01-trex-birthday-bake.png",
+        "caption": "A friendly T. rex baking a giant birthday cake in a sunny kitchen",
+        "pdf": "/coloring-pages/dinosaurs/printables/trex-birthday-bake.pdf"
+      },
+      {
+        "title": "Triceratops Waterfall",
+        "image": "/marketing/coloring-pages/dinosaurs/line-art/02-triceratops-waterfall.png",
+        "caption": "A triceratops family splashing in a gentle jungle waterfall",
+        "pdf": "/coloring-pages/dinosaurs/printables/triceratops-waterfall.pdf"
+      },
+      {
+        "title": "Stegosaurus Skateboard",
+        "image": "/marketing/coloring-pages/dinosaurs/line-art/03-stegosaurus-skateboard.png",
+        "caption": "A baby stegosaurus learning to ride a skateboard in the park",
+        "pdf": "/coloring-pages/dinosaurs/printables/stegosaurus-skateboard.pdf"
+      },
+      {
+        "title": "Brachiosaurus Treetops",
+        "image": "/marketing/coloring-pages/dinosaurs/line-art/04-brachiosaurus-treetops.png",
+        "caption": "A long-necked brachiosaurus reaching for apples at the treetops",
+        "pdf": "/coloring-pages/dinosaurs/printables/brachiosaurus-treetops.pdf"
+      },
+      {
+        "title": "Dino Picnic",
+        "image": "/marketing/coloring-pages/dinosaurs/line-art/05-dino-picnic.png",
+        "caption": "Two cheerful dinosaurs having a picnic on a grassy hill",
+        "pdf": "/coloring-pages/dinosaurs/printables/dino-picnic.pdf"
+      },
+      {
+        "title": "Pteranodon Ride",
+        "image": "/marketing/coloring-pages/dinosaurs/line-art/06-pteranodon-ride.png",
+        "caption": "A pteranodon giving a little dinosaur a gentle ride over rolling hills",
+        "pdf": "/coloring-pages/dinosaurs/printables/pteranodon-ride.pdf"
+      }
+    ],
+    "more": "<h2>Dinosaur facts to drop while they color</h2><h3>Nobody is sure what the plates on a stegosaurus were for.</h3><p>Warning off predators, telling each other apart, and controlling body heat are all still guesses. A good excuse for bright colors. <a href=\"https://www.nhm.ac.uk/discover/dino-directory/stegosaurus.html\">Natural History Museum</a></p><h3>Triceratops grew new teeth its whole life.</h3><p>The old ones wore down slicing through tough plants, and fresh ones kept pushing up behind them. <a href=\"https://doi.org/10.1126/sciadv.1500055\">Erickson et al., Science Advances</a></p><h3>The biggest dinosaurs were plant-eaters, not the toothy hunters.</h3><p>Patagotitan outweighed Tyrannosaurus rex at least six times over, on a diet of leaves. <a href=\"https://www.nhm.ac.uk/discover/dino-directory/patagotitan.html\">Natural History Museum</a></p><h3>Brachiosaurus could not chew.</h3><p>That long neck reached the leaves at the very top of the tree, and down they went whole. <a href=\"https://www.nhm.ac.uk/discover/dino-directory/brachiosaurus.html\">Natural History Museum</a></p><h3>Pteranodon was a flying reptile, not a dinosaur.</h3><p>A cousin of the dinosaurs, and a fact your kid will treasure correcting you on later. <a href=\"https://www.nhm.ac.uk/discover/the-truth-about-pterosaurs.html\">Natural History Museum</a></p>",
+    "prompt": "a stegosaurus on a skateboard"
+  },
+  {
+    "slug": "unicorns",
+    "name": "Unicorns",
+    "blurb": "Unicorn coloring pages starring the unicorn only your kid would invent. Describe it, color a page free, then turn a favorite into a printed book we mail to you.",
+    "title": "Unicorn Coloring Pages Your Kid Dreams Up — CrayonBloom",
+    "heading": "Unicorn coloring pages your kid dreams up",
+    "description": "Unicorn coloring pages starring the unicorn only your kid would invent. Describe it, color a page free, then turn a favorite into a printed book we mail to you.",
+    "intro": [
+      "The unicorn phase deserves better than the same horse-with-a-horn everyone prints. Tell us the unicorn your kid is dreaming up, one with butterfly wings or a mane made of rainbows, and CrayonBloom draws a clean, printable page just for them, free. Love it? It's the first page of a real printed book built around their idea, with their own story and activities. Browse the unicorns below while you think one up."
+    ],
+    "pages": [
+      {
+        "title": "Rainbow Bridge Foal",
+        "image": "/marketing/coloring-pages/unicorns/line-art/01-rainbow-bridge-foal.png",
+        "caption": "A unicorn foal trotting across a rainbow bridge in the clouds",
+        "pdf": "/coloring-pages/unicorns/printables/rainbow-bridge-foal.pdf"
+      },
+      {
+        "title": "Cupcake Picnic",
+        "image": "/marketing/coloring-pages/unicorns/line-art/02-unicorn-cupcake-picnic.png",
+        "caption": "A unicorn sharing cupcakes with woodland friends at a picnic",
+        "pdf": "/coloring-pages/unicorns/printables/unicorn-cupcake-picnic.pdf"
+      },
+      {
+        "title": "Starry Night Nap",
+        "image": "/marketing/coloring-pages/unicorns/line-art/03-unicorn-starry-nap.png",
+        "caption": "A sleepy unicorn curled up under a starry night sky",
+        "pdf": "/coloring-pages/unicorns/printables/unicorn-starry-nap.pdf"
+      },
+      {
+        "title": "Meadow of Flowers",
+        "image": "/marketing/coloring-pages/unicorns/line-art/04-unicorn-flower-meadow.png",
+        "caption": "A unicorn splashing through a meadow of giant friendly flowers",
+        "pdf": "/coloring-pages/unicorns/printables/unicorn-flower-meadow.pdf"
+      },
+      {
+        "title": "Magical Carousel",
+        "image": "/marketing/coloring-pages/unicorns/line-art/05-unicorn-carousel.png",
+        "caption": "A unicorn carousel spinning at a cheerful magical fair",
+        "pdf": "/coloring-pages/unicorns/printables/unicorn-carousel.pdf"
+      },
+      {
+        "title": "Painting a Rainbow",
+        "image": "/marketing/coloring-pages/unicorns/line-art/06-unicorn-painting-rainbow.png",
+        "caption": "A unicorn and a butterfly painting a big rainbow across the sky",
+        "pdf": "/coloring-pages/unicorns/printables/unicorn-painting-rainbow.pdf"
+      }
+    ],
+    "more": "<h2>True things about unicorns</h2><h3>Medieval Europe bought and sold unicorn horns.</h3><p>They were narwhal tusks, traded widely, whole and cut into pieces. <a href=\"https://www.clevelandart.org/articles/hunting-unicorn-horn-narwhal-tusks-medieval-monsters\">Cleveland Museum of Art</a></p><h3>A narwhal's horn is really a tooth.</h3><p>In males, the left tooth of the upper jaw grows forward and out through the front of the jaw — up to about ten feet of it. <a href=\"https://www.fisheries.noaa.gov/species/narwhal\">NOAA Fisheries</a></p><h3>Scotland's national animal is the unicorn.</h3><p>It first turned up on the Scottish royal coat of arms around the 12th century. <a href=\"https://www.scotland.org/inspiration/what-is-the-national-animal-of-scotland\">Scotland.org</a></p>",
+    "prompt": "a unicorn baking a rainbow birthday cake"
+  },
+  {
+    "slug": "animals",
+    "name": "Animals",
+    "blurb": "Animal coloring pages starring the critter your kid loves this week. Describe it, color a page free, then turn a favorite into a printed book we mail to you.",
+    "title": "Animal Coloring Pages, Straight From Your Kid's Idea — CrayonBloom",
+    "heading": "Animal coloring pages, straight from your kid’s idea",
+    "description": "Animal coloring pages starring the critter your kid loves this week. Describe it, color a page free, then turn a favorite into a printed book we mail to you.",
+    "intro": [
+      "Every kid has a favorite animal — and usually a very specific one, doing a very specific thing. Describe the critter your kid is dreaming up, a sloth reading bedtime stories or a fox in rain boots, and CrayonBloom draws a clean, printable page just for them, free. Love it? It's the first page of a real printed book made from their idea, with their own story and activities. Browse the friendly animals below to warm up the crayons."
+    ],
+    "pages": [
+      {
+        "title": "Capybara Mail",
+        "image": "/marketing/examples/line-art/01-capybara-mail.png",
+        "caption": "A capybara mail carrier delivering birthday cards around a cheerful riverside town",
+        "pdf": "/coloring-pages/animals/printables/capybara-mail.pdf"
+      },
+      {
+        "title": "Lantern Festival Rabbit",
+        "image": "/marketing/examples/line-art/02-lantern-festival-rabbit.png",
+        "caption": "A rabbit lantern-maker lighting a moonlit festival in a treetop village",
+        "pdf": "/coloring-pages/animals/printables/lantern-festival-rabbit.pdf"
+      },
+      {
+        "title": "Otter Boardwalk Band",
+        "image": "/marketing/examples/line-art/03-otter-boardwalk-band.png",
+        "caption": "An otter musician starting a boardwalk band on a bright seaside afternoon",
+        "pdf": "/coloring-pages/animals/printables/otter-boardwalk-band.pdf"
+      },
+      {
+        "title": "Turtle Parade Workshop",
+        "image": "/marketing/examples/line-art/04-turtle-parade-workshop.png",
+        "caption": "A turtle inventor building playful parade floats in a cozy forest workshop",
+        "pdf": "/coloring-pages/animals/printables/turtle-parade-workshop.pdf"
+      },
+      {
+        "title": "Fox Story Picnic",
+        "image": "/marketing/examples/line-art/05-fox-story-picnic.png",
+        "caption": "A fox librarian hosting a story picnic beside a lighthouse harbor",
+        "pdf": "/coloring-pages/animals/printables/fox-story-picnic.pdf"
+      },
+      {
+        "title": "Panda Kite Festival",
+        "image": "/marketing/examples/line-art/06-panda-kite-festival.png",
+        "caption": "A panda kite-maker preparing a windy hilltop kite festival with friends",
+        "pdf": "/coloring-pages/animals/printables/panda-kite-festival.pdf"
+      }
+    ],
+    "more": "",
+    "prompt": "a sleepy sloth reading a bedtime story"
+  },
+  {
+    "slug": "space",
+    "name": "Space",
+    "blurb": "Space coloring pages starring the rocket or alien only your kid would invent. Describe it, color a page free, then turn a favorite into a printed book we mail to you.",
+    "title": "Space Coloring Pages Your Kid Dreams Up — CrayonBloom",
+    "heading": "Space coloring pages your kid dreams up",
+    "description": "Space coloring pages starring the rocket or alien only your kid would invent. Describe it, color a page free, then turn a favorite into a printed book we mail to you.",
+    "intro": [
+      "Space is wide open — the perfect place for your kid to invent something no telescope has found yet. Describe the astronaut, rocket, or friendly alien they're dreaming up and CrayonBloom draws a clean, printable page just for them, free. Love it? It's the first page of a real printed book built around their idea, with their own story and activities. Browse the planets and rockets below while you dream one up."
+    ],
+    "pages": [
+      {
+        "title": "Moon Landing",
+        "image": "/marketing/coloring-pages/space/line-art/01-astronaut-moon-flag.png",
+        "caption": "A smiling astronaut planting a flag on a cratered moon",
+        "pdf": "/coloring-pages/space/printables/astronaut-moon-flag.pdf"
+      },
+      {
+        "title": "Rocket Flyby",
+        "image": "/marketing/coloring-pages/space/line-art/02-rocket-ringed-planets.png",
+        "caption": "A friendly rocket ship zooming past big ringed planets",
+        "pdf": "/coloring-pages/space/printables/rocket-ringed-planets.pdf"
+      },
+      {
+        "title": "Alien Hello",
+        "image": "/marketing/coloring-pages/space/line-art/03-alien-flying-saucer.png",
+        "caption": "A cheerful alien family waving from a little flying saucer",
+        "pdf": "/coloring-pages/space/printables/alien-flying-saucer.pdf"
+      },
+      {
+        "title": "Moon Rover Tea",
+        "image": "/marketing/coloring-pages/space/line-art/04-astronaut-rover-tea.png",
+        "caption": "An astronaut having a tea party with a friendly moon rover",
+        "pdf": "/coloring-pages/space/printables/astronaut-rover-tea.pdf"
+      },
+      {
+        "title": "Happy Galaxy",
+        "image": "/marketing/coloring-pages/space/line-art/05-happy-planets-stars.png",
+        "caption": "Planets and stars with happy faces floating in a cozy galaxy",
+        "pdf": "/coloring-pages/space/printables/happy-planets-stars.pdf"
+      },
+      {
+        "title": "Space Station Pup",
+        "image": "/marketing/coloring-pages/space/line-art/06-astronaut-puppy-float.png",
+        "caption": "A kid astronaut floating with a puppy inside a space station",
+        "pdf": "/coloring-pages/space/printables/astronaut-puppy-float.pdf"
+      }
+    ],
+    "more": "<h2>Space facts, in case they ask</h2><h3>Saturn is not the only planet with rings.</h3><p>Jupiter has them too — hard to see unless the sun is behind them. A good excuse to color rings on more than one. <a href=\"https://science.nasa.gov/jupiter/facts/\">NASA Science</a></p><h3>The astronauts' tracks are still on the moon.</h3><p>No wind, no rain to wear them away. A NASA orbiter photographed the ones Apollo 15 left, thirty-nine years later. <a href=\"https://science.nasa.gov/solar-system/moon/10-cool-things-nasas-lunar-reconnaissance-orbiter-is-teaching-us-about-the-moon/\">NASA Science</a></p><h3>The sun is a star, just the closest one.</h3><p>The next nearest is Proxima Centauri, and its light takes 4.24 years to get here. <a href=\"https://science.nasa.gov/sun/facts/\">NASA Science</a></p><h3>A day on Jupiter is under 10 hours.</h3><p>The biggest planet is also the fastest spinner — around once every 9.9 hours. <a href=\"https://science.nasa.gov/jupiter/\">NASA Science</a></p>",
+    "prompt": "an astronaut walking a puppy on the moon"
+  },
+  {
+    "slug": "ocean",
+    "name": "Ocean",
+    "blurb": "Ocean coloring pages starring the sea creature only your kid would dream up. Describe it, color a page free, then turn a favorite into a printed book we mail to you.",
+    "title": "Ocean Coloring Pages, Starring Your Kid's Own Sea Creature — CrayonBloom",
+    "heading": "Ocean coloring pages, starring your kid’s own sea creature",
+    "description": "Ocean coloring pages starring the sea creature only your kid would dream up. Describe it, color a page free, then turn a favorite into a printed book we mail to you.",
+    "intro": [
+      "Under the sea is a whole world your kid can't walk into — which is exactly why it's so easy to imagine. Describe the sea creature they're dreaming up, an octopus throwing a tea party or a whale who gives rides, and CrayonBloom draws a clean, printable page just for them, free. Love it? It's the first page of a real printed book made from their idea, with their own story and activities. Browse the ocean pages below to get the blues and greens going."
+    ],
+    "pages": [
+      {
+        "title": "Juggling Octopus",
+        "image": "/marketing/coloring-pages/ocean/line-art/01-octopus-juggling-shells.png",
+        "caption": "A cheerful octopus juggling seashells underwater",
+        "pdf": "/coloring-pages/ocean/printables/octopus-juggling-shells.pdf"
+      },
+      {
+        "title": "Reef City Turtle",
+        "image": "/marketing/coloring-pages/ocean/line-art/02-sea-turtle-reef.png",
+        "caption": "A sea turtle gliding past a bright coral reef city",
+        "pdf": "/coloring-pages/ocean/printables/sea-turtle-reef.pdf"
+      },
+      {
+        "title": "Leaping Dolphins",
+        "image": "/marketing/coloring-pages/ocean/line-art/03-dolphins-leaping.png",
+        "caption": "A family of dolphins leaping over gentle ocean waves",
+        "pdf": "/coloring-pages/ocean/printables/dolphins-leaping.pdf"
+      },
+      {
+        "title": "Mermaid Storytime",
+        "image": "/marketing/coloring-pages/ocean/line-art/04-mermaid-storytime.png",
+        "caption": "A mermaid reading stories to a school of little fish",
+        "pdf": "/coloring-pages/ocean/printables/mermaid-storytime.pdf"
+      },
+      {
+        "title": "Whale Ride",
+        "image": "/marketing/coloring-pages/ocean/line-art/05-whale-seahorse-ride.png",
+        "caption": "A friendly whale giving tiny seahorses a ride",
+        "pdf": "/coloring-pages/ocean/printables/whale-seahorse-ride.pdf"
+      },
+      {
+        "title": "Sandcastle Crew",
+        "image": "/marketing/coloring-pages/ocean/line-art/06-crab-starfish-sandcastle.png",
+        "caption": "A crab and a starfish building a sandcastle on the seafloor",
+        "pdf": "/coloring-pages/ocean/printables/crab-starfish-sandcastle.pdf"
+      }
+    ],
+    "more": "<h2>Ocean facts worth saying out loud</h2><h3>An octopus has three hearts.</h3><p>Two pump blood to the gills to pick up oxygen; the third sends it round the rest of the body. <a href=\"https://oceanservice.noaa.gov/news/feb26/undersea-creatures-valentines-day.html\">NOAA Ocean Service</a></p><h3>Octopus blood is blue.</h3><p>The protein that carries its oxygen is built on copper, not the iron that makes ours red. <a href=\"https://www.nhm.ac.uk/discover/octopuses-keep-surprising-us-here-are-eight-examples-how.html\">Natural History Museum</a></p><h3>A blue whale is the biggest animal that has ever lived.</h3><p>Bigger than any dinosaur. <a href=\"https://www.fisheries.noaa.gov/species/blue-whale\">NOAA Fisheries</a></p><h3>A blue whale's heart weighs about 400 pounds.</h3><p>About as much as two grown-ups. Only one has ever been preserved. <a href=\"https://www.earthtouchnews.com/oceans/whales-and-dolphins/update-famous-and-ginormous-blue-whale-heart-is-now-on-display/\">Royal Ontario Museum, via Earth Touch News</a></p><h3>Sea turtles go back to the coast where they hatched.</h3><p>Every stretch of coast has its own magnetic signature, and a turtle steers by it — sometimes across a whole ocean. <a href=\"https://lohmannlab.web.unc.edu/geomagnetic-imprinting/\">Lohmann Lab, UNC</a></p><h3>A summer flounder takes the color of the sea floor it lies on.</h3><p>Which earns it the nickname chameleon of the sea, and is a fine excuse to color the same fish two different ways. <a href=\"https://www.fisheries.noaa.gov/species/summer-flounder\">NOAA Fisheries</a></p>",
+    "prompt": "a smiling octopus throwing a tea party"
+  },
+  {
+    "slug": "vehicles",
+    "name": "Cars & Trucks",
+    "blurb": "Cars and trucks coloring pages starring the vehicle your kid loves. Describe it, color a page free, then turn a favorite into a printed book we mail to you.",
+    "title": "Cars and Trucks Coloring Pages Your Kid Dreams Up — CrayonBloom",
+    "heading": "Cars and trucks coloring pages your kid dreams up",
+    "description": "Cars and trucks coloring pages starring the vehicle your kid loves. Describe it, color a page free, then turn a favorite into a printed book we mail to you.",
+    "intro": [
+      "For the kid who narrates every passing truck, give them one that's entirely their own. Describe the fire truck, digger, or monster truck they're dreaming up and CrayonBloom draws a clean, printable page just for them, free. Love it? It's the first page of a real printed book built around their idea, with their own story and activities. Browse the trucks and trains below for the next long car ride."
+    ],
+    "pages": [
+      {
+        "title": "Fire Truck Rescue",
+        "image": "/marketing/coloring-pages/vehicles/line-art/01-fire-truck-kitten.png",
+        "caption": "A smiling fire truck racing to rescue a kitten from a tree",
+        "pdf": "/coloring-pages/vehicles/printables/fire-truck-kitten.pdf"
+      },
+      {
+        "title": "Digger Playground",
+        "image": "/marketing/coloring-pages/vehicles/line-art/02-digger-sandcastle.png",
+        "caption": "A friendly construction digger building a sandcastle playground",
+        "pdf": "/coloring-pages/vehicles/printables/digger-sandcastle.pdf"
+      },
+      {
+        "title": "Choo-Choo Hills",
+        "image": "/marketing/coloring-pages/vehicles/line-art/03-train-rolling-hills.png",
+        "caption": "A cheerful choo-choo train winding through rolling green hills",
+        "pdf": "/coloring-pages/vehicles/printables/train-rolling-hills.pdf"
+      },
+      {
+        "title": "Pumpkin Tractor",
+        "image": "/marketing/coloring-pages/vehicles/line-art/04-tractor-pumpkin-patch.png",
+        "caption": "A tractor and friends harvesting a sunny pumpkin patch",
+        "pdf": "/coloring-pages/vehicles/printables/tractor-pumpkin-patch.pdf"
+      },
+      {
+        "title": "Mud Puddle Hop",
+        "image": "/marketing/coloring-pages/vehicles/line-art/05-monster-truck-puddles.png",
+        "caption": "A happy monster truck bouncing over friendly mud puddles",
+        "pdf": "/coloring-pages/vehicles/printables/monster-truck-puddles.pdf"
+      },
+      {
+        "title": "Harbor Tugboat",
+        "image": "/marketing/coloring-pages/vehicles/line-art/06-tugboat-harbor.png",
+        "caption": "A little tugboat guiding ships into a sunny harbor",
+        "pdf": "/coloring-pages/vehicles/printables/tugboat-harbor.pdf"
+      }
+    ],
+    "more": "",
+    "prompt": "a fire truck rescuing a kitten from a tree"
+  },
+  {
+    "slug": "dragons",
+    "name": "Dragons",
+    "blurb": "Dragon coloring pages starring the dragon only your kid would invent. Describe it, color a page free, then turn a favorite into a printed book we mail to you.",
+    "title": "Dragon Coloring Pages, Starring Your Kid's Own Dragon — CrayonBloom",
+    "heading": "Dragon coloring pages, starring your kid’s own dragon",
+    "description": "Dragon coloring pages starring the dragon only your kid would invent. Describe it, color a page free, then turn a favorite into a printed book we mail to you.",
+    "intro": [
+      "The best dragon isn't in any storybook yet — it's the one your kid just made up. Describe the dragon they're dreaming up, one who toasts marshmallows or runs a village bakery, and CrayonBloom draws a clean, printable page just for them, free. Love it? It's the first page of a real printed book made from their idea, with their own story and activities. Browse the friendly dragons below while you dream one up."
+    ],
+    "pages": [
+      {
+        "title": "Marshmallow Roast",
+        "image": "/marketing/coloring-pages/dragons/line-art/01-dragon-marshmallows.png",
+        "caption": "A baby dragon learning to toast marshmallows over a small campfire",
+        "pdf": "/coloring-pages/dragons/printables/dragon-marshmallows.pdf"
+      },
+      {
+        "title": "Castle Flyover",
+        "image": "/marketing/coloring-pages/dragons/line-art/02-dragon-knight-ride.png",
+        "caption": "A friendly dragon giving a knight a ride over a castle",
+        "pdf": "/coloring-pages/dragons/printables/dragon-knight-ride.pdf"
+      },
+      {
+        "title": "Bedtime Stories",
+        "image": "/marketing/coloring-pages/dragons/line-art/03-dragon-bedtime-stories.png",
+        "caption": "A dragon reading bedtime stories to its little hatchlings",
+        "pdf": "/coloring-pages/dragons/printables/dragon-bedtime-stories.pdf"
+      },
+      {
+        "title": "Hilltop Kites",
+        "image": "/marketing/coloring-pages/dragons/line-art/04-dragon-kite-flying.png",
+        "caption": "A dragon and a kid flying kites together on a breezy hilltop",
+        "pdf": "/coloring-pages/dragons/printables/dragon-kite-flying.pdf"
+      },
+      {
+        "title": "Gem Nap",
+        "image": "/marketing/coloring-pages/dragons/line-art/05-dragon-gem-nap.png",
+        "caption": "A sleepy dragon curled around a tidy pile of shiny gems",
+        "pdf": "/coloring-pages/dragons/printables/dragon-gem-nap.pdf"
+      },
+      {
+        "title": "Village Bakery",
+        "image": "/marketing/coloring-pages/dragons/line-art/06-dragon-bakery.png",
+        "caption": "A dragon helping bake bread in a cozy village bakery",
+        "pdf": "/coloring-pages/dragons/printables/dragon-bakery.pdf"
+      }
+    ],
+    "more": "",
+    "prompt": "a baby dragon toasting marshmallows"
+  }
+]

@@ -3,6 +3,8 @@
 // boundary and passes only the resolved principal; source secrets stay there.
 import { type Bundle, sha256 } from '@yaks/graph'
 import type { Rails } from './rails.ts'
+import { placed } from './pages/chrome.ts'
+import { optOut, ready, slipped } from './pages/free.ts'
 
 export type LegacyPrincipal = { owner?: string; via?: string }
 export type LegacyStore = {
@@ -74,77 +76,12 @@ let json = (value: unknown, status = 200): Response =>
 let missing = () => json({ error: 'This link is not available.' }, 404)
 let wantsJson = (request: Request) =>
   !!request.headers.get('accept')?.includes('application/json')
-let escape = (value: unknown) =>
-  String(value ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
-/** The path the visitor addressed before the app's mount was stripped. */
-let base = (request: Request): string => {
-  let address = new URL(request.headers.get('x-yak-address') ?? request.url)
-      .pathname,
-    path = new URL(request.url).pathname
-  return address.endsWith(path) ? address.slice(0, -path.length) : ''
-}
-/** The public pages' chrome, so an old link lands on a CrayonBloom page. */
-let html = (request: Request, title: string, body: string): Response => {
-  let root = base(request)
-  let link = (href: string, text: string) =>
-    `<a class="Public_Link" href="${root}${href}">${text}</a>`
-  return new Response(
-    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${title} — CrayonBloom</title><link rel="stylesheet" href="${root}/public.css"></head><body class="Public Public-crayonbloom"><a class="Public_Skip" href="#main">Skip to content</a><header class="Public_Header"><a class="Public_Brand" href="${root}/">CrayonBloom</a><nav class="Public_Nav" aria-label="Main navigation">${
-      link('/studio', 'Your books')
-    } ${link('/coloring-pages', 'Coloring pages')} ${
-      link('/faq', 'Questions')
-    }</nav></header><main class="Public_Main" id="main"><article class="Public_Body">${body}</article></main><footer class="Public_Footer">${
-      link('/privacy', 'Privacy')
-    } ${link('/terms', 'Terms')} ${
-      link('/contact', 'Contact')
-    }<p class="Public_Paragraph">CrayonBloom · Yak Shaving LLC</p></footer></body></html>`,
-    {
-      headers: {
-        'content-type': 'text/html; charset=utf-8',
-        'cache-control': 'no-store, private',
-      },
-    },
+/** Where the visitor's address puts the app path the worker was handed. */
+let place = (request: Request) =>
+  placed(
+    request.headers.get('x-yak-address') ?? request.url,
+    new URL(request.url).pathname,
   )
-}
-let optOut = (request: Request, unsubscribed: boolean): Response => {
-  if (wantsJson(request)) return json({ unsubscribed })
-  let body = unsubscribed
-    ? '<p class="Public_Paragraph">You are unsubscribed from commercial messages.</p>'
-    : '<p class="Public_Paragraph">You can stop commercial messages from CrayonBloom.</p><form method="post"><button>Unsubscribe</button></form>'
-  return html(
-    request,
-    'Unsubscribe',
-    `<h1 class="Public_Title">Unsubscribe</h1>${body}`,
-  )
-}
-type Art = { blob: string; mime: string }
-/** The Rails free-page result: the finished page, or the failed draw. */
-let freePage = (
-  request: Request,
-  token: string,
-  prompt: unknown,
-  art?: Art,
-): Response => {
-  let root = base(request),
-    here = `${root}/free_pages/${encodeURIComponent(token)}`
-  let more =
-    `<p class="Public_Paragraph"><a class="Public_Link" href="${root}/coloring-pages">`
-  if (!art) {
-    return html(
-      request,
-      'A coloring page',
-      `<h1 class="Public_Title">That one didn’t come out right.</h1><p class="Public_Paragraph">Our crayons slipped on this one. Here’s a shelf of pages that are ready to print right now.</p>${more}Browse coloring pages</a></p>`,
-    )
-  }
-  let idea = escape(prompt)
-  return html(
-    request,
-    `“${escape(String(prompt ?? '').slice(0, 70))}”`,
-    `<p class="Public_Subheading">Ready to color</p><h1 class="Public_Title">Your page is ready!</h1><p class="Public_Paragraph">“${idea}”</p><p class="Public_Paragraph"><img class="Public_Image" src="${here}/artwork" alt="Coloring page for ${idea}"></p><p class="Public_Paragraph"><a class="Public_Link" href="${here}/download">Download printable PDF</a></p><p class="Public_Paragraph"><a class="Public_Link" href="${here}/artwork" download>Download image${
-      art.mime === 'image/png' ? ' (PNG)' : ''
-    }</a></p>${more}More pages to print</a></p><p class="Public_Paragraph">The printable has a blank line at the bottom — your kid can sign it in crayon when the coloring is done.</p>`,
-  )
-}
 let decoded = (value: string): string | null => {
   try {
     return decodeURIComponent(value)
@@ -213,7 +150,14 @@ export let legacyPage = async (
         artwork: art ? [art] : [],
       })
     }
-    return freePage(request, token, snapshot.prompt, art)
+    return art
+      ? ready(
+        place(request),
+        '/free_pages/' + encodeURIComponent(token),
+        String(snapshot.prompt ?? ''),
+        art.mime === 'image/png',
+      )
+      : slipped(place(request))
   }
   let order = path.match(/^\/orders\/(\d+)$/)
   if (order && request.method === 'GET') {
@@ -247,7 +191,10 @@ export let legacyPage = async (
     if (request.method === 'POST' && !row.mail_opt_out) {
       await db.apply([{ entity: row.entity, mail_opt_out: { at: now } }])
     }
-    return optOut(request, request.method === 'POST' || !!row.mail_opt_out)
+    let unsubscribed = request.method === 'POST' || !!row.mail_opt_out
+    return wantsJson(request)
+      ? json({ unsubscribed })
+      : optOut(place(request), unsubscribed)
   }
   return null
 }

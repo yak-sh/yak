@@ -1,0 +1,31 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none"
+  xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CrayonBloom logo">
+  <rect width="512" height="512" fill="#FFF3DC" />
+  <g stroke="#3A2E25" stroke-width="14" stroke-linecap="round"
+    stroke-linejoin="round">
+    <!-- crayon stem -->
+    <path
+      d="M256 232 L290 290 L290 410 Q290 432 268 432 L244 432 Q222 432 222 410 L222 290 Z"
+      fill="#E8654E" />
+    <!-- crayon paper band -->
+    <path d="M222 300 H290 M222 326 H290" stroke-width="11" />
+    <!-- leaves -->
+    <path d="M288 352 Q352 308 388 324 Q352 366 288 360 Z" fill="#1FA868" />
+    <path d="M224 358 Q160 314 124 330 Q160 372 224 366 Z" fill="#1FA868" />
+    <!-- petals -->
+    <g fill="#FFB22E">
+      <ellipse cx="256" cy="120" rx="58" ry="40"
+        transform="rotate(90 256 120)" />
+      <ellipse cx="313" cy="161" rx="58" ry="40"
+        transform="rotate(-18 313 161)" />
+      <ellipse cx="199" cy="161" rx="58" ry="40"
+        transform="rotate(18 199 161)" />
+      <ellipse cx="291" cy="229" rx="58" ry="40"
+        transform="rotate(54 291 229)" />
+      <ellipse cx="221" cy="229" rx="58" ry="40"
+        transform="rotate(126 221 229)" />
+    </g>
+    <!-- flower center -->
+    <circle cx="256" cy="180" r="44" fill="#E8654E" />
+  </g>
+</svg>

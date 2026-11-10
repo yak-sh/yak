@@ -19,6 +19,11 @@ names another, and `--space` picks the space when the account has several.
 An app kept here is never edited on the platform: the next push would undo the
 edit.
 
+An app with a `package.json` of its own is formatted with the repository's
+settings only when they are named: `deno fmt --config deno.json apps/<name>`.
+Without `--config`, Deno takes the app's `package.json` as its configuration and
+rewrites every file in its default style.
+
 Git holds an app's code, not its pictures, fonts or sounds: `apps/.gitignore`
 keeps their bytes out of history. They are released with the code all the same,
 so an installed copy carries them. A push from a checkout that lacks one leaves

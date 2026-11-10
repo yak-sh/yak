@@ -4,7 +4,7 @@ import { equal, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 
 let sources = await Promise.all(
-  ['printbound', 'crayonbloom'].map(async (app) => ({
+  ['printbound'].map(async (app) => ({
     app,
     text: await Deno.readTextFile(
       new URL(`../${app}/recovery.js`, import.meta.url),

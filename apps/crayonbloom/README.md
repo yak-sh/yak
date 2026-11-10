@@ -6,11 +6,36 @@ style library, character reference prompts and age profiles are ported from
 printables are free. A finished print edition is prepared by PrintBound, then
 reviewed before its destination quote and single seller checkout.
 
-The app is private. Its Worker serves public guides, blog, RSS, curated theme
-art and the studio; customer routes check the platform-vouched person or guest
-instrument before reading any book or artifact. Gallery exposure requires both a
-reviewed page and its parent’s consent. Marketing suppression and historical
-links are kept independently; this code sends no marketing mail.
+The app is private. Its Worker serves the home page, public guides, blog, RSS,
+curated theme art and the studio; customer routes check the platform-vouched
+person or guest instrument before reading any book or artifact. Gallery exposure
+requires both a reviewed page and its parent’s consent. Marketing suppression
+and historical links are kept independently; this code sends no marketing mail.
+
+## The look
+
+CrayonBloom wears its own design: cream paper, white pages inked round, sticker
+buttons, Fredoka over Nunito. It is made of three things under `look/`:
+
+- `crayon.css`, the theme: the crayon box as the kit's custom properties.
+- `skin/`, a sheet laid over each `@yaks/ui` part the pages wear.
+- `parts/`, the app's own parts (`Hero`, `Sheet`, `Band`, `Mast` and the rest),
+  each a `Name.ts` beside its `Name.css`.
+
+`look.ts` lists them in the order a browser reads them, and the worker serves
+them as one `/look.css`, reading the kit's sheets from the files a declared
+`@yaks/ui` dependency ships beside it (`__packages/@yaks/ui/`).
+
+The worker draws every public page from those parts (`pages/`: the frame, the
+home page, the theme pages from `themes.json`, and the kept prose in `public/`)
+and answers it as HTML. The studio is a page script (`studio.html`, `studio.ts`,
+`studio/`) drawn in the browser from the same parts.
+
+The fonts (`look/fonts/`) and the home page's art (`art/`) come from the
+`coloring-book-maker` repo. Like every picture and font, they are released by
+`yak admin push` and not kept in git.
+
+## Running it
 
 `coloring_runtime{preview,font,printer,model,story_model}` configures
 deployment. The default preview uses deterministic fixture art and labeled story

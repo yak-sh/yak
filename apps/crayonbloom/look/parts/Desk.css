@@ -1,0 +1,56 @@
+.Desk {
+  display: grid;
+  align-content: start;
+  gap: clamp(1.25rem, 3vw, 2rem);
+  max-width: 1180px;
+  min-height: 60vh;
+  margin: 0 auto;
+  padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 3vw, 2rem)
+    clamp(2.5rem, 6vw, 4.5rem);
+}
+.Desk > * {
+  min-width: 0;
+  margin: 0;
+}
+.Desk-read {
+  max-width: 50rem;
+}
+.Desk_Head {
+  display: grid;
+  justify-items: start;
+  gap: 0.6rem;
+}
+.Desk_Head > * {
+  margin: 0;
+}
+.Desk_Title {
+  max-width: 22ch;
+  font-size: clamp(2.2rem, 5vw, 3.4rem);
+  line-height: 1.06;
+}
+.Desk_Pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: clamp(1.25rem, 3vw, 2rem);
+}
+.Desk_Row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+@media (max-width: 860px) {
+  .Desk_Pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media print {
+  .Desk {
+    max-width: none;
+    padding: 0;
+  }
+  .Desk_Row {
+    display: none;
+  }
+}

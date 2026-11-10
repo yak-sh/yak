@@ -1,0 +1,28 @@
+.Ticks {
+  display: grid;
+  gap: 0.7rem;
+  max-width: none;
+  padding: 0;
+  list-style: none;
+  font-weight: 500;
+}
+.Ticks_Item {
+  position: relative;
+  padding-left: 1.9rem;
+  color: var(--muted);
+}
+.Ticks_Item strong {
+  color: var(--text);
+}
+.Ticks_Item::before {
+  content: '';
+  position: absolute;
+  left: 0.45rem;
+  top: 0.2em;
+  width: 0.5em;
+  height: 0.95em;
+  border: solid var(--grass);
+  border-width: 0 3px 3px 0;
+  border-radius: 1px;
+  rotate: 42deg;
+}

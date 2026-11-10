@@ -1,0 +1,28 @@
+.Tray {
+  display: grid;
+  align-content: start;
+  gap: var(--gap);
+}
+.Tray > * {
+  min-width: 0;
+  margin: 0;
+}
+.Tray_Title {
+  max-width: none;
+  color: var(--heading);
+  font-size: var(--h2);
+}
+.Tray_Note {
+  max-width: none;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 500;
+}
+.Tray-ruled {
+  gap: 0.75rem;
+  padding-top: var(--gap);
+  border-top: 2px dashed var(--border);
+}
+.Tray-ruled .Tray_Title {
+  font-size: var(--h3);
+}

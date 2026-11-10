@@ -322,7 +322,7 @@ test('A free printable capability and an opt-out retain their scoped reach', asy
   })
   let page = await text('fixture-claimed')
   match(page, /Your page is ready/)
-  match(page, /A &#60;claimed&#62; page/)
+  match(page, /A &lt;claimed> page/)
   match(page, /href="\/free_pages\/fixture-claimed\/download"/)
   equal(await text('fixture-claimed/artwork'), art)
   equal(await text('fixture-claimed/download'), `A <claimed> page:${art}`)

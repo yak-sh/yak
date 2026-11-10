@@ -1,0 +1,61 @@
+.Band {
+  padding: clamp(2.5rem, 6vw, 4.5rem) 0;
+}
+.Band-first {
+  padding-top: clamp(2rem, 5vw, 3.75rem);
+}
+.Band-mint,
+.Band-blush {
+  border-block: 2px solid var(--border);
+}
+.Band-mint {
+  background: var(--mint);
+}
+.Band-blush {
+  background: var(--blush);
+  border-top: 3px solid var(--accent);
+}
+.Band_Inner {
+  display: grid;
+  gap: clamp(1.5rem, 3vw, 2.25rem);
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 clamp(1rem, 3vw, 2rem);
+}
+.Band_Inner > * {
+  min-width: 0;
+  margin: 0;
+}
+.Band-center .Band_Inner {
+  justify-items: center;
+  text-align: center;
+}
+.Band-narrow .Band_Inner {
+  max-width: 50rem;
+}
+.Band_Split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(2rem, 5vw, 3.4rem);
+}
+.Band_Split > * {
+  display: grid;
+  gap: var(--gap);
+  min-width: 0;
+}
+.Band_Split > * > * {
+  margin: 0;
+}
+@media (max-width: 860px) {
+  .Band_Split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media print {
+  .Band {
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+}

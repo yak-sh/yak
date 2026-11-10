@@ -83,19 +83,19 @@ around it gets a scroll area. In Chrome a box with `overflow: auto` and
 overflows, so a page drawing that part stops scrolling under the pointer. A part
 made of other parts holds them, the way `Say` holds a `Field` and a `Button`: an
 `input` a part styles itself is a second text box beside `Field`, with its own
-look in both hosts. A part that is another part is drawn as it, never by
-writing its class: a report is a card (`block(Card, 'Report', …)`), copy's
-button a `Button` (`Copy.Go`), and a caller makes a tab's panel a card with
+look in both hosts. A part that is another part is drawn as it, never by writing
+its class: a report is a card (`block(Card, 'Report', …)`), copy's button a
+`Button` (`Copy.Go`), and a caller makes a tab's panel a card with
 `<TabSet.Panel as={Card}>` (packages/ui/el.ts).
 
 A textarea is as tall as what is typed in it: `field-sizing: content`, set once
 for every textarea in packages/ui/base.css and for yaks.app's `textarea.Field`
-in packages/ui/pencil/Field.css, under a ceiling past which it scrolls. Never size one with
-`rows` or grow it from script; a part sets a floor where an empty one would be
-a sliver, and only a textarea sized on purpose, like an editor that fills its
-pane, sets its own height. Jeff, 2026-10-30: "can all typical textareas be made
-`field-sizing: content;`? put this in the ui skill or something; i always have
-to ask."
+in packages/ui/pencil/Field.css, under a ceiling past which it scrolls. Never
+size one with `rows` or grow it from script; a part sets a floor where an empty
+one would be a sliver, and only a textarea sized on purpose, like an editor that
+fills its pane, sets its own height. Jeff, 2026-10-30: "can all typical
+textareas be made `field-sizing: content;`? put this in the ui skill or
+something; i always have to ask."
 
 Colors are **roles**, not hues: `--positive`, `--negative`, `--number`,
 `--time`, `--link`, `--accent`, `--heading` and the rest of `Colors` in
@@ -105,13 +105,14 @@ has no green and two pinks, so a hue posing as a role shows at once.
 
 - A **theme** is custom properties only: a CSS file of `--` names and the same
   colors for the terminal (packages/ui/gouache.css and .ts, the default and
-  yak.sh's own; linen, yaks.app's; everforest and rosepine beside them;
-  `themes` in kit.ts).
+  yak.sh's own; linen, yaks.app's; everforest and rosepine beside them; `themes`
+  in kit.ts).
 - A **skin** replaces (`css`) or lays CSS over (`over`) the parts it names, with
   optional terminal entries; the rest fall back to their kit.
   packages/ui/paper.ts, the default, lays yak.sh's grain over `base`;
   packages/ui/ledger.ts replaces four parts, deliberately partial so the guide
-  shows both; packages/ui/pencil.ts is yaks.app's pencil on paper, setting the shared surface paint and the details of its named parts.
+  shows both; packages/ui/pencil.ts is yaks.app's pencil on paper, setting the
+  shared surface paint and the details of its named parts.
 - A tool or app that has no look of its own wears `composition` (the defaults),
   never a theme by name; naming one pins it.
 - A **kit** is a set of parts. A plugin contributes kits, themes, skins and UX
@@ -120,11 +121,12 @@ has no green and two pinks, so a hue posing as a role shows at once.
 A new part gets its paint by composing `Surface`, `Surface.Raised`,
 `Surface.Press` or `Surface.Well` (`packages/ui/Surface.ts`), the way
 `block(Surface, 'Example', { Title: 'h2' })` makes a flat surface. These
-primitives own the edge, elevation, hover and pressed states; the part adds
-its layout. `Surface` is included even in a host's subset of the kit, in browser and terminal.
-The skin sets their tokens, so pencil reaches a part it has never named.
-Use `--hover` for a selectable row's wash. When a treatment is missing, add
-it to the shared primitive rather than copying a pencil recipe into the part.
+primitives own the edge, elevation, hover and pressed states; the part adds its
+layout. `Surface` is included even in a host's subset of the kit, in browser and
+terminal. The skin sets their tokens, so pencil reaches a part it has never
+named. Use `--hover` for a selectable row's wash. When a treatment is missing,
+add it to the shared primitive rather than copying a pencil recipe into the
+part.
 
 A consumer imports the parts and never learns which theme or skin paints them.
 
@@ -234,42 +236,55 @@ synced everywhere, so it's never lost (M-59093).
 ## yaks.app's own pages
 
 The pages workers/yak serves (the dashboard at /manage, sign-in, the gallery,
-integrations, pricing) are HTML strings rather than this Preact tree, but
-their parts are this kit's: they wear the `linen` theme and the `pencil`
-skin, composed for them at deploy into public/_ui.css (workers/yak/
-sheet-assets.ts, `WORN` names the parts they wear), and write the kit's
-class names (`Button Button-go`, `Card_Head`, `Rows_Item`, `Chip`). Their own
-CSS (style.css, pages.css) is page layout, with site.css for the face and
-the paints no theme names. yaks.app/style-guide shows every part they wear
-and its "One design language" section is the rule every page follows. Jeff,
-2026-10-27 (T-132742): "the style-guide should decide on one design language
-and stick to it". A card is flat with a hairline, and its head (`heading()`
-in pages.ts) names it, says how it stands and holds its actions at the
-right; like things are `Rows`; a field sits under its label (`labeled()`),
-never at the end of a sentence; what few people change folds under Advanced
-options with its default in place. A stamp is said with its `at` and its `by`
-through stamps.ts `said`, the names coming from the directory's `writers`, so
-every page says a person, or an agent for its person, the same way. A part a page lacks goes into the kit,
-composed from the shared primitives, with an example in the style guide (site_test checks every
-worn part has one), not into one page's stylesheet.
+integrations, pricing) are HTML strings rather than this Preact tree, but their
+parts are this kit's: they wear the `linen` theme and the `pencil` skin,
+composed for them at deploy into public/_ui.css (workers/yak/ sheet-assets.ts,
+`WORN` names the parts they wear), and write the kit's class names
+(`Button Button-go`, `Card_Head`, `Rows_Item`, `Chip`). Their own CSS
+(style.css, pages.css) is page layout, with site.css for the face and the paints
+no theme names. yaks.app/style-guide shows every part they wear and its "One
+design language" section is the rule every page follows. Jeff, 2026-10-27
+(T-132742): "the style-guide should decide on one design language and stick to
+it". A card is flat with a hairline, and its head (`heading()` in pages.ts)
+names it, says how it stands and holds its actions at the right; like things are
+`Rows`; a field sits under its label (`labeled()`), never at the end of a
+sentence; what few people change folds under Advanced options with its default
+in place. A stamp is said with its `at` and its `by` through stamps.ts `said`,
+the names coming from the directory's `writers`, so every page says a person, or
+an agent for its person, the same way. A part a page lacks goes into the kit,
+composed from the shared primitives, with an example in the style guide
+(site_test checks every worn part has one), not into one page's stylesheet.
 
 The site's static pages (home, pricing, help, the legal pages and the style
 guide) are TSX in workers/yak/site/, drawn from the kit's parts in one frame
-(frame.tsx: head, nav, footer) and written into public/ by the deploy's
-build, gitignored like _ui.css. A part takes `as` where the page's outline
-wants another element (`<Card as='li'>`, `<Card.Title as='h3'>`); never
-write its class by hand. The style guide's prose is yaks.app's, and the
-parts it wears are shown by the kit's own specimens (@yaks/ui `Worn`), so
-a part's example lives with the part: a variant pencil draws and no
-specimen shows is added to the part's `specimens()`.
+(frame.tsx: head, nav, footer) and written into public/ by the deploy's build,
+gitignored like _ui.css. A part takes `as` where the page's outline wants
+another element (`<Card as='li'>`, `<Card.Title as='h3'>`); never write its
+class by hand. The style guide's prose is yaks.app's, and the parts it wears are
+shown by the kit's own specimens (@yaks/ui `Worn`), so a part's example lives
+with the part: a variant pencil draws and no specimen shows is added to the
+part's `specimens()`.
 
 What a person does to their own account (invite someone, take someone off,
 choose the homepage, connect an agent) is a control on its dashboard page that
 calls the tool their assistant would call (apps.ts `pressed`), never a line
 telling them to ask their assistant. Building and fixing apps is still the
-assistant's. Jeff, 2026-10-30: "i guess we do need more UI after all. stuff
-like "Ask your assistant to invite someone by their email address, to one app
-or to every app here." should be replaced with real UI".
+assistant's. Jeff, 2026-10-30: "i guess we do need more UI after all. stuff like
+"Ask your assistant to invite someone by their email address, to one app or to
+every app here." should be replaced with real UI".
+
+## An app's own look
+
+A yaks app with a design of its own (apps/crayonbloom) wears the kit the same
+way: a theme of custom properties, a skin sheet laid over each kit part it
+wears, and its own parts beside them, each a `Name.ts` and a `Name.css`. Its
+worker draws pages from `@yaks/ui/parts` with preact-render-to-string and serves
+the look as one stylesheet, composed from the app's sheets and the kit's, which
+a declared `"@yaks/ui": "platform"` dependency ships beside the worker at
+`__packages/@yaks/ui/<Part>.css` (apps/crayonbloom/look/look.ts). A page script
+is found only through a static `.html` file that names it, so a screen drawn in
+the browser keeps one. `app_preview` returns a screenshot of a pushed app's
+page, which is how a look is checked without a browser on the box.
 
 ## Looking at it
 
@@ -286,8 +301,8 @@ slow platform tier; checks start no server, workerd or child process.
   Fill it with rows copied from the live graph, long titles and old data
   included; a specimen's tidy sample hides what the owner's rows do to a screen.
 - **How it looks:** the style guide,
-  `/ui?theme=gouache|linen|everforest|rosepine&scheme=light|dark&skin=paper|pencil|ledger|base`, and
-  `yak ui` in a terminal (`t` cycles the theme, `s` the skin, `j`/`k` walk),
+  `/ui?theme=gouache|linen|everforest|rosepine&scheme=light|dark&skin=paper|pencil|ledger|base`,
+  and `yak ui` in a terminal (`t` cycles the theme, `s` the skin, `j`/`k` walk),
   seen on the live box once the change lands. Both themes, light and dark, phone
   width and the terminal: each one catches what the others hide, and faint text
   shows in light before anywhere else.

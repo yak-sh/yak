@@ -1,0 +1,101 @@
+/* Crayon: CrayonBloom's colours and type, the crayon box on warm paper.
+   Cream paper under white pages, written in espresso ink, never black, with
+   coral for the one thing to press. One scheme: a coloring page is white.
+
+   The paints are named for what they look like (paper, page, ink, coral,
+   marigold, grass, cornflower, grape) and a theme has more roles than a box
+   has crayons, so roles share them. The washes (mint, blush) tint a band
+   behind a section; nothing is written in them. */
+@font-face {
+  font-family: 'Fredoka';
+  font-weight: 500;
+  font-display: swap;
+  src: url('look/fonts/Fredoka-Medium.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Fredoka';
+  font-weight: 600;
+  font-display: swap;
+  src: url('look/fonts/Fredoka-SemiBold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Nunito';
+  font-weight: 400;
+  font-display: swap;
+  src: url('look/fonts/Nunito-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Nunito';
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url('look/fonts/Nunito-Italic.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Nunito';
+  font-weight: 700;
+  font-display: swap;
+  src: url('look/fonts/Nunito-Bold.ttf') format('truetype');
+}
+
+:root {
+  color-scheme: light;
+  --gap: 1.25rem;
+  --radius: 12px;
+  --measure: 40rem;
+  /* a page resting on warm paper: a brown glow over a faint solid offset */
+  --shadow: 6px 9px 20px -7px #96602833, 3px 4px 0 #241d1714;
+  --shadow-lift: 10px 15px 30px -8px #96602852, 4px 6px 0 #241d1714;
+
+  --font: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+  --display: 'Fredoka', 'Nunito', system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --size: 1.0625rem;
+  --small: 0.9375rem;
+  --scale: 1.3;
+
+  --bg: #fbf4e4; /* paper */
+  --surface: #fff1cf; /* butter, a sheet behind the one in front */
+  --card: #ffffff; /* the page */
+  --border: #3a2e251f; /* a pencil line */
+  --border2: #3a2e25; /* ink */
+
+  --text: #3a2e25; /* ink */
+  --muted: #776657; /* soft ink */
+  --dim: #a99c8e;
+
+  --accent: #e8654e; /* coral */
+  --link: #b8432f; /* deep coral, to read on paper and on butter */
+  --heading: #3a2e25;
+
+  --info: #3f6fe5; /* cornflower */
+  --active: #3f6fe5;
+  --positive: #157a4b; /* deep grass */
+  --negative: #a83f2d;
+  --caution: #f7b24a; /* marigold */
+  --special: #8a63d6; /* grape */
+
+  --number: #3a2e25;
+  --literal: #b8432f;
+  --time: #776657;
+  --who: #157a4b;
+
+  --keyword: #b8432f;
+  --string: #157a4b;
+  --fn: #3f6fe5;
+  --type: #8a63d6;
+  --attr: #776657;
+
+  --hue-0: #b8432f;
+  --hue-1: #157a4b;
+  --hue-2: #3f6fe5;
+  --hue-3: #8a63d6;
+  --hue-4: #8a5a00;
+  --hue-5: #776657;
+
+  /* the washes a band is tinted with, and the line every sticker is drawn in */
+  --mint: #e8f6ee;
+  --blush: #fdeee8;
+  --grass: #2a9466;
+  --stroke: 2.6px;
+}
