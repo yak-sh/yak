@@ -1793,10 +1793,15 @@
     text-align: center;
   }
   .Sidebar_Foot {
+    display: grid;
+    gap: .75rem;
     flex: none;
   }
   .Sidebar_Rule {
-    margin-block: calc(.375rem - var(--room));
+    margin-block: calc(-1 * var(--room));
+  }
+  .Sidebar_Form {
+    margin: 0;
   }
   .Sidebar_Close {
     display: none;

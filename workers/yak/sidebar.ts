@@ -101,7 +101,11 @@ let link = (at: Item) => {
     at.count != null ? h('span', { class: 'Sidebar_Count' }, at.count) : null,
   )
   return at.submit
-    ? h('form', { class: 'Page_Form', method: 'post', action: at.href }, node)
+    ? h(
+      'form',
+      { class: 'Sidebar_Form', method: 'post', action: at.href },
+      node,
+    )
     : node
 }
 
