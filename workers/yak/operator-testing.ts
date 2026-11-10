@@ -130,7 +130,13 @@ export let operatorService = (env: Env, held: Held, options: Options) => {
         if (path == '/operator/settings') {
           let { setting } = await import('./operator-persona.ts')
           return Response.json(
-            await setting(store.g, space, held.person, args.set),
+            await setting(
+              store.g,
+              space,
+              held.person,
+              args.set,
+              (entities) => directoryOf(env.STORE).apply({ entities }),
+            ),
           )
         }
         return Response.json(

@@ -600,7 +600,18 @@ export class Builder {
     if (new URL(request.url).pathname == '/operator/settings') {
       let { setting } = await import('./operator-persona.ts')
       let { set } = await request.json() as { set?: Settings }
-      return Response.json(await setting(read.store.g, space, person, set))
+      let dir = directory({
+        fetch: (req: Request) => dirPart.fetch(req, this.#env),
+      })
+      return Response.json(
+        await setting(
+          read.store.g,
+          space,
+          person,
+          set,
+          (entities) => dir.apply({ entities }),
+        ),
+      )
     }
     if (new URL(request.url).pathname == '/operator/carried') {
       let { carrying } = await import('./operator-carried.ts')

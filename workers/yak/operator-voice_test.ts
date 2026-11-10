@@ -9,6 +9,7 @@ import { endpoints } from './endpoints.ts'
 import { budget } from './meter.ts'
 import { operatorAnswer } from './operator-page.ts'
 import { unread } from './speech.ts'
+import { operators } from './operator-service-probe.ts'
 
 let voices: string[] = []
 let deepgram = endpoints(globalThis).open(async (req) => {
@@ -30,6 +31,7 @@ let fixture = async (dollars = 1) => {
   let p = platform('operator-voice', {
     DEEPGRAM_API_KEY: 'a-key',
     SPEECH_API: deepgram.url,
+    BUILDER: operators,
   })
   let person = crypto.randomUUID(), eid = crypto.randomUUID()
   await p.dir.apply({

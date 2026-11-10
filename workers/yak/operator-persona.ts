@@ -176,12 +176,16 @@ export let settled = async (
 
 /** What `space`'s Operator's settings are, after `set` is written on its
  * persona as `by` asked: the `/operator/settings` door its settings page
- * writes and a ring reads them by (build-door.ts `settingsAt`). */
+ * writes and a ring reads them by (build-door.ts `settingsAt`). A name set
+ * here is `copy`'d to the directory before the door answers, so the page
+ * that saved it reads it back at once; `operator_named` copies a name the
+ * Operator sets itself. */
 export let setting = async (
   g: Pick<Graph, 'apply'> & { storage: Reads },
   space: Space,
   by: string,
   set?: Settings,
+  copy: (entities: Bundle[]) => Promise<unknown> = () => Promise.resolve(),
 ): Promise<Settings> => {
   await settled(g, space)
   if (set && Object.keys(set).length) {
@@ -192,6 +196,7 @@ export let setting = async (
     }], { trusted: true })
   }
   let [row] = await g.storage.get([personaFor(space.eid)])
+  if (set?.name) await copy(named(row))
   return (row?.operator ?? {}) as Settings
 }
 
