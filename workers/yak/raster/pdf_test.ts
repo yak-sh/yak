@@ -77,6 +77,7 @@ test('a page containing an image renders the whole rotated page for OCR', () => 
     (Math.floor(image.height / 2) * image.width + Math.floor(image.width / 2)) *
     image.channels
   assertEquals([...image.data.slice(center, center + 3)], [255, 0, 0])
+  assertEquals(second.color, true)
 })
 
 test('a requested PDF page must exist', async () => {
@@ -91,5 +92,6 @@ test('an explicit page preview renders native text without changing OCR extracti
   )
   assertEquals([image.width, image.height], [144, 72])
   assertStringIncludes(shown.text, 'First page')
+  assertEquals(shown.color, false)
   assertEquals(first.image, undefined)
 })

@@ -47,7 +47,7 @@ let fixture = async () => {
     preview: () => {
       operations++
       if (fail) throw new Error('Renderer unavailable')
-      return Promise.resolve(png)
+      return Promise.resolve({ image: png, color: false })
     },
   }
   return {

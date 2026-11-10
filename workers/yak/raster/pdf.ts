@@ -8,15 +8,29 @@ let picture = (page: PDFiumPage, text: string) =>
   !text.trim() ||
   [...page.objects()].some((o) => o.type == 'image' || o.type == 'form')
 
+/** Whether any drawn pixel's channels differ by more than 2: colored ink. */
+export let tinted = (rgba: Uint8Array) => {
+  for (let i = 0; i < rgba.length; i += 4) {
+    let r = rgba[i], g = rgba[i + 1], b = rgba[i + 2]
+    if (Math.max(r, g, b) - Math.min(r, g, b) > 2) return true
+  }
+  return false
+}
+
+// The drawn page, and whether it carries colored ink: the pixels are here, so
+// a caller never decodes the PNG again to ask.
 let png = async (page: PDFiumPage) => {
   let { originalWidth, originalHeight } = page.getOriginalSize()
   let scale = Math.min(2, 2400 / Math.max(originalWidth, originalHeight))
+  let color = false
   let image = await page.render({
     scale,
-    render: ({ data, width, height }) =>
-      Promise.resolve(encode({ data, width, height, channels: 4 })),
+    render: ({ data, width, height }) => {
+      color = tinted(data)
+      return Promise.resolve(encode({ data, width, height, channels: 4 }))
+    },
   })
-  return base64(image.data)
+  return { image: base64(image.data), color }
 }
 
 export let pdf = async (
@@ -48,7 +62,7 @@ export let pdf = async (
       pages,
       text,
       ...(params.get('render') == '1' || picture(page, text))
-        ? { image: await png(page) }
+        ? await png(page)
         : {},
     })
   } finally {

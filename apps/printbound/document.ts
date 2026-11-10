@@ -6,7 +6,6 @@ import {
   merge,
   type Read,
 } from './composition.ts'
-import { monochrome } from './artwork.ts'
 import { inspect, type Inspected, preflight } from './inspection.ts'
 import { count, type Product } from './layout.ts'
 import { DocumentInputError, supplied } from './document-errors.ts'
@@ -30,7 +29,11 @@ export type Manifest = {
 export type DocumentIO = {
   read: Read
   put(bytes: Uint8Array, mime: string): Promise<string>
-  preview(pdf: Uint8Array, page: number): Promise<Uint8Array>
+  /** The page drawn as a PNG, and whether it carries colored ink. */
+  preview(
+    pdf: Uint8Array,
+    page: number,
+  ): Promise<{ image: Uint8Array; color: boolean }>
 }
 export type Preparation = {
   specification: Product
@@ -74,8 +77,8 @@ let previews = async (
   let pages: Page[] = []
   // One composed page at a time: a book never holds every decoded bitmap.
   for (let page of inspected) {
-    let bytesPage = await io.preview(bytes, page.number)
-    if (role == 'interior' && spec.coloring && !monochrome(bytesPage)) {
+    let { image: bytesPage, color } = await io.preview(bytes, page.number)
+    if (role == 'interior' && spec.coloring && color) {
       throw new DocumentInputError(
         'Coloring interior page ' + page.number + ' contains colored ink',
       )

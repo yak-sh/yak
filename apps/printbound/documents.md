@@ -52,13 +52,16 @@ generated print assets belong in blob storage. The 924-byte generated font in
 customer typography.
 
 PDF previews call `APP.fetch('/pdf?page=1&render=1', {method: 'POST', body})`.
-The platform's authenticated PDF door uses its existing PDFium raster worker.
-App code loads no WebAssembly or local files, starts no browser, and calls no
-external rendering service. Invalid supplied PDFs and artwork raise
-`DocumentInputError`, which the service answers as a correction request.
-Transport and generated-document failures propagate to the app's error
-reporting; the caller retains its source draft and publishes no incomplete
-manifest.
+The platform's authenticated PDF door uses its existing PDFium raster worker,
+which answers the drawn page and whether it carries colored ink, so the app
+never decodes a page's pixels. An 8-bit grayscale or RGB PNG without
+transparency is embedded as its own compressed rows; only artwork that must be
+converted (transparency, or color in a coloring book) is decoded. App code loads
+no WebAssembly or local files, starts no browser, and calls no external
+rendering service. Invalid supplied PDFs and artwork raise `DocumentInputError`,
+which the service answers as a correction request. Transport and
+generated-document failures propagate to the app's error reporting; the caller
+retains its source draft and publishes no incomplete manifest.
 
 The binding geometry and layout rules come from the PrintBound and CrayonBloom
 renderers. Lulu requires downloadable interior and cover PDFs, embedded fonts,

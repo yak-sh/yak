@@ -71,10 +71,13 @@ export let documents = (
       }),
     )
     let row = await res.json()
-    if (typeof row.image != 'string') {
+    if (typeof row.image != 'string' || typeof row.color != 'boolean') {
       throw new Error('PDF page renderer returned no image')
     }
-    return Uint8Array.from(atob(row.image), (c) => c.charCodeAt(0))
+    return {
+      image: Uint8Array.from(atob(row.image), (c) => c.charCodeAt(0)),
+      color: row.color,
+    }
   },
 })
 

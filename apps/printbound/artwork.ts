@@ -54,14 +54,47 @@ export let raster = (
 
 export let gray = (bytes: Uint8Array) => raster(bytes, true)
 
-export let monochrome = (bytes: Uint8Array) => {
-  let image = decode(bytes)
-  if (image.channels < 3) return true
-  for (let i = 0; i < image.data.length; i += image.channels) {
-    if (
-      Math.max(image.data[i], image.data[i + 1], image.data[i + 2]) -
-          Math.min(image.data[i], image.data[i + 1], image.data[i + 2]) > 2
-    ) return false
-  }
-  return true
+/** A PNG a PDF can carry as it is: its zlib rows, which PDF's FlateDecode
+ * reads with the PNG predictors, so embedding never decodes a pixel. */
+export type Rows = {
+  width: number
+  height: number
+  colors: 1 | 3
+  data: Uint8Array
 }
+
+/** The rows of an 8-bit, non-interlaced grayscale or RGB PNG without
+ * transparency; undefined for any other PNG, which must be converted. */
+export let rows = (bytes: Uint8Array): Rows | undefined => {
+  let view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  let at = 8, idat: Uint8Array[] = [], header
+  while (at + 8 <= bytes.length) {
+    let length = view.getUint32(at),
+      type = String.fromCharCode(...bytes.subarray(at + 4, at + 8)),
+      data = bytes.subarray(at + 8, at + 8 + length)
+    if (type == 'IHDR') header = data
+    else if (type == 'IDAT') idat.push(data)
+    else if (type == 'tRNS') return
+    else if (type == 'IEND') break
+    at += 12 + length
+  }
+  if (!header || !idat.length) return
+  let [depth, color, , , interlace] = header.subarray(8, 13)
+  if (depth != 8 || interlace || (color != 0 && color != 2)) return
+  let data = new Uint8Array(idat.reduce((n, d) => n + d.length, 0))
+  idat.reduce((n, d) => (data.set(d, n), n + d.length), 0)
+  let size = new DataView(header.buffer, header.byteOffset)
+  return {
+    width: size.getUint32(0),
+    height: size.getUint32(4),
+    colors: color == 0 ? 1 : 3,
+    data,
+  }
+}
+
+/** A coloring page's gray levels: near-white (245 and up) prints as paper,
+ * as raster() cleans a converted page. */
+export let paper = Uint8Array.from(
+  { length: 256 },
+  (_, n) => n >= 245 ? 255 : n,
+)

@@ -3,17 +3,21 @@ import { marked, type Tokens } from 'marked'
 import {
   clip,
   degrees,
+  drawObject,
   endPath,
   grayscale,
   PDFDocument,
-  PDFEmbeddedPage,
   type PDFFont,
+  PDFHexString,
   type PDFPage,
+  PDFRawStream,
   popGraphicsState,
   pushGraphicsState,
   rectangle,
+  scale,
+  translate,
 } from 'pdf-lib'
-import { raster } from './artwork.ts'
+import { paper, raster, type Rows, rows } from './artwork.ts'
 import { DocumentInputError, supplied } from './document-errors.ts'
 import { inspect } from './inspection.ts'
 import { count, fit, geometry, type Product } from './layout.ts'
@@ -205,22 +209,90 @@ let textPages = (
   }
 }
 
-let image = (
+type Box = { x: number; y: number; width: number; height: number }
+/** Artwork placed on a page: an embedded image, PDF page or carried PNG. */
+type Art = {
+  width: number
+  height: number
+  draw(page: PDFPage, at: Box): void
+  embed(): Promise<void>
+}
+
+// A PNG's rows as the image's stream, unchanged: PDF reads them with the PNG
+// predictors. A coloring page's grays go through the paper table.
+let carried = (pdf: PDFDocument, png: Rows, coloring: boolean): Art => {
+  let { context } = pdf, { width, height, colors, data } = png
+  let space = colors == 3 ? 'DeviceRGB' : coloring
+    ? context.obj([
+      'Indexed',
+      'DeviceGray',
+      255,
+      PDFHexString.of(
+        [...paper].map((n) => n.toString(16).padStart(2, '0')).join(''),
+      ),
+    ])
+    : 'DeviceGray'
+  let stream = PDFRawStream.of(
+    context.obj({
+      Type: 'XObject',
+      Subtype: 'Image',
+      Width: width,
+      Height: height,
+      BitsPerComponent: 8,
+      ColorSpace: space,
+      Filter: 'FlateDecode',
+      DecodeParms: {
+        Predictor: 15,
+        Colors: colors,
+        BitsPerComponent: 8,
+        Columns: width,
+      },
+    }),
+    data,
+  )
+  let ref = context.register(stream)
+  return {
+    width,
+    height,
+    draw: (page, at) =>
+      page.pushOperators(
+        pushGraphicsState(),
+        translate(at.x, at.y),
+        scale(at.width, at.height),
+        drawObject(page.node.newXObject('Image', ref)),
+        popGraphicsState(),
+      ),
+    embed: () => Promise.resolve(),
+  }
+}
+
+// Artwork is decoded only when it must change: transparency to flatten, or
+// color on a coloring page.
+let image = async (
   pdf: PDFDocument,
   spec: Product,
   bytes: Uint8Array,
   coloring = spec.coloring,
   box?: { width: number; height: number; dpi: number; bleed: boolean },
-) =>
-  bytes[0] == 0x89
-    ? pdf.embedPng(raster(bytes, coloring, box))
-    : pdf.embedJpg(bytes)
+): Promise<Art> => {
+  let png = bytes[0] == 0x89 ? rows(bytes) : undefined
+  if (png && !(coloring && png.colors == 3)) return carried(pdf, png, coloring)
+  let art = bytes[0] == 0x89
+    ? await pdf.embedPng(raster(bytes, coloring, box))
+    : await pdf.embedJpg(bytes)
+  return {
+    width: art.width,
+    height: art.height,
+    draw: (page, at) => page.drawImage(art, at),
+    embed: () => art.embed(),
+  }
+}
 
 let picture = async (
   page: PDFPage,
   spec: Product,
   bytes: Uint8Array,
-  box: { x: number; y: number; width: number; height: number },
+  box: Box,
   bleed = false,
   coloring = spec.coloring,
 ) => {
@@ -234,8 +306,14 @@ let picture = async (
   if (input && input.getPageCount() != 1) {
     throw new DocumentInputError('A page asset PDF must contain one page')
   }
-  let art = input
-    ? (await page.doc.embedPdf(input))[0]
+  let embedded = input && (await page.doc.embedPdf(input))[0]
+  let art: Art = embedded
+    ? {
+      width: embedded.width,
+      height: embedded.height,
+      draw: (page, at) => page.drawPage(embedded, at),
+      embed: () => embedded.embed(),
+    }
     : await supplied(() =>
       image(page.doc, spec, bytes, coloring, {
         ...box,
@@ -257,8 +335,7 @@ let picture = async (
       'Page artwork is below ' + spec.dpi + ' dpi at its print size',
     )
   }
-  if (art instanceof PDFEmbeddedPage) page.drawPage(art, size)
-  else page.drawImage(art, size)
+  art.draw(page, size)
   page.pushOperators(popGraphicsState())
   await art.embed()
 }

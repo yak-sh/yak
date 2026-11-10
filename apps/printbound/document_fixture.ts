@@ -57,7 +57,10 @@ export let fixture = () => {
       )
       if (!res.ok) throw new Error(await res.text())
       let result = await res.json()
-      return Uint8Array.from(atob(result.image), (c) => c.charCodeAt(0))
+      return {
+        image: Uint8Array.from(atob(result.image), (c) => c.charCodeAt(0)),
+        color: result.color,
+      }
     },
   }
   return { blobs, calls, io }

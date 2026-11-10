@@ -198,3 +198,28 @@ test('render failure never publishes an incomplete document manifest', async () 
   equal(calls, 3)
   ok(f.blobs.has('font'))
 })
+
+test('print-ready PNG rows are carried into the PDF without converting a pixel', async () => {
+  let f = fixture()
+  let gray = encode({
+    width: 2,
+    height: 2,
+    channels: 1,
+    data: new Uint8Array([0, 250, 128, 255]),
+  })
+  f.blobs.set('gray', gray)
+  let pages = [{ blob: 'gray', kind: 'image' as const }]
+  let [coloring, plain] = await Promise.all(
+    [true, false].map((coloring) =>
+      prepare(
+        { ...spec, coloring },
+        { title: 'ABC', font: 'font', pages },
+        f.io,
+      )
+    ),
+  )
+  match(coloring.pages[0].images[0].color, /^\[ \/Indexed \/DeviceGray 255 </)
+  equal(plain.pages[0].images[0].color, '/DeviceGray')
+  let art = decode(ok(f.blobs.get(plain.pages[0].blob)))
+  ok(art.data.some((n) => n == 0))
+})
