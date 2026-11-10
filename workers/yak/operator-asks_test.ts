@@ -40,10 +40,16 @@ await box.graph.apply([
   ...numbered(12),
 ], { trusted: true })
 
-let connect = async (asks?: unknown) =>
+let connect = async (asks?: unknown, more: Record<string, unknown> = {}) =>
   await mcpConnect.run(
     await operatorContext(env, { person: ada }, space, () => dir),
-    { name: 'box', url: '/mcp', machine: 'adas', ...asks ? { asks } : {} },
+    {
+      name: 'box',
+      url: '/mcp',
+      machine: 'adas',
+      ...asks ? { asks } : {},
+      ...more,
+    },
   )
 
 // The list drawn, as the person reads it: each row's lines and buttons, and
@@ -122,6 +128,18 @@ test('a person who does not own the machine’s space reaches nothing, and a mac
   let shown = drawn(listed)
   assertEquals(shown.text.includes('Your machine is off'), true)
   assertEquals(shown.count, 0)
+})
+
+test('where an id the server names opens is the server’s to say, and an empty one says none', async () => {
+  let opened = async (mentions: string) => {
+    await connect(undefined, { mentions })
+    return (await asksOf(env, ada, space.eid))!.mentions
+  }
+  assertEquals(
+    await opened('https://box.example/{id}'),
+    'https://box.example/{id}',
+  )
+  assertEquals(await opened(''), undefined)
 })
 
 test('another space’s Operator page lists nothing of the machine', async () => {

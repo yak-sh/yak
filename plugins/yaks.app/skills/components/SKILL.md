@@ -724,7 +724,7 @@ The complete list of reserved names:
     grant grants_listed home hook hostname image inference installed
     integration integration_install interrupted invite inviting key
     last_deploy lease lines listed mail mail_answered mail_dismissed
-    mail_post mail_task mcp_server member memory meter model
+    mail_post mail_task mcp_server member memory mentions meter model
     model_reservation model_result newcomer newcomer_builds notice
     notice_confirmed notice_letter notice_posted notice_subscription
     notified notify_deaths notify_trash oauth_grant occupancy offer openai

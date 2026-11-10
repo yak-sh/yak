@@ -36,6 +36,9 @@ export type Listed = {
   server: string
   asks: Ask[]
   off?: string
+  /** Where an id the server's rows carry opens, `{id}` where it goes
+   * (`mentions{url}` on its row). */
+  mentions?: string
 }
 
 /** How many show before the rest wait behind one press. */
@@ -133,7 +136,9 @@ export let asksOf = async (
   let row = await listing(env, person, space)
   if (!row) return null
   let { tool, query } = comp(row, 'asks')
+  let url = String(comp(row, 'mentions').url ?? '')
   let server = `mcp:${row.entity.eid}`
+  let said = (l: Listed): Listed => url ? { ...l, mentions: url } : l
   try {
     let out = await within(
       runConnectedCommand(
@@ -149,18 +154,18 @@ export let asksOf = async (
       (out.value?.structuredContent as { result?: Bundle[] } | undefined)
         ?.result
     if (out.value?.isError || out.value?.unavailable || !Array.isArray(rows)) {
-      return { server, asks: [], off: out.text }
+      return said({ server, asks: [], off: out.text })
     }
-    return { server, asks: rows.map(askOf) }
+    return said({ server, asks: rows.map(askOf) })
   } catch (e) {
     // A machine that is off is said to be; anything else is reported, and the
     // page is drawn all the same.
     if (!(e instanceof CallError)) caught(e, { request: 'asks' })
-    return {
+    return said({
       server,
       asks: [],
       off: e instanceof CallError ? e.message : 'it could not be read',
-    }
+    })
   }
 }
 

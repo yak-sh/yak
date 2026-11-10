@@ -128,6 +128,9 @@ export let mcpConnect: Row = {
         },
         required: ['tool'],
       },
+      mentions: str(
+        "Where an id this server's rows carry, such as T-123, opens: an address with {id} where the id goes, such as https://tasks.yak.sh/{id}. Each such id in your Operator's replies is then a link there. An empty one links none.",
+      ),
     },
     required: ['name', 'url'],
   },
@@ -146,6 +149,9 @@ export let mcpConnect: Row = {
       ...typeof args.enabled == 'boolean' ? { enabled: args.enabled } : {},
       ...Array.isArray(args.allow) ? { allow: args.allow.map(String) } : {},
       ...asked(args.asks),
+      ...typeof args.mentions == 'string'
+        ? { mentions: args.mentions.trim() || null }
+        : {},
     })
     return { text: JSON.stringify(value), value }
   },

@@ -49,6 +49,8 @@ type Settings = {
   // What needs the person, read from this server (operator-asks.ts); null
   // lists nothing.
   asks?: { tool: string; query: string } | null
+  // Where an id it names opens, `{id}` where the id goes; null opens none.
+  mentions?: string | null
 }
 // `machine` is the space whose tunnel reaches the server, where it is on one.
 type RemoteCommand = Command & { namespace: string; machine?: string }
@@ -411,6 +413,9 @@ export let remoteCommands = (
         ...settings.client_id ? { client_id: settings.client_id } : {},
       },
       ...settings.asks !== undefined ? { asks: settings.asks } : {},
+      ...settings.mentions !== undefined
+        ? { mentions: settings.mentions ? { url: settings.mentions } : null }
+        : {},
     }
     try {
       let next = serverOf(row)

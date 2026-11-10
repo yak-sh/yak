@@ -1960,6 +1960,7 @@ export let chatPage = async (
       follows,
       talked.standing,
       !!speechOf(env),
+      asks?.mentions,
     ),
     app,
   })
@@ -2104,19 +2105,29 @@ let chatScript = (
   follows: Follows,
   standing: string,
   paid: boolean,
+  mentions?: string,
 ) =>
   `<script type="module">
 import { browserDrafts } from '/_draft.js'
 import { follow } from '/follow.js'
 import { frames } from '/frames.js'
 import { redraw } from '/redraw.js'
-import { asideHtml, glanceHtml, helperHtml, lasted, menus, ordered, rowsOf, turnHtml } from '/_talk.js'
+import { asideHtml, glanceHtml, helperHtml, lasted, mention, menus, ordered, rowsOf, turnHtml } from '/_talk.js'
 import { voice } from '/voice.js'
 let open = ${JSON.stringify(open)}
 let root = ${JSON.stringify(root)}
 let chats = ${JSON.stringify(chatPath(space.slug, ''))}
 menus(document)
 let box = document.querySelector('[data-conversation]')
+// An id in a reply opens where the person's server says (\`mentions\`),
+// in the replies drawn now and in each one drawn after.
+let mentions = ${JSON.stringify(mentions ?? '')}
+if (box && mentions) {
+  mention(box, mentions)
+  new MutationObserver((seen) => {
+    for (let r of seen) if (r.target.nodeType == 1) mention(r.target, mentions)
+  }).observe(box, { childList: true, subtree: true })
+}
 let heading = document.querySelector('[data-title]')
 let form = document.querySelector('#ask')
 // The app open beside the chat (T-140509) is loaded again when the Operator

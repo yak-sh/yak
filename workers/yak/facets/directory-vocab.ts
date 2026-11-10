@@ -201,6 +201,14 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { tool: text, query: text },
     },
+    // Where an id the same server's rows carry (T-123) opens, on the row
+    // beside `asks`: `url` with `{id}` where the id goes. The Operator page
+    // makes each such id in a reply a link there (operator-rows.ts `mention`).
+    mentions: {
+      component: true,
+      type: 'object',
+      properties: { url: text },
+    },
     // One OAuth grant a person holds, as their agents and services are listed
     // (grant-rows.ts): written as the provider writes the grant to KV, gone
     // when it deletes it, and holding none of its secrets. Its eid is derived
