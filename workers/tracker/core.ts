@@ -31,7 +31,6 @@ import {
   every,
   fields,
   limit,
-  list,
   order,
   parse,
   present,
@@ -332,19 +331,29 @@ export let store = (storage: Storage, config: Config) => {
           fx.slots().filter((s) => s.effect && s.run).map((s) => s.id),
         ),
       ]
-      let [pending] = await g.read(and(
-        eq('effect.state', 'pending'),
-        eq('effect.handler', list(...names)),
-        order('effect.next'),
-        limit(1),
-        fields('effect.next'),
-      ))
+      // One read a handler: the index holds a handler's pending runs in the
+      // order they are due, so each read takes its first row. Asked for every
+      // handler at once, the engine sorts every pending run to find the
+      // first: 98,000 rows a call behind an outage's backlog, after every
+      // intake, which is what kept the object from answering (2026-11-10).
+      let pending: Bundle[] = []
+      for (let name of names) {
+        pending.push(
+          ...await g.read(and(
+            eq('effect.state', 'pending'),
+            eq('effect.handler', name),
+            order('effect.next'),
+            limit(1),
+            fields('effect.next'),
+          )),
+        )
+      }
       let [wake] = await g.read(
         '.wake.at>=1970-01-01T00:00:00Z .order=wake.at .limit=1 .fields=wake.at',
       )
       let at = (value: unknown) => Date.parse(String(value)) || now + 1000
       let next = Math.min(
-        pending ? at((pending.effect as Comp | undefined)?.next) : Infinity,
+        ...pending.map((run) => at((run.effect as Comp | undefined)?.next)),
         wake ? at((wake.wake as Comp | undefined)?.at) : Infinity,
       )
       return Number.isFinite(next) ? Math.max(now + 1000, next) : null
