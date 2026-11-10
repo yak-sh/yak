@@ -36,7 +36,7 @@
 // This module reads files; it is reached through `@yaks/session/tail`, never
 // the main module, which a browser loads.
 
-import * as fs from '@yaks/file/io'
+import { after, batches, records } from './log.ts'
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
@@ -89,6 +89,8 @@ export type Tail = {
   /** what the requests read so far carried (./parts.ts), followed from the
    * log's first line */
   walk?: Walk
+  /** a resumed walk, followed in slices before any new entries are read */
+  replay?: { line: number; lines: AsyncGenerator<string> }
 }
 
 /** How a line is read in. */
@@ -405,31 +407,6 @@ let compressed = async (
   return held
 }
 
-// The byte the line after `lines` starts at. Read once, when a tail begins:
-// after that the tail walks forward and the count walks with it.
-let after = (path: string, lines: number): number => {
-  if (!lines) return 0
-  let f
-  try {
-    f = fs.openSync(path)
-  } catch {
-    return 0 // never written: there is nothing to skip
-  }
-  try {
-    let buf = new Uint8Array(64 * 1024), at = 0, seen = 0
-    for (let n = f.readSync(buf); n; n = f.readSync(buf)) {
-      let text = buf.subarray(0, n)
-      for (let i = text.indexOf(10); i >= 0; i = text.indexOf(10, i + 1)) {
-        if (++seen == lines) return at + i + 1
-      }
-      at += n
-    }
-    return at
-  } finally {
-    f.close()
-  }
-}
-
 /**
  * A tail on `path`, placed after the lines its transcript says were read.
  *
@@ -496,49 +473,11 @@ export let tail = async (
     known: !!held,
     line,
     marked: line,
-    at: o.stream ? 0 : after(path, line),
+    at: o.stream ? 0 : await after(path, line),
     ...(o.stream ? { skip: line } : {}),
     rest: o.prefix ?? '',
     dec: new TextDecoder(),
   }
-}
-
-// What the file holds past the tail. The decoder streams, so a multi-byte
-// character split across two reads is reassembled correctly.
-let sip = (t: Tail): string => {
-  let f
-  try {
-    f = fs.openSync(t.path)
-  } catch {
-    return '' // never written: the log has said nothing yet
-  }
-  try {
-    f.seekSync(t.at, 0)
-    let buf = new Uint8Array(64 * 1024)
-    let text = ''
-    for (let n = f.readSync(buf); n; n = f.readSync(buf)) {
-      t.at += n
-      text += t.dec.decode(buf.subarray(0, n), { stream: true })
-    }
-    return text
-  } finally {
-    f.close()
-  }
-}
-
-// The complete lines since the last read.
-let lines = async (t: Tail, final = false): Promise<string[]> => {
-  let text = t.rest
-  if (!text.includes('\n')) {
-    text += t.stream ? await t.stream.read() ?? '' : sip(t)
-  }
-  let parts = text.split('\n')
-  final ||= !!t.stream?.done
-  t.rest = final ? '' : parts.pop() ?? ''
-  if (final && parts.at(-1) === '') parts.pop()
-  let skip = Math.min(t.skip ?? 0, parts.length)
-  if (t.skip) t.skip -= skip
-  return parts.slice(skip)
 }
 
 let parsed = (text: string): Record<string, unknown> | undefined => {
@@ -610,20 +549,29 @@ let walked = (w: Walk, made: Bundle[]): Bundle[] =>
 // The walk a tail keeps, begun before it reads a line: a log read from its
 // start begins one empty, and one taken up partway first follows the lines
 // already read, writing nothing, so its next request knows what came before.
-let follow = async (t: Tail, read: Reader, o: Pull) => {
-  if (t.walk) return
-  t.walk = walker()
-  if (!t.line || t.stream || !t.session) return
-  let text: string
-  try {
-    text = await fs.readTextFile(t.path)
-  } catch {
-    return // gone: what follows is all there is
+let follow = async (t: Tail, read: Reader, o: Pull): Promise<boolean> => {
+  if (!t.walk) {
+    t.walk = walker()
+    if (t.line && !t.stream && t.session) {
+      t.replay = { line: 0, lines: records(t.path) }
+    }
   }
-  let line = 0
-  for (let raw of text.split('\n')) {
-    if (++line > t.line) break
-    let event = parsed(raw)
+  let replay = t.replay
+  if (!replay) return true
+  let breath = performance.now(), from = replay.line
+  while (replay.line < t.line) {
+    if (
+      o.signal?.aborted ||
+      replay.line > from && performance.now() > (o.until ?? Infinity)
+    ) return false
+    if (performance.now() - breath > 50) {
+      await new Promise((go) => setTimeout(go, 0))
+      breath = performance.now()
+    }
+    let raw = await replay.lines.next()
+    if (raw.done) break
+    let line = ++replay.line
+    let event = parsed(raw.value)
     if (!event) continue
     let said = read(event)
     for (let f of said.fixed ?? []) fix(t.walk, f)
@@ -631,7 +579,7 @@ let follow = async (t: Tail, read: Reader, o: Pull) => {
       t.walk,
       imported(said, {
         ...o,
-        session: t.session,
+        session: t.session!,
         file: t.file.entity.eid,
         path: t.path,
         line,
@@ -639,6 +587,9 @@ let follow = async (t: Tail, read: Reader, o: Pull) => {
       }),
     )
   }
+  await replay.lines.return(undefined)
+  t.replay = undefined
+  return true
 }
 
 /**
@@ -664,8 +615,6 @@ export let pull = async (
 ): Promise<number> => {
   let from = t.line
   let breath = performance.now()
-  let all = await lines(t, o.final)
-  if (all.length && !o.prose) await follow(t, read, o)
   let run: (Line & { line: number; person: boolean })[] = []
   let text = 0
   // What a run of lines writes, in one transaction. Trusted: `transcript` is
@@ -706,48 +655,57 @@ export let pull = async (
     text = 0
     if (lines.length) await land(lines)
   }
-  for (let [i, raw] of all.entries()) {
-    if (o.signal?.aborted || i && performance.now() > (o.until ?? Infinity)) {
-      t.rest = [...all.slice(i), t.rest].join('\n')
+  reading: for await (let all of batches(t, o.final)) {
+    if (!o.prose && !await follow(t, read, o)) {
+      t.rest = [...all, t.rest].join('\n')
       break
     }
-    // A long read hands the event loop back every so often: the lease its duty
-    // holds and every other duty in the process renew and fire on timers.
-    if (performance.now() - breath > 50) {
-      await new Promise((go) => setTimeout(go, 0))
-      breath = performance.now()
+    for (let [i, raw] of all.entries()) {
+      if (
+        o.signal?.aborted ||
+        t.line > from && performance.now() > (o.until ?? Infinity)
+      ) {
+        t.rest = [...all.slice(i), t.rest].join('\n')
+        break reading
+      }
+      // A long read hands the event loop back every so often: the lease its duty
+      // holds and every other duty in the process renew and fire on timers.
+      if (performance.now() - breath > 50) {
+        await new Promise((go) => setTimeout(go, 0))
+        breath = performance.now()
+      }
+      let line = ++t.line
+      let event = parsed(raw)
+      if (!event) continue
+      let said = read(event)
+      if (t.walk) { for (let f of said.fixed ?? []) fix(t.walk, f) }
+      let kept = o.prose ? said.entries.filter(retained) : said.entries
+      if (!kept.length && !said.about && !said.limits?.length) continue
+      t.session ??= await created(g, t)
+      // A run is one write, so one reading of `own` holds for all its lines.
+      if (!run.length) await settle(g, t)
+      let made = imported(said, {
+        ...o,
+        session: t.session,
+        file: t.file.entity.eid,
+        path: t.path,
+        line,
+        own: t.own,
+      })
+      let signed = made.some((b) => b.$actor)
+      // A line a person signed is a transaction of its own: in a batch, an
+      // entity nobody signs is written by the first writer the batch names
+      // (@yaks/graph `writers`), and nothing else in the run is theirs.
+      if (signed) await flush()
+      run.push({
+        bundles: fold(made, t.walk ? walked(t.walk, made) : []),
+        at: said.at,
+        line,
+        person: kept.some(typed),
+      })
+      text += raw.length
+      if (signed || run.length >= RUN || text >= RUN_TEXT) await flush()
     }
-    let line = ++t.line
-    let event = parsed(raw)
-    if (!event) continue
-    let said = read(event)
-    if (t.walk) { for (let f of said.fixed ?? []) fix(t.walk, f) }
-    let kept = o.prose ? said.entries.filter(retained) : said.entries
-    if (!kept.length && !said.about && !said.limits?.length) continue
-    t.session ??= await created(g, t)
-    // A run is one write, so one reading of `own` holds for all its lines.
-    if (!run.length) await settle(g, t)
-    let made = imported(said, {
-      ...o,
-      session: t.session,
-      file: t.file.entity.eid,
-      path: t.path,
-      line,
-      own: t.own,
-    })
-    let signed = made.some((b) => b.$actor)
-    // A line a person signed is a transaction of its own: in a batch, an
-    // entity nobody signs is written by the first writer the batch names
-    // (@yaks/graph `writers`), and nothing else in the run is theirs.
-    if (signed) await flush()
-    run.push({
-      bundles: fold(made, t.walk ? walked(t.walk, made) : []),
-      at: said.at,
-      line,
-      person: kept.some(typed),
-    })
-    text += raw.length
-    if (signed || run.length >= RUN || text >= RUN_TEXT) await flush()
   }
   await flush()
   // Lines past the last that made an entry, or refused ones, are marked read
@@ -855,12 +813,6 @@ export let recount = async (
   read: Reader,
   o: { session: Eid; signal?: AbortSignal },
 ): Promise<number> => {
-  let text: string
-  try {
-    text = await fs.readTextFile(path)
-  } catch {
-    return 0 // gone: nothing to read again
-  }
   let [file] = await onDisk(g, path)
   let own = await owns(g, o.session, file.entity.eid)
   let key = own ? o.session : `${o.session} ${path}`
@@ -898,8 +850,13 @@ export let recount = async (
     placed = true
     wrote += kept.flat().filter((b) => b.entry).length
   }
-  for (let raw of text.split('\n')) {
+  let breath = performance.now()
+  for await (let raw of records(path)) {
     if (o.signal?.aborted) break
+    if (performance.now() - breath > 50) {
+      await new Promise((go) => setTimeout(go, 0))
+      breath = performance.now()
+    }
     line++
     let event = parsed(raw)
     if (!event) continue

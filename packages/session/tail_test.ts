@@ -353,3 +353,115 @@ for (let size of [65535, 65536, 65537, 131073]) {
     assertEquals(count, 1)
   })
 }
+
+// A resumed request must carry the same conversation as one read without a
+// restart, even when rebuilding that conversation takes several pulls.
+let replaying = async () => {
+  let f = await prepared(
+    typed('ø'.repeat(40_000)),
+    reply(use),
+    answer,
+  )
+  await pull(f.g, f.t, claude)
+  f.log({
+    type: 'assistant',
+    message: {
+      id: 'request-after-resume',
+      content: [{ type: 'text', text: 'done' }],
+      usage: { input_tokens: 40_000, output_tokens: 1 },
+    },
+  })
+  return { ...f, resumed: await tail(f.g, f.path, { session: ids.run1 }) }
+}
+let slicedReplay = await replaying()
+let abortedReplay = await replaying()
+let continuousReplay = await replaying()
+await pull(continuousReplay.g, continuousReplay.t, claude)
+let [continuousRequest] = await continuousReplay.g.read(
+  '.ask .usage ?context_parts',
+)
+continuousReplay.free()
+
+let replayResult = async (f: Awaited<ReturnType<typeof replaying>>) => {
+  let [request] = await f.g.read('.ask .usage ?context_parts')
+  assertEquals(request.context_parts, continuousRequest.context_parts)
+  assertEquals((await tail(f.g, f.path, { session: ids.run1 })).line, 4)
+}
+
+test('a resumed transcript rebuilds its context within each pull deadline', async () => {
+  let f = slicedReplay, seen: string[] = []
+  let read = (e: Record<string, unknown>) => {
+    seen.push(String(e.type))
+    return claude(e)
+  }
+  try {
+    assertEquals(await pull(f.g, f.resumed, read, { until: 0 }), 0)
+    assertEquals(seen, ['user'])
+    assertEquals((await f.g.read('.ask .usage')).length, 0)
+    assertEquals(await pull(f.g, f.resumed, read, { until: 0 }), 0)
+    assertEquals(seen, ['user', 'assistant'])
+    assertEquals(await pull(f.g, f.resumed, read, { until: 0 }), 1)
+    assertEquals(seen, ['user', 'assistant', 'user', 'assistant'])
+    await replayResult(f)
+  } finally {
+    f.free()
+  }
+})
+
+test('an abort stops context reconstruction between lines and resumes without losing context', async () => {
+  let f = abortedReplay, stop = new AbortController(), seen = 0
+  try {
+    assertEquals(
+      await pull(f.g, f.resumed, (e) => {
+        seen++
+        stop.abort()
+        return claude(e)
+      }, { signal: stop.signal }),
+      0,
+    )
+    assertEquals(seen, 1)
+    assertEquals(await pull(f.g, f.resumed, claude), 1)
+    await replayResult(f)
+  } finally {
+    f.free()
+  }
+})
+
+let closingArchive = await prepared()
+let archiveReads = 0, archiveStop = new AbortController()
+let closedTail = await tail(closingArchive.g, closingArchive.path, {
+  session: ids.run1,
+  version: 'compressed-version',
+  stream: {
+    done: false,
+    close: () => Promise.resolve(),
+    read: () => {
+      if (++archiveReads == 1) return Promise.resolve('{"type":"user"')
+      if (archiveReads > 2) throw new Error('reading a closed archive again')
+      archiveStop.abort()
+      return Promise.resolve(undefined)
+    },
+  },
+})
+
+test('an archive closed during a partial line stops without finishing the transcript', async () => {
+  try {
+    assertEquals(
+      await pull(closingArchive.g, closedTail, claude, {
+        signal: archiveStop.signal,
+      }),
+      0,
+    )
+    assertEquals(archiveReads, 2)
+    assertEquals(closedTail.rest, '{"type":"user"')
+    assertEquals(
+      c(
+        (await closingArchive.g.get([closedTail.file.entity.eid]))[0],
+        'transcript',
+      )?.finished,
+      undefined,
+    )
+  } finally {
+    closingArchive.free()
+  }
+})
