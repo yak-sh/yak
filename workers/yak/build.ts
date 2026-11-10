@@ -51,7 +51,8 @@
 //                   {built}                      the app's address
 //                   {done, text, refused?}       the turn's last sentence
 //                   {ready, building}            the replay is over
-//                   {busy}                       a build is already running
+//                   {busy}                       a build is already running,
+//                                                or the line is kept for later
 //
 // A page that reconnects hears the whole conversation again as those same
 // frames, in order, then `{ready}` — so a reload costs nothing and the page
@@ -64,7 +65,11 @@
 // it.
 import type { Hibernation, Wire } from '@yaks/durable-object'
 import { driver, type DurableStorage } from '@yaks/durable-object/sql'
-import { bounded } from '@yaks/durable-object/ceiling'
+import {
+  bounded,
+  type Ceiling,
+  type Stopped,
+} from '@yaks/durable-object/ceiling'
 import type { Alarms } from './operator-store.ts'
 import { level, writes } from '@yaks/member'
 import {
@@ -85,6 +90,7 @@ import type { Who } from './session.ts'
 import { caught, refusing, stopped } from './defects.ts'
 import { refuse } from '@yaks/api/refuse'
 import { reported, type Tally, tallying } from './lib/hops.ts'
+import * as log from './writes.ts'
 import { headed } from './timing.ts'
 import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
@@ -92,10 +98,13 @@ import { managePath } from './route.ts'
 import { WAKE } from './door.ts'
 import {
   type Frame,
+  HELD,
   type Held,
   NOBODY,
   NOT_A_WRITER,
   OWED,
+  sayer,
+  saying,
   seatOf,
   SPACE,
   WAIT,
@@ -134,6 +143,9 @@ type Socket = Watching | Lent
 // line of it, and not much of that. A tool answers a paragraph; a page draws a
 // row.
 let CUT = 120
+
+// How long a kept line no turn could take up waits before it is tried again.
+let AGAIN = 60_000
 
 export let line = (text: string): string => {
   let first = text.trim().split('\n')[0] ?? ''
@@ -219,10 +231,16 @@ export class Builder {
   >
   // What the pages watching the Operator are told, once it is at work.
   #frames?: ReturnType<typeof import('./operator-host.ts').operatorFrames>
-  // Whether a build is running in this object right now. In memory on purpose:
-  // an object that was evicted has no build running, and a flag in storage
-  // would outlive the loop it stands for and lock the space forever.
-  #building = false
+  // The build running in this object right now, if one is. In memory on
+  // purpose: an object that was evicted has no build running, and a flag in
+  // storage would outlive the loop it stands for and lock the space forever.
+  #building?: Promise<unknown>
+  // What this object's statements may cost before it stops until a window
+  // ends (@yaks/durable-object `bounded`): a line said meanwhile is kept
+  // (`#hold`), and taken up once the window ends (`#replay`).
+  #ceiling: Ceiling
+  // The kept lines being taken up, one turn at a time.
+  #replaying?: Promise<void>
   #arming?: Promise<void>
   // The Operator's pool, once this incarnation has made it (`#work`).
   #fx?: { running(): unknown[] }
@@ -252,6 +270,7 @@ export class Builder {
 
   constructor(ctx: State, env: Env) {
     this.#ctx = ctx
+    this.#ceiling = bounded(ctx.storage)
     this.#sql = driver(ctx.storage)
     this.#env = env
     this.#lent = browsers(() => ctx.getWebSockets(), env.CLOCK)
@@ -334,7 +353,7 @@ export class Builder {
   joined(ws: Wire, held: Held) {
     ws.serializeAttachment(held)
     for (let f of frames(this.said())) ws.send(JSON.stringify(f))
-    ws.send(JSON.stringify({ ready: true, building: this.#building }))
+    ws.send(JSON.stringify({ ready: true, building: !!this.#building }))
   }
 
   /** The space this object is for, read fresh — its tier and its month's
@@ -350,25 +369,57 @@ export class Builder {
 
   /**
    * One line from a person: the build it starts, and the frames it casts. What
-   * it answers is the turn's last frame — `{done}` or `{busy}` — for the door
-   * below, which waits for the round rather than listening to it. Everyone on
-   * a socket has already heard it.
+   * it answers is how the round ended beyond what the conversation keeps —
+   * `{done}`, `{busy}`, or the line kept for later — for the door below,
+   * which waits for the round rather than listening to it. Everyone on a
+   * socket has already heard it.
    *
-   * One at A time, and the flag is raised before the first `await` on purpose:
-   * two frames a moment apart are two handlers interleaving at every await, so
-   * a check that yielded first would let both builds start.
+   * One at a time, and the build is raised before the first `await` on
+   * purpose: two frames a moment apart are two handlers interleaving at every
+   * await, so a check that yielded first would let both builds start.
+   *
+   * A line said while this object is stopped is kept (`#hold`); a line said
+   * to one that is not pays a look in memory for that.
    */
-  async say(held: Held, text: string): Promise<Frame> {
+  async say(held: Held, text: string): Promise<Frame[]> {
     if (this.#building) return this.#say([{ busy: WAIT }])
-    this.#building = true
+    let stop = this.#ceiling.refusal(true)
+    if (stop) return await this.#hold(held, text, stop)
+    return await this.#turn(held, text)
+  }
+
+  // A build, raised as `#building` until it ends. A line kept while the
+  // object was stopped names its place in the log (`kept`), which it leaves
+  // as the conversation takes it.
+  #turn(held: Held, text: string, kept?: number): Promise<Frame[]> {
+    let turn = this.#build(held, text, kept)
+    this.#building = turn
+    return turn.finally(() => this.#building = undefined)
+  }
+
+  async #build(held: Held, text: string, kept?: number): Promise<Frame[]> {
+    let heard = false
     try {
       let space = await this.#space(held.space)
-      if (!space) return this.#say([{ done: 'that space is gone' }])
+      if (!space) {
+        // A kept line goes with its space.
+        if (kept != null) log.done(this.#sql, kept)
+        return this.#say([{ done: 'that space is gone' }])
+      }
       let who: Who = { person: held.person, role: held.role }
       let asked: Line = { said: 'person', text }
       let was = this.said()
-      this.#keep([asked])
-      this.#tell([{ said: 'person', text }])
+      // A kept line was told as it was kept, and leaves the log in the
+      // transaction the conversation takes it in.
+      if (kept == null) this.#keep([asked])
+      else {
+        this.#sql.tx!(() => {
+          this.#keep([asked])
+          log.done(this.#sql, kept)
+        })
+      }
+      heard = true
+      if (kept == null) this.#tell([{ said: 'person', text }])
       let end: Frame = { done: '' }
       // The loop and its tools load with the first build, not with every
       // isolate that wakes this object (T-37977).
@@ -383,26 +434,81 @@ export class Builder {
       // What the loop added to what it was handed: the person's line is
       // already kept, so the transcript and the loop agree on one history.
       this.#keep(out.lines.slice(was.length + 1))
-      return end
+      return [end]
     } catch (e) {
-      // A stopped object says when to try again.
-      if (stopped(e)) return this.#say([{ done: e.message }])
+      if (stopped(e)) {
+        // Stopped before the conversation took the line, it is kept, or a
+        // kept one stays where it is (`#replays`). After, the stop says when
+        // to try again.
+        if (heard) return this.#say([{ done: e.message }])
+        return kept == null ? await this.#hold(held, text, e) : []
+      }
       // The loop answers its own refusals in sentences; anything that reaches
       // here is ours breaking, and the person is owed a sentence for that too.
       caught(e, { request: 'build', space: held.space })
       return this.#say([{
         done: 'Something of ours broke. Nothing was built.',
       }])
-    } finally {
-      this.#building = false
     }
   }
 
-  // A frame told to everyone and handed back to the caller: the two endings
-  // that never reach the loop.
-  #say(frames: Frame[]): Frame {
+  // Frames told to everyone and handed back to the caller: the endings that
+  // never reach the loop.
+  #say(frames: Frame[]): Frame[] {
     this.#tell(frames)
-    return frames[0]
+    return frames
+  }
+
+  /** A line said while this object may not write (`#ceiling`): kept in the
+   * write log, which the ceiling lets through (`free`), and taken up as a
+   * turn of its own once the window ends, by the alarm armed for then
+   * (`#replay`). Everyone watching sees it said, and when it will be
+   * answered. */
+  async #hold(held: Held, text: string, stop: Stopped): Promise<Frame[]> {
+    this.#ceiling.free(() => {
+      for (let stmt of log.schema()) this.#sql.query(stmt)
+      log.keep(this.#sql, saying(held, text), JSON.stringify({ say: text }))
+    })
+    let told = this.#say([
+      { said: 'person', text },
+      { busy: HELD(Math.ceil(stop.retry.after / 1000)) },
+    ])
+    await this.#rest(stop.retry.after)
+    return told
+  }
+
+  // The alarm, `ms` from now.
+  #rest = (ms: number) => this.#ctx.storage.setAlarm(Date.now() + ms)
+
+  // The lines kept while this object was stopped (`#hold`), taken up behind
+  // the alarm, since a build takes minutes. A log that holds none is looked
+  // at once an incarnation (writes.ts `next`), and stands from the store's
+  // fitting (operator-store.ts), so the look runs no DDL.
+  #replay() {
+    if (this.#replaying || !log.waiting(this.#sql)) return
+    let going = this.#replaying = this.#replays()
+      .catch((e) => caught(e, { request: 'build replay' }))
+      .finally(() => this.#replaying = undefined)
+    this.#ctx.waitUntil?.(going)
+  }
+
+  // Oldest first, a turn each once no other build is running. One the
+  // window stops waits for its end, and every line behind it with it; one no
+  // turn took up (its directory unreachable) waits a minute.
+  async #replays() {
+    let last: number | undefined
+    for (let k = log.next(this.#sql); k; k = log.next(this.#sql)) {
+      if (k.seq == last) return await this.#rest(AGAIN)
+      last = k.seq
+      let asked = log.replayed(k, 'http://builder/say')
+      let { say } = await asked.json() as { say: string }
+      while (this.#building) await this.#building.catch(() => {})
+      if (!this.#ceiling.stopped(true)) {
+        await this.#turn(sayer(asked.headers), say, k.seq)
+      }
+      let wait = this.#ceiling.stopped(true)
+      if (wait) return await this.#rest(wait)
+    }
   }
 
   /**
@@ -834,12 +940,12 @@ export class Builder {
   // then too; one stopped as its work goes is `waking`'s.
   async alarm() {
     try {
-      let wait = bounded(this.#ctx.storage).stopped(true)
-      if (wait) await this.#ctx.storage.setAlarm(Date.now() + wait)
+      let wait = this.#ceiling.stopped(true)
+      if (wait) await this.#rest(wait)
       else await this.#ring()
     } catch (e) {
       if (!stopped(e)) throw e
-      await this.#ctx.storage.setAlarm(Date.now() + e.retry.after)
+      await this.#rest(e.retry.after)
     }
   }
 
@@ -847,6 +953,7 @@ export class Builder {
     let { drain, SLICE, waking } = await import('./operator-store.ts')
     let { store } = await this.#work()
     this.#resume()
+    this.#replay()
     this.#wake ??= waking(
       this.#ctx.storage,
       (e) => caught(e, { request: 'operator alarm' }),
@@ -884,13 +991,16 @@ export class Builder {
    * conversation answered as the frames a page draws — the replay a socket
    * would have heard, plus the `{done}` or `{busy}` this line came to. The
    * page is pages.ts's; this is the same wire, said once instead of streamed.
+   * A stopped object's conversation waits with it, and the page shows the
+   * line it kept.
    */
   async #round(request: Request, held: Held): Promise<Response> {
     let asked = await request.json() as { say?: unknown }
     let text = typeof asked.say == 'string' ? asked.say.trim() : ''
     if (!text) return no(400, 'say what you want built')
     let end = await this.say(held, text)
-    return Response.json({ frames: [...frames(this.said()), end] })
+    let before = this.#ceiling.stopped(false) ? [] : frames(this.said())
+    return Response.json({ frames: [...before, ...end] })
   }
 
   // The 101, and the socket handed to the runtime so it outlives this object.

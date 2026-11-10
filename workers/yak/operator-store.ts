@@ -50,6 +50,7 @@ import { due, soonest, tick, wakes } from '@yaks/wake'
 import { caught, stopped } from './defects.ts'
 import { adopt, indexed, schema as ftsSchema, search } from '@yaks/fts'
 import { installed, type Meta, meta, printOf } from '@yaks/sqlite'
+import { schema as logSchema } from './writes.ts'
 
 export let operatorVocab = loadVocab([
   kernelDoc,
@@ -106,6 +107,10 @@ let text = indexed(operatorVocab)
 // component (@yaks/sqlite `over`), as an app's store makes its own. A store
 // fitted before any entry was written holds no `entry` table to index then.
 let searching = ftsSchema(text, derived)
+// The write log the object's Builder keeps a person's line in while it is
+// stopped (build.ts `#hold`), fitted with the store, so the alarm that takes
+// the lines up (`#replay`) finds the log standing and runs no DDL to look.
+let beside = () => [...blobSchema(), ...logSchema()]
 let print: string | undefined
 
 /** The revision of how the file is fitted, part of its print: a file fitted
@@ -139,12 +144,12 @@ export let operatorStore = (
     schemaReady: () => stood,
   })
   print ??= printOf(`operator:${FITTING}:${store.print()}`, [
-    ...blobSchema(),
+    ...beside(),
     ...searching,
   ])
   stood = installed(sql) != null && meta(sql).get(FITTED) == print
   if (!stood) {
-    for (let stmt of blobSchema()) sql.query(stmt)
+    for (let stmt of beside()) sql.query(stmt)
     let left = store.install()
     adopt(sql, text, derived, { heal: false })
     if (!left.length) meta(sql).set(FITTED, print)

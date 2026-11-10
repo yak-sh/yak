@@ -17,6 +17,10 @@ import { stringify } from '@yaks/vocab/wire'
 // These plain tables belong to no vocabulary or app migration. Their placement
 // beside the graph makes receipt persistence and mutation atomic even when
 // the graph above storage cannot stand.
+//
+// A space's Builder keeps the same log in its own SQLite for a person's line
+// it cannot answer yet (build.ts `#hold`): `keep` while its object is
+// stopped, `next` and `done` as it takes each line up once the window ends.
 import { type Bundle, sha256 } from '@yaks/graph'
 import { composed } from '@yaks/graph/bundle'
 import { Refused } from '@yaks/graph/errors'
@@ -647,11 +651,12 @@ export let dead = (db: Driver, seq: number, why: string) =>
     where: at(seq),
   })
 
-/** The request a kept write was, to apply again: a binary one's envelope as
- * it came (binary.ts `sealed`). */
-export let replayed = (k: Kept): Request => {
+/** The request a kept write was, to send `at` its door again (a Store's
+ * `/apply` unless said): a binary one's envelope as it came (binary.ts
+ * `sealed`). */
+export let replayed = (k: Kept, at = 'http://store/apply'): Request => {
   let headers = new Headers(JSON.parse(k.headers))
-  return new Request('http://store/apply', {
+  return new Request(at, {
     method: 'POST',
     headers,
     body: opened(headers, k.body),

@@ -735,7 +735,10 @@ while stopped, plus the statement that passed it. What a stopped object answers:
   are marked neither failed nor stuck. An effect stopped mid-run is due again
   after the wait as the same attempt, and one that ended while stopped is not
   run again: the pool writes down how it ended after the wait (@yaks/effects).
-- A Builder answers each door 429 the same way; its alarm comes back then.
+- A Builder answers each door 429 the same way; its alarm comes back then. A
+  chat line said to it meanwhile is kept in its own write log (build.ts
+  `#hold`), told back as said with when it will be answered, and taken up as its
+  own turn, oldest first, by the alarm at the window's end (`#replay`).
 - The directory is told of a runaway and never stopped: every door reads it, so
   stopping it would stop the platform. A relocation counts its rows, is never
   stopped half way, and leaves neither end stopped (relocate.ts `freely`).

@@ -307,7 +307,8 @@ A query that works on the box can be refused in a store.
   (`#failed`), an effect that meets one runs again as the same attempt
   (@yaks/effects `deferral`), and how a run ended that the stop would not let
   the pool write down is written once the window ends (`unwritten`). A Builder answers 429 the same way and its alarm
-  comes back then. The directory is spared (`#start`): every door reads it.
+  comes back then; a chat line said to it is kept in its own write log and
+  taken up as a turn once the window ends (build.ts `#hold`, `#replay`). The directory is spared (`#start`): every door reads it.
   A relocation runs on `freely` drivers: it never stops half way, nor leaves
   either end stopped. A page's
   outbox and socket wait as long as `retry-after` says (client.js). The

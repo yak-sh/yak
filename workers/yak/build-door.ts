@@ -73,6 +73,37 @@ export let WAIT =
   'I am still building the last thing you asked for — let me finish, and ' +
   'then say that again.'
 
+/** A line said while the space's Builder is stopped for the rows it spent,
+ * `s` seconds more (build.ts `#hold`): kept, and taken up then. */
+export let HELD = (s: number) =>
+  `Building is paused here for ${s} s. I have kept what you said, and I ` +
+  'will take it up then.'
+
+/** A person's line to a space's Builder, as its `/say` door takes it: what
+ * the form with no script posts (`posting`), and what the Builder keeps of a
+ * line it cannot answer yet (build.ts `#hold`). */
+export let saying = (held: Held, text: string): Request =>
+  new Request('http://builder/say', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      [SPACE]: held.space,
+      'x-yak-person': held.person,
+      'x-yak-role': held.role ?? '',
+    },
+    body: JSON.stringify({ say: text }),
+  })
+
+/** Who said a line `saying` made, as its headers say. */
+export let sayer = (headers: Headers): Held => {
+  let role = headers.get('x-yak-role')
+  return {
+    person: headers.get('x-yak-person') ?? '',
+    role: role ? level(role) : null,
+    space: headers.get(SPACE) ?? '',
+  }
+}
+
 /** Nobody is refused at the handshake rather than mid-conversation. */
 export let NOBODY = 'sign in to build here'
 export let NOT_A_WRITER = 'only a member who writes can build here'
@@ -194,18 +225,12 @@ export let posting = async (
   if (!text) {
     return building({ space: space.slug, why: 'Say what you want built.' }, env)
   }
-  let asked = await builderOf(env, space.eid)(
-    () =>
-      new Request('http://builder/say', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          [SPACE]: space.eid,
-          'x-yak-person': who.person ?? '',
-          'x-yak-role': who.role ?? '',
-        },
-        body: JSON.stringify({ say: text }),
-      }),
+  let asked = await builderOf(env, space.eid)(() =>
+    saying({
+      person: who.person ?? '',
+      role: who.role ? level(who.role) : null,
+      space: space.eid,
+    }, text)
   )
   if (!asked.ok) {
     let said = await asked.json() as { message?: string }

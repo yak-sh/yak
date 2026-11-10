@@ -24,8 +24,10 @@ import {
   NOBODY,
   NOT_A_WRITER,
   OWED,
+  saying,
   seated,
 } from './build-door.ts'
+import { bounded } from '@yaks/durable-object/ceiling'
 import { WAKE } from './door.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -254,6 +256,74 @@ test('a second line during a build is told to wait', async () => {
   let again = joined(o)
   let said = again.sent.filter((f) => 'said' in f) as { text: string }[]
   assert(!said.some((f) => f.text.includes('garden')))
+})
+
+// Ada's object over storage as a new one has it, on a window of a second
+// the case moves, and the rows it may write in it, spent (@yaks/durable-object
+// `bounded`); then an alarm the runtime rings, and what it left running.
+let paused = async () => {
+  let o = await seeded([{ text: 'Sure.' }])
+  let ctx = state('', false)
+  let at = { t: 0 }
+  let ceiling = bounded(ctx.storage, {
+    now: () => at.t,
+    refuse: true,
+    windows: [{ ms: 1_000, read: 1e6, written: 10 }],
+  })
+  let stop = () =>
+    ceiling.count({
+      shape: () => 's',
+      rowsRead: 0,
+      rowsWritten: 11,
+      returned: 0,
+    })
+  let object = new Builder(ctx, o.env)
+  let ring = async (t: number) => {
+    at.t = t
+    await object.alarm()
+    while (ctx.pending.size) await Promise.all(ctx.pending)
+  }
+  let lines = () => object.said().map((l) => l.text)
+  return { ...o, ctx, object, stop, ring, lines }
+}
+
+let idle = await paused()
+test('an alarm with no line kept takes none up', async () => {
+  await idle.ring(0)
+  assertEquals(idle.lines(), [])
+})
+
+let kept = await paused()
+test('a line said to a stopped Builder is kept, and answered once the window ends', async () => {
+  let o = kept
+  let ws = joined(o)
+  o.stop()
+  o.object.webSocketMessage(ws, JSON.stringify({ say: 'a recipe box' }))
+  assertEquals(kinds(ws.sent), ['ready', 'said:person', 'busy'])
+  await o.ring(500)
+  assertEquals([kinds(ws.sent).length, o.lines()], [3, []])
+  await o.ring(1_000)
+  assertEquals(kinds(ws.sent).slice(3), ['said:builder', 'done'])
+  assertEquals(o.lines(), ['a recipe box', 'Sure.'])
+})
+
+let tipped = await paused()
+test('a line the window stops as it is heard is kept too', async () => {
+  let o = tipped
+  let said = o.object.say(o.held, 'a recipe box')
+  o.stop()
+  assertEquals(kinds(await said), ['said:person', 'busy'])
+  await o.ring(1_000)
+  assertEquals(o.lines(), ['a recipe box', 'Sure.'])
+})
+
+let formed = await paused()
+test('a form posted to a stopped Builder is answered the line it kept', async () => {
+  let o = formed
+  o.stop()
+  let r = await o.object.fetch(saying(o.held, 'a recipe box'))
+  let { frames } = await r.json() as { frames: Frame[] }
+  assertEquals([r.status, kinds(frames)], [200, ['said:person', 'busy']])
 })
 
 test('a socket with nobody on it never opens', async () => {
