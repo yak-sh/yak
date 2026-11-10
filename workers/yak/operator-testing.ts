@@ -59,9 +59,12 @@ let clock: Clock = {
 }
 
 /** Session decisions use the same graph composition over rows in memory. */
-export let operatorMemory = (storage: Storage = ram(operatorVocab, {
-  computed: { ...statusComputed, ...attemptComputed, ...executionComputed },
-})) => ({ ...operatorGraph(storage, [], { clock }), storage })
+export let operatorMemory = (
+  storage: Storage = ram(operatorVocab, {
+    computed: { ...statusComputed, ...attemptComputed, ...executionComputed },
+  }),
+  options: Parameters<typeof operatorGraph>[2] = {},
+) => ({ ...operatorGraph(storage, [], { clock, ...options }), storage })
 
 /** The Operator's HTTP and page-frame handlers over a private RAM graph. */
 export let operatorService = (env: Env, held: Held, options: Options) => {

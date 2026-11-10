@@ -145,11 +145,20 @@ let part = (row: Bundle, name: string) => row[name] as Comp | undefined
  * `delivered`, or `bounced` with why: a carrier's block, a spent budget or
  * mail allowance. Anything unexpected is reported too.
  */
-export let alert = async (env: Env, store: Store, eid: string) => {
+export let alert = async (
+  env: Env,
+  store: Store,
+  eid: string,
+  defer?: (ms: number) => Promise<void>,
+) => {
   let [row] = await store.g.get([eid])
   if (!row || row.delivered || row.bounced) return
   let { waitingContact } = await import('./operator-contacts.ts')
-  if (await waitingContact(store, row)) return
+  let waiting = await waitingContact(store, row)
+  if (waiting) {
+    if (waiting == 'tool') await defer?.(10)
+    return
+  }
   let to = String(part(row, 'deliver')?.to ?? '')
   let by = String(part(row, 'created')?.by ?? '')
   let words = String(part(row, 'doc')?.body ?? '').trim()

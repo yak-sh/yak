@@ -1,4 +1,6 @@
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
+import type { Clock } from '@yaks/fp'
+import { drain } from './operator-store.ts'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import type { Binding } from '@yaks/cloudflare-mail'
 import type { Comp } from '@yaks/graph'
@@ -14,12 +16,13 @@ import { alert, notificationSend } from './operator-alerts.ts'
 import { notification } from './operator-updates.ts'
 import { endpoints } from './endpoints.ts'
 import { CONSENT } from './operator-texts.ts'
+import { handleChannels } from './operator-channels.ts'
 import { consentEid } from '@yaks/phone'
 import { Unsent } from '@yaks/mail'
 import { meta } from './meta.ts'
 import { seenBy } from './operator-access.ts'
 
-let setup = async (name: string, email?: string) => {
+let setup = async (name: string, email?: string, time?: Clock) => {
   let { env, dir } = platform('contacts-' + name)
   let person = crypto.randomUUID(),
     spaceId = crypto.randomUUID(),
@@ -43,7 +46,7 @@ let setup = async (name: string, email?: string) => {
     ],
   }, { 'x-yak-person': person })
   let space = (await dir.at(spaceId))!
-  let store = operatorMemory()
+  let store = operatorMemory(undefined, time ? { clock: time } : {})
   await store.g.apply([{
     entity: { eid: session },
     session: {},
@@ -392,4 +395,174 @@ test('the same pending email in another conversation has its own confirmation an
   assertEquals(heldTwo, 2)
   assertEquals(!!secondDelivered.delivered, true)
   assertEquals(two.letters.length, 3)
+})
+
+let parallel = await setup('parallel', 'old-parallel@example.com')
+let parallelSource = await parallel.entry(
+  'Text me at 269-555-0144 when you finish.',
+)
+let parallelTurns = 0
+let phoneRead = Promise.withResolvers<void>()
+let notificationFinished = Promise.withResolvers<void>()
+let parallelReceipt: { reaches?: string } = {}
+parallel.store.g.use({
+  name: 'contact-race-intake',
+  hooks: {
+    effect: (bundles) => {
+      for (let row of bundles) {
+        let body = (row.content as Comp | undefined)?.body
+        if (
+          row.result && typeof body == 'string' &&
+          body.includes('"notification"')
+        ) {
+          parallelReceipt = JSON.parse(body)
+          notificationFinished.resolve()
+        }
+      }
+      return bundles
+    },
+  },
+})
+let parallelDirectory = {
+  ...parallel.dir,
+  phoned: async (number: string) => {
+    await phoneRead.promise
+    return parallel.dir.phoned(number)
+  },
+}
+let parallelOperator = operating(parallel.store, parallel.env, {
+  directory: () => parallelDirectory,
+  ...operatorModel((req) =>
+    Promise.resolve({
+      id: crypto.randomUUID(),
+      model: req.model,
+      cost: 0,
+      items: parallelTurns++ == 0
+        ? [
+          {
+            kind: 'call',
+            id: crypto.randomUUID(),
+            name: 'contact_add',
+            args: JSON.stringify({
+              address: '269-555-0144',
+              source: parallelSource,
+            }),
+          },
+          {
+            kind: 'call',
+            id: crypto.randomUUID(),
+            name: 'notification_send',
+            args: JSON.stringify({ text: 'The simultaneous report is ready.' }),
+          },
+        ]
+        : [{
+          kind: 'assistant',
+          text: 'Your completion waits for the inline confirmation.',
+        }],
+    })
+  ),
+})
+handleChannels(parallelOperator, parallel.env)
+let parallelRunning = parallelOperator.run(parallel.held, parallel.space, {
+  say: 'Text me at 269-555-0144 when you finish.',
+})
+await notificationFinished.promise
+phoneRead.resolve()
+await parallelRunning
+let [parallelProposal] = await parallel.store.g.read('.operator_contact')
+let [parallelNote] = await parallel.store.g.read('.notification')
+let parallelBefore = {
+  letters: parallel.letters.length,
+  texts: parallel.sent.length,
+}
+await confirmTextContact(
+  parallel.env,
+  parallel.ctx,
+  parallel.space,
+  parallel.store,
+  parallelProposal.entity.eid,
+  '+12695550144',
+  true,
+)
+let [parallelDelivered] = await parallel.store.g.get([parallelNote.entity.eid])
+test('ordinary Operator tools called in parallel hold completion for the inline contact confirmation', () => {
+  assertEquals(parallelReceipt.reaches, 'pending contact confirmation')
+  assertEquals(parallelBefore, { letters: 0, texts: 0 })
+  assertEquals(!!parallelDelivered.delivered, true)
+  assertStringIncludes(
+    parallel.sent.at(-1)!.text,
+    'The simultaneous report is ready.',
+  )
+})
+
+let failureTime = clock(Date.now())
+let failureClock: Clock = {
+  ...failureTime,
+  after: (ms, work) => {
+    if (ms > 0) return failureTime.after(ms, work)
+    let pending = true
+    queueMicrotask(() => {
+      if (pending) work()
+    })
+    return () => {
+      pending = false
+    }
+  },
+}
+let failedParallel = await setup(
+  'refused-parallel',
+  'unchanged@example.net',
+  failureClock,
+)
+let failureTurns = 0
+let failureOperator = operating(failedParallel.store, failedParallel.env, {
+  directory: () => failedParallel.dir,
+  ...operatorModel((req) =>
+    Promise.resolve({
+      id: crypto.randomUUID(),
+      model: req.model,
+      cost: 0,
+      items: failureTurns++ == 0
+        ? [
+          {
+            kind: 'call',
+            id: crypto.randomUUID(),
+            name: 'contact_add',
+            args: JSON.stringify({
+              address: 'not-an-address',
+              source: 'no-entry',
+            }),
+          },
+          {
+            kind: 'call',
+            id: crypto.randomUUID(),
+            name: 'notification_send',
+            args: JSON.stringify({
+              text: 'The job with a refused contact is done.',
+            }),
+          },
+        ]
+        : [{
+          kind: 'assistant',
+          text: 'The new contact was refused; your old contact stays.',
+        }],
+    })
+  ),
+})
+handleChannels(failureOperator, failedParallel.env)
+await failureOperator.run(failedParallel.held, failedParallel.space, {
+  say: 'Finish the check.',
+})
+await failureTime.advance(10)
+await drain(failedParallel.store)
+let [failureNote] = await failedParallel.store.g.read(
+  '.notification ?delivered',
+)
+test('a refused parallel contact creation releases the existing notification effect to the unchanged contact', () => {
+  assertEquals(!!failureNote.delivered, true)
+  assertEquals(failedParallel.letters.length, 1)
+  assertStringIncludes(
+    String(failedParallel.letters[0].text),
+    'The job with a refused contact is done.',
+  )
 })

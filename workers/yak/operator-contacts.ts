@@ -23,6 +23,7 @@ type Contact = {
   person: string
   address: string
   source: string
+  request: string
   code?: string
   expires?: string
   tries?: number
@@ -176,7 +177,11 @@ let confirmed = async (
     )
   }
   // A completion written while the address was still unverified stays owed.
-  let since = String(comp(row, 'created')?.at ?? new Date().toISOString())
+  let [request] = await store.g.get([c.request ?? c.source], ['created'])
+  let since = String(
+    comp(request, 'created')?.at ?? comp(row, 'created')?.at ??
+      new Date().toISOString(),
+  )
   let owed = await store.g.read(
     `.notification .deliver.to=${ctx.person} !delivered !bounced .created.by=${space.eid} .created.at>=${
       JSON.stringify(since)
@@ -268,6 +273,8 @@ export let contactAdd = (
       `.operator_contact.person=${ctx.person} .operator_contact.session=${session} !verified !cancelled ?created .order=created.at .limit=1`,
     )
     let id = open?.entity.eid ?? crypto.randomUUID()
+    let request = comp(open, 'operator_contact')?.request ??
+      comp(open, 'operator_contact')?.source ?? source.eid
     let sms = !!mobile(address)
     let mentioned = sms
       ? source.words.replace(/\D/g, '').includes(address.slice(-10))
@@ -299,6 +306,7 @@ export let contactAdd = (
           person: ctx.person,
           address,
           source: source.eid,
+          request,
           session,
           code: null,
           expires: null,
@@ -332,6 +340,7 @@ export let contactAdd = (
         person: ctx.person,
         address,
         source: source.eid,
+        request,
         session,
         code: await mac(address, code, secret),
         expires: new Date(Date.now() + LIFE).toISOString(),
@@ -407,9 +416,7 @@ export let waitingContact = async (
   let at = String(comp(note, 'created')?.at ?? '')
   if (!person || !at) return false
   let rows = await store.g.read(
-    `.operator_contact.person=${person} !verified !cancelled .created.at<=${
-      JSON.stringify(at)
-    }`,
+    `.operator_contact.person=${person} !verified !cancelled`,
   )
   for (let row of rows) {
     if (
@@ -418,9 +425,26 @@ export let waitingContact = async (
         note,
         String(comp(row, 'operator_contact')?.session),
       )
-    ) return true
+    ) {
+      let c = row.operator_contact as Contact
+      let [request] = await store.g.get([c.request ?? c.source], ['created'])
+      if (String(comp(request, 'created')?.at ?? '') <= at) {
+        return 'confirmation' as const
+      }
+    }
   }
-  return false
+  let session = String(comp(note, 'created')?.via ?? '')
+  if (!session) return false
+  let calls = await store.g.read(
+    `.call.to.tool.name=contact_add .entry.session=${session} ?execution`,
+  )
+  return calls.some((row) => {
+      let args = comp(row, 'call')?.args as Record<string, unknown> | undefined
+      return args?.address && !args.code &&
+        (!row.execution || comp(row, 'execution')?.state == 'running')
+    })
+    ? 'tool' as const
+    : false
 }
 
 let supersede = async (

@@ -10,6 +10,13 @@ export let operatorDoc: VocabDoc = {
         person: { type: 'string', ref: 'entity', death: 'keep' },
         address: { type: 'string' },
         source: { type: 'string', ref: 'entry', death: 'keep' },
+        request: {
+          type: 'string',
+          ref: 'entry',
+          death: 'keep',
+          description:
+            'The original human request whose completion waits for this contact, retained across retries and address changes.',
+        },
         session: { type: 'string', ref: 'session', death: 'keep' },
         code: {
           type: 'string',

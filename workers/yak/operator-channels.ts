@@ -907,9 +907,14 @@ export let handleChannels = (
     },
     // What the Operator tells a person reaches them the way they chose
     // (operator-alerts.ts).
-    operator_alert: async (event) => {
+    operator_alert: async (event, _g, _mark, attempt) => {
       let { alert } = await import('./operator-alerts.ts')
-      await alert(env, operator.store, event.entity.eid)
+      await alert(
+        env,
+        operator.store,
+        event.entity.eid,
+        (ms) => Promise.resolve(attempt?.defer?.(ms)),
+      )
     },
     // An answer goes out on its request's channel, unless another answer of
     // its turn carries it (`with`). One kept on the request itself is from
