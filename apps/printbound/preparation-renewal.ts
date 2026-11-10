@@ -27,7 +27,9 @@ export let renewed = (
   before.searchParams.sort()
   after.searchParams.sort()
   if (before.href !== after.href) {
-    throw new InputError('The source document changed; prepare another edition')
+    throw new InputError(
+      'The source document changed; prepare another edition',
+    )
   }
   return next
 }

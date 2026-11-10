@@ -14,4 +14,6 @@ for (let page of pages) {
   card.append(image, caption)
   list.append(card)
 }
-if (!pages.length) list.textContent = 'No shared pages have been published yet.'
+if (!pages.length) {
+  list.textContent = 'No shared pages have been published yet.'
+}

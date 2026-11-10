@@ -101,8 +101,14 @@ test('quote and checkout carry the reviewed document UUID and progress reads the
   }, alice)
   await desk.purchase(row.entity.eid, alice)
   assertEquals(calls.find(([name]) => name === 'quote')![1].document, doc.id)
-  assertEquals(calls.find(([name]) => name === 'purchase')![1].document, doc.id)
-  assertEquals((await desk.progress(row.entity.eid, alice))!.status, 'printing')
+  assertEquals(
+    calls.find(([name]) => name === 'purchase')![1].document,
+    doc.id,
+  )
+  assertEquals(
+    (await desk.progress(row.entity.eid, alice))!.status,
+    'printing',
+  )
   await desk.save(
     { ...text, id: row.entity.eid, markdown: 'Changed words' },
     alice,

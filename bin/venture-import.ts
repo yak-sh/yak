@@ -42,7 +42,9 @@ export let importedEid = (
   table: string,
   values: unknown[],
 ): string =>
-  derivedEid(JSON.stringify(['venture-import', source, address(table, values)]))
+  derivedEid(
+    JSON.stringify(['venture-import', source, address(table, values)]),
+  )
 
 let indexed = (tables: Tables, catalog: Catalog): Map<string, Row> => {
   let index = new Map<string, Row>()
@@ -76,7 +78,9 @@ let references = (
       let value = row[prop]
       if (!present(value) && ref.optional) return []
       if (!present(value) || !index.has(address(ref.table, [value]))) {
-        throw Error(`Missing source reference: ${table}.${prop} → ${ref.table}`)
+        throw Error(
+          `Missing source reference: ${table}.${prop} → ${ref.table}`,
+        )
       }
       return [[prop, importedEid(source, ref.table, [value])]]
     }),

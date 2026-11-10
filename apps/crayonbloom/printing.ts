@@ -57,7 +57,9 @@ export let printing = (
         body: JSON.stringify({ artifacts: [...new Set(blobs)] }),
       }),
     )
-    let indexed = new Map(answer.links.map((link) => [link.artifact, link.url]))
+    let indexed = new Map(
+      answer.links.map((link) => [link.artifact, link.url]),
+    )
     return (blob: string) => {
       let url = indexed.get(blob)
       if (!url) {

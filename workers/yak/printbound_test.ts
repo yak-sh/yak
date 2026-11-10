@@ -245,6 +245,9 @@ test('a private PrintBound storefront prepares a full book and fulfills only its
     (await post<{ status: string }>('studio/progress', { id })).status,
     'shipped',
   )
-  assertEquals((await ask(`receipt?order=${receipt.id}`, customer)).status, 200)
+  assertEquals(
+    (await ask(`receipt?order=${receipt.id}`, customer)).status,
+    200,
+  )
   assertEquals((await ask(`receipt?order=${receipt.id}`, other)).status, 403)
 })

@@ -23,7 +23,9 @@ let row = (id: string) => ({
 })
 let fixture = async ({ app, text }: typeof sources[number]) => {
   let { document } = parseHTML('<main id="desk"></main><p id="notice"></p>')
-  Object.defineProperty(document, 'baseURI', { value: 'https://fixture.test/' })
+  Object.defineProperty(document, 'baseURI', {
+    value: 'https://fixture.test/',
+  })
   let desk = document.querySelector('#desk')!, handlers = new Map()
   desk.addEventListener = (name: string, fn: unknown) => handlers.set(name, fn)
   let location = { hash: '#new/00000000-0000-4000-8000-000000000001' }

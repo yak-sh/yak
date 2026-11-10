@@ -8,7 +8,10 @@ import manifest from './vocab.json' with { type: 'json' }
 // the app-door journey covers payment and order privacy separately.
 let vocab = loadVocab({
   $defs: {
-    order: { component: true, properties: { quote: { type: 'string' } } },
+    order: {
+      component: true,
+      properties: { quote: { type: 'string', ref: 'entity' } },
+    },
     print_order: { component: true, properties: {} },
     print_expired: { component: true, properties: {} },
     print_payment_seen: { component: true, properties: {} },
