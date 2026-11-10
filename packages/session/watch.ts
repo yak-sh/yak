@@ -37,7 +37,7 @@ import { Refused } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
 import { human } from '@yaks/id'
 import { CLAIM, SESSION } from './comp.ts'
-import { ended, type Projects, projects } from './listen.ts'
+import { ended, type Projects, projects, taken } from './listen.ts'
 
 type G = Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>
 // A reader that also resolves the ids a call was given (`T-12`) to eids.
@@ -157,11 +157,12 @@ let operatorOf = async (g: G, project: Eid): Promise<Eid | undefined> => {
 
 /** Where each watcher's knock goes: its session while that can hear, else
  * its project's operator, else the project. Persons and anyone muting the
- * task are left out. */
+ * task are left out, and with `relay` false, so is a session that is over. */
 export let targets = async (
   g: G,
   watching: Eid[],
   muting: Set<Eid>,
+  relay = true,
 ): Promise<Eid[]> => {
   let rows = new Map(
     (watching.length
@@ -191,9 +192,9 @@ export let targets = async (
   for (let w of watching) {
     let project = projectOf(rows, w)
     if (muting.has(w) || (project && muting.has(project))) continue
-    if (rows.get(w)?.[SESSION] && !gone.has(w)) {
-      out.add(w)
-      continue
+    if (rows.get(w)?.[SESSION]) {
+      if (!gone.has(w)) out.add(w)
+      if (!gone.has(w) || !relay) continue
     }
     if (!project) continue
     if (!operators.has(project)) {
@@ -380,7 +381,9 @@ export let knocks = async (g: Addressing, eid: Eid): Promise<Bundle[]> => {
     ...await told(g, row, task.entity.eid, change.via),
   ])
   watching = watching.filter((w) => !own.has(w))
-  let to = (await targets(g, watching, muting)).filter((t) => !knows.has(t))
+  let worked = !!row.comment && (await taken(g, [eid])).has(eid)
+  let to = (await targets(g, watching, muting, !worked))
+    .filter((t) => !knows.has(t))
   if (!to.length) return []
   let [who] = change.by ? await g.get([change.by], ['doc']) : []
   let name = who ? str(comp(who, 'doc').title) || human(g.vocab)(who) : ''

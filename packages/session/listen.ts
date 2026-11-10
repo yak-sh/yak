@@ -19,6 +19,12 @@
 // just like mail. On a record a session holds, an outside session hears every
 // comment but its own, and a native transcript only a person's: each input
 // wakes it for a model turn.
+//
+// A person's comment on an open task that is not blocked is for the session at
+// work on it, and for nobody else ({@link taken}): the holder hears it, and
+// where no live session holds the task one is started on it with the comment
+// as its first input (./start.ts). It follows neither the session that filed
+// the task nor its project, so the operator is not asked to relay it.
 // A reply is the old session's while it may still hear it, and the project's
 // once it cannot. The session that wrote a letter hears the answer, wherever
 // the far side sent it, until that session is over (its harness ended it, or
@@ -58,14 +64,8 @@
 // one the project ever ran would otherwise stay an heir, and each item would
 // wake one to spend a model turn on news meant for a live line of work.
 //
-// Nothing starts a session when none comes: a held reply waits for one. That
-// is where a managed spawn will plug in, once T-95308 lifts the ban on
-// starting sessions (C-121250) and the owner picks its provider, model and
-// spend: an owing (D-121352) on the rows {@link held} reads, a letter nobody
-// else can hear and that nobody has heard, starting @yaks/spawn's run in the
-// project's checkout with the thread as its brief and the project's common
-// persona as its own. The session it starts is then a session of the project,
-// and hears the reply through this same rule.
+// Nothing starts a session for a held reply when none comes: it waits for
+// one. Only a person's comment on an open task does (./start.ts).
 //
 // Each item is marked `notified` as it is said, so it is said once, including
 // one that arrived while nothing was listening: a monitor that expired and was
@@ -202,11 +202,11 @@ export let natives = async (
 // an answer.
 let WORKING = ['pending', 'running']
 
-// Which of these native transcripts are at work, mid-turn: only such a one
-// hears what is held for its project. A status is read off the transcript's
-// entries, so it is asked of native transcripts alone, never of an outside
-// session's long log.
-let atWork = async (
+/** Which of these native transcripts are at work, mid-turn: only such a one
+ * hears what is held for its project. A status is read off the transcript's
+ * entries, so it is asked of native transcripts alone, never of an outside
+ * session's long log. */
+export let atWork = async (
   graph: Pick<Graph, 'read'>,
   sessions: Eid[],
 ): Promise<Eid[]> =>
@@ -371,6 +371,29 @@ export let knocked = (projects?: Eid[]): And =>
     absent(NOTIFIED),
   )
 
+/** Which of these comments a session at work on their task takes up: a
+ * person's, on an open task that is not blocked. The vocabulary's
+ * `session_start` owes a start for one whose task no live session holds, by
+ * these same tests. None in a graph that knows no person or task. */
+export let taken = async (
+  graph: Pick<Graph, 'vocab' | 'read'>,
+  comments: Eid[],
+): Promise<Set<Eid>> => {
+  let has = (name: string) => !!graph.vocab.comp(name)
+  if (!comments.length || !has('person') || !has('task')) return new Set()
+  return new Set(eids(
+    await graph.read(and(
+      eq('entity.eid', value(comments)),
+      present('created.by.person'),
+      absent('created.via.session'),
+      present('comment.target.task'),
+      ...['completed', 'cancelled', 'blocked'].filter(has)
+        .map((mark) => absent(`comment.target.${mark}`)),
+      fields('entity.eid'),
+    )),
+  ))
+}
+
 /** Unsaid person-written comments on records filed under these projects and
  * created through a session. They are that session's while it can hear, then
  * the project's. */
@@ -411,10 +434,13 @@ export let held = async (
   let knocks = graph.vocab.comp('knock')
     ? await graph.read(and(...knocked(projects).clauses, every()))
     : []
-  let comments =
+  let filed =
     graph.vocab.comp('comment') && graph.vocab.prop('filed', 'project')
       ? await graph.read(and(...commented(projects).clauses, every()))
       : []
+  // A comment a session at work takes up is never the project's.
+  let working = await taken(graph, eids(filed))
+  let comments = filed.filter((b) => !working.has(b.entity.eid))
   let reach = [...projects, ...await addresses(graph, projects)]
   let mail = graph.vocab.comp('mail')
     ? await graph.read(and(...arrived(reach).clauses, every()))
@@ -462,17 +488,26 @@ let words = (b: Bundle): string => {
   )
 }
 
+/** Who an item is said to be from: the session it came through, else the
+ * identity that wrote it. A door that is no session (a web process a person
+ * wrote through) is not who it is from. */
+export let writer = (b: Bundle, sessions: Set<Eid>): string => {
+  let { by, via } = comp(b, 'created')
+  return sessions.has(str(via)) ? str(via) : str(by) || str(via)
+}
+
 /** One item as the line a monitor shows. `named` gives the readable id of an
- * entity the item points at, where it could be read, and `state` where a task
- * it is about stands. */
+ * entity the item points at, where it could be read, `state` where a task
+ * it is about stands, and `by` who it is from ({@link writer}). */
 export let said = (
   vocab: Vocab,
   b: Bundle,
   named: (eid: string) => string,
   state: (eid: string) => string = () => '',
+  by = author(b),
 ): string => {
   let id = human(vocab)(b)
-  let from = author(b) ? ` from ${named(author(b))}` : ''
+  let from = by ? ` from ${named(by)}` : ''
   let on = str(comp(b, 'comment').target)
   let stands = state(on) ? ` (${state(on)})` : ''
   let line = b.comment && b.knock
@@ -481,7 +516,7 @@ export let said = (
     ? `comment ${id} on ${named(on)}${from}`
     : b.knock
     ? `knock ${id} at ${named(str(comp(b, 'knock').target))}${from}`
-    : `mail ${id} from ${str(comp(b, 'mail').from) || named(author(b))}`
+    : `mail ${id} from ${str(comp(b, 'mail').from) || named(by)}`
   let text = words(b)
   return safe(text ? `${line}: ${text}` : line)
 }
@@ -548,12 +583,19 @@ export let pendingItems = async (
 }
 
 /** Unsaid items, and for the record each answers the session that created it
- * and, where asked, the session holding it. */
+ * and, where asked, the session holding it, with the comments among them only
+ * that holder hears ({@link taken}). */
 export type Routes = {
   items: Bundle[]
   creators: Map<Eid, string>
   holders: Map<Eid, string>
+  taken: Set<Eid>
 }
+
+/** The session an item follows for having created what it answers: none for a
+ * comment a session at work takes up. */
+export let creatorOf = (r: Routes, b: Bundle, on: string): string =>
+  r.taken.has(b.entity.eid) ? '' : r.creators.get(on) ?? ''
 /** What a caller already read for {@link pending}: the unsaid comments and
  * replies it may route, and the graph's projects when it keeps them. */
 export type News = { comments: Routes; replies: Routes; projects?: Projects }
@@ -567,7 +609,9 @@ let routed = async (
   claimed = false,
 ): Promise<Routes> => {
   let none = new Map<Eid, string>()
-  if (ids && !ids.length) return { items: [], creators: none, holders: none }
+  if (ids && !ids.length) {
+    return { items: [], creators: none, holders: none, taken: new Set() }
+  }
   let items = graph.vocab.comp(name)
     ? await graph.read(
       ids ? and(eq('entity.eid', value(ids)), ...query.clauses) : query,
@@ -586,6 +630,7 @@ let routed = async (
     items,
     creators: by('created', 'via'),
     holders: claimed ? by(CLAIM, 'session') : none,
+    taken: claimed ? await taken(graph, eids(items)) : new Set(),
   }
 }
 
@@ -641,8 +686,9 @@ export let pending = async (
 ): Promise<Owed[]> => {
   let vocab = graph.vocab
   // A person's comment on a record the session created or holds reaches
-  // native and outside sessions alike. An agent's comment on a held record
-  // reaches an outside session only.
+  // native and outside sessions alike, and one a session at work takes up
+  // only its holder. An agent's comment on a held record reaches an outside
+  // session only.
   let [owner] = await graph.read(
     and(
       eq('entity.eid', session),
@@ -664,7 +710,7 @@ export let pending = async (
   let mine = (r: Routes, name: string, prop: string) =>
     r.items.filter((b) => {
       let on = str(comp(b, name)[prop])
-      return r.creators.get(on) == session || r.holders.get(on) == session
+      return creatorOf(r, b, on) == session || r.holders.get(on) == session
     }).map((b) => b.entity.eid)
   let ids = [
     ...mine(received.comments, 'comment', 'target'),
@@ -697,14 +743,17 @@ export let pending = async (
       items.flatMap((b) => [
         str(comp(b, 'comment').target),
         str(comp(b, 'knock').target),
-        author(b),
+        str(comp(b, 'created').via),
+        str(comp(b, 'created').by),
       ]).filter(Boolean),
     ),
   ]
   let names = new Map<string, string>(), states = new Map<string, string>()
+  let sessions = new Set<Eid>()
   for (let b of await graph.get(pointed)) {
     names.set(b.entity.eid, human(vocab)(b))
     if (b.task) states.set(b.entity.eid, statusOf(vocab, b) ?? '')
+    if (b[SESSION]) sessions.add(b.entity.eid)
   }
   let named = (eid: string) => names.get(eid) ?? eid
   let state = (eid: string) => states.get(eid) ?? ''
@@ -718,7 +767,8 @@ export let pending = async (
       first.same.push(item)
       continue
     }
-    let owed = { item, line: said(vocab, item, named, state), same: [] }
+    let line = said(vocab, item, named, state, writer(item, sessions))
+    let owed = { item, line, same: [] }
     if (key) knocks.set(key, owed)
     out.push(owed)
   }
@@ -726,18 +776,20 @@ export let pending = async (
 }
 
 /** Mark an item only if nobody has delivered it meanwhile, and with it the
- * knocks that say the `same` ({@link Owed}). The optional entry makes a native
- * session's input and the mark one committed batch. */
+ * knocks that say the `same` ({@link Owed}). What rides `together` lands in
+ * that one committed batch or not at all: a native session's input, and for a
+ * session started on the item, the session and its claim (./start.ts). A
+ * guard among them that no longer holds leaves the item unmarked too. */
 export let deliver = async (
   graph: Pick<Graph, 'apply'>,
   actor: Actor | null,
   item: Bundle,
-  entry?: Bundle,
+  together: Bundle[] = [],
   same: Bundle[] = [],
 ): Promise<boolean> => {
   try {
     await graph.apply(signed([
-      ...entry ? [entry] : [],
+      ...together,
       {
         entity: { eid: item.entity.eid },
         [NOTIFIED]: {},
@@ -777,7 +829,7 @@ export let hear = async (
   let count = 0
   for (let { item, line, same } of await pending(graph, session)) {
     out(line)
-    if (!await deliver(graph, actor, item, undefined, same)) continue
+    if (!await deliver(graph, actor, item, [], same)) continue
     count++
   }
   return count

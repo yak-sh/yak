@@ -94,6 +94,15 @@ What any errand runner that can't lose work lives with:
   after the write, so removing a component, moving out of scope or dying in a
   cascade still owes reconciliation. A global `active` query instead asks whether the duty is
   enabled anywhere.
+- **A match decides in the commit.** A declaration's `match` is a query the
+  registry evaluates inside the committing transaction, over the entities the
+  batch touched, so a run is written only for a write that owes one and its
+  handler never reads the graph to find out whether it has work. `session_start`
+  (packages/session/vocab.json) is the worked case: a person's comment on an
+  open task nobody holds. A one-entity match reaches other entities through
+  reference paths (`.comment.target.claim.session`), and is asked again
+  whenever that entity is touched, so it includes what its own run writes
+  (`!notified`) to stop matching.
 - **A trigger is broad.** `created: ['completed']` fires for every entity that
   ever gains `completed`, whoever wrote it. `active: '<query>'` or a `match`
   narrows it to the cases meant. An effect row owes no run itself

@@ -34,6 +34,7 @@ import { CLAIM, SESSION } from './comp.ts'
 import {
   arrived,
   comments,
+  creatorOf,
   deliver,
   ended,
   heirs,
@@ -195,7 +196,7 @@ let candidates = async (
   let items = [
     ...news.comments.items.filter((b) => {
       let on = String(comp(b, 'comment').target)
-      return sessions.has(news.comments.creators.get(on) ?? '') ||
+      return sessions.has(creatorOf(news.comments, b, on)) ||
         !!news.comments.holders.get(on)
     }),
     ...queries.length
@@ -205,8 +206,9 @@ let candidates = async (
       ))
       : [],
   ]
+  // A comment a session at work takes up is never held for a project.
   let comments = g.vocab.prop('filed', 'project')
-    ? items.filter((b) => b.comment)
+    ? items.filter((b) => b.comment && !news.comments.taken.has(b.entity.eid))
     : []
   let targets = [
     ...new Set(
@@ -278,6 +280,14 @@ export let due = async (g: Graph, at: Scope = scope(true)): Promise<Due[]> => {
   return out
 }
 
+/** The input entry that says an item to a native session: one entry per
+ * session and item, so saying it again writes nothing new. */
+export let input = (session: Eid, item: Eid, body: string): Bundle => ({
+  entity: { eid: derivedEid(`session bus ${session} ${item}`) },
+  entry: { session },
+  content: { body },
+})
+
 /** One pass over native sessions: each line {@link due} is appended as an
  * input. A failed append leaves the item unmarked, so the next pass can retry
  * it, and an item another session was given first is not said twice.
@@ -285,13 +295,8 @@ export let due = async (g: Graph, at: Scope = scope(true)): Promise<Due[]> => {
 export let feed = async (g: Graph, at?: Scope): Promise<number> => {
   let count = 0
   for (let { session, item, line, same } of await due(g, at)) {
-    let entry: Bundle = {
-      entity: { eid: derivedEid(`session bus ${session} ${item.entity.eid}`) },
-      entry: { session },
-      content: { body: line },
-      attention: {},
-    }
-    if (await deliver(g, null, item, entry, same)) count++
+    let entry = { ...input(session, item.entity.eid, line), attention: {} }
+    if (await deliver(g, null, item, [entry], same)) count++
   }
   return count
 }
@@ -408,7 +413,7 @@ export let ledger = (host: Door): Ledger | undefined => {
   host.stopping?.addEventListener('abort', () => stop?.(), { once: true })
   let enter = (r: Routes, name: string, prop: string) => {
     for (let b of r.items) {
-      let creator = r.creators.get(String(comp(b, name)[prop]))
+      let creator = creatorOf(r, b, String(comp(b, name)[prop]))
       if (!creator) continue
       by.set(creator, (by.get(creator) ?? new Set()).add(b.entity.eid))
       whose.set(b.entity.eid, creator)
@@ -470,7 +475,7 @@ let owed = async (host: Door, id: Eid): Promise<Owed[]> => {
   let g = host.graph
   let out: Owed[] = []
   for (let said of await pending(g, id, await ledger(host)?.owed(id))) {
-    if (await deliver(g, { via: id }, said.item, undefined, said.same)) {
+    if (await deliver(g, { via: id }, said.item, [], said.same)) {
       out.push(said)
     }
   }

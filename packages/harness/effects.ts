@@ -4,6 +4,10 @@
 // @yaks/session declares the effect and knows nothing of a machine; the
 // harness handles it because the machine is the harness's to lend. What the
 // box opened is let go after the host's admitted work drains.
+//
+// `session_start` is handled here too (@yaks/session `starting`): a session
+// started on a person's comment wears the persona of the task's lineage and
+// asks the harness's default model, as `session_new --work` does.
 
 import { promptEntry } from '@yaks/context'
 import { type Comp, derivedEid, Refused } from '@yaks/graph'
@@ -11,7 +15,8 @@ import { openingFor } from './instructions.ts'
 import type { Handlers } from '@yaks/effects'
 import type { Host } from '@yaks/host'
 
-import { running } from '@yaks/session'
+import { running, starting } from '@yaks/session'
+import { defaultUsing } from './default.ts'
 import { lend, offering } from './agent.ts'
 import { here, type Opts } from './local.ts'
 import { hosted } from './store.ts'
@@ -20,8 +25,9 @@ import { machines } from './session_machines.ts'
 
 /** The runner, lent this machine, over the host's graph. The plugin's options
  * may name `compactAt`, the share of its model's context window a transcript
- * fills before it is compacted (half where absent); the model a session asks
- * by default is graph data (./default.ts `defaultUsing`). */
+ * fills before it is compacted (half where absent), and `starts`, the most
+ * sessions started on comments at work at once (two where absent); the model
+ * a session asks by default is graph data (./default.ts `defaultUsing`). */
 export let effects = (
   host: Host,
   options: Record<string, unknown> & Pick<Opts, 'env' | 'http'> = {},
@@ -121,20 +127,29 @@ export let effects = (
       }], { trusted: true })
     }
   }
-  return running(
-    g,
-    lent.then((lent) => {
-      let runner = lend(lent)
-      return {
-        ...runner,
-        each: unfinishedEach(host, runner.each),
-        answers: async (using, session) => {
-          if (!await runner.answers?.(using, session)) return false
-          if (session) await opening(session)
-          return true
-        },
-        stopping: host.stopping,
-      }
+  return {
+    ...running(
+      g,
+      lent.then((lent) => {
+        let runner = lend(lent)
+        return {
+          ...runner,
+          each: unfinishedEach(host, runner.each),
+          answers: async (using, session) => {
+            if (!await runner.answers?.(using, session)) return false
+            if (session) await opening(session)
+            return true
+          },
+          stopping: host.stopping,
+        }
+      }),
+    ),
+    ...starting(g, {
+      limit: typeof options.starts == 'number' ? options.starts : undefined,
+      opening: async (work) => ({
+        persona: (await openingFor(g, {}, host.workspaces, { work })).persona,
+        using: await defaultUsing(g),
+      }),
     }),
-  )
+  }
 }

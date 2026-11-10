@@ -848,7 +848,10 @@ A watcher's session is knocked while it can hear. Once it is over, the knock
 goes to its project's operator (the live session a person opened for that
 project or for one it is filed under, the one that spoke last), else to the
 project. A person's comment, which reaches the filer and the holder as a comment
-already, knocks neither of them.
+already, knocks neither of them. His comment on an open task that is not blocked
+is taken up by a session at work on it
+([a comment starts a session](#a-comment-starts-a-session)), so a watcher that
+is over passes that knock to nobody: the operator is not asked to relay it.
 
 A writer is never knocked about its own write, and its subagents write for it: a
 subagent runs inside its parent's process and hands back what it did as the
@@ -888,6 +891,41 @@ owner's morning in his time zone. Each time the box's clock fires it,
 project, where the knock waits for the next session at work. Nothing starts a
 session, and the duty's work is the operator's to do
 ([`woken_test.ts`](./woken_test.ts)).
+
+## A comment starts a session
+
+A person's comment on an open task that no live session holds starts a session
+on that task, with the comment as its first input. The person is whoever
+`created.by` names, wearing `person`, writing through no session.
+
+Whether a start is owed is settled in the comment's own commit, by the match
+`session_start` declares in the vocabulary: the comment is not yet said to
+anyone, and its task is open, not `blocked{on, since}`, and unclaimed or claimed
+by a session with `session.ended`. An agent's comment owes none. A comment
+committed before the effect was declared owes none either, and nothing looks
+back for one.
+
+The run is one write, guarded by what the commit saw: the session
+(`session{persona, source, operator: false}`, `native{}`, `filed{project}`), its
+claim on the task, the input that asks its model for a turn, and `notified` on
+the comment. A comment someone heard meanwhile, or a task closed, blocked or
+taken meanwhile, starts nothing. `session.source` names the comment. The input
+is the bus's line for the comment, then a request to reply first with a comment
+on the task, so its writer sees it was picked up.
+
+From that write on the task is held, so his next comment reaches the same
+session as an input ([claimed-work comments](#claimed-work-comments)) and owes
+no second start. Such a comment is for the session at work and nobody else: it
+does not follow the session that filed the task, and it is not held for the
+project.
+
+At most two sessions started this way are at work (mid-turn) at once; the host
+sets the number (`starting`'s `limit`, the harness plugin's `starts`). A start
+past it keeps its run and waits in the pool, asking again every ten seconds. The
+host also says what a session on a task opens with (`opening`): the harness
+gives the common persona of the task's lineage and its default model, as
+`yak session new --work` does. [`start_test.ts`](./start_test.ts) runs each case
+through the commit, the pool and the bus.
 
 ## Claimed-work comments
 

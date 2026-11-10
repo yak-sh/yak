@@ -999,6 +999,11 @@
       "target": ".task|.comment",
       "description": "knock the sessions watching a task when it is completed, cancelled or answered, or commented on: the session that filed it, those that mention its id and the actors subscribed to watch it. A session that is over is told through its project's operator. One knock per target and change, none for the writer's own or its subagents', and none for what a managed run's receipt tells the session it knocks: the receipt comment itself, and the run completing or cancelling its task"
     },
+    "session_start": {
+      "effect": true,
+      "match": ".comment !notified .created.by.person !created.via.session .comment.target.task !comment.target.completed !comment.target.cancelled !comment.target.blocked (!comment.target.claim | .comment.target.claim.session.session.ended=true)",
+      "description": "start a session on a task for a person's comment on it: one not yet said to anyone, on a task that is open, not blocked, and unclaimed or claimed by a session that has ended. The session holds the task and takes the comment as its first input, in one write guarded by what this match saw, so his next comment reaches that session and owes no second start. An agent's comment owes none. At most two sessions started this way are at work at once; a start past that waits in the pool"
+    },
     "session_texted": {
       "effect": true,
       "created": [

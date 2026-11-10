@@ -177,7 +177,7 @@ test('an answered decision knocks once, with the choice', async () => {
   ])
 })
 
-test("an agent's comment knocks the filer; a person's reaches it as a comment", async () => {
+test("an agent's comment knocks the filer; a person's reaches it as a comment once the task is closed", async () => {
   let o = await office()
   await o.write([{
     entity: { eid: 'c1' },
@@ -188,12 +188,44 @@ test("an agent's comment knocks the filer; a person's reaches it as a comment", 
   equal(await o.heard('worker'), [
     `${human(vocab)(c1)} on ${o.id} by TaskMaster: landed 1234abc`,
   ])
+  // On open work his comment is for the session at work on the task: its
+  // holder, or the one started on it (./start.ts).
   await o.write([{
     entity: { eid: 'c2' },
     comment: { target: 't' },
     doc: { body: 'thanks' },
   }])
+  equal(await o.heard('worker'), [])
+  await o.write(done)
+  await o.heard('worker')
+  await o.write([{
+    entity: { eid: 'c3' },
+    comment: { target: 't' },
+    doc: { body: 'one more thing' },
+  }])
   equal(await o.heard('worker'), ['comment'])
+})
+
+test("a person's comment on open work is not passed to the operator for a watcher that is over", async () => {
+  let o = await office()
+  await o.g.apply([{
+    entity: { eid: 's1' },
+    subscription: { actor: 'gone', target: 't', mode: 'watch' },
+  }], { trusted: true })
+  let word = (eid: string) => [{
+    entity: { eid },
+    comment: { target: 't' },
+    doc: { body: 'thanks' },
+  }]
+  await o.write(word('c1'))
+  equal(await o.heard('operator'), [])
+  await o.write(done)
+  await o.heard('operator')
+  await o.write(word('c2'))
+  let [c2] = await o.g.get(['c2'])
+  equal(await o.heard('operator'), [
+    `${human(vocab)(c2)} on ${o.id} by Jeff: thanks`,
+  ])
 })
 
 let comment = (eid: string, body: string, more = {}): Bundle[] => [{
