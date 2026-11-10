@@ -1,16 +1,29 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import { Closed, filter } from './filter.ts'
-import { GATEWAY, HEADER } from './gateway.ts'
+import { type Callers, Closed, filter, offered } from './filter.ts'
+import { CALLER, GATEWAY, HEADER } from './gateway.ts'
+
+// A request at `path`: through the tunnel when `marked`, from the caller the
+// platform names in `word`.
+let asked = (path: string, marked: boolean, word?: string) =>
+  new Request(`http://box${path}`, {
+    headers: {
+      ...marked ? { [HEADER]: '1' } : {},
+      ...word == null ? {} : { [CALLER]: word },
+    },
+  })
 
 // What the machine's filter does with a request at `path`: `pass`, or the
 // refusal's name.
-let seen = (routes: string[] | undefined, path: string, marked: boolean) => {
-  let req = new Request(`http://box${path}`, {
-    headers: marked ? { [HEADER]: '1' } : {},
-  })
+let seen = (
+  routes: string[] | undefined,
+  path: string,
+  marked: boolean,
+  word?: string,
+  callers?: Callers,
+) => {
   try {
-    filter(routes)(req)
+    filter(routes, callers)(asked(path, marked, word))
     return 'pass'
   } catch (e) {
     return (e as Error).name
@@ -32,6 +45,44 @@ test('a request that did not come through the tunnel is untouched', () => {
   for (let path of ['/apply', '/query', '/mail/inbound']) {
     assertEquals(seen([], path, false), 'pass', path)
   }
+})
+
+// A machine that takes mail from every app in the space, and lends its tools
+// and its model steps to its owner's Operator alone.
+let MAIL = ['/mail/inbound']
+let LENT: Callers = {
+  operator: { routes: ['/mcp', '/model/step'], tools: ['task_new'] },
+}
+
+test('a path opened to one caller answers only the request the platform says is from it', () => {
+  for (let path of ['/mcp', '/model/step']) {
+    assertEquals(seen(MAIL, path, true, 'operator', LENT), 'pass', path)
+    // An app's worker, the owner's connector, a platform that says no word,
+    // and words no config names: an object's own machinery among them.
+    for (let word of ['app', 'connector', undefined, '', 'constructor']) {
+      assertEquals(seen(MAIL, path, true, word, LENT), 'Denied', `${word}`)
+    }
+  }
+  for (let word of ['app', 'connector', 'operator', undefined]) {
+    assertEquals(seen(MAIL, '/mail/inbound', true, word, LENT), 'pass')
+    assertEquals(seen(MAIL, '/apply', true, word, LENT), 'Denied')
+  }
+  // The word is the platform's to the tunnel: without the gateway's mark it
+  // narrows nothing.
+  assertEquals(seen(MAIL, '/apply', false, 'app', LENT), 'pass')
+})
+
+test('a caller is offered its own tools beside everyone’s', () => {
+  let tools = offered(['task_list'], LENT)
+  assertEquals(tools(asked('/mcp', true, 'operator')), [
+    'task_list',
+    'task_new',
+  ])
+  for (let word of ['app', 'connector', undefined]) {
+    assertEquals(tools(asked('/mcp', true, word)), ['task_list'], `${word}`)
+  }
+  assertEquals(offered([], LENT)(asked('/mcp', true, 'app')), [])
+  assertEquals(tools(asked('/mcp', false, 'operator')), undefined)
 })
 
 test('changing opened routes changes the same filter', () => {

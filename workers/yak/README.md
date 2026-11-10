@@ -886,11 +886,17 @@ is that space, `url` the server's path on the machine, and `mcp_connect` takes
 the space's slug. It is asked through the tunnel's gateway (`tunnel.ts`
 `machine`) with no discovery, sign-in, integration or connection. Each list and
 each call reads anew that the row's owner owns that space, from the whole
-directory; to anyone else the server is not connected. A request made in an
-Operator conversation carries that conversation's session id as `x-via`, a
-fork's or a helper's included, and a call from `command` carries none. A machine
-that is off, a tunnel with no gateway and a path the machine has not opened
-leave the connection status command and report nothing to the tracker.
+directory; to anyone else the server is not connected. Every request handed to a
+tunnel's gateway says who is asking in `x-yak-caller`, which only the platform
+sets: `operator` for the owner's Operator, `connector` for the owner's own
+`command` call, and `app` for an app's worker (`tunnel.ts` `reach`). The
+machine's config opens each path to all of them or to the callers it names
+(@yaks/tunnel `callers`), so an app in the space can't reach a path its owner
+opened to their Operator. A request made in an Operator conversation carries
+that conversation's session id as `x-via`, a fork's or a helper's included, and
+a call from `command` carries none. A machine that is off, a tunnel with no
+gateway and a path the machine has not opened leave the connection status
+command and report nothing to the tracker.
 
 A Store imports its graph and effects facets before opening its boot
 transaction, then binds them with `@yaks/host` over its storage, vault, blobs

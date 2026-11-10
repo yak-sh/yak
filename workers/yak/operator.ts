@@ -48,7 +48,7 @@ import {
 } from '@yaks/model'
 import { forwarding } from '@yaks/model/step'
 import { falling, MACHINE, namesFor } from './operator-machine.ts'
-import type { Via } from './connected-mcp.ts'
+import type { Calling } from './tunnel.ts'
 import { platform, ready, served } from './providers.ts'
 import { attachmentRows } from './operator-attachments.ts'
 import { attached, fileContext } from './operator-inputs.ts'
@@ -155,7 +155,7 @@ export type Options = {
   machine?: (
     space: Space,
     person: string,
-    via?: Via,
+    via?: Calling['via'],
   ) => Promise<typeof fetch | null>
   tools?: (ctx: Ctx, files: File[]) => Tool[]
   // Told each time a session moved (a step landed, words were given), so a
@@ -394,14 +394,14 @@ export let operatorRoster = async (
   // Every tool the connector lists for the person (agent.ts `connected`), to
   // the conversation and each of its forks alike: the list heads the request,
   // so one list keeps the conversation's cached prefix for every fork. A
-  // server on the person's own machine (tunnel.ts `machine`) is told which
-  // conversation asks: the one this session works for, so a fork's calls and
-  // a helper's are the conversation's there too.
+  // server on the person's own machine (tunnel.ts `machine`) is told that
+  // their Operator asks, and which conversation: the one this session works
+  // for, so a fork's calls and a helper's are the conversation's there too.
   let top: Promise<string> | undefined
-  let remote = await connectedTools(
-    ctx,
-    session ? () => top ??= topOf(work, session) : undefined,
-  )
+  let remote = await connectedTools(ctx, {
+    caller: 'operator',
+    via: session ? () => top ??= topOf(work, session) : undefined,
+  })
   let apps = listing(coded(
     {
       ...connected(ctx, reach, g),
@@ -560,7 +560,8 @@ export let operatorChoice = (env: Env, machine = false) => {
  * The machine that answers an Operator's model steps for `person` in `space`,
  * as the `fetch` that reaches it through the space's tunnel, or null: the
  * space has a tunnel, the person is its owner (tunnel.ts `machine`), and they
- * are a platform admin. The provider and the step's route are anyone's
+ * are a platform admin. The machine is told its owner's Operator asks, and in
+ * which conversation (`via`). The provider and the step's route are anyone's
  * (@yaks/model/step); this is the one place that says only an admin's
  * Operator is served by a machine (D-153799). Everyone else's turn in the
  * same space, a member's or a stranger's, is answered by a hosted model: an
@@ -572,11 +573,14 @@ export let machineFor = async (
   space: Pick<Space, 'eid' | 'tunnel'>,
   person: string,
   open: () => Directory = opening(env),
-  via?: Via,
+  via?: Calling['via'],
 ): Promise<typeof fetch | null> => {
   if (!space.tunnel || !person) return null
   if (!await admin({ dir: open(), person })) return null
-  return (await import('./tunnel.ts')).machine(env, space.eid, person, via)
+  return (await import('./tunnel.ts')).machine(env, space.eid, person, {
+    caller: 'operator',
+    via,
+  })
 }
 
 /** This space's operator work as operator_read answers it: the latest tasks
@@ -961,7 +965,7 @@ export let operating = (
   // What it asks its person's own machine for, where one serves them.
   let mine = operatorChoice(env, true)
   let reachMachine = options.machine ??
-    ((space: Space, person: string, via?: Via) =>
+    ((space: Space, person: string, via?: Calling['via']) =>
       machineFor(env, space, person, options.directory ?? opening(env), via))
   let spawn = sessionTools(g, { childProperties: { topic: TOPIC } })
     .find((t) => t.name == 'spawn')!

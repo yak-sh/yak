@@ -72,7 +72,7 @@ let made = await mcpConnect.run(owner.ctx, {
 })
 let at = `mcp:${made.value!.server}`
 
-test('the owner’s turn lists and calls a tool on their machine, naming its conversation and signing in nowhere', async () => {
+test('the owner’s turn lists and calls a tool on their machine as their Operator, naming its conversation and signing in nowhere', async () => {
   let { run, named } = await turn(ada)
   assertEquals(named, ['tasks__publish_mockup'])
   box.requests.length = 0
@@ -88,6 +88,7 @@ test('the owner’s turn lists and calls a tool on their machine, naming its con
   for (let r of box.requests) {
     assertEquals(r.url, 'http://machine/mcp')
     assertEquals(r.headers.get('x-via'), talk)
+    assertEquals(r.headers.get('x-yak-caller'), 'operator')
     for (let h of ['authorization', 'cookie']) {
       assertEquals(r.headers.has(h), false, h)
     }
@@ -100,11 +101,15 @@ test('the owner’s turn lists and calls a tool on their machine, naming its con
   )
 })
 
-test('a call made in no conversation names none', async () => {
+test('a call from the owner’s connector says so, and names no conversation', async () => {
   box.requests.length = 0
   await runConnectedCommand(owner.ctx, at, 'publish_mockup', { html: 'x' })
   assertEquals(box.requests.length > 0, true)
   assertEquals(box.requests.some((r) => r.headers.has('x-via')), false)
+  assertEquals(
+    [...new Set(box.requests.map((r) => r.headers.get('x-yak-caller')))],
+    ['connector'],
+  )
 })
 
 test('a member’s turn is offered nothing of the owner’s machine, whatever row names it', async () => {

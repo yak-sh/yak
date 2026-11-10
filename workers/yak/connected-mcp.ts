@@ -4,43 +4,41 @@ import { url } from './host.ts'
 import { remoteCommands } from './mcp-remote.ts'
 import { asCaller, type Ctx, refuse, str } from './tool.ts'
 import type { Row } from './tool-words.ts'
-import type { machine } from './tunnel.ts'
+import type { Calling } from './tunnel.ts'
 import { argsOf, type Tool as GraphTool } from '@yaks/graph'
 import { nameOf } from '@yaks/mcp-client'
 
-/** The conversation commands are asked in, read when a call to a machine
- * needs it: an Operator's conversation, by its session's id. */
-export type Via = Parameters<typeof machine>[3]
+export type { Calling }
 
 // The tunnel's code is loaded by the first server on a machine, which almost
 // nobody has.
-let commands = (ctx: Ctx, via?: Via) =>
+let commands = (ctx: Ctx, asking?: Calling) =>
   remoteCommands(ctx.person, {
     ...ctxOf(ctx.env, asCaller(ctx, null)),
     report: (e) => caught(e, { request: 'connected MCP' }),
     signIn: url(ctx.env, '/manage/connections'),
     machine: async (space) =>
-      (await import('./tunnel.ts')).machine(ctx.env, space, ctx.person, via),
+      (await import('./tunnel.ts')).machine(ctx.env, space, ctx.person, asking),
   })
 
-export let listConnectedCommands = (ctx: Ctx, said = '', via?: Via) =>
-  commands(ctx, via).list(said)
+export let listConnectedCommands = (ctx: Ctx, said = '', asking?: Calling) =>
+  commands(ctx, asking).list(said)
 export let runConnectedCommand = (
   ctx: Ctx,
   said: string,
   name: string,
   args: Record<string, unknown>,
-  via?: Via,
-) => commands(ctx, via).call(said, name, args)
+  asking?: Calling,
+) => commands(ctx, asking).call(said, name, args)
 
 /** The same commands as named tools inside an Operator or code execution.
- * `via` is the conversation they are offered in, which a machine is told with
- * each request made there. */
+ * `asking` is who they are offered to, an Operator and its conversation or
+ * else the person's connector, which a machine is told with each request. */
 export let connectedTools = async (
   ctx: Ctx,
-  via?: Via,
+  asking?: Calling,
 ): Promise<GraphTool[]> =>
-  (await listConnectedCommands(ctx, '', via)).map((command) => ({
+  (await listConnectedCommands(ctx, '', asking)).map((command) => ({
     name: nameOf(command.namespace, command.name),
     title: command.title,
     description: command.description,
@@ -54,7 +52,7 @@ export let connectedTools = async (
         command.at,
         command.name,
         argsOf(call),
-        via,
+        asking,
       )
       return [{
         entity: { eid: '$said' },

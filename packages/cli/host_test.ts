@@ -44,7 +44,7 @@ import { signer } from './local.ts'
 import { clock, test, until } from '@yaks/testing'
 import { claude, codex } from '@yaks/spawn'
 import { sessionEid } from '@yaks/session/who'
-import { HEADER } from '@yaks/tunnel'
+import { CALLER, HEADER } from '@yaks/tunnel'
 import { parse as parseToml } from 'smol-toml'
 
 // The host of these tests, as its own writes are signed: this process, whose
@@ -2264,6 +2264,71 @@ test("a call through the tunnel writes as the tunnel's persona through its conve
     let [by, via] = await add('Hamlet')
     assertEquals(by, undefined)
     assertEquals((await session(via)).fallback, true)
+  } finally {
+    await host.close()
+  }
+})
+
+test("what a machine opens to its owner's Operator, no app in the space reaches through the tunnel", async () => {
+  let [operator, everyone] = [mint(), mint()]
+  let host = await compose(
+    {
+      db: ':memory:',
+      plugins: ['shop', '@yaks/session', ...HTTP, {
+        use: '@yaks/tunnel',
+        with: {
+          routes: ['/shop/*'],
+          persona: everyone,
+          callers: {
+            operator: {
+              routes: ['/mcp'],
+              tools: ['book_add'],
+              persona: operator,
+            },
+          },
+        },
+      }],
+    },
+    only({ shop }),
+  )
+  try {
+    await host.graph.apply([
+      { entity: { eid: operator }, book: { title: 'the Operator' } },
+      { entity: { eid: everyone }, book: { title: 'an app' } },
+    ])
+    // A request through the tunnel, from the caller the platform names.
+    let sent = (path: string, word?: string, body?: unknown) =>
+      serving(host)(
+        new Request(`http://h${path}`, {
+          method: body ? 'POST' : 'GET',
+          headers: {
+            'content-type': 'application/json',
+            [HEADER]: '1',
+            ...word ? { [CALLER]: word } : {},
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        }),
+      )
+    let call = (word?: string) =>
+      sent('/mcp', word, {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'book_add', arguments: { title: `by ${word}` } },
+      })
+    for (let word of ['app', 'connector', undefined]) {
+      let refused = await call(word)
+      assertEquals(refused.status, 403, `${word}`)
+      await refused.body?.cancel()
+      // What the machine opened to everyone still answers each of them.
+      assertEquals(await (await sent('/shop/mail', word)).text(), '/shop/mail')
+    }
+    assertEquals((await (await call('operator')).json()).error, undefined)
+    // Only the Operator's call wrote, as the persona the machine names for it.
+    let made = (await host.graph.read('.book&?created'))
+      .map((b) => [(b.book as Comp).title, (b.created as Comp).by])
+      .filter(([title]) => String(title).startsWith('by '))
+    assertEquals(made, [['by operator', operator]])
   } finally {
     await host.close()
   }

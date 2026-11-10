@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { mint } from '@yaks/graph'
-import { HEADER } from '@yaks/tunnel'
+import { CALLER, HEADER } from '@yaks/tunnel'
 import type { App, Space } from './directory.ts'
 import { directory, stamp } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -258,6 +258,7 @@ let WORDS = {
   'x-yak-grant': 'the-app-grant',
   'x-yak-person': 'a-liar',
   [HEADER]: 'forged',
+  [CALLER]: 'operator',
   'x-via': 'a-forged-conversation',
   cookie: 'theme=dark',
 }
@@ -299,7 +300,7 @@ test('only the app itself reaches the machine, and only an app built in the spac
   assertEquals(await code((await reach({ space: alone })).res), 'no_tunnel')
 })
 
-test('the app’s request goes to its space’s gateway with the platform’s words taken off', async () => {
+test('the app’s request goes to its space’s gateway as an app’s, with the platform’s words taken off', async () => {
   let { res, handed, named } = await reach()
   assertEquals(await res.text(), 'from the machine')
   assertEquals(named, ['tunnel-s1'])
@@ -308,7 +309,11 @@ test('the app’s request goes to its space’s gateway with the platform’s wo
   assertEquals(r.method, 'POST')
   assertEquals(await r.text(), 'a letter')
   assertEquals(r.headers.get('content-type'), 'text/plain')
-  for (let h in WORDS) assertEquals(r.headers.has(h), false, h)
+  // Whatever it said of itself, the platform says it is an app's worker.
+  assertEquals(r.headers.get(CALLER), 'app')
+  for (let h in WORDS) {
+    if (h != CALLER) assertEquals(r.headers.has(h), false, h)
+  }
 })
 
 test('a tunnel with no gateway yet says so', async () => {
@@ -338,21 +343,35 @@ await stamp(env, {
   }],
 })
 
-test('the owner’s request goes to the gateway naming its conversation and nothing of the platform’s', async () => {
+test('the owner’s request goes to the gateway saying who asks for them, and nothing else of the platform’s', async () => {
   let said = { method: 'POST', headers: WORDS, body: 'a call' }
-  let talking = await tunnel.machine(env, ada.eid, ADA, () => 'a-talk')
+  let talking = await tunnel.machine(env, ada.eid, ADA, {
+    caller: 'operator',
+    via: () => 'a-talk',
+  })
   let res = await talking!('http://anywhere/mcp?x=1', said)
   assertEquals(await res.text(), 'from the machine')
   let alone = await tunnel.machine(env, ada.eid, ADA)
   await alone!('http://anywhere/mcp', said)
   assertEquals(door.named, [`tunnel-${ada.eid}`, `tunnel-${ada.eid}`])
-  assertEquals(door.handed.map((r) => [r.url, r.headers.get('x-via')]), [
-    ['http://machine/mcp?x=1', 'a-talk'],
-    ['http://machine/mcp', null],
-  ])
+  // Their Operator, in its conversation; with nothing said, their connector,
+  // whatever the request says of itself.
+  assertEquals(
+    door.handed.map((r) => [
+      r.url,
+      r.headers.get(CALLER),
+      r.headers.get('x-via'),
+    ]),
+    [
+      ['http://machine/mcp?x=1', 'operator', 'a-talk'],
+      ['http://machine/mcp', 'connector', null],
+    ],
+  )
   assertEquals(await door.handed[0].text(), 'a call')
   for (let h in WORDS) {
-    if (h != 'x-via') assertEquals(door.handed[0].headers.has(h), false, h)
+    if (h != 'x-via' && h != CALLER) {
+      assertEquals(door.handed[0].headers.has(h), false, h)
+    }
   }
 })
 

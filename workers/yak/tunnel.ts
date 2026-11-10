@@ -37,12 +37,26 @@
 // in (`x-via`), which no app's request may say for itself. Both go through
 // the one call (`through`).
 //
+// Every request handed to a gateway says which of the three is asking, in a
+// word only this Worker sets (`x-yak-caller`, `Caller` below): an app's
+// worker, the owner's Operator, or the owner's own connector. The machine's
+// config opens a path to all of them or to the ones it names, so its owner
+// can lend the Operator tools and model steps that no app in the space can
+// reach.
+//
 // A tunnel's token is answered to the caller once and never kept or logged:
 // the machine's `yak` puts it straight into its own vault. A website session
 // or an OAuth token opens this door, never a pasted grant. Under `/api/`, the same-origin
 // guard (route.ts `guarded`) stands in front of it the way it stands in front
 // of the fee.
-import { type Api, connect, disconnect, gateways, tunnels } from '@yaks/tunnel'
+import {
+  type Api,
+  CALLER,
+  connect,
+  disconnect,
+  gateways,
+  tunnels,
+} from '@yaks/tunnel'
 import * as dirPart from './directory.ts'
 import {
   type App,
@@ -214,9 +228,25 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
 }
 
 // The platform's own words about a request (the grants, who is looking), none
-// of which is the machine's business, and the one word it says to the machine
-// itself: no caller's request names the conversation it was made in.
+// of which is the machine's business, and the words it says to the machine
+// itself: no caller's request names the conversation it was made in, or who
+// is asking.
 let OURS = /^(cookie|x-via)$|^x-yak-/
+
+/** Who is asking a machine, as the platform tells it (@yaks/tunnel `CALLER`):
+ * an `app`'s own worker; the owner's `operator`, in a conversation or a run of
+ * its own; or the owner's own `connector`, the assistant they signed in to
+ * yaks.app from, calling `command`. A machine's config opens paths, tools and
+ * a persona to each by this word. */
+export type Caller = 'app' | 'operator' | 'connector'
+
+/** Who asks a machine for its owner: their connector unless it says their
+ * Operator, which also names the conversation it asks in (`via`), where there
+ * is one. */
+export type Calling = {
+  caller: Exclude<Caller, 'app'>
+  via?: () => Promise<string | undefined> | string | undefined
+}
 
 /** The header that names the conversation a request to a machine was made in:
  * an Operator's conversation with the tunnel's owner, by the id of its session
@@ -224,10 +254,12 @@ let OURS = /^(cookie|x-via)$|^x-yak-/
 export let VIA = 'x-via'
 
 // A request as it goes on to a machine: `req`'s method, body and headers at
-// `path` there, with the platform's own words taken off.
-let onward = (path: string, req: Request, via?: string) => {
+// `path` there, with the platform's own words taken off and its word on who
+// is asking put on.
+let onward = (path: string, req: Request, caller: Caller, via?: string) => {
   let headers = new Headers()
   for (let [k, v] of req.headers) if (!OURS.test(k)) headers.set(k, v)
+  headers.set(CALLER, caller)
   if (via) headers.set(VIA, via)
   return new Request(`http://machine${path}`, {
     method: req.method,
@@ -296,6 +328,7 @@ export let reach: Answer = async (
   let out = onward(
     path.slice(TUNNELED.length - 1) + new URL(req.url).search,
     req,
+    'app',
   )
   try {
     return await through(env, space, app, who, out) ??
@@ -311,7 +344,8 @@ export let reach: Answer = async (
  * gone. Who owns the space is read from the whole directory as this call
  * finds it, never from a narrowed view of it or from a row written earlier.
  * Only the path of what it is asked for is meant, and each request goes on
- * with the conversation it is made in (`via`), where there is one. Every
+ * saying who asks for the owner (`asking`): their connector, or their
+ * Operator and the conversation it is made in, where there is one. Every
  * ending is an answer, as `reach` gives it: a space with no tunnel, a tunnel
  * with no gateway and a machine that is off are the machine being unavailable
  * to its owner, and no fault of the platform's to report. */
@@ -319,7 +353,7 @@ export let machine = async (
   env: Env,
   at: string,
   person: string,
-  via?: () => Promise<string | undefined> | string | undefined,
+  asking: Calling = { caller: 'connector' },
 ): Promise<typeof globalThis.fetch | null> => {
   if (!person || !at) return null
   let dir = dirOf(env)
@@ -330,7 +364,12 @@ export let machine = async (
     if (!space.tunnel) return json(404, 'no_tunnel', ENDS.no_tunnel(space))
     let req = new Request(input, init)
     let { pathname, search } = new URL(req.url)
-    let out = onward(pathname + search, req, await via?.())
+    let out = onward(
+      pathname + search,
+      req,
+      asking.caller,
+      await asking.via?.(),
+    )
     // Asked for the space itself, which is no app: a gateway calls nothing
     // out, so no connection is lent on this call.
     try {

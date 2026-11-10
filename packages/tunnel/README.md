@@ -25,6 +25,12 @@ callers: it writes as the persona the machine names for the tunnel, and is
 offered only the tools the machine lists. A request without the mark did not
 come through the tunnel, and all of this leaves it alone.
 
+The platform also says who is asking, in `x-yak-caller`: its own word for the
+kind of caller, set on every request it hands the gateway and taken off whatever
+a caller sent. The machine opens a path, a tool or a persona to every request
+through the tunnel, or only to the callers it names
+([Who is asking](#who-is-asking)).
+
 ```sh
 deno add jsr:@yaks/tunnel
 ```
@@ -32,8 +38,8 @@ deno add jsr:@yaks/tunnel
 Entry points:
 
 - `@yaks/tunnel`: the account calls (`connect`, `disconnect`, `tunnels`,
-  `services`, `gateways`), the tunnel's two ends (`GATEWAY`, `HEADER`, `filter`,
-  `opens`) and the vocabulary.
+  `services`, `gateways`), the tunnel's two ends (`GATEWAY`, `HEADER`, `CALLER`,
+  `filter`, `opens`, `offered`, `named`) and the vocabulary.
 - `@yaks/tunnel/routes`: what a machine's server puts in front of its routes:
   the filter over the paths its config opens, who a request through the tunnel
   writes as, and the tools it is offered.
@@ -106,6 +112,42 @@ nothing: `/apply` and `/query` stay closed to the tunnel unless the machine's
 owner lists them. The filter is the `web` role's, so it stands in front of every
 route of the process that serves HTTP.
 
+### Who is asking
+
+`routes`, `tools` and `persona` at the top of the config are what every request
+through the tunnel gets, and any app built in the space can send one. What only
+one kind of caller gets goes under `callers`, by the platform's word for it:
+
+```json
+{
+  "use": "@yaks/tunnel",
+  "with": {
+    "routes": ["/mail/inbound"],
+    "callers": {
+      "operator": {
+        "routes": ["/mcp", "/model/step"],
+        "tools": ["task_list", "task_update", "graph_query"],
+        "persona": "N-153900"
+      }
+    }
+  }
+}
+```
+
+yaks.app says one of three words:
+
+| `x-yak-caller` | who is asking                                                            |
+| -------------- | ------------------------------------------------------------------------ |
+| `app`          | an app's own worker, built in the tunnel's space                         |
+| `operator`     | the Operator of the space's owner, in a conversation or a run of its own |
+| `connector`    | the owner's own assistant, signed in to yaks.app, calling `command`      |
+
+A caller named under `callers` is answered at its paths and everyone's, is
+offered its tools and everyone's, and writes as its own persona, or everyone's
+where it names none. A request saying no word, or one the config names nothing
+for, gets what everyone does. So a path that reads the machine's graph or spends
+its owner's subscription belongs under `callers`, never at the top.
+
 ### Tools through the tunnel
 
 A hosted assistant uses the machine's tools by opening `/mcp` (@yaks/mcp) and
@@ -115,9 +157,13 @@ saying which tools the tunnel offers and who its callers are:
 {
   "use": "@yaks/tunnel",
   "with": {
-    "routes": ["/mcp"],
-    "tools": ["task_list", "task_update", "graph_query"],
-    "persona": "N-153900"
+    "callers": {
+      "operator": {
+        "routes": ["/mcp"],
+        "tools": ["task_list", "task_update", "graph_query"],
+        "persona": "N-153900"
+      }
+    }
   }
 }
 ```
@@ -142,7 +188,7 @@ of the machine's own sessions, and never as the machine's person.
 ### Model steps through the tunnel
 
 A hosted space runs model steps on the machine's own providers by opening
-`/model/step` (@yaks/model/step), which
+`/model/step` (@yaks/model/step) to the caller that may spend them, which
 [@yaks/harness](../harness/README.md#answering-another-hosts-model-steps)
 answers from the providers its `serve` option names. The gateway hands back the
 machine's answer as it arrives, so the reply streams to the platform piece by

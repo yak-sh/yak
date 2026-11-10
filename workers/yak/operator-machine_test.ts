@@ -6,6 +6,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { identityEid, mint } from '@yaks/graph'
 import { type Model, ModelError, type Request } from '@yaks/model'
 import { answering } from '@yaks/model/step'
+import { CALLER } from '@yaks/tunnel'
 import { transcript } from '@yaks/session'
 import { platform } from './directory-probe.ts'
 import { directoryOf, META, stamp } from './directory.ts'
@@ -33,10 +34,17 @@ let serve: Model = (req) => {
 let answer = answering(serve, (e) => {
   throw e
 })
+// Who the platform told the machine was asking, a step at a time.
+let callers: (string | null)[] = []
 let DISPATCH = {
   get: () => {
     if (!up) throw new Error('the machine is off')
-    return { fetch: (r: globalThis.Request) => answer(r) }
+    return {
+      fetch: (r: globalThis.Request) => {
+        callers.push(r.headers.get(CALLER))
+        return answer(r)
+      },
+    }
   },
 } as unknown as Env['DISPATCH']
 let { env } = platform('operator-machine', { DISPATCH })
@@ -112,6 +120,8 @@ test('an admin’s turn in the space whose tunnel is theirs is answered by their
   assertEquals(t.hosted, 0)
   assertEquals(t.using, on('machine', 'sonnet'))
   assertEquals(t.said, { body: "the machine's sonnet" })
+  // A machine lends its providers to its owner's Operator, and no app.
+  assertEquals(callers, ['operator'])
   assertEquals(t.cost, 0)
   let [provider] = await store.g.get([identityEid('provider', ['machine'])])
   assertEquals(provider.provider, { name: 'machine', transport: 'machine' })

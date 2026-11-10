@@ -5,9 +5,19 @@
 // with `x-yak-tunnel`, over whatever the request said. An app never holds the
 // binding, so all it can send the machine is what the platform passes on, and
 // always marked. The machine's end is ./filter.ts.
+//
+// The platform also says who is asking, in `x-yak-caller`: a word of its own
+// for each kind of caller it passes on (an app's worker, its owner's
+// assistant), set on every request it hands the gateway and taken off
+// whatever a caller sent. The gateway passes it on as it came, and the
+// machine opens a path to the callers it names (./filter.ts `Callers`).
 
 /** The header the gateway marks every request with. */
 export let HEADER = 'x-yak-tunnel'
+
+/** The header the platform says who is asking in: its own word for the kind of
+ * caller, which only it sets. */
+export let CALLER = 'x-yak-caller'
 
 /** The gateway's one module: the request as the platform passed it on, marked
  * as the tunnel's, to the machine behind the VPC Service (`BOX`). */
