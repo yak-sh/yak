@@ -1710,6 +1710,17 @@
     background: var(--surface);
     z-index: 1;
   }
+  /* Talk keeps the page grain below its app preview. Paint that same grain
+     inside the sidebar, above its surface; other pages already paint it. */
+  .Talk_Page .Sidebar::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background: var(--grain) 0 0 / 256px;
+    opacity: var(--grain-opacity);
+    pointer-events: none;
+  }
   .Sidebar_Top {
     display: flex;
     flex: none;
