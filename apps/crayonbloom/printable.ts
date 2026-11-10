@@ -67,7 +67,7 @@ export let printable = async (
   if (!current(book, page) || !page.artwork) {
     throw new Refusal('Finish this page before downloading its printable.')
   }
-  return sheet(app, runtime.font, page.artwork, book.doc.title)
+  return await sheet(app, runtime.font, page.artwork, book.doc.title)
 }
 
 export let printableRequest = async (
