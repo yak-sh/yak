@@ -403,18 +403,23 @@ test('a machine its owner cannot reach is an answer, never a throw', async () =>
 
 // ── The machine telling its owner's Operator ────────────────────────────────
 
-// Ada's space with a tunnel, and what its Operator was asked.
+// A session of Ada's Operator that works for her conversation.
+let HELPER = mint()
+
+// Ada's space with a tunnel, and what its Operator was asked to take in.
 let telling = async () => {
   let asked: Request[] = []
   let f = await spaces({
     BUILDER: {
       idFromName: (n: string) => n,
       get: () => ({
-        fetch: (r: Request) => {
+        fetch: async (r: Request) => {
+          if (new URL(r.url).pathname == '/operator/read') {
+            let { task } = await r.json()
+            return Response.json({}, { status: task == HELPER ? 200 : 404 })
+          }
           asked.push(r)
-          return Promise.resolve(
-            Response.json({ request: 'r' }, { status: 202 }),
-          )
+          return Response.json({ request: 'r' }, { status: 202 })
         },
       }),
     } as unknown as Env['BUILDER'],
@@ -441,8 +446,8 @@ test("the machine's word is a request on its owner's Operator's machine channel,
   let t = await telling()
   await using _ = t.scenario
   assertEquals((await t.tell(ADA)).body, { space: 'ada', request: 'r' })
-  // Another conversation of theirs: the one space their tunnel goes to.
-  assertEquals((await t.tell(ADA, { conversation: mint() })).status, 200)
+  // A session working for her conversation is found where it is held.
+  assertEquals((await t.tell(ADA, { conversation: HELPER })).status, 200)
   let [first, again] = await Promise.all(t.asked.map((r) => r.json()))
   assertEquals(new URL(t.asked[0].url).pathname, '/operator/receive')
   assertEquals(t.asked[0].headers.get('x-yak-person'), ADA)
@@ -460,6 +465,10 @@ test('only the owner of a space with a tunnel tells its Operator, and only somet
   assertEquals((await t.tell(null)).status, 403)
   assertEquals((await t.tell(JEFF)).body.error.code, 'no_conversation')
   assertEquals((await t.tell(ADA, { text: ' ' })).status, 400)
+  assertEquals(
+    (await t.tell(ADA, { conversation: mint() })).body.error.code,
+    'no_conversation',
+  )
   await t.wears(null)
   assertEquals((await t.tell(ADA)).body.error.code, 'no_conversation')
   assertEquals(t.asked, [])

@@ -136,12 +136,12 @@ let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /**
  * What the machine behind a space's tunnel tells its owner's Operator: the
  * words of a knock at the session standing there for their conversation,
- * taken in as a request on the Operator's `machine` channel, in the space
- * whose conversation with them `conversation` is, else the one space of
- * theirs a tunnel goes to. Only the space's owner tells it, by their own
- * connection, and the knock (`key`) names the request, so a knock told again
- * is one request. The Operator decides whether they hear of it
- * (operator-channels.ts).
+ * taken in as a request on the Operator's `machine` channel, in the space of
+ * theirs with a tunnel whose Operator holds `conversation` (their one
+ * conversation, or a session that works for it). Only the space's owner
+ * tells it, by their own connection, and the knock (`key`) names the
+ * request, so a knock told again is one request. The Operator decides
+ * whether they hear of it (operator-channels.ts).
  */
 export let tell = async (
   env: Env,
@@ -165,8 +165,31 @@ export let tell = async (
     .filter(([, role]) => role == 'owner').map(([eid]) => eid)
   let spaces = (await Promise.all(owned.map((eid) => dir.at(eid))))
     .filter((s): s is Space => !!s && !s.trashed && !!s.tunnel)
-  let space = spaces.find((s) => rootOf(s.eid, person) == conversation) ??
-    (spaces.length == 1 ? spaces[0] : undefined)
+  let { builderOf, SPACE } = await import('./build-door.ts')
+  let asked = (at: Space, path: string, args: object) =>
+    builderOf(env, at.eid)(() =>
+      new Request(`https://builder${path}`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-yak-person': person,
+          [SPACE]: at.eid,
+        },
+        body: JSON.stringify(args),
+      })
+    )
+  let holds = async (at: Space) => {
+    let r = await asked(at, '/operator/read', { task: conversation })
+    await r.body?.cancel()
+    return r.ok
+  }
+  let space = spaces.find((s) => rootOf(s.eid, person) == conversation)
+  for (let at of space ? [] : spaces) {
+    if (await holds(at)) {
+      space = at
+      break
+    }
+  }
   if (!space) {
     return json(
       404,
@@ -174,22 +197,11 @@ export let tell = async (
       `no space of yours with a tunnel holds ${conversation}`,
     )
   }
-  let { builderOf, SPACE } = await import('./build-door.ts')
-  let r = await builderOf(env, space.eid)(() =>
-    new Request('https://builder/operator/receive', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-yak-person': person,
-        [SPACE]: space.eid,
-      },
-      body: JSON.stringify({
-        say: text,
-        request: { channel: 'machine' },
-        options: { id: derivedEid(`operator-machine|${space.eid}|${key}`) },
-      }),
-    })
-  )
+  let r = await asked(space, '/operator/receive', {
+    say: text,
+    request: { channel: 'machine' },
+    options: { id: derivedEid(`operator-machine|${space.eid}|${key}`) },
+  })
   let body = await r.json() as { request?: string; message?: string }
   if (!r.ok) {
     throw new Error(
