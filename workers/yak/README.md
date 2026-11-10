@@ -1227,6 +1227,22 @@ so first text barely moved: 2.7 and 3.5 s from the words, after 3.2 and 4.5 s
 before, within the model's own variance. The saving grows with a conversation's
 length.
 
+The Worker's own share, measured again the same evening on warm one-word turns
+in the same conversation, fell from 0.8–1.3 s to 0.36–0.53 s. Each step's
+`yak operator ask` line now carries a `trace`: every directory, store, vault,
+copy and machine wait, as `<began>+<ms> <wait> <what it asked>`, in ms from the
+step's start. What it shows now is two directory round trips in a row, each
+0.19–0.33 s from that conversation's object:
+
+1. The space, the person's reach and seats, the spaces that let the Operator in
+   with their apps, and the admin check, asked in one batch as the step starts
+   (operator.ts `working`).
+2. What needs the step's context from the first: the person's Google
+   connections, their MCP servers and the home space's page.
+
+The machine's own checks (`machineFor`) are answered from the first batch, so
+`at_request` to `at_submit` is nothing.
+
 What the Operator is told is two personas, worn through @yaks/persona
 (operator-persona.ts). The yaks.app Operator persona is kept in the directory:
 its own text is the general guidance, written by the code only where there is
