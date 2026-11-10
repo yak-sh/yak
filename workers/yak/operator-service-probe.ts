@@ -19,6 +19,10 @@ export let operators: Env['BUILDER'] = {
       if (req.method == 'POST' && path == '/operator/receive') {
         return Promise.resolve(Response.json({}))
       }
+      // An Operator that has set nothing speaks as the platform's.
+      if (req.method == 'POST' && path == '/operator/settings') {
+        return Promise.resolve(Response.json({}))
+      }
       if (req.method == 'POST' && path == '/operator/requests') {
         return Promise.resolve(Response.json([]))
       }

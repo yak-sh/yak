@@ -205,6 +205,23 @@ export let offered = (
   return { setup, voices, ways, paces: PACES, backends }
 }
 
+/** What an Operator may set its call settings to, one line a setting, in
+ * the ids its `operator{}` holds: the choices its settings page offers. */
+export let choices = (
+  env: Speaking,
+  space: Pick<Space, 'voice' | 'voice_model' | 'voice_speed' | 'voice_backend'>,
+) => {
+  let { voices, ways, paces, backends } = offered(env, space)
+  let list = (xs: { id: string; name: string }[]) =>
+    xs.map((x) => `${x.id} (${x.name})`).join(', ')
+  return [
+    `voice: ${list(voices)}`,
+    `voice_speed: ${list(paces)}`,
+    `voice_model: ${list(ways.map((w) => ({ id: w.model, name: w.name })))}`,
+    `voice_backend: ${list(backends)}`,
+  ].join('\n')
+}
+
 /** The voice named `id`, refused when no provider has one by that id. */
 export let voiceOf = (id: string) => {
   let voice = VOICES.find((v) => v.id == id)
@@ -299,7 +316,7 @@ export let sampled = async (
   return bytes
 }
 
-type Speaking =
+export type Speaking =
   & Pick<Env, 'SPEECH_FLOOR' | 'SPEECH_API'>
   & Partial<Record<keyof Env, unknown>>
 

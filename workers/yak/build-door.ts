@@ -4,6 +4,7 @@ import { jittered } from '@yaks/durable-object/resets'
 import { type Level, level } from '@yaks/member'
 import { ahead, fetchOf, WAKE } from './door.ts'
 import type { Space } from './directory.ts'
+import { type Settings, worn } from './operator-persona.ts'
 import type { Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { answered } from './meta.ts'
@@ -236,6 +237,31 @@ export let operatorDoor = async (
   )
   if (!response.ok) throw await answered(response)
   return response.json()
+}
+
+/** `space` as its Operator's settings say, read off its persona in its
+ * store after writing `set` there, when given (operator-persona.ts
+ * `setting`). A caller that read no seat sends none, and the object reads
+ * it. */
+export let settingsAt = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  set?: Settings,
+): Promise<Space> => {
+  let response = await builderOf(env, space.eid)(() =>
+    new Request('https://builder/operator/settings', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...who.role ? seated(space, who) : { [SPACE]: space.eid },
+        ...vouched(who),
+      },
+      body: JSON.stringify(set ? { set } : {}),
+    })
+  )
+  if (!response.ok) throw await answered(response)
+  return worn(space, await response.json())
 }
 
 /** The kernel has checked the app's public access or the caller's membership. */

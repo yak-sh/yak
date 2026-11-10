@@ -59,7 +59,8 @@ import type { Operator } from './operator.ts'
 import { ownerOf } from './operator-access.ts'
 import { receive, requestId } from './operator-channels.ts'
 import { glanceOf, type Look, looks } from './operator-glance.ts'
-import { SPACE } from './build-door.ts'
+import { settingsAt, SPACE } from './build-door.ts'
+import { settled } from './operator-persona.ts'
 
 /** The longest a call lasts, in minutes. */
 export let MINUTES = 10
@@ -135,9 +136,11 @@ export let reached = async (
     dir.nameAt(person),
     dir.texting(person).then((t) => spaceFor(env, person, t?.space)),
   ])
-  if (
-    !space || await paused(env, provider ?? setupOf(env, space).provider)
-  ) return null
+  if (!space) return null
+  // The provider its voice speaks through, as its persona says.
+  let voiced = provider ??
+    setupOf(env, await settingsAt(env, space, { person, role: null })).provider
+  if (await paused(env, voiced)) return null
   return { person, space, first: name?.trim().split(/\s+/)[0] || undefined }
 }
 
@@ -335,7 +338,7 @@ export type Talk = Around & {
   /** text spoken as raw samples in the line's format */
   say: (text: string) => Promise<ReadableStream<Uint8Array>>
   /** what is said, one after another, when a caller's turn has had no
-   * answer for `wait` milliseconds, made as the call starts */
+   * answer for `wait` milliseconds */
   ack?: string[]
   /** how long a caller waits in silence before an acknowledgement: WAIT */
   wait?: number
@@ -384,6 +387,12 @@ let GLANCED = 2000
 let WAIT = 2000
 
 let CALL = { request: 'operator call' }
+
+// A provider's talking model is given its voice as its session opens
+// (@yaks/speech openai.ts), and OpenAI's Realtime keeps it once it has
+// spoken, so a voice set during the call is heard on the next one.
+let FIXED =
+  'Your provider fixes your voice for this call. When they ask for another voice, the Operator can still save it, and it is heard from their next call on; tell them so, and never say this call has changed voice.'
 
 // The codes a socket closes with on purpose: done, going away, or none given.
 let CLEAN = [1000, 1001, 1005]
@@ -567,8 +576,9 @@ let carry = (
  * One call's conversation, heard and spoken around the Operator's own model:
  * the caller's turns given to the Operator, and what it writes spoken back a
  * sentence at a time, what it wrote before a tool said before the tool runs.
- * A turn with nothing said for `wait` is acknowledged, from audio made as
- * the call starts; a caller who starts talking stops whatever is playing.
+ * A turn with nothing said for `wait` is acknowledged, said then, so in the
+ * voice the Operator has then; a caller who starts talking stops whatever is
+ * playing.
  */
 export let converse = (o: Talk): Call => {
   let asked = false, streamed = false, buffer = '', failed = 0
@@ -617,13 +627,7 @@ export let converse = (o: Talk): Call => {
       send()
     })
   }
-  let ack = (o.ack ?? []).map((text) => {
-    let audio = o.say(plain(text)).then(async (body) =>
-      new Uint8Array(await new Response(body).arrayBuffer())
-    )
-    audio.catch(c.report)
-    return audio
-  })
+  let ack = o.ack ?? []
   stream = o.listen({
     start: () => {
       generation++
@@ -640,8 +644,7 @@ export let converse = (o: Talk): Call => {
       if (ack.length) {
         c.later(o.wait ?? WAIT, () => {
           if (mine != turn || spoke || !asked) return
-          let audio = ack[acks++ % ack.length]
-          queue(async () => c.play(await audio, false))
+          speak(ack[acks++ % ack.length], false)
         })
       }
       o.ask(text).catch((error) => {
@@ -1074,13 +1077,13 @@ export let calling = async (
     tools: Tool[]
     backend?: Backend
   } = {
-    instructions: instructed(name, setup.duplex),
+    instructions: `${instructed(name, setup.duplex)}\n\n${FIXED}`,
     tools,
     ...own
       ? {
         backend: {
           model: setup.backend,
-          instructions: backed(name, new Date()),
+          instructions: `${backed(name, new Date())}\n\n${FIXED}`,
           tools: [
             ...tools,
             ...own.tools.filter((o) => !tools.some((m) => m.name == o.name)),
@@ -1127,6 +1130,8 @@ export let answering = async (
   ticket: Ticket,
   armed: () => Promise<void> | undefined,
 ): Promise<Response> => {
+  let seen = space
+  space = await settled(operator.store.g, seen)
   let phone = await phoneAt(env, { via: ticket.via })
   let setup = setupOf(env, space)
   let speech = speechOf(env, setup.provider)
@@ -1174,13 +1179,7 @@ export let answering = async (
         ask: c.asking(setup.model),
         listen: (told) =>
           turns({ ...speech, format: line.format, told, open: upgraded }),
-        say: async (text) =>
-          (await speaking(env, space, text, {
-            provider: setup.provider,
-            format: line.format,
-            voice: setup.voice,
-            speed: setup.speed,
-          })).body,
+        say: saying(env, seen, operator.store.g, line.format, setup),
         ack: ACKS,
       }),
   )
@@ -1190,6 +1189,33 @@ export let answering = async (
       webSocket: unknown
     },
   )
+}
+
+/**
+ * A call's speech, its voice and pace read off the Operator's persona as
+ * each line is said, so a voice it sets during the call is heard on its next
+ * line, the call going on. The call's model stays the one it began with,
+ * and a voice whose provider is off here gives way to the call's first.
+ */
+export let saying = (
+  env: Env,
+  space: Space,
+  g: Parameters<typeof settled>[0],
+  format: Line['format'],
+  first: ReturnType<typeof setupOf>,
+) =>
+async (text: string) => {
+  let now = setupOf(env, {
+    ...await settled(g, space),
+    voice_model: first.model,
+  })
+  let setup = speechOf(env, now.provider) ? now : first
+  return (await speaking(env, space, text, {
+    provider: setup.provider,
+    format,
+    voice: setup.voice,
+    speed: setup.speed,
+  })).body
 }
 
 /** The `voice` channel: an answer spoken on the call it was asked on, or,

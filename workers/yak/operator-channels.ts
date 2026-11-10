@@ -905,6 +905,14 @@ export let handleChannels = (
         }], { trusted: true })
       }
     },
+    // The Operator's name, set on its persona by its people or itself, is
+    // copied to its space's directory row, which the platform reads it off.
+    operator_named: async (event) => {
+      let { named } = await import('./operator-persona.ts')
+      let [row] = await g.get([event.entity.eid])
+      let copy = named(row)
+      if (copy.length) await directoryOf(env.STORE).apply({ entities: copy })
+    },
     // What the Operator tells a person reaches them the way they chose
     // (operator-alerts.ts).
     operator_alert: async (event, _g, _mark, attempt) => {

@@ -14,9 +14,10 @@
 // its eid (`persona.base`) and the runner reads it from the directory at each
 // ask (@yaks/harness `wear`): a change to the base reaches every Operator on
 // its next turn, with nothing copied into the spaces.
-import type { Bundle, Comp, Eid } from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
+import { short } from '@yaks/id'
 import type { Reads } from '@yaks/persona'
 import { stringify } from '@yaks/query'
 import type { Space } from './directory.ts'
@@ -24,6 +25,7 @@ import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
 import { url } from './host.ts'
 import { chatPath } from './route.ts'
+import { choices, type Speaking } from './speech.ts'
 
 /** The persona every Operator is worn on, kept in the directory. */
 export let BASE = derivedEid('operator-persona|base')
@@ -97,21 +99,140 @@ export let declare = async (
   if (writes.length) await meta(env).apply(writes, KERNEL)
 }
 
+/** The Operator's settings (operator-vocab.ts `operator`), as its persona
+ * holds them. */
+export type Settings = {
+  name?: string | null
+  voice?: string | null
+  voice_speed?: string | null
+  voice_model?: string | null
+  voice_backend?: string | null
+  cache_retention?: number | null
+}
+
+/** The settings a space's directory row held, where its persona holds none
+ * yet: what the store copies once (`held`). */
+let copied = (space: Space): Settings =>
+  Object.fromEntries(
+    Object.entries({
+      name: space.operator,
+      voice: space.voice,
+      voice_speed: space.voice_speed,
+      voice_model: space.voice_model,
+      voice_backend: space.voice_backend,
+      cache_retention: space.cache_retention,
+    }).filter(([, v]) => v != null),
+  )
+
+/** `space` as its Operator's settings say: theirs where the persona holds
+ * them, a setting it does not hold being the platform's own. */
+export let worn = (space: Space, own: Settings): Space => ({
+  ...space,
+  operator: own.name || space.operator,
+  voice: own.voice ?? null,
+  voice_speed: own.voice_speed ?? null,
+  voice_model: own.voice_model ?? null,
+  voice_backend: own.voice_backend ?? null,
+  cache_retention: own.cache_retention ?? null,
+})
+
+/**
+ * The Operator's settings off its persona in the store `g` reads, with
+ * `space` worn in them, and the write that first copies the directory row's
+ * settings onto a persona that holds none: the move of a space from before
+ * its settings were its own. The copy is written only where the persona has
+ * no `operator{}`, so it never overwrites what is there, and a second read
+ * writes nothing.
+ */
+export let held = async (
+  g: Reads,
+  space: Space,
+): Promise<{ space: Space; copy: Bundle[] }> => {
+  let eid = personaFor(space.eid)
+  let [row] = await g.get([eid])
+  let own = row?.operator as Settings | undefined
+  if (own) return { space: worn(space, own), copy: [] }
+  let copy = copied(space)
+  return {
+    space: worn(space, copy),
+    copy: [{
+      entity: { eid },
+      operator: copy,
+      persona: { base: BASE, home: space.eid },
+    }],
+  }
+}
+
+/** `space` as its Operator's settings say, read off its store's persona and
+ * copied there first where it held none (`held`). */
+export let settled = async (
+  g: Pick<Graph, 'apply'> & { storage: Reads },
+  space: Space,
+) => {
+  let { space: now, copy } = await held(g.storage, space)
+  if (copy.length) await g.apply(copy, { trusted: true })
+  return now
+}
+
+/** What `space`'s Operator's settings are, after `set` is written on its
+ * persona as `by` asked: the `/operator/settings` door its settings page
+ * writes and a ring reads them by (build-door.ts `settingsAt`). */
+export let setting = async (
+  g: Pick<Graph, 'apply'> & { storage: Reads },
+  space: Space,
+  by: string,
+  set?: Settings,
+): Promise<Settings> => {
+  await settled(g, space)
+  if (set && Object.keys(set).length) {
+    await g.apply([{
+      entity: { eid: personaFor(space.eid) },
+      operator: set,
+      $actor: { by },
+    }], { trusted: true })
+  }
+  let [row] = await g.storage.get([personaFor(space.eid)])
+  return (row?.operator ?? {}) as Settings
+}
+
+/** The directory's copy of the Operator's name, as persona `row` holds it:
+ * what lists, letters and pages read without the store
+ * (operator-vocab.ts `operator_named`). None where the row is no space's. */
+export let named = (row: Bundle | undefined): Bundle[] => {
+  let name = (row?.operator as Settings | undefined)?.name
+  let home = (row?.persona as { home?: string } | undefined)?.home
+  return name && home ? [{ entity: { eid: home }, operator: { name } }] : []
+}
+
 /** Who a space's Operator is, as its instructions say: its name, whose it
- * is, and its page, whose link in a text signs the reader in
- * (operator-texts.ts `signingIn`). */
-export let introduced = (space: Space) =>
+ * is, its page, whose link in a text signs the reader in
+ * (operator-texts.ts `signingIn`), and where its settings are, which it
+ * changes itself when asked. */
+export let introduced = (space: Space, env?: Speaking) =>
   `You are ${space.operator}, the Operator of ${space.slug}, and answer to that name. You work for the owner of ${space.slug}. Don't sign your replies; a letter or a text is signed for you. Your page, where they can read your whole conversation, is ${
     url({}, chatPath(space.slug))
-  }; a yaks.app link you text them signs them in when they follow it.`
+  }; a yaks.app link you text them signs them in when they follow it.
+
+Your settings are yours to change when the person asks: they are operator{name, voice, voice_speed, voice_model, voice_backend} on your persona ${
+    short(personaFor(space.eid))
+  } in your own graph. Change one with graph_apply, self true and one bundle naming only the properties asked for, such as {"entity":{"eid":"${
+    short(personaFor(space.eid))
+  }"},"operator":{"voice":"<id>"}}; null puts one back to the platform's own. A name is up to 40 characters. On a call your next line is said in the voice you set, unless the call says your provider fixes it.${
+    env ? `\n\nThe choices on here, by id:\n${choices(env, space)}` : ''
+  }`
 
 /**
  * The space's own persona, worn on the base: what a store whose entities `g`
- * reads still needs written to make it what `space` says. Its text is the
- * space's to write, so only its title is set.
+ * reads still needs written to make it what `space` and its settings say.
+ * Its text is the space's to write, so only its title is set.
  */
-export let spaced = async (g: Reads, space: Space): Promise<Bundle[]> => {
-  let eid = personaFor(space.eid)
+export let spaced = async (
+  g: Reads,
+  from: Space,
+  env?: Speaking,
+): Promise<Bundle[]> => {
+  let eid = personaFor(from.eid)
+  let { space, copy } = await held(g, from)
   let [old] = await g.get([space.eid])
   let moving = !!old?.persona
   // Earlier Operators wore the space itself as their persona. Move that
@@ -126,16 +247,17 @@ export let spaced = async (g: Reads, space: Space): Promise<Bundle[]> => {
         ...moving ? old.doc as Comp : {},
         title: `${space.operator}, the Operator of ${space.slug}`,
       },
-      persona: { base: BASE },
+      persona: { base: BASE, home: space.eid },
     },
     { entity: { eid: space.eid }, project: {} },
     ...docs(eid, [{
       key: 'who',
       title: 'Who you are',
-      body: introduced(space),
+      body: introduced(space, env),
     }], (k) => derivedEid(`operator-persona|${k}|${space.eid}`)),
   ]
   return [
+    ...copy,
     ...moving
       ? [
         {

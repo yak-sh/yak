@@ -120,10 +120,19 @@ export let operatorService = (env: Env, held: Held, options: Options) => {
         () => undefined,
       )
       if (response) return response
-      if (path == '/operator/run' || path == '/operator/helper') {
+      if (
+        path == '/operator/run' || path == '/operator/helper' ||
+        path == '/operator/settings'
+      ) {
         let { directoryOf } = await import('./directory.ts')
         let space = await directoryOf(env.STORE).at(held.space)
         if (!space) throw new Error('Operator space is missing')
+        if (path == '/operator/settings') {
+          let { setting } = await import('./operator-persona.ts')
+          return Response.json(
+            await setting(store.g, space, held.person, args.set),
+          )
+        }
         return Response.json(
           await (path == '/operator/helper'
             ? operator.helper(held, space, args)

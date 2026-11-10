@@ -2574,26 +2574,6 @@ export let directoryRows = (rows: {
       }, headers)
       return (await self.at(space.eid))!
     },
-    // The space's Operator called `name` (operator-name.ts `given`), or
-    // speaking in `voice` at `voice_speed` and answered on a call by
-    // `voice_model`, which hands a hard request to `voice_backend` (speech.ts
-    // `setupOf`).
-    operate: async (
-      space: Space,
-      operator: {
-        name?: string
-        voice?: string
-        voice_speed?: string
-        voice_model?: string
-        voice_backend?: string
-      },
-      headers: Record<string, string>,
-    ): Promise<Space> => {
-      await self.apply({
-        entities: [{ entity: { eid: space.eid }, operator }],
-      }, headers)
-      return (await self.at(space.eid))!
-    },
     app: async (space: Space, slug: string) => {
       let row = await one(
         `.app.space=${space.eid}&.app.slug=${slug}&${ABOUT}`,

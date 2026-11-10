@@ -26,7 +26,13 @@ import {
 import type { Env } from './env.ts'
 import { directoryOf, type Reach, type Space, walkTo } from './directory.ts'
 import { reachOf } from './operator-reach.ts'
-import { builderOf, carried, operatorDoor, seated } from './build-door.ts'
+import {
+  builderOf,
+  carried,
+  operatorDoor,
+  seated,
+  settingsAt,
+} from './build-door.ts'
 import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
 import { esc, heading, type Picked, script, shell } from './pages.ts'
@@ -685,16 +691,12 @@ export let operatorAnswer = async (
       let model = form.get('voice_model')
       let speed = form.get('voice_speed')
       let backend = form.get('voice_backend')
-      let set = await directoryOf(env.STORE).operate(
-        space,
-        {
-          voice: id,
-          ...speed ? { voice_speed: paceOf(String(speed)).id } : {},
-          ...model ? { voice_model: modelOf(String(model), id) } : {},
-          ...backend ? { voice_backend: backendOf(String(backend)).id } : {},
-        },
-        vouched(who),
-      )
+      let set = await settingsAt(env, space, who, {
+        voice: id,
+        ...speed ? { voice_speed: paceOf(String(speed)).id } : {},
+        ...model ? { voice_model: modelOf(String(model), id) } : {},
+        ...backend ? { voice_backend: backendOf(String(backend)).id } : {},
+      })
       return Response.json({
         voice: set.voice,
         voice_speed: set.voice_speed,
@@ -751,7 +753,10 @@ export let operatorAnswer = async (
       if (!text || text.length > SAID) {
         throw refuse('arguments', `Send up to ${SAID} characters to say.`)
       }
-      let { voice, provider, speed } = setupOf(env, space)
+      let { voice, provider, speed } = setupOf(
+        env,
+        await settingsAt(env, space, who),
+      )
       let said = await speaking(env, space, text, { voice, provider, speed })
       return new Response(said.body, {
         headers: { 'content-type': said.type, 'cache-control': 'no-store' },
@@ -771,11 +776,9 @@ export let operatorAnswer = async (
   if (q.has('name') && req.method == 'POST') {
     let form = await req.formData()
     try {
-      let named = await directoryOf(env.STORE).operate(
-        space,
-        { name: given(String(form.get('name') ?? '')) },
-        vouched(who),
-      )
+      let named = await settingsAt(env, space, who, {
+        name: given(String(form.get('name') ?? '')),
+      })
       return Response.json({ name: named.operator })
     } catch (e) {
       if (!(e instanceof CallError)) throw e
@@ -1055,20 +1058,29 @@ export let conversationOf = async (
 // The Operator's settings, which the dashboard draws beside its side like
 // every other page (pages.ts `desk`): what it does and where, a link to its
 // conversations in the chat app (`chatPage`), and the texts it may send.
-export let operatorBody = async (env: Env, space: Space, who: Who) => {
-  let at = managePath('operator', space.slug)
+export let operatorBody = async (env: Env, seen: Space, who: Who) => {
+  let at = managePath('operator', seen.slug)
   let dir = directoryOf(env.STORE)
-  let [consent, { pa, beyond }, phone, platform, chosen, email, browsers] =
-    await Promise
-      .all([
-        dir.texting(who.person ?? ''),
-        reachOf(dir, walkTo(space.slug, space.eid), who.person ?? ''),
-        phoneAt(env, space.sender),
-        phoneAt(env),
-        dir.alerts(who.person ?? ''),
-        dir.emailAt(who.person ?? ''),
-        dir.pushes(who.person ?? ''),
-      ])
+  let [
+    space,
+    consent,
+    { pa, beyond },
+    phone,
+    platform,
+    chosen,
+    email,
+    browsers,
+  ] = await Promise
+    .all([
+      settingsAt(env, seen, who),
+      dir.texting(who.person ?? ''),
+      reachOf(dir, walkTo(seen.slug, seen.eid), who.person ?? ''),
+      phoneAt(env, seen.sender),
+      phoneAt(env),
+      dir.alerts(who.person ?? ''),
+      dir.emailAt(who.person ?? ''),
+      dir.pushes(who.person ?? ''),
+    ])
   let from = phone?.transport().number
   let call = platform?.caller ? platform.transport().number : undefined
   let address = mailFrom(space.slug, null, env)

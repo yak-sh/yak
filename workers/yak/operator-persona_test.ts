@@ -75,7 +75,7 @@ test('the base comes first, then the space persona worn on it, then where it is'
     String(first.instructions),
     `You are ${space.operator}, the Operator of home`,
   )
-  assertEquals(persona.persona, { base: BASE })
+  assertEquals(persona.persona, { base: BASE, home: space.eid })
 })
 
 test('the guidance is a doc in the directory: an edit reaches the next turn', () => {

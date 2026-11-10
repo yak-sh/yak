@@ -1018,8 +1018,9 @@ export let operating = (
         }
         reached('payer', space)
         // The space may ask its provider to keep the cached prefix longer than
-        // the default (`operator{cache_retention}`).
-        let kept = space ? (await dir().at(space))?.cache_retention : undefined
+        // the default (`operator{cache_retention}` on its persona).
+        let [own] = space ? await g.get([personaFor(space)], ['operator']) : []
+        let kept = comp(own, 'operator')?.cache_retention as number | undefined
         let session = comp(ask, 'entry')?.session
         let reply = await accounted(
           env,
@@ -1299,7 +1300,7 @@ export let operating = (
     let work = await workingOf(store, session)
     if (work?.signup) return signupTools(env, space, ctx.person!, work.signup)
     reached('working', space)
-    let persona = await spaced(g.storage, space)
+    let persona = await spaced(g.storage, space, env)
     if (persona.length) await g.apply(persona, { trusted: true })
     reached('persona', persona)
     // The platform admin's sessions also read the platform: who they are is
@@ -1561,7 +1562,7 @@ export let operating = (
     let selected = await chosen(asked, from)
     await Promise.all([seeding(selected.model, selected.provider), basing()])
     await g.apply([
-      ...await spaced(g.storage, space),
+      ...await spaced(g.storage, space, env),
       { entity: { eid: held.person }, person: {} },
     ], { trusted: true })
     return selected

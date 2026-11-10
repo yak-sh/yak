@@ -26,6 +26,7 @@ import {
   converse,
   greeting,
   MINUTES,
+  saying,
   streamDoor,
   type Talking,
   talking,
@@ -42,6 +43,9 @@ import { rootOf } from './operator-root.ts'
 import { answering, conversationOf, workOf } from './operator-host.ts'
 import { ANSWERED, ASKED, HELLO, SMALL_TALK } from './operator-calls_fixture.ts'
 import { parseHTML } from 'linkedom'
+import { operators } from './operator-service-probe.ts'
+import { personaFor } from './operator-persona.ts'
+import { setupOf } from './speech.ts'
 import { sourceWords } from './operator-source.ts'
 
 let replyText = (words: Words) => typeof words == 'string' ? words : words.text
@@ -76,6 +80,7 @@ let fixture = async () => {
       await crypto.subtle.exportKey('raw', signer.publicKey),
     ),
     DEEPGRAM_API_KEY: 'a-key',
+    BUILDER: operators,
   })
   let jeff = crypto.randomUUID(), ana = crypto.randomUUID()
   let meta = crypto.randomUUID(), own = crypto.randomUUID()
@@ -449,6 +454,60 @@ let calling = (
   }
 }
 
+// The speech provider, saying each line as samples of one value a voice.
+let voices: string[] = []
+let speech = endpoints(globalThis).open((req) => {
+  let voice = new URL(req.url).searchParams.get('model')!
+  voices.push(voice)
+  return Promise.resolve(
+    new Response(new Uint8Array(1000).fill(voice == PANDORA ? 2 : 1)),
+  )
+})
+let PANDORA = 'aura-2-pandora-en'
+
+test('a voice the Operator sets on its persona during a call is heard on its next line and acknowledgement, the call going on', async () => {
+  let p = platform('call-voice', {
+    DEEPGRAM_API_KEY: 'a-key',
+    SPEECH_API: speech.url,
+  })
+  let person = crypto.randomUUID()
+  let space = (await p.dir.at(
+    await p.dir.mint(person, 'voice', 'Voice', {
+      'x-yak-person': person,
+      'x-yak-role': 'owner',
+    }),
+  ))!
+  await stamp(p.env, {
+    entities: [{ entity: { eid: space.eid }, budget: { dollars: 1 } }],
+  })
+  let store = operatorMemory()
+  let time = clock()
+  let c = calling(['One moment.'], {
+    time,
+    wait: 20,
+    say: saying(p.env, space, store.g, line.format, setupOf(p.env, space)),
+  })
+  await until(() => c.played() == 1)
+  c.told().end('Please speak in Pandora.')
+  // What the Operator writes, asked: the same write as its settings page's.
+  await store.g.apply([{
+    entity: { eid: personaFor(space.eid) },
+    operator: { voice: PANDORA },
+  }], { trusted: true })
+  c.call.answered('This is Pandora.')
+  await until(() => c.played() == 2)
+  c.told().end('What is on my calendar?')
+  await time.advance(20)
+  await until(() => c.played() == 3)
+  equal(voices, ['aura-2-draco-en', PANDORA, PANDORA])
+  equal(
+    c.sent.map((s) => JSON.parse(s)).filter((f) => f.event == 'media')
+      .map((f) => atob(f.media.payload).charCodeAt(0)),
+    [1, 2, 2],
+  )
+  equal(c.done, [])
+})
+
 test('a call says hello, hears a turn, and speaks the reply a sentence at a time as it is written', async () => {
   let c = calling()
   await until(() => c.played() == 1)
@@ -512,9 +571,9 @@ test('a caller who starts talking stops what is playing, and a turn is acknowled
   let lengths = () =>
     c.sent.map((s) => JSON.parse(s)).filter((f) => f.event == 'media')
       .map((f) => atob(f.media.payload).length)
-  // The acknowledgements are made as the call starts.
+  // An acknowledgement is said only when it is needed, in the voice then.
   await until(() => c.played() == 1)
-  equal(spoken, ['One moment.', 'Let me see.', HI])
+  equal(spoken, [HI])
   c.told().start!()
   equal(JSON.parse(c.sent.at(-1)!), { event: 'clear' })
   // A quick answer comes with no acknowledgement.
@@ -532,8 +591,8 @@ test('a caller who starts talking stops what is playing, and a turn is acknowled
   await time.advance(5)
   c.call.typed('Let me look')
   c.call.paused()
-  await until(() => spoken.length == 5)
-  equal(spoken[4], 'Let me look')
+  await until(() => spoken.length == 4)
+  equal(spoken[3], 'Let me look')
   c.call.answered('Let me look. You have choir at 7.')
   c.told().end('And tomorrow?')
   await time.advance(20)

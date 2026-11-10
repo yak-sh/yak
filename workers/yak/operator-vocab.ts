@@ -2,6 +2,29 @@ import type { VocabDoc } from '@yaks/vocab'
 
 export let operatorDoc: VocabDoc = {
   $defs: {
+    // The Operator's settings, on its persona (operator-persona.ts
+    // `personaFor`): what it is called (operator-name.ts), the voice it
+    // speaks in on a call (a @yaks/speech voice id, which names its provider
+    // too), how fast (speech.ts `PACES`), the model that answers it there
+    // and the larger one that model hands a hard request to (speech.ts
+    // `setupOf`); none, the platform's. `cache_retention` is how long, in
+    // seconds, its conversations ask the model's provider to keep their
+    // cached prefix (@yaks/model `Request.cacheRetention`). Its people change
+    // them on its settings page, and it changes them itself with graph_apply.
+    operator: {
+      component: true,
+      type: 'object',
+      description:
+        "The Operator's settings: the name it goes by, the voice it speaks in on a call, how fast it speaks, the model that answers it on a call, the larger model that model hands a hard request to on the provider's side (none: the Operator), and how many seconds its model's provider keeps its conversations' cached prefix.",
+      properties: {
+        name: { type: 'string' },
+        voice: { type: 'string' },
+        voice_speed: { type: 'string' },
+        voice_model: { type: 'string' },
+        voice_backend: { type: 'string' },
+        cache_retention: { type: 'number' },
+      },
+    },
     operator_contact: {
       component: true,
       description:
@@ -360,6 +383,14 @@ export let operatorDoc: VocabDoc = {
       idempotent: false,
       tries: 3,
       description: 'Deliver a kept answer through its originating channel.',
+    },
+    operator_named: {
+      effect: true,
+      created: ['operator'],
+      changed: ['operator.name'],
+      tries: 5,
+      description:
+        "Copy the Operator's name from its persona to its space's directory row, which lists, letters and pages read (operator-persona.ts `named`).",
     },
     operator_alert: {
       effect: true,

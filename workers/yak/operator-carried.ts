@@ -36,6 +36,7 @@ import {
   upgraded,
 } from './operator-calls.ts'
 import { SPACE } from './build-door.ts'
+import { settled } from './operator-persona.ts'
 
 /** What a minute of a call on a provider's own line costs on the phone
  * provider's side: Telnyx's inbound toll-free minute on a SIP trunk, which
@@ -150,6 +151,7 @@ export let carrying = async (
     return new Response(null, { status: 204 })
   }
   joined.add(ticket.call)
+  space = await settled(operator.store.g, space)
   let setup = setupOf(env, space)
   let t = lined(provider)!
   let own = setup.provider == provider && t.models.includes(setup.model)

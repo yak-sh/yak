@@ -78,6 +78,7 @@ import type { Beat, Line } from './builder.ts'
 import { directory, type Space } from './directory.ts'
 import { behind, onceRead, type Restartable } from './running.ts'
 import * as dirPart from './directory.ts'
+import type { Settings } from './operator-persona.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
 import { caught, refusing } from './defects.ts'
@@ -595,6 +596,11 @@ export class Builder {
         JSON.parse(request.headers.get('x-yak-call') ?? '{}'),
         () => this.#arming,
       )
+    }
+    if (new URL(request.url).pathname == '/operator/settings') {
+      let { setting } = await import('./operator-persona.ts')
+      let { set } = await request.json() as { set?: Settings }
+      return Response.json(await setting(read.store.g, space, person, set))
     }
     if (new URL(request.url).pathname == '/operator/carried') {
       let { carrying } = await import('./operator-carried.ts')
