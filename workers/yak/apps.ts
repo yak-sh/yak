@@ -405,11 +405,13 @@ export let json = (
 // tags and thrown on, never answered as the page's mistake (defects.ts
 // `refusing`).
 let rejection = (error: unknown, tags: Record<string, string>) =>
-  json(
-    refusing(error, tags),
-    'refused',
-    error instanceof Error ? error.message : String(error),
-  )
+  Response.json({
+    error: {
+      code: 'refused',
+      message: error instanceof Error ? error.message : String(error),
+      ...(error instanceof Error ? { name: error.name } : {}),
+    },
+  }, { status: refusing(error, tags) })
 
 // What the page's own code got wrong, as the store refused it: a break in the
 // app, filed here at its door because the page may catch the refusal and the
