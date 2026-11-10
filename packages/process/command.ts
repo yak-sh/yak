@@ -35,6 +35,9 @@ export type CommandOutput = CommandStatus & {
 }
 export type ChildProcess = {
   pid: number
+  /** Settles once the child is running, or rejects when it could not start
+   * (a missing program), before any of its pipes are used. */
+  started: Promise<void>
   status: Promise<CommandStatus>
   stdin: WritableStream<Uint8Array>
   stdout: ReadableStream<Uint8Array<ArrayBuffer>>
@@ -84,7 +87,17 @@ let bytes = async (
   stream
     ? new Uint8Array(await new Response(stream).arrayBuffer())
     : new Uint8Array()
+// A child and its pipes hold the process open, and can be ref'd and unref'd
+// together. A child that never started (no pid) holds nothing.
+type Held = { ref: () => void; unref: () => void }
+let held = (p: NativeChild) =>
+  (p.pid ? [p, p.stdin, p.stdout, p.stderr].filter((s) => s) : []) as Held[]
 let child = (p: NativeChild): ChildProcess => {
+  let started = new Promise<void>((resolve, reject) => {
+    p.once('spawn', resolve)
+    p.once('error', reject)
+  })
+  started.catch(() => {})
   let done = new Promise<CommandStatus>((resolve, reject) => {
     p.once('error', reject)
     p.once('exit', (code, signal) => resolve(status(code, signal)))
@@ -101,6 +114,7 @@ let child = (p: NativeChild): ChildProcess => {
   }
   return {
     pid: p.pid ?? 0,
+    started,
     status: done,
     get stdin() {
       return input ?? missing()
@@ -132,10 +146,10 @@ let child = (p: NativeChild): ChildProcess => {
       }
     },
     ref: () => {
-      p.ref()
+      for (let h of held(p)) h.ref()
     },
     unref: () => {
-      p.unref()
+      for (let h of held(p)) h.unref()
     },
     [Symbol.asyncDispose]: async () => {
       if (p.exitCode == null && p.signalCode == null) p.kill('SIGTERM')

@@ -181,7 +181,10 @@ streams; `disconnected()` from `@yaks/process/system` settles in the child when
 its parent closes the channel or exits, including an exit before the child
 starts listening. A child's `kill()` signals it by pid and leaves that channel
 open, so a child told to drain is not also told its parent is gone.
-`detached: true` gives the child its own process group.
+`detached: true` gives the child its own process group. `started` settles once
+the child runs and rejects when it cannot start (a missing program), before any
+of its streams is used. `unref()` lets the parent exit while the child runs, its
+piped streams included; `ref()` holds the parent open again.
 
 `@yaks/process/modules` says which modules a set of roots reaches:
 `modules(roots, cwd)` runs `deno info` in the tree at `cwd`, under its config

@@ -1,5 +1,6 @@
 // @yaks/claude as a provider a config names (@yaks/model `ProviderFacet`):
-// `claude`, one signed-in `claude -p` per model turn, started on the first ask.
+// `claude`, one signed-in `claude -p` per model step, each started before
+// the step it answers (mod.ts `claude`).
 // The plugin's options are the command it runs (`command`, `args`).
 
 import { deferredModel, type Lent, type Model } from '@yaks/model'

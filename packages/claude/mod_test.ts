@@ -1,7 +1,8 @@
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { test } from '@yaks/testing'
 import { ModelError } from '@yaks/model'
-import type { Request, TextDelta } from '@yaks/model'
+import type { Reply, Request, TextDelta } from '@yaks/model'
+import { execPath } from 'node:process'
 import { claude, type Frame, input, items, listing, read } from './mod.ts'
 let tool = {
   name: 'graph_query',
@@ -107,6 +108,70 @@ test('an already cancelled request never submits', async () => {
     DOMException,
   )
   assertEquals(submitted, false)
+})
+
+/** A model answered by cli_fixture.ts, and the pids of the processes it has
+ * started, in the order they booted. */
+let faked = async () => {
+  let log = await Deno.makeTempFile()
+  let fixture = new URL('./cli_fixture.ts', import.meta.url).pathname
+  let booted = async () =>
+    (await Deno.readTextFile(log)).split('\n').filter(Boolean)
+      .map((line) => Number(line.split(' ')[1]))
+  return {
+    model: claude({ command: execPath, args: ['run', '-A', fixture, log] }),
+    booted,
+    /** Until `n` processes have booted. */
+    until: async (n: number) => {
+      while ((await booted()).length < n) {
+        await new Promise((r) => setTimeout(r, 5))
+      }
+      return await booted()
+    },
+    [Symbol.asyncDispose]: () => Deno.remove(log),
+  }
+}
+/** What the process that answered `reply` had seen. */
+let seen = (reply: Reply) =>
+  JSON.parse((reply.items[0] as { text: string }).text)
+let asking = (text: string) => ({
+  ...req,
+  instructions: 'be brief',
+  items: [{ kind: 'user' as const, text }],
+})
+
+test('a step is answered by a process started before it, which saw only that step', async () => {
+  await using cli = await faked()
+  await using model = cli.model
+  let first = seen(await model(asking('first')))
+  let [, held] = await cli.until(2)
+  let second = seen(await model(asking('second')))
+  assertEquals(second.pid, held)
+  assertEquals(
+    [first.users, second.users],
+    [[JSON.stringify(asking('first').items[0])], [
+      JSON.stringify(asking('second').items[0]),
+    ]],
+  )
+  assertEquals([first.tools, second.tools], [['graph_query'], ['graph_query']])
+  assertEquals(second.prompt.endsWith('be brief'), true)
+})
+
+test('a call ends the step with the call, never answered', async () => {
+  await using cli = await faked()
+  await using model = cli.model
+  let reply = await model(asking('please call'))
+  assertEquals(reply.items, [{
+    kind: 'call',
+    id: 'call-1',
+    name: 'graph_query',
+    args: '{}',
+  }])
+})
+
+test('a host without the CLI is told to install it', async () => {
+  await using model = claude({ command: '/nonexistent/claude' })
+  await assertRejects(() => model(req), ModelError, 'Install and sign in')
 })
 
 let event = (event: Frame): Frame => ({ type: 'stream_event', event })

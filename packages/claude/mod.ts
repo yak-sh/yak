@@ -2,8 +2,9 @@ import * as io from '@yaks/file/io'
 import { command as processCommand } from '@yaks/process/command'
 import { claudeDoc } from './vocab.ts'
 /**
- * Claude Code as a one-turn @yaks/model implementation. The MCP server only
- * advertises tools: calls are returned to the harness, never executed here.
+ * Claude Code as a one-turn @yaks/model implementation. The MCP server it
+ * hosts over the CLI's control channel only advertises tools: calls are
+ * returned to the harness, never executed here.
  * Each request replays graph history; no Claude conversation is authoritative.
  * @module
  */
@@ -111,6 +112,7 @@ export type Turn = { reply?: Reply; session: string; terminal: boolean }
  * `message_delta` carries; an `assistant` frame holds the count it started
  * with. A message that requests a call is read through its `message_delta`,
  * which the CLI writes before it dispatches the call, and reading stops there.
+ * Otherwise it stops at the turn's `result`.
  */
 export let read = async (
   req: Request,
@@ -181,14 +183,147 @@ export let read = async (
       if (frame.is_error || frame.subtype != 'success') {
         throw new ModelError('claude', JSON.stringify(frame))
       }
+      break
     }
   }
   return turn
 }
 
-/** Start one Claude process per model request. Requires a signed-in local CLI. */
-export let claude = (opts: Options = {}): Model =>
-  Object.assign(async (req: Request): Promise<Reply> => {
+/** The CLI's arguments for one model at one effort. A step's prompt and tools
+ * are not among them: they reach the process with the step (`opening`), so
+ * the process can start before its step is known. Built-ins, settings, hooks,
+ * slash commands and saved sessions are all off. */
+export let argv = (model: string, effort?: string): string[] => [
+  '-p',
+  '--model',
+  model,
+  '--input-format',
+  'stream-json',
+  '--output-format',
+  'stream-json',
+  '--verbose',
+  '--include-partial-messages',
+  '--max-turns',
+  '1',
+  '--no-session-persistence',
+  '--tools',
+  '',
+  '--strict-mcp-config',
+  '--setting-sources',
+  '',
+  '--settings',
+  '{"disableAllHooks":true}',
+  '--disable-slash-commands',
+  '--permission-mode',
+  'dontAsk',
+  '--allowedTools',
+  'mcp__harness__*',
+  ...effort ? ['--effort', effort] : [],
+]
+
+/** The control request that opens a step: its system prompt, and the harness
+ * as an SDK-hosted MCP server, which the CLI asks for its tools over the same
+ * stdin and stdout (`offer`). */
+export let opening = (req: Request): string =>
+  JSON.stringify({
+    type: 'control_request',
+    request_id: crypto.randomUUID(),
+    request: {
+      subtype: 'initialize',
+      systemPrompt: [[
+        'You are the model of a graph-native harness. The user message contains the authoritative transcript, one JSON item per block, oldest first.',
+        'Continue that transcript, responding to its latest user or tool result. Prior assistant/call/result items are history, not new requests.',
+        'Use only the offered harness MCP tools. The graph harness executes your calls after this turn. Do not simulate tool results.',
+        req.instructions ?? '',
+      ].join('\n\n')],
+      sdkMcpServers: ['harness'],
+    },
+  }) + '\n'
+
+type Child = ReturnType<ReturnType<typeof processCommand>['spawn']>
+/** A started CLI process and its empty working directory. */
+type Proc = { child: Child; cwd: string; ended: boolean }
+
+let start = async (opts: Options, model: string, effort?: string) => {
+  let cwd = await io.makeTempDir({ prefix: 'yak-claude-' })
+  let child = processCommand(opts.command ?? 'claude', {
+    args: [...opts.args ?? [], ...argv(model, effort)],
+    cwd,
+    stdin: 'piped',
+    stdout: 'piped',
+    stderr: 'piped',
+    env: {
+      CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    },
+  }).spawn()
+  let proc: Proc = { child, cwd, ended: false }
+  let ended = () => {
+    proc.ended = true
+  }
+  child.status.then(ended, ended)
+  await child.started.catch(async (error) => {
+    await io.remove(cwd, { recursive: true })
+    throw error
+  })
+  // A process waiting for its step never holds its host open; it ends when
+  // the host does, and its stdin with it.
+  child.unref()
+  return proc
+}
+
+let end = async (proc: Proc) => {
+  // Its exit is waited for, so it holds the host open until then.
+  proc.child.ref()
+  proc.child.kill('SIGKILL')
+  await proc.child.status.catch(() => {})
+  await io.remove(proc.cwd, { recursive: true })
+}
+
+let lines = (stream: ReadableStream<Uint8Array<ArrayBuffer>>) => {
+  let buffer = ''
+  return stream.pipeThrough(new TextDecoderStream()).pipeThrough(
+    new TransformStream<string, string>({
+      transform(chunk, controller) {
+        buffer += chunk
+        let lines = buffer.split('\n')
+        buffer = lines.pop()!
+        for (let line of lines) if (line.trim()) controller.enqueue(line)
+      },
+      flush(controller) {
+        if (buffer.trim()) controller.enqueue(buffer)
+      },
+    }),
+  )
+}
+
+/**
+ * Claude Code answering model requests, one CLI process per step. Requires a
+ * signed-in local CLI. Each step takes a process started before it, for its
+ * model and effort, and starts the next step's while it waits on the model,
+ * so a step doesn't wait for the CLI to start. A process answers one step and
+ * is ended: nothing one step sends reaches another's reply.
+ */
+export let claude = (opts: Options = {}): Model & AsyncDisposable => {
+  // The process the next step of each model and effort takes.
+  let spares = new Map<string, Promise<Proc | undefined>>()
+  let key = (req: Request) => JSON.stringify([req.model, req.effort ?? null])
+  let spare = (req: Request) => {
+    if (spares.has(key(req))) return
+    spares.set(
+      key(req),
+      start(opts, req.model, req.effort).catch(() => undefined),
+    )
+  }
+  let take = async (req: Request) => {
+    let held = spares.get(key(req))
+    spares.delete(key(req))
+    let proc = await held
+    if (proc && !proc.ended) return proc
+    if (proc) await end(proc)
+    return await start(opts, req.model, req.effort)
+  }
+  return Object.assign(async (req: Request): Promise<Reply> => {
     if (req.questions) {
       throw new ModelError(
         'questions',
@@ -205,103 +340,63 @@ export let claude = (opts: Options = {}): Model =>
       )
     }
     req.signal?.throwIfAborted()
-    let bridge = offer(req.tools)
-    let cwd = await io.makeTempDir({ prefix: 'yak-claude-' })
-    let child:
-      | ReturnType<ReturnType<typeof processCommand>['spawn']>
-      | undefined
-    let killed = false
-    let kill = () => {
-      if (child && !killed) {
-        killed = true
-        try {
-          child.kill('SIGKILL')
-        } catch { /* already exited */ }
-      }
-    }
+    let tools = offer(req.tools)
+    let proc: Proc | undefined
+    let kill = () => proc?.child.kill('SIGKILL')
     let stderr: Promise<string> | undefined
     try {
-      let prompt = [
-        'You are the model of a graph-native harness. The user message contains the authoritative transcript, one JSON item per block, oldest first.',
-        'Continue that transcript, responding to its latest user or tool result. Prior assistant/call/result items are history, not new requests.',
-        'Use only the offered harness MCP tools. The graph harness executes your calls after this turn. Do not simulate tool results.',
-        req.instructions ?? '',
-      ].join('\n\n')
-      req.signal?.throwIfAborted()
       await submitted(req)
       req.signal?.throwIfAborted()
-      child = processCommand(opts.command ?? 'claude', {
-        args: [
-          ...opts.args ?? [],
-          '-p',
-          '--model',
-          req.model,
-          '--input-format',
-          'stream-json',
-          '--output-format',
-          'stream-json',
-          '--verbose',
-          '--include-partial-messages',
-          '--max-turns',
-          '1',
-          '--no-session-persistence',
-          '--tools',
-          '',
-          '--strict-mcp-config',
-          '--mcp-config',
-          bridge.config,
-          '--setting-sources',
-          '',
-          '--settings',
-          '{"disableAllHooks":true}',
-          '--disable-slash-commands',
-          '--permission-mode',
-          'dontAsk',
-          '--allowedTools',
-          'mcp__harness__*',
-          '--system-prompt',
-          prompt,
-          ...req.effort ? ['--effort', req.effort] : [],
-        ],
-        cwd,
-        stdin: 'piped',
-        stdout: 'piped',
-        stderr: 'piped',
-        env: {
-          CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1',
-          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-        },
-      }).spawn()
+      proc = await take(req)
+      let child = proc.child
+      child.ref()
       req.signal?.addEventListener('abort', kill, { once: true })
-      if (req.signal?.aborted) kill()
       // Drain stderr concurrently to avoid a full pipe blocking stdout.
       stderr = new Response(child.stderr).text().then((s) => s.slice(-8192))
-      req.signal?.throwIfAborted()
       let writer = child.stdin.getWriter()
-      await writer.write(new TextEncoder().encode(input(req)))
-      await writer.close()
-      if (req.signal?.aborted) kill()
-      let buffer = ''
-      let reader = child.stdout.pipeThrough(new TextDecoderStream())
-        .pipeThrough(
-          new TransformStream<string, string>({
-            transform(chunk, controller) {
-              buffer += chunk
-              let lines = buffer.split('\n')
-              buffer = lines.pop()!
-              for (let line of lines) if (line.trim()) controller.enqueue(line)
-            },
-            flush(controller) {
-              if (buffer.trim()) controller.enqueue(buffer)
-            },
-          }),
-        ).getReader()
+      let send = (line: string) => writer.write(new TextEncoder().encode(line))
+      await send(opening(req) + input(req))
+      spare(req)
+      let reader = lines(child.stdout).getReader()
+      // The turn's frames; the control channel is answered here.
       let frames = async function* (): AsyncGenerator<Frame> {
         try {
           while (true) {
             let { value, done } = await reader.read()
             if (done) return
-            yield JSON.parse(value!)
+            let frame: Frame = JSON.parse(value!)
+            if (frame.type == 'control_response') {
+              if (frame.response?.subtype == 'error') {
+                throw new ModelError('claude_protocol', frame.response.error)
+              }
+              continue
+            }
+            if (frame.type != 'control_request') {
+              yield frame
+              continue
+            }
+            let r = frame.request ?? {}
+            let mcp = r.subtype == 'mcp_message' && r.server_name == 'harness'
+              ? tools(r.message ?? {})
+              : undefined
+            // A call is never answered: the harness runs it.
+            if (mcp == undefined && r.message?.method == 'tools/call') continue
+            await send(
+              JSON.stringify({
+                type: 'control_response',
+                response: mcp
+                  ? {
+                    subtype: 'success',
+                    request_id: frame.request_id,
+                    response: { mcp_response: mcp },
+                  }
+                  : {
+                    subtype: 'error',
+                    request_id: frame.request_id,
+                    error: `Unsupported control request: ${r.subtype}`,
+                  },
+              }) + '\n',
+            )
           }
         } finally {
           await reader.cancel()
@@ -309,11 +404,9 @@ export let claude = (opts: Options = {}): Model =>
         }
       }
       let { reply, session, terminal } = await read(req, frames())
-      // Claude may already be dispatching the call: the harness runs it.
-      if (reply?.items.some((i) => i.kind == 'call')) kill()
-      let status = await child.status
+      kill()
       req.signal?.throwIfAborted()
-      if (!reply || (!killed && (!status.success || !terminal))) {
+      if (!reply || (!terminal && !reply.items.some((i) => i.kind == 'call'))) {
         throw new ModelError(
           'claude_exit',
           await stderr || 'Claude ended without a completed turn',
@@ -322,7 +415,8 @@ export let claude = (opts: Options = {}): Model =>
       return Object.assign(reply, { claudeSession: session })
     } catch (error) {
       kill()
-      if (io.isNotFound(error)) {
+      let failed = await proc?.child.status.then(() => {}, (e) => e)
+      if (io.isNotFound(error) || io.isNotFound(failed)) {
         throw new ModelError(
           'claude_missing',
           'Install and sign in to Claude Code on the harness host',
@@ -331,11 +425,8 @@ export let claude = (opts: Options = {}): Model =>
       throw error
     } finally {
       req.signal?.removeEventListener('abort', kill)
-      kill()
-      await child?.status
-      await stderr
-      await bridge.close()
-      await io.remove(cwd, { recursive: true })
+      if (proc) await end(proc)
+      await stderr?.catch(() => {})
     }
   }, {
     list: () => Promise.resolve(listing()),
@@ -348,4 +439,11 @@ export let claude = (opts: Options = {}): Model =>
       },
     }),
     vocab: claudeDoc,
+    /** Ends the processes waiting for steps. */
+    [Symbol.asyncDispose]: async () => {
+      let held = [...spares.values()]
+      spares.clear()
+      for (let proc of await Promise.all(held)) if (proc) await end(proc)
+    },
   })
+}

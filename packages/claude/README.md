@@ -19,26 +19,38 @@ also be requested and confirmed by the normal provider resolver.
 
 ## One turn, one owner of tools
 
-Each ask starts a new CLI process in an empty temporary directory, supplies an
-explicit system prompt and the graph history as JSON transcript data through
-stream-json input, and reads stream-json output. Settings sources, hooks, slash
-commands, auto-memory and nonessential traffic are disabled. `--tools ''`
-disables built-ins. A strict, capability-URL loopback MCP server advertises
-exactly the request's tool definitions. It **never executes a tool**. If Claude
-starts dispatching a call, the server withholds its response. On the completed
-assistant tool-use frame the adapter kills the child, returning neutral calls to
-the harness, whose ordinary loop persists and executes them. `--max-turns 1`
-also bounds the CLI's loop. Text-only completion must end in a successful
-result. `--include-partial-messages` makes the CLI send text as it is written,
-and each piece reaches the request's `onText` as it arrives; the completed frame
-tells only what no piece carried. There are no retries within this adapter;
-durable submission/acknowledgement uses the same model callbacks as the HTTP
-providers.
+Each step is answered by its own CLI process in an empty temporary directory,
+which reads stream-json input and writes stream-json output. The step's explicit
+system prompt arrives in the process's `initialize` control request, and the
+graph history as JSON transcript data in one user message. Settings sources,
+hooks, slash commands, auto-memory and nonessential traffic are disabled.
+`--tools ''` disables built-ins. The harness is an SDK-hosted MCP server
+(`sdkMcpServers`): the CLI asks it for its tools over the same stdin and stdout,
+and it advertises exactly the request's tool definitions. It **never executes a
+tool**: a `tools/call` is never answered. On the completed assistant tool-use
+frame the adapter kills the child, returning neutral calls to the harness, whose
+ordinary loop persists and executes them. `--max-turns 1` also bounds the CLI's
+loop. Text-only completion must end in a successful result.
+`--include-partial-messages` makes the CLI send text as it is written, and each
+piece reaches the request's `onText` as it arrives; the completed frame tells
+only what no piece carried. There are no retries within this adapter; durable
+submission/acknowledgement uses the same model callbacks as the HTTP providers.
 
 The graph records each ask, assistant text, requested call, harness result, CLI
 session/message ids and reported token usage. Claude's displayed dollar estimate
 is not a subscription charge and is not recorded as a paid API bill.
-Cancellation kills the child and releases the temporary MCP server/directory.
+Cancellation kills the child and removes its directory.
+
+## A process started before its step
+
+The CLI takes 0.3–0.6 s to start, before it reads its input. Nothing of a step
+is in its arguments except the model and effort, so each step takes a process
+already started for them and, once its own input is sent, starts the one the
+next step takes. A process answers one step and is then killed: one step's input
+never reaches another's reply. A waiting process doesn't hold its host open
+(`unref`); it reads end-of-file and exits when the host does. Each holds about
+190 MB while it waits, one for each model and effort asked for. The model is
+`AsyncDisposable`, which ends the waiting ones.
 
 ## What is not graph-native
 
