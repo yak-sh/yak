@@ -1,5 +1,5 @@
 // Availability and completion are checked in the registration’s transaction.
-import { type Answers, type Form, missing, open } from '@yaks/forms'
+import { answered, type Answers, type Form, missing, open } from '@yaks/forms'
 import { composed } from '@yaks/graph/bundle'
 import { after, each } from '@yaks/fp'
 import { type Bundle, type Comp, hook, type Plugin } from '@yaks/graph'
@@ -47,16 +47,42 @@ export let formRules = (
                 if (missing(form, answers).length) {
                   throw new Refused('Answer every required question.')
                 }
+                let files = [
+                  ...new Set(
+                    answered(form, answers).filter((a) =>
+                      a.question.question.kind == 'file'
+                    ).map((a) => a.value),
+                  ),
+                ]
+                if (
+                  files.some((id) =>
+                    typeof id != 'string' || !/^[a-f0-9]{64}$/.test(id)
+                  )
+                ) {
+                  throw new Refused('Upload a file for every file answer.')
+                }
                 return after(
-                  form.form.capacity == null
-                    ? []
-                    : tx.read(accepted(id, form.form.capacity), undefined, []),
-                  (held) => {
-                    let count = counts.get(id) ?? held.length
-                    if (!open(form, now(), count)) {
-                      throw new Refused('This form is closed or full.')
+                  files.length ? tx.get(files as string[], ['blob']) : [],
+                  (blobs) => {
+                    if (
+                      blobs.length != files.length || blobs.some((b) => !b.blob)
+                    ) {
+                      throw new Refused('Upload a file for every file answer.')
                     }
-                    counts.set(id, count + 1)
+                    return after(
+                      form.form.capacity == null ? [] : tx.read(
+                        accepted(id, form.form.capacity),
+                        undefined,
+                        [],
+                      ),
+                      (held) => {
+                        let count = counts.get(id) ?? held.length
+                        if (!open(form, now(), count)) {
+                          throw new Refused('This form is closed or full.')
+                        }
+                        counts.set(id, count + 1)
+                      },
+                    )
                   },
                 )
               },

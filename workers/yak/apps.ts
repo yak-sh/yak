@@ -270,7 +270,10 @@ let DOORS = new Map<string, () => Promise<Answer>>([
   ['form', async () => (await import('./forms.ts')).forms],
 ])
 // The form door's paths, whose forms are the app's own whoever asks.
-let formPath = (path: string) => path.startsWith('/api/form/')
+let formPath = (path: string, req: Request) =>
+  path.startsWith('/api/form/') ||
+  (path == '/api/blob' && req.method == 'POST' &&
+    new URL(req.url).searchParams.has('form'))
 
 // A refusal is read — by the page that catches it, and by the person's agent
 // after that — so it answers a sentence beside its code (C-32574 item 2, where
@@ -2212,12 +2215,18 @@ export let api = async (
   }
   if (path == '/blob') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
-    if (!mayPost) return refused()
-    let below = await unfloored()
-    if (below) return below
+    let form = new URL(req.url).searchParams.has('form')
+    if (form) {
+      let denied = await (await import('./forms.ts')).formUpload(req, store)
+      if (denied) return denied
+    } else {
+      if (!mayPost) return refused()
+      let below = await unfloored()
+      if (below) return below
+    }
     return await took(req, env, space, app, store, {
       ...headers,
-      ...(await named(env, who, app)),
+      ...(form ? KERNEL : await named(env, who, app)),
     }).catch(untaken)
   }
   if (
@@ -2992,7 +3001,7 @@ let served = async (
   // a sample or a copy holds none of the app's forms.
   let visit: Visiting | null = null
   let stranger = { app, who, release: null as Release | null }
-  if (!itself && !walls && !formPath(path) && visitable(app, who)) {
+  if (!itself && !walls && !formPath(path, req) && visitable(app, who)) {
     let [own, release, invited] = await c.time('visit', () =>
       Promise.all([
         ownOf(env, visitor, who.via!, app!.eid),

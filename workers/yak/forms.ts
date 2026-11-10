@@ -6,6 +6,7 @@ import { Refused } from '@yaks/graph/errors'
 import { type Form, open, posted } from '@yaks/forms'
 import { accepted } from './form-rules.ts'
 import type { Answer } from './apps.ts'
+import type { Door } from './door.ts'
 import type { Stored } from './graph.ts'
 import { appStore } from './directory.ts'
 import { KERNEL } from './meta.ts'
@@ -139,6 +140,32 @@ export let forms: Answer = ({ req, env, path, space, app, json }) => {
       return new Response(r.status == 204 ? null : text, r)
     },
     { method: req.method, body: post ? req.body : null, headers: req.headers },
+    KERNEL,
+  )
+}
+
+/** A public form admits bytes only for a file question it is accepting now. */
+export let formUpload = (
+  req: Request,
+  store: Door,
+): Promise<Response | null> => {
+  let params = new URL(req.url).searchParams
+  return store.consume(
+    `/form?${new URLSearchParams({ name: params.get('form') ?? '' })}`,
+    async (r) => {
+      if (!r.ok) return r
+      let form = await r.json() as {
+        open: boolean
+        questions: Form['questions']
+      }
+      if (!form.open) return reply('This form is closed or full.', 400)
+      return form.questions.some((q) =>
+          q.entity.eid == params.get('question') && q.question.kind == 'file'
+        )
+        ? null
+        : reply('No such file question.', 400)
+    },
+    {},
     KERNEL,
   )
 }

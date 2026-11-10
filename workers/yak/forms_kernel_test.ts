@@ -487,3 +487,93 @@ test('the app owner reads the sign-ups of a public app', async () => {
   })).rows
   equal(rows.length, 1)
 })
+
+let portfolio = crypto.randomUUID(), resumes = crypto.randomUUID()
+let resume = crypto.randomUUID(), elsewhere = crypto.randomUUID()
+let filesClosed = crypto.randomUUID()
+await agent.tool('graph_apply', {
+  app: gallery,
+  entities: [
+    { entity: { eid: portfolio }, alias: { name: 'portfolio' }, form: {} },
+    { entity: { eid: elsewhere }, form: {} },
+    { entity: { eid: filesClosed }, form: { closes: '2000-01-01T00:00:00Z' } },
+    {
+      entity: { eid: resumes },
+      question: {
+        form: portfolio,
+        kind: 'repeat',
+        label: 'Person',
+        required: true,
+      },
+    },
+    {
+      entity: { eid: resume },
+      question: {
+        form: portfolio,
+        within: resumes,
+        kind: 'file',
+        label: 'Resume',
+        required: true,
+      },
+    },
+  ],
+})
+let uploadFile = (name = 'portfolio', q = resume) =>
+  k.at(
+    host,
+    `/${gallery}/api/blob?${new URLSearchParams({ form: name, question: q })}`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain', 'x-yak-name': 'resume.txt' },
+      body: 'Resume contents',
+    },
+  )
+let fileSent = await uploadFile()
+let fileAnswer = fileSent.ok ? await fileSent.json() : await fileSent.text()
+let submitFile = (ref: unknown) =>
+  k.at(host, `/${gallery}/api/form/portfolio`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      answers: { [resumes]: [{ [resume]: ref }, { [resume]: ref }] },
+    }),
+  })
+let fileTaken = await submitFile(fileAnswer.eid)
+let nonexistentFile = await submitFile('0'.repeat(64))
+let malformedFile = await submitFile({ name: 'not uploaded' })
+let foreignQuestion = await uploadFile(elsewhere)
+let wrongQuestion = await uploadFile('portfolio', named)
+let closedUpload = await uploadFile(filesClosed)
+await k.settled()
+
+let fileStatus = [fileTaken.status, await fileTaken.text()]
+let fileRows = (await agent.answer('graph_query', {
+  app: gallery,
+  query: `.registration.form=${portfolio}`,
+})).rows
+let fileBlobs = (await agent.answer('graph_query', {
+  app: gallery,
+  query: `.entity.eid=${fileAnswer.eid}&.blob`,
+})).rows
+let fileRead = await k.at(host, `/${gallery}/api/blob/${fileAnswer.eid}`)
+let fileGraph = await k.at(host, `/${gallery}/api/query?q=.registration`)
+let fileGraphText = await fileGraph.text()
+
+test('a signed-out visitor uploads to a private published form and submits the same file twice', () => {
+  equal(fileSent.status, 200, JSON.stringify(fileAnswer))
+  equal(fileStatus, [204, ''])
+  equal(fileRows.map((r) => (r.registration as Comp).answers), [{
+    [resumes]: [{ [resume]: fileAnswer.eid }, { [resume]: fileAnswer.eid }],
+  }])
+  equal(fileBlobs.length, 1)
+  ok(fileRead.status >= 400)
+  ok(!fileGraphText.includes(fileAnswer.eid))
+})
+
+test('file submissions require uploaded references and uploads require the form’s file question', () => {
+  equal(nonexistentFile.status, 400)
+  equal(malformedFile.status, 400)
+  equal(foreignQuestion.status, 400)
+  equal(wrongQuestion.status, 400)
+  equal(closedUpload.status, 400)
+})

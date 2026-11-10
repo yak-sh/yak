@@ -9,6 +9,8 @@
 import { type ComponentChildren, h, type JSX } from 'preact'
 import { useEffect, useRef } from 'preact/hooks'
 import type { Bundle } from '@yaks/graph'
+import { type Upload, upload } from './Signup-file.ts'
+export { signupBlob, type Upload, upload } from './Signup-file.ts'
 import { derivedEid } from '@yaks/graph/identity'
 import {
   type Answers,
@@ -174,6 +176,8 @@ export type SignupProps = {
   read?: Read
   /** how it sends; JSON to `at` by default */
   send?: Send
+  /** how a selected file is uploaded; the form app's blob door by default */
+  upload?: Upload
 }
 
 let named = (path: readonly (string | number)[]) => path.join('.')
@@ -203,7 +207,8 @@ let LISTED = 6
 
 /** Draws any form from its questions, and sends it to the form door. */
 export let Signup = (
-  { at, e, onChange, read = get, send = post }: SignupProps,
+  { at, e, onChange, read = get, send = post, upload: sendFile = upload }:
+    SignupProps,
 ): JSX.Element => {
   let state = signupOf(e)
   let latest = useRef(state)
@@ -246,7 +251,30 @@ export let Signup = (
         : h(Loading, {}, 'Loading the form…'),
     )
   }
-  return drawn(at, door, state, emit, send)
+  let file = async (path: (string | number)[], chosen: File) => {
+    if (latest.current.sending) return
+    emit({
+      sending: true,
+      said: undefined,
+      answers: put(
+        latest.current.answers ?? fresh(door.questions),
+        path,
+        undefined,
+      ),
+    })
+    let result = await sendFile(at, String(path.at(-1)), chosen)
+    emit(
+      typeof result == 'string' ? { sending: false, said: result } : {
+        sending: false,
+        answers: put(
+          latest.current.answers ?? fresh(door.questions),
+          path,
+          result.eid,
+        ),
+      },
+    )
+  }
+  return drawn(at, door, state, emit, send, file)
 }
 
 let drawn = (
@@ -255,6 +283,7 @@ let drawn = (
   state: SignupState,
   emit: (change: SignupState) => void,
   send: Send,
+  file: (path: (string | number)[], chosen: File) => Promise<void>,
 ): JSX.Element => {
   let rows: Rows = { form: settings, questions }
   let answers = state.answers ?? fresh(questions)
@@ -296,6 +325,7 @@ let drawn = (
       : [],
   )
   let set = (path: (string | number)[], value: unknown) =>
+    !state.sending &&
     emit({ answers: put(answers, path, value), said: undefined })
 
   let label = (a: Asked, as?: string) => {
@@ -350,6 +380,7 @@ let drawn = (
                     {},
                     h(Button, {
                       type: 'button',
+                      disabled: state.sending,
                       mod: 'quiet',
                       onClick: () =>
                         set(
@@ -371,6 +402,7 @@ let drawn = (
             {},
             h(Button, {
               type: 'button',
+              disabled: state.sending,
               onClick: () =>
                 set(path, [
                   ...(Array.isArray(value) ? value : []),
@@ -398,6 +430,7 @@ let drawn = (
                 name,
                 choose: true,
                 required: q.required,
+                disabled: state.sending,
                 value: text,
                 onChange: (ev: Event) =>
                   set(
@@ -424,6 +457,7 @@ let drawn = (
                 name,
                 value: c,
                 required: !many && q.required,
+                disabled: state.sending,
                 checked: many ? picked.includes(c) : value === c,
                 onChange: () =>
                   set(
@@ -454,6 +488,7 @@ let drawn = (
               name,
               value: 'true',
               required: q.required,
+              disabled: state.sending,
               checked: value === true,
               // Unchecked is no answer, so a required box must be checked.
               onChange: () => set(path, value === true ? undefined : true),
@@ -466,12 +501,23 @@ let drawn = (
         return h(
           Form.Field,
           { key: name },
-          h(Form.Label, { as: 'span' }, q.label),
-          h(
-            Form.Value,
-            { mod: 'none' },
-            'Files can’t be sent with this form yet.',
-          ),
+          label(a),
+          h(Field, {
+            id,
+            name,
+            type: 'file',
+            required: q.required && !text,
+            disabled: state.sending,
+            onChange: (ev: Event) => {
+              let chosen = (ev.target as HTMLInputElement).files?.[0]
+              if (chosen) {
+                ;(ev.target as HTMLInputElement).value = ''
+                void file(path, chosen)
+              }
+            },
+          }),
+          text ? h(Form.Value, {}, 'File uploaded.') : null,
+          after(a),
         )
       default: {
         let lines = q.kind == 'lines' || q.kind == 'address'
@@ -484,6 +530,7 @@ let drawn = (
             name,
             lines,
             required: q.required,
+            disabled: state.sending,
             value: text,
             ...(input[q.kind] ?? {}),
             onInput: (ev: Event) =>

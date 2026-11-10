@@ -13,6 +13,7 @@ import {
   signupAt,
   signupOf,
   signupReturned,
+  type Upload,
 } from './Signup.ts'
 
 let ask = (
@@ -81,7 +82,12 @@ let { document, Event } = parseHTML('<html><body><main></main></body></html>')
 
 // A page holding one Signup: its state kept as the page graph would keep it,
 // its door answered by the given rows, and every send remembered.
-let page = async (door: Door | string, refuse?: string, feedback?: object) => {
+let page = async (
+  door: Door | string,
+  refuse?: string,
+  feedback?: object,
+  upload?: Upload,
+) => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let location = Object.getOwnPropertyDescriptor(globalThis, 'location')
   let history = Object.getOwnPropertyDescriptor(globalThis, 'history')
@@ -121,6 +127,7 @@ let page = async (door: Door | string, refuse?: string, feedback?: object) => {
           e = b
           queueMicrotask(draw)
         },
+        upload,
         read: (to) => (reads.push(to), Promise.resolve(door)),
         send: (
           to,
@@ -162,6 +169,15 @@ let page = async (door: Door | string, refuse?: string, feedback?: object) => {
           .find((b) => b.textContent == said)!,
         'click',
       ),
+    file: async (name: string, chosen: File) => {
+      let el = $(`[name="${name}"]`)
+      Object.defineProperty(el, 'files', {
+        value: [chosen],
+        configurable: true,
+      })
+      await fire(el, 'change')
+    },
+    settle,
     submit: async () => await fire($('form'), 'submit'),
     [Symbol.asyncDispose]: async () => {
       await act(() => render(null, root))
@@ -358,4 +374,69 @@ test('a terminal draws the same form from the same state', async () => {
   } finally {
     ui.free()
   }
+})
+
+let files: Door = {
+  form: {},
+  open: true,
+  questions: [
+    ask('people', 'repeat', 'Person', { required: true }),
+    ask('resume', 'file', 'Resume', { required: true, within: 'people' }),
+  ],
+}
+
+test('a chosen file becomes its repeat answer, while pending uploads hold editing and sending', async () => {
+  let pending = Promise.withResolvers<{ eid: string } | string>()
+  let calls: unknown[] = []
+  await using p = await page(
+    files,
+    undefined,
+    undefined,
+    (at, question, file) => {
+      calls.push([at, question, file.name])
+      return pending.promise
+    },
+  )
+  await p.submit()
+  equal(p.sent, [])
+  await p.press('Add another')
+  let chosen = new File(['resume'], 'résumé.pdf', { type: 'application/pdf' })
+  await p.file('people.1.resume', chosen)
+  equal(calls, [['/directory/api/form/kids-club', 'resume', 'résumé.pdf']])
+  equal(p.state().sending, true)
+  equal(p.$$('input, button').every((el) => el.hasAttribute('disabled')), true)
+  await p.press('Remove', '[aria-label="Person 1"]')
+  await p.submit()
+  equal(p.sent, [])
+  pending.resolve({ eid: 'file-reference' })
+  await p.settle()
+  equal(p.state().answers, { people: [{}, { resume: 'file-reference' }] })
+  equal(p.$('[name="people.1.resume"]').hasAttribute('required'), false)
+  await p.file('people.0.resume', chosen)
+  await p.submit()
+  equal(p.sent, [{
+    people: [{ resume: 'file-reference' }, { resume: 'file-reference' }],
+  }])
+})
+
+test('a refused file upload keeps the form and lets the same file be tried again', async () => {
+  let calls = 0
+  await using p = await page(
+    files,
+    undefined,
+    undefined,
+    () =>
+      Promise.resolve(
+        ++calls == 1 ? 'This file is too large.' : { eid: 'retry' },
+      ),
+  )
+  let chosen = new File(['file'], 'photo.png')
+  await p.file('people.0.resume', chosen)
+  equal(p.$('[role=alert]').textContent, 'This file is too large.')
+  equal(p.state().sending, false)
+  await p.submit()
+  equal(p.sent, [])
+  await p.file('people.0.resume', chosen)
+  await p.submit()
+  equal(p.sent, [{ people: [{ resume: 'retry' }] }])
 })

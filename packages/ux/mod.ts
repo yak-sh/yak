@@ -74,9 +74,12 @@ export {
   type Send,
   Signup,
   signupAt,
+  signupBlob,
   signupOf,
   type SignupProps,
   type SignupState,
+  type Upload,
+  upload,
 } from './Signup.ts'
 export { drag, DRAGGED, dragged, drags } from './drag.ts'
 export {
