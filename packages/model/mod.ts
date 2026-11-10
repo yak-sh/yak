@@ -425,8 +425,9 @@ export type Listed = {
 }
 
 /** A requested name exists before dispatch, but is not offered until answered.
- * A model met for the first time is weighed at its list price ({@link
- * listPrice}) unless the batch prices it; a price on a stored row stands. */
+ * A model with no price, met for the first time or held since before the
+ * table knew it, is weighed at its list price ({@link listPrice}) unless the
+ * batch prices it; a price on a stored row stands. */
 export let requesting: Hook = (bundles, tx) => {
   let names = new Map<string, string>()
   let out: Bundle[] = bundles.map((b) => {
@@ -451,22 +452,26 @@ export let requesting: Hook = (bundles, tx) => {
       identityEid(MODEL, [String((b.model as Comp | undefined)?.name)])
     ),
   )
-  return after(tx.get([...names.keys()], [MODEL, 'pending']), (rows) => {
-    let held = new Map(rows.map((b) => [b.entity.eid, b]))
-    return [
-      ...out,
-      ...[...names].flatMap(([eid, name]): Bundle[] => {
-        if (held.get(eid)?.model) return []
-        let price = !priced.has(eid) && listPrice(name)
-        return [{
-          entity: { eid },
-          model: { name, offered: false },
-          pending: {},
-          ...price ? { price } : {},
-        }]
-      }),
-    ]
-  })
+  return after(
+    tx.get([...names.keys()], [MODEL, 'pending', 'price']),
+    (rows) => {
+      let held = new Map(rows.map((b) => [b.entity.eid, b]))
+      return [
+        ...out,
+        ...[...names].flatMap(([eid, name]): Bundle[] => {
+          let row = held.get(eid)
+          let price = !priced.has(eid) && !row?.price && listPrice(name)
+          if (row?.model) return price ? [{ entity: { eid }, price }] : []
+          return [{
+            entity: { eid },
+            model: { name, offered: false },
+            pending: {},
+            ...price ? { price } : {},
+          }]
+        }),
+      ]
+    },
+  )
 }
 
 /** A provider's answer confirms a requested model; old asks keep their row. */

@@ -115,6 +115,18 @@ test('a model met for the first time is priced at its list price', () => {
   assertEquals(priceOf('gpt-5'), { input: 9, output: 9 })
 })
 
+test('a held model with no price takes its list price when next named', () => {
+  let g = shelf()
+  let name = 'claude-opus-4-8[1m]'
+  let eid = identityEid('model', [name])
+  let priceOf = () => (g.get([eid]) as Bundle[])[0]?.price
+  g.apply([{ entity: { eid }, model: { name } }])
+  g.apply([{ entity: { eid }, price: null }])
+  assertEquals(priceOf(), undefined)
+  g.apply([{ entity: { eid: E }, using: { model: name } }])
+  assertEquals(priceOf(), listPrice('claude-opus-4-8'))
+})
+
 test('reported cost beats row pricing and unknown cost stays unknown', () => {
   let reply = {
     id: 'r',
