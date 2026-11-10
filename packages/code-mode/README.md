@@ -4,6 +4,11 @@ Short JS/TS executions over a scoped tool registry. `catalog()` preserves each
 provider and tool name as an object path; `declarations()` generates TypeScript
 from the registry's input and output schemas. `execute()` records nested calls
 through the supplied runner with the outer call's actor, instrument and source.
+Its `refused` option hears what the bridge refuses before any runner does (a
+tool outside the scope, a limit, a malformed argument or `results.read`, a call
+after the execution ended) as a runner's `refused` hears its own, each with the
+nested call it refused: the id a call keeps from the bridge to the runner, so a
+host deduping by call hears each call once.
 
 The host supplies an isolated evaluator, and a `Strip` that reads a script's
 TypeScript as JavaScript: yaks.app strips through its compiler Worker, which

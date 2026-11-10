@@ -23,7 +23,7 @@ import {
   type Tool,
   who,
 } from '@yaks/graph'
-import { registry, runner, toolEid, toolsDoc } from '@yaks/tools'
+import { type Refused, registry, runner, toolEid, toolsDoc } from '@yaks/tools'
 import { spineDoc } from '@yaks/kernel/vocab'
 import { provenanceDoc } from '@yaks/provenance/vocab'
 import { loadVocab } from '@yaks/vocab'
@@ -177,9 +177,7 @@ let run = (script: string) =>
     reads.asked,
     evaluate,
     strip,
-    undefined,
-    undefined,
-    kept,
+    { kept },
   )
 test('the answer is the return value; inner results stay in the sandbox', async () => {
   let out = await run(`let n = 0
@@ -223,9 +221,7 @@ test('only accidental output beyond the system safety bound is refused', async (
     reads.asked,
     () => Promise.resolve('x'.repeat(LIMITS.systemBytes + 1)),
     strip,
-    undefined,
-    undefined,
-    kept,
+    { kept },
   )
   equal(out.error, TOO.system)
 })
@@ -246,7 +242,7 @@ test('deadline revokes bridge; completed scripts cannot leave new calls behind',
       return await new Promise(() => {})
     },
     strip,
-    time,
+    { clock: time },
   )
   await started.promise
   await time.advance(LIMITS.wallMs)
@@ -269,8 +265,7 @@ let refusal = async (set: string, name: string, live = one.run) =>
     one.asked,
     async (_, b) => JSON.stringify({ value: await b.call(set, name, '{}') }),
     strip,
-    undefined,
-    () => Promise.resolve(live),
+    { current: () => Promise.resolve(live) },
   )).error
 let gone = runner(one.g, { tools: registry([{ name: 'yaks', tools: [] }]) })
 test('a refused nested call names the tool the script asked for', async () => {
@@ -286,6 +281,54 @@ test('a refused nested call names the tool the script asked for', async () => {
     await refusal('yaks', 'echo', gone),
     'tool yaks.echo is no longer available',
   )
+})
+
+// What one hearer hears of an execution whose bridge and runner both report
+// to it, as the connector wires them, from the bridge calls `ask` makes.
+let four = fixture([echo])
+let hearing = async (ask: (b: Parameters<typeof evaluate>[1]) => unknown) => {
+  let heard: { eid: string; source: unknown; said: string[] }[] = []
+  let refused: Refused = ({ code, said }, call, tool) => {
+    let { source } = call.call as Comp
+    heard.push({ eid: call.entity.eid, source, said: [code, said, tool!] })
+  }
+  let run = runner(four.g, { tools: four.catalog, refused })
+  let out = await execute(
+    '',
+    four.catalog,
+    run,
+    four.asked,
+    async (_, b) => {
+      await ask(b)
+      return '{}'
+    },
+    strip,
+    { refused },
+  )
+  return { out, heard }
+}
+test('the bridge’s refusals are heard once each, with the call each refused', async () => {
+  let { out, heard } = await hearing(async (b) => {
+    let refused = (p: Promise<unknown>) => p.catch(() => {})
+    await refused(b.call('yaks', 'nope', '{}'))
+    await refused(b.call('yaks', 'echo', '[]'))
+    await refused(b.read(''))
+    await b.call('yaks', 'echo', '{"text":1}')
+  })
+  equal(heard.map((h) => h.said), [
+    ['tool', 'tool yaks.nope is outside this execution scope', 'nope'],
+    ['args', 'tool arguments must be an object', 'echo'],
+    ['args', 'results.read takes a result id', 'results.read'],
+    [
+      'arguments',
+      'Invalid tool arguments: text: wants a string, not a number',
+      'echo',
+    ],
+  ])
+  equal(new Set(heard.map((h) => h.eid)).size, 4)
+  equal(heard.map((h) => h.source), Array(4).fill(four.asked.entity.eid))
+  // The runner heard the call it refused under the id its receipt keeps.
+  equal(heard[3].eid, out.calls[0].id)
 })
 
 test('declarations preserve exact paths and resolve nested unions without recursive expansion', async () => {
@@ -473,6 +516,20 @@ test('code mode requires sign-in and nested calls retain the credential scope', 
   })
   equal(out.structuredContent.calls.length, 1)
   equal(out.structuredContent.value.isError, true)
+})
+test('a connector script’s bridge refusal reaches the platform’s refusal record', async () => {
+  await agent.call('tools/call', {
+    name: 'code_mode',
+    arguments: { script: 'return await results.read("")' },
+  })
+  await k.settled()
+  let rows = (await meta(k).query('.tool_refusal *')).filter((r) =>
+    (r.tool_refusal as Comp).tool == 'results.read'
+  )
+  equal(rows.map((r) => [r.refusal, r.content]), [[
+    { code: 'args' },
+    { body: 'results.read takes a result id' },
+  ]])
 })
 test('one connector call creates, writes and deploys a mockup through the shared tools', async () => {
   let discovered = await agent.call('tools/call', {

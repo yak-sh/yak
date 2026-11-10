@@ -50,26 +50,30 @@ export let coded = <T extends Options>(
       codeRun,
       ctx.env.CODE_MODE ?? unavailable,
       ctx.env.ESBUILD ? stripping(ctx.env) : unavailable,
-      ctx.env.CLOCK,
-      async () => {
-        let now = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
-        let reach = await inReach(now)
-        let graph = await reaching(now, reach)
-        let catalog = registry([{
-          name: 'yaks',
-          tools: [
-            ...listing({ ...opts, graph, search: searching(now, reach) }),
-            ...resultTools(now, local),
-          ],
-        }, { name: 'mcp', tools: remoteTools }])
-        return runner(ledger(graph, opts.calls), {
-          tools: catalog,
-          host: graph,
-          report: opts.report,
-          refused: opts.refused,
-        })
+      {
+        clock: ctx.env.CLOCK,
+        report: opts.report,
+        refused: opts.refused,
+        current: async () => {
+          let now = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
+          let reach = await inReach(now)
+          let graph = await reaching(now, reach)
+          let catalog = registry([{
+            name: 'yaks',
+            tools: [
+              ...listing({ ...opts, graph, search: searching(now, reach) }),
+              ...resultTools(now, local),
+            ],
+          }, { name: 'mcp', tools: remoteTools }])
+          return runner(ledger(graph, opts.calls), {
+            tools: catalog,
+            host: graph,
+            report: opts.report,
+            refused: opts.refused,
+          })
+        },
+        kept: resultStore(ctx, args, local),
       },
-      resultStore(ctx, args, local),
     )
   let base = offered()
   let code = {

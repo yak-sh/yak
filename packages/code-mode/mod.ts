@@ -2,11 +2,14 @@
  * supplies an evaluator and reads a script's TypeScript as JavaScript; this
  * package owns discovery, limits and the bridge. */
 import { argsOf, type Bundle, mint, type Tool, who } from '@yaks/graph'
-import { type Clock, system } from '@yaks/fp'
+import { system } from '@yaks/fp'
 import {
   answerOf,
   CallError,
   faulted,
+  heard,
+  type Opts,
+  refusalOf,
   type Registry,
   type Runner,
   structured,
@@ -76,6 +79,19 @@ let finished = (
   }
   return out
 }
+/** What an execution is given beside its script, tools and evaluator. A
+ * runner's `clock`, `report` and `refused` mean here what they mean to it:
+ * what the bridge refuses itself (a tool outside the scope, a limit,
+ * arguments that are not an object, a call after the execution ended) is
+ * heard by `refused` with the nested call it refused, as a runner hears its
+ * own refusals. */
+export type Options = Pick<Opts, 'clock' | 'report' | 'refused'> & {
+  /** the runner each nested call reaches, asked anew for every call
+   * (default: the execution's `run`) */
+  current?: () => Promise<Runner>
+  /** the results the host's harness kept, read by `results.read` */
+  kept?: Kept
+}
 let said = (r: Result) => r.content.map((c) => c.text).join('\n').slice(0, 1024)
 
 /** All nested calls use admitted registry implementations, the outer caller's
@@ -87,10 +103,9 @@ export let execute = async (
   asked: Bundle,
   evaluate: Evaluate,
   strip: Strip,
-  clock: Clock = system,
-  current: () => Promise<Runner> = () => Promise.resolve(run),
-  kept?: Kept,
+  opts: Options = {},
 ): Promise<Answer> => {
+  let { clock = system, current = () => Promise.resolve(run), kept } = opts
   if (
     script.length > LIMITS.scriptBytes || bytes(script) > LIMITS.scriptBytes
   ) {
@@ -102,103 +117,123 @@ export let execute = async (
   let pending = new Set<Promise<unknown>>()
   let controller = new AbortController()
   let active = true
+  let actor = who(asked)
+  // A nested call as the runner records it. Its id is minted before the
+  // bridge's first check, so whether the bridge refuses it or the runner
+  // does, it is heard under the one id the call keeps throughout.
+  let nested = (id: string, name?: string, args?: unknown): Bundle => ({
+    entity: { eid: id },
+    call: {
+      ...(name ? { to: toolEid(name) } : {}),
+      ...(args === undefined ? {} : { args }),
+      source: asked.entity.eid,
+    },
+    ...(actor ? { $actor: actor } : {}),
+  })
+  let hear = async (e: unknown, call: Bundle, tool?: string) => {
+    let refusal = refusalOf(e)
+    if (refusal) await heard(opts, refusal, call, tool)
+  }
   let read = async (id: string): Promise<unknown> => {
-    if (!active) throw new CallError('expired', 'execution has ended')
-    if (typeof id != 'string' || !id || id.length > 256) {
-      throw new CallError('args', 'results.read takes a result id')
+    try {
+      if (!active) throw new CallError('expired', 'execution has ended')
+      if (typeof id != 'string' || !id || id.length > 256) {
+        throw new CallError('args', 'results.read takes a result id')
+      }
+      if (!kept) throw new CallError('result', 'kept results are unavailable')
+      let value = await kept.read(id)
+      if (bytes(value) > LIMITS.systemBytes) {
+        throw new CallError('limit', TOO.system)
+      }
+      if (!active) throw new CallError('expired', 'execution has ended')
+      return value
+    } catch (e) {
+      await hear(e, nested(mint()), 'results.read')
+      throw e
     }
-    if (!kept) throw new CallError('result', 'kept results are unavailable')
-    let value = await kept.read(id)
-    if (bytes(value) > LIMITS.systemBytes) {
-      throw new CallError('limit', TOO.system)
-    }
-    if (!active) throw new CallError('expired', 'execution has ended')
-    return value
   }
   let call = async (
     set: string,
     name: string,
     args: string,
   ): Promise<Result> => {
-    if (!active) throw new CallError('expired', 'execution has ended')
-    if (
-      typeof set != 'string' || typeof name != 'string' ||
-      typeof args != 'string'
-    ) throw new CallError('args', 'bridge takes JSON text')
-    if (
-      args.length > LIMITS.scriptBytes ||
-      new TextEncoder().encode(args).length > LIMITS.scriptBytes
-    ) {
-      throw new CallError('limit', TOO.args)
-    }
-    let input: unknown
-    try {
-      input = JSON.parse(args)
-    } catch {
-      throw new CallError('args', 'tool arguments must be JSON')
-    }
-    // A refusal names the tool the script asked for, as `tools[set][name]`
-    // spells it, so its words say which call was refused.
-    let path = `${set}.${name}`
-    let tool = allowed.get(JSON.stringify([set, name]))
-    if (!tool) {
-      throw new CallError(
-        'tool',
-        `tool ${path} is outside this execution scope`,
-      )
-    }
-    if (calls.length >= LIMITS.calls) {
-      throw new CallError('limit', TOO.calls)
-    }
-    if (!input || typeof input != 'object' || Array.isArray(input)) {
-      throw new CallError('args', 'tool arguments must be an object')
-    }
     let id = mint()
-    let receipt: Receipt = { id, path: [set, name], pending: true }
-    calls.push(receipt)
-    let work = (async (): Promise<Result> => {
-      let actor = who(asked)
-      let live = await current()
-      if (!active) throw new CallError('expired', 'execution has ended')
-      let nested: Bundle = {
-        entity: { eid: id },
-        call: { to: toolEid(name), args: input, source: asked.entity.eid },
-        ...(actor ? { $actor: actor } : {}),
-      }
-      let admitted = live.admit(nested)
-      if (!admitted || admitted.tool.name != name) {
-        throw new CallError('tool', `tool ${path} is no longer available`)
-      }
-      await admitted.ensure()
-      if (!active) throw new CallError('expired', 'execution has ended')
-      let landed = await admitted.call()
-      let answer = answerOf(landed, id)
-      let failed = faulted(landed, id)
-      let result: Result = {
-        content: texts(answer, Infinity).map((text) => ({
-          type: 'text',
-          text,
-        })),
-        ...(!failed || !admitted.tool.outputSchema
-          ? { structuredContent: structured(admitted.tool, answer) }
-          : {}),
-        ...(failed ? { isError: true } : {}),
-      }
-      if (bytes(result) > LIMITS.systemBytes) {
-        throw new CallError('limit', TOO.system)
-      }
-      if (failed) Object.assign(receipt, { isError: true, error: said(result) })
-      return result
-    })()
-    pending.add(work)
+    let named = typeof name == 'string' ? name : undefined
+    let input: unknown
+    let receipt: Receipt | undefined
+    let work: Promise<Result> | undefined
     try {
+      if (!active) throw new CallError('expired', 'execution has ended')
+      if (
+        typeof set != 'string' || typeof name != 'string' ||
+        typeof args != 'string'
+      ) throw new CallError('args', 'bridge takes JSON text')
+      if (
+        args.length > LIMITS.scriptBytes ||
+        new TextEncoder().encode(args).length > LIMITS.scriptBytes
+      ) {
+        throw new CallError('limit', TOO.args)
+      }
+      try {
+        input = JSON.parse(args)
+      } catch {
+        throw new CallError('args', 'tool arguments must be JSON')
+      }
+      // A refusal names the tool the script asked for, as `tools[set][name]`
+      // spells it, so its words say which call was refused.
+      let path = `${set}.${name}`
+      if (!allowed.has(JSON.stringify([set, name]))) {
+        throw new CallError(
+          'tool',
+          `tool ${path} is outside this execution scope`,
+        )
+      }
+      if (calls.length >= LIMITS.calls) {
+        throw new CallError('limit', TOO.calls)
+      }
+      if (!input || typeof input != 'object' || Array.isArray(input)) {
+        throw new CallError('args', 'tool arguments must be an object')
+      }
+      let made: Receipt = { id, path: [set, name], pending: true }
+      receipt = made
+      calls.push(made)
+      work = (async (): Promise<Result> => {
+        let live = await current()
+        if (!active) throw new CallError('expired', 'execution has ended')
+        let admitted = live.admit(nested(id, name, input))
+        if (!admitted || admitted.tool.name != name) {
+          throw new CallError('tool', `tool ${path} is no longer available`)
+        }
+        await admitted.ensure()
+        if (!active) throw new CallError('expired', 'execution has ended')
+        let landed = await admitted.call()
+        let answer = answerOf(landed, id)
+        let failed = faulted(landed, id)
+        let result: Result = {
+          content: texts(answer, Infinity).map((text) => ({
+            type: 'text',
+            text,
+          })),
+          ...(!failed || !admitted.tool.outputSchema
+            ? { structuredContent: structured(admitted.tool, answer) }
+            : {}),
+          ...(failed ? { isError: true } : {}),
+        }
+        if (bytes(result) > LIMITS.systemBytes) {
+          throw new CallError('limit', TOO.system)
+        }
+        if (failed) Object.assign(made, { isError: true, error: said(result) })
+        return result
+      })()
+      pending.add(work)
       return await work
     } catch (e) {
-      receipt.error = message(e)
+      if (receipt) receipt.error = message(e)
+      await hear(e, nested(id, named, input), named)
       throw e
     } finally {
-      delete receipt.pending
-      pending.delete(work)
+      if (receipt) delete receipt.pending
+      if (work) pending.delete(work)
     }
   }
   let cancel = () => {}
@@ -245,9 +280,7 @@ export let tool = (
   run: Runner,
   evaluate: Evaluate,
   strip: Strip,
-  clock?: Clock,
-  current?: () => Promise<Runner>,
-  kept?: Kept,
+  opts: Options = {},
 ): Tool => ({
   name: 'code_mode',
   title: 'Run code',
@@ -302,9 +335,7 @@ export let tool = (
         asked,
         evaluate,
         strip,
-        clock,
-        current,
-        kept,
+        opts,
       )
     if (bytes(value) > LIMITS.systemBytes) {
       throw new CallError('limit', TOO.system)
