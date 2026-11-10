@@ -20,7 +20,8 @@ import type { Driver } from '@yaks/sql'
 export type Copying = { plan: Plan } | { rows: Cell[][]; last: number | null }
 
 /** Each space's store into the file `open` makes for its slug, a line said
- * for each: its tables and rows, or that it holds none. */
+ * for each: its tables and rows, or that it holds none. The file is one, to
+ * be copied or opened anywhere: `open` makes it with a rollback journal. */
 export let copy = async (o: {
   spaces: { eid: string; slug: string }[]
   page: (
@@ -55,8 +56,6 @@ export let copy = async (o: {
         }
       }
       ending(sql, plan)
-      // One file, its log folded in, to be copied or opened anywhere.
-      sql.query({ t: 'pragma', name: 'journal_mode', value: 'delete' })
       o.out(`${space.slug}  ${plan.tables.length} tables, ${rows} rows`)
     } finally {
       sql.close()

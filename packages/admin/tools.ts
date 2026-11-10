@@ -670,7 +670,7 @@ export let runs = (
               fs.removeSync(file)
             } catch { /* none was there */ }
           }
-          return open(path)
+          return open(path, { wal: false })
         },
         out: each.out,
         stopping: host.stopping,

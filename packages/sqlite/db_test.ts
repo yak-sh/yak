@@ -54,6 +54,22 @@ test('a file grows a whole MiB at a time', () => {
   }
 })
 
+test('a file opened without WAL keeps its writes in the one file', () => {
+  let dir = Deno.makeTempDirSync()
+  let sql = open(`${dir}/copy.db`, { wal: false })
+  try {
+    sql.query({ t: 'create table', name: 't', cols: [{ name: 'x' }] })
+    sql.query(insert('t', { x: 1 }))
+    assertEquals(sql.query({ t: 'pragma', name: 'journal_mode' }), [{
+      journal_mode: 'delete',
+    }])
+    sql.close()
+    assertEquals([...Deno.readDirSync(dir)].map((f) => f.name), ['copy.db'])
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
 test('a database named without a directory makes none', () => {
   let name = `file:${crypto.randomUUID()}?mode=memory&cache=shared`
   open(name).close()

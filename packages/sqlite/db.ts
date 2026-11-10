@@ -38,7 +38,8 @@ let CACHE = 64 * 1024 * 1024
  * Every connection runs with foreign keys on. A file is one other processes
  * may have open too, so it also runs in WAL mode, with WAL's crash-safe pairing
  * `synchronous = normal`, a 64 MiB WAL checkpointed on a thread of its own
- * once it fills (`wal` sets the size, for a test), a 64 MiB page cache, no
+ * once it fills (`wal` sets the size, for a test; `wal: false` keeps a
+ * rollback journal instead, for one file to copy elsewhere), a 64 MiB page cache, no
  * checkpoint on close or commit, and a one-minute busy timeout, and a new file starts in incremental
  * auto-vacuum mode, so the pages a delete frees can be given back (./owe.ts `reclaim`); a database in memory
  * belongs to this process alone and needs none of that. A graph batch may be large, so contention gives
@@ -55,7 +56,7 @@ let CACHE = 64 * 1024 * 1024
  */
 export let open = (
   path: string,
-  opts: { readOnly?: boolean; wal?: number } = {},
+  opts: { readOnly?: boolean; wal?: number | false } = {},
 ): Opened => {
   if (opts.readOnly) return reader(path)
   // A file's directory, made when absent. A name with none (`graph.db`, a
@@ -84,20 +85,10 @@ export let open = (
     // a VACUUM.
     let [{ page_count }] = d.query({ t: 'pragma', name: 'page_count' })
     if (!page_count) set('auto_vacuum', 'incremental')
-    set('journal_mode', 'wal')
-    set('synchronous', 'normal')
-    let wal = opts.wal ?? WAL
-    set('journal_size_limit', wal)
     // The pages a connection keeps: at SQLite's 2 MiB, a write to a graph of
     // a few hundred MiB read most of the index pages it touched back from the
     // file, statement by statement.
     set('cache_size', -CACHE / 1024)
-    // The last connection to close leaves the WAL for the next to append to.
-    // A checkpoint on close syncs both files, and the next process's first
-    // commit then starts the WAL afresh and syncs its header: together a
-    // short command's slowest steps. The checkpoint thread still moves the
-    // pages into the file.
-    configure(db, 'SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE', true)
     // A checkpoint that grows the file changes its size, and syncing a size
     // waits for ext4's journal to commit, which waits for every other
     // process's ordered writes: beside a copy of the graph held at its disk cap
@@ -107,29 +98,12 @@ export let open = (
     let [{ page_size }] = d.query({ t: 'pragma', name: 'page_size' })
     let mib = Number(page_count) * Number(page_size) / 128 / 2 ** 20
     if (d.file) chunk(db, Math.min(64, Math.max(1, Math.floor(mib))) * 2 ** 20)
-    // A checkpoint syncs the file, which on this box waited seconds behind
-    // other processes' writes, and SQLite runs its own inside the COMMIT that
-    // crosses its mark, on the committing thread: a server's main thread was
-    // held 5.6 s (bug bace8585). The hook takes its place, and only asks
-    // ./checkpoint.ts's thread once the WAL holds what it is kept to.
-    if (d.file) {
-      let mark = wal / Number(page_size)
-      let checkpoints = checkpoint(path)
-      let hook: { close(): void } | undefined = walHook(
-        db,
-        (pages) => pages >= mark && checkpoints.run(),
-      )
-      let close = d.close
-      d.close = () =>
-        checkpoints.close(() => {
-          try {
-            close()
-          } finally {
-            hook?.close()
-            hook = undefined
-          }
-        })
-    }
+    // A file kept with a rollback journal is one file, for a copy taken
+    // elsewhere. It starts that way rather than leaving WAL once written:
+    // SQLite refuses to leave WAL while another connection holds the file,
+    // as the checkpoint thread's does, at once and past any busy timeout.
+    if (opts.wal === false) set('journal_mode', 'delete')
+    else logged(db, d, path, opts.wal ?? WAL, Number(page_size))
   }
   return Object.assign(d, {
     ...loadable() && {
@@ -144,4 +118,47 @@ export let open = (
       },
     },
   })
+}
+
+// WAL mode with WAL's crash-safe pairing `synchronous = normal`, a WAL of `wal`
+// bytes, and its checkpoints on ./checkpoint.ts's thread.
+let logged = (
+  db: Database,
+  d: ReturnType<typeof driver>,
+  path: string,
+  wal: number,
+  pageSize: number,
+) => {
+  let set = (name: string, value: string | number) =>
+    d.query({ t: 'pragma', name, value })
+  set('journal_mode', 'wal')
+  set('synchronous', 'normal')
+  set('journal_size_limit', wal)
+  // The last connection to close leaves the WAL for the next to append to.
+  // A checkpoint on close syncs both files, and the next process's first
+  // commit then starts the WAL afresh and syncs its header: together a
+  // short command's slowest steps. The checkpoint thread still moves the
+  // pages into the file.
+  configure(db, 'SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE', true)
+  if (!d.file) return
+  // A checkpoint syncs the file, which on this box waited seconds behind
+  // other processes' writes, and SQLite runs its own inside the COMMIT that
+  // crosses its mark, on the committing thread: a server's main thread was
+  // held 5.6 s (bug bace8585). The hook takes its place, and only asks
+  // ./checkpoint.ts's thread once the WAL holds what it is kept to.
+  let checkpoints = checkpoint(path)
+  let hook: { close(): void } | undefined = walHook(
+    db,
+    (pages) => pages >= wal / pageSize && checkpoints.run(),
+  )
+  let close = d.close
+  d.close = () =>
+    checkpoints.close(() => {
+      try {
+        close()
+      } finally {
+        hook?.close()
+        hook = undefined
+      }
+    })
 }
