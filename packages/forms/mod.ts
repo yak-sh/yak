@@ -248,3 +248,19 @@ export let open = (
   (form.opens == null || now >= Date.parse(form.opens)) &&
   (form.closes == null || now < Date.parse(form.closes)) &&
   (form.capacity == null || count < form.capacity)
+
+/** The answers a form starts with for the person `row` is: each top-level
+ * question whose `fills` names `component.property` takes that property's
+ * value from the row, where it holds one. */
+/// prefilled({ form: {}, questions: [{ entity: { eid: 'q' }, question: { form: 'f', label: 'Email', kind: 'email', fills: 'individual.email' } }] }, { individual: { email: 'ann@example.org' } }) -> { q: 'ann@example.org' }
+/// prefilled({ form: {}, questions: [] }, undefined) -> {}
+export let prefilled = (
+  form: Form,
+  row: Readonly<Record<string, unknown>> | undefined,
+): Answers =>
+  Object.fromEntries(form.questions.flatMap(({ entity, question: q }) => {
+    let [comp, prop, ...more] = q.fills?.split('.') ?? []
+    if (q.within || !row || !prop || more.length) return []
+    let value = (row[comp] as Record<string, unknown> | undefined)?.[prop]
+    return filled(value) ? [[entity.eid, value]] : []
+  }))

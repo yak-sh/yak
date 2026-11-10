@@ -196,10 +196,10 @@ The access rows ask `owner` whatever either says.
 
 `readers` takes the same values as `floor` and asks them of whoever reads the
 component, whatever the app's mode: an entity wearing it is seen only by a
-reader standing on that floor. A `public` app's form sign-ups declare
-`"readers": "viewer"`, so anyone reads the form and only those holding a level
-on the app read the sign-ups. `readersIn(vocab)` reads the declarations back,
-and `floored(doc)` reports a `readers` that is not a floor too.
+reader standing on that floor. Form sign-ups declare `"readers": "editor"`, so
+anyone reads a `public` form and only the app's editors and owners read the
+sign-ups. `readersIn(vocab)` reads the declarations back, and `floored(doc)`
+reports a `readers` that is not a floor too.
 
 The [person-owned data](#person-owned-data) plugin enforces it, at the same
 reads and with the same bypasses. Each external read supplies `ReadOpts.level`

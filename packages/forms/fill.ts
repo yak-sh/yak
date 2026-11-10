@@ -24,14 +24,16 @@ export { blobAt, type Upload, upload } from './file.ts'
 
 let named = (path: readonly (string | number)[]) => path.join('.')
 
-/** What a form's door answers to GET: the form's own rows, and whether it
- * takes sign-ups now. */
+/** What a form's door answers to GET: the form's own rows, whether it
+ * takes sign-ups now, and, for a caller the app knows, the answers its rows
+ * already hold for them. */
 export type Door = {
   entity?: { eid: string }
   doc?: { title?: string; body?: string }
   form: Settings
   open: boolean
   questions: Question[]
+  answers?: Answers
 }
 
 export type Read = (at: string) => Promise<Door | string>
@@ -62,9 +64,12 @@ let entry = (questions: readonly Question[], within: string): Answers =>
     ).map((q) => [q.entity.eid, [entry(questions, q.entity.eid)]]),
   )
 
-/** What a form starts with: one entry in each required repeat. */
-let fresh = (questions: readonly Question[]): Answers =>
-  entry(questions, undefined as unknown as string)
+/** What a form starts with: one entry in each required repeat, and what the
+ * door already knows of the person filling it in. */
+let fresh = ({ questions, answers }: Door): Answers => ({
+  ...entry(questions, undefined as unknown as string),
+  ...answers,
+})
 
 /** The default read: the form door's JSON. */
 export let get: Read = async (at) => {
@@ -168,7 +173,7 @@ export let fill = (
     read,
     send,
     loading: 'Loading the form…',
-    initial: (door) => fresh(door.questions),
+    initial: fresh,
     upload: async (at, path, file) => {
       let result = await sendFile(at, String(path.at(-1)), file)
       return typeof result == 'string' ? result : { value: result.eid }
@@ -190,14 +195,15 @@ export let fill = (
 
 let drawn = (
   at: string,
-  { doc = {}, form: settings, open, questions }: Door,
+  door: Door,
   state: SubmitState<Door>,
   emit: (change: SubmitState<Door>) => void,
   send: Send,
   file: (path: (string | number)[], chosen: File) => Promise<void>,
 ): JSX.Element => {
+  let { doc = {}, form: settings, open, questions } = door
   let rows: Rows = { form: settings, questions }
-  let answers = state.values ?? fresh(questions)
+  let answers = state.values ?? fresh(door)
   let title = doc.title ? h('h2', {}, doc.title) : null
 
   if (state.sent) {

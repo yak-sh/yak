@@ -4,10 +4,11 @@ import { calendar, type Entry } from '@yaks/events'
 import { type Bundle, type Comp, derivedEid, signed } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { mode, reads } from '@yaks/member'
-import { type App, appStore, directoryOf, type Space } from './directory.ts'
+import { type App, appStore, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import type { Stored } from './graph.ts'
+import { recognized } from './recognized.ts'
 
 let quoted = (value: string) => JSON.stringify(value)
 let fields = (row: Bundle | undefined, name: string): Comp =>
@@ -50,18 +51,14 @@ let response = (req: Request, rows: Entry[], privateFeed = false) =>
   })
 
 /** Website sign-ups have directory people; texts have platform submitters.
- * Only the platform's vouched phone joins them, never a supplied answer. */
+ * Only what the platform proved of the person joins them (recognized.ts),
+ * never a supplied answer. */
 export let calendarScope = async (
   at: Stored,
   person: string,
 ): Promise<string> => {
-  let phone = at.env.STORE
-    ? await directoryOf(at.env.STORE).phoneAt(person)
-    : null
-  let people = phone
-    ? await at.graph.read(`.phone.number=${quoted(phone)}&.limit=1`)
-    : []
-  let ids = [...new Set([person, ...people.map((p) => p.entity.eid)])]
+  let me = await recognized(at, person)
+  let ids = [...new Set([person, ...me ? [me.entity.eid] : []])]
   return `(.registration.submitter=${quoted(person)}|${
     ids.map((id) => `.registration.person=${quoted(id)}`).join('|')
   })`

@@ -86,14 +86,14 @@ accepted registrations (`completed`, without `cancelled` or `waitlisted`). It
 works on private apps too. Cancelled events are excluded, duplicate sign-ups
 produce one entry, and every series keeps its own time zone. The token opens
 only this calendar; it supplies no app, graph or API access. Feed rows require
-an app viewer to read and an editor to write, so tokens stay out of anonymous
-graph reads even in open apps.
+an app editor to read and to write, so tokens stay out of anonymous graph reads
+even in open apps, and one viewer never reads another person's.
 
 The Operator returns the link with the person's own registration progress.
 `signup_calendar` retrieves or replaces it for the vouched submitter, or for
-website registrations matched through the platform person's verified phone. The
-registration id is optional. Replacing the token revokes the previous URL
-immediately. `registration.person` also supports feeds issued for directory
-people; it does not authorize a stranger to discover or replace another person's
-link. This package declares the feed shape; the platform supplies HTTP and
-storage.
+website registrations matched through the platform person's verified phone or
+address. The registration id is optional. Replacing the token revokes the
+previous URL immediately. `registration.person` also supports feeds issued for
+directory people; it does not authorize a stranger to discover or replace
+another person's link. This package declares the feed shape; the platform
+supplies HTTP and storage.

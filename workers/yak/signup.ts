@@ -1,6 +1,13 @@
 // The form conversation keeps its progress in the registration, in the app.
 // Only the kernel brings a vouched submitter to this door.
-import { type Answers, type Form, missing, next, open } from '@yaks/forms'
+import {
+  type Answers,
+  type Form,
+  missing,
+  next,
+  open,
+  prefilled,
+} from '@yaks/forms'
 import { type Bundle, type Comp, derivedEid, mint, signed } from '@yaks/graph'
 import { consentEid } from '@yaks/phone'
 import { Refused } from '@yaks/graph/errors'
@@ -74,22 +81,17 @@ let answering = (
   return out
 }
 
+// The texting number is theirs: the platform received the text from it.
 let initial = async (at: Stored, form: Form, phone: string) => {
   let [person] = await at.graph.read(
     `.phone.number=${quoted(phone)}${
       at.graph.vocab.comp('individual') ? '&?individual' : ''
     }&.limit=1`,
   )
-  let individual = comp(person, 'individual')
-  return Object.fromEntries(form.questions.flatMap((q) => {
-    if (q.question.within) return []
-    let value = q.question.fills == 'individual.phone'
-      ? phone
-      : q.question.fills?.startsWith('individual.')
-      ? individual[q.question.fills.slice('individual.'.length)]
-      : undefined
-    return value == null || value === '' ? [] : [[q.entity.eid, value]]
-  }))
+  return prefilled(form, {
+    ...person,
+    individual: { ...comp(person, 'individual'), phone },
+  })
 }
 
 export let signupIn = async (req: Request, at: Stored): Promise<Response> => {

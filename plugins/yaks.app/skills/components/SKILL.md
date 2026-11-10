@@ -573,8 +573,9 @@ everything else to anyone and keeps these rows from visitors with no role:
 
 Here the app's viewers, editors and owners read every `signup`, and a visitor
 signed out or holding no role reads none, nor counts them. The platform's
-`registration`, a form's sign-up, is declared this way. `readers` keeps rows
-from readers only; who may write them is still `floor` and the app's access.
+`registration`, a form's sign-up, declares `editor`, so only the people who run
+the app read sign-ups, never its viewers. `readers` keeps rows from readers
+only; who may write them is still `floor` and the app's access.
 
 ## Private per-person rows: `personal`
 

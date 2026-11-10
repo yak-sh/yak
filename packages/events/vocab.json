@@ -8,7 +8,7 @@
     "feed": {
       "component": true,
       "type": "object",
-      "readers": "viewer",
+      "readers": "editor",
       "floor": "editor",
       "description": "one person's private calendar subscription; its token opens only this feed",
       "required": ["person", "token"],

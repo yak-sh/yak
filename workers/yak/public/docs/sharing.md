@@ -208,13 +208,16 @@ sign-in working: they lose access to this space, not to the platform.
 ## Letting the people an app lists join it
 
 An app whose own data already lists its people, such as a church directory with
-every member's email address, can let them in without an invitation each. Its
-`vocab.json` names the properties that hold those addresses, and optionally an
-email domain, under `join`:
+every member's email address and phone number, can let them in without an
+invitation each. Its `vocab.json` names the properties that hold those addresses
+and numbers, optionally which rows count, and optionally an email domain, under
+`join`:
 
     {
       "join": {
         "emails": ["individual.email", "household.email"],
+        "phones": ["phone.number"],
+        "where": ".individual.status=member,attender",
         "domain": "example.org",
         "role": "viewer"
       },
@@ -222,24 +225,28 @@ email domain, under `join`:
     }
 
 `emails` lists `component.property` names this manifest declares; one value may
-hold several addresses separated by commas, and capitals do not matter. `domain`
-lets in every address at that domain, without the `@`. `role` is `viewer` (the
-default) or `editor`. `join` needs `emails`, `domain` or both, and takes effect
-with the next `app_deploy`.
+hold several addresses separated by commas, and capitals do not matter. `phones`
+does the same for phone numbers, however they were typed, and may name the
+platform's `phone.number`, which a form's directory fills from a person's phone.
+`where` is a query: only the rows it matches let their people join, so a former
+member's row lets nobody in. `domain` lets in every address at that domain,
+without the `@`. `role` is `viewer` (the default) or `editor`. `join` needs
+`emails`, `phones`, `domain` or some of them, and takes effect with the next
+`app_deploy`.
 
-Somebody signed in with a listed address who opens the private app sees a Join
-button instead of "Nothing here yet."; on a `public` app, where they can already
-read, `me()` returns `join` with the role pressing Join would give them (else
-`null`), so the page can offer it. Pressing it posts to the app's `api/join` and
-makes them a guest of that app at that role, exactly as an accepted
-`member_add(email, app, role)` would, and the space's people are told in their
-Updates. Everyone else is offered nothing, and their `api/join` is refused. The
-address is always the one the person signed in with, which the sign-in code
-proved is theirs.
+Somebody signed in with a listed address or number who opens the private app
+sees a Join button instead of "Nothing here yet."; on a `public` app, where they
+can already read, `me()` returns `join` with the role pressing Join would give
+them (else `null`), so the page can offer it. Pressing it posts to the app's
+`api/join` and makes them a guest of that app at that role, exactly as an
+accepted `member_add(email, app, role)` would, and the space's people are told
+in their Updates. Everyone else is offered nothing, and their `api/join` is
+refused. The address or number is always the one the person signed in with,
+which the sign-in code proved is theirs.
 
 `member_add` still works beside it. Removing a person's row, or changing its
-address, stops them joining again, but access they already have stays until
-`member_remove` takes it away, as for any guest.
+address or number, stops them joining again, but access they already have stays
+until `member_remove` takes it away, as for any guest.
 
 ## Publishing and installing
 

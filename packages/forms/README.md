@@ -61,9 +61,10 @@ otherwise `open`. `registration.answers` holds answers; no separate answer
 component is declared. The core reports missing answers and does not write
 marks.
 
-A registration declares @yaks/member's `"readers": "viewer"`: whatever the app's
-access, only those holding a level on the app read one, so a `public` form's
-sign-ups stay with its people.
+A registration declares @yaks/member's `"readers": "editor"`: whatever the app's
+access, only its owners and editors read one, so a `public` form's sign-ups, and
+a members' directory's, stay with the people who run it rather than every
+reader.
 
 ## Question progress
 

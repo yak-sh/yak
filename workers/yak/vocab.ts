@@ -31,6 +31,7 @@ import { idKeywords } from '@yaks/id'
 import { derived as builds } from '@yaks/builders/vocab'
 import { sessionDerived } from '@yaks/session/status'
 import { read } from '@yaks/yaml'
+import { parse } from '@yaks/query'
 import { docs as lensDocs } from '@yaks/lens/vocab'
 import { declaredLenses, lensPaths, retainedLenses } from './lenses.ts'
 import { sessionLens } from './session-lens.ts'
@@ -484,19 +485,22 @@ export let OPENS: Record<string, string> = {
 }
 
 /**
- * What is wrong with a manifest's `join` (join.ts): `emails` names this
- * manifest's own properties as `component.property`, `domain` is an email
- * domain, `role` is viewer or editor, and at least one of the first two is
- * said.
+ * What is wrong with a manifest's `join` (join.ts): `emails` and `phones`
+ * name this manifest's own properties as `component.property` (`phones` may
+ * also name the platform's `phone.number`), `where` is a query, `domain` is
+ * an email domain, `role` is viewer or editor, and at least one of emails,
+ * phones or domain is said.
  */
 /// joinErrors({ domain: 'example.org' }, {}) -> []
 /// joinErrors({ emails: ['m.email'] }, { m: { properties: { email: {} } } }) -> []
+/// joinErrors({ phones: ['phone.number'], where: '.m.status=member' }, {}) -> []
+/// joinErrors({ phones: ['phone.number'], where: '(.m.status=x' }, {}).length -> 1
 /// joinErrors({ role: 'owner' }, {}).length -> 2
 export let joinErrors = (join: unknown, defs: unknown): string[] => {
   if (!object(join)) {
     return [
-      'it is an object: { "emails": ["member.email"], "domain": ' +
-      '"example.org", "role": "viewer" }',
+      'it is an object: { "emails": ["member.email"], "phones": ' +
+      '["phone.number"], "domain": "example.org", "role": "viewer" }',
     ]
   }
   let own = object(defs) ? defs : {}
@@ -506,17 +510,39 @@ export let joinErrors = (join: unknown, defs: unknown): string[] => {
     return !more.length && object(def) && object(def.properties) &&
       prop in def.properties
   }
-  let { emails, domain, role, ...rest } = join
+  let paths = (name: string, list: unknown, also: string[] = []) =>
+    list === undefined ||
+      Array.isArray(list) && list.every((e) => typeof e == 'string')
+      ? (list as string[] ?? []).filter((e) =>
+        !declared(e) && !also.includes(e)
+      ).map((e) =>
+        `${name}: ${e} is not a component.property this manifest declares`
+      )
+      : [
+        `${name} is a list of component.property names, e.g. ["member.${
+          name.slice(0, -1)
+        }"]`,
+      ]
+  let { emails, phones, where, domain, role, ...rest } = join
+  let query = () => {
+    try {
+      parse(where as string)
+      return []
+    } catch (e) {
+      return [`where is a query: ${(e as Error).message}`]
+    }
+  }
   return [
     ...Object.keys(rest).map((k) =>
-      `${k} is not one of its words: emails, domain, role`
+      `${k} is not one of its words: emails, phones, where, domain, role`
     ),
-    ...emails === undefined ||
-        Array.isArray(emails) && emails.every((e) => typeof e == 'string')
-      ? (emails as string[] ?? []).filter((e) => !declared(e)).map((e) =>
-        `emails: ${e} is not a component.property this manifest declares`
-      )
-      : ['emails is a list of component.property names, e.g. ["member.email"]'],
+    ...paths('emails', emails),
+    ...paths('phones', phones, ['phone.number']),
+    ...where === undefined
+      ? []
+      : typeof where == 'string' && where.trim()
+      ? query()
+      : ['where is a query, such as ".member.status=current"'],
     ...domain === undefined ||
         typeof domain == 'string' && /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(domain)
       ? []
@@ -524,8 +550,8 @@ export let joinErrors = (join: unknown, defs: unknown): string[] => {
     ...role === undefined || role == 'viewer' || role == 'editor'
       ? []
       : ['role is viewer or editor: what joining makes them'],
-    ...emails === undefined && domain === undefined
-      ? ['it names emails, a domain, or both: who may join']
+    ...emails === undefined && phones === undefined && domain === undefined
+      ? ['it names emails, phones, a domain, or some of them: who may join']
       : [],
   ]
 }
