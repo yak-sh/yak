@@ -150,7 +150,7 @@ let [representation] = await files.graph.query('.representation')
 
 test('private artifact rows and ordinary blob paths disclose no bytes to catalog visitors', async () => {
   for (let person of [undefined, ANA, BO]) {
-    for (let q of ['.attachment', '.blob', '.sale_artifact']) {
+    for (let q of ['.attachment', '.blob', '.artifact', '.sale_artifact']) {
       let result = await files.ask(`query?q=${q}`, person)
       assertEquals(await result.json(), [])
     }

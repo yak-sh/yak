@@ -33,7 +33,21 @@ let storeOf = ({ env, space, app }: Asked) =>
   })
 let accessOf = (row: Bundle) => row.sale_access as SaleAccess | undefined
 let allowed = (at: Asked, row: Bundle) =>
-  editor(at) || !!accessOf(row) && mayReceive(accessOf(row)!, at.who)
+  editor(at) || !!accessOf(row) && mayReceive(accessOf(row)!, {
+      person: at.who.service?.person ?? at.who.person,
+      via: at.who.via,
+    })
+let artifactRows = (rows: Bundle[], sha: string, bytes: number) => {
+  let attachment = rows.find((row) => row.attachment)!.attachment as Comp
+  return rows.map((row) =>
+    row.entity.eid == sha
+      ? {
+        ...row,
+        artifact: { address: sha, media_type: attachment.mime, size: bytes },
+      }
+      : row
+  )
+}
 
 /** Provider payment identifiers stay on the seller's graph. */
 export let customerReceipt = (row: Bundle) => {
@@ -95,7 +109,12 @@ let upload = async (at: Asked) => {
     {
       mime: at.req.headers.get('content-type') ?? 'application/octet-stream',
       name,
-      protect: (rows, sha) => protectedArtifact(rows, sha, { buyer, via }),
+      protect: (rows, sha) =>
+        protectedArtifact(
+          artifactRows(rows, sha, bytes.byteLength),
+          sha,
+          { buyer, via },
+        ),
     },
   )
   return privateJson({
