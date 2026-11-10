@@ -710,7 +710,10 @@ let send = async (
     step(env, 'code_sent', req, { who: address })
     if (text) {
       let { phoneOf } = await import('./phones.ts')
-      await (await phoneOf(env)).send({ to: address, text: codeText(ask.code) })
+      await (await phoneOf(env)).send({
+        to: address,
+        text: codeText(ask.code),
+      })
       return null
     }
     await mail(env)(
@@ -1234,7 +1237,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     })
   }
 
-  // Signing out (T-136122): this browser forgets the person and stays itself.
+  // Signing out starts fresh guest work; old attribution receipts stay owned.
   // Only a POST, so a link a mail client fetches signs nobody out.
   if (path == LOGOUT && req.method == 'POST' && env.SESSION_SECRET) {
     return redirect(

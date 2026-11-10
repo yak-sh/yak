@@ -254,6 +254,7 @@ export type Answer = (
 // page compiles none of them (T-148886). Each still answers null to a path of
 // its segment it does not serve.
 let DOORS = new Map<string, () => Promise<Answer>>([
+  ['drafts', async () => (await import('./draft-door.ts')).draftDoor],
   ['pay', async () => (await import('./sale-door.ts')).saleDoor],
   ['stats', async () => (await import('./views.ts')).stats],
   ['connections', async () => (await import('./connections.ts')).own],

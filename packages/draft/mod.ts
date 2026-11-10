@@ -6,7 +6,7 @@
  * until it is sent or discarded, which empties its text in the journal, where
  * it can be undone.
  *
- * - `draftDoc`, `docs`: `draft{by, place, text, rev}` and the `typed{over}`
+ * - `draftDoc`, `docs`: `draft{by, via, place, text, rev}` and the `typed{over}`
  *   event (vocab.json).
  * - `drafts()`: the plugin a store composes; its hook (`merging`) merges a
  *   write over what another interface wrote meanwhile (plugin.ts).
@@ -29,3 +29,10 @@ export {
   type Drafts,
   type Stash,
 } from './desk.ts'
+
+export {
+  type DraftDoor,
+  draftGateway,
+  type DraftIdentity,
+  DraftRefused,
+} from './gateway.ts'

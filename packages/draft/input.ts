@@ -34,6 +34,7 @@ let desked = () =>
   })
 /** The person's drafts, keyed by where they type. */
 export let drafts: Drafts = {
+  has: (place) => desked().has(place),
   text: (place) => desked().text(place),
   type: (place, text) => desked().type(place, text),
   spend: (place, also) => desked().spend(place, also),

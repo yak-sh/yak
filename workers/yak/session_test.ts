@@ -45,7 +45,10 @@ test('session cookie domains follow the configured hostname trust', () => {
     domainOf(req('localhost'), { ...ENV, LOCAL_DEV: '1' }),
     'yaks.app',
   )
-  assertEquals(domainOf(req('yak.workers.dev'), { ...ENV, LOCAL_DEV: '1' }), '')
+  assertEquals(
+    domainOf(req('yak.workers.dev'), { ...ENV, LOCAL_DEV: '1' }),
+    '',
+  )
   assertEquals(domainOf(req('customer.example'), ENV), '')
   assertEquals(domainOf(req('yaks.app'), ENV), 'yaks.app')
 })
@@ -94,7 +97,10 @@ let last = CUT + SESSION
 test(
   'a cookie sealed before 2c05d0f6 is re-minted on sight, however young',
   async () => {
-    let old = await sealedOld({ person: 'p-1', space: null, exp: last }, SECRET)
+    let old = await sealedOld(
+      { person: 'p-1', space: null, exp: last },
+      SECRET,
+    )
     let r = await slid(asked(`${COOKIE}=${old}`), ENV, new Response('ok'))
     let fresh = await verify(value(r.headers.get('set-cookie') ?? ''), SECRET)
     assertEquals(fresh?.person, 'p-1')
@@ -360,4 +366,25 @@ test('a page and worker visit preserve a browser instrument without turning it i
   assertEquals([oldVisit?.person, oldVisit?.role], ['p-1', 'owner'])
   assert(oldVisit?.via)
   assertEquals((await granted(back, SECRET, 'eve/game'))?.via, oldVisit.via)
+})
+
+test('explicit logout starts a fresh guest instrument while sign-in preserves that instrument', async () => {
+  let { signedOut } = await import('./session.ts')
+  let signed = await minted(
+    asked(`${COOKIE}=${browserToken}`),
+    ENV,
+    SECRET,
+    'p-1',
+  )
+  let before = await browserOf(asked(`${COOKIE}=${value(signed)}`), SECRET)
+  let out = await signedOut(asked(`${COOKIE}=${value(signed)}`), ENV, SECRET)
+  let guest = await browserOf(asked(`${COOKIE}=${value(out)}`), SECRET)
+  assert(before?.via !== guest?.via)
+  let next = await minted(asked(`${COOKIE}=${value(out)}`), ENV, SECRET, 'p-2')
+  let claims = await verify(value(next), SECRET)
+  assertEquals(claims?.via, guest?.via)
+  assertEquals(claims?.person, 'p-2')
+  // Existing credentials keep working; explicit logout only replaces the
+  // cookie it sends, never a server-wide token or session revocation.
+  assertEquals((await verify(value(signed), SECRET))?.person, 'p-1')
 })

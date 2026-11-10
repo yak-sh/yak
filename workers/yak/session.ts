@@ -220,7 +220,10 @@ export let browserOf = async (
   if (!token || !secret) return null
   let claims = await verify(token, secret)
   if (claims) {
-    return browserIdentity(claims.via ?? `session:${sha256(token)}`, claims.exp)
+    return browserIdentity(
+      claims.via ?? `session:${sha256(token)}`,
+      claims.exp,
+    )
   }
   let browser = await opened<Browser>('browser', token, secret)
   return browser && typeof browser.via == 'string' && browser.via &&
@@ -264,11 +267,10 @@ export let minted = (
     )
   ).then((token) => cookie(token, domainOf(req, env), SESSION))
 
-/** The cookie signing out leaves (T-136122): the same browser, signed in as
- * nobody, so what it wrote as a guest stays its own. */
+/** Explicit sign-out starts fresh guest work. The preceding instrument keeps
+ * its directory claim and unfinished attribution receipts for that person. */
 export let signedOut = async (req: Request, env: Host, secret: string) => {
-  let browser = await browserOf(req, secret)
-  let via = browser?.source ?? browser?.via ?? crypto.randomUUID()
+  let via = crypto.randomUUID()
   let exp = Math.floor(Date.now() / 1000) + SESSION
   return cookie(
     await seal('browser', { via, exp } satisfies Browser, secret),

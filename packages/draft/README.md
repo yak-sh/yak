@@ -119,8 +119,11 @@ its fields and stops its subscription and timers when the page unmounts. Every
 input is stashed synchronously, so closing before a paced write completes leaves
 a recovery copy for the next load. Accepted text lives in the store;
 localStorage holds only pending recovery, scoped to this app's API address and
-person.
+person. Each pending field retains its owner through sign-in recovery. A failed
+target copy leaves that person’s copy readable in place; later guest input at
+the same field is separate, so another person cannot inherit it.
 
+`has(place)` distinguishes an existing empty edit from a place never held.
 `text(place)`, `type(place, text)` and `restore(place, text, over)` are the
 desk's same methods. `spend(place, bundles)` clears a draft in the same write as
 the thing made from it, and resolves to a boolean: a refusal restores the text.
@@ -131,3 +134,18 @@ to show a persistence refusal; without one it is raised for the page's error
 reporter. `by`, `stash` (or `false`) and `pace` may be supplied when a host
 already knows identity, supplies its own recovery storage, or needs a different
 write pace. The ordinary app needs none of them.
+
+A host that vouches an earlier principal may pass `recover: [principal]`, for
+example the same browser's guest instrument after sign-in. Each pending field
+changes ownership before recovery tries another storage location. The desk can
+keep using that copy in place until the store accepts it. Fresh guest input in
+the same field has separate ownership; it can pass to a later signed-in person
+without exposing the earlier person's pending text. Recovery merges copies held
+by the current person and never opens another app's scope.
+
+Private app Workers relay their draft route through the caller's `STORE` binding
+at `/drafts`. Its GET snapshot and POST `{principal, place, text, over}` use the
+platform-vouched identity, not the app's own grant. Personal drafts keep
+`draft.by`; guest drafts keep `draft.via` and retain guest authorship until the
+directory's sign-in receipt attributes it. Explicit logout starts fresh guest
+work, while earlier receipts and recovery copies remain with their person.

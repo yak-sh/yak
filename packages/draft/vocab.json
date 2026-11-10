@@ -29,6 +29,12 @@
           "type": "integer",
           "stamped": true,
           "description": "how many writes of its text the store has taken, so an interface tells the newer text from the older"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the vouched browser instrument owning guest input before it is handed to a person"
         }
       },
       "personal": "by"

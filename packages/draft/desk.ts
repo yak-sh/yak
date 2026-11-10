@@ -57,6 +57,8 @@ export type Stash = Pick<
 
 /** What a desk offers each place a person types in. */
 export type Drafts = {
+  /** Whether this place has been held, including an intentionally empty edit. */
+  has: (place: string) => boolean
   /** what is typed in `place` and not yet sent ('' for nothing), read
    * reactively */
   text: (place: string) => string
@@ -368,6 +370,7 @@ export let desk = (
   })
 
   return {
+    has: (place) => held.has(place),
     text: (place) => seen(place).value,
     type: (place, text) =>
       step(place, (h) => ({ ...h, local: text, stuck: false })),

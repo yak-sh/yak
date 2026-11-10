@@ -75,6 +75,7 @@ export let commandField = (
   let desks = new Map<string, ReturnType<typeof desk>>()
   let closed = false
   let drafts: Drafts = {
+    has: (place) => active.value?.has(place) ?? false,
     text: (place) => active.value?.text(place) ?? '',
     type: (place, text) => {
       if (!closed) active.value?.type(place, text)
@@ -172,7 +173,10 @@ export let commandField = (
                   emergency.delete(b.entity.eid)
                 } else if (current && !closed) {
                   let old = JSON.parse(copy.value), newer = JSON.parse(current)
-                  emergency.set(b.entity.eid, { key: copy.key, value: current })
+                  emergency.set(b.entity.eid, {
+                    key: copy.key,
+                    value: current,
+                  })
                   d?.restore(
                     copy.key.slice(oldPrefix.length + 'draft:'.length),
                     newer.text,
