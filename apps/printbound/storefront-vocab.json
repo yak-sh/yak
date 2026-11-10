@@ -1,0 +1,51 @@
+{
+  "$defs": {
+    "book_source": {
+      "description": "Saved chat or Markdown for one personal PrintBound book. owner is a vouched person; via keeps guest continuity until the book is claimed.",
+      "properties": {
+        "owner": {
+          "type": "string"
+        },
+        "via": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "markdown": {
+          "type": "string"
+        },
+        "dedication": {
+          "type": "string"
+        }
+      }
+    },
+    "book_prepared": {
+      "description": "The immutable document selected for this source revision; an edit clears the selection.",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "document": {
+          "type": "object"
+        }
+      }
+    },
+    "book_quote": {
+      "description": "The exact destination quote selected for this reviewed document.",
+      "properties": {
+        "quote": {
+          "type": "object"
+        }
+      }
+    },
+    "book_receipt": {
+      "description": "The print service receipt returned by the most recent purchase; progress is read from the print provider.",
+      "properties": {
+        "receipt": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}
