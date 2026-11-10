@@ -1,4 +1,11 @@
 import { recovery } from './recovery.js'
+let account = document.querySelector('[data-account]')
+account?.addEventListener('click', () => {
+  let login = new URL('https://yaks.app/login')
+  login.searchParams.set('return', location.href)
+  account.href = login.href
+})
+
 let desk = document.querySelector('#desk'),
   notice = document.querySelector('#notice')
 let esc = (value) =>

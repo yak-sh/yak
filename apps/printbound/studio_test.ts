@@ -22,13 +22,29 @@ let row = (id: string) => ({
   coloring_source: { prompt: 'Idea from ' + id },
 })
 let fixture = async ({ app, text }: typeof sources[number]) => {
-  let { document } = parseHTML('<main id="desk"></main><p id="notice"></p>')
+  let { document } = parseHTML(
+    '<a data-account href="https://yaks.app/login">Sign in</a><main id="desk"></main><p id="notice"></p>',
+  )
   Object.defineProperty(document, 'baseURI', {
     value: 'https://fixture.test/',
   })
   let desk = document.querySelector('#desk')!, handlers = new Map()
   desk.addEventListener = (name: string, fn: unknown) => handlers.set(name, fn)
-  let location = { hash: '#new/00000000-0000-4000-8000-000000000001' }
+  let location = {
+    hash: '#new/00000000-0000-4000-8000-000000000001',
+    get href() {
+      return 'https://fixture.test/studio' + this.hash
+    },
+  }
+  let account = document.querySelector('[data-account]')!,
+    accountClick = () => {},
+    place = ''
+  account.addEventListener = (
+    _name: string,
+    handler: EventListenerOrEventListenerObject,
+  ) => {
+    accountClick = handler as () => void
+  }
   let history = {
     replaceState: (_data: unknown, _unused: string, hash: string) => {
       location.hash = hash
@@ -70,7 +86,14 @@ let fixture = async ({ app, text }: typeof sources[number]) => {
   await run(
     document,
     fetch,
-    () => Promise.resolve({ bind() {}, field() {}, unbind() {} }),
+    () =>
+      Promise.resolve({
+        bind(form: Element, name: string) {
+          if (form.matches('[data-source]')) place = name
+        },
+        field() {},
+        unbind() {},
+      }),
     location,
     history,
     (_name: string, handler: () => Promise<void>) => navigate = handler,
@@ -85,6 +108,10 @@ let fixture = async ({ app, text }: typeof sources[number]) => {
   return {
     document,
     posts,
+    login: () => {
+      accountClick()
+      return { url: new URL(account.getAttribute('href')!), place }
+    },
     load: (id: string) => {
       let response = held<Record<string, unknown>>()
       loads.set(id, response)
@@ -106,6 +133,26 @@ let fixture = async ({ app, text }: typeof sources[number]) => {
 }
 
 for (let source of sources) {
+  test(`${source.app} signs in with the current stable recovery place and returns to the selected book`, async () => {
+    let f = await fixture(source), fresh = f.login()
+    equal(fresh.url.origin + fresh.url.pathname, 'https://yaks.app/login')
+    equal(
+      fresh.url.searchParams.get('return'),
+      'https://fixture.test/studio#new/00000000-0000-4000-8000-000000000001',
+    )
+    equal(fresh.place, 'book:00000000-0000-4000-8000-000000000001')
+    let selected = '00000000-0000-4000-8000-000000000002',
+      pending = f.load(selected)
+    pending.resolve()
+    await pending.done
+    let saved = f.login()
+    equal(
+      saved.url.searchParams.get('return'),
+      'https://fixture.test/studio#book/' + selected,
+    )
+    equal(saved.place, 'book:' + selected)
+  })
+
   test(`${source.app} keeps the latest book when older reads finish later`, async () => {
     let f = await fixture(source), a = f.load('a'), b = f.load('b')
     b.resolve()
