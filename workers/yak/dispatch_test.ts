@@ -48,6 +48,7 @@ import { commandAt } from './app-command.ts'
 import { caught, within } from './defects.ts'
 import type { Env } from './env.ts'
 import { nobody, type Who } from './session.ts'
+import { ADDRESS, MOUNT } from './route.ts'
 
 let SECRET = 'a-probe-secret'
 
@@ -169,6 +170,32 @@ test('the worker is handed who is looking, and never the cookie', async () => {
   // The session cookie is a credential for every space this person belongs
   // to; the app is owed this visit and no more. Its own cookies survive.
   assertEquals(sent.headers.get('cookie'), 'theme=dark')
+})
+
+test('a custom-domain worker receives its public URL and mount', async () => {
+  for (
+    let [publicUrl, path, mount, expected = publicUrl] of [
+      ['https://wedding.example/?invite=key', '/?invite=key', '/'],
+      ['https://wedding.example/recipes/rsvp', '/rsvp', null],
+      [
+        'https://wedding.example/api/assets/v7/photo.png',
+        '/photo.png',
+        '/',
+        'https://wedding.example/photo.png',
+      ],
+    ] as const
+  ) {
+    let m = mirror()
+    let req = visit(path, {
+      [ADDRESS]: publicUrl,
+      ...(mount ? { [MOUNT]: mount } : {}),
+    })
+    await ran(envOf(m.get), space, app, req, who)
+    let sent = m.seen()
+    assertEquals(sent.url, expected)
+    assertEquals(sent.headers.get(MOUNT), mount)
+    assertEquals(sent.headers.get(ADDRESS), null)
+  }
 })
 
 test('the worker acts as its vouched browser without receiving the browser cookie', async () => {
@@ -815,6 +842,65 @@ let loaded = (worker: string) => {
   return import(
     data(SHIM.replaceAll(`"./${WORKER}"`, JSON.stringify(data(worker))))
   )
+}
+
+let { default: domainWorker } = await loaded(`export default {
+  async fetch(req, env) {
+    let url = new URL(req.url)
+    let mount = req.headers.get('x-yak-mount') || '/recipes/'
+    if (url.searchParams.has('invite')) {
+      return Response.redirect(new URL(mount + '#rsvp', url), 303)
+    }
+    if (req.headers.get('origin') != url.origin) return new Response('', { status: 403 })
+    let file = await env.FILES.fetch(req)
+    let saved = await env.APP.fetch('/apply', { method: 'POST', body: await req.text() })
+    return Response.json([await file.text(), await saved.text()])
+  },
+}`)
+
+for (
+  let [host, mount] of [
+    ['wedding.example', '/'],
+    ['family.example', '/recipes/'],
+    ['jeff.yaks.app', '/recipes/'],
+  ]
+) {
+  let publicUrl = `https://${host}${mount}`
+  let headers = host == 'jeff.yaks.app' ? {} : {
+    [ADDRESS]: publicUrl,
+    ...(mount == '/' ? { [MOUNT]: mount } : {}),
+  }
+  let kernel = {
+    fetch: async (req: Request) =>
+      new Response(`${req.method} ${req.url} ${await req.text()}`),
+  }
+  let env = envOf(() => ({
+    fetch: (req) => domainWorker.fetch(req, { KERNEL: kernel }, {}),
+  }))
+  test(`an invitation redirect stays on ${host}`, async () => {
+    let req = visit('/?invite=key', {
+      ...headers,
+      ...(host == 'jeff.yaks.app'
+        ? {}
+        : { [ADDRESS]: publicUrl + '?invite=key' }),
+    })
+    let res = await ran(env, space, app, req, who)
+    assertEquals(res!.status, 303)
+    assertEquals(res!.headers.get('location'), publicUrl + '#rsvp')
+  })
+  test(`a same-origin form and its worker doors stay on ${host}`, async () => {
+    let req = new Request('https://jeff.yaks.app/recipes/rsvp', {
+      method: 'POST',
+      headers: { ...headers, origin: `https://${host}` },
+      body: 'saved reply',
+    })
+    let res = await ran(env, space, app, req, who)
+    assertEquals(res!.status, 200)
+    assertEquals(await res!.json(), [
+      `POST ${publicUrl}rsvp saved reply`,
+      `POST ${publicUrl}api/apply saved reply`,
+    ])
+  })
 }
 
 // The worker the door test runs the shim over, loaded once.

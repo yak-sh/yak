@@ -58,7 +58,7 @@ import { scriptOf, storeName, url } from './directory.ts'
 import type { Env } from './env.ts'
 import { accountUrl, failure, resent } from '@yaks/cloudflare/api'
 import { oops } from './pages.ts'
-import { bearing, GRANT } from './route.ts'
+import { ADDRESS, bearing, GRANT, MOUNT } from './route.ts'
 import type { Who } from './session.ts'
 import type { Dispatch } from './door.ts'
 import { failed, noted, refusal } from './unseen.ts'
@@ -405,11 +405,24 @@ let handed = async (
   source?: string,
 ) => {
   let headers = new Headers(req.headers)
-  for (let h of [...VOUCH, GRANT, SELF]) headers.delete(h)
+  let mount = app.mount ?? headers.get(MOUNT)
+  let url = new URL(req.url)
+  let address = headers.get(ADDRESS)
+  if (address) {
+    let publicUrl = new URL(address)
+    // Routing inserted the app's first segment on an app domain. Keep any
+    // subsequent file or sandbox rewrite when putting its public mount back.
+    publicUrl.pathname = headers.has(MOUNT)
+      ? headers.get(MOUNT)! + url.pathname.split('/').slice(2).join('/')
+      : url.pathname
+    publicUrl.search = url.search
+    url = publicUrl
+  }
+  for (let h of [...VOUCH, GRANT, SELF, ADDRESS]) headers.delete(h)
   uncookied(headers)
   headers.set('x-yak-app', app.slug)
   headers.set('x-yak-app-eid', app.eid)
-  if (app.mount) headers.set('x-yak-mount', app.mount)
+  if (mount) headers.set(MOUNT, mount)
   if (who.person) headers.set('x-yak-person', who.person)
   if (who.role) headers.set('x-yak-role', who.role)
   if (who.via) headers.set('x-yak-via', who.via)
@@ -418,7 +431,7 @@ let handed = async (
   if (source) headers.set(COMMAND_SOURCE, source)
   headers.set(GRANT, await granting(secret, store, who, app.policy))
   headers.set(SELF, await owning(secret, store, app))
-  return new Request(req, { headers })
+  return new Request(url, new Request(req, { headers }))
 }
 
 // A script that is not there, which is every app that has never deployed a
