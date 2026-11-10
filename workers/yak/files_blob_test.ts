@@ -7,7 +7,11 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { blobAt } from './cache.ts'
-import { blobBytes, fetch } from './files.ts'
+import { blobBytes, fetch, fileBytes } from './files.ts'
+import { within } from './defects.ts'
+import { clock } from '@yaks/testing'
+import type { Bundle } from '@yaks/graph'
+import type { Cache } from './purge.ts'
 import { platform } from './serving-probe.ts'
 
 let scenario = platform()
@@ -54,6 +58,77 @@ test('a blob is read in-process when the cache in front of the door fails', asyn
   let got = await blobBytes(failing, { eid }, prefix, sha)
   assertEquals(got.status, 200)
   assertEquals(new Uint8Array(await got.arrayBuffer()), bytes)
+})
+
+test('a failed file cache key is repaired without waiting for its purge', async () => {
+  let repair = Promise.withResolvers<void>()
+  let sent: { keys: string[]; cache?: Cache }[] = []
+  let failing = {
+    ...env,
+    FILES: {
+      fetch: () => Promise.resolve(new Response(null, { status: 520 })),
+    },
+    PURGER: {
+      idFromName: (name: string) => name,
+      get: () => ({
+        purge: (keys: string[], _spread?: boolean, cache?: Cache) => {
+          sent.push({ keys, cache })
+          return repair.promise
+        },
+      }),
+    },
+  }
+  try {
+    let got = await blobBytes(failing, { eid }, prefix, sha)
+    assertEquals(new Uint8Array(await got.arrayBuffer()), bytes)
+    assertEquals(sent, [{
+      keys: [new URL(blobAt(eid, sha)).pathname],
+      cache: 'files',
+    }])
+  } finally {
+    repair.resolve()
+  }
+})
+
+test('a missing file still answers 404 and reports a failed cache repair', async () => {
+  let rows: Bundle[] = []
+  let retained: Promise<void>[] = []
+  let time = clock()
+  let failure = Error('purge unavailable')
+  let failing = {
+    ...env,
+    ERRORS: {
+      send: (batch: Bundle[]) => {
+        rows.push(batch[0])
+        return Promise.resolve()
+      },
+    },
+    FILES: {
+      fetch: () => Promise.resolve(new Response(null, { status: 520 })),
+    },
+    PURGER: {
+      idFromName: (name: string) => name,
+      get: () => ({ purge: () => Promise.reject(failure) }),
+    },
+  }
+  let got = await within(
+    failing,
+    {},
+    () => fileBytes(failing, eid, 'ada/cookbook', '/src/config.php', ''),
+    time,
+    {
+      retain: (p) => {
+        retained.push(p)
+      },
+    },
+  )
+  await Promise.all(retained)
+  assertEquals(got.status, 404)
+  await got.body?.cancel()
+  assertEquals(rows.map((r) => (r.exception as { value: string }).value), [
+    'the files cache answered 520',
+    'purge unavailable',
+  ])
 })
 
 test('the blob door reads no bytes for HEAD and keeps missing blobs private', async () => {

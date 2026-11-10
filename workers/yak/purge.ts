@@ -13,7 +13,8 @@
 // token rather than spend a refusal, and every tag owed while it waits rides
 // with it, up to 100 a purge. The directory, whose writes they follow
 // (facets/pages-graph.ts), and a release, which purges its app as it raises
-// its fence (tools.ts `released`), send theirs there.
+// its fence (tools.ts `released`), send theirs there. Files repairs a failed
+// cache path through the same quota, in its own entrypoint's cache.
 //
 // An acknowledged purge has not reached every cache yet. Cloudflare
 // acknowledges one in about 60 ms, and it is gone from most colos within
@@ -37,8 +38,32 @@ export type Purged = {
  * where its caller asks it to: past the longest seen (T-150618). */
 export let SPREAD = 2_500
 
-/** The Site entrypoint, as far as purging asks of it. */
-export type Purges = { purge(tags: string[]): Promise<Purged> }
+export type Cache = 'site' | 'files'
+
+/** A cached entrypoint and the shared quota's destination. */
+export type Purges = { purge(keys: string[]): Promise<Purged> }
+
+/** The runtime's cache, reached only from its owning entrypoint. */
+export type Caching = {
+  purge(options: { tags?: string[]; pathPrefixes?: string[] }): Promise<Purged>
+}
+
+export let cleared = async (
+  cache: Caching | undefined,
+  options: Parameters<Caching['purge']>[0],
+): Promise<Purged> => {
+  if (!cache) {
+    return {
+      success: false,
+      errors: [{ code: 0, message: 'entrypoint has no cache to purge' }],
+    }
+  }
+  let { success, errors } = await cache.purge(options)
+  return {
+    success,
+    errors: errors.map(({ code, message }) => ({ code, message })),
+  }
+}
 
 /** The tag on every answer an app gave, and on every answer in a space. */
 export let SITE_TAG = 'site'
@@ -70,13 +95,13 @@ export class Unpurged extends Error {}
 // Tags owed together, the writers waiting on them, and when the purge that
 // took the last of them was sent.
 type Round = {
-  tags: Set<string>
+  keys: Set<string>
   done: PromiseWithResolvers<void>
   refused: number
   sent: number
 }
 let round = (): Round => ({
-  tags: new Set(),
+  keys: new Set(),
   done: Promise.withResolvers(),
   refused: 0,
   sent: 0,
@@ -84,7 +109,7 @@ let round = (): Round => ({
 // A round going again takes in the one owed since, and settles it with its own.
 let merge = (r: Round, later: Round | null) => {
   if (!later) return r
-  for (let tag of later.tags) r.tags.add(tag)
+  for (let tag of later.keys) r.keys.add(tag)
   r.done.promise.then(() => {
     later.sent = r.sent
     later.done.resolve()
@@ -123,8 +148,12 @@ let merge = (r: Round, later: Round | null) => {
  * assertEquals(sent, [['app:a'], ['app:b', 'app:c']])
  * ```
  */
-export let purger = (site: Purges, wait = sleep, now = Date.now) => {
-  let owed: Round | null = null
+export let purger = (
+  destination: { purge(keys: string[], cache: Cache): Promise<Purged> },
+  wait = sleep,
+  now = Date.now,
+) => {
+  let owed = new Map<Cache, Round>()
   let flying = false
   let tokens = BUCKET, at = now()
   let token = async () => {
@@ -136,46 +165,50 @@ export let purger = (site: Purges, wait = sleep, now = Date.now) => {
       await wait((1 - tokens) * REFILL)
     }
   }
-  let send = async (r: Round) => {
-    let batch = [...r.tags].slice(0, BATCH)
+  let send = async (r: Round, cache: Cache) => {
+    let batch = [...r.keys].slice(0, BATCH)
     r.sent = now()
-    let said = await site.purge(batch)
-    if (said.success) { for (let tag of batch) r.tags.delete(tag) }
+    let said = await destination.purge(batch, cache)
+    if (said.success) { for (let tag of batch) r.keys.delete(tag) }
     else {
       let limited = said.errors.some((e) => e.code == LIMITED)
       if (limited) tokens = 0
       if (!limited || ++r.refused == TRIES) {
         throw new Unpurged(
-          `purge of ${batch.length} tags refused: ${
+          `purge of ${batch.length} keys refused: ${
             said.errors.map((e) => `${e.code} ${e.message}`).join('; ')
           }`,
         )
       }
     }
-    if (r.tags.size) owed = merge(r, owed)
+    if (r.keys.size) owed.set(cache, merge(r, owed.get(cache) ?? null))
     else r.done.resolve()
   }
   // Writers in one turn share the first purge, and everything owed while a
   // purge flies or waits for its token shares the next.
   let fly = async () => {
     await null
-    while (owed) {
+    while (owed.size) {
       await token()
-      let r = owed
-      owed = null
-      await send(r).catch((e) => r.done.reject(e))
+      let [cache, r] = owed.entries().next().value!
+      owed.delete(cache)
+      await send(r, cache).catch((e) => r.done.reject(e))
     }
     flying = false
   }
-  return (tags: string[], spread = false): Promise<void> => {
+  return (
+    tags: string[],
+    spread = false,
+    cache: Cache = 'site',
+  ): Promise<void> => {
     if (!tags.length) return Promise.resolve()
-    owed ??= round()
-    for (let tag of tags) owed.tags.add(tag)
+    let r = owed.get(cache) ?? round()
+    owed.set(cache, r)
+    for (let tag of tags) r.keys.add(tag)
     if (!flying) {
       flying = true
       void fly()
     }
-    let r = owed
     return spread
       ? r.done.promise.then(() => wait(Math.max(0, r.sent + SPREAD - now())))
       : r.done.promise
@@ -185,18 +218,21 @@ export let purger = (site: Purges, wait = sleep, now = Date.now) => {
 /** The Purger binding: the one Durable Object every purge goes through. */
 export type Purgers = {
   idFromName(name: string): unknown
-  get(id: unknown): { purge(tags: string[], spread?: boolean): Promise<void> }
+  get(id: unknown): {
+    purge(keys: string[], spread?: boolean, cache?: Cache): Promise<void>
+  }
 }
 
-/** Purge `tags` from Site's cache, through the Purger, and with `spread`, wait
- * until they are gone from every colo's. Where Site has no cache (a test run,
- * `wrangler dev`) none is bound, so there is nothing to do. */
+/** Purge Site tags or Files path prefixes through the account's quota. With
+ * `spread`, wait until they are gone from every colo's. A test run binds no
+ * Purger, so there is nothing to do. */
 export let purge = (
   env: { PURGER?: Purgers },
-  tags: string[],
+  keys: string[],
   spread = false,
+  cache: Cache = 'site',
 ) => {
   let { PURGER } = env
-  if (!PURGER || !tags.length) return Promise.resolve()
-  return PURGER.get(PURGER.idFromName('purger')).purge(tags, spread)
+  if (!PURGER || !keys.length) return Promise.resolve()
+  return PURGER.get(PURGER.idFromName('purger')).purge(keys, spread, cache)
 }

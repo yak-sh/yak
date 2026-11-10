@@ -30,7 +30,8 @@ import { at, blobAt, immutable, keptAt, servableAt } from './cache.ts'
 import { elapsed, hop } from './lib/hops.ts'
 import { type Served, storeOf } from './door.ts'
 import { answered, metaOf } from './meta.ts'
-import { caught, relayed, responding } from './defects.ts'
+import { background, caught, relayed, responding } from './defects.ts'
+import { purge } from './purge.ts'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from './versions.ts'
 import { drawn, ICON_SVG } from './raster.ts'
@@ -283,6 +284,13 @@ let through = async (env: Env, req: Request) => {
     caught(new Error(`the files cache answered ${cached.status}`), {
       request: `${req.method} files`,
     })
+    // A broken entry can keep failing across versions. Evict its path from
+    // Files' cache through the account's quota, while this read uses R2.
+    background(
+      purge(env, [new URL(req.url).pathname], false, 'files').catch((e) =>
+        caught(e, { request: 'Files cache repair' })
+      ),
+    )
   } catch (e) {
     if ((e as Error | null)?.name != 'DataCloneError') throw e
   }

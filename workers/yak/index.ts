@@ -22,7 +22,13 @@ import type { entry as tracked } from './defects-runtime.ts'
 import type { Env, Inbound } from './env.ts'
 import type { builds as built } from './builds.ts'
 import type { Lent } from './kernel.ts'
-import { type Purged, purger } from './purge.ts'
+import {
+  type Cache,
+  type Caching,
+  cleared,
+  type Purged,
+  purger,
+} from './purge.ts'
 import type { Asked, Heard } from './outlast.ts'
 import type { Lexicon as Lexical } from './lexicon.ts'
 import type { Conversion } from './arrival.ts'
@@ -168,6 +174,7 @@ export class Files extends WorkerEntrypoint {
   // Cloudflare types out of this Worker, so the base's own generic is not
   // resolved here.
   declare env: Env
+  declare ctx: { cache?: Caching }
 
   fetch(req: Request): Promise<Response> {
     return entry(
@@ -175,6 +182,14 @@ export class Files extends WorkerEntrypoint {
       'Files fetch',
       async () => (await import('./files.ts')).fetch(req, this.env),
       req,
+    )
+  }
+
+  purge(paths: string[]): Promise<Purged> {
+    return entry(
+      this.env,
+      'Files purge',
+      () => cleared(this.ctx.cache, { pathPrefixes: paths }),
     )
   }
 }
@@ -189,7 +204,7 @@ export class Files extends WorkerEntrypoint {
 // calls it through the SITE binding, for every write that changes a page.
 export class Site extends WorkerEntrypoint {
   declare env: Env
-  declare ctx: { cache?: Purging }
+  declare ctx: { cache?: Caching }
 
   fetch(req: Request): Promise<Response> {
     return entry(
@@ -201,26 +216,13 @@ export class Site extends WorkerEntrypoint {
   }
 
   purge(tags: string[]): Promise<Purged> {
-    return entry(this.env, 'Site purge', async () => {
-      // Site is only ever bound where its cache is on (wrangler.toml), so a
-      // purge with no cache to reach is a failure to hear about.
-      if (!this.ctx.cache) {
-        return {
-          success: false,
-          errors: [{ code: 0, message: 'Site has no cache to purge' }],
-        }
-      }
-      let { success, errors } = await this.ctx.cache.purge({ tags })
-      return {
-        success,
-        errors: errors.map(({ code, message }) => ({ code, message })),
-      }
-    })
+    return entry(
+      this.env,
+      'Site purge',
+      () => cleared(this.ctx.cache, { tags }),
+    )
   }
 }
-
-// What the runtime lends an entrypoint whose cache is on (wrangler.toml).
-type Purging = { purge(o: { tags: string[] }): Promise<Purged> }
 
 // The one object every purge goes through (purge.ts `purge`): Cloudflare keeps
 // one purge budget for the whole account, so it is spent in one place, and
@@ -229,10 +231,15 @@ type Purging = { purge(o: { tags: string[] }): Promise<Purged> }
 // `apply`: an RPC stub answers every property as a method of the far side.
 export class Purger extends DurableObject<Env> {
   declare env: Env
-  #purge = purger({ purge: (tags) => this.env.SITE!.purge!(tags) })
+  #purge = purger({
+    purge: (keys, cache) =>
+      cache == 'files'
+        ? this.env.FILES!.purge!(keys)
+        : this.env.SITE!.purge!(keys),
+  })
 
-  purge(tags: string[], spread = false): Promise<void> {
-    return this.#purge(tags, spread)
+  purge(keys: string[], spread = false, cache: Cache = 'site'): Promise<void> {
+    return this.#purge(keys, spread, cache)
   }
 }
 
