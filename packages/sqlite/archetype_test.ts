@@ -218,6 +218,27 @@ test('identity reads see pending component changes before classification', async
   }
 })
 
+test('a numbered store keeps its archetype read index without declaring archetypes', () => {
+  let words = loadVocab([domain, {
+    $defs: {
+      entity: {
+        component: true,
+        type: 'object',
+        properties: { num: { type: 'number' } },
+      },
+    },
+  }])
+  let s = storage(mem(), words)
+  s.install()
+  s.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'plain' }, doc: {} },
+      { entity: { eid: 'task' }, doc: {}, task: {} },
+    ])
+  )
+  assertEquals(s.read('.doc !task').map((b) => b.entity.eid), ['plain'])
+})
+
 test('classification begins the next presence comparison in a ledger', () => {
   let l = ledger(mem())
   l.moved('a', 'doc', false)

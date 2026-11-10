@@ -347,10 +347,12 @@ let spine = (vocab: Vocab): Stmt[] => [
 // its own; for one that does not they are made here, and stay the store's own
 // bookkeeping, which its reads never show.
 let POINTED = loadVocab([archetypeDoc])
-export let pointerIndex: CreateIndex = indexDdl(POINTED, 'entity', {
-  props: ['archetype'],
-  unique: false,
-})
+let pointedIndex = (vocab: Vocab): CreateIndex =>
+  indexDdl(vocab, 'entity', {
+    props: vocab.prop('entity', 'num') ? ['archetype', 'num'] : ['archetype'],
+    unique: false,
+  })
+export let pointerIndex: CreateIndex = pointedIndex(POINTED)
 let pointed = (vocab: Vocab): Stmt[] =>
   tables(POINTED).filter((name) => !vocab.comp(name))
     .map((name) => tableDdl(POINTED, name))
@@ -417,17 +419,14 @@ export let indexed = (
 ): readonly CreateIndex[] => {
   let held = indexes.get(vocab)
   if (!held) indexes.set(vocab, held = indexing(vocab))
-  return storage && !vocab.comp('archetype') ? [pointerIndex, ...held] : held
+  return storage && !vocab.comp('archetype')
+    ? [pointedIndex(vocab), ...held]
+    : held
 }
 let indexing = (vocab: Vocab): CreateIndex[] => [
   // Bare schema adapters can still hold the legacy spine. A storage install
   // asks for its internal pointer index after adding the column.
-  ...vocab.comp('archetype')
-    ? [indexDdl(vocab, 'entity', {
-      props: vocab.prop('entity', 'num') ? ['archetype', 'num'] : ['archetype'],
-      unique: false,
-    })]
-    : [],
+  ...vocab.comp('archetype') ? [pointedIndex(vocab)] : [],
   ...tables(vocab)
     .flatMap((name) =>
       vocab.indexes(name).map((i) => indexDdl(vocab, name, i))
@@ -501,7 +500,7 @@ export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
  * fingerprint instead, and moving it fits every store once more: move it when
  * fitting learns to see something it did not.
  */
-export let FIT = 8
+export let FIT = 9
 
 /**
  * What fitting reads off a file before an install creates anything: each

@@ -6,7 +6,7 @@ import { assertEquals } from '@std/assert'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { type Bundle, graph } from '@yaks/graph'
 import { by, insert, scan, val } from '@yaks/sql'
-import { storage } from '@yaks/sqlite'
+import { reclassify, storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { schema } from './ddl.ts'
@@ -33,7 +33,8 @@ let words: VocabDoc = {
 }
 let fixture = async (classified = true) => {
   let vocab = loadVocab(classified ? [archetypeDoc, words] : [words])
-  let store = storage(open(':memory:'), vocab)
+  let sql = open(':memory:')
+  let store = storage(sql, vocab)
   store.install()
   let db = store.statements
   for (let stmt of schema()) db.query(stmt)
@@ -54,6 +55,7 @@ let fixture = async (classified = true) => {
   let text = fields(vocab, searched)
   return {
     db,
+    reclassify: (eids: string[]) => reclassify(sql, eids),
     text,
     read: (f = text) => sources(db, f).map((s) => [s.entity, s.text]),
     has: (eid: string) => !!vectorOf(db, eid, embedder.model),
@@ -143,13 +145,14 @@ test('removing an exclusion restores the classified owner eligibility', () => {
   ])
 })
 
-// A plain SQL host uses the same queue triggers, without graph classification.
+// A raw writer keeps its pointers current before the queue reads them.
 let moved = await fixture(false)
 await sweep(moved.db, moved.text, embedder)
 
 test('an arriving exclusion spends its old vector', async () => {
   assertEquals(moved.has('plain'), true)
   moved.db.query(insert('draft', { entity: moved.owner('plain') }))
+  moved.reclassify(['plain'])
   await sweep(moved.db, moved.text, embedder)
   assertEquals(moved.has('plain'), false)
 })
@@ -161,6 +164,7 @@ test('a departing exclusion restores an eligible vector', async () => {
     from: 'draft',
     where: by({ entity: moved.owner('draft') }),
   })
+  moved.reclassify(['draft'])
   await sweep(moved.db, moved.text, embedder)
   assertEquals(moved.has('draft'), true)
 })
@@ -171,6 +175,7 @@ deleted.db.query(insert('tombstone', {
   entity: deleted.owner('plain'),
   deleted_at: '2026-10-11T00:00:00Z',
 }))
+deleted.reclassify(['plain'])
 
 test('a tombstone stops its text being a source', () => {
   assertEquals(deleted.read(), [['drafting', 'drafting\ndrafting body']])
@@ -186,6 +191,7 @@ test('a queued tombstone spends its old vector', async () => {
 // drained. The corpus and its vectors predate the changed exclusion.
 let empty = await fixture(false)
 empty.db.query({ t: 'delete', from: 'draft' })
+empty.reclassify(['draft', 'both'])
 let beforeDraft = empty.text.map((f) => ({ ...f, not: ['result'] }))
 await sweep(empty.db, beforeDraft, embedder)
 let addedEmpty = watch(empty.db, empty.text)
