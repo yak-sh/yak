@@ -7,7 +7,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { after, same } from '@yaks/fp'
-import { absent, and, eq, fields, limit, lt, present, want } from '@yaks/query'
+import { absent, and, eq, fields, limit, present, want } from '@yaks/query'
 import { faultOf, stablePlace } from './fault.ts'
 import { enrichFrames } from './frames.ts'
 import { comp, type Desk, type Frame, str, title } from './model.ts'
@@ -107,14 +107,6 @@ export let grouped = (
   let frames = Array.isArray(x.frames) ? x.frames as Frame[] : []
   let back = !!bug && regresses(row, bug, before)
   let marks = inherited(row, bug, before)
-  // A probe proves the path here and stops: its receipt, and no bug.
-  if (row.probe) {
-    return [{
-      entity: row.entity,
-      $was: { probe: { grouped: null } },
-      probe: { grouped: new Date().toISOString() },
-    }]
-  }
   return [
     {
       ...row,
@@ -189,7 +181,7 @@ export let grouped = (
 // carries; of its bug, the counters it moves and when it was resolved, and
 // its marks whole only for an imported sample.
 let MARKS = ['archived', 'notified', 'resolved']
-let ITS = ['error', 'exception', 'during', 'refusal', 'probe', ...MARKS]
+let ITS = ['error', 'exception', 'during', 'refusal', ...MARKS]
 let COUNTED = fields(
   'bug.hits',
   'bug.days',
@@ -244,25 +236,6 @@ let earlier = (
   ))
 }
 
-// How long a probe's receipt is kept for its sender to read.
-let PROBE_KEPT = 60 * 60 * 1000
-/** The deletes of the probes whose receipts their senders have had an hour to
- * read: each probe's grouping clears the ones before it, so they never pile
- * up. A delete says what it was by its guard. */
-let spent = (g: Desk): Bundle[] | Promise<Bundle[]> =>
-  after(
-    g.read(and(
-      lt('probe.grouped', new Date(Date.now() - PROBE_KEPT).toISOString()),
-      fields('probe.grouped'),
-    )),
-    (rows) =>
-      rows.map((b) => ({
-        entity: b.entity,
-        $delete: true,
-        $was: { probe: { grouped: token(comp(b, 'probe').grouped) } },
-      })),
-  )
-
 /** Existing groups can have migrated eids. New groups have deterministic ids;
  * guarded counters serialize competing workers without process-local locks.
  * Contention rebases here, without spending the effect's failure attempts. */
@@ -273,10 +246,7 @@ export let group = async (
 ): Promise<void> => {
   for (;;) {
     let [row] = await g.get([eid], ITS)
-    if (
-      !row?.error || row.refusal || comp(row, 'error').bug ||
-      comp(row, 'probe').grouped
-    ) return
+    if (!row?.error || row.refusal || comp(row, 'error').bug) return
     let full = await (enrich ?? enrichFrames())(row)
     let fault = faultOf(full)
     let app = str(comp(full, 'during').app)
@@ -288,14 +258,7 @@ export let group = async (
         (bug) =>
           after(
             earlier(g, full, bug),
-            (before) =>
-              after(
-                row.probe ? spent(g) : [],
-                (gone) =>
-                  g.apply([...grouped(full, bug, before), ...gone], {
-                    trusted: true,
-                  }),
-              ),
+            (before) => g.apply(grouped(full, bug, before), { trusted: true }),
           ),
       )
       return

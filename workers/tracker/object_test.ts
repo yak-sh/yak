@@ -11,6 +11,8 @@ import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { notify } from '@yaks/tracker/effects'
 import { activate, activation } from './mail.ts'
 import { sending } from '@yaks/mail'
+import { grouped } from '@yaks/tracker'
+import { canary } from './worker.ts'
 import { platform } from './core.ts'
 import type { Message } from '@yaks/mail'
 import { durable } from '../../packages/durable-object/testing.ts'
@@ -284,6 +286,17 @@ test('delayed openings still owe mail after eviction', async () => {
   equal((letters[0].mail as Comp).target, 'late')
 })
 
+let archivedCanary = fixture()
+
+test('deployment canaries remain archived after grouping and owe no mail', async () => {
+  let { g } = archivedCanary, config = setup()
+  let rows = canary('b'.repeat(64))
+  let [occurrence, opening] = grouped(rows[0], undefined, [])
+  await g.apply([...rows, occurrence, opening], { trusted: true })
+  await notify(g, opening.entity.eid, config)
+  equal((await g.read('.mail')).length, 0)
+  equal(!!(await g.get([opening.entity.eid]))[0].archived, true)
+})
 test('a platform object tells an admin the bundle it runs, before booting', async () => {
   let secret = 'scratch'
   let object = new Tracker({

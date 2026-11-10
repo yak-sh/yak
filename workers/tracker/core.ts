@@ -87,25 +87,16 @@ let tools = {
   reopened: 'bug_reopen',
 } as const
 let STAMPS = new Set(['entity', 'created', 'updated'])
-// A deploy's probe moves no bug, arriving, grouped or cleared away.
-let BOOKKEEPING = new Set([
-  'effect',
-  'lease',
-  'worker',
-  'wake',
-  'fired',
-  'probe',
-])
+let BOOKKEEPING = new Set(['effect', 'lease', 'worker', 'wake', 'fired'])
 let TAG = 'bugs-tag', MOVED = 'bugs-moved', MOVES = 1000
 let only = (names: string[]) =>
   names.length > 0 && names.every((k) => BOOKKEEPING.has(k))
-// A trace is read through its own doors (`traces`, `trace`), never the bugs',
-// and a probe through the canary's.
-let APART = ['trace', 'span', 'probe']
+// A trace is read through its own doors (`traces`, `trace`), never the bugs'.
+let TRACED = ['trace', 'span']
 let news = (b: Bundle) =>
   b.$delete
     ? !only(Object.keys(b.$was ?? {}))
-    : !APART.some((k) => k in b) && !Object.keys(b).every((k) =>
+    : !TRACED.some((k) => k in b) && !Object.keys(b).every((k) =>
       STAMPS.has(k) || k[0] == '$' || BOOKKEEPING.has(k)
     )
 let OCCURRENCE = ['error', 'exception', 'during', 'breadcrumbs', 'request']
