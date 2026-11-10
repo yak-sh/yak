@@ -39,6 +39,7 @@ import { esc, heading, type Picked, script, shell } from './pages.ts'
 import { aboutPath, talkSide } from './talk-sidebar.ts'
 import { spaceHost, url } from './host.ts'
 import {
+  backTo,
   chatPath,
   logoPath,
   MANAGE,
@@ -109,14 +110,14 @@ import { DOCUMENTS } from './documents.ts'
 import { phoneAt } from './phones.ts'
 import { icons } from './icons.ts'
 import {
-  needing,
-  needsCard,
+  needsList,
   type Updates,
   updates,
   updatesOf,
   visitsOf,
 } from './updates.ts'
-import { answered, asksCard, asksOf } from './operator-asks.ts'
+import { answered, asksList, asksOf } from './operator-asks.ts'
+import { type List, talkBeside, waitsButton } from './talk-beside.ts'
 
 // What this page draws, as markup: the edge where its parts become text.
 let html = (node: Node) => renderToString(h(Fragment, null, node))
@@ -656,7 +657,7 @@ export let operatorAnswer = async (
     }
   }
   // A choice pressed beside what needs them (operator-asks.ts), sent on as
-  // their own answer; the page is drawn again without it.
+  // their own answer; the page it was pressed on is drawn again without it.
   if (q.has('asks') && req.method == 'POST') {
     let form = await req.formData()
     let said = (k: string) => String(form.get(k) ?? '')
@@ -678,7 +679,9 @@ export let operatorAnswer = async (
     }
     return new Response(null, {
       status: 303,
-      headers: { location: new URL(chatPath(space.slug), url).href },
+      headers: {
+        location: backTo(env, said('back'), chatPath(space.slug)),
+      },
     })
   }
   if (q.has('alerts') && req.method == 'POST') {
@@ -1264,9 +1267,6 @@ export type Beside = {
   apps?: { eid: string; slug: string; title: string }[]
   name?: string | null
   admin?: boolean
-  /** whether the person keeps the side collapsed to its icons
-   * (`desk_sidebar{collapsed}`) */
-  collapsed?: boolean
 }
 
 export { aboutPath }
@@ -1623,8 +1623,10 @@ export let installing = (space: Space) => {
   })
 }
 
-// A page of the chat app: the side, and beside it the bar naming the page
-// and whose Operator it is, over `main`, and the app open beside them.
+// A page of the chat app: the bar naming the page and whose Operator it is,
+// over `main`; the menu (talk-sidebar.ts) behind the bar's button; the lists
+// of what waits on the person beside it where the page has them
+// (talk-beside.ts); and the app open beside them all.
 let talkPage = (
   env: Env,
   space: Space,
@@ -1639,14 +1641,14 @@ let talkPage = (
     main: Node
     // the main's own modifier, beside `Talk_Main`
     kind?: string
-    // this page's address, where the side's fold draws it again
-    here: string
     // where the skip link goes, and what it says
     skip: [string, string]
     script?: string
     app?: Making
     // what it is doing now, at the bar's right end (operator-aside.ts)
     aside?: Node
+    // what waits on the person, beside the conversation
+    lists?: List[]
   },
 ) =>
   shell(
@@ -1658,12 +1660,14 @@ let talkPage = (
       h(Skip, { href: page.skip[0] }, page.skip[1]),
       h(
         'div',
-        { class: page.app ? 'Talk Talk-app' : 'Talk' },
+        {
+          class: ['Talk', page.app && 'Talk-app', page.lists && 'Talk-beside']
+            .filter(Boolean).join(' '),
+        },
         talkSide(env, space, who, beside, {
           waiting: page.waiting,
           current: page.current,
           app: page.app?.slug,
-          here: page.here,
         }),
         h(
           'div',
@@ -1687,14 +1691,16 @@ let talkPage = (
             ),
             page.app ? showing(page.app) : null,
             page.aside,
+            page.lists ? waitsButton(page.lists) : null,
           ),
           page.main,
         ),
+        page.lists ? talkBeside(page.lists) : null,
         page.app ? canvas(env, space, page.app, space.operator) : null,
       ),
     ]) + (page.script ?? ''),
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
-    beside.collapsed ? 'Talk_Page Talk_Page-rail' : 'Talk_Page',
+    'Talk_Page',
     installable(space),
   )
 
@@ -1776,11 +1782,12 @@ let hello = (heading: string, said: string) =>
 /**
  * One conversation with the Operator in its chat app, a page of its own
  * (route.ts `chatPath`): the product's side (`side`) with the person's chats
- * in it, newest first; the conversation filling the page, what it is doing
- * now under it; and the box to write in at the foot, with Stop while it
- * works. `open` is a task, a request no task has taken yet, or `new`, which
- * greets the person by name, holds over the box what needs them
- * (`data-needs`, T-140508), and under it a few ways to start.
+ * in it, newest first, behind the menu; the conversation filling the page,
+ * what it is doing now under it; the box to write in at the foot, with Stop
+ * while it works; and beside it what needs the person (talk-beside.ts),
+ * whichever conversation is open. `open` is a task, a request no task has
+ * taken yet, or `new`, which greets the person by name and under the box
+ * offers a few ways to start.
  *
  * Beside it, the app the address names (`chosen`, the side's `aboutPath`),
  * of those the person may open, and no other. With none named, the app the
@@ -1799,14 +1806,13 @@ export let chatPage = async (
   let at = managePath('operator', space.slug)
   // The space's address opens the person's one conversation, and a new chat
   // only until they have one (T-141349).
-  // What needs them is read beside the conversation where the address is
-  // the one they land on, and once it is known to be, where it names it.
-  let asking = open == 'new' ? asksOf(env, who.person, space.eid) : undefined
-  let [talked, newcomer] = await Promise.all([
+  // What needs them is read beside every conversation, at once with it.
+  let [talked, newcomer, asks] = await Promise.all([
     conversationOf(env, space, who, at, open == 'new' ? '' : open, {
       updates: true,
     }),
     who.person ? directoryOf(env.STORE).newcomer(who.person) : false,
+    asksOf(env, who.person, space.eid),
   ])
   let news = talked.updates!
   // Their one conversation, as the store names it: what an empty `open` asks
@@ -1839,14 +1845,12 @@ export let chatPage = async (
       `What can I do for you${first ? `, ${first}` : ''}?`,
       `Ask ${operator} to make an app, change one, or find something out. You can send a photo or a document too.`,
     )
-  // The person's one conversation, or a new chat until they have one, with
-  // no app beside it is where they land: what needs them waits over the box,
-  // and a new chat offers ways to start.
-  let landing = (fresh || open == root) && !app
-  let needs = landing ? needing(news) : undefined
-  let asks = landing
-    ? await (asking ?? asksOf(env, who.person, space.eid))
-    : null
+  // What waits on them, beside the conversation (talk-beside.ts): what
+  // their server lists, then their Updates that need them.
+  let lists = [
+    ...asks ? [asksList(asks, `${at}?asks=1`, here)] : [],
+    needsList(space, news),
+  ]
   return talkPage(env, space, who, beside, {
     title: fresh
       ? app ? app.title || app.slug : `Message ${operator}`
@@ -1855,40 +1859,16 @@ export let chatPage = async (
     waiting: news.waiting,
     current: [open, talked.task],
     kind: fresh ? 'Talk_Main-new' : '',
-    here,
+    lists,
     skip: fresh || talked.title
       ? ['#ask', 'Skip to the message box']
       : ['#content', 'Skip to content'],
     main: [
       // The conversation is drawn by the Builder object (operator-view.ts
-      // `talk`), and what needs the person by Updates (updates.ts).
+      // `talk`).
       newcomer ? keepCard(here) : null,
       talked.helper ? helperCard(talked.helper, operator) : null,
       talked.html ? column(talked.html) : column('', greeting),
-      landing
-        ? h(
-          'div',
-          { class: 'Talk_Needs', 'data-needs': '' },
-          asks ? asksCard(asks, `${at}?asks=1`) : null,
-          needs
-            ? needsCard(
-              space,
-              needs,
-              h(
-                'p',
-                null,
-                h(
-                  'a',
-                  {
-                    href: `${managePath('updates', space.slug)}#u-${needs.eid}`,
-                  },
-                  `Ask ${operator} about it`,
-                ),
-              ),
-            )
-            : null,
-        )
-        : null,
       fresh || talked.title
         ? composer(env, at, here, operator, app, !!talked.helper, fresh)
         : null,
@@ -1942,7 +1922,6 @@ export let updatesPage = async (
     status: 200,
     waiting: news.updates.filter((u) => u.needs).length,
     current: ['updates'],
-    here: managePath('updates', space.slug),
     skip: ['#content', 'Skip to content'],
     main: h(
       'div',

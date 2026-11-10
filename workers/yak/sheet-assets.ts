@@ -63,6 +63,7 @@ export let WORN = [
   'Modal',
   'Dot',
   'State',
+  'Badge',
   'Group',
   'Form',
   'At',

@@ -1,13 +1,15 @@
 // What needs a person, read from their machine through their space's tunnel
-// and drawn over their Operator's message box: both ends in one process.
+// and drawn beside their conversation with their Operator: both ends in one
+// process.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Comp, mint } from '@yaks/graph'
 import { parseHTML } from 'linkedom'
+import { Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { mcpConnect } from './connected-mcp.ts'
 import { machineOf } from './machine-testing.ts'
-import { answered, asksCard, asksOf, type Listed } from './operator-asks.ts'
+import { answered, asksList, asksOf, type Listed } from './operator-asks.ts'
 import { operatorContext } from './operator.ts'
 
 let { box, env, dir, space, ada, bob, person } = await machineOf(
@@ -44,12 +46,16 @@ let connect = async (asks?: unknown) =>
     { name: 'box', url: '/mcp', machine: 'adas', ...asks ? { asks } : {} },
   )
 
-// The list drawn, as the person reads it: each row's lines and buttons.
+// The list drawn, as the person reads it: each row's lines and buttons, and
+// how many it counts.
 let drawn = (listed: Listed) => {
+  let list = asksList(listed, '/a', '/manage/here')
   let { document } = parseHTML(
-    `<div>${renderToString(asksCard(listed, '/a'))}</div>`,
+    `<div>${renderToString(h(Fragment, null, list.node))}</div>`,
   )
   return {
+    count: list.count,
+    back: document.querySelector('[name=back]')?.getAttribute('value'),
     rows: [...document.querySelectorAll('.Asks_Item')].map((r) =>
       [...r.querySelectorAll('.Rows_Name, .Rows_Meta, button')].map((e) =>
         e.textContent
@@ -78,9 +84,11 @@ test('the list is what the server answers, in its order, the first ten shown and
     ),
     'Which day?',
   ])
-  let { rows, text } = drawn(listed)
+  let { rows, text, count, back } = drawn(listed)
   assertEquals(rows[0], ['Ask 00', 'Do it.', 'Reply'])
-  assertEquals(rows.length, 13)
+  assertEquals([rows.length, count], [13, 13])
+  // A choice comes back to the page it was pressed on.
+  assertEquals(back, '/manage/here')
   assertEquals(text.includes('3 more'), true)
   assertEquals(rows.at(-1), [
     'Which day?',
@@ -108,7 +116,9 @@ test('a person who does not own the machine’s space reaches nothing, and a mac
   let listed = (await asksOf(off, ada, space.eid))!
   assertEquals(listed.asks, [])
   assertEquals(typeof listed.off, 'string')
-  assertEquals(drawn(listed).text.includes('Your machine is off'), true)
+  let shown = drawn(listed)
+  assertEquals(shown.text.includes('Your machine is off'), true)
+  assertEquals(shown.count, 0)
 })
 
 test('another space’s Operator page lists nothing of the machine', async () => {

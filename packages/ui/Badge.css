@@ -1,0 +1,15 @@
+/* How many wait: a number on a pill in the colour of what needs the person,
+   as tall as the line it sits in. */
+.Badge {
+  display: inline-block;
+  min-width: 1.3em;
+  padding: 0 .35em;
+  border-radius: 99px;
+  background: var(--negative);
+  color: var(--bg);
+  font-size: var(--small);
+  font-weight: 800;
+  line-height: 1.4;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}

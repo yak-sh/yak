@@ -73,6 +73,7 @@ import * as shell from './Shell.ts'
 import * as sideNav from './SideNav.ts'
 import * as spark from './Spark.ts'
 import * as stamp from './Stamp.ts'
+import * as badge from './Badge.ts'
 import * as state from './State.ts'
 import * as table from './Table.ts'
 import * as tabs from './Tabs.ts'
@@ -110,6 +111,7 @@ let modules = {
   Marks: {
     Dot: dot,
     State: state,
+    Badge: badge,
     Id: id,
     Stamp: stamp,
     Chip: chip,

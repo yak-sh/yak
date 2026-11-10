@@ -81,6 +81,16 @@ export let managePath = (view: ManageView, space?: string) =>
     : space
     ? `${MANAGE}/${encodeURIComponent(space)}/${view}`
     : `${MANAGE}/${view}`
+/** Where a dashboard form lands back: the page under /manage it names, at
+ * the apex, else `fallback`; a form never sends the person off yaks.app. */
+export let backTo = (env: Host, back: string, fallback: string) => {
+  let home = new URL(url(env))
+  let to = new URL(back || fallback, home)
+  return to.origin == home.origin &&
+      (to.pathname == MANAGE || to.pathname.startsWith(`${MANAGE}/`))
+    ? to.href
+    : new URL(fallback, home).href
+}
 // What a conversation opens by: a task's or a request's eid, or `new`.
 let OPEN = /^(new|[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12})$/
 /** An Operator conversation's own page, the chat app (operator-page.ts

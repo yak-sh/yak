@@ -20,6 +20,7 @@ import type { Update } from './operator-updates.ts'
 import { lastDay } from './views.ts'
 import { markdown } from './operator-draw.ts'
 import { caught } from './defects.ts'
+import type { List } from './talk-beside.ts'
 
 /** A person's Updates in a space, and how many wait on them: what needs
  * them, and what they have not read, which the side counts beside "Updates
@@ -34,11 +35,6 @@ export let updatesOf = (
   operatorDoor(env, space, who, 'updates', seen ? { seen } : {}) as Promise<
     Updates
   >
-
-/** The newest thing that needs the person, which a new chat shows over its
- * box. */
-export let needing = ({ updates }: Updates): Update | undefined =>
-  updates.find((u) => u.needs)
 
 /** The apps an update can be about, by eid, where they open. */
 export type Apps = { eid: string; slug: string; title: string }[]
@@ -86,10 +82,10 @@ let words = (text: string) =>
 // When it happened, said the human way.
 let stamp = (u: Update) => h(Time, { at: u.at, class: 'Update_When' })
 
-/** What needs a person: the Operator's question, its choices, a button for
- * each (the one it recommends first and filled), and `ask` below them, a way
- * to ask about it. */
-export let needsCard = (space: Space, u: Update, ask: ComponentChildren) => {
+// What needs a person: the Operator's question, its choices, a button for
+// each (the one it recommends first and filled), and below them a way to ask
+// about it, opened in place.
+let needsCard = (space: Space, u: Update) => {
   let choices = [...u.choices ?? []].sort((a, b) =>
     +(b.label == u.recommended) - +(a.label == u.recommended)
   )
@@ -126,8 +122,18 @@ export let needsCard = (space: Space, u: Update, ask: ComponentChildren) => {
         ),
       )
       : null,
-    ask,
+    replying(space, u),
   )
+}
+
+/** What needs the person among their Updates, newest first, as the list
+ * beside their conversation (talk-beside.ts), each answered where it is. */
+export let needsList = (space: Space, { updates }: Updates): List => {
+  let needs = updates.filter((u) => u.needs)
+  return {
+    count: needs.length,
+    node: needs.length ? needs.map((u) => needsCard(space, u)) : null,
+  }
 }
 
 // A way to send the Operator words about an update, opened in place.
@@ -151,7 +157,7 @@ let replying = (space: Space, u: Update) =>
   )
 
 let card = (env: Env, space: Space, u: Update, apps: Apps) => {
-  if (u.needs) return needsCard(space, u, replying(space, u))
+  if (u.needs) return needsCard(space, u)
   let lead = leads(env, space, u, apps)
   return h(
     Card,

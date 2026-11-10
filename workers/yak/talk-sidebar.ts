@@ -1,4 +1,6 @@
-// The Operator's sidebar choices; Sidebar owns their drawing.
+// The Operator's menu: its spaces, Updates, apps and settings, behind the
+// bar's menu button on every width (talk-beside.ts holds what is beside the
+// conversation). Sidebar owns their drawing.
 import { h } from 'preact'
 import { type Item, Sidebar } from './sidebar.ts'
 import type { Env } from './env.ts'
@@ -19,7 +21,7 @@ export let talkSide = (
   space: Space,
   who: Who,
   beside: Beside,
-  at: { current: string[]; waiting: number; app?: string; here: string },
+  at: { current: string[]; waiting: number; app?: string },
 ) => {
   let owner = who.role == 'owner'
   let here = beside.spaces?.find((s) => s.slug == space.slug) ?? {
@@ -53,11 +55,6 @@ export let talkSide = (
     base: url(env),
     home: chatPath(space.slug),
     label: 'Menu',
-    fold: {
-      collapsed: !!beside.collapsed,
-      back: at.here,
-      rail: 'Talk_Page-rail',
-    },
     picker: [
       here,
       spaces.some((s) => s.slug == space.slug) ? spaces : [here, ...spaces],

@@ -370,11 +370,13 @@ test('a new chat greets the person by name, with ways to start that fill the box
       [`What can ${space.operator} do?`, 'What can you do for me?'],
     ],
   )
-  // What needs the person waits over the box (T-140508).
+  // Beside it, what needs the person, which is nothing yet; the bar's way
+  // to it on a phone wears no count.
   assertEquals(
-    document.querySelector('[data-needs]')?.nextElementSibling?.id,
-    'ask',
+    document.querySelector('#needs .Talk_Lists')?.textContent,
+    'Nothing needs you.',
   )
+  assertEquals(document.querySelector('.Talk_Waits .Badge'), null)
   assertEquals(fresh.code, 200)
   assertStringIncludes(
     fresh.document.querySelector('.Talk_Hello')!.textContent!,
@@ -390,7 +392,6 @@ test('a new chat greets the person by name, with ways to start that fill the box
 test('a chat that is gone says so, with no box', () => {
   assertEquals(gone.code, 404)
   assertEquals(gone.document.querySelector('[name=say]'), null)
-  assertEquals(gone.document.querySelector('[data-needs]'), null)
 })
 
 test('an app chosen in the side opens a chat about it, with the app live beside it', () => {
@@ -410,8 +411,8 @@ test('an app chosen in the side opens a chat about it, with the app live beside 
     'What should change in Holdfast?',
   )
   // The words sent say which page and app are open; a chat about an app is
-  // not where the person lands, so it holds no ways to start and nothing
-  // that needs them.
+  // not where the person lands, so it holds no ways to start, and what
+  // needs them is still beside it.
   assertEquals(
     document.querySelector('#ask [name=app]')?.getAttribute('value'),
     'app1',
@@ -420,7 +421,8 @@ test('an app chosen in the side opens a chat about it, with the app live beside 
     document.querySelector('#ask [name=page]')?.getAttribute('value'),
     aboutPath('clerk', 'app1'),
   )
-  assertEquals(document.querySelector('.Talk_Starts, [data-needs]'), null)
+  assertEquals(document.querySelector('.Talk_Starts'), null)
+  assert(document.querySelector('#needs[data-needs]'))
   // On a phone, the bar switches to the app, and the app back to the chat.
   assertEquals(
     document.querySelector('.Talk_Show')?.getAttribute('href'),
@@ -784,6 +786,94 @@ test('a chat in which the Operator changed an app opens with no app beside it', 
   let { document } = await sided('owner')
   assertEquals(document.querySelector('.Talk_App'), null)
   assertEquals(document.querySelector('#ask [name=app]'), null)
+})
+
+// Whichever conversation is open, what needs the person stays beside it,
+// each answered where it is, and its count is on the bar's way to it; the
+// spaces, apps and settings are behind the bar's menu (D-153799, The chair).
+test('what needs the person is beside every conversation, counted, with the menu behind the bar', async () => {
+  let needs = {
+    eid: crypto.randomUUID(),
+    needs: true,
+    unread: true,
+    at: new Date().toISOString(),
+    words: 'Send the *notice* tonight?',
+    choices: [
+      { label: 'Tonight', description: 'Before the meeting.' },
+      { label: 'Tomorrow', description: 'With the minutes.' },
+    ],
+    recommended: 'Tomorrow',
+  }
+  let told = {
+    eid: crypto.randomUUID(),
+    needs: false,
+    unread: true,
+    at: needs.at,
+    words: 'Posted.',
+  }
+  let BUILDER: Env['BUILDER'] = {
+    idFromName: (name) => name,
+    get: (name) => ({
+      fetch: async (req: Request) => {
+        let answer = await service.binding.get(name).fetch(req)
+        if (new URL(req.url).pathname != '/operator/conversation') return answer
+        let said = await answer.json()
+        return Response.json({
+          ...said,
+          updates: { updates: [needs, told], waiting: 2 },
+        })
+      },
+    }),
+  }
+  for (let [open, app] of [['new'], [task], ['new', 'app1']]) {
+    let page = await chatPage(
+      { ...p.env, BUILDER },
+      space,
+      who,
+      open!,
+      beside,
+      app,
+    )
+    let { document } = parseHTML(await page.text())
+    let aside = document.querySelector('aside#needs')!
+    assertEquals(
+      aside.querySelector('.Toolbar_Title')?.textContent,
+      'What needs you',
+    )
+    assertEquals(aside.querySelector('.Badge')?.textContent, '1')
+    let card = aside.querySelector(`#u-${needs.eid}`)!
+    assertEquals(card.querySelector('.Update_Words em')?.textContent, 'notice')
+    assertEquals(
+      [...card.querySelectorAll('button[name=choice]')].map((b) =>
+        b.textContent
+      ),
+      ['Tomorrow', 'Tonight'],
+    )
+    assert(
+      card.querySelector('details.Update_Reply [name=say]'),
+      'asked about in place',
+    )
+    assertEquals(aside.querySelector(`#u-${told.eid}`), null)
+    let waits = document.querySelector('.Talk_Bar .Talk_Waits')!
+    assertEquals([waits.getAttribute('href'), waits.textContent], [
+      '#needs',
+      '1',
+    ])
+    assertEquals(
+      document.querySelector('.Talk_Bar .Talk_Menu')?.getAttribute('href'),
+      '#menu',
+    )
+    assert(
+      document.querySelector('#menu.Sidebar .Sidebar_Close'),
+      'the menu closes',
+    )
+    assertEquals(document.querySelector('#menu .Sidebar_Fold'), null)
+    // The Updates count in the menu is what needs them and what is unread.
+    assertEquals(
+      document.querySelector('#menu .Sidebar_Count')?.textContent,
+      '2',
+    )
+  }
 })
 
 // The page's Operator, recording what it is asked; `old` is a Builder on the

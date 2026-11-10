@@ -45,6 +45,7 @@ export { Report } from './Report.ts'
 export { Rows } from './Rows.ts'
 export { SideNav } from './SideNav.ts'
 export { State } from './State.ts'
+export { Badge } from './Badge.ts'
 export { type Col, Table, type TableProps } from './Table.ts'
 export { Tabs, TabSet } from './Tabs.ts'
 

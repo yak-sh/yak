@@ -1,5 +1,5 @@
-// What needs a person, listed over their Operator's message box with no model
-// turn (D-153799, item 6): the rows one MCP server they connected answers
+// What needs a person, listed beside their conversation with their Operator
+// with no model turn (D-153799, item 6; talk-beside.ts): the rows one MCP server they connected answers
 // (`asks{tool, query}` on its `mcp_server` row, directory-vocab.ts), read by
 // one call each time the page is drawn, in the order the server gives them.
 // The page knows nothing of what the rows are beyond the words they carry: a
@@ -16,7 +16,7 @@ import { caught } from './defects.ts'
 import { directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
 import { answerAsTheirs } from './operator-relay.ts'
-import { heading } from './pages.ts'
+import type { List } from './talk-beside.ts'
 import { CallError } from '@yaks/tools/errors'
 import { type Ctx, refuse } from './tool.ts'
 
@@ -176,8 +176,9 @@ export let answered = (
 ) => answerAsTheirs(theirs(env, person), space, server, ask, choice)
 
 // One row: what it is and what it asks, each a line, then its choices and a
-// way to answer in their own words, which fills the message box.
-let row = (a: Ask, action: string, server: string) =>
+// way to answer in their own words, which fills the message box. A choice
+// comes back to `back`, the page it was pressed on.
+let row = (a: Ask, action: string, server: string, back: string) =>
   h(
     Rows.Item,
     { as: 'li', class: 'Asks_Item' },
@@ -196,6 +197,7 @@ let row = (a: Ask, action: string, server: string) =>
           { method: 'post', action },
           h('input', { type: 'hidden', name: 'server', value: server }),
           h('input', { type: 'hidden', name: 'ask', value: a.eid }),
+          h('input', { type: 'hidden', name: 'back', value: back }),
           a.choices.map((c, i) =>
             h(Button, {
               mod: !i && 'go',
@@ -214,29 +216,26 @@ let row = (a: Ask, action: string, server: string) =>
   )
 
 /**
- * The list, drawn: the first `SHOWN` rows, the rest folded under one line
- * that says how many, and in place of rows, that nothing needs them or that
- * their machine did not answer. `action` is where a choice is sent.
+ * The list beside the conversation: the first `SHOWN` rows, the rest folded
+ * under one line that says how many, or that their machine did not answer;
+ * nothing where nothing needs them. `action` is where a choice is sent, and
+ * `back` the page it returns to.
  */
-export let asksCard = (listed: Listed, action: string) => {
+export let asksList = (listed: Listed, action: string, back: string): List => {
   let { asks, off, server } = listed
   let more = asks.length - SHOWN
   let rows = (some: Ask[]) =>
     h(
       Rows,
       { as: 'ul', class: 'Asks' },
-      some.map((a) => row(a, action, server)),
+      some.map((a) => row(a, action, server, back)),
     )
-  return h(
-    Card,
-    { class: 'Talk_Asks' },
-    heading('What needs you', {
-      status: asks.length ? h('span', null, asks.length) : null,
-    }),
-    off
+  return {
+    count: asks.length,
+    node: off
       ? h(
         Empty,
-        null,
+        { class: 'Talk_Asks' },
         h(
           'p',
           null,
@@ -244,16 +243,20 @@ export let asksCard = (listed: Listed, action: string) => {
         ),
         h('p', { class: 'Talk_Asks_Why' }, off),
       )
-      : !asks.length
-      ? h(Empty, null, h('p', null, 'Nothing needs you.'))
-      : rows(asks.slice(0, SHOWN)),
-    more > 0
+      : asks.length
       ? h(
-        More,
-        null,
-        h(More.Summary, null, `${more} more`),
-        h(More.Body, null, rows(asks.slice(SHOWN))),
+        Card,
+        { class: 'Talk_Asks' },
+        rows(asks.slice(0, SHOWN)),
+        more > 0
+          ? h(
+            More,
+            null,
+            h(More.Summary, null, `${more} more`),
+            h(More.Body, null, rows(asks.slice(SHOWN))),
+          )
+          : null,
       )
       : null,
-  )
+  }
 }

@@ -203,10 +203,10 @@ test('the name is the person’s, saved on their Profile', async () => {
 })
 
 // The side collapses to a rail of its icons (T-151458): the choice is the
-// person's, kept on their row, so every page of theirs draws it, the
-// settings' and the chat's alike; each icon keeps its name as its title and
-// its words.
-test('the side collapses to its icons on every page, and opens again', async () => {
+// person's, kept on their row, so every settings page of theirs draws it;
+// each icon keeps its name as its title and its words. The chat's menu is
+// behind its bar's button, so it has no rail.
+test('the side collapses to its icons on every settings page, and opens again', async () => {
   let fold = (sidebar: string, back: string, accept = 'text/html') =>
     k.at('yaks.app', profile, {
       method: 'POST',
@@ -229,7 +229,6 @@ test('the side collapses to its icons on every page, and opens again', async () 
     let [path, rail] of [
       [people, 'Desk-rail'],
       [profile, 'Desk-rail'],
-      [home, 'Talk_Page-rail'],
     ]
   ) {
     let page = await drawn(path)
@@ -314,7 +313,7 @@ test('the chat’s side opens each app beside it, and Updates', async () => {
   let chat = await get(home)
   assertEquals(chat.status, 200)
   let chatted = await chat.text()
-  assertStringIncludes(chatted, 'class="Talk"')
+  assertStringIncludes(chatted, 'class="Talk Talk-beside"')
   assertStringIncludes(chatted, `href="${home}?app=site"`)
   let about = await (await get(`${home}?app=site`)).text()
   assertEquals(

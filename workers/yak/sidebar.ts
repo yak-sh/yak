@@ -1,6 +1,6 @@
 // yaks.app's sidebar: one frame and navigation tree, specialized by data.
 import { h } from 'preact'
-import { Button, Icon, SideNav } from '@yaks/ui/parts'
+import { Badge, Button, Icon, SideNav } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
 import { Idle } from './mascot.ts'
 import { managePath } from './route.ts'
@@ -99,7 +99,7 @@ let link = (at: Item) => {
       })
       : glyph(at.icon),
     h(SideNav.Label, null, at.label),
-    at.count != null ? h('span', { class: 'Sidebar_Count' }, at.count) : null,
+    at.count != null ? h(Badge, { class: 'Sidebar_Count' }, at.count) : null,
   )
   return at.submit
     ? h(

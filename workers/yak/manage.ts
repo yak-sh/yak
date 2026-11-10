@@ -55,6 +55,7 @@ import { untrash } from './erase.ts'
 import {
   type AccountView,
   accountView,
+  backTo,
   chatPath,
   landing,
   logoPath,
@@ -448,18 +449,6 @@ export let shared = async (
     }))
 }
 
-// Where a dashboard form lands back: the page that sent it, at the apex.
-// Where a form names to go back to, if it is one of these pages, else
-// Profile: a form never sends the person off yaks.app.
-let backTo = (env: Env, back: string) => {
-  let home = new URL(hostUrl(env))
-  let to = new URL(back || managePath('profile'), home)
-  return to.origin == home.origin &&
-      (to.pathname == MANAGE || to.pathname.startsWith(`${MANAGE}/`))
-    ? to.href
-    : new URL(managePath('profile'), home).href
-}
-
 let sentFrom = (req: Request, env: Env) => {
   let at = new URL(req.url)
   return new URL(at.pathname + at.search, hostUrl(env))
@@ -493,25 +482,23 @@ let pickable = async (dir: ReturnType<typeof directory>, seats: Seat[]) => {
 
 // What the chat app's side holds (operator-page.ts `Beside`), asked at once:
 // the spaces its selector offers, the apps here this person may open, and
-// what they are called, whether they are the platform's admin, which the
-// page's read said (`administrative`), and how they keep the side.
+// what they are called, and whether they are the platform's admin, which the
+// page's read said (`administrative`).
 let beside = async (
   dir: ReturnType<typeof directory>,
   space: Space,
   who: Owner,
 ): Promise<Beside> => {
-  let [spaces, { mine }, name, collapsed] = await Promise.all([
+  let [spaces, { mine }, name] = await Promise.all([
     dir.seats(who.person).then((seats) => pickable(dir, seats)),
     dir.apps(space).then((apps) => shelf(apps, space, who)),
     dir.nameAt(who.person),
-    dir.collapsed(who.person),
   ])
   return {
     spaces,
     apps: mine.map((a) => ({ eid: a.eid, slug: a.slug, title: a.title })),
     name,
     admin: !!who.administrative,
-    collapsed,
   }
 }
 
@@ -814,7 +801,10 @@ let account = async (
     if (!req.headers.get('accept')?.includes('text/html')) {
       return new Response(null, { status: 204 })
     }
-    return redirect(backTo(env, String(form.get('back') ?? '')), 303)
+    return redirect(
+      backTo(env, String(form.get('back') ?? ''), managePath('profile')),
+      303,
+    )
   }
   // Cleared, the front of their address comes back — a person always has a
   // title, because a member row names them by it and a titleless one reads
