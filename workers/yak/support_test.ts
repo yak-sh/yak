@@ -138,7 +138,8 @@ test('the same call opens the same thread and owes the same letter', () => {
   let more = saying({}, 'thread', { words: 'And', call: 'call-2' }, letter)
   equal(saying({}, 'thread', { words: 'And', call: 'call-2' }, letter), more)
   equal(more[0].comment, { target: 'thread' })
-  equal((more[2].mail as { target: string }).target, more[0].entity.eid)
+  equal(more[1], { entity: { eid: 'thread' }, completed: null }, 'reopens')
+  equal((more[3].mail as { target: string }).target, more[0].entity.eid)
 })
 
 test("the platform's answer is a message without support, a fix edge and a mark", () => {
@@ -294,15 +295,16 @@ test('a thread is opened, answered and read in the same place', async () => {
   assertStringIncludes(read.text, 'Fixed: the board wraps now.')
   assertStringIncludes(read.text, 'Completed')
 
-  // And adds to it, which TaskMaster is told of in a letter of its own.
+  // And adds to it, which TaskMaster is told of in a letter of its own, and
+  // which puts the thread back among those waiting for an answer.
   let more = await feedback(agent, { thread, text: 'Thank you!' })
   let mine = more.value.messages.at(-1)!
   equal([mine.from, mine.words], ['person', 'Thank you!'])
   ok((await letterOf(mine.message))?.delivered)
-  waiting = (await (await support()).json()).threads
-  ok(!waiting.some((t: { eid: string }) => t.eid == thread), 'completed')
+  equal(more.value.completed, null)
+  let waiting = (await (await support()).json()).threads
+  ok(waiting.some((t: { eid: string }) => t.eid == thread), 'reopened')
 })
-let waiting: { eid: string }[] = []
 
 test('nobody else reads a thread, and nobody writes its owner', async () => {
   let { thread } =

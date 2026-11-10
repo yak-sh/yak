@@ -177,7 +177,9 @@ export let opening = (
   ]
 }
 
-/** The rows that add a message from the thread's side, and its letter. */
+/** The rows that add a message from the thread's side, and its letter. The
+ * message reopens a thread the platform completed: whoever writes again is
+ * not done, so it waits for TaskMaster again (`waiting`, T-153274). */
 export let saying = (
   env: Host,
   thread: string,
@@ -185,12 +187,16 @@ export let saying = (
   letter: Letter | null,
 ): Bundle[] => {
   let eid = said.call ? derived('message', said.call) : mint()
-  return [{
-    entity: { eid },
-    comment: { target: thread },
-    doc: { body: said.words },
-    support: supportOf(said),
-  }, ...letter ? letterRows(env, thread, eid, said.words, letter) : []]
+  return [
+    {
+      entity: { eid },
+      comment: { target: thread },
+      doc: { body: said.words },
+      support: supportOf(said),
+    },
+    { entity: { eid: thread }, completed: null },
+    ...letter ? letterRows(env, thread, eid, said.words, letter) : [],
+  ]
 }
 
 /** What the platform answers: its words, the message it answers, the fix it
