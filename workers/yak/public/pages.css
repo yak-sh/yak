@@ -811,7 +811,6 @@
     text-align: left;
   }
   .Talk {
-    --sidebar-panel: var(--bg);
     display: grid;
     grid-template-columns: 17rem minmax(0, 1fr);
     height: 100dvh;
@@ -1758,7 +1757,7 @@
     overscroll-behavior: contain;
   }
   .Sidebar_Nav {
-    --nav-panel: var(--sidebar-panel, var(--card));
+    --nav-panel: var(--card);
     flex: none;
     margin-right: calc(-1 * var(--sidebar-padding));
   }
