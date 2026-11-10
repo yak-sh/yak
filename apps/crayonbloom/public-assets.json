@@ -1,0 +1,548 @@
+[
+  {
+    "key": "marketing/coloring-pages/dinosaurs/line-art/01-trex-birthday-bake.png",
+    "sha256": "6e629f68c621374fed8962dd9209e80359008e9bc0e1be29ff6346640c90b05d",
+    "bytes": 190226,
+    "theme": "dinosaurs",
+    "page": "trex-birthday-bake",
+    "title": "T. Rex Birthday Bake",
+    "printable": {
+      "key": "public-printables/dinosaurs/trex-birthday-bake.pdf",
+      "sha256": "30e520b34ae4df9a128f1501c416b327a4815530e31a095a31f265bb1639fd65",
+      "bytes": 277908
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/dinosaurs/line-art/02-triceratops-waterfall.png",
+    "sha256": "832229837d62290522880d9790cae3376ffd88d50c591dafa5c6934ba8c5416d",
+    "bytes": 202813,
+    "theme": "dinosaurs",
+    "page": "triceratops-waterfall",
+    "title": "Triceratops Waterfall",
+    "printable": {
+      "key": "public-printables/dinosaurs/triceratops-waterfall.pdf",
+      "sha256": "85f927a6b8e07af13a6da1a3773f7d2e2a0ddfdf68011d77a2cb325e7bd1d1d9",
+      "bytes": 297069
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/dinosaurs/line-art/03-stegosaurus-skateboard.png",
+    "sha256": "57f20925246eed8e358986a25fb4c054d72a027cb291bdd526dd2d9506cbfac7",
+    "bytes": 150448,
+    "theme": "dinosaurs",
+    "page": "stegosaurus-skateboard",
+    "title": "Stegosaurus Skateboard",
+    "printable": {
+      "key": "public-printables/dinosaurs/stegosaurus-skateboard.pdf",
+      "sha256": "030cdcef9115b04209bd5dc694c700ebcb4977406be3ac22705079ca301e7c90",
+      "bytes": 221450
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/dinosaurs/line-art/04-brachiosaurus-treetops.png",
+    "sha256": "f64c18aaa1ee5c3004452335c0a0c5f1cd4a3275a2915364ce95e42e1f545c25",
+    "bytes": 94956,
+    "theme": "dinosaurs",
+    "page": "brachiosaurus-treetops",
+    "title": "Brachiosaurus Treetops",
+    "printable": {
+      "key": "public-printables/dinosaurs/brachiosaurus-treetops.pdf",
+      "sha256": "bebd71d5a935613b818b7b2d7c5fbc7decc69af3dab4f5db5f732ad487665bc4",
+      "bytes": 139881
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/dinosaurs/line-art/05-dino-picnic.png",
+    "sha256": "495ce5fa82aca6b5aa6bdecd1a38f007b7831b59e0bdb3a8448f8f036e726991",
+    "bytes": 170108,
+    "theme": "dinosaurs",
+    "page": "dino-picnic",
+    "title": "Dino Picnic",
+    "printable": {
+      "key": "public-printables/dinosaurs/dino-picnic.pdf",
+      "sha256": "2c2ae5a53a85653e8680d0047a30afb6752e2f4188679c80f161836029445389",
+      "bytes": 249240
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/dinosaurs/line-art/06-pteranodon-ride.png",
+    "sha256": "70f56343d1e254ed51ee4f8bd6f6d35e46b09fce79bd69b99ddda879630f64b2",
+    "bytes": 97202,
+    "theme": "dinosaurs",
+    "page": "pteranodon-ride",
+    "title": "Pteranodon Ride",
+    "printable": {
+      "key": "public-printables/dinosaurs/pteranodon-ride.pdf",
+      "sha256": "387defa56457df7a0bdafac87faf246cd18cec0b02f0f21b8010a6eec8163559",
+      "bytes": 145651
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/unicorns/line-art/01-rainbow-bridge-foal.png",
+    "sha256": "d5e14e057fb6d26b0320b900ee3cfc24b118f9ac52f75830c81840f8615d2e0a",
+    "bytes": 132911,
+    "theme": "unicorns",
+    "page": "rainbow-bridge-foal",
+    "title": "Rainbow Bridge Foal",
+    "printable": {
+      "key": "public-printables/unicorns/rainbow-bridge-foal.pdf",
+      "sha256": "6942f060ec7d0f668a24560d158be890677002f7c627f9676cd372536d89290c",
+      "bytes": 198483
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/unicorns/line-art/02-unicorn-cupcake-picnic.png",
+    "sha256": "6fbc87cf6f6940a4d92f7836886ccde0ee824fb5a4717a13675ecec4405caf37",
+    "bytes": 176549,
+    "theme": "unicorns",
+    "page": "unicorn-cupcake-picnic",
+    "title": "Cupcake Picnic",
+    "printable": {
+      "key": "public-printables/unicorns/unicorn-cupcake-picnic.pdf",
+      "sha256": "f62836b680f0e26890cbce36576a1344f1f990c4e6316731ea181bc453a30a78",
+      "bytes": 254835
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/unicorns/line-art/03-unicorn-starry-nap.png",
+    "sha256": "b27eb8b47e3564ad84b349f86ff045441cab748906611f0db318538842068918",
+    "bytes": 124943,
+    "theme": "unicorns",
+    "page": "unicorn-starry-nap",
+    "title": "Starry Night Nap",
+    "printable": {
+      "key": "public-printables/unicorns/unicorn-starry-nap.pdf",
+      "sha256": "44a587f07a9af1fde1aedf914ed540148809aa2db6a8c8733d15552cba5f85ff",
+      "bytes": 185342
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/unicorns/line-art/04-unicorn-flower-meadow.png",
+    "sha256": "33b397cf3ed859d920daf7d4ab74bd357f39fbaa542a366fe7a3507684742815",
+    "bytes": 205288,
+    "theme": "unicorns",
+    "page": "unicorn-flower-meadow",
+    "title": "Meadow of Flowers",
+    "printable": {
+      "key": "public-printables/unicorns/unicorn-flower-meadow.pdf",
+      "sha256": "fb3a04564ba7f5aec3a4aa8e2cffb8c2ed51cea97279e4bfb3909c0eca6ed05d",
+      "bytes": 297202
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/unicorns/line-art/05-unicorn-carousel.png",
+    "sha256": "2edbe35cfac685b695b49b6e58487b836d76e7d73d4a0079799e8150bb4ba06b",
+    "bytes": 236328,
+    "theme": "unicorns",
+    "page": "unicorn-carousel",
+    "title": "Magical Carousel",
+    "printable": {
+      "key": "public-printables/unicorns/unicorn-carousel.pdf",
+      "sha256": "2040b945949ce4723584ebbe32cd4d48fbc528f9c9143f6f59bff350457ff611",
+      "bytes": 346727
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/unicorns/line-art/06-unicorn-painting-rainbow.png",
+    "sha256": "d0838ddd6259ffb4bd2dbabf8691d26e85fa34102d705632c4989ac8c3f80996",
+    "bytes": 140698,
+    "theme": "unicorns",
+    "page": "unicorn-painting-rainbow",
+    "title": "Painting a Rainbow",
+    "printable": {
+      "key": "public-printables/unicorns/unicorn-painting-rainbow.pdf",
+      "sha256": "49fd82b648ebd9d2d4890fb9c0f7ed6fc308e4a64664d167fc9f28dd22815ae1",
+      "bytes": 209616
+    }
+  },
+  {
+    "key": "marketing/examples/line-art/01-capybara-mail.png",
+    "sha256": "b9c7c2475cc006e70b8755496ed31c8cc5b14c6f8a2e7c9ddf6180dd977d5d2f",
+    "bytes": 159724,
+    "theme": "animals",
+    "page": "capybara-mail",
+    "title": "Capybara Mail",
+    "printable": {
+      "key": "public-printables/animals/capybara-mail.pdf",
+      "sha256": "03625e8cca0dcb8d2e2f18b9bc794cb2d7e15af57f1fbc35582651dcb4ebb576",
+      "bytes": 224714
+    }
+  },
+  {
+    "key": "marketing/examples/line-art/02-lantern-festival-rabbit.png",
+    "sha256": "05f8753abe11a794a015876c5c7f34a312c60fffe7bca6a2810d67e75780c689",
+    "bytes": 206421,
+    "theme": "animals",
+    "page": "lantern-festival-rabbit",
+    "title": "Lantern Festival Rabbit",
+    "printable": {
+      "key": "public-printables/animals/lantern-festival-rabbit.pdf",
+      "sha256": "6418ccbe07eaecaeb3598315353130fcfa73dc345fc696084a584dadc7760c4d",
+      "bytes": 290095
+    }
+  },
+  {
+    "key": "marketing/examples/line-art/03-otter-boardwalk-band.png",
+    "sha256": "de8c9f6edcbcc2178ad304341fac7e4bce6c3232d15e3fa64832c7a6649897ec",
+    "bytes": 125650,
+    "theme": "animals",
+    "page": "otter-boardwalk-band",
+    "title": "Otter Boardwalk Band",
+    "printable": {
+      "key": "public-printables/animals/otter-boardwalk-band.pdf",
+      "sha256": "1e1ab0bfccbea59d271ae89a2b9cf8045d4f88bddcefda43a41688ae339336b3",
+      "bytes": 177925
+    }
+  },
+  {
+    "key": "marketing/examples/line-art/04-turtle-parade-workshop.png",
+    "sha256": "0b2dabd6f2cda8ee5c5f8030ab8c58a18e50b2e41077d7073ff42d084475f12e",
+    "bytes": 185838,
+    "theme": "animals",
+    "page": "turtle-parade-workshop",
+    "title": "Turtle Parade Workshop",
+    "printable": {
+      "key": "public-printables/animals/turtle-parade-workshop.pdf",
+      "sha256": "9771f0ae9901f0f77d342d97426b8f5bde83406ab2d30fcc4beea0c63cbfbc6b",
+      "bytes": 258429
+    }
+  },
+  {
+    "key": "marketing/examples/line-art/05-fox-story-picnic.png",
+    "sha256": "c6828ae422a9f7b5aa7a49f8e5872a289faf6a87091b64f8e005bac735e0bb98",
+    "bytes": 142140,
+    "theme": "animals",
+    "page": "fox-story-picnic",
+    "title": "Fox Story Picnic",
+    "printable": {
+      "key": "public-printables/animals/fox-story-picnic.pdf",
+      "sha256": "824764600eeb1f04ae1bc27b7f7d6538fa5a0e74c3ba37833615a5b59e326c1b",
+      "bytes": 201841
+    }
+  },
+  {
+    "key": "marketing/examples/line-art/06-panda-kite-festival.png",
+    "sha256": "19d40621abb21bf0c10cb6c8312a8aaaa149db838f0273af7abbf1d541c53b8e",
+    "bytes": 173784,
+    "theme": "animals",
+    "page": "panda-kite-festival",
+    "title": "Panda Kite Festival",
+    "printable": {
+      "key": "public-printables/animals/panda-kite-festival.pdf",
+      "sha256": "14e3a45b59e7374fcf302d30f7a9fe86c2afdb9c486c113b97f1bf6a57b40e5d",
+      "bytes": 243112
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/space/line-art/01-astronaut-moon-flag.png",
+    "sha256": "b3f212c879af651534ca2f7f797a85d8e8910e681db94a1e89836b9425ff462c",
+    "bytes": 112228,
+    "theme": "space",
+    "page": "astronaut-moon-flag",
+    "title": "Moon Landing",
+    "printable": {
+      "key": "public-printables/space/astronaut-moon-flag.pdf",
+      "sha256": "404934b8428413ccc48174887b6810269b88f9839b764f830ab7023a020d0d8e",
+      "bytes": 167199
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/space/line-art/02-rocket-ringed-planets.png",
+    "sha256": "27dda69289021d001761bcb79f4239985ec420f39a3a16ebf8dfe639fdf0531e",
+    "bytes": 120281,
+    "theme": "space",
+    "page": "rocket-ringed-planets",
+    "title": "Rocket Flyby",
+    "printable": {
+      "key": "public-printables/space/rocket-ringed-planets.pdf",
+      "sha256": "cc3245699179ce96913c06b41d123214aa16c077bdcc68debf8eb44fd6a9c222",
+      "bytes": 179402
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/space/line-art/03-alien-flying-saucer.png",
+    "sha256": "a231d35a03dc96e9a617b1c76e7306724b701b22edb865b2126878b1efca6d3c",
+    "bytes": 123954,
+    "theme": "space",
+    "page": "alien-flying-saucer",
+    "title": "Alien Hello",
+    "printable": {
+      "key": "public-printables/space/alien-flying-saucer.pdf",
+      "sha256": "2b3577d3d6fd144bc277e239d3eedc32e77f85c1d80b8f923d3bbb14e226ae72",
+      "bytes": 182874
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/space/line-art/04-astronaut-rover-tea.png",
+    "sha256": "655ddddc3687a88d0fd444f03709dc1d7d6bf3fd2510796dde6b1167fd906d67",
+    "bytes": 121768,
+    "theme": "space",
+    "page": "astronaut-rover-tea",
+    "title": "Moon Rover Tea",
+    "printable": {
+      "key": "public-printables/space/astronaut-rover-tea.pdf",
+      "sha256": "edc3e462cf67d3b2b8ea4c584185ee6c2ef15585efaf3438284ee9d395b34785",
+      "bytes": 179598
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/space/line-art/05-happy-planets-stars.png",
+    "sha256": "34cb296e78a4d0b78780e49b463030ce2ba4f1662b08f579bcd4b272a387455d",
+    "bytes": 145228,
+    "theme": "space",
+    "page": "happy-planets-stars",
+    "title": "Happy Galaxy",
+    "printable": {
+      "key": "public-printables/space/happy-planets-stars.pdf",
+      "sha256": "bd07e8a16320d0d6f8358c452cf275bf2efe4526bd9bab1801e392288a938133",
+      "bytes": 214339
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/space/line-art/06-astronaut-puppy-float.png",
+    "sha256": "7e63bc54999f212554e16ac336da928ed41aa32ecfc61bc133cc7922bcf8f177",
+    "bytes": 108725,
+    "theme": "space",
+    "page": "astronaut-puppy-float",
+    "title": "Space Station Pup",
+    "printable": {
+      "key": "public-printables/space/astronaut-puppy-float.pdf",
+      "sha256": "381d478fe4d409988dc279e3e6fff6ad55343f0930a5a3a80be32c99c65c6ba8",
+      "bytes": 155882
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/ocean/line-art/01-octopus-juggling-shells.png",
+    "sha256": "8d542c96f0d32f3a6aa898c8c42234d154982df9afa816f88796110ba1a9d18a",
+    "bytes": 152917,
+    "theme": "ocean",
+    "page": "octopus-juggling-shells",
+    "title": "Juggling Octopus",
+    "printable": {
+      "key": "public-printables/ocean/octopus-juggling-shells.pdf",
+      "sha256": "dc3ab2c7a7ad1db44cd1c9e005f70cfefc204e9bd31715b088f18f2ee72f5a82",
+      "bytes": 226752
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/ocean/line-art/02-sea-turtle-reef.png",
+    "sha256": "e307e69250d0f196e9b720046945f5c26fa61e5c886a3d4ef721ea004e05164c",
+    "bytes": 235715,
+    "theme": "ocean",
+    "page": "sea-turtle-reef",
+    "title": "Reef City Turtle",
+    "printable": {
+      "key": "public-printables/ocean/sea-turtle-reef.pdf",
+      "sha256": "86c66884a6a63d28f488df479ee1f1c3e90d7e9667178b7fc5ba467a0fab4295",
+      "bytes": 342407
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/ocean/line-art/03-dolphins-leaping.png",
+    "sha256": "caed0eb5d69aa4e5567ab5a6a478f1511d9ac7d1744fb3353d2206bd9d9d15ce",
+    "bytes": 108903,
+    "theme": "ocean",
+    "page": "dolphins-leaping",
+    "title": "Leaping Dolphins",
+    "printable": {
+      "key": "public-printables/ocean/dolphins-leaping.pdf",
+      "sha256": "f29fb89ec4ccb076a690d98751e71912f8ae22ca0d6724fc0a40d3b459099282",
+      "bytes": 162661
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/ocean/line-art/04-mermaid-storytime.png",
+    "sha256": "7a13a535e9bd9a4e4046ff6b9938a56f9f50440e7488283b454b42db6ddafe20",
+    "bytes": 192353,
+    "theme": "ocean",
+    "page": "mermaid-storytime",
+    "title": "Mermaid Storytime",
+    "printable": {
+      "key": "public-printables/ocean/mermaid-storytime.pdf",
+      "sha256": "4a11aee69c7569f06515147794ea4b11425f1157a961000a943d715115037fcc",
+      "bytes": 279552
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/ocean/line-art/05-whale-seahorse-ride.png",
+    "sha256": "e47a7debba02eafc86e16bde76b5a6b25d226dac8d0264f335a72a5c114e9aa3",
+    "bytes": 118024,
+    "theme": "ocean",
+    "page": "whale-seahorse-ride",
+    "title": "Whale Ride",
+    "printable": {
+      "key": "public-printables/ocean/whale-seahorse-ride.pdf",
+      "sha256": "9bf2062afdb9c33b96b2a60e4ac1d72562776b02b25f0edd6f0b32974ed4e8e3",
+      "bytes": 172639
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/ocean/line-art/06-crab-starfish-sandcastle.png",
+    "sha256": "364d42e3ca6501a9d23af558ced672b3bf0b15d1e7cd92baef51bc49a9461b7a",
+    "bytes": 112365,
+    "theme": "ocean",
+    "page": "crab-starfish-sandcastle",
+    "title": "Sandcastle Crew",
+    "printable": {
+      "key": "public-printables/ocean/crab-starfish-sandcastle.pdf",
+      "sha256": "ac105f6dfbdc28bdbd01c215071b64f5f973504cca9910c0514b58f4ca9a3d05",
+      "bytes": 164974
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/vehicles/line-art/01-fire-truck-kitten.png",
+    "sha256": "ea71b39aaf0e519a6ce8a686abe27f0e323f3f93e8fd5d0cc8aef509e40714aa",
+    "bytes": 168874,
+    "theme": "vehicles",
+    "page": "fire-truck-kitten",
+    "title": "Fire Truck Rescue",
+    "printable": {
+      "key": "public-printables/vehicles/fire-truck-kitten.pdf",
+      "sha256": "07ed39f4da7f0fcbee2f0b99de639108e670a9fa50d740fc2350f064561c4b5f",
+      "bytes": 244510
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/vehicles/line-art/02-digger-sandcastle.png",
+    "sha256": "9d463699fcc5515e0e58952e36374b001a7e2b2a95276fac932e01d785d5d6c6",
+    "bytes": 156641,
+    "theme": "vehicles",
+    "page": "digger-sandcastle",
+    "title": "Digger Playground",
+    "printable": {
+      "key": "public-printables/vehicles/digger-sandcastle.pdf",
+      "sha256": "ae0e91483bdb81ee989b574024508449ba3b931a9a1e3cff1a2287906e5a1904",
+      "bytes": 230946
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/vehicles/line-art/03-train-rolling-hills.png",
+    "sha256": "8a0b2ced2d09a3603ae8cc85599ad6d285a99c68480cf91b237baee44944736f",
+    "bytes": 167765,
+    "theme": "vehicles",
+    "page": "train-rolling-hills",
+    "title": "Choo-Choo Hills",
+    "printable": {
+      "key": "public-printables/vehicles/train-rolling-hills.pdf",
+      "sha256": "caebba8802ae5acf299e80752bb3781a1a5a7be6e0a245c128e31d745a050aba",
+      "bytes": 243948
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/vehicles/line-art/04-tractor-pumpkin-patch.png",
+    "sha256": "11ab7dbb7c708dc30619cad487a02506495f3bbbe1ed4f66e55fddafc33b5c15",
+    "bytes": 213849,
+    "theme": "vehicles",
+    "page": "tractor-pumpkin-patch",
+    "title": "Pumpkin Tractor",
+    "printable": {
+      "key": "public-printables/vehicles/tractor-pumpkin-patch.pdf",
+      "sha256": "dafd3fd4e4f380d551a2d977e6c93014f1a7eec479e74c9b21637c12f71e5450",
+      "bytes": 307705
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/vehicles/line-art/05-monster-truck-puddles.png",
+    "sha256": "24485411387e10d1fccb08d21d0e32cf024df117acc995e2e72945f02cb3a248",
+    "bytes": 156260,
+    "theme": "vehicles",
+    "page": "monster-truck-puddles",
+    "title": "Mud Puddle Hop",
+    "printable": {
+      "key": "public-printables/vehicles/monster-truck-puddles.pdf",
+      "sha256": "573e20d8cdc4cf83c79c5d1ee304f1108b30342ad3da0069d8912655f73637d3",
+      "bytes": 225930
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/vehicles/line-art/06-tugboat-harbor.png",
+    "sha256": "923a5e6ded8492de2752f8c0360f3d9d4aea996fe13b8d86edcf91e90e6d0074",
+    "bytes": 129311,
+    "theme": "vehicles",
+    "page": "tugboat-harbor",
+    "title": "Harbor Tugboat",
+    "printable": {
+      "key": "public-printables/vehicles/tugboat-harbor.pdf",
+      "sha256": "bee5b8b406af776e271fe9335032a4ea4faf4c8d9a5d75ccb308dc9eccb2efe5",
+      "bytes": 191552
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/dragons/line-art/01-dragon-marshmallows.png",
+    "sha256": "42a5940c2dec50b763cb90f466682773ff784077f1052d6fdcfd3494d7aebea9",
+    "bytes": 145921,
+    "theme": "dragons",
+    "page": "dragon-marshmallows",
+    "title": "Marshmallow Roast",
+    "printable": {
+      "key": "public-printables/dragons/dragon-marshmallows.pdf",
+      "sha256": "de231b604d19ce97029fd79952612993df52de18ddedaad0217e0e617591cbf4",
+      "bytes": 216312
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/dragons/line-art/02-dragon-knight-ride.png",
+    "sha256": "177b57d0cd189c44ddf81ac12d26aaebf9071a608b6f2af147a0568b4fcf632c",
+    "bytes": 149819,
+    "theme": "dragons",
+    "page": "dragon-knight-ride",
+    "title": "Castle Flyover",
+    "printable": {
+      "key": "public-printables/dragons/dragon-knight-ride.pdf",
+      "sha256": "0d11ae00fc283b1801372c21c1d241f0cd62b2bdd03d393cc14b06a43c431cf9",
+      "bytes": 220234
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/dragons/line-art/03-dragon-bedtime-stories.png",
+    "sha256": "b4f3a13f8b568814321313b5246b8746daf6dd60e6e6ee675d709a5d37ff3336",
+    "bytes": 203413,
+    "theme": "dragons",
+    "page": "dragon-bedtime-stories",
+    "title": "Bedtime Stories",
+    "printable": {
+      "key": "public-printables/dragons/dragon-bedtime-stories.pdf",
+      "sha256": "5f9de5f2183e6030f194b11c5916ecef5a35401723e2d02abe52147ccfcd8807",
+      "bytes": 296876
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/dragons/line-art/04-dragon-kite-flying.png",
+    "sha256": "8068f42f290de176bdd5762bb4f260d31d8539b4dba4b1fa497dc032a329f343",
+    "bytes": 136389,
+    "theme": "dragons",
+    "page": "dragon-kite-flying",
+    "title": "Hilltop Kites",
+    "printable": {
+      "key": "public-printables/dragons/dragon-kite-flying.pdf",
+      "sha256": "d0ad6d4ba355d7ef458e3684f8217d6f52ed69dd26d5b9a977e912276e565445",
+      "bytes": 199760
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/dragons/line-art/05-dragon-gem-nap.png",
+    "sha256": "038bbcd2fab39cf02d973733a3dbf5291cf08768b4931b0647809b45d1a99aee",
+    "bytes": 144971,
+    "theme": "dragons",
+    "page": "dragon-gem-nap",
+    "title": "Gem Nap",
+    "printable": {
+      "key": "public-printables/dragons/dragon-gem-nap.pdf",
+      "sha256": "ad66baf50b9ed78727808a12ba4d838feea790501f1c4fa9bbefa17d1dfdc267",
+      "bytes": 210492
+    }
+  },
+  {
+    "key": "marketing/coloring-pages/dragons/line-art/06-dragon-bakery.png",
+    "sha256": "b82d0e29d037faef99683efcecedbf65e5a0c80cd6b831c4873e22eec21b5716",
+    "bytes": 219729,
+    "theme": "dragons",
+    "page": "dragon-bakery",
+    "title": "Village Bakery",
+    "printable": {
+      "key": "public-printables/dragons/dragon-bakery.pdf",
+      "sha256": "a3da9dd27e166bd31f01430e25348ab589fc1b48761fef6bfc0fc5780daf7984",
+      "bytes": 320435
+    }
+  }
+]
