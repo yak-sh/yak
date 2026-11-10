@@ -6,7 +6,8 @@
 // commits and again until it is taken. Each place it goes keeps it once,
 // under an id derived from the message, however often it is sent:
 //
-//   - the person's Updates in the space the thread was said in: a
+//   - the person's Updates in the space the thread was said in, or their own
+//     space (directory.ts `own`) where it was said in none: a
 //     notification{about: thread} for them, its words linking the thread's
 //     page (support-page.ts);
 //   - the Operator conversation it came from, when its session is one of
@@ -22,6 +23,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Env } from './env.ts'
 import type { Meta } from './meta.ts'
+import { ownOf, type Row, seatsLine } from './directory.ts'
 import { type Message, noted, read, type Thread, told } from './support.ts'
 import type { Telling } from './operator-updates.ts'
 import type { operatorStore } from './operator-store.ts'
@@ -95,7 +97,8 @@ export let carry = async (
   let what = t && carrying(t, eid)
   if (!t || !what) return
   let c = carried(t, eid, what.m, env)
-  let heard = t.space ? await builder(env, t.space, c) : null
+  let space = t.space ?? await own(store, c.person)
+  let heard = space ? await builder(env, space, c) : null
   if (heard) return
   let { owe } = await import('./stream.ts')
   await owe(env, c.person, {
@@ -104,6 +107,11 @@ export let carry = async (
     line: c.note.body,
   })
 }
+
+// The person's own space (directory.ts `own`), where a thread said in no
+// space tells them, or null for someone with none: never one it mints.
+let own = async (store: Pick<Meta, 'query'>, person: string) =>
+  ownOf(await store.query(seatsLine(person)) as Row[], person)?.eid ?? null
 
 // The space's Builder, keeping the Update and, where the thread came from
 // an Operator conversation of the person's, the note: that conversation's

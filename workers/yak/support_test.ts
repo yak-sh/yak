@@ -375,6 +375,30 @@ test("an answer rides the agent's next result once, and the person's Updates lea
   }
 })
 
+test('an answer on a thread said in no space reaches the Updates of their own space, and their agent', async () => {
+  // Two spaces of theirs and no app named: the thread names no space.
+  let me = await helped()
+  let { thread } = (await feedback(me.agent, { text: 'Where did it go?' }))
+    .value
+  let one = async (q: string) =>
+    (await meta(k).query(q))[0] as Record<string, Record<string, string>>
+  let seat = await one(`.member.person=${me.person}&.member.own=true`)
+  let own = await one(`.entity.eid=${seat.member.space}&?space`)
+  ok(own.space.slug != me.slug, 'their own space is not the seeded one')
+  let reply = 'It is back where it was.'
+  equal((await support({ thread, text: reply })).status, 200)
+  await k.settled()
+  let linked = async (slug: string) =>
+    [...(await opened(managePath('updates', slug), me.cookie)).document
+      .querySelectorAll('a')]
+      .some((a) =>
+        (a.getAttribute('href') ?? '').endsWith(`/support/${thread}`)
+      )
+  ok(await linked(own.space.slug), 'their own Updates link the thread')
+  ok(!await linked(me.slug), 'their other space hears nothing')
+  assertStringIncludes(await carried(me.agent, 'about'), reply)
+})
+
 test('the person adds to a thread from its page, as the tool does', async () => {
   let me = await helped()
   let { thread } =
