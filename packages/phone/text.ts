@@ -105,3 +105,18 @@ let WORDS: Record<string, Keyword> = {
  */
 export let keyword = (text: string): Keyword | null =>
   WORDS[text.trim().replace(/^\W+|\W+$/g, '').toUpperCase()] ?? null
+
+/**
+ * Whether a text reached the number that sent it. Nobody wrote it to that
+ * number: it is the line's own text coming back, and an answer to it would
+ * come back the same way, so a host that answers texts leaves it unread.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { echo } from '@yaks/phone'
+ * equal(echo({ from: '+12695550100', to: '+12695550100' }), true)
+ * equal(echo({ from: '+12695550142', to: '+12695550100' }), false)
+ * ```
+ */
+export let echo = (text: Pick<Arrival, 'from' | 'to'>): boolean =>
+  !!text.from && text.from == text.to

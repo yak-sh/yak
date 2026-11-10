@@ -109,8 +109,10 @@ and @yaks/session's `session_texted` knocks the session that texted them.
 
 ## Receiving
 
-`keyword(text)` recognizes STOP, HELP and START. `kept(arrival, people)` records
-the message and updates consent using the same shapes for every provider.
+`keyword(text)` recognizes STOP, HELP and START. `echo(arrival)` says a text
+reached the number that sent it, which a host that answers texts leaves unread:
+its answer would come back the same way. `kept(arrival, people)` records the
+message and updates consent using the same shapes for every provider.
 `settled(outcome, sent)` records a failed delivery. An opaque `text.message_id`
 is scoped by `text.via`, so different providers cannot settle each other's
 texts. `arrivalEid(id, via)` derives a text's identity from both.

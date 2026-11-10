@@ -28,6 +28,7 @@ export {
   Blocked,
   consentEid,
   Denied,
+  echo,
   type Keyword,
   keyword,
   type Outcome,

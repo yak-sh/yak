@@ -8,6 +8,7 @@ import {
   type Arrival,
   Blocked,
   consentEid,
+  echo,
   keyword,
   type Text,
 } from '@yaks/phone'
@@ -229,12 +230,14 @@ let signedUp = async (env: Env, arrival: Arrival, person?: string) => {
  * words; anything else from a person who agreed to texts is a request to
  * their space's Operator, which answers by text. A text from a number
  * nobody with a space wears signs its sender up when that is switched on
- * (`signedUp`), and is not read otherwise.
+ * (`signedUp`), and is not read otherwise. Neither is a text a number sent
+ * itself (@yaks/phone `echo`), which an answer would only repeat.
  */
 export let arrived = async (
   env: Env,
   arrival: Arrival & { via: string },
 ) => {
+  if (echo(arrival)) return
   let dir = directoryOf(env.STORE)
   let line = arrival.rcs ? null : await dir.lined(arrival.to)
   if (line) {

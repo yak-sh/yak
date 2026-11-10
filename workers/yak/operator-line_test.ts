@@ -277,6 +277,15 @@ await service.drain()
 let memberBack = of('sendSMS').find((t) =>
   t.get('message')?.startsWith('The hall is free')
 )!
+// The line's own text, come back to it.
+let heard = async () => [
+  (await store.g.read('.operator_request')).length,
+  of('sendSMS').length,
+]
+let beforeEcho = await heard()
+let echoed = await texted('echo', '2695550111', 'Is the hall free Sunday?')
+await service.drain()
+let afterEcho = await heard()
 let root = await conversationOf(store, '/at', rootOf(eid, person))
 let writer = (await dir.phoned('+12695550142'))!
 let theirs = await conversationOf(store, '/at', rootOf(eid, writer))
@@ -397,6 +406,11 @@ test('an inbound number has its callback pointed here, keeping how texts reach t
   )
   assertEquals(restored.get('url_callback'), church)
   assertEquals(of('setSMS').length, 4)
+})
+
+test('a text an inbound number sent itself is answered to the provider and asks the Operator nothing', async () => {
+  assertEquals([echoed.status, await echoed.text()], [200, 'ok'])
+  assertEquals(afterEcho, beforeEcho)
 })
 
 test('a connection saved before numbers were listed is used both ways on the number it took', async () => {

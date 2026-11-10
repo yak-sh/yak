@@ -30,7 +30,14 @@ import {
   credential,
   type Ctx as Connections,
 } from '@yaks/connections'
-import { type Account, Blocked, Denied, type Held, type Own } from '@yaks/phone'
+import {
+  type Account,
+  Blocked,
+  Denied,
+  echo,
+  type Held,
+  type Own,
+} from '@yaks/phone'
 import { mobile } from '@yaks/phone/mobile'
 import { phoneOf, phones } from './phones.ts'
 import { charged } from './text-spend.ts'
@@ -581,7 +588,8 @@ export let phoneNumbers = (
  * the callback of the provider lent as `via` sends it. A ticket the kernel
  * did not seal is the caller's own forgery or stale link, refused and not
  * reported; a text from anyone the Operator has not texted from that number
- * lately is the person's own and is not read.
+ * lately is the person's own and is not read, and neither is one the number
+ * sent itself (@yaks/phone `echo`), which an answer would only repeat.
  * The provider is answered `ok`, which stops it sending the text again.
  */
 export let lineDoor = async (
@@ -605,7 +613,7 @@ export let lineDoor = async (
     `.entity.eid=${held.connection}&.${CONNECTION}&*`,
   )
   let owner = String(comp(line, CONNECTION).owner ?? '')
-  if (!arrival || !line || !owner) return ok()
+  if (!arrival || echo(arrival) || !line || !owner) return ok()
   let { directoryOf } = await import('./directory.ts')
   let dir = directoryOf(env.STORE)
   // A connection is its own space's, or a person's, whose Operator may have
