@@ -23,6 +23,7 @@ export let machineOf = async (name: string, tools: string[]) => {
       '@yaks/kernel',
       '@yaks/provenance',
       '@yaks/doc',
+      '@yaks/edge',
       '@yaks/process',
       '@yaks/persona',
       '@yaks/task',
