@@ -27,32 +27,37 @@ let text = {
   author: 'A. Writer',
   dedication: 'For family',
 }
-let fixture = (override?: Service) => {
+let fixture = (override?: (...args: Parameters<Service>) => unknown) => {
   let { db, g } = memory(manifest),
     calls: [string, Record<string, unknown>][] = []
-  let service: Service = override ?? (async (name, args) => {
-    calls.push([name, args])
-    if (name === 'prepare') return doc
-    if (name === 'quote') {
-      return {
-        id: crypto.randomUUID(),
-        document: doc.id,
-        revision: doc.revision,
-        seller: 'PrintBound',
-        currency: 'usd',
-        total: 2400,
-        expires: new Date(Date.now() + 60_000).toISOString(),
-        shipping: { id: 'MAIL', name: 'Standard', cents: 600 },
+  let respond: (...args: Parameters<Service>) => unknown = override ??
+    ((name, args) => {
+      calls.push([name, args])
+      if (name === 'prepare') return doc
+      if (name === 'quote') {
+        return {
+          id: crypto.randomUUID(),
+          document: doc.id,
+          revision: doc.revision,
+          seller: 'PrintBound',
+          currency: 'usd',
+          total: 2400,
+          expires: new Date(Date.now() + 60_000).toISOString(),
+          shipping: { id: 'MAIL', name: 'Standard', cents: 600 },
+        }
       }
-    }
-    return {
-      id: args.quote,
-      document: doc.revision,
-      seller: 'PrintBound',
-      status: name === 'order_status' ? 'printing' : 'payment_pending',
-    }
-  })
-  return { desk: studio(db, service), g, calls }
+      return {
+        id: args.quote,
+        document: doc.revision,
+        seller: 'PrintBound',
+        status: name === 'order_status' ? 'printing' : 'payment_pending',
+      }
+    })
+  return {
+    desk: studio(db, (...args) => Promise.resolve(respond(...args))),
+    g,
+    calls,
+  }
 }
 
 test('saved guest input continues through sign-in and becomes private to the bound customer', async () => {
@@ -70,7 +75,7 @@ test('saved guest input continues through sign-in and becomes private to the bou
 
 test('failed preparation cannot quote or take payment', async () => {
   let bought = 0,
-    { desk } = fixture(async (name, args) => {
+    { desk } = fixture((name) => {
       if (name === 'prepare') throw new Error('Artwork failed')
       bought++
       return {}
@@ -129,7 +134,7 @@ test('an edit racing preparation preserves the edit and does not attach a stale 
 test('pending preparation resumes one stored job and never becomes a reviewed document early', async () => {
   let starts = 0,
     polls = 0,
-    { desk } = fixture(async (name, args) => {
+    { desk } = fixture((name, args) => {
       if (name === 'prepare') {
         if (!args.document) starts++
         else assertEquals(args.document, doc.id)
@@ -155,7 +160,7 @@ test('pending preparation resumes one stored job and never becomes a reviewed do
 
 test('a preparation input error preserves its job and resumes the same document after correction', async () => {
   let resumed: unknown, failed = true
-  let { desk } = fixture(async (name, args) => {
+  let { desk } = fixture((name, args) => {
     if (name === 'prepare') {
       resumed = args.document
       return { id: doc.id, pending: true }
