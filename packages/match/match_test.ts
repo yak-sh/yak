@@ -249,10 +249,10 @@ test('a bare word matches by whole word, not by substring', () => {
   assertEquals(sel(''), [])
 })
 
-test('an ordering sorts, with absent values last either way', () => {
+test('an ordering sorts, with absent values first', () => {
   assertEquals(sel('.kind=book&.order=book.price'), ['b3', 'b4', 'b1', 'b2'])
   assertEquals(sel('.kind=book&.order=-book.price'), ['b2', 'b1', 'b4', 'b3'])
-  assertEquals(sel('.kind=book&.order=book.released'), ['b2', 'b3', 'b1', 'b4'])
+  assertEquals(sel('.kind=book&.order=book.released'), ['b4', 'b2', 'b3', 'b1'])
   assertEquals(sel('.kind=book&.order=-book.released'), [
     'b1',
     'b3',
@@ -288,9 +288,14 @@ test('a window pages WITHIN the order it was asked for', () => {
     'b3',
     'b4',
   ])
-  // an anchor outside the selection still names a place in the order: r3 has
-  // no price, and absent values sort last, so no book follows it
-  assertEquals(sel('.kind=book&.order=book.price&.after=9'), [])
+  // an anchor outside the selection still names a place in the order (r3 has
+  // no price, and absent values sort first)
+  assertEquals(sel('.kind=book&.order=book.price&.after=9'), [
+    'b3',
+    'b4',
+    'b1',
+    'b2',
+  ])
 })
 
 test('an eid cursor pages entities without human numbers', () => {

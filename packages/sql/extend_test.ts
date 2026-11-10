@@ -126,7 +126,7 @@ test('an extension supplies an order value that names no property', () => {
   let { sql } = compile(parse('.order=similar'), v, { extend: [ranks] })
   assert(
     sql.endsWith(
-      'order by case "entity"."id" when 7 then 0 else 1 end nulls last, ' +
+      'order by case "entity"."id" when 7 then 0 else 1 end, ' +
         '"entity"."num" desc, "entity"."id" desc',
     ),
     sql,
@@ -138,8 +138,7 @@ test('an extension supplies an order value that names no property', () => {
   let byTitle = compile(parse('.order=doc.title'), v, { extend: [ranks] })
   assert(
     byTitle.sql.endsWith(
-      `order by nullif("doc"."title", '') nulls last, "entity"."num" desc, ` +
-        '"entity"."id" desc',
+      'order by "doc"."title", "entity"."num" desc, "entity"."id" desc',
     ),
     byTitle.sql,
   )

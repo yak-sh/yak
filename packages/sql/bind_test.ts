@@ -340,7 +340,7 @@ test('ordering by an unfiltered property still joins its table', () => {
   // wherever it is cut
   assert(
     sql.endsWith(
-      `order by nullif("doc"."title", '') nulls last, "entity"."num" desc, ` +
+      'order by "doc"."title", "entity"."num" desc, ' +
         '"entity"."id" desc',
     ),
     sql,
@@ -396,7 +396,7 @@ test('an explicit .order survives a window', () => {
   let { sql } = compile(parse('.task.priority=1&.order=-doc.title&.limit=2'), v)
   assert(
     sql.endsWith(
-      `order by nullif("doc"."title", '') desc, "entity"."num" desc, ` +
+      'order by "doc"."title" desc, "entity"."num" desc, ' +
         '"entity"."id" desc limit 2',
     ),
     sql,
@@ -408,7 +408,7 @@ test('.after pages within the asked order, keyed on the anchor', () => {
   // the cursor names an entity by its num — the same form whatever the
   // order — and the anchor's own value is read back to page past it
   assert(sql.includes('where "__cur"."num" = ?'), sql)
-  assert(sql.includes(`nullif("doc"."title", '') > nullif((select`), sql)
+  assert(sql.includes('"doc"."title" > (select'), sql)
   // ties fall to the spine num, and an anchor no entity has is the first page
   assert(sql.includes(`"entity"."num" < ?`), sql)
   assert(sql.includes('not exists (select 1 from "entity" as "__cur"'), sql)

@@ -221,8 +221,6 @@ let expr: (e: Expr, c: Ctx) => string = kept((e: Expr, c: Ctx): string => {
       return `${expr(e.e, c)} as ${q(e.name)}`
     case 'desc':
       return `${expr(e.e, c)} desc`
-    case 'last':
-      return `${expr(e.e, c)} nulls last`
     case 'over':
       return `${expr(e.fn, c)} over (${
         [
@@ -1154,7 +1152,6 @@ let EXPRS = new Set([
   'cast',
   'as',
   'desc',
-  'last',
   'over',
 ])
 let isExpr = (n: Stmt | Expr): n is Expr => EXPRS.has(n.t)

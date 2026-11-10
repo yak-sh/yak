@@ -417,10 +417,10 @@ equal(select('.book.price<20|.review'), ['b1', 'r1'])
 descending. The property may be one a chain of references reaches, as in a path
 predicate: `.order=review.book.book.price` orders reviews by their book's price,
 and `rows()` projects `.fields=review.book.doc.title` the same way. Values sort
-numbers before text, the order SQLite's `ORDER BY` gives over the same values,
-and the entity number breaks ties, so ties are deterministic. An entity lacking
-the value, missing or empty text, comes after every entity holding it in either
-direction.
+absent first, then numbers, then text — the order SQLite's `ORDER BY` gives over
+the same values — and the entity number breaks ties, so ties are deterministic.
+Ascending property order puts missing values first; descending order reverses
+that property order.
 
 `.limit=n` keeps the first n results, and `.limit=0` keeps none. An aggregate in
 `rows()` ignores `.order`, `.limit` and `.after` and counts every match, as

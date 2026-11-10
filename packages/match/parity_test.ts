@@ -127,31 +127,6 @@ test('epoch millisecond properties resolve the same time bounds in both evaluato
   }
 })
 
-// An entity lacking the ordered value, missing or empty, comes after every
-// one holding it, ascending or descending, newest first among the lacking.
-test('an order puts what lacks its value last, either way', () => {
-  let bs: Bundle[] = [
-    { entity: { eid: 'none' }, book: {}, doc: {} },
-    { entity: { eid: 'two' }, book: { price: 2 }, doc: { title: 'b' } },
-    { entity: { eid: 'blank' }, book: {}, doc: { title: '' } },
-    { entity: { eid: 'one' }, book: { price: 1 }, doc: { title: 'a' } },
-  ]
-  let s = loaded(shop, bs)
-  let cases: [string, string[]][] = [
-    ['.book&.order=book.price', ['one', 'two', 'blank', 'none']],
-    ['.book&.order=-book.price', ['two', 'one', 'blank', 'none']],
-    ['.book&.order=doc.title', ['one', 'two', 'blank', 'none']],
-    ['.book&.order=-doc.title', ['two', 'one', 'blank', 'none']],
-    ['.book&.order=doc.title&.limit=2', ['one', 'two']],
-    ['.book&.order=doc.title&.after=two', ['blank', 'none']],
-    ['.book&.order=-doc.title&.after=blank', ['none']],
-  ]
-  for (let [q, want] of cases) {
-    assertEquals(eids(matcher(q, shop, { now: NOW })(bs)), want, q)
-    assertEquals(eids(fromSql(s, q)), want, q)
-  }
-})
-
 // A component whose plural is its own name (`_lens` names a `_package`) gets
 // its association by the property, so "a package no lens names" is a line.
 test('an association whose plural is taken is named by its property', () => {

@@ -80,19 +80,16 @@ import {
   cond,
   count,
   type Cte,
-  desc,
   each,
   eq,
   exists,
   type Expr as Cond,
   FALSE,
-  fn,
   type Frag,
   from,
   gt,
   isRaw,
   type Join,
-  last,
   lit,
   not,
   notNull,
@@ -3945,9 +3942,9 @@ let halved = (ast: And, ctx: Ctx): Frag | undefined => {
 // (`.content.body~=`), run on each of them. Read as two halves, the rows
 // holding a value walk the property's index in its order, so SQLite sorts
 // only each run of equal values by the rest and stops at the page; the rows
-// without one, missing or empty, which sort last in either direction
-// (`sortOf`), are read only where the other half cannot fill the page. At
-// most twice the page is then put in order. A filter another index seeks, or a needle few rows hold,
+// without one, which sort first ascending and last descending, are read only
+// where the other half cannot fill the page. At most twice the page is then
+// put in order. A filter another index seeks, or a needle few rows hold,
 // already bounds what is sorted. A bound on the ordered property instead
 // narrows the same walk, which still stops at the page.
 let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
@@ -3969,7 +3966,8 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
       ['after', 'count', 'tally', 'distinct'].includes(c.kind)
     )
   ) return
-  let path = order.value.replace(/^-/, '').split('.')
+  let desc = order.value.startsWith('-')
+  let path = order.value.slice(Number(desc)).split('.')
   let [comp, prop] = path
   let p = ctx.v.prop(comp, prop)
   if (
@@ -4084,16 +4082,26 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
       }),
     }))
   }
-  // The walk reads the rows holding a non-empty value, in the index's order;
-  // the rest, missing or empty (`!p` holds of both), follow it. A test that
-  // admits none of them leaves that half empty, read only where the walk
-  // fell short of the page, having read every row the test admits.
-  let none = { kind: 'scalar' as const, raw: '' }
-  let holding: Pred[] = [
-    { kind: 'pred', path, op: '!', value: null },
-    { kind: 'pred', path, op: '!=', value: none },
-  ]
-  let lacking: Pred = { kind: 'pred', path, op: '=', value: none }
+  // A test requiring the ordered value excludes nulls already. One index
+  // walk answers it, including empty text where that test admits it; there
+  // is no missing-value half to scan before an ascending page.
+  if (
+    flattened(filters).some((c) =>
+      c.kind == 'pred' && !c.not && !c.where &&
+      c.path.join('.') == path.join('.') && needs(opOf(c), c.value)
+    )
+  ) return render(page({ walk: { comp, index } }, [], limit.n))
+  let holding: Pred = { kind: 'pred', path, op: '!', value: null }
+  // Blank, so it holds an empty text too, which the holding half may also read.
+  let lacking: Pred = {
+    kind: 'pred',
+    path,
+    op: '=',
+    value: { kind: 'scalar', raw: '' },
+  }
+  let [first, rest]: [Ctx['walk'], Pred[]][] = desc
+    ? [[{ comp, index }, [holding]], [null, [lacking]]]
+    : [[null, [lacking]], [{ comp, index }, [holding]]]
   // A backlink page walks the index only for an entity with many referrers
   // (`MANY`, as `lower`'s backlink page chooses). For one with few, the walk
   // passes every entity holding the property, and then every one lacking it,
@@ -4109,7 +4117,7 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
     `not exists (${held.sql} limit 1 offset ${MANY})`,
     held.params,
   )
-  let lead = page({ walk: { comp, index } }, holding, few ?? limit.n)
+  let lead = page({ walk: first[0] }, first[1], few ?? limit.n)
   let led = render(lead)
   let full = raw(
     `exists (${led.sql} limit 1 offset ${limit.n - 1})`,
@@ -4117,7 +4125,7 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
   )
   let parts = [
     lead,
-    page({ walk: null }, [lacking], few ? or(few, full) : full),
+    page({ walk: rest[0] }, rest[1], few ? or(few, full) : full),
   ]
   if (few) parts.push(page({ walk: null }, [], not(few)))
   return render(select({
@@ -4327,7 +4335,7 @@ let lower = (
         : 'this store does not number its entities',
     )
   }
-  let ordered = sort ? [term(sort, !!ctx.walk)] : []
+  let ordered = sort ? [`${sort.row}${sort.desc ? ' desc' : ''}`] : []
   // A window is newest first, which is what makes taking a prefix meaningful
   // and lets a `.after` cursor continue it. A complete result is oldest first:
   // it is not a page of anything, and the order the rows were written in is the
@@ -5614,15 +5622,8 @@ let visible = (
 // the ranks can express it — and routes to a property when no extension claims
 // it. (An in-memory matcher would sort these in JavaScript; compiling them into
 // the statement is what this representation adds.)
-//
-// A property is read as its value or NULL, an empty text being as absent as a
-// missing one (`!p` holds of both), and NULL sorts after every value in
-// either direction: what is absent comes after what is there. `bare` is the
-// column itself, the order an index keeps, for a read whose rows all hold a
-// value (`inOrder`'s walk).
 type Sort = {
   row: string
-  bare: string
   at: (owner: string) => string
   desc: boolean
   ranked?: boolean
@@ -5634,32 +5635,14 @@ let sortOf = (ctx: Ctx, value: string): Sort => {
   if (rank) {
     return {
       row: rank,
-      bare: rank,
       at: (o) => ranked(ctx, field, o)!,
       desc,
       ranked: true,
     }
   }
-  let { expr, tag } = resolveField(ctx, field)
-  let held = (e: string) =>
-    NUMERIC.includes(tag) ? e : inline(fn('nullif', raw(e), lit('')))
-  return {
-    row: held(expr),
-    bare: expr,
-    at: (o) => held(resolveField(ctx, field, o).expr),
-    desc,
-  }
+  let row = resolveField(ctx, field).expr
+  return { row, at: (o) => resolveField(ctx, field, o).expr, desc }
 }
-
-// The tags whose values are never text, so never empty.
-let NUMERIC: Tag[] = ['number', 'priority', 'bool', 'eid']
-
-// A sort as an order term: descending puts NULLs last already, ascending says
-// so. A walk's rows all hold a value, read in the index's own order.
-let term = (sort: Sort, walk: boolean): string =>
-  walk
-    ? `${sort.bare}${sort.desc ? ' desc' : ''}`
-    : inline(sort.desc ? desc(raw(sort.row)) : last(raw(sort.row)))
 
 let ranked = (ctx: Ctx, field: string, owner?: string): string | null => {
   for (let e of ctx.ext) {
@@ -5708,10 +5691,9 @@ let atAnchor = (sort: Sort, owner: Frag): Frag => {
 // `.after` as a keyset condition over the effective order: the rows strictly
 // past the anchor's own place in it, with the spine breaking ties
 // (descending, so that an unordered window still reads newest first). Absent
-// values sort last in either direction (`sortOf`), as @yaks/match sorts them,
-// and comparing anything to NULL yields NULL rather than a boolean, so the
-// null case is written out: past an anchor holding a value lie the rows
-// holding none.
+// values sort first when ascending — SQLite puts NULLs first, and @yaks/match
+// does the same — and comparing anything to NULL yields NULL rather than a
+// boolean, so each null case is written out.
 //
 // The fallbacks follow from the keyset rather than being special cases: an
 // anchor that no longer matches the query still has an order value to page
@@ -5757,12 +5739,9 @@ let keyset = (
 // Past the anchor in an explicit order: its value first, the tie after.
 let past = (sort: Sort, a: Frag, exists: Frag, tie: Frag): Frag => {
   let v = sort.row
-  let beyond = spliced(
-    `(${v} is null and `,
-    a,
-    ` is not null) or ${v} ${sort.desc ? '<' : '>'} `,
-    a,
-  )
+  let beyond = sort.desc
+    ? spliced(`(${v} is null and `, a, ` is not null) or ${v} < `, a)
+    : spliced('(', a, ` is null and ${v} is not null) or ${v} > `, a)
   return spliced(
     '(not ',
     exists,

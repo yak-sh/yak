@@ -126,8 +126,7 @@ let DECLINED = new Set([
 let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>
   cs.find((c) => c.kind == kind) as T | undefined
 
-// SQLite's ordering, in memory: an absent value first, then numbers, then
-// text. `.order` puts the absent last instead (`ordered`).
+// SQL's ordering, in memory: an absent value first, then numbers, then text.
 let rank = (v: unknown): number => v == null ? 0 : typeof v == 'number' ? 1 : 2
 let compare = (a: unknown, b: unknown): number => {
   if (rank(a) != rank(b)) return rank(a) - rank(b)
@@ -141,11 +140,6 @@ let compare = (a: unknown, b: unknown): number => {
   if (rank(a) == 1) return (a as number) - (b as number)
   return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0
 }
-
-// `.order`'s comparison of two values: by `compare`, descending if asked,
-// and an absent value after every present one either way.
-let ordered = (a: unknown, b: unknown, desc: boolean): number =>
-  Number(a == null) - Number(b == null) || (desc ? -1 : 1) * compare(a, b)
 
 // The compiled forms already built, per vocabulary, per computed-rule registry,
 // per query tree, one for each function that compiles one. A form that read
@@ -293,10 +287,8 @@ let said = (f: Field) => (b: Bundle, among: Index): unknown => {
 // The sort a query asks for, or null to keep the order given. An explicit
 // `.order` survives a window — a window sets how much of a sequence to return,
 // never which sequence — and the entity number breaks its ties, so the order is
-// total and a page cut here holds the rows a page cut in SQL holds. An entity
-// lacking the ordered value, missing or empty text, comes after every one
-// holding it in either direction. A window with no `.order` is that tiebreak
-// alone: newest first.
+// total and a page cut here holds the rows a page cut in SQL holds. A window
+// with no `.order` is that tiebreak alone: newest first.
 let sorter = (
   ctx: Ctx,
   cs: Clause[],
@@ -318,12 +310,13 @@ let sorter = (
         : -compare(a.entity.num ?? null, b.entity.num ?? null)) ||
       (ctx.storageOrder && !order ? 1 : -1) *
         ((place.get(a.entity.eid) ?? 0) - (place.get(b.entity.eid) ?? 0))
-    if (!read) return windowed ? newest : null
-    let held = (b: Bundle) => {
-      let v = read(b, among)
-      return v === '' ? null : v
-    }
-    return (a, b) => ordered(held(a), held(b), desc) || newest(a, b)
+    return read
+      ? (a, b) =>
+        (desc ? -1 : 1) * compare(read(a, among), read(b, among)) ||
+        newest(a, b)
+      : windowed
+      ? newest
+      : null
   }
 }
 
