@@ -749,8 +749,8 @@ The complete list of reserved names:
     restored result retired revision rtc rtc_lapse sale_access sale_artifact
     satisfies screen screenshot secret seeded seller sender sending serves
     service_checkout service_quote session session_input session_result
-    session_run sfu signed_in signin sms_consent space space_logo spend
-    staged started starter stop stream_item submitted subscription
+    session_run sfu shared signed_in signin sms_consent space space_logo
+    spend staged started starter stop stream_item submitted subscription
     supersedes supervises support sweep switched task text text_post theme
     tool tool_refusal topic trashed tree_entry trend tunnel tunnel_tell
     typed unchecked updated usage uses using verified visit visitor_build

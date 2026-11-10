@@ -25,6 +25,7 @@ export type Settings = {
   thanks?: string
   closed?: string
   notify?: readonly string[]
+  shares?: { question: string; is: unknown }
 }
 
 /** A question row, retaining its entity id as the answer's key. */
@@ -41,6 +42,7 @@ export type Question = {
     when?: { question: string; is: unknown }
     fills?: string
     relates?: 'child' | 'parent' | 'spouse' | 'sibling'
+    shared?: boolean
     order?: number
   }
 }
@@ -235,6 +237,21 @@ export let kept = (form: Form, answers: Answers): Answers => {
         }),
     )
   return keep(asked(form, answers), answers)
+}
+
+/** What a sign-up shares with the app's people: undefined unless its visible
+ * answer to the form's `shares.question` is `shares.is`, then its visible
+ * answers to the top-level questions marked `shared`. */
+export let shared = (form: Form, answers: Answers): Answers | undefined => {
+  let on = form.form.shares, visible = kept(form, answers)
+  if (!on || !same(visible[on.question], on.is)) return undefined
+  let marked = new Set(
+    form.questions.filter((q) => q.question.shared && !q.question.within)
+      .map((q) => q.entity.eid),
+  )
+  return Object.fromEntries(
+    Object.entries(visible).filter(([eid]) => marked.has(eid)),
+  )
 }
 
 /** Whether sign-ups are accepted at this instant and registration count.

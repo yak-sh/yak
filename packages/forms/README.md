@@ -40,12 +40,13 @@ Load `formsDoc` from `@yaks/forms/vocab` beside `kernelDoc` from
 `@yaks/kernel/vocab`, which declares the shared completion and cancellation
 marks. Add `doc{title, body}` to a form for its title and introduction.
 
-| Component      | Properties                                                                                            |
-| -------------- | ----------------------------------------------------------------------------------------------------- |
-| `form`         | `opens`, `closes`, `capacity`, `thanks`, `closed`, `notify`                                           |
-| `question`     | `form`, `label`, `kind`, `choices`, `required`, `hint`, `within`, `when`, `fills`, `relates`, `order` |
-| `registration` | `form`, `person`, `answers`, `at`                                                                     |
-| `waitlisted`   | stamped `at`, `by`, `via`                                                                             |
+| Component      | Properties                                                                                                      |
+| -------------- | --------------------------------------------------------------------------------------------------------------- |
+| `form`         | `opens`, `closes`, `capacity`, `thanks`, `closed`, `notify`, `shares`                                           |
+| `question`     | `form`, `label`, `kind`, `choices`, `required`, `hint`, `within`, `when`, `fills`, `relates`, `shared`, `order` |
+| `registration` | `form`, `person`, `answers`, `at`                                                                               |
+| `shared`       | `form`, `registration`, `answers`, `at`                                                                         |
+| `waitlisted`   | stamped `at`, `by`, `via`                                                                                       |
 
 Question kinds are `line`, `lines`, `choose`, `choices`, `check`, `date`,
 `email`, `phone`, `address`, `file` and `repeat`. `fills` names a directory
@@ -65,6 +66,46 @@ A registration declares @yaks/member's `"readers": "editor"`: whatever the app's
 access, only its owners and editors read one, so a `public` form's sign-ups, and
 a members' directory's, stay with the people who run it rather than every
 reader.
+
+## What a sign-up shares
+
+A sign-up stays with the people who run the app unless its sender chooses
+otherwise. `form.shares{question, is}` names the question that asks, and the
+answer that shares; `question.shared` marks the top-level questions whose
+answers are shown. `shared(form, answers)` returns those answers when the
+visible answer to `shares.question` is `shares.is`, and `undefined` otherwise.
+
+The host writes them to a `shared{form, registration, answers, at}` row beside
+the registration. It declares `"readers": "viewer"`: the app's viewers, editors
+and owners read it, and a visitor holding no role does not, whatever the app's
+access. Deleting the registration deletes it. A prayer form asking "Share with
+our church or just the prayer team?" shows the church's members the request and
+the name, and keeps the email with the team:
+
+```ts
+import { type Form, shared } from '@yaks/forms'
+import { equal } from '@yaks/testing'
+
+let ask = (eid: string, more = {}) => ({
+  entity: { eid },
+  question: { form: 'prayer', label: eid, kind: 'line' as const, ...more },
+})
+let prayer: Form = {
+  form: { shares: { question: 'with', is: 'Our church' } },
+  questions: [
+    ask('with'),
+    ask('request', { shared: true }),
+    ask('first', { shared: true }),
+    ask('email'),
+  ],
+}
+let answers = { request: 'Healing', first: 'Ann', email: 'ann@example.org' }
+equal(shared(prayer, { ...answers, with: 'Our church' }), {
+  request: 'Healing',
+  first: 'Ann',
+})
+equal(shared(prayer, { ...answers, with: 'Just the team' }), undefined)
+```
 
 ## Question progress
 

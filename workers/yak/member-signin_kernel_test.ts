@@ -56,8 +56,8 @@ await meta(env).apply([
 ], KERNEL)
 let boCookie = await signedIn(k, bo)
 
-let [annRow, boRow, cyRow, form, email, first, said] = Array.from(
-  { length: 7 },
+let [annRow, boRow, cyRow, form, email, first, said, share] = Array.from(
+  { length: 8 },
   () => crypto.randomUUID(),
 )
 await agent.tool('graph_apply', {
@@ -80,7 +80,15 @@ await agent.tool('graph_apply', {
       entity: { eid: cyRow },
       individual: { first: 'Cy', email: cy.email, status: 'former' },
     },
-    { entity: { eid: form }, alias: { name: 'prayer' }, form: {} },
+    {
+      entity: { eid: form },
+      alias: { name: 'prayer' },
+      form: { shares: { question: share, is: 'Our church' } },
+    },
+    {
+      entity: { eid: share },
+      question: { form, kind: 'choose', label: 'Share with', order: 1 },
+    },
     {
       entity: { eid: first },
       question: {
@@ -101,7 +109,13 @@ await agent.tool('graph_apply', {
     },
     {
       entity: { eid: said },
-      question: { form, kind: 'lines', label: 'Your request', required: true },
+      question: {
+        form,
+        kind: 'lines',
+        label: 'Your request',
+        required: true,
+        shared: true,
+      },
     },
   ],
 })
@@ -114,10 +128,10 @@ let at = (path: string, cookie?: string, init: RequestInit = {}) =>
   })
 let shown = async (cookie?: string) =>
   (await (await at('api/form/prayer', cookie)).json()).answers
-let pray = (cookie: string | undefined, words: string) =>
+let pray = (cookie: string | undefined, words: string, to = 'Our church') =>
   at('api/form/prayer', cookie, {
     method: 'POST',
-    body: JSON.stringify({ answers: { [said]: words } }),
+    body: JSON.stringify({ answers: { [said]: words, [share]: to } }),
   })
 let joinFor = async (cookie: string) =>
   (await (await at('api/me', cookie)).json()).join
@@ -134,9 +148,8 @@ test('a member signed in by address or number finds their sign-up filled in', as
 })
 
 test('a sign-up names the member who sent it, and a stranger is nobody', async () => {
-  for (let [cookie, words] of [[ann.cookie, 'Ann'], [stranger.cookie, 'S']]) {
-    equal((await pray(cookie, words)).status, 204)
-  }
+  equal((await pray(ann.cookie, 'Ann')).status, 204)
+  equal((await pray(stranger.cookie, 'S', 'Just the prayer team')).status, 204)
   await k.settled()
   let rows = (await agent.answer('graph_query', {
     app,
@@ -157,7 +170,7 @@ test('current members are offered Join by address or number; others are not', as
   equal(await joinFor(stranger.cookie), null)
 })
 
-test('a member who joins reads the directory, and not its sign-ups', async () => {
+test('a member who joins reads the directory and what was shared, not sign-ups', async () => {
   let joined = await at('api/join', boCookie, { method: 'POST' })
   equal(await joined.json(), { joined: 'viewer' })
   equal((await at('', boCookie)).status, 200)
@@ -168,6 +181,10 @@ test('a member who joins reads the directory, and not its sign-ups', async () =>
   )
   ok(['Ann', 'Bo', 'Cy'].every((n) => names.includes(n)), names)
   equal(await read('.registration'), [])
+  equal(
+    (await read('.shared')).map((r: { shared: Comp }) => r.shared.answers),
+    [{ [said]: 'Ann' }],
+  )
 })
 
 test('published, the directory shows a member Join and a stranger its sample', async () => {

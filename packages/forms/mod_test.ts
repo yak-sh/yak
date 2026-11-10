@@ -11,6 +11,7 @@ import {
   open,
   posted,
   type Question,
+  shared,
 } from './mod.ts'
 
 let question = (
@@ -223,4 +224,27 @@ test('asked shows what a form shows, and kept drops answers to hidden questions'
     ],
     photos: true,
   })
+})
+
+test('shared answers only the marked visible answers, and only when shares holds', () => {
+  let f: Form = {
+    form: { shares: { question: 'with', is: 'Our church' } },
+    questions: [
+      question('with', { kind: 'choose', choices: ['Our church', 'Team'] }),
+      question('ask', { kind: 'lines', shared: true }),
+      question('first', { shared: true }),
+      question('email', { kind: 'email' }),
+      question('why', { shared: true, when: { question: 'email', is: 'x' } }),
+    ],
+  }
+  let answers = {
+    with: 'Our church',
+    ask: 'Pray for Ann',
+    first: 'Ann',
+    email: 'ann@example.org',
+    why: 'hidden',
+  }
+  equal(shared(f, answers), { ask: 'Pray for Ann', first: 'Ann' })
+  equal(shared(f, { ...answers, with: 'Team' }), undefined)
+  equal(shared({ ...f, form: {} }, answers), undefined)
 })

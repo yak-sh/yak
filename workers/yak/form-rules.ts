@@ -1,8 +1,22 @@
-// Availability and completion are checked in the registration’s transaction.
-import { answered, type Answers, type Form, missing, open } from '@yaks/forms'
+// Availability and completion are checked in the registration’s transaction,
+// and what its sender chose to share is written beside it.
+import {
+  answered,
+  type Answers,
+  type Form,
+  missing,
+  open,
+  shared,
+} from '@yaks/forms'
 import { composed } from '@yaks/graph/bundle'
 import { after, each } from '@yaks/fp'
-import { type Bundle, type Comp, hook, type Plugin } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  derivedEid,
+  hook,
+  type Plugin,
+} from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 
 let comp = (row: Bundle | undefined, name: string): Comp =>
@@ -14,6 +28,10 @@ export let accepted = (id: string, capacity: number) =>
   `.registration.form=${quote(id)}&.completed&!cancelled&!waitlisted&.limit=${
     Math.max(1, capacity)
   }`
+// A retried completion finds the same shared row again.
+let share = (registration: string) =>
+  derivedEid(JSON.stringify(['registration-shared', registration]))
+
 export let formRules = (
   now: () => number,
 ): Plugin => ({
@@ -22,6 +40,7 @@ export let formRules = (
   hooks: {
     rules: hook(['registration', 'completed'], (bundles, tx) => {
       let rows = composed(bundles), counts = new Map<string, number>()
+      let out = [...bundles]
       let complete = (row: Bundle) =>
         after(tx.get([row.entity.eid]), ([before]) => {
           if (before?.completed) return
@@ -81,6 +100,18 @@ export let formRules = (
                           throw new Refused('This form is closed or full.')
                         }
                         counts.set(id, count + 1)
+                        let told = shared(form, answers)
+                        if (!told) return
+                        out.push({
+                          entity: { eid: share(row.entity.eid) },
+                          shared: {
+                            form: id,
+                            registration: row.entity.eid,
+                            answers: told,
+                            at: registration.at ??
+                              new Date(now()).toISOString(),
+                          },
+                        })
                       },
                     )
                   },
@@ -95,7 +126,7 @@ export let formRules = (
           undefined,
           (_, row) => complete(row),
         ),
-        () => bundles,
+        () => out,
       )
     }),
   },

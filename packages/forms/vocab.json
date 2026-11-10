@@ -40,6 +40,21 @@
             "type": "string"
           },
           "description": "entity ids to notify of a sign-up"
+        },
+        "shares": {
+          "type": "object",
+          "properties": {
+            "question": {
+              "type": "string"
+            },
+            "is": {}
+          },
+          "required": [
+            "question",
+            "is"
+          ],
+          "additionalProperties": false,
+          "description": "a sign-up whose answer to question is this value is shared with the app's people: its shared answers are written to a shared row they read"
         }
       }
     },
@@ -130,6 +145,10 @@
           ],
           "description": "on a repeat, what each entry is to the person it is listed under; absent records no relation"
         },
+        "shared": {
+          "type": "boolean",
+          "description": "whether this answer is among those a shared sign-up shows the app's people"
+        },
         "order": {
           "type": "number",
           "description": "question order; absent is zero and ties sort by entity id"
@@ -175,6 +194,40 @@
           "ref": "entity",
           "death": "keep",
           "description": "platform person whose submission this is, independent of the matched directory person"
+        }
+      }
+    },
+    "shared": {
+      "component": true,
+      "type": "object",
+      "description": "the answers a sign-up's sender chose to share, read by the app's viewers, editors and owners and nobody else; deleting the sign-up deletes it",
+      "readers": "viewer",
+      "required": [
+        "form",
+        "registration"
+      ],
+      "properties": {
+        "form": {
+          "type": "string",
+          "ref": "form",
+          "death": "keep",
+          "description": "the form signed up through"
+        },
+        "registration": {
+          "type": "string",
+          "ref": "registration",
+          "death": "cascade",
+          "description": "the sign-up whose answers these are"
+        },
+        "answers": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "the shared answers, keyed by question id"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when the sign-up was sent"
         }
       }
     },
