@@ -116,6 +116,7 @@ import {
   updatesOf,
   visitsOf,
 } from './updates.ts'
+import { answered, asksCard, asksOf } from './operator-asks.ts'
 
 // What this page draws, as markup: the edge where its parts become text.
 let html = (node: Node) => renderToString(h(Fragment, null, node))
@@ -653,6 +654,32 @@ export let operatorAnswer = async (
       if (!(e instanceof CallError)) throw e
       return Response.json({ message: e.message }, { status: 400 })
     }
+  }
+  // A choice pressed beside what needs them (operator-asks.ts), sent on as
+  // their own answer; the page is drawn again without it.
+  if (q.has('asks') && req.method == 'POST') {
+    let form = await req.formData()
+    let said = (k: string) => String(form.get(k) ?? '')
+    try {
+      await answered(
+        env,
+        who.person ?? '',
+        space.eid,
+        said('server'),
+        said('ask'),
+        said('choice'),
+      )
+    } catch (e) {
+      if (!(e instanceof CallError)) throw e
+      return new Response(`That answer was not taken: ${e.message}`, {
+        status: 409,
+        headers: { 'content-type': 'text/plain; charset=utf-8' },
+      })
+    }
+    return new Response(null, {
+      status: 303,
+      headers: { location: new URL(chatPath(space.slug), url).href },
+    })
   }
   if (q.has('alerts') && req.method == 'POST') {
     let form = await req.formData()
@@ -1620,6 +1647,8 @@ let talkPage = (
     app?: Making
     // what it is doing now, at the bar's right end (operator-aside.ts)
     aside?: Node
+    // how long its reads took, as a Server-Timing header says it
+    timing?: string
   },
 ) =>
   shell(
@@ -1666,7 +1695,11 @@ let talkPage = (
         page.app ? canvas(env, space, page.app, space.operator) : null,
       ),
     ]) + (page.script ?? ''),
-    { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
+    {
+      'cache-control': 'private, no-store',
+      'x-robots-tag': 'noindex',
+      ...page.timing ? { 'server-timing': page.timing } : {},
+    },
     beside.collapsed ? 'Talk_Page Talk_Page-rail' : 'Talk_Page',
     installable(space),
   )
@@ -1772,6 +1805,9 @@ export let chatPage = async (
   let at = managePath('operator', space.slug)
   // The space's address opens the person's one conversation, and a new chat
   // only until they have one (T-141349).
+  // What needs them is read beside the conversation where the address is
+  // the one they land on, and once it is known to be, where it names it.
+  let asking = open == 'new' ? asksOf(env, who.person, space.eid) : undefined
   let [talked, newcomer] = await Promise.all([
     conversationOf(env, space, who, at, open == 'new' ? '' : open, {
       updates: true,
@@ -1814,6 +1850,9 @@ export let chatPage = async (
   // and a new chat offers ways to start.
   let landing = (fresh || open == root) && !app
   let needs = landing ? needing(news) : undefined
+  let asks = landing
+    ? await (asking ?? asksOf(env, who.person, space.eid))
+    : null
   return talkPage(env, space, who, beside, {
     title: fresh
       ? app ? app.title || app.slug : `Message ${operator}`
@@ -1836,6 +1875,7 @@ export let chatPage = async (
         ? h(
           'div',
           { class: 'Talk_Needs', 'data-needs': '' },
+          asks ? asksCard(asks, `${at}?asks=1`) : null,
           needs
             ? needsCard(
               space,
@@ -1875,6 +1915,8 @@ export let chatPage = async (
     aside: talked.aside
       ? h(Aside, { aside: talked.aside, now: Date.now() })
       : undefined,
+    // The read of what needs them, which the README's number is measured by.
+    timing: asks ? `asks;dur=${asks.ms}` : undefined,
     script: chatScript(
       talked.aside ?? { turn: null, helpers: [] },
       at,

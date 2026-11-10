@@ -68,6 +68,18 @@ export let connectedTools = async (
     },
   }))
 
+// The list of what needs the person a server is asked for, as mcp_connect
+// takes it: none said leaves it, an empty tool takes it away.
+let asked = (said: unknown) => {
+  if (!said || typeof said != 'object') return {}
+  let { tool, query } = said as Record<string, unknown>
+  return {
+    asks: String(tool ?? '').trim()
+      ? { tool: String(tool).trim(), query: String(query ?? '') }
+      : null,
+  }
+}
+
 export let mcpConnect: Row = {
   name: 'mcp_connect',
   destructive: false,
@@ -93,6 +105,16 @@ export let mcpConnect: Row = {
         description:
           'Exact remote tool names to expose; omission keeps the existing selection.',
       },
+      asks: {
+        type: 'object',
+        description:
+          "What needs you, listed over your Operator's message box with no model turn: the server's tool that lists it, called with query, whose rows are shown in its order. An empty tool lists nothing.",
+        properties: {
+          tool: str('The tool that lists what needs you, such as task_list.'),
+          query: str("The query it is called with, in the server's own words."),
+        },
+        required: ['tool'],
+      },
     },
     required: ['name', 'url'],
   },
@@ -110,6 +132,7 @@ export let mcpConnect: Row = {
       ...typeof args.client_id == 'string' ? { client_id: args.client_id } : {},
       ...typeof args.enabled == 'boolean' ? { enabled: args.enabled } : {},
       ...Array.isArray(args.allow) ? { allow: args.allow.map(String) } : {},
+      ...asked(args.asks),
     })
     return { text: JSON.stringify(value), value }
   },

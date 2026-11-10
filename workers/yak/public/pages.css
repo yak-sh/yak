@@ -746,6 +746,22 @@
   .Talk_Needs:empty {
     display: none;
   }
+  /* What needs the person (operator-asks.ts): each a line for what it is
+     and a line for what it asks, cut where it runs out of room, its title
+     saying the rest. */
+  .Talk_Needs {
+    display: grid;
+    gap: .75rem;
+  }
+  .Asks :is(.Rows_Name, .Rows_Meta) {
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .Asks .Rows_Actions {
+    flex-wrap: wrap;
+  }
   /* Over a helper's conversation, what it is and where words go
      (operator-page.ts `helperCard`). */
   .Talk_Helper {

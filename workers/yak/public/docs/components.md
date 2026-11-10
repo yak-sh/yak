@@ -720,7 +720,7 @@ one is refused entirely:
 The complete list of reserved names:
 
     _change _pace _tx about access account_alert account_usage acts_for
-    alias answer app archetype archived artifact ask attachment attempt
+    alias answer app archetype archived artifact ask asks attachment attempt
     attribute_writes belief binding blob bounced browser budget build
     build_of builder builder_answer builder_dep builder_edit
     builder_model_answer builder_open builder_ring built call call_ready

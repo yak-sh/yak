@@ -46,6 +46,9 @@ type Settings = {
   enabled?: boolean
   allow?: string[]
   client_id?: string
+  // What needs the person, read from this server (operator-asks.ts); null
+  // lists nothing.
+  asks?: { tool: string; query: string } | null
 }
 // `machine` is the space whose tunnel reaches the server, where it is on one.
 type RemoteCommand = Command & { namespace: string; machine?: string }
@@ -375,6 +378,7 @@ export let remoteCommands = (
         ...settings.allow ? { allow: JSON.stringify(settings.allow) } : {},
         ...settings.client_id ? { client_id: settings.client_id } : {},
       },
+      ...settings.asks !== undefined ? { asks: settings.asks } : {},
     }
     try {
       let next = serverOf(row)

@@ -100,6 +100,27 @@ let opening = (words: string) =>
 let COMMENT = 'comment_new', ANSWER = 'decision_answer', SHOW = 'graph_show'
 
 /**
+ * A person's own answer to a decision on their machine: the choice they
+ * pressed beside it on `space`'s Operator page (operator-asks.ts), sent on
+ * through `at`, their server there, as their own act, the way a message of
+ * theirs is.
+ */
+export let answerAsTheirs = async (
+  ctx: Ctx,
+  space: string,
+  at: string,
+  decision: string,
+  choice: string,
+) => {
+  let out = await runConnectedCommand(ctx, at, ANSWER, { decision, choice }, {
+    caller: 'operator',
+    space,
+    own: true,
+  })
+  if (out.value?.isError) throw refuse('mcp_tool', out.text)
+}
+
+/**
  * One tool for each of the person's machines whose server takes comments
  * (`remote`, connected-mcp.ts `connectedTools`): one of their own messages in
  * this conversation becomes their comment on an entity there, and for a

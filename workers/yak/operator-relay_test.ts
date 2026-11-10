@@ -5,54 +5,20 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, mint } from '@yaks/graph'
-import { compose, every } from '@yaks/cli/host'
 import { toolEid } from '@yaks/tools'
-import { HEADER } from '@yaks/tunnel'
 import { mcpConnect } from './connected-mcp.ts'
-import { platform } from './directory-probe.ts'
-import { directoryOf, stamp } from './directory.ts'
-import type { Env } from './env.ts'
+import { machineOf } from './machine-testing.ts'
 import { operatorContext, operatorRoster } from './operator.ts'
 import { sourceReference } from './operator-source.ts'
 import { operatorMemory } from './operator-testing.ts'
 
-let ada = mint(), bob = mint()
-// The machine: its own person, the persona its Operator's calls write as, and
-// the platform's id for the person whose own words it takes.
-let person = mint(), persona = mint()
-let config = {
-  db: ':memory:',
-  person,
-  plugins: [
-    '@yaks/kernel',
-    '@yaks/provenance',
-    '@yaks/doc',
-    '@yaks/process',
-    '@yaks/persona',
-    '@yaks/task',
-    '@yaks/session',
-    '@yaks/api',
-    '@yaks/mcp',
-    {
-      use: '@yaks/tunnel',
-      with: {
-        callers: {
-          operator: {
-            routes: ['/mcp'],
-            tools: ['comment_new', 'decision_answer', 'graph_show'],
-            persona,
-            owner: ada,
-          },
-        },
-      },
-    },
-  ],
-}
-let box = await compose(config, every(config))
+let { box, env, dir, space, ada, bob, person, persona } = await machineOf(
+  'operator-relay',
+  ['comment_new', 'decision_answer', 'graph_show'],
+)
+let eid = space.eid
 let [task, decision, second] = [mint(), mint(), mint()]
 await box.graph.apply([
-  { entity: { eid: person }, person: {}, doc: { title: 'Ada, at her box' } },
-  { entity: { eid: persona }, persona: {}, doc: { title: 'the Operator' } },
   { entity: { eid: task }, task: {}, doc: { title: 'Ship the page' } },
   ...[decision, second].map((eid) => ({
     entity: { eid },
@@ -68,33 +34,6 @@ await box.graph.apply([
     },
   })),
 ], { trusted: true })
-
-// The tunnel's gateway, as @yaks/tunnel's own marks a request.
-let DISPATCH = {
-  get: () => ({
-    fetch: (r: Request) => {
-      let headers = new Headers(r.headers)
-      headers.set(HEADER, '1')
-      return box.handler!(new Request(r, { headers }))
-    },
-  }),
-} as unknown as Env['DISPATCH']
-let { env } = platform('operator-relay', { DISPATCH })
-let dir = directoryOf(env.STORE)
-let eid = await dir.mint(ada, 'adas', 'Ada', {
-  'x-yak-person': ada,
-  'x-yak-role': 'owner',
-})
-await stamp(env, {
-  entities: [{
-    entity: { eid },
-    tunnel: { id: mint(), service: mint(), adopted: true },
-  }, {
-    entity: { eid: '$seat' },
-    member: { space: eid, person: bob, role: 'editor' },
-  }],
-})
-let space = (await dir.at(eid))!
 
 // Ada's conversation with her Operator: what she wrote, what it answered,
 // what the platform told it, and what she wrote next.

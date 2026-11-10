@@ -192,6 +192,15 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { collapsed: { type: 'boolean' } },
     },
+    // What needs a person, read from an MCP server they connected
+    // (`mcp_server`, the entity it sits on) and listed over their Operator's
+    // message box with no model turn (operator-asks.ts): the server's `tool`
+    // called with `query`, whose rows are what needs them, in its order.
+    asks: {
+      component: true,
+      type: 'object',
+      properties: { tool: text, query: text },
+    },
     // One OAuth grant a person holds, as their agents and services are listed
     // (grant-rows.ts): written as the provider writes the grant to KV, gone
     // when it deletes it, and holding none of its secrets. Its eid is derived
