@@ -477,8 +477,11 @@ export class Builder {
     return told
   }
 
-  // The alarm, `ms` from now.
-  #rest = (ms: number) => this.#ctx.storage.setAlarm(Date.now() + ms)
+  // The alarm, `ms` from now, or sooner where another need armed it so.
+  #rest = async (ms: number) => {
+    let { sooner } = await import('./operator-store.ts')
+    await sooner(this.#ctx.storage, Date.now() + ms)
+  }
 
   // The lines kept while this object was stopped (`#hold`), taken up behind
   // the alarm, since a build takes minutes. A log that holds none is looked

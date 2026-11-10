@@ -76,6 +76,18 @@ test('an alarm armed while a wake works outlasts it', async () => {
   await until(() => s.at == 1)
 })
 
+test('an alarm armed sooner for another need stands through a wake', async () => {
+  let s = storage(), kept: Promise<void>[] = [], w = held()
+  let wake = waking(s, () => {}, (work) => void kept.push(work))
+  let soon = Date.now() + 5_000
+  await s.setAlarm(soon)
+  await wake(w.work)
+  let backed = s.at
+  w.end(soon + 60_000)
+  await kept[0]
+  assertEquals([backed, s.at], [soon, soon])
+})
+
 test('work that fails is reported, and its backstop stays armed to try again', async () => {
   let s = storage(), failed: unknown[] = []
   let wake = waking(s, (e) => void failed.push(e))

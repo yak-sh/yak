@@ -233,6 +233,15 @@ export type Alarms = {
   deleteAlarm(): Promise<void>
 }
 
+/** The alarm at `at`, unless one stands sooner that is not `mine`: whichever
+ * comes first. What an alarm is armed for (a wake's backstop, its next run, a
+ * kept line's retry, build.ts `#rest`) never pushes back another's sooner
+ * need, and an alarm `mine` names is replaced. */
+export let sooner = async (storage: Alarms, at: number, mine?: number) => {
+  let set = await storage.getAlarm()
+  if (set == null || set == mine || at < set) await storage.setAlarm(at)
+}
+
 /** How long an object's wake may go unheard before it wakes again. */
 export let BACKSTOP = 15_000
 
@@ -249,7 +258,8 @@ export let BACKSTOP = 15_000
  * backstop that would take the step up included. Work that fails is
  * reported, and the backstop it leaves armed tries it again; work its object
  * stopped (@yaks/durable-object `Stopped`) comes back when the object's
- * window ends, and is no failure. The work, going
+ * window ends, and is no failure. Each is armed for whichever comes first,
+ * it or an alarm armed since for another's need (`sooner`). The work, going
  * on after the alarm answers, is handed to `keep` (the object's `waitUntil`).
  */
 export let waking = (
@@ -259,20 +269,22 @@ export let waking = (
 ) => {
   let armed = 0, going: Promise<void> | undefined
   return async (work: () => Promise<number | null>) => {
+    let was = armed
     armed = Date.now() + BACKSTOP
-    await storage.setAlarm(armed)
+    await sooner(storage, armed, was)
     if (going) return
     keep(
       going = (async () => {
         try {
           let next = await work()
-          if (next) await storage.setAlarm(next)
+          if (next) await sooner(storage, next, armed)
           else if (await storage.getAlarm() == armed) {
             await storage.deleteAlarm()
           }
         } catch (e) {
-          if (stopped(e)) await storage.setAlarm(Date.now() + e.retry.after)
-          else report(e)
+          if (stopped(e)) {
+            await sooner(storage, Date.now() + e.retry.after, armed)
+          } else report(e)
         } finally {
           going = undefined
         }
