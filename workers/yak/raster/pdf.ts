@@ -23,7 +23,8 @@ export let pdf = async (
   req: Request,
   library: PDFiumLibrary,
 ): Promise<Response> => {
-  let asked = new URL(req.url).searchParams.get('page')
+  let params = new URL(req.url).searchParams
+  let asked = params.get('page')
   let number = Number(asked)
   if (
     req.method != 'POST' ||
@@ -46,7 +47,9 @@ export let pdf = async (
     return Response.json({
       pages,
       text,
-      ...picture(page, text) ? { image: await png(page) } : {},
+      ...(params.get('render') == '1' || picture(page, text))
+        ? { image: await png(page) }
+        : {},
     })
   } finally {
     doc.destroy()

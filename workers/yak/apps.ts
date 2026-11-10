@@ -260,6 +260,7 @@ let DOORS = new Map<string, () => Promise<Answer>>([
   ['fetch', async () => (await import('./outbound.ts')).fetchDoor],
   ['tunneled', async () => (await import('./tunnel.ts')).reach],
   ['documents', async () => (await import('./document-search.ts')).documents],
+  ['pdf', async () => (await import('./pdf.ts')).pdfDoor],
   ['ai', async () => {
     let { modelRun, recovery } = await import('./models.ts')
     return async (asked) => await modelRun(asked) ?? await recovery(asked)

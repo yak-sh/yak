@@ -83,3 +83,13 @@ test('a requested PDF page must exist', async () => {
   assertEquals((await posted('?page=0')).status, 400)
   assertEquals((await posted('?page=3')).status, 422)
 })
+
+test('an explicit page preview renders native text without changing OCR extraction', async () => {
+  let shown = await (await posted('?page=1&render=1')).json()
+  let image = decode(
+    Uint8Array.from(atob(shown.image), (c) => c.charCodeAt(0)),
+  )
+  assertEquals([image.width, image.height], [144, 72])
+  assertStringIncludes(shown.text, 'First page')
+  assertEquals(first.image, undefined)
+})

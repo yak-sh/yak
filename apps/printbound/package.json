@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@pdf-lib/fontkit": "1.1.1",
+    "pdf-lib": "1.17.1",
+    "marked": "18.0.6",
+    "fast-png": "8.0.0"
+  }
+}
