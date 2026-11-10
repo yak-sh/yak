@@ -83,7 +83,7 @@ import { writes } from '@yaks/member'
 import { inReach } from './declared.ts'
 import { connected, reaching } from './agent.ts'
 import { coded } from './agent-code.ts'
-import { connectedTools } from './connected-mcp.ts'
+import { connectedInstructions, connectedTools } from './connected-mcp.ts'
 import { relayTools } from './operator-relay.ts'
 import { ledger } from './ledger.ts'
 import { admin, type Args, type Ctx, inSpace, refuse } from './tool.ts'
@@ -326,12 +326,7 @@ export let operatorRoster = async (
   // their Operator asks, and which conversation: the one this session works
   // for, so a fork's calls and a helper's are the conversation's there too.
   // What the person connected is read beside their reach, needing none of it.
-  let top: Promise<string> | undefined
-  let asking: Calling = {
-    caller: 'operator',
-    space,
-    via: session ? () => top ??= topOf(work, session) : undefined,
-  }
+  let asking = operatorAsking(work, space, session)
   let connecting = connectedTools(ctx, asking)
   connecting.catch(() => {})
   let reach = reached('reach', await inReach(ctx))
@@ -763,6 +758,21 @@ let asked = (session?: string) => {
       ),
     }),
   )
+}
+
+// Who asks a person's connected servers for `space`'s Operator: that
+// Operator, in the conversation `session` works for.
+let operatorAsking = (
+  store: Store,
+  space: string,
+  session?: string,
+): Calling => {
+  let top: Promise<string> | undefined
+  return {
+    caller: 'operator',
+    space,
+    via: session ? () => top ??= topOf(store, session) : undefined,
+  }
 }
 
 // The session a helper works for, up its `spawned` links: a person's
@@ -1759,17 +1769,28 @@ export let operating = (
       let work = await workingOf(store, session)
       if (work?.signup) return outside(space) + '\n\n' + SIGNUP
       let topic = topicOf(row)
+      // What the person's own servers say of the tools they are offered,
+      // whatever their seat here, as those tools are.
+      let servers = connectedInstructions(
+        ctx,
+        operatorAsking(store, space.eid, session),
+      )
       // Someone who does not write in the space is told none of its work.
       if (!writes(ctx.role)) {
-        return reached('instructions', outside(space, ctx.role))
+        return reached(
+          'instructions',
+          [outside(space, ctx.role), await servers].filter(Boolean)
+            .join('\n\n'),
+        )
       }
-      let [map, google] = await Promise.all([
+      let [map, google, said] = await Promise.all([
         topic ? oracleContext(ctx, g, topic) : oracleMap(ctx, g),
         googleTold(env, ctx, space),
+        servers,
       ])
       return reached(
         'instructions',
-        [map, told(ctx, space), google].filter(Boolean).join('\n\n'),
+        [map, told(ctx, space), google, said].filter(Boolean).join('\n\n'),
       )
     },
     each: async (step, session) => {

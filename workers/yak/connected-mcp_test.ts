@@ -7,11 +7,13 @@ import { mint } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { fixture } from '../../packages/mcp-client/testing.ts'
 import {
+  connectedInstructions,
   connectedTools,
   mcpConnect,
   runConnectedCommand,
 } from './connected-mcp.ts'
 import { ctxOf } from './connections.ts'
+import { SAID } from './mcp-remote.ts'
 import { platform } from './directory-probe.ts'
 import { directoryOf, stamp } from './directory.ts'
 import type { Env } from './env.ts'
@@ -168,4 +170,33 @@ test('a machine that cannot be reached reads as its server being unavailable', a
   assertEquals(named, ['tasks__connection_status'])
   let out = await run('tasks__connection_status', {})
   assertEquals(JSON.stringify(out).includes('publish_mockup'), true)
+})
+
+test('what a server says to read before its tools reaches its owner’s Operator alone, cut at its bound', async () => {
+  let told = (person: { ctx: typeof owner.ctx }, at = space) =>
+    connectedInstructions(person.ctx, { caller: 'operator', space: at.eid })
+  box.say('Read the board first.')
+  try {
+    box.requests.length = 0
+    let said = await told(owner)
+    assertEquals(said.includes('Read the board first.'), true)
+    assertEquals(said.includes('tasks__'), true)
+    assertEquals(
+      [...new Set(box.requests.map((r) => r.headers.get('x-yak-caller')))],
+      ['operator'],
+    )
+    box.requests.length = 0
+    assertEquals(await told(await turn(bob)), '')
+    assertEquals(await told(owner, elsewhere), '')
+    assertEquals(box.requests, [])
+    box.say('x'.repeat(SAID + 10))
+    let long = await told(owner)
+    assertEquals(long.includes('x'.repeat(SAID + 1)), false)
+    assertEquals(long.includes(`Cut at ${SAID} of the ${SAID + 10}`), true)
+    up = false
+    assertEquals(await told(owner), '')
+  } finally {
+    up = true
+    box.say(undefined)
+  }
 })

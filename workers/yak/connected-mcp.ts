@@ -31,6 +31,19 @@ export let runConnectedCommand = (
   asking?: Calling,
 ) => commands(ctx, asking).call(said, name, args)
 
+/** What the servers a person connected say to read before their tools, as
+ * the instructions of the Operator `asking` names: each server's own text
+ * under its name, and nothing where none said any. A person's servers are
+ * listed for that person alone, and one on a machine only for the Operator
+ * of the space whose tunnel reaches it. */
+export let connectedInstructions = async (
+  ctx: Ctx,
+  asking?: Calling,
+): Promise<string> =>
+  (await commands(ctx, asking).told()).map(({ label, namespace, text }) =>
+    `## ${label}\n\nThe MCP server ${label}, which the person you work for connected, says this of its tools (named ${namespace}__…):\n\n${text}`
+  ).join('\n\n')
+
 /** The same commands as named tools inside an Operator or code execution.
  * `asking` is who they are offered to, an Operator and its conversation or
  * else the person's connector, which a machine is told with each request. */

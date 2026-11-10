@@ -55,6 +55,19 @@ type RemoteCommand = Command & { namespace: string; machine?: string }
 type Listed = Awaited<ReturnType<ReturnType<typeof connect>['list']>>
 // A server with the way to its machine, where it is on one.
 type Reached = GraphServer & { fetch?: typeof fetch }
+/** How much of what one server says to read before its tools an Operator is
+ * told, in characters: about 16k tokens. A server's instructions are its own
+ * text, which a stranger's server writes, and they are sent with every ask of
+ * the Operator they reach. */
+export let SAID = 64_000
+/** What one server said to read before its tools, cut at {@link SAID}. */
+export type Told = { label: string; namespace: string; text: string }
+let cut = (text: string) =>
+  text.length > SAID
+    ? `${
+      text.slice(0, SAID)
+    }\n\n[Cut at ${SAID} of the ${text.length} characters the server said.]`
+    : text
 // A server on a machine that did not answer as one: the machine is off, its
 // tunnel has no gateway, or it opened no such path. Its owner sees that, and
 // it is no fault of the platform's to report.
@@ -352,6 +365,25 @@ export let remoteCommands = (
       }
     }
   }
+  // What each server the person reaches says to read before its tools (the
+  // protocol's `instructions`). One that cannot be reached says nothing; its
+  // tools say why where they are listed.
+  let told = async (): Promise<Told[]> =>
+    (await Promise.all((await servers()).map(async (s) => {
+      try {
+        let text = (await using(s, (c) => c.instructions()))?.trim()
+        return text
+          ? [{
+            label: s.label,
+            namespace: s.server.namespace!,
+            text: cut(text),
+          }]
+          : []
+      } catch (e) {
+        if (!challenged(s, e) && !away(s, e)) host.report(e)
+        return []
+      }
+    }))).flat()
   let configure = async (settings: Settings) => {
     if (!person) throw refuse('access', 'Sign in to connect an MCP server.')
     let { machine } = settings
@@ -399,5 +431,5 @@ export let remoteCommands = (
         : [],
     }
   }
-  return { list, call, configure }
+  return { list, call, told, configure }
 }

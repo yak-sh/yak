@@ -24,7 +24,13 @@
 // is no moment at which a tool holds a graph together with an identity that
 // did not come from this handler.
 
-import { type Authenticate, type Handler, json, refuse } from '@yaks/api'
+import {
+  type Authenticate,
+  type Handler,
+  json,
+  refuse,
+  type Told,
+} from '@yaks/api'
 import { TEXT } from '@yaks/api/address'
 import type { Actor, Bundle, Graph } from '@yaks/graph'
 import { status } from '@yaks/graph/errors'
@@ -69,6 +75,10 @@ export type MountOptions = Omit<Options, 'actor' | 'only'> & {
    * arrived narrows them (@yaks/api `Offers`); nothing for a request offered
    * every tool. Asked per request, as the actor is. */
   offers?: (request: Request) => string[] | undefined
+  /** what this request is told before the server's own instructions, where
+   * the way it arrived says so (@yaks/api `Told`): a tunnel's caller is told
+   * the text of the persona it writes as. Asked only for `initialize`. */
+  told?: Told
   /** Legacy one-shot call timeout in ms; modern exchanges use client cancellation. */
   timeout?: number
   /** The clock the handler keeps time by: the legacy `timeout`, and its
@@ -634,6 +644,14 @@ export let mcp = (opts: MountOptions): Handler => {
     if (drawing(request)) response.headers.set(TEXT, 'drawn')
     return response
   }
+  // What an exchange is told: what the way its request arrived says to read
+  // first, then this server's own, both only where it sends instructions.
+  let instructing = async (request: Request, exchange?: Exchange) => {
+    let own = await instructed(opts, exchange)
+    if (!opts.told || (exchange && exchange.method != 'initialize')) return own
+    let said = (await opts.told(request))?.trim()
+    return said ? [said, own].filter(Boolean).join('\n\n') : own
+  }
   let built = async (
     request: Request,
     actor: Actor | null,
@@ -642,7 +660,7 @@ export let mcp = (opts: MountOptions): Handler => {
     await prepared(
       server({
         ...opts,
-        instructions: await instructed(opts, exchange),
+        instructions: await instructing(request, exchange),
         actor,
         only: opts.offers?.(request),
         runner: running(),

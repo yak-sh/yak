@@ -20,6 +20,7 @@ import type {
   Handler,
   Offers,
   Route,
+  Told,
 } from '@yaks/api'
 import type { Host, Role } from './mod.ts'
 import {
@@ -375,6 +376,7 @@ export let assemble = (
       let filters: Filter[] = []
       let arrivals: Arrived[] = []
       let offering: Offers[] = []
+      let telling: Told[] = []
       let made: Registry | undefined
       let ranked: Search | undefined
       let meant: Meaning | undefined = lent.meaning
@@ -412,6 +414,12 @@ export let assemble = (
           for (let narrowed of offering) {
             let tools = narrowed(request)
             if (tools) return tools
+          }
+        },
+        told: async (request) => {
+          for (let tell of telling) {
+            let said = await tell(request)
+            if (said !== undefined) return said
           }
         },
         // Present only when a plugin offers one: a host without it polls its
@@ -728,6 +736,7 @@ export let assemble = (
         offering = served.flatMap(([r, o]) =>
           r.offers ? [r.offers(host, o)] : []
         )
+        telling = served.flatMap(([r, o]) => r.told ? [r.told(host, o)] : [])
         answering = mod.handler(host, options ?? {})
         observed.binding(hosts[0][2], 'routes')
       }

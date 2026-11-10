@@ -5062,6 +5062,9 @@ importers:
       '@yaks/graph':
         specifier: 0.2.33
         version: link:../graph
+      '@yaks/persona':
+        specifier: 0.2.23
+        version: link:../persona
       '@yaks/process':
         specifier: 0.2.28
         version: link:../process
@@ -5090,9 +5093,6 @@ importers:
       '@yaks/notify':
         specifier: 0.2.28
         version: link:../notify
-      '@yaks/persona':
-        specifier: 0.2.23
-        version: link:../persona
       '@yaks/provenance':
         specifier: 0.2.28
         version: link:../provenance

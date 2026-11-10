@@ -12,7 +12,14 @@ import type {
 import type { Search } from '@yaks/graph/tools'
 import type { Vocab } from '@yaks/vocab'
 import type { Derived, Raw, Row, Statements, Stmt } from '@yaks/sql'
-import type { Authenticate, Filter, Handler, Offers, Route } from '@yaks/api'
+import type {
+  Authenticate,
+  Filter,
+  Handler,
+  Offers,
+  Route,
+  Told,
+} from '@yaks/api'
 import type { Anatomy, AnatomyObserver } from '@yaks/code/anatomy'
 import type { Contributions } from '@yaks/ui/contributions'
 import type { Blobs } from '@yaks/blob'
@@ -259,6 +266,11 @@ export interface Host {
    * through narrows them ({@link RoutesFacet.offers}); nothing for a request
    * offered every tool. A door that lists or runs tools asks it (@yaks/mcp). */
   offers?: Offers
+  /** what this request is told before a door's own instructions, where the
+   * link it came through says so ({@link RoutesFacet.told}): the text of the
+   * persona a tunnel's caller writes as. A door that instructs its callers
+   * asks it (@yaks/mcp). */
+  told?: Told
   /** Every commit another host makes to this store, as the patches it applied
    * (@yaks/graph `News`): what a subscription registry or a cache over
    * {@link graph} is fed so it sees the writes its graph's `effect` phase

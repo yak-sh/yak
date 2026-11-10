@@ -36,10 +36,11 @@
 // machine's own page does, and never through a session: a comment written
 // through a session is an agent's, to every reader of the graph. A request
 // said to be anybody else's act is refused.
-import type { Arrived, Offers } from '@yaks/api'
+import type { Arrived, Offers, Told } from '@yaks/api'
 import { VIA } from '@yaks/api'
 import type { Eid, Graph } from '@yaks/graph'
 import { standIn } from '@yaks/session/who'
+import { voice, wear } from '@yaks/persona'
 import {
   type Callers,
   Closed,
@@ -63,7 +64,7 @@ export type Options = Opened & {
 /** What this facet reads off the host: the graph a caller's session is kept
  * in, the person the machine's config names, and its own process. */
 export type Hosting = {
-  graph: Pick<Graph, 'address' | 'get' | 'apply'>
+  graph: Pick<Graph, 'address' | 'get' | 'apply' | 'storage' | 'vocab'>
   config?: { person?: string }
   me?: Eid
 }
@@ -77,20 +78,24 @@ export let filter = (
   options: Options = {},
 ): (req: Request) => void => only(options.routes, options.callers)
 
+// An entity the config names by eid, number or name, as its eid, addressed by
+// the first marked request that needs it: the graph is open by then.
+let naming = (host: Hosting) => {
+  let found = new Map<string, Promise<Eid>>()
+  let address = async (said: string, kind?: string) =>
+    ((await host.graph.address([said], kind)).get(said) ?? said) as Eid
+  return (said?: string, kind?: string) =>
+    said
+      ? found.get(said) ?? found.set(said, address(said, kind)).get(said)
+      : undefined
+}
+
 /** Who a request through the tunnel is from: the persona the config names for
  * its caller, or else for every request, through the session standing for the
  * conversation its `x-via` names. One the platform says is the own act of the
  * tunnel's `owner` is from the config's `person`, through this process. */
 export let arrived = (host: Hosting, options: Options = {}): Arrived => {
-  let found = new Map<string, Promise<Eid>>()
-  let address = async (said: string, kind?: string) =>
-    ((await host.graph.address([said], kind)).get(said) ?? said) as Eid
-  // Addressed by the first marked request that writes as it: the graph is
-  // open by then.
-  let named = (said?: string, kind?: string) =>
-    said
-      ? found.get(said) ?? found.set(said, address(said, kind)).get(said)
-      : undefined
+  let named = naming(host)
   return async (request) => {
     if (!marked(request)) return undefined
     let caller = opened(options.callers, request)
@@ -118,3 +123,22 @@ export let arrived = (host: Hosting, options: Options = {}): Arrived => {
  * request and for its caller. */
 export let offers = (_host: unknown, options: Options = {}): Offers =>
   offered(options.tools, options.callers)
+
+/** What a request through the tunnel is told before a door's own
+ * instructions: the text of the persona it writes as, composed as every
+ * persona here is (@yaks/persona `wear` and `voice`), and read again for each
+ * request that asks, so an edit to it reaches the next one. A request that is
+ * the owner's own act writes as no persona, and is told none. */
+export let told = (host: Hosting, options: Options = {}): Told => {
+  let named = naming(host)
+  return async (request) => {
+    if (!marked(request) || request.headers.has(BY)) return undefined
+    let persona = await named(
+      opened(options.callers, request).persona ?? options.persona,
+      'persona',
+    )
+    let worn = persona &&
+      await wear(host.graph.storage, host.graph.vocab)(persona)
+    return worn ? voice(host.graph.vocab)(worn) : undefined
+  }
+}

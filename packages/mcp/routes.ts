@@ -17,7 +17,7 @@ import type { Reply, Runner } from '@yaks/tools'
 import { generic } from '@yaks/graph/tools'
 import { graphDoc } from '@yaks/graph/vocab'
 import { SESSION } from '@yaks/session'
-import type { Authenticate, Handler, Offers, Route } from '@yaks/api'
+import type { Authenticate, Handler, Offers, Route, Told } from '@yaks/api'
 import type { Search } from './tools.ts'
 
 /** The path an agent speaks to. */
@@ -34,6 +34,9 @@ export type Hosting = {
   /** the tools a request is offered, where the link it came through narrows
    * them (@yaks/host `Host.offers`) */
   offers?: Offers
+  /** what a request is told before this server's own instructions, where the
+   * link it came through says so (@yaks/host `Host.told`) */
+  told?: Told
   /** The process serving the host, whose own writes come through it. */
   me?: string
   tools: NamedTool[]
@@ -62,6 +65,7 @@ let mounted = async (host: Hosting): Promise<Handler> => {
     sessions: host.graph.vocab.comp(SESSION) ? host.graph : undefined,
     authenticate: host.who,
     offers: (request) => host.offers?.(request),
+    told: host.told,
     me: host.me,
     tools: host.tools.filter((t) => !tier.has(t.name)),
     search: host.search,

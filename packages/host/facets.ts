@@ -6,6 +6,7 @@ import type {
   Handler,
   Offers,
   Route,
+  Told,
 } from '@yaks/api'
 import type { Eid, Plugin } from '@yaks/graph'
 import type { Backings, Derived, Extension, History, Stmt } from '@yaks/sql'
@@ -149,6 +150,9 @@ export type RoutesFacet = {
   /** the tools a request that came through this plugin's link is offered
    * ({@link Host.offers}) */
   offers?: (host: Host, options: Options) => Offers
+  /** what a request that came through this plugin's link is told before a
+   * door's own instructions ({@link Host.told}) */
+  told?: (host: Host, options: Options) => Told
   handler?: (host: Host, options: Options) => Handler
 }
 

@@ -329,6 +329,11 @@ A composed host passes what its links say (`Host.offers`), so a request through
 a machine's tunnel reaches the tools that machine's config lists
 ([@yaks/tunnel](../tunnel/README.md)).
 
+`mcp({ told })` is asked at `initialize` for what that request is told before
+the server's own `instructions`. A composed host passes what its links say
+(`Host.told`): a request through a machine's tunnel is told the text of the
+persona it writes as.
+
 `readOnly: true` removes `graph_apply` from the generic tool list. It does not
 remove plugin or explicitly supplied tools, prevent them from writing, or
 disable call recording. Review those tools when configuring a read-only

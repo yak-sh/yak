@@ -45,6 +45,7 @@ import { clock, test, until } from '@yaks/testing'
 import { claude, codex } from '@yaks/spawn'
 import { sessionEid } from '@yaks/session/who'
 import { BY, CALLER, HEADER } from '@yaks/tunnel'
+import { voice, wear } from '@yaks/persona'
 import { parse as parseToml } from 'smol-toml'
 
 // The host of these tests, as its own writes are signed: this process, whose
@@ -2392,6 +2393,74 @@ test("a request through the tunnel that the platform says is its owner's own act
     assertEquals(await host.graph.read('.book.title=Ulysses'), [])
     await (await add('Walden', { [BY]: owner })).text()
     assertEquals((await stamped('Walden'))[0], undefined)
+  } finally {
+    await host.close()
+  }
+})
+
+test("a tunnel's caller is told the persona it writes as, composed, before the server's own instructions", async () => {
+  let [persona, person, owner] = [mint(), mint(), mint()]
+  let host = await compose(
+    {
+      db: ':memory:',
+      person,
+      plugins: [
+        'shop',
+        '@yaks/doc',
+        '@yaks/persona',
+        '@yaks/session',
+        ...HTTP,
+        {
+          use: '@yaks/tunnel',
+          with: {
+            callers: {
+              operator: {
+                routes: ['/mcp'],
+                tools: ['book_list'],
+                persona,
+                owner,
+              },
+            },
+          },
+        },
+      ],
+    },
+    only({ shop }),
+  )
+  try {
+    await host.graph.apply([{
+      entity: { eid: persona },
+      doc: { title: 'the assistant', body: 'Tend the asks.' },
+      persona: {},
+    }])
+    let told = async (headers: Record<string, string> = {}) =>
+      String(
+        (await (await serving(host)(
+          new Request('http://h/mcp', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', ...headers },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'initialize',
+              params: {
+                protocolVersion: '2025-06-18',
+                capabilities: {},
+                clientInfo: { name: 't', version: '1' },
+              },
+            }),
+          }),
+        )).json()).result.instructions ?? '',
+      )
+    let worn = await wear(host.graph.storage, host.graph.vocab)(persona)
+    let text = voice(host.graph.vocab)(worn!).trim()
+    let own = await told()
+    assertEquals(own.includes('Tend the asks.'), false)
+    let operator = { [HEADER]: '1', [CALLER]: 'operator' }
+    assertEquals(await told(operator), [text, own].join('\n\n'))
+    assert(text.includes('Tend the asks.'))
+    // The owner's own act through the tunnel writes as no persona.
+    assertEquals(await told({ ...operator, [BY]: owner }), own)
   } finally {
     await host.close()
   }

@@ -64,6 +64,7 @@ export {
   type Options,
   type Route,
   routed,
+  type Told,
 } from './route.ts'
 export { asking, type Authenticate, signed, VIA } from './actor.ts'
 export type { PeerWriter } from './save.ts'

@@ -175,6 +175,9 @@ saying which tools the tunnel offers and who its callers are:
   leave off any tool that starts an agent or runs a command.
 - `persona` is the persona every request through the tunnel writes as (`by`),
   named by eid, number or name. Without one such a request writes as nobody.
+  Where an opened path instructs its callers (`/mcp` at `initialize`), such a
+  request is told that persona's text first, composed as `yak persona read`
+  composes it (`told`), so a hosted Operator knows what the persona holds.
 - The request names the conversation it comes from in `x-via`. The machine keeps
   one session standing for each (`session{persona, source}`, its eid derived
   from the conversation's id; @yaks/session `standIn`), and what the request

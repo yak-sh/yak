@@ -21,7 +21,9 @@ export const edge = (fetcher: typeof fetch): typeof fetch => {
   return go
 }
 
-export const fixture = () => {
+/** A server answering over `fetcher`, which says at `initialize` the
+ * `instructions` it is given, at first or later by `say`. */
+export const fixture = (instructions?: string) => {
   const calls: { method: string; params: Record<string, unknown> }[] = []
   const requests: Request[] = []
   let tools = [{
@@ -50,6 +52,7 @@ export const fixture = () => {
         protocolVersion: '2025-06-18',
         capabilities: { tools: { listChanged: true } },
         serverInfo: { name: 'mock', version: '1' },
+        ...instructions == null ? {} : { instructions },
       }
       : body.method === 'tools/list'
       ? { tools }
@@ -68,6 +71,9 @@ export const fixture = () => {
     fetcher,
     change: () => {
       tools = []
+    },
+    say: (text?: string) => {
+      instructions = text
     },
     fail: () => {
       failCall = true

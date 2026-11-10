@@ -55,6 +55,13 @@ export type Arrived = (
  * is offered every tool. */
 export type Offers = (request: Request) => string[] | undefined
 
+/** What a request that reached the host through a plugin's link is told
+ * before anything else a door says to read, such as the text of the persona
+ * it writes as, or `undefined` for a request told nothing of its own. */
+export type Told = (
+  request: Request,
+) => string | undefined | Promise<string | undefined>
+
 /** Whether a route matches this request's method and path. A GET route
  * matches a HEAD too, which is a GET answered without its body (RFC 9110
  * §9.3.2): how a page asks a bundle's etag without fetching it. */

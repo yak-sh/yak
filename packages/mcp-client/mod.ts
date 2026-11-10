@@ -185,6 +185,10 @@ export const checkToolNames = (tools: readonly ToolId[]): void => {
 
 export type Connection = {
   list: () => Promise<RemoteTool[]>
+  /** What the server said to read before its tools, in its answer to
+   * `initialize` (the protocol's `instructions`), or nothing where it said
+   * none. It is the server's own text, as trusted as the server is. */
+  instructions: () => Promise<string | undefined>
   call: (
     name: string,
     args: Record<string, unknown>,
@@ -365,6 +369,7 @@ export const connect = (server: Server, options: Options = {}): Connection => {
   }
   return {
     list,
+    instructions: async () => (await ensure()).getInstructions() || undefined,
     call,
     refresh: () => {
       generation++

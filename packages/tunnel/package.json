@@ -17,6 +17,7 @@
     "@yaks/effects": "0.2.33",
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.33",
+    "@yaks/persona": "0.2.23",
     "@yaks/process": "0.2.28",
     "@yaks/secrets": "0.2.28",
     "@yaks/session": "0.2.33",
@@ -28,7 +29,6 @@
     "@yaks/kernel": "0.2.28",
     "@yaks/mail": "0.2.23",
     "@yaks/notify": "0.2.28",
-    "@yaks/persona": "0.2.23",
     "@yaks/provenance": "0.2.28",
     "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.30"
