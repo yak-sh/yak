@@ -80,30 +80,47 @@ test('fresh fetch closes its pool when the response body fails', async () => {
   equal(closed, 1)
 })
 
-test('fresh fetch ends with its signal when the body stalls', async () => {
-  // The answer's head arrives, then its body stalls; the abort comes after.
+// An answer whose head arrives and whose body then stalls, as a provider's
+// event stream does when it goes quiet; the abort comes after the head.
+let stalled = async (
+  read: (url: string, signal: AbortSignal) => Promise<unknown>,
+) => {
   let server = Deno.listen({ hostname: '127.0.0.1', port: 0 })
   let stop = new AbortController(), held: Deno.Conn[] = []
-  ;(async () => {
-    for await (let conn of server) {
-      held.push(conn)
-      await conn.write(
-        new TextEncoder().encode(
-          'HTTP/1.1 200 OK\r\ncontent-length: 10\r\n\r\nabc',
-        ),
-      )
-      setTimeout(() => stop.abort(), 50)
-    }
+  let ended = (async () => {
+    let conn = await server.accept()
+    held.push(conn)
+    await conn.write(
+      new TextEncoder().encode(
+        'HTTP/1.1 200 OK\r\ncontent-length: 10\r\n\r\nabc',
+      ),
+    )
+    setTimeout(() => stop.abort(), 50)
+    // The request cut short closes its connection.
+    while (await conn.read(new Uint8Array(1024)) != null);
+    return true
   })()
   try {
-    let fetch = freshFetch()
     let url = `http://127.0.0.1:${server.addr.port}/`
-    equal(
-      await throws(() => fetch(url, { signal: stop.signal })),
-      stop.signal.reason,
-    )
+    equal(await throws(() => read(url, stop.signal)), stop.signal.reason)
+    equal(await ended, true)
   } finally {
     server.close()
     for (let conn of held) conn.close()
+  }
+}
+
+test('fresh fetch ends with its signal when the body stalls', () =>
+  stalled((url, signal) => freshFetch()(url, { signal })))
+
+test('a streamed body ends with its signal when it stalls', async () => {
+  let pool = httpClient()
+  try {
+    await stalled(async (url, signal) => {
+      let response = await pool.fetch(url, { signal })
+      await response.text()
+    })
+  } finally {
+    await pool.destroy?.()
   }
 })

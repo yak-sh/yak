@@ -34,6 +34,50 @@ let answer = (body: BodyInit | null, source: Answer): Response => {
   return response
 }
 
+// A body that ends with `signal`: undici's body under Deno reads on past an
+// abort once its headers have arrived, so a stalled stream would never end,
+// and neither would whoever reads it (a model step a Stop withdrew, the host
+// draining behind it). On abort the read in progress fails with the signal's
+// reason and the source is cancelled, which ends its request.
+let bounded = (
+  body: ReadableStream<Uint8Array> | null,
+  signal?: AbortSignal | null,
+): ReadableStream<Uint8Array> | null => {
+  if (!body || !signal) return body
+  let reader = body.getReader()
+  let release = () => {}
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      let stop = () => {
+        controller.error(signal.reason)
+        reader.cancel(signal.reason).catch(() => {})
+      }
+      if (signal.aborted) return stop()
+      signal.addEventListener('abort', stop, { once: true })
+      release = () => signal.removeEventListener('abort', stop)
+    },
+    async pull(controller) {
+      try {
+        let part = await reader.read()
+        // An abort already ended the stream; what the source said after is
+        // nobody's.
+        if (signal.aborted) return
+        if (part.done) {
+          release()
+          controller.close()
+        } else controller.enqueue(part.value)
+      } catch (error) {
+        release()
+        if (!signal.aborted) controller.error(error)
+      }
+    },
+    cancel(reason) {
+      release()
+      return reader.cancel(reason)
+    },
+  }, { highWaterMark: 0 })
+}
+
 /** A fetch pool with an explicit lifetime, shared by Node and Deno callers.
  * Without a dispatcher, its own pool opens with its first request. */
 export let httpClient = (given?: Dispatcher): Client => {
@@ -67,27 +111,19 @@ export let httpClient = (given?: Dispatcher): Client => {
         duplex: 'half',
       } as Parameters<typeof request>[1],
     )
-    return answer(received.body as ReadableStream<Uint8Array> | null, received)
+    return answer(
+      bounded(
+        received.body as ReadableStream<Uint8Array> | null,
+        options?.signal,
+      ),
+      received,
+    )
   }
   return {
     fetch: send,
     close: () => dispatcher?.close(),
     destroy: () => dispatcher?.destroy(),
   }
-}
-
-// A body read that ends with `signal`: undici's body under Deno reads on past
-// an abort once its headers have arrived, so a stalled body would never end.
-let collect = (response: Response, signal?: AbortSignal | null) => {
-  if (!signal) return response.arrayBuffer()
-  signal.throwIfAborted()
-  return new Promise<ArrayBuffer>((resolve, reject) => {
-    let stop = () => reject(signal.reason)
-    signal.addEventListener('abort', stop, { once: true })
-    response.arrayBuffer().then(resolve, reject).finally(() =>
-      signal.removeEventListener('abort', stop)
-    )
-  })
 }
 
 /** Collect each answer before closing its request's private connection pool. */
@@ -98,7 +134,7 @@ export let freshFetch =
       (input instanceof Request ? input.signal : undefined)
     try {
       let response = await client.fetch(input, init)
-      let body = response.body ? await collect(response, signal) : null
+      let body = response.body ? await response.arrayBuffer() : null
       return answer(body, response)
     } finally {
       // A request the signal cut short may still hold its connection, which a
