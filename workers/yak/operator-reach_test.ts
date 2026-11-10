@@ -120,19 +120,22 @@ let oneRead = await tallying(new Map(), async () => {
   return (await ctx.dir.reachable(bea)).map((r) => r.app.slug)
 })
 // A person's own Operator reaches every space they sit in, one with no apps
-// among them, whose apps their own reach read too.
+// among them, whose apps their own reach read too, in a session that is
+// theirs and in an administrative one.
 let booksSpace = (await dir.space(books))!
 let asOwner = asked.length
-let ownRead = await tallying(new Map(), async () => {
-  let ctx = await operatorContext(
-    env,
-    { person: ada.person },
-    booksSpace,
-    counted,
-  )
-  ctx.dir = ctx.reopen!()
-  return (await ctx.dir.reachable(ada.person)).map((r) => r.app.slug)
-})
+let ownRead = (administrative: boolean) =>
+  tallying(new Map(), async () => {
+    let ctx = await operatorContext(
+      env,
+      { person: ada.person, administrative },
+      booksSpace,
+      counted,
+    )
+    ctx.dir = ctx.reopen!()
+    return (await ctx.dir.reachable(ada.person)).map((r) => r.app.slug)
+  })
+let own = [await ownRead(false), await ownRead(true)]
 // Someone with no seat in the shop, talking with its Operator.
 let outsider = await reach(crypto.randomUUID())
 let stranger = await page(people, { operator: 'nobody-here', role: 'editor' })
@@ -158,7 +161,7 @@ test('let in from the People page, it works there with the role given, for a wri
 
 test('the spaces an Operator reaches are read with their apps, in one trip', () => {
   assertEquals(oneRead, ['list'])
-  assertEquals(ownRead, ['list'])
+  assertEquals(own, [['list'], ['list']])
   assertEquals(asked.filter((q) => q.includes('.app.space=')), [])
   assert(asked.length > asOwner)
 })

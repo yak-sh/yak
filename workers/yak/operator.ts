@@ -708,9 +708,9 @@ let working = async (
   // (lib/hops.ts `recall`).
   let dir = reading()
   let reach = reachOf(dir, { eid: o.space }, o.person, o.administrative)
-  let apps = o.administrative ? undefined : dir.reachable(o.person)
+  let apps = dir.reachable(o.person)
   let platform = admin({ dir, person: o.person })
-  for (let asked of [reach, apps, platform]) asked?.catch(() => {})
+  for (let asked of [reach, apps, platform]) asked.catch(() => {})
   let space = await (open?.() ?? directoryOf(env.STORE)).at(o.space)
   if (!space || space.trashed) throw refuse('missing', 'That space is gone.')
   let ctx = await operatorContext(env, o, space, reading, reach)

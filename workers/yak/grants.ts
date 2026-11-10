@@ -263,10 +263,12 @@ export let narrowed = (
   // The apps of each space that let the holder in, with the role it gave. A
   // space the person also sits in is in their own reach, which the request
   // has already read (an Operator's step asks it with the space, operator.ts
-  // `working`); the rest are asked together, in one round trip.
+  // `working`), an administrative one's too: the role is the one given, and
+  // the apps are the space's. The rest are asked together, in one round trip,
+  // unless the request already read them (directory.ts `apps`).
   let reachBeyond = async (person: string) => {
     if (!beyond.length) return []
-    let theirs = over ? [] : await dir.reachable(person)
+    let theirs = await dir.reachable(person)
     let sat = new Set(theirs.map((r) => r.space.eid))
     let asked = beyond.filter((r) => !sat.has(r.space.eid))
     let apps = asked.length ? await dir.apps(asked.map((r) => r.space)) : []

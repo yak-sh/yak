@@ -2136,19 +2136,6 @@ let found = () => {
 // of them, as of where it stood in its directory writes before reading.
 let keep = (spaces: Iterable<string>, apps: App[], since?: number) => {
   let mine = found()
-  // TODO(T-155323): the second half of the diagnostic in `apps`.
-  let all = [...spaces]
-  if (all.length > 1) {
-    console.log(
-      'yak apps keep',
-      JSON.stringify({
-        tally: !!ambient(),
-        since: since ?? null,
-        spaces: all.map((k) => k.slice(0, 8)),
-      }),
-    )
-  }
-  spaces = all
   if (!mine || since == null) return
   for (let space of spaces) {
     mine.apps.set(space, {
@@ -2700,19 +2687,6 @@ export let directoryRows = (rows: {
       let read = eids.map((eid) => held?.get(eid))
       if (read.every((r) => r && r.at === wrote(META_STORE))) {
         return structuredClone(read.flatMap((r) => r!.apps))
-      }
-      // TODO(T-155323): a diagnostic for one deploy, to say why an Operator
-      // step's apps of several spaces miss what its reach read; removed next.
-      if (eids.length > 1) {
-        console.log(
-          'yak apps miss',
-          JSON.stringify({
-            held: held ? [...held.keys()].map((k) => k.slice(0, 8)) : null,
-            asked: eids.map((e) => e.slice(0, 8)),
-            at: read.map((r) => r?.at ?? null),
-            now: wrote(META_STORE) ?? null,
-          }),
-        )
       }
       return (await query(`.app.space=${eids.join(',')}&${ABOUT}`))
         .map(appOf)
