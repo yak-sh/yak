@@ -120,3 +120,33 @@ test('SQL spans report billed cursor rows, including failures, without extra SQL
   equal(captured.spans[2].counts, captured.spans[1].counts)
   equal(captured.spans[2].outcome, 'error')
 })
+
+test('an engine refusal names the statement it refused, without its values', () => {
+  let refusing: DurableStorage = {
+    sql: {
+      exec: (sql) => {
+        if (sql.startsWith('pragma')) return durable().sql.exec(sql)
+        throw new Error('nested too deep: SQLITE_ERROR')
+      },
+    },
+    transactionSync: (run) => run(),
+  }
+  let said = console.error, lines: unknown[][] = []
+  console.error = (...line) => void lines.push(line)
+  try {
+    let e = assertThrows(() =>
+      driver(refusing).query(
+        select({ from: table('book'), where: eq(col('title'), val('Dune')) }),
+      )
+    ) as Error
+    equal(e.message, 'nested too deep: SQLITE_ERROR')
+    equal(e.cause, {
+      statement: 'select * from "book" where "title" = ?',
+      length: 38,
+    })
+    equal(lines.length, 1)
+    ok(!JSON.stringify(lines).includes('Dune'))
+  } finally {
+    console.error = said
+  }
+})

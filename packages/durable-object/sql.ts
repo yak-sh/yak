@@ -21,6 +21,7 @@ import {
   type Driver,
   fn,
   type Param,
+  type Raw,
   renderStable,
   type Row,
   select,
@@ -124,6 +125,22 @@ let unbind = (row: Row): Row => {
   return row
 }
 
+// The engine's refusal, with the statement it refused as its cause: the
+// engine's message says what was wrong and never which statement, and a store
+// sends hundreds. The statement is its shape, so no value rides along, and
+// the first SHOWN characters of it, where its `with` list is. It is said on
+// the console too, since the Workers log is read when the tracker cannot be.
+let SHOWN = 12_000
+let refused = (e: unknown, rendered: Raw) => {
+  if (!(e instanceof Error) || e.cause != null) return e
+  e.cause = {
+    statement: shape(rendered, SHOWN),
+    length: rendered.sql.length,
+  }
+  console.error('sql refused', e.message, JSON.stringify(e.cause))
+  return e
+}
+
 /**
  * A {@link https://jsr.io/@yaks/sql | @yaks/sql} `Driver` over a Durable
  * Object's storage. It converts the values the engine will not take, hands the
@@ -170,6 +187,8 @@ export let driver = (
         reported = true
       }
       return rows
+    } catch (e) {
+      throw refused(e, rendered)
     } finally {
       // A statement that failed still cost a call to the engine.
       if (peek()) {
