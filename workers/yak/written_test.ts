@@ -98,8 +98,14 @@ let made = () => {
     }) as App
   let collisions = 0
   let skew = 0
+  // The row as this request first read it, as the directory answers a
+  // request (hops.ts `recall`) until it writes there or asks again.
+  let seen: App | undefined
   let dir = {
-    app: () => Promise.resolve(app()),
+    app: () => Promise.resolve(seen ??= app()),
+    reread: () => {
+      seen = undefined
+    },
     written: (_app: App, draft?: string): Promise<Written[]> =>
       answer(() =>
         store.read(`.written.app=${APP}`).filter((b) =>
@@ -119,6 +125,7 @@ let made = () => {
       ),
     stamp: ({ entities }: { entities: Bundle[] }) =>
       answer(() => {
+        seen = undefined
         try {
           return store.tx((tx) => {
             guard(entities, tx, vocab)
@@ -245,6 +252,9 @@ let made = () => {
     draft,
     time,
     collisions: () => collisions,
+    // Another request's release holding the app's edits, or lifting its fence.
+    fence: (fence: string | null) =>
+      store.tx((tx) => tx.patch([{ entity: { eid: APP }, app: { fence } }])),
     skew: (ms: number) => {
       skew = ms
     },
@@ -347,6 +357,17 @@ test('a file deleted comes back, and a delete sent again says so', async () => {
     Error,
     'no file missing.txt',
   )
+})
+
+let fencedWrite = made()
+test('a write held by a release goes ahead once another request lifts its fence', async () => {
+  let { write, read, fence } = fencedWrite
+  fence(`${Date.now()}:release`)
+  let wrote = write({ 'a.txt': 'one' })
+  await new Promise((done) => setTimeout(done, 100))
+  fence(null)
+  assertEquals((await wrote).wrote, ['a.txt'])
+  assertEquals(await read('a.txt'), 'one')
 })
 
 let concurrentWrites = made()

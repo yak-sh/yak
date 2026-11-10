@@ -279,6 +279,31 @@ test('a release reaches consumer and home through stale isolate caches', async (
   assertEquals(reads, [2, 3])
 })
 
+test('a request answers an app from its first read until it asks again', async () => {
+  let fence: string | null = '1:release'
+  let store: Meta = {
+    query: (line) =>
+      Promise.resolve(
+        line.includes('.app.slug=notes')
+          ? [{
+            entity: { eid: 'a1' },
+            app: { slug: 'notes', space: 's1', fence },
+          }]
+          : [],
+      ),
+    apply: () => Promise.resolve([]),
+  }
+  let dir = directory(fixture(store))
+  await tallying(new Map(), async () => {
+    assertEquals((await dir.app(space, 'notes'))?.fence, '1:release')
+    // Another request's release lifts the fence.
+    fence = null
+    assertEquals((await dir.app(space, 'notes'))?.fence, '1:release')
+    dir.reread()
+    assertEquals((await dir.app(space, 'notes'))?.fence, null)
+  })
+})
+
 // Read real graph predicates so address/home filtering, not a stub's roster,
 // determines which apps may route a path.
 let routingVocab = platformVocab()

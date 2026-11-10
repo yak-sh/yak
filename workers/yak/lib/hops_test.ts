@@ -7,6 +7,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import {
   apart,
   counts,
+  forget,
   hop,
   recall,
   type Tally,
@@ -80,6 +81,17 @@ test('a request reads once, until it writes to what it read', async () => {
   // Another request asks for itself, and outside every request it is a read.
   await tallying(new Map(), async () => assertEquals(await read(), 3))
   assertEquals([await read(), await read()], [4, 5])
+})
+
+test('a request that forgets a store reads it again, and only that store', async () => {
+  let read = asking()
+  await tallying(new Map(), async () => {
+    assertEquals(await read(), 1)
+    forget('ada/other')
+    assertEquals(await read(), 1)
+    forget('ada/notes')
+    assertEquals([await read(), await read()], [2, 2])
+  })
 })
 
 test('a read made while a write is in flight is not the answer after it', async () => {

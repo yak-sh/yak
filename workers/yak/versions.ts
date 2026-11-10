@@ -93,15 +93,19 @@ let latest = async (dir: Directory, space: Space, app: App) => {
     : (await dir.apps(space)).find((row) => row.eid == app.eid) ?? app
 }
 
-/** A release fence holds new edits until its source switch or refusal. */
+/** A release fence holds new edits until its source switch or refusal. The
+ * edit gives up after 30 seconds, an answer well inside the minute after which
+ * a request that has not answered is a defect (defects.ts `watched`). */
 export let waiting = async (
   dir: Directory,
   space: Space,
   app: App,
   who: Who,
 ) => {
-  let until = Date.now() + 60_000
-  for (;;) {
+  let until = Date.now() + 30_000
+  for (let n = 0;; n++) {
+    // The release lifting the fence is another request's write.
+    if (n) dir.reread()
     let row = await latest(dir, space, app)
     if (!row.fence) return row
     let started = Number(row.fence.split(':')[0])
@@ -119,7 +123,7 @@ export let waiting = async (
     if (Date.now() > until) {
       throw refuse('unavailable', `release in progress for ${app.slug}; retry`)
     }
-    await new Promise((done) => setTimeout(done, 25))
+    await new Promise((done) => setTimeout(done, 250))
   }
 }
 

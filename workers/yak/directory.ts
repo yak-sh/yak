@@ -49,7 +49,14 @@ import {
 } from './door.ts'
 import { PLATFORM_STORE, SLUG } from '@yaks/platform/names'
 import { ADMIN } from '@yaks/platform/bots'
-import { ambient, recall, type Tally, writing, wrote } from './lib/hops.ts'
+import {
+  ambient,
+  forget,
+  recall,
+  type Tally,
+  writing,
+  wrote,
+} from './lib/hops.ts'
 import { refusal } from '@yaks/api/refuse'
 import { CallError } from '@yaks/tools/errors'
 import {
@@ -2204,6 +2211,10 @@ export let directoryRows = (rows: {
     get stale() {
       return !!rows.stale
     },
+    // Ask again what this request already asked: what another request wrote
+    // since is read, rather than this request's first answer (versions.ts
+    // `waiting` watches another's release lift its fence).
+    reread: () => forget(META_STORE),
     // A write that changes the directory: a batch of bundles, each minting at
     // an eid its author chose (T-32455), answered as applied.
     apply: write,

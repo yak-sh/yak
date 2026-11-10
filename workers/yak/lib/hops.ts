@@ -100,6 +100,12 @@ export let writing = <T>(store: string, send: () => Promise<T>): Promise<T> => {
   return send().finally(mark)
 }
 
+/** This request's readings of `store` answer nothing more: its next asking
+ * reads again, as after its own write. For a request waiting on another's
+ * write (versions.ts `waiting`), which its first reading would otherwise
+ * answer for as long as it waits. */
+export let forget = (store: string) => hop(`wrote:${store}`)
+
 // How many times this request has marked a write to `store` (`writing`).
 let written = (store: string, tally: Tally) => tally.get(`wrote:${store}`) ?? 0
 
