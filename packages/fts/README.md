@@ -164,12 +164,12 @@ The pieces can be used independently:
   same way: a page of a search is its best rows, never its newest. A first page
   (no `.after`) whose words are all its own clauses ranks only as many rows as
   it shows and reads only those, unless the ranking comes up short.
-- `find(db, fields, text, options?)` executes a ranked search. `hits()` returns
-  the same `{ sql, params }` statement without executing it, for use with an
-  asynchronous database. It returns `null` when there are no search terms or
-  indexes; `find()` returns `[]` in those cases. Given a reader's `scope` and
-  its `vocab`, `find()` ranks only text that reader may see, reading a component
-  no table stands for as worn by nobody.
+- `find(db, fields, text, options?)` executes a ranked search, reading each
+  index's content source off the file. `hits(db, fields, text, options?)` runs
+  the same search with the sources it is given, and returns `null` when there
+  are no search terms or indexes; `find()` returns `[]` in those cases. Given a
+  reader's `scope` and its `vocab`, `find()` ranks only text that reader may
+  see, reading a component no table stands for as worn by nobody.
 
 ## Matching and ranking
 
@@ -192,6 +192,12 @@ Text kept outside its row is compared as stored, so a blob-backed body never
 ranks this way. Equal matches go newest first. No recency or popularity
 weighting is added.
 
+A ranking runs a statement a step, and each statement admits through one index's
+screen: workerd counts every naming of a common table expression, with each
+source its body reads, against a depth of 100, and one index's page under a
+visibility screen counts about 24. Each index's page, its tied places and its
+exact names are read alone; joining them is arithmetic in JavaScript.
+
 A ranking reads a page, not every match: each index hands back only its own best
 `limit` admitted rows through FTS5's `order by rank`, which sorts inside the
 index, and the names through `^`, newest first, until it has `limit`. A yaks.app
@@ -199,7 +205,7 @@ store bills the rows a cursor hands back, so a word in a thousand rows costs
 about as much as one in twenty. `limit` defaults to 20 and snippet `context`
 defaults to 10 words. `plan: 'index'` keeps these bounded index pages for stores
 that bill rows read; `plan: 'sort'` orders relevance and newest-first ties in
-one SQL scan, avoiding a second prefix expansion at a tied page boundary.
+one scan an index, avoiding a second prefix expansion at a tied page boundary.
 `find()` and the query extension choose the sort plan for a shared file driver;
 `hits()` and `ranked()` keep the index plan unless requested otherwise. An
 optional `screen` is SQL selecting the ids of the permitted entities, such as
@@ -211,9 +217,8 @@ beginning when that preview has no literal match. This bounds display work
 without changing membership or rank; the excerpt may mark only that phrase.
 Smaller rows keep FTS5's token, phrase and Unicode highlighting. `find()` reads
 each index's declared content source from the schema so a preview can be sliced
-before it reaches the full-text virtual table. An asynchronous caller of
-`hits()` can supply the same index-to-source map as `content`; omitting it reads
-through the index as before.
+before it reaches the full-text virtual table. A caller of `hits()` can supply
+the same index-to-source map as `content`; omitting it reads through the index.
 
 Snippets mark matches with `OPEN` (`\x01`) and `CLOSE` (`\x02`), not HTML.
 Renderers must escape the text and add their own highlighting.

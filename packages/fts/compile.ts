@@ -187,18 +187,17 @@ export let search = (
   let rank = (): number[] => {
     if (held) return held
     let screen = asked?.() ?? undefined
-    let stmt = ranked(live, words.join(' '), {
-      screen,
-      // The query's screen already admits the owner through entity visibility.
-      // Repeating it for each text source multiplies the ranking's VM program.
-      screens: screen ? aspects : sources,
-      limit: page ?? RANKED,
-      plan: db!.file ? 'sort' : 'index',
-      name: named(said.join(' ')),
-    })
     ranking = true
     try {
-      held = stmt ? db!.query(stmt).map((r) => Number(r.owner)) : []
+      held = ranked(db!, live, words.join(' '), {
+        screen,
+        // The query's screen already admits the owner through entity visibility.
+        // Repeating it for each text source multiplies the ranking's VM program.
+        screens: screen ? aspects : sources,
+        limit: page ?? RANKED,
+        plan: db!.file ? 'sort' : 'index',
+        name: named(said.join(' ')),
+      })
     } finally {
       ranking = false
     }

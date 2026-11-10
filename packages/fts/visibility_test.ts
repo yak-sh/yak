@@ -46,8 +46,7 @@ let ids = (q: string) =>
 let sources = screens(text, shop, opts)
 // The owners `.order=search` ranks for the words, as compile.ts asks.
 let rank = (words: string) =>
-  db.query(ranked(text, term(words), { screens: sources, name: named(words) })!)
-    .map((r) => r.owner)
+  ranked(db, text, term(words), { screens: sources, name: named(words) })
 // Open the selection's, the ranker's and the standalone search's statements
 // beside the fixture's search indexes, so each case times only its search.
 ids('privateword')

@@ -4,17 +4,17 @@
 // selects. This module answers the other question a search box asks: of those,
 // which come first, and what text matched? That is FTS5's `bm25` relevance and
 // its `snippet()`, both of which can only be read in a statement that queries
-// the index itself, so this module builds that statement.
+// the index itself, so this module builds those statements and runs them.
 //
-// `hits()` only builds it: it returns SQL and params the caller may run through
-// anything, sync or async. `find()` runs it through a driver and returns
-// {@link Hit}s. Ranking is by relevance alone; mixing in recency, popularity or
-// anything else is an application's policy, applied to the results it gets
-// back.
+// `hits()` runs them through a driver and returns {@link Hit}s; `find()` reads
+// the indexes' sources off the file first. Ranking is by relevance alone;
+// mixing in recency, popularity or anything else is an application's policy,
+// applied to the results it gets back.
 
 import type { Eid } from '@yaks/graph'
 import {
   absentFrom,
+  among,
   and,
   as,
   at,
@@ -35,18 +35,13 @@ import {
   not,
   op,
   or,
-  over,
-  type Query,
   type Raw,
-  render,
   type Select,
   select,
   type Selection,
   sourceScreen,
   sub,
   table,
-  unionAll,
-  unionAllWithin,
   val,
   when,
 } from '@yaks/sql'
@@ -134,123 +129,108 @@ export let unworn = (comps: string[] = [], owner: Expr): Expr[] =>
     })))
   )
 
-// Ranking revisits each index for its page, ties and exact names. Bind each
-// admission relation once, including when several indexes share its scope.
-// Keep it keyed by the matching owner: materializing a broad visibility scope
-// enumerates the whole graph before a search can return even one hit.
-let shared = (screens: Record<string, Raw> = {}) => {
-  let ctes: Cte[] = []
-  let held = new Map<string, Raw>()
-  let sources = Object.fromEntries(
-    Object.entries(screens).map(([index, q]) => {
-      let key = JSON.stringify(q)
-      let source = held.get(key)
-      if (!source) {
-        let name = `__fts_allowed${ctes.length}`
-        ctes.push({ name, q, materialized: false })
-        source = render(select({ cols: [col('id')], from: table(name) }))
-        held.set(key, source)
-      }
-      return [index, source]
-    }),
-  )
-  return { ctes, sources }
-}
-
-// The ranked statement for a search, or null when the text contains no word.
-// The words are ANDed terms (./term.ts) and bm25 orders the results, so a
-// search behaves as a set of words rather than as one phrase.
+// The ranked hits for a search, best first, or null when the text contains no
+// word. The words are ANDed terms (./term.ts) and bm25 orders the results, so
+// a search behaves as a set of words rather than as one phrase.
 //
-// The ranking is `best` (see `chosen`); a snippet is read last, and only for
-// the rows returned. FTS5 reads a row's text back to cut one, and a search
-// over transcripts matches thousands of rows, some of them megabytes of
-// command output: cutting a snippet for every match before choosing twenty
-// took seconds where ranking alone takes milliseconds.
+// The ranking is `best`; a snippet is read last, and only for the rows
+// returned. FTS5 reads a row's text back to cut one, and a search over
+// transcripts matches thousands of rows, some of them megabytes of command
+// output: cutting a snippet for every match before choosing twenty took
+// seconds where ranking alone takes milliseconds.
 export let hits = (
+  db: Driver,
   fields: Field[],
   text: string,
   opts: SearchOpts = {},
-): Raw | null => {
-  let t = match(text)
-  let best = chosen(fields, t, { name: named(text), ...opts })
-  if (!best) return null
+): Hit[] | null => {
+  let ranking = best(db, fields, match(text), { name: named(text), ...opts })
+  if (!ranking) return null
+  if (!ranking.length) return []
   let context = opts.context ?? 10
   // Membership and rank still use the full match; the excerpt leaves common
   // terms unmarked, so FTS5 does less work cutting large matching texts.
   let marked = excerpt(text)
-  let b = at('best')
-  let snippets = indexes(worded(fields)).map(({ name, props }, i) => {
-    let fts = indexName(name)
-    return {
-      name: `__snippets${i}`,
-      materialized: true,
-      q: select({
-        cols: [
-          as(col('rowid', fts), 'owner'),
-          as(cut(fts, props, marked, context, opts.content?.[name]), 'snippet'),
-        ],
-        from: table(fts),
-        where: and(
-          op('match', col(fts), val(marked)),
-          exists(
-            select({
-              cols: [lit(1)],
-              from: table('best'),
-              where: and(
-                eq(b('arm'), lit(i)),
-                eq(b('owner'), col('rowid', fts)),
-              ),
-            }),
-          ),
+  let ids = (rows: Candidate[]) => rows.map((r) => lit(r.owner))
+  // Each eid is read by id, a seek a row: asked as a set, SQLite may walk
+  // `entity` whole however few the ids, whatever its statistics say.
+  let o = at('__owner'), e = at('entity')
+  let eids = new Map(
+    db.query(select({
+      cols: [
+        as(o('column1'), 'id'),
+        as(
+          sub(select({
+            cols: [e('eid')],
+            from: table('entity'),
+            where: eq(e('id'), o('column1')),
+          })),
+          'eid',
         ),
-      }),
-    }
-  })
-  let snippet = when(
-    indexes(worded(fields)).map((
-      _,
-      i,
-    ) => [
-      lit(i),
-      sub(
-        select({
-          cols: [col('snippet')],
-          from: table(`__snippets${i}`),
-          where: eq(col('owner'), b('owner')),
-        }),
+      ],
+      from: from(
+        { t: 'values', rows: ids(ranking).map((id) => [id]) },
+        '__owner',
       ),
-    ]),
-    undefined,
-    b('arm'),
+    })).map((r) => [Number(r.id), String(r.eid)]),
   )
-  return render({
-    ...best,
-    with: [...best.with!, ...snippets],
-    cols: [...best.cols!, as(snippet, 'snippet')],
+  let snippets = new Map<string, string>()
+  indexes(worded(fields)).forEach(({ name, props }, i) => {
+    let mine = ranking.filter((r) => r.arm == i)
+    if (!mine.length) return
+    let fts = indexName(name)
+    let cuts = db.query(select({
+      cols: [
+        as(col('rowid', fts), 'owner'),
+        as(cut(fts, props, marked, context, opts.content?.[name]), 'snippet'),
+      ],
+      from: table(fts),
+      where: and(
+        op('match', col(fts), val(marked)),
+        among(col('rowid', fts), ids(mine)),
+      ),
+    }))
+    for (let r of cuts) snippets.set(`${i} ${r.owner}`, String(r.snippet ?? ''))
+  })
+  return ranking.flatMap((r) => {
+    let entity = eids.get(r.owner)
+    return entity == null ? [] : [{
+      entity,
+      rank: r.rank,
+      snippet: snippets.get(`${r.arm} ${r.owner}`) ?? '',
+    }]
   })
 }
 
 // The same ranking over a match expression already built from the words
-// (term.ts), without snippets — what `.order=search` ranks by (./compile.ts).
-// Each row carries the entity's integer `owner`.
+// (term.ts), without snippets — what `.order=search` ranks by (./compile.ts):
+// the entities' integer owners, best first.
 export let ranked = (
+  db: Driver,
   fields: Field[],
   t: string,
   opts: SearchOpts = {},
-): Raw | null => {
-  let best = chosen(fields, t, opts)
-  return best && render(best)
-}
+): number[] => (best(db, fields, t, opts) ?? []).map((r) => r.owner)
 
-// The ranking both statements share: the best `limit` entities (`best`), each
-// with its bm25 rank and the index it ranked best in (`arm`), one row per
-// entity, joined to `entity` for the eid. `min(rank)` picks an entity's
-// best-matching index, and the `arm` selected alongside it names that index —
-// SQLite returns a bare column selected next to a single `min()` from the row
-// the minimum came from, which is exactly the pairing wanted here.
+// A ranked entity: its integer owner, its bm25 rank, the index it ranked best
+// in (`arm`), and whether its stored text is the words exactly (`named`).
+type Candidate = { owner: number; rank: number; arm: number; named: number }
+
+// The best `limit` entities, one row each. An entity's best rank is its
+// `min` across indexes, and its arm the index that rank came from.
+//
+// The ranking runs as a statement a step, and each statement admits through
+// one index's screen. Workerd's SQLite counts every naming of a common table
+// expression, with each source its body reads, against its depth of 100, and
+// a visibility screen reads dozens: measured on a Durable Object, 2026-11-10,
+// one index's page under a screen counts 24, so four indexes' pages refused as
+// one statement however they were written, and written out without CTEs they
+// pass the engine's 100 KB. So each index's page, its tied places and its
+// exact names are read alone, and what joins them (the edge of a page, an
+// entity's best index, the order) is plain arithmetic here.
 //
 // A page stops reading at its best rows. Each index answers only its own best
-// `limit` admitted rows (`placing`), through FTS5's own `order by rank`, which
+// `limit` admitted rows (`page`), through FTS5's own `order by rank`, which
 // sorts inside the index and hands back just the rows taken: a yaks.app store
 // bills each row a cursor hands back, so a broad word costs a page, not every
 // match. The best `limit` entities across indexes are among each index's best
@@ -259,9 +239,10 @@ export let ranked = (
 // the rest of the query refuses never takes a place.
 //
 // Equal matches go newest first, as a listing does, but FTS5 hands equal ranks
-// back oldest first. So when the row past an index's last place ranks the same
-// as that place, the places at that rank are taken again, newest first, by a
-// `rowid desc` scan of the rows ranking exactly that (`newest`).
+// back oldest first. So an index-order page reads one row past its last place,
+// and when that row ranks the same as the last place, the places at that rank
+// are taken again, newest first, by a `rowid desc` scan of the rows ranking
+// exactly that (`newest`). A CPU sort orders ties itself.
 //
 // A name comes first. bm25 rewards a word said often in a short text, so a
 // task saying "Mossvale" twice in its title outranks the project whose title
@@ -270,63 +251,68 @@ export let ranked = (
 // rank before every other. They are found through the index as rows whose
 // text begins with the words (FTS5's `^`), and only those rows are read to
 // compare.
-//
-// The steps that rank are materialized, and it is not decoration: FTS5's
-// `bm25`, `rank` and `snippet` may only be used in a statement that matches
-// the index, and SQLite's query flattener would fold a plain subquery into the
-// join above it, moving them out of that context and raising "unable to use
-// function bm25 in the requested context".
-let chosen = (
+let best = (
+  db: Driver,
   fields: Field[],
   t: string,
   opts: SearchOpts,
-): Select | null => {
+): Candidate[] | null => {
   let arms = indexes(worded(fields))
   if (!t || !arms.length) return null
   let limit = opts.limit ?? 20
   let sorting = opts.plan == 'sort'
-  let { ctes, sources } = shared(opts.screens)
-  let e = at('entity')
-  let c = at('__candidate')
-  let b = at('best')
-  // A kind can have no owners in an index at all. Prove that through the
-  // selected owners' component keys before opening a CPU-sorted FTS cursor.
-  // Joined, not crossed: SQLite drives from the smaller side, so a broad
-  // screen seeks a rare component's few owners rather than walking the graph
-  // in id order to find one.
-  let guarded = sorting && !!opts.screen
-  let active = (arm: Index) =>
-    exists(select({
-      cols: [lit(1)],
-      from: table('__fts_screen'),
-      joins: [join(
-        table(arm.on ?? arm.comp, '__source'),
-        eq(col('entity', '__source'), col('id', '__fts_screen')),
-      )],
-    }))
-  let take = (i: number, n: number): Expr =>
-    guarded
-      ? when([[
-        sub(select({ cols: [col(`arm${i}`)], from: table('__fts_active') })),
-        lit(n),
-      ]], lit(0))
-      : lit(n)
   // A screen the compiler made tests one owner by its keyed form, a seek per
-  // posting however many owners it admits. A bare relation is read whole.
+  // posting however many owners it admits. A bare relation is read whole: a
+  // CPU sort visits every matching posting, so it is read once a statement;
+  // index-order pages keep candidate seeks for sparse paid reads.
   let probed = !!opts.screen?.probe
+  let screen: Cte[] = opts.screen
+    ? [{
+      name: '__fts_screen',
+      cols: ['id'],
+      q: opts.screen,
+      materialized: sorting && !probed,
+    }]
+    : []
+  let ask = (q: Select, arm: number, named: 0 | 1): Candidate[] =>
+    db.query({ ...q, with: screen }).map((r) => ({
+      owner: Number(r.owner),
+      rank: Number(r.rank),
+      arm,
+      named,
+    }))
   let eligible = (owner: Expr) =>
     probed ? member(opts.screen!, owner) : exists(select({
       cols: [lit(1)],
       from: table('__fts_screen'),
       where: eq(col('id', '__fts_screen'), owner),
     }))
+  // A kind can have no owners in an index at all. A CPU sort proves that
+  // through the selected owners' component keys before opening its cursor.
+  // Joined, not crossed: SQLite drives from the smaller side, so a broad
+  // screen seeks a rare component's few owners rather than walking the graph
+  // in id order to find one.
+  let take = (arm: Index, n: number): Expr =>
+    sorting && opts.screen
+      ? when([[
+        exists(select({
+          cols: [lit(1)],
+          from: table('__fts_screen'),
+          joins: [join(
+            table(arm.on ?? arm.comp, '__source'),
+            eq(col('entity', '__source'), col('id', '__fts_screen')),
+          )],
+        })),
+        lit(n),
+      ]], lit(0))
+      : lit(n)
   // An index's rows matching `expr`, among the live owners the caller admits.
   let admitted: Admitted = (name, expr) => {
     let fts = indexName(name)
     let owner = col('rowid', fts)
     return and(
       op('match', col(fts), val(expr)),
-      permitted(name, owner, sources),
+      permitted(name, owner, opts.screens),
       ...unworn(arms.find((arm) => arm.name == name)!.not, owner),
       ...opts.screen ? [eligible(owner)] : [],
       not(exists(select({
@@ -336,204 +322,72 @@ let chosen = (
       }))),
     )
   }
-  // A workerd compound select holds five terms (@yaks/sql's compound.ts), so
-  // each kind of candidate takes one term per index, nested to fit however
-  // many indexes the vocabulary has, and the kinds are joined above them.
-  let kinds = [
-    arms.map((_, i) => placed(i, limit, sorting)),
-    sorting
-      ? []
-      : arms.map(({ name }, i) => newest(name, i, t, limit, admitted)),
-    opts.name
-      ? arms.map((arm, i) =>
-        exactly(arm, i, t, opts.name!, take(i, limit), admitted)
-      )
-      : [],
-  ].filter((kind) => kind.length)
-  let candidates = unionAll(
-    ...kinds.map((kind, k) =>
+  let found = arms.flatMap((arm, i) => {
+    let { name } = arm
+    let page = ask(
       select({
-        cols: ['owner', 'rank', 'arm', 'named'].map((n) => col(n)),
-        from: from(unionAllWithin(kind), `__kind${k}`),
-      })
-    ),
-  )
-  let best = select({
-    cols: [
-      // Read by id for each candidate: joined, SQLite scans `entity` per
-      // candidate here, whatever its statistics say.
-      as(
-        sub(select({
-          cols: [e('eid')],
-          from: table('entity'),
-          where: eq(e('id'), c('owner')),
-        })),
-        'entity',
-      ),
-      as(c('owner'), 'owner'),
-      as(fn('min', c('rank')), 'rank'),
-      as(c('arm'), 'arm'),
-      as(fn('max', c('named')), 'named'),
-    ],
-    from: from(candidates, '__candidate'),
-    group: [c('owner')],
-    order: [desc(col('named')), col('rank'), desc(c('owner'))],
-    limit: val(limit),
+        cols: [as(col('rowid'), 'owner'), as(col('rank'), 'rank')],
+        from: table(indexName(name)),
+        where: admitted(name, t),
+        order: [col('rank'), ...sorting ? [desc(col('rowid'))] : []],
+        limit: take(arm, sorting ? limit : limit + 1),
+      }),
+      i,
+      0,
+    )
+    let worst = page.at(-1)?.rank
+    let tied = page.filter((r) => r.rank == worst).length
+    let placed = page.length > limit
+      ? [
+        ...page.filter((r) => r.rank != worst),
+        ...tied > 1
+          ? ask(newest(name, t, worst!, tied - 1, admitted), i, 0)
+          : [],
+      ]
+      : page
+    let names = opts.name
+      ? ask(exactly(arm, t, opts.name, take(arm, limit), admitted), i, 1)
+      : []
+    return [...placed, ...names]
   })
-  return select({
-    with: [
-      ...ctes,
-      ...opts.screen
-        ? [{
-          name: '__fts_screen',
-          cols: ['id'],
-          q: opts.screen,
-          // A CPU sort visits every matching posting. A bare relation is
-          // shared rather than re-run for every hit; a probed one is never
-          // enumerated, since the screen of a broad query is the whole graph.
-          // Index-order pages keep candidate seeks for sparse paid reads.
-          materialized: sorting && !probed,
-        }]
-        : [],
-      ...guarded
-        ? [{
-          name: '__fts_active',
-          q: select({ cols: arms.map((arm, i) => as(active(arm), `arm${i}`)) }),
-          materialized: true,
-        }]
-        : [],
-      ...arms.flatMap(({ name }, i) =>
-        placing(
-          name,
-          i,
-          t,
-          take(i, sorting ? limit : limit + 1),
-          admitted,
-          sorting,
-        )
-      ),
-      { name: 'best', q: best, materialized: true },
-    ],
-    cols: [
-      as(b('entity'), 'entity'),
-      as(b('owner'), 'owner'),
-      as(b('rank'), 'rank'),
-    ],
-    from: table('best'),
-    order: [desc(b('named')), b('rank'), desc(b('owner'))],
-  })
+  let by = new Map<number, Candidate>()
+  for (let c of found) {
+    let held = by.get(c.owner)
+    if (!held) by.set(c.owner, { ...c })
+    else {
+      if (c.rank < held.rank) Object.assign(held, { rank: c.rank, arm: c.arm })
+      held.named = Math.max(held.named, c.named)
+    }
+  }
+  return [...by.values()]
+    .sort((a, b) => b.named - a.named || a.rank - b.rank || b.owner - a.owner)
+    .slice(0, limit)
 }
 
 type Admitted = (name: string, expr: string) => Expr
 
-// Index `i`'s best admitted rows by rank, one past its last place, and the
-// worst rank among them.
-let top = (i: number) => `__top${i}`
-let edge = (i: number) => `__edge${i}`
-
-// A candidate row: an owner, its rank, its index, and whether it is a name.
-let candidate = (owner: Expr, rank: Expr, arm: number, named: 0 | 1) => [
-  as(owner, 'owner'),
-  as(rank, 'rank'),
-  as(lit(arm), 'arm'),
-  as(lit(named), 'named'),
-]
-
-// Index `i`'s best admitted rows by rank, `limit + 1` of them (`top`), and
-// one row (`edge`) saying the worst rank among them, how many share it (`n`)
-// and how many they are (`held`), read in one pass.
-let placing = (
-  name: string,
-  i: number,
-  t: string,
-  limit: Expr,
-  admitted: Admitted,
-  sorting: boolean,
-): Cte[] => [{
-  name: top(i),
-  q: select({
-    cols: [as(col('rowid'), 'owner'), as(col('rank'), 'rank')],
-    from: table(indexName(name)),
-    where: admitted(name, t),
-    order: [col('rank'), ...sorting ? [desc(col('rowid'))] : []],
-    limit,
-  }),
-  materialized: true,
-}, {
-  name: edge(i),
-  q: select({
-    cols: [
-      col('rank'),
-      as(fn('count', lit(1)), 'n'),
-      as(over(fn('sum', fn('count', lit(1)))), 'held'),
-    ],
-    from: table(top(i)),
-    group: [col('rank')],
-    order: [desc(col('rank'))],
-    limit: lit(1),
-  }),
-  materialized: true,
-}]
-
-// Whether index `i`'s `top` holds a row past its last place: then the rows at
-// its worst rank are that row and, when it ties, places to take again.
-let full = (i: number, limit: number) =>
-  op('>', col('held', edge(i)), lit(limit))
-
-// Index `i`'s places ranking better than its worst, or all of them when it
-// holds no row past its last place.
-let placed = (i: number, limit: number, sorting: boolean): Select =>
-  select({
-    cols: candidate(col('owner'), col('rank'), i, 0),
-    from: table(top(i)),
-    where: sorting ? lit(true) : not(exists(select({
-      cols: [lit(1)],
-      from: table(edge(i)),
-      where: and(full(i, limit), eq(col('rank', edge(i)), col('rank', top(i)))),
-    }))),
-  })
-
-// Index `i`'s places at its worst rank when the row past its last place ties
-// with them, taken again newest first: all who share that rank but the row
-// past. Otherwise the scan's limit is 0, which SQLite stops at before reading
-// a row. It matches the rank through `bm25`, since FTS5 reads a constraint on
-// `rank` as its configuration.
+// An index's places at its worst rank `worst` when the row past its last place
+// ties with them, taken again newest first: `room` of them, all who share that
+// rank but the row past. It matches the rank through `bm25`, since FTS5 reads
+// a constraint on `rank` as its configuration.
 let newest = (
   name: string,
-  i: number,
   t: string,
-  limit: number,
+  worst: number,
+  room: number,
   admitted: Admitted,
 ): Select => {
   let fts = indexName(name)
-  let worst = (value: Expr) =>
-    sub(select({ cols: [value], from: table(edge(i)) }))
-  let room = when(
-    [[
-      and(full(i, limit), op('>', col('n'), lit(1))),
-      op('-', col('n'), lit(1)),
-    ]],
-    lit(0),
-  )
   return select({
-    cols: candidate(col('owner'), col('rank'), i, 0),
-    from: from(
-      select({
-        cols: [as(col('rowid'), 'owner'), as(col('rank'), 'rank')],
-        from: table(fts),
-        where: and(
-          eq(fn('bm25', col(fts)), worst(col('rank'))),
-          admitted(name, t),
-        ),
-        order: [desc(col('rowid'))],
-        limit: fn('coalesce', worst(room), lit(0)),
-      }),
-      '__newest',
-    ),
+    cols: [as(col('rowid'), 'owner'), as(col('rank'), 'rank')],
+    from: table(fts),
+    where: and(eq(fn('bm25', col(fts)), val(worst)), admitted(name, t)),
+    order: [desc(col('rowid'))],
+    limit: lit(room),
   })
 }
 
-// Index `i`'s best `limit` admitted owners whose stored text, in any of its
+// An index's best `limit` admitted owners whose stored text, in any of its
 // columns, is exactly `name`: the rows whose text begins with it (`^`), each
 // read once to compare, and each ranked by the words `t` as a hit is. In an
 // index of one column every such row says the same words in the same length,
@@ -543,12 +397,11 @@ let newest = (
 // holds is its address, never its words.
 let exactly = (
   { name: index, comp, props }: Index,
-  i: number,
   t: string,
   name: string,
   limit: Expr,
   admitted: Admitted,
-): Query => {
+): Select => {
   let fts = indexName(index)
   let n = at('__named')
   let same = (p: string) =>
@@ -562,27 +415,21 @@ let exactly = (
     ),
   }))
   return select({
-    cols: candidate(col('owner'), col('rank'), i, 1),
-    from: from(
-      select({
-        cols: [as(col('rowid'), 'owner'), as(rank, 'rank')],
-        from: table(fts),
+    cols: [as(col('rowid'), 'owner'), as(rank, 'rank')],
+    from: table(fts),
+    where: and(
+      admitted(index, `^"${name.replaceAll('"', '')}"`),
+      exists(select({
+        cols: [lit(1)],
+        from: table(comp, '__named'),
         where: and(
-          admitted(index, `^"${name.replaceAll('"', '')}"`),
-          exists(select({
-            cols: [lit(1)],
-            from: table(comp, '__named'),
-            where: and(
-              eq(n('entity'), col('rowid', fts)),
-              or(...props.map(same)),
-            ),
-          })),
+          eq(n('entity'), col('rowid', fts)),
+          or(...props.map(same)),
         ),
-        order: [...props.length > 1 ? [col('rank')] : [], desc(col('rowid'))],
-        limit,
-      }),
-      `__named${i}`,
+      })),
     ),
+    order: [...props.length > 1 ? [col('rank')] : [], desc(col('rowid'))],
+    limit,
   })
 }
 
@@ -615,7 +462,7 @@ export let find = (
   let names = new Set(tables.map((o) => o.name))
   let live = fields.filter((f) => (f.on ?? f.comp) in content)
     .map((f) => trim(f, (comp) => names.has(comp)))
-  let stmt = hits(live, text, {
+  return hits(db, live, text, {
     plan: db.file ? 'sort' : 'index',
     content,
     ...scope && {
@@ -625,11 +472,5 @@ export let find = (
       }),
     },
     ...opts,
-  })
-  if (!stmt) return []
-  return db.query(stmt).map((r) => ({
-    entity: String(r.entity),
-    rank: Number(r.rank),
-    snippet: String(r.snippet ?? ''),
-  }))
+  }) ?? []
 }

@@ -97,8 +97,8 @@ test('distinctive words of a search are marked in the snippet', () => {
 })
 
 test('a search that cannot be asked finds nothing', () => {
-  assertEquals(hits(text, '  '), null)
-  assertEquals(hits([], 'dragon'), null)
+  assertEquals(hits(shelf(), text, '  '), null)
+  assertEquals(hits(shelf(), [], 'dragon'), null)
   assertEquals(find(shelf(), text, ''), [])
 })
 
