@@ -3,21 +3,29 @@
 // gets in the words its office uses, what yaks.app has built for one, and the
 // one plan a church pays for. Only its own address shows it, which is where an
 // ad for churches points, so that address is its canonical one. Its box is the
-// home page's: a first build, with no sign-up.
+// home page's, a first build with no sign-up, asking for the web address of
+// the site the church has now: the Operator reads it and builds theirs from
+// it (newcomer.ts `worded`, `rebuilding`). Words typed in the box are built as
+// an idea, as the home page's are.
 import { Button, Card, Field } from '@yaks/ui'
 import { GET_PLAN } from '../route.ts'
-import { START } from '../newcomer.ts'
+import { KEEPING, START } from '../newcomer.ts'
 import { FREE, PRICE, YEARLY } from '../meter.ts'
 import { Page, Yours } from './frame.tsx'
 
 /** Where the page lives. */
 export let PATH = '/churches'
 
+/** About how many minutes a church's site takes, from the button to the
+ * Operator saying it is live: one read and rebuilt in a check took 3 minutes
+ * 40 seconds, its page first showing after 81 seconds. */
+export let MINUTES = 4
+
 export let Churches = () => (
   <Page
-    name='yaks.app for churches — your website, sign-up forms, directory and calendar in one place'
-    title='yaks.app for churches — your website, sign-up forms, directory and calendar in one place'
-    description={`Tell yaks.app what your church needs, and it builds your website, sign-up forms, member directory and calendar, and changes them whenever you ask. Free to try, $${PRICE.pro} a month for your whole church.`}
+    name='yaks.app for churches — a new church website built from the one you have, and changed whenever you ask'
+    title='yaks.app for churches — a new church website built from the one you have, and changed whenever you ask'
+    description={`Type your church's web address and watch yaks.app build your new site from it, free to try and with no sign-up. Then change it by asking, by email or chat, and add sign-up forms, a member directory and a calendar. $${PRICE.pro} a month for your whole church.`}
     path={PATH}
     kind='Home'
     head={<script src='cta.js' defer />}
@@ -26,44 +34,93 @@ export let Churches = () => (
       <div class='Hello_Copy'>
         <p class='Hello_Kicker'>For church offices</p>
         <h1 class='Title Title-hero' id='hello'>
-          Your church's website, sign-up forms, directory and calendar, in one
-          place.
+          <label for='say'>
+            Type your church's web address, and watch yaks.app build your new
+            site.
+          </label>
         </h1>
         <p class='Note'>
-          <label for='say'>
-            Tell yaks.app what your church needs. It builds it for you, and
-            changes it whenever you ask.
-          </label>
+          Your church's name, service times and what's on this week, read from
+          the site you have now. To change anything, you ask it by email or
+          chat.
         </p>
         <form class='Hello_Ask' method='post' action={START}>
+          <input type='hidden' name='org' value='church' />
           <Field
-            class='Hello_Field'
-            lines
+            class='Hello_Field Hello_Field-line'
             id='say'
             name='say'
             required
             maxLength={4000}
-            placeholder='What does your church office need? A sign-up form, a directory, a new website…'
+            autocapitalize='none'
+            autocorrect='off'
+            spellcheck={false}
+            enterkeyhint='go'
+            placeholder='yourchurch.org'
           />
           <Button mod='go' type='submit' data-cta='start'>
-            Build it free
+            Build my site free
           </Button>
         </form>
         <p class='Note Note-small'>
-          Free to try, with no sign-up. <a href='#cost'>${PRICE.pro} a month</a>
-          {' '}
-          for your whole church.
+          Free to try, with no sign-up. It takes about {MINUTES}{' '}
+          minutes, and the site you have now isn't changed. No website yet? Type
+          what your church needs instead.
         </p>
       </div>
     </section>
+    <section class='How' aria-labelledby='how'>
+      <h2 class='Title' id='how'>
+        It starts from your site, and you change it by asking
+      </h2>
+      <ol class='Steps'>
+        <li class='Steps_Item'>
+          <h3 class='Step_Name'>You watch your new site being built</h3>
+          <p class='Note'>
+            A chat opens and says what it is doing. Your new site shows as it is
+            made, the page itself after a minute or two, and it is ready to open
+            in about {MINUTES}{' '}
+            minutes. The site you have now is only read. Nothing on it changes.
+          </p>
+        </li>
+        <li class='Steps_Item'>
+          <h3 class='Step_Name'>Keep it with your email address</h3>
+          <p class='Note'>
+            If you like what you see, give your email and it is yours, free. If
+            you don't, it is taken down after {KEEPING / 86_400_000} days.
+          </p>
+        </li>
+        <li class='Steps_Item'>
+          <h3 class='Step_Name'>Ask for changes by email or chat</h3>
+          <p class='Note'>
+            Your church gets an Operator, an AI helper that does the building.
+            Ask it the way you would ask a volunteer who is good with computers:
+            “Put the Christmas Eve service times on the home page.” It makes the
+            change and writes back.
+          </p>
+        </li>
+        <li class='Steps_Item'>
+          <h3 class='Step_Name'>
+            Only the people you invite see what is private
+          </h3>
+          <p class='Note'>
+            Members sign in with their email to open the directory, and nobody
+            else can. What is in it stays yours, to take with you or delete
+            whenever you like.
+          </p>
+        </li>
+      </ol>
+    </section>
     <section class='Yours' aria-labelledby='built'>
-      <h2 class='Title' id='built'>Built on yaks.app for a church</h2>
+      <h2 class='Title' id='built'>
+        What else yaks.app has built for a church
+      </h2>
       <dl class='Yours_List'>
         <div>
-          <dt class='Yours_Term'>A church website</dt>
+          <dt class='Yours_Term'>Sign-up forms on the website</dt>
           <dd class='Yours_Detail'>
-            With its sermons, its events, and sign-up forms for kids' club,
-            youth group and the things on the calendar.
+            For kids' club, youth group and the things on the calendar, beside
+            the church's sermons and events.
           </dd>
         </div>
         <div>
@@ -83,38 +140,6 @@ export let Churches = () => (
           </dd>
         </div>
       </dl>
-    </section>
-    <section class='How' aria-labelledby='how'>
-      <h2 class='Title' id='how'>
-        You ask in plain words, and the change is made
-      </h2>
-      <ol class='Steps'>
-        <li class='Steps_Item'>
-          <h3 class='Step_Name'>Your church gets an Operator</h3>
-          <p class='Note'>
-            It is an AI helper that does the building. Nobody has to learn a
-            website builder.
-          </p>
-        </li>
-        <li class='Steps_Item'>
-          <h3 class='Step_Name'>Email it or chat with it</h3>
-          <p class='Note'>
-            Ask the way you would ask a volunteer who is good with computers:
-            “Put the Christmas Eve service times on the home page.” It makes the
-            change and writes back.
-          </p>
-        </li>
-        <li class='Steps_Item'>
-          <h3 class='Step_Name'>
-            Only the people you invite see what is private
-          </h3>
-          <p class='Note'>
-            Members sign in with their email to open the directory, and nobody
-            else can. What is in it stays yours, to take with you or delete
-            whenever you like.
-          </p>
-        </li>
-      </ol>
     </section>
     <section class='Cost' aria-labelledby='cost'>
       <h2 class='Title' id='cost'>
@@ -168,11 +193,11 @@ export let Churches = () => (
       </p>
     </section>
     <Card class='Join' aria-labelledby='join'>
-      <h2 class='Title' id='join'>Start with one thing your office needs</h2>
+      <h2 class='Title' id='join'>Start with the website you have now</h2>
       <p class='Join_Doors'>
-        <Button mod='go' href='#say' data-cta='join'>Tell us what it is</Button>
+        <Button mod='go' href='#say' data-cta='join'>Type its address</Button>
       </p>
-      <p class='Note Note-small'>Free to try.</p>
+      <p class='Note Note-small'>Free to try, with no sign-up.</p>
     </Card>
   </Page>
 )

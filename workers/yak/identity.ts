@@ -177,7 +177,7 @@ import {
 import { chatPath, hostOf, LOGOUT, MANAGE, OAUTH, onZone } from './route.ts'
 import { woken } from './build-door.ts'
 import { INVITE, LINK, SLUG } from '@yaks/platform/names'
-import { counted, FULL, keep, oneBuild, START } from './newcomer.ts'
+import { counted, FULL, keep, oneBuild, START, worded } from './newcomer.ts'
 import {
   type Arrived,
   type Ask,
@@ -878,10 +878,12 @@ let landed = async (
  * builds in their own space. A stranger becomes a newcomer: a person with no
  * address yet, signed in on this browser, whose space holds one build's
  * dollars (newcomer.ts `oneBuild`), once the day and their address have builds
- * left (`counted`); past either they meet the sign-in card saying so.
+ * left (`counted`); past either they meet the sign-in card saying so. Words
+ * that are the web address of the site they have now ask for it rebuilt
+ * (newcomer.ts `worded`), as the site of the `org` the page's box named.
  */
-let begun = async (req: Request, env: Env, said: string) => {
-  let words = said.trim().slice(0, SAID)
+let begun = async (req: Request, env: Env, said: string, org = '') => {
+  let words = worded(said.trim().slice(0, SAID), org)
   if (!words) return redirect(hostUrl(env, '/'), undefined, 303)
   let person = await browser(env, req)
   // A cookie outlives a newcomer whose space nobody kept and was erased
@@ -1248,9 +1250,10 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   }
 
   // The home page's box (newcomer.ts): the words go to the Operator of the
-  // space they build in, and the browser follows them into its chat.
+  // space they build in, and the browser follows them into its chat. A
+  // landing page whose box asks for a site says whose (`org`).
   if (path == START && req.method == 'POST' && env.SESSION_SECRET) {
-    return await begun(req, env, field('say'))
+    return await begun(req, env, field('say'), field('org'))
   }
 
   // Whether this browser is signed in, for the site's island (signed.ts), and

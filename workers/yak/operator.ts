@@ -37,6 +37,7 @@ import {
   stoppedHere,
 } from './operator-view.ts'
 import { building } from './made.ts'
+import { rebuilding } from './newcomer.ts'
 import { listing } from '@yaks/mcp'
 import {
   type Listed,
@@ -1379,6 +1380,7 @@ export let operating = (
       iconic,
       paged,
       building,
+      rebuilding,
     ]).catch((e) => {
       based = undefined
       caught(e, { request: 'operator base persona' })

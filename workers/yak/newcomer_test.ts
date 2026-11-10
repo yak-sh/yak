@@ -39,7 +39,7 @@ let k = await fresh({}, (e) => {
 })
 cleanup(() => k.stop())
 
-let build = (say: string, { ip = '', cookie = '' } = {}) =>
+let build = (say: string, { ip = '', cookie = '', org = '' } = {}) =>
   k.at('yaks.app', START, {
     method: 'POST',
     redirect: 'manual',
@@ -48,7 +48,7 @@ let build = (say: string, { ip = '', cookie = '' } = {}) =>
       ...ip ? { 'cf-connecting-ip': ip } : {},
       ...cookie ? { cookie } : {},
     },
-    body: new URLSearchParams({ say }).toString(),
+    body: new URLSearchParams({ say, ...org ? { org } : {} }).toString(),
   })
 
 let cookieOf = (r: Response) =>
@@ -61,6 +61,11 @@ let first = await build('A sign-up sheet for our bake sale', {
 })
 let cookie = cookieOf(first)
 let again = await build('Add a column for allergies', { cookie })
+// The box of a page for churches, given the address of the site they have.
+let sited = await build(' GraceChurch.example/visit ', {
+  cookie,
+  org: 'church',
+})
 let second = await build('A chore chart', { ip: '203.0.113.7' })
 let third = await build('A reading log', { ip: '203.0.113.7' })
 let thirdSaid = parseHTML(await third.text()).document.body.textContent ?? ''
@@ -78,6 +83,13 @@ let chat = parseHTML(
   )).text(),
 ).document
 let card = chat.querySelector('form.Talk_Keep')
+let sitedSaid = parseHTML(
+  await (await k.at(
+    'yaks.app',
+    new URL(sited.headers.get('location')!).pathname,
+    { headers: { cookie } },
+  )).text(),
+).document.body.textContent ?? ''
 
 let newcomer = await k.dir.newcomer(owner)
 let known = await k.dir.known(owner)
@@ -227,6 +239,16 @@ test("a stranger's idea opens a space of their own, signed in, in its chat", () 
       new URL(first.headers.get('location')!).pathname,
     ),
     'it lands on the chat its words opened',
+  )
+})
+
+test("a web address typed in a church page's box asks for that church's site, whole", () => {
+  assertEquals(spaceOf(sited), space.slug)
+  assert(
+    sitedSaid.includes(
+      "My church's website is https://gracechurch.example/visit",
+    ),
+    sitedSaid.slice(-400),
   )
 })
 

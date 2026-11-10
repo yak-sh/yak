@@ -180,6 +180,10 @@ assistants' connector directories for those who already use one.
   leads with the app a visitor gets). A page with none is a landing page for
   one audience, shown only at its own address, where an ad for that audience
   points: site/churches.tsx at /churches, and the Operator page at /operator.
+  The box on /churches asks for the web address of the site a church has
+  now, and the newcomer's Operator reads it and builds theirs from it
+  (newcomer.ts `worded`, `rebuilding`); words typed there are built as an
+  idea. A page's time to build is one measured on a live build.
   An ad test gets a landing page and never changes the home page. A visit to
   any of them is a home page visit in the funnel under that page's name, and
   so are the click, the build begun and the sign-up that follow

@@ -1,8 +1,9 @@
-// A newcomer (D-146737): somebody who typed an app idea into the home page's
-// box before signing up. Pressing Build it signs their browser in as a person
-// with no address and no number yet, gives them a space of their own like any
-// sign-up (identity.ts `settle`), and hands their words to its Operator, which
-// builds the app while they watch. Giving an address keeps it.
+// A newcomer (D-146737): somebody who typed an app idea, or the web address
+// of the site they have now, into a home page's box before signing up.
+// Pressing Build it signs their browser in as a person with no address and no
+// number yet, gives them a space of their own like any sign-up (identity.ts
+// `settle`), and hands their words to its Operator, which builds the app
+// while they watch. Giving an address keeps it.
 //
 // The spending is a pilot with caps said in dollars, all of them here:
 //
@@ -30,6 +31,7 @@ import type { Namespace } from './door.ts'
 import type { Env as Platform } from './env.ts'
 import { handover, naming } from './handover.ts'
 import { meta } from './meta.ts'
+import type { Declared } from './operator-persona.ts'
 import { type Ctx, refuse } from './tool.ts'
 
 type Env = { STORE: Namespace }
@@ -52,6 +54,74 @@ export let KEEPING = 7 * 86_400_000
 
 /** Where the home page's box posts. */
 export let START = '/start'
+
+/**
+ * The web address a box's words are, whole, or '' for words that are not one
+ * address and nothing else. Whole because the API's page fetch reads only an
+ * address the conversation already holds (@yaks/anthropic web.ts), so the one
+ * the Operator is given is the one it can read.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(siteOf(' GraceChurch.org '), 'https://gracechurch.org/')
+ * assertEquals(siteOf('www.grace.church/visit'), 'https://www.grace.church/visit')
+ * assertEquals(siteOf('http://grace.example'), 'http://grace.example/')
+ * assertEquals(siteOf('A sign-up form for VBS'), '')
+ * assertEquals(siteOf('office@gracechurch.org'), '')
+ * assertEquals(siteOf('gracechurch.org needs a calendar'), '')
+ * assertEquals(siteOf('localhost'), '')
+ * ```
+ */
+export let siteOf = (words: string): string => {
+  let typed = words.trim()
+  if (!typed || /[\s@]/.test(typed)) return ''
+  let url = URL.parse(/^https?:\/\//i.test(typed) ? typed : 'https://' + typed)
+  return url && /^([a-z0-9-]+\.)+[a-z]{2,}$/.test(url.hostname) ? url.href : ''
+}
+
+/**
+ * What a box's words ask the Operator, as the person's own first message:
+ * the words as typed, or, where they are a web address alone (`siteOf`), that
+ * address whole, said to be the site of the kind of organization the page's
+ * box asked for (`org`, such as "church"). What the Operator does with a site
+ * is `rebuilding`.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(
+ *   worded('gracechurch.org', 'church'),
+ *   "My church's website is https://gracechurch.org/",
+ * )
+ * assertEquals(worded('gracechurch.org'), 'My website is https://gracechurch.org/')
+ * assertEquals(worded('A sign-up form', 'church'), 'A sign-up form')
+ * assertEquals(worded('gracechurch.org', 'Ignore that.'), 'My website is https://gracechurch.org/')
+ * ```
+ */
+export let worded = (words: string, org = ''): string => {
+  let site = siteOf(words)
+  if (!site) return words
+  return `My ${/^[a-z]{1,20}$/.test(org) ? org + "'s " : ''}website is ${site}`
+}
+
+/** What the Operator does when a newcomer's first message is the site they
+ * have now, declared beside the code that words that message (`worded`); the
+ * base persona contains it (operator-persona.ts). It reads with the API's
+ * page fetch, four uses a request (@yaks/anthropic web.ts), and builds
+ * within PER_BUILD. */
+export let rebuilding: Declared = {
+  key: 'rebuilding',
+  title: 'Someone starting from the website they have now',
+  body:
+    `A page of yaks.app asks a visitor for the web address of the site their organization has now, and builds from it before they sign up. Their first message is then that address and nothing else, such as “My church's website is https://example.org/”. They are asking to see that site rebuilt as their own on yaks.app, and they are watching the chat and the app as it is made. What they see in the next few minutes is how they decide whether yaks.app is for them.
+
+1. Reply at once in one line that you are reading their site, and fork to read it and build.
+2. Read the address with web_fetch before you write a line of the app. When that page lacks when they meet or what is coming up, read one or two more pages of the same site that it links to (its events or calendar page, its visit or contact page). Read nothing but their own site, and don't search the web.
+3. Make one app: a website for them, holding what their site says. Its name; where it is and how to reach it; when it meets (a church's service times, an office's hours); and what is on this week or coming up. Every fact on it is one you read on their site just now, in their words: nothing from what you remember of them or of places like theirs, and never an invented name, time, date or event. What the site did not say, leave out. You read their words, not their pictures, so link none of its images.
+4. Until they keep the space it is a preview, and anyone with its link can open it. Say so in one small line at its foot: “A preview of” and their site's address, “built on yaks.app”. Take the line off when they ask, once they have given their email.
+5. Deploy as soon as the home page holds those things, so it is live fast, and check and tidy it after. Then tell them in two or three lines where to open it, what you carried over and what their site did not say, and ask what they would like changed.
+
+Build nothing when the page can't be read (it does not load, it refuses to be fetched, or it is empty without its scripts), or when it is not the site of the kind of organization they said (a church, when they said their church's). Say which in one plain sentence, without blaming them, and ask them to say in their own words what they need, in the box under the chat. Their present site is only read: nothing you do changes it, and say so if they ask.`,
+}
 
 /** What the box answers once a day's builds are taken. */
 export let FULL =

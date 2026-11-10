@@ -703,6 +703,11 @@
     }
   }
 
+  /* A box that asks for one line, such as a web address. */
+  .Hello_Field-line {
+    min-height: 0;
+  }
+
   .Demo {
     display: grid;
     gap: var(--gap);

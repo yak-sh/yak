@@ -656,13 +656,14 @@ test('every public page hands a stranger sign-in, never /connect', () => {
 })
 
 // Each page that asks for an idea posts it to be built, under the button its
-// hero names.
+// hero names. The churches page asks for the web address of the site a church
+// has now, in one line, and says whose site its box asks for.
 test("a home page's box posts an idea to be built", () => {
   for (
-    let [name, button] of [
-      ['index.html', 'Build it'],
-      ['build.html', 'Build it'],
-      ['churches.html', 'Build it free'],
+    let [name, button, field, org] of [
+      ['index.html', 'Build it', 'textarea'],
+      ['build.html', 'Build it', 'textarea'],
+      ['churches.html', 'Build my site free', 'input', 'church'],
     ]
   ) {
     let box = parsed(name).querySelector('form.Hello_Ask')!
@@ -672,8 +673,13 @@ test("a home page's box posts an idea to be built", () => {
       name,
     )
     assertEquals(
-      box.querySelector('textarea[name="say"][required]')?.id,
+      box.querySelector(`${field}[name="say"][required]`)?.id,
       'say',
+      name,
+    )
+    assertEquals(
+      box.querySelector('input[name="org"]')?.getAttribute('value'),
+      org,
       name,
     )
     assertEquals(
@@ -712,6 +718,7 @@ test("each home page's heading asks for what its box takes", () => {
     let name of [
       'index.html',
       'build.html',
+      'churches.html',
       'operator.html',
       'operator-email.html',
     ]
