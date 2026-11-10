@@ -240,11 +240,37 @@ export let elapsed = async <T>(
   try {
     return await waiting(name, work)
   } finally {
-    let now = Date.now()
-    hop(name, now - at, tally)
-    let begun = tally && since(tally)
-    if (tally && begun != null) {
-      spans.get(tally)?.push([name, at - (now - begun), now - at, what])
-    }
+    hop(name, Date.now() - at, tally)
+    trace(tally, name, at, what)
+  }
+}
+
+/** `work`, traced as `name` where the request is (`traced`) but summed
+ * nowhere: a stretch that is part of a wait already counted, such as reading
+ * the body of an answer whose headers ended its round trip. */
+export let spanned = async <T>(
+  name: string,
+  work: () => Promise<T>,
+  what?: string,
+): Promise<T> => {
+  let tally = here.getStore()
+  let at = Date.now()
+  try {
+    return await work()
+  } finally {
+    trace(tally, name, at, what)
+  }
+}
+
+let trace = (tally: Tally | undefined, name: string, at: number, what = '') => {
+  let now = Date.now()
+  let begun = tally && since(tally)
+  if (tally && begun != null) {
+    spans.get(tally)?.push([
+      name,
+      at - (now - begun),
+      now - at,
+      what || undefined,
+    ])
   }
 }

@@ -8,7 +8,7 @@ import { cookieValue } from './lib/token.ts'
 import { type Fetcher, reset } from './door.ts'
 import type { Env } from './env.ts'
 import { background, defect } from './defects.ts'
-import { apart, elapsed } from './lib/hops.ts'
+import { apart, elapsed, spanned } from './lib/hops.ts'
 import { evicted, jittered, opaque, retried } from '@yaks/durable-object/resets'
 import { type Clock, system } from '@yaks/fp'
 import { setImmediate } from 'node:timers'
@@ -171,11 +171,12 @@ let remembered = (
 // request's tally as `copy_wait` (timing.ts). A fill behind an answer runs
 // apart from it (hops.ts `apart`): the request never waits on it.
 let timedCopy = (copy: ServingCopyDoor): ServingCopyDoor => {
-  let timed = <T>(call: () => Promise<T>) => elapsed('copy_wait', call)
+  let timed = <T>(call: () => Promise<T>, what?: string) =>
+    elapsed('copy_wait', call, what?.slice(0, 120))
   let { read, valid, publish, publishes, revision, settle } = copy
   return {
-    ...read && { read: (key) => timed(() => copy.read!(key)) },
-    ...valid && { valid: (at) => timed(() => copy.valid!(at)) },
+    ...read && { read: (key) => timed(() => copy.read!(key), `read ${key}`) },
+    ...valid && { valid: (at) => timed(() => copy.valid!(at), `valid ${at}`) },
     ...publish && {
       publish: (at, key, body) => timed(() => copy.publish!(at, key, body)),
     },
@@ -369,7 +370,11 @@ export let gathered = (via: Fetcher): Fetcher => {
         for (let { answer } of asked) answer(new Response(body, r))
         return
       }
-      let answers = await r.json() as ReadAnswer[]
+      let answers = await spanned(
+        'body',
+        () => r.json() as Promise<ReadAnswer[]>,
+        `reads of ${asked.length}`,
+      )
       asked.forEach(({ answer }, n) => {
         let { status, epoch, body } = answers[n]
         answer(
@@ -656,7 +661,7 @@ export let signedDirectory = (
           // answer it was sending as well as the call it was taking.
           try {
             answer = await reads.fetch(new Request(req, { headers }))
-            body = await answer.text()
+            body = await spanned('body', () => answer.text(), key.slice(0, 120))
           } catch (e) {
             await fallback()
             return `the directory did not answer: ${said(e)}`
