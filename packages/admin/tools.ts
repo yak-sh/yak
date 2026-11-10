@@ -363,7 +363,9 @@ export let runs = (
 
     // The server answers support threads only to the account's seat in yak.
     // A fix named by its handle here (T-153200) is this graph's entity, so
-    // it is resolved here and sent as its eid.
+    // it is resolved here and sent as its eid, with what the person's page
+    // shows of it, since the platform cannot read this graph: a commit's
+    // message (its eid is its sha) or another entity's title.
     admin_support: verb(async (call, _vault, _keep, graph) => {
       let a = argsOf(call)
       let thread = word(a, 'thread')
@@ -385,11 +387,14 @@ export let runs = (
       let fix = named
         ? (await graph.address([named])).get(named) ?? named
         : undefined
+      let [row] = fix ? await graph.get([fix]) : []
       let t = text || reply_to || fix || complete
         ? await supportAnswer(at.bearer, thread, {
           text,
           reply_to,
           fix,
+          fix_message: word((row?.commit ?? {}) as Comp, 'message'),
+          fix_title: word((row?.doc ?? {}) as Comp, 'title'),
           complete,
         })
         : await supportNow(at.bearer, thread)

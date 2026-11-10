@@ -6,6 +6,10 @@
  * host.ts `apex`); the product is always called this. */
 export let PLATFORM = 'yaks.app'
 
+/** The public repository the platform is built from (M-37867), whose web
+ * pages a commit links into as `${REPO}/commit/<sha>`. */
+export let REPO = 'https://github.com/yak-sh/yak'
+
 /** A space's or an app's slug. */
 export let SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
 

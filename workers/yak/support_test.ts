@@ -143,10 +143,10 @@ test('the same call opens the same thread and owes the same letter', () => {
 })
 
 test("the platform's answer is a message without support, a fix edge and a mark", () => {
-  let [message, edge, done] = answering('t', {
+  let [message, edge, kept, done] = answering('t', {
     words: 'Fixed.',
     reply_to: 'm',
-    fix: 'f',
+    fix: { eid: 'f', title: 'Wrap the board' },
     complete: true,
   }, 'a')
   equal(message, {
@@ -155,6 +155,7 @@ test("the platform's answer is a message without support, a fix edge and a mark"
     doc: { body: 'Fixed.' },
   })
   equal([edge.edge, edge.about], [{ from: 'a', to: 'f' }, {}])
+  equal(kept, { entity: { eid: 'f' }, doc: { title: 'Wrap the board' } })
   equal(done, { entity: { eid: 't' }, completed: {} })
   equal(answering('t', { complete: true }, 'a'), [done])
   equal(answering('t', {}, 'a'), [])
@@ -397,6 +398,50 @@ test('an answer on a thread said in no space reaches the Updates of their own sp
   ok(await linked(own.space.slug), 'their own Updates link the thread')
   ok(!await linked(me.slug), 'their other space hears nothing')
   assertStringIncludes(await carried(me.agent, 'about'), reply)
+})
+
+test('a fix that is a commit links to it in the public repository, and any other fix is its title', async () => {
+  let me = await helped()
+  let { thread } =
+    (await feedback(me.agent, { app: 'board', text: 'Dates are wrong.' }))
+      .value
+  let sha = '82e93df529d08088f62fcb6997f6174fbc3353fa'
+  let task = crypto.randomUUID(), bare = crypto.randomUUID()
+  let answers: Record<string, string>[] = [
+    { fix: sha, fix_message: 'T-1 Dates read in your zone\n\nWhy.' },
+    { fix: task, fix_title: 'Dates read in your zone' },
+    { fix: bare },
+  ]
+  for (let fields of answers) {
+    equal((await support({ thread, ...fields })).status, 200)
+  }
+  await k.settled()
+  let fixes = [
+    ...(await opened(`/support/${thread}`, me.cookie)).document
+      .querySelectorAll('.Support_Fix'),
+  ].map((p) => {
+    let a = p.querySelector('a')
+    return [p.textContent, a?.getAttribute('href') ?? null]
+  })
+  equal(fixes, [
+    [
+      'Fix: T-1 Dates read in your zone',
+      `https://github.com/yak-sh/yak/commit/${sha}`,
+    ],
+    ['Fix: Dates read in your zone', null],
+    [`Fix: ${bare}`, null],
+  ])
+  let updates = await opened(managePath('updates', me.slug), me.cookie)
+  ok(
+    [...updates.document.querySelectorAll('a')].some((a) =>
+      a.getAttribute('href')?.endsWith(`/commit/${sha}`)
+    ),
+    'their Updates link the commit',
+  )
+  assertStringIncludes(
+    await carried(me.agent, 'about'),
+    `T-1 Dates read in your zone (https://github.com/yak-sh/yak/commit/${sha})`,
+  )
 })
 
 test('the person adds to a thread from its page, as the tool does', async () => {

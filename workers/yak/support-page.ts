@@ -20,8 +20,10 @@ import { markdown } from './operator-draw.ts'
 import {
   adding,
   asking,
+  type Fix,
   lately,
   type Message,
+  named,
   opens,
   read,
   SAYS,
@@ -47,6 +49,14 @@ let speaker = (m: Pick<Message, 'from' | 'person'>, me: string) =>
     ? 'You'
     : 'Someone in its space'
 
+// A fix as the person reads it: a commit links to its page in the public
+// repository, by its title; anything else is its title alone, and a fix
+// with nothing kept of it its id (support.ts `fixOf`).
+let fixed = (f: Fix) =>
+  f.href
+    ? h('a', { href: f.href }, named(f))
+    : f.title ?? h('code', null, f.eid)
+
 // One message: who said it and when, its words, and the fix it links.
 let message = (
   m: Pick<Message, 'from' | 'person' | 'at' | 'words' | 'fixes'>,
@@ -67,7 +77,7 @@ let message = (
         'p',
         { class: 'Support_Fix' },
         'Fix: ',
-        m.fixes.map((f, i) => [i ? ', ' : '', h('code', null, f)]),
+        m.fixes.map((f, i) => [i ? ', ' : '', fixed(f)]),
       )
       : null,
   )

@@ -176,6 +176,9 @@ test('support lists waiting threads and answers one, its fix named by this graph
       entity: { eid: '$fix' },
       doc: { title: 'Wrap the board' },
       alias: { name: 'fix:wrap' },
+    }, {
+      entity: { eid: 'abc123' },
+      commit: { message: 'T-1 Wrap the board\n\nWhy.' },
     }])
     let asked: (string | null)[] = []
     let thread = { eid: 't1', title: 'It scrolls', link: 'L', text: 'T' }
@@ -193,6 +196,7 @@ test('support lists waiting threads and answers one, its fix named by this graph
         fix: 'fix:wrap',
         complete: true,
       })
+      await ask('admin_support', { thread: 't1', fix: 'abc123' })
       await assertRejects(
         () => ask('admin_support', { text: 'To whom?' }),
         CallError,
@@ -201,7 +205,8 @@ test('support lists waiting threads and answers one, its fix named by this graph
     equal(asked, [
       '',
       '?thread=t1',
-      `thread=t1&text=Wrapped.&fix=${fix.entity.eid}&complete=true`,
+      `thread=t1&text=Wrapped.&fix=${fix.entity.eid}&fix_title=Wrap+the+board&complete=true`,
+      'thread=t1&fix=abc123&fix_message=T-1+Wrap+the+board%0A%0AWhy.',
     ])
   } finally {
     await host.close()

@@ -77,7 +77,16 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   await answer(
     store,
     eid,
-    { words, reply_to, fix, complete },
+    {
+      words,
+      reply_to,
+      // What the box's graph holds of the fix, which this store cannot read:
+      // a commit's message, or another entity's title (support.ts `Fixing`).
+      fix: fix
+        ? { eid: fix, message: said('fix_message'), title: said('fix_title') }
+        : null,
+      complete,
+    },
     vouched({
       person: who.person,
       role: 'owner',

@@ -311,7 +311,9 @@ export let supportNow = (
   said(sent(apex(`${SUPPORT}?thread=${encodeURIComponent(thread)}`), session))
 
 /** The platform's answer in a thread: its words, the message it answers, the
- * fix it links and whether the thread is done. Answers the thread after. */
+ * fix it links with what this graph holds of it (a commit's message, or
+ * another entity's title, which the platform keeps for the thread's page),
+ * and whether the thread is done. Answers the thread after. */
 export let supportAnswer = (
   session: string,
   thread: string,
@@ -319,6 +321,8 @@ export let supportAnswer = (
     text?: string
     reply_to?: string
     fix?: string
+    fix_message?: string
+    fix_title?: string
     complete?: boolean
   },
 ): Promise<SupportThread> =>
@@ -329,6 +333,8 @@ export let supportAnswer = (
       ...answer.text ? { text: answer.text } : {},
       ...answer.reply_to ? { reply_to: answer.reply_to } : {},
       ...answer.fix ? { fix: answer.fix } : {},
+      ...answer.fix_message ? { fix_message: answer.fix_message } : {},
+      ...answer.fix_title ? { fix_title: answer.fix_title } : {},
       ...answer.complete ? { complete: 'true' } : {},
     },
     session,

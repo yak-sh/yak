@@ -26,6 +26,7 @@ import { CONNECTOR } from './seo.ts'
 import { AGENT } from './docs.ts'
 import { destination, type Preview } from './link-preview.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
+import { REPO as PUBLIC } from '@yaks/platform/names'
 
 import {
   about,
@@ -623,8 +624,9 @@ let oauthHelp = (env: Host) => [
 // This repository is itself a plugin marketplace (T-34666): `.agents/plugins/
 // marketplace.json` offers `plugins/yaks.app/`, whose `.mcp.json` names the
 // same MCP address every other door on this page hands out. So the shorthand
-// is a third route to the same server, not a different product.
-let REPO = 'yak-sh/yak'
+// is a third route to the same server, not a different product, named as
+// the marketplace field reads it: `owner/name`.
+let REPO = new URL(PUBLIC).pathname.slice(1)
 
 // Claude's Add custom connector dialog, opened with the name and URL filled in
 // (claude.com/docs/connectors/building/directory-vs-custom).

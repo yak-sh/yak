@@ -7,8 +7,12 @@
 // is and the run it came from, as the caller's credential said. Every later
 // message is a comment{target, reply_to} on it with its words in doc{body}. A
 // message from the thread's side wears support{} too; one without it is the
-// platform's answer, which may link the fix it names by an about edge. An
-// explicit outcome is completed{at, by, via} on the thread.
+// platform's answer, which may link the fix it names by an about edge. The
+// fix is an entity in the box's graph, which this store cannot read, so the
+// answer keeps beside the edge, at the fix's own eid, what a person reads of
+// it as the box said it: commit{message} for a commit, whose eid is its sha,
+// and doc{title} for anything else. An explicit outcome is
+// completed{at, by, via} on the thread.
 //
 // Each message from the thread's side owes TaskMaster a letter, written in
 // the same batch as the words: @yaks/mail's mail_post sends it after the write
@@ -31,6 +35,7 @@ import { KERNEL, type Meta } from './meta.ts'
 import { toPlatform } from './mail-config.ts'
 import { type Host, url as hostUrl } from './host.ts'
 import { isTestAddress } from '@yaks/platform/bots'
+import { REPO } from '@yaks/platform/names'
 import type { Directory } from './directory.ts'
 import { admin } from './tool.ts'
 import { caught } from './defects.ts'
@@ -72,8 +77,13 @@ export type Message = {
   person: string | null
   session: string | null
   call: string | null
-  fixes: string[]
+  fixes: Fix[]
 }
+
+/** A fix one answer links, as a person reads it: its title, and the page of
+ * the commit in the public repository where it is a commit. A fix linked with
+ * nothing kept of it has no title, and is said by its id. */
+export type Fix = { eid: string; title: string | null; href: string | null }
 
 /** A thread as read: its opening words and context, every message after them
  * oldest first, and its outcome. */
@@ -199,14 +209,48 @@ export let saying = (
   ]
 }
 
+/** The fix an answer links, as the box's graph holds it: a commit's whole
+ * message, or any other entity's title. */
+export type Fixing = {
+  eid: string
+  message?: string | null
+  title?: string | null
+}
+
 /** What the platform answers: its words, the message it answers, the fix it
  * names and whether the thread is done. */
 export type Answer = {
   words?: string
   reply_to?: string | null
-  fix?: string | null
+  fix?: Fixing | null
   complete?: boolean
 }
+
+/// subject('T-1 Wrap the board\n\nAnd why.') -> 'T-1 Wrap the board'
+/** A commit's title: the first line of its message. */
+export let subject = (message: string) => message.trim().split('\n')[0]
+
+/** A fix as a person reads it, out of its row in this store, if one is
+ * kept. */
+export let fixOf = (eid: string, row: Bundle = { entity: { eid } }): Fix => {
+  let message = str(comp(row, 'commit').message)
+  return {
+    eid,
+    title: message != null ? subject(message) : str(comp(row, 'doc').title),
+    href: row.commit ? `${REPO}/commit/${eid}` : null,
+  }
+}
+
+/// named({ eid: 'f', title: 'Wrap', href: null }) -> 'Wrap'
+/// named({ eid: 'f', title: null, href: null }) -> 'f'
+/** A fix in words: its title, or its id where nothing is kept of it. */
+export let named = (f: Fix) => f.title ?? f.eid
+
+/** A fix in words with where it is read, for a reader with no links. */
+export let spelled = (f: Fix) => f.href ? `${named(f)} (${f.href})` : named(f)
+
+/** A fix in Markdown: its title, linked to its commit. */
+export let marked = (f: Fix) => f.href ? `[${named(f)}](${f.href})` : named(f)
 
 /** The rows of the platform's answer, `eid` the message's: a message
  * without support{}, an about edge from it to the fix, and the thread's
@@ -216,31 +260,42 @@ export let answering = (
   a: Answer,
   eid: string = mint(),
 ): Bundle[] => {
-  let words = a.words?.trim() ?? ''
+  let words = a.words?.trim() ?? '', fix = a.fix
+  let kept: Bundle | undefined = !fix
+    ? undefined
+    : fix.message
+    ? { entity: { eid: fix.eid }, commit: { message: fix.message } }
+    : fix.title
+    ? { entity: { eid: fix.eid }, doc: { title: fix.title } }
+    : undefined
   return [
-    ...words || a.fix
+    ...words || fix
       ? [{
         entity: { eid },
         comment: { target: thread, reply_to: a.reply_to ?? null },
-        doc: { body: words || `Fixed: ${a.fix}` },
+        doc: { body: words || `Fixed: ${named(fixOf(fix!.eid, kept))}` },
       }]
       : [],
-    ...a.fix ? [linked(eid, 'about', a.fix)] : [],
+    ...fix ? [linked(eid, 'about', fix.eid)] : [],
+    ...kept ? [kept] : [],
     ...a.complete ? [{ entity: { eid: thread }, completed: {} }] : [],
   ]
 }
 
-/** A thread and its messages as rows read them. */
+/** A thread and its messages as rows read them, with the about edges from
+ * its messages and the rows kept of their fixes. */
 export let threadOf = (
   row: Bundle,
   messages: Bundle[],
   edges: Bundle[],
+  kept: Bundle[] = [],
 ): Thread => {
   let doc = comp(row, 'doc'), report = comp(row, 'report')
   let support = comp(row, 'support'), done = row.completed as Row | undefined
   let fixes = (eid: string) =>
     edges.filter((e) => ref(comp(e, 'edge').from) == eid)
       .flatMap((e) => ref(comp(e, 'edge').to) ?? [])
+      .map((to) => fixOf(to, kept.find((k) => k.entity.eid == to)))
   return {
     eid: row.entity.eid,
     title: str(doc.title) ?? '',
@@ -315,7 +370,11 @@ export let read = async (
       `.about&.edge.from=${messages.map((m) => m.entity.eid).join(',')}`,
     )
     : []
-  return threadOf(row, messages, edges)
+  let to = [...new Set(edges.flatMap((e) => ref(comp(e, 'edge').to) ?? []))]
+  let kept = to.length
+    ? await store.query(`.entity.eid=${to.join(',')}&?commit&?doc`)
+    : []
+  return threadOf(row, messages, edges, kept)
 }
 
 /** The threads the platform has not completed, newest first. */
@@ -390,7 +449,12 @@ export let transcript = (
     `${who({ from: 'person', person: t.person })}${when(t.at)}: ${t.words}`,
     ...t.messages.map((m) =>
       `${who(m)}${when(m.at)}${id(m.eid)}: ${m.words}` +
-      (m.fixes.length ? `\n  fix: ${m.fixes.join(', ')}` : '')
+      (m.fixes.length
+        ? `\n  fix: ${
+          m.fixes.map((f) => ids ? `${spelled(f)} [${f.eid}]` : spelled(f))
+            .join(', ')
+        }`
+        : '')
     ),
     t.completed
       ? `Completed${when(t.completed.at)}.`
@@ -427,7 +491,7 @@ export let valueOf = (t: Thread, env: Host) => ({
     words: m.words,
     at: m.at,
     reply_to: m.reply_to,
-    fixes: m.fixes,
+    fixes: m.fixes.map((f) => f.eid),
   })),
 })
 
@@ -439,7 +503,7 @@ export let noted = (t: Thread, m: Message | undefined, env: Host): string =>
     m
       ? `TaskMaster answered for yaks.app in the support thread “${t.title}” (thread ${t.eid}), opened with feedback: ${m.words}`
       : `TaskMaster marked the support thread “${t.title}” (thread ${t.eid}) completed.`,
-    ...m?.fixes.length ? [`Fix: ${m.fixes.join(', ')}.`] : [],
+    ...m?.fixes.length ? [`Fix: ${m.fixes.map(spelled).join(', ')}.`] : [],
     ...m ? [t.completed ? 'It is marked completed.' : 'It is still open.'] : [],
     `Read the whole thread with feedback(thread: '${t.eid}'), or at ${
       link(env, t.eid)
@@ -454,6 +518,7 @@ export let told = (t: Thread, m: Message | undefined, env: Host): string =>
       ? `yaks.app answered your feedback “${t.title}”: ${m.words}`
       : `yaks.app marked your feedback “${t.title}” done.`,
     [
+      ...m?.fixes.length ? [`Fix: ${m.fixes.map(marked).join(', ')}.`] : [],
       ...m && t.completed ? ['It is marked done.'] : [],
       `[Read the thread](${link(env, t.eid)})`,
     ].join(' '),
