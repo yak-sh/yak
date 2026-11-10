@@ -24,6 +24,8 @@ let space = (await dir.at(
   }),
 ))!
 let persona = personaFor(space.eid)
+// The name it is asked to take: never the one the space was given.
+let renamed = space.operator == 'Hazel' ? 'Wren' : 'Hazel'
 let store = operatorMemory()
 let asked: Request[] = []
 let say = (text: string): Item[] => [{ kind: 'assistant', text }]
@@ -31,9 +33,11 @@ let say = (text: string): Item[] => [{ kind: 'assistant', text }]
 // its persona, as its instructions say.
 let script = (req: Request): Item[] => {
   let last = req.items.at(-1)!
-  if (last.kind == 'result') return say('I am Hazel now, speaking as Pandora.')
+  if (last.kind == 'result') {
+    return say(`I am ${renamed} now, speaking as Pandora.`)
+  }
   let text = last.kind == 'user' ? last.text : ''
-  return /Hazel/.test(text)
+  return text.includes(renamed)
     ? [{
       kind: 'call',
       id: crypto.randomUUID(),
@@ -42,7 +46,7 @@ let script = (req: Request): Item[] => {
         self: true,
         bundles: [{
           entity: { eid: persona },
-          operator: { name: 'Hazel', voice: 'aura-2-pandora-en' },
+          operator: { name: renamed, voice: 'aura-2-pandora-en' },
         }],
       }),
     }]
@@ -77,8 +81,7 @@ let texted = async (words: string) => {
   }, words)
   await drain(store)
 }
-let was = space.operator
-await texted('Call yourself Hazel, and speak in Pandora.')
+await texted(`Call yourself ${renamed}, and speak in Pandora.`)
 let [own] = await store.g.get([persona])
 
 test('asked, the Operator renames itself and changes its voice by writing its own persona', async () => {
@@ -89,18 +92,17 @@ test('asked, the Operator renames itself and changes its voice by writing its ow
     }`,
   )
   assertStringIncludes(String(asked[0].instructions), 'aura-2-pandora-en (')
-  assertEquals((own.operator as Comp).name, 'Hazel')
+  assertEquals((own.operator as Comp).name, renamed)
   assertEquals((own.operator as Comp).voice, 'aura-2-pandora-en')
-  assertEquals(sent.at(-1), 'I am Hazel now, speaking as Pandora.')
+  assertEquals(sent.at(-1), `I am ${renamed} now, speaking as Pandora.`)
   // The directory's copy of its name follows, for what reads it there.
-  assertEquals((await dir.at(space.eid))!.operator, 'Hazel')
-  assertEquals(was == 'Hazel', false)
+  assertEquals((await dir.at(space.eid))!.operator, renamed)
 })
 
 test('its page writes the same persona, as the person asked', async () => {
   assertEquals(
     await setting(store.g, space, owner, { voice_speed: 'brisk' }),
-    { name: 'Hazel', voice: 'aura-2-pandora-en', voice_speed: 'brisk' },
+    { name: renamed, voice: 'aura-2-pandora-en', voice_speed: 'brisk' },
   )
   let [row] = await store.g.get([persona])
   assertEquals((row.updated as Comp).by, owner)
