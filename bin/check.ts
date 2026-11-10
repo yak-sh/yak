@@ -13,6 +13,12 @@
 // (`check:types:all`), as main's CI does after the push: a change to a
 // package's exports has the compiler check most of the repository again,
 // close to a minute on the box.
+//
+// `check:fmt` and `check:lint` skip what .gitignore names, the Worker's build
+// outputs among them. Deno reads a directory holding `.git`, even an empty
+// one, as its own repository and applies no .gitignore from above it: when
+// either check reports generated files, look for a stray `.git`
+// (`find . -name .git -not -path './node_modules/*'`).
 import config from '../deno.json' with { type: 'json' }
 
 /** The checks, by their task names. */
