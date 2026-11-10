@@ -284,7 +284,12 @@ a declared `"@yaks/ui": "platform"` dependency ships beside the worker at
 `__packages/@yaks/ui/<Part>.css` (apps/crayonbloom/look/look.ts). A page script
 is found only through a static `.html` file that names it, so a screen drawn in
 the browser keeps one. `app_preview` returns a screenshot of a pushed app's
-page, which is how a look is checked without a browser on the box.
+page, which is how a look is checked without a browser on the box: push a copy
+to the `checks` space, then
+`yak command app_preview --as checks --space checks --app <copy> --path <page> --json`,
+whose JSON carries the PNG in base64 (the plain output leaves the image out).
+The preview's sandbox answers no app door, so a screen that reads its rows
+through one shows empty there.
 
 ## Looking at it
 
