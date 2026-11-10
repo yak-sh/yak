@@ -109,6 +109,46 @@ test('a common needle, a short one, and an index still filling answer as a read 
   }
 })
 
+test('a needle more texts hold the trigrams of tests only those texts', () => {
+  // Each decoy holds every trigram of "on the hoard" but not the phrase.
+  let decoys = FEW_TEXTS + 100, plain = 6_000
+  let db = new Database(':memory:'), d = driver(db)
+  let store = storage(d, vocab)
+  store.install()
+  store.raise()
+  let texts = [
+    'a wyrm sat on the hoard',
+    ...Array.from({ length: decoys }, (_, i) => `${i}: on the end; he hoard`),
+    ...Array.from({ length: plain }, (_, i) => `Dragon ${i}`),
+  ]
+  let ids = texts.map((_, n) => n + 1)
+  d.query(insert('entity', ...ids.map((i) => ({ id: i, eid: `n${i}` }))))
+  d.query(
+    insert('note', ...ids.map((i) => ({ entity: i, text: texts[i - 1] }))),
+  )
+  adopt(d, fields)
+  let tested = 0
+  db.function('like', (pattern: string, value: string, _escape: string) => {
+    tested++
+    let needle = pattern.slice(1, -1).replace(/\\(.)/g, '$1')
+    return Number(value.toLowerCase().includes(needle.toLowerCase()))
+  })
+  let read = (filling: boolean) => {
+    tested = 0
+    let ext = search(fields, d, {
+      pending: () => filling ? {} as never : undefined,
+    })
+    let q = parse('.note.text~="on the hoard" .limit=5')
+    let s = render(compile(q, vocab, { extend: [ext] }))
+    let eids = db.prepare(s.sql).all(...s.params).map((r) => String(r.eid))
+    return { eids, tested }
+  }
+  equal(read(true), { eids: ['n1'], tested: texts.length })
+  let { eids, tested: n } = read(false)
+  equal(eids, ['n1'])
+  ok(n <= decoys + 1, `${n} texts tested`)
+})
+
 test('the index follows writes', () => {
   d.query({
     t: 'update',
@@ -148,6 +188,7 @@ let long = () => {
   let reads = (needle: string) => {
     ext.begin?.({} as never, { kind: 'and', clauses: [] })
     let { owners } = ext.contains!('note', 'text', needle)!
+    if (!owners) throw new Error('no owners')
     return db.query(owners).map((r) => Number(Object.values(r)[0])).sort()
   }
   return { db, reads }

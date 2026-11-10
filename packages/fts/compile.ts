@@ -342,12 +342,10 @@ export let search = (
         })
       // An index this file does not hold yet (its writer has not opened it
       // with this vocabulary), or holds while still filling it, finds too
-      // few: the read goes in its own order, and, answered rather than
-      // declined, is built again next time rather than kept (@yaks/sql
-      // kept.ts).
-      if (!db || !stands(fts) || fill?.pending(fts)) {
-        return { owners, few: false }
-      }
+      // few: the read goes in its own order and tests every text, and,
+      // answered rather than declined, is built again next time rather than
+      // kept (@yaks/sql kept.ts).
+      if (!db || !stands(fts) || fill?.pending(fts)) return { few: false }
       let key = `${fts}\0${m}`
       let known = found.get(key)
       if (known) return known

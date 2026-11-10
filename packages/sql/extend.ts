@@ -129,15 +129,19 @@ export type Ranks = (q: And) => string | null
 // What a substring index finds for a `~=` test of `comp.prop`: the owners
 // whose text may hold `needle` (every one that does, and perhaps some that
 // don't, so the test still reads each), and whether they are few enough that a
-// read is driven from them rather than from its own order. Null declines: no
-// index covers the property, or the needle is too short for it. @yaks/fts
-// answers from its trigram indexes; the binder keeps the test either way, so
-// what it answers changes only how a read is planned.
+// read is driven from them rather than from its own order. A read in its own
+// order still reads the text of only those owners. No owners: the index covers
+// the property but cannot name them yet (it is still being filled, or this
+// file does not hold it), so the read goes in its own order and tests every
+// text. Null declines: no index covers the property, or the needle is too
+// short for it. @yaks/fts answers from its trigram indexes; the binder keeps
+// the test either way, so what it answers changes only how a read is planned.
 export type Contains = (
   comp: string,
   prop: string,
   needle: string,
-) => { owners: Query; few: boolean } | null
+) => Found | null
+export type Found = { owners?: Query; few: boolean }
 
 // A named contribution: which clause kinds it claims, how each of them
 // compiles, and optionally how it writes an ORDER BY, which order a window

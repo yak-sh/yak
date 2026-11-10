@@ -101,9 +101,11 @@ needle nothing holds reads only the owed texts. Beside a shape the archetype
 index would select by (`.entry !result`), those rows are the candidates, sought
 by key and their shape tested, not picked out of every owner of the shape. A
 needle more rows hold reads in its own order and stops at its page, as it does
-without an index, and so does a needle shorter than three characters and a test
-while `fill` says the index is still being filled. Bare words never read a
-substring index (`worded(fields)`).
+without an index, but tests only the texts the index found: a phrase of common
+words has its trigrams in many texts and its substring in few, and testing every
+text for it read them all. A needle shorter than three characters, and a test
+while `fill` says the index is still being filled, test every text. Bare words
+never read a substring index (`worded(fields)`).
 
 ## The four pieces
 

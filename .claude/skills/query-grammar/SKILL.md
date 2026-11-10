@@ -45,6 +45,12 @@ filter. A malformed clause throws rather than becoming a search term.
 | `.p<v` `.p<=v` `.p>v` `.p>=v`  | comparisons                                            |
 | `word`, `"two words"`, `lemo*` | full-text terms (see `search-and-embeddings`)          |
 
+- To find what someone said about something, use the `search` tool with the
+  words: it ranks memories, comments and transcript entries by words and
+  meaning in about 0.5 s, and its hits name their session. `memory_source`
+  finds the earliest place a named person wrote words verbatim. A query of
+  `.content.body~=<phrase> .entry` reads transcript text until it fills its
+  page: use it for an exact substring words cannot match (an id, a path).
 - Whitespace, `&` and `,` between terms all mean AND; `&` survives a URL.
   `|` is OR and binds looser: `.a .b|.c` is `(a and b) or c`; parentheses
   group. Inside a value `,` means any-of, and a list has no spaces.

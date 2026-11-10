@@ -36,7 +36,8 @@ another.
 - **Substrings:** `~=` matches a substring, which no word index finds. A
   property marked `contains: true` (`content.body`) keeps an FTS5 trigram index
   (@yaks/fts "Substring indexes"); a needle it finds in at most 4,000 rows reads
-  only those, and a commoner one reads in order and stops at its page.
+  only those, and a commoner one reads in order and stops at its page, testing
+  only the rows the index found.
 - **Meaning:** `.near=<entity>` ranks entities by cosine similarity of stored
   vectors to that entity's vector, among whatever the rest of the query admits;
   `.order=similar` orders by it (packages/embedding/README.md, "How `.near`

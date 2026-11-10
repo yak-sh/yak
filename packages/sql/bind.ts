@@ -139,6 +139,7 @@ import {
 import {
   claimed,
   type Extension,
+  type Found,
   type Screen,
   type Selection,
   type Site,
@@ -998,20 +999,38 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   // owner's component is probed by its key, never read whole beside them.
   // Another stored filter can still admit the whole history (a date bound
   // among them). Only known owners skip the substring index's candidates.
-  let few = keyed ? undefined : gram(ctx, p)
-  if (few) {
+  let found = keyed ? undefined : grams(ctx, p)
+  let owners = found?.owners
+  if (owners && found?.few) {
     return and(
-      among(raw(ctx.d.ownerKey('entity')), few),
+      among(raw(ctx.d.ownerKey('entity')), owners),
       probed(ctx, hop.comp),
       cond(frag),
     )
   }
+  // More owners than that read in the read's own order, which stops at its
+  // page, but only theirs have their text read: a phrase of common words
+  // ("explorations on the way") has its trigrams in 10,353 of the box's
+  // 793,000 transcripts and its substring in 12, and testing every entry for
+  // it read them all, past 10 s. Listing even 464,000 owners takes about
+  // 0.1 s. `+` keeps them from driving the read, and one `case` tests them
+  // before the text: SQLite tests a term holding a subquery after every
+  // other, so as two terms the text would be tested first.
+  let text = owners
+    ? when(
+      [[among(raw(`+${ctx.d.ownerKey('entity')}`), owners), cond(frag)]],
+      lit(0),
+    )
+    : cond(frag)
   // A derived expression is opaque to SQLite's outer-join strength reduction.
   // Name its owning set explicitly; a CASE guard cannot make it seek that set.
   if (ctx.derived[`${hop.comp}.${hop.prop}`]) {
-    return and(owned(ctx, hop.comp), cond(frag))
+    return and(owned(ctx, hop.comp), text)
   }
   let owner = ctx.d.col(hop.comp, 'eid', ctx.v)!
+  if (owners) {
+    return and(cond({ sql: `${owner} is not null`, params: [] }), text)
+  }
   return cond({
     sql: `(${owner} is not null and ${frag.sql})`,
     params: frag.params,
@@ -3682,9 +3701,10 @@ let binding = (s: Select, ctx: Ctx): Select =>
     ? { ...s, with: [...tagged(ctx.tags, ctx.tagged), ...s.with ?? []] }
     : s
 
-// The owners a substring index finds for a `~=` test of one stored property,
-// when they are few (an extension's `contains`), else undefined.
-let gram = (ctx: Ctx, p: Pred): Query | undefined => {
+// What a substring index finds for a `~=` test of one stored property (an
+// extension's `contains`): the owners whose text may hold the needle, and
+// whether they are few enough to drive a read.
+let grams = (ctx: Ctx, p: Pred): Found | undefined => {
   if (
     p.path.length != 2 || opOf(p) != '~' || !needs('~', p.value) ||
     p.path[0] == 'entity' || computed(ctx.v, p.path[0])
@@ -3692,8 +3712,15 @@ let gram = (ctx: Ctx, p: Pred): Query | undefined => {
   let needle = flat(p.value)
   for (let e of ctx.ext) {
     let found = e.contains?.(p.path[0], p.path[1], needle)
-    if (found) return found.few ? found.owners : undefined
+    if (found) return found
   }
+}
+
+// The owners a substring index finds for a `~=` test, when they are few
+// enough to drive a read, else undefined.
+let gram = (ctx: Ctx, p: Pred): Query | undefined => {
+  let found = grams(ctx, p)
+  return found?.few ? found.owners : undefined
 }
 
 // Whether an index can seek a test: an equality or a comparison of an indexed
