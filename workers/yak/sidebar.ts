@@ -136,19 +136,19 @@ export let Sidebar = (at: Sidebar) =>
     },
     h(
       'div',
-      { class: 'Sidebar_Top' },
-      h(
-        'a',
-        { class: 'Sidebar_Brand', href: at.home },
-        h(Idle, { base: at.base, size: 36 }),
-        worded('yaks.app'),
-      ),
-      at.fold ? fold(at.fold) : null,
-      h(Button, { class: 'Sidebar_Close', href: '#' }, '✕ Close'),
-    ),
-    h(
-      'div',
       { class: 'Sidebar_Scroll' },
+      h(
+        'div',
+        { class: 'Sidebar_Top' },
+        h(
+          'a',
+          { class: 'Sidebar_Brand', href: at.home },
+          h(Idle, { base: at.base, size: 36 }),
+          worded('yaks.app'),
+        ),
+        at.fold ? fold(at.fold) : null,
+        h(Button, { class: 'Sidebar_Close', href: '#' }, '✕ Close'),
+      ),
       at.back
         ? h(
           Button,
@@ -173,13 +173,13 @@ export let Sidebar = (at: Sidebar) =>
         ? h('div', { class: 'Sidebar_Whose' }, choice(...at.picker))
         : null,
       at.sections.map((s) => section(s, !!at.fold?.collapsed)),
+      at.footer?.length
+        ? h(
+          'div',
+          { class: 'Sidebar_Foot' },
+          h(SideNav.Rule, { class: 'Sidebar_Rule' }),
+          at.footer.map((s) => section(s, !!at.fold?.collapsed)),
+        )
+        : null,
     ),
-    at.footer?.length
-      ? h(
-        'div',
-        { class: 'Sidebar_Foot' },
-        h(SideNav.Rule, { class: 'Sidebar_Rule' }),
-        at.footer.map((s) => section(s, !!at.fold?.collapsed)),
-      )
-      : null,
   )

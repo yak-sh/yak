@@ -793,8 +793,7 @@
   /* The Operator's chat app (operator-page.ts `chatPage`): the product's
      side, and one conversation filling the page, read down a column with the
      box to write in held at the foot of the window. Each pane scrolls within
-     the window; the side holds its height, and what lies between its top and
-     Manage scrolls on its own when it is longer (`.Sidebar_Scroll`). */
+     the window; the whole sidebar scrolls together (`.Sidebar_Scroll`). */
   .Talk_Page {
     display: block;
     min-height: 0;
@@ -1713,6 +1712,7 @@
   }
   .Sidebar_Top {
     display: flex;
+    flex: none;
     align-items: center;
     justify-content: space-between;
     gap: .5rem;
@@ -1726,9 +1726,9 @@
     font-weight: 800;
     text-decoration: none;
   }
-  /* Leave the footer in view while the navigation scrolls. Keep paint room
-     past the edge so overflow cannot clip the active tab's cover of the
-     wandering pencil line. Equal padding keeps the links at the edge. */
+  /* The brand, navigation and footer scroll together. Keep paint room past
+     the edge so overflow cannot clip the active tab's cover of the wandering
+     pencil line. Equal padding keeps the links at the edge. */
   .Sidebar_Scroll {
     --reach: calc(var(--stroke) + 6px);
     --overlap: var(--reach);

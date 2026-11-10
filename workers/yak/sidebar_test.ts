@@ -56,12 +56,18 @@ for (let selected of items) {
   })
 }
 
-test('sidebar keeps account actions outside scrolling navigation', () => {
+test('sidebar scrolls the brand, navigation and account actions together', () => {
   let document = drawn('/first')
   let form = document.querySelector('form[action="/logout"]')!
   assertEquals(form.getAttribute('method'), 'post')
   assertEquals(form.querySelector('button')?.textContent, 'Sign out')
-  assertEquals(form.closest('.Sidebar_Scroll'), null)
+  let scroll = document.querySelector('.Sidebar_Scroll')!
+  assert(form.closest('.Sidebar_Scroll') === scroll)
+  for (
+    let item of document.querySelectorAll(
+      '.Sidebar_Brand, .Sidebar_Folder, .Sidebar_Close, .SideNav_Link',
+    )
+  ) assert(item.closest('.Sidebar_Scroll') === scroll)
   assert(document.querySelector('.Sidebar_Foot .SideNav_Rule'))
   assertEquals(document.querySelector('.Sidebar_Count')?.textContent, '2')
 })
