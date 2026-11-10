@@ -10,17 +10,30 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { executionComputed } from '@yaks/tools/state'
 import { start } from './document.ts'
 import { products } from './layout.ts'
+import { preparationRecovery } from './preparation-errors.ts'
 import { documentStatus, prepareCommand } from './preparation-service.ts'
 import type { ServicePorts, Who } from './service.ts'
 import manifest from './vocab.json' with { type: 'json' }
 
 for (
-  let error of [
-    new Error('Worker exceeded CPU time limit.'),
-    new CallError('access', 'Command access was revoked'),
+  let { label, error } of [
+    {
+      label: 'CPU exception',
+      error: new Error('Worker exceeded CPU time limit.'),
+    },
+    {
+      label: 'HTML exception',
+      error: new Error(
+        '<!doctype html><title>Upstream failure</title><p>Private diagnostics</p>',
+      ),
+    },
+    {
+      label: 'caller refusal',
+      error: new CallError('access', 'Command access was revoked'),
+    },
   ]
 ) {
-  test(`native ${error.name} stops its preparation and preserves the same resumable job`, async () => {
+  test(`native ${label} stops its preparation and preserves the same resumable job`, async () => {
     let definitions = Object.fromEntries(
       Object.entries(manifest.$defs).filter(([name]) =>
         name.startsWith('print_preparation') || name === 'print_document'
@@ -92,7 +105,17 @@ for (
     let ports = { store, preview: true } as unknown as ServicePorts
     let failed = await documentStatus(ports, { document: job }, who)
     equal(failed.pending, false)
-    equal('error' in failed ? failed.error : undefined, error.message)
+    equal(
+      'error' in failed ? failed.error : undefined,
+      error instanceof CallError ? error.message : preparationRecovery,
+    )
+    if (!(error instanceof CallError)) {
+      equal(landed.find((row) => row.exception)?.exception, {
+        type: error.name,
+        value: error.message,
+      })
+      equal(reported[0], error)
+    }
     equal(reported.length, error instanceof CallError ? 0 : 1)
     let resumed = await prepareCommand(ports, { document: job }, who)
     equal(resumed.id, job)

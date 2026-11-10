@@ -3,6 +3,7 @@ import { allowed } from './store.ts'
 import { DocumentInputError, type Preparation } from './document.ts'
 import { apply, compare, query } from './orders.ts'
 import { InputError } from './refusal.ts'
+import { preparationRecovery } from './preparation-errors.ts'
 import { renewal } from './preparation-renewal.ts'
 import type { Prepared, ServicePorts, Who } from './service.ts'
 
@@ -19,7 +20,12 @@ export type PreparationRow = {
     authority?: string
   }
   print_document?: { manifest: Prepared }
-  print_preparation_failed?: { at?: string; reason: string; call?: string }
+  print_preparation_failed?: {
+    at?: string
+    reason: string
+    call?: string
+    refusal?: boolean
+  }
 }
 let key = (value: unknown): string => {
   if (
@@ -86,7 +92,11 @@ let status = (ports: ServicePorts, row: PreparationRow) =>
       preview: ports.preview,
       prepared: row.print_preparation.state.pages.length,
       ...(row.print_preparation_failed
-        ? { error: row.print_preparation_failed.reason }
+        ? {
+          error: row.print_preparation_failed.refusal === true
+            ? row.print_preparation_failed.reason
+            : preparationRecovery,
+        }
         : {}),
     }
 
@@ -192,11 +202,16 @@ export let prepareStep = async (ports: ServicePorts, value: unknown) => {
     await compare(ports.store, changes)
     return status(ports, await read(ports, id))
   } catch (error) {
+    let refusal = error instanceof InputError ||
+      error instanceof DocumentInputError
     await compare(ports.store, [{
       entity: row.entity,
       print_preparation_failed: {
         at: ports.now(),
-        reason: error instanceof Error ? error.message : String(error),
+        reason: refusal && error instanceof Error
+          ? error.message
+          : preparationRecovery,
+        refusal,
       },
       $was: {
         print_preparation: {
@@ -206,9 +221,7 @@ export let prepareStep = async (ports: ServicePorts, value: unknown) => {
         },
       },
     }])
-    if (
-      !(error instanceof InputError) && !(error instanceof DocumentInputError)
-    ) {
+    if (!refusal) {
       await ports.report(error, {
         order: id,
         location: 'printbound.prepareStep',

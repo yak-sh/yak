@@ -329,28 +329,32 @@
           "ref": "entity",
           "description": "The native command whose failure stopped this preparation.",
           "death": "keep"
+        },
+        "refusal": {
+          "type": "boolean",
+          "description": "A typed caller refusal whose reason is safe and useful to show; unexpected or unclassified failures use recovery copy while native diagnostics remain private."
         }
       }
     },
     "print_preparation_exception": {
       "rule": true,
       "description": "A native command failure stops only its current document continuation, retaining completed artifacts for explicit resume.",
-      "match": "$job .print_preparation.continuation=$call, !print_document, !print_preparation_failed; $call .call.source=$job; $fault .output.source=$call, .exception.value=$reason; $job +print_preparation_failed.reason=$reason, +print_preparation_failed.call=$call"
+      "match": "$job .print_preparation.continuation=$call, !print_document, !print_preparation_failed; $call .call.source=$job; $fault .output.source=$call, .exception.value=$reason; $job +print_preparation_failed.reason=\"Preparation stopped unexpectedly. Your saved work is kept. Resume this document to try again.\", +print_preparation_failed.call=$call, +print_preparation_failed.refusal=false"
     },
     "print_preparation_refusal": {
       "rule": true,
       "description": "A native command failure stops only its current document continuation, retaining completed artifacts for explicit resume.",
-      "match": "$job .print_preparation.continuation=$call, !print_document, !print_preparation_failed; $call .call.source=$job; $fault .result.call=$call, .refusal,.content.body=$reason; $job +print_preparation_failed.reason=$reason, +print_preparation_failed.call=$call"
+      "match": "$job .print_preparation.continuation=$call, !print_document, !print_preparation_failed; $call .call.source=$job; $fault .result.call=$call, .refusal,.content.body=$reason; $job +print_preparation_failed.reason=$reason, +print_preparation_failed.call=$call, +print_preparation_failed.refusal=true"
     },
     "print_preparation_interrupted": {
       "rule": true,
       "description": "An interrupted current continuation remains visible and resumable without guessing an elapsed timeout.",
-      "match": "$job .print_preparation.continuation=$call, !print_document, !print_preparation_failed; $call .call.source=$job, .interrupted; $job +print_preparation_failed.reason=\"Preparation was interrupted. Resume the saved document.\", +print_preparation_failed.call=$call"
+      "match": "$job .print_preparation.continuation=$call, !print_document, !print_preparation_failed; $call .call.source=$job, .interrupted; $job +print_preparation_failed.reason=\"Preparation was interrupted. Resume the saved document.\", +print_preparation_failed.call=$call, +print_preparation_failed.refusal=true"
     },
     "print_preparation_refusal_output": {
       "rule": true,
       "description": "A native command failure stops only its current document continuation, retaining completed artifacts for explicit resume.",
-      "match": "$job .print_preparation.continuation=$call, !print_document, !print_preparation_failed; $call .call.source=$job; $fault .output.source=$call, .refusal,.content.body=$reason; $job +print_preparation_failed.reason=$reason, +print_preparation_failed.call=$call"
+      "match": "$job .print_preparation.continuation=$call, !print_document, !print_preparation_failed; $call .call.source=$job; $fault .output.source=$call, .refusal,.content.body=$reason; $job +print_preparation_failed.reason=$reason, +print_preparation_failed.call=$call, +print_preparation_failed.refusal=true"
     }
   }
 }

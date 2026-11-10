@@ -3,7 +3,8 @@ import { equal, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { start } from './document.ts'
+import { DocumentInputError, start } from './document.ts'
+import { preparationRecovery } from './preparation-errors.ts'
 import { products } from './layout.ts'
 import {
   documentStatus,
@@ -152,4 +153,71 @@ test('a prior browser restores a pending guest document to its person without gr
   let [saved] = await query<PreparationRow>(store, `.entity.eid=${job.id}`)
   equal(saved.print_preparation.person, alice.person)
   equal('browsers' in saved.print_preparation, false)
+})
+
+test('preparation refuses invalid input with detail and keeps unexpected diagnostics out of customer status', async () => {
+  for (
+    let error of [
+      new InputError('Reconnect this source before resuming.'),
+      new DocumentInputError('Page 3 needs an image with at least 300 DPI.'),
+      new Error('<html><h1>Private upstream diagnostic</h1></html>', {
+        cause: new Error('Original transport failure'),
+      }),
+    ]
+  ) {
+    let store = await fixture(), reports: unknown[] = []
+    let ports = {
+      store,
+      preview: true,
+      now: () => '2026-11-10T00:00:00Z',
+      begin: () =>
+        Promise.resolve(
+          start(products.text, { title: 'Kept book', markdown: 'Saved words' }),
+        ),
+      verifyPreparation: () => Promise.reject(error),
+      report: (cause: unknown) => {
+        reports.push(cause)
+        return Promise.resolve()
+      },
+    } as unknown as ServicePorts
+    let who: Who = {
+      person: crypto.randomUUID(),
+      source: crypto.randomUUID(),
+      seller: crypto.randomUUID(),
+    }
+    let job = await prepareCommand(ports, { title: 'Kept book' }, who),
+      escaped: unknown
+    try {
+      await prepareStep(ports, job.id)
+    } catch (cause) {
+      escaped = cause
+    }
+    let expected = error instanceof InputError ||
+      error instanceof DocumentInputError
+    let status = await documentStatus(ports, { document: job.id }, who)
+    equal(status.pending, false)
+    equal(
+      'error' in status ? status.error : undefined,
+      expected ? error.message : preparationRecovery,
+    )
+    equal(escaped, expected ? undefined : error)
+    equal(reports, expected ? [] : [error])
+    if (!expected) {
+      // A pre-upgrade mark may still contain the original upstream body.
+      await store.fetch('/apply', {
+        method: 'POST',
+        body: JSON.stringify({
+          entities: [{
+            entity: { eid: job.id },
+            print_preparation_failed: { reason: error.message, refusal: null },
+          }],
+        }),
+      })
+      let legacy = await documentStatus(ports, { document: job.id }, who)
+      equal('error' in legacy ? legacy.error : undefined, preparationRecovery)
+    }
+    let resumed = await prepareCommand(ports, { document: job.id }, who)
+    equal(resumed.id, job.id)
+    equal(resumed.pending, true)
+  }
 })
