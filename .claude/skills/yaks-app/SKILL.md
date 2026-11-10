@@ -283,6 +283,18 @@ A query that works on the box can be refused in a store.
   per-store analytics after the next deploy; a JS incarnation restart alone need
   not reopen SQLite. Measure costs on a throwaway copy; a person's store is no
   benchmark fixture.
+- **A scan is a bug the moment it runs.** Every object's driver counts its
+  statements (@yaks/durable-object `bounded`, wired for every class in
+  defects-runtime.ts `instrument` and in the tracker's constructor). One
+  statement that reads 100,000 rows or more and a hundred times what it
+  returned files a `Scan` bug, one for each statement shape, tagged with the
+  shape and the object. An object past 50 million rows read or 100,000 written
+  in a minute (200 million and 500,000 in an hour) files a `Runaway` bug for
+  that object with its costliest shapes. Cloudflare has no spend cap and its
+  budget alerts arrive a day late, so these are how a cost is seen. No
+  statement's condition goes without an index (the owner, verbatim: "no
+  scanning tables. and no scanning *all* tables"): the fix for a `Scan` bug is
+  an index or a different read, never a higher threshold.
 - **A boot is all or nothing.** It runs in one transaction. A schema that won't
   stand unwinds, and the store answers every request 503 with the reason
   (`graph.ts` `#stalled`), still keeping the writes it is sent (`writes.ts`),

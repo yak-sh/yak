@@ -28,14 +28,18 @@ export type Summary = {
   operations: Operation[]
 }
 
-type Group = {
+export type Group = {
   total: Cost
   other: Cost
   shapes: Map<string, Entry>
 }
 
 let empty = (): Cost => ({ calls: 0, rowsRead: 0, rowsWritten: 0 })
-let group = (): Group => ({ total: empty(), other: empty(), shapes: new Map() })
+export let group = (): Group => ({
+  total: empty(),
+  other: empty(),
+  shapes: new Map(),
+})
 let add = (to: Cost, from: Cost) => {
   to.calls += from.calls
   to.rowsRead += from.rowsRead
@@ -45,7 +49,7 @@ let weight = (c: Cost) => c.rowsRead + c.rowsWritten
 
 // Two independent 32-bit streams keep the key small without retaining a long
 // SQL shape in memory. The readable prefix is capped separately.
-let id = (s: string): string => {
+export let id = (s: string): string => {
   let a = 2166136261
   let b = 2246822519
   for (let i = 0; i < s.length; i++) {
@@ -58,7 +62,7 @@ let id = (s: string): string => {
   }`
 }
 
-let tally = (into: Group, sample: Sample, limit: number) => {
+export let tally = (into: Group, sample: Sample, limit: number) => {
   let cost = {
     calls: 1,
     rowsRead: sample.rowsRead,
@@ -85,7 +89,7 @@ let tally = (into: Group, sample: Sample, limit: number) => {
   add(entry ?? into.other, cost)
 }
 
-let finish = (g: Group, reads: number, writes: number) => {
+export let finish = (g: Group, reads: number, writes: number) => {
   let ranked = [...g.shapes.values()].sort((a, b) => b.rowsRead - a.rowsRead)
   let top = ranked.slice(0, reads)
   let written = [...ranked].sort((a, b) => b.rowsWritten - a.rowsWritten)

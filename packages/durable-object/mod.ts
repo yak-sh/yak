@@ -88,6 +88,20 @@ export {
 } from './resets.ts'
 export { profile, type Summary } from './profile.ts'
 export {
+  bounded,
+  type Ceiling,
+  ceiling,
+  FAR,
+  type Report,
+  Runaway,
+  SCAN,
+  Scan,
+  Stopped,
+  type Told,
+  type Window,
+  WINDOWS,
+} from './ceiling.ts'
+export {
   type Hibernation,
   type Sockets,
   sockets,

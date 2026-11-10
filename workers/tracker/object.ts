@@ -2,6 +2,7 @@
 // failed installation never leaves a permanently rejected constructor promise.
 
 import {
+  bounded,
   driver,
   type DurableStorage,
   type Hibernation,
@@ -14,7 +15,7 @@ import {
   type Wire,
 } from '@yaks/durable-object'
 import { subscriptions } from '@yaks/api'
-import { caught, origin, queue, type Sink } from '@yaks/tracker/report'
+import { caught, origin, queue, report, type Sink } from '@yaks/tracker/report'
 import {
   type Config,
   options,
@@ -150,6 +151,21 @@ export class Tracker {
     this.sink = env.ERRORS
       ? queue(env.ERRORS)
       : (rows) => console.error(JSON.stringify(rows))
+    // A statement of this tracker's that scans, and the tracker past the rows
+    // it may read or write, told where the statement ran: a scan is one bug
+    // for its statement, a runaway one for its scope.
+    bounded(ctx.storage, {
+      now: this.now,
+      report: (error, { fault, tags }) => {
+        let from = this.#origin('Tracker.sql')
+        void report(error, {
+          ...from,
+          sink: this.sink,
+          fault: fault.startsWith('scan|') ? fault : `${fault}|${this.scope}`,
+          tags: { ...from.tags, ...tags, scope: this.scope },
+        })
+      },
+    })
     this.#config = {
       sink: this.sink,
       report: (error) => this.#report(error, 'Tracker.effect'),

@@ -6,7 +6,8 @@
     ".": "./mod.ts",
     "./sql": "./sql.ts",
     "./store": "./store.ts",
-    "./resets": "./resets.ts"
+    "./resets": "./resets.ts",
+    "./ceiling": "./ceiling.ts"
   },
   "license": "Apache-2.0",
   "description": "Provides graph storage on a Cloudflare Durable Object's embedded SQLite and connects hibernatable WebSockets to query subscriptions.",

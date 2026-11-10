@@ -24,6 +24,10 @@ export let STATUS: Record<string, number> = {
   // @yaks/member's: a component written again sooner than its pace lets this
   // writer. The same write is taken once the pace has run.
   Paced: 429,
+  // @yaks/durable-object's: a statement refused because its object read or
+  // wrote more rows than it may for now. The same call is taken once the
+  // wait it names has run.
+  Stopped: 429,
   NotFound: 404,
   Stale: 409,
   // @yaks/session's: a write naming a session that does not exist, or an

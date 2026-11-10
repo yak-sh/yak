@@ -1,11 +1,12 @@
 // Runtime retention for tracker delivery and its bounded repeat windows.
 import { waitUntil } from 'cloudflare:workers'
 import { faults } from '@yaks/api'
-import { caught, watched, within } from './defects.ts'
+import { caught, defect, watched, within } from './defects.ts'
 import { origin } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
 import { learn, restarting } from './running.ts'
 import { type Own, replaced } from '@yaks/durable-object/resets'
+import { bounded, type Report } from '@yaks/durable-object/ceiling'
 
 let clock = {
   now: Date.now,
@@ -67,6 +68,21 @@ export let entry = <T>(
     )
 )
 
+// A statement that scans, and an object past the rows it may read or write,
+// told where the statement ran (@yaks/durable-object `bounded`): a scan is
+// one bug for its statement whichever object ran it, a runaway one for its
+// object.
+let costly = (kind: string, id?: { name?: string }): Report =>
+(
+  error,
+  { fault, tags },
+) => {
+  let object = id?.name ?? String(id ?? '')
+  defect(error, { ...tags, class: kind, object }, {
+    fault: fault.startsWith('scan|') ? fault : `${fault}|${kind}|${object}`,
+  })
+}
+
 /** Construction, lifecycle callbacks and RPC methods share the same reporting
  * boundary. A callback installed by construction retains its invocation scope. */
 export let instrument = <C>(Original: C): C => {
@@ -93,6 +109,10 @@ export let instrument = <C>(Original: C): C => {
   return new Proxy(Tracked, {
     construct(target, args, newTarget) {
       let [state, env = {}] = args as [unknown, Partial<Env>?]
+      if (own(state)) {
+        let { id } = state as { id?: { name?: string } }
+        bounded(state.storage, { report: costly(Base.name, id) })
+      }
       return entry(
         env,
         `${Base.name} constructor`,

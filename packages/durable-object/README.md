@@ -33,6 +33,27 @@ cursor's `rowsRead` and `rowsWritten` with a value-free SQL shape.
 `profile(emit)` collects these samples in memory. `flush()` emits its first
 nonempty summary immediately and subsequent summaries at most once per minute.
 
+Cloudflare bills every row a statement reads or writes and offers no cap on it,
+so every driver counts its statements against its object's **ceiling**
+(`./ceiling.ts`): the rows the object may read and write in a minute and in an
+hour (`WINDOWS`). Two failures are reported as they happen:
+
+- `Scan`: one statement read `SCAN` (100,000) rows or more and `FAR` (100) times
+  what it returned or wrote, so no index served its condition. It is reported
+  once an hour for each statement shape, with the shape.
+- `Runaway`: the object's statements together passed a window's rows. It is
+  reported once for that window, with the costliest shapes.
+
+A host names where the reports go once, before its first driver:
+`bounded(ctx.storage, { report, refuse })`. Every driver over that storage
+counts against the same ceiling. With `refuse`, a statement past a window is
+refused as `Stopped` (status 429, `retry.after` in milliseconds) until the
+window ends: past its written rows the object still reads, and past its read
+rows it takes nothing. Statements a stopped object must still take, such as
+keeping a person's write for later, run inside the ceiling's `free(body)`. The
+tallies live in the instance's memory, so an object evicted between bursts
+starts its windows over.
+
 `sockets(subs, ctx)` connects hibernatable WebSockets to
 [@yaks/api](../api/README.md) subscriptions. The API registry re-evaluates saved
 queries after committed changes; this adapter accepts sockets, dispatches
@@ -238,14 +259,15 @@ assertEquals(moved(error) && replaced(reset), true)
 
 `@yaks/durable-object` exports everything below. A reader of the object's
 storage that holds no socket imports `@yaks/durable-object/sql` (`driver`),
-`/store` (`storage`) or `/resets` (the reset helpers) alone, without `sockets`
-and the `@yaks/api` dispatch it brings:
+`/store` (`storage`), `/resets` (the reset helpers) or `/ceiling` alone, without
+`sockets` and the `@yaks/api` dispatch it brings:
 
 | Export                                                  | Purpose                                             |
 | ------------------------------------------------------- | --------------------------------------------------- |
 | `storage(ctx.storage, vocab, base?)`                    | Creates an `@yaks/sqlite` `Store`                   |
 | `driver(ctx.storage, observe?)`                         | Creates the underlying synchronous SQLite `Driver`  |
 | `profile(emit)`                                         | Aggregates cursor costs into bounded summaries      |
+| `bounded(ctx.storage, options?)`, `ceiling(options?)`   | Report a scan or a runaway, and stop the object     |
 | `sockets(subs, ctx)`                                    | Returns `accept`, `message`, `close`, and `wake`    |
 | `prohibited`, `reserved`                                | Identify internal runtime tables                    |
 | `moved`, `replaced`, `evicted`, `killed`, `opaque`      | Tell a reset of this instance from a failure        |

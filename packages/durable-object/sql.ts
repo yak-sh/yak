@@ -31,6 +31,7 @@ import {
   writing,
 } from '@yaks/sql'
 import { during, measure as traced, peek } from '@yaks/trace'
+import { bounded } from './ceiling.ts'
 
 /** A value the engine will bind: everything else is converted first. */
 export type SqlValue = ArrayBuffer | string | number | null
@@ -158,17 +159,24 @@ export let driver = (
   measure?: Measure,
 ): Driver => {
   let reported = false
+  // What this object's statements may cost together (./ceiling.ts).
+  let bound = bounded(durable)
   // The cursor is lazy: draining it is what runs the statement.
   let execute = (s: Stmt): Row[] => {
+    // A stopped object's refusal is the caller's to wait out, not the
+    // engine's: it is no statement the engine refused.
+    bound.admit(writing(s))
     // Workerd keeps each prepared statement by its text (SqlStorage's
     // StatementCache), so every collection binds as one JSON array: a read's
     // text is the same whatever ids it names, and is prepared once.
     let rendered = renderStable(s)
     let { sql, params } = rendered
     let cursor: SqlCursor<Row> | undefined
+    let returned = 0
     try {
       cursor = durable.sql.exec(sql, ...params.map(bind))
       let rows = cursor.toArray().map(unbind)
+      returned = rows.length
       if (observe && cursor.rowsRead != null && cursor.rowsWritten != null) {
         try {
           observe({
@@ -205,6 +213,15 @@ export let driver = (
       } catch (e) {
         if (!reported) console.error('statement meter failed', e)
         reported = true
+      }
+      // A statement that failed still read what it read.
+      if (cursor?.rowsRead != null && cursor.rowsWritten != null) {
+        bound.count({
+          shape: () => shape(rendered),
+          rowsRead: cursor.rowsRead,
+          rowsWritten: cursor.rowsWritten,
+          returned,
+        })
       }
     }
   }
