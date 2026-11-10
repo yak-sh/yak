@@ -50,7 +50,12 @@ let install = async (at: Selected, source: string, assets?: string) => {
   let files = await read(local(source))
   if (assets) files.push(...await read(assets))
   console.log(`Deploying ${at.at}`)
-  for (let line of await push(rpc(at.bearer), files, target(at))) {
+  for (
+    let line of await push(rpc(at.bearer), files, target(at), {
+      progress: (event) =>
+        console.log(JSON.stringify({ app: at.at, ...event })),
+    })
+  ) {
     console.log(line)
   }
 }
