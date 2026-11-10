@@ -25,10 +25,11 @@ import { refuse } from './tool.ts'
 import {
   affordable,
   billed,
-  charged,
   type Listed,
+  measured,
   type Model,
   ModelError,
+  type ModelResults,
   type Native,
   type Price,
   requestBound,
@@ -1277,6 +1278,33 @@ export let metered = (
   },
 })
 
+/** Deliver a saved result and finish only its original, idempotent settlement. */
+export let resultOf = (
+  bind: Partial<Pick<Env, 'STORE'>>,
+  results: ModelResults,
+): NonNullable<Model['result']> =>
+async (call) => {
+  let result = await results.read(call)
+  if (!result) return
+  let cost = result.reply.cost
+  if (cost != null) {
+    if (!bind.STORE) throw new ModelError('unbound')
+    if (
+      !await settled(
+        { STORE: bind.STORE },
+        call,
+        cost,
+        result.reply.costReported,
+      )
+    ) {
+      throw new Error(
+        'Completed model result has no original reservation',
+      )
+    }
+  }
+  return result
+}
+
 /** A hosted provider spends from the same space budget as every other door.
  * Costs are supplied by the adapter, never guessed from media JSON. A call
  * `visiting` names a visitor for is held to their share as well, and counted
@@ -1288,6 +1316,7 @@ export let accounted = (
   price?: (name: string) => Promise<Price | undefined>,
   visiting?: (req: Parameters<Model>[0]) => Promise<string | undefined>,
   source?: string,
+  results?: ModelResults,
 ): Model =>
   Object.assign(
     async (req: Parameters<Model>[0]) => {
@@ -1339,6 +1368,7 @@ export let accounted = (
       )
       reached('reserved', hold)
       let submitted = false
+      let requestedAt = Date.now()
       let reply: Awaited<ReturnType<Model>>
       try {
         reply = await model({
@@ -1363,15 +1393,32 @@ export let accounted = (
         if (!submitted || unkept) await hold.settle(0, false)
         throw error
       }
-      let cost = charged(reply, tariff, hold.value.dollars)
-      if (!cost || !Number.isFinite(cost.dollars) || cost.dollars < 0) {
+      let cost = measured(reply, tariff)
+      if (cost && (!Number.isFinite(cost.dollars) || cost.dollars < 0)) {
         throw new Error('Hosted provider returned no valid request cost')
       }
-      await hold.settle(cost.dollars, cost.reported)
-      return { ...reply, cost: cost.dollars, costReported: cost.reported }
+      reply = { ...reply, cost: cost?.dollars, costReported: cost?.reported }
+      try {
+        await results?.save(call, {
+          reply,
+          mark: model.mark?.(reply, { requestedAt }),
+        })
+        if (cost) await hold.settle(cost.dollars, cost.reported)
+      } catch (error) {
+        if (!results) throw error
+        throw new ModelError('model_result_delivery', String(error), {
+          after: 1000,
+        })
+      }
+      return reply
     },
     model,
     {
+      ...results
+        ? {
+          result: resultOf(bind, results),
+        }
+        : {},
       recover: async (call: string) => {
         if (!model.recover) {
           throw new ModelError(

@@ -63,6 +63,7 @@ import type { MediaReceipt } from './media.ts'
 import { listPrice } from './prices.ts'
 export { listPrice } from './prices.ts'
 export { deferredModel } from './deferred.ts'
+export { type ModelResult, type ModelResults, modelResults } from './results.ts'
 export { message } from './message.ts'
 export type { Lent, Native, ProviderFacet, Spending } from './provider.ts'
 export {
@@ -111,6 +112,7 @@ export {
   affordable,
   charged,
   FRAMING,
+  measured,
   promptBound,
   requestBound,
   retained,
@@ -331,6 +333,10 @@ export type Mark = Record<string, Record<string, unknown>>
 export type Model = ((req: Request) => Promise<Reply>) & {
   /** Download/store a saved recording only; never calls generation. */
   recover?: (call: string) => Promise<Reply>
+  /** A saved complete answer, with any original accounting finished; never generation. */
+  result?: (
+    call: string,
+  ) => Promise<import('./results.ts').ModelResult | undefined>
   list?: () => Promise<Listed[]>
   info?: (name: string) => Promise<Listed | undefined>
   mark?: (reply: Reply, cache?: CacheContext) => Mark

@@ -38,11 +38,11 @@ import {
 import { building } from './made.ts'
 import { listing } from '@yaks/mcp'
 import {
-  billed,
   type Listed,
   type Model,
   ModelError,
   modelReads,
+  modelResults,
   type Price,
 } from '@yaks/model'
 import { platform, ready, served } from './providers.ts'
@@ -84,7 +84,7 @@ import { adminTools } from './operator-admin.ts'
 import { platformFault } from './unseen.ts'
 import { bound, type Env } from './env.ts'
 import type { Held } from './build-door.ts'
-import { accounted } from './meter.ts'
+import { accounted, resultOf } from './meter.ts'
 import { caught, defect } from './defects.ts'
 import {
   ambient,
@@ -997,44 +997,50 @@ export let operating = (
   // Each ask is charged to the space of the session asking, at the price of
   // the model it asks.
   let accounting = (base: Model, from: string): Model =>
-    Object.assign(async (req: Parameters<Model>[0]) => {
-      reached('request', req)
-      let [price, [ask], space] = await Promise.all([
-        priced(req.model, from),
-        req.call ? g.get([req.call]) : [],
-        payerOf(store, req.call),
-      ])
-      if (!options.model && !price) {
-        throw new Error(`No catalogue price for operator model ${req.model}`)
-      }
-      reached('payer', space)
-      // The space may ask its provider to keep the cached prefix longer than
-      // the default (`operator{cache_retention}`).
-      let kept = space ? (await dir().at(space))?.cache_retention : undefined
-      let session = comp(ask, 'entry')?.session
-      let reply = await accounted(
-        env,
-        (dir) => space ? dir.at(space) : Promise.resolve(null),
-        base,
-        () => Promise.resolve(price),
-        undefined,
-        from,
-      )({
-        ...req,
-        ...kept ? { cacheRetention: kept } : {},
-        onSubmit: async () => {
-          await req.onSubmit?.()
-          reached('submit', null)
-        },
-        onFirst: () => {
-          reached('first_token', null)
-          req.onFirst?.()
-        },
-      }).finally(() => asked(session ? String(session) : undefined))
-      if (session && req.onText) options.stepped?.(String(session))
-      let cost = billed(reply, price)
-      return { ...reply, cost: cost?.dollars, costReported: cost?.reported }
-    }, base)
+    Object.assign(
+      async (req: Parameters<Model>[0]) => {
+        reached('request', req)
+        let [price, [ask], space] = await Promise.all([
+          priced(req.model, from),
+          req.call ? g.get([req.call]) : [],
+          payerOf(store, req.call),
+        ])
+        if (!options.model && !price) {
+          throw new Error(`No catalogue price for operator model ${req.model}`)
+        }
+        reached('payer', space)
+        // The space may ask its provider to keep the cached prefix longer than
+        // the default (`operator{cache_retention}`).
+        let kept = space ? (await dir().at(space))?.cache_retention : undefined
+        let session = comp(ask, 'entry')?.session
+        let reply = await accounted(
+          env,
+          (dir) => space ? dir.at(space) : Promise.resolve(null),
+          base,
+          () => Promise.resolve(price),
+          undefined,
+          from,
+          modelResults(g),
+        )({
+          ...req,
+          ...kept ? { cacheRetention: kept } : {},
+          onSubmit: async () => {
+            await req.onSubmit?.()
+            reached('submit', null)
+          },
+          onFirst: () => {
+            reached('first_token', null)
+            req.onFirst?.()
+          },
+        }).finally(() => asked(session ? String(session) : undefined))
+        if (session && req.onText) options.stepped?.(String(session))
+        return reply
+      },
+      base,
+      {
+        result: resultOf(env, modelResults(g)),
+      },
+    )
   let models = Object.fromEntries(
     Object.entries(implementations).map(([p, m]) => [p, accounting(m, p)]),
   )

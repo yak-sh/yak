@@ -1,7 +1,11 @@
 // Record a model exchange through the existing request/session components.
 // Passive inputs keep this observed exchange out of the session runner's work.
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { identityEid } from '@yaks/graph/identity'
+import { derivedEid, identityEid } from '@yaks/graph/identity'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
+import { attemptState } from './attempt.ts'
+import type { ModelResult } from '@yaks/model'
 import {
   MODEL,
   type Model,
@@ -30,6 +34,56 @@ let failureUsage = (error: unknown): Comp | undefined => {
     return valid.length ? Object.fromEntries(valid) : undefined
   } catch {
     return
+  }
+}
+
+/** Deliver a saved passive exchange even though its transcript owes no model turn. */
+export let completeCompact = async (
+  g: Graph,
+  ask: Bundle,
+  { reply, mark }: ModelResult,
+): Promise<void> => {
+  if (attemptState(ask) != 'inflight') return
+  let session = (ask.entry as Comp).session as Eid
+  let texts = reply.items.filter((i) => i.kind == 'assistant').map((i) =>
+    i.text
+  )
+  let empty = !texts.join('\n').trim()
+    ? new ModelError('compaction', 'Empty summary')
+    : undefined
+  let actor = { by: String((ask.ask as Comp).to), via: session }
+  try {
+    await g.apply([
+      {
+        entity: ask.entity,
+        $actor: actor,
+        $was: { attempt: { by: token((ask.attempt as Comp).by) } },
+        attempt: { by: null },
+        completed: {},
+        ...empty
+          ? { failed: { reason: empty.message }, refusal: { code: empty.code } }
+          : {},
+        ...mark,
+        ...reply.usage ? { usage: reply.usage } : {},
+        ...reply.cost == null ? {} : {
+          cost: { dollars: reply.cost, reported: reply.costReported ?? true },
+        },
+      },
+      ...(empty ? [empty.message] : texts).map((body, index) => ({
+        entity: {
+          eid: derivedEid('compaction-result|' + ask.entity.eid + '|' + index),
+        },
+        $actor: actor,
+        entry: { session },
+        output: { source: ask.entity.eid },
+        content: { body },
+      })),
+    ], { trusted: true })
+  } catch (error) {
+    if (
+      !(error instanceof Stale) || error.eid != ask.entity.eid ||
+      error.comp != 'attempt'
+    ) throw error
   }
 }
 
@@ -73,12 +127,13 @@ export let compactAsk = async (
       entity: { eid: ask },
       entry: { session: conversation },
       notice: {},
+      using: { model, ...provider ? { provider } : {} },
+      sending: { instructions: req.instructions },
       ask: { to: model, through: input },
       attempt: { by: conversation },
     },
   ])
-  // `using` admits runner work. Add it only with completion, when the
-  // passive input/ask already has an output; no worker can run this exchange.
+  // Notice entries remain passive while preserving the original selection.
   let using = {
     model,
     ...provider ? { provider } : {},
@@ -87,6 +142,7 @@ export let compactAsk = async (
   try {
     compacted = await served.model(req)
   } catch (e) {
+    if (e instanceof ModelError && e.code == 'model_result_delivery') throw e
     // Provider failure bodies can still report billed tokens. Keep unknown
     // counts absent rather than recording a made-up zero.
     let usage = failureUsage(e)
@@ -118,34 +174,13 @@ export let compactAsk = async (
     ])
     throw e
   }
-  let text = compacted.items.filter((i) => i.kind == 'assistant')
-    .map((i) => i.text).join('\n').trim()
-  let empty = !text ? new ModelError('compaction', 'Empty summary') : undefined
-  await save([
-    {
-      entity: { eid: ask },
-      using,
-      sending: { instructions: req.instructions },
-      attempt: { by: null },
-      completed: {},
-      ...empty
-        ? { failed: { reason: empty.message }, refusal: { code: empty.code } }
-        : {},
-      ...served.model.mark?.(compacted),
-      ...compacted.usage ? { usage: compacted.usage } : {},
-      ...compacted.cost == null ? {} : {
-        cost: { dollars: compacted.cost, reported: true },
-      },
-    },
-    ...(empty
-      ? [{ kind: 'assistant', text: empty.message }]
-      : compacted.items.filter((i) => i.kind == 'assistant')).map((i) => ({
-        entity: { eid: crypto.randomUUID() },
-        entry: { session: conversation },
-        output: { source: ask },
-        content: { body: i.text },
-      })),
-  ])
-  if (empty) throw empty
+  let [original] = await g.get([ask])
+  await completeCompact(g, original, {
+    reply: compacted,
+    mark: served.model.mark?.(compacted),
+  })
+  if (!compacted.items.some((i) => i.kind == 'assistant' && i.text.trim())) {
+    throw new ModelError('compaction', 'Empty summary')
+  }
   return compacted
 }

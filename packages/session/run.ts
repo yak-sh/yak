@@ -52,6 +52,8 @@ import { cleanEnd, requested, rouse, unlinked, waits, wake } from './wake.ts'
 import { watch } from './watch.ts'
 import { text } from './texted.ts'
 import { knock } from './woken.ts'
+import { completeCompact } from './compact_ask.ts'
+import { attemptState } from './attempt.ts'
 
 /** What a host lends the runner: how a step is taken (./react.ts `Deps`), the
  * bound on children, and who is running it. */
@@ -848,6 +850,27 @@ export let running = (
       : {},
     ...declared(g, 'session_recover') ? { session_recover: recover } : {},
     session_run: run,
+    ...declared(g, 'session_result')
+      ? {
+        session_result: async (e: Event, _tx, _write, attempt) => {
+          let r = await ready
+          let [ask] = await g.get([e.entity.eid])
+          if (!ask?.ask || attemptState(ask) != 'inflight') return
+          let session = String(comp(ask, 'entry')?.session)
+          if (ask.notice) {
+            let result = await r.model.result?.(ask.entity.eid)
+            if (result) await completeCompact(g, ask, result)
+            return
+          }
+          let s = await react(g, session, {
+            ...r,
+            attempt,
+            resultCall: ask.entity.eid,
+          })
+          await r.each?.(s, session)
+        },
+      }
+      : {},
     ...declared(g, 'session_release')
       ? { session_release: (e: Event, tx: ReadTx) => release(g, e, tx) }
       : {},

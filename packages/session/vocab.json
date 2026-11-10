@@ -913,6 +913,13 @@
       "tries": 8,
       "description": "an input line inherits its transcript's selected model and owes one turn; an entry selecting a model is already owed by session_run"
     },
+    "session_result": {
+      "effect": true,
+      "created": ["model_result"],
+      "target": ".ask .entry",
+      "tries": 8,
+      "description": "deliver a saved complete model result on its original request, including passive compaction exchanges, without repeating generation"
+    },
     "session_run": {
       "effect": true,
       "created": [

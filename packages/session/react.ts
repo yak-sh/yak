@@ -56,6 +56,7 @@ import {
   MODEL,
   type Model,
   ModelError,
+  type ModelResult,
   type Part,
   PROVIDER,
   QUESTIONS,
@@ -246,6 +247,8 @@ export type Deps = {
   asyncTools?: boolean
   /** Internal effect execution of one recorded call (never a model request). */
   runCall?: Eid
+  /** Deliver one saved request result without starting another model/tool step. */
+  resultCall?: Eid
   /** How long a background call runs before it is given a Pending entry
    * ({@link PATIENCE} where absent). */
   patience?: number
@@ -731,11 +734,12 @@ export let react = async (
   let older = open.some((b) => (b.call as Comp)?.source != asked?.entity.eid)
   if (
     !newest ||
-    !deps.runCall && (status == 'stopped' || status == 'settled' && !older)
+    !deps.runCall && !deps.resultCall &&
+      (status == 'stopped' || status == 'settled' && !older)
   ) {
     return nothing
   }
-  if (status == 'failed' && !deps.runCall) return nothing
+  if (status == 'failed' && !deps.runCall && !deps.resultCall) return nothing
   let mint = deps.mint ?? (() => crypto.randomUUID() as Eid)
   // Who a line of this turn is written by. The pair is the one the fleet
   // resolves for an agent's write (src/db.ts actorFor/writerVia): the
@@ -831,13 +835,14 @@ export let react = async (
     // When the request was sent, for a provider that knows how long the
     // prefix it caches lasts (@yaks/model `CacheContext`).
     requestedAt?: number,
+    saved?: ModelResult,
   ): Promise<Step> => {
     const finalAsk: Bundle = {
       ...ask,
-      ...providerModel.mark?.(
+      ...(saved ? saved.mark : providerModel.mark?.(
         reply,
         requestedAt == null ? undefined : { requestedAt },
-      ) ?? {},
+      )) ?? {},
       ...reply.usage ? { usage: reply.usage } : {},
       ...reply.cost == null ? {} : {
         cost: { dollars: reply.cost, reported: reply.costReported ?? true },
@@ -860,16 +865,50 @@ export let react = async (
       finalAsk.interrupted = { code: 'cut' }
     }
     let added: Bundle[] = [finalAsk, ...await carried(g, session, sent)]
+    let partials = saved
+      ? await g.read(`.output.source=${ask.entity.eid}&.stream_item&*`)
+      : []
+    let matching = (item: Item, index: number) =>
+      partials.find((b) => {
+        let key = comp(b, 'stream_item')
+        return 'id' in item && item.id != null
+          ? key?.id == item.id
+          : key?.index == index
+      })
+    let texts = reply.items.filter((item) => item.kind == 'assistant')
+    if (
+      partials.some((b) =>
+        !texts.some((item, index) =>
+          matching(item, index)?.entity.eid == b.entity.eid
+        )
+      )
+    ) {
+      return await finish(ask, {
+        ...finalAsk,
+        interrupted: { code: 'superseded' },
+      }, [
+        line(
+          { [EXCEPTION]: {} },
+          'Completed reply omitted a streamed text item; retained partial output',
+        ),
+      ]) ?? await current()
+    }
     let textIndex = 0
     for (let item of reply.items) {
       if (item.kind == 'assistant') {
         const active = stream.get(item.id ?? String(textIndex))
-        textIndex++
+        let partial = matching(item, textIndex++)
         added.push(
           active
             ? {
               entity: active.entry.entity,
               $was: { [CONTENT]: { body: active.writer.expected() } },
+              [CONTENT]: { body: item.text },
+              [OUTPUT]: { source: ask.entity.eid },
+            }
+            : partial
+            ? {
+              entity: partial.entity,
               [CONTENT]: { body: item.text },
               [OUTPUT]: { source: ask.entity.eid },
             }
@@ -977,6 +1016,14 @@ export let react = async (
       for (const active of stream.values()) active.writer.discard()
     }
   }
+  if (deps.resultCall) {
+    let [ask] = await g.get([deps.resultCall])
+    if (!ask?.ask || attemptState(ask) != 'inflight') return current()
+    let result = await deps.model.result?.(ask.entity.eid)
+    if (!result) return current()
+    signer = { by: String(comp(ask, ASK)?.to), via: session }
+    return complete(ask, result.reply, deps.model, new Map(), undefined, result)
+  }
   const unfinished = deps.runCall
     ? undefined
     : entries.find((b) => attemptState(b) == 'inflight')
@@ -1035,6 +1082,20 @@ export let react = async (
   }
   if (unfinished?.inference && !executor) return current()
   if (unfinished && !executor) {
+    let result = await (original?.model ?? deps.model).result?.(
+      unfinished.entity.eid,
+    )
+    if (result) {
+      signer = { by: String(comp(unfinished, ASK)?.to), via: session }
+      return complete(
+        unfinished,
+        result.reply,
+        original?.model ?? deps.model,
+        new Map(),
+        undefined,
+        result,
+      )
+    }
     // The request may have reached the provider. Its partial output stays in
     // the transcript, but only a completed ask can be used as an anchor.
     // Continue from that history after the former worker has gone.
@@ -1795,6 +1856,7 @@ export let react = async (
             },
             line({
               [CONTENT]: { body: '' },
+              stream_item: { index, ...id == null ? {} : { id } },
               [OUTPUT]: { source: ask.entity.eid },
             }),
           ], { trusted: true })
@@ -1854,7 +1916,14 @@ export let react = async (
     await ending()
     if (streamFailure) throw streamFailure
   } catch (error) {
-    if (executor) throw error
+    if (
+      executor ||
+      error instanceof ModelError && error.code == 'model_result_delivery'
+    ) {
+      await ending()
+      for (let active of stream.values()) active.writer.discard()
+      throw error
+    }
     let e = error
     let phase = 'model'
     await ending()

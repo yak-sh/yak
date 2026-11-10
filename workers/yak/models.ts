@@ -20,6 +20,7 @@ import {
   mediaReceipts,
   type Model,
   ModelError,
+  modelResults,
   type Price,
 } from '@yaks/model'
 import { records } from '@yaks/secrets'
@@ -383,6 +384,7 @@ export let asking = (at: Stored): Handlers => {
       price,
       visitorOf(at),
       name,
+      modelResults(at.graph),
     )
   }
   let first = names(at.env, serving)[0]
@@ -417,6 +419,7 @@ export let asking = (at: Stored): Handlers => {
   return {
     session_input: run.session_input,
     session_run: run.session_run,
+    session_result: run.session_result,
   }
 }
 

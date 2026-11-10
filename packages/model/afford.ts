@@ -114,13 +114,12 @@ export let affordable = (
     : null
 }
 
-/** Settlement uses reported dollars or complete usage. Unknown usage keeps the
- * maximum reserved; unclassified input is charged at its highest cache tariff. */
-export let charged = (
+/** Measured dollars require reported cost or complete usage. Unclassified
+ * input uses its highest cache tariff; missing usage stays unknown. */
+export let measured = (
   reply: { cost?: number; costReported?: boolean; usage?: Usage },
   price: Price | undefined,
-  maximum: number,
-): { dollars: number; reported: boolean } => {
+): { dollars: number; reported: boolean } | undefined => {
   if (reply.cost != null) {
     return { dollars: reply.cost, reported: reply.costReported ?? true }
   }
@@ -132,7 +131,7 @@ export let charged = (
       count == null || Number.isSafeInteger(count) && count >= 0
     )
   ) {
-    return { dollars: maximum, reported: false }
+    return undefined
   }
   let input = Math.max(
     price.input,
@@ -142,3 +141,11 @@ export let charged = (
   )
   return { dollars: weigh({ ...price, input }, n), reported: false }
 }
+
+/** A conservative charge where the caller explicitly accounts unknown usage. */
+export let charged = (
+  reply: { cost?: number; costReported?: boolean; usage?: Usage },
+  price: Price | undefined,
+  maximum: number,
+): { dollars: number; reported: boolean } =>
+  measured(reply, price) ?? { dollars: maximum, reported: false }

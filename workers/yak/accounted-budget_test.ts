@@ -1,6 +1,11 @@
 import { assertAlmostEquals, assertEquals, assertRejects } from '@std/assert'
 import { mint } from '@yaks/graph'
-import { type Model, ModelError } from '@yaks/model'
+import {
+  type Model,
+  ModelError,
+  type ModelResult,
+  type ModelResults,
+} from '@yaks/model'
 import { test } from '@yaks/testing'
 import { directoryOf, stamp } from './directory.ts'
 import { accounted, metered, monthOf } from './meter.ts'
@@ -178,7 +183,7 @@ test('a provider preparation refusal releases its unsubmitted reservation', asyn
   assertAlmostEquals(await prepared.used(), 0)
 })
 
-test('missing provider token counts retain the conservative call charge', async () => {
+test('missing provider token counts retain held budget without claiming measured cost', async () => {
   let raw: Model = Object.assign(async (ask: Parameters<Model>[0]) => {
     await ask.onSubmit!()
     return {
@@ -188,8 +193,11 @@ test('missing provider token counts retain the conservative call charge', async 
       usage: { input_tokens: 1 },
     }
   }, { info })
-  await withModel(unknown.space, raw)(req)
+  let call = mint()
+  let reply = await withModel(unknown.space, raw)({ ...req, call })
   assertAlmostEquals(await unknown.used(), 0.003)
+  assertEquals(reply.cost, undefined)
+  assertEquals((await reservation(p.env, call))?.dollars, 0.003)
 })
 
 test('a provider violating its quote is surfaced without freeing held dollars', async () => {
@@ -342,4 +350,124 @@ test('an explicit Workers AI input refusal refunds the unpurchased call', async 
   }, () => Promise.resolve(rejected.space))
   await assertRejects(() => ai.run('@cf/refusing', {}), Error, '5006:')
   assertAlmostEquals(await rejected.used(), 0)
+})
+
+let delivered = await fixture()
+let lostDelivery = await fixture()
+let uncertainDelivery = await fixture()
+let storage = () => {
+  let values = new Map<string, ModelResult>()
+  let results: ModelResults = {
+    read: (call) => Promise.resolve(values.get(call)),
+    save: (call, result) => {
+      values.set(call, structuredClone(result))
+      return Promise.resolve()
+    },
+  }
+  return results
+}
+
+test('a completed model result is durable before settlement and recovers the same settled charge', async () => {
+  let results = storage()
+  let call = mint()
+  let purchases = 0
+  let raw: Model = Object.assign(async (ask: Parameters<Model>[0]) => {
+    purchases++
+    await ask.onSubmit!()
+    return { id: 'receipt', model: ask.model, items: [], cost: 0.0015 }
+  }, { info })
+  let durable: ModelResults = {
+    read: results.read,
+    save: async (call, result) => {
+      assertEquals((await reservation(p.env, call))?.dollars, 0.003)
+      await results.save(call, result)
+    },
+  }
+  let paid = () =>
+    accounted(
+      p.env,
+      () => Promise.resolve(delivered.space),
+      raw,
+      undefined,
+      undefined,
+      'test',
+      durable,
+    )
+  let reply = await paid()({ ...req, call })
+  assertEquals((await paid().result!(call))?.reply, reply)
+  assertEquals((await paid().result!(call))?.reply.cost, 0.0015)
+  assertAlmostEquals(await delivered.used(), 0.0015)
+  assertEquals(purchases, 1)
+})
+
+test('a result checkpoint interrupted before settlement finishes billing on recovery without generation', async () => {
+  let results = storage()
+  let call = mint()
+  let purchases = 0
+  let raw: Model = Object.assign(async (ask: Parameters<Model>[0]) => {
+    purchases++
+    await ask.onSubmit!()
+    return {
+      id: 'receipt',
+      model: ask.model,
+      items: [],
+      usage: { input_tokens: 100, output_tokens: 5 },
+    }
+  }, { info })
+  let interrupted: ModelResults = {
+    read: results.read,
+    save: async (call, result) => {
+      await results.save(call, result)
+      throw new Error('interrupted after result checkpoint')
+    },
+  }
+  let paid = () =>
+    accounted(
+      p.env,
+      () => Promise.resolve(lostDelivery.space),
+      raw,
+      undefined,
+      undefined,
+      'test',
+      interrupted,
+    )
+  await assertRejects(
+    () => paid()({ ...req, call }),
+    ModelError,
+    'interrupted after result checkpoint',
+  )
+  assertEquals((await reservation(p.env, call))?.dollars, 0.003)
+  let saved = await paid().result!(call)
+  await paid().result!(call)
+  assertAlmostEquals(saved!.reply.cost!, 0.000105)
+  assertEquals(saved?.reply.costReported, false)
+  assertAlmostEquals(await lostDelivery.used(), 0.000105)
+  assertEquals(await reservation(p.env, call), undefined)
+  assertEquals(purchases, 1)
+})
+
+test('an uncertain provider outcome has no completed result and keeps its reservation', async () => {
+  let results = storage()
+  let call = mint()
+  let raw: Model = Object.assign(async (ask: Parameters<Model>[0]) => {
+    await ask.onSubmit!()
+    throw new Error('lost provider answer')
+  }, { info })
+  let paid = accounted(
+    p.env,
+    () => Promise.resolve(uncertainDelivery.space),
+    raw,
+    undefined,
+    undefined,
+    'test',
+    results,
+  )
+  await assertRejects(
+    () => paid({ ...req, call }),
+    Error,
+    'lost provider answer',
+  )
+  assertEquals(await paid.result!(call), undefined)
+  assertEquals((await reservation(p.env, call))?.dollars, 0.003)
+  assertAlmostEquals(await uncertainDelivery.used(), 0.003)
 })

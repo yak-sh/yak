@@ -297,6 +297,33 @@
         }
       }
     },
+    "stream_item": {
+      "component": true,
+      "sync": "none",
+      "wire": false,
+      "journal": false,
+      "type": "object",
+      "description": "the provider-neutral identity of a streamed text item, retained on its output entry for completed-result recovery",
+      "properties": {
+        "index": { "type": "integer" },
+        "id": { "type": "string" }
+      }
+    },
+    "model_result": {
+      "component": true,
+      "sync": "none",
+      "journal": false,
+      "wire": false,
+      "type": "object",
+      "description": "a complete provider reply and its provider marks on the original ask, saved before billing settlement and transcript delivery so either can recover without generation",
+      "properties": {
+        "body": {
+          "type": "string",
+          "store": "blob",
+          "description": "the completed ModelResult, including usage and known cost; absent cost remains unknown"
+        }
+      }
+    },
     "response": {
       "component": true,
       "journal": false,
