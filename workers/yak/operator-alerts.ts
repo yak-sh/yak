@@ -16,6 +16,7 @@ import {
   push,
   type Subscription,
   subscriptionEid,
+  Unpushed,
   type Vapid,
 } from '@yaks/push'
 import type { Tool } from '@yaks/session'
@@ -74,6 +75,7 @@ export let routeOf = (
   texting: Pick<Texting, 'number'> | null,
   email: string | null,
   pushes: Subscription[] = [],
+  except?: Alerting,
 ): Route | null => {
   let wanted = chosen ?? (texting ? 'text' : 'email')
   if (wanted == 'updates') return null
@@ -82,13 +84,20 @@ export let routeOf = (
     text: texting ? { by: 'text', to: texting.number } : null,
     email: email ? { by: 'email', to: email } : null,
   }
-  return ORDER[wanted].map((way) => ways[way]).find(Boolean) ?? null
+  return ORDER[wanted].filter((way) => way != except).map((way) => ways[way])
+    .find(Boolean) ?? null
 }
 
 /** Where an alert written at `at` reaches `person` now, as the directory
  * has them. A browser allowed after it was written is not told it: turning
- * alerts on brings what happens next, never what was already owed. */
-export let routeFor = async (dir: Directory, person: string, at?: string) => {
+ * alerts on brings what happens next, never what was already owed. `except`
+ * skips a channel that refused this alert. */
+export let routeFor = async (
+  dir: Directory,
+  person: string,
+  at?: string,
+  except?: Alerting,
+) => {
   let [chosen, texting, email, pushes] = await Promise.all([
     dir.alerts(person),
     dir.texting(person),
@@ -96,7 +105,7 @@ export let routeFor = async (dir: Directory, person: string, at?: string) => {
     dir.pushes(person),
   ])
   let before = at ? pushes.filter((b) => !b.since || b.since <= at) : pushes
-  return routeOf(chosen, texting, email, before.map(subscription))
+  return routeOf(chosen, texting, email, before.map(subscription), except)
 }
 
 // A browser as a push goes to it, without when it was allowed.
@@ -171,7 +180,9 @@ let part = (row: Bundle, name: string) => row[name] as Comp | undefined
  * for the way they chose, when the space's Operator wrote it (its `by` is
  * the space) to someone other than the whole space. It is stamped
  * `delivered`, or `bounced` with why: a carrier's block, a spent budget or
- * mail allowance. Anything unexpected is reported too.
+ * mail allowance. A push refusal falls back to the next channel; an outage
+ * with no fallback stays owed for the pool to retry. Anything unexpected is
+ * reported too.
  */
 export let alert = async (
   env: Env,
@@ -207,7 +218,13 @@ export let alert = async (
     }
   } catch (error) {
     if (error instanceof Unsent) throw error
-    if (!(error instanceof Blocked) && !(error instanceof CallError)) {
+    if (error instanceof Unpushed && error.retry) {
+      throw Object.assign(refuse('push', error.message), { retry: error.retry })
+    }
+    if (
+      !(error instanceof Blocked) && !(error instanceof CallError) &&
+      !(error instanceof Unpushed)
+    ) {
       caught(error, { request: 'operator alert', channel: route.by })
     }
     let reason = error instanceof Error ? error.message : String(error)
@@ -238,9 +255,16 @@ let sent = async (
     let open = openAt(url(env, chatPath(space.slug)), note.about)
     let count = await waitingOn(env, store, person, space.eid)
     let told = { words, open, id, count }
-    if (await pushed(env, dir, route.to, space, told)) return
-    let next = await routeFor(dir, person, note.at)
+    let refused: Unpushed | undefined
+    try {
+      if (await pushed(env, dir, route.to, space, told)) return
+    } catch (error) {
+      if (!(error instanceof Unpushed)) throw error
+      refused = error
+    }
+    let next = await routeFor(dir, person, note.at, 'push')
     if (next) return sent(env, store, dir, space, person, next, note)
+    if (refused) throw refused
     throw refuse('gone', 'No browser they allowed takes notifications now.')
   }
   if (route.by == 'text') {
@@ -293,8 +317,8 @@ let waitingOn = async (
 // Whether an alert reached any of `browsers`, each pushed the Operator's
 // name, the alert in a line, where it opens and how many things wait on the
 // person. A browser whose subscription is gone is dropped; one the push
-// service refused is reported, and when none took it the first refusal is
-// the alert's.
+// service refused is retained, and when none took it the first refusal is
+// handed back to the alert for fallback or retry.
 let pushed = async (
   env: Env,
   dir: Directory,

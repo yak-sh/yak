@@ -21,12 +21,17 @@ export type Vapid = { key: JsonWebKey; subject: string }
 export type Pushed = 'sent' | 'gone'
 
 /** A push service refused a message for a reason other than a dead
- * subscription. */
+ * subscription. A timeout, rate limit or service outage carries `retry`,
+ * honoring Retry-After or waiting a second by default. */
 export class Unpushed extends Error {
   status: number
-  constructor(status: number, why: string) {
+  retry?: { after: number }
+  constructor(status: number, why: string, after = 1000) {
     super(`The push service answered ${status}${why ? `: ${why}` : ''}`)
     this.status = status
+    if (status == 408 || status == 429 || status >= 500) {
+      this.retry = { after }
+    }
   }
 }
 
@@ -258,5 +263,15 @@ export let push = async (
   let why = await response.text().catch(() => '')
   if (response.ok) return 'sent'
   if (response.status == 404 || response.status == 410) return 'gone'
-  throw new Unpushed(response.status, why.slice(0, 200))
+  let later = response.headers.get('retry-after')
+  let after = later == null
+    ? 1000
+    : /^\d+$/.test(later)
+    ? Number(later) * 1000
+    : Math.max(0, Date.parse(later) - Date.now())
+  throw new Unpushed(
+    response.status,
+    why.slice(0, 200),
+    Number.isFinite(after) ? after : 1000,
+  )
 }

@@ -48,6 +48,31 @@ test('a subscription the service no longer has is gone; any other refusal is an 
   )
 })
 
+test('push outages and rate limits keep their retry timing; permanent refusals do not retry', async () => {
+  for (
+    let [status, retry] of [[530, { after: 7000 }], [429, { after: 7000 }], [
+      403,
+      undefined,
+    ]] as const
+  ) {
+    let error = await push(
+      ana.subscription,
+      'hi',
+      vapid,
+      () =>
+        Promise.resolve(
+          new Response('error code: 1033', {
+            status,
+            headers: { 'retry-after': '7' },
+          }),
+        ),
+    ).catch((error) => error)
+    assertEquals(error instanceof Unpushed, true)
+    assertEquals(error.status, status)
+    assertEquals(error.retry, retry)
+  }
+})
+
 test('a push carries one record of words at most', async () => {
   let full = await pushRequest(
     ana.subscription,

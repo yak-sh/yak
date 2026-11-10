@@ -31,7 +31,10 @@ bytes), signs a VAPID token for the endpoint's origin, good for twelve hours,
 and posts it through `send` (`fetch` by default). It answers `sent` once the
 service took it and `gone` when the service answered 404 or 410, so the
 subscription is dead; any other answer throws `Unpushed` with its status.
-`pushRequest` builds the same request without sending it, and
+Timeouts (408), rate limits (429) and service outages (5xx) carry `retry{after}`
+in milliseconds, honoring `Retry-After` or defaulting to one second. A host can
+use that refusal to retry or fall back to another channel without dropping the
+subscription. `pushRequest` builds the same request without sending it, and
 `isSubscription(value)` says whether a value a page posted is a subscription a
 message can go to.
 

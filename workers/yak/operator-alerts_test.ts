@@ -237,6 +237,15 @@ let opened = async () =>
 let about = crypto.randomUUID()
 let byPush = await told('Your report is ready.\nIt has three charts.', about)
 let onBoth = await opened()
+pushes['/laptop'] = 530
+let partial = await told('One push service is down.')
+let partialPush = await opened()
+let partialRefused = take(refused)
+pushes['/phone'] = 530
+let outage = await told('Both push services are down.')
+let outageText = take(texted)
+let outageRefused = take(refused)
+pushes['/phone'] = 201
 pushes['/laptop'] = 410
 let afterGone = await told('The laptop is gone.')
 let onPhone = await opened()
@@ -292,6 +301,18 @@ test('a browser that took back its subscription is dropped, and the rest still h
   assertEquals([goneOnce, Object.keys(onPhone)], [['/laptop'], ['phone']])
   assertEquals(left.map((b) => b.endpoint), [phone.subscription.endpoint])
   assertEquals(typeof (afterGone.row.delivered as { at: string }).at, 'string')
+})
+test('one refused push still reaches other browsers, and all refused pushes fall back to text', () => {
+  assertEquals([Object.keys(partialPush), partialRefused], [['phone'], [
+    '/laptop',
+  ]])
+  assertEquals(!!partial.row.delivered, true)
+  assertEquals(outageRefused.sort(), ['/laptop', '/phone'])
+  assertEquals(outageText, [{
+    to: ANA,
+    text: `Both push services are down.\n\n${textSigned(space)}`,
+  }])
+  assertEquals([!!outage.row.delivered, outage.row.bounced], [true, undefined])
 })
 test('when every browser allowed is gone, the alert goes the next way, as for a stopped number', async () => {
   assertEquals(fallen, [[], ['/phone'], [ANA]])
