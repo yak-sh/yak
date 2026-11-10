@@ -105,21 +105,18 @@ let letIn = await page(people, { operator: shop, role: 'viewer' })
 let listed = await (await page(people)).text()
 let during = await reach()
 // Within one request, the spaces the Operator reaches come with their apps:
-// what it then asks of their apps is answered from that read.
+// what it then asks of their apps is answered from that read, through any
+// client the request opens.
 let asked: string[] = []
-let counted = directory({
-  fetch: (req) => {
-    asked.push(decodeURIComponent(new URL(req.url).search))
-    return directoryFetch(req, env)
-  },
-})
+let counted = () =>
+  directory({
+    fetch: (req) => {
+      asked.push(decodeURIComponent(new URL(req.url).search))
+      return directoryFetch(req, env)
+    },
+  })
 let oneRead = await tallying(new Map(), async () => {
-  let ctx = await operatorContext(
-    env,
-    { person: bea },
-    shopSpace,
-    () => counted,
-  )
+  let ctx = await operatorContext(env, { person: bea }, shopSpace, counted)
   return (await ctx.dir.reachable(bea)).map((r) => r.app.slug)
 })
 // Someone with no seat in the shop, talking with its Operator.

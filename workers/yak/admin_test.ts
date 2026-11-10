@@ -240,6 +240,8 @@ let dir = {
   space: (slug: string) => Promise.resolve(slug == META.space ? ROOT : null),
   role: (_: Space, person: string) =>
     Promise.resolve(person == 'root' ? 'owner' : null),
+  sitting: (person: string) =>
+    Promise.resolve(new Map(person == 'root' ? [[ROOT.eid, 'owner']] : [])),
   census: () =>
     Promise.resolve({ ...EMPTY, people: census().people.slice(0, 1) }),
 } as unknown as Directory

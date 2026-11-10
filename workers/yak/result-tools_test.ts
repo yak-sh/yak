@@ -34,6 +34,7 @@ let directory = {
   app: () => Promise.resolve(app),
   page: () => Promise.resolve({ space, role: 'viewer' }),
   role: () => Promise.resolve('viewer'),
+  sitting: () => Promise.resolve(new Map([[space.eid, 'viewer']])),
 }
 let anonymous = { env, dir: directory, person: '' } as unknown as Ctx
 let viewer = { ...anonymous, person: crypto.randomUUID() }

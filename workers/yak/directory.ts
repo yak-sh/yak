@@ -2104,6 +2104,34 @@ export let directory = (
   })
 }
 
+// What this request's reads found, kept with the request (hops.ts `ambient`)
+// and answering no other, since a client outlives a request (`directoryOf`
+// holds one an isolate long), and shared by every client the request reads
+// through, as a line already read is (hops.ts `recall`). Each is kept with
+// where the request stood in its directory writes then (hops.ts `wrote`): it
+// answers until the request writes there. `apps` is every app of each space a
+// page named whole (`page` with `every`) or an Operator reaches (`reaches`),
+// by the space's eid, so a request asks a space's apps once. `invited` is the
+// invitations standing for the person a page asked about, by the space or app
+// each is to, so `invite` asks nothing more of them; a space or app the read
+// held with no invitation to it is known to have none.
+type Found = {
+  apps: Map<string, { at: number; apps: App[] }>
+  invited?: {
+    at: number
+    person: string
+    to: Map<string, { eid: string; role: Role } | null>
+  }
+}
+let requests = new WeakMap<Tally, Found>()
+let found = () => {
+  let tally = ambient()
+  if (!tally) return undefined
+  let held = requests.get(tally)
+  if (!held) requests.set(tally, held = { apps: new Map() })
+  return held
+}
+
 /** Directory decisions over supplied reads and writes. The binding client
  * above owns revisions, request caching and transport recovery. */
 export let directoryRows = (rows: {
@@ -2116,33 +2144,6 @@ export let directoryRows = (rows: {
 }) => {
   let query = rows.query
   let one = async (q: string) => (await query(q))[0]
-  // What this request's page reads found, kept with the request (hops.ts
-  // `ambient`) and answering no other, since a client outlives a request
-  // (`directoryOf` holds one an isolate long), and each with where the
-  // request stood in its directory writes then (hops.ts `wrote`): it answers
-  // until the request writes there, as a line already read is answered again
-  // (hops.ts `recall`). `apps` is every app of each space a page named whole
-  // (`page` with `every`), by the space's eid, so a page asks its space's
-  // apps once. `invited` is the invitations standing for the person a page
-  // asked about, by the space or app each is to, so `invite` asks nothing
-  // more of them; a space or app the read held with no invitation to it is
-  // known to have none.
-  type Found = {
-    apps: Map<string, { at: number; apps: App[] }>
-    invited?: {
-      at: number
-      person: string
-      to: Map<string, { eid: string; role: Role } | null>
-    }
-  }
-  let requests = new WeakMap<Tally, Found>()
-  let found = () => {
-    let tally = ambient()
-    if (!tally) return undefined
-    let held = requests.get(tally)
-    if (!held) requests.set(tally, held = { apps: new Map() })
-    return held
-  }
   let held = (to: string, person: string) => {
     let invited = found()?.invited
     return invited?.person == person && invited.at == wrote(META_STORE)
