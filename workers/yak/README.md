@@ -1254,14 +1254,24 @@ The Worker's own share, measured again the same evening on warm one-word turns
 in the same conversation, fell from 0.8–1.3 s to 0.36–0.53 s. Each step's
 `yak operator ask` line now carries a `trace`: every directory, store, vault,
 copy and machine wait, as `<began>+<ms> <wait> <what it asked>`, in ms from the
-step's start. What it shows now is two directory round trips in a row, each
-0.19–0.33 s from that conversation's object:
+step's start. It showed two directory round trips in a row, each 0.19–0.33 s
+from that conversation's object: the space, the person's reach and seats, the
+spaces that let the Operator in and the admin check first; then the person's
+Google connections, their MCP servers and the home space's page, which waited
+for the step's context.
 
-1. The space, the person's reach and seats, the spaces that let the Operator in
-   with their apps, and the admin check, asked in one batch as the step starts
-   (operator.ts `working`).
-2. What needs the step's context from the first: the person's Google
-   connections, their MCP servers and the home space's page.
+Those now go in the first batch too (operator.ts `working`). The step's early
+context needs only the person and the space's eid, its narrowed directory waits
+for the reach only to look past the space (grants.ts `narrowed`), and an
+administrative step reads its own space's role and apps from the person's seats
+and reach instead of the space's page. Measured on six warm turns in the same
+conversation, `at_submit` came 145 ms after the first batch's last answer, and
+now comes 40–65 ms after it, once the vault has answered the Google sign-in
+client. The batch's own last answer came later, though: 0.35–0.72 s for its 14
+directory requests, where the first 6 had taken 0.27–0.58 s. Its first answer
+still comes at 0.11–0.39 s, which suggests the directory answers the batch's
+requests one after another; that is not yet read from its own side. Time to
+`at_submit` is about what it was: 0.40–0.77 s, against 0.36–0.93 s the same day.
 
 The machine's own checks (`machineFor`) are answered from the first batch, so
 `at_request` to `at_submit` is nothing.
