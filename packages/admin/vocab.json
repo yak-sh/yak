@@ -743,6 +743,45 @@
         "tier",
         "reason"
       ]
+    },
+    "admin_support": {
+      "tool": true,
+      "destructive": false,
+      "noun": "admin",
+      "verb": "support",
+      "title": "Read or answer yaks.app support threads",
+      "description": "The support threads people and their agents open with feedback, kept in the platform's own store. With no thread, the ones not yet completed, newest first. With a thread, the whole conversation: where it was said from, the words that opened it, and every message with the id a reply names. Text answers in the thread as you, the platform's answer its person reads with feedback(thread); reply_to names the message it answers, fix links the task or commit that fixes it, and complete marks the thread done. Answered only to the platform role.\n\n  yak admin support --as admin@bot.yak.sh\n  yak admin support 6f1c… --as admin@bot.yak.sh\n  yak admin support 6f1c… 'Renaming is app_set(slug); the guide now says so.' --fix T-153200 --complete --as admin@bot.yak.sh",
+      "input": {
+        "thread": {
+          "type": "string",
+          "description": "the thread's id, as feedback's letter or the list names it; leave it out to list the threads not yet completed"
+        },
+        "text": {
+          "type": "string",
+          "description": "the answer, in the words its person reads"
+        },
+        "reply_to": {
+          "type": "string",
+          "description": "the id of the message this answers, as the thread lists it"
+        },
+        "fix": {
+          "type": "string",
+          "description": "the task or commit that fixes what the thread raised, by id or name"
+        },
+        "complete": {
+          "type": "boolean",
+          "description": "mark the thread completed"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "openWorld": true,
+      "positional": [
+        "thread",
+        "text"
+      ]
     }
   }
 }

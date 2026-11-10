@@ -29,6 +29,7 @@ import { START } from './newcomer.ts'
 import * as pageReport from './page-report.ts'
 import { paymentDoor } from './payment-doors.ts'
 import * as sell from './sell.ts'
+import * as support from './support-door.ts'
 import * as sweep from './sweep.ts'
 import * as tunnel from './tunnel.ts'
 import * as site from './site.ts'
@@ -134,6 +135,9 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // before the connector for the same reason as the fee's.
   if (path == '/api/budget') return budget.fetch(req, env)
   if (path == '/api/comp') return comp.fetch(req, env)
+  // TaskMaster's answers to support threads (support-door.ts), the owner's
+  // door, before the connector for the same reason as the fee's.
+  if (path == support.PATH) return support.fetch(req, env)
   // The tunnel a space has to a machine (tunnel.ts, T-39585): the owner's own
   // door, before the connector for the same reason as the fee's.
   if (path == '/api/tunnel') return tunnel.fetch(req, env)

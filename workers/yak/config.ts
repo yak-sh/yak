@@ -185,7 +185,14 @@ export let directoryConfig: Config = {
     {
       use: '@yaks/kernel',
       facets: ['vocab'],
-      words: [...spine, ...relations, ...marks, 'completed', 'unchecked'],
+      words: [
+        ...spine,
+        ...relations,
+        ...marks,
+        'comment',
+        'completed',
+        'unchecked',
+      ],
     },
     provenance,
     // Who changed a space's or an app's address or title, its seats and
@@ -211,7 +218,23 @@ export let directoryConfig: Config = {
     { use: '@yaks/blob', words: [] },
     { use: '@yaks/task', facets: ['vocab'], words: ['contains', 'requires'] },
     ...links,
-    { use: '@yaks/mail', words: ['notified'] },
+    // A support thread (support.ts): a conversation whose messages are
+    // comments, and the letter each message owes TaskMaster, sent by the pool
+    // through the platform's own sender (graph.ts `senders`) so a mail outage
+    // keeps the letter waiting rather than losing it.
+    { use: '@yaks/inbox', facets: ['vocab'], words: ['conversation'] },
+    {
+      use: '@yaks/mail',
+      words: [
+        'notified',
+        'mail',
+        'deliver',
+        'delivered',
+        'bounced',
+        'mail_post',
+      ],
+      with: { sender: { via: 'platform' } },
+    },
     // A person's mobile number beside their address, the words they agreed
     // to before being texted, and the numbers their own connected phone
     // account holds (operator-line.ts). Texts themselves are kept by the

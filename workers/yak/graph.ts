@@ -335,7 +335,7 @@ import {
 } from '@yaks/host/assembly'
 import { type Host as PluginHost, type Load } from '@yaks/host'
 import { type Config, given, meet, used } from '@yaks/host/config'
-import { configs } from './config.ts'
+import { configs, posts } from './config.ts'
 import { load } from './load.ts'
 import { metering } from './meter.ts'
 import { appTexter } from './app-texts.ts'
@@ -1519,6 +1519,9 @@ export class Store {
             () => this.#get('mail'),
             outgoing(this.#bind, mailTags(name)),
           ),
+          // The platform's own letters, which only the directory sends
+          // (config.ts): unmetered, from the platform's address.
+          platform: outgoing(this.#bind, {}, posts.platform),
         },
         texters: {
           worker: appTexter(

@@ -286,6 +286,54 @@ export let setComp = (
 ): Promise<SpaceComp> =>
   said(posted(apex('/api/comp'), { space, tier, reason }, session))
 
+/** The support threads people open with feedback (workers/yak
+ * support-door.ts), each with `text`, the thread as TaskMaster reads it. Only
+ * an owner of the `yak` space is answered. */
+export type SupportThread = {
+  eid: string
+  title: string
+  link: string
+  text: string
+  completed: { at: string | null; by: string | null } | null
+}
+export let SUPPORT = '/api/support'
+
+/** The threads not yet completed. */
+export let supportWaiting = (
+  session: string,
+): Promise<{ threads: SupportThread[] }> => said(sent(apex(SUPPORT), session))
+
+/** One thread whole. */
+export let supportNow = (
+  session: string,
+  thread: string,
+): Promise<SupportThread> =>
+  said(sent(apex(`${SUPPORT}?thread=${encodeURIComponent(thread)}`), session))
+
+/** The platform's answer in a thread: its words, the message it answers, the
+ * fix it links and whether the thread is done. Answers the thread after. */
+export let supportAnswer = (
+  session: string,
+  thread: string,
+  answer: {
+    text?: string
+    reply_to?: string
+    fix?: string
+    complete?: boolean
+  },
+): Promise<SupportThread> =>
+  said(posted(
+    apex(SUPPORT),
+    {
+      thread,
+      ...answer.text ? { text: answer.text } : {},
+      ...answer.reply_to ? { reply_to: answer.reply_to } : {},
+      ...answer.fix ? { fix: answer.fix } : {},
+      ...answer.complete ? { complete: 'true' } : {},
+    },
+    session,
+  ))
+
 /** Refund dollars the space spent this month, and why: they come off its
  * month and its starter's draw, its budget left as it is. */
 export let refund = (

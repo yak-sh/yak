@@ -27,6 +27,8 @@ let box = async () => {
       '@yaks/provenance',
       '@yaks/id',
       '@yaks/edge',
+      '@yaks/key',
+      '@yaks/alias',
       '@yaks/doc',
       '@yaks/persona',
       '@yaks/mail',
@@ -161,6 +163,46 @@ test("funnel reads the platform's counts from a time or a duration back", async 
     equal(asked[0], '2026-11-07T00:00:00.000Z')
     equal(Math.round((Date.now() - Date.parse(asked[1])) / 3_600_000), 24)
     equal(asked.length, 2)
+  } finally {
+    await host.close()
+  }
+})
+
+test('support lists waiting threads and answers one, its fix named by this graph', async () => {
+  let { host, kept, ask } = await box()
+  try {
+    await kept('own@example.com', 'own-bearer')
+    let [fix] = await host.graph.apply([{
+      entity: { eid: '$fix' },
+      doc: { title: 'Wrap the board' },
+      alias: { name: 'fix:wrap' },
+    }])
+    let asked: (string | null)[] = []
+    let thread = { eid: 't1', title: 'It scrolls', link: 'L', text: 'T' }
+    await answering((url, init) => {
+      asked.push(init?.body ? String(init.body) : new URL(url).search)
+      return Response.json(
+        new URL(url).search || init?.body ? thread : { threads: [thread] },
+      )
+    }, async () => {
+      equal(body(await ask('admin_support')), 't1  It scrolls')
+      equal(body(await ask('admin_support', { thread: 't1' })), 'T\nL')
+      await ask('admin_support', {
+        thread: 't1',
+        text: 'Wrapped.',
+        fix: 'fix:wrap',
+        complete: true,
+      })
+      await assertRejects(
+        () => ask('admin_support', { text: 'To whom?' }),
+        CallError,
+      )
+    })
+    equal(asked, [
+      '',
+      '?thread=t1',
+      `thread=t1&text=Wrapped.&fix=${fix.entity.eid}&complete=true`,
+    ])
   } finally {
     await host.close()
   }

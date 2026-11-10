@@ -108,13 +108,15 @@ export let transport = async (
 export type Delivery = Partial<Env>
 
 /** The capability lent to apps and Operators, with one selected transport,
- * the staging sink kept at its boundary. */
+ * the staging sink kept at its boundary. `kind` is whose letters these are:
+ * the platform's own (support.ts) leave as platform letters do. */
 export let outgoing = (
   env: Delivery,
   tags: Record<string, string> = {},
+  kind: Post = posts.apps,
 ): Sender => ({
   send: async (m) => {
-    let { sender, waiting } = await transport(env, posts.apps, tags)
+    let { sender, waiting } = await transport(env, kind, tags)
     if (!sender) throw new Unsent(waiting!, 60_000)
     return diverted(sender, env).send(m)
   },

@@ -249,7 +249,7 @@
           "description": "the inverse sandbox mark kept in step for rollback readers"
         }
       },
-      "description": "a copy of somebody else\u2019s app, at the version it was copied from"
+      "description": "a copy of somebody else’s app, at the version it was copied from"
     },
     "trend": {
       "component": true,
@@ -387,7 +387,7 @@
         "status": {
           "type": "string",
           "stamped": true,
-          "description": "that subscription's status as Stripe last said it (`active`, `past_due`, `canceled`, \u2026), mirrored by the webhook and never moved by anything here: Stripe's state machine, not ours"
+          "description": "that subscription's status as Stripe last said it (`active`, `past_due`, `canceled`, …), mirrored by the webhook and never moved by anything here: Stripe's state machine, not ours"
         },
         "until": {
           "type": "string",
@@ -481,10 +481,38 @@
           "format": "date-time"
         }
       },
-      "description": "an error a deployed app reported about itself",
+      "description": "where somebody stood when they said something was wrong: the app, its deployed version and the platform's release, on a report an app filed about itself or a support thread feedback opened",
       "before": [
         "doc"
       ]
+    },
+    "support": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "person": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the signed-in person whose thread this is, from the caller's credential; absent on a thread opened signed out, which nobody but the platform reads"
+        },
+        "session": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the run it was said from: the Operator session or the connector's instrument the credential vouched for"
+        },
+        "call": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the tool call it was said in, where the door recorded one"
+        }
+      },
+      "description": "who a support thread or one of its messages came from, as the caller's credential said: ownership on a thread (a conversation{} wearing report{}), evidence on each of its comment{} messages. A message without it is the platform's answer (workers/yak/support.ts)."
     },
     "screen": {
       "component": true,
@@ -574,7 +602,7 @@
           "description": "the immutable handle its storage uses, independent of its current address"
         }
       },
-      "description": "one customer\u2019s area of the platform, at its own slug",
+      "description": "one customer’s area of the platform, at its own slug",
       "before": [
         "doc"
       ]

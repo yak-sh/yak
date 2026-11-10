@@ -145,11 +145,12 @@ test('feedback reaches the platform, in the words it was said in', async () => {
 
     let words = 'She said renaming an app is impossible to find. I looked ' +
       'for app_rename and there is no such tool.'
-    let said = await agent.tool('feedback', { app: 'recipes', text: words })
-    // One sentence the agent can repeat: it arrived, and they can answer.
-    assertStringIncludes(said, 'people who run yaks.app')
-    assertStringIncludes(said, `${kitchen43}/recipes v1`)
-    assertStringIncludes(said, them.email)
+    let said = await agent.answer('feedback', { app: 'recipes', text: words })
+    // One sentence the agent can repeat: it is kept, and answered in the
+    // thread it names.
+    assertStringIncludes(said.text, 'people who run yaks.app')
+    assertStringIncludes(said.text, `${kitchen43}/recipes v1`)
+    let thread = (said.value as { thread: string }).thread
 
     // The letter: the words first, the context under a rule beneath them.
     let sent = await letter(k, 'hello@yaks.app', 'app_rename')
@@ -161,10 +162,9 @@ test('feedback reaches the platform, in the words it was said in', async () => {
     assertStringIncludes(sent.body, `yaks.app ${VERSION}`)
     // To the platform's address alone, which the box files in the yaks.app
     // project; two addresses would put one letter in whichever project's copy
-    // arrived first.
+    // arrived first. Its answer goes in the thread it names.
     assertEquals(sent.to, ['hello@yaks.app'])
-    // Answering it reaches the person who said it.
-    assertEquals(sent.replyTo, them.email)
+    assertStringIncludes(sent.body, `thread ${thread}`)
 
     // The row, in the meta store: the words, who said them, and where they
     // were standing — the app, the deploy it was serving, and the platform's

@@ -48,6 +48,9 @@ import {
   storeQuery,
   storesNow,
   storeUpload,
+  supportAnswer,
+  supportNow,
+  supportWaiting,
   tunnelNow,
   unlink,
   zone,
@@ -356,6 +359,41 @@ export let runs = (
             ? `comped: ${now.comp.reason} (${now.comp.by})`
             : 'no comp'),
       )]
+    }),
+
+    // The server answers support threads only to the account's seat in yak.
+    // A fix named by its handle here (T-153200) is this graph's entity, so
+    // it is resolved here and sent as its eid.
+    admin_support: verb(async (call, _vault, _keep, graph) => {
+      let a = argsOf(call)
+      let thread = word(a, 'thread')
+      let text = word(a, 'text'), reply_to = word(a, 'reply_to')
+      let named = word(a, 'fix'), complete = a.complete === true
+      if (!thread && (text || reply_to || named || complete)) {
+        throw new CallError('thread', 'name the thread to answer')
+      }
+      let at = await acting(a)
+      if (!thread) {
+        let { threads } = await supportWaiting(at.bearer)
+        return [said(
+          call,
+          threads.length
+            ? threads.map((t) => `${t.eid}  ${t.title}`)
+            : 'no thread is waiting',
+        )]
+      }
+      let fix = named
+        ? (await graph.address([named])).get(named) ?? named
+        : undefined
+      let t = text || reply_to || fix || complete
+        ? await supportAnswer(at.bearer, thread, {
+          text,
+          reply_to,
+          fix,
+          complete,
+        })
+        : await supportNow(at.bearer, thread)
+      return [said(call, [t.text, t.link])]
     }),
 
     admin_funnel: verb(async (call) => {

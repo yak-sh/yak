@@ -430,6 +430,7 @@ deletes its key, so the person has to connect it again.
 ## feedback
 
     feedback(text, app?, space?)
+    feedback(thread, text?)
 
 The tool for **all** feedback about the platform: this connector, its tools, its
 guide, the way an app is built or served on yaks.app. A tool that refused for no
@@ -443,19 +444,34 @@ around it and carry on: nobody at yaks.app sees the workaround, so feedback is
 how they learn about the problem.
 
 Send two things and nothing else: **what the person said, in their own words,
-and what you tried and what happened.** Who they are, their address, their
-space, the app if you name one, its version, the platform's release and the time
-are attached automatically. Repeating them only adds text the reader already
-has.
+and what you tried and what happened.** Who they are, their space, the app if
+you name one, its version, the platform's release, the time, and the run and
+call it was said from are attached automatically. Repeating them only adds text
+the reader already has.
 
-It writes a report in the platform's own store and mails it to the people who
-run yaks.app, who can write back to the person's address. If the mail cannot go
-out, the report is kept and the reply tells you so — no need to send it again.
+Called with `text`, it opens a **support thread** in the platform's own store
+and answers with its `thread` id and a `link` to it, as words and as data. The
+people who run yaks.app are told by email and answer in the thread itself. The
+letter is kept with the words and sent from there, so a mail outage delays it
+and never loses either; there is no need to send it again.
 
-The limit is three an hour, per person. A fourth is deferred, not refused: the
-reply says so and gives the address to write to directly if it cannot wait.
-Feedback is not counted against the space's monthly email ceiling, so a space at
-its ceiling can still send feedback.
+Called with `thread`, it reads the thread: the words that opened it, every
+message since, the fix an answer links and whether the thread is completed. With
+`thread` and `text`, it adds the text to the thread first, and they are told of
+that too. Ask again later for a reply; it stays in the thread.
+
+A thread is read and added to only by the person who opened it, a member of the
+space it was said in, or the platform, and only with a credential that reaches
+that space. Anyone else naming its id is told there is no thread they can read.
+Feedback works signed out too, but a thread opened signed out belongs to nobody:
+it cannot be read back or answered in, so put an address in the words if a reply
+is wanted.
+
+Opening a thread is limited to three an hour, per person; adding to threads to
+twelve an hour. Past either, the call is deferred, not refused: the reply says
+so and gives the address to write to directly if it cannot wait. Feedback is not
+counted against the space's monthly email ceiling, so a space at its ceiling can
+still send feedback.
 
 **An error in the person's own app is not platform feedback.** It is already in
 `app_errors`, and fixing it is your job.

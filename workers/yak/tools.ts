@@ -145,7 +145,7 @@ import { inspect as inspectStore } from './store-inspect.ts'
 // module's own body runs.
 import { tooLong } from './standing.ts'
 import { listable } from './shelf.ts'
-import { meta, minted } from './meta.ts'
+import { meta } from './meta.ts'
 import {
   doomed,
   door,
@@ -203,6 +203,17 @@ import {
   mint,
   revoke,
 } from './grants.ts'
+import {
+  link,
+  open,
+  opens,
+  read as readThread,
+  say,
+  type Thread,
+  title,
+  transcript,
+  valueOf,
+} from './support.ts'
 import { mail } from './mail.ts'
 import { NARROW, PAGES, uriOf, whole } from './guide.ts'
 import { asset, EITHER, NO_ARGS, PUBLIC, publics, what } from './preauth.ts'
@@ -2710,16 +2721,25 @@ let HOURLY = 3
 // rather than a counter in some isolate — three per hour only means anything
 // if it holds across the isolate a call lands in. A store that cannot answer
 // counts nothing: a rate limit is never the reason feedback is lost.
-let recently = async (ctx: Ctx) => {
+let counted = async (ctx: Ctx, line: string) => {
   try {
-    return (await meta(ctx.env).query(
-      `.report&.created.by=${ctx.person}&.report.at>=1-hour-ago`,
-    )).length
+    return (await meta(ctx.env).query(line)).length
   } catch (e) {
     caught(e, { tool: 'feedback' })
     return 0
   }
 }
+let recently = (ctx: Ctx) =>
+  counted(ctx, `.report&.created.by=${ctx.person}&.report.at>=1-hour-ago`)
+
+// And what they have added to threads this hour. A conversation needs more
+// turns than reports need openings, and each one still mails a person.
+let SAYS = 12
+let recentlySaid = (ctx: Ctx) =>
+  counted(
+    ctx,
+    `.comment&.support.person=${ctx.person}&.created.at>=1-hour-ago`,
+  )
 
 // The type a view is served under: text/html with the profile the MCP Apps
 // spec requires, which is how a host tells a page it renders from a page it
@@ -6580,25 +6600,137 @@ let OURS: Row[] = [
     destructive: false,
     openWorld: true,
     // The one door that takes something from a stranger (anon.ts). What it
-    // writes is the platform's own inbox and nobody's graph, so it is no more
-    // an anonymous write than a letter is: harder-limited, and unsigned.
+    // writes is the platform's own store and nobody's graph, so it is no more
+    // an anonymous write than a letter is: harder-limited, and unsigned. A
+    // stranger may open a thread and never read one: only a credential says
+    // whose a thread is (support.ts `opens`).
     security: EITHER,
     input: {
       type: 'object',
       properties: {
         text: str(
           'the feedback itself: what is wrong, clumsy, missing, wished for ' +
-            'or good, in the words the person used, and what you tried',
+            'or good, in the words the person used, and what you tried; ' +
+            'with thread, what to add to it, or leave it out to read it',
         ),
         app: str(
           'the slug of the app they were using, if any',
         ),
         space: SPACE,
+        thread: str(
+          'the thread id an earlier feedback answered with, to add words to ' +
+            'it or read its replies',
+        ),
       },
-      required: ['text'],
     },
     run: async (ctx, args) => {
-      let said = text(args.text, 'text')
+      let said = args.text == null ? '' : text(args.text, 'text').trim()
+      let pause = `every one of them is kept and will be read — so this is ` +
+        `a pause, not a no. Save the rest for later, or write to ${
+          replyTo(ctx.env)
+        } directly if it cannot wait.`
+      let store = meta(ctx.env)
+      let headers = async () => ({
+        ...vouched(asCaller(ctx, null)),
+        ...await titling(ctx.dir, ctx.person),
+      })
+      // Who said it, on the letter, and whether a letter goes at all: a test
+      // account's words are kept and go nowhere (@yaks/platform/bots), since a
+      // letter in a person's mailbox is a thing a person has to read. Nobody
+      // signed in is said plainly — "someone, signed out" — rather than left
+      // blank, so a reader knows there is no address to answer.
+      let signed = async () => {
+        let by = ctx.person ? await ctx.dir.nameAt(ctx.person) : null
+        let email = ctx.person ? await ctx.dir.emailAt(ctx.person) : null
+        return {
+          email,
+          test: isTestAddress(email ?? ''),
+          from: ctx.person
+            ? `${by ?? 'someone'}${email ? ` <${email}>` : ''}`
+            : 'someone, signed out',
+        }
+      }
+      // What the credential says about where this was said from: the person,
+      // the run it vouched for, the call the door recorded. Never an id the
+      // caller typed.
+      let evidence = {
+        person: ctx.person || null,
+        session: ctx.who?.instrument ?? null,
+        call: ctx.call ?? null,
+      }
+      let answer = (t: Thread, lead: string): Out => ({
+        text: `${lead}\n\n${transcript(t, ctx.person)}\n\n` +
+          `Read it again with feedback(thread: '${t.eid}'), or at ` +
+          link(ctx.env, t.eid),
+        value: valueOf(t, ctx.env),
+      })
+
+      if (args.thread != null) {
+        let eid = text(args.thread, 'thread')
+        if (!ctx.person) {
+          throw refuse(
+            'access',
+            'A thread is read and answered signed in, by the person who ' +
+              `opened it or a member of its space. Sign in at ${
+                hostUrl(ctx.env, '/login')
+              }, or call feedback without thread to open a new one.`,
+          )
+        }
+        let t = await readThread(store, eid)
+        let narrowed = ctx.who?.spaceEid ??
+          (ctx.who?.space
+            ? (await ctx.dir.space(ctx.who.space))?.eid ?? ctx.who.space
+            : null)
+        // One sentence for a thread that is not there and one that is not
+        // theirs: an id says nothing about somebody else's thread.
+        if (
+          !t || !await opens(t, {
+            person: ctx.person,
+            narrowed,
+            member: async (space) => {
+              let at = await ctx.dir.at(space)
+              return !!at && !!await ctx.dir.role(at, ctx.person)
+            },
+            admin: () => admin(ctx),
+          })
+        ) {
+          throw refuse('missing', `no thread ${eid} that you can read`)
+        }
+        if (!said) return answer(t, 'The thread as it stands:')
+        let held = await recentlySaid(ctx)
+        if (held >= SAYS) {
+          throw refuse(
+            'limit',
+            `That is ${held} already this hour, and ${pause}`,
+          )
+        }
+        let me = await signed()
+        await say(
+          store,
+          ctx.env,
+          t.eid,
+          { words: said, ...evidence },
+          me.test ? null : {
+            subject: `feedback: ${t.title}`,
+            lines: [
+              me.from,
+              `yaks.app ${VERSION} · ${new Date().toISOString()}`,
+            ],
+          },
+          await headers(),
+        )
+        return answer(
+          (await readThread(store, t.eid))!,
+          'Added to the thread; the people who run yaks.app are told.',
+        )
+      }
+
+      if (!said) {
+        throw refuse(
+          'arguments',
+          'text: say what is wrong or wished for, or name a thread to read it',
+        )
+      }
       // Where they were, as far as it can be worked out — and never a
       // question. A person in two spaces who named no app still gets to say
       // what is wrong: the report simply names no space, which is a smaller
@@ -6618,10 +6750,6 @@ let OURS: Row[] = [
       let app = space && args.app != null
         ? await ctx.dir.app(space, text(args.app, 'app'))
         : null
-      let pause = `every one of them is kept and will be read — so this is ` +
-        `a pause, not a no. Save the rest for later, or write to ${
-          replyTo(ctx.env)
-        } directly if it cannot wait.`
       if (!ctx.person) {
         if (!await within(ctx.env.FEEDBACK_RATE, ctx.source ?? '')) {
           throw refuse(
@@ -6640,80 +6768,54 @@ let OURS: Row[] = [
         }
       }
       let at = new Date().toISOString()
-      // The whole thing is the body; the title is its opening, so a listing
-      // of reports reads.
-      let opening = said.trim().split('\n')[0].slice(0, 80)
-      let wrote = await meta(ctx.env).apply([{
-        entity: { eid: '$said' },
-        doc: { title: opening, body: said },
-        report: {
+      let me = await signed()
+      let where = app && space
+        ? `${space.slug}/${app.slug}${app.version ? ` v${app.version}` : ''}`
+        : space?.slug ?? ''
+      // The letter leads with the words: what was said is the report, and
+      // everything else is a line of context under a rule, so a person takes
+      // it in at a glance. It goes to the platform's own address (mail.ts
+      // REPLY_TO), which the box pulls into the yaks.app project.
+      let eid = await open(
+        store,
+        ctx.env,
+        { words: said, ...evidence },
+        {
           app: app?.eid ?? null,
           space: space?.eid ?? null,
           version: app?.version ?? null,
           release: VERSION,
           at,
         },
-      }], {
-        ...vouched(asCaller(ctx, null)),
-        ...await titling(ctx.dir, ctx.person),
-      })
-      let eid = minted(wrote).$said ?? ''
-      // The letter, to the platform's own address (mail.ts REPLY_TO), which
-      // the box pulls into the yaks.app project: its sessions hear it and its
-      // board holds it as a task until it is answered. The reply goes to
-      // whoever said it, when they are signed in: the answer is for them, and
-      // our own address in Reply-To would send it back to us.
-      // It leads with the words: what was said is the report,
-      // and everything else is a line of context under a rule, so a person
-      // takes it in at a glance.
-      // Who it is from, on the letter. Nobody signed in is said plainly —
-      // "someone, signed out" — rather than left blank, so a reader knows
-      // there is no address to answer and nothing was lost.
-      let by = ctx.person ? await ctx.dir.nameAt(ctx.person) : null
-      let email = ctx.person ? await ctx.dir.emailAt(ctx.person) : null
-      let from = ctx.person
-        ? `${by ?? 'someone'}${email ? ` <${email}>` : ''}`
-        : 'someone, signed out'
-      let where = app && space
-        ? `${space.slug}/${app.slug}${app.version ? ` v${app.version}` : ''}`
-        : space?.slug ?? ''
-      // A test account's words are kept and go nowhere (@yaks/platform/bots): a
-      // letter in a person's mailbox is a thing a person has to read.
-      let test = isTestAddress(email ?? '')
-      let sent = !test && await mail(ctx.env)({
-        to: [replyTo(ctx.env)],
-        ...(email ? { replyTo: email } : {}),
-        subject: `feedback: ${opening}`,
-        body: `${said.trim()}\n\n—\n` +
-          `${from}\n` +
-          (where ? `${where}\n` : '') +
-          (app && space ? `${url(space, app, ctx.env)}\n` : '') +
-          `yaks.app ${VERSION} · ${at}\n${eid}`,
-      }).then(() => true).catch((e) => {
-        caught(e, { tool: 'feedback', space: space?.slug, app: app?.slug })
-        return false
-      })
-      // Never loud: a mail seam that refused loses the letter, never the
-      // words. The row stands, and the answer says so, because an agent told
-      // "that failed" says it again and the person says it twice.
-      return {
-        text: sent
-          ? 'That went to the people who run yaks.app' +
-            (where ? `, with ${where} and the versions` : '') +
-            `. They read these, and can write back${
-              email ? ` to ${email}` : ''
-            }.` +
-            (ctx.person
-              ? ''
-              : ' It went as from someone signed out, so there is no address ' +
-                'to answer — say one in the words if a reply is wanted.')
-          : test
+        me.test ? null : {
+          subject: `feedback: ${title(said)}`,
+          lines: [
+            me.from,
+            ...where ? [where] : [],
+            ...app && space ? [url(space, app, ctx.env)] : [],
+            `yaks.app ${VERSION} · ${at}`,
+          ],
+        },
+        await headers(),
+      )
+      let t = (await readThread(store, eid))!
+      // Never loud about the mail: the letter waits in the store until it
+      // goes, so nothing here can fail after the words are kept, and an
+      // agent told "that failed" says it again and the person says it twice.
+      return answer(
+        t,
+        (me.test
           ? 'The words are kept for the people who run yaks.app, and not ' +
-            `mailed: ${email} is a test account.`
-          : 'The words are kept for the people who run yaks.app — the mail ' +
-            'could not go out just now, so it waits with them rather than ' +
-            'being lost. No need to say it again.',
-      }
+            `mailed: ${me.email} is a test account.`
+          : 'Kept as a thread for the people who run yaks.app' +
+            (where ? `, with ${where} and the versions` : '') +
+            '; they are told by mail and answer in the thread.') +
+          (ctx.person
+            ? ''
+            : ' It was said signed out, so nobody can read it back or be ' +
+              'answered in it — say an address in the words if a reply is ' +
+              'wanted.'),
+      )
     },
   },
   // The guide, handed over rather than linked (T-34284). Every description

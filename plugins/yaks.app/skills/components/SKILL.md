@@ -715,34 +715,34 @@ The complete list of reserved names:
     builder_model_answer builder_open builder_ring built call call_ready
     call_woken called calls cancel cancelled checkout chosen cites
     code_review comment commit comp compat completed connection contains
-    content cost created credit credit_block delegates delete_upload deliver
-    delivered demo deploy desk_sidebar dispatch doc document_extract
-    document_page document_text draft edge effect email entity entry error
-    event exception execution failed favorite fee feed feedback file filed
-    finding fired form form_post former gallery gitobj grant grants_listed
-    home hook hostname image inference installed integration
-    integration_install interrupted invite inviting key last_deploy lease
-    lines listed mail mail_answered mail_dismissed mail_post mail_task
-    mcp_server member memory meter model model_reservation model_result
-    newcomer newcomer_builds notice notice_confirmed notice_letter
-    notice_posted notice_subscription notified notify_deaths notify_trash
-    oauth_grant occupancy offer openai opened openrouter operator
-    operator_alerts operator_reach order output output_of own_number parent
-    pending person persona phone phone_line plan price product project
-    provider provisional public_file published push_subscription quarantined
-    question questions reads recalled ref referenced refund_failed
-    refund_request refund_retry refund_sale refund_sent refusal
-    register_writes registration release_remake report repository
-    representation requires restored result retired revision rtc rtc_lapse
-    sale_access sale_artifact satisfies screen screenshot secret seeded
-    seller sender sending serves service_checkout service_quote session
-    session_input session_result session_run sfu signed_in signin
+    content conversation cost created credit credit_block delegates
+    delete_upload deliver delivered demo deploy desk_sidebar dispatch doc
+    document_extract document_page document_text draft edge effect email
+    entity entry error event exception execution failed favorite fee feed
+    feedback file filed finding fired form form_post former gallery gitobj
+    grant grants_listed home hook hostname image inference installed
+    integration integration_install interrupted invite inviting key
+    last_deploy lease lines listed mail mail_answered mail_dismissed
+    mail_post mail_task mcp_server member memory meter model
+    model_reservation model_result newcomer newcomer_builds notice
+    notice_confirmed notice_letter notice_posted notice_subscription
+    notified notify_deaths notify_trash oauth_grant occupancy offer openai
+    opened openrouter operator operator_alerts operator_reach order output
+    output_of own_number parent pending person persona phone phone_line plan
+    price product project provider provisional public_file published
+    push_subscription quarantined question questions reads recalled ref
+    referenced refund_failed refund_request refund_retry refund_sale
+    refund_sent refusal register_writes registration release_remake report
+    repository representation requires restored result retired revision rtc
+    rtc_lapse sale_access sale_artifact satisfies screen screenshot secret
+    seeded seller sender sending serves service_checkout service_quote
+    session session_input session_result session_run sfu signed_in signin
     sms_consent space space_logo spend staged started starter stop
-    stream_item submitted subscription supersedes supervises sweep switched
-    task text text_post theme tool topic trashed tree_entry trend tunnel
-    typed unchecked updated usage uses using verified visit visitor_build
-    visitor_calls visitor_share volume waitlisted wake wants web worked
-    worktree written
+    stream_item submitted subscription supersedes supervises support sweep
+    switched task text text_post theme tool topic trashed tree_entry trend
+    tunnel typed unchecked updated usage uses using verified visit
+    visitor_build visitor_calls visitor_share volume waitlisted wake wants
+    web worked worktree written
 
 When your first choice is reserved, name the component for its specific purpose:
 the reserved name is the general one, and yours is the specific one. Not

@@ -1068,20 +1068,22 @@ screen_pair:
 feedback:
   title: Send feedback about yaks.app
   description: >-
-    Send feedback about yaks.app itself: this connector, its tools, its
-    documentation, the way an app is built or served. A bug, a rough edge, a
-    step that took three tries, a confusing answer, a wish, a feature idea,
-    a thing that went well. Not for the app being built for the person: an
-    error inside their own app is listed by app_errors. A report carries
-    what the person said, in their words, and what was tried and what
-    happened; who they are, their space, the app if named, and the versions
-    are attached automatically. It reaches a person by email, and they can
-    write back. It works signed out too: the report then records that it
-    came from someone signed out, and there is no address to reply to unless
-    one is in the text. Pass text describing the feedback, with optional
-    space and app slugs. Returns a submission confirmation, or says the
-    report was saved but could not be emailed. Documentation:
-    https://yaks.app/docs/errors.
+    Send feedback about yaks.app itself, and talk it through with the people
+    who run it: this connector, its tools, its documentation, the way an app
+    is built or served. A bug, a rough edge, a step that took three tries, a
+    confusing answer, a wish, a feature idea, a thing that went well. Not for
+    the app being built for the person: an error inside their own app is
+    listed by app_errors. Pass text with what the person said, in their
+    words, and what was tried and what happened; who they are, their space,
+    the app if named, and the versions are attached automatically. It opens a
+    support thread and returns its thread id and a link; the people who run
+    yaks.app are told by email and answer in the thread. Pass that thread to
+    read the replies, the fix they link and whether it is done, or thread with
+    text to add to it. Only the person who opened a thread, a member of its
+    space, or the platform reads or adds to one. It works signed out too:
+    the thread then records that it came from someone signed out, and nobody
+    can read it back, so put an address in the text if a reply is wanted.
+    Documentation: https://yaks.app/docs/errors.
 guide:
   title: Read the guide
   step:
