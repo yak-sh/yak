@@ -3,7 +3,9 @@ import type { Page } from './model.ts'
 export let gallery = (db: Store, app: Binding) => {
   let selected = async (id: string) => {
     let [page] = await db.query(
-      `.entity.eid=${identifier(id)}&.gallery_approved&?coloring_page&?artwork`,
+      `.entity.eid=${
+        identifier(id)
+      }&.gallery_approved&?coloring_page&?artwork&?gallery_approved`,
     ) as Page[]
     if (!page?.artwork || !page.coloring_page) return null
     let [book] = await db.query(
@@ -14,7 +16,7 @@ export let gallery = (db: Store, app: Binding) => {
   return {
     async list() {
       let candidates = await db.query(
-          '.gallery_approved&?coloring_page&?artwork',
+          '.gallery_approved&?coloring_page&?artwork&?gallery_approved',
         ) as Page[],
         rows = []
       let books = [
@@ -32,7 +34,10 @@ export let gallery = (db: Store, app: Binding) => {
         if (page.artwork && consented.has(page.coloring_page.book)) {
           rows.push({
             id: page.entity.eid,
-            caption: page.coloring_page.caption,
+            caption: String(
+              (page.gallery_approved as { caption?: string } | undefined)
+                ?.caption ?? '',
+            ),
             mime: page.artwork.mime,
           })
         }

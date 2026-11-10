@@ -293,6 +293,14 @@
         "at": {
           "type": "string",
           "format": "date-time"
+        },
+        "caption": {
+          "type": "string",
+          "description": "Reviewed public caption, independent of the private story sentence."
+        },
+        "title": {
+          "type": "string",
+          "description": "Reviewed public title."
         }
       }
     },
