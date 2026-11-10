@@ -3,7 +3,7 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { Stale } from '@yaks/graph/errors'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { test, until as soon } from '@yaks/testing'
+import { test, tick, until as soon } from '@yaks/testing'
 import { blogGraph, pooledBlog } from './testing.ts'
 import {
   drop,
@@ -412,6 +412,60 @@ test("one holder's leases are renewed together, in one commit", async () => {
       )
     ),
   )
+})
+
+// Work that ends while a beat's read of its lease is still out. The read then
+// answers what it saw or fails, over a store left open or closed behind the
+// work. Answers what was told and the lease as it was left.
+let leaving = async (o: { answers: boolean; closed: boolean }) => {
+  let base = g()
+  let out: PromiseWithResolvers<void> | undefined
+  let working = false, closed = false
+  let graph: Graph = {
+    ...base,
+    get: async (...args: Parameters<Graph['get']>) => {
+      if (closed) throw new Error('the store is closed')
+      let rows = await base.get(...args)
+      if (working && !out) await (out = Promise.withResolvers<void>()).promise
+      return rows
+    },
+  }
+  let told: unknown[] = []
+  let stop = new AbortController()
+  let running = holding(
+    graph,
+    'clock',
+    {
+      holder: 'p1',
+      hold: 15,
+      signal: stop.signal,
+      report: (e) => void told.push(e),
+    },
+    (signal) => {
+      working = true
+      return until(signal)
+    },
+  )
+  let read = await soon(() => out, { label: "a beat's read" })
+  stop.abort()
+  await running
+  closed = o.closed
+  o.answers ? read.resolve() : read.reject(new Error('the store closed'))
+  await tick()
+  return { told, lease: await held(base, 'clock') }
+}
+
+test('a renewal under way when its work ends does not take the lease back', async () => {
+  assertEquals(await leaving({ answers: true, closed: false }), {
+    told: [],
+    lease: { name: 'clock' },
+  })
+})
+
+test('a renewal under way when its work ends tells nothing a store closed behind it fails', async () => {
+  for (let answers of [true, false]) {
+    assertEquals((await leaving({ answers, closed: true })).told, [])
+  }
 })
 
 test("not waiting, a take the store fails is the caller's to hear", async () => {

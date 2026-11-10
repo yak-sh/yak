@@ -307,7 +307,7 @@ let beside = (g: Access, r: Renewal): () => void => {
       if (b.beating) return
       b.beating = true
       try {
-        await renew(g, [...b.renewals])
+        await renew(g, [...b.renewals], (r) => b.renewals.has(r))
       } finally {
         b.beating = false
       }
@@ -326,13 +326,22 @@ let beside = (g: Access, r: Renewal): () => void => {
 // One commit renewing every lease a beat holds. One somebody else holds now is
 // lost; a commit refused is asked again a lease at a time, and a refusal is
 // read back before it counts, since only another holder means it is gone.
-let renew = async (g: Access, all: Renewal[]): Promise<void> => {
+//
+// A beat runs beside the work, so the work can end while one is under way.
+// `kept` says whether a renewal is still wanted: a lease its holder has let go
+// is not taken back, and nothing the store fails about it is anybody's to hear,
+// since a holder on its way out may have closed the store behind it.
+let renew = async (
+  g: Access,
+  all: Renewal[],
+  kept: (r: Renewal) => boolean,
+): Promise<void> => {
   if (!all.length) return
-  let { ask, report } = all[0]
+  let { ask } = all[0]
   try {
     let bundles = await taking(g, all.map((r) => r.name), ask)
     all.forEach((r, i) => bundles[i] || r.lost.abort())
-    let taken = bundles.filter((b): b is Bundle => !!b)
+    let taken = bundles.filter((b, i): b is Bundle => !!b && kept(all[i]))
     if (!taken.length) return
     try {
       await g.apply(taken)
@@ -341,15 +350,15 @@ let renew = async (g: Access, all: Renewal[]): Promise<void> => {
       if (!(error instanceof Stale)) throw error
     }
   } catch (e) {
-    return report(e)
+    return all.find(kept)?.report(e)
   }
   for (let r of all) {
-    if (r.lost.signal.aborted) continue
+    if (r.lost.signal.aborted || !kept(r)) continue
     try {
       if (await take(g, r.name, r.ask)) continue
       if ((await held(g, r.name))?.holder != r.ask.holder) r.lost.abort()
     } catch (e) {
-      r.report(e)
+      if (kept(r)) r.report(e)
     }
   }
 }
