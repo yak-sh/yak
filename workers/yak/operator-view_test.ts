@@ -62,11 +62,11 @@ let drawn = () =>
 
 test('an error reads as words, its detail only inside a closed disclosure', () => {
   let doc = drawn()
-  let shown = [...doc.querySelectorAll('.Talk_Trouble > p')]
+  let shown = [...doc.querySelectorAll('.Transcript_Error > p')]
     .map((p) => p.textContent)
   assertEquals(shown.length, 4)
   for (let said of shown) assert(!/[{}]/.test(said!), said!)
-  let details = [...doc.querySelectorAll('.Talk_Trouble > details')]
+  let details = [...doc.querySelectorAll('.Transcript_Error > details')]
   assertEquals(details.length, 4)
   for (let d of details) {
     assert(!d.hasAttribute('open'))
@@ -78,8 +78,8 @@ test('an error reads as words, its detail only inside a closed disclosure', () =
   )
   assertStringIncludes(details[2].textContent!, 'CPU time')
   assertStringIncludes(details[3].textContent!, 'no verified cost bound')
-  for (let p of doc.querySelectorAll('.Talk_Trouble > p')) {
-    let text = p.closest('.Talk_Entry')!
+  for (let p of doc.querySelectorAll('.Transcript_Error > p')) {
+    let text = p.closest('.Transcript_Entry')!
       .querySelector('[data-entry-text]')!.getAttribute('data-entry-text')!
     assertStringIncludes(text, p.textContent!)
   }
@@ -95,9 +95,9 @@ test('an error reads as words, its detail only inside a closed disclosure', () =
     assertEquals(doc.querySelector('main')!.innerHTML.includes(detail), false)
   }
   // Nothing of an error is drawn as a reply, or as the person's words.
-  assertEquals(doc.querySelectorAll('.Talk_Reply').length, 0)
+  assertEquals(doc.querySelectorAll('.Transcript_Reply').length, 0)
   assertEquals(
-    [...doc.querySelectorAll('.Talk_You')].map((p) => p.textContent),
+    [...doc.querySelectorAll('.Transcript_Bubble')].map((p) => p.textContent),
     ['Any app errors recently?'],
   )
 })
@@ -182,9 +182,9 @@ let shown = (entries: Bundle[]) => {
   let doc = parseHTML(
     `<main>${rows(entries, names).map((r) => r.html).join('')}</main>`,
   ).document
-  return [...doc.querySelectorAll('.Talk_You')].map((p) => ({
+  return [...doc.querySelectorAll('.Transcript_Bubble')].map((p) => ({
     said: p.textContent,
-    via: p.querySelector('.Talk_Via')?.getAttribute('title') ?? null,
+    via: p.querySelector('.Transcript_Via')?.getAttribute('title') ?? null,
   }))
 }
 
@@ -253,15 +253,17 @@ test("a call's turn draws the caller's words and what they heard, the request an
   )
   let texts = (q: string) =>
     [...document.querySelectorAll(q)].map((e) => e.textContent!.trim())
-  assertEquals(texts('.Talk_You:not(.Talk_Asked *)'), [
+  assertEquals(texts('.Transcript_Bubble:not(.More_Branch *)'), [
     'Any errors?',
     'Thanks',
   ])
-  assertEquals(texts('.Talk_Asked .Talk_You'), ['User asks: any errors?'])
-  assertEquals(texts('.Talk_Asked .Talk_Reply'), ['None.'])
-  assertEquals(texts('.Talk_Asked .Talk_Step > summary'), ['Did tool'])
+  assertEquals(texts('.More_Branch .Transcript_Bubble'), [
+    'User asks: any errors?',
+  ])
+  assertEquals(texts('.More_Branch .Transcript_Reply'), ['None.'])
+  assertEquals(texts('.More_Branch .More_Inline > summary'), ['Did tool'])
   assertEquals(
-    texts('.Talk_Reply:not(.Talk_Asked *)'),
+    texts('.Transcript_Reply:not(.More_Branch *)'),
     ['No errors at all.'],
   )
   // The answer coming back redraws the fold, under its request's id.
@@ -286,10 +288,10 @@ test("words the platform wrote read as the system's in one closed line, never as
     }</main>`,
   ).document
   assertEquals(
-    [...doc.querySelectorAll('.Talk_You')].map((p) => p.textContent),
+    [...doc.querySelectorAll('.Transcript_Bubble')].map((p) => p.textContent),
     ['Make it blue'],
   )
-  let system = [...doc.querySelectorAll('.Talk_System')]
+  let system = [...doc.querySelectorAll('.More_Framed-system')]
   assertEquals(system.map((d) => d.hasAttribute('open')), [false, false])
   assertEquals(system.map((d) => d.querySelector('summary')!.textContent), [
     'From the system: ' + recovery,

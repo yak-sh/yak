@@ -1,3 +1,12 @@
+import * as identity from './Identity.ts'
+import * as toolbar from './Toolbar.ts'
+import * as transcript from './Transcript.ts'
+import * as attachments from './Attachments.ts'
+import * as annotated from './Annotated.ts'
+import * as preview from './Preview.ts'
+import * as composer from './Composer.ts'
+import * as popover from './Popover.ts'
+import * as skip from './Skip.ts'
 /**
  * The kit: every part, by the name of the file its CSS is in, in the groups
  * the style guide shows them in; every theme; and what a theme becomes for
@@ -144,6 +153,16 @@ let modules = {
     Inbox: inbox,
   },
   Page: {
+    Identity: identity,
+    Toolbar: toolbar,
+    Transcript: transcript,
+    Attachments: attachments,
+    Annotated: annotated,
+    Preview: preview,
+    Composer: composer,
+    Popover: popover,
+    Skip: skip,
+
     Loading: loading,
     Empty: empty,
     Shell: shell,

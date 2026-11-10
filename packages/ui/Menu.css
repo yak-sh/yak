@@ -109,3 +109,7 @@
   cursor: pointer;
   text-decoration: none;
 }
+
+.Menu_Fold[open] .Identity_Action {
+  color: var(--muted);
+}

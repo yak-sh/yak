@@ -1,3 +1,4 @@
+import { Annotated } from '@yaks/ui/parts'
 import type { Bundle, Comp } from '@yaks/graph/bundle'
 import { type ComponentChildren as Node, h } from 'preact'
 
@@ -17,7 +18,9 @@ export let metadata = (
   let requests = new Map(
     asks.filter((b) => b.ask).map((b) => [b.entity.eid, b]),
   )
-  let names = new Map(models.map((b) => [b.entity.eid, comp(b, 'model')?.name]))
+  let names = new Map(
+    models.map((b) => [b.entity.eid, comp(b, 'model')?.name]),
+  )
   return Object.fromEntries(
     entries.filter((b) => b.entry).map((b) => {
       let entry = comp(b, 'entry')!
@@ -65,20 +68,15 @@ let dollars = (cost: number) =>
 /** A quiet margin outside the message's reading column. */
 export let measured = (node: Node, meta?: Metadata) =>
   !meta ? node : h(
-    'div',
-    { class: 'Talk_Measured' },
-    h('div', { class: 'Talk_Reading' }, node),
+    Annotated,
+    {},
+    h(Annotated.Content, {}, node),
     h(
-      'aside',
-      {
-        class: 'Talk_Margin',
-        tabindex: 0,
-        'data-tip': meta.detail,
-        'aria-label': meta.detail,
-      },
-      h('span', { class: 'Talk_Sequence' }, `#${meta.seq}`),
+      Annotated.Margin,
+      { tabindex: 0, 'data-tip': meta.detail, 'aria-label': meta.detail },
+      h(Annotated.Number, { 'data-sequence': '' }, `#${meta.seq}`),
       meta.cost != null
-        ? h('span', { class: 'Talk_Price' }, dollars(meta.cost))
+        ? h(Annotated.Number, { 'data-cost': '' }, dollars(meta.cost))
         : null,
     ),
   )

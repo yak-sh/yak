@@ -204,7 +204,7 @@ test("a piece of the Operator's work draws its task as its session ran: the word
   let { document } = parseHTML(drawn.html)
   let summaries = [...document.querySelectorAll('summary')]
     .map((summary) => summary.textContent ?? '')
-  assertStringIncludes(drawn.html, 'Talk_You">Post a special meeting')
+  assertStringIncludes(drawn.html, 'Transcript_Bubble">Post a special meeting')
   assertEquals(
     summaries.some((text) => text.startsWith('Read the schema')),
     true,

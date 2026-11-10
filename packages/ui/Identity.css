@@ -1,0 +1,87 @@
+.Identity {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.Identity {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: center;
+  column-gap: .6rem;
+  padding: .55rem .7rem;
+  list-style: none;
+}
+.Identity.Menu_Summary {
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+}
+.Identity_Avatar {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 800;
+}
+img.Identity_Avatar {
+  object-fit: cover;
+  background: none;
+}
+.Identity_Text {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  line-height: 1.25;
+}
+.Identity_Name {
+  overflow-wrap: anywhere;
+}
+.Identity_Name,
+.Identity_Note {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.Identity_Note {
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+}
+.Identity_Action {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+  font-size: var(--fine, var(--small));
+  font-weight: 700;
+}
+.Identity_Mark {
+  color: var(--accent);
+  font-weight: 800;
+}
+.Identity_Add {
+  padding: .5rem .7rem;
+  color: var(--accent);
+  font-size: var(--fine, var(--small));
+  font-weight: 700;
+  text-decoration: none;
+}
+.Identity_Name,
+.Identity_Note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.Identity_Image {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: .35rem;
+  object-fit: cover;
+}
+
+.Identity_Avatar-large {
+  width: 4rem;
+  height: 4rem;
+  font-size: 1.75rem;
+}

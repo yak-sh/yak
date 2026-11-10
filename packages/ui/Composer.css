@@ -1,0 +1,116 @@
+.Composer {
+  position: relative;
+}
+.Composer_Figure {
+  position: absolute;
+  bottom: calc(100% - .2rem);
+  left: .75rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: contain;
+  pointer-events: none;
+}
+.Composer {
+  display: grid;
+  gap: .5rem;
+  padding: .5rem;
+  border: 1px solid var(--border2);
+  border-radius: 1rem;
+  background: var(--card);
+}
+.Composer_Field {
+  width: 100%;
+  min-height: calc(var(--control-height, 2rem) * 1.5);
+  max-height: 40vh;
+  resize: none;
+}
+.Composer_Tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+}
+.Composer_Attach {
+  position: relative;
+  color: var(--muted);
+  font-size: var(--small);
+  cursor: pointer;
+}
+.Composer_Attach:hover {
+  color: var(--text);
+}
+.Composer_File {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.Composer_Attach:focus-within {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.Composer_Tools .Drop_Said {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.Composer_Stop,
+.Composer_Send {
+  margin-left: auto;
+}
+.Composer_Stop {
+  display: none;
+}
+.Composer_Voice[hidden] {
+  display: none;
+}
+.Composer_Voice[data-listening] {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--accent) 18%, transparent);
+  animation: Composer_Listening 1.6s ease-in-out infinite alternate;
+}
+@keyframes Composer_Listening {
+  to {
+    box-shadow: 0 0 0 .45rem color-mix(in srgb, var(--accent) 8%,
+      transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .Composer_Voice[data-listening] {
+    animation: none;
+  }
+}
+.Composer_Status {
+  margin: .3rem 0 0;
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+}
+.Composer_Status:empty {
+  display: none;
+}
+
+.Composer[data-busy] .Composer_Stop {
+  display: inline-flex;
+}
+.Composer[data-busy] .Composer_Send {
+  margin-left: 0;
+}
+
+.Composer_Form {
+  gap: .75rem;
+  background: linear-gradient(transparent, var(--bg) 1rem);
+}
+.Composer_Form-inline {
+  background: none;
+}
+
+@container workspace (min-width:54rem) {
+  .Composer_Figure {
+    right: calc(100% + .75rem);
+    bottom: 0;
+    left: auto;
+    width: 4rem;
+    height: 4rem;
+  }
+}

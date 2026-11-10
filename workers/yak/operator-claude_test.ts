@@ -108,19 +108,21 @@ test('the conversation shows the context the Operator and each helper were given
   )
   let { document } = parseHTML(`<main>${html}</main>`)
   let named = (d: Element) => d.querySelector(':scope > summary')!.textContent
-  let layers = (d: Element) => [...d.querySelectorAll(':scope > .Talk_Told')]
+  let layers = (d: Element) => [...d.querySelectorAll(':scope > .More_Framed')]
   let [operator, helper, ...more] = [
-    ...document.querySelectorAll('.Talk_Told:not(.Talk_Told .Talk_Told)'),
+    ...document.querySelectorAll('.More_Framed:not(.More_Framed .More_Framed)'),
   ]
   assertEquals(more, [])
   assertEquals(named(operator), `The context ${space.operator} was given`)
   assertEquals(named(helper), 'The context the helper was given')
   let first = (m: string) => asked.find((r) => r.model == m)!
   let shown = (at: Element) =>
-    [...at.children].find((c) => c.classList.contains('Talk_Written'))
+    [...at.children].find((c) => c.classList.contains('More_Text'))
       ?.innerHTML ?? at.querySelector(':scope > p')?.textContent
   let drawn = (md: string) =>
-    parseHTML(renderToString(reply(md))).document.querySelector('.Talk_Reply')!
+    parseHTML(renderToString(reply(md))).document.querySelector(
+      '.Transcript_Reply',
+    )!
       .innerHTML
   let whoOf = (m: string) =>
     first(m).instructions!.split(' Who you are\n')[1].split(PART)[0].trim()
@@ -158,7 +160,7 @@ test('the conversation shows the context the Operator and each helper were given
     first(m).tools.map((t) => JSON.stringify(t))
   )
   assertEquals(
-    document.querySelectorAll('.Talk_Told details > pre').length,
+    document.querySelectorAll('.More_Framed details > pre').length,
     new Set(offers).size,
   )
   // Each tool by its name, opening on its description and its schema.
@@ -172,10 +174,12 @@ test('the conversation shows the context the Operator and each helper were given
     JSON.stringify(spawn.parameters, null, 2),
   )
   // The helper's context sits inside the step that started it.
-  let step = helper.closest('.Talk_Step')!
+  let step = helper.closest('.More_Inline')!
   assertEquals(named(step), 'Started a helper')
-  let words = document.querySelectorAll('.Talk_You, .Talk_Reply, .Talk_Trouble')
-  for (let w of words) assertEquals(w.querySelector('.Talk_Told'), null)
+  let words = document.querySelectorAll(
+    '.Transcript_Bubble, .Transcript_Reply, .Transcript_Error',
+  )
+  for (let w of words) assertEquals(w.querySelector('.More_Framed'), null)
   let live = await frameOf(store, child.entity.eid)
   assertEquals(live!.frame.operator.task, out.session)
   // A helper's step brings the page that step, live, its context inside.
@@ -202,7 +206,11 @@ let talked = async (refused: boolean) => {
   let { session } = await operating(store, env, { model: opus, name: SONNET })
     .ask({ person: owner }, space, { say: 'The page is broken; fix it.' })
   await drain(store)
-  let { html } = await conversationOf(store, '/manage/claude/operator', session)
+  let { html } = await conversationOf(
+    store,
+    '/manage/claude/operator',
+    session,
+  )
   let { document } = parseHTML(`<main>${html}</main>`)
   let all = (s: string) =>
     [...document.querySelectorAll(s)].map((e) => e.textContent?.trim())
@@ -212,16 +220,16 @@ let talked = async (refused: boolean) => {
 test("a helper's end is the Operator's step in the conversation, never the person's words", async () => {
   for (let refused of [false, true]) {
     let { all } = await talked(refused)
-    assertEquals(all('.Talk_You'), ['The page is broken; fix it.'])
+    assertEquals(all('.Transcript_Bubble'), ['The page is broken; fix it.'])
     assertEquals(
-      all('.Talk_Step > summary').at(-1),
+      all('.More_Inline > summary').at(-1),
       refused ? 'A helper could not finish' : 'Heard back from a helper',
     )
     if (refused) {
-      assertEquals(all('.Talk_Step-no .Talk_Trouble > p'), [
+      assertEquals(all('.More_Inline-no .Transcript_Error > p'), [
         'A helper the Operator started could not finish, so the Operator went on without it.',
       ])
-      assertStringIncludes(all('.Talk_Trouble pre').join(), REFUSED)
+      assertStringIncludes(all('.Transcript_Error pre').join(), REFUSED)
     }
   }
 })

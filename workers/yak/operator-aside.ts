@@ -1,3 +1,4 @@
+import { Popover } from '@yaks/ui/parts'
 // The aside in the chat's header (operator-page.ts `talkPage`): what the
 // conversation is doing now, and the helpers it set going, each with how it
 // stands, its step and how long it has taken. In the right margin where the
@@ -10,7 +11,7 @@
 // and says how long each has lasted, which the page keeps current.
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
-import { Button, Card, Dot, Rows, State } from '@yaks/ui/parts'
+import { Card, Dot, Rows, State } from '@yaks/ui/parts'
 
 /** What a conversation's turn is doing while it runs, and since when. */
 export type Turn = { what: string; since: string }
@@ -88,19 +89,18 @@ let TONE: Record<Standing, string | string[] | undefined> = {
 let For = (
   { since, until, now }: { since: string; until?: string; now: number },
 ) =>
-  h('time', {
-    class: 'Talk_Time',
-    'data-since': since,
-    'data-until': until,
-    dateTime: since,
-  }, lasted(since, until, now))
+  h(
+    Popover.Time,
+    { 'data-since': since, 'data-until': until, dateTime: since },
+    lasted(since, until, now),
+  )
 
 /** The turn under way, in a line: what it is doing and for how long, or that
  * nothing runs. */
 export let TurnNow = ({ turn, now }: { turn: Turn | null; now: number }) =>
   h(
-    'p',
-    { class: 'Talk_Turn', 'data-turn': '' },
+    Popover.Line,
+    { 'data-turn': '' },
     turn
       ? [
         h(State, { mod: ['pulse', 'active'] }, turn.what.replace(/…$/, '')),
@@ -194,19 +194,16 @@ export let glanceOf = ({ turn, helpers }: Aside) => {
 export let Glance = ({ aside, open }: { aside: Aside; open: boolean }) => {
   let { dots, more, label } = glanceOf(aside)
   return h(
-    Button,
+    Popover.Trigger,
     {
       type: 'button',
-      class: 'Talk_Glance',
       'data-glance': '',
       'aria-expanded': open ? 'true' : 'false',
       'aria-controls': 'aside-now',
       'aria-label': label,
     },
     dots.map((mod) => h(Dot, { mod, 'aria-hidden': 'true' })),
-    more
-      ? h('span', { class: 'Talk_More', 'aria-hidden': 'true' }, `+${more}`)
-      : null,
+    more ? h(Popover.Count, { 'aria-hidden': 'true' }, `+${more}`) : null,
   )
 }
 
@@ -216,9 +213,10 @@ export let Aside = (
   { aside, now, open = false }: { aside: Aside; now: number; open?: boolean },
 ) =>
   h(
-    'aside',
+    Popover,
     {
       class: 'Talk_Aside',
+      mod: 'responsive',
       'data-aside': '',
       'data-open': open ? '' : undefined,
       'aria-label': 'What is happening now',
@@ -226,7 +224,7 @@ export let Aside = (
     },
     h(Glance, { aside, open }),
     h(
-      'div',
+      Popover.Body,
       { class: 'Talk_AsideIn', id: 'aside-now' },
       h(
         Card,

@@ -1,3 +1,4 @@
+import { Identity } from '@yaks/ui/parts'
 // The space picker shared by the dashboard and Operator sidebar.
 import { h } from 'preact'
 import { Icon, Menu } from '@yaks/ui/parts'
@@ -7,10 +8,11 @@ let named = (s: Picked) => s.title || s.slug
 let glyph = (name: 'chevrons-up-down' | 'plus') => h(Icon, { of: icons[name] })
 
 /** A space's logo, or where it has none its first letter. */
-export let spaceTile = (s: Picked) =>
+export let spaceTile = (s: Picked, mod?: string) =>
   s.logo
-    ? h('img', {
-      class: 'Desk_Tile',
+    ? h(Identity.Avatar, {
+      as: 'img',
+      mod,
       src: s.logo,
       width: 32,
       height: 32,
@@ -18,8 +20,8 @@ export let spaceTile = (s: Picked) =>
       decoding: 'async',
     })
     : h(
-      'span',
-      { class: 'Desk_Tile', 'aria-hidden': 'true' },
+      Identity.Avatar,
+      { mod, 'aria-hidden': 'true' },
       named(s).charAt(0).toUpperCase(),
     )
 
@@ -36,12 +38,8 @@ export let choice = (
 ) => {
   let add = make
     ? h(
-      'a',
-      {
-        class: 'Desk_New',
-        href: make.href,
-        title: make.label,
-      },
+      Identity.Add,
+      { href: make.href, title: make.label },
       glyph('plus'),
       h('span', { class: 'Sidebar_Label' }, make.label),
     )
@@ -51,16 +49,16 @@ export let choice = (
     return [
       spaceTile(s),
       h(
-        'span',
-        { class: 'Desk_Name' },
-        h('b', { class: 'Desk_NameText' }, named(s)),
-        said ? h('small', { class: 'Desk_NameNote' }, said) : null,
+        Identity.Text,
+        {},
+        h(Identity.Name, {}, named(s)),
+        said ? h(Identity.Note, {}, said) : null,
       ),
     ]
   }
   if (all.length < 2) {
     return [
-      h('div', { class: 'Desk_Space', title: named(here) }, box(here)),
+      h(Identity, { title: named(here) }, box(here)),
       add,
     ]
   }
@@ -70,12 +68,12 @@ export let choice = (
     h(
       Menu.Summary,
       {
-        class: 'Desk_Space',
+        as: Identity,
         title: `Change space: ${named(here)}`,
         'aria-label': `Change space: ${named(here)}`,
       },
       box(here),
-      h('span', { class: 'Desk_Change' }, glyph('chevrons-up-down')),
+      h(Identity.Action, {}, glyph('chevrons-up-down')),
     ),
     h(
       Menu,
@@ -96,7 +94,7 @@ export let choice = (
               ? `${s.whose}’s space · you’re a member`
               : 'You’re a member',
           ),
-          s.slug == here.slug ? h('span', { class: 'Desk_Tick' }, '✓') : null,
+          s.slug == here.slug ? h(Identity.Mark, {}, '✓') : null,
         )
       ),
       add ? h(Menu.Rule, {}) : null,

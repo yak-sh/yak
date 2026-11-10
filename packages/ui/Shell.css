@@ -186,3 +186,10 @@
     scrollbar-width: none;
   }
 }
+
+.Shell_Sheet {
+  background: var(--card);
+}
+.Shell_Content {
+  font-size: var(--small);
+}

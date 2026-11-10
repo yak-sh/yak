@@ -1,0 +1,49 @@
+.Popover_Trigger {
+  gap: .3rem;
+  font-variant-numeric: tabular-nums;
+}
+.Popover_Trigger .Dot {
+  width: .55rem;
+  height: .55rem;
+}
+.Popover_Count {
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+  font-weight: 700;
+}
+.Popover_Line {
+  margin: 0;
+}
+.Popover_Time {
+  font-variant-numeric: tabular-nums;
+}
+
+.Popover[hidden],
+.Popover [hidden] {
+  display: none;
+}
+.Popover_Body {
+  display: none;
+  gap: .75rem;
+  padding: var(--popover-padding, .5rem);
+  background: var(--popover-background, var(--bg));
+  border: var(--popover-border, 1px solid var(--border2));
+  border-radius: var(--radius);
+  box-shadow: var(--popover-shadow, 0 .5rem 1.5rem color-mix(in srgb,
+    var(--text) 12%, transparent));
+}
+.Popover[data-open] .Popover_Body {
+  display: grid;
+}
+
+@container workspace (min-width:76rem) {
+  .Popover-responsive .Popover_Trigger {
+    display: none;
+  }
+  .Popover-responsive .Popover_Body {
+    padding: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+  }
+}

@@ -84,9 +84,9 @@ test('a person archives a span in one write without losing its words or search h
 })
 
 test('timestamps offer entry actions, and hiding preserves readable words and restoration', () => {
-  equal(doc.querySelectorAll('.Talk_Entry-hidden').length, 2)
+  equal(doc.querySelectorAll('.Transcript_Entry-hidden').length, 2)
   equal(restored.every((b) => !b.archived && !!b.content), true)
-  equal(restoredDoc.querySelectorAll('.Talk_Entry-hidden').length, 0)
+  equal(restoredDoc.querySelectorAll('.Transcript_Entry-hidden').length, 0)
   for (
     let [page, label, restore] of [[doc, 'Restore', 'true'], [
       restoredDoc,

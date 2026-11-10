@@ -51,6 +51,14 @@ let { Link, Label, Rule, Edge } = SideNav
  * pointer; and a rail, the column collapsed to its icons. */
 export let specimens = (): Specimen[] => [
   [
+    'SideNav, variants',
+    h(
+      SideNav.Edge,
+      { mod: 'textured' },
+      h(SideNav, {}, h(SideNav.Link, { href: '#' }, 'Home')),
+    ),
+  ],
+  [
     'SideNav, Edge, Link, Link-on, Link-hover, Rule',
     h(
       Edge,

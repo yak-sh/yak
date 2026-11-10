@@ -19,7 +19,10 @@ import { COOKIE, sign } from './lib/token.ts'
 let p = platform('admin-operator', { SESSION_SECRET: 'secret' })
 let dir = directoryOf(p.env.STORE)
 let [jeff, root, eid] = [0, 0, 0].map(() => crypto.randomUUID())
-let as = (person: string) => ({ 'x-yak-person': person, 'x-yak-role': 'owner' })
+let as = (person: string) => ({
+  'x-yak-person': person,
+  'x-yak-role': 'owner',
+})
 await dir.apply({
   entities: [
     {
@@ -115,10 +118,10 @@ test('a conversation opens on what was said and everything its model was told an
   // chat app, so marked by no channel.
   let column = talk.document.querySelector('#content > .Talk_Column')!
   assertEquals(column.hasAttribute('data-conversation'), true)
-  assertEquals(texts(column, '.Talk_You'), ['Post the meeting.'])
-  assertEquals(column.querySelector('.Talk_Via'), null)
-  assertEquals(texts(talk.document, '.Talk_Reply'), ['Posted.'])
-  let told = [...talk.document.querySelectorAll('.Talk_Told')]
+  assertEquals(texts(column, '.Transcript_Bubble'), ['Post the meeting.'])
+  assertEquals(column.querySelector('.Transcript_Via'), null)
+  assertEquals(texts(talk.document, '.Transcript_Reply'), ['Posted.'])
+  let told = [...talk.document.querySelectorAll('.More_Framed')]
   let summaries = told.map((d) => d.querySelector('summary')!.textContent!)
   assertEquals(summaries[0], 'The context the Operator was given')
   let tools = told.at(-1)!
@@ -244,16 +247,19 @@ test('operator_read reads a long conversation back to its start, the newest 64 f
 
 let plain = await conversationOf(service.store, '/operator', long)
 test('only the admin conversation puts recorded model prices beside messages', () => {
-  let reply = talk.document.querySelector('.Talk_Reply')!.closest(
-    '.Talk_Measured',
+  let reply = talk.document.querySelector('.Transcript_Reply')!.closest(
+    '.Annotated',
   )!
-  assertEquals(texts(reply, '.Talk_Price'), ['$0.001'])
-  let yours = talk.document.querySelector('.Talk_You')!.closest(
-    '.Talk_Measured',
+  assertEquals(texts(reply, '[data-cost]'), ['$0.001'])
+  let yours = talk.document.querySelector('.Transcript_Bubble')!.closest(
+    '.Annotated',
   )!
-  assertEquals(texts(yours, '.Talk_Price'), [])
-  assertEquals(plain.html.includes('Talk_Margin'), false)
-  assertEquals(talk.document.querySelectorAll('.Talk_Margin[title]').length, 0)
+  assertEquals(texts(yours, '[data-cost]'), [])
+  assertEquals(plain.html.includes('Annotated_Margin'), false)
+  assertEquals(
+    talk.document.querySelectorAll('.Annotated_Margin[title]').length,
+    0,
+  )
 })
 
 let [
@@ -303,14 +309,14 @@ await service.store.g.apply([
 ], { trusted: true })
 let metered = await get(`${at}/${long}`)
 let margin = (id: string) =>
-  metered.document.querySelector(`#row-${id} .Talk_Margin`)!
+  metered.document.querySelector(`#row-${id} .Annotated_Margin`)!
 test('entry numbering crosses an off-page compact and resets at the next one, with off-page recorded spend', () => {
   assertEquals(metered.status, 200)
-  assertEquals(texts(margin(beforeCompact), '.Talk_Sequence'), ['#69'])
-  assertEquals(texts(margin(afterCompact), '.Talk_Sequence'), ['#1'])
-  assertEquals(texts(margin(afterCompact), '.Talk_Price'), ['$0.012346'])
-  assertEquals(texts(margin(unknown), '.Talk_Sequence'), ['#3'])
-  assertEquals(texts(margin(unknown), '.Talk_Price'), [])
+  assertEquals(texts(margin(beforeCompact), '[data-sequence]'), ['#69'])
+  assertEquals(texts(margin(afterCompact), '[data-sequence]'), ['#1'])
+  assertEquals(texts(margin(afterCompact), '[data-cost]'), ['$0.012346'])
+  assertEquals(texts(margin(unknown), '[data-sequence]'), ['#3'])
+  assertEquals(texts(margin(unknown), '[data-cost]'), [])
   assertEquals(
     margin(unknown).getAttribute('data-tip')!.includes('price not recorded'),
     true,

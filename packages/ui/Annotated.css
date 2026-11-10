@@ -1,0 +1,17 @@
+.Annotated {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6.5rem;
+  align-items: start;
+  gap: 1rem;
+}
+.Annotated_Content {
+  min-width: 0;
+}
+.Annotated_Margin {
+  display: grid;
+  justify-items: end;
+  gap: .2rem;
+  color: var(--muted);
+  font-size: var(--small);
+  font-variant-numeric: tabular-nums;
+}

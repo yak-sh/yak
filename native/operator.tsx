@@ -7,7 +7,7 @@ import { type ComponentRef, useEffect, useRef, useState } from 'react'
 import { KeyboardAvoidingView, ScrollView, StyleSheet } from 'react-native'
 import { h, type VNode } from 'preact'
 import { useEffect as useSoon, useState as useHeld } from 'preact/hooks'
-import { Button, Field } from '@yaks/ui'
+import { Button, Field, Notice, Transcript } from '@yaks/ui'
 import { look, mount, type Node } from '@yaks/native'
 import {
   drawLines,
@@ -124,9 +124,9 @@ let Talk = ({ space }: { space: Space }) => {
     }
   }
   return h(
-    'main',
+    Transcript.Lines,
     {
-      class: 'Talk_Said',
+      as: 'main',
       onClick: async (e: Event) => {
         let button = (e.target as Element).closest?.('[data-archive-entries]')
         if (!button) return
@@ -149,9 +149,9 @@ let Talk = ({ space }: { space: Space }) => {
       },
     },
     [...lines].map(([id, node]) => h('div', { key: id }, node)),
-    typing ? h('p', { class: 'Talk_Reply' }, typing) : null,
-    now ? h('p', { class: 'Talk_Now' }, now) : null,
-    trouble ? h('p', { class: 'Talk_Note Talk_Note-no' }, trouble) : null,
+    typing ? h(Transcript.Reply, { as: 'p' }, typing) : null,
+    now ? h(Transcript.Status, {}, now) : null,
+    trouble ? h(Notice, { mod: 'negative' }, trouble) : null,
     h(
       'form',
       { onSubmit: send },

@@ -54,7 +54,11 @@ let telnyxApi = endpoints(globalThis).open(async (req) => {
   let [, call, action] = /^\/calls\/([^/]+)\/actions\/(\w+)$/.exec(
     new URL(req.url).pathname,
   ) ?? []
-  acted.push({ action, call: decodeURIComponent(call), body: await req.json() })
+  acted.push({
+    action,
+    call: decodeURIComponent(call),
+    body: await req.json(),
+  })
   return Response.json({ data: { result: 'ok' } })
 })
 let signer = await crypto.subtle.generateKey('Ed25519', true, [
@@ -234,7 +238,9 @@ test('a stream reopened on a ticket too old for its call is refused and reported
     (failure.exception as { value: string }).value,
     "A call's stream was refused: its ticket is 720 s old",
   )
-  equal((failure.error as { tags: unknown }).tags, { request: 'operator call' })
+  equal((failure.error as { tags: unknown }).tags, {
+    request: 'operator call',
+  })
 })
 
 test('a call charges what it used as it goes, so the object restarted under it and the stream opened again charge it all once', async () => {
@@ -575,7 +581,9 @@ test('a call whose hearing stream is refused once the call is answered reports t
     (failure.exception as { value: string }).value,
     "A call's speech stream was lost: Turn detection is not supported",
   )
-  equal((failure.error as { tags: unknown }).tags, { request: 'operator call' })
+  equal((failure.error as { tags: unknown }).tags, {
+    request: 'operator call',
+  })
 })
 
 // A call a model hears and speaks itself, the model stood in for, or with
@@ -915,24 +923,29 @@ test("a recorded call is the caller's conversation: their words theirs, its voic
   let { document } = parseHTML(`<div>${html}</div>`)
   let texts = (q: string) =>
     [...document.querySelectorAll(q)].map((e) => e.textContent!.trim())
-  let open = ':not(.Talk_Asked *)'
-  equal(texts(`.Talk_You${open}`), [
+  let open = ':not(.More_Branch *)'
+  equal(texts(`.Transcript_Bubble${open}`), [
     'Hi Ellihu, how are you this evening?',
     'Hi, Ellahu, do any of my apps have errors right now?',
   ])
-  equal(texts(`.Talk_Reply${open}`), [
+  equal(texts(`.Transcript_Reply${open}`), [
     "Hi, it's Elihu.",
     'Good evening. I’m well, thank you. Ready to assist with anything you need.',
     'Certainly, one moment.',
     'You have one open error in Mossvale.',
   ])
-  equal(texts('.Talk_Asked .Talk_You'), [
+  equal(texts('.More_Branch .Transcript_Bubble'), [
     'Hi Elihu, do any of my apps have errors right now?',
   ])
-  equal(texts('.Talk_Asked .Talk_Reply'), ['Mossvale has one open error.'])
+  equal(texts('.More_Branch .Transcript_Reply'), [
+    'Mossvale has one open error.',
+  ])
   equal(
     ['By phone:', 'your voice', 'called you'].map((s) =>
-      [...texts(`.Talk_You${open}`), ...texts(`.Talk_Reply${open}`)].some((
+      [
+        ...texts(`.Transcript_Bubble${open}`),
+        ...texts(`.Transcript_Reply${open}`),
+      ].some((
         text,
       ) => text.includes(s))
     ),
@@ -1101,7 +1114,10 @@ test("a call's turns answered together, and the helper they start, are each said
     'Done: Garlic Butter Chicken is in your recipe box.',
   ])
   // Each request has its answers, and each reached the caller.
-  let requests = await answering(store, await store.g.read('.operator_request'))
+  let requests = await answering(
+    store,
+    await store.g.read('.operator_request'),
+  )
   equal(requests.map((r) => !!r.delivered), [true, true])
   c.frame({ event: 'stop' })
   await c.call.ended

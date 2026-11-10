@@ -16,6 +16,9 @@ import type { Colors, Specimen } from './theme.ts'
 import { Button } from './Button.ts'
 
 let Base = block('header', 'Head', {
+  Eyebrow: 'p',
+  Period: 'p',
+  Address: 'a',
   Title: 'h1',
   Link: 'a',
   Id: 'span',
@@ -30,7 +33,18 @@ let { Facts: Line, Sep } = Base
 /** A page's head. */
 export let Head:
   & Part
-  & Record<'Title' | 'Link' | 'Id' | 'Kind' | 'Sub' | 'Facts', Part> = Object
+  & Record<
+    | 'Title'
+    | 'Link'
+    | 'Id'
+    | 'Kind'
+    | 'Sub'
+    | 'Facts'
+    | 'Eyebrow'
+    | 'Period'
+    | 'Address',
+    Part
+  > = Object
     .assign(
       Base,
       {
@@ -67,13 +81,24 @@ let { Title, Id, Kind, Sub, Facts } = Head
 /** A whole head, and a bare one. */
 export let specimens = (): Specimen[] => [
   [
+    'Head, variants',
+    h(
+      Head,
+      {},
+      h(Head.Eyebrow, {}, 'Your workspace'),
+      h(Head.Title, { as: 'h2', mod: 'page' }, 'Overview'),
+      h(Head.Period, {}, 'Last 30 days'),
+      h(Head.Address, { href: '#' }, 'example.com'),
+    ),
+  ],
+  [
     'Head, Title, Id, Kind, Sub, Facts',
     h(
       Head,
       {},
       h(
         Title,
-        {},
+        { as: 'h2' },
         'task',
         h(Id, {}, '#3cc275b704'),
         h(Kind, {}, 'component'),
@@ -83,7 +108,7 @@ export let specimens = (): Specimen[] => [
       h(
         Facts,
         {},
-        h('a', { href: '#pkg' }, '@yaks/task'),
+        h('a', { href: '#' }, '@yaks/task'),
         h('span', {}, 'kind'),
         h('span', {}, 'prefix T'),
       ),
@@ -91,14 +116,14 @@ export let specimens = (): Specimen[] => [
   ],
   [
     'Head, Title, Link',
-    h(Head, {}, h(Title, {}, h(Head.Link, { href: '#' }, 'inspect'))),
+    h(Head, {}, h(Title, { as: 'h2' }, h(Head.Link, { href: '#' }, 'inspect'))),
   ],
   [
     'Head, Sub-refused',
     h(
       Head,
       {},
-      h(Title, {}, 'Fix the map'),
+      h(Title, { as: 'h2' }, 'Fix the map'),
       h(Sub, { mod: 'refused' }, "no entity 'T-404'"),
     ),
   ],

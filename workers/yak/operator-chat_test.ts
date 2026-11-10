@@ -145,7 +145,7 @@ let sided = async (
   )
   let lines = [
     ...document.querySelectorAll(
-      '.Sidebar :is(.Sidebar_Brand, .Desk_Space b, .SideNav_Link, .Sidebar_Group)',
+      '.Sidebar :is(.Sidebar_Brand, .Identity b, .SideNav_Link, .Sidebar_Group)',
     ),
   ]
   return {
@@ -199,40 +199,43 @@ test('a conversation opens in the chat app: its words, each step in plain words,
   assertEquals(page.code, 200)
   assertEquals(text('[data-title]'), [CONVERSATION])
   // the yak sits beside the box
-  assert(page.document.querySelector('#ask .Talk_Write > img[data-idle]'))
-  assertEquals(text('.Talk_You'), [
+  assert(page.document.querySelector('#ask .Composer > img[data-idle]'))
+  assertEquals(text('.Transcript_Bubble'), [
     'Post a special meeting Thursday at 7 about the road millage.',
   ])
   // Each step said from the person's side, as what it did for them, or
   // tried to: the step names the app and the person it acted on.
-  assertEquals(text('.Talk_Step > summary'), [
+  assertEquals(text('.More_Inline > summary'), [
     'Read the schema',
     'Tried listing the files of notices',
     'Tried texting Jeff',
   ])
   assertEquals(
-    page.document.querySelector('.Talk_Reply strong')?.textContent,
+    page.document.querySelector('.Transcript_Reply strong')?.textContent,
     'posted',
   )
-  assertEquals(text('.Talk_Reply li'), ['Thursday at 7'])
+  assertEquals(text('.Transcript_Reply li'), ['Thursday at 7'])
   // Every entry keeps its action beside its own time, including steps.
-  assertEquals(text('.Talk_Said .Talk_When'), Array(6).fill('just now'))
+  assertEquals(
+    text('.Transcript_Lines .Transcript_When'),
+    Array(6).fill('just now'),
+  )
   // A step opens on what it asked for in words; what its error said shows
   // only inside its closed Details, and what the model was told only in its
   // own frame.
   let said = page.document.querySelector('[data-conversation]')!.cloneNode(
     true,
   ) as Element
-  said.querySelectorAll('.Talk_Trouble details, .Talk_Told').forEach((d) =>
-    d.remove()
-  )
+  said.querySelectorAll('.Transcript_Error details, .More_Framed').forEach((
+    d,
+  ) => d.remove())
   assertEquals(said.innerHTML.includes('<pre'), false)
   assertEquals(said.innerHTML.includes('&quot;'), false)
-  assertEquals(text('.Talk_Trouble > p'), [
+  assertEquals(text('.Transcript_Error > p'), [
     'This step did not work, so the Operator went on without it.',
     'This step did not work, so the Operator went on without it.',
   ])
-  assertEquals(text('.Talk_Step-no .Talk_Facts dt'), ['Op', 'App', 'Text'])
+  assertEquals(text('.More_Inline-no .Pairs-nested dt'), ['Op', 'App', 'Text'])
   // Done: nothing is said to be under way, and Stop is not offered.
   assertEquals(page.document.querySelector('[data-pending]'), null)
   assertEquals(
@@ -397,7 +400,7 @@ test('an app chosen in the side opens a chat about it, with the app live beside 
     app.querySelector('iframe')?.getAttribute('src'),
     'https://clerk.yaks.app/app1/',
   )
-  assertEquals(app.querySelector('.Talk_AppName b')?.textContent, 'Holdfast')
+  assertEquals(app.querySelector('.Identity_Text b')?.textContent, 'Holdfast')
   assertEquals(
     document.querySelector('.SideNav [aria-current="page"]')?.textContent,
     'Holdfast',
@@ -443,7 +446,10 @@ test("an app opens beside the person's one conversation, its words on screen fro
     document.querySelector('.Talk_App')?.getAttribute('data-app'),
     'app1',
   )
-  assertEquals(document.querySelector('.Talk_You')?.textContent?.trim(), words)
+  assertEquals(
+    document.querySelector('.Transcript_Bubble')?.textContent?.trim(),
+    words,
+  )
   assertEquals(document.querySelector('.Talk_Hello'), null)
   assertEquals(
     document.querySelector('#ask [name=app]')?.getAttribute('value'),
@@ -454,7 +460,7 @@ test("an app opens beside the person's one conversation, its words on screen fro
   let fresh = await sided('owner', 'new', 'app1')
   assertEquals(fresh.to.Holdfast, aboutPath('clerk', 'app1', task))
   assertEquals(
-    fresh.document.querySelector('.Talk_You')?.textContent?.trim(),
+    fresh.document.querySelector('.Transcript_Bubble')?.textContent?.trim(),
     words,
   )
   let updates = parseHTML(
@@ -508,11 +514,11 @@ test("the chat app says whose Operator it is, and opens another space's", () => 
       said('title'),
       `Message ${at.operator} · ${at.operator} · yaks.app`,
     )
-    assertEquals(said('.Sidebar_Whose .Desk_Space b'), name)
-    assertEquals(said('.Talk_Who'), `${at.operator}, ${name}’s Operator`)
+    assertEquals(said('.Sidebar_Whose .Identity b'), name)
+    assertEquals(said('.Toolbar_Sub'), `${at.operator}, ${name}’s Operator`)
     assertStringIncludes(said('.Talk_Hello')!, `Ask ${at.operator}`)
     // the yak waits beside the box, played by its script (mascot.ts `idle`)
-    assert(document.querySelector('#ask .Talk_Write > img[data-idle]'))
+    assert(document.querySelector('#ask .Composer > img[data-idle]'))
     assert(document.querySelector('script[src$="/idle.js"]'))
     assertEquals(
       [...document.querySelectorAll('.Sidebar_Whose .Menu_Item small')].map((
@@ -590,7 +596,7 @@ test('Stop from the page reaches the Operator', () => {
 
 test('a conversation read again carries its title and its lines', () => {
   assertEquals(talk.task, task)
-  assertStringIncludes(talk.html, 'Talk_Reply')
+  assertStringIncludes(talk.html, 'Transcript_Reply')
 })
 
 let broke = await receive(service.store, {
@@ -609,11 +615,11 @@ test('a conversation the provider refused reads as ended: no Stop, nothing under
   assertEquals(crashed.querySelector('[data-now]')?.textContent, '')
   let last = (s: string) => [...crashed.querySelectorAll(s)].at(-1)
   assertEquals(
-    last('.Talk_Trouble > p')?.textContent,
+    last('.Transcript_Error > p')?.textContent,
     'The Operator could not get an answer from its model, so it stopped before replying. Send your message again to try once more.',
   )
   // Its error shows only inside the closed Details.
-  let details = last('.Talk_Trouble > details')!
+  let details = last('.Transcript_Error > details')!
   assertEquals(details.hasAttribute('open'), false)
   assertStringIncludes(details.textContent!, 'invalid_request_error')
   details.remove()
@@ -655,7 +661,7 @@ test('a renamed Operator goes by its new name in its chat app, its settings and 
   assertEquals(renamed.json, { name: 'Marlowe Quince' })
   assertEquals(after.operator, 'Marlowe Quince')
   assertEquals(
-    again.querySelector('.Talk_Who')?.textContent,
+    again.querySelector('.Toolbar_Sub')?.textContent,
     'Marlowe Quince, Township’s Operator',
   )
   assertEquals(

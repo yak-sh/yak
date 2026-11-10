@@ -14,7 +14,9 @@ import { managePath } from './route.ts'
 let held = false
 let waiting: (() => void)[] = []
 let k = await fresh({}, (env) => {
-  let kv = env.OAUTH_KV as { list: (o: { prefix: string }) => Promise<unknown> }
+  let kv = env.OAUTH_KV as {
+    list: (o: { prefix: string }) => Promise<unknown>
+  }
   let list = kv.list.bind(kv)
   kv.list = (o) =>
     held && o.prefix.startsWith('grant:')
@@ -36,7 +38,7 @@ let card = async ({ slug, cookie }: { slug: string; cookie: string }) => {
     headers: { cookie },
   })
   assertEquals(page.status, 200)
-  let at = parseHTML(await page.text()).document.querySelector('.Desk_Connect')!
+  let at = parseHTML(await page.text()).document.querySelector('.Card-accent')!
   return {
     shown: !at.hasAttribute('hidden'),
     unsettled: at.hasAttribute('data-unsettled'),

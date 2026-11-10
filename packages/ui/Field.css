@@ -32,3 +32,7 @@ select.Field {
   outline: 0;
   padding: 0;
 }
+
+.Field {
+  text-align: left;
+}

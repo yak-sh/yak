@@ -22,3 +22,27 @@
   font-size: 1.05rem;
   font-weight: 800;
 }
+
+.Empty_Title-welcome {
+  margin: 0 0 .5rem;
+  font-size: 1.5rem;
+}
+
+.Empty-welcome {
+  padding: 0;
+  text-align: center;
+}
+.Empty-welcome::after {
+  content: none;
+}
+
+.Empty-welcome {
+  display: block;
+  border: 0;
+}
+.Empty-welcome > * {
+  max-width: none;
+}
+.Empty-welcome > .Empty_Title {
+  margin: 0 0 .5rem;
+}

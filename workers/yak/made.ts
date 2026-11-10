@@ -1,3 +1,4 @@
+import { Notice } from '@yaks/ui/parts'
 // What an app is made of, in the words of somebody who has never seen a
 // vocab.json (D-146737): the kinds of things it keeps, each with what it
 // keeps of one, and what it can do, its commands. The chat draws both beside
@@ -228,8 +229,8 @@ export let does = (
       made.acts.length || made.finds.length
         ? [
           h(
-            'p',
-            { class: 'Talk_MadeNote' },
+            Notice,
+            { mod: 'fine' },
             live
               ? 'Ask for any of these in this chat, even with none of its pages open.'
               : 'Once it is live, you can ask for any of these in this chat, even with none of its pages open.',
@@ -249,11 +250,7 @@ export let does = (
         : null,
       pages.length
         ? [
-          h(
-            'p',
-            { class: 'Talk_MadeNote' },
-            'Its pages, each shown in Screens.',
-          ),
+          h(Notice, { mod: 'fine' }, 'Its pages, each shown in Screens.'),
           h(
             Rows,
             null,

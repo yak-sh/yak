@@ -59,3 +59,32 @@ a.Head_Title:hover,
 .Head_Sep {
   color: var(--dim);
 }
+
+.Head_Eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+}
+.Head_Title-page {
+  font-size: 1.75rem;
+  line-height: 1.2;
+  margin: .15rem 0 0;
+}
+.Head_Period {
+  margin: .25rem 0 0;
+  font-size: var(--small);
+}
+.Head_Address {
+  font-size: var(--fine, var(--small));
+  text-decoration: none;
+  color: var(--muted);
+}
+@media (max-width: 700px) {
+  .Head_Title-page {
+    font-size: 1.5rem;
+  }
+}
+
+.Head_Title-page {
+  font-weight: 800;
+}

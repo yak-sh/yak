@@ -134,23 +134,27 @@ let { document } = parseHTML(
   await (await chatPage(p.env, space, who, request)).text(),
 )
 test('the files show in the message they were sent with, a picture as itself', () => {
-  let message = document.querySelector('.Talk_Said > div:has(.Talk_You)')!
+  let message = document.querySelector(
+    '.Transcript_Lines > div:has(.Transcript_Bubble)',
+  )!
   assertEquals(
-    message.querySelector('.Talk_You')?.textContent,
+    message.querySelector('.Transcript_Bubble')?.textContent,
     'When is the meeting?',
   )
-  let picture = message.querySelector('.Talk_Picture img')!
+  let picture = message.querySelector('.Attachments_Picture img')!
   assertEquals(picture.getAttribute('alt'), 'flyer.png')
   assertEquals(
     picture.getAttribute('src'),
     `?attachment=${request}&file=0`,
   )
   assertEquals(
-    [...message.querySelectorAll('.Talk_File')].map((a) => a.textContent),
+    [...message.querySelectorAll('.Attachments_File')].map((a) =>
+      a.textContent
+    ),
     ['PDFagenda.pdf'],
   )
   // Not listed a second time under the conversation.
-  assertEquals(document.querySelector('.Talk_Thread > .Talk_Files'), null)
+  assertEquals(document.querySelector('.Transcript > .Attachments'), null)
 })
 
 let opened = (await operatorAnswer(
@@ -178,7 +182,9 @@ test('a sent picture opens in place, and a document is saved', async () => {
 })
 
 // The box on a new conversation, with the shell's drop script running in it.
-let code = await Deno.readTextFile(new URL('./public/drop.js', import.meta.url))
+let code = await Deno.readTextFile(
+  new URL('./public/drop.js', import.meta.url),
+)
 let fresh = await (await chatPage(p.env, space, who, 'new')).text()
 let box = () => {
   let html = fresh

@@ -1,3 +1,4 @@
+import { Head, Toolbar } from '@yaks/ui/parts'
 // The platform admin's directory (T-124291): every person, space and app on
 // yaks.app and what each uses, at /admin on the apex. A person's row says
 // what the spaces they own spent this month (each against its own budget), the
@@ -570,9 +571,9 @@ let desk = (
       }),
       where: [
         h('b', null, title),
-        h('small', { class: 'Desk_WhoseName' }, 'Admin'),
+        h(Toolbar.Sub, { as: 'small' }, 'Admin'),
       ],
-      head: h('div', null, kicker, h('h1', { class: 'Desk_Heading' }, title)),
+      head: h('div', null, kicker, h(Head.Title, { mod: 'page' }, title)),
       content: body,
       class: 'Directory_Content',
     })),
@@ -720,7 +721,7 @@ export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
     h(Fragment, null, raw(drawn(r, 'Directory.Page', ctx)), more),
     h(
       'a',
-      { class: 'Desk_Address', href: `${PATH}/${key}${tested(d)}` },
+      { class: 'Head_Address', href: `${PATH}/${key}${tested(d)}` },
       LISTS[key].title,
     ),
   )
@@ -797,7 +798,7 @@ let operatorPage = async (
   let space = spaceOf(r)
   let home = `${PATH}/${r.entity.eid}/operator`
   let back = (to: string, said: string) =>
-    h('a', { class: 'Desk_Address', href: `${to}${tested(d)}` }, said)
+    h('a', { class: 'Head_Address', href: `${to}${tested(d)}` }, said)
   let ask = (path: string, args: unknown) =>
     asking(env, space, person, path, args)
   if (!open) {
@@ -933,7 +934,12 @@ let spendingPage = async (d: Reading, env: Env, person: string) => {
         ) as Spending | Error,
       })),
   )
-  return desk(d, 'Spending', 'spending', spendingBody(spaces, asked, PATH, now))
+  return desk(
+    d,
+    'Spending',
+    'spending',
+    spendingBody(spaces, asked, PATH, now),
+  )
 }
 
 let pct = (share: number) => `${Math.round(share * 100)}%`

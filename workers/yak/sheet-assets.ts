@@ -87,6 +87,18 @@ export let WORN = [
   'Catalog',
   'Gallery',
   'Cards',
+  'Identity',
+  'Toolbar',
+  'Transcript',
+  'Attachments',
+  'Annotated',
+  'Preview',
+  'Composer',
+  'Popover',
+  'Skip',
+  'Head',
+  'Shell',
+  'Pairs',
 ]
 
 /** What yaks.app wears of the kit. */

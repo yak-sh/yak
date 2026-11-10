@@ -1,3 +1,4 @@
+import { Head } from '@yaks/ui/parts'
 import { Time } from '@yaks/ui/parts'
 // The kernel's own pages, in the home page's voice (workers/yak/public): what
 // a person sees when there is nothing at an address, when an app broke, and
@@ -1075,8 +1076,8 @@ export let editor = (
       h(
         'div',
         null,
-        h('a', { class: 'Desk_Address', href: `${at.at}/` }, `${at.app} ↗`),
-        h('h1', { class: 'Desk_Heading' }, 'Data'),
+        h('a', { class: 'Head_Address', href: `${at.at}/` }, `${at.app} ↗`),
+        h(Head.Title, { mod: 'page' }, 'Data'),
       ),
     ),
     h(

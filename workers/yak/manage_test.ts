@@ -317,9 +317,10 @@ test('the chat’s side opens each app beside it, and Updates', async () => {
   assertStringIncludes(chatted, 'class="Talk"')
   assertStringIncludes(chatted, `href="${home}?app=site"`)
   let about = await (await get(`${home}?app=site`)).text()
-  assertStringIncludes(
-    about,
-    `<iframe class="Talk_Frame" src="https://${host}/site/"`,
+  assertEquals(
+    parseHTML(about).document.querySelector('iframe[data-frame=live]')
+      ?.getAttribute('src'),
+    `https://${host}/site/`,
   )
   let updates = await get(managePath('updates', slug))
   assertEquals(updates.status, 200)

@@ -1,3 +1,4 @@
+import { Transcript } from '@yaks/ui/parts'
 import { Time } from '@yaks/ui/parts'
 // What the Operator's chat app shows of its work (operator-page.ts
 // `chatPage`): each task as one conversation, its lines drawn by
@@ -13,7 +14,7 @@ import { blocks, parse } from '@yaks/markdown/structural'
 import type { H } from '@yaks/render'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
-import { Button, Card, Loading, Rows } from '@yaks/ui/parts'
+import { Button, Card, Rows } from '@yaks/ui/parts'
 import { moment } from './html.ts'
 import { chatPath } from './route.ts'
 import type { Declared } from './operator-persona.ts'
@@ -578,29 +579,26 @@ export let talk = (
 ) => {
   let working = now(entries, names)
   let first = comp(entries.find((b) => b.entry), 'entry')?.seq
-  return renderToString(h(
-    'div',
-    {
-      class: 'Talk_Thread',
-      'data-task': task.entity.eid,
-      'data-from': first == null ? undefined : Number(first) - 1,
-      'data-pending': working ? '' : undefined,
-      'data-doing': working ? doingOf(entries) : undefined,
-    },
+  return renderToString(
     h(
-      'div',
-      { class: 'Talk_Said', 'data-rows': '' },
-      lines(entries, names, seen).map((r) =>
-        h('div', { class: 'Talk_Row', id: `row-${r.id}` }, r.node)
+      Transcript,
+      {
+        'data-task': task.entity.eid,
+        'data-from': first == null ? undefined : Number(first) - 1,
+        'data-pending': working ? '' : undefined,
+        'data-doing': working ? doingOf(entries) : undefined,
+      },
+      h(
+        Transcript.Lines,
+        { 'data-rows': '' },
+        lines(entries, names, seen).map((r) =>
+          h(Transcript.Row, { id: `row-${r.id}` }, r.node)
+        ),
       ),
+      // the words a screen reader hears; the yak beside the box shows them
+      h(Transcript.Status, {}, h('span', { 'data-now': '' }, working)),
     ),
-    // the words a screen reader hears; the yak beside the box shows them
-    h(
-      Loading,
-      { class: 'Talk_Now' },
-      h('span', { 'data-now': '' }, working),
-    ),
-  ))
+  )
 }
 
 /** A piece of the Operator's work as its lists show it, in plain words. */

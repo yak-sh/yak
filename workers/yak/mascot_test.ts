@@ -104,7 +104,13 @@ test('the builder waits with the yak at its keyboard', async () => {
 })
 
 test('the waiting yak is drawn at the size it shows, at every density', async () => {
-  let page = await shell(env, 'Message Elihu', null, 200, idle('Talk_Yak'))
+  let page = await shell(
+    env,
+    'Message Elihu',
+    null,
+    200,
+    idle('Composer_Figure'),
+  )
     .text()
   let img = parseHTML(page).document.querySelector('img[data-idle]')!
   assertEquals(img.getAttribute('width'), '128')
@@ -126,7 +132,7 @@ let waiting = (
   loads = (_url: string) => true,
 ) => {
   let { document, Event, CustomEvent, MutationObserver } = parseHTML(
-    `<main>${idle('Talk_Yak')}</main>`,
+    `<main>${idle('Composer_Figure')}</main>`,
   )
   let img = document.querySelector('img')!
   // each timer by its id; a cleared one is dropped
@@ -186,7 +192,9 @@ let waiting = (
   return { step, shown, fetched, ask, doing, settled, rest: shown() }
 }
 
-let code = await Deno.readTextFile(new URL('./public/idle.js', import.meta.url))
+let code = await Deno.readTextFile(
+  new URL('./public/idle.js', import.meta.url),
+)
 
 test('he sits, then plays each of his loops once before any comes again', async () => {
   let yak = waiting()

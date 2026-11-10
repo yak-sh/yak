@@ -333,13 +333,13 @@ test('the operator page names its email address, sends conversations to the chat
     failed: { reason: 'TypeError: x is undefined' },
   }]))
   assertEquals(
-    document.querySelector('.Talk_Trouble > p')!.textContent!.includes(
+    document.querySelector('.Transcript_Error > p')!.textContent!.includes(
       'TypeError',
     ),
     false,
   )
   assertStringIncludes(
-    document.querySelector('.Talk_Trouble details pre')!.textContent!,
+    document.querySelector('.Transcript_Error details pre')!.textContent!,
     'TypeError',
   )
 })
@@ -655,7 +655,9 @@ let letters: {
 }[] = []
 f.env.OPERATOR_MODEL = '@cf/test/operator'
 f.env.MODEL_FETCH = () =>
-  Promise.resolve(new Response('$1 per M input tokens, $2 per M output tokens'))
+  Promise.resolve(
+    new Response('$1 per M input tokens, $2 per M output tokens'),
+  )
 f.env.AI = {
   gateway: () => ({ getUrl: () => Promise.resolve('https://unused') }),
   run: () =>
@@ -731,7 +733,7 @@ test('a page watching the Operator hears each step as the lines it changed, and 
   assertEquals(heard[0].now, 'Thinking…')
   assertStringIncludes(
     heard.flatMap((h) => h.rows.map((r) => r.html)).join(''),
-    'Talk_Reply',
+    'Transcript_Reply',
   )
   // Ended, however it ended: nothing is said to be under way.
   assertEquals(heard.at(-1)!.now.endsWith('…'), false)

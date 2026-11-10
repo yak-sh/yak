@@ -29,3 +29,31 @@
   font-size: var(--small);
   line-height: 1.5;
 }
+
+.Body_Source-detail {
+  margin: .4rem 0 0;
+  padding: .6rem .8rem;
+  background: var(--card);
+  font-size: var(--small);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.Body-flow :is(.Body_Paragraph, .Body_Unordered, .Body_Ordered, .Body_Heading) {
+  margin: 0 0 .75rem;
+  color: inherit;
+}
+.Body-flow > :last-child {
+  margin-bottom: 0;
+}
+.Body-flow .Body_Source {
+  padding: .6rem .8rem;
+  background: var(--card);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.Body-flow .Body_Table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}

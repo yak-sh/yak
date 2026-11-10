@@ -59,3 +59,7 @@
   align-items: center;
   gap: .5rem;
 }
+
+.Form > .Button {
+  justify-self: start;
+}

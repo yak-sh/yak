@@ -40,7 +40,7 @@ test('source references stay out of chat and task inputs, preserving the personâ
   ].map((body, i) => entry('input-' + i, i + 1, { content: { body } }))
   let painted = rows(inputs, namer(seen), seen).map((r) => r.html)
   let words = (html: string) =>
-    parseHTML(html).document.querySelector('.Talk_You')!.textContent
+    parseHTML(html).document.querySelector('.Transcript_Bubble')!.textContent
   assertEquals(painted.slice(0, 2).map(words), [body, body])
   assertStringIncludes(painted[2], original)
   assertStringIncludes(

@@ -31,6 +31,7 @@ export let native = (c: Colors): Native => ({
 
 /** What a press did, and why one did not. */
 export let specimens = (): Specimen[] => [
+  ['Notice, variants', h(Notice, { mod: 'fine' }, 'A short note.')],
   ['Notice', h(Notice, { role: 'status' }, 'Saved. Your apps live there now.')],
   [
     'Notice-negative',

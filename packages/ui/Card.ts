@@ -70,6 +70,15 @@ let { Head, Mark, Title, Actions, Sub } = Card
 /** A card with all its head holds, and one with no head at all. */
 export let specimens = (): Specimen[] => [
   [
+    'Card, variants',
+    h(
+      'div',
+      {},
+      h(Card, { mod: 'danger' }, h(Card.Title, {}, 'Delete this item')),
+      h(Card, { mod: 'accent' }, h(Card.Title, {}, 'Connect')),
+    ),
+  ],
+  [
     'Card, Head, Mark, Title, Link, Actions, Form, Sub',
     h(
       Card,

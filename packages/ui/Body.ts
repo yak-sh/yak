@@ -13,7 +13,7 @@
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
 import { block, type Part } from './el.ts'
-import type { Colors, Specimen } from './theme.ts'
+import type { Colors, Native, Specimen } from './theme.ts'
 
 let tags = {
   Paragraph: 'p',
@@ -117,3 +117,8 @@ export let specimens = (): Specimen[] => [
     ),
   ],
 ]
+
+/** The same interface on a native host. */
+export let native = (_c: Colors): Native => ({
+  Body: { gap: 8 },
+})

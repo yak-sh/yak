@@ -11,3 +11,12 @@
 .Notice-negative {
   color: var(--negative);
 }
+
+.Notice-fine {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+}
+.Notice-fine {
+  font-size: var(--fine, var(--small));
+}

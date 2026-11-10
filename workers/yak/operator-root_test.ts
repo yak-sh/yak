@@ -113,10 +113,10 @@ let replied = sent.splice(0)
 let page = parseHTML(
   `<main>${(await conversationOf(store, '/at', root)).html}</main>`,
 ).document
-let lines = [...page.querySelectorAll('.Talk_You')].map((p) => ({
-  via: p.querySelector('.Talk_Via')?.getAttribute('title'),
+let lines = [...page.querySelectorAll('.Transcript_Bubble')].map((p) => ({
+  via: p.querySelector('.Transcript_Via')?.getAttribute('title'),
   said: p.textContent,
-  at: !!p.parentElement?.querySelector('.Talk_When'),
+  at: !!p.parentElement?.querySelector('.Transcript_When'),
 }))
 
 test("a person's text forks, and is answered at once and again when the fork comes back, by text", () => {

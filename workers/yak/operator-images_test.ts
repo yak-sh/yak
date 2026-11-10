@@ -134,7 +134,7 @@ test('the picture a step made is drawn under it, opening the original', () => {
     },
   ], (name) => ({ doing: name, done: name })).map((r) => r.html).join('')
   let img = parseHTML(`<div>${html}</div>`).document.querySelector(
-    '.Talk_Picture img',
+    '.Attachments_Picture img',
   )
   assertEquals(img?.getAttribute('src'), `?attachment=${result}&file=0`)
 })

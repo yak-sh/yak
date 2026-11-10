@@ -789,9 +789,10 @@ test('words sent are drawn before the Operator takes them in, then once as its l
   let line = `id="row-${inputOf(String(body.get('request')))}"`
   assertEquals(
     [waiting, taken].map((html) => [
-      [...parseHTML(html).document.querySelectorAll('.Talk_You')].filter((
-        node,
-      ) => node.textContent == 'Ask the shelter about tables').length,
+      [...parseHTML(html).document.querySelectorAll('.Transcript_Bubble')]
+        .filter((
+          node,
+        ) => node.textContent == 'Ask the shelter about tables').length,
       html.includes(line),
     ]),
     [[1, true], [1, true]],
@@ -853,7 +854,9 @@ test(
     let rows = card.querySelector('[data-rows]')!
     // The omitted words were older than the surviving conversation, as in a
     // refresh whose displayed range starts too late.
-    rows.prepend(...ids.map((id) => page.document.getElementById('row-' + id)!))
+    rows.prepend(
+      ...ids.map((id) => page.document.getElementById('row-' + id)!),
+    )
     let reported: string[] = []
     let was = globalThis.reportError
     globalThis.reportError = (e: unknown) => void reported.push(String(e))
@@ -918,7 +921,10 @@ test('a helper’s line landing before the socket opens is read, once', async ()
   await settle()
   landed.leave()
   assertEquals([still, landed.talks()], [0, 1])
-  assertStringIncludes(box.innerHTML, 'Find the north shelter’s June dates too')
+  assertStringIncludes(
+    box.innerHTML,
+    'Find the north shelter’s June dates too',
+  )
 })
 
 // The aside in the margin (operator-aside.ts), kept live from the graph: a
@@ -1180,7 +1186,7 @@ test(
     let was = globalThis.reportError
     globalThis.reportError = (e: unknown) => void reported.push(String(e))
     let words = () =>
-      [...page.document.querySelectorAll('.Talk_You')]
+      [...page.document.querySelectorAll('.Transcript_Bubble')]
         .map((r) => r.textContent)
     try {
       await growingStore.g.apply([

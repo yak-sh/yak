@@ -21,7 +21,9 @@ export let Empty: Part & Record<'Title', Part> = block('section', 'Empty', {
 export let description = 'Nothing here yet: what will be, and how to start.'
 
 /** Muted, a blank line after it. */
-export let sheet = (c: Colors): Sheet => ({ Empty: { fg: c.muted, gap: true } })
+export let sheet = (c: Colors): Sheet => ({
+  Empty: { fg: c.muted, gap: true },
+})
 
 /** Nothing here yet, on a phone: a dashed outline round what will be. */
 export let native = (c: Colors): Native => ({
@@ -38,6 +40,15 @@ export let native = (c: Colors): Native => ({
 
 /** A place for the first app. */
 export let specimens = (): Specimen[] => [
+  [
+    'Empty, variants',
+    h(
+      Empty,
+      { mod: 'welcome' },
+      h(Empty.Title, { mod: 'welcome' }, 'Welcome'),
+      h('p', {}, 'What would you like to do?'),
+    ),
+  ],
   [
     'Empty',
     h(

@@ -104,3 +104,15 @@
   height: 3rem;
   object-fit: contain;
 }
+
+.Card-danger .Card_Title {
+  color: var(--negative);
+}
+.Card-accent {
+  border-color: var(--accent);
+}
+
+.Card[data-compact] {
+  --pad-block: .5rem;
+  --pad-inline: .5rem;
+}

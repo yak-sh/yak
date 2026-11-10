@@ -1,3 +1,5 @@
+import { Shell } from '@yaks/ui/parts'
+import { Head, Skip, Toolbar } from '@yaks/ui/parts'
 // The dashboard's pages, apart from pages.ts so a page that only serves a
 // space never compiles them. Its sidebar is composed by desk-sidebar.ts.
 import { deskSide } from './desk-sidebar.ts'
@@ -212,18 +214,18 @@ export let deskFrame = (
   },
 ) => [
   h(
-    'header',
-    { class: 'Desk_Bar' },
+    Toolbar,
+    { class: 'Desk_Bar', mod: 'narrow' },
     h(Button, { href: '#menu' }, '☰ Menu'),
-    h('span', { class: 'Desk_Where' }, at.where),
+    h(Toolbar.Text, { as: 'span' }, at.where),
   ),
-  h('a', { class: 'Desk_Skip', href: '#content' }, 'Skip to content'),
+  h(Skip, { href: '#content' }, 'Skip to content'),
   at.sidebar,
   h(
-    'div',
+    Shell.Sheet,
     { class: 'Desk_Body' },
     h('header', { class: 'Desk_Head' }, at.head),
-    h('div', {
+    h(Shell.Content, {
       class: ['Desk_Content', at.class].filter(Boolean).join(' '),
       id: 'content',
       tabindex: '-1',
@@ -235,7 +237,7 @@ export let deskFrame = (
 let connectCard = (at: DeskPage, env: Host) =>
   h(
     Card,
-    { class: 'Desk_Connect', ...state(false, at.agents) },
+    { mod: 'accent', ...state(false, at.agents) },
     heading('Connect your agent', {
       actions: h(
         Button,
@@ -549,14 +551,14 @@ let logoCard = (at: DeskPage) => {
       'Shown beside the space’s name. A square picture looks best.',
     ),
     h(
-      'form',
+      Form,
       {
         class: 'Desk_Logo Page_Form',
         method: 'post',
         action,
         enctype: 'multipart/form-data',
       },
-      spaceTile(here),
+      spaceTile(here, 'large'),
       fileDrop({
         name: 'logo',
         label: 'Logo',
@@ -631,7 +633,7 @@ let preferences = (at: DeskPage, env: Host) => {
     ),
     h(
       Card,
-      { class: 'Desk_Danger' },
+      { mod: 'danger' },
       heading('Delete this space', {
         actions: h(Button, {
           href: url(env, `/space/${encodeURIComponent(at.space)}/delete`),
@@ -648,7 +650,9 @@ let preferences = (at: DeskPage, env: Host) => {
 
 let selling = (at: DeskPage, env: Host) => {
   let by = at.provider
-  if (!at.sell || !by) return h('p', null, 'Selling is not available here yet.')
+  if (!at.sell || !by) {
+    return h('p', null, 'Selling is not available here yet.')
+  }
   let ready = at.sell == 'ready'
   let connected = at.sell != 'none'
   let stop = ready || (!at.paying && connected)
@@ -2014,16 +2018,16 @@ export let desk = (at: DeskPage, env: Host = {}) => {
       person: at.person,
       where: [
         h('b', null, titles[view]),
-        h('small', { class: 'Desk_WhoseName' }, whose),
+        h(Toolbar.Sub, { as: 'small' }, whose),
       ],
       head: [
         h(
           'div',
           null,
-          h('p', { class: 'Desk_Whose' }, whose),
-          h('h1', { class: 'Desk_Heading' }, titles[view]),
+          h(Head.Eyebrow, {}, whose),
+          h(Head.Title, { mod: 'page' }, titles[view]),
           view == 'visits'
-            ? h('p', { class: 'Desk_Period' }, `Last ${at.viewDays ?? 30} days`)
+            ? h(Head.Period, {}, `Last ${at.viewDays ?? 30} days`)
             : null,
         ),
         view == 'apps'

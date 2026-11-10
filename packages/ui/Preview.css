@@ -1,0 +1,73 @@
+.Preview_Address {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: .25rem .5rem;
+  overflow: auto;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: var(--small);
+  color: var(--text);
+  user-select: all;
+}
+.Preview_Frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: .75rem;
+  background: white;
+  color-scheme: normal;
+  box-shadow: 0 0 0 1px var(--border2);
+}
+
+.Preview-pane {
+  border-left: 1px solid var(--border2);
+  background: var(--surface);
+}
+
+.Preview_Frame-flat {
+  box-shadow: none;
+  border-radius: calc(var(--radius) - .25rem);
+}
+
+.Preview_Choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.25rem;
+  min-height: 0;
+  height: 100%;
+  align-content: start;
+}
+.Preview_Item {
+  display: contents;
+}
+.Preview_Choice {
+  order: 0;
+  --control-height: 2rem;
+  padding: 0 .5rem;
+}
+.Preview_View {
+  order: 1;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  min-height: 0;
+  flex: 1 1 100%;
+  height: 100%;
+}
+.Preview_Choices:has(.Preview_Choice) > .Preview_Item > .Preview_View {
+  height: calc(100% - 2rem);
+}
+.Preview_Item:has(.Preview_Choice) > .Preview_View {
+  display: none;
+}
+.Preview_Item:has(.Check_Input:checked) > .Preview_View {
+  display: flex;
+}
+.Preview_View > .Preview_Frame {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.Preview_View > .Notice {
+  padding: .25rem .5rem 0;
+}

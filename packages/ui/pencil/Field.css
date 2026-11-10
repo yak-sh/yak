@@ -55,3 +55,7 @@ textarea.Field {
   box-shadow: none;
   filter: none;
 }
+
+.Field {
+  text-align: left;
+}

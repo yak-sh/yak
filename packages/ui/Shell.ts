@@ -41,7 +41,9 @@ export let Shell:
     | 'Menu'
     | 'Title'
     | 'Tools'
-    | 'Body',
+    | 'Body'
+    | 'Sheet'
+    | 'Content',
     Part
   > = block('div', 'Shell', {
     Side: 'nav',
@@ -59,6 +61,8 @@ export let Shell:
     Title: 'div',
     Tools: 'div',
     Body: 'div',
+    Sheet: 'div',
+    Content: 'div',
   })
 
 /** What it is, in a line. */
@@ -102,6 +106,26 @@ let place = (label: string, on?: boolean, count?: string) =>
 
 /** An app on its inbox, with two more places and a page. */
 export let specimens = (): Specimen[] => [
+  [
+    'Shell, variants',
+    h(
+      Shell,
+      { mod: 'open', style: 'height:10rem' },
+      h(Shell.Shade, { 'aria-label': 'Close navigation' }),
+      h(
+        Shell.Main,
+        {},
+        h(
+          Shell.Bar,
+          {},
+          h(Shell.Menu, {}, 'Menu'),
+          h(Shell.Title, {}, 'Overview'),
+          h(Shell.Tools, {}, 'Actions'),
+        ),
+        h(Shell.Sheet, {}, h(Shell.Content, {}, 'The page content.')),
+      ),
+    ),
+  ],
   [
     'Shell, Side, Brand, Find, Item, Item-on, Icon, Label, Count, Main, Bar, Title, Body',
     h(

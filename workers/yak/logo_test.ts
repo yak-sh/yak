@@ -45,7 +45,9 @@ test('a space wears the logo its owner chooses, and its letter without one', asy
     }
     let tile = async () => {
       let html = await (await get(settings)).text()
-      return parseHTML(html).document.querySelector('.Desk_Space .Desk_Tile')!
+      return parseHTML(html).document.querySelector(
+        '.Identity .Identity_Avatar',
+      )!
     }
 
     assertEquals((await tile()).tagName, 'SPAN')
@@ -95,7 +97,9 @@ test('space_set sets the logo its Operator is given, and an app with no icon wea
       let html = await (await k.at('yaks.app', managePath('settings', slug), {
         headers: { cookie: them.cookie },
       })).text()
-      return parseHTML(html).document.querySelector('.Desk_Space .Desk_Tile')!
+      return parseHTML(html).document.querySelector(
+        '.Identity .Identity_Avatar',
+      )!
     }
     await agent.tool('app_new', { space: slug, slug: 'notes', title: 'Notes' })
     await agent.tool('app_deploy', { space: slug, app: 'notes' })

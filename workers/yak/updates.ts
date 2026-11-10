@@ -1,3 +1,4 @@
+import { Empty } from '@yaks/ui/parts'
 // Updates from the Operator (T-140508): what happened in a space, as messages
 // from its Operator a person can reply to, at `/manage/<space>/updates`
 // (route.ts `managePath('updates', …)`), beside the chat app's side
@@ -260,7 +261,7 @@ export let updates = (
     updates.length ? updates.map((u) => card(env, space, u, apps)) : h(
       'div',
       { class: 'Talk_Hello' },
-      h('h2', { class: 'Talk_HelloTitle' }, 'Nothing yet'),
+      h(Empty.Title, { mod: 'welcome' }, 'Nothing yet'),
       h(
         'p',
         null,

@@ -1,0 +1,11 @@
+.Skip {
+  position: absolute;
+  top: -5rem;
+  left: 1rem;
+  padding: .6rem 1rem;
+  background: var(--card);
+  z-index: 1;
+}
+.Skip:focus {
+  top: 1rem;
+}

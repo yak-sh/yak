@@ -50,13 +50,13 @@ let shown = async (from?: number) => {
 let newest = await shown()
 let whole = await shown(0)
 
-let newestRows = newest.querySelectorAll('.Talk_Row').length
-let newestLinks = newest.querySelectorAll('.Talk_FilesLink').length
-let links = whole.querySelectorAll('.Talk_FilesLink').length
-let href = whole.querySelector(`#row-${input} .Talk_FilesLink`)
+let newestRows = newest.querySelectorAll('.Transcript_Row').length
+let newestLinks = newest.querySelectorAll('.Attachments_Link').length
+let links = whole.querySelectorAll('.Attachments_Link').length
+let href = whole.querySelector(`#row-${input} .Attachments_Link`)
   ?.getAttribute('href')
-let said = whole.querySelector(`#row-${input} .Talk_You`)?.textContent
-let footer = whole.querySelector('.Talk_Thread > .Talk_Files')
+let said = whole.querySelector(`#row-${input} .Transcript_Bubble`)?.textContent
+let footer = whole.querySelector('.Transcript > .Attachments')
 
 test('an upload outside the displayed history is not appended below newer messages', () => {
   equal(newestRows, 300)

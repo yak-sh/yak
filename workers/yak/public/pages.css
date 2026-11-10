@@ -67,11 +67,6 @@
     padding: .1rem .35rem;
     overflow-wrap: anywhere;
   }
-  /* The space selector and its rows are pressed, as a control is, not read. */
-  .Desk_Space {
-    -webkit-user-select: none;
-    user-select: none;
-  }
 }
 
 @layer sections {
@@ -389,103 +384,16 @@
   .Desk_Bar {
     display: none;
   }
-  /* The space selector (pages.ts `chooser`): the space's name, and with
-     another to go to, a button on its hatch, so it reads as something to
-     press and not as the page you are on. Change opens the list over the
-     page, wider than the side, drawn in pencil on a hatch the way a button
-     sits on its. Change sits right of the name, and the name holds one
-     line: whole where it fits, else cut with an ellipsis (its full text is
-     the summary's title and the menu's row). A name that wraps in the
-     column beside Change breaks every few letters (T-145350). */
-  .Desk_Space {
-    display: grid;
-    grid-template-columns: 2rem minmax(0, 1fr);
-    align-items: center;
-    column-gap: .6rem;
-    padding: .55rem .7rem;
-    list-style: none;
-  }
-  .Desk_Space.Menu_Summary {
-    grid-template-columns: 2rem minmax(0, 1fr) auto;
-  }
-  .Desk_Tile {
-    display: grid;
-    place-items: center;
-    width: 2rem;
-    height: 2rem;
-    border-radius: var(--radius);
-    background: var(--accent);
-    color: var(--bg);
-    font-weight: 800;
-  }
-  img.Desk_Tile {
-    object-fit: cover;
-    background: none;
-  }
   .Desk_Logo {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--gap);
   }
-  .Desk_Logo .Desk_Tile {
-    width: 4rem;
-    height: 4rem;
-    font-size: 1.75rem;
-  }
+
   .Desk_Logo .Drop {
     flex: 1;
     min-width: 12rem;
-  }
-  .Desk_Name {
-    flex: 1;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    min-width: 0;
-    line-height: 1.25;
-  }
-  .Desk_NameText {
-    overflow-wrap: anywhere;
-  }
-  .Desk_Space .Desk_Name > * {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  .Desk_NameNote {
-    color: var(--muted);
-    font-size: var(--fine);
-  }
-  .Desk_Change {
-    display: inline-flex;
-    align-items: center;
-    color: var(--accent);
-    font-size: var(--fine);
-    font-weight: 700;
-  }
-  .Menu_Fold[open] .Desk_Change {
-    color: var(--muted);
-  }
-  .Desk_Tick {
-    color: var(--accent);
-    font-weight: 800;
-  }
-  .Desk_New {
-    padding: .5rem .7rem;
-    color: var(--accent);
-    font-size: var(--fine);
-    font-weight: 700;
-    text-decoration: none;
-  }
-  /* The line over a page's title, naming the space it changes or "Your
-     account". */
-  .Desk_Whose {
-    margin: 0;
-    color: var(--muted);
-    font-size: var(--fine);
-  }
-  .Desk_Danger .Card_Title {
-    color: var(--negative);
   }
   /* The body keeps what it raises (a selected tab, a chart) to itself, so
      the side, and a menu opened from it over the body, lies above it all. */
@@ -493,7 +401,6 @@
     isolation: isolate;
     min-width: 0;
     min-height: 100vh;
-    background: var(--card);
     padding: 2rem clamp(1.25rem, 4vw, 3rem) 3rem;
   }
   .Desk_Head {
@@ -505,20 +412,6 @@
     max-width: 52rem;
     margin-bottom: 1.5rem;
   }
-  .Desk_Heading {
-    font-size: 1.75rem;
-    line-height: 1.2;
-    margin: .15rem 0 0;
-  }
-  .Desk_Period {
-    margin: .25rem 0 0;
-    font-size: var(--small);
-  }
-  .Desk_Address {
-    font-size: var(--fine);
-    text-decoration: none;
-    color: var(--muted);
-  }
   .Desk_Head .Button {
     flex: none;
   }
@@ -526,7 +419,6 @@
     display: grid;
     gap: var(--gap);
     max-width: 52rem;
-    font-size: var(--small);
   }
   .Desk_Content > * {
     margin: 0;
@@ -535,19 +427,7 @@
     display: grid;
     gap: .75rem;
   }
-  .Desk .Field,
-  .Desk .Check_Input,
-  .Card .Field,
-  .Card .Check_Input {
-    text-align: left;
-  }
-  .Desk .Form > .Button,
-  .Desk .Page_Form > .Button {
-    justify-self: start;
-  }
-  .Desk_Connect {
-    border-color: var(--accent);
-  }
+
   .Identity_Cards {
     max-width: 18rem;
     margin: 1.5rem auto 0;
@@ -589,17 +469,6 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
-  .Desk_Skip {
-    position: absolute;
-    top: -5rem;
-    left: 1rem;
-    padding: .6rem 1rem;
-    background: var(--card);
-    z-index: 1;
-  }
-  .Desk_Skip:focus {
-    top: 1rem;
-  }
   @media (max-width: 700px) {
     .Desk_Main {
       display: block;
@@ -610,21 +479,6 @@
       top: 0;
       z-index: 2;
       display: flex;
-      align-items: center;
-      gap: .75rem;
-      padding: .6rem 1rem;
-      background: var(--bg);
-      border-bottom: 1px solid var(--border2);
-    }
-    .Desk_Where {
-      display: grid;
-      min-width: 0;
-      line-height: 1.2;
-    }
-    .Desk_WhoseName {
-      color: var(--muted);
-      font-size: var(--fine);
-      overflow-wrap: anywhere;
     }
     .Desk_Body {
       min-height: 0;
@@ -632,9 +486,6 @@
     }
     .Desk_Head {
       margin-bottom: 1.25rem;
-    }
-    .Desk_Heading {
-      font-size: 1.5rem;
     }
   }
 
@@ -816,14 +667,7 @@
     height: 100dvh;
     overflow: hidden;
   }
-  .Talk_Icon,
-  .Sidebar_Icon {
-    flex: none;
-    width: 1.5rem;
-    height: 1.5rem;
-    border-radius: .35rem;
-    object-fit: cover;
-  }
+
   .Talk_Menu,
   .Talk_Back,
   .Talk_Show {
@@ -834,12 +678,6 @@
   .Talk_Show {
     min-width: 0;
     max-width: 50%;
-  }
-  .Talk_ShowName {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .Talk_Main {
     display: flex;
@@ -854,30 +692,6 @@
     position: sticky;
     top: 0;
     z-index: 2;
-    display: flex;
-    align-items: center;
-    gap: .75rem;
-    padding: .75rem 1.25rem;
-    background: var(--bg);
-    border-bottom: 1px solid var(--border2);
-  }
-  .Talk_Heads {
-    display: grid;
-    min-width: 0;
-  }
-  .Talk_Who {
-    margin: 0;
-    color: var(--muted);
-    font-size: var(--fine);
-  }
-  .Talk_Head {
-    min-width: 0;
-    margin: 0;
-    overflow: hidden;
-    font-size: 1rem;
-    font-weight: 700;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   /* The conversation, at a reading width in the middle of the page. */
   .Talk_Column,
@@ -899,36 +713,11 @@
     padding-top: 18vh;
     text-align: center;
   }
-  .Talk_HelloTitle {
-    margin: 0 0 .5rem;
-    font-size: 1.5rem;
-  }
   /* The yak beside the box (operator-page.ts `composer`), taking no room
      from the conversation: in the margin to its left where the page is wide
      enough, else sitting on its top edge. */
   .Talk_Main {
-    container: talk / inline-size;
-  }
-  .Talk_Write {
-    position: relative;
-  }
-  .Talk_Yak {
-    position: absolute;
-    bottom: calc(100% - .2rem);
-    left: .75rem;
-    width: 2.5rem;
-    height: 2.5rem;
-    object-fit: contain;
-    pointer-events: none;
-  }
-  @container talk (min-width: 54rem) {
-    .Talk_Yak {
-      right: calc(100% + .75rem);
-      bottom: 0;
-      left: auto;
-      width: 4rem;
-      height: 4rem;
-    }
+    container: workspace / inline-size;
   }
   /* A new chat (operator-page.ts `chatPage`): the greeting, what needs the
      person, the box and the ways to start, held together in the middle of
@@ -944,7 +733,6 @@
   .Talk_Main-new .Talk_Box {
     position: static;
     padding-bottom: .75rem;
-    background: none;
   }
   .Talk_Needs {
     margin-bottom: .75rem;
@@ -975,25 +763,8 @@
     flex: none;
     margin-left: auto;
   }
-  .Talk_Aside[hidden],
-  .Talk_Aside [hidden] {
-    display: none;
-  }
-  .Talk_Glance {
-    gap: .3rem;
-    font-variant-numeric: tabular-nums;
-  }
-  .Talk_Glance .Dot {
-    width: .55rem;
-    height: .55rem;
-  }
-  .Talk_More {
-    color: var(--muted);
-    font-size: var(--fine);
-    font-weight: 700;
-  }
+
   .Talk_AsideIn {
-    display: none;
     position: absolute;
     top: calc(100% + .5rem);
     right: .75rem;
@@ -1002,34 +773,14 @@
     max-height: calc(100dvh - 6rem);
     overflow-y: auto;
   }
-  .Talk_Aside[data-open] .Talk_AsideIn {
-    display: grid;
-    padding: .5rem;
-    background: var(--bg);
-    border: 1px solid var(--border2);
-    border-radius: var(--radius);
-    box-shadow: 0 .5rem 1.5rem color-mix(in srgb, var(--text) 12%, transparent);
-  }
-  .Talk_Turn {
-    margin: 0;
-  }
-  .Talk_Time {
-    font-variant-numeric: tabular-nums;
-  }
-  @container talk (min-width: 76rem) {
-    .Talk_Glance {
-      display: none;
-    }
+
+  @container workspace (min-width: 76rem) {
     .Talk_AsideIn,
     .Talk_Aside[data-open] .Talk_AsideIn {
       display: grid;
       top: calc(100% + .75rem);
       right: 1.25rem;
       width: calc(min(22rem, (100cqw - 46rem) / 2) - 1.25rem);
-      padding: 0;
-      background: none;
-      border: 0;
-      box-shadow: none;
     }
   }
   /* Updates from the Operator (updates.ts): a card for each, what needs the
@@ -1092,56 +843,10 @@
     min-width: 0;
     overflow: hidden auto;
     overscroll-behavior: contain;
-    border-left: 1px solid var(--border2);
-    background: var(--surface);
-  }
-  .Talk_AppHead {
-    display: flex;
-    align-items: center;
-    gap: .6rem;
-    min-width: 0;
-    padding: .6rem 1rem;
-  }
-  .Talk_AppName {
-    display: grid;
-    min-width: 0;
-    margin-right: auto;
-    line-height: 1.25;
-  }
-  .Talk_AppTitle,
-  .Talk_AppHost {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .Talk_AppHost {
-    color: var(--muted);
-    font-size: var(--fine);
   }
   .Talk_Stage {
     min-height: 0;
     padding: 0 1rem 1rem;
-  }
-  .Talk_Address {
-    flex: 0 0 auto;
-    min-width: 0;
-    padding: .25rem .5rem;
-    overflow: auto;
-    white-space: nowrap;
-    font-family: var(--mono);
-    font-size: var(--small);
-    color: var(--text);
-    user-select: all;
-  }
-  .Talk_Frame {
-    display: block;
-    width: 100%;
-    height: 100%;
-    border: 0;
-    border-radius: .75rem;
-    background: white;
-    color-scheme: normal;
-    box-shadow: 0 0 0 1px var(--border2);
   }
   /* What it is made of, a tab each over one sheet that fills the column
      under its name: the lists scroll inside the sheet, whose drawn edge
@@ -1169,10 +874,7 @@
     overflow: auto;
     overscroll-behavior: contain;
   }
-  .Talk_Part-screens {
-    --pad-block: .5rem;
-    --pad-inline: .5rem;
-  }
+
   .Talk_Part-screens .Talk_Sheet {
     display: flex;
     flex-direction: column;
@@ -1182,351 +884,9 @@
   .Talk_Part-screens .Empty {
     margin: auto 0;
   }
-  .Talk_Part-screens .Talk_Frame {
+  .Talk_Part-screens .Preview_Frame {
     flex: 1 1 auto;
     min-height: 0;
-    box-shadow: none;
-    border-radius: calc(var(--radius) - .25rem);
-  }
-  .Talk_MadeNote {
-    margin: 0;
-    color: var(--muted);
-    font-size: var(--fine);
-  }
-  .Talk_Part-screens .Talk_MadeNote {
-    padding: .25rem .5rem 0;
-  }
-  /* The draft or the app live, a radio each, while both are there: only
-     the checked one's note and frame show. */
-  .Talk_Screens {
-    --control-height: 2rem;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0 1.25rem;
-    padding: 0 .5rem;
-  }
-  .Talk_Screens ~ .Talk_MadeNote {
-    padding-top: 0;
-  }
-  .Talk_Part-screens:has([name=screen]) [data-screen] {
-    display: none;
-  }
-  .Talk_Part-screens:has([name=screen][value=draft]:checked) [data-screen=draft],
-  .Talk_Part-screens:has([name=screen][value=live]:checked) [data-screen=live] {
-    display: block;
-  }
-  .Talk_Thread,
-  .Talk_Said {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 1rem;
-  }
-  .Talk_Said > * {
-    min-width: 0;
-  }
-  /* The person's words sit to the right in a bubble; the Operator's replies
-     are the page's own text. */
-  .Talk_You {
-    justify-self: end;
-    max-width: 85%;
-    margin: 0;
-    padding: .6rem 1rem;
-    border-radius: 1.1rem;
-    background: var(--mine);
-    color: var(--text);
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-  }
-  /* The channel the words came by, a small mark before them. */
-  .Talk_Via {
-    margin-right: .4em;
-    color: var(--muted);
-  }
-  .Talk_Via .Icon {
-    width: .95em;
-    height: .95em;
-    vertical-align: -.1em;
-  }
-  .Talk_Entry:has(> .Talk_You) {
-    display: grid;
-  }
-  /* The timestamp opens the entry’s actions. */
-  .Talk_Meta {
-    display: flex;
-    align-items: center;
-    gap: .4rem;
-    margin-top: .25rem;
-    color: var(--muted);
-    font-size: var(--fine);
-  }
-  .Talk_Entry:has(> .Talk_You, > .Talk_Files) > .Talk_Meta {
-    justify-content: end;
-  }
-  .Talk_Measured {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 6.5rem;
-    align-items: start;
-    gap: 1rem;
-  }
-  .Talk_Reading {
-    min-width: 0;
-  }
-  .Talk_Margin {
-    display: grid;
-    justify-items: end;
-    gap: .2rem;
-    color: var(--muted);
-    font-size: var(--small);
-    font-variant-numeric: tabular-nums;
-  }
-  .Talk_Entry-hidden {
-    opacity: .5;
-  }
-  .Talk_Reply {
-    margin: 0;
-    color: var(--text);
-    overflow-wrap: anywhere;
-  }
-  .Talk_Reply .Body_Paragraph,
-  .Talk_Reply .Body_Unordered,
-  .Talk_Reply .Body_Ordered,
-  .Talk_Written :is(.Body_Paragraph, .Body_Unordered, .Body_Ordered, .Body_Heading) {
-    margin: 0 0 .75rem;
-    color: inherit;
-  }
-  .Talk_Reply > :last-child,
-  .Talk_Reply .Body > :last-child,
-  .Update_Words .Body > :last-child,
-  .Talk_Written > :last-child {
-    margin-bottom: 0;
-  }
-  .Talk_Reply .Body_Source,
-  .Talk_Written .Body_Source {
-    padding: .6rem .8rem;
-    background: var(--card);
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-  }
-  .Talk_Reply .Body_Table {
-    display: block;
-    max-width: 100%;
-    overflow-x: auto;
-  }
-  /* A conversation's lines flow: the steps one after another are one line
-     that wraps, each its own small item, and everything else (words, a
-     reply, an opened step, a step with the files it brought back) takes a
-     line of its own. A line's margins and the gap add to the space between
-     lines a conversation always had. */
-  .Talk_Said[data-rows],
-  .Talk_Inner {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: .35rem .9rem;
-  }
-  .Talk_Said[data-rows] > :not(:has(> .Talk_Entry > .Talk_Step)),
-  .Talk_Said[data-rows] > :has(> .Talk_Entry > .Talk_Step[open]) {
-    flex-basis: 100%;
-    margin-block: .325rem;
-  }
-  .Talk_Inner > :not(:has(> .Talk_Step)),
-  .Talk_Inner > :has(> .Talk_Step[open]) {
-    flex-basis: 100%;
-    margin-block: .125rem;
-  }
-  :is(.Talk_Said[data-rows], .Talk_Inner) > :first-child {
-    margin-top: 0;
-  }
-  :is(.Talk_Said[data-rows], .Talk_Inner) > :last-child {
-    margin-bottom: 0;
-  }
-  /* A step the Operator took, as one quiet item that opens on what it asked
-     for and what came back. */
-  .Talk_Summary {
-    display: inline-flex;
-    gap: .4rem;
-    align-items: baseline;
-    color: var(--muted);
-    font-size: var(--small);
-    cursor: pointer;
-    list-style: none;
-  }
-  .Talk_Summary::-webkit-details-marker {
-    display: none;
-  }
-  .Talk_Summary::after {
-    content: '›';
-    transition: transform .15s;
-  }
-  .Talk_Step[open] > .Talk_Summary::after {
-    transform: rotate(90deg);
-  }
-  .Talk_Step-on > .Talk_Summary {
-    color: var(--accent);
-  }
-  .Talk_Step-no > .Talk_Summary {
-    color: var(--negative);
-  }
-  .Talk_Detail {
-    margin: .4rem 0 0;
-    padding: .6rem .8rem;
-    border-left: 2px solid var(--border2);
-    font-size: var(--small);
-  }
-  .Talk_DetailLabel {
-    margin: .4rem 0 .2rem;
-    font-weight: 700;
-  }
-  .Talk_DetailLabel:first-child {
-    margin-top: 0;
-  }
-  .Talk_Detail > .Talk_DetailValue {
-    display: block;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-  }
-  .Talk_Facts {
-    display: grid;
-    gap: .2rem;
-    margin: 0;
-  }
-  .Talk_Fact {
-    display: grid;
-    grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
-    gap: .6rem;
-  }
-  .Talk_FactLabel {
-    color: var(--muted);
-  }
-  .Talk_FactValue {
-    margin: 0;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-  }
-  .Talk_Facts .Talk_Facts > .Talk_Fact {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
-  }
-  .Talk_Note {
-    margin: 0;
-    color: var(--muted);
-    font-size: var(--small);
-  }
-  .Talk_Note-no {
-    color: var(--negative);
-  }
-  /* An error: a sentence in words, and what it said only when opened. */
-  .Talk_TroubleSummary {
-    color: var(--muted);
-    font-size: var(--small);
-    cursor: pointer;
-  }
-  .Talk_TroubleDetail {
-    margin: .4rem 0 0;
-    padding: .6rem .8rem;
-    background: var(--card);
-    font-size: var(--small);
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-  }
-  /* What a call's talking model asked the Operator, behind a small mark
-     between what the caller said and what they heard. */
-  .Talk_AskedSummary {
-    display: inline-flex;
-    color: var(--muted);
-    cursor: pointer;
-    list-style: none;
-  }
-  .Talk_AskedSummary::-webkit-details-marker {
-    display: none;
-  }
-  .Talk_AskedSummary .Icon {
-    width: 1em;
-    height: 1em;
-  }
-  .Talk_Inner {
-    display: flex;
-    flex-direction: column;
-    gap: .6rem;
-    margin: .4rem 0 0;
-    padding: .6rem .8rem;
-    border-left: 2px solid var(--border2);
-  }
-  /* What a model was told (a system prompt, a persona), set apart in a dashed
-     frame, closed until opened. */
-  .Talk_Told {
-    padding: .4rem .8rem;
-    border: 1px dashed var(--border2);
-    border-radius: .6rem;
-    font-size: var(--small);
-  }
-  .Talk_ToldSummary {
-    color: var(--muted);
-    cursor: pointer;
-  }
-  .Talk_Written {
-    max-height: 60vh;
-    margin: .4rem 0 0;
-    overflow: auto;
-    overflow-wrap: anywhere;
-  }
-  .Talk_Told .Body_Source,
-  .Talk_ToldSource {
-    max-height: 60vh;
-    margin: .4rem 0 0;
-    overflow: auto;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-  }
-  /* What the Operator is doing now, in words a screen reader hears; the yak
-     beside the box shows it. */
-  .Talk_Now {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-  /* The files a person sent, under their words at the right: a picture as
-     itself, any other file as a chip with its kind and name. */
-  .Talk_Files {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .5rem;
-    margin: 0;
-    font-size: var(--small);
-  }
-  .Talk_FilesLink {
-    overflow-wrap: anywhere;
-  }
-  .Talk_Said .Talk_Files {
-    justify-self: end;
-    justify-content: flex-end;
-    max-width: 85%;
-  }
-  .Talk_Said > .Talk_Row:has(> .Talk_Files) {
-    display: grid;
-    gap: .5rem;
-  }
-  .Talk_Image {
-    display: block;
-    width: auto;
-    max-width: min(100%, 16rem);
-    max-height: 12rem;
-    border-radius: .75rem;
-    object-fit: cover;
-  }
-  .Talk_File {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    max-width: 16rem;
-    padding: .35rem .75rem .35rem .35rem;
-    border-radius: .75rem;
-    background: var(--mine);
-    color: var(--text);
-    text-decoration: none;
   }
   /* The box to write in, held at the foot of the window. */
   .Talk_Box {
@@ -1535,7 +895,6 @@
     z-index: 1;
     margin-top: 0;
     padding-block: .5rem 1rem;
-    background: linear-gradient(transparent, var(--bg) 1rem);
   }
   /* Back to the newest entry, over the middle of the box while the person
      has scrolled up from it (public/follow.js). */
@@ -1548,92 +907,7 @@
   .Talk_Jump[hidden] {
     display: none;
   }
-  .Talk_Write {
-    display: grid;
-    gap: .5rem;
-    padding: .5rem;
-    border: 1px solid var(--border2);
-    border-radius: 1rem;
-    background: var(--card);
-  }
-  .Talk_Field {
-    width: 100%;
-    min-height: calc(var(--control-height) * 1.5);
-    max-height: 40vh;
-    resize: none;
-  }
-  .Talk_Tools {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .5rem;
-  }
-  .Talk_Attach {
-    position: relative;
-    color: var(--muted);
-    font-size: var(--small);
-    cursor: pointer;
-  }
-  .Talk_Attach:hover {
-    color: var(--text);
-  }
-  .Talk_Attachment {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-  }
-  .Talk_Attach:focus-within {
-    outline: 3px solid var(--accent);
-    outline-offset: 3px;
-  }
-  .Talk_Tools .Drop_Said {
-    flex: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .Talk_Stop,
-  .Talk_Send {
-    margin-left: auto;
-  }
-  .Talk_Stop {
-    display: none;
-  }
-  .Talk:has([data-task][data-pending]) .Talk_Stop {
-    display: inline-flex;
-  }
-  .Talk:has([data-task][data-pending]) .Talk_Send {
-    margin-left: 0;
-  }
-  /* The microphone (public/voice.js): a calm glow while it listens. */
-  .Talk_Voice[hidden] {
-    display: none;
-  }
-  .Talk_Voice[data-listening] {
-    color: var(--accent);
-    border-color: var(--accent);
-    box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--accent) 18%, transparent);
-    animation: Talk_Listening 1.6s ease-in-out infinite alternate;
-  }
-  @keyframes Talk_Listening {
-    to {
-      box-shadow: 0 0 0 .45rem color-mix(in srgb, var(--accent) 8%,
-        transparent);
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .Talk_Voice[data-listening] {
-      animation: none;
-    }
-  }
-  .Talk_Status {
-    margin: .3rem 0 0;
-    color: var(--muted);
-    font-size: var(--fine);
-  }
-  .Talk_Status:empty {
-    display: none;
-  }
+
   @media (max-width: 700px) {
     .Talk {
       display: block;
@@ -1641,9 +915,7 @@
     .Talk_Menu {
       display: inline-flex;
     }
-    .Talk_Bar {
-      padding: .5rem 1rem;
-    }
+
     .Talk_Column,
     .Talk_Box {
       padding-inline: 1rem;
@@ -1669,17 +941,12 @@
       z-index: 3;
       display: grid;
       height: auto;
-      border: 0;
     }
     .Talk_Back {
       display: inline-flex;
     }
     .Talk_Stage {
       padding: 0 .5rem .5rem;
-    }
-    .Talk_Fact {
-      grid-template-columns: minmax(0, 1fr);
-      gap: 0;
     }
   }
   @media (min-width: 701px) {
@@ -1708,17 +975,6 @@
     padding: 1rem var(--sidebar-padding);
     background: var(--surface);
     z-index: 1;
-  }
-  /* Talk keeps the page grain below its app preview. Paint that same grain
-     inside the sidebar, above its surface; other pages already paint it. */
-  .Talk_Page .Sidebar::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    background: var(--grain) 0 0 / 256px;
-    opacity: var(--grain-opacity);
-    pointer-events: none;
   }
   .Sidebar_Top {
     display: flex;
@@ -1757,7 +1013,6 @@
     overscroll-behavior: contain;
   }
   .Sidebar_Nav {
-    --nav-panel: var(--card);
     flex: none;
     margin-right: calc(-1 * var(--sidebar-padding));
   }
@@ -1885,13 +1140,13 @@
       min-width: 1.1rem;
       margin: 0;
     }
-    .Sidebar-rail .Desk_Space {
+    .Sidebar-rail .Identity {
       grid-template-columns: 2rem;
       justify-content: center;
       padding: .4rem;
     }
-    .Sidebar-rail .Sidebar_Whose > .Desk_Space .Desk_Name,
-    .Sidebar-rail .Sidebar_Whose > .Menu_Fold > .Menu_Summary :is(.Desk_Name, .Desk_Change) {
+    .Sidebar-rail .Sidebar_Whose > .Identity .Identity_Text,
+    .Sidebar-rail .Sidebar_Whose > .Menu_Fold > .Menu_Summary :is(.Identity_Text, .Identity_Action) {
       display: none;
     }
     /* The picker opens beside the rail, outside the scrolling column. */
@@ -1937,5 +1192,21 @@
     .Sidebar_Fold {
       display: none;
     }
+  }
+}
+
+@layer sections {
+  .Update_Words .Body > :last-child {
+    margin-bottom: 0;
+  }
+}
+
+@layer sections {
+  .Sidebar_Icon {
+    flex: none;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: .35rem;
+    object-fit: cover;
   }
 }

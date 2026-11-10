@@ -1,0 +1,85 @@
+.Transcript,
+.Transcript_Lines {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+.Transcript_Lines > * {
+  min-width: 0;
+}
+.Transcript_Bubble {
+  justify-self: end;
+  max-width: 85%;
+  margin: 0;
+  padding: .6rem 1rem;
+  border-radius: 1.1rem;
+  background: var(--mine, var(--surface));
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.Transcript_Via {
+  margin-right: .4em;
+  color: var(--muted);
+}
+.Transcript_Via .Icon {
+  width: .95em;
+  height: .95em;
+  vertical-align: -.1em;
+}
+.Transcript_Entry:has(> .Transcript_Bubble) {
+  display: grid;
+}
+.Transcript_Meta {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  margin-top: .25rem;
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+}
+.Transcript_Entry:has(> .Transcript_Bubble, > .Attachments) > .Transcript_Meta {
+  justify-content: end;
+}
+.Transcript_Entry-hidden {
+  opacity: .5;
+}
+.Transcript_Reply {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.Transcript_Lines[data-rows] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .35rem .9rem;
+}
+.Transcript_Lines[data-rows] > :not(:has(> .Transcript_Entry > .More_Inline)),
+.Transcript_Lines[data-rows] > :has(> .Transcript_Entry > .More_Inline[open]) {
+  flex-basis: 100%;
+  margin-block: .325rem;
+}
+.Transcript_Lines[data-rows] > :first-child {
+  margin-top: 0;
+}
+.Transcript_Lines[data-rows] > :last-child {
+  margin-bottom: 0;
+}
+.Transcript_Status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.Transcript_Lines .Attachments {
+  justify-self: end;
+  justify-content: flex-end;
+  max-width: 85%;
+}
+.Transcript_Lines > .Transcript_Row:has(> .Attachments) {
+  display: grid;
+  gap: .5rem;
+}

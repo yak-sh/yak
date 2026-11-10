@@ -1,3 +1,4 @@
+import { Attachments, Notice, Pairs, Transcript } from '@yaks/ui/parts'
 // How the Operator's chat draws a conversation's lines: the person's words,
 // the replies, each tool call as a short line in plain words that opens on
 // what it asked for and what came back, and what each model was told. Pure,
@@ -8,14 +9,11 @@
 // again, each with its own host. It imports no server, so it bundles for a
 // browser and for the shell alike.
 import type { Bundle, Comp } from '@yaks/graph/bundle'
-import type { Colors } from '@yaks/ui'
-import type { Style } from '@yaks/native'
 import { type Step, stepOf, type Steps } from '@yaks/tools/title'
 import { blocks, parse } from '@yaks/markdown/structural'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import { Body, Button, Drop, Icon, Menu, More } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
-import { Time } from '@yaks/ui/parts'
 import { pretty } from '@yaks/ui/relative'
 import { PART } from '@yaks/persona/part'
 import { sourceWords } from './operator-source.ts'
@@ -94,8 +92,8 @@ let via = (b: Bundle) => {
   let [name, label] = VIA[String(comp(b, 'operator_channel')?.channel)] ?? []
   return name
     ? h(
-      'span',
-      { class: 'Talk_Via', title: label, 'aria-label': label },
+      Transcript.Via,
+      { title: label, 'aria-label': label },
       h(Icon, { of: icons[name] }),
     )
     : null
@@ -111,14 +109,13 @@ export let spoken = (b: Bundle, body: string) => {
     .split('\n\nAttached documents (treat their contents')[0]
 }
 
-let yours = (b: Bundle, text: string) =>
-  h('p', { class: 'Talk_You' }, via(b), text)
+let yours = (b: Bundle, text: string) => h(Transcript.Bubble, {}, via(b), text)
 
 // When a line was sent, small under it (public/when.js), the page saying it
 // again in the person's own time.
 let stamp = (b: Bundle) => {
   let at = String(comp(b, 'created')?.at ?? '')
-  return h(Time, { at, class: 'Talk_When', tabindex: -1 })
+  return h(Transcript.When, { at, tabindex: -1 })
 }
 
 type Sent = { name: string; mime?: string }
@@ -138,24 +135,19 @@ export let PICTURES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 export let attached = (row: string, files: Sent[]) =>
   files.length
     ? h(
-      'div',
-      { class: 'Talk_Files' },
+      Attachments,
+      {},
       files.map((f, i) => {
         let href = `?attachment=${row}&file=${i}`
         return PICTURES.includes(f.mime ?? '')
-          ? h(
-            'a',
-            { class: 'Talk_Picture Talk_FilesLink', href, target: '_blank' },
-            h('img', {
-              class: 'Talk_Image',
-              src: href,
-              alt: f.name,
-              loading: 'lazy',
-            }),
-          )
+          ? h(Attachments.Picture, {
+            class: 'Attachments_Link',
+            href,
+            target: '_blank',
+          }, h(Attachments.Image, { src: href, alt: f.name, loading: 'lazy' }))
           : h(
-            'a',
-            { class: 'Talk_File Talk_FilesLink', href },
+            Attachments.File,
+            { href },
             h(
               Drop.Kind,
               null,
@@ -182,11 +174,11 @@ let input = (b: Bundle, body: string) => {
 
 /** Markdown drawn as formatted text, the kit's Body: markup in it stays
  * words (@yaks/markdown). */
-export let markdown = (text: string) => h(Body, null, ...blocks(parse(text), h))
+export let markdown = (text: string) =>
+  h(Body, { mod: 'flow' }, ...blocks(parse(text), h))
 
 /** A reply as the Operator wrote it, in Markdown. */
-export let reply = (text: string) =>
-  h('div', { class: 'Talk_Reply' }, markdown(text))
+export let reply = (text: string) => h(Transcript.Reply, {}, markdown(text))
 
 // A value a tool was given or gave back, the way a person reads it: a list
 // of what it holds under names in words, never its JSON. Bounded in depth,
@@ -200,41 +192,35 @@ let readable = (value: unknown, depth = 0): Node => {
     }
   }
   if (value == null || value === '') {
-    return h('span', { class: 'Talk_DetailValue' }, 'Nothing')
+    return h(More.Value, {}, 'Nothing')
   }
   if (typeof value != 'object') {
-    return h('span', { class: 'Talk_DetailValue' }, cut(String(value), 600))
+    return h(More.Value, {}, cut(String(value), 600))
   }
-  if (depth > 2) return h('span', { class: 'Talk_DetailValue' }, '…')
+  if (depth > 2) return h(More.Value, {}, '…')
   let list = Array.isArray(value)
     ? value.map((v, i) => [String(i + 1), v] as const)
     : Object.entries(value)
-  if (!list.length) return h('span', { class: 'Talk_DetailValue' }, 'Nothing')
+  if (!list.length) return h(More.Value, {}, 'Nothing')
   let more = list.length - 12
   return h(
-    'dl',
-    { class: 'Talk_Facts' },
+    Pairs,
+    { mod: 'nested' },
     list.slice(0, 12).map(([k, v]) =>
       h(
-        'div',
-        { class: 'Talk_Fact' },
+        Pairs.Row,
+        {},
         h(
-          'dt',
-          { class: 'Talk_FactLabel' },
+          Pairs.Key,
+          {},
           Array.isArray(value)
             ? k
             : k.replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase()),
         ),
-        h('dd', { class: 'Talk_FactValue' }, readable(v, depth + 1)),
+        h(Pairs.Value, {}, readable(v, depth + 1)),
       )
     ),
-    more > 0
-      ? h(
-        'div',
-        { class: 'Talk_Fact' },
-        h('dd', { class: 'Talk_FactValue' }, `and ${more} more`),
-      )
-      : null,
+    more > 0 ? h(Pairs.Row, {}, h(Pairs.Value, {}, `and ${more} more`)) : null,
   )
 }
 
@@ -255,17 +241,17 @@ let laid = (detail: unknown) => {
  * words, with what the error said only inside a closed "Details". */
 export let trouble = (said: string, detail?: unknown) =>
   h(
-    'div',
-    { class: 'Talk_Trouble' },
-    h('p', { class: 'Talk_Note Talk_Note-no' }, said),
+    Transcript.Error,
+    {},
+    h(Notice, { mod: 'negative' }, said),
     detail == null || detail === '' ||
       (typeof detail == 'object' && !Object.keys(detail).length)
       ? null
       : h(
         'details',
         null,
-        h('summary', { class: 'Talk_TroubleSummary' }, 'Details'),
-        h('pre', { class: 'Talk_TroubleDetail' }, laid(detail)),
+        h(More.Summary, { mod: 'quiet' }, 'Details'),
+        h(Body.Source, { mod: 'detail' }, laid(detail)),
       ),
   )
 
@@ -273,10 +259,10 @@ export let trouble = (said: string, detail?: unknown) =>
 // `no` once it did not work.
 let step = (name: string, mod: '' | 'on' | 'no', ...inside: Node[]) =>
   h(
-    'details',
-    { class: mod ? `Talk_Step Talk_Step-${mod}` : 'Talk_Step' },
-    h('summary', { class: 'Talk_Summary' }, name),
-    h('div', { class: 'Talk_Detail' }, ...inside),
+    More.Inline,
+    { mod },
+    h(More.Toggle, {}, name),
+    h(More.Inset, {}, ...inside),
   )
 
 // A step that did not work: "Tried texting Jeff".
@@ -301,12 +287,12 @@ let tool = (
   let drawn = step(
     name,
     ok == null ? 'on' : ok ? '' : 'no',
-    h('p', { class: 'Talk_DetailLabel' }, 'What it asked for'),
+    h(More.Label, {}, 'What it asked for'),
     readable(c.args ?? {}),
     ...told,
     ok == null ? null : ok
       ? [
-        h('p', { class: 'Talk_DetailLabel' }, 'What came back'),
+        h(More.Label, {}, 'What came back'),
         readable(String(comp(result, 'content')?.body ?? '')),
       ]
       : trouble(
@@ -340,7 +326,7 @@ let helper = (b: Bundle, body: string) => {
       node: step(
         'Heard back from a helper',
         '',
-        h('p', { class: 'Talk_DetailLabel' }, 'What came back'),
+        h(More.Label, {}, 'What came back'),
         readable(said),
       ),
     }
@@ -357,16 +343,10 @@ let helper = (b: Bundle, body: string) => {
 // What a model was told before anything was said to it, closed until
 // opened, and drawn apart from the words, the replies and the errors.
 let instructed = (said: string, ...inside: Node[]) =>
-  h(
-    'details',
-    { class: 'Talk_Told' },
-    h('summary', { class: 'Talk_ToldSummary' }, said),
-    ...inside,
-  )
+  h(More.Framed, {}, h(More.Legend, {}, said), ...inside)
 
 // What a model was told is Markdown, drawn the way a reply is.
-let written = (body: string) =>
-  h('div', { class: 'Talk_Written' }, markdown(body))
+let written = (body: string) => h(More.Text, {}, markdown(body))
 
 // What a page has drawn of what its models were told: each layer and each
 // tool, by its text. One drawn above is not drawn again: a conversation's
@@ -388,11 +368,7 @@ let offered = (tools: Tool[], page: Drawn) => {
         null,
         h('summary', null, t.name),
         written(t.description),
-        h(
-          'pre',
-          { class: 'Talk_ToldSource' },
-          JSON.stringify(t.parameters, null, 2),
-        ),
+        h(More.Source, {}, JSON.stringify(t.parameters, null, 2)),
       )
     ),
     !rest
@@ -618,14 +594,12 @@ let archivable = (line: Line, entries: Bundle[]): Line => {
   return {
     ...line,
     node: h(
-      'div',
-      {
-        class: archived.length ? 'Talk_Entry Talk_Entry-hidden' : 'Talk_Entry',
-      },
+      Transcript.Entry,
+      { mod: archived.length ? 'hidden' : undefined },
       line.node,
       h(
-        'div',
-        { class: 'Talk_Meta' },
+        Transcript.Meta,
+        {},
         h(Menu.Trigger, {
           type: 'button',
           'data-menu-trigger': menu,
@@ -803,18 +777,13 @@ export let asked = (entries: Bundle[]) => {
 // what they heard: their request and the Operator's work and answer.
 let Asked = ({ nodes }: { nodes: Node[] }) =>
   h(
-    'details',
-    { class: 'Talk_Asked' },
-    h(
-      'summary',
-      {
-        class: 'Talk_AskedSummary',
-        title: 'What was asked of the Operator',
-        'aria-label': 'What was asked of the Operator',
-      },
-      h(Icon, { of: icons['message-circle'] }),
-    ),
-    h('div', { class: 'Talk_Inner' }, ...nodes),
+    More.Branch,
+    {},
+    h(More.Mark, {
+      title: 'What was asked of the Operator',
+      'aria-label': 'What was asked of the Operator',
+    }, h(Icon, { of: icons['message-circle'] })),
+    h(More.Children, {}, ...nodes),
   )
 
 // Any other line: a refusal, a reply, a helper's end, a failure, a stop, or a
@@ -829,17 +798,17 @@ let line = (
   if (b.operator_contact) {
     return is(
       b.verified
-        ? h('p', { class: 'Talk_Note' }, 'Your contact is confirmed.')
+        ? h(Notice, {}, 'Your contact is confirmed.')
         : b.cancelled
         ? h(
-          'p',
-          { class: 'Talk_Note' },
+          Notice,
+          {},
           'This contact request is no longer active.',
         )
         : String(comp(b, 'operator_contact')?.address ?? '').includes('@')
         ? h(
-          'p',
-          { class: 'Talk_Note' },
+          Notice,
+          {},
           'Check your email for the contact verification code.',
         )
         : contactCard(body),
@@ -879,7 +848,7 @@ let line = (
       ? h('a', { href: `${opens}/${stopped}` }, 'a helper')
       : 'a helper'
     return is(
-      h('p', { class: 'Talk_Note' }, 'You stopped ', helper, '.'),
+      h(Notice, {}, 'You stopped ', helper, '.'),
     )
   }
   if (told(b, body)) return [{ id, uses: [id], ...helper(b, body) }]
@@ -896,7 +865,7 @@ let line = (
   }
   if (b.system && body) return is(system(b, body))
   if (b.stop || b.interrupted || b.cancel) {
-    return is(h('p', { class: 'Talk_Note' }, 'Stopped.'))
+    return is(h(Notice, {}, 'Stopped.'))
   }
   if (theirs(b)) return is(input(b, body))
   return []
@@ -907,11 +876,11 @@ let line = (
 let system = (b: Bundle, body: string) => {
   let [, label] = VIA[String(comp(b, 'operator_channel')?.channel)] ?? []
   return h(
-    'details',
-    { class: 'Talk_Told Talk_System' },
+    More.Framed,
+    { mod: 'system' },
     h(
-      'summary',
-      { class: 'Talk_ToldSummary' },
+      More.Legend,
+      {},
       `${label ?? 'From the system'}: `,
       cut(spoken(b, body).split('\n')[0], 80),
     ),
@@ -1037,46 +1006,5 @@ export let drawLines = (sent: Lines): { id: string; node: Node }[] => {
   })
 }
 
-/** The native look of these lines' parts (@yaks/native `Look` classes), over
- * a theme's colours, as pages.css draws them on the web: the person's words
- * on the right in their own colour, the replies on the left, and every step
- * one quiet line until pressed. */
-export let look = (c: Colors): Record<string, Style> => ({
-  Talk_Said: { gap: 14, padding: 16 },
-  Talk_You: {
-    alignSelf: 'flex-end',
-    maxWidth: '85%',
-    backgroundColor: c.surface,
-    borderRadius: 18,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    color: c.text,
-  },
-  Talk_Via: { color: c.dim },
-  Talk_Entry: { gap: 4 },
-  'Talk_Entry-hidden': { opacity: 0.5 },
-  Talk_Meta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  Talk_When: { fontSize: 12, color: c.dim },
-  Talk_Reply: { gap: 8, fontSize: 16, color: c.text },
-  Body: { gap: 8 },
-  Talk_Step: { gap: 6 },
-  'Talk_Step-on': { opacity: 0.8 },
-  'Talk_Step-no': { opacity: 0.9 },
-  Talk_Detail: {
-    gap: 6,
-    paddingLeft: 10,
-    borderLeftWidth: 2,
-    borderLeftColor: c.border,
-  },
-  Talk_Facts: { gap: 4 },
-  Talk_Told: { gap: 6 },
-  Talk_Written: { gap: 6 },
-  Talk_Inner: { gap: 8, paddingLeft: 10 },
-  Talk_Note: { fontSize: 15, color: c.muted },
-  'Talk_Note-no': { color: c.negative },
-  Talk_Trouble: { gap: 6 },
-  Talk_Files: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  Talk_File: { color: c.link },
-  Talk_Now: { fontSize: 15, color: c.muted, paddingHorizontal: 16 },
-})
+/** The native kit appearance of a conversation. */
+export { transcriptLook as look } from '@yaks/ui/parts'

@@ -51,7 +51,13 @@ let sides = (html: string) => {
 }
 
 // A space of Dana's whose Operator is Pip.
-let pip = [{ slug: 'dana', title: '', owner: true, own: true, operator: 'Pip' }]
+let pip = [{
+  slug: 'dana',
+  title: '',
+  owner: true,
+  own: true,
+  operator: 'Pip',
+}]
 
 // The top of the side on one line (T-151731): the way back says "Back to"
 // and the Operator's name, the name first so "Back to" is what gives way
@@ -91,8 +97,8 @@ test('the side’s top keeps its words to one line, and the selector has no Chan
     pick.getAttribute('title'),
     'Change space: Loch Lomond Allotments',
   )
-  assertEquals(pick.querySelector('.Desk_Change')?.textContent, '')
-  assert(pick.querySelector('.Desk_Change .Icon'))
+  assertEquals(pick.querySelector('.Identity_Action')?.textContent, '')
+  assert(pick.querySelector('.Identity_Action .Icon'))
   assert(!pick.textContent!.includes('Change'))
 })
 
@@ -142,10 +148,10 @@ test('Manage is one side: back to the Operator, the space you manage, then your 
   )
   assertStringIncludes(page, 'Connect your agent')
   assertEquals(
-    document.querySelector('.Desk_Connect .Button')?.getAttribute('href'),
+    document.querySelector('.Card-accent .Button')?.getAttribute('href'),
     managePath('agents'),
   )
-  assertEquals(document.querySelector('.Desk_Whose')?.textContent, 'dana')
+  assertEquals(document.querySelector('.Head_Eyebrow')?.textContent, 'dana')
   // Sign out is the side's one form; the library has none.
   assertEquals(
     document.querySelector('.Sidebar_Foot form')?.getAttribute('action'),
@@ -157,12 +163,12 @@ test('Manage is one side: back to the Operator, the space you manage, then your 
 
 test("a space's Settings change only the space, and delete it", async () => {
   let { document } = sides(await block({ view: 'settings' }))
-  let form = document.querySelector('#content form.Form')!
+  let form = document.querySelector('#content [name=space]')!.closest('form')!
   assertEquals(form.getAttribute('action'), managePath('settings', 'dana'))
   assertEquals(form.querySelector('[name=name]'), null)
   assert(form.querySelector('[name=space]'))
   assertEquals(
-    document.querySelector('.Desk_Danger .Button')?.getAttribute('href'),
+    document.querySelector('.Card-danger .Button')?.getAttribute('href'),
     'https://yaks.app/space/dana/delete',
   )
 })
@@ -178,12 +184,15 @@ test('Profile holds the name, the email and the space opened first', async () =>
   )
   assertEquals(current, 'Profile')
   assertEquals(
-    document.querySelector('.Desk_Whose')?.textContent,
+    document.querySelector('.Head_Eyebrow')?.textContent,
     'Your account',
   )
   let form = document.querySelector('#content form')!
   assertEquals(form.getAttribute('action'), managePath('profile'))
-  assertEquals(form.querySelector('[name=name]')?.getAttribute('value'), 'dana')
+  assertEquals(
+    form.querySelector('[name=name]')?.getAttribute('value'),
+    'dana',
+  )
   assertStringIncludes(form.textContent!, 'dana@x.test')
   // Only spaces of their own can open first.
   assertEquals(
@@ -215,7 +224,7 @@ test('the selector names the space, not its address, and keeps the page when ano
     }))
   let page = await block({ view: 'billing', space: 'grove', spaces })
   assertEquals(
-    parseHTML(page).document.querySelector('summary.Desk_Space')?.textContent,
+    parseHTML(page).document.querySelector('summary.Identity')?.textContent,
     'LLocust Grove',
   )
   assertEquals(rows(page), [
@@ -251,7 +260,7 @@ test('the selector names the space, not its address, and keeps the page when ano
   let alone = parseHTML(await block({ spaces: [spaces[0]] })).document
   assertEquals(alone.querySelector('.Menu_Fold'), null)
   assertEquals(
-    alone.querySelector('.Desk_New')?.getAttribute('href'),
+    alone.querySelector('.Identity_Add')?.getAttribute('href'),
     '/manage/account/space',
   )
 })
@@ -287,7 +296,7 @@ test('on a phone, Menu opens the same side', async () => {
   assertEquals(menu.getAttribute('href'), '#menu')
   assertEquals(document.querySelector('#menu')?.tagName, 'ASIDE')
   assertEquals(
-    document.querySelector('.Desk_Where')?.textContent,
+    document.querySelector('.Toolbar_Text')?.textContent,
     'Peopledana',
   )
 })
@@ -508,7 +517,10 @@ test('who visited: an app nobody opened says so', async () => {
     }],
   })
   let { document } = parseHTML(page)
-  assertEquals(document.querySelector('.Report_Total')?.textContent, '0 visits')
+  assertEquals(
+    document.querySelector('.Report_Total')?.textContent,
+    '0 visits',
+  )
   assert(!page.includes('class="Chart Chart-bars"'), page)
 })
 

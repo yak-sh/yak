@@ -55,3 +55,7 @@
 .Form_Line > .At {
   flex: 1 1 12rem;
 }
+
+.Form > .Button {
+  justify-self: start;
+}

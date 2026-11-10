@@ -121,3 +121,13 @@
     white-space: nowrap;
   }
 }
+
+.SideNav_Edge-textured::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--grain) 0 0 / 256px;
+  opacity: var(--grain-opacity);
+  pointer-events: none;
+}

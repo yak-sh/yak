@@ -110,7 +110,7 @@ test('what an app can do is asked for in the chat once it is live', () => {
     let { document } = parseHTML(
       renderToString(h('div', null, does(madeOf(text(RECIPES)), whose, live))),
     )
-    return document.querySelector('.Talk_MadeNote')?.textContent
+    return document.querySelector('.Notice-fine')?.textContent
   }
   equal(
     note(true),
@@ -142,7 +142,7 @@ test('what an app can do lists its pages, each shown in its screens when pressed
     'About: /about',
   ])
   equal(
-    document.querySelector('.Talk_MadeNote')?.textContent,
+    document.querySelector('.Notice-fine')?.textContent,
     'Its pages, each shown in Screens.',
   )
   equal(

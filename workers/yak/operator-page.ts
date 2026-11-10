@@ -1,3 +1,12 @@
+import {
+  Composer,
+  Identity,
+  Notice,
+  Preview,
+  Skip,
+  Toolbar,
+  Transcript,
+} from '@yaks/ui/parts'
 import { Time } from '@yaks/ui/parts'
 import type { Bundle } from '@yaks/graph'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
@@ -519,18 +528,15 @@ export let conversation = (rows: Bundle[]) =>
     let failed = row.failed ?? row.bounced
     let files = request.files ?? []
     return h(
-      'div',
-      {
-        class: 'Talk_Thread',
-        'data-pending': answer || failed ? undefined : '',
-      },
+      Transcript,
+      { 'data-pending': answer || failed ? undefined : '' },
       h(
-        'div',
-        { class: 'Talk_Said' },
+        Transcript.Lines,
+        {},
         h(
           'div',
           null,
-          doc.body ? h('p', { class: 'Talk_You' }, doc.body) : null,
+          doc.body ? h(Transcript.Bubble, {}, doc.body) : null,
           attached(row.entity.eid, files),
         ),
         answer?.text ? reply(answer.text) : failed
@@ -539,8 +545,8 @@ export let conversation = (rows: Bundle[]) =>
             failed,
           )
           : h(
-            'p',
-            { class: 'Talk_Note' },
+            Notice,
+            {},
             'Your request is saved. The Operator will start on it soon.',
           ),
         failed && answer
@@ -1301,8 +1307,7 @@ let stageOf = ({ made, live, draft }: Making) =>
 let screens = (app: Making, operator: string) => {
   let { live, draft } = app
   let frame = (which: 'draft' | 'live', at: string) => [
-    h('a', {
-      class: 'Talk_Address',
+    h(Preview.Address, {
       href: at,
       target: '_blank',
       rel: 'noopener',
@@ -1310,8 +1315,8 @@ let screens = (app: Making, operator: string) => {
       'data-address': which,
       'data-screen': which,
     }, at),
-    h('iframe', {
-      class: 'Talk_Frame',
+    h(Preview.Frame, {
+      mod: 'flat',
       src: at,
       title: `${app.title}, ${which == 'draft' ? 'the draft' : 'live'}`,
       name: `screen-${which}`,
@@ -1321,7 +1326,7 @@ let screens = (app: Making, operator: string) => {
     }),
   ]
   let note = (which: string, said: string) =>
-    h('p', { class: 'Talk_MadeNote', 'data-screen': which }, said)
+    h(Notice, { mod: 'fine', 'data-screen': which }, said)
   if (!live && !draft) {
     return h(
       Empty,
@@ -1333,50 +1338,55 @@ let screens = (app: Making, operator: string) => {
       ),
     )
   }
-  if (!live) {
-    return [
-      note(
-        'draft',
-        `A draft with its own test data, changing as ${operator} works on it.`,
-      ),
-      frame('draft', draft!),
-    ]
-  }
-  if (!draft) return frame('live', live)
-  let pick = (which: string, word: string) =>
-    h(
-      Check,
-      null,
-      h(Check.Input, {
-        type: 'radio',
-        name: 'screen',
-        value: which,
-        checked: which == 'draft',
-      }),
-      word,
-    )
-  return [
-    h(
-      'div',
-      {
-        class: 'Talk_Screens',
-        role: 'radiogroup',
-        'aria-label': 'Which screens',
-      },
-      pick('draft', 'Draft'),
-      pick('live', 'Live'),
+  let choices = [
+    draft &&
+    {
+      id: 'draft',
+      title: 'Draft',
+      at: draft,
+      note: live
+        ? `${operator}’s changes, not live yet, with the draft’s own test data.`
+        : `A draft with its own test data, changing as ${operator} works on it.`,
+    },
+    live &&
+    {
+      id: 'live',
+      title: 'Live',
+      at: live,
+      note: draft
+        ? 'What people see now. The draft’s changes show here once released.'
+        : '',
+    },
+  ].filter((x) => !!x)
+  return h(
+    Preview.Choices,
+    { role: 'radiogroup', 'aria-label': 'Which screens' },
+    choices.map((choice, i) =>
+      h(
+        Preview.Item,
+        {},
+        choices.length > 1
+          ? h(
+            Preview.Choice,
+            {},
+            h(Check.Input, {
+              type: 'radio',
+              name: 'screen',
+              value: choice.id,
+              checked: i == 0,
+            }),
+            choice.title,
+          )
+          : null,
+        h(
+          Preview.View,
+          {},
+          choice.note ? note(choice.id, choice.note) : null,
+          frame(choice.id as 'draft' | 'live', choice.at),
+        ),
+      )
     ),
-    note(
-      'draft',
-      `${operator}’s changes, not live yet, with the draft’s own test data.`,
-    ),
-    note(
-      'live',
-      `What people see now. The draft’s changes show here once released.`,
-    ),
-    frame('draft', draft),
-    frame('live', live),
-  ]
+  )
 }
 
 // The app open beside the chat (T-140509), and the one the Operator is
@@ -1411,13 +1421,19 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
       h(TabSet.Tab, { for: `made-${id}` }, name),
       h(
         TabSet.Panel,
-        { as: Card, class: `Talk_Part Talk_Part-${id}`, 'data-part': id },
+        {
+          as: Card,
+          class: `Talk_Part Talk_Part-${id}`,
+          'data-part': id,
+          'data-compact': id == 'screens' ? '' : undefined,
+        },
         h('div', { class: 'Talk_Sheet' }, ...inside),
       ),
     )
   return h(
-    'section',
+    Preview,
     {
+      mod: 'pane',
       class: 'Talk_App',
       id: 'app',
       'aria-label': title,
@@ -1425,21 +1441,20 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
       'data-stage': stage,
     },
     h(
-      'header',
-      { class: 'Talk_AppHead', 'data-part': 'head' },
+      Toolbar,
+      { mod: 'compact', 'data-part': 'head' },
       h(Button, { href: '#', class: 'Talk_Back' }, '← Chat'),
-      h('img', {
-        class: 'Talk_Icon',
+      h(Identity.Image, {
         src: `https://${host}/icon.png`,
         width: 24,
         height: 24,
         alt: '',
       }),
       h(
-        'span',
-        { class: 'Talk_AppName' },
-        h('b', { class: 'Talk_AppTitle' }, title),
-        h('small', { class: 'Talk_AppHost' }, host),
+        Identity.Text,
+        {},
+        h(Identity.Name, {}, title),
+        h(Identity.Note, {}, host),
       ),
       away
         ? h(
@@ -1501,7 +1516,7 @@ let showing = (app: Shown) =>
   h(
     Button,
     { href: '#app', class: 'Talk_Show' },
-    h('span', { class: 'Talk_ShowName' }, app.title || app.slug),
+    h(Toolbar.Label, {}, app.title || app.slug),
   )
 
 // The Operator page installs to a home screen as a web app (D-136811): each
@@ -1601,7 +1616,7 @@ let talkPage = (
     null,
     page.status,
     html([
-      h('a', { class: 'Desk_Skip', href: page.skip[0] }, page.skip[1]),
+      h(Skip, { href: page.skip[0] }, page.skip[1]),
       h(
         'div',
         { class: page.app ? 'Talk Talk-app' : 'Talk' },
@@ -1618,7 +1633,7 @@ let talkPage = (
             id: 'content',
           },
           h(
-            'header',
+            Toolbar,
             { class: 'Talk_Bar' },
             h(Button, {
               href: '#menu',
@@ -1626,10 +1641,10 @@ let talkPage = (
               'aria-label': 'Menu',
             }, '☰'),
             h(
-              'div',
-              { class: 'Talk_Heads' },
-              h('h1', { class: 'Talk_Head', 'data-title': '' }, page.title),
-              h('p', { class: 'Talk_Who' }, whoseOf(space)),
+              Toolbar.Text,
+              {},
+              h(Toolbar.Title, { 'data-title': '' }, page.title),
+              h(Toolbar.Sub, {}, whoseOf(space)),
             ),
             page.app ? showing(page.app) : null,
             page.aside,
@@ -1713,9 +1728,9 @@ export let column = (html: string, empty: Node = null) =>
 
 let hello = (heading: string, said: string) =>
   h(
-    'div',
-    { class: 'Talk_Hello' },
-    h('h2', { class: 'Talk_HelloTitle' }, heading),
+    Empty,
+    { class: 'Talk_Hello', mod: 'welcome' },
+    h(Empty.Title, { mod: 'welcome' }, heading),
     h('p', null, said),
   )
 
@@ -1829,7 +1844,7 @@ export let chatPage = async (
         )
         : null,
       fresh || talked.title
-        ? composer(env, at, here, operator, app, !!talked.helper)
+        ? composer(env, at, here, operator, app, !!talked.helper, fresh)
         : null,
       fresh && !app
         ? h(
@@ -1907,6 +1922,7 @@ let composer = (
   operator: string,
   app?: Shown,
   helper = false,
+  inline = false,
 ) => {
   // On a helper's page the words still go to the person's conversation,
   // never the helper, and the box says so.
@@ -1916,8 +1932,9 @@ let composer = (
     ? `What should change in ${app.title || app.slug}?`
     : `Message ${operator}`
   return h(
-    'form',
+    Composer.Form,
     {
+      mod: inline && 'inline',
       class: 'Talk_Box Page_Form',
       id: 'ask',
       method: 'post',
@@ -1936,29 +1953,24 @@ let composer = (
     h('input', { type: 'hidden', name: 'page', value: here }),
     app ? h('input', { type: 'hidden', name: 'app', value: app.slug }) : null,
     h(
-      Drop,
-      { mod: 'gather', class: 'Talk_Write' },
-      h(Idle, { class: 'Talk_Yak', base: url(env) }),
+      Composer,
+      {},
+      h(Composer.Figure, { as: Idle, base: url(env) }),
       h(Drop.Chosen, { 'aria-label': 'Files to send', 'aria-live': 'polite' }),
-      h(Field, {
+      h(Composer.Field, {
         lines: true,
-        class: 'Talk_Field',
         name: 'say',
         placeholder: asked,
         'aria-label': asked,
       }),
       h(
-        'div',
-        { class: 'Talk_Tools' },
+        Composer.Tools,
+        {},
         h(
-          'label',
-          {
-            class: 'Talk_Attach',
-            title: 'Add images or documents, or paste or drop them here',
-          },
+          Composer.Attach,
+          { title: 'Add images or documents, or paste or drop them here' },
           '＋ Add files',
-          h(Drop.File, {
-            class: 'Talk_Attachment',
+          h(Composer.File, {
             type: 'file',
             name: 'file',
             multiple: true,
@@ -1970,16 +1982,11 @@ let composer = (
           }),
         ),
         h(Drop.Said, { role: 'status' }),
-        h(
-          Button,
-          { class: 'Talk_Stop', type: 'button', 'data-stop': '' },
-          'Stop',
-        ),
+        h(Composer.Stop, { type: 'button', 'data-stop': '' }, 'Stop'),
         // shown where the browser or the platform can hear (public/voice.js)
         h(
-          Button,
+          Composer.Voice,
           {
-            class: 'Talk_Voice',
             type: 'button',
             hidden: true,
             'data-voice': '',
@@ -1989,10 +1996,10 @@ let composer = (
           h(Icon, { of: icons.mic }),
           h('span', { 'data-voice-says': '' }, 'Talk'),
         ),
-        h(Button, { mod: 'go', class: 'Talk_Send', type: 'submit' }, 'Send'),
+        h(Composer.Send, { type: 'submit' }, 'Send'),
       ),
     ),
-    h('p', { class: 'Talk_Status', role: 'status', 'data-send-status': '' }),
+    h(Composer.Status, { role: 'status', 'data-send-status': '' }),
   )
 }
 
@@ -2267,6 +2274,7 @@ let moves = ${JSON.stringify(MOVES)}
 let yak = form?.querySelector('[data-idle]')
 let last = 'idle'
 let doing = (now = 'idle') => {
+  form?.querySelector('.Composer')?.toggleAttribute('data-busy', working())
   if (!yak || now == last) return
   last = now
   let move = moves[now]
@@ -2359,6 +2367,7 @@ document.addEventListener('click', async (e) => {
     status.textContent = ''
   } catch (error) {
     card.setAttribute('data-pending', '')
+    doing(card.dataset.doing)
     said(error)
   }
 })
@@ -2373,7 +2382,7 @@ let reading, again = false
 // slides its oldest displayed entries out of the next read.
 let from = thread()?.dataset.from
 // The person's own words the page shows, each by its row's id.
-let theirs = () => new Map([...box.querySelectorAll('[id^="row-"]')].filter((r) => r.querySelector('.Talk_You')).map((r) => [r.id, r]))
+let theirs = () => new Map([...box.querySelectorAll('[id^="row-"]')].filter((r) => r.querySelector('.Transcript_Bubble')).map((r) => [r.id, r]))
 let read = async () => {
   if (open == 'new') return
   if (reading) return void (again = true)
@@ -2436,7 +2445,7 @@ let hear = (frame) => {
   if (o.typing) {
     if (!typing) {
       typing = document.createElement('p')
-      typing.className = 'Talk_Reply'
+      typing.className = 'Transcript_Reply'
       typing.dataset.typing = ''
       rows.append(typing)
     }
@@ -2450,7 +2459,7 @@ let hear = (frame) => {
     let at = document.getElementById('row-' + row.id)
     if (!at) {
       at = document.createElement('div')
-      at.className = 'Talk_Row'
+      at.className = 'Transcript_Row'
       at.id = 'row-' + row.id
       rows.append(at)
     }
@@ -2460,8 +2469,8 @@ let hear = (frame) => {
   }
   if (reading) again = true
   card.querySelector('[data-now]').textContent = o.now
-  doing(o.doing)
   card.toggleAttribute('data-pending', !!o.now)
+  doing(o.doing)
 }
 let listen = () => {
   let socket = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1&lines=1' + (open == 'new' ? '' : '&talk=' + encodeURIComponent(open)))

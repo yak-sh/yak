@@ -31,6 +31,7 @@ export type Sidebar = {
   home: string
   label: string
   title?: string
+  surface?: 'textured'
   back?: { href: string; name: string }
   picker?: Parameters<typeof choice>
   sections: Section[]
@@ -130,6 +131,7 @@ export let Sidebar = (at: Sidebar) =>
   h(
     SideNav.Edge,
     {
+      mod: at.surface,
       class: at.fold?.collapsed ? 'Sidebar Sidebar-rail' : 'Sidebar',
       id: 'menu',
       'aria-label': at.label,
