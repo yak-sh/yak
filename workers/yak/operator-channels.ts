@@ -758,6 +758,11 @@ let ANSWERING = new Set(['letter', 'texted', 'signup'])
  * (tunnel.ts `tell`). */
 export let OWN = new Set(['error', 'escalated', 'machine'])
 
+/** The channels whose words start a turn without their person asking at that
+ * moment: the Operator's and the platform's own ({@link OWN}), a wake-up that
+ * fired and a subscription that matched. */
+export let UNASKED = new Set([...OWN, 'wake', 'subscription'])
+
 export let handleChannels = (
   operator: Operator,
   env: Env,

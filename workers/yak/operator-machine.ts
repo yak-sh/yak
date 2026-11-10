@@ -10,7 +10,8 @@
 // the machine can't answer (the tunnel is down, the provider's allowance is
 // spent, the provider takes no such input) is asked of the next provider's
 // model, and then of the hosted model, which the space pays for as it pays
-// for every hosted step.
+// for every hosted step. A step nobody asked for at that moment (a knock, a
+// wake-up) has no hosted model to fall to: it waits for the machine.
 import { type Model, ModelError, type Request } from '@yaks/model'
 
 /** The provider an Operator's machine-served steps are asked of
@@ -24,6 +25,10 @@ export type Lends = { model: string; delegate?: string }[]
 /** One way to answer a step: a model, the name it is asked under, and whether
  * the space pays for it (a hosted model) rather than the machine's owner. */
 export type Leg = { model: Model; name: string; hosted?: boolean }
+
+/** How long a step that waits for its machine waits before it is asked again
+ * (ms), at the least ({@link falling}). */
+export const AWAY = 60_000
 
 /**
  * The models a step asking the machine for `asked` goes to, in order: `asked`
@@ -66,7 +71,9 @@ export let namesFor = (
  * had begun to answer, a stop the caller asked for, and the last leg's failure
  * are thrown as they came. `fell` is told before a hosted leg is asked after
  * another failed, with the request it will be sent and the failure, and
- * answers the request to send.
+ * answers the request to send. A step with no hosted leg waits for the
+ * machine: its last failure before any output is thrown as one that may pass
+ * (`retry`, after {@link AWAY} at the least), so whoever runs it asks again.
  *
  * ```ts
  * import { type Model, ModelError } from '@yaks/model'
@@ -80,6 +87,10 @@ export let namesFor = (
  *   { model: on, name: 'hosted', hosted: true },
  * ])
  * equal((await model({ model: 'mine', items: [], tools: [] })).model, 'hosted')
+ * let waits = falling(() => [{ model: off, name: 'mine' }])
+ * let error = await waits({ model: 'mine', items: [], tools: [] })
+ *   .catch((e) => e)
+ * equal([error.code, error.retry], ['unreachable', { after: 60_000 }])
  * ```
  */
 export let falling = (
@@ -107,11 +118,22 @@ async (req) => {
       })
     } catch (error) {
       req.signal?.throwIfAborted()
-      if (!(error instanceof ModelError) || begun || i == all.length - 1) {
-        throw error
+      if (!(error instanceof ModelError) || begun) throw error
+      if (i == all.length - 1) {
+        throw all.some((l) => l.hosted) ? error : away(error)
       }
       failed = error
     }
   }
   throw failed ?? new ModelError('provider', 'No model answers this step')
 }
+
+// A machine's failure as one that may pass: asked again after the machine's
+// own wait, or after AWAY.
+let away = (error: ModelError) =>
+  new ModelError(
+    error.code,
+    error.message,
+    { after: Math.max(error.retry?.after ?? 0, AWAY) },
+    error.response,
+  )

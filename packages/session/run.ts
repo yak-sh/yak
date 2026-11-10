@@ -68,6 +68,9 @@ export type Runner = Deps & ChildLimits & {
     using: Comp | undefined,
     session?: Eid,
   ) => boolean | Promise<boolean>
+  /** how long a transcript this host does not answer yet waits before
+   * `answers` is asked again (ms, a second where absent) */
+  waiting?: number
   /** each step, as it lands */
   each?: (step: Step, session?: string) => void | Promise<void>
   /** reconcile borrowed resources after this pass releases its lease */
@@ -562,7 +565,7 @@ let advance = (
       if (
         (await usingOf(g, session) || await hasAsk(g, session)) &&
         !await outside(g, session)
-      ) await r.attempt?.defer?.(1000)
+      ) await r.attempt?.defer?.(r.waiting ?? 1000)
       return
     }
     await holding(g, `${RUN}/${session}`, {

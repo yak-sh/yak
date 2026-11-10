@@ -185,3 +185,17 @@ test('words that name their own model, as a call’s do, are answered by the hos
   let t = await turn(jeff, { model: paid.name })
   assertEquals([t.box, t.hosted, t.using], [[], 1, HOSTED])
 })
+
+test('a turn nobody asked for at that moment waits for the machine that is off, and the space pays for none of it', async () => {
+  up = false
+  let t = await turn(jeff, { channel: 'machine' })
+  assertEquals([t.box, t.hosted, t.cost], [[], 0, 0])
+  // Its ask is owed again, for when the machine is back.
+  let owed = await store.g.read(
+    `.provisional&.ask&.entry.session=${t.session}&.fields=interrupted.code`,
+  )
+  assertEquals(owed.map((b) => b.interrupted), [{ code: 'unreachable' }])
+  // His own words meanwhile fall to the hosted model, as ever.
+  assertEquals((await turn(jeff)).hosted, 1)
+  up = true
+})

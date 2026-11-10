@@ -47,8 +47,8 @@ import {
   type Price,
   type Request as Step,
 } from '@yaks/model'
-import { forwarding } from '@yaks/model/step'
-import { falling, MACHINE, namesFor } from './operator-machine.ts'
+import { forwarding, PATH } from '@yaks/model/step'
+import { AWAY, falling, MACHINE, namesFor } from './operator-machine.ts'
 import type { Calling } from './tunnel.ts'
 import { platform, ready, served } from './providers.ts'
 import { attachmentRows } from './operator-attachments.ts'
@@ -111,6 +111,7 @@ import {
   messageReference,
   OWN,
   starting,
+  UNASKED,
 } from './operator-channels.ts'
 import { escalate, escalationAnswer, REPLIES } from './operator-escalate.ts'
 import { askedAt, inputOf, rootAt } from './operator-root.ts'
@@ -851,6 +852,10 @@ let couldnt = (why: string) => `I couldn't finish this: ${why}.`
 let HOSTED =
   "The person's own machine did not answer this request, so a hosted model is answering instead of their subscription, and the space pays for it. Tell them so in one short sentence in your reply, once. Carry on with what they asked."
 let TOLD = ' The people who run yaks.app have been told.'
+// The failures of a machine's step that say its tunnel did not reach it, and
+// how long a turn waits after its machine's providers refused it (ms).
+let REACHES = new Set(['unreachable', 'stalled'])
+let SPENT = 60 * 60_000
 
 /**
  * What ended a session's work: its newest reply, else what kept it from one,
@@ -1017,6 +1022,24 @@ export let operating = (
     let space = o ? await dir().at(o.space) : undefined
     if (!session || !o || !space || space.trashed) return null
     return reachMachine(space, o.person, () => topOf(store, session))
+  }
+  // Whether the turn a session takes was started without its person asking
+  // at that moment: the newest words of its conversation came on a channel
+  // nobody typed in (operator-channels.ts `UNASKED`), or it is scheduled
+  // work's helper (operator-work.ts). Such a turn never falls to a hosted
+  // model, which would spend the space's money nobody chose to spend: it
+  // waits for its person's machine.
+  let unasked = async (session?: string) => {
+    if (!session) return false
+    let top = await topOf(store, session)
+    let [[work], [said]] = await Promise.all([
+      g.get([top], ['operator_work']),
+      g.read(
+        `.entry.session=${top}&.content&.using&!ask&.order=-entry.seq&.limit=1&.fields=operator_channel.channel`,
+      ),
+    ])
+    let channel = comp(said, 'operator_channel')?.channel
+    return !!work?.operator_work || UNASKED.has(String(channel ?? ''))
   }
   let machine: Model = async (req) => {
     let fetch = reached('machine', await machineOf(req.call))
@@ -1235,6 +1258,36 @@ export let operating = (
       }],
     }
   }
+  // A turn that waits for its machine (`unasked`) has its newest ask owed
+  // again after the machine failed it (@yaks/session `provisional`), and is
+  // not asked again until the machine looks able: one the tunnel did not
+  // reach (`unreachable`, `stalled`) once the tunnel reaches it, looked at
+  // once per AWAY at most; one whose providers refused it (an allowance
+  // spent), SPENT after it failed. A look is free, and an ask spends one of
+  // its run's tries.
+  let looked = new Map<string, { at: number; up: Promise<boolean> }>()
+  let up = (session: string, reach: typeof globalThis.fetch) => {
+    let held = looked.get(session)
+    if (held && Date.now() - held.at < AWAY) return held.up
+    let seen = reach('http://machine' + PATH, { method: 'HEAD' }).then(
+      async (r) => (await r.body?.cancel(), r.status < 500),
+      () => false,
+    )
+    looked.set(session, { at: Date.now(), up: seen })
+    return seen
+  }
+  let away = async (session: string) => {
+    let [owed] = await g.read(
+      `.provisional&.ask&.entry.session=${session}&.limit=1&.fields=interrupted.code,created.at`,
+    )
+    if (!owed || !await unasked(session)) return false
+    let reach = await machineAt(session)
+    if (!reach) return false
+    if (!REACHES.has(String(comp(owed, 'interrupted')?.code))) {
+      return Date.now() - Date.parse(String(comp(owed, 'created')?.at)) < SPENT
+    }
+    return !await up(session, reach)
+  }
   let models = Object.fromEntries(
     Object.entries(implementations).filter(([p]) => p != MACHINE)
       .map(([p, m]) => [p, accounting(m, p)]),
@@ -1243,11 +1296,14 @@ export let operating = (
   // the hosted model (operator-machine.ts), which is charged as any hosted
   // step is.
   let lent = accounting(implementations[MACHINE], MACHINE, true)
+  // A turn nobody asked for at that moment has no hosted leg, so it waits
+  // for the machine (`unasked`, `away`).
   models[MACHINE] = Object.assign(
-    falling((req) => {
+    falling(async (req) => {
       let names = namesFor(req.model, agents.machine, { model: name, delegate })
-      return [
-        ...names.machine.map((name) => ({ model: lent, name })),
+      let own = names.machine.map((name) => ({ model: lent, name }))
+      return await unasked(await sessionOf(req.call)) ? own : [
+        ...own,
         { model: models[provider], name: names.hosted, hosted: true },
       ]
     }, fell),
@@ -1644,92 +1700,99 @@ export let operating = (
         options.tell?.(session)
       },
     })
-  fx.handle(stepwise(running(
-    g,
-    lend({
-      h: { g, fx, vocab, me, gone },
-      providers: models,
-      name,
-      provider,
-      // Its text is shown as it is written, once it is stored, so a reset
-      // under a reply takes back none of what a person saw.
-      streaming: true,
-      typed: options.typing,
-      context: shown,
-      inputSource,
-      // The conversation forks for its work.
-      tools: [],
-      // Each ask wears the space's persona on the platform's base, read from
-      // the directory (operator-persona.ts).
-      wear: { bases: bases(env) },
-      // A child works for the same space and person as the session that
-      // started it, and is charged to that space.
-      prepareChild: async ({ parent, args }) => {
-        let o = await workingOf(store, parent)
-        if (!o) return {}
-        if (!args.topic) return { operator_session: o }
-        let { ctx } = await working(env, store, parent, options.directory)
-        if (!writes(ctx.role)) return { operator_session: o }
-        let topic = await oracleTopic(ctx, g, String(args.topic))
-        await oracleContext(ctx, g, topic)
-        return {
-          operator_session: o,
-          session: { persona: ORACLE, topic },
-        }
-      },
-      remote: roster,
-      resultText: async (entry) => {
-        let session = String(comp(entry, 'entry')?.session)
-        let work = await workingOf(store, session)
-        if (!work) throw new Error('Operator result has no working session')
-        return outputView(
-          g,
-          entry,
-          undefined,
-          (value, source) => keepResult(g, value, source, work.person),
-        )
-      },
-      // The conversation and its work forks share a short topic map. Only a
-      // session opened on a topic carries that topic's compiled context.
-      instructions: async (session) => {
-        reached('instructing', null)
-        let [{ space, ctx }, [row]] = await Promise.all([
-          working(env, store, session, options.directory),
-          g.read(`.entity.eid=${session}&.fields=session.topic`),
-        ])
-        let work = await workingOf(store, session)
-        if (work?.signup) return outside(space) + '\n\n' + SIGNUP
-        let topic = topicOf(row)
-        // Someone who does not write in the space is told none of its work.
-        if (!writes(ctx.role)) {
-          return reached('instructions', outside(space, ctx.role))
-        }
-        let [map, google] = await Promise.all([
-          topic ? oracleContext(ctx, g, topic) : oracleMap(ctx, g),
-          googleTold(env, ctx, space),
-        ])
-        return reached(
-          'instructions',
-          [map, told(ctx, space), google].filter(Boolean).join('\n\n'),
-        )
-      },
-      each: async (step, session) => {
-        if (!session) return
-        if (ENDED.includes(step.status)) await answered(session)
-        options.tell?.(session)
-      },
-      report: (e, where) => caught(e, { request: 'operator', ...where }),
-      // Each refusal a tool gave the conversation, with its space
-      // (refusals.ts): a connector tool's is its own call's, heard here once.
-      refused: hearing(env, async (call) => {
-        let session = String(comp(call, 'entry')?.session ?? '')
-        return {
-          session: session || null,
-          space: session ? (await workingOf(store, session))?.space : null,
-        }
-      }),
+  let runner = lend({
+    h: { g, fx, vocab, me, gone },
+    providers: models,
+    name,
+    provider,
+    // Its text is shown as it is written, once it is stored, so a reset
+    // under a reply takes back none of what a person saw.
+    streaming: true,
+    typed: options.typing,
+    context: shown,
+    inputSource,
+    // The conversation forks for its work.
+    tools: [],
+    // Each ask wears the space's persona on the platform's base, read from
+    // the directory (operator-persona.ts).
+    wear: { bases: bases(env) },
+    // A child works for the same space and person as the session that
+    // started it, and is charged to that space.
+    prepareChild: async ({ parent, args }) => {
+      let o = await workingOf(store, parent)
+      if (!o) return {}
+      if (!args.topic) return { operator_session: o }
+      let { ctx } = await working(env, store, parent, options.directory)
+      if (!writes(ctx.role)) return { operator_session: o }
+      let topic = await oracleTopic(ctx, g, String(args.topic))
+      await oracleContext(ctx, g, topic)
+      return {
+        operator_session: o,
+        session: { persona: ORACLE, topic },
+      }
+    },
+    remote: roster,
+    resultText: async (entry) => {
+      let session = String(comp(entry, 'entry')?.session)
+      let work = await workingOf(store, session)
+      if (!work) throw new Error('Operator result has no working session')
+      return outputView(
+        g,
+        entry,
+        undefined,
+        (value, source) => keepResult(g, value, source, work.person),
+      )
+    },
+    // The conversation and its work forks share a short topic map. Only a
+    // session opened on a topic carries that topic's compiled context.
+    instructions: async (session) => {
+      reached('instructing', null)
+      let [{ space, ctx }, [row]] = await Promise.all([
+        working(env, store, session, options.directory),
+        g.read(`.entity.eid=${session}&.fields=session.topic`),
+      ])
+      let work = await workingOf(store, session)
+      if (work?.signup) return outside(space) + '\n\n' + SIGNUP
+      let topic = topicOf(row)
+      // Someone who does not write in the space is told none of its work.
+      if (!writes(ctx.role)) {
+        return reached('instructions', outside(space, ctx.role))
+      }
+      let [map, google] = await Promise.all([
+        topic ? oracleContext(ctx, g, topic) : oracleMap(ctx, g),
+        googleTold(env, ctx, space),
+      ])
+      return reached(
+        'instructions',
+        [map, told(ctx, space), google].filter(Boolean).join('\n\n'),
+      )
+    },
+    each: async (step, session) => {
+      if (!session) return
+      if (ENDED.includes(step.status)) await answered(session)
+      options.tell?.(session)
+    },
+    report: (e, where) => caught(e, { request: 'operator', ...where }),
+    // Each refusal a tool gave the conversation, with its space
+    // (refusals.ts): a connector tool's is its own call's, heard here once.
+    refused: hearing(env, async (call) => {
+      let session = String(comp(call, 'entry')?.session ?? '')
+      return {
+        session: session || null,
+        space: session ? (await workingOf(store, session))?.space : null,
+      }
     }),
-  )))
+  })
+  // A turn that waits for its machine is looked at again every half of AWAY,
+  // and asked again once it looks able (`away`). Words given meanwhile owe a
+  // run of their own, which does not wait.
+  fx.handle(stepwise(running(g, {
+    ...runner,
+    waiting: AWAY / 2,
+    answers: async (using, session) =>
+      (await runner.answers?.(using, session) ?? true) &&
+      !(session && await away(session)),
+  })))
 
   // Whoever carries a session on, the newest words' reach applies, and the
   // files it was given stay with it. A person's one conversation says so.
