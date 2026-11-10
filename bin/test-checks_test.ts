@@ -2,6 +2,8 @@ import { equal, test } from '@yaks/testing'
 import type { Survey } from '@yaks/testing/deps'
 import { type Check, check, checks, format, kept } from './test-checks.ts'
 import { OBSERVED } from './test-observe.ts'
+import config from '../deno.json' with { type: 'json' }
+import { formatting } from '@yaks/git/land'
 
 let planned = checks(['a.ts', 'doc.md', 'data.json', 'image.png'])
 
@@ -10,10 +12,9 @@ test('source checks format, lint and byte-check the change', () => {
     {
       name: 'format',
       args: [
-        'fmt',
+        ...formatting([], config),
         '--config',
         'deno.json',
-        '--permit-no-files',
         'a.ts',
         'doc.md',
         'data.json',

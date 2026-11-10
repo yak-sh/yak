@@ -460,7 +460,9 @@ it shared. No test suite is run here, and this operation knows of none.
 
 Before merging, landing runs `deno fmt` on changed regular files, using the
 checkout's formatting configuration and Deno's supported file types. Formatting
-edits amend the branch's last commit with its message preserved. Deleted files,
+passes global `exclude` and `fmt.exclude` patterns through Deno's `--ignore`, so
+explicitly named files retain their exclusions in JSON and JSONC configs. edits
+amend the branch's last commit with its message preserved. Deleted files,
 symlinks and submodules are skipped. A formatter error is printed and landing
 continues, keeping any files it formatted successfully. When the branch changes
 a `package.json` or `pnpm-workspace.yaml` in a checkout that tracks

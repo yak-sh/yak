@@ -19,6 +19,8 @@ import {
 import { type Prepared, types } from './check-types.ts'
 import { cache } from '@yaks/testing/kept'
 import { OBSERVED } from './test-observe.ts'
+import { formatting } from '@yaks/git/land'
+import config from '../deno.json' with { type: 'json' }
 
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 // What workers/yak/gen.ts reads or writes: the Worker's words and config, the
@@ -54,12 +56,22 @@ export let checks = (changed: string[]): Check[] => {
   let lint = changed.filter(code)
   // The workspace's own config, named: a yaks app's package.json is a config
   // to Deno too, and found beside a file it would replace the workspace's.
-  let config = ['--config', 'deno.json', '--permit-no-files']
+  let options = ['--config', 'deno.json', '--permit-no-files']
   let members = [...new Set(changed.flatMap((path) => member(path) ?? []))]
   return [
-    ...fmt.length ? [{ name: 'format', args: ['fmt', ...config, ...fmt] }] : [],
+    ...fmt.length
+      ? [{
+        name: 'format',
+        args: [
+          ...formatting([], config),
+          '--config',
+          'deno.json',
+          ...fmt,
+        ],
+      }]
+      : [],
     ...lint.length
-      ? [{ name: 'lint', args: ['lint', ...config, ...lint] }]
+      ? [{ name: 'lint', args: ['lint', ...options, ...lint] }]
       : [],
     ...changed.length
       ? [{

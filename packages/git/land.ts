@@ -1,5 +1,7 @@
 import * as system from '@yaks/process/system'
 import { command as processCommand } from '@yaks/process/command'
+import { formatConfig, formatting } from './format.ts'
+export { formatting } from './format.ts'
 // Landing a branch: the plain Git operation, and the guard that keeps a rebase
 // from quietly reverting the base. It reads nothing from a graph — the
 // checkout you are standing in and `git worktree list` supply every
@@ -121,8 +123,14 @@ let execute = async (
 /** Run git without a terminal prompt. */
 export let run: Run = (args, cwd) => execute('git', args, cwd)
 
-let format: Run = (files, cwd) =>
-  execute(system.execPath(), ['fmt', '--permit-no-files', ...files], cwd)
+let format: Run = async (files, cwd) => {
+  try {
+    let config = await formatConfig(cwd)
+    return execute(system.execPath(), formatting(files, config), cwd)
+  } catch (e) {
+    return { ok: false, code: 1, out: '', err: String(e) }
+  }
+}
 
 // Resolves the manifests into the lockfile without linking node_modules: the
 // checkout's own install (packages/cli/dependencies.ts) follows the lockfile.

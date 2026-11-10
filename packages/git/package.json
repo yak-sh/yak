@@ -30,7 +30,8 @@
     "@yaks/process": "0.2.28",
     "@yaks/query": "0.2.32",
     "@yaks/tools": "0.2.30",
-    "@yaks/vocab": "0.2.32"
+    "@yaks/vocab": "0.2.32",
+    "@std/jsonc": "npm:@jsr/std__jsonc@1.0.2"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
