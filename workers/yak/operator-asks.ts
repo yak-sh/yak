@@ -31,12 +31,12 @@ export type Ask = {
 }
 
 /** The list a person's server answered, or why it answered none: `off` says
- * so in the platform's words. `ms` is how long the read took. */
+ * so in the platform's words. The read's wait is the page's `machine_wait`
+ * (timing.ts). */
 export type Listed = {
   server: string
   asks: Ask[]
   off?: string
-  ms: number
 }
 
 /** How many show before the rest wait behind one press. */
@@ -135,8 +135,6 @@ export let asksOf = async (
   if (!row) return null
   let { tool, query } = comp(row, 'asks')
   let server = `mcp:${row.entity.eid}`
-  let began = performance.now()
-  let ms = () => Math.round(performance.now() - began)
   try {
     let out = await within(
       runConnectedCommand(
@@ -152,9 +150,9 @@ export let asksOf = async (
       (out.value?.structuredContent as { result?: Bundle[] } | undefined)
         ?.result
     if (out.value?.isError || out.value?.unavailable || !Array.isArray(rows)) {
-      return { server, asks: [], off: out.text, ms: ms() }
+      return { server, asks: [], off: out.text }
     }
-    return { server, asks: rows.map(askOf), ms: ms() }
+    return { server, asks: rows.map(askOf) }
   } catch (e) {
     // A machine that is off is said to be; anything else is reported, and the
     // page is drawn all the same.
@@ -163,7 +161,6 @@ export let asksOf = async (
       server,
       asks: [],
       off: e instanceof CallError ? e.message : 'it could not be read',
-      ms: ms(),
     }
   }
 }

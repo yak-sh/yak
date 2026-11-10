@@ -73,6 +73,7 @@ import { resent } from '@yaks/cloudflare/api'
 import type { Answer } from './apps.ts'
 import { caught } from './defects.ts'
 import { adminWho } from './asking.ts'
+import { elapsed } from './lib/hops.ts'
 
 /** Where an app's worker asks for its space's machine. */
 export let TUNNELED = '/tunneled/'
@@ -386,10 +387,13 @@ export let machine = async (
       asking.own ? person : undefined,
     )
     // Asked for the space itself, which is no app: a gateway calls nothing
-    // out, so no connection is lent on this call.
+    // out, so no connection is lent on this call. Its wait is the request's
+    // `machine_wait` (timing.ts).
     try {
-      return await through(env, space, space, { person, role }, out) ??
-        json(503, 'no_gateway', ENDS.no_gateway(space))
+      return await elapsed(
+        'machine_wait',
+        () => through(env, space, space, { person, role }, out),
+      ) ?? json(503, 'no_gateway', ENDS.no_gateway(space))
     } catch {
       return json(502, 'unreached', ENDS.unreached(space))
     }

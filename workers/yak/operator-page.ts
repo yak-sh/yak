@@ -1647,8 +1647,6 @@ let talkPage = (
     app?: Making
     // what it is doing now, at the bar's right end (operator-aside.ts)
     aside?: Node
-    // how long its reads took, as a Server-Timing header says it
-    timing?: string
   },
 ) =>
   shell(
@@ -1695,11 +1693,7 @@ let talkPage = (
         page.app ? canvas(env, space, page.app, space.operator) : null,
       ),
     ]) + (page.script ?? ''),
-    {
-      'cache-control': 'private, no-store',
-      'x-robots-tag': 'noindex',
-      ...page.timing ? { 'server-timing': page.timing } : {},
-    },
+    { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     beside.collapsed ? 'Talk_Page Talk_Page-rail' : 'Talk_Page',
     installable(space),
   )
@@ -1915,8 +1909,6 @@ export let chatPage = async (
     aside: talked.aside
       ? h(Aside, { aside: talked.aside, now: Date.now() })
       : undefined,
-    // The read of what needs them, which the README's number is measured by.
-    timing: asks ? `asks;dur=${asks.ms}` : undefined,
     script: chatScript(
       talked.aside ?? { turn: null, helpers: [] },
       at,
