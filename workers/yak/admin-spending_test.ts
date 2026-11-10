@@ -131,7 +131,7 @@ test('the spending page says what each day spent, by source and by who covered i
 })
 
 test('the top spaces and conversations each open on their page', () => {
-  assertEquals(spaces.slice(1), [['clerk', 'Given', '$0.75', '$0.75']])
+  assertEquals(spaces.slice(1), [['clerk', 'Free', '$0.75', '$0.75']])
   assertEquals(top.slice(1).map((r) => r.slice(0, 3)), [
     ['Conversation with Jeff', 'clerk', '$0.0005'],
   ])
@@ -267,5 +267,63 @@ test('the admin reads every helper’s cost, lineage and standing as structured 
     assertEquals(helper.turns, i == 5 ? 2 : 1)
     assertEquals(helper.unpriced, i ? 0 : 1)
     assertEquals(typeof helper.status, 'string')
+  }
+})
+
+await dir.apply({
+  entities: [
+    { slug: 'paying-plus', plan: { tier: 'plus' } },
+    { slug: 'paying-pro', plan: { tier: 'pro' } },
+    { slug: 'granted', comped: { until: '2099-01-01T00:00:00Z' } },
+    { slug: 'yourname' },
+  ].map(({ slug, ...parts }) => ({
+    entity: { eid: crypto.randomUUID() },
+    space: { slug, store: slug },
+    spend: { month, models: 1 },
+    ...parts,
+  })),
+}, kernel)
+let bot = crypto.randomUUID()
+await dir.apply({
+  entities: [
+    {
+      entity: { eid: bot },
+      person: {},
+      email: { address: 'spending@bot.yak.sh' },
+    },
+    {
+      entity: { eid: crypto.randomUUID() },
+      member: {
+        person: bot,
+        space: (await dir.space('granted'))!.eid,
+        role: 'owner',
+      },
+    },
+  ],
+}, kernel)
+let plansPage = await get('/admin/spending')
+let plans = new Map(
+  [...plansPage.document.querySelectorAll('.Table_Row')]
+    .filter((r) =>
+      r.querySelector('a')?.getAttribute('href')?.startsWith('/admin/')
+    )
+    .map((r) => {
+      let cells = [...r.querySelectorAll('.Table_Cell')]
+      return [cells[0].textContent, cells[1]]
+    }),
+)
+
+test('spending shows effective plan names and distinguishes grants from payment', () => {
+  assertEquals(plansPage.status, 200)
+  assertEquals(plans.get('clerk')?.textContent, 'Free')
+  assertEquals(plans.get('paying-plus')?.textContent, 'Plus')
+  assertEquals(plans.get('paying-pro')?.textContent, 'Pro')
+  assertEquals(plans.get('paying-plus')?.getAttribute('title'), null)
+  for (let slug of ['granted', 'yourname']) {
+    assertEquals(plans.get(slug)?.textContent, 'Plus')
+    assertEquals(
+      plans.get(slug)?.getAttribute('title'),
+      `${slug == 'granted' ? 'Test space. ' : ''}Plan granted without payment`,
+    )
   }
 })

@@ -13,6 +13,7 @@ import { Card, type Col, Empty, Group, Table } from '@yaks/ui/parts'
 import { type ByDay, columns, series, sparkline, summed } from '@yaks/ui/chart'
 import { count, dollars, SOURCES } from './meter.ts'
 import { day } from './html.ts'
+import type { Tier } from './directory.ts'
 import {
   joined,
   none,
@@ -29,6 +30,8 @@ export type Counted = {
   slug: string
   /** every person seated in it is a test account */
   test: boolean
+  /** the plan's effective tier, including grants */
+  tier: Tier
   /** it pays for its plan */
   paying: boolean
   /** what it spent this month */
@@ -245,8 +248,13 @@ let topSpaces = (spaces: Counted[], base: string, now: number) => {
           h(Table.Cell, null, link(`${base}/${s.eid}`, s.slug)),
           h(
             Table.Cell,
-            null,
-            s.test ? 'Test' : s.paying ? 'Paying' : 'Given',
+            {
+              title: [
+                s.test && 'Test space',
+                s.tier != 'free' && !s.paying && 'Plan granted without payment',
+              ].filter(Boolean).join('. ') || undefined,
+            },
+            { free: 'Free', plus: 'Plus', pro: 'Pro' }[s.tier],
           ),
           h(Table.Cell, { mod: 'num' }, dollars(n)),
           h(Table.Cell, { mod: 'num' }, dollars(s.month)),

@@ -875,6 +875,7 @@ let spendingPage = async (d: Reading, env: Env, person: string) => {
     eid: r.entity.eid,
     slug: r.space!.slug,
     test: !!d.uses.get(r.entity.eid)?.test,
+    tier: d.spaces.get(r.entity.eid)!.tier ?? 'free',
     paying: paid(r.plan?.tier),
     month: budget(spaceOf(r)).spent,
     trend: r.trend,
