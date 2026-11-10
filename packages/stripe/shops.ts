@@ -19,6 +19,8 @@
 // nothing.
 import type {
   Paid,
+  Refund,
+  Refunded,
   Sale,
   Seller,
   Settled,
@@ -58,6 +60,9 @@ export type Charge = {
   payment_intent?: string | { id?: string }
   metadata?: Record<string, string>
   refunded?: boolean
+  amount?: number
+  amount_refunded?: number
+  application_fee?: string | { id?: string }
   status?: string
 }
 
@@ -176,13 +181,6 @@ export let back = (url: string): string =>
  * requires a positive amount, so a fee of nothing has to be no fee rather than
  * a fee of 0.
  *
- * Stripe does not give an application fee back when the charge it came out
- * of is refunded, so a seller who refunds from their own dashboard is out of
- * pocket by the platform's fee. Giving it back in proportion is
- * `POST /v1/application_fees/<id>/refund` (in part with `amount`), which these
- * shops would lend the day the host's TODO about it (sell.ts `settled`) is
- * built.
- *
  * The tags ride `metadata`, and are copied onto `payment_intent_data[metadata]`
  * as well, which is not redundancy: a refund arrives as a `charge.refunded`,
  * whose object inherits the PaymentIntent's metadata and knows nothing of the
@@ -266,6 +264,59 @@ type Event = {
   data?: { object?: Record<string, unknown> }
 }
 
+/** A refund read from Stripe's create response or its verified event. */
+export let refundedOf = (o: Record<string, unknown>): Refunded => ({
+  id: String(o.id ?? ''),
+  payment: idOf(o.payment_intent as string | { id?: string }),
+  amount: Number(o.amount ?? 0),
+  status: o.status == 'succeeded'
+    ? 'succeeded'
+    : o.status == 'failed'
+    ? 'failed'
+    : o.status == 'canceled'
+    ? 'canceled'
+    : 'pending',
+  tags: { ...(o.metadata as Record<string, string> ?? {}) },
+})
+
+// Stripe retains idempotency keys for a day. The refund's own metadata keeps
+// recovery safe after that window, including a lost create response.
+let priorRefund = async (
+  options: Keyed,
+  on: string,
+  request: Refund,
+) => {
+  let after = ''
+  for (;;) {
+    let query = new URLSearchParams({
+      payment_intent: request.payment,
+      limit: '100',
+      ...(after ? { starting_after: after } : {}),
+    })
+    let page = await ask(options, `/v1/refunds?${query}`, undefined, on)
+    if (!Array.isArray(page.data) || typeof page.has_more != 'boolean') {
+      throw new Error('stripe returned an invalid refund list')
+    }
+    let rows = page.data as Record<string, unknown>[]
+    let old = rows.find((r) =>
+      (r.metadata as Record<string, string>)?.request == request.key
+    )
+    if (old) {
+      let refund = refundedOf(old)
+      if (
+        refund.amount != request.amount || refund.payment != request.payment
+      ) throw new Error('stripe refund request identity was reused')
+      return refund
+    }
+    if (!page.has_more) return null
+    let next = String(rows?.at(-1)?.id ?? '')
+    if (!next || next == after) {
+      throw new Error('stripe refund list did not advance')
+    }
+    after = next
+  }
+}
+
 /** Stripe's shops, every call made with `options` as they read at the
  * time. */
 export let shops = (options: Keyed): Shops => {
@@ -303,6 +354,47 @@ export let shops = (options: Keyed): Shops => {
         on,
         sale.key,
       ),
+    refund: async (on, request) => {
+      let old = await priorRefund(options, on, request)
+      if (old) return old
+      let refund = refundedOf(
+        await ask(
+          options,
+          '/v1/refunds',
+          {
+            payment_intent: request.payment,
+            amount: request.amount,
+            ...(request.fee ? { refund_application_fee: true } : {}),
+            metadata: { ...request.tags, request: request.key },
+          },
+          on,
+          'POST',
+          request.key,
+        ),
+      )
+      if (!refund.id) throw new Error('stripe made a refund with no id')
+      return refund
+    },
+    refundFee: async (id, refunded, total) => {
+      if (!total || !refunded) return
+      let fee = await ask(
+        options,
+        `/v1/application_fees/${encodeURIComponent(id)}`,
+      )
+      let target = Math.floor(
+        Number(fee.amount ?? 0) * Math.min(refunded, total) / total,
+      )
+      let amount = target - Number(fee.amount_refunded ?? 0)
+      if (amount <= 0) return
+      await ask(
+        options,
+        `/v1/application_fees/${encodeURIComponent(id)}/refunds`,
+        { amount },
+        undefined,
+        'POST',
+        `fee:${id}:${refunded}:${total}`,
+      )
+    },
   }
 }
 
@@ -311,7 +403,15 @@ export let shops = (options: Keyed): Shops => {
 // carries none of its own.
 let payment = (o: Charge) => {
   let id = idOf(o.payment_intent)
-  return id ? { id, tags: { ...o.metadata } } : null
+  return id
+    ? {
+      id,
+      tags: { ...o.metadata },
+      ...(o.amount != null ? { total: o.amount } : {}),
+      ...(o.amount_refunded != null ? { refunded: o.amount_refunded } : {}),
+      ...(idOf(o.application_fee) ? { fee: idOf(o.application_fee) } : {}),
+    }
+    : null
 }
 
 /** A verified event Stripe posted to the Connect endpoint, read, with the
@@ -329,6 +429,12 @@ export let shopped = (options: Keyed) => (event: unknown): Shopped => {
   }
   if (type == 'checkout.session.completed') {
     return { account, about: 'sale', sale: paidOf(o as Session) }
+  }
+  if (
+    type == 'refund.created' || type == 'refund.updated' ||
+    type == 'refund.failed'
+  ) {
+    return { account, about: 'refund', refund: refundedOf(o) }
   }
   let c = o as Charge
   let to = settledBy(type, c)

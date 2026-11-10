@@ -5,6 +5,7 @@ import { ram } from '@yaks/ram'
 import { appVocab } from './vocab.ts'
 import {
   checkedQuote,
+  checkoutQuote,
   issueQuote,
   quotedOrder,
   quotedSale,
@@ -122,4 +123,23 @@ test('quoted checkout charges shipping and tax once, and its receipt points to t
     ]
   ) throws(() => quotedOrder(quote, { ...paid, ...changed }))
   equal(quotedOrder(quote, paid), order)
+})
+
+test('a checkout retry keeps the original fee and provider parameters', async () => {
+  let at = {
+    space: id(6),
+    app: 'printbound',
+    bps: 250,
+    done: 'https://seller/ok',
+    cancel: 'https://seller/back',
+  }
+  let first = await checkoutQuote(store, quote, at)
+  let next = await checkoutQuote(store, quote, {
+    ...at,
+    bps: 500,
+    done: 'https://seller/changed',
+    email: 'changed@example.com',
+  })
+  equal(next, first)
+  equal(next.fee, 67)
 })

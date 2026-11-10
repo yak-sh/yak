@@ -79,7 +79,12 @@ export let readQuote = async (store: Meta, id: string): Promise<Quote> => {
   if (!eid(id)) refuse('invalid quote identity')
   let [row] = await store.query(`.entity.eid=${id}`) as Quoted[]
   if (!row?.service_quote) refuse('quote not found; request a new quote')
-  let q = validQuote(JSON.parse(row.service_quote.snapshot))
+  let q: Quote
+  try {
+    q = validQuote(JSON.parse(row.service_quote.snapshot))
+  } catch (cause) {
+    throw new Error('stored quote snapshot is invalid', { cause })
+  }
   if (q.id != id || quoteHash(q) != row.service_quote.hash) {
     throw new Error('stored quote does not match its immutable snapshot')
   }
@@ -148,6 +153,31 @@ export let quotedSale = (
     source: q.source,
   },
 })
+
+/** Freeze the provider request before reaching it. A later change of fee,
+ * email or return URL must not change the parameters under its retry key. */
+export let checkoutQuote = async (
+  store: Meta,
+  quote: Quote,
+  at: Parameters<typeof quotedSale>[1],
+): Promise<Sale> => {
+  let [row] = await store.query(`.entity.eid=${quote.id}`)
+  let saved = row?.service_checkout as { snapshot?: string } | undefined
+  if (saved?.snapshot) {
+    let sale = JSON.parse(saved.snapshot) as Sale
+    if (sale.key != quote.id || sale.tags.quote_hash != quoteHash(quote)) {
+      throw new Error('stored checkout does not match its quote')
+    }
+    return sale
+  }
+  let sale = quotedSale(quote, at)
+  await store.apply([{
+    entity: { eid: quote.id },
+    service_checkout: { snapshot: JSON.stringify(sale) },
+    $was: { service_checkout: { snapshot: null } },
+  }])
+  return sale
+}
 
 /** Paid events may be delivered after expiry: the provider already enforced
  * the checkout deadline. Amount and snapshot must still agree exactly. */

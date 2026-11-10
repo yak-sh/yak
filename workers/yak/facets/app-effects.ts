@@ -11,11 +11,13 @@ import { blobPrefix, released } from '../blob-key.ts'
 import { r2Objects } from '../lib/objects.ts'
 import { formPost } from '../form-mail.ts'
 import { noticePost } from '../notices.ts'
+import { refundSale } from '../service-refunds.ts'
 import { noticeComponents } from '../notices-vocab.ts'
 
 export let effects = (_host: unknown, options: Options): Handlers => {
   let at = options.store
   return {
+    refund_sale: refundSale(at),
     form_post: formPost(at),
     ...(at.graph.vocab.docs.some((doc) => noticeComponents(doc).length)
       ? { notice_post: noticePost(at) }

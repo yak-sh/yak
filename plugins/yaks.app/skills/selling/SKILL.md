@@ -219,6 +219,55 @@ allowing a provider to fetch that exact artifact in that app for fifteen
 minutes. Renewing a link checks the current customer entitlement again. Receipt
 and artifact responses use `Cache-Control: private, no-store`.
 
+## Document quotes
+
+A service worker issues a physical-service quote through
+`env.APP.fetch('/pay/quotes', {method: 'POST', body: JSON.stringify(quote)})`.
+The `Quote` type in `@yaks/host/payments` names the complete contract: buyer,
+originating app (`source`), seller, document identity and revision,
+specification, quantity, currency, destination, shipping choice, subtotal, tax,
+total and expiry. All amounts are integers in the currency's smallest unit, such
+as cents. The subtotal covers the complete quantity. Only the seller's worker or
+an editor can issue a quote. Its identity cannot be reused for different facts.
+
+The buyer posts `{quote: quote.id, success, cancel}` to `/api/pay/checkout`. The
+platform reads the saved quote; prices in the request have no effect. Changing
+the quantity or destination requires another quote. A quote needs at least
+thirty minutes remaining to open a hosted checkout, and its expiry cannot exceed
+twenty-four hours. Checkout fixes the delivery address, shipping and tax, and
+returns `{url, quote, source, receipt}`. The buyer's authenticated identity must
+match the quote. A seller worker can open the same unpaid checkout through its
+app binding. Opening a checkout does not charge the customer.
+
+The checkout request is saved before contacting the provider. Retrying it keeps
+the same fee, address and return URLs. On payment, the order records
+`order{quote, document, revision, specification, buyer, source, quantity,
+currency, shipping_cents, tax_cents, ...}`.
+The `receipt` URL accepts the order or quote identity and returns the verified
+buyer's receipt without provider account or payment identifiers. Payment uses
+the seller's merchant account and never moves a space's included usage budget.
+
+## Merchant refunds
+
+The seller's worker or an editor posts to `/pay/refunds` through `env.APP`:
+
+    {request: refundId, order: orderId, amount: cents, reason: explanation}
+
+Both identities are UUIDs. Keep `request` fixed when retrying the same refund.
+Omit `amount` for the remaining payment, or supply a positive amount for a
+partial refund. The platform records `refund_request{order, amount, reason}`
+before an effect asks the provider. It returns HTTP 202 with
+`{refund, status: 'requested'}`. `GET /pay/refunds/<refund>` returns the
+merchant's request; its computed `refund_request.status` is `requested`,
+`processing`, `refunded` or `failed`.
+
+Recovery reuses the same provider request and checks for a previous refund even
+if the provider's temporary retry key has expired. Partial and full refunds
+reverse the platform's application fee in proportion where one was collected.
+Refunds made in the seller's provider dashboard also update the order and
+reconcile that fee. A provider failure remains recorded and is reported to the
+platform tracker.
+
 ## Testing with Stripe test mode
 
 Stripe's test mode is separate from live mode: the seller onboards a test
@@ -245,7 +294,6 @@ reference.
 
 ## Not supported
 
-Subscriptions and recurring charges, shipping rates and tax calculation,
-discount codes, and refunds from inside an app. A refund is made in the seller's
-own Stripe dashboard, and the `order` row's `status` updates to match. Tell the
-person this directly instead of building a button that does not work.
+Subscriptions and recurring charges, discount codes, and automatic shipping rate
+or tax calculation. Physical services supply provider-confirmed shipping and tax
+in their immutable quote.

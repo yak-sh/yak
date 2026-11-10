@@ -174,6 +174,54 @@ export let appsDoc: VocabDoc = {
     // Every property is server-owned: the webhook writes it through the
     // kernel's door (sell.ts `asApp`), and no page, member or visitor can say
     // an order was paid (T-37881). Who may remove one is graph.ts `FLOORS`.
+    refund_request: {
+      component: true,
+      type: 'object',
+      readers: 'editor',
+      status: {
+        completed: 'refunded',
+        refund_failed: 'failed',
+        refund_sent: 'processing',
+        default: 'requested',
+      },
+      properties: {
+        order: owned(ref('keep')),
+        amount: owned(num),
+        reason: owned(text),
+      },
+    },
+    refund_sent: {
+      component: true,
+      type: 'object',
+      readers: 'editor',
+      properties: { reference: owned(text), amount: owned(num) },
+    },
+    refund_failed: {
+      component: true,
+      type: 'object',
+      readers: 'editor',
+      properties: { at: owned(time), reason: owned(text) },
+    },
+    refund_retry: {
+      component: true,
+      type: 'object',
+      readers: 'editor',
+      properties: { at: owned(time) },
+    },
+    refund_sale: {
+      effect: true,
+      created: ['refund_request', 'refund_retry'],
+      changed: ['refund_retry.at'],
+      target: '.refund_request',
+      description:
+        'Refund a merchant payment under its durable request identity.',
+    },
+    service_checkout: {
+      component: true,
+      type: 'object',
+      readers: 'editor',
+      properties: { snapshot: owned(text) },
+    },
     service_quote: {
       component: true,
       type: 'object',
@@ -203,6 +251,7 @@ export let appsDoc: VocabDoc = {
         tax_cents: owned(num),
         total_cents: owned(num),
         fee_cents: owned(num),
+        refunded_cents: owned(num),
         email: owned(text),
         status: owned({
           type: 'string',

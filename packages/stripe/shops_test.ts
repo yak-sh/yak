@@ -18,6 +18,7 @@ let stripe = (answer: (path: string) => unknown) => {
   let asked: {
     path: string
     on: string | null
+    key: string | null
     body: Record<string, string>
   }[] = []
   let fetch = stub(
@@ -28,6 +29,7 @@ let stripe = (answer: (path: string) => unknown) => {
       asked.push({
         path,
         on: new Headers(init?.headers).get('stripe-account'),
+        key: new Headers(init?.headers).get('idempotency-key'),
         body: Object.fromEntries(new URLSearchParams(String(init?.body ?? ''))),
       })
       return Promise.resolve(Response.json(answer(path)))
@@ -215,7 +217,12 @@ test('a refund or a dispute moves its payment', async () => {
     'disputed',
     paid,
   ])
-  equal(s.asked[0], { path: '/v1/charges/ch_1', on: 'acct_1', body: {} })
+  equal(s.asked[0], {
+    path: '/v1/charges/ch_1',
+    on: 'acct_1',
+    key: null,
+    body: {},
+  })
   equal(
     await moved('charge.dispute.closed', { charge: 'ch_1', status: 'lost' }),
     ['lost', paid],
@@ -247,6 +254,7 @@ test('a physical checkout fixes its shipping address and charge, with retry iden
     shipping: { name: 'Ground', cents: 500 },
   })
   let body = s.asked[0].body
+  equal(s.asked[0].key, 'quote_1')
   equal(body['payment_intent_data[shipping][address][line1]'], '1 Main St')
   equal(
     body['shipping_options[0][shipping_rate_data][fixed_amount][amount]'],
@@ -254,4 +262,72 @@ test('a physical checkout fixes its shipping address and charge, with retry iden
   )
   equal(body.expires_at, String(Date.parse('2026-11-11T00:00:00Z') / 1000))
   equal('shipping_address_collection[allowed_countries][0]' in body, false)
+})
+
+test('a merchant refund keeps its retry key and reverses its application fee proportionally', async () => {
+  let calls = 0
+  using s = stripe(() =>
+    ++calls == 1 ? { data: [], has_more: false } : ({
+      id: 're_1',
+      payment_intent: 'pi_1',
+      amount: 500,
+      status: 'succeeded',
+    })
+  )
+  let refund = await lent.refund('acct_1', {
+    key: 'request_1',
+    payment: 'pi_1',
+    amount: 500,
+    fee: true,
+    tags: { app: 'books' },
+  })
+  equal(s.asked[1].key, 'request_1')
+  equal([refund.id, refund.status, refund.amount], ['re_1', 'succeeded', 500])
+  equal([s.asked[1].path, s.asked[1].on], ['/v1/refunds', 'acct_1'])
+  equal(s.asked[1].body, {
+    payment_intent: 'pi_1',
+    amount: '500',
+    refund_application_fee: 'true',
+    'metadata[app]': 'books',
+    'metadata[request]': 'request_1',
+  })
+})
+
+test('a dashboard refund returns only the application fee still owed, including a retry', async () => {
+  let refunded = 0
+  using s = stripe((path) => {
+    if (path.endsWith('/refunds')) {
+      refunded = 25
+      return { id: 'fr_1' }
+    }
+    return { id: 'fee_1', amount: 100, amount_refunded: refunded }
+  })
+  await lent.refundFee('fee_1', 250, 1000)
+  await lent.refundFee('fee_1', 250, 1000)
+  equal(s.asked.filter((a) => a.path.endsWith('/refunds')).map((a) => a.body), [
+    { amount: '25' },
+  ])
+  equal(s.asked[1].on, null)
+})
+
+test('refund recovery finds the earlier refund after the provider retry key expired', async () => {
+  using s = stripe(() => ({
+    data: [{
+      id: 're_old',
+      payment_intent: 'pi_1',
+      amount: 500,
+      status: 'succeeded',
+      metadata: { request: 'request_1' },
+    }],
+    has_more: false,
+  }))
+  let refund = await lent.refund('acct_1', {
+    key: 'request_1',
+    payment: 'pi_1',
+    amount: 500,
+    tags: {},
+  })
+  equal(refund.id, 're_old')
+  equal(s.asked.length, 1)
+  equal(s.asked[0].key, null)
 })

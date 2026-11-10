@@ -37,6 +37,7 @@ import { payments, shops, via } from './payments.ts'
 import type {
   Line,
   Paid,
+  Payment,
   Sale,
   Seller as Shop,
   Settled,
@@ -63,13 +64,18 @@ import { refuse } from './tool.ts'
 import { caught, refusing } from './defects.ts'
 import {
   checkedQuote,
+  checkoutQuote,
   issueQuote,
   quotedOrder,
-  quotedSale,
   readQuote,
 } from './service-quotes.ts'
 import type { Quote } from '@yaks/host/payments'
 import { protectedSale } from './sale-private.ts'
+import {
+  recordRefund,
+  type RefundAsk,
+  requestRefund,
+} from './service-refunds.ts'
 
 // ---- the fee ---------------------------------------------------------------
 
@@ -466,6 +472,7 @@ export let buying = async (
   }
   let items: Item[]
   let quote: Quote | undefined
+  let quoteStore: ReturnType<typeof asApp> | undefined
   let priceless: ReturnType<typeof priced> | undefined
   let success: string
   let cancel: string
@@ -478,10 +485,8 @@ export let buying = async (
     if (requested?.quote != null) {
       let app = await inApp(env, at.space, at.app)
       if (!app) throw refuse('quote', 'seller app not found')
-      let issued = await readQuote(
-        asApp(env, at.space, app),
-        String(requested.quote),
-      )
+      quoteStore = asApp(env, at.space, app)
+      let issued = await readQuote(quoteStore, String(requested.quote))
       quote = checkedQuote(
         issued,
         {
@@ -526,7 +531,7 @@ export let buying = async (
       // The seller's account, which makes it their charge rather than ours.
       at.space.seller!.account,
       quote
-        ? quotedSale(quote, {
+        ? await checkoutQuote(quoteStore!, quote, {
           space: at.space.eid,
           app: at.app,
           bps: await feeOf(dirOf(env)),
@@ -588,7 +593,8 @@ export let quoteDoor = async (
     if (req.method != 'POST' || id) {
       return Response.json({ error: 'method_not_allowed' }, { status: 405 })
     }
-    let quote = await req.json() as Quote
+    let quote = await req.json().catch(() => null) as Quote | null
+    if (!quote) throw refuse('quote', 'a complete quote is required')
     if (quote.seller != at.app.eid) {
       throw refuse('quote', 'quote seller must be this app')
     }
@@ -601,6 +607,51 @@ export let quoteDoor = async (
       },
     }, {
       status: refusing(e, { request: '/api/pay/quotes', app: at.app.slug }),
+    })
+  }
+}
+
+/** Merchant-only refund requests are recorded before an effect reaches the
+ * provider. apps.ts verifies the app binding or the seller's editor role. */
+export let refundDoor = async (
+  req: Request,
+  env: Env,
+  at: { space: Space; app: App },
+  id?: string,
+): Promise<Response> => {
+  let store = asApp(env, at.space, at.app)
+  try {
+    if (req.method == 'GET' && id) {
+      if (!/^[0-9a-f-]{36}$/i.test(id)) {
+        throw refuse('refund', 'invalid refund identity')
+      }
+      let [row] = await store.query(`.entity.eid=${id}`)
+      if (!row?.refund_request) {
+        return Response.json({ error: 'not_found' }, { status: 404 })
+      }
+      return Response.json(row)
+    }
+    if (req.method != 'POST' || id) {
+      return Response.json({ error: 'method_not_allowed' }, { status: 405 })
+    }
+    let asked = await req.json().catch(() => null) as RefundAsk | null
+    if (!asked) throw refuse('refund', 'a refund request is required')
+    let request = await requestRefund(
+      store,
+      asked,
+      new Date().toISOString(),
+    )
+    return Response.json({ refund: request, status: 'requested' }, {
+      status: 202,
+    })
+  } catch (e) {
+    return Response.json({
+      error: {
+        code: 'refund_failed',
+        message: e instanceof Error ? e.message : String(e),
+      },
+    }, {
+      status: refusing(e, { request: '/api/pay/refunds', app: at.app.slug }),
     })
   }
 }
@@ -749,6 +800,19 @@ export let apply = async (env: Env, heard: Shopped): Promise<string> => {
     return `${space.slug} disconnected`
   }
   if (heard.about == 'sale') return await sold(env, space, on, heard.sale)
+  if (heard.about == 'refund') {
+    let refund = heard.refund
+    let app = await inApp(env, space, String(refund.tags.app ?? ''))
+    if (!app || !refund.tags.request) return 'not a merchant refund request'
+    await recordRefund(
+      asApp(env, space, app),
+      refund.tags.request,
+      refund,
+      new Date().toISOString(),
+      (error) => caught(error, { request: 'refund event', app: app.slug }),
+    )
+    return `${app.slug}: refund ${refund.status}`
+  }
   if (heard.about == 'payment') {
     return await settled(env, space, heard.to, await heard.payment())
   }
@@ -875,30 +939,35 @@ let sold = async (env: Env, space: Space, account: string, o: Paid) => {
  *
  * A refund that finds no order is not a break: a merchant refunds charges they
  * made outside this platform too, on the same account.
- *
- * TODO, and it cannot bite while the fee is 0: the provider need not give our
- * fee back when a charge is refunded, so the day the owner sets a rate, a
- * seller who refunds from their own dashboard is out of pocket by our fee. The
- * fix is ours to make: the seller has already made the refund by the time we
- * hear about it, so it is the fee refunded in proportion, which the shops
- * contract would lend. Left unbuilt rather than built untested: there is no
- * fee to give back today, and the first sale with a rate on it is what should
- * drive the shape.
  */
 let settled = async (
   env: Env,
   space: Space,
   to: Settled,
-  payment: { id: string; tags: Record<string, string> } | null,
+  payment: Payment | null,
 ) => {
   let app = payment && await inApp(env, space, String(payment.tags.app ?? ''))
   if (!payment || !app) return 'not a sale of ours'
   let store = asApp(env, space, app)
   let [row] = await store.query(`.order.intent=${payment.id}`) as {
     entity: { eid: string }
-    order?: { status?: string }
+    order?: { status?: string; refunded_cents?: number }
   }[]
   if (!row) return 'no order for that payment'
+  if (payment.refunded != null && payment.total != null && payment.fee) {
+    await (await shops(env)).refundFee(
+      payment.fee,
+      payment.refunded,
+      payment.total,
+    )
+  }
+  let refunded = Math.max(row.order?.refunded_cents ?? 0, payment.refunded ?? 0)
+  let refundMoved = payment.refunded != null &&
+    refunded != row.order?.refunded_cents
+  if (row.order?.status == 'refunded' && to == 'partially_refunded') {
+    return 'unchanged'
+  }
+
   // A dispute decided undoes the dispute and nothing else: an order refunded
   // meanwhile stays refunded.
   let closed = to == 'lost' || to == 'restored'
@@ -906,8 +975,11 @@ let settled = async (
   let status = to == 'restored' ? 'paid' : to
   // A dispute on an order already disputed, or a redelivery: the property is
   // already where it is going, so nothing is written.
-  if (row.order?.status == status) return 'unchanged'
-  await store.apply([{ entity: { eid: row.entity.eid }, order: { status } }])
+  if (row.order?.status == status && !refundMoved) return 'unchanged'
+  await store.apply([{
+    entity: { eid: row.entity.eid },
+    order: { status, ...(refundMoved ? { refunded_cents: refunded } : {}) },
+  }])
   return `${app.slug}: ${status}`
 }
 

@@ -726,17 +726,19 @@ The complete list of reserved names:
     operator_alerts operator_reach order output output_of own_number parent
     pending person persona phone phone_line plan price product project
     provider provisional public_file published push_subscription quarantined
-    question questions reads recalled ref referenced refusal register_writes
-    registration release_remake report repository representation requires
-    restored result retired revision rtc rtc_lapse sale_access sale_artifact
-    satisfies screen screenshot secret seeded seller sender sending serves
-    service_quote session session_input session_result session_run sfu
-    signed_in signin sms_consent space space_logo spend staged started
-    starter stop stream_item submitted subscription supersedes supervises
-    sweep switched task text text_post theme tool topic trashed tree_entry
-    trend tunnel typed unchecked updated usage uses using verified visit
-    visitor_build visitor_calls visitor_share volume waitlisted wake wants
-    web worked worktree written
+    question questions reads recalled ref referenced refund_failed
+    refund_request refund_retry refund_sale refund_sent refusal
+    register_writes registration release_remake report repository
+    representation requires restored result retired revision rtc rtc_lapse
+    sale_access sale_artifact satisfies screen screenshot secret seeded
+    seller sender sending serves service_checkout service_quote session
+    session_input session_result session_run sfu signed_in signin
+    sms_consent space space_logo spend staged started starter stop
+    stream_item submitted subscription supersedes supervises sweep switched
+    task text text_post theme tool topic trashed tree_entry trend tunnel
+    typed unchecked updated usage uses using verified visit visitor_build
+    visitor_calls visitor_share volume waitlisted wake wants web worked
+    worktree written
 
 When your first choice is reserved, name the component for its specific purpose:
 the reserved name is the general one, and yours is the specific one. Not

@@ -227,6 +227,35 @@ export type Paid = {
   tags: Tags
 }
 
+/** A merchant's durable refund request. The key survives retries, including
+ * a response lost after the provider accepted the refund. */
+export type Refund = {
+  key: string
+  payment: string
+  amount: number
+  fee?: boolean
+  tags: Tags
+}
+
+/** What the provider says about one refund, including asynchronous changes. */
+export type Refunded = {
+  id: string
+  payment: string
+  amount: number
+  status: 'pending' | 'succeeded' | 'failed' | 'canceled'
+  tags: Tags
+}
+
+/** A payment read from a charge or dispute event. Refund amounts are cumulative
+ * provider facts; older events may not carry them. */
+export type Payment = {
+  id: string
+  tags: Tags
+  total?: number
+  refunded?: number
+  fee?: string
+}
+
 /** Where an order's payment moved: `refunded` in whole or `partially_refunded`
  * in part, `disputed` by the buyer, then `lost` to them or `restored` to the
  * seller. */
@@ -247,12 +276,13 @@ export type Shopped =
     | { about: 'seller'; seller: Seller }
     | { about: 'revoked' }
     | { about: 'sale'; sale: Paid }
+    | { about: 'refund'; refund: Refunded }
     | {
       about: 'payment'
       to: Settled
       /** the payment it moved and what it carried, read on asking; null
        * where the event names none */
-      payment: () => Promise<{ id: string; tags: Tags } | null>
+      payment: () => Promise<Payment | null>
     }
     | { about: 'other' }
   )
@@ -274,6 +304,11 @@ export type Shops = {
   onboarding: (account: string, back: string) => Promise<string>
   /** the address of a hosted checkout on a seller's account */
   checkout: (account: string, sale: Sale) => Promise<string>
+  /** Refund on the merchant's account, returning the application fee in
+   * proportion. An identical key and request must never refund twice. */
+  refund: (account: string, request: Refund) => Promise<Refunded>
+  /** Reconcile a dashboard refund's cumulative application-fee reversal. */
+  refundFee: (fee: string, refunded: number, total: number) => Promise<void>
 }
 
 /** One verified event the provider posted, read into the host's words: a

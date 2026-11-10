@@ -7,7 +7,7 @@ import { KERNEL, metaOf } from './meta.ts'
 import { blobPrefix } from './blob-key.ts'
 import { blobBytes } from './files.ts'
 import { Untaken, uploaded, useOf } from './uploads.ts'
-import { quoteDoor } from './sell.ts'
+import { quoteDoor, refundDoor } from './sell.ts'
 import {
   ARTIFACT_LIFE,
   artifactPermit,
@@ -55,6 +55,8 @@ export let customerReceipt = (row: Bundle) => {
   let fields = [
     'items',
     'total_cents',
+    'refunded_cents',
+    'source',
     'status',
     'quote',
     'document',
@@ -186,6 +188,12 @@ export let saleDoor: Answer = async (at) => {
   if (quote) {
     return editor(at)
       ? quoteDoor(at.req, at.env, { space: at.space, app: at.app }, quote[1])
+      : at.json(403, 'not_an_editor')
+  }
+  let refund = /^\/pay\/refunds(?:\/([0-9a-f-]{36}))?$/.exec(at.path)
+  if (refund) {
+    return editor(at)
+      ? refundDoor(at.req, at.env, { space: at.space, app: at.app }, refund[1])
       : at.json(403, 'not_an_editor')
   }
   if (at.path == '/pay/artifacts') {
