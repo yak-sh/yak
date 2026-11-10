@@ -69,6 +69,10 @@ type Reached = GraphServer & { fetch?: typeof fetch }
  * text, which a stranger's server writes, and they are sent with every ask of
  * the Operator they reach. */
 export let SAID = 64_000
+/** One ask of a server: a tool of its, and what it is called with. */
+export type Ask = { name: string; args: Record<string, unknown> }
+/** What one ask answered, or why it failed. */
+export type Asked = { out: Out } | { error: unknown }
 /** What one server said to read before its tools, cut at {@link SAID}. */
 export type Told = { label: string; namespace: string; text: string }
 let cut = (text: string) =>
@@ -341,38 +345,76 @@ export let remoteCommands = (
       ]
     }
   }
+  // One ask on a connection already open, sent as it was asked: the server's
+  // tools are listed only for its own status, or to say why a call failed,
+  // so a call through a tunnel costs one request on the connection, not two.
+  let asked = async (
+    s: Reached,
+    c: ReturnType<typeof connect>,
+    { name, args }: Ask,
+  ): Promise<Out> => {
+    if (name == 'connection_status') {
+      let tools = await c.list()
+      if (!tools.some((t) => t.name == name)) {
+        let commands = described(s, tools)
+        return { text: JSON.stringify(commands), value: { commands } }
+      }
+    }
+    let reply: Awaited<ReturnType<typeof c.call>>
+    try {
+      reply = await c.call(name, args)
+    } catch (e) {
+      let tools = await c.list().catch(() => null)
+      if (tools && !tools.some((t) => t.name == name)) {
+        throw refuse('missing', `${s.label} has no command ${name}.`)
+      }
+      throw e
+    }
+    let text = reply.content.filter((b) => b.type == 'text')
+      .map((b) => b.text).join('\n') || unsaid(reply) || ''
+    return { text, value: reply }
+  }
+  // What an ask that failed answers: a sign-in, a server that is away, or
+  // the failure itself.
+  let failed = async (s: Reached, name: string, e: unknown): Promise<Out> => {
+    if (challenged(s, e)) return await authorization(s, e.challenge)
+    if (name != 'connection_status') {
+      throw away(s, e) ? refuse('unavailable', `${s.label}: ${e.message}`) : e
+    }
+    if (!away(s, e)) host.report(e)
+    return {
+      text: `${s.label} is unavailable; try this command again later.`,
+      value: { unavailable: true },
+    }
+  }
+  // Several asks of one server, all at once on one connection, each answered
+  // or failed on its own: a page reading three lists from a machine opens
+  // the tunnel's connection once, not three times.
+  let calls = async (at: string, asks: Ask[]): Promise<Asked[]> => {
+    let s = await owned(at.slice('mcp:'.length))
+    let settled = await using(
+      s,
+      (c) => Promise.allSettled(asks.map((ask) => asked(s, c, ask))),
+    )
+    return Promise.all(
+      settled.map((r, i) =>
+        r.status == 'fulfilled'
+          ? { out: r.value }
+          : failed(s, asks[i].name, r.reason).then(
+            (out) => ({ out }),
+            (error: unknown) => ({ error }),
+          )
+      ),
+    )
+  }
   let call = async (
     at: string,
     name: string,
     args: Record<string, unknown>,
   ): Promise<Out> => {
-    let s = await owned(at.slice('mcp:'.length))
-    try {
-      return await using(s, async (c) => {
-        let tools = await c.list()
-        if (name == 'connection_status' && !tools.some((t) => t.name == name)) {
-          let commands = described(s, tools)
-          return { text: JSON.stringify(commands), value: { commands } }
-        }
-        if (!tools.some((t) => t.name == name)) {
-          throw refuse('missing', `${s.label} has no command ${name}.`)
-        }
-        let reply = await c.call(name, args)
-        let text = reply.content.filter((b) => b.type == 'text')
-          .map((b) => b.text).join('\n') || unsaid(reply) || ''
-        return { text, value: reply }
-      })
-    } catch (e) {
-      if (challenged(s, e)) return authorization(s, e.challenge)
-      if (name != 'connection_status') {
-        throw away(s, e) ? refuse('unavailable', `${s.label}: ${e.message}`) : e
-      }
-      if (!away(s, e)) host.report(e)
-      return {
-        text: `${s.label} is unavailable; try this command again later.`,
-        value: { unavailable: true },
-      }
-    }
+    let [r] = await calls(at, [{ name, args }])
+    if ('error' in r) throw r.error
+    return r.out
   }
   // What each server the person reaches says to read before its tools (the
   // protocol's `instructions`). One that cannot be reached says nothing; its
@@ -461,5 +503,5 @@ export let remoteCommands = (
         : [],
     }
   }
-  return { list, call, told, configure }
+  return { list, call, calls, told, configure }
 }

@@ -13,7 +13,8 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { short } from '@yaks/id'
 import { type ComponentChildren as Node, h } from 'preact'
 import { Badge, Button, Card, Empty, More, Rows } from '@yaks/ui/parts'
-import { runConnectedCommand } from './connected-mcp.ts'
+import { runConnectedCommands } from './connected-mcp.ts'
+import type { Asked } from './mcp-remote.ts'
 import { caught } from './defects.ts'
 import { directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
@@ -153,55 +154,71 @@ let argsOf = (said: unknown): Record<string, unknown> => {
   }
 }
 
-// One list, read as `space`'s Operator, which is whom a machine opens its
-// tools to.
+// A list that could not be read: a machine that is off is said to be;
+// anything else is reported, and the page is drawn all the same.
+let unread = (listed: Listed, e: unknown): Listed => {
+  if (!(e instanceof CallError)) caught(e, { request: 'lists' })
+  return {
+    ...listed,
+    off: e instanceof CallError ? e.message : 'it could not be read',
+  }
+}
+
+// A list as its server answered it.
+let heard = (listed: Listed, asked: Asked): Listed => {
+  if ('error' in asked) return unread(listed, asked.error)
+  let { out } = asked
+  let rows = (out.value?.structuredContent as { result?: Bundle[] } | undefined)
+    ?.result
+  if (out.value?.isError || out.value?.unavailable || !Array.isArray(rows)) {
+    return { ...listed, off: out.text }
+  }
+  let things = rows.filter((b) => !b.entity.eid.startsWith('$'))
+  return {
+    ...listed,
+    asks: things.map(askOf),
+    lines: things.length ? [] : said(rows),
+  }
+}
+
+// The lists one server offers, read as `space`'s Operator, which is whom a
+// machine opens its tools to: all at once on one connection, so a machine
+// behind a tunnel is opened once for the page and not once a list.
 let read = async (
   env: Env,
   person: string,
   space: string,
-  { list, server: row }: { list: Bundle; server: Bundle },
+  row: Bundle,
+  lists: Bundle[],
   wait: number,
-): Promise<Listed> => {
-  let { tool, args, waits } = comp(list, 'mcp_list')
+): Promise<Listed[]> => {
   let server = `mcp:${row.entity.eid}`
-  let listed: Listed = {
+  let listed = lists.map((list): Listed => ({
     server,
     title: String(comp(list, 'doc').title ?? ''),
-    waits: waits === true,
+    waits: comp(list, 'mcp_list').waits === true,
     asks: [],
     lines: [],
-  }
+  }))
   try {
-    let out = await within(
-      runConnectedCommand(
+    let asked = await within(
+      runConnectedCommands(
         theirs(env, person),
         server,
-        String(tool),
-        argsOf(args),
+        lists.map((list) => {
+          let { tool, args } = comp(list, 'mcp_list')
+          return { name: String(tool), args: argsOf(args) }
+        }),
         { caller: 'operator', space },
       ),
       wait,
     )
-    let rows =
-      (out.value?.structuredContent as { result?: Bundle[] } | undefined)
-        ?.result
-    if (out.value?.isError || out.value?.unavailable || !Array.isArray(rows)) {
-      return { ...listed, off: out.text }
-    }
-    let things = rows.filter((b) => !b.entity.eid.startsWith('$'))
-    return {
-      ...listed,
-      asks: things.map(askOf),
-      lines: things.length ? [] : said(rows),
-    }
+    return listed.map((l, i) => heard(l, asked[i]))
   } catch (e) {
-    // A machine that is off is said to be; anything else is reported, and the
-    // page is drawn all the same.
-    if (!(e instanceof CallError)) caught(e, { request: 'lists' })
-    return {
-      ...listed,
-      off: e instanceof CallError ? e.message : 'it could not be read',
-    }
+    // The server as a whole failed: each of its lists says so, and it is
+    // reported once.
+    let off = unread(listed[0], e).off
+    return listed.map((l) => ({ ...l, off }))
   }
 }
 
@@ -223,10 +240,23 @@ export let listsOf = async (
   let { servers, lists } = await listings(env, person, space)
   let mentions = servers.map((s) => String(comp(s, 'mentions').url ?? ''))
     .find(Boolean)
+  // Each server's lists together, then all of them back in their order.
+  let groups = Map.groupBy(lists, (l) => l.server.entity.eid).values()
+  let got = new Map(
+    (await Promise.all([...groups].map(async (group) => {
+      let listed = await read(
+        env,
+        person,
+        space,
+        group[0].server,
+        group.map((l) => l.list),
+        wait,
+      )
+      return group.map((l, i) => [l.list, listed[i]] as const)
+    }))).flat(),
+  )
   return {
-    lists: await Promise.all(
-      lists.map((l) => read(env, person, space, l, wait)),
-    ),
+    lists: lists.map((l) => got.get(l.list)!),
     ...mentions ? { mentions } : {},
   }
 }

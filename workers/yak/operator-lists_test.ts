@@ -196,3 +196,29 @@ test('a list without a title or tool is refused, and [] takes them away', async 
   await connect([])
   assertEquals(await listed(), [])
 })
+
+test('a server’s lists are read on one connection, each call sent without listing its tools first', async () => {
+  await connect([needs, { ...needs, title: 'Again', waits: false }])
+  let asked: string[] = []
+  let at = env.DISPATCH!
+  let seen = {
+    ...env,
+    DISPATCH: {
+      ...at,
+      get: (...a: Parameters<typeof at.get>) => ({
+        fetch: async (r: Request) => {
+          if (r.method == 'POST') asked.push((await r.clone().json()).method)
+          return at.get(...a).fetch(r)
+        },
+      }),
+    },
+  } as typeof env
+  let [first, again] = await listed(seen)
+  assertEquals([first.off, again.off], [undefined, undefined])
+  assertEquals(again.asks, first.asks)
+  let count = (method: string) => asked.filter((m) => m == method).length
+  assertEquals(
+    [count('initialize'), count('tools/list'), count('tools/call')],
+    [1, 0, 2],
+  )
+})

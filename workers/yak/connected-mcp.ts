@@ -1,7 +1,7 @@
 import { ctxOf } from './connections.ts'
 import { caught } from './defects.ts'
 import { url } from './host.ts'
-import { type Offered, remoteCommands } from './mcp-remote.ts'
+import { type Ask, type Offered, remoteCommands } from './mcp-remote.ts'
 import { asCaller, type Ctx, refuse, str } from './tool.ts'
 import type { Row } from './tool-words.ts'
 import type { Calling } from './tunnel.ts'
@@ -30,6 +30,14 @@ export let runConnectedCommand = (
   args: Record<string, unknown>,
   asking?: Calling,
 ) => commands(ctx, asking).call(said, name, args)
+/** Several commands of one connected server, asked at once on one
+ * connection, each answered or failed on its own. */
+export let runConnectedCommands = (
+  ctx: Ctx,
+  said: string,
+  asks: Ask[],
+  asking?: Calling,
+) => commands(ctx, asking).calls(said, asks)
 
 /** What the servers a person connected say to read before their tools, as
  * the instructions of the Operator `asking` names: each server's own text
