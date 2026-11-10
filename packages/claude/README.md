@@ -29,8 +29,11 @@ starts dispatching a call, the server withholds its response. On the completed
 assistant tool-use frame the adapter kills the child, returning neutral calls to
 the harness, whose ordinary loop persists and executes them. `--max-turns 1`
 also bounds the CLI's loop. Text-only completion must end in a successful
-result. There are no retries within this adapter; durable
-submission/acknowledgement uses the same model callbacks as the HTTP providers.
+result. `--include-partial-messages` makes the CLI send text as it is written,
+and each piece reaches the request's `onText` as it arrives; the completed frame
+tells only what no piece carried. There are no retries within this adapter;
+durable submission/acknowledgement uses the same model callbacks as the HTTP
+providers.
 
 The graph records each ask, assistant text, requested call, harness result, CLI
 session/message ids and reported token usage. Claude's displayed dollar estimate
@@ -62,5 +65,6 @@ adapter remains for outside Claude agents, their built-in tools and saved
 threads. Moving heal requires changing its opener/machine/persona preparation
 and process-based concurrency accounting; it is not switched by this package.
 
-Tested against Claude Code 2.1.293. Tests use a fake subprocess, never a paid
-Claude invocation. A live probe should use `--model haiku` and stay short.
+Tested against Claude Code 2.1.322. Tests hand `read` the CLI's frames in
+process, never a paid Claude invocation. A live probe should use `--model haiku`
+and stay short.

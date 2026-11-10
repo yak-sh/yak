@@ -71,6 +71,93 @@ export let items = (message: Record<string, unknown>, req: Request): Item[] => {
   })
 }
 
+/** One line of the CLI's stream-json output. */
+// deno-lint-ignore no-explicit-any
+export type Frame = Record<string, any>
+
+/** What the frames of one turn came to. `terminal` says the CLI reported a
+ * successful result, which a turn ended by a call never reaches. */
+export type Turn = { reply?: Reply; session: string; terminal: boolean }
+
+/**
+ * Read one turn from the CLI's frames. Text reaches `onText` as its
+ * `stream_event` deltas arrive, at its place among the reply's assistant
+ * items; each completed assistant frame then adds its items to the reply and
+ * tells whatever of its text no delta carried, so the text told is always the
+ * reply's text. Reading stops at the first frame that requests a call.
+ */
+export let read = async (
+  req: Request,
+  frames: AsyncIterable<Frame> | Iterable<Frame>,
+): Promise<Turn> => {
+  let turn: Turn = { session: '', terminal: false }
+  let id = ''
+  // Content block index to its place among the assistant items.
+  let place = new Map<number, number>()
+  let told: string[] = []
+  let tell = (index: number, text: string) => {
+    if (!text) return
+    told[index] = (told[index] ?? '') + text
+    req.onText?.({ index, id, text })
+  }
+  for await (let frame of frames) {
+    if (frame.session_id && !turn.session) {
+      turn.session = frame.session_id
+      await acknowledged(req, { claude: { session_id: turn.session } })
+    }
+    if (frame.type == 'stream_event') {
+      let e = frame.event ?? {}
+      if (e.type == 'message_start') id = String(e.message?.id)
+      if (e.type == 'content_block_start') {
+        began(req)
+        if (e.content_block?.type == 'text') place.set(e.index, place.size)
+      }
+      let at = place.get(e.index)
+      if (e.delta?.type == 'text_delta' && at != null) tell(at, e.delta.text)
+    }
+    if (frame.type == 'assistant') {
+      if (turn.reply && turn.reply.id != frame.message?.id) {
+        throw new ModelError('claude_protocol', 'More than one model turn')
+      }
+      if (frame.error) throw new ModelError('claude', String(frame.error))
+      began(req)
+      let message = frame.message
+      id = String(message.id)
+      let prior = turn.reply?.items ?? []
+      let output = items(message, req)
+      let u = message.usage ?? {}
+      let cached = u.cache_read_input_tokens ?? 0
+      let totalInput = (u.input_tokens ?? 0) + cached +
+        (u.cache_creation_input_tokens ?? 0)
+      turn.reply = {
+        id,
+        model: message.model ?? req.model,
+        items: [...prior, ...output],
+        usage: {
+          input_tokens: totalInput,
+          output_tokens: u.output_tokens ?? 0,
+          total_tokens: totalInput + (u.output_tokens ?? 0),
+          cached_tokens: cached,
+        },
+      }
+      let at = prior.filter((i) => i.kind == 'assistant').length
+      for (let item of output) {
+        if (item.kind != 'assistant') continue
+        tell(at, item.text.slice(told[at]?.length ?? 0))
+        at++
+      }
+      if (output.some((i) => i.kind == 'call')) break
+    }
+    if (frame.type == 'result') {
+      turn.terminal = true
+      if (frame.is_error || frame.subtype != 'success') {
+        throw new ModelError('claude', JSON.stringify(frame))
+      }
+    }
+  }
+  return turn
+}
+
 /** Start one Claude process per model request. Requires a signed-in local CLI. */
 export let claude = (opts: Options = {}): Model =>
   Object.assign(async (req: Request): Promise<Reply> => {
@@ -126,6 +213,7 @@ export let claude = (opts: Options = {}): Model =>
           '--output-format',
           'stream-json',
           '--verbose',
+          '--include-partial-messages',
           '--max-turns',
           '1',
           '--no-session-persistence',
@@ -165,9 +253,6 @@ export let claude = (opts: Options = {}): Model =>
       await writer.write(new TextEncoder().encode(input(req)))
       await writer.close()
       if (req.signal?.aborted) kill()
-      let reply: Reply | undefined
-      let session = ''
-      let terminal = false
       let buffer = ''
       let reader = child.stdout.pipeThrough(new TextDecoderStream())
         .pipeThrough(
@@ -183,67 +268,21 @@ export let claude = (opts: Options = {}): Model =>
             },
           }),
         ).getReader()
-      try {
-        while (true) {
-          let { value, done } = await reader.read()
-          if (done) break
-          let frame = JSON.parse(value!)
-          if (frame.session_id && !session) {
-            session = frame.session_id
-            await acknowledged(req, { claude: { session_id: session } })
+      let frames = async function* (): AsyncGenerator<Frame> {
+        try {
+          while (true) {
+            let { value, done } = await reader.read()
+            if (done) return
+            yield JSON.parse(value!)
           }
-          if (frame.type == 'assistant') {
-            if (reply && reply.id != frame.message?.id) {
-              throw new ModelError(
-                'claude_protocol',
-                'More than one model turn',
-              )
-            }
-            if (frame.error) throw new ModelError('claude', String(frame.error))
-            began(req)
-            let message = frame.message
-            let prior = reply?.items ?? []
-            let output = items(message, req)
-            let u = message.usage ?? {}
-            let cached = u.cache_read_input_tokens ?? 0
-            let totalInput = (u.input_tokens ?? 0) + cached +
-              (u.cache_creation_input_tokens ?? 0)
-            reply = {
-              id: String(message.id),
-              model: message.model ?? req.model,
-              items: [...prior, ...output],
-              usage: {
-                input_tokens: totalInput,
-                output_tokens: u.output_tokens ?? 0,
-                total_tokens: totalInput + (u.output_tokens ?? 0),
-                cached_tokens: cached,
-              },
-            }
-            for (let [index, item] of output.entries()) {
-              if (item.kind == 'assistant') {
-                req.onText?.({
-                  index: prior.length + index,
-                  id: item.id,
-                  text: item.text,
-                })
-              }
-            }
-            if (output.some((i) => i.kind == 'call')) {
-              kill()
-              break
-            }
-          }
-          if (frame.type == 'result') {
-            terminal = true
-            if (frame.is_error || frame.subtype != 'success') {
-              throw new ModelError('claude', JSON.stringify(frame))
-            }
-          }
+        } finally {
+          await reader.cancel()
+          reader.releaseLock()
         }
-      } finally {
-        await reader.cancel()
-        reader.releaseLock()
       }
+      let { reply, session, terminal } = await read(req, frames())
+      // Claude may already be dispatching the call: the harness runs it.
+      if (reply?.items.some((i) => i.kind == 'call')) kill()
       let status = await child.status
       req.signal?.throwIfAborted()
       if (!reply || (!killed && (!status.success || !terminal))) {
