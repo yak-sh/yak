@@ -232,13 +232,17 @@ let accounts = (env: Env, ctx: Ctx, space: Space) =>
     `operator google ${ctx.person} ${space.eid}`,
     () =>
       Promise.all([CALENDAR, GMAIL].map(async (name) => {
-        // A sign-in finished at a broker is theirs from this ask on.
-        await settling(env, [ctx.person, space.eid], name)
-        let [i, held] = await Promise.all([
+        // A sign-in finished at a broker is theirs from this ask on: the
+        // connection is read beside it, and again only once one settled.
+        let [made, i, held] = await Promise.all([
+          settling(env, [ctx.person, space.eid], name),
           known(ctxOf(env).graph.read, name),
           ownConnection(env, ctx, space, name),
         ])
-        return { i, held }
+        return {
+          i,
+          held: made ? await ownConnection(env, ctx, space, name) : held,
+        }
       })),
   )
 
