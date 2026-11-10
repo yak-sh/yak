@@ -1410,6 +1410,9 @@ export class Store {
       clock: clockOf(this.#time),
       singleOwner: true,
       startup: 'manual',
+      // A write owes its runs and the alarm starts them (`#owedEffects`):
+      // none starts in the request that wrote it.
+      defer: true,
       // A run cut off by a deploy runs again free; one this version's store
       // crashed under spends an attempt.
       version: this.#version() ?? undefined,
@@ -1418,7 +1421,7 @@ export class Store {
       // Keep the chain bounded, but let that owed call run.
       depth: 3,
       max: 2,
-      nudge: () => this.#workingEffects(),
+      nudge: () => this.#owedEffects(),
       report: (error, { handler }) =>
         defect(error, { request: `effect ${handler}`, store: name }),
     })
@@ -3207,7 +3210,7 @@ export class Store {
     this.#effectsReady = true
     // The pass starts as many start-up runs as the pool has slots; the rest
     // are pending, and run now rather than at the next write.
-    this.#workingEffects()
+    this.#owedEffects()
     this.#embedding()
     this.#put(
       'deployed',
@@ -3494,6 +3497,28 @@ export class Store {
     }
   }
 
+  // Effects owed by a write: the pool already working takes them on, and
+  // otherwise the alarm starts it. The pool never works inside the request
+  // that nudged it: the runtime counts every call an effect makes as a level
+  // below that request, so a step whose call comes back into this store as a
+  // write, nudging the next step, would chain each step one level deeper
+  // until the runtime refuses ("Subrequest depth limit exceeded"). The
+  // alarm's event is the store's own, at depth zero, whoever asked.
+  #owedEffects = () => {
+    if (this.#dormant || !this.#vocab.comp('effect')) return
+    if (!this.#effectsReady || this.#effectWork) {
+      this.#effectAgain = true
+      return
+    }
+    this.#ctx.waitUntil?.(
+      this.#arming(new Date(this.#now()).toISOString(), 'effects')
+        .catch((e) =>
+          defect(e, { request: 'effect arming', store: this.#name() })
+        ),
+    )
+  }
+
+  // The pool at work, started only from the alarm (`#owedEffects`).
   #workingEffects = () => {
     if (this.#dormant) return
     if (!this.#vocab.comp('effect')) return
@@ -4903,7 +4928,7 @@ export class Store {
         return refuse(new Refused(`${of} names no failed effect run`))
       }
       await this.#trust(bundles, null)
-      this.#workingEffects()
+      this.#owedEffects()
       return Response.json({ retried: bundles.length })
     }
     // Entities that died in another app of the space (deaths.ts): what

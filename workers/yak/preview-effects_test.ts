@@ -1,8 +1,10 @@
-// Effects keep the temporary app view after the browser request has ended.
+// Effects keep the temporary app view after the browser request has ended,
+// and run in the store's own event, never in the request that owed them.
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { equal, test } from '@yaks/testing'
 import { toolEid } from '@yaks/tools'
 import { parseTools } from '@yaks/tools/declared'
-import { type App, appStore, storeName } from './directory.ts'
+import { type App, appStore } from './directory.ts'
 import { ADA_OWNS, platform, seeded } from './serving-probe.ts'
 import { effects } from './facets/app-effects.ts'
 import type { Stored } from './graph.ts'
@@ -33,11 +35,29 @@ await post('/expires', {
   at: Date.now() + 60_000,
   context: { space, app: candidate },
 })
+// The runtime's request lineage: each call the worker makes back into the
+// store is a level below the request it answers, which is what the runtime
+// counts toward its subrequest depth limit.
+let lineage = new AsyncLocalStorage<number>()
+let depths: number[] = [], later: Promise<unknown>[] = []
 let dispatched: { script: string; mount: string | null }[] = []
 p.env.DISPATCH = {
   get: (script: string) => ({
     fetch: (req: Request) => {
+      let depth = lineage.getStore() ?? 0
+      depths.push(depth)
       dispatched.push({ script, mount: req.headers.get('x-yak-mount') })
+      // A step that schedules the next one writes its call back to the store
+      // after it answers, from its own request.
+      if (depths.length < 4) {
+        later.push(lineage.run(depth + 1, async () => {
+          await new Promise((r) => setTimeout(r, 0))
+          await post('/apply', [{
+            entity: { eid: crypto.randomUUID() },
+            call: { to: toolEid('draft_ping'), args: {} },
+          }])
+        }))
+      }
       return Promise.resolve(new Response('draft reply'))
     },
   }),
@@ -58,15 +78,22 @@ await post('/apply', [{
   entity: { eid: crypto.randomUUID() },
   call: { to: toolEid('draft_ping'), args: {} },
 }])
-await p.object(storeName(space, candidate)).alarm()
+for (let n = 0; n < later.length || !n; n++) {
+  await p.settled()
+  await Promise.all(later)
+}
 await p.settled()
 let after = (await dir.appAt(app.eid))!.app.meter
 
 test('a recorded preview command calls the draft worker at its private mount', () => {
-  equal(dispatched, [{
+  equal(dispatched[0], {
     script: 'draft-worker',
     mount: candidate.mount ?? null,
-  }])
+  })
+})
+
+test('a chain of calls each written back by the last runs at no added depth', () => {
+  equal(depths, [0, 0, 0, 0])
 })
 
 test('temporary store effects leave the live app storage meter alone', () => {

@@ -162,6 +162,7 @@ test('a companion works off-page across pause, restart and retry', async () => {
       let ticked = await store.tick(time.now())
       asked += ticked.fired.length
       for (let i = 0; i < 1000; i++) {
+        await p.ring()
         let calls = await read(door, `.call.source=${eid}&?execution`)
         let ran = calls.filter((c: { execution?: { state: string } }) =>
           c.execution && c.execution.state != 'running'
@@ -197,13 +198,8 @@ test('a companion works off-page across pause, restart and retry', async () => {
       }],
     })
     await time.advance(5_000)
-    store = new Store(p.states.get(name)!, p.env)
-    let ns = p.env.STORE
-    p.env.STORE = {
-      idFromName: (n) => ns.idFromName(n),
-      get: (id) =>
-        String(id) == name ? { fetch: (req) => store.fetch(req) } : ns.get(id),
-    }
+    let ctx = p.states.get(name)!
+    store = p.register(name, ctx, () => new Store(ctx, p.env))
     door = appStore(p.env.STORE, k.space, k.app)
     await fire()
     let [paused] = await read(door, `.entity.eid=${eid}&?companion`)

@@ -258,16 +258,33 @@ export let lasting = (
     states.set(name, ctx)
     alarms.set(name, alarm)
   }
+  // Custom stores share this runtime's alarm delivery and lifetime, including
+  // the injected clock their constructor receives through env.CLOCK.
+  let register = (
+    name: string,
+    ctx: ReturnType<typeof state>,
+    make: () => Store,
+  ) => {
+    if (!stores.includes(ctx)) stores.push(ctx)
+    let store: Store
+    alarmed(name, ctx, () => store.alarm())
+    store = make()
+    sockets.set(name, ctx.live)
+    recovery.set(name, ctx.pitr)
+    objects.set(name, store)
+    return store
+  }
   let object = (name: string) => {
     let held = objects.get(name)
     if (!held) {
       let ctx = Object.assign(ownedState(name), {
         id: { toString: () => name },
       })
-      alarmed(name, ctx, () => object(name).alarm())
-      sockets.set(name, ctx.live)
-      recovery.set(name, ctx.pitr)
-      objects.set(name, held = new Store(ctx, env, undefined, undefined, load))
+      held = register(
+        name,
+        ctx,
+        () => new Store(ctx, env, undefined, undefined, load),
+      )
     }
     return held
   }
@@ -318,15 +335,16 @@ export let lasting = (
     let ctx = states.get(name)!
     let delivery = (async () => {
       let at = await ctx.storage.getAlarm()
-      if (at == null || at > Date.now()) return
+      if (at == null || at > (env.CLOCK?.now() ?? Date.now())) return
       await ctx.storage.deleteAlarm()
       await alarms.get(name)!()
     })().finally(() => ringing.delete(name))
     ringing.set(name, delivery)
     return delivery
   }
+  let disposed = false
   let ring = async (): Promise<void> => {
-    if (closing) return
+    if (disposed) return
     await Promise.all(
       [...armed].filter((name) => !ringing.has(name)).map(deliver),
     )
@@ -339,7 +357,10 @@ export let lasting = (
   ]
   // Until nothing is left running, including work that work started.
   let settled = async () => {
-    for (let work = pending(); work.length; work = pending()) {
+    for (;;) {
+      await ring()
+      let work = pending()
+      if (!work.length) return
       await Promise.allSettled(work)
     }
   }
@@ -347,6 +368,7 @@ export let lasting = (
   let close = () => {
     if (closing) return closing
     let release = () => {
+      disposed = true
       for (let ctx of stores) ctx.storage[Symbol.dispose]()
       stores.length = 0
     }
@@ -366,6 +388,7 @@ export let lasting = (
     env,
     files,
     object,
+    register,
     states,
     sockets,
     builder,

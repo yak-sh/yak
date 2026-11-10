@@ -103,13 +103,15 @@ let app = async (
         body: JSON.stringify(body),
       }),
     )
-  let read = async (query: string): Promise<Bundle[]> =>
-    await (await store.fetch(
+  let read = async (query: string): Promise<Bundle[]> => {
+    await p.settled()
+    return await (await store.fetch(
       new Request(
         `http://store/query?q=${encodeURIComponent(query)}`,
         { headers: as(ADA) },
       ),
     )).json()
+  }
   assertEquals(
     (await send('/vocab', {
       $defs: {
@@ -441,9 +443,8 @@ test('a hosted generated row starts the next immediate builder', async () => {
     200,
   )
   assertEquals((await start(v)).status, 200)
-  await until(() => v.asked.length == 2, {
-    label: 'chained builder model turn',
-  })
+  await v.settled()
+  assertEquals(v.asked.length, 2)
   let [output] = await v.read('.villager&.built&*')
   let builds = await v.read(`.build.builder=${next}&*`)
   assertEquals(builds.length, 1)
@@ -470,7 +471,8 @@ test('shadow outputs do not start downstream immediate builders', async () => {
     200,
   )
   assertEquals((await start(v)).status, 200)
-  await until(() => v.asked.length == 2, { label: 'main downstream turn' })
+  await v.settled()
+  assertEquals(v.asked.length, 2)
   assertEquals(
     (await v.call('builder_build', {
       builder: BUILDER,
@@ -479,7 +481,8 @@ test('shadow outputs do not start downstream immediate builders', async () => {
     })).status,
     200,
   )
-  await until(() => v.asked.length == 3, { label: 'shadow model turn' })
+  await v.settled()
+  assertEquals(v.asked.length, 3)
   await until(async () => (await v.read('.build&*')).length == 3, {
     label: 'shadow build retained',
   })

@@ -1,3 +1,4 @@
+import { system } from '@yaks/fp'
 import { BucketUnavailable } from '@yaks/blob'
 // The clock, as every store now keeps it (D-37562): a wake row is owed at an
 // instant, a write to one arms the object's own alarm, and the alarm fires
@@ -47,80 +48,86 @@ let ring = async (p: ReturnType<typeof platform>, name = PLATFORM_OBJECT) => {
   await p.object(name).alarm()
 }
 
-test('a wake fires in the store that holds it and its rule receives the tick instant', async () => {
-  let seen: Bound[] = []
-  let configured = { use: 'fixture', words: [] }
-  let fixture: Load = (async (plugin, facet) => {
-    if (plugin != 'fixture') return await load(plugin, facet)
-    return facet == 'graph'
-      ? {
-        plugins: () => [{
-          name: 'fixture',
-          rules: [{
-            phase: 'effect',
-            match: '.wake, *fired, .doc, doc.title=fixture, #Now',
-            run: (row) => {
-              seen.push(row)
-              return undefined
-            },
+test(
+  'a wake fires in the store that holds it and its rule receives the tick instant',
+  async () => {
+    let seen: Bound[] = []
+    let configured = { use: 'fixture', words: [] }
+    let fixture: Load = (async (plugin, facet) => {
+      if (plugin != 'fixture') return await load(plugin, facet)
+      return facet == 'graph'
+        ? {
+          plugins: () => [{
+            name: 'fixture',
+            rules: [{
+              phase: 'effect',
+              match: '.wake, *fired, .doc, doc.title=fixture, #Now',
+              run: (row) => {
+                seen.push(row)
+                return undefined
+              },
+            }],
           }],
-        }],
-      }
-      : null
-  }) as Load
-  directoryConfig.plugins!.push(configured)
-  try {
-    let p = platform('wake fixture')
-    let ctx = state(PLATFORM_OBJECT)
-    p.states.set(PLATFORM_OBJECT, ctx)
-    let store = new Store(ctx, p.env, undefined, undefined, fixture)
-    p.env.STORE = {
-      idFromName: (name) => name,
-      get: () => ({ fetch: (req: Request) => store.fetch(req) }),
-    } as typeof p.env.STORE
-    await store.fetch(
-      new Request('http://store/vocab', {
-        method: 'POST',
-        headers: { 'x-store': PLATFORM_STORE, 'x-yak-kernel': '1' },
-        body: '{}',
-      }),
-    )
-    await meta(p.env).apply([{
-      entity: { eid: 'fixture-wake' },
-      wake: { at: iso('09:00'), every: '30m' },
-      doc: { title: 'fixture' },
-    }, {
-      entity: { eid: 'fixture-paused' },
-      wake: { at: null, every: '30m' },
-    }])
-    assertEquals(seen.length, 0)
-    await store.tick(at('09:05'))
-    assertEquals(seen.length, 1)
-    assertEquals((await wake(p.env, 'fixture-paused')).wake.at, undefined)
-    assertEquals(seen[0].Now.at, iso('09:05'))
-    assertEquals(seen[0].fired, { at: iso('09:05') })
-    assertEquals(seen[0].wake, {
-      at: iso('09:30'),
-      every: '30m',
-    })
-    // The same instant again takes the occurrence it already took, and a
-    // patch that is not a firing is not one.
-    await store.tick(at('09:05'))
-    await meta(p.env).apply([{
-      entity: { eid: 'fixture-wake' },
-      wake: { note: 'same occurrence' },
-    }])
-    assertEquals(seen.length, 1)
-    await store.tick(at('09:35'))
-    assertEquals(seen.length, 2)
-    assertEquals(seen[1].fired, { at: iso('09:35') })
-  } finally {
-    directoryConfig.plugins!.splice(
-      directoryConfig.plugins!.indexOf(configured),
-      1,
-    )
-  }
-})
+        }
+        : null
+    }) as Load
+    directoryConfig.plugins!.push(configured)
+    try {
+      let p = platform('wake fixture', {
+        CLOCK: { ...system, now: () => at('09:00') },
+      })
+      let ctx = state(PLATFORM_OBJECT)
+      let store = p.register(
+        PLATFORM_OBJECT,
+        ctx,
+        () => new Store(ctx, p.env, undefined, undefined, fixture),
+      )
+      await store.fetch(
+        new Request('http://store/vocab', {
+          method: 'POST',
+          headers: { 'x-store': PLATFORM_STORE, 'x-yak-kernel': '1' },
+          body: '{}',
+        }),
+      )
+      await meta(p.env).apply([{
+        entity: { eid: 'fixture-wake' },
+        wake: { at: iso('09:00'), every: '30m' },
+        doc: { title: 'fixture' },
+      }, {
+        entity: { eid: 'fixture-paused' },
+        wake: { at: null, every: '30m' },
+      }])
+      assertEquals(seen.length, 0)
+      await store.tick(at('09:05'))
+      await p.settled()
+      assertEquals(seen.length, 1)
+      assertEquals((await wake(p.env, 'fixture-paused')).wake.at, undefined)
+      assertEquals(seen[0].Now.at, iso('09:05'))
+      assertEquals(seen[0].fired, { at: iso('09:05') })
+      assertEquals(seen[0].wake, {
+        at: iso('09:30'),
+        every: '30m',
+      })
+      // The same instant again takes the occurrence it already took, and a
+      // patch that is not a firing is not one.
+      await store.tick(at('09:05'))
+      await meta(p.env).apply([{
+        entity: { eid: 'fixture-wake' },
+        wake: { note: 'same occurrence' },
+      }])
+      assertEquals(seen.length, 1)
+      await store.tick(at('09:35'))
+      await p.settled()
+      assertEquals(seen.length, 2)
+      assertEquals(seen[1].fired, { at: iso('09:35') })
+    } finally {
+      directoryConfig.plugins!.splice(
+        directoryConfig.plugins!.indexOf(configured),
+        1,
+      )
+    }
+  },
+)
 
 test('seeded wake rows survive a directory restart without rewinding or resuming', async () => {
   let p = platform('wake restart')
@@ -606,8 +613,13 @@ let CHORE_WORDS = JSON.stringify({
   $defs: { chore: { properties: { name: { type: 'string' } } } },
 })
 
-let app = (name = 'ada/chores', ctx = state()) => {
-  let store = new Store(ctx)
+let app = (name = 'ada/chores', ctx = state(), now = Date.now) => {
+  let p = platform('wake commands', { CLOCK: { ...system, now } })
+  let store = p.register(
+    name,
+    ctx,
+    () => new Store(ctx, { CLOCK: p.env.CLOCK }),
+  )
   let head = {
     'x-store': name,
     'x-yak-app': 'a0000000-0000-4000-8000-000000000001',
@@ -631,12 +643,13 @@ let app = (name = 'ada/chores', ctx = state()) => {
   // A call runs in the store's effect pool once the write that owes it
   // commits, so what it writes is waited for rather than read at once.
   let holds = (line: string, n: number) =>
-    until(async () => (await rows(line)).length == n, {
+    until(async () => {
+      await p.settled()
+      return (await rows(line)).length == n
+    }, {
       label: `${n} of ${line}`,
     })
-  let settled = async () => {
-    while (ctx.pending.size) await Promise.all([...ctx.pending])
-  }
+  let settled = p.settled
   return { ctx, store, ask, rows, holds, settled }
 }
 
@@ -647,42 +660,45 @@ let chores = async () => {
   return a
 }
 
-test('a call wearing a wake waits for it, and answers when it fires', async () => {
-  let a = await chores()
-  // A call nobody scheduled is due when it is written: the other rule.
-  await a.ask('/apply', [{
-    entity: { eid: 'now' },
-    call: { to: toolEid('add_chore'), args: { name: 'take the bins out' } },
-  }])
-  await a.holds('.result.call=now', 1)
-  let now = Date.now() - 1
-  assertEquals(
-    (await a.ask('/apply', [{
-      entity: { eid: 'later' },
-      call: { to: toolEid('add_chore'), args: { name: 'water the plants' } },
-      wake: { at: new Date(now).toISOString() },
-    }])).status,
-    200,
-  )
-  // Written and sleeping: the ready rule says `!wake` and this one wears one.
-  assertEquals((await a.rows('.result.call=later')).length, 0)
-  assertEquals((await a.rows('.chore')).length, 1)
-  assertEquals(await a.ctx.storage.getAlarm(), now)
-  await a.ctx.storage.deleteAlarm()
-  await a.store.alarm()
-  // The firing is what ran it: the chore the template names is written, and
-  // the answer is beside the ask.
-  await a.holds('.result.call=later', 1)
-  assertEquals(
-    (await a.rows('.chore')).map((b) => (b.chore as { name: string }).name)
-      .sort(),
-    ['take the bins out', 'water the plants'],
-  )
-  assertEquals(
-    ((await a.rows('.execution'))[0].execution as { state: string }).state,
-    'done',
-  )
-})
+test(
+  'a call wearing a wake waits for it, and answers when it fires',
+  async () => {
+    let a = await chores()
+    // A call nobody scheduled is due when it is written: the other rule.
+    await a.ask('/apply', [{
+      entity: { eid: 'now' },
+      call: { to: toolEid('add_chore'), args: { name: 'take the bins out' } },
+    }])
+    await a.holds('.result.call=now', 1)
+    let now = Date.now() - 1
+    assertEquals(
+      (await a.ask('/apply', [{
+        entity: { eid: 'later' },
+        call: { to: toolEid('add_chore'), args: { name: 'water the plants' } },
+        wake: { at: new Date(now).toISOString() },
+      }])).status,
+      200,
+    )
+    // Written and sleeping: the ready rule says `!wake` and this one wears one.
+    assertEquals((await a.rows('.result.call=later')).length, 0)
+    assertEquals((await a.rows('.chore')).length, 1)
+    assertEquals(await a.ctx.storage.getAlarm(), now)
+    await a.ctx.storage.deleteAlarm()
+    await a.store.alarm()
+    // The firing is what ran it: the chore the template names is written, and
+    // the answer is beside the ask.
+    await a.holds('.result.call=later', 1)
+    assertEquals(
+      (await a.rows('.chore')).map((b) => (b.chore as { name: string }).name)
+        .sort(),
+      ['take the bins out', 'water the plants'],
+    )
+    assertEquals(
+      ((await a.rows('.execution'))[0].execution as { state: string }).state,
+      'done',
+    )
+  },
+)
 
 test('a recurring call is one invocation per firing, never a re-run', async () => {
   let a = await chores()
@@ -729,7 +745,8 @@ let ADVANCE = JSON.stringify({
 })
 
 test('an idle world advances offline, a missed stretch in one firing', async () => {
-  let a = app('ada/idler')
+  let time = at('09:00')
+  let a = app('ada/idler', state(), () => time)
   assertEquals((await a.ask('/vocab', IDLER)).status, 200)
   assertEquals((await a.ask('/tools', ADVANCE)).status, 200)
   // The command's own row, found by name — what a page writes into `call.to`.
@@ -749,7 +766,7 @@ test('an idle world advances offline, a missed stretch in one firing', async () 
       wake: { at: string; every: string }
       fired: { at: string }
     }
-  await a.store.tick(at('09:05'))
+  await a.store.tick(time = at('09:05'))
   await a.holds('.tick', 1)
   assertEquals((await a.rows('.call.source=world')).length, 1)
   assertEquals((await world()).fired.at, iso('09:05'))
@@ -757,7 +774,7 @@ test('an idle world advances offline, a missed stretch in one firing', async () 
   // Half an hour with nothing awake to notice: the seven occurrences owed in
   // between are one firing, so the command runs once more and not seven
   // times, and the cadence carries on from where the catch-up left it.
-  await a.store.tick(at('09:40'))
+  await a.store.tick(time = at('09:40'))
   await a.holds('.tick', 2)
   let calls = await a.rows('.call.source=world&?created')
   assertEquals(calls.length, 2)
@@ -782,7 +799,8 @@ let VILLAGE = JSON.stringify({
 })
 
 test('a world with nobody in it stops ticking, and a player arriving wakes it', async () => {
-  let a = app('ada/village')
+  let time = at('09:00')
+  let a = app('ada/village', state(), () => time)
   assertEquals((await a.ask('/vocab', VILLAGE)).status, 200)
   assertEquals((await a.ask('/tools', ADVANCE)).status, 200)
   let player = (bundle: object) =>
@@ -806,21 +824,21 @@ test('a world with nobody in it stops ticking, and a player arriving wakes it', 
       ],
     },
   }])
-  await a.store.tick(at('09:05'))
+  await a.store.tick(time = at('09:05'))
   await a.holds('.tick', 1)
   assertEquals(await owed(), stamp('09:05:30'))
   await player({ player: { active: false } })
-  await a.store.tick(sec('09:05:30'))
+  await a.store.tick(time = sec('09:05:30'))
   await a.holds('.tick', 2)
   assertEquals(await owed(), stamp('09:10:30'))
   // Half an hour nobody ticked through is one firing, on the cadence's phase.
-  await a.store.tick(at('09:40'))
+  await a.store.tick(time = at('09:40'))
   await a.holds('.tick', 3)
   assertEquals(await owed(), stamp('09:40:30'))
   // Nobody is left: the firing owed goes off, and nothing is owed after it.
   await player({ $delete: true })
   await a.ctx.storage.deleteAlarm()
-  await a.store.tick(sec('09:40:30'))
+  await a.store.tick(time = sec('09:40:30'))
   await a.holds('.tick', 4)
   assertEquals(await owed(), undefined)
   // Finish the last call, then deliver the alarm that guarded its run.
@@ -829,10 +847,11 @@ test('a world with nobody in it stops ticking, and a player arriving wakes it', 
   await a.store.alarm()
   await a.settled()
   assertEquals(await a.ctx.storage.getAlarm(), null)
-  assertEquals((await a.store.tick(at('12:00'))).fired, [])
+  assertEquals((await a.store.tick(time = at('12:00'))).fired, [])
   // Somebody arrives, and the world is owed its next half minute again.
-  let arrived = Date.now()
+  let arrived = time = Date.now()
   await player({ player: { active: true } })
+  await a.settled()
   let next = Date.parse((await owed())!)
   assert(next > arrived && next <= Date.now() + 30_000)
   assertEquals(await a.ctx.storage.getAlarm(), next)
@@ -870,7 +889,7 @@ let binned = {
 
 for (let [what, [out, back]] of Object.entries(binned)) {
   test(`a trashed ${what} fires no wakes, and catches up once restored`, async () => {
-    await using p = probe()
+    await using p = probe({ CLOCK: { ...system, now: () => at('09:00') } })
     let k = { ...await seeded(p.env), env: p.env }
     let name = storeName(k.space, k.app)
     await metaOf(appStore(p.env.STORE, k.space, k.app)).apply([{
@@ -882,6 +901,7 @@ for (let [what, [out, back]] of Object.entries(binned)) {
       (await p.object(name).tick(at(time))).fired.length
     assertEquals(await fired('09:05'), 1)
     await out(k)
+    await p.settled()
     await until(async () => await storage.get<boolean>('dormant') == true, {
       label: 'trash delivered',
     })
@@ -890,13 +910,14 @@ for (let [what, [out, back]] of Object.entries(binned)) {
     assertEquals(await fired('09:40'), 0)
     assertEquals(await storage.getAlarm(), null)
     await back(k)
+    await p.settled()
     await until(
       async () =>
         await storage.get<boolean>('dormant') == false &&
         await storage.getAlarm() != null,
       { label: 'restore delivered' },
     )
-    assert((await storage.getAlarm())! <= Date.now())
+    assert((await storage.getAlarm())! <= at('10:00'))
     assertEquals(await fired('10:00'), 1)
     assertEquals(await fired('10:01'), 0)
     assertEquals(await fired('10:05'), 1)
