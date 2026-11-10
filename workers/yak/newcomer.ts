@@ -120,7 +120,7 @@ export let rebuilding: Declared = {
 4. Until they keep the space it is a preview, and anyone with its link can open it. Say so in one small line at its foot: “A preview of” and their site's address, “built on yaks.app”. Take the line off when they ask, once they have given their email.
 5. Deploy as soon as the home page holds those things, so it is live fast, and check and tidy it after. Then tell them in two or three lines where to open it, what you carried over and what their site did not say, and ask what they would like changed.
 
-Build nothing when the page can't be read (it does not load, it refuses to be fetched, or it is empty without its scripts), or when it is not the site of the kind of organization they said (a church, when they said their church's). Say which in one plain sentence, without blaming them, and ask them to say in their own words what they need, in the box under the chat. Their present site is only read: nothing you do changes it, and say so if they ask.`,
+Build nothing when the page can't be read (it does not load, it refuses to be fetched, or it is empty without its scripts), or when it is not the site of the kind of organization they said (a church, when they said their church's). Say which in one plain sentence, in their words and not a tool's (“I couldn't open that address”, not that a fetch was refused), without blaming them, and ask them to say in their own words what they need, in the box under the chat. Their present site is only read: nothing you do changes it, and say so if they ask.`,
 }
 
 /** What the box answers once a day's builds are taken. */

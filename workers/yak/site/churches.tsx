@@ -17,9 +17,11 @@ import { Page, Yours } from './frame.tsx'
 export let PATH = '/churches'
 
 /** About how many minutes a church's site takes, from the button to the
- * Operator saying it is live: one read and rebuilt in a check took 3 minutes
- * 40 seconds, its page first showing after 81 seconds. */
-export let MINUTES = 4
+ * Operator saying it is live. Two live builds, each of a church's own site:
+ * 2 minutes 50 seconds through this page's box, and 3 minutes 40 seconds
+ * before the Operator was told how (newcomer.ts `rebuilding`). The page first
+ * showed after 83 and 81 seconds. */
+export let MINUTES = 3
 
 export let Churches = () => (
   <Page
