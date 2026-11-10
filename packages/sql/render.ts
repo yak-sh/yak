@@ -611,45 +611,62 @@ let pieces = (sql: string, counting = false): Piece[] | undefined => {
   return out
 }
 
-/** How far workerd, the SQLite under a Durable Object and D1, lets a
- * statement's common table expressions count ({@link depth}): it refuses a
- * statement at 100, its expression depth, and one short of it beside a
- * subquery in FROM. The library this toolkit embeds counts nothing. */
+/** How many cursors a statement may open before it names a common table
+ * expression on workerd, the SQLite under a Durable Object and D1
+ * ({@link cursors}): its SQLITE_LIMIT_EXPR_DEPTH, 100. The library this
+ * toolkit embeds holds SQLite's default of 1000. */
 export let DEPTH = 100
 
+// The words that end a FROM clause's list of sources at their level.
+let ENDS = new Set([
+  'where',
+  'group',
+  'having',
+  'order',
+  'limit',
+  'window',
+  'union',
+  'intersect',
+  'except',
+  'on',
+  'using',
+  'returning',
+  'set',
+  'values',
+  'select',
+])
+
 /**
- * What a statement's common table expressions count against {@link DEPTH}.
- * Workerd's SQLite counts every naming of one against its expression depth
- * and gives none back, however flat the statement. Measured on D1,
- * 2026-11-10, by the most terms of a list it answers:
+ * How many cursors SQLite opens on a statement's sources before it is done
+ * naming its common table expressions. SQLite 3.54.1 (workerd's since
+ * 2026-11-05) refuses to name one once the statement holds
+ * SQLITE_LIMIT_EXPR_DEPTH cursors, with "VIEWs and/or subqueries nested too
+ * deep" (select.c `resolveFromTermToCte`, check-in e68aa6e1), and does not
+ * count the error back down, so every naming after it is refused too.
  *
- * - a naming of a CTE counts 1 (98 or 99 terms);
- * - and 1 for each source its body reads, at any depth: a table, a
- *   table-valued function, a subquery in FROM, or another CTE at that one's
- *   own count (49 terms over a body of one table, 25 over one of three);
- * - and 1 for each subquery under the subquery that names it (50 terms with
- *   one, 33 with two).
- *
- * A statement with no CTE counts nothing: 110 such terms over tables alone
- * are answered, as are subqueries in FROM 105 deep. Whether a CTE is
- * materialized changes nothing, and one never named counts nothing.
+ * A source in any FROM clause, a table, a table-valued function or a
+ * subquery, is a cursor. A naming of a common table expression is one, and
+ * its body's sources again, since SQLite expands a copy of the body at each
+ * naming, materialized or not. The count is of the whole statement, which is
+ * at least what SQLite holds at its last naming. A statement that names none
+ * is never refused for it, however many sources it reads.
  *
  * ```ts
- * import { depth } from '@yaks/sql'
+ * import { cursors } from '@yaks/sql'
  * import { equal } from '@yaks/testing'
  *
- * equal(depth('select 1 from "a" join (select 1 from "b") on 1'), 0)
- * equal(depth('with "c" as (select 1 from "a") select 1 from "c"'), 2)
+ * equal(cursors('select 1 from "a" join (select 1 from "b") on 1'), 0)
+ * equal(cursors('with "c" as (select 1 from "a") select 1 from "c"'), 2)
  * equal(
- *   depth(
+ *   cursors(
  *     'with "c" as (select 1 from "a" join "b") ' +
  *       'select exists (select 1 from "c" where exists (select 1 from "c"))',
  *   ),
- *   7,
+ *   6,
  * )
  * ```
  */
-export let depth = (sql: string): number => {
+export let cursors = (sql: string): number => {
   if (!sql.includes('with')) return 0
   let t = pieces(sql, true)!
   let is = (i: number, kind: Piece['kind'], text?: string) =>
@@ -666,8 +683,7 @@ export let depth = (sql: string): number => {
   let called = (i: number) => is(i, 'name') || is(i, 'word')
   // Each CTE's body, as the pieces it spans: `name [(columns)] as [[not]
   // materialized] (select …)`.
-  type Span = { from: number; to: number }
-  let bodies: (Span & { name: string })[] = []
+  let bodies = new Map<number, { name: string; from: number; to: number }>()
   for (let i = 1; i < t.length; i++) {
     if (!is(i, 'word', 'as')) continue
     let j = i + 1
@@ -679,81 +695,93 @@ export let depth = (sql: string): number => {
     ) continue
     let at = is(i - 1, 'close') ? opens.get(i - 1)! - 1 : i - 1
     if (!called(at)) continue
-    bodies.push({ name: t[at].text, from: j, to: closes.get(j) ?? t.length })
+    bodies.set(j, { name: t[at].text, from: j, to: closes.get(j) ?? t.length })
   }
-  if (!bodies.length) return 0
-  let names = new Set(bodies.map((b) => b.name))
-  let groups: Span[] = [...closes].filter(([from]) =>
-    is(from + 1, 'word', 'select')
-  ).map(([from, to]) => ({ from, to }))
-  // The innermost of `of` that piece `i` stands in.
-  let inner = <T extends Span>(of: T[], i: number): T | undefined => {
-    let found: T | undefined
-    for (let g of of) {
-      if (g.from < i && i < g.to && (!found || g.from > found.from)) found = g
-    }
-    return found
+  if (!bodies.size) return 0
+  let names = new Map<string, { from: number; to: number }[]>()
+  for (let b of bodies.values()) {
+    names.set(b.name, [...names.get(b.name) ?? [], b])
   }
-  // What each body reads, a source that is no CTE as `null`, and where the
-  // statement outside them names one.
-  let top: number[] = []
-  let reads = new Map(bodies.map((b) => [b, [] as (string | null)[]]))
-  for (let i = 0; i + 1 < t.length; i++) {
-    if (!is(i, 'word', 'from') && !is(i, 'word', 'join')) continue
-    let body = inner(bodies, i)
-    let named = called(i + 1) && names.has(t[i + 1].text) &&
-      !is(i + 2, 'open') && !is(i + 2, 'other', '.')
-    if (body) reads.get(body)!.push(named ? t[i + 1].text : null)
-    else if (named) top.push(i)
-  }
-  let counts = new Map<string, number>()
-  let count = (name: string): number => {
-    if (counts.has(name)) return counts.get(name)!
-    // A recursive body's name for itself counts nothing more.
-    counts.set(name, 0)
-    let n = 1 + Math.max(
-      ...bodies.filter((b) => b.name == name).map((b) =>
-        reads.get(b)!.reduce((sum, r) => sum + (r == null ? 1 : count(r)), 0)
-      ),
-    )
-    counts.set(name, n)
-    return n
-  }
-  return top.reduce((sum, i) => {
-    let g = inner(groups, i)
-    let under = 0
-    if (g) {
-      for (let k = g.from + 2; k < g.to; k++) {
-        if (is(k, 'word', 'select')) under++
+  let named = false
+  // The cursors the pieces from `from` to `to` open, a body defined among
+  // them counting only where it is named; `inside` holds the names whose
+  // bodies are being counted, whose naming of themselves is a recursion.
+  let count = (from: number, to: number, inside: Set<string>): number => {
+    let n = 0
+    // Per parenthesis: whether a source comes next, or a comma brings one.
+    let state: ('next' | 'list' | 'none')[] = ['none']
+    for (let i = from; i < to; i++) {
+      let p = t[i]
+      if (bodies.has(i)) {
+        i = bodies.get(i)!.to
+        continue
+      }
+      let at = state.length - 1
+      if (p.kind == 'open') {
+        let sub = ['select', 'with', 'values'].some((w) => is(i + 1, 'word', w))
+        // A source in parentheses, a subquery or a list of joined ones; after
+        // a source, a function's arguments or a list of columns.
+        let source = state[at] == 'next'
+        if (source) state[at] = 'list'
+        if (source && sub) n++
+        state.push(source && !sub ? 'next' : 'none')
+        continue
+      }
+      if (p.kind == 'close') {
+        if (state.length > 1) state.pop()
+        continue
+      }
+      if (p.kind == 'word' && ENDS.has(p.text)) {
+        state[at] = 'none'
+        continue
+      }
+      if (state[at] == 'next' && called(i)) {
+        state[at] = 'list'
+        n++
+        let defs = names.get(p.text)
+        let cte = !is(i + 1, 'open') && !is(i + 1, 'other', '.')
+        if (defs && cte && !inside.has(p.text)) {
+          named = true
+          let deeper = new Set([...inside, p.text])
+          n += Math.max(...defs.map((d) => count(d.from + 1, d.to, deeper)))
+        }
+        continue
+      }
+      if (p.kind == 'word') {
+        if (p.text == 'from' || p.text == 'join') state[at] = 'next'
+        else if (p.text == 'update' || p.text == 'into') state[at] = 'next'
+      } else if (p.kind == 'other' && p.text == ',' && state[at] == 'list') {
+        state[at] = 'next'
       }
     }
-    return sum + count(t[i + 1].text) + under
-  }, 0)
+    return n
+  }
+  let n = count(0, t.length, new Set())
+  return named ? n : 0
 }
 
-/** Whether an engine holding {@link DEPTH} refuses `sql` for what its common
- * table expressions count. */
-export let deep = (sql: string): boolean => depth(sql) >= DEPTH - 1
+/** Whether workerd refuses `sql` for naming a common table expression past
+ * {@link DEPTH} cursors ({@link cursors}). */
+export let deep = (sql: string): boolean => cursors(sql) >= DEPTH
 
 // A relation written `not materialized` is a subquery wherever it is named:
-// the planner reads it so either way, and a subquery in FROM counts nothing
-// against the engine's DEPTH where a naming of a common table expression
-// counts itself and all its body reads (`depth`): measured on D1, 2026-11-10,
-// a screen of four tables is refused past 11 namings as a CTE and answered at
-// 60 written out. So such a relation is written where it is named, each copy
-// binding its own parameters while the engine's `cap` has room and writing
-// them as literals past it. For an engine that counts (`most`), a statement
-// still past the depth has its other relations written out too, one at a time
-// until it is under: a materialized one is then read once for each naming,
-// which answers the same rows where the engine would answer none; a
+// the planner reads it so either way, and a statement that names no common
+// table expression is never refused for its cursors (`cursors`). So such a
+// relation is written where it is named, each copy binding its own
+// parameters while the engine's `cap` has room and writing them as literals
+// past it. For an engine that refuses a naming past `most` cursors, a
+// statement still past it has its other relations written out too, one at a
+// time until it is under: a materialized one is then read once for each
+// naming, which answers the same rows where the engine would answer none; a
 // statement that cannot be brought under stays as it was. One named in a way
 // this cannot read (a recursive one, a list of columns, a name another body
 // takes) stays as it was written, and so does a statement that would run past
 // LENGTH.
 let HINT = ' as not materialized ('
-// How far under DEPTH a statement is written: `depth` agreed with the engine
-// to within one on every shape measured, and a count that falls short costs a
-// refused statement where one that overshoots costs a relation read twice.
+// How far under `most` a statement is written: `cursors` counts the whole
+// statement, at least what the engine holds at its last naming, but an
+// UPDATE or DELETE opens a cursor on each index of its table before it reads
+// its WHERE.
 let MARGIN = 10
 // The texts found to need nothing, since a kept statement is rendered again
 // each time it runs.
@@ -771,7 +799,7 @@ let flat = (r: Raw, cap: number, most: number): Raw => {
     out = next
   }
   if (out != r && long(out.sql)) out = r
-  let under = (sql: string) => depth(sql) <= most - MARGIN
+  let under = (sql: string) => cursors(sql) <= most - MARGIN
   if (most != Infinity && !under(out.sql)) {
     let whole = out
     for (let turn = 0; turn < 64 && !under(whole.sql); turn++) {

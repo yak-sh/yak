@@ -13,7 +13,7 @@ import {
   when,
 } from './mod.ts'
 import { type Cte, raw } from './ast.ts'
-import { deep, DEPTH, depth, inline, LENGTH, VARIABLES } from './render.ts'
+import { cursors, deep, DEPTH, inline, LENGTH, VARIABLES } from './render.ts'
 
 test('compiled fragments inline values outside quoted text and names', () => {
   let fragment = render(select({
@@ -276,7 +276,7 @@ let twice = (cte: Cte, most?: number) =>
     most,
   )
 
-test('a materialized relation stays in the with while the engine counts the statement under its depth', () => {
+test('a materialized relation stays in the with while the statement holds fewer cursors than the engine counts to', () => {
   let r = twice(paged(20), DEPTH)
   equal([r.sql.startsWith('with "page" as materialized ('), deep(r.sql)], [
     true,
@@ -286,9 +286,9 @@ test('a materialized relation stays in the with while the engine counts the stat
   equal(twice(paged(60)).sql.startsWith('with "page" as materialized ('), true)
 })
 
-test('a statement the engine would count past its depth has its relations written where they are named', () => {
+test('a statement past the cursors the engine counts to has its relations written where they are named', () => {
   let r = twice(paged(60), DEPTH)
-  equal([r.sql.includes('with'), depth(r.sql), r.params], [false, 0, [
+  equal([r.sql.includes('with'), cursors(r.sql), r.params], [false, 0, [
     'a',
     'a',
   ]])

@@ -94,23 +94,18 @@ test('eviction, schema changes and deleteAll leave reusable storage', async () =
   assertEquals(all(), [{ value: 42 }])
 })
 
-test('a statement naming a CTE as often as workerd counts to is refused', () => {
+test('a statement naming a CTE once it holds 100 cursors is refused', () => {
   let d = durable()
-  let naming = (n: number, body = 'select "x" from "q"') =>
-    `with "q" as (select 1 as "x"), "r" as (select "x" from "q") ` +
-    `select 1 as "v" where 1 in (${Array(n).fill(`(${body})`).join(', ')})`
+  // `n` subqueries in FROM, each a cursor, before the naming of "c".
+  let naming = (n: number, c = 'select 1 from "c"') =>
+    `with "c" as (select 1 as "x") select 1 as "v" where 1 in (${
+      Array(n).fill('(select "x" from (select 1 as "x"))').join(', ')
+    }) and exists (${c})`
   assertEquals([...d.sql.exec(naming(98))], [{ v: 1 }])
   assertThrows(() => d.sql.exec(naming(99)), Error, 'nested too deep')
-  // One named through another counts for both.
-  assertEquals([...d.sql.exec(naming(49, 'select "x" from "r"'))], [{ v: 1 }])
-  assertThrows(
-    () => d.sql.exec(naming(50, 'select "x" from "r"')),
-    Error,
-    'nested too deep',
-  )
-  // A subquery is no CTE, however many stand beside each other.
+  // A statement that names none is answered, however many it holds.
   assertEquals([
-    ...d.sql.exec(naming(120, 'select "x" from (select 1 as "x")')),
+    ...d.sql.exec(naming(150, 'select 1 from (select 1 as "x")')),
   ], [{ v: 1 }])
 })
 

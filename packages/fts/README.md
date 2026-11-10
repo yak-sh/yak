@@ -193,10 +193,11 @@ ranks this way. Equal matches go newest first. No recency or popularity
 weighting is added.
 
 A ranking runs a statement a step, and each statement admits through one index's
-screen: workerd counts every naming of a common table expression, with each
-source its body reads, against a depth of 100, and one index's page under a
-visibility screen counts about 24. Each index's page, its tied places and its
-exact names are read alone; joining them is arithmetic in JavaScript.
+screen: workerd's SQLite refuses to name a common table expression once a
+statement holds 100 cursors, each source of each naming's body among them, and
+one index's page under a visibility screen holds dozens. Each index's page, its
+tied places and its exact names are read alone; joining them is arithmetic in
+JavaScript.
 
 A ranking reads a page, not every match: each index hands back only its own best
 `limit` admitted rows through FTS5's `order by rank`, which sorts inside the

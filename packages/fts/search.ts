@@ -220,12 +220,11 @@ type Candidate = { owner: number; rank: number; arm: number; named: number }
 // `min` across indexes, and its arm the index that rank came from.
 //
 // The ranking runs as a statement a step, and each statement admits through
-// one index's screen. Workerd's SQLite counts every naming of a common table
-// expression, with each source its body reads, against its depth of 100, and
-// a visibility screen reads dozens: measured on a Durable Object, 2026-11-10,
-// one index's page under a screen counts 24, so four indexes' pages refused as
-// one statement however they were written, and written out without CTEs they
-// pass the engine's 100 KB. So each index's page, its tied places and its
+// one index's screen. Workerd's SQLite refuses to name a common table
+// expression once a statement holds 100 cursors (@yaks/sql `cursors`), and a
+// visibility screen reads dozens, so four indexes' pages refused as one
+// statement with their screens named, and written out without CTEs they pass
+// the engine's 100 KB. So each index's page, its tied places and its
 // exact names are read alone, and what joins them (the edge of a page, an
 // entity's best index, the order) is plain arithmetic here.
 //

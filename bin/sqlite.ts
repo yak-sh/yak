@@ -8,8 +8,14 @@
 // on the machine finds it. bin/test.ts hands it to every test runtime by
 // `DENO_SQLITE_PATH`, which @yaks/sqlite honors (packages/sqlite/sqlitepath.ts).
 //
-// The options are Homebrew's for 3.53.3, which the box's processes ran on,
-// with what SQLite's own configure adds to them, so a query plans as it did.
+// The version is workerd's (its MODULE.bazel), the SQLite under every
+// Durable Object on yaks.app, so a statement the stand-in
+// (packages/durable-object/testing.ts) is given meets the engine production
+// runs, under production's limits: 3.54.1 refuses to name a common table
+// expression once a statement holds 100 cursors, which 3.53 never did, and
+// nothing short of that engine showed it (bug 40483d8e).
+//
+// The options are Homebrew's, with what SQLite's own configure adds to them.
 // On Linux that includes fdatasync, which syncs a file's data and the size it
 // needs, where fsync also forces ext4's journal to commit for a changed mtime:
 // that commit waits for every other process's ordered writes, and with a copy
@@ -23,10 +29,10 @@
 //
 //   deno run -A bin/sqlite.ts    # builds it when absent and says its path
 
-export let VERSION = '3.53.3'
+export let VERSION = '3.54.1'
 
-let SOURCE = 'https://www.sqlite.org/2026/sqlite-autoconf-3530300.tar.gz'
-let SHA256 = 'c917d7db16648ec95f714974ace5e5dcf46b7dc70e26600a0a102a3141125db0'
+let SOURCE = 'https://www.sqlite.org/2026/sqlite-autoconf-3540100.tar.gz'
+let SHA256 = '926ef8d3eab93fbf6e06011901273eec076b25594a4e1cdadd50c987f4f6d64e'
 
 export let OPTIONS = [
   'API_ARMOR',

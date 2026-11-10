@@ -171,7 +171,7 @@ export let driver = (
     // Workerd keeps each prepared statement by its text (SqlStorage's
     // StatementCache), so every collection binds as one JSON array: a read's
     // text is the same whatever ids it names, and is prepared once. Workerd
-    // counts a statement's common table expressions against its DEPTH.
+    // refuses to name a common table expression past DEPTH cursors.
     let rendered = renderStable(s, VARIABLES, DEPTH)
     let { sql, params } = rendered
     let cursor: SqlCursor<Row> | undefined

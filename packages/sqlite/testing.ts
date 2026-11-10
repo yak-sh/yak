@@ -247,97 +247,15 @@ let limit = (db: Database, limits: Limits) => {
  * stand-in needs this door, and nothing published has one: @yaks/sqlite runs
  * what @yaks/sql renders. Keys are enforced, as `open()` enforces them, and
  * the engine's own `limits` hold, so a statement it would refuse is refused
- * here too: one that names common table expressions as many times as its
- * `exprDepth` among them, which the library underneath still answers.
+ * here too: the library the tests run on is the engine's (bin/sqlite.ts).
  */
 export let textual = (limits: Limits = {}, from?: Snapshot) => {
   let db = from ? copied(from).db : new Database(':memory:')
   limit(db, limits)
-  let ask = prepared(db)
-  let most = limits.exprDepth
-  // A store asks the same few texts over and over: each is counted once.
-  let counted = new Map<string, number>()
-  let run: typeof ask = most == null ? ask : (sql, params) => {
-    let n = counted.get(sql)
-    if (n == null) {
-      if (counted.size >= 512) counted.clear()
-      counted.set(sql, n = expansions(sql))
-    }
-    // One short of the depth is refused too, as workerd refuses it beside a
-    // subquery in FROM.
-    if (n >= most - 1) {
-      throw new Error('VIEWs and/or subqueries nested too deep')
-    }
-    return ask(sql, params)
-  }
+  let run = prepared(db)
   let keys = render({ t: 'pragma', name: 'foreign_keys', value: 'on' })
   run(keys.sql, keys.params)
   return { run, close: () => db.close() }
-}
-
-let TOKEN = /'(?:[^']|'')*'|"(?:[^"]|"")*"|\w+|[().]/g
-
-// How many times a statement's text names a common table expression, each
-// name counting once and once more for every one its body names in turn. An
-// engine newer than the library these tests run on counts each against its
-// expression depth and never gives one back, however flat the statement:
-// workerd refuses a statement at 100 (measured on D1, 2026-11-10: a CTE named
-// 99 times in an IN list is answered and 100 refused, 49 and 50 through a
-// second CTE, materialized or not; subqueries in FROM, 105 deep or 110 beside
-// each other, are answered).
-let expansions = (sql: string): number => {
-  if (!/\bwith\b/i.test(sql)) return 0
-  let t = (sql.match(TOKEN) ?? []).filter((x) => x[0] != "'").map((x) =>
-    x[0] == '"' ? x.slice(1, -1) : x.toLowerCase()
-  )
-  let closes = new Map<number, number>(), opens = new Map<number, number>()
-  let open: number[] = []
-  t.forEach((x, i) => {
-    if (x == '(') open.push(i)
-    else if (x == ')' && open.length) {
-      closes.set(open.at(-1)!, i)
-      opens.set(i, open.pop()!)
-    }
-  })
-  // Each CTE's body, as the tokens it spans: `name [(columns)] as
-  // [[not] materialized] (select …)`.
-  let bodies: { name: string; from: number; to: number }[] = []
-  for (let i = 1; i < t.length; i++) {
-    if (t[i] != 'as') continue
-    let j = i + 1
-    if (t[j] == 'not') j++
-    if (t[j] == 'materialized') j++
-    if (t[j] != '(' || !['select', 'with', 'values'].includes(t[j + 1])) {
-      continue
-    }
-    let at = t[i - 1] == ')' ? opens.get(i - 1)! - 1 : i - 1
-    bodies.push({ name: t[at], from: j, to: closes.get(j) ?? t.length })
-  }
-  let names = new Set(bodies.map((b) => b.name))
-  // What each body names itself, apart from the bodies written inside it.
-  let top: string[] = [],
-    within = new Map(bodies.map((b) => [b, [] as string[]]))
-  for (let i = 0; i + 1 < t.length; i++) {
-    if (t[i] != 'from' && t[i] != 'join' || !names.has(t[i + 1])) continue
-    if (t[i + 2] == '(' || t[i + 2] == '.') continue
-    let inner = bodies.filter((b) => b.from < i && i < b.to)
-      .sort((a, b) => (a.to - a.from) - (b.to - b.from))[0]
-    ;(inner ? within.get(inner)! : top).push(t[i + 1])
-  }
-  let costs = new Map<string, number>()
-  let cost = (name: string): number => {
-    if (costs.has(name)) return costs.get(name)!
-    // A recursive body's name for itself is no expansion.
-    costs.set(name, 0)
-    let n = 1 + Math.max(
-      ...bodies.filter((b) => b.name == name).map((b) =>
-        within.get(b)!.reduce((sum, ref) => sum + cost(ref), 0)
-      ),
-    )
-    costs.set(name, n)
-    return n
-  }
-  return top.reduce((sum, ref) => sum + cost(ref), 0)
 }
 
 // The shop vocabulary, authored as JSON Schema plus the yaks keywords.

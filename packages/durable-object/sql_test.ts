@@ -2,7 +2,20 @@
 import { equal, ok, test } from '@yaks/testing'
 import { assertThrows } from '@std/assert'
 import { during, peek, record } from '@yaks/trace'
-import { and, col, effect, eq, insert, or, select, table, val } from '@yaks/sql'
+import {
+  and,
+  col,
+  effect,
+  eq,
+  exists,
+  from,
+  insert,
+  lit,
+  or,
+  select,
+  table,
+  val,
+} from '@yaks/sql'
 import { driver, type DurableStorage } from './sql.ts'
 import { durable } from './testing.ts'
 
@@ -149,4 +162,29 @@ test('an engine refusal names the statement it refused, without its values', () 
   } finally {
     console.error = said
   }
+})
+
+// Workerd's SQLite (3.54.1) refuses to name a common table expression once a
+// statement holds 100 cursors, wherever they are: here a hundred subqueries in
+// the WHERE before the one naming.
+test('a statement that holds 100 cursors before it names a relation is answered', () => {
+  let held = (n: number) =>
+    select({
+      with: [{
+        name: 'c',
+        q: select({ cols: [lit(1)] }),
+        materialized: true,
+      }],
+      cols: [lit(1)],
+      where: and(
+        ...Array.from({ length: n }, () =>
+          exists(select({
+            cols: [lit(1)],
+            from: from(select({ cols: [lit(1)] }), 's'),
+          }))),
+        exists(select({ cols: [lit(1)], from: table('c') })),
+      ),
+    })
+  let d = driver(durable())
+  for (let n of [10, 100, 200]) equal(d.query(held(n)).length, 1)
 })

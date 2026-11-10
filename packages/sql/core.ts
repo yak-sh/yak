@@ -89,9 +89,9 @@ export {
   type Write,
 } from './ast.ts'
 export {
+  cursors,
   deep,
   DEPTH,
-  depth,
   excerpt,
   render,
   renderStable,
