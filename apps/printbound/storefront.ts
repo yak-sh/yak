@@ -1,8 +1,7 @@
-import { draftGateway, DraftRefused } from '@yaks/draft'
 import { type Binding, identifier, Refusal, store, who } from './store.ts'
 import { type Service, studio } from './source.ts'
 
-export type Env = { APP: Binding; FILES: Binding }
+export type Env = { APP: Binding; STORE: Binding; FILES: Binding }
 export let storefront = async (
   request: Request,
   env: Env,
@@ -13,13 +12,15 @@ export let storefront = async (
   let caller = who(request), desk = studio(store(env.APP), service)
   try {
     if (route === 'drafts') {
-      let gateway = draftGateway(store(env.APP), caller)
-      return Response.json(
-        request.method === 'GET'
-          ? await gateway.snapshot()
-          : await gateway.write(await request.json()),
-        { headers: { 'cache-control': 'private, no-store' } },
-      )
+      return await env.STORE.fetch('/drafts', {
+        method: request.method,
+        ...request.method === 'POST'
+          ? {
+            headers: { 'content-type': 'application/json' },
+            body: await request.text(),
+          }
+          : {},
+      })
     }
     if (route === 'shelf' && request.method === 'GET') {
       return Response.json(await desk.shelf(caller))
@@ -69,9 +70,6 @@ export let storefront = async (
     else return new Response('Not found', { status: 404 })
     return Response.json(result)
   } catch (error) {
-    if (error instanceof DraftRefused) {
-      return Response.json({ error: error.message }, { status: 409 })
-    }
     if (!(error instanceof Refusal)) throw error
     return Response.json({ error: error.message }, {
       status: error.status,

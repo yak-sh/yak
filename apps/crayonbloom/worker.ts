@@ -1,4 +1,3 @@
-import { draftGateway, DraftRefused } from '@yaks/draft'
 import { collection } from './collection.ts'
 import { gallery } from './gallery.ts'
 import { story } from './story.ts'
@@ -81,12 +80,15 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
       )
     }
     if (action === 'drafts') {
-      let gateway = draftGateway(db, caller)
-      return reply(
-        request.method === 'GET'
-          ? await gateway.snapshot()
-          : await gateway.write(await request.json()),
-      )
+      return await env.STORE.fetch('/drafts', {
+        method: request.method,
+        ...request.method === 'POST'
+          ? {
+            headers: { 'content-type': 'application/json' },
+            body: await request.text(),
+          }
+          : {},
+      })
     }
     let runtime = await settings(db)
     let engine = atelier(db, {
@@ -261,9 +263,6 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
     } else return new Response('Not found', { status: 404 })
     return reply(result ?? { ok: true })
   } catch (error) {
-    if (error instanceof DraftRefused) {
-      return Response.json({ error: error.message }, { status: 409 })
-    }
     if (!(error instanceof Refusal)) throw error
     return Response.json({ error: error.message }, {
       status: error.status,
