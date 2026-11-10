@@ -85,11 +85,13 @@ the text itself is stored once, however many rows contain it. The stored text is
 not a row of the graph (there is no second entity beside your doc), so `.doc`
 returns your docs and a body reads back as the text you wrote.
 
-**`draft`** — `by` (eid), `place` (text), `text` (text); the store sets `rev`
-(number). A person's unsent input, kept and synced across devices on the eid
-`draftEid(by, place)` from `@yaks/draft`. Write it with `typed` to preserve
-concurrent input, and empty its text in the same batch as the action that sends
-it. Keep a local recovery copy until the store acknowledges that batch.
+**`draft`** — `by` (eid), `place` (text), `text` (text), `via` (eid); the store
+sets `rev` (number). A person's unsent input, kept and synced across devices on
+the eid `draftEid(by, place)` from `@yaks/draft`. A guest's input carries `via`,
+the browser it was typed in, until sign-in hands it to a person. Write it with
+`typed` to preserve concurrent input, and empty its text in the same batch as
+the action that sends it. Keep a local recovery copy until the store
+acknowledges that batch.
 
 **`typed`** — `over` (text). An event sent with a draft write, naming the text
 the interface last received from the store. The store merges both interfaces'
