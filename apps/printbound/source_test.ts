@@ -193,3 +193,15 @@ test('a preparation input error preserves its job and resumes the same document 
     doc.id,
   )
 })
+
+test('a signed continuation binds a guest book before its quote or receipt can be shared by the browser', async () => {
+  let { desk } = fixture(), row = await desk.save(text, { via: alice.via })
+  await desk.prepare(row.entity.eid, { via: alice.via })
+  await desk.quote(row.entity.eid, {}, alice)
+  await assertRejects(() => desk.owned(row.entity.eid, bob))
+  await assertRejects(() => desk.purchase(row.entity.eid, bob))
+  assertEquals(
+    (await desk.owned(row.entity.eid, alice)).book_source.owner,
+    alice.person,
+  )
+})

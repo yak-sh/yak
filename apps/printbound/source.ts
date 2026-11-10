@@ -1,4 +1,4 @@
-import { type Bundle, sha256 } from '@yaks/graph'
+import { type Bundle, sha256, token } from '@yaks/graph'
 import {
   allowed,
   guard,
@@ -87,6 +87,14 @@ export let studio = (db: Store, service: Service) => {
     ) as Book[]
     if (!row || !allowed(row.book_source, caller)) {
       throw new Refusal('That saved book is not available.', 403)
+    }
+    if (caller.person && !row.book_source.owner) {
+      await db.apply([{
+        entity: row.entity,
+        book_source: { owner: caller.person },
+        $was: { book_source: { owner: null, via: token(row.book_source.via) } },
+      }])
+      row.book_source.owner = caller.person
     }
     return row
   }
