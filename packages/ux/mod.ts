@@ -117,3 +117,15 @@ export {
   type Controller as CompletionController,
   type FieldProps,
 } from './completion.ts'
+
+export {
+  Sort,
+  sortAt,
+  sorted,
+  sortOf,
+  type SortProps,
+  type SortRow,
+  sortRows,
+  type SortState,
+  type SortValue,
+} from './Sort.ts'

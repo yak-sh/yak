@@ -213,6 +213,10 @@ ${links(env, 'pages.css', undefined, assets)}${
   let close = `</main><script type="module" src="${
     file('_dates.js')
   }"></script>${
+    main.includes('data-sort=')
+      ? `<script type="module" src="${file('_sort.js')}"></script>`
+      : ''
+  }${
     main.includes('data-chart')
       ? `<script type="module" src="${file('chart.js')}"></script>`
       : ''

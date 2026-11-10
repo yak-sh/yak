@@ -244,7 +244,9 @@ equal(
 `Table` uses a CSS grid with subgrid rows and accessibility roles. `cols` names
 the column tracks; apply matching variants to cells. Text cuts short with an
 ellipsis, `num` sets right, and `prose` wraps. The table owns its `style` prop
-to carry those tracks. Sorting and selection belong to its caller.
+to carry those tracks. Sorting and selection belong to its caller. `Table.Sort`
+is a native button for a heading; `@yaks/ux` supplies controlled sorting with
+raw values.
 
 A table can be a tree. A row holding rows starts its first cell with a `Toggle`,
 `Toggle-open` while the rows it holds show under it; a row sits one `Indent`
@@ -256,6 +258,7 @@ parent's, in a browser and in a terminal. What a `Toggle` opens is its caller's.
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { Table } from '@yaks/ui'
+import { parseHTML } from 'linkedom'
 import { equal } from '@yaks/testing'
 
 const tree = h(
@@ -270,7 +273,10 @@ const tree = h(
 )
 const html = renderToString(tree)
 equal(html.includes('role="table"'), true)
-equal(html.includes('Pages ↓'), true)
+equal(
+  parseHTML(html).document.querySelector('[role=columnheader]')?.textContent,
+  'Pages ↓',
+)
 equal(html.includes('class="Table_Cell Table_Cell-num">412'), true)
 ```
 

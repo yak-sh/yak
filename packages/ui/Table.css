@@ -117,3 +117,16 @@
 .Table_Toggle:hover {
   color: var(--text);
 }
+
+.Table_Sort {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+.Table_Sort:focus-visible {
+  outline: 1px solid var(--accent);
+}

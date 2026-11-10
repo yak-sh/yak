@@ -5111,6 +5111,9 @@ importers:
       linkedom:
         specifier: ^0.18.12
         version: 0.18.15
+      preact-render-to-string:
+        specifier: 6.7.0
+        version: 6.7.0(preact@10.29.7)
 
   packages/visualize:
     dependencies:

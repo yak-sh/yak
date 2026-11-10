@@ -758,3 +758,21 @@ binding.close()
 
 Failed writes retain their drafts. Successful writes retain any newer edits
 typed while saving; Discard restores the values the page last saved.
+
+## Sorting tables
+
+`Sort` draws a controlled table with keyboard-reachable header buttons. It reads
+`Sort{column, direction}` from `e` and emits a replacement bundle through
+`onChange`. `sortAt(owner)` names its page entity. Pressing a new column sorts
+ascending; pressing it again reverses the direction, shown beside its heading
+and through `aria-sort`.
+
+Supply `cols`, `heads` and `rows`. Each row has `values` (raw strings, numbers,
+or null) and `content` (one or more `Table.Row` elements). Money, counts and
+timestamps are numbers; formatting belongs in the content. Related detail rows
+move with their parent. Equal values retain input order, and null values stay
+last in either direction.
+
+Server-rendered pages use `bindSort(root, {read, write})` from `@yaks/ux/sort`.
+The host reads and writes bundles in its page graph; the binding orders the same
+row groups without replacing their content. It returns listener cleanup.

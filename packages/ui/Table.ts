@@ -53,6 +53,7 @@ let Base = block('div', 'Table', {
   Heading: 'div',
   Cell: 'div',
   Toggle: 'button',
+  Sort: 'button',
   Indent: 'span',
 })
 
@@ -73,7 +74,7 @@ let template = (cols: Col[]) =>
 export let Table:
   & FunctionComponent<TableProps>
   & Record<
-    'Head' | 'Body' | 'Row' | 'Heading' | 'Cell' | 'Toggle' | 'Indent',
+    'Head' | 'Body' | 'Row' | 'Heading' | 'Cell' | 'Toggle' | 'Sort' | 'Indent',
     Part
   > = Object
     .assign(
@@ -88,10 +89,15 @@ export let Table:
             Base.Heading,
             { role: 'columnheader', ...p },
             children,
-            arrow(p.mod),
+            h(
+              'span',
+              { class: 'Table_Direction', 'aria-hidden': true },
+              arrow(p.mod),
+            ),
           ),
         Cell: roled(Base.Cell, 'cell'),
         Toggle: Base.Toggle,
+        Sort: Base.Sort,
         Indent: (p: Props) => h(Base.Indent, { 'aria-hidden': true, ...p }),
       },
     )
@@ -185,7 +191,11 @@ export let specimens = (): Specimen[] => [
         h(
           Row,
           {},
-          h(Heading, { mod: 'sorts' }, 'name'),
+          h(
+            Heading,
+            { mod: 'sorts' },
+            h(Table.Sort, { type: 'button' }, 'name'),
+          ),
           h(Heading, {}, 'type'),
           h(Heading, {}, 'description'),
           h(Heading, { mod: ['sorts', 'desc', 'num'] }, 'entities'),

@@ -10,6 +10,7 @@ import { Time } from '@yaks/ui/parts'
 // It only draws: admin.ts reads the rows and puts this on its desk.
 import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
 import { Card, type Col, Empty, Group, Table } from '@yaks/ui/parts'
+import { Sort, sortAt, type SortRow, type SortValue } from '@yaks/ux/sort'
 import { type ByDay, columns, series, sparkline, summed } from '@yaks/ui/chart'
 import { count, dollars, SOURCES } from './meter.ts'
 import { day } from './html.ts'
@@ -70,43 +71,33 @@ let lasted = (ms: number) => {
 
 let pct = (n: number, of: number) => of ? `${Math.round(n / of * 100)}%` : '0%'
 
-// A table: its headings over its rows, a column of numbers set right.
-let table = (
-  cols: Col[],
-  heads: string[],
-  rows: VNode[],
-) =>
+// A table's items keep their raw sort values beside the rows they draw.
+let table = (cols: Col[], heads: string[], rows: SortRow[]) =>
   h(
     Card,
     { as: 'div', class: 'Spending_Table' },
-    h(
-      Table,
-      { cols },
-      h(
-        Table.Head,
-        null,
-        h(
-          Table.Row,
-          null,
-          heads.map((said, i) =>
-            h(Table.Heading, { mod: cols[i] == 'num' && 'num' }, said)
-          ),
-        ),
-      ),
-      h(Table.Body, null, rows),
-    ),
+    h(Sort, {
+      e: { entity: { eid: sortAt(`spending/${heads[0]}`) } },
+      onChange: () => {},
+      cols,
+      heads,
+      rows,
+    }),
   )
 let row = (
   first: ComponentChildren,
   nums: ComponentChildren[],
+  values: SortValue[],
   mod?: string,
-) =>
-  h(
+): SortRow => ({
+  values,
+  content: h(
     Table.Row,
     { mod },
     h(Table.Cell, null, first),
     nums.map((n) => h(Table.Cell, { mod: 'num' }, n)),
-  )
+  ),
+})
 let indented = (said: ComponentChildren) =>
   h(Fragment, null, h(Table.Indent, null), said)
 
@@ -153,6 +144,12 @@ let bySource = (byDay: Record<string, ByDay>, now: number) =>
           ...series(days, DAYS, now),
           money: true,
         }) as VNode,
+      ], [
+        SOURCES[source] ?? source,
+        n,
+        total(days, now, 7),
+        total(days, now, 1),
+        n,
       ])
     )
 
@@ -241,8 +238,14 @@ let topSpaces = (spaces: Counted[], base: string, now: number) => {
     ? table(
       [null, null, 'num', 'num'],
       ['Space', 'Plan', '30 days', 'This month'],
-      top.map(({ s, n }) =>
-        h(
+      top.map(({ s, n }) => ({
+        values: [
+          s.slug,
+          { free: 'Free', plus: 'Plus', pro: 'Pro' }[s.tier],
+          n,
+          s.month,
+        ],
+        content: h(
           Table.Row,
           null,
           h(Table.Cell, null, link(`${base}/${s.eid}`, s.slug)),
@@ -258,8 +261,8 @@ let topSpaces = (spaces: Counted[], base: string, now: number) => {
           ),
           h(Table.Cell, { mod: 'num' }, dollars(n)),
           h(Table.Cell, { mod: 'num' }, dollars(s.month)),
-        )
-      ),
+        ),
+      })),
     )
     : null
 }
@@ -292,8 +295,9 @@ let topRuns = (runs: Placed[], base: string) => {
     ? table(
       [null, null, 'num', 'num', 'num'],
       ['Conversation', 'Space', 'Cost', 'Requests', 'Helpers'],
-      top.map((r) =>
-        h(
+      top.map((r) => ({
+        values: [r.title, r.space.slug, r.cost, r.turns, r.helpers.length],
+        content: h(
           Table.Row,
           null,
           h(Table.Cell, null, link(opens(base, r), r.title)),
@@ -301,8 +305,8 @@ let topRuns = (runs: Placed[], base: string) => {
           h(Table.Cell, { mod: 'num' }, dollars(r.cost)),
           h(Table.Cell, { mod: 'num' }, count(r.turns)),
           h(Table.Cell, { mod: 'num' }, count(r.helpers.length)),
-        )
-      ),
+        ),
+      })),
     )
     : null
 }
@@ -339,30 +343,43 @@ let sessions = (runs: Placed[], base: string) => {
     ? table(
       cols,
       ['Conversation or helper', 'Space', ...USED, 'Last'],
-      shown.flatMap((r) => [
-        line(r, link(opens(base, r), r.title)),
-        ...r.helpers.slice(0, HELPERS).map((helper) =>
-          line(
-            { ...helper, space: r.space },
-            indented(
-              link(opens(base, { ...helper, space: r.space }), helper.title),
-            ),
-            'quiet',
-          )
-        ),
-        ...r.helpers.length > HELPERS
-          ? [line(
-            {
-              ...r.helpers.slice(HELPERS).reduce(plus, none()),
-              open: '',
-              title: '',
-              space: r.space,
-            },
-            indented(`${count(r.helpers.length - HELPERS)} more helpers`),
-            'quiet',
-          )]
-          : [],
-      ]),
+      shown.map((r) => ({
+        values: [
+          r.title,
+          r.space.slug,
+          r.cost,
+          r.turns,
+          r.input,
+          r.cached,
+          r.output,
+          r.ms,
+          Date.parse(r.until),
+        ],
+        content: [
+          line(r, link(opens(base, r), r.title)),
+          ...r.helpers.slice(0, HELPERS).map((helper) =>
+            line(
+              { ...helper, space: r.space },
+              indented(
+                link(opens(base, { ...helper, space: r.space }), helper.title),
+              ),
+              'quiet',
+            )
+          ),
+          ...r.helpers.length > HELPERS
+            ? [line(
+              {
+                ...r.helpers.slice(HELPERS).reduce(plus, none()),
+                open: '',
+                title: '',
+                space: r.space,
+              },
+              indented(`${count(r.helpers.length - HELPERS)} more helpers`),
+              'quiet',
+            )]
+            : [],
+        ],
+      })),
     )
     : h(Empty, null, h(Empty.Title, null, 'No Operator has spent anything yet'))
 }
@@ -420,6 +437,7 @@ let partLine = (
   p: Part,
   month: number,
   mod?: string,
+  name = String(said),
 ) =>
   row(said, [
     tokens(sentOf(p) / Math.max(1, p.sends)),
@@ -428,6 +446,14 @@ let partLine = (
     dollars(p.written),
     dollars(p.uncached),
     dollars(costOf(p) * month),
+  ], [
+    name,
+    sentOf(p) / Math.max(1, p.sends),
+    p.sends,
+    p.cached,
+    p.written,
+    p.uncached,
+    costOf(p) * month,
   ], mod)
 
 // The pieces, a group a line by what they cost, each group's pieces under it
@@ -457,14 +483,19 @@ let partsTable = (
       'Uncached',
       'A month',
     ],
-    lines.flatMap(({ group, all, sum }) =>
-      all.length == 1 ? [partLine(nameOf(all[0][0]), all[0][1], month)] : [
-        partLine(`${nameOf(group)} (${all.length})`, sum, month),
-        ...all.slice(0, 25).map(([k, p]) =>
-          partLine(indented(nameOf(k)), p, month, 'quiet')
-        ),
-      ]
-    ),
+    lines.map(({ group, all, sum }) => {
+      if (all.length == 1) return partLine(nameOf(all[0][0]), all[0][1], month)
+      let parent = partLine(`${nameOf(group)} (${all.length})`, sum, month)
+      return {
+        values: parent.values,
+        content: [
+          parent.content,
+          ...all.slice(0, 25).map(([k, p]) =>
+            partLine(indented(nameOf(k)), p, month, 'quiet', nameOf(k)).content
+          ),
+        ],
+      }
+    }),
   )
 }
 

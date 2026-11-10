@@ -10,6 +10,7 @@
   },
   "entries": [
     ".",
-    "./keys"
+    "./keys",
+    "./sort"
   ]
 }

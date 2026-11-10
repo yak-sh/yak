@@ -15,6 +15,8 @@ import { Order, orderAt } from './Order.ts'
 import { type Door, Signup, signupAt } from './Signup.ts'
 import { Text } from './Text.ts'
 import { Save } from './Save.ts'
+import { Sort, sortAt } from './Sort.ts'
+import { Table } from '@yaks/ui/parts'
 import type { Question } from '@yaks/forms'
 import { type Host, Ux } from './host.ts'
 import { defineKit, type Kit } from './kit.ts'
@@ -83,6 +85,28 @@ let OrderSample = (): JSX.Element => {
       let rest = ids.value.filter((x) => x != id)
       ids.value = [...rest.slice(0, at), id, ...rest.slice(at)]
     },
+  })
+}
+
+let SortSample = (): JSX.Element => {
+  let state = useSignal<Bundle>({ entity: { eid: sortAt('guide/sort') } })
+  let rows = [['Apple', 12], ['Pear', 3], ['Orange', 90]] as [string, number][]
+  return h(Sort, {
+    e: state.value,
+    onChange: (b) => {
+      state.value = b
+    },
+    cols: [null, 'num'],
+    heads: ['Name', 'Count'],
+    rows: rows.map(([name, n]) => ({
+      values: [name, n],
+      content: h(
+        Table.Row,
+        null,
+        h(Table.Cell, null, name),
+        h(Table.Cell, { mod: 'num' }, n),
+      ),
+    })),
   })
 }
 
@@ -163,6 +187,16 @@ export let kit: Kit = defineKit({
   description: 'Controlled editing and navigation in the page graph',
   vocab: uxDoc,
   components: {
+    Sort: {
+      Component: Sort,
+      description:
+        'A table sorted by raw column values, with accessible header buttons',
+      state: ['Sort'],
+      specimens: () => [[
+        'Press a column to sort; press again to reverse',
+        h(SortSample, {}),
+      ]],
+    },
     Save: {
       Component: Save,
       description:

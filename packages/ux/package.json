@@ -9,7 +9,8 @@
     "./ui": "./ui.ts",
     "./completion": "./completion.ts",
     "./keys": "./keys.ts",
-    "./save": "./save-browser.ts"
+    "./save": "./save-browser.ts",
+    "./sort": "./sort-browser.ts"
   },
   "license": "Apache-2.0",
   "description": "Controlled Preact components for editing properties, opening disclosures, completing input and filling in sign-up forms. Component state lives in a page graph; drafts and emitted bundles belong to the caller.",
@@ -32,6 +33,7 @@
     "@yaks/draft": "0.2.24",
     "@yaks/testing": "0.2.30",
     "@yaks/tui": "0.2.24",
-    "linkedom": "^0.18.12"
+    "linkedom": "^0.18.12",
+    "preact-render-to-string": "6.7.0"
   }
 }

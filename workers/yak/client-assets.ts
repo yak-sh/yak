@@ -22,6 +22,7 @@ export let parts = {
   // The Operator chat's line drawing (operator-rows.ts), for its page alone.
   '_talk.js': './operator-rows.ts',
   '_settings.js': './settings.ts',
+  '_sort.js': './sort.ts',
 }
 
 export let assets = async (to = new URL('./public/', import.meta.url)) => {

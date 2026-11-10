@@ -4,6 +4,8 @@
 // space's Operator recorded them; for the admin alone.
 
 import { test } from '@yaks/testing'
+import { bindSort } from '@yaks/ux/sort'
+import type { Bundle } from '@yaks/graph'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { answer } from './admin.ts'
@@ -326,4 +328,44 @@ test('spending shows effective plan names and distinguishes grants from payment'
       `${slug == 'granted' ? 'Test space. ' : ''}Plan granted without payment`,
     )
   }
+})
+
+// Exercise the HTML answered by the admin door with the shared browser binding.
+let choices = new Map<string, Bundle>()
+let unbind = bindSort(page.document, {
+  read: (eid) => choices.get(eid),
+  write: (b) => {
+    choices.set(b.entity.eid, b)
+  },
+})
+let sourceTable = page.document.querySelector('.Table')!
+let moneyHead = sourceTable.querySelectorAll<HTMLButtonElement>('button')[1]
+moneyHead.click()
+await Promise.resolve()
+let cheapFirst = texts(
+  sourceTable,
+  '[data-sort-values] .Table_Cell:first-child',
+)
+let direction = moneyHead.parentElement!.getAttribute('aria-sort')
+moneyHead.click()
+await Promise.resolve()
+let costlyFirst = texts(
+  sourceTable,
+  '[data-sort-values] .Table_Cell:first-child',
+)
+unbind()
+test('the admin spending HTML sorts its recorded source costs through accessible headers', () => {
+  assertEquals(cheapFirst, ['Workers AI', 'Voice', 'Anthropic'])
+  assertEquals(costlyFirst, ['Anthropic', 'Voice', 'Workers AI'])
+  assertEquals(direction, 'ascending')
+  assertEquals(
+    page.document.querySelectorAll('.Table_Heading button').length > 20,
+    true,
+  )
+  assertEquals(
+    [...page.document.querySelectorAll('script[src]')].some((s) =>
+      s.getAttribute('src')!.includes('_sort.')
+    ),
+    true,
+  )
 })

@@ -138,6 +138,27 @@
           "description": "why the door refused the answers, in its words"
         }
       }
+    },
+    "Sort": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "A table's sort choice on its owner-named page entity.",
+      "properties": {
+        "column": {
+          "type": "number",
+          "description": "the zero-based column index"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "description": "ascending or descending values"
+        }
+      }
     }
   }
 }
