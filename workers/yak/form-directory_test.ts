@@ -51,20 +51,23 @@ let setup = async (seed: Bundle[] = []) => {
         fills: `individual.${prop}`,
       },
     })),
-    {
-      entity: { eid: 'children' },
-      question: { form: 'form', label: 'Children', kind: 'repeat' },
-    },
-    ...['first', 'born'].map((prop) => ({
-      entity: { eid: 'child-' + prop },
-      question: {
-        form: 'form',
-        label: prop,
-        kind: 'line',
-        fills: `individual.${prop}`,
-        within: 'children',
-      },
-    })),
+    ...([['children', 'child'], ['partner', 'spouse'], ['others']] as const)
+      .flatMap(([repeat, relates]) => [
+        {
+          entity: { eid: repeat },
+          question: { form: 'form', label: repeat, kind: 'repeat', relates },
+        },
+        ...['first', 'born'].map((prop) => ({
+          entity: { eid: `${repeat.slice(0, 5)}-${prop}` },
+          question: {
+            form: 'form',
+            label: prop,
+            kind: 'line',
+            fills: `individual.${prop}`,
+            within: repeat,
+          },
+        })),
+      ]),
     {
       entity: { eid: 'hidden' },
       question: {
@@ -263,6 +266,68 @@ for (
     equal(((await g.get(['signup']))[0].registration as Comp).person, 'member')
   })
 }
+
+// Ann already has Bo, born 2020-03-04, in the directory.
+let family = async (answers: object) => {
+  let g = await setup([fixture, {
+    entity: { eid: 'bo' },
+    individual: { first: 'Bo', status: 'member', born: '2020-03-04' },
+  }, {
+    entity: { eid: 'ann-bo' },
+    relation: { kind: 'parent', a: 'member', b: 'bo' },
+  }])
+  await g.apply(sign({ phone: '+12695550142', ...answers }))
+  return {
+    people: await g.read('.individual'),
+    links: (await g.read('.relation')).map((l) => l.relation as Comp),
+  }
+}
+
+for (
+  let [name, child] of [
+    ['by first name', { 'child-first': ' bo ' }],
+    ['by name and birthday', {
+      'child-first': 'Bo',
+      'child-born': '2020-03-04',
+    }],
+  ] as const
+) {
+  test(`a member's listed child is found ${name}, not copied`, async () => {
+    let { people, links } = await family({ children: [child] })
+    equal(people.length, 2)
+    equal(links, [{ kind: 'parent', a: 'member', b: 'bo' }])
+  })
+}
+
+test('a child with another birthday is a new guest', async () => {
+  let { people, links } = await family({
+    children: [{ 'child-first': 'Bo', 'child-born': '2021-05-06' }],
+  })
+  equal(people.length, 3)
+  equal(links.length, 2)
+})
+
+test("a member's child is found only as their child, and only once", async () => {
+  let { people, links } = await family({
+    partner: [{ 'partn-first': 'Bo' }],
+    children: [{ 'child-first': 'Bo' }, { 'child-first': 'Bo' }],
+  })
+  equal(people.length, 4)
+  equal(links.filter((l) => l.b == 'bo').length, 1)
+})
+
+test('a repeat records the relation its question names, or none', async () => {
+  let { people, links } = await family({
+    partner: [{ 'partn-first': 'Cy' }],
+    others: [{ 'other-first': 'Di' }],
+  })
+  let cy = people.find((p) => (p.individual as Comp).first == 'Cy')!
+  equal(people.length, 4)
+  equal(links.sort((x, y) => String(x.kind).localeCompare(String(y.kind))), [
+    { kind: 'parent', a: 'member', b: 'bo' },
+    { kind: 'spouse', a: 'member', b: cy.entity.eid },
+  ])
+})
 
 let rollbackStore = storage(durable(), vocab)
 rollbackStore.install()

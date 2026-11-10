@@ -40,17 +40,19 @@ Load `formsDoc` from `@yaks/forms/vocab` beside `kernelDoc` from
 `@yaks/kernel/vocab`, which declares the shared completion and cancellation
 marks. Add `doc{title, body}` to a form for its title and introduction.
 
-| Component      | Properties                                                                                 |
-| -------------- | ------------------------------------------------------------------------------------------ |
-| `form`         | `opens`, `closes`, `capacity`, `thanks`, `closed`, `notify`                                |
-| `question`     | `form`, `label`, `kind`, `choices`, `required`, `hint`, `within`, `when`, `fills`, `order` |
-| `registration` | `form`, `person`, `answers`, `at`                                                          |
-| `waitlisted`   | stamped `at`, `by`, `via`                                                                  |
+| Component      | Properties                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------------------- |
+| `form`         | `opens`, `closes`, `capacity`, `thanks`, `closed`, `notify`                                           |
+| `question`     | `form`, `label`, `kind`, `choices`, `required`, `hint`, `within`, `when`, `fills`, `relates`, `order` |
+| `registration` | `form`, `person`, `answers`, `at`                                                                     |
+| `waitlisted`   | stamped `at`, `by`, `via`                                                                             |
 
 Question kinds are `line`, `lines`, `choose`, `choices`, `check`, `date`,
 `email`, `phone`, `address`, `file` and `repeat`. `fills` names a directory
-property, such as `individual.born`; the core performs no directory writes.
-`notify` lists recipient entity ids; delivery belongs to the caller.
+property, such as `individual.born`. On a repeat, `relates` says what each entry
+is to the person it is listed under: `child`, `parent`, `spouse` or `sibling`,
+and absent when the entries are no relation. The core performs no directory
+writes. `notify` lists recipient entity ids; delivery belongs to the caller.
 
 Registration state comes from marks. `registration.status` is `cancelled` when
 it carries `cancelled{at, by, via, reason}`, then `waitlisted` when it carries

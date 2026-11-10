@@ -120,6 +120,16 @@
           "type": "string",
           "description": "directory property filled by this answer, such as individual.born"
         },
+        "relates": {
+          "type": "string",
+          "enum": [
+            "child",
+            "parent",
+            "spouse",
+            "sibling"
+          ],
+          "description": "on a repeat, what each entry is to the person it is listed under; absent records no relation"
+        },
         "order": {
           "type": "number",
           "description": "question order; absent is zero and ties sort by entity id"

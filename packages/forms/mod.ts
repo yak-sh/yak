@@ -40,6 +40,7 @@ export type Question = {
     within?: string
     when?: { question: string; is: unknown }
     fills?: string
+    relates?: 'child' | 'parent' | 'spouse' | 'sibling'
     order?: number
   }
 }

@@ -61,6 +61,32 @@ let captured = (row: Bundle, values: Record<string, unknown>) =>
     prop == 'number' && same(value, number(values.phone))
   )
 
+// What a repeat's `relates` names each entry, as the directory relation that
+// says so: the side the entry takes, and whether the relation reads both ways.
+let kin: Record<
+  string,
+  { kind: string; entry: 'a' | 'b'; mutual?: boolean }
+> = {
+  child: { kind: 'parent', entry: 'b' },
+  parent: { kind: 'parent', entry: 'a' },
+  spouse: { kind: 'spouse', entry: 'b', mutual: true },
+  sibling: { kind: 'sibling', entry: 'b', mutual: true },
+}
+type Kin = typeof kin[string]
+let other = (side: 'a' | 'b') => side == 'a' ? 'b' : 'a'
+let folded = (v: unknown) => typeof v == 'string' ? v.trim().toLowerCase() : ''
+
+// An entry is a relative already listed when the first name agrees, and the
+// last name and birthday agree wherever both sides have one.
+let named = (row: Bundle, values: Record<string, unknown>) => {
+  let held = fields(row, 'individual')
+  return !!folded(values.first) &&
+    ['first', 'last', 'born'].every((prop) =>
+      !folded(held[prop]) || !folded(values[prop]) ||
+      folded(held[prop]) == folded(values[prop])
+    )
+}
+
 export let directoryForms = (vocab: Vocab): Plugin => ({
   name: 'yak/form-directory',
   admission: () => true,
@@ -137,6 +163,33 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
           },
         )
       }
+      // The people already related to `outer` as `rel` says.
+      let relatives = (rel: Kin, outer: string) =>
+        after(
+          each(
+            rel.mutual ? ['a', 'b'] as const : [rel.entry],
+            [] as string[],
+            (ids, side) =>
+              after(
+                tx.read(
+                  `.relation.kind=${quoted(rel.kind)}&.relation.${
+                    other(side)
+                  }=${quoted(outer)}`,
+                ),
+                (rows) => [
+                  ...ids,
+                  ...rows.map((r) => String(fields(r, 'relation')[side])),
+                ],
+              ),
+          ),
+          (ids) =>
+            each(
+              [...new Set(ids)].filter((id) => id != outer),
+              [] as Bundle[],
+              (rows, eid) =>
+                after(person(eid), (row) => row ? [...rows, row] : rows),
+            ),
+        )
       let register = (patch: Bundle) =>
         after(tx.get([patch.entity.eid], ['registration']), ([before]) => {
           let registration = {
@@ -173,6 +226,7 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                 groups.set(key, group)
               }
               let parents = new Map<string, string>()
+              let taken = new Set<string>()
               return each(
                 [...groups].sort((a, b) => a[1].path.length - b[1].path.length),
                 undefined as void,
@@ -182,6 +236,27 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                       ? registration.person
                       : guest(patch.entity.eid, path)
                   let provisional = guest(patch.entity.eid, [])
+                  let outer = path.length
+                    ? parents.get(JSON.stringify(path.slice(0, -2))) ??
+                      parents.get('[]')!
+                    : ''
+                  let rel = path.length
+                    ? kin[
+                      String(
+                        form.questions.find((q) => q.entity.eid == path.at(-2))
+                          ?.question.relates,
+                      )
+                    ]
+                    : undefined
+                  // A listed relative is found again rather than copied.
+                  let relative = (held: Bundle | undefined) =>
+                    held || !rel ? undefined : after(
+                      relatives(rel, outer),
+                      (listed) =>
+                        listed.find((b) =>
+                          !taken.has(b.entity.eid) && named(b, values)
+                        ),
+                    )
                   return after(person(eid), (held) =>
                     after(
                       !path.length && (!held || eid == provisional)
@@ -189,7 +264,7 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                           { ...values, ...contacts.get(key) },
                           provisional,
                         )
-                        : held,
+                        : relative(held),
                       (matched) => {
                         let found = matched ?? held
                         let who = found ??
@@ -197,6 +272,7 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                         if (!found) save(who)
                         save(fill(vocab, who, values))
                         parents.set(key, who.entity.eid)
+                        taken.add(who.entity.eid)
                         if (!path.length) {
                           out.push({
                             entity: patch.entity,
@@ -208,10 +284,12 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                             return after(
                               tx.read(`.refs=${quoted(eid)}&*`),
                               (refs) => {
+                                let side = (r: Bundle) =>
+                                  (['a', 'b'] as const).find((s) =>
+                                    fields(r, 'relation')[s] == eid
+                                  )
                                 let owned = refs.every((r) =>
-                                  r.entity.eid == patch.entity.eid ||
-                                  fields(r, 'relation').kind == 'parent' &&
-                                    fields(r, 'relation').a == eid
+                                  r.entity.eid == patch.entity.eid || side(r)
                                 )
                                 if (owned && captured(held, values)) {
                                   out.push(
@@ -219,7 +297,7 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                                       r,
                                     ) => ({
                                       entity: r.entity,
-                                      relation: { a: who.entity.eid },
+                                      relation: { [side(r)!]: who.entity.eid },
                                     })),
                                   )
                                   out.push({ entity: { eid }, $delete: true })
@@ -228,10 +306,7 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                               },
                             )
                           }
-                        } else {
-                          let parent =
-                            parents.get(JSON.stringify(path.slice(0, -2))) ??
-                              parents.get('[]')!
+                        } else if (rel && !matched) {
                           out.push({
                             entity: {
                               eid: derivedEid(
@@ -243,9 +318,9 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                               ),
                             },
                             relation: {
-                              kind: 'parent',
-                              a: parent,
-                              b: who.entity.eid,
+                              kind: rel.kind,
+                              [rel.entry]: who.entity.eid,
+                              [other(rel.entry)]: outer,
                             },
                           })
                         }
