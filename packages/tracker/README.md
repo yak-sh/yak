@@ -170,6 +170,16 @@ systemd unit's failure reported from outside the unit, regresses on its time
 alone. Earlier occurrences and occurrences at the resolution timestamp still
 count, but retain `resolved` and `notified` without adding `regressed`.
 
+### Probes
+
+A **probe** is an occurrence sent to prove the path from a reporter to grouping,
+as the tracker Worker's deploy canary is: an `error` beside `probe{grouped}`. It
+is delivered, admitted and handed to `error_group` like any occurrence, and
+grouping reads what it reads for one, then writes only the probe's receipt,
+`probe.grouped`: no bug, so nothing notifies and nothing reaches a fixer. Its
+sender reads the receipt. Each probe's grouping deletes the probes grouped over
+an hour before, so they do not accumulate.
+
 A bug wears `during{session, entity}` from the occurrence that opened it, first
 or reopening, when that occurrence names a session: the session whose work
 raised it and the work it was doing, so the bug goes to them (@yaks/heal). An

@@ -216,6 +216,20 @@
       },
       "extends": true
     },
+    "probe": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "description": "An occurrence sent to prove the path from a reporter to grouping, as a deploy's canary is. Grouping writes its receipt and files it under no bug.",
+      "properties": {
+        "grouped": {
+          "type": "string",
+          "stamped": true,
+          "description": "When grouping reached it: the receipt its sender reads.",
+          "format": "date-time"
+        }
+      }
+    },
     "regressed": {
       "component": true,
       "type": "object",
@@ -338,11 +352,11 @@
     },
     "error_group": {
       "effect": true,
-      "description": "Group each ungrouped occurrence, atomically counting and linking it.",
+      "description": "Group each ungrouped occurrence, atomically counting and linking it; a probe gets its receipt and no bug.",
       "created": [
         "error"
       ],
-      "target": ".error !error.bug"
+      "target": ".error !error.bug !probe.grouped"
     },
     "bug_notify": {
       "effect": true,

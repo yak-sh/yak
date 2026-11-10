@@ -6,6 +6,7 @@ import { token } from '@yaks/graph'
 import { type Kept, options, platform, store, vocab } from './core.ts'
 import { sign } from './auth.ts'
 import { door } from './door.ts'
+import { canary } from './worker.ts'
 
 let secret = 'scratch-tracker-secret'
 let storage = ram(vocab, options), facts = new Map<string, string>()
@@ -56,6 +57,9 @@ await g.graph.apply([{
   trace: { op: 'http', name: 'GET /', at: '2026-10-27T12:00:00Z' },
   during: { app: '00000000-0000-4000-8000-0000000000a1' },
 }], { trusted: true })
+// Nor is a deploy's canary, arriving or grouped: it is no bug.
+await g.ingest(canary('a'.repeat(64)))
+await g.drain()
 let quiet = await read(first.tag)
 await door(g, platform, secret)(
   new Request('https://tracker.test/archive', {
@@ -68,7 +72,7 @@ let moved = await read(first.tag)
 let woke = await read(moved.tag, instance())
 // A reader holding an older tag asks what moved since it: the archived bug,
 // and the bug an occurrence was grouped into, never the pool's bookkeeping
-// or a trace.
+// a trace or a canary.
 let since = (tag: string, from = g) =>
   read(tag, from, `&since=${encodeURIComponent(tag)}`)
 let archived = await since(first.tag)
