@@ -556,6 +556,12 @@ test('archetype: a table rekeyed away from entity leaves every set that named it
   assertEquals(backfill(d).retired, 1)
   assertEquals((await read()).entity.archetype, eidOf([]))
   assertEquals(drift(d).drifted, 0)
+  // A later boot does not look for the retired set's owners again.
+  let repointed: string[] = []
+  backfill(spy(d, (sql) => {
+    if (/^update "entity" set "archetype"/.test(sql)) repointed.push(sql)
+  }))
+  assertEquals(repointed, [])
 })
 
 test('archetype: pre-existing reference stub can become a descriptor', async () => {

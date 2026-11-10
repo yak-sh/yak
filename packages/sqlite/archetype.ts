@@ -265,6 +265,11 @@ export function backfill(driver: Driver, number = false): Backfill {
     let tables = once(() => componentTables(driver))
     let present = once(() => new Set(tables()))
     let ids = new Map<string, number>()
+    // The descriptors retired on this boot. One retired on an earlier boot
+    // had its owners unpointed in that boot's unit, and no write points at a
+    // set naming a table that is gone, so its owners are not looked for
+    // again: a file that keeps hundreds of them would scan every entity on
+    // each boot to find none.
     let stale: number[] = []
     for (
       let row of run(select({
@@ -329,21 +334,22 @@ export function backfill(driver: Driver, number = false): Backfill {
       }
       let id = Number(row.entity)
       ids.set(a.eid, id)
-      if (a.tables.some((t) => !present().has(t))) {
+      if (a.tables.some((t) => !present().has(t)) && row.retired == null) {
         stale.push(id)
-        if (row.retired == null) {
-          run({
-            t: 'insert',
-            into: 'retired',
-            cols: ['entity'],
-            rows: [[val(id)]],
-          })
-          run(point(null, byId(id)))
-          counts.retired++
-        }
+        run({
+          t: 'insert',
+          into: 'retired',
+          cols: ['entity'],
+          rows: [[val(id)]],
+        })
+        run(point(null, byId(id)))
+        counts.retired++
       }
     }
-    if (stale.length) run(point(null, oneOf(col('archetype'), stale)))
+    // Spelled out a list at a time, each member a seek on the pointer index.
+    for (let i = 0; i < stale.length; i += 512) {
+      run(point(null, oneOf(col('archetype'), stale.slice(i, i + 512))))
+    }
 
     // Snapshot the incomplete owners before minting descriptors. New descriptors
     // are classified directly below; they never need another whole-file pass.
