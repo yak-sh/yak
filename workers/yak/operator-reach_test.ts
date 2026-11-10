@@ -2,7 +2,7 @@
 // page, and that Operator then reaches it with the role given, for whoever may
 // ask it at home (operator-reach.ts, T-136179).
 import { test } from '@yaks/testing'
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { handler } from './kernel.ts'
 import { platform } from './deploy-probe.ts'
 import { as, SECRET } from './serving-data-probe.ts'
@@ -119,6 +119,20 @@ let oneRead = await tallying(new Map(), async () => {
   let ctx = await operatorContext(env, { person: bea }, shopSpace, counted)
   return (await ctx.dir.reachable(bea)).map((r) => r.app.slug)
 })
+// A person's own Operator reaches every space they sit in, one with no apps
+// among them, whose apps their own reach read too.
+let booksSpace = (await dir.space(books))!
+let asOwner = asked.length
+let ownRead = await tallying(new Map(), async () => {
+  let ctx = await operatorContext(
+    env,
+    { person: ada.person },
+    booksSpace,
+    counted,
+  )
+  ctx.dir = ctx.reopen!()
+  return (await ctx.dir.reachable(ada.person)).map((r) => r.app.slug)
+})
 // Someone with no seat in the shop, talking with its Operator.
 let outsider = await reach(crypto.randomUUID())
 let stranger = await page(people, { operator: 'nobody-here', role: 'editor' })
@@ -144,7 +158,9 @@ test('let in from the People page, it works there with the role given, for a wri
 
 test('the spaces an Operator reaches are read with their apps, in one trip', () => {
   assertEquals(oneRead, ['list'])
+  assertEquals(ownRead, ['list'])
   assertEquals(asked.filter((q) => q.includes('.app.space=')), [])
+  assert(asked.length > asOwner)
 })
 
 test('someone with no seat at home reaches nothing the Operator was let into', () => {

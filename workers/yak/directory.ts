@@ -2132,6 +2132,19 @@ let found = () => {
   return held
 }
 
+// The apps a read found of each of `spaces`, kept for this request's `apps`
+// of them, as of where it stood in its directory writes before reading.
+let keep = (spaces: Iterable<string>, apps: App[], since?: number) => {
+  let mine = found()
+  if (!mine || since == null) return
+  for (let space of spaces) {
+    mine.apps.set(space, {
+      at: since,
+      apps: apps.filter((app) => app.space == space),
+    })
+  }
+}
+
 /** Directory decisions over supplied reads and writes. The binding client
  * above owns revisions, request caching and transport recovery. */
 export let directoryRows = (rows: {
@@ -2201,15 +2214,12 @@ export let directoryRows = (rows: {
     let spaces = new Map(
       got.filter((r) => r.space).map((r) => [r.entity.eid, spaceOf(r)]),
     )
-    let mine = withApps ? found() : undefined
-    if (mine && since != null) {
-      let apps = got.filter((r) => r.app).map(appOf)
-      for (let space of spaces.keys()) {
-        mine.apps.set(space, {
-          at: since,
-          apps: apps.filter((app) => app.space == space),
-        })
-      }
+    if (withApps) {
+      keep(
+        spaces.keys(),
+        got.filter((r) => r.app).map(appOf),
+        since,
+      )
     }
     return rows.flatMap((r) => {
       let space = spaces.get(idOf(r.operator_reach![other]))
@@ -3274,6 +3284,7 @@ export let directoryRows = (rows: {
     ): Promise<{ space: Space; app: App; role: Role }[]> => {
       if (!person) return []
       let mine = `.members_space.member.person=${person}`
+      let since = wrote(META_STORE)
       let rows = await query(
         `(.member.person=${person})|(.space&${mine})|(.app.space${mine}&${ABOUT})&*`,
       )
@@ -3286,6 +3297,9 @@ export let directoryRows = (rows: {
         ) => [idOf(r.member!.space), r.member!.role as Role]),
       )
       let apps = rows.filter((r) => r.app).map(appOf)
+      // Every app of each space they sit in, the platform's and an empty one
+      // too, is what this request's `apps` of those spaces asks.
+      keep(spaces.keys(), apps, since)
       return [...spaces.values()].flatMap((space) => {
         let eid = space.eid, role = roles.get(eid)
         return role && space.slug != META.space && !space.trashed
