@@ -121,7 +121,8 @@ export type Opts = {
    * {@link report}: arguments its schema refuses, a tool named that this
    * runner lacks (answered by {@link otherwise}), the tool's own `CallError`,
    * a write the graph refuses. It is told the code and words of the refusal,
-   * the call and the tool that answered. Awaited like a report; what it
+   * the call and the tool it asked for: the name the call keeps
+   * (`call.name`), or else the tool that answered. Awaited like a report; what it
    * throws is reported, and never changes the call's answer. */
   refused?: Refused
   /** what answers a call naming a tool this runner does not have. Omitted,

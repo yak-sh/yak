@@ -12,6 +12,10 @@
           "death": "keep",
           "description": "the tool entity called"
         },
+        "name": {
+          "type": "string",
+          "description": "optional: the tool's name as the caller wrote it, which says what was asked for where `to` names a tool nobody serves, as a model's call to a tool it invented does"
+        },
         "id": {
           "type": "string",
           "description": "the provider's id for it, echoed in the result"

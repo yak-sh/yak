@@ -262,7 +262,7 @@ export let project = (
     let c = comp(call, CALL)!
     return {
       id: String(c.id ?? ''),
-      name: tools.get(String(c.to))?.name ?? 'tool',
+      name: tools.get(String(c.to))?.name ?? String(c.name ?? 'tool'),
       args: c.args == null ? textOf(call) || '{}' : JSON.stringify(c.args),
     }
   }

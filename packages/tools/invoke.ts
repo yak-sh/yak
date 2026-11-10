@@ -86,6 +86,9 @@ export let invoke = async (
   let id = call.entity.eid
   let host = opts.host ?? g
   let c = call.call as Comp
+  // The tool the call asked for: the name its caller wrote, where it kept
+  // one, since a tool answering a name nobody serves (`otherwise`) is not it.
+  let asked = typeof c.name == 'string' && c.name ? c.name : tool.name
   // What a thrown error becomes: the fault as its own entity, recording
   // which call it came from. An expected refusal ({@link refusalOf}) gets
   // `refusal{code}` and is told to whoever hears refusals. Anything else is
@@ -101,9 +104,9 @@ export let invoke = async (
     }
     let refusal = refusalOf(error)
     if (!refusal && actionable(String(exceptionOf(error).value))) {
-      await opts.report?.(error, call, tool.name)
+      await opts.report?.(error, call, asked)
     }
-    if (refusal) await heard(opts, refusal, call, tool.name)
+    if (refusal) await heard(opts, refusal, call, asked)
     // A refusal is said in its own words, which its code already classes;
     // a defect keeps the name of what was thrown.
     return [{

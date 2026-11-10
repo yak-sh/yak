@@ -1490,7 +1490,10 @@ test('two tool calls in one reply are both answered before the next ask', async 
 
 test('a call for a tool this session does not serve is refused, not left open', async () => {
   let g = world()
-  let { model } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
+  let { model, asked } = scripted(
+    [calls(['c1', 'hi']), says('r2', 'done')],
+    false,
+  )
   let heard: [string, string | undefined, string][] = []
   // The tool row is in the graph and the session serves no function for it.
   assertEquals(
@@ -1505,10 +1508,11 @@ test('a call for a tool this session does not serve is refused, not left open', 
     'settled',
   )
   let entries = await transcript(g, ids.s)
-  // Whoever hears the session's refusals hears this one, with its call.
+  // Whoever hears the session's refusals hears this one, with its call and
+  // the name the model asked for.
   assertEquals(heard, [[
     'tool',
-    'unserved',
+    'echo',
     entries.find((b) => kindOf(b) == 'call')!.entity.eid,
   ]])
   // The refusal is the call's result, as any expected failure lands — one
@@ -1523,9 +1527,11 @@ test('a call for a tool this session does not serve is refused, not left open', 
   ])
   let refused = entries.find((b) => kindOf(b) == 'result')!
   assertEquals(refused.refusal, { code: 'tool' })
+  assertEquals((refused.content as Comp).body, 'no such tool: echo')
+  // And the model is told of its call by the name it wrote.
   assertEquals(
-    String((refused.content as Comp).body).includes('no such tool'),
-    true,
+    asked[1].items.find((item) => item.kind == 'call'),
+    { kind: 'call', id: 'c1', name: 'echo', args: '{"text":"hi"}' },
   )
 })
 

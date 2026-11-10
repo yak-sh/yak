@@ -73,7 +73,7 @@ JSON object. The components beside `entry` determine its type:
 | `content{body}` without `output`      | input from a person or system      |
 | `ask{to, through}`                    | a request to a model               |
 | `content{body}` with `output{source}` | model output                       |
-| `call{to, id, args, source}`          | a tool call requested by a model   |
+| `call{to, name, id, args, source}`    | a tool call requested by a model   |
 | `result{call}` with `content`         | a tool result                      |
 | `using{provider, model, effort, …}`   | model selection on an input or ask |
 | `usage` and `cost` beside an ask      | what the request used and cost     |

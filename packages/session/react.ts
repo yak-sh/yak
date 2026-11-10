@@ -930,11 +930,14 @@ export let react = async (
         // answers or outlasts its patience (`patient`). The call a cut reply
         // was writing is unfinished (`cut`), whatever its text spells, and
         // the runner refuses it before reading its arguments (@yaks/tools).
+        // The name the model wrote is kept beside the tool it names, since a
+        // name nobody serves names no tool row: its refusal says that name.
         let args = objectIn(item.args)
         added.push(line(
           {
             [CALL]: {
               to: toolEid(item.name),
+              name: item.name,
               id: item.id,
               ...args ? { args } : {},
               source: ask.entity.eid,
@@ -1271,7 +1274,8 @@ export let react = async (
       name: 'unserved',
       description: 'a tool this session does not serve',
       run: (call) => {
-        throw new CallError('tool', 'no such tool: ' + comp(call, CALL)?.to)
+        let c = comp(call, CALL)
+        throw new CallError('tool', 'no such tool: ' + (c?.name ?? c?.to))
       },
     }
     // A background call still running when its patience runs out is given a

@@ -153,17 +153,17 @@ is assigned a fresh eid first.
 
 `toolsDoc` declares these [components](../graph/README.md#data-model):
 
-| Component                            | Purpose                                                                  |
-| ------------------------------------ | ------------------------------------------------------------------------ |
-| `tool{name, description, revision?}` | Identifies a registered tool; its eid is derived from `name`.            |
-| `call{to, args, id?, source?}`       | Names the tool, arguments, optional provider id, and originating entity. |
-| `execution{by, state}`               | Holds the call claim and computed execution state.                       |
-| `result{call, ms?}`                  | Records completion and duration when the runner observed the start.      |
-| `content{body}`                      | Carries content.                                                         |
-| `output{source?, id?, value?}`       | Records output.                                                          |
-| `refusal{code}`                      | A **refusal** records a deliberate rejection with a reason code.         |
-| `exception{type?, value?}`           | An **exception** keeps what was thrown in an answer or transcript entry. |
-| `finding{level}`                     | Carries a [check](#health-checks)'s verdict.                             |
+| Component                             | Purpose                                                                                             |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `tool{name, description, revision?}`  | Identifies a registered tool; its eid is derived from `name`.                                       |
+| `call{to, args, id?, name?, source?}` | Names the tool, arguments, optional provider id, the name its caller wrote, and originating entity. |
+| `execution{by, state}`                | Holds the call claim and computed execution state.                                                  |
+| `result{call, ms?}`                   | Records completion and duration when the runner observed the start.                                 |
+| `content{body}`                       | Carries content.                                                                                    |
+| `output{source?, id?, value?}`        | Records output.                                                                                     |
+| `refusal{code}`                       | A **refusal** records a deliberate rejection with a reason code.                                    |
+| `exception{type?, value?}`            | An **exception** keeps what was thrown in an answer or transcript entry.                            |
+| `finding{level}`                      | Carries a [check](#health-checks)'s verdict.                                                        |
 
 `callDoc` omits the `tool` declaration; `toolDoc` contains only that
 declaration. `toolsDoc` contains both and the runner's effect rules. Importing
