@@ -189,14 +189,16 @@ export let sequencing: Hook = (bundles, tx) =>
   )
 
 /** Append an ordinary input or a passive notice. The session plugin assigns seq
- * inside the graph transaction. Supply an eid for idempotent delivery. */
+ * inside the graph transaction. Supply an eid for idempotent delivery and from
+ * for words authored outside the receiving model's own conversation. */
 export let appendEntry = (g: Graph, session: string, body: string, opts: {
   eid?: string
   notice?: boolean
+  from?: string
 } = {}): Bundle[] | Promise<Bundle[]> =>
   g.apply([{
     entity: { eid: opts.eid ?? crypto.randomUUID() },
-    entry: { session },
+    entry: { session, ...opts.from ? { from: opts.from } : {} },
     content: { body },
     ...opts.notice ? { notice: {} } : {},
   }])

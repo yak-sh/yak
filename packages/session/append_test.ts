@@ -4,6 +4,7 @@ import { appendEntry, sequencing } from './append.ts'
 import { sessionTools } from './children.ts'
 import { locked, pages, seed, store } from './testing.ts'
 import { transcript } from './react.ts'
+import { project } from './project.ts'
 import { type Bundle, type Comp, graph, Refused, status } from '@yaks/graph'
 
 let positions = (rows: Bundle[]) => rows.map((b) => (b.entry as Comp).seq)
@@ -159,6 +160,43 @@ test('notice tool admits passive context without callers supplying sequence', as
   assertEquals(positions(rows), [1])
   assertEquals(rows[0].notice, {})
 })
+
+for (let sender of ['parent', 'helper', 'peer', 'recipient']) {
+  let g = appending()
+  await g.apply([
+    { entity: { eid: 'parent' }, session: {} },
+    {
+      entity: { eid: 'recipient' },
+      session: {},
+      spawned: { parent: 'parent' },
+    },
+    {
+      entity: { eid: 'helper' },
+      session: {},
+      spawned: { parent: 'recipient' },
+    },
+    { entity: { eid: 'peer' }, session: {} },
+  ])
+  let tool = sessionTools(g).find((t) => t.name == 'notice')!
+  test(`a passive notice from ${sender} keeps its writer in the assembled prompt`, async () => {
+    await tool.run({ session: 'recipient', body: 'I checked the result.' }, {
+      session: sender,
+      call: { entity: { eid: 'call' } },
+      entries: [],
+    })
+    await appendEntry(g, 'recipient', 'The platform restarted.', {
+      notice: true,
+    })
+    let rows = await transcript(g, 'recipient')
+    assertEquals(project(rows, rows, new Map()), [
+      {
+        kind: 'user',
+        text: `From session ${sender}:\nI checked the result.`,
+      },
+      { kind: 'user', text: 'From the system:\nThe platform restarted.' },
+    ])
+  })
+}
 
 test("an entry naming no session is refused as its writer's mistake", async () => {
   let g = locked(store())

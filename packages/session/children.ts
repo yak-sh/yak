@@ -399,7 +399,7 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
   return [delegation(g, limits, true), delegation(g, limits, false), {
     name: 'notice',
     description:
-      'Append passive context to a session without waking it. Sequence is assigned atomically; do not guess entry.seq.',
+      'Append your words as passive context to a session without waking it, identified as coming from your session. Sequence is assigned atomically; do not guess entry.seq.',
     parameters: {
       type: 'object',
       properties: {
@@ -413,13 +413,14 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
       required: ['session', 'body'],
     },
     run: async (args, context) => {
-      caller(context)
+      let ctx = caller(context)
       let session = String(args.session)
       if (!(await row(g, session))?.session) {
         throw new ToolError('session', 'not a session: ' + session)
       }
       let added = await appendEntry(g, session, String(args.body), {
         notice: true,
+        from: `session ${ctx.session}`,
         eid: args.eid == null ? undefined : String(args.eid),
       })
       return added[0].entity.eid
