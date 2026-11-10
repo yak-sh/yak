@@ -279,13 +279,15 @@ A yaks app with a design of its own (apps/crayonbloom) wears the kit the same
 way: a theme of custom properties, a skin sheet laid over each kit part it
 wears, and its own parts beside them, each a `Name.ts` and a `Name.css`. Its
 worker draws pages from `@yaks/ui/parts` with preact-render-to-string and serves
-the look as one stylesheet, composed from the app's sheets and the kit's, which
-a declared `"@yaks/ui": "platform"` dependency ships beside the worker at
-`__packages/@yaks/ui/<Part>.css` (apps/crayonbloom/look/look.ts). A page script
-is found only through a static `.html` file that names it, so a screen drawn in
-the browser keeps one. `app_preview` returns a screenshot of a pushed app's
-page, which is how a look is checked without a browser on the box: push a copy
-to the `checks` space, then
+the look as one stylesheet. Each sheet, the app's own and the kit's
+(`@yaks/ui/<Part>.css`), is imported as text, `with { type: 'text' }`, so the
+stylesheet is compiled into the worker (apps/crayonbloom/look/look.ts). Never
+compose it from `env.FILES` reads: each is a trip through the gateway, about 30
+ms, and a new isolate pays all of them again. A page script is found only
+through a static `.html` file that names it, so a screen drawn in the browser
+keeps one. `app_preview` returns a screenshot of a pushed app's page, which is
+how a look is checked without a browser on the box: push a copy to the `checks`
+space, then
 `yak command app_preview --as checks --space checks --app <copy> --path <page> --json`,
 whose JSON carries the PNG in base64 (the plain output leaves the image out).
 The preview's sandbox answers no app door, so a screen that reads its rows

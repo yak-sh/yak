@@ -42,25 +42,13 @@ let schedule = async (
 // page shows, the marks, and the studio's shell and script.
 let STATIC =
   /^\/(look\/fonts\/[\w-]+\.ttf|art\/[\w/-]+\.(png|webp)|(icon|favicon)\.svg|studio\.ts)$/
-// The look is the same for every request an isolate serves.
-let look: Promise<string> | undefined
-let styled = async (env: Env): Promise<Response> => {
-  look ??= stylesheet(async (path) => {
-    let response = await file(env, path)
-    if (!response.ok) {
-      throw new Error(`The stylesheet ${path} answered ${response.status}`)
-    }
-    return await response.text()
-  })
-  // A failed read is not kept: the next request reads again.
-  look.catch(() => look = undefined)
-  return new Response(await look, {
+let styled = (): Response =>
+  new Response(stylesheet, {
     headers: {
       'content-type': 'text/css; charset=utf-8',
       'cache-control': 'public, max-age=300',
     },
   })
-}
 export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
   let address = request.url, url = new URL(address)
   let mount = request.headers.get('x-yak-mount') ??
@@ -93,7 +81,7 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
   let place = placed(address, url.pathname)
   if (['GET', 'HEAD'].includes(request.method)) {
     if (place.path == '/') return home(place)
-    if (place.path == '/look.css') return await styled(env)
+    if (place.path == '/look.css') return styled()
     if (place.path == '/studio') return file(env, 'studio.html')
     if (place.path == '/gallery') {
       return galleryPage(place, await gallery(db, env.APP).list())

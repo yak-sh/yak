@@ -1,6 +1,6 @@
 import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
-import { sheets, stylesheet } from './look/look.ts'
+import { stylesheet } from './look/look.ts'
 import { placed } from './pages/chrome.ts'
 import { ready } from './pages/free.ts'
 import { home } from './pages/home.ts'
@@ -61,14 +61,8 @@ test('a finished free page is one visitor’s, with its printable', async () => 
   )
 })
 
-test('the stylesheet is the theme, then every part worn', async () => {
-  let css = await stylesheet(async (path) => {
-    let at = path.startsWith('__packages/@yaks/ui/')
-      ? new URL('../../packages/ui/' + path.slice(20), import.meta.url)
-      : new URL(path, import.meta.url)
-    return `/* ${path} */\n` + await Deno.readTextFile(at)
-  })
-  let order = sheets().map((path) => css.indexOf(`/* ${path} */`))
-  equal(order, order.toSorted((a, b) => a - b))
-  ok(order[0] == 0 && !order.includes(-1))
+test("the stylesheet holds the theme, the kit parts worn and the app's own", () => {
+  for (let rule of ['--accent: #e8654e', '.Button:hover', '.Mast_Brand']) {
+    ok(stylesheet.includes(rule), rule)
+  }
 })

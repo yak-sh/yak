@@ -22,9 +22,10 @@ buttons, Fredoka over Nunito. It is made of three things under `look/`:
 - `parts/`, the app's own parts (`Hero`, `Sheet`, `Band`, `Mast` and the rest),
   each a `Name.ts` beside its `Name.css`.
 
-`look.ts` lists them in the order a browser reads them, and the worker serves
-them as one `/look.css`, reading the kit's sheets from the files a declared
-`@yaks/ui` dependency ships beside it (`__packages/@yaks/ui/`).
+`look.ts` imports each sheet as text (`with { type: 'text' }`), the kit's from
+`@yaks/ui/<Part>.css`, in the order a browser reads them, so the stylesheet is
+compiled into the worker, which answers it as `/look.css` without reading a
+file.
 
 The worker draws every public page from those parts (`pages/`: the frame, the
 home page, the theme pages from `themes.json`, and the kept prose in `public/`)
