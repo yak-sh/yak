@@ -349,6 +349,7 @@ export let atelier = (db: Store, io: AtelierIO) => {
       let selectedStyle = await style(book)
       if (
         book.coloring_book.mode !== 'free' &&
+        all.some((p) => !p.coloring_page.activity && !current(book, p)) &&
         book.character_art?.input !== fingerprint(book)
       ) {
         if (!book.page_failed) {

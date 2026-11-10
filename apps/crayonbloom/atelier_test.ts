@@ -199,3 +199,12 @@ test('a signed continuation adopts the selected guest book before another person
   )
   assertEquals((await f.desk.shelf({ ...bob, via: alice.via })).length, 0)
 })
+
+test('a puzzle-only book completes without requesting a character image', async () => {
+  let f = await fixture(), row = await f.desk.save(input, alice)
+  await f.desk.addPuzzle(row.entity.eid, 'maze', alice)
+  let result = await f.desk.advance(row.entity.eid, alice)
+  assertEquals(result.complete, true)
+  assertEquals(result.book.page_drawing, undefined)
+  assertEquals(f.drawn, [])
+})
