@@ -65,9 +65,13 @@ export let Churches = () => (
           </Button>
         </form>
         <p class='Note Note-small'>
-          Free to try, with no sign-up. It takes about {MINUTES}{' '}
-          minutes, and the site you have now isn't changed. No website yet? Type
-          what your church needs instead.
+          Free to try, with no sign-up. yaks.app reads the site at that address
+          and builds a preview of it that only you can open, marked on every
+          page as a preview. It takes about {MINUTES}{' '}
+          minutes, and the site you have now isn't changed. It goes online only
+          once you sign up and connect your church's web address, which shows
+          the site is yours. No website yet? Type what your church needs
+          instead.
         </p>
       </div>
     </section>
@@ -86,10 +90,13 @@ export let Churches = () => (
           </p>
         </li>
         <li class='Steps_Item'>
-          <h3 class='Step_Name'>Keep it with your email address</h3>
+          <h3 class='Step_Name'>Keep it, and put it online</h3>
           <p class='Note'>
             If you like what you see, give your email and it is yours, free. If
-            you don't, it is taken down after {KEEPING / 86_400_000} days.
+            you don't, it is deleted after {KEEPING / 86_400_000}{' '}
+            days. To put it online, connect your church's web address to it: a
+            record you add where that address is registered shows the site is
+            yours, and only then can anyone else open it.
           </p>
         </li>
         <li class='Steps_Item'>

@@ -26,12 +26,11 @@ import type { Bundle, Comp, Tool } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
 import { type Directory, idOf, newcomerIs, stamp } from './directory.ts'
-import type { Row, Space } from './directory.ts'
+import type { Preview, Row, Space } from './directory.ts'
 import type { Namespace } from './door.ts'
 import type { Env as Platform } from './env.ts'
 import { handover, naming } from './handover.ts'
 import { meta } from './meta.ts'
-import type { Declared } from './operator-persona.ts'
 import { type Ctx, refuse } from './tool.ts'
 
 type Env = { STORE: Namespace }
@@ -84,7 +83,7 @@ export let siteOf = (words: string): string => {
  * the words as typed, or, where they are a web address alone (`siteOf`), that
  * address whole, said to be the site of the kind of organization the page's
  * box asked for (`org`, such as "church"). What the Operator does with a site
- * is `rebuilding`.
+ * is `REBUILDING`.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -103,24 +102,150 @@ export let worded = (words: string, org = ''): string => {
   return `My ${/^[a-z]{1,20}$/.test(org) ? org + "'s " : ''}website is ${site}`
 }
 
-/** What the Operator does when a newcomer's first message is the site they
- * have now, declared beside the code that words that message (`worded`); the
- * base persona contains it (operator-persona.ts). It reads with the API's
- * page fetch, four uses a request (@yaks/anthropic web.ts), and builds
- * within PER_BUILD. */
-export let rebuilding: Declared = {
-  key: 'rebuilding',
-  title: 'Someone starting from the website they have now',
-  body:
-    `A page of yaks.app asks a visitor for the web address of the site their organization has now, and builds from it before they sign up. Their first message is then that address and nothing else, such as “My church's website is https://example.org/”. They are asking to see that site rebuilt as their own on yaks.app, and they are watching the chat and the app as it is made. What they see in the next few minutes is how they decide whether yaks.app is for them.
+/** What the Operator is told before the first message of a conversation
+ * begun from a box given the web address of a site (`worded`), and on no
+ * other turn (operator-channels.ts `BY`, a request's `rebuild`). It reads
+ * with the API's page fetch, four uses a request (@yaks/anthropic web.ts),
+ * held to that site's domain for a newcomer (`fetchable`), and builds within
+ * PER_BUILD. What it builds is a private preview (`previewing`). */
+export let REBUILDING =
+  `A page of yaks.app asks a visitor for the web address of the site their organization has now, and builds from it before they sign up. Their first message is then that address and nothing else, such as “My church's website is https://example.org/”. They are asking to see that site rebuilt as their own on yaks.app, and they are watching the chat and the app as it is made. What they see in the next few minutes is how they decide whether yaks.app is for them.
 
 1. Reply at once in one line that you are reading their site, and fork to read it and build.
 2. Read the address with web_fetch before you write a line of the app. When that page lacks when they meet or what is coming up, read one or two more pages of the same site that it links to (its events or calendar page, its visit or contact page). Read nothing but their own site, and don't search the web.
 3. Make one app: a website for them, holding what their site says. Its name; where it is and how to reach it; when it meets (a church's service times, an office's hours); and what is on this week or coming up. Every fact on it is one you read on their site just now, in their words: nothing from what you remember of them or of places like theirs, and never an invented name, time, date or event. What the site did not say, leave out. You read their words, not their pictures, so link none of its images.
-4. Until they keep the space it is a preview, and anyone with its link can open it. Say so in one small line at its foot: “A preview of” and their site's address, “built on yaks.app”. Take the line off when they ask, once they have given their email.
+4. What you build is a private preview: only they can open it, signed in, and every page of it says it was made on yaks.app and is not that site's own. It is never public until they show the site is theirs: once they have given their email, they attach their site's domain to this space (domain_attach, then domain_status until it is verified), and then it can be published at that domain. A space nobody keeps goes after seven days.
 5. Deploy as soon as the home page holds those things, so it is live fast, and check and tidy it after. Then tell them in two or three lines where to open it, what you carried over and what their site did not say, and ask what they would like changed.
 
-Build nothing when the page can't be read (it does not load, it refuses to be fetched, or it is empty without its scripts), or when it is not the site of the kind of organization they said (a church, when they said their church's). Say which in one plain sentence, in their words and not a tool's (“I couldn't open that address”, not that a fetch was refused), without blaming them, and ask them to say in their own words what they need, in the box under the chat. Their present site is only read: nothing you do changes it, and say so if they ask.`,
+Build nothing when the page can't be read (it does not load, it refuses to be fetched, or it is empty without its scripts), or when it is not the site of the kind of organization they said (a church, when they said their church's). Say which in one plain sentence, in their words and not a tool's (“I couldn't open that address”, not that a fetch was refused), without blaming them, and ask them to say in their own words what they need, in the box under the chat. Their present site is only read: nothing you do changes it, and say so if they ask.`
+
+/**
+ * A site rebuilt from the web address a box was given is somebody's, and
+ * maybe not the person's who typed it, so what is built from it is a preview
+ * until they show the address is theirs:
+ *
+ *   born        an app born in the space within KEEPING of the address
+ *               (`previewing`) is born private and wears `preview{site}`
+ *               (tools.ts app_new, app_install), so only the space's own
+ *               people open it; app_set keeps it private (HELD)
+ *   served      each of its pages says on it that it is a preview made on
+ *               yaks.app and not the site's own (apps.ts `previewLine`), and
+ *               asks not to be indexed
+ *   claimed     a domain of that site (`claims`) verified on the space by
+ *               domain_attach and domain_status takes the mark off the space
+ *               and its apps (`unveiled`, called by domains.ts `refresh`),
+ *               and app_set may then publish it
+ *   gone        a newcomer's space nobody kept goes to the trash KEEPING
+ *               after it opened (`unkept`), previews and all
+ *
+ * The site a space's new apps preview at `now`, or null.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let at = '2026-11-10T00:00:00.000Z'
+ * let preview = { site: 'https://grace.example/', at }
+ * assertEquals(previewing({ preview }, new Date(at)), preview)
+ * assertEquals(previewing({ preview }, new Date('2026-11-18T00:00:00Z')), null)
+ * assertEquals(previewing({ preview: null }), null)
+ * ```
+ */
+export let previewing = (
+  space: Pick<Space, 'preview'>,
+  now = new Date(),
+): Preview | null =>
+  space.preview &&
+    now.getTime() - Date.parse(space.preview.at) < KEEPING
+    ? space.preview
+    : null
+
+/**
+ * The only sites a newcomer's Operator may read, where their space previews
+ * one: that site's domain, subdomains and all, and no search (@yaks/model
+ * `Request.sites`). Everyone else's Operator reads the provider's whole web.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let preview = { site: 'https://www.grace.example/visit', at: new Date().toISOString() }
+ * assertEquals(fetchable({ newcomer: true, preview }), ['grace.example'])
+ * assertEquals(fetchable({ newcomer: false, preview }), undefined)
+ * assertEquals(fetchable({ newcomer: true, preview: null }), undefined)
+ * ```
+ */
+export let fetchable = (
+  space: Pick<Space, 'newcomer' | 'preview'>,
+  now = new Date(),
+): string[] | undefined => {
+  let site = space.newcomer ? previewing(space, now)?.site : null
+  let host = site && URL.parse(site)?.hostname.replace(/^www\./, '')
+  return host ? [host] : undefined
+}
+
+/** A space opened by a box given the address of a site (`siteOf`). */
+export let previewed = (
+  env: Env,
+  space: Space,
+  site: string,
+  now = new Date(),
+) =>
+  stamp(env, {
+    entities: [{
+      entity: { eid: space.eid },
+      preview: { site, at: now.toISOString() },
+    }],
+  })
+
+/**
+ * Whether verifying `host` on a space shows the person holds `site`: it is
+ * the site's own host, or a name under it, `www.` aside. Verifying needs a
+ * DNS record at that name (domains.ts `ownership`), which only whoever holds
+ * the site's domain can add.
+ *
+ * ```ts
+ * import { assert } from '@std/assert'
+ * let site = 'https://www.grace.example/visit'
+ * assert(claims(site, 'grace.example'))
+ * assert(claims(site, 'www.grace.example'))
+ * assert(claims(site, 'new.grace.example'))
+ * assert(!claims(site, 'grace.example.com'))
+ * assert(!claims(site, 'notgrace.example'))
+ * assert(!claims('https://grace.example/', 'example'))
+ * ```
+ */
+export let claims = (site: string, host: string) => {
+  let own = (URL.parse(site)?.hostname ?? '').replace(/^www\./, '')
+  return !!own && (host == own || host.endsWith('.' + own))
+}
+
+/** What app_set answers asked to open a preview to more than its space. */
+export let HELD = (site: string) =>
+  `This app is a preview of ${site}, rebuilt from its address, and stays ` +
+  'private until they show that site is theirs: attach its domain to this ' +
+  'space (domain_attach, then domain_status until it is verified), which ' +
+  'lifts the preview. Until then only the people of this space open it.'
+
+/**
+ * What verifying `row`'s hostname lifts: the space it serves (or whose app
+ * it serves) and that space's apps, where they are previews of a site the
+ * hostname `claims`. The marks go in the write that stamps it verified.
+ */
+export let unveiled = async (
+  env: Env,
+  row: { name: string; serves: string },
+): Promise<Bundle[]> => {
+  let store = meta(env)
+  let [served] = await store.query(`.entity.eid=${row.serves}&?space&?app`)
+  let space = served?.app
+    ? idOf((served.app as Comp).space as string)
+    : served?.space
+    ? row.serves
+    : null
+  if (!space) return []
+  let rows = await store.query(
+    `(.entity.eid=${space}&.preview)|(.app.space=${space}&.preview)`,
+  )
+  return rows
+    .filter((r) => claims(String((r.preview as Comp).site ?? ''), row.name))
+    .map((r) => ({ entity: { eid: r.entity.eid }, preview: null }))
 }
 
 /** What the box answers once a day's builds are taken. */

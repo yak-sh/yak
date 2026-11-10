@@ -525,6 +525,17 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { at: time },
     },
+    // A site somebody else may own, rebuilt here from its web address
+    // (newcomer.ts `previewing`). On a space: the box was given that address
+    // `at`, and the apps born here for KEEPING after are previews of it. On
+    // an app: it is one, private, marked on its pages and never indexed,
+    // until a domain of that site is verified on its space (domains.ts
+    // `refresh`), which takes the mark off both rows.
+    preview: {
+      component: true,
+      type: 'object',
+      properties: { site: owned(text), at: owned(time) },
+    },
     // What a space just spent on its month: a letter, a build, a model call, a
     // voice's lease, an app's text, container seconds. The directory adds it to the `meter`
     // inside the write's own transaction (meter.ts `spend`), so two spends at

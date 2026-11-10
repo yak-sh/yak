@@ -28,6 +28,7 @@ import { phoneTexts } from './phone-move.ts'
 import type { Declared } from './operator-persona.ts'
 import type { operatorStore } from './operator-store.ts'
 import { onPage } from './operator-view.ts'
+import { REBUILDING } from './newcomer.ts'
 import { unsaid } from './operator-draw.ts'
 import { handover, naming } from './handover.ts'
 import { rootOf } from './operator-root.ts'
@@ -69,6 +70,9 @@ export type Request = {
   // The address of the yaks.app page the words were written on, on the
   // `chat` channel.
   page?: string
+  // Begun from a box given the web address of a site, on the `chat`
+  // channel: its words carry what to do with it (newcomer.ts `REBUILDING`).
+  rebuild?: boolean
   // Sent to sign up (inbox.ts `signingUp`, operator-texts.ts `arrived`): their
   // first words to yaks.app, unless they had signed up before.
   signup?: boolean
@@ -338,7 +342,9 @@ let BY: Record<
   string,
   (request: Request, id: string, subject?: Bundle) => string
 > = {
-  chat: (request) => request.page ? onPage(request.page, request.app) : '',
+  chat: (request) =>
+    (request.rebuild ? REBUILDING + '\n\n' : '') +
+    (request.page ? onPage(request.page, request.app) : ''),
   email: (request) => request.signup ? 'By email, signing up: ' : 'By email: ',
   signup: () => 'By text, signing up for a form: ',
   text: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',

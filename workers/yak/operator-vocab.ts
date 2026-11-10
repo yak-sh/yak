@@ -106,6 +106,11 @@ export let operatorDoc: VocabDoc = {
           description:
             "On the escalated channel, the conversation that raised the words: the Operator's own, with the reply's writer and only their permissions, which hears back only what escalation_answer sends it. The words are the Operator's, never the person's they are raised with.",
         },
+        rebuild: {
+          type: 'boolean',
+          description:
+            'Begun from a box given the web address of a site, on the chat channel: its words carry what to do with it.',
+        },
         signup: {
           type: 'boolean',
           description:

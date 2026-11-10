@@ -5,7 +5,9 @@
 // open it and make their own copy (T-131901), or yaks.app itself. Woven inline beside the reporter, and only into
 // a free space's pages (page-script.ts), so a kept version or a published
 // release wears it without its files changing, and a space on the Plus plan
-// sheds it on its next load.
+// sheds it on its next load. A site's preview (newcomer.ts `previewing`)
+// wears it on every plan, saying it was made on yaks.app and is not that
+// site's own (`data-yak-preview`).
 //
 // It lives in a closed shadow root on an element of its own, beside <body>
 // rather than in it: the page's styles cannot reach in (the host's rules are
@@ -96,6 +98,9 @@ b { font-weight: 800 }
 
   // Read while this script runs: afterwards there is no current script.
   let opens = document.currentScript?.dataset.yakBadge || 'https://yaks.app/'
+  // The site a preview was rebuilt from (newcomer.ts `previewing`), which
+  // the badge says this page is not.
+  let preview = document.currentScript?.dataset.yakPreview
   let host = document.createElement('yaks-badge')
   let root = host.attachShadow({ mode: 'closed' })
   // Two sheets: the look, and how high the badge rides at the end of a
@@ -120,7 +125,9 @@ b { font-weight: 800 }
   link.rel = 'noopener'
   let name = document.createElement('b')
   name.textContent = 'yaks.app'
-  link.append('Made with ', name)
+  if (preview) {
+    link.append('Preview made on ', name, ` · not ${preview}'s own site`)
+  } else link.append('Made with ', name)
   root.append(link)
 
   let page = document.documentElement

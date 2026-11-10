@@ -37,7 +37,7 @@ import {
   stoppedHere,
 } from './operator-view.ts'
 import { building } from './made.ts'
-import { rebuilding } from './newcomer.ts'
+import { fetchable } from './newcomer.ts'
 import { listing } from '@yaks/mcp'
 import {
   type Listed,
@@ -1242,8 +1242,16 @@ export let operating = (
         reached('payer', space)
         // The space may ask its provider to keep the cached prefix longer than
         // the default (`operator{cache_retention}` on its persona).
-        let [own] = space ? await g.get([personaFor(space)], ['operator']) : []
+        let [[own], payer] = space
+          ? await Promise.all([
+            g.get([personaFor(space)], ['operator']),
+            dir().at(space),
+          ])
+          : [[], null]
         let kept = comp(own, 'operator')?.cache_retention as number | undefined
+        // A newcomer's Operator reads only the site they gave (newcomer.ts
+        // `fetchable`).
+        let sites = payer ? fetchable(payer) : undefined
         let session = comp(ask, 'entry')?.session
         let charged = free ? base : accounted(
           env,
@@ -1257,6 +1265,7 @@ export let operating = (
         let reply = await charged({
           ...req,
           ...kept ? { cacheRetention: kept } : {},
+          ...sites ? { sites } : {},
           onSubmit: async () => {
             reached('submitting', null)
             await req.onSubmit?.()
@@ -1384,7 +1393,6 @@ export let operating = (
       iconic,
       paged,
       building,
-      rebuilding,
     ]).catch((e) => {
       based = undefined
       caught(e, { request: 'operator base persona' })

@@ -41,6 +41,9 @@ let FILES = [
  * link it follows, which wears the release and address listeners; the visitor's bar. */
 export type Scripts = {
   badge: string | null
+  /** The host of the site a preview was rebuilt from, which its badge says
+   * this page is not (newcomer.ts `previewing`). */
+  preview?: string | null
   draft?: string
   bar?: Bar | null
 }
@@ -86,7 +89,7 @@ export let pageScript = async (
   assets: Assets,
   at: string,
   version: number,
-  { badge, draft, bar }: Scripts,
+  { badge, draft, bar, preview }: Scripts,
 ) => {
   try {
     let [report, release, badged, barred, location] = await scripts(assets)
@@ -99,7 +102,13 @@ export let pageScript = async (
       }
     }
     let worn: [Script, string][] = [[report, ''], [release, ''], [location, '']]
-    if (badge != null) worn.push([badged, ` data-yak-badge="${esc(badge)}"`])
+    if (badge != null) {
+      worn.push([
+        badged,
+        ` data-yak-badge="${esc(badge)}"` +
+        (preview ? ` data-yak-preview="${esc(preview)}"` : ''),
+      ])
+    }
     if (bar) {
       worn.push([
         barred,

@@ -22,19 +22,23 @@ export let HOSTED: Hosted = {
 // reaches the context; older ones have the plain versions.
 let FILTERING = /^claude-(opus-(5|4-[678])|sonnet-(5|4-6))/
 
-/** The web tools offered to a model. */
-export let web = (model: string): HostedParam[] => {
+/** The web tools offered to a model: held to `sites` where given, which
+ * fetches only from them and searches nothing (@yaks/model `Request`). */
+export let web = (model: string, sites?: string[]): HostedParam[] => {
   let [search, fetch] = FILTERING.test(model)
     ? ['20260209', '20260209']
     : ['20250305', '20250910']
   return [
-    { type: `web_search_${search}`, name: 'web_search', max_uses: USES },
+    ...sites
+      ? []
+      : [{ type: `web_search_${search}`, name: 'web_search', max_uses: USES }],
     {
       type: `web_fetch_${fetch}`,
       name: 'web_fetch',
       max_uses: USES,
       max_content_tokens: FETCHED,
       citations: { enabled: true },
+      ...sites ? { allowed_domains: sites } : {},
     },
   ]
 }

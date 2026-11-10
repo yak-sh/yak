@@ -341,6 +341,10 @@ export type Space = {
   // platform's owner set one (budget.ts), in place of its plan's (meter.ts
   // `BUDGET`). Null on every space nobody has given one, which is almost all.
   budget: number | null
+  // The site the box was given when it opened a build here, and when
+  // (newcomer.ts `previewing`); null for every space no box was given an
+  // address for, which is almost all of them.
+  preview?: Preview | null
   // Whether that budget is a newcomer's one build (newcomer.ts `oneBuild`):
   // what lifts it is keeping the app, so its refusals ask for their email
   // rather than offering a plan (meter.ts `unkept`).
@@ -379,6 +383,10 @@ export type Space = {
   tunnel: Tunnel | null
 }
 export type App = AppInfo & { policy: number }
+/** A site rebuilt from its web address, and when the box was given it. */
+export type Preview = { site: string; at: string }
+let previewOf = (r: Row): Preview | null =>
+  r.preview?.site ? { site: r.preview.site, at: r.preview.at ?? '' } : null
 export type AppInfo = {
   /** A transient view may keep its graph within this store alone. */
   scope?: 'store'
@@ -450,6 +458,10 @@ export type AppInfo = {
   gallery: Gallery | null
   // The app's uploaded image chosen by its owner for listings.
   screenshot: string | null
+  // The site somebody else may own that this app was rebuilt from
+  // (newcomer.ts `previewing`): until its domain is verified here the app is
+  // that site's private preview. Null for every other app.
+  preview?: Preview | null
   // When this app's store was seeded and by which release (seed.ts), null
   // until it has been. A release reads it to know the seed has already run.
   seeded: Sowed | null
@@ -778,6 +790,7 @@ export type Row = {
   started?: { space?: Id | null }
   newcomer?: { at?: string }
   visitor_build?: { at?: string }
+  preview?: { site?: string | null; at?: string | null }
   created?: { at?: string; by?: Id | null }
   last_deploy?: { at?: string; by?: Id | null; via?: Id | null }
   acts_for?: { person?: Id | null }
@@ -1204,6 +1217,7 @@ export let APP_PARTS = [
   'installed',
   'gallery',
   'screenshot',
+  'preview',
   'seeded',
   'demo',
   'trashed',
@@ -1235,6 +1249,7 @@ export let SPACE_PARTS = [
   'comped',
   'comp',
   'space_logo',
+  'preview',
 ]
 let SPACE_ABOUT = SPACE_PARTS.map((part) => `?${part}`).join('&')
 
@@ -1360,6 +1375,7 @@ export let spaceOf = (r: Row): Space => ({
   fee: r.fee?.bps ?? 0,
   budget: r.budget?.dollars ?? null,
   newcomer: !!r.budget?.newcomer,
+  preview: previewOf(r),
   starter: r.starter?.dollars ?? null,
   visitors: r.visitor_share?.percent ?? null,
   visitorCalls: r.visitor_share?.calls ?? null,
@@ -1476,6 +1492,7 @@ export let appAbout = (r: Row): AppInfo => ({
     }
     : null,
   screenshot: r.screenshot?.blob ?? null,
+  preview: previewOf(r),
   seeded: r.seeded
     ? { at: r.seeded.at ?? '', version: r.seeded.version ?? 0 }
     : null,

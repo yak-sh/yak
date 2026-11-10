@@ -970,6 +970,17 @@ export let badgeOf = (space: Space, app: App, env: Host) =>
     ? pageAt(app.published.name, env)
     : hostUrl(env, '/')
 
+// The badge and what it says of a site's preview (newcomer.ts
+// `previewing`): every plan's preview wears it, saying whose site it is not.
+export let badged = (space: Space, app: App, env: Host): Scripts => {
+  let preview = app.preview
+    ? URL.parse(app.preview.site)?.hostname.replace(/^www\./, '') ?? null
+    : null
+  return preview
+    ? { badge: badgeOf(space, app, env) ?? hostUrl(env, '/'), preview }
+    : { badge: badgeOf(space, app, env) }
+}
+
 // The platform's scripts a page wears as the files door hands it: none when
 // an app's worker asked for it, since what the worker answers is woven on its
 // way out (`reported`), and the browser would run each script twice.
@@ -989,7 +1000,7 @@ export let wearing = (
   env: Host,
   who: Who,
 ): Scripts => ({
-  badge: badgeOf(space, app, env),
+  ...badged(space, app, env),
   bar: barOf(env, app, who),
 })
 
@@ -1245,11 +1256,19 @@ let versionedAsset = async (
 // Where the browser sends what it notices on its own: the app's own report
 // door, named as an endpoint group, with nel asking for the failures that
 // never reached us at all.
-let reporting = (res: Response, req: Request, at: string) => {
+// A site's preview (newcomer.ts `previewing`) asks too that no search engine
+// index or follow any of it.
+let reporting = (
+  res: Response,
+  req: Request,
+  at: string,
+  app: Pick<App, 'preview'> | null,
+) => {
   // A socket is not a page: the 101 carries the runtime's own `webSocket`,
   // which no Response constructor here can copy, and nothing about it reports.
   if (res.status == 101) return res
   let headers = new Headers(res.headers)
+  if (app?.preview) headers.set('x-robots-tag', 'noindex, nofollow')
   headers.set(
     'reporting-endpoints',
     `yak="${new URL(`${at}api/report`, req.url).href}"`,
@@ -2903,14 +2922,12 @@ let served = async (
         bare,
         open,
         app.version ?? 0,
-        {
-          badge: badgeOf(space, app, env),
-        },
+        badged(space, app, env),
         APP,
         req.headers.get(ADDRESS) ?? req.url,
       )
     }
-    let page = reporting(open, req, bare)
+    let page = reporting(open, req, bare, app)
     if (edge) return keep(page, space, app)
     shown(env, req, page, seen(space, app))
     return page
@@ -3055,14 +3072,12 @@ let served = async (
           '/',
           page,
           early.app.version ?? 0,
-          {
-            badge: badgeOf(space, early.app, env),
-          },
+          badged(space, early.app, env),
           appPreview(early.app, '/'),
           req.headers.get(ADDRESS) ?? req.url,
         )
       }
-      let res = reporting(page, req, '/')
+      let res = reporting(page, req, '/', early.app)
       return sandboxed(early.app) ? walled(res) : res
     }
   }
@@ -3188,6 +3203,7 @@ let served = async (
             await api(req, env, dir, space, app, path.slice(4), who, c, at),
             req,
             at,
+            app,
           ),
           space,
           app,
@@ -3207,7 +3223,7 @@ let served = async (
     if (
       !await apiAllowed(req, path, who.person, !!itself, env.API_RATE)
     ) {
-      return wall(reporting(tooMany(), req, at))
+      return wall(reporting(tooMany(), req, at, app))
     }
     // A stranger's first write gives their browser a store of its own, a copy
     // of the sample, and goes there; the answer tells the page's client to
@@ -3231,6 +3247,7 @@ let served = async (
           ),
           req,
           at,
+          app,
         ))
       }
       let own = await c.time(
@@ -3268,7 +3285,7 @@ let served = async (
       ].includes(apiPath) ||
         apiPath.startsWith('/blob') || apiPath.startsWith('/files/'))
     ) scheduleBy(env, who, app.eid)
-    return wall(reporting(answer, req, at))
+    return wall(reporting(answer, req, at, app))
   }
   // A private app hides its page too, not only its data (C-32607 item 5):
   // `access: private` says only its members can see it, and its files are
@@ -3388,14 +3405,14 @@ let served = async (
       : (await index(req, env, space, (await routing).roster!, seatOf)).page
   }
   // Site's page is counted by the gateway that sends it (page-cache.ts).
-  if (edge) return marked(keep(reporting(page, req, at), space, app))
+  if (edge) return marked(keep(reporting(page, req, at, app), space, app))
   // Count the page served (views.ts, T-34496). Last, once, and only for
   // what an app answered: the `/api/` doors returned above, a file that is not
   // HTML is not a page, and the platform's own pages — the space index, the
   // trash, a wrong address — never come back through here.
   shown(env, req, page, seen(space, app))
   if (page.status < 400) scheduleBy(env, who, app.eid)
-  return wall(reporting(page, req, at))
+  return wall(reporting(page, req, at, app))
 }
 
 // Who a sandboxed app's request is (installed.ts). Its page token, from the

@@ -741,7 +741,7 @@ The complete list of reserved names:
     notified notify_deaths notify_trash oauth_grant occupancy offer openai
     opened openrouter operator operator_alerts operator_reach order output
     output_of own_number parent pending person persona phone phone_line plan
-    price product project provider provisional public_file published
+    preview price product project provider provisional public_file published
     push_subscription quarantined question questions reads recalled ref
     referenced refund_failed refund_request refund_retry refund_sale
     refund_sent refusal refusal_report register_writes registration

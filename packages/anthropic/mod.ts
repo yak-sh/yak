@@ -348,7 +348,7 @@ export let messages = (options: Options): Model => {
       : undefined
     let offered = [
       ...tools(req.tools),
-      ...options.web ? web(req.model) : [],
+      ...options.web ? web(req.model, req.sites) : [],
     ]
     let body = {
       model: req.model,

@@ -28,6 +28,7 @@ import { resent } from '@yaks/cloudflare/api'
 import type { Env } from './env.ts'
 import { apex as hostApex, type Host } from './host.ts'
 import { type Host as Hostname, stamp } from './directory.ts'
+import { unveiled } from './newcomer.ts'
 import { token } from '@yaks/graph/sha256'
 
 export let needsHostnames = (env: Host = {}) =>
@@ -327,8 +328,11 @@ export let refresh = async (env: Env, row: Hostname, custom: Custom | null) => {
     (owned && !row.verified)
   ) {
     let at = new Date().toISOString()
+    // Verified, it shows the site a preview here was rebuilt from is theirs
+    // (newcomer.ts `unveiled`), and the preview lifts in the same write.
+    let lifted = owned && !row.verified ? await unveiled(env, row) : []
     let applied = await stamp(env, {
-      entities: [{
+      entities: [...lifted, {
         entity: { eid: row.eid },
         hostname: { verification, stage, at },
         ...owned && !row.verified ? { verified: { at } } : {},

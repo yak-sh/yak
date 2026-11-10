@@ -177,7 +177,16 @@ import {
 import { chatPath, hostOf, LOGOUT, MANAGE, OAUTH, onZone } from './route.ts'
 import { woken } from './build-door.ts'
 import { INVITE, LINK, SLUG } from '@yaks/platform/names'
-import { counted, FULL, keep, oneBuild, START, worded } from './newcomer.ts'
+import {
+  counted,
+  FULL,
+  keep,
+  oneBuild,
+  previewed,
+  siteOf,
+  START,
+  worded,
+} from './newcomer.ts'
 import {
   type Arrived,
   type Ask,
@@ -880,7 +889,9 @@ let landed = async (
  * dollars (newcomer.ts `oneBuild`), once the day and their address have builds
  * left (`counted`); past either they meet the sign-in card saying so. Words
  * that are the web address of the site they have now ask for it rebuilt
- * (newcomer.ts `worded`), as the site of the `org` the page's box named.
+ * (newcomer.ts `worded`), as the site of the `org` the page's box named, and
+ * what is built from it is a private preview until they show the site is
+ * theirs (newcomer.ts `previewing`).
  */
 let begun = async (req: Request, env: Env, said: string, org = '') => {
   let words = worded(said.trim().slice(0, SAID), org)
@@ -907,6 +918,8 @@ let begun = async (req: Request, env: Env, said: string, org = '') => {
   }
   let space = await settle(env, person)
   if (set) await oneBuild(env, space)
+  let site = siteOf(said.trim().slice(0, SAID))
+  if (site) await previewed(env, space, site)
   let request = crypto.randomUUID()
   let chat = hostUrl(env, chatPath(space.slug, request))
   let { operatorDoor } = await import('./build-door.ts')
@@ -916,6 +929,7 @@ let begun = async (req: Request, env: Env, said: string, org = '') => {
       channel: 'chat',
       files: [],
       page: hostUrl(env, chatPath(space.slug)),
+      ...site ? { rebuild: true } : {},
     },
     options: { id: request },
   })

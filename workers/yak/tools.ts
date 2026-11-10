@@ -107,6 +107,7 @@ import {
   mailbox,
   META,
   MODES,
+  type Preview,
   RESERVED,
   type Role,
   type Space,
@@ -115,6 +116,7 @@ import {
   url,
 } from './directory.ts'
 import * as dirPart from './directory.ts'
+import { HELD, previewing } from './newcomer.ts'
 import { latestSpeaks, ownSpeaks } from './lenses.ts'
 import { sandboxed, sandboxing } from './installed.ts'
 import { watching } from './preview.ts'
@@ -2031,6 +2033,8 @@ let taking = async (
  * An app installed over a visit (visit.ts) takes that visit's store and
  * uploads, so nothing moves.
  */
+// Born in a space the box was given a site's address for, an app is that
+// site's preview (newcomer.ts `previewing`): private, whatever was asked.
 let born = (
   space: Space,
   slug: string,
@@ -2038,6 +2042,7 @@ let born = (
     title: string
     access: Access
     kept?: Pick<Visit, 'store' | 'blobs'> | null
+    previews?: Preview | null
   },
 ): Bundle => {
   let eid = crypto.randomUUID()
@@ -2049,7 +2054,7 @@ let born = (
       slug,
       space: space.eid,
       version: 0,
-      access: o.access,
+      access: o.previews ? 'private' : o.access,
       store: o.kept?.store ?? handle(space, slug, eid),
       files,
       blobs: o.kept?.blobs ?? blobPrefix(space, { slug, files }),
@@ -3354,10 +3359,12 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let { space, who } = await inSpace(ctx, args, true)
       let s = fresh(args.slug, 'slug')
+      let previews = previewing(space)
       // Its object starts first, beside every read and write below.
       let row = born(space, s, {
         title: titled(args.title),
         access: args.access == null ? 'public' : access(args.access),
+        previews,
       })
       warmed(ctx.env, row)
       // The plan's app ceiling (T-32758), at the one door that adds one.
@@ -3388,6 +3395,12 @@ let OURS: Row[] = [
       let applied = await ctx.dir.apply({ entities }, vouched(maker.who))
       let eid = applied.find((row) => row.app)?.entity.eid
       if (!eid) throw new Error('app creation returned no identity')
+      // The preview mark is the platform's to write (directory-vocab.ts).
+      if (previews) {
+        await ctx.dir.stamp({
+          entities: [{ entity: { eid }, preview: previews }],
+        })
+      }
       renew(ctx)
       let pair = await ctx.dir.appAt(eid)
       if (!pair || pair.space.eid != space.eid) {
@@ -3421,9 +3434,9 @@ let OURS: Row[] = [
         text: `app ${space.slug}/${s} (${app.eid}) is made but not deployed: ` +
           'its address serves nothing yet, so do not tell the person it ' +
           'exists or give them a link. app_files writes it, and app_deploy ' +
-          `releases it and answers its link. ${told(app.access)}. https://${
-            spaceHost(ctx.env, space.slug)
-          }/ ${
+          `releases it and answers its link. ${told(app.access)}. ${
+            previews ? HELD(previews.site) + ' ' : ''
+          }https://${spaceHost(ctx.env, space.slug)}/ ${
             front ? `opens ${front.slug}` : "lists the space's apps"
           } — app_set(app, home: true) makes this one the front page there`,
         space,
@@ -4675,6 +4688,9 @@ let OURS: Row[] = [
       let title = args.title == null ? null : titled(args.title)
       let to = args.slug == null ? null : fresh(args.slug, 'slug')
       let open = args.access == null ? null : access(args.access)
+      if (open && open != 'private' && app.preview) {
+        throw refuse('access', HELD(app.preview.site))
+      }
       let home = args.home == null ? null : flag(args.home, 'home')
       let drop = args.forget == null ? null : slug(args.forget, 'forget')
       // The globs are checked before anything is written or any file moves:
@@ -5994,11 +6010,13 @@ let OURS: Row[] = [
       // from and which version it took. Its access is the published app's: an
       // app written to be voted on has to stay votable, and the person can
       // app_set it after.
+      let previews = previewing(space)
       let row: Bundle = {
         ...born(space, s, {
           title: clamped(offer.app.title),
           access: offer.app.access,
           kept,
+          previews,
         }),
         installed: { of: offer.app.eid, version, ...sandboxing(false) },
         // A visit's store was seeded from the sample, and holds what they
@@ -6045,6 +6063,12 @@ let OURS: Row[] = [
       )
       let eid = applied.find((row) => row.app)?.entity.eid
       if (!eid) throw new Error('app creation returned no identity')
+      // The preview mark is the platform's to write (directory-vocab.ts).
+      if (previews) {
+        await ctx.dir.stamp({
+          entities: [{ entity: { eid }, preview: previews }],
+        })
+      }
       renew(ctx)
       let pair = await ctx.dir.appAt(eid)
       if (!pair || pair.space.eid != space.eid) {
@@ -6085,7 +6109,8 @@ let OURS: Row[] = [
               ? 'with everything this browser made there'
               : 'its own store and its own data'
           }, pinned to that version (app_update moves ` +
-          'it)' + asked.said + out.said,
+          'it)' + asked.said + out.said +
+          (previews ? '. ' + HELD(previews.site) : ''),
         value: { app: app.slug, url: url(space, app, ctx.env), version },
         space,
       }

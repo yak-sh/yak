@@ -252,6 +252,10 @@ test("a web address typed in a church page's box asks for that church's site, wh
   )
 })
 
+test("a web address typed in the box makes what is built from it that site's preview", () => {
+  assertEquals(kept.preview?.site, 'https://gracechurch.example/visit')
+})
+
 test("a newcomer's space holds one build's dollars and no starter", () => {
   assertEquals(space.budget, PER_BUILD)
   assertEquals(limitOf(space), PER_BUILD)

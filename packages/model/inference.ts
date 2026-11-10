@@ -37,6 +37,7 @@ export type FrozenModelRequest =
     | 'tokens'
     | 'anchor'
     | 'conversation'
+    | 'sites'
   >
   & {
     items: (Exclude<Request['items'][number], { kind: Media }> | {
@@ -60,6 +61,7 @@ export let frozenRequest = (req: Request): FrozenModelRequest => {
     tokens,
     anchor,
     conversation,
+    sites,
   } = req
   return JSON.parse(JSON.stringify({
     call,
@@ -73,6 +75,7 @@ export let frozenRequest = (req: Request): FrozenModelRequest => {
     tokens,
     anchor,
     conversation,
+    sites,
     items: req.items.map((item) =>
       'bytes' in item ? { ...item, bytes: [...item.bytes] } : item
     ),
