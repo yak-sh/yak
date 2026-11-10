@@ -458,16 +458,17 @@ rather than waiting for it; `hold(gitdir, exclusive)` takes the lock, and a
 reader that needs the checkout whole, such as the CLI's runtime snapshot, holds
 it shared. No test suite is run here, and this operation knows of none.
 
-Before merging, landing runs `deno fmt` on changed regular files, using the
-checkout's formatting configuration and Deno's supported file types. Formatting
-passes global `exclude` and `fmt.exclude` patterns through Deno's `--ignore`, so
-explicitly named files retain their exclusions in JSON and JSONC configs. edits
-amend the branch's last commit with its message preserved. Deleted files,
-symlinks and submodules are skipped. A formatter error is printed and landing
-continues, keeping any files it formatted successfully. When the branch changes
-a `package.json` or `pnpm-workspace.yaml` in a checkout that tracks
-`pnpm-lock.yaml`, landing runs `pnpm install --lockfile-only` and amends the
-updated lockfile into the same commit, so the base never takes a manifest
+Before merging, landing runs `deno fmt` on changed regular files of a checkout
+with a `deno.json` or `deno.jsonc`, using its formatting configuration and
+Deno's supported file types; a checkout without one is never formatted.
+Formatting passes global `exclude` and `fmt.exclude` patterns through Deno's
+`--ignore`, so explicitly named files retain their exclusions in JSON and JSONC
+configs. Its edits amend the branch's last commit with its message preserved.
+Deleted files, symlinks and submodules are skipped. A formatter error is printed
+and landing continues, keeping any files it formatted successfully. When the
+branch changes a `package.json` or `pnpm-workspace.yaml` in a checkout that
+tracks `pnpm-lock.yaml`, landing runs `pnpm install --lockfile-only` and amends
+the updated lockfile into the same commit, so the base never takes a manifest
 without its lockfile. A pnpm failure is printed and reported, and landing
 continues.
 

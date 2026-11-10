@@ -21,7 +21,7 @@ test('explicit formatting paths retain global and formatter exclusions', () => {
 
 test('a checkout without exclusions delegates its filenames to Deno unchanged', () => {
   equal(
-    formatting(['./page with spaces.html', './image.png', './-script.ts']),
+    formatting(['./page with spaces.html', './image.png', './-script.ts'], {}),
     [
       'fmt',
       '--permit-no-files',
@@ -53,6 +53,18 @@ test('formatting reads JSONC exclusions without treating comments as paths', asy
   ])
 })
 
-test('formatting a checkout without a Deno config retains Deno defaults', async () => {
-  equal(await formatConfig('/source', () => Promise.resolve(undefined)), {})
+test('a checkout without a Deno config has no formatting config', async () => {
+  equal(
+    await formatConfig('/source', () => Promise.resolve(undefined)),
+    undefined,
+  )
+})
+
+test('an empty Deno config formats with Deno defaults', async () => {
+  let config = await formatConfig('/source', () => Promise.resolve('{}'))
+  equal(formatting(['./code.ts'], config), [
+    'fmt',
+    '--permit-no-files',
+    './code.ts',
+  ])
 })
