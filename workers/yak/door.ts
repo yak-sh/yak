@@ -29,12 +29,24 @@ import {
 // also where a parent request collects those costs, and times the round trip
 // itself under `wait`: `directory_wait`, `store_wait` or `operator_wait`
 // (timing.ts).
+// What a request asked, for a trace (hops.ts `traced`): its path and query,
+// cut short.
+let asked = (req: Request) => {
+  let { pathname, search } = new URL(req.url)
+  let said = pathname + search
+  try {
+    said = decodeURIComponent(said)
+  } catch { /* said as sent */ }
+  return said.slice(0, 120)
+}
+
 let metered = async (
   wait: string,
   send: () => Promise<Response>,
+  what?: string,
 ): Promise<Response> => {
   hop('hops')
-  let res = await elapsed(wait, send)
+  let res = await elapsed(wait, send, what)
   heard(res.headers.get(WAITS))
   for (
     let [header, name] of [
@@ -276,6 +288,7 @@ export let doorOf = (
     return metered(
       name == PLATFORM_STORE ? 'directory_wait' : 'store_wait',
       () => read ? send(req) : writing(name, () => send(req)),
+      asked(req),
     )
   }
   return Object.assign(ask, {

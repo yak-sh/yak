@@ -99,8 +99,10 @@ import {
   counts,
   reached,
   since,
+  spansOf,
   type Tally,
   tallying,
+  traced,
 } from './lib/hops.ts'
 import { drain, type operatorStore } from './operator-store.ts'
 import {
@@ -722,6 +724,7 @@ let stepwise = (handlers: Handlers): Handlers =>
       (...args: Parameters<typeof handler>) => {
         let tally: Tally = new Map()
         steps.add(tally)
+        traced(tally)
         return tallying(tally, () => handler(...args))
       },
     ]),
@@ -731,7 +734,8 @@ let stepwise = (handlers: Handlers): Handlers =>
 // trips it made on the way, in the Worker's logs: store hops, bucket reads,
 // and trips to the cached Files door (files.ts `door`). Its stage marks
 // include when the request was sent (`at_submit`) and when the reply's first
-// output arrived (`at_first_token`).
+// output arrived (`at_first_token`), and its `trace` each wait it made, as
+// `<began>+<ms> <wait> <what it asked>`, in ms from the step's start.
 let asked = (session?: string) => {
   let tally = ambient()
   let ms = tally && steps.has(tally) && since(tally)
@@ -747,6 +751,9 @@ let asked = (session?: string) => {
         [...tally].filter(([name]) =>
           name.endsWith('_wait') || name.startsWith('at_')
         ),
+      ),
+      trace: spansOf(tally).map(([name, at, ms, what]) =>
+        `${at}+${ms} ${name.replace(/_wait$/, '')}${what ? ' ' + what : ''}`
       ),
     }),
   )
@@ -1004,15 +1011,15 @@ export let operating = (
   // The machine a step is asked of: the one that serves the person its
   // session works for, read as the step is asked, so a session is never
   // answered by a machine its person has no claim to.
-  let machineOf = async (ask?: string) => {
-    let session = await sessionOf(ask)
+  let machineOf = async (ask?: string) => machineAt(await sessionOf(ask))
+  let machineAt = async (session?: string) => {
     let o = session ? await workingOf(store, session) : undefined
     let space = o ? await dir().at(o.space) : undefined
     if (!session || !o || !space || space.trashed) return null
     return reachMachine(space, o.person, () => topOf(store, session))
   }
   let machine: Model = async (req) => {
-    let fetch = await machineOf(req.call)
+    let fetch = reached('machine', await machineOf(req.call))
     if (!fetch) {
       throw new ModelError(
         'unreachable',
@@ -1166,6 +1173,7 @@ export let operating = (
           ...req,
           ...kept ? { cacheRetention: kept } : {},
           onSubmit: async () => {
+            reached('submitting', null)
             await req.onSubmit?.()
             reached('submit', null)
           },
@@ -1494,15 +1502,27 @@ export let operating = (
   // watch, draw, report, and reach their Google are the space's work, offered
   // to someone who writes in it and to nobody else (D-151808).
   let roster = async (session: string): Promise<Tool[]> => {
+    reached('tools', null)
+    // A step its person's machine answers reaches for the machine now, beside
+    // its roster: what that reads of the directory is read once a step
+    // (lib/hops.ts `recall`), so the step finds it read when it is sent.
+    let last = Promise.resolve(g.read(
+      `.entry.session=${session} .using .order=-entry.seq .limit=1 .fields=using.provider`,
+    ))
+    last.then(([using]) => {
+      if (
+        comp(using, 'using')?.provider == identityEid('provider', [MACHINE])
+      ) {
+        return machineAt(session)
+      }
+    }).catch(() => {})
     let [{ space, ctx, files }, task, [row], [using]] = await Promise.all([
       working(env, store, session, options.directory),
       taskOf(store, session),
       g.read(
         `.entity.eid=${session}&.fields=spawned.parent,fork.from,session.topic`,
       ),
-      g.read(
-        `.entry.session=${session} .using .order=-entry.seq .limit=1 .fields=using.provider`,
-      ),
+      last,
     ])
     let work = await workingOf(store, session)
     if (work?.signup) return signupTools(env, space, ctx.person!, work.signup)
@@ -1672,6 +1692,7 @@ export let operating = (
       // The conversation and its work forks share a short topic map. Only a
       // session opened on a topic carries that topic's compiled context.
       instructions: async (session) => {
+        reached('instructing', null)
         let [{ space, ctx }, [row]] = await Promise.all([
           working(env, store, session, options.directory),
           g.read(`.entity.eid=${session}&.fields=session.topic`),

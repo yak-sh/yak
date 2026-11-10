@@ -7,11 +7,14 @@ import { assertEquals, assertRejects } from '@std/assert'
 import {
   apart,
   counts,
+  elapsed,
   forget,
   hop,
   recall,
+  spansOf,
   type Tally,
   tallying,
+  traced,
   writing,
 } from './hops.ts'
 
@@ -165,4 +168,21 @@ test('a failed caller decode cannot evict a newer read', async () => {
     assertEquals(await read(), 2)
     assertEquals(count, 2)
   })
+})
+
+test('a traced request keeps each wait it made, what it asked and when', async () => {
+  let plain: Tally = new Map(), seen: Tally = new Map()
+  traced(seen)
+  let wait = () => elapsed('directory_wait', () => Promise.resolve(), '/query')
+  await tallying(plain, wait)
+  await tallying(seen, async () => {
+    await wait()
+    await elapsed('vault_wait', () => Promise.resolve())
+  })
+  assertEquals(spansOf(plain), [])
+  assertEquals(
+    spansOf(seen).map(([name, , , what]) => [name, what]),
+    [['directory_wait', '/query'], ['vault_wait', undefined]],
+  )
+  assertEquals(spansOf(seen).every(([, at, ms]) => at >= 0 && ms >= 0), true)
 })

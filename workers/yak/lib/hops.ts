@@ -212,16 +212,39 @@ export let heard = (header: string | null) => {
   }
 }
 
-/** Waiting on internal I/O, accumulated on this request's own tally. */
+/** One wait of a traced request: its name, when it began and how long it
+ * took, in ms from the request's start, and what it asked, where said. */
+export type Span = [name: string, at: number, ms: number, what?: string]
+
+// The waits of each request whose waits are traced (`traced`), in the order
+// they ended.
+let spans = new WeakMap<Tally, Span[]>()
+
+/** Trace each wait `tally` makes from now on (`spansOf`): where the sum of a
+ * stage's waits says how long it waited, these say on what, and which waits
+ * overlapped. */
+export let traced = (tally: Tally) => void spans.set(tally, [])
+
+/** The waits a traced request made, as they ended. */
+export let spansOf = (tally: Tally): Span[] => spans.get(tally) ?? []
+
+/** Waiting on internal I/O, accumulated on this request's own tally, and
+ * traced with `what` it asked where the request is (`traced`). */
 export let elapsed = async <T>(
   name: string,
   work: () => Promise<T>,
+  what?: string,
 ): Promise<T> => {
   let tally = here.getStore()
   let at = Date.now()
   try {
     return await waiting(name, work)
   } finally {
-    hop(name, Date.now() - at, tally)
+    let now = Date.now()
+    hop(name, now - at, tally)
+    let begun = tally && since(tally)
+    if (tally && begun != null) {
+      spans.get(tally)?.push([name, at - (now - begun), now - at, what])
+    }
   }
 }
