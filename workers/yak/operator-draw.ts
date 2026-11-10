@@ -13,7 +13,7 @@ import type { Style } from '@yaks/native'
 import { type Step, stepOf, type Steps } from '@yaks/tools/title'
 import { blocks, parse } from '@yaks/markdown/structural'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
-import { Body, Drop, Icon, Menu } from '@yaks/ui/parts'
+import { Body, Button, Drop, Icon, Menu, More } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
 import { Time } from '@yaks/ui/parts'
 import { pretty } from '@yaks/ui/relative'
@@ -572,6 +572,7 @@ export type Helper = { session?: string; call?: string; entries: Bundle[] }
  * where a conversation opens, by its id after `opens/`. */
 export type Seen = {
   helpers?: Helper[]
+  threads?: Record<string, Thread>
   metadata?: Record<string, Metadata>
   offers?: Offers
   called?: string
@@ -675,7 +676,14 @@ let archivable = (line: Line, entries: Bundle[]): Line => {
 export let lines = (
   entries: Bundle[],
   names: Names,
-  { helpers = [], offers, called = 'the Operator', opens, metadata }: Seen = {},
+  {
+    helpers = [],
+    threads = {},
+    offers,
+    called = 'the Operator',
+    opens,
+    metadata,
+  }: Seen = {},
 ): Line[] => {
   let results = new Map(
     entries.filter((b) => b.result).map((b) => [
@@ -722,7 +730,10 @@ export let lines = (
       let told = prompts.get(id)
       let result = results.get(id)
       let helping = b.call && helpers.some((one) => one.call == id)
-      let drawn: Line[] = told
+      let thread = threads[id]
+      let drawn: Line[] = thread
+        ? [{ id, uses: [id], node: threaded(b, thread), text: body }]
+        : told
         ? [{ id, uses: told.uses, node: told.draw() }]
         : b.call
         ? [{
@@ -888,6 +899,41 @@ let system = (b: Bundle, body: string) => {
   )
 }
 
+/** A closed outside conversation, drawn at its single delivery notice. */
+export type Thread = { session: string; who: string; lines: Lines }
+
+let threaded = (notice: Bundle, thread: Thread) =>
+  h(
+    More,
+    { id: `thread-${thread.session}` },
+    h(
+      More.Summary,
+      null,
+      thread.who,
+      ' · ',
+      stamp(notice),
+      ' · ',
+      String(comp(notice, 'content')?.body ?? '').replace(
+        /^Chat [\da-f-]+ closed \([^)]*\)\.\n\n/,
+        '',
+      ),
+    ),
+    h(
+      More.Body,
+      null,
+      thread.lines.opens
+        ? h(
+          Button,
+          { href: `${thread.lines.opens}/${thread.session}` },
+          'Open the conversation',
+        )
+        : null,
+      drawLines(thread.lines).map(({ id, node }) =>
+        h('div', { id: `row-${id}` }, node)
+      ),
+    ),
+  )
+
 /**
  * Lines as a page's socket sends them: each line by the id it is put by and
  * the entries it reads (`uses`), those entries in the transcript's order,
@@ -897,6 +943,7 @@ let system = (b: Bundle, body: string) => {
  * {@link drawLines} draws each from these alone, as the conversation drew it.
  */
 export type Lines = {
+  threads?: Record<string, Thread>
   lines: { id: string; uses: string[] }[]
   entries: Bundle[]
   tools: Record<string, Named>
@@ -939,6 +986,9 @@ export let wire = (
     ),
     ...seen.person ? { person: seen.person } : {},
     helpers,
+    threads: Object.fromEntries(
+      Object.entries(seen.threads ?? {}).filter(([id]) => used.has(id)),
+    ),
     offers: Object.fromEntries(
       [...seen.offers ?? []].filter(([sha]) => offers.has(sha)),
     ),

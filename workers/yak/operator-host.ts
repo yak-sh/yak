@@ -44,6 +44,7 @@ import {
   type Names,
   type Naming,
   type Offers,
+  type Thread,
   wire,
 } from './operator-draw.ts'
 
@@ -158,11 +159,12 @@ let helpersOf = async (
   calls?: Set<string>,
 ): Promise<Helper[]> =>
   await Promise.all(
-    (await childrenOf(store, sessions, calls)).map(async (b) => ({
-      session: b.entity.eid,
-      call: comp(b, 'spawned')?.call as string | undefined,
-      entries: await linesOf(store, b.entity.eid, SHOWN),
-    })),
+    (await childrenOf(store, sessions, calls))
+      .filter((b) => comp(b, 'spawned')?.quiet == null).map(async (b) => ({
+        session: b.entity.eid,
+        call: comp(b, 'spawned')?.call as string | undefined,
+        entries: await linesOf(store, b.entity.eid, SHOWN),
+      })),
   )
 
 // The sessions these sessions started, only those started by `calls` when
@@ -330,6 +332,39 @@ let seenOf = async (
       ...helpers.flatMap((h) => h.entries),
     ]),
   }
+}
+
+// Only a closing notice exposes a connector chat in its parent's transcript.
+// Read its own entries, never the inherited main-thread prefix.
+let threadsOf = async (
+  store: Store,
+  entries: Bundle[],
+  named: Named,
+  called?: string,
+  opens?: string,
+): Promise<Record<string, Thread>> => {
+  let threads: Record<string, Thread> = {}
+  for (let notice of entries.filter((b) => b.notice && b.delivery)) {
+    let session = String(comp(notice, 'delivery')?.child ?? '')
+    let [row] = await store.g.get([session], ['spawned'])
+    let spawned = comp(row, 'spawned')
+    if (
+      spawned?.quiet == null || spawned.parent != comp(notice, 'entry')?.session
+    ) continue
+    let own = await linesOf(store, session, SHOWN)
+    let helped = await seenOf(store, [row], own)
+    let naming = await namingOf(store, withHelpers(own, helped.helpers), named)
+    let seen = { ...helped, ...naming, called, opens }
+    let from = own.find((b) => comp(b, 'entry')?.from)
+    let who = String(comp(from, 'entry')?.from ?? 'An outside agent')
+    threads[notice.entity.eid] = {
+      session,
+      who: who[0].toUpperCase() + who.slice(1) +
+        (naming.person ? ` for ${naming.person}` : ''),
+      lines: wire(drawnLines(own, namer(seen), seen), own, seen),
+    }
+  }
+  return threads
 }
 
 // The task holding a session, by the link a task keeps to it.
@@ -898,6 +933,7 @@ export let conversationOf = async (
     let helped = await seenOf(store, [row], entries, calls)
     let seen = {
       ...helped,
+      threads: await threadsOf(store, entries, named, called, opens),
       ...everyone ? { metadata: await metadataOf(store, entries) } : {},
       called,
       opens,
@@ -965,6 +1001,7 @@ export let conversationOf = async (
   let helped = await seenOf(store, sessions, entries)
   let seen = {
     ...helped,
+    threads: await threadsOf(store, entries, named, called, opens),
     ...everyone ? { metadata: await metadataOf(store, entries) } : {},
     called,
     opens,
@@ -1004,7 +1041,7 @@ export let frameOf = async (
   opens?: string,
 ) => {
   let [row] = await store.g.read(
-    `.entity.eid=${session}&.session&.fields=entity.eid,spawned.parent,spawned.call`,
+    `.entity.eid=${session}&.session&.fields=entity.eid,spawned.parent,spawned.call,spawned.quiet`,
   )
   if (!row) return null
   // Every session is read from its own newest lines, and those past the
@@ -1018,15 +1055,17 @@ export let frameOf = async (
   // helpers are drawn with what each was told inside.
   let own = async () => {
     let since = from ?? seq - 30
+    let changed = entries.filter((b) =>
+      Number(comp(b, 'entry')?.seq ?? 0) > since
+    )
     let calls = new Set(
-      entries.filter((b) => Number(comp(b, 'entry')?.seq ?? 0) > since)
-        .flatMap((b) =>
-          b.call
-            ? [b.entity.eid]
-            : b.result
-            ? [String(comp(b, 'result')!.call)]
-            : []
-        ),
+      changed.flatMap((b) =>
+        b.call
+          ? [b.entity.eid]
+          : b.result
+          ? [String(comp(b, 'result')!.call)]
+          : []
+      ),
     )
     let helpers = await helpersBy(store, calls)
     let naming = await namingOf(store, entries, named)
@@ -1034,6 +1073,7 @@ export let frameOf = async (
       from,
       frame(await keyOf(store, session), entries, namer(naming), since, {
         helpers,
+        threads: await threadsOf(store, changed, named, called, opens),
         offers: await offersOf(store, withHelpers(entries, helpers)),
         called,
         opens,
@@ -1042,7 +1082,9 @@ export let frameOf = async (
     )
   }
   let parent = String(comp(row, 'spawned')?.parent ?? '')
-  if (!parent) return { seq, frame: await own() }
+  if (!parent || comp(row, 'spawned')?.quiet != null) {
+    return { seq, frame: await own() }
+  }
   let call = comp(row, 'spawned')?.call as string | undefined
   // What a helper was told changes only at an ask: only then is the step
   // that started it drawn again, from as many of its lines as a
@@ -1133,15 +1175,15 @@ export let operatorFrames = (
       }
     }
   }
-  // Marks edit old rows, which the step cursor does not cover. Ask every
-  // page watching their conversation to read it again when those marks change.
+  // Marks and refreshed closing notices edit rows outside the step cursor.
+  // Ask pages watching their conversation to read it again.
   store.g.use({
     name: 'operator-entry-marks',
     hooks: {
       effect: async (bundles) => {
-        let ids = bundles.filter((b) => 'archived' in b).map((b) =>
-          b.entity.eid
-        )
+        let ids = bundles.filter((b) =>
+          'archived' in b || comp(b, 'delivery')?.through
+        ).map((b) => b.entity.eid)
         if (ids.length) {
           let entries = await store.g.get(ids, ['entry'])
           let sessions = new Set(
