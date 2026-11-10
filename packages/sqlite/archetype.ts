@@ -27,9 +27,14 @@ import {
 } from '@yaks/sql'
 import { componentTables } from './physical.ts'
 import { descriptor } from './catalog.ts'
+import { pointerIndex } from './ddl.ts'
+import { catalogue } from '@yaks/sql'
 import { mintSql } from './write.ts'
 import { unit } from './unit.ts'
 import { revision } from '@yaks/sql'
+import { Unpointed } from './error.ts'
+import { type Ledger, ledger } from './ledger.ts'
+export { type Ledger, ledger } from './ledger.ts'
 
 export { componentTables } from './physical.ts'
 
@@ -104,6 +109,19 @@ let presence = (
   return owners
 }
 
+// The descriptors a connection's units found or minted, by eid, as each one's
+// id, while no statement but theirs moved one (@yaks/sql `revision`): a unit
+// pointing entities at an archetype it has met asks the file nothing for it.
+let met = new WeakMap<object, { at: number; ids: Map<string, number> }>()
+let descriptors = (driver: Driver) => {
+  let at = revision(driver, 'descriptors')
+  let held = met.get(driver.connection ?? driver)
+  if (held?.at != at) {
+    met.set(driver.connection ?? driver, held = { at, ids: new Map() })
+  }
+  return held
+}
+
 // Descriptor minting shared by boot and live reclassification. A descriptor is
 // found by eid first; a bare spine that already has component rows is rejected
 // rather than reused. The descriptor set {archetype} is its own fixed point.
@@ -111,7 +129,6 @@ let minter = (
   run: Run,
   driver: Driver,
   cache: Archetypes,
-  tables: () => string[],
   ids: Map<string, number>,
   number: boolean,
   counts: Backfill,
@@ -119,14 +136,23 @@ let minter = (
   let meta = cache.intern(['archetype'])
   let made = new Set<number>()
   let born: Bundle[] = []
+  let considered = new Map<number, string[]>()
   let mint = (eid: string): number => {
     let id = ids.get(eid)
     if (id != null) return id
     let existing = run(select({
-      cols: [col('id', 'e'), as(col('entity', 'a'), 'descriptor')],
+      cols: [
+        col('id', 'e'),
+        as(col('entity', 'a'), 'descriptor'),
+        col('tables', 'p'),
+      ],
       from: table('entity', 'e'),
       joins: [
         left(table('archetype', 'a'), eq(col('entity', 'a'), col('id', 'e'))),
+        left(
+          table('archetype', 'p'),
+          eq(col('entity', 'p'), col('archetype', 'e')),
+        ),
       ],
       where: eq(col('eid', 'e'), val(eid)),
     }))[0]
@@ -134,8 +160,14 @@ let minter = (
       ids.set(eid, id = Number(existing.id))
       return id
     }
-    if (existing && tables().some((t) => holds(run, t, Number(existing.id)))) {
-      throw new Error(`Archetype identity is occupied: ${eid}`)
+    if (existing) {
+      let pointed = existing.tables == null
+        ? null
+        : descriptor(driver, String(existing.tables)).tables
+      let held = considered.get(Number(existing.id)) ??
+        ledger(driver).held(eid, pointed)
+      if (!held) throw new Unpointed([eid])
+      if (held.length) throw new Error(`Archetype identity is occupied: ${eid}`)
     }
     driver.query(mintSql(eid, number))
     id = Number(
@@ -168,6 +200,7 @@ let minter = (
   // of the descriptors, regardless of its position in the snapshot. Hash once
   // per distinct set and bind owner groups in bounded chunks.
   let assign = (owners: Map<number, string[]>) => {
+    considered = owners
     let groups = new Map<string, { names: string[]; owners: number[] }>()
     for (let [owner, names] of owners) {
       let key = JSON.stringify(names)
@@ -176,7 +209,7 @@ let minter = (
       group.owners.push(owner)
     }
     let targets = [...groups.values()].map((g) =>
-      [g.owners, mint(cache.intern(g.names).eid)] as const
+      [g.owners, mint(cache.intern(g.names).eid), g.names] as const
     )
     for (let [owners, id] of targets) {
       let pending = owners.filter((owner) => !made.has(owner))
@@ -217,6 +250,15 @@ export function backfill(driver: Driver, number = false): Backfill {
   let run: Run = (s) => driver.query(s)
   let counts: Backfill = { entities: 0, archetypes: 0, retired: 0 }
   return unit(driver, () => {
+    // The catalog's missing-pointer lookup must seek even while a new store
+    // is being classified. This index is part of classification's repair.
+    if (
+      !catalogue(driver).some((o) =>
+        o.name == pointerIndex.name || o.name == `${pointerIndex.name}_num`
+      )
+    ) {
+      driver.query(pointerIndex)
+    }
     let cache = new Archetypes()
     // What the file holds is read once, and only when something is asked of
     // it: a fresh file reads nothing, and a file with descriptors reads which
@@ -319,13 +361,13 @@ export function backfill(driver: Driver, number = false): Backfill {
         where: isNull(col('archetype', 'e')),
       }))
     }
-    minter(run, driver, cache, tables, ids, number, counts).assign(owners)
+    minter(run, driver, cache, ids, number, counts).assign(owners)
     return counts
   })
 }
 
 // The entities `which` names that are not descriptors themselves, with the
-// eid of the archetype each one points at.
+// eid of the archetype each one points at and the tables it names.
 let owned = (which: Expr) =>
   select({
     cols: [
@@ -333,10 +375,12 @@ let owned = (which: Expr) =>
       col('eid', 'e'),
       col('archetype', 'e'),
       as(col('eid', 'd'), 'assigned'),
+      as(col('tables', 'p'), 'pointed'),
     ],
     from: table('entity', 'e'),
     joins: [
       left(table('entity', 'd'), eq(col('id', 'd'), col('archetype', 'e'))),
+      left(table('archetype', 'p'), eq(col('entity', 'p'), col('id', 'd'))),
       left(table('archetype', 'a'), eq(col('entity', 'a'), col('id', 'e'))),
     ],
     where: and(isNull(col('entity', 'a')), which),
@@ -427,102 +471,10 @@ export let mend = (driver: Driver, number = false): number => {
   return moved
 }
 
-/** A unit's ledger of archetype moves ({@link ledger}). */
-export type Ledger = {
-  moved: (eid: string, table: string, held: boolean) => void
-  born: (eid: string) => void
-  removed: (eid: string) => void
-  pointed: (eid: string) => void
-  owed: () => string[]
-  buried: () => string[]
-  wrote: (eid: string) => Wrote
-}
-
-/** What a unit wrote to one entity since its pointer was: the tables it gave
- * rows that are there still, and whether the unit minted the entity, when
- * those rows are all it holds. */
-export type Wrote = { born: boolean; tables: string[] }
-
-/**
- * One unit's account of what its writes did to each entity's archetype, kept
- * by the store that opened the unit (./mod.ts `storage`). `moved` hears a row
- * come or go (./write.ts `patch`), `born` a spine minted, `removed` an entity
- * removed, `pointed` a pointer written. `owed` is every entity whose rows
- * ended the unit other than they began it, or that was born, with no pointer
- * written since: the ones no tracker classified. `buried` is every entity
- * removed with no pointer written since: each holds its tombstone and nothing
- * else, so its set is known without reading a table, and a read passes it by
- * as dead whatever its pointer says. A batch that adds a component and drops
- * it again owes nothing, and neither does anything @yaks/graph wrote, since
- * its tracker points every entity it moved after the rows are written.
- * `wrote` is what the stored pointer does not know yet about one entity
- * ({@link Wrote}).
- */
-export let ledger = (): Ledger => {
-  // Per entity, per table: whether it held a row before the unit's first
-  // write to it, and whether it holds one now.
-  let rows = new Map<string, Map<string, [boolean, boolean]>>()
-  let born = new Set<string>()
-  let dead = new Set<string>()
-  return {
-    moved: (eid: string, table: string, held: boolean) => {
-      // A row moving again (a revival, a patch after it) leaves the dead
-      // holding more than their tombstone, and owing a reading of what.
-      dead.delete(eid)
-      let of = rows.get(eid) ?? new Map<string, [boolean, boolean]>()
-      rows.set(eid, of)
-      of.set(table, [of.get(table)?.[0] ?? !held, held])
-    },
-    born: (eid: string) => {
-      born.add(eid)
-    },
-    removed: (eid: string) => {
-      rows.delete(eid)
-      born.delete(eid)
-      dead.add(eid)
-    },
-    // A pointer establishes the next presence comparison's starting shape.
-    // Later changes owe classification against that shape, not the unit's
-    // initial one, including when a query settled an intermediate patch.
-    pointed: (eid: string) => {
-      rows.delete(eid)
-      born.delete(eid)
-      dead.delete(eid)
-    },
-    owed: (): string[] =>
-      [...new Set([...born, ...rows.keys()])].filter((eid) => (born.has(eid) ||
-        [...rows.get(eid)!.values()].some(([was, now]) => was != now))
-      ),
-    buried: (): string[] => [...dead],
-    wrote: (eid: string): Wrote => ({
-      born: born.has(eid),
-      tables: [...rows.get(eid) ?? []].filter(([, [, now]]) => now)
-        .map(([table]) => table),
-    }),
-  }
-}
-
-/**
- * The tables these entities hold rows in, as their removal clears them: each
- * one's stored archetype, together with what the open units' ledgers say they
- * wrote since its pointer was ({@link Ledger} `wrote`), among the component
- * tables the file holds. One statement reads the pointers, so a removal costs
- * the tables its entities wear rather than every table in the file.
- *
- * The pointer is exact wherever no unit is open: every door classifies what it
- * wrote before its unit closes, and a raw writer calls {@link reclassify}
- * (what {@link drift} audits). Inside an open unit, a ledger names every row
- * written since. An entity that is neither, whose pointer is missing or names
- * no descriptor, and that no open unit minted, is not known this way, and then
- * every component table the file holds is the answer.
- */
-export function heldBy(
-  driver: Driver,
-  eids: string[],
-  ledgers: readonly Ledger[] = [],
-): string[] {
-  let held = new Set<string>()
-  let pointers = driver.query(select({
+// Each of these entities' eid with the tables its stored pointer names, or
+// null where it names no descriptor. One statement reads the pointers.
+let pointers = (driver: Driver, eids: string[]) =>
+  driver.query(select({
     cols: [col('eid', 'e'), col('tables', 'a')],
     from: table('entity', 'e'),
     joins: [
@@ -532,14 +484,46 @@ export function heldBy(
       ),
     ],
     where: oneOf(col('eid', 'e'), [...new Set(eids)]),
-  }))
-  for (let row of pointers) {
-    let wrote = ledgers.map((l) => l.wrote(String(row.eid)))
-    if (row.tables == null && !wrote.some((w) => w.born)) return facets(driver)
-    if (row.tables != null) {
-      for (let t of descriptor(driver, String(row.tables)).tables) held.add(t)
+  })).map((row): [string, readonly string[] | null] => [
+    String(row.eid),
+    row.tables == null ? null : descriptor(driver, String(row.tables)).tables,
+  ])
+
+/**
+ * The tables these entities hold rows in, as their removal clears them: each
+ * one's stored archetype, as the connection's ledger amends it for what the
+ * open transaction wrote since ({@link Ledger} `held`), among the component
+ * tables the file holds. One statement reads the pointers, so a removal costs
+ * the tables its entities wear rather than every table in the file.
+ *
+ * The pointer is exact wherever no unit is open: every door classifies what it
+ * wrote before its unit closes, and a raw writer calls {@link reclassify}
+ * (what {@link drift} audits). An entity with no pointer that the transaction
+ * did not mint is a failure: `lost` repairs those, as {@link reclassify} does
+ * before their tables are read again; without one, the failure is thrown.
+ */
+export function heldBy(
+  driver: Driver,
+  eids: string[],
+  book?: Ledger,
+  lost?: (eids: string[]) => void,
+): string[] {
+  let held = new Set<string>()
+  let missing: string[] = []
+  let take = (rows: [string, readonly string[] | null][]) => {
+    for (let [eid, pointed] of rows) {
+      let tables = book ? book.held(eid, pointed) : pointed
+      if (tables) { for (let t of tables) held.add(t) }
+      else missing.push(eid)
     }
-    for (let w of wrote) for (let t of w.tables) held.add(t)
+  }
+  take(pointers(driver, eids))
+  if (missing.length) {
+    let unknown = missing
+    missing = []
+    if (!lost) throw new Unpointed(unknown)
+    lost(unknown)
+    take(pointers(driver, unknown))
   }
   return componentTables(driver, [], [...held])
 }
@@ -551,100 +535,164 @@ export function heldBy(
  * is its tombstone and nothing else, known without reading a table. A unit
  * calls this for the dead its ledger still owes a pointer ({@link Ledger}
  * `buried`) as it closes, so the dead leave their archetype whichever door
- * removed them, and a presence lookup passes them by.
+ * removed them, and a presence lookup passes them by. Answers whether it
+ * minted a descriptor.
  */
-export function entomb(driver: Driver, eids: string[], number = false): void {
-  if (!eids.length) return
+export function entomb(
+  driver: Driver,
+  eids: string[],
+  number = false,
+): boolean {
+  if (!eids.length) return false
   let run: Run = (s) => driver.query(s)
-  unit(driver, () => {
+  return unit(driver, () => {
     let cache = new Archetypes()
     let counts: Backfill = { entities: 0, archetypes: 0, retired: 0 }
-    let tables = () => facets(driver)
+    let found = descriptors(driver)
     let { mint } = minter(
       run,
       driver,
       cache,
-      tables,
-      new Map(),
+      found.ids,
       number,
       counts,
     )
     let dead = mint(cache.intern([TOMBSTONE]).eid)
+    found.at = revision(driver, 'descriptors')
     run(point(dead, oneOf(col('eid'), [...new Set(eids)])))
+    return counts.archetypes > 0
   })
 }
 
 /**
  * Classify the named entities from their physical presence, now, inside the
  * caller's transaction. For rows an application wrote past the graph (raw SQL
- * into a component table): no queue, no triggers, the same presence rule as
- * boot. Returns the pointers that moved and any descriptor minted, as bundles
- * an application can broadcast. Descriptors and unknown eids are left alone.
+ * into a component table), and the repair of an entity met with no archetype:
+ * no queue, no triggers, the same presence rule as boot. Returns the pointers
+ * that moved and any descriptor minted, as bundles an application can
+ * broadcast. Descriptors and unknown eids are left alone.
  */
 export function reclassify(
   driver: Driver,
   eids: string[],
   number = false,
 ): Bundle[] {
-  return classify(driver, eids, number)
-}
-
-// Internal settlement may know a birth's complete shape from its unit's
-// ledger. Every other entity, including raw SQL writes, needs physical reads.
-export function classify(
-  driver: Driver,
-  eids: string[],
-  number: boolean,
-  known: ReadonlyMap<string, string[]> = new Map(),
-): Bundle[] {
-  if (!eids.length) return []
-  let run: Run = (s) => driver.query(s)
   return unit(driver, () => {
-    let cache = new Archetypes()
-    let tables = once(() => facets(driver))
-    let rows = run(owned(oneOf(col('eid', 'e'), [...new Set(eids)])))
-    if (!rows.length) return []
-    let owners = new Map<number, string[]>(
-      rows.map((r) => [Number(r.id), known.get(String(r.eid)) ?? []]),
-    )
-    let ids = rows.filter((r) => !known.has(String(r.eid)))
-      .map((r) => Number(r.id))
-    if (ids.length) {
-      presence(run, tables(), owners, (c) => ({ where: oneOf(c, ids) }))
-    }
-    let moved = new Map<number, string>()
-    for (let r of rows) {
-      let set = cache.intern(owners.get(Number(r.id))!)
-      if (set.eid == r.assigned) owners.delete(Number(r.id))
-      else moved.set(Number(r.id), String(r.eid))
-    }
-    if (!owners.size) return []
-    let counts: Backfill = { entities: 0, archetypes: 0, retired: 0 }
-    let { assign, born } = minter(
-      run,
-      driver,
-      cache,
-      tables,
-      new Map(),
-      number,
-      counts,
-    )
-    let echoes: Bundle[] = []
-    for (let [group, id] of assign(owners)) {
-      let archetype = String(
-        run(
+    let { born, put } = sorted(driver, eids, number)
+    return [
+      ...born,
+      ...put.flatMap(([owners, id]) => {
+        let [row] = driver.query(
           select({
             cols: [col('eid')],
             from: table('entity'),
             where: byId(id),
           }),
-        )[0]
-          .eid,
-      )
-      for (let owner of group) {
-        echoes.push({ entity: { eid: moved.get(owner)!, archetype } })
-      }
-    }
-    return [...born, ...echoes]
+        )
+        return owners.map((eid) => ({
+          entity: { eid, archetype: String(row.eid) },
+        }))
+      }),
+    ]
   })
+}
+
+/**
+ * A unit settling what it owes: each entity pointed at the archetype of the
+ * tables it holds, which `known` says from its pointer and the unit's ledger
+ * (given the tables the pointer names), so no table is read. Only an entity
+ * `known` cannot speak for is read from the rows it holds, as a repair is.
+ * `learned` hears the archetype, by its id, each entity is found or put in.
+ * It runs inside the unit that owes them, which makes it all or nothing, and
+ * answers whether it minted a descriptor.
+ */
+export let classify = (
+  driver: Driver,
+  eids: string[],
+  number: boolean,
+  known?: Known,
+  learned?: Learned,
+): boolean => sorted(driver, eids, number, known, learned).born.length > 0
+
+type Known = (
+  eid: string,
+  pointed: readonly string[] | null,
+) => string[] | undefined
+type Learned = (eid: string, tables: string[], id: number) => void
+
+// The named entities put in the archetype of the tables each holds: the
+// descriptors minted for it, and the eids pointed at each archetype's id.
+let sorted = (
+  driver: Driver,
+  eids: string[],
+  number: boolean,
+  known?: Known,
+  learned?: Learned,
+): { born: Bundle[]; put: [string[], number][] } => {
+  let none = { born: [], put: [] }
+  if (!eids.length) return none
+  let run: Run = (s) => driver.query(s)
+  let cache = new Archetypes()
+  let tables = once(() => facets(driver))
+  let rows = run(owned(oneOf(col('eid', 'e'), [...new Set(eids)])))
+  if (!rows.length) return none
+  let owners = new Map<number, string[]>()
+  let ids: number[] = []
+  for (let r of rows) {
+    let pointed = r.pointed == null
+      ? null
+      : descriptor(driver, String(r.pointed)).tables
+    let held = known?.(String(r.eid), pointed)
+    owners.set(Number(r.id), held ?? [])
+    if (!held) ids.push(Number(r.id))
+  }
+  if (ids.length) {
+    presence(run, tables(), owners, (c) => ({ where: oneOf(c, ids) }))
+  }
+  let moved = new Map<number, string>()
+  for (let r of rows) {
+    let names = owners.get(Number(r.id))!
+    if (cache.intern(names).eid == r.assigned) {
+      learned?.(String(r.eid), names, Number(r.archetype))
+      owners.delete(Number(r.id))
+    } else moved.set(Number(r.id), String(r.eid))
+  }
+  if (!owners.size) return none
+  let counts: Backfill = { entities: 0, archetypes: 0, retired: 0 }
+  let found = descriptors(driver)
+  let { assign, born } = minter(
+    run,
+    driver,
+    cache,
+    found.ids,
+    number,
+    counts,
+  )
+  let put = assign(owners).map(([group, id, names]): [string[], number] => {
+    let eids = group.map((owner) => moved.get(owner)!)
+    for (let eid of eids) learned?.(eid, names, id)
+    return [eids, id]
+  })
+  found.at = revision(driver, 'descriptors')
+  return { born, put }
+}
+
+/** The table sets the open write knows instead of its stored pointers. */
+export let pendingShapes = (
+  driver: Driver,
+  book: Ledger,
+): Map<number, readonly string[]> => {
+  let eids = book.owed()
+  if (!eids.length) return new Map()
+  return new Map(
+    driver.query(owned(oneOf(col('eid', 'e'), eids))).map((r) => {
+      let eid = String(r.eid)
+      let pointed = r.pointed == null
+        ? null
+        : descriptor(driver, String(r.pointed)).tables
+      let held = book.held(eid, pointed)
+      if (!held) throw new Unpointed([eid])
+      return [Number(r.id), held]
+    }),
+  )
 }

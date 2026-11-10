@@ -86,7 +86,7 @@ export type Settings = {
   ERRORS?: { send: (rows: Bundle[]) => Promise<void> }
 } & Mailbox
 
-let TRACE_READY = 'trace-ceiling-v1'
+let TRACE_READY = 'trace-archetypes-v2'
 let ddl = schema(vocab, options.derived)
 // The tracker follows its vocabulary through its print, as the box and every
 // yaks.app store do (@yaks/sqlite `follow`): its storage's own, with nothing
@@ -207,6 +207,7 @@ export class Tracker {
     }
     let saved = storage(this.ctx.storage, vocab, {
       ...options,
+      report: this.#stored,
       schemaReady: () => true,
     }, this.#rows.observe)
     if (!marked) {
@@ -226,6 +227,7 @@ export class Tracker {
     let saved = install
       ? storage(this.ctx.storage, vocab, {
         ...options,
+        report: this.#stored,
         schemaReady: () => printed(sql, PRINT),
       }, this.#rows.observe)
       : this.#traceStorage()
@@ -279,6 +281,8 @@ export class Tracker {
     moved(error) && replaced(this.ctx.storage)
       ? Promise.resolve()
       : caught(error, { sink: this.sink, ...this.#origin(entrypoint, request) })
+  // What the store outlives and repairs (@yaks/sqlite `report`).
+  #stored = (error: Error) => void this.#report(error, 'Tracker.store')
   recover = async (error: unknown, entrypoint: string, request?: Request) => {
     console.error(entrypoint, error)
     await this.#report(error, entrypoint, request)

@@ -1573,6 +1573,7 @@ export class Store {
             // minted and never by a number, so nothing mints one for them.
             number: numbered(vocab),
             counts: 'lazy',
+            report: (error) => defect(error, { request: 'store', store: name }),
             schemaReady: () =>
               this.#stood(shape) || printed(drive, shape.print),
             // A component's search index and queue triggers are made with its
@@ -3363,6 +3364,8 @@ export class Store {
         vocab,
         storage: sqliteStorage(this.#sql, vocab, {
           counts: 'lazy',
+          report: (error) =>
+            defect(error, { request: 'store', store: this.#get('name') }),
           schemaReady: () => true,
           derived,
           number: numbered(vocab),

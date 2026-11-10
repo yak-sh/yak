@@ -2,6 +2,8 @@
 // counts, never definitions, statement text, or row values.
 
 import { foreign } from './physical.ts'
+import { heldBy } from './archetype.ts'
+import { ledger } from './ledger.ts'
 import { populations } from './population.ts'
 import { by, col, type Driver, gt, lit, select, table } from '@yaks/sql'
 
@@ -107,7 +109,7 @@ export type Identity = {
   omitted: number
 }
 
-/** Physical identity and component presence, never component values. */
+/** Identity and its archetype table set, never component values. */
 export let identity = (db: Driver, eid: string): Identity => {
   let [row] = db.query(select({
     cols: [col('id')],
@@ -117,30 +119,12 @@ export let identity = (db: Driver, eid: string): Identity => {
   if (!row) {
     return { eid, exists: false, tombstoned: false, tables: [], omitted: 0 }
   }
-  let names = db.query({ t: 'pragma', name: 'table_list' })
-    .filter((r) => r.schema == 'main' && r.type == 'table')
-    .map((r) => String(r.name))
-    .filter((name) => !foreign(name))
-    .sort((a, b) =>
-      Number(b == 'tombstone') - Number(a == 'tombstone') || a.localeCompare(b)
-    )
-  let checked = names.slice(0, 160).filter((name) =>
-    db.query({ t: 'pragma', name: 'table_info', arg: name })
-      .some((column) => column.name == 'entity')
-  )
-  let tables = checked.filter((name) =>
-    db.query(select({
-      cols: [col('entity')],
-      from: table(name),
-      where: by({ entity: Number(row.id) }),
-      limit: lit(1),
-    })).length
-  ).sort()
+  let tables = heldBy(db, [eid], ledger(db)).sort()
   return {
     eid,
     exists: true,
     tombstoned: tables.includes('tombstone'),
-    tables,
-    omitted: Math.max(0, names.length - 160),
+    tables: tables.slice(0, 160),
+    omitted: Math.max(0, tables.length - 160),
   }
 }

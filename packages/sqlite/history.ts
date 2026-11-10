@@ -62,20 +62,22 @@ import type { Vocab } from '@yaks/vocab'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import { tables } from './layout.ts'
 import { indexed } from './ddl.ts'
+import { branched } from './history-branch.ts'
+import {
+  BESIDE,
+  beside,
+  BRANCH,
+  FROM,
+  shaped,
+  shapeDdl,
+  shapeSeeds,
+  TO,
+} from './history-shapes.ts'
+export { BESIDE, beside, BRANCH, FROM, TO } from './history-shapes.ts'
 
 export type { History } from '@yaks/sql'
 
 export type { Mode } from '@yaks/sql'
-
-/** The store-reserved columns. `$` names are the store's, as `$entity` is, so
- * no property can take them. */
-export let FROM = '$from', TO = '$to', BRANCH = '$branch'
-
-/** What the table beside a component's is named after it. */
-export let BESIDE = '$versions'
-
-/** The table of every version of `comp`. */
-export let beside = (comp: string): string => `${comp}${BESIDE}`
 
 /** The table of branches. */
 export let BRANCHES = '$branch'
@@ -183,16 +185,17 @@ export let besideDdl = (
  * The live tables are not restated: history changes none of them. */
 export let historySchema = (vocab: Vocab, typed?: Typed): Stmt[] => [
   ...besideDdl(vocab, typed),
+  ...shapeDdl,
   BRANCH_DDL,
 ]
 
 /** The versions of what main holds as history begins: each live row of every
  * component that keeps versions, whose table of versions `made` says was just
  * made, as its open version from no transaction. */
-export let seeds = (vocab: Vocab, made: (table: string) => boolean): Stmt[] =>
-  [...covered(vocab)]
+export let seeds = (vocab: Vocab, made: (table: string) => boolean): Stmt[] => [
+  ...[...covered(vocab)]
     .filter((comp) => keeps(vocab, comp) && made(beside(comp)))
-    .map((comp) => {
+    .map((comp): Stmt => {
       let cols = stored(vocab, comp)
       return {
         t: 'insert',
@@ -209,7 +212,9 @@ export let seeds = (vocab: Vocab, made: (table: string) => boolean): Stmt[] =>
           from: table(comp),
         }),
       }
-    })
+    }),
+  ...shapeSeeds([...covered(vocab)], made),
+]
 
 /** The branch table: a branch's parent (0 is main), the transaction it forked
  * at, and when. Making one writes a row and copies nothing. */
@@ -285,7 +290,6 @@ export let ticked = (driver: Driver): number | undefined =>
 // ---- versioned writes ----
 
 type W = Extract<Stmt, { t: 'insert' | 'update' | 'delete' }>
-type Insert = Extract<W, { t: 'insert' }>
 
 /** One write as the statements that run it on a driver with history: those
  * that keep its versions before it, itself, whose count a caller reads, and,
@@ -307,7 +311,7 @@ let target = (w: W): string =>
  * rows instead (`branched`). A write to a table history does not cover, or on
  * main to an exempt component, is itself alone.
  */
-export let kept = (driver: Driver, w: W): Kept => {
+let keep1 = (driver: Driver, w: W): Kept => {
   let k = keeping.get(driver)
   let alone = { before: [], write: w }
   if (!k) return alone
@@ -347,6 +351,26 @@ export let kept = (driver: Driver, w: W): Kept => {
   }
 }
 
+export let kept = (driver: Driver, w: W): Kept => {
+  let result = keep1(driver, w)
+  let k = keeping.get(driver)
+  let comp = target(w)
+  if (!k || !covered(k.vocab).has(comp) || !k.mode && !keeps(k.vocab, comp)) {
+    return result
+  }
+  let tx = clockOf(driver, k)
+  let branch = k.mode && 'branch' in k.mode ? k.mode.branch : 0
+  return {
+    ...result,
+    after: (
+      owners,
+    ) => [
+      ...result.after?.(owners) ?? [],
+      ...shaped(comp, owners, branch, tx, w.t != 'delete'),
+    ],
+  }
+}
+
 let clockOf = (driver: Driver, k: Keeping): number => {
   let unit = k.units.at(-1)
   if (!unit) {
@@ -361,23 +385,6 @@ let MAIN_OPEN = and(eq(col(BRANCH), lit(0)), eq(col(TO), lit(0)))
 // The entities whose rows of `comp` match `where`.
 let owned = (comp: string, where: Expr): Query =>
   select({ cols: [col('entity')], from: table(comp), where })
-
-// An insert's query with more columns after its own.
-let appended = (q: Query, es: Expr[]): Query => {
-  if (q.t != 'select') throw new Error('a versioned insert from a compound')
-  return { ...q, cols: [...q.cols ?? [], ...es] }
-}
-
-// The entities an insert names: its rows' owners, or its query's.
-let entities = (w: Insert): Expr[] | Query => {
-  let at = w.cols?.indexOf('entity') ?? -1
-  if (at < 0) {
-    throw new Error(`a versioned insert into ${w.into} names no owner`)
-  }
-  if (w.rows) return w.rows.map((r) => r[at])
-  if (w.q?.t != 'select') throw new Error('a versioned insert from a compound')
-  return { ...w.q, with: w.q.with ?? w.with, cols: [w.q.cols![at]] }
-}
 
 // Main's open versions of `owners`, ended at `tx`: one this same transaction
 // opened goes, since nobody else ever saw it; any other is closed.
@@ -448,109 +455,6 @@ let synced = (
     { t: 'update', table: to, set: { [TO]: val(tx) }, where: stale },
     opened(comp, cols, and(among(col('entity'), owners), none), tx),
   ]
-}
-
-// ---- writes on a branch ----
-
-// The branch's open row of the entity a write's condition names.
-let open = (branch: number) =>
-  and(eq(col(BRANCH), val(branch)), eq(col(TO), lit(0)))
-
-/**
- * A write on branch `b`, as a write to the branch's rows beside. Every read in
- * it names the live table, which on a branch's connection is the branch's view
- * of it (./mode.ts), so it sees the branch.
- *
- * Before any write, each entity's component as the branch sees it is copied
- * into an open row of the branch's own, where it has none: an insert then
- * lands on that row as it would on main's, an update changes it, and a removal
- * closes it, so it goes on hiding main's. A branch keeps no versions of its
- * own: its rows are what it holds now, and what it removed.
- */
-let branched = (
-  vocab: Vocab,
-  comp: string,
-  w: W,
-  b: number,
-  tx: number,
-): Kept => {
-  let cols = stored(vocab, comp)
-  let to = beside(comp)
-  let seed = (where: Expr): W => ({
-    t: 'insert',
-    or: 'ignore',
-    into: to,
-    cols: ['entity', ...cols, BRANCH, FROM, TO],
-    q: select({
-      cols: [
-        col('entity'),
-        ...cols.map((c) => col(c)),
-        val(b),
-        val(tx),
-        lit(0),
-      ],
-      from: table(comp),
-      where,
-    }),
-  })
-  if (w.t == 'insert') {
-    let e = entities(w)
-    return {
-      before: [seed(among(col('entity'), e))],
-      write: {
-        ...w,
-        into: to,
-        cols: [...w.cols!, BRANCH, FROM, TO],
-        ...w.rows
-          ? { rows: w.rows.map((r) => [...r, val(b), val(tx), lit(0)]) }
-          : {},
-        ...w.q ? { q: appended(w.q, [val(b), val(tx), lit(0)]) } : {},
-        ...w.upsert
-          ? {
-            upsert: w.upsert.map((u) => ({
-              ...u,
-              on: [col('entity'), col(BRANCH), col(TO)],
-            })),
-          }
-          : {},
-      },
-    }
-  }
-  let where = w.where ?? lit(true)
-  let mine = and(where, open(b))
-  if (w.t == 'update') {
-    return {
-      before: [seed(where)],
-      write: {
-        t: 'update',
-        table: to,
-        set: { ...w.set, [FROM]: val(tx) },
-        where: mine,
-        ...w.returning ? { returning: w.returning } : {},
-      },
-    }
-  }
-  // A row this transaction both opened and closed already has its closed
-  // twin at `tx`; it goes. Any other open row is closed where it stands.
-  let twin = exists(select({
-    cols: [lit(1)],
-    from: table(to, '__twin'),
-    where: and(
-      eq(col('entity', '__twin'), col('entity', to)),
-      eq(col(BRANCH, '__twin'), val(b)),
-      eq(col(TO, '__twin'), val(tx)),
-    ),
-  }))
-  return {
-    before: [seed(where), { t: 'delete', from: to, where: and(mine, twin) }],
-    write: {
-      t: 'update',
-      table: to,
-      set: { [TO]: val(tx) },
-      where: mine,
-      ...w.returning ? { returning: w.returning } : {},
-    },
-  }
 }
 
 // ---- what a mode reads ----

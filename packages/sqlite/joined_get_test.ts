@@ -15,7 +15,7 @@ import {
   val,
 } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
-import { get, storage } from './mod.ts'
+import { get, reclassify, storage } from './mod.ts'
 import { mem, seedIdentities, shop, spy, unit } from './testing.ts'
 import { get as census } from './fixtures/census.ts'
 
@@ -197,7 +197,7 @@ test('a selected identity reads backed rows that have no stored spine', () => {
   assertEquals(get(driver, v, [eid], opts, []), [{ entity: { eid } }])
 })
 
-test('an empty shape guess sees a later classified or unclassified birth', () => {
+test('an empty shape guess sees a later birth, through the graph or past it', () => {
   let driver = mem(), s = storage(driver, vocab)
   s.install()
   s.raise(['doc'])
@@ -209,6 +209,7 @@ test('an empty shape guess sees a later classified or unclassified birth', () =>
   driver.query(insert('entity', { eid: ids[1] }))
   let id = Number(scan(driver, 'entity', by({ eid: ids[1] }), ['id'])[0].id)
   driver.query(insert('doc', { entity: id, title: 'new' }))
+  reclassify(driver, [ids[1]])
   assertEquals(get(driver, vocab, ids), census(driver, vocab, ids))
   assertEquals(get(driver, vocab, ids), census(driver, vocab, ids))
 })

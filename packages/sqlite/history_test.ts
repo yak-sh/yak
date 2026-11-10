@@ -1,4 +1,4 @@
-import { equal, test, throws } from '@yaks/testing'
+import { equal, ok, test, throws } from '@yaks/testing'
 import { type Bundle, graph } from '@yaks/graph'
 import {
   as,
@@ -12,6 +12,8 @@ import {
 } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { open } from './db.ts'
+import { render } from '@yaks/sql'
+import { meta, SCHEMA } from './meta.ts'
 import { branch, type Mode, moded, storage } from './mod.ts'
 
 let vocab = loadVocab([{
@@ -186,3 +188,43 @@ await looking.get(['q1'])
 
 test('a store that begins to keep history keeps what it held as its past', async () =>
   equal((await looking.get(['q1']))[0].page, { title: 'before' }))
+
+// As a file from before historical archetypes: keep all its component
+// versions, remove only the new index, and let installation rebuild it.
+let shapeRows = () =>
+  d.query(
+    select({
+      from: table('$archetype$versions'),
+      order: [col('entity'), col('component'), col('$branch'), col('$to')],
+    }),
+  )
+let originalShapes = shapeRows()
+d.query({ t: 'drop', kind: 'table', name: '$archetype$versions' })
+meta(d).del(SCHEMA)
+store.install()
+let repairedShapes = shapeRows()
+store.install()
+let repeatedShapes = shapeRows()
+test('historical archetypes rebuild from older versions and installation is idempotent', () => {
+  equal(repairedShapes, originalShapes)
+  equal(repeatedShapes, repairedShapes)
+})
+
+test('a past whole read asks no unrelated component view for presence', async () => {
+  let statements: string[] = []
+  let query = past.query
+  past.query = (s) => {
+    statements.push(render(s).sql)
+    return query(s)
+  }
+  try {
+    let row = (await seen({ at: life[0].at }).get(['p1']))[0]
+    equal(row.page, { title: 'one', n: 1 })
+    ok(
+      !statements.some((s) => /(?:from|join) "(?:pinned|lease)"/.test(s)),
+      statements.join('\n'),
+    )
+  } finally {
+    past.query = query
+  }
+})

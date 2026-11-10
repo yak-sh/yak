@@ -13,7 +13,7 @@ import {
 } from '@yaks/sql'
 import { parse } from '@yaks/query'
 import { fields, schema as ftsSchema, search } from '@yaks/fts'
-import { get, read, removeSql, spines, storage } from './mod.ts'
+import { backfill, get, read, removeSql, spines, storage } from './mod.ts'
 
 let vocab = loadVocab({
   $defs: {
@@ -114,6 +114,8 @@ let fixture = (() => {
   )
   d.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
   d.query(insert('entity', ...ids.slice(21).map((eid) => ({ eid }))))
+  // Rows written past the store are classified, as their writer must.
+  backfill(d)
   return { d, statements }
 })()
 

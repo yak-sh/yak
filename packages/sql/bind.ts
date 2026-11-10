@@ -169,6 +169,10 @@ export type BindOpts = {
   /** Component tables the file does not hold yet, for a reader no writer has
    * caught up: each reads as an empty relation (./absent.ts). */
   absent?: readonly string[]
+  /** Tables the file keeps that are no words of this vocabulary (a store's
+   * archetype descriptors, where the vocabulary declares none): an entity
+   * holding a row in one is the store's bookkeeping, and no query sees it. */
+  bookkeeping?: readonly string[]
   /** the rows each computed component is read from (./derived.ts) */
   backed?: Backings
   /** what each backed component's eids end with in this store, which a
@@ -415,8 +419,8 @@ let byArchetype = (
   missing = false,
 ): Cond | null => {
   if (!ctx.archetypes || !ctx.d.archetype) return null
-  // Bounded owner selections need only keyed component probes. Opening a
-  // cold catalog here would read every unrelated shape before those owners.
+  // Bounded owner selections test their named components by key; a cold
+  // catalog need not read unrelated descriptors for those predicates.
   if ((ctx.bounded || ctx.candidates) && !ctx.archetypes.held) return null
   let ids = ctx.archetypes(predicate)
   if (!ids) return null
@@ -443,7 +447,19 @@ let byArchetype = (
   let sql = missing
     ? ids.length ? `coalesce(${set.sql}, 1)` : `${key} is null`
     : set.sql
-  return cond({ sql, params: set.params })
+  let pending = ctx.archetypes.pending
+  if (!pending) return cond({ sql, params: set.params })
+  let identity = owner ?? ctx.d.ownerKey('entity')
+  let excluded = ctx.d.among(identity, [...pending.ids])
+  let matches = pending.matching(predicate)
+  let included = matches.length
+    ? ctx.d.among(identity, [...matches])
+    : { sql: '0', params: [] }
+  return cond({
+    sql:
+      `(((${sql}) and not coalesce(${excluded.sql}, 0)) or coalesce(${included.sql}, 0))`,
+    params: [...set.params, ...excluded.params, ...included.params],
+  })
 }
 
 // The entities wearing `comp`, read from its own table: what a presence test
@@ -2264,7 +2280,9 @@ let shapeOr = (
       !ctx.derived[c.path.join('.')] &&
       indexFor(ctx, c.path[0], c.path[1], siblings)
     )
-  if (indexedOwner && ctx.archetypes && ctx.d.archetype) {
+  if (
+    indexedOwner && ctx.archetypes && !ctx.archetypes.pending && ctx.d.archetype
+  ) {
     let required = [...siblings, ...scopes].flatMap((c) => {
       let f = facet(c)
       return f ? [f] : []
@@ -2389,7 +2407,8 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   // every owner the shape has in the graph.
   if (
     shape && ctx.present && none.length && !ctx.bounded && !ctx.spine &&
-    !ctx.candidates && !shapes.size && ctx.d.archetypeSource && !ctx.paged
+    !ctx.candidates && !shapes.size && ctx.d.archetypeSource && !ctx.paged &&
+    !ctx.archetypes?.pending
   ) {
     let policy = allowed(ctx)
     let admitting = policy && {
@@ -3546,6 +3565,38 @@ export let bound = (
   scope?: Scope,
 ): Select => prepared(ast, vocab, opts, d, reads, scope).lower()
 
+// An entity's own reference to a row of the store's bookkeeping
+// (`BindOpts.bookkeeping`) reads as nothing, as that row does: a store whose
+// vocabulary declares no archetypes has no `entity.archetype` to show.
+let NOTHING: DerivedProp = {
+  stable: true,
+  tag: 'eid',
+  worn: false,
+  expr: () => lit(null),
+}
+let unkepts = new WeakMap<Derived, Map<string, Derived>>()
+let unkept = (v: Vocab, derived: Derived, kept?: readonly string[]) => {
+  if (!kept?.length) return derived
+  let hidden = v.props('entity').filter((p) =>
+    kept.includes(v.prop('entity', p)?.ref ?? '')
+  )
+  if (!hidden.length) return derived
+  let key = hidden.join(',')
+  let cache = unkepts.get(derived)
+  if (!cache) unkepts.set(derived, cache = new Map())
+  let got = cache.get(key)
+  if (!got) {
+    cache.set(
+      key,
+      got = {
+        ...derived,
+        ...Object.fromEntries(hidden.map((p) => [`entity.${p}`, NOTHING])),
+      },
+    )
+  }
+  return got
+}
+
 // A query begun: every extension has been told (its `begin`), and the
 // context it will lower in is chosen. `opts` holds the options as that context
 // captured them, before any `begin` ran. A caller may reuse a proven lowering
@@ -3592,6 +3643,23 @@ export let prepared = (
     }
   }
   d = absentDialect(d, vocab, opts.absent)
+  if (opts.bookkeeping?.length && !d.discreet) {
+    let { live } = d
+    let kept = opts.bookkeeping
+    d = {
+      ...d,
+      discreet: true,
+      live: (owner) => {
+        let alive = live(owner)
+        let at = owner ?? '"entity"."id"'
+        let none = kept.map((t, i) =>
+          `not exists (select 1 from "${t}" "@kept${i}" ` +
+          `where "@kept${i}"."entity" = ${at})`
+        )
+        return { ...alive, sql: [`(${alive.sql})`, ...none].join(' and ') }
+      },
+    }
+  }
   if (opts.graves && !opts.visibility) {
     d = { ...d, live: () => ({ sql: '1', params: [] }) }
   }
@@ -3625,7 +3693,11 @@ export let prepared = (
     d: backedDialect(d, vocab, backed, tags, (c) => tagged.add(c), spine),
     // A property computed from a component's rows reads one with no table
     // as worn by nobody, as the dialect does.
-    derived: absentDerived(vocab, derivedOf(vocab, opts.derived), opts.absent),
+    derived: unkept(
+      vocab,
+      absentDerived(vocab, derivedOf(vocab, opts.derived), opts.absent),
+      opts.bookkeeping,
+    ),
     absent: opts.absent,
     backed,
     tags,
@@ -4988,7 +5060,8 @@ let scopedTally = (
   let tally = ast.clauses.length == 1 && ast.clauses[0].kind == 'tally' &&
     ast.clauses[0].path.join('.') == 'entity.archetype'
   if (
-    tally && !reads.length && !opts.eids && !opts.absent?.length &&
+    tally && !opts.archetypes?.pending && !reads.length && !opts.eids &&
+    !opts.absent?.length &&
     !opts.backed?.entity && !screening &&
     !Object.keys(visibility.components ?? {}).length &&
     !opts.extend?.some((e) =>
@@ -5532,6 +5605,7 @@ let visible = (
       {
         held: { get: () => catalog.held },
         masked: { value: hidden },
+        pending: { get: () => catalog.pending },
       },
     )
     : undefined

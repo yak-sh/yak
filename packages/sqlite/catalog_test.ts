@@ -5,6 +5,8 @@ import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { catalog } from './catalog.ts'
+import { assertThrows } from '@std/assert'
+import { Unpointed } from './error.ts'
 import { storage } from './mod.ts'
 import { mem, shop, spy } from './testing.ts'
 
@@ -36,7 +38,7 @@ test('a warm catalog costs no storage calls until its rows change', () => {
   equal(calls, 0)
 })
 
-test('pointer-only changes reuse descriptor rows but still decline unclassified owners', () => {
+test('pointer-only changes reuse descriptors and report corrupt owners', () => {
   let scans = 0,
     d = spy(mem(), (s) => {
       if (
@@ -60,8 +62,10 @@ test('pointer-only changes reuse descriptor rows but still decline unclassified 
     cols: ['eid'],
     rows: [[{ t: 'val', v: 'unclassified' }]],
   })
-  equal(match(), undefined)
+  assertThrows(match, Unpointed)
+  // The write reads the owner first, which reports it and classifies it as
+  // the entity holding nothing it is: one new descriptor, read once.
   g.apply([{ entity: { eid: 'unclassified' }, doc: { title: 'Classified' } }])
   equal(match(), before)
-  equal(scans, 0)
+  equal(scans, 1)
 })

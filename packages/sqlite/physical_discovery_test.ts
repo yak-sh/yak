@@ -66,15 +66,22 @@ held.query(insert('archetype', {
   tables: JSON.stringify(['doc', 'hidden', 'infrastructure', 'missing']),
 }))
 let heldRows = counted(held)
-test('removal discovers the physical tables its descriptor names, with a fallback for unknown owners', () => {
+test('removal discovers the physical tables its descriptor names, and has an owner with none repaired', () => {
   equal(heldBy(held, ['owner']), ['doc', 'hidden'])
   equal(heldRows(), 3)
-  held.query({
-    t: 'update',
-    table: 'entity',
-    set: { archetype: val(null) },
-    where: by({ eid: 'owner' }),
-  })
-  equal(heldBy(held, ['owner']), ['archetype', 'doc', 'hidden', 'unused'])
-  equal(heldRows(), 5)
+  let point = (archetype: number | null) =>
+    held.query({
+      t: 'update',
+      table: 'entity',
+      set: { archetype: val(archetype) },
+      where: by({ eid: 'owner' }),
+    })
+  point(null)
+  let lost: string[][] = []
+  let repair = (eids: string[]) => {
+    lost.push(eids)
+    point(1)
+  }
+  equal(heldBy(held, ['owner'], undefined, repair), ['doc', 'hidden'])
+  equal(lost, [['owner']])
 })

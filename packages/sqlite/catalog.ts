@@ -1,16 +1,19 @@
+import { satisfies } from '@yaks/archetype/sets'
+import { Unpointed } from './error.ts'
 // Immutable table sets and a connection-revision snapshot: planning reads no
 // persistent rows until a catalog mutation or rollback invalidates that snapshot.
 import { type Archetype, Archetypes, tablesOf } from '@yaks/archetype/sets'
 import {
+  and,
   type ArchetypeSet,
   archetypeSet,
   col,
   type Driver,
   isNull,
-  lit,
+  not,
+  oneOf,
   select,
   table,
-  val,
 } from '@yaks/sql/core'
 import { revision } from '@yaks/sql/core'
 import { tableVersion } from './versions.ts'
@@ -47,24 +50,24 @@ export function descriptor(driver: Driver, text: string): Archetype {
   return a
 }
 
-function snapshot(driver: Driver): ArchetypeSet | undefined {
+function snapshot(
+  driver: Driver,
+  pending?: ReadonlyMap<number, readonly string[]>,
+): ArchetypeSet {
   let cache = cacheFor(driver)
   let v = revision(driver, 'catalog')
-  if (cache.version == v) return cache.set
-  // Raw patch() can mint rows before classification. Keep that incomplete
-  // snapshot as a declined catalog, and inspect it again only after a mutation.
-  if (
-    driver.query(select({
-      cols: [lit(1)],
-      from: table('entity'),
-      where: isNull(col('archetype')),
-      limit: val(1),
-    })).length
-  ) {
-    cache.version = v
-    cache.set = undefined
-    return undefined
-  }
+  if (cache.version == v && cache.set) return cache.set
+  // An incomplete catalog is corruption, never permission for the planner
+  // to discover presence in component tables. The writer repairs it.
+  let missing = driver.query(select({
+    cols: [col('eid')],
+    from: table('entity'),
+    where: and(
+      isNull(col('archetype')),
+      ...pending?.size ? [not(oneOf(col('id'), [...pending.keys()]))] : [],
+    ),
+  }))
+  if (missing.length) throw new Unpointed(missing.map((r) => String(r.eid)))
   let version = revision(driver, 'descriptors')
   if (cache.descriptorVersion != version || !cache.descriptors) {
     // SQLite's data_version hears every peer commit. The table's own clock
@@ -128,19 +131,34 @@ export function described(
  * Create one per compile, not once per connection. Compile and execute inside
  * the same transaction, so another writer cannot change the catalog between.
  */
-export function catalog(driver: Driver): ArchetypeSet {
+export function catalog(
+  driver: Driver,
+  pending?: ReadonlyMap<number, readonly string[]>,
+): ArchetypeSet {
   let loaded = false
   let current: ArchetypeSet | undefined
   let cache = cacheFor(driver)
   let choose = (predicate: Parameters<ArchetypeSet>[0]) => {
     if (!loaded) {
-      current = snapshot(driver)
+      current = snapshot(driver, pending)
       loaded = true
     }
     return current?.(predicate)
   }
+  if (pending?.size) {
+    Object.assign(choose, {
+      pending: {
+        ids: [...pending.keys()],
+        matching: (predicate: Parameters<ArchetypeSet>[0]) =>
+          [...pending].filter(([, tables]) =>
+            satisfies(predicate, { eid: '', tables })
+          ).map(([id]) => id),
+      },
+    })
+  }
   return Object.defineProperty(choose, 'held', {
     get: () => {
+      if (pending?.size) return true
       if (!cache.descriptors) return false
       let version = revision(driver, 'descriptors')
       if (cache.descriptorVersion == version) return true
@@ -149,8 +167,8 @@ export function catalog(driver: Driver): ArchetypeSet {
         cache.schemaVersion != revision(driver, 'schema') ||
         cache.tableVersion != tableVersion(driver, 'archetype')
       ) return false
-      // Only descriptor freshness is proven. snapshot() still checks whether
-      // any owner lacks classification before handing this set to a plan.
+      // Only descriptor freshness is proven. snapshot() still checks for
+      // corrupt owners before handing this set to a plan.
       cache.descriptorVersion = version
       return true
     },

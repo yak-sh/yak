@@ -323,3 +323,15 @@ test('failed empty schema setup retains its charge across restart without report
   equal(authority.traceBudget().reserved, 2 * (136 + TRACE_ADMISSION_SETUP))
   equal(reports, 0)
 })
+
+test('an older trace schema waits for ordinary installation before reading again', async () => {
+  let target = new Tracker(state(durable(), space))
+  await target.boot()
+  let kept = meta(driver(target.ctx.storage))
+  kept.set('trace-ready', 'trace-ceiling-v1')
+  let reopened = new Tracker(target.ctx)
+  equal(await reopened.ingestTrace(rows()), false)
+  equal(reopened.tracker, undefined)
+  await reopened.boot()
+  equal(await reopened.ingestTrace(rows()), true)
+})

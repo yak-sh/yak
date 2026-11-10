@@ -219,7 +219,7 @@ test('identity reads see pending component changes before classification', async
 })
 
 test('classification begins the next presence comparison in a ledger', () => {
-  let l = ledger()
+  let l = ledger(mem())
   l.moved('a', 'doc', false)
   assertEquals(l.owed(), ['a'])
   l.pointed('a')
@@ -231,6 +231,55 @@ test('classification begins the next presence comparison in a ledger', () => {
   l.moved('a', 'doc', false)
   l.moved('a', 'doc', true)
   assertEquals(l.owed(), [])
+})
+
+test('a ledger says what an entity holds from its pointer and the rows since', () => {
+  let l = ledger(mem())
+  assertEquals(l.held('a', ['doc']), ['doc'])
+  assertEquals(l.held('a', null), undefined)
+  l.moved('a', 'task', true)
+  l.moved('a', 'doc', false)
+  assertEquals(l.held('a', ['doc', 'note']), ['note', 'task'])
+  assertEquals(l.held('a', null), undefined)
+  // A birth holds what it was given, whatever class it was minted in.
+  l.born('b')
+  l.moved('b', 'doc', true)
+  assertEquals(l.held('b', ['doc', 'task']), ['doc'])
+  assertEquals(l.held('b', null), ['doc'])
+  // The removed hold their tombstone, and what a revival gives them after.
+  l.removed('a')
+  assertEquals([l.held('a', ['doc']), l.buried(), l.owed()], [
+    ['tombstone'],
+    ['a'],
+    ['b'],
+  ])
+  l.moved('a', 'tombstone', false)
+  l.moved('a', 'note', true)
+  assertEquals([l.held('a', ['doc']), l.buried()], [['note'], []])
+})
+
+test('a ledger takes back what a rolled back savepoint heard', () => {
+  let sql = mem()
+  let l = ledger(sql)
+  let point = (t: 'savepoint' | 'release' | 'rollback', name: string) =>
+    sql.query(t == 'rollback' ? { t, to: name } : { t, name })
+  point('savepoint', 'outer')
+  l.moved('a', 'doc', true)
+  point('savepoint', 'inner')
+  l.moved('a', 'task', true)
+  l.pointed('a')
+  l.born('b')
+  assertEquals([l.owed(), l.held('a', ['doc', 'task'])], [['b'], [
+    'doc',
+    'task',
+  ]])
+  point('rollback', 'inner')
+  point('release', 'inner')
+  assertEquals([l.owed(), l.held('a', []), l.wrote('b')], [['a'], [
+    'doc',
+  ], false])
+  point('release', 'outer')
+  assertEquals([l.owed(), l.wrote('a')], [[], false])
 })
 
 test('archetype: a removal past the graph leaves its archetype, and its tombstone still swallows a racing write', async () => {

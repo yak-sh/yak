@@ -135,6 +135,7 @@ export let operatorStore = (
     derived,
     extend: [search(text, sql)],
     over: () => searching,
+    report: (error) => caught(error, { request: 'operator store' }),
     schemaReady: () => stood,
   })
   print ??= printOf(`operator:${FITTING}:${store.print()}`, [

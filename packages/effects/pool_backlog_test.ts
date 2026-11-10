@@ -221,9 +221,11 @@ let shortPass = async (idle: number) => {
 }
 let alone = await shortPass(0), among = await shortPass(20)
 
-test('a pass over a short backlog reads as much beside twenty idle handlers as beside none', () => {
-  assertEquals(alone.started, 1)
-  assertEquals(among, alone)
+test('a pass over a short backlog reads no more beside twenty idle handlers than beside none', () => {
+  assertEquals([alone.started, among.started], [1, 1])
+  // What a store learns of its tables on a first removal, the one with more
+  // handlers has learned before the pass.
+  assert(among.reads <= alone.reads, JSON.stringify({ alone, among }))
 })
 
 for (let sqlite of [false, true]) {

@@ -1,3 +1,4 @@
+import { Unpointed } from './error.ts'
 import {
   cardinality,
   census,
@@ -28,7 +29,6 @@ import {
   absentDerived,
   among,
   and,
-  array,
   as,
   type Backings,
   type BindOpts,
@@ -100,11 +100,13 @@ export let rows = (
   query: Query,
   opts: BindOpts = {},
 ): Row[] => {
-  let indexed = !!vocab.comp('archetype')
   let ask = () => {
     let parsed = ast(query)
     // A store's counted populations are of the living.
-    let shape = opts.graves ? undefined : cardinality(parsed, vocab, opts)
+    let shape =
+      opts.graves || opts.archetypes?.pending || !vocab.comp('archetype')
+        ? undefined
+        : cardinality(parsed, vocab, opts)
     if (
       shape && (!opts.archetypes || opts.archetypes({}) != undefined) &&
       classified(driver)
@@ -132,12 +134,13 @@ export let rows = (
         if (n != undefined) return [{ value: '', n }]
       }
     }
-    let population = !opts.graves && parsed.clauses.length == 1 &&
+    let population =
+      !opts.graves && !opts.archetypes?.pending && parsed.clauses.length == 1 &&
         parsed.clauses[0].kind == 'tally' &&
         parsed.clauses[0].path.join('.') == 'entity.archetype' &&
         installed(driver) && classified(driver)
-      ? POPULATION
-      : undefined
+        ? POPULATION
+        : undefined
     let compiled = compile(
       parsed,
       vocab,
@@ -155,7 +158,7 @@ export let rows = (
   // concurrent writer could introduce a new matching set between the two. A
   // read unit is one snapshot without the write lock, so a long query never
   // makes a writer on another connection wait (./unit.ts).
-  return indexed || opts.archetypes ? unit(driver, ask, 'read') : ask()
+  return unit(driver, ask, 'read')
 }
 
 // A compile's options over this file: the caller's, and the file's archetype
@@ -163,10 +166,13 @@ export let rows = (
 // a lookup on the archetype index.
 let catalogued = (driver: Driver, vocab: Vocab, opts: BindOpts): BindOpts => ({
   ...opts,
-  archetypes: opts.archetypes ??
-    (vocab.comp('archetype') ? catalog(driver) : undefined),
+  archetypes: opts.archetypes ?? catalog(driver),
+  // Where the vocabulary declares none, the descriptors every file keeps
+  // (./ddl.ts) are the store's bookkeeping, and no entity of its graph.
+  ...vocab.comp('archetype') ? {} : { bookkeeping: KEPT },
   stable: opts.stable ?? driver.stable,
 })
+let KEPT = ['archetype']
 
 /**
  * The entities a query admits, as a statement selecting their integer ids as
@@ -457,10 +463,11 @@ export let grave = (id: Expr): Expr =>
 
 /**
  * The spine rows of the entities `which` names, as `e`: each one's id, eid,
- * number and grave, and its archetype's eid and table set where the store
- * keeps archetypes. What every whole read starts from. Left `kind`-only, it
- * carries the archetype as the id the entity points at (`@kind`), for a reader
- * that knows the descriptors already (`kinded`).
+ * number and grave, and its archetype's eid and table set where the
+ * vocabulary declares archetypes. What every whole read starts from. Left
+ * `kind`-only, it carries the archetype as the id the entity points at
+ * (`@kind`), which every file this package installs keeps, for a reader that
+ * knows the descriptors already (`kinded`).
  */
 export let spine = (vocab: Vocab, which: Expr, kind = false): Select => {
   let typed = !!vocab.comp('archetype')
@@ -470,7 +477,7 @@ export let spine = (vocab: Vocab, which: Expr, kind = false): Select => {
       col('eid', 'e'),
       col('num', 'e'),
       as(grave(col('id', 'e')), 'dead'),
-      ...(!typed ? [] : kind ? [as(col('archetype', 'e'), '@kind')] : [
+      ...(kind ? [as(col('archetype', 'e'), '@kind')] : !typed ? [] : [
         as(col('eid', 'a'), 'archetype'),
         as(col('tables', 'shape'), '@tables'),
       ]),
@@ -541,8 +548,7 @@ export let described = (
   }
   learn(driver, from, rows)
 }
-let kinded = (driver: Driver, vocab: Vocab, rows: Row[]): Row[] => {
-  if (!vocab.comp('archetype')) return rows
+let kinded = (driver: Driver, rows: Row[]): Row[] => {
   let at = revision(driver, 'descriptors')
   let cache = kinds.get(driver)
   if (cache?.at != at) kinds.set(driver, cache = { at, held: new Map() })
@@ -580,59 +586,6 @@ let kinded = (driver: Driver, vocab: Vocab, rows: Row[]): Row[] => {
   }
   return rows
 }
-
-// Which tables hold a row for any owner. VALUES has no compound-SELECT arm
-// limit, but each table names the owners, and an engine counts every naming
-// of a common table expression against its expression depth, never giving one
-// back (workerd refuses a statement at 100): a statement asks about PROBED
-// tables, and a wider vocabulary takes one for each PROBED its file holds.
-// A table costs more than its one naming there: the platform tracker's
-// object, 70 tables in its file, refused a statement of 64 ("VIEWs and/or
-// subqueries nested too deep", 2026-11-10), so a statement stays at 16, under
-// the depth even at six a table.
-// Globally empty tables short-circuit before the owners are walked: the test
-// is a constant term of the walk's own WHERE, which SQLite checks before the
-// loop. Beside it, as an AND outside the walk, SQLite 3.46 ran every table's
-// walk at once and a wide sparse read took seconds. Every table names the
-// owners, so they are one array: written out, they would be prepared again
-// for each table and for each different set of owners. Each table is asked
-// about one owner at a time, so a mode's view over two tables (a branch's
-// exempt components, @yaks/sqlite mode.ts) takes the owner into each of its
-// arms; joined to the owners, a statement this wide would read every row of
-// it.
-let worn = new WeakMap<Vocab, Map<string, Source>>()
-let PROBED = 16
-let probe = (vocab: Vocab, names: string[], owners: number[]): Select =>
-  select({
-    with: [{ name: 'owners', q: array(owners), materialized: true }],
-    cols: [as(col('column1', 'worn'), 'name')],
-    from: at(
-      at(worn, vocab, () => new Map()),
-      `${owners.length > 1} ${names}`,
-      () =>
-        from({
-          t: 'values',
-          rows: names.map((c) => [
-            lit(c),
-            exists(select({
-              cols: [lit(1)],
-              from: table('owners'),
-              where: and(
-                ...(owners.length > 1
-                  ? [exists(select({ cols: [lit(1)], from: table(c) }))]
-                  : []),
-                exists(select({
-                  cols: [lit(1)],
-                  from: table(c),
-                  where: eq(col('entity', c), col('value', 'owners')),
-                })),
-              ),
-            })),
-          ]),
-        }, 'worn'),
-    ),
-    where: eq(col('column2', 'worn'), lit(true)),
-  })
 
 // A previous table set is only a guess about which read to prepare. The read
 // always fetches the current spine, descriptor and component values together;
@@ -740,7 +693,12 @@ let joinedPlan = (
       name,
       alias,
     )
-    if (!p) return bounded(cache, key, null, 128)
+    // A row is packed as JSON, which holds no bytes: a component with a
+    // binary property keeps the set-shaped gather.
+    let bytes = vocab.props(name).some((prop) =>
+      vocab.prop(name, prop)?.scalar == 'binary'
+    )
+    if (!p || bytes) return bounded(cache, key, null, 128)
     p.tagged?.forEach((c) => reading.add(c))
     let fields = p.sel.map((e) => {
       if (e.t != 'as' && e.t != 'col') {
@@ -804,7 +762,7 @@ let joinedGet = (
   opts: BindOpts,
   names: string[],
   wanted?: string[],
-  pending: Set<string> = new Set(),
+  unsettled?: Unsettled,
 ): Bundle[] | { spine: Row[] } | undefined => {
   let plan = joinedPlan(vocab, names, opts)
   if (!plan) return
@@ -814,7 +772,10 @@ let joinedGet = (
   params[at] = eids.length == 1 ? eids[0] : JSON.stringify(eids)
   let rows: Row[]
   try {
-    rows = kinded(driver, vocab, driver.query({ ...statement, params }))
+    // A read of named components asks the tables it names: only a store
+    // that shows archetypes needs the descriptors for it.
+    rows = driver.query({ ...statement, params })
+    if (!wanted || vocab.comp('archetype')) rows = kinded(driver, rows)
   } catch (err) {
     // A raw schema edit can remove a table from the previous shape. Read the
     // current descriptor before deciding which remaining tables to gather.
@@ -825,17 +786,20 @@ let joinedGet = (
   }
   let found = new Map<string, Bundle>()
   let numbered = !!vocab.prop('entity', 'num')
+  let typed = !!vocab.comp('archetype')
   let covered = new Set(names)
   for (let row of rows) {
     let entity = {
       eid: String(row.eid),
       ...!numbered || row.num == null ? {} : { num: Number(row.num) },
-      ...row.archetype == null ? {} : { archetype: String(row.archetype) },
+      ...!typed || row.archetype == null
+        ? {}
+        : { archetype: String(row.archetype) },
     }
     let bundle: Bundle = row.dead == null ? { entity } : tombstoned(entity)
     found.set(entity.eid, bundle)
     if (row.dead != null) continue
-    let current = row['@tables'] == null || pending.has(entity.eid)
+    let current = row['@tables'] == null || unsettled?.wrote(entity.eid)
       ? undefined
       : descriptor(driver, String(row['@tables'])).tables
     if (
@@ -872,9 +836,12 @@ let joinedGet = (
  * eid no entity has is simply absent. Each carries the components `comps`
  * names, and no other table is read; left out, it carries every one. This is
  * the read `apply()` uses for its precondition guard, where a query would be
- * the wrong question. `unclassified` names entities whose component rows moved
- * inside the transaction before their archetype pointer was assigned; these
- * are gathered from their physical rows rather than the stored descriptor.
+ * the wrong question.
+ *
+ * Each entity is read from the tables its archetype names, and no table is
+ * asked whether it holds one. `unsettled` speaks for the entities whose
+ * pointer does not say what they hold ({@link Unsettled}); an entity it cannot
+ * speak for either is a failure, and the read throws {@link Unpointed}.
  */
 export type ReadCache = {
   fetch: (eids: string[], comps?: string[]) => Bundle[]
@@ -887,6 +854,26 @@ export type ReadCache = {
     graves?: boolean,
   ) => Row[]
 }
+
+/**
+ * Who says what an entity holds where its stored pointer does not: the
+ * store's open transaction, which wrote rows the pointer has not been moved
+ * for yet (./archetype.ts `ledger`), or a connection reading another time than
+ * the pointer speaks of (./mode.ts).
+ */
+export type Unsettled = {
+  /** Whether `eid`'s pointer is behind what the entity holds. */
+  wrote: (eid: string) => boolean
+  /** The tables each of these entities holds among `names`, by its id, given
+   * the ones its pointer names (null where it names none). One it cannot
+   * speak for is left out. */
+  held: (
+    rows: { eid: string; id: number; pointed: readonly string[] | null }[],
+    names: readonly string[],
+  ) => Map<number, readonly string[]>
+}
+
+export { Unpointed } from './error.ts'
 
 /** The eids, of `eids`, whose entities a scope's `screen` admits. Each
  * requested row is tested against the screen by its id, so the statement reads
@@ -917,7 +904,7 @@ export let get = (
   eids: string[],
   opts: BindOpts = {},
   comps?: string[],
-  unclassified: string[] = [],
+  unsettled?: Unsettled,
   cache?: ReadCache,
   answered = false,
 ): Bundle[] => {
@@ -989,7 +976,7 @@ export let get = (
     let scoped = () => ({ ...plain, derived: visibleDerived(vocab, opts) })
     let found = held
       ? held.filter((b) => allowed.has(b.entity.eid))
-      : get(driver, vocab, ids, scoped(), comps, unclassified)
+      : get(driver, vocab, ids, scoped(), comps, unsettled)
     if (cache) {
       // The payload cache holds authoritative rows. Every derived component
       // is read again through scoped sources before the payload is exposed.
@@ -1001,7 +988,7 @@ export let get = (
       let dynamic = [...names].filter((name) => found.some((b) => b[name]))
       if (dynamic.length) {
         let current = new Map(
-          get(driver, vocab, ids, scoped(), dynamic, unclassified).map((
+          get(driver, vocab, ids, scoped(), dynamic, unsettled).map((
             b,
           ) => [b.entity.eid, b]),
         )
@@ -1076,7 +1063,7 @@ export let get = (
       return out
     })
   }
-  let pending = new Set(unclassified)
+  let pending = eids.filter((eid) => unsettled?.wrote(eid))
   let names =
     (comps
       ? [...new Set(comps)].filter((c) => readable(vocab).has(c))
@@ -1091,7 +1078,7 @@ export let get = (
   // still read each worn table once for all its owners, rather than joining
   // the union of every different entity's facets.
   if (
-    eids.length && eids.length <= 32 && !comps && !pending.size &&
+    eids.length && eids.length <= 32 && !comps && !pending.length &&
     eids.every((eid) => remembered.has(eid))
   ) {
     let descriptors = eids.filter((eid) => {
@@ -1107,12 +1094,20 @@ export let get = (
         opts,
         ['archetype'],
         undefined,
-        pending,
+        unsettled,
       )
       let names = [
         ...new Set(owners.flatMap((eid) => [...remembered.get(eid)!])),
       ].sort()
-      let b = joinedGet(driver, vocab, owners, opts, names, undefined, pending)
+      let b = joinedGet(
+        driver,
+        vocab,
+        owners,
+        opts,
+        names,
+        undefined,
+        unsettled,
+      )
       if (Array.isArray(a) && Array.isArray(b)) {
         let at = new Map([...a, ...b].map((row) => [row.entity.eid, row]))
         return eids.flatMap((eid) => at.get(eid) ?? [])
@@ -1126,7 +1121,7 @@ export let get = (
       ? [...new Set(eids.flatMap((eid) => [...remembered.get(eid)!]))].sort()
       : undefined
     if (guess) {
-      let rows = joinedGet(driver, vocab, eids, opts, guess, comps, pending)
+      let rows = joinedGet(driver, vocab, eids, opts, guess, comps, unsettled)
       if (Array.isArray(rows)) return rows
       initial = rows?.spine
     }
@@ -1137,8 +1132,10 @@ export let get = (
   // in every layout, but the number is @yaks/id's word and a store that never
   // loaded it has none to speak of — including one that was numbered before the
   // plugin was opt in, whose old rows still carry the value. Read off the
-  // vocabulary, the way the archetype below is.
+  // vocabulary, as the archetype is: every file keeps the pointer, and a store
+  // shows it where its vocabulary declares archetypes (@yaks/archetype).
   let numbered = !!vocab.prop('entity', 'num')
+  let typed = !!vocab.comp('archetype')
   // Bound parameter count and SQL-cache size; gather a component per set,
   // never every component per entity (a 1,000-entry transcript is otherwise
   // tens of thousands of queries). A set of owners is a collection (@yaks/sql
@@ -1146,20 +1143,30 @@ export let get = (
   // Materialize the selected ids once: re-running a window subquery
   // for each component could select different owners under a concurrent writer.
   // Keep caller order and duplicate semantics.
+  // Entities nothing says the tables of, across every part of the read.
+  let lost: string[] = []
   for (let i = 0; i < eids.length; i += 4096) {
     let ids = eids.slice(i, i + 4096)
-    let owners: number[] = []
     let byId = new Map<number, Bundle>()
-    let groups = new Map<string, number[]>()
-    for (
-      let row of initial ??
-        kinded(driver, vocab, driver.query(namedSpine(vocab, ids)))
-    ) {
+    let groups = new Map<string, { tables: readonly string[]; ids: number[] }>()
+    let grouped = (key: string, tables: readonly string[], id: number) => {
+      let group = groups.get(key)
+      if (!group) groups.set(key, group = { tables, ids: [] })
+      group.ids.push(id)
+    }
+    // The entities whose pointer does not say what they hold.
+    let open: { eid: string; id: number; pointed: readonly string[] | null }[] =
+      []
+    let spines = initial ?? driver.query(namedSpine(vocab, ids))
+    if (!initial && (!comps || typed)) kinded(driver, spines)
+    for (let row of spines) {
       let eid = String(row.eid)
       let entity = {
         eid,
         ...!numbered || row.num == null ? {} : { num: Number(row.num) },
-        ...(row.archetype == null ? {} : { archetype: String(row.archetype) }),
+        ...(!typed || row.archetype == null
+          ? {}
+          : { archetype: String(row.archetype) }),
       }
       let bundle = row.dead == null ? { entity } : tombstoned(entity)
       found.set(eid, bundle)
@@ -1168,48 +1175,44 @@ export let get = (
         bounded(remembered, eid, [], 2048)
         continue
       }
-      if (row['@tables'] == null || pending.has(eid)) {
-        owners.push(Number(row.id))
-      } else {
-        let key = String(row['@tables'])
-        bounded(
-          remembered,
-          eid,
-          descriptor(driver, key).tables.filter((c) => names.includes(c)),
-          2048,
-        )
-        let group = groups.get(key)
-        if (!group) groups.set(key, group = [])
-        group.push(Number(row.id))
+      // What an entity holds is what its archetype names. No table is asked.
+      let pointed = row['@tables'] == null
+        ? null
+        : descriptor(driver, String(row['@tables'])).tables
+      if (!pointed || unsettled?.wrote(eid)) {
+        open.push({ eid, id: Number(row.id), pointed })
+        continue
       }
+      bounded(
+        remembered,
+        eid,
+        pointed.filter((c) => names.includes(c)),
+        2048,
+      )
+      grouped(String(row['@tables']), pointed, Number(row.id))
+    }
+    if (open.length) {
+      // The one that knows better says (`unsettled`). A read of named
+      // components asks the tables it names, which is its own question; a
+      // whole read of an entity nothing speaks for has no table to ask.
+      let held = unsettled?.held(open, names)
+      for (let { eid, id } of open) {
+        let tables = held?.get(id) ?? (comps ? names : undefined)
+        if (tables) grouped(JSON.stringify(tables), tables, id)
+        else lost.push(eid)
+      }
+      if (lost.length) continue
     }
     let compOwners = new Map<string, number[]>()
-    // Group once per archetype, then read each present table once across all
-    // its owner groups. No component-table census on classified entities.
-    for (let [text, group] of groups) {
-      for (let comp of descriptor(driver, text).tables) {
+    // Group once per table set, then read each present table once across all
+    // its owner groups.
+    for (let { tables, ids } of groups.values()) {
+      for (let comp of tables) {
         if (!asked.has(comp)) continue
         let held = compOwners.get(comp)
-        if (held) held.push(...group)
-        else compOwners.set(comp, [...group])
+        if (held) held.push(...ids)
+        else compOwners.set(comp, [...ids])
       }
-    }
-    // Unclassified rows have no descriptor. Probe their worn tables once;
-    // a named component read can ask those tables directly. The live probe
-    // sees a component added or removed by another writer on the next read.
-    let present: string[] = comps && owners.length ? names : []
-    if (!comps && owners.length) {
-      for (let at = 0; at < names.length; at += PROBED) {
-        present.push(
-          ...driver.query(probe(vocab, names.slice(at, at + PROBED), owners))
-            .map((r) => String(r.name)),
-        )
-      }
-    }
-    for (let comp of present) {
-      let held = compOwners.get(comp)
-      if (held) held.push(...owners)
-      else compOwners.set(comp, owners)
     }
     // The spine pass already resolved every owner's storage id. Do not join
     // it again for each component just to recover the eid we already hold;
@@ -1248,6 +1251,7 @@ export let get = (
       b[comp] = decoded(vocab, comp, named(value, refs, refNames)) as Comp
     }
   }
+  if (lost.length) throw new Unpointed(lost)
   backedGet(driver, vocab, eids.filter((e) => !found.has(e)), opts, comps)
     .forEach((b) => found.set(b.entity.eid, b))
   for (let eid of eids) {
@@ -1349,7 +1353,7 @@ export let read = (
     eids,
     { ...opts, derived: asked },
     comps,
-    [],
+    undefined,
     undefined,
     true,
   )

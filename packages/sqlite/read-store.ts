@@ -34,7 +34,7 @@ export let storage = (
     statements: {
       ...sql,
       atomic: (body) => unit(driver, body, 'read'),
-      ...vocab.comp('archetype') ? { archetypes: true } : {},
+      archetypes: true,
     },
     checks: checks(driver),
     migrations: migrations(driver),
@@ -43,7 +43,7 @@ export let storage = (
     ddl: () => [
       ...tabled(vocab, base.derived, !!driver.file),
       ...grown(vocab, standing(driver, vocab)),
-      ...indexed(vocab),
+      ...indexed(vocab, true),
     ],
     grown: () => grown(vocab, standing(driver, vocab)),
     print: () => plan(vocab, base.derived, !!driver.file).print,

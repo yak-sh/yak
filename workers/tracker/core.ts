@@ -6,6 +6,7 @@ import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { CallError } from '@yaks/tools/errors'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { archetypeDoc } from '@yaks/archetype'
 import { provenanceDoc } from '@yaks/provenance'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { apiDoc } from '@yaks/api/vocab'
@@ -39,6 +40,7 @@ import {
 export { platform } from '@yaks/tracker/remote'
 export let vocab = loadVocab([
   kernelDoc,
+  archetypeDoc,
   provenanceDoc,
   toolsDoc,
   apiDoc,

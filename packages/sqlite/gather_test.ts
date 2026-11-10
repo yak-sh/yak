@@ -3,7 +3,7 @@ import { assert, assertEquals } from '@std/assert'
 import { type BindOpts, insert, lit } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { mem, seed, shop, spy, unit } from './testing.ts'
-import { get, storage } from './mod.ts'
+import { backfill, get, storage } from './mod.ts'
 
 test('transaction gather observes writes and rollback', async () => {
   let driver = mem()
@@ -42,7 +42,7 @@ test('transaction gather observes writes and rollback', async () => {
   )
 })
 
-test('singleton gather reads a wide sparse vocabulary in one probe', async () => {
+test('singleton gather reads only the tables its archetype names', async () => {
   let vocab = loadVocab({
     $defs: {
       entity: {
@@ -81,7 +81,7 @@ test('singleton gather reads a wide sparse vocabulary in one probe', async () =>
     tag0: {},
     tag404: {},
   }])
-  assertEquals(queries.length, 5) // spine + presence + three facets
+  assertEquals(queries.length, 5) // spine + descriptor + three facets
   // A new facet is visible immediately: only SQL shapes are cached, not rows
   // or presence. An absent entity must not be cached across a later birth.
   seed(s, [{ entity: { eid: 'sparse' }, tag1: {} }])
@@ -176,20 +176,21 @@ test('whole reads scale with worn components across one or 100 hits', () => {
   ))
   driver.query(insert(first, ...ids.map((_, i) => ({ entity: i + 1 }))))
   driver.query(insert(last, { entity: 1 }))
+  backfill(driver)
 
   queries.length = 0
   assertEquals(s.get(['owner-0'])[0][last], {})
-  // spine + a probe for each 16 of the 40 tables + two facets
-  assertEquals(queries.length, 6)
+  // spine + its archetype + the two facets it names, whatever the forty
+  assertEquals(queries.length, 4)
   queries.length = 0
   assertEquals(s.read(`.${first}`, {}, [first]).length, 100)
   assertEquals(queries.length, 3) // filter + spine + named facet
   assert(queries.every((sql) => !sql.includes(last)))
   queries.length = 0
   assertEquals(s.read(`.${first}`).length, 100)
-  // filter, asked again and now kept + spine + three probes + the one facet
-  // the rest wear: the entity wearing both is held
-  assertEquals(queries.length, 6)
+  // filter, asked again and now kept + spine + the one facet the rest wear:
+  // the entity wearing both is held
+  assertEquals(queries.length, 4)
   queries.length = 0
   assertEquals(s.read(`.${first}`).length, 100)
   assertEquals(queries.length, 0) // the filter's answer and every entity held

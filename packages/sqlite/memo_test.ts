@@ -478,13 +478,15 @@ let selects = async (
 
 test('a transaction asks about a spine once, however many patches name it', async () => {
   let f = await fixture()
-  let write = async () => (await f.s.tx((tx) => {
-    tx.patch([{ entity: { eid: 'mob' }, player: { active: true } }])
-    tx.patch([{ entity: { eid: 'mob' }, position: { x: 1 } }])
-    tx.patch([{ entity: { eid: 'mob' }, position: { x: 2 } }])
+  let write = (eid: string) => async () => (await f.s.tx((tx) => {
+    tx.patch([{ entity: { eid }, player: { active: true } }])
+    tx.patch([{ entity: { eid }, position: { x: 1 } }])
+    tx.patch([{ entity: { eid }, position: { x: 2 } }])
   }))
-  assertEquals(await selects(f, write), 1)
-  assertEquals(await selects(f, write), 0)
+  // The first of a shape mints the archetype the next is born pointing at.
+  await write('first')()
+  assertEquals(await selects(f, write('mob')), 1)
+  assertEquals(await selects(f, write('mob')), 0)
   assertEquals(f.s.get(['mob'])[0].position, { x: 2 })
 })
 
@@ -518,8 +520,11 @@ test('an answer stands through a removal of what it never selected', async () =>
     tx.patch([
       { entity: { eid: 'mob' }, player: { active: true } },
       { entity: { eid: 'rock' }, position: { x: 1 } },
+      { entity: { eid: 'pebble' }, position: { x: 1 } },
     ])
   )
+  // The first removal mints the archetype of the dead.
+  await f.s.tx((tx) => tx.remove([{ eid: 'pebble' }]))
   let active = () => f.s.rows('.player.active=true').map((r) => r.eid)
   let still = () => f.s.rows('!position').map((r) => r.eid)
   active(), active(), still(), still()

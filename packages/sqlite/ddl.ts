@@ -38,7 +38,8 @@
 // and stays key-free.
 
 import { field, indexName } from '@yaks/sql'
-import type { Index, Prop, Vocab } from '@yaks/vocab'
+import { type Index, loadVocab, type Prop, type Vocab } from '@yaks/vocab'
+import { archetypeDoc } from '@yaks/archetype/sets'
 import {
   among,
   and,
@@ -325,8 +326,8 @@ export let tabled = (
 // The tables a file keeps a token for (./versions.ts): archetype, which every
 // connection's catalog follows (./catalog.ts). A single-owner store sees its
 // own writes and keeps none.
-let clocks = (vocab: Vocab, file: boolean): string[] =>
-  file && vocab.comp('archetype') ? ['archetype'] : []
+let clocks = (_vocab: Vocab, file: boolean): string[] =>
+  file ? ['archetype'] : []
 
 // Which entity each write named, for a file's other connections to let go of
 // just those (./written.ts). A single-owner store keeps no log either.
@@ -336,7 +337,23 @@ let told = (vocab: Vocab, file: boolean): Stmt[] =>
 let spine = (vocab: Vocab): Stmt[] => [
   ...SPINE,
   ...tables(vocab).map((name) => tableDdl(vocab, name)),
+  ...pointed(vocab),
 ]
+
+// The archetype descriptors and their retirements (@yaks/archetype), which
+// every file keeps whether or not its vocabulary declares them: each entity's
+// pointer says which tables hold it, and every whole read and removal goes by
+// it (./archetype.ts). A vocabulary that declares them makes their tables with
+// its own; for one that does not they are made here, and stay the store's own
+// bookkeeping, which its reads never show.
+let POINTED = loadVocab([archetypeDoc])
+export let pointerIndex: CreateIndex = indexDdl(POINTED, 'entity', {
+  props: ['archetype'],
+  unique: false,
+})
+let pointed = (vocab: Vocab): Stmt[] =>
+  tables(POINTED).filter((name) => !vocab.comp(name))
+    .map((name) => tableDdl(POINTED, name))
 
 // Whether the file's view already says what `make` says. SQLite keeps a
 // view's statement from its name on, behind a `CREATE VIEW` of its own.
@@ -394,26 +411,23 @@ export let retabled = (
 // way the statements resting on them are (./raise.ts `rests`): every store of
 // a vocabulary asks for the same list as it opens.
 let indexes = new WeakMap<Vocab, readonly CreateIndex[]>()
-export let indexed = (vocab: Vocab): readonly CreateIndex[] => {
+export let indexed = (
+  vocab: Vocab,
+  storage = false,
+): readonly CreateIndex[] => {
   let held = indexes.get(vocab)
   if (!held) indexes.set(vocab, held = indexing(vocab))
-  return held
+  return storage && !vocab.comp('archetype') ? [pointerIndex, ...held] : held
 }
 let indexing = (vocab: Vocab): CreateIndex[] => [
-  // Adapters that only replay schema() may still have the old spine. Until
-  // they opt into archetypes/migration, do not index a column they lack.
-  ...(vocab.comp('archetype')
-    ? [
-      ...vocab.prop('entity', 'num')
-        ? [
-          indexDdl(vocab, 'entity', {
-            props: ['archetype', 'num'],
-            unique: false,
-          }),
-        ]
-        : [indexDdl(vocab, 'entity', { props: ['archetype'], unique: false })],
-    ]
-    : []),
+  // Bare schema adapters can still hold the legacy spine. A storage install
+  // asks for its internal pointer index after adding the column.
+  ...vocab.comp('archetype')
+    ? [indexDdl(vocab, 'entity', {
+      props: vocab.prop('entity', 'num') ? ['archetype', 'num'] : ['archetype'],
+      unique: false,
+    })]
+    : [],
   ...tables(vocab)
     .flatMap((name) =>
       vocab.indexes(name).map((i) => indexDdl(vocab, name, i))
@@ -456,7 +470,7 @@ let made = (create: CreateIndex): string =>
  * index whose kept SQL is the one its declaration makes is as declared, and
  * the engine is asked nothing about it. */
 export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
-  let wanted = new Map(indexed(vocab).map((i) => [i.name, i]))
+  let wanted = new Map(indexed(vocab, true).map((i) => [i.name, i]))
   let listed = new Map<string, Map<string, Row>>()
   return objects(driver, { type: 'index' }).flatMap((row) => {
     let table = String(row.tbl_name), name = String(row.name)
@@ -487,7 +501,7 @@ export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
  * fingerprint instead, and moving it fits every store once more: move it when
  * fitting learns to see something it did not.
  */
-export let FIT = 7
+export let FIT = 8
 
 /**
  * What fitting reads off a file before an install creates anything: each

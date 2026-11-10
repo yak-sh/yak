@@ -30,3 +30,34 @@ test('pending transaction reads cost no intermediate archetype writes', () => {
   })
   equal(s.read('.alpha .beta').map((b) => b.entity.eid), ['owner'])
 })
+
+test('pending query shapes follow removals and nested rollback', () => {
+  let s = storage(mem(), vocab)
+  s.install()
+  s.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'a' }, alpha: {}, beta: {} },
+      { entity: { eid: 'b' }, alpha: {} },
+    ])
+  )
+  let ids = (rows: ReturnType<typeof s.read>) =>
+    rows.map((b) => b.entity.eid).sort()
+  s.tx((tx) => {
+    tx.patch([{ entity: { eid: 'a' }, beta: null }])
+    equal(ids(tx.read('.alpha !beta')), ['a', 'b'])
+    tx.patch([{ entity: { eid: 'b' }, beta: {} }])
+    equal(ids(tx.read('.alpha !beta')), ['a'])
+    try {
+      s.tx((inner) => {
+        inner.patch([{ entity: { eid: 'a' }, alpha: null }])
+        equal(ids(inner.read('.alpha !beta')), [])
+        throw Error('undo')
+      })
+    } catch (e) {
+      if (!(e instanceof Error) || e.message != 'undo') throw e
+    }
+    equal(ids(tx.read('.alpha !beta')), ['a'])
+    equal(ids(tx.read('.alpha .beta')), ['b'])
+  })
+  equal(ids(s.read('.alpha !beta')), ['a'])
+})

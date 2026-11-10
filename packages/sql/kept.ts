@@ -713,6 +713,16 @@ let kept = (
   opts: BindOpts,
   begin: Begin,
 ): Raw => {
+  // An open writer's overlay names owners and table sets unique to this
+  // read. A statement retained by query shape cannot stand for that data.
+  if (opts.archetypes?.pending) {
+    return render(
+      begin(ast, opts, {
+        archetypes: opts.archetypes,
+        extend: opts.extend,
+      }).lower(),
+    )
+  }
   let shaped = called(kind, ast, vocab, opts)
   let s = shelf(vocab), held = shaped && s.get(shaped.key)
   if (held && 'sql' in held && stands(held.asked, opts)) {

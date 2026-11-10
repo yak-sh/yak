@@ -14,10 +14,9 @@
 // connection reads one mode at a time, so every store over it reads the one it
 // was last bound to.
 //
-// What the views cannot carry is turned off: the archetype pointers say what
-// an entity holds now, so the descriptors read as none and presence is read
-// from the tables themselves; and an index hint names an index a view does
-// not have, so the compiler gives none.
+// A mode reads its table sets from history's archetype index, populated by
+// the same writes that keep its component versions (./history-shapes.ts).
+// Index hints name live indexes the temporary views do not have.
 //
 // A connection as of a transaction refuses every write. A branch's writes go
 // to the branch's rows beside the live tables (./history.ts `branched`).
@@ -33,6 +32,7 @@ import {
   val,
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
+import { pastShapes } from './history-shapes.ts'
 import { docDdl, indexed } from './ddl.ts'
 import {
   BRANCHES,
@@ -148,6 +148,8 @@ export let moded = (
     mode,
     archetypes: () => undefined,
     missingIndexes: indexed(vocab).map((i) => i.name),
+    held: (ids: number[], names: readonly string[]) =>
+      pastShapes(driver, vocab, ids, names, opts.mode),
   }
   let store = storage(driver, vocab, opts)
   dialed.set(driver, { vocab, kind: k, opts, store })

@@ -12,7 +12,7 @@ import { parse } from '@yaks/query'
 import { driver } from './native.ts'
 import { storage } from './mod.ts'
 import { catalog } from './catalog.ts'
-import { backfill } from './archetype.ts'
+import { backfill, reclassify } from './archetype.ts'
 import { sqlitePath } from './sqlitepath.ts'
 let status = Deno.dlopen(sqlitePath, {
   sqlite3_stmt_status: {
@@ -100,12 +100,12 @@ let claimed = page(fixtures[1], false, [{
   order: (f) => f == 'entity.num' ? sql('0 + 0') : null,
 }])
 
-// Raw/imported owners without a pointer make the catalog decline; a planner
-// must keep reading their physical components instead of dropping them.
+// A raw import classifies what it wrote before a planner can read it.
 let raw = fixture(100)
 raw.d.query(insert('entity', { id: 200, eid: 'unclassified', num: 1000 }))
 raw.d.query(insert('doc', { entity: 200, title: 'raw' }))
-let incomplete = page(raw)
+reclassify(raw.d, ['unclassified'])
+let repaired = page(raw)
 test('a numbered shape page costs its ordered shape prefixes not document history', () => {
   for (let r of observed) {
     equal(r.ids, Array.from({ length: 13 }, (_, i) => `d${r.n - 3 - i}`))
@@ -115,8 +115,8 @@ test('a numbered shape page costs its ordered shape prefixes not document histor
 test('a numbered shape page retains component visibility', () => {
   equal(aspects.ids, ['d2', 'd1'])
 })
-test('a numbered shape page retains unclassified owners through its fallback', () => {
-  equal(incomplete.ids[0], 'unclassified')
+test('a numbered shape page reads an imported owner after classification', () => {
+  equal(repaired.ids[0], 'unclassified')
 })
 
 test('numbered shape selection retains idle rank hooks and declines claimed order', () => {

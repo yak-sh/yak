@@ -589,7 +589,8 @@ let writes: [string, Stmt[], number, [string, number][]][] = [
   ['a delete ahead of the cursor is read by its window', [gone(5)], ahead, [
     ['fox', 4],
   ]],
-  ['an entity made meanwhile is read by its window', made(6), ahead, [
+  // Past the ids the store's own descriptors took.
+  ['an entity made meanwhile is read by its window', made(60), ahead, [
     ['fox', 5],
     ['owl', 1],
   ]],

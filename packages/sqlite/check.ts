@@ -29,7 +29,6 @@
 import { tally } from '@yaks/fp'
 import type { Finding } from '@yaks/tools'
 import { drift } from './archetype.ts'
-import { componentTables } from './physical.ts'
 import type { Driver } from '@yaks/sql'
 
 // `pragma foreign_key_check` returns one row per violation: the table holding
@@ -77,16 +76,6 @@ export let checks = (driver: Driver) => ({
   },
 
   archetypes: (sample: number): Finding[] => {
-    // An application that never composed @yaks/archetype has no such table and
-    // no pointers to disagree with anything. Reporting that beats an audit that
-    // reads every entity as drifted because nothing ever classified one.
-    if (!componentTables(driver).includes('archetype')) {
-      return [{
-        level: 'warn',
-        text: 'this file keeps no archetypes (@yaks/archetype is not ' +
-          'composed here), so there is no pointer to check',
-      }]
-    }
     let d = drift(driver, sample)
     let rest = d.drifted - d.sample.length
     return d.drifted

@@ -50,7 +50,8 @@ test('install is idempotent, and a bundle survives the round trip', async () => 
       insert(
         'entity',
         ...Array.from({ length: to - from + 1 }, (_, n) => {
-          let id = from + n
+          // Past the ids the store's own descriptors took.
+          let id = from + n + 10
           return { id, eid: `e${id}` }
         }),
       ),
@@ -64,17 +65,19 @@ test('install is idempotent, and a bundle survives the round trip', async () => 
       ).split(' ')[0],
     )
   installed(s)
-  assertEquals(size(), 1)
+  // The product, and the descriptors of the archetype it is in.
+  let own = size()
+  assertEquals(own, 3)
   add(2, 2)
   bytes *= 2
   installed(storage(db, shop))
-  assertEquals(size(), 1)
+  assertEquals(size(), own)
   add(3, 32)
   bytes *= 16
   s.read('.entity.eid=e1')
-  assertEquals(size(), 1)
+  assertEquals(size(), own)
   installed(storage(db, shop))
-  assertEquals(size(), 32)
+  assertEquals(size(), own + 31)
 })
 
 test('an object and an array come back as the values written', async () => {
@@ -210,7 +213,7 @@ test('an entity is read whole where its file holds more tables than workerd lets
   await s.tx((tx) =>
     tx.patch([{ entity: { eid: 'few' }, facet0: { value: 'a' } }])
   )
-  // One this transaction wrote has no archetype yet, so its tables are asked.
+  // The transaction knows what it wrote before its archetype is assigned.
   let few = {
     entity: { eid: 'few' },
     facet0: { value: 'a' },

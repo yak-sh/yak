@@ -108,12 +108,12 @@ export type Memo = {
   view: (key: string, run: () => Bundle[], comps?: string[]) => Bundle[]
   /** Run a write that changes the entities `eids` names, given what it
    * returned: they are let go, and kept out until its transaction ends. A
-   * write that may make entities it does not name (`mints`) lets go of every
-   * one remembered as missing. */
+   * write that may make entities it does not name (`mints`, or what it says
+   * of what the write returned) lets go of every one remembered as missing. */
   writes: <R>(
     body: () => R,
     eids: (out: R) => Iterable<string>,
-    mints?: boolean,
+    mints?: boolean | ((out: R) => boolean),
   ) => R
   /** Run a patch of `bundles`, which returns the entities it minted or
    * numbered: they and every entity it names are let go as `writes` lets
@@ -208,7 +208,6 @@ export let basis = (
   within = false,
 ): string[] | undefined => {
   let out = new Set(['tombstone'])
-  if (catalogued) out.add('archetype')
   let path = (segs: string[], facet = false): boolean => {
     // A backlink is no path aim() answers: say so without the refusal.
     if (!vocab.comp(segs[0]) && vocab.assoc(segs[0])) return false
@@ -231,6 +230,7 @@ export let basis = (
       case 'or':
         return c.clauses.every(visit)
       case 'pred':
+        if (catalogued && bare(c)) out.add('archetype')
         return !c.where && path(c.path, bare(c))
       case 'fields':
         return c.fields.every((f) => path(f.path))
@@ -951,7 +951,7 @@ export let memoized = (
   let writes = <R>(
     body: () => R,
     eids: (out: R) => Iterable<string>,
-    mints = false,
+    mints: boolean | ((out: R) => boolean) = false,
   ): R => {
     c.writing++
     let shifts = c.shifts
@@ -986,7 +986,7 @@ export let memoized = (
       // An id, a number or a grave it moved is one of these entities'.
       if (c.shifts != shifts) c.spines.delete(eid)
     }
-    if (mints) {
+    if (typeof mints == 'function' ? mints(out) : mints) {
       // What it minted is not named: neither is whose spine it moved.
       if (c.shifts != shifts) {
         c.spines.clear()

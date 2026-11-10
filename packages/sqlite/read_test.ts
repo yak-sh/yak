@@ -11,7 +11,7 @@ import { loadVocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
 import { mem, seed, shop as vocab, spy, store } from './testing.ts'
 
-import { storage } from './mod.ts'
+import { backfill, reclassify, storage } from './mod.ts'
 import { reader } from './reader.ts'
 
 let c = (b: Bundle, name: string): Comp => b[name] as Comp
@@ -308,17 +308,21 @@ test('wide sparse gathers cross owner and vocabulary chunks without stale occupa
     insert('entity', ...ids.map((eid, i) => ({ id: i + 1, eid, num: i + 1 }))),
   )
   driver.query(insert('facet404', { entity: 4101, value: 'last chunk' }))
+  backfill(driver)
   let fetched = await s.tx((tx) => tx.get([...ids, 'absent', ids[0]]))
   assertEquals(fetched.map((b) => b.entity.eid), [...ids, ids[0]])
   assertEquals(fetched[0], { entity: { eid: ids[0], num: 1 } })
   assertEquals(fetched[4100].facet404, { value: 'last chunk' })
-  // Another writer can fill or clear a table between reads. The empty-table
-  // shortcut must be a live query, never a vocabulary/connection-wide cache.
+  // A writer past the store can fill or clear a table between reads, and
+  // names the owners it wrote: the next read goes by the pointer it moved,
+  // never a shape this connection remembered.
   driver.query(insert('facet0', { entity: 1, value: 'newly populated' }))
+  reclassify(driver, [ids[0]])
   assertEquals((await s.tx((tx) => tx.get(ids.slice(0, 2))))[0].facet0, {
     value: 'newly populated',
   })
   driver.query({ t: 'delete', from: 'facet0' })
+  reclassify(driver, [ids[0]])
   assertEquals(
     (await s.tx((tx) => tx.get(ids.slice(0, 2))))[0].facet0,
     undefined,

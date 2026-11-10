@@ -65,6 +65,7 @@ import {
   eq,
   exists,
   type Expr,
+  fn,
   from,
   type Insert,
   isNull,
@@ -86,9 +87,10 @@ import {
 } from '@yaks/sql'
 import { tables } from './layout.ts'
 import { required } from './physical.ts'
+import { heldBy } from './archetype.ts'
 import { classed, spined } from './memo.ts'
 import { isJsonb, jsonb, jsonIn } from './jsonb.ts'
-import { described, get, grave } from './read.ts'
+import { described, get, grave, type Unsettled } from './read.ts'
 import { kept } from './history.ts'
 
 // The owner's integer id, as a subquery. Every write keys to it, so an entity
@@ -534,8 +536,17 @@ export let pruneSql = (
     }))
   let stands = new Set(held)
   let empty = and(
-    ...held.filter((c) => c != 'entity' && c != TOMBSTONE)
-      .map((c) => not(holds(c, 'entity'))),
+    exists(select({
+      cols: [lit(1)],
+      from: table('archetype', '__shape'),
+      where: and(
+        eq(col('entity', '__shape'), col('archetype', 'entity')),
+        oneOf(fn('json', col('tables', '__shape')), [
+          '[]',
+          JSON.stringify([TOMBSTONE]),
+        ]),
+      ),
+    })),
     ...vocab.refProps()
       .filter(([c, p]) => stands.has(c) && !vocab.prop(c, p)?.computed)
       .map(([c, p]) => not(holds(c, field(p)))),
@@ -658,6 +669,11 @@ export type Births = {
   born: (eid: string, tables: string[], id?: number) => void
   /** `eid` is pointed at the archetype `id`: whether its mint said so. */
   pointed: (eid: string, id: number) => boolean
+  /** Whether `eid`'s mint wrote the pointer of the archetype that names
+   * exactly `tables`, so a birth that finished holding them owes none. */
+  settled: (eid: string, tables: string[]) => boolean
+  /** The archetype `id` names exactly `tables`, which `eid` finished in. */
+  finished: (eid: string, tables: string[], id: number) => void
 }
 
 /** One unit's {@link Births}, minted in what the connection learned. */
@@ -674,6 +690,21 @@ export let births = (driver: Driver): Births => {
       open.delete(eid)
       classes.learn(birth.shape, id)
       return birth.id == id
+    },
+    // A set's own archetype is kept beside the classes, under the shape no
+    // birth opens in.
+    settled: (eid, tables) => {
+      let id = classes.get(`=${shape(tables)}`)
+      if (id == null || open.get(eid)?.id != id) return false
+      open.delete(eid)
+      return true
+    },
+    finished: (eid, tables, id) => {
+      classes.learn(`=${shape(tables)}`, id)
+      let birth = open.get(eid)
+      if (!birth) return
+      open.delete(eid)
+      classes.learn(birth.shape, id)
     },
   }
 }
@@ -799,6 +830,9 @@ let wholes = (
  * An entity minted here takes its pointer in its mint where one is known: the
  * one its own bundle names, or the class `born` says its shape finishes in
  * ({@link Births}). A pointer its mint already wrote is not written again.
+ *
+ * `unsettled` says what an entity this transaction wrote holds, where the
+ * patch reads one (./read.ts `Unsettled`).
  */
 export let patch = (
   driver: Driver,
@@ -808,6 +842,7 @@ export let patch = (
   moved?: Moved,
   had?: Known,
   born?: Births,
+  unsettled?: Unsettled,
 ): Entity[] => {
   // A computed component's rows are another package's (@yaks/sql `Backing`):
   // there is no table here to write one to.
@@ -978,7 +1013,7 @@ export let patch = (
       take(eid) !== false
   })
   if (pointed.length) {
-    for (let b of get(driver, vocab, pointed)) {
+    for (let b of get(driver, vocab, pointed, {}, undefined, unsettled)) {
       let n = take(b.entity.eid)
       if (n === false || comps(b).length) continue
       let e = minted(driver.query(numberSql(b.entity.eid, n)))
@@ -1167,14 +1202,14 @@ export let revive = (driver: Driver, eids: string[], moved?: Moved): void => {
  * is tombstoned, keeping its eid and number. Exactly the entities named —
  * @yaks/graph decided which they are. `held` is the tables they hold rows in,
  * where the caller knows (a store that keeps archetypes reads them off the
- * entities' pointers, ./archetype.ts `heldBy`); left out, it is every table the
- * vocabulary declares that the file holds.
+ * entities' pointers, ./archetype.ts `heldBy`); left out, it reads their
+ * pointers itself. An unclassified entity is a failure, never every table.
  */
 export let remove = (
   driver: Driver,
-  vocab: Vocab,
+  _vocab: Vocab,
   entities: Entity[],
-  held: string[] = stood(driver, vocab),
+  held: string[] = heldBy(driver, entities.map((e) => e.eid)),
   at: string = new Date().toISOString(),
 ): void => {
   for (let s of removeSql(held, entities, at)) write(driver, s)

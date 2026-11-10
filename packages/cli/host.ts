@@ -765,6 +765,10 @@ let composed = async (
           // of a long transcript: more than a Durable Object's 4 MiB keeps.
           memory: 32 << 20,
           over: () => over,
+          // What the store outlives and repairs, an entity no archetype
+          // names among it, is a bug all the same.
+          report: (error: Error) =>
+            report(error, { during: { process: selfEid() } }),
         }
         store = opening(o)
         return store

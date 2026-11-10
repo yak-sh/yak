@@ -14,7 +14,7 @@ import {
 } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { get } from './read.ts'
-import { preparedDriver, snapshot } from './testing.ts'
+import { classified, preparedDriver, snapshot } from './testing.ts'
 
 let vocab = loadVocab({
   $defs: {
@@ -58,7 +58,7 @@ let options: { derived: Derived } = {
   },
 }
 let sql = preparedDriver(
-  snapshot(vocab, options, [
+  classified(snapshot(vocab, options, [
     insert('entity', { id: 1, eid: 'one' }),
     insert('word', {
       entity: 1,
@@ -67,7 +67,7 @@ let sql = preparedDriver(
       related: 'held relation',
     }),
     insert('other', { entity: 1, value: 'stored relation' }),
-  ]),
+  ])),
 )
 
 test('gathers preserve owner expressions outside stable stored text', () => {

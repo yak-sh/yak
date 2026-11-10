@@ -8,6 +8,8 @@ import { open } from './db.ts'
 import { storage } from './mod.ts'
 import { shop } from './testing.ts'
 import { catalog } from './catalog.ts'
+import { assertThrows } from '@std/assert'
+import { Unpointed } from './error.ts'
 let dir = Deno.makeTempDirSync({ prefix: 'catalog-peer-' })
 let path = `${dir}/graph.db`, writer = open(path)
 let vocab = loadVocab([...shop.docs, archetypeDoc]),
@@ -30,14 +32,17 @@ let newShape = replaced({ all: ['product'], none: [] })
 
 let matched = catalog(reader)({ all: ['doc'], none: [] })
 let refreshed = !!catalog(reader).held
-// Even when descriptor rows stay held, snapshot() declines unclassified owners.
+// Even when descriptor rows stay held, snapshot() reports unclassified owners.
 writer.query({
   t: 'insert',
   into: 'entity',
   cols: ['eid'],
   rows: [[{ t: 'val', v: 'raw' }]],
 })
-let unclassified = catalog(reader)({ all: ['doc'], none: [] })
+let unclassified = assertThrows(
+  () => catalog(reader)({ all: ['doc'], none: [] }),
+  Unpointed,
+)
 writer.query({ t: 'drop', kind: 'trigger', name: 'archetype_version_insert' })
 let missing = !!catalog(reader).held
 reader.close()
@@ -52,6 +57,6 @@ test('held shape descriptors decline changed descriptor tokens', () => {
   equal(newShape?.length, 1)
 })
 test('held shape descriptors never bypass unclassified owner checks', () =>
-  equal(unclassified, undefined))
+  equal(unclassified.eids, ['raw']))
 test('held shape descriptors decline missing tracking triggers', () =>
   equal(missing, false))

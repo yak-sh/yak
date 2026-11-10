@@ -40,6 +40,9 @@ export type Dialect = {
   membership: string
   // The condition excluding deleted entities, ANDed into every query.
   live: (owner?: string) => Frag
+  /** `live` already leaves out the store's bookkeeping (./bind.ts
+   * `BindOpts.bookkeeping`), which a dialect made from this one inherits. */
+  discreet?: boolean
   // The join source for a component and the on key.
   table: (comp: string) => string
   // The bare table expression for a component, with no alias — what a

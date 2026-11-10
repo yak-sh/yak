@@ -14,7 +14,15 @@ export type ArchetypeSet =
   & ((
     predicate: Presence,
   ) => readonly number[] | undefined)
-  & { held?: boolean; masked?: ReadonlySet<string> }
+  & {
+    held?: boolean
+    masked?: ReadonlySet<string>
+    pending?: {
+      /** Owners whose open write supersedes their stored pointer. */
+      ids: readonly number[]
+      matching: (predicate: Presence) => readonly number[]
+    }
+  }
 
 /** Anything that can report which archetype eids satisfy a presence test — the
  * one thing this binding needs, so the compiler never has to import the cache's

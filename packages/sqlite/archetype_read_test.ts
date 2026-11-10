@@ -5,7 +5,7 @@ import { graph } from '@yaks/graph'
 import { by, col, fn, insert, lit, scan } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { mem, seedIdentities, shop, spy, unit } from './testing.ts'
-import { get, storage } from './mod.ts'
+import { backfill, get, storage } from './mod.ts'
 import { get as census } from './fixtures/census.ts'
 import { POPULATION } from './population.ts'
 
@@ -82,7 +82,7 @@ test('archetype gather golden: wide sparse sets, chunks and a smaller reader voc
   )
   driver.query(insert('doc', { entity: idOf('owner-1'), title: 'first' }))
   // Physical table sets, not the smaller reader's vocabulary, determine shape.
-  s.install()
+  backfill(driver)
   ids.push('missing', ids[0])
   assertEquals(get(driver, wide, ids), census(driver, wide, ids))
   assertEquals(get(driver, vocab, ids), census(driver, vocab, ids))

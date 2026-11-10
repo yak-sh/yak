@@ -66,7 +66,7 @@ import type {
   Measure,
   ReadOpts,
 } from '@yaks/graph'
-import { after, type Clock, isPromise, sleep } from '@yaks/fp'
+import { after, type Clock, sleep } from '@yaks/fp'
 import { context, scope } from '@yaks/trace'
 import type { Query } from './read.ts'
 import {
@@ -98,12 +98,15 @@ import {
   type ReadCache,
   rows,
   screened,
+  Unpointed,
+  type Unsettled,
 } from './read.ts'
 import { doom } from './doom.ts'
 import { exclusive, unit, unwaiting } from './unit.ts'
 import { enter } from '@yaks/graph/enter'
 import { busy } from './error.ts'
 import { options } from './reader.ts'
+import { catalog } from './catalog.ts'
 import {
   backfill,
   classify,
@@ -111,6 +114,7 @@ import {
   heldBy,
   type Ledger,
   ledger,
+  pendingShapes,
 } from './archetype.ts'
 import { componentTables, objects, shape } from './physical.ts'
 import { analyze, build, forgo, reshape, type Sizes } from './owe.ts'
@@ -165,7 +169,6 @@ export {
   mend,
   reclassify,
   reclassifyAll,
-  type Wrote,
 } from './archetype.ts'
 export { statements } from './statements.ts'
 import { statements } from './statements.ts'
@@ -434,6 +437,12 @@ export type Opts = BindOpts & {
    * not be fitted to the vocabulary, left as it was (ddl.ts `fit`). One
    * line on the console, by default (ddl.ts `logged`). */
   report?: (error: Error) => void
+  /** What each of these entities, by id, holds among `names` in the mode
+   * this connection reads, where no archetype pointer says (./mode.ts). */
+  held?: (
+    ids: number[],
+    names: readonly string[],
+  ) => Map<number, readonly string[]>
   /** Keep every version a write replaces (./history.ts), naming the
    * transactions this statement takes, one per unit that writes a component
    * with history. From the history plugin (@yaks/journal). */
@@ -499,26 +508,6 @@ let keyed = (value: unknown): string | undefined => {
   return `{${out.join(',')}}`
 }
 
-// The ledgers of the units open on each driver, outermost first (`tracked`).
-type Writing = { ledger: Ledger; complete: boolean }
-let ledgers = new WeakMap<Driver, Writing[]>()
-
-// The value `body` gives, once `last` has run after it settled, either way.
-let lastly = <R>(body: () => R, last: () => void): R => {
-  let out: R
-  try {
-    out = body()
-  } catch (error) {
-    last()
-    throw error
-  }
-  if (!isPromise(out)) {
-    last()
-    return out
-  }
-  return out.finally(last) as R
-}
-
 // The tables of versions a store with history keeps (./history.ts), made where
 // missing and typed as the live tables stand now, and each one just made
 // given the live rows as the versions they are so far.
@@ -554,9 +543,31 @@ export let storage = (
     let own = plan(vocab, base.derived, !!driver.file).print
     return besides.length ? sha256(`${own};history`) : own
   }
-  let owing = () => [
-    ...new Set((ledgers.get(driver) ?? []).flatMap((u) => u.ledger.owed())),
-  ]
+  // Whether this store keeps each entity's archetype pointer in step with
+  // its rows: every store does, whatever its vocabulary declares, since every
+  // whole read and removal goes by the pointer. A mode's connection reads
+  // what an entity held then, which no pointer says (./mode.ts).
+  let keeping = !base.mode
+  // What the connection's open transaction wrote that no pointer says yet
+  // (./archetype.ts `ledger`).
+  let book = keeping ? ledger(driver) : undefined
+  let owing = () => book?.owed() ?? []
+  // Who says what an entity holds where its pointer does not: the open
+  // transaction's ledger, or the mode this connection reads (`base.held`).
+  let unsettled: Unsettled | undefined = book
+    ? {
+      wrote: book.wrote,
+      held: (rows) =>
+        new Map(rows.flatMap(({ eid, id, pointed }) => {
+          let tables = book.held(eid, pointed)
+          return tables ? [[id, tables]] : []
+        })),
+    }
+    : base.held && {
+      // No pointer says what an entity held then.
+      wrote: () => true,
+      held: (rows, names) => base.held!(rows.map((r) => r.id), names),
+    }
   // What an install answers for, as its receipt marks it: the print, and the
   // count and length of what it makes, of what rests on the tables first
   // writes raised (./raise.ts), and of the `strays` beside them.
@@ -624,22 +635,19 @@ export let storage = (
     })
   }
   let identity = (eids: string[], comps?: string[]) =>
-    get(driver, vocab, eids, opts(), comps, owing())
+    get(driver, vocab, eids, opts(), comps, unsettled)
   let report = base.report ?? logged
-  // Whether this store keeps archetypes, and whether their descriptors are
-  // numbered like any other entity.
-  // A mode's connection reads what an entity held then, which no pointer
-  // says (./mode.ts).
-  let classified = !!vocab.comp('archetype') && !base.mode
-  let numbered = typeof base.number == 'object'
-    ? !base.number.except.includes('archetype')
-    : !!base.number
+  // Whether this store's vocabulary declares archetypes, so its queries are
+  // planned by them and its reads show them, and whether their descriptors
+  // are numbered like any other entity.
+  let classified = !!vocab.comp('archetype') && keeping
+  let numbered = !!vocab.comp('archetype') &&
+    (typeof base.number == 'object'
+      ? !base.number.except.includes('archetype')
+      : !!base.number)
   let memo = memoized(driver, vocab, base.derived, base.memory)
   // A query's rows, from memory while the tables its answer stands on are
   // unwritten (./memo.ts `answer`), in the one snapshot that decides both. A
-  // `direct` read takes presence from the component tables, not the archetype
-  // pointers a transaction still owes; anywhere else an owed pointer means the
-  // catalog can't be trusted yet.
   // Where a caller's options leave a read's entities as the store's own get
   // reads them, the get to read them through.
   let policies = (o: Opts, within = false): string[] | undefined => {
@@ -767,7 +775,7 @@ export let storage = (
         eids,
         effective,
         comps,
-        pending,
+        unsettled,
         eligible && !base.visibility && !virtual(eids, effective)
           ? reading(effective, fetch)
           : undefined,
@@ -846,10 +854,9 @@ export let storage = (
       eids.map((eid) => [eid, ids.get(eid)?.id ?? null]),
     )
   }
-  let asked = (query: And, o: Opts = {}, direct = false): Row[] => {
-    let catalogued = classified && !direct
-    let owing = catalogued &&
-      (ledgers.get(driver) ?? []).some((u) => u.ledger.owed().length)
+  let asked = (query: And, o: Opts = {}): Row[] => {
+    let catalogued = keeping
+    let owing = catalogued && !!book?.owed().length
     // A read asking for graves is the statement's: it alone judges the
     // deleted (@yaks/sql `ghostly`).
     if (
@@ -859,7 +866,7 @@ export let storage = (
       policies(o) && basis(vocab, query, base.derived, catalogued)
     ) {
       let { visibility: _visibility, ...plain } = o
-      let raw = asked(query, plain, direct)
+      let raw = asked(query, plain)
       let permitted = new Set(
         reading(o).permit(raw.map((r) => String(r.eid)), [], () => []).map((
           r,
@@ -885,15 +892,13 @@ export let storage = (
       query,
       !!o.storageOrder,
       !!o.unordered,
-      direct,
       o.visibility,
     ])
     let prove = () => {
       // A retained proof reads the same query and policy even if a caller
       // later edits the AST or visibility object it handed this read.
-      let [query, , , , visibility] = JSON.parse(key) as [
+      let [query, , , visibility] = JSON.parse(key) as [
         And,
-        boolean,
         boolean,
         boolean,
         Opts['visibility'],
@@ -959,10 +964,14 @@ export let storage = (
             ...opts(),
             ...o,
             references: resolved(query, o) ?? o.references,
-            ...direct ? { archetypes: () => undefined } : {},
           }),
         prove,
       ), 'read')
+  }
+  let holding = (eids: string[]) => {
+    if (!base.held) return heldBy(driver, eids, book, mend)
+    let ids = [...spines(driver, eids).values()].map((r) => r.id)
+    return [...new Set([...base.held(ids, tables(vocab)).values()].flat())]
   }
   let graves = burying(driver, vocab)
   let tx: Tx = {
@@ -1015,32 +1024,69 @@ export let storage = (
       memo.removes(
         entities.map((e) => e.eid),
         at,
-        () => remove(driver, vocab, entities, undefined, at),
+        () =>
+          remove(
+            driver,
+            vocab,
+            entities,
+            holding(entities.map((e) => e.eid)),
+            at,
+          ),
       )
     },
     revive: (eids) => memo.writes(() => revive(driver, eids), () => eids),
     prune: (eids) => memo.writes(() => prune(driver, vocab, eids), () => eids),
     buried: (before, page) => graves(before, page),
   }
-  // A unit over a store that keeps archetypes keeps every pointer in step,
-  // whichever door wrote: @yaks/graph's tracker, a hook writing through a
-  // detached transaction, a script patching through `tx`. Its ledger hears
-  // each row that came or went and each pointer written (./archetype.ts
-  // `ledger`); what it still owes when the body returns is classified from
-  // what those entities hold (`classify`), in the same unit. A birth's complete
-  // ledger supplies its shape without discovering or reading every table;
-  // other entities are classified from their physical rows. Through the
-  // graph that is nothing, since its tracker points every entity it moved, so
-  // its writes gain no read. Removal clears the tables its entities hold
-  // (`heldBy`); the dead no pointer has been written for since are pointed at
-  // the tombstone set (`entomb`), which reads nothing.
+  // An entity met with no archetype to go by is a failure: every door
+  // classifies what it wrote before its unit closes. It is reported, and
+  // repaired by classifying it from the rows it holds, the one place a table
+  // is asked what it holds (./archetype.ts `classify`).
+  // One wording, so it is one bug wherever it is told; the entities ride
+  // beside it.
+  let lost = (eids: string[]) =>
+    report(Object.assign(
+      new Error(
+        'entities had no archetype, and were classified from the rows held',
+      ),
+      { name: 'Unpointed', eids: eids.slice(0, 8) },
+    ))
+  let mend = (eids: string[]) => {
+    lost(eids)
+    memo.writes(
+      () => unit(driver, () => classify(driver, eids, numbered)),
+      () => eids,
+      true,
+    )
+  }
+  // A read, and once more after the repair where it met such an entity. A
+  // store that cannot write (a mode's connection) only reports.
+  let mending = <R>(read: () => R): R => {
+    try {
+      return read()
+    } catch (e) {
+      if (!(e instanceof Unpointed) || !keeping) throw e
+      mend(e.eids)
+      return read()
+    }
+  }
+  // Every unit keeps every pointer in step, whichever door wrote:
+  // @yaks/graph's tracker, a hook writing through a detached transaction, a
+  // script patching through `tx`. The connection's ledger hears each row that
+  // came or went and each pointer written (./archetype.ts `ledger`); what it
+  // still owes when the body returns is classified in the same unit, each
+  // entity from its pointer and what the ledger heard, so no table is read.
+  // Through the graph that is nothing, since its tracker points every entity
+  // it moved, so its writes gain no read. Removal clears the tables its
+  // entities hold (`heldBy`); the dead no pointer has been written for since
+  // are pointed at the tombstone set (`entomb`), which reads nothing.
   //
   // A unit opened inside another (a graph applied in a caller's transaction)
-  // hears what the outer ones wrote and have not classified yet: their ledgers
-  // stay open beside its own, outermost first, so it reads and removes what an
-  // entity holds rather than what its pointer said before they began.
-  let tracked = (): { tx: Tx; settle: () => void; close: () => void } => {
-    let l = ledger()
+  // shares the ledger, which follows the connection's savepoints: it reads
+  // and removes what an entity holds rather than what its pointer said before
+  // the outer one began, and settles whatever the transaction owes so far.
+  let tracked = (book: Ledger): { tx: Tx; settle: () => void } => {
+    let l = book
     // A birth is minted in the class its shape last finished in, and its
     // pointer is written again only where it finishes elsewhere.
     let remembered = births(driver)
@@ -1051,14 +1097,7 @@ export let storage = (
         l.born(eid)
       },
     }
-    let open = ledgers.get(driver) ?? []
-    ledgers.set(driver, open)
-    // A nested unit can write rows its ancestors did not hear, even if it
-    // later rolls back. Their ledgers no longer prove a complete birth shape.
-    for (let u of open) u.complete = false
-    let writing = { ledger: l, complete: true }
-    open.push(writing)
-    let owed = () => [...new Set(open.flatMap((u) => u.ledger.owed()))]
+    let owed = l.owed
     // An entity whose rows moved in this transaction is read from what it
     // holds; every other one as its pointer says, or from memory.
     let getting = (
@@ -1074,7 +1113,7 @@ export let storage = (
       let at = new Map(
         [
           ...kept(
-            (ids, names) => get(driver, vocab, ids, opts(), names, pending),
+            (ids, names) => get(driver, vocab, ids, opts(), names, unsettled),
             moved,
             comps,
             refresh,
@@ -1086,54 +1125,65 @@ export let storage = (
       return eids.flatMap((eid) => at.get(eid) ?? [])
     }
     let settle = () => {
-      let dead = l.buried(), owed = l.owed()
-      let known = new Map<string, string[]>()
-      if (writing.complete) {
-        for (let eid of owed) {
-          let wrote = l.wrote(eid)
-          if (wrote.born) known.set(eid, wrote.tables)
-          else {
-            let tables = memo.presence(eid, componentTables(driver))
-            if (tables) known.set(eid, tables)
-          }
-        }
-      }
+      let dead = l.buried()
+      // A birth minted in the class it finished in owes no pointer, and
+      // nothing is asked of the file for it.
+      let owed = l.owed().filter((eid) => {
+        let held = l.held(eid, null)
+        if (!held || !remembered.settled(eid, held)) return true
+        l.pointed(eid)
+        return false
+      })
+      if (!dead.length && !owed.length) return
+      let unknown: string[] = []
       memo.writes(
         () => {
-          if (dead.length) entomb(driver, dead, numbered)
-          if (owed.length) classify(driver, owed, numbered, known)
+          let buried = entomb(driver, dead, numbered)
+          let sorted = classify(driver, owed, numbered, (eid, pointed) => {
+            let held = l.held(eid, pointed)
+            if (!held) unknown.push(eid)
+            return held
+          }, remembered.finished)
+          return buried || sorted
         },
-        () => [...dead, ...owed],
-        // A class first worn mints its descriptor (./archetype.ts).
-        owed.length > 0,
+        // A pointer is part of what a read gives only where the store shows
+        // archetypes: elsewhere what memory holds of these entities stands.
+        () => classified ? [...dead, ...owed] : [],
+        // A class first worn mints its descriptor (./archetype.ts), an
+        // entity the write does not name; one a store shows no reader of.
+        (minted) => classified && minted,
       )
+      if (unknown.length) lost(unknown)
       for (let eid of [...dead, ...owed]) l.pointed(eid)
     }
     return {
-      close: () => void open.splice(open.lastIndexOf(writing), 1),
       tx: {
         ...tx,
-        get: getting,
-        // Pending component rows already stand in this transaction. Read them
-        // directly rather than persisting an intermediate archetype just to
-        // read before the graph's final stamp/tracker flush.
+        get: (eids, comps) => mending(() => getting(eids, comps)),
+        // Queries overlay the shapes the open writer knows on its catalog;
+        // no intermediate classification is persisted to answer a read.
         read: (query, signalled, comps) => {
+          if (!owed().length) {
+            return mending(() => tx.read(query, signalled, comps))
+          }
           let o = asking(signalled)
-          let direct = owed().length > 0
-          return metered(() =>
-            read(
-              driver,
-              vocab,
-              query,
-              {
-                ...opts(),
-                ...o,
-                ...direct ? { archetypes: () => undefined } : {},
-              },
-              comps,
-              (q) => asked(q, o, direct),
-              fetched(o, getting, owed),
-            ), { what: named(query) })
+          let archetypes = catalog(driver, pendingShapes(driver, book))
+          let bound = { ...opts(), ...o, archetypes }
+          return metered(
+            () =>
+              mending(() =>
+                read(
+                  driver,
+                  vocab,
+                  query,
+                  bound,
+                  comps,
+                  (q) => rows(driver, vocab, q, bound),
+                  fetched(o, getting, owed),
+                )
+              ),
+            { what: named(query) },
+          )
         },
         patch: (given) => {
           let bundles = readied(given)
@@ -1148,12 +1198,17 @@ export let storage = (
                 l.moved,
                 known,
                 born,
+                unsettled,
               ),
           )
           for (let b of bundles) {
             if (b.entity.archetype !== undefined) l.pointed(b.entity.eid)
           }
           return minted
+        },
+        prune: (eids) => {
+          settle()
+          tx.prune(eids)
         },
         remove: (entities) => {
           let eids = entities.map((e) => e.eid)
@@ -1166,7 +1221,7 @@ export let storage = (
                 driver,
                 vocab,
                 entities,
-                heldBy(driver, eids, open.map((u) => u.ledger)),
+                heldBy(driver, eids, l, mend),
                 at,
               ),
           )
@@ -1205,7 +1260,7 @@ export let storage = (
       let seal = () => {
         epoch(driver)
         recorded(driver)
-        if (classified) backfill(driver, numbered)
+        if (keeping) backfill(driver, numbered)
         receipt = {
           schema: mark(
             componentTables(
@@ -1232,7 +1287,7 @@ export let storage = (
           )
           erect(driver, tables)
           let after = (comp: string) =>
-            [...tables, ...indexed(vocab), ...beside].filter((s) =>
+            [...tables, ...indexed(vocab, true), ...beside].filter((s) =>
               (s.t == 'create index' || s.t == 'create trigger') && s.on == comp
             )
           let kept = new Set<string>()
@@ -1244,7 +1299,11 @@ export let storage = (
           forgo(driver, kept)
           left = [
             ...unfit,
-            ...build(driver, holds(driver, vocab, indexed(vocab)), base.sizes),
+            ...build(
+              driver,
+              holds(driver, vocab, indexed(vocab, true)),
+              base.sizes,
+            ),
             ...besides.length ? versioned(driver, vocab) : [],
           ]
           left.forEach(report)
@@ -1272,7 +1331,7 @@ export let storage = (
         unit(driver, () => {
           epoch(driver)
           recorded(driver)
-          if (classified) backfill(driver, numbered)
+          if (keeping) backfill(driver, numbered)
           if (fresh || clean) {
             receipt = {
               schema: mark(
@@ -1317,8 +1376,8 @@ export let storage = (
     else install()
   }
   return {
-    statements: classified
-      ? { ...statements(driver), archetypes: true }
+    statements: keeping
+      ? Object.assign(statements(driver), { archetypes: true })
       : base.mode
       ? {
         ...statements(driver),
@@ -1345,7 +1404,7 @@ export let storage = (
     ddl: () => [
       ...tabled(vocab, base.derived, !!driver.file),
       ...grown(vocab, standing(driver, vocab)),
-      ...indexed(vocab),
+      ...indexed(vocab, true),
     ],
     grown: () => grown(vocab, standing(driver, vocab)),
     print: printed,
@@ -1362,7 +1421,8 @@ export let storage = (
     read: (query, o, comps) => {
       ensure()
       return metered(
-        () => unit(driver, () => tx.read(query, o, comps), 'read'),
+        () =>
+          mending(() => unit(driver, () => tx.read(query, o, comps), 'read')),
         { what: named(query) },
       )
     },
@@ -1376,7 +1436,9 @@ export let storage = (
       ) {
         unit(driver, () => population(driver))
       }
-      return metered(() => asked(parsed, o), { what: named(query) })
+      return metered(() => mending(() => asked(parsed, o)), {
+        what: named(query),
+      })
     },
     screen: (query, o) => {
       ensure()
@@ -1394,7 +1456,10 @@ export let storage = (
       if (!eids.length) return []
       ensure()
       return metered(
-        () => unit(driver, () => viewed(eids, comps, asking(o) ?? {}), 'read'),
+        () =>
+          mending(() =>
+            unit(driver, () => viewed(eids, comps, asking(o) ?? {}), 'read')
+          ),
         { what: gotten(eids) },
       )
     },
@@ -1420,20 +1485,19 @@ export let storage = (
                   get: (eids, comps) => kept(t.get, eids, comps),
                   ...base.history ? { clock } : {},
                 })
-                if (!classified) return body(cached(tx))
-                let { tx: t, settle, close } = tracked()
+                if (!book) return body(cached(tx))
+                let { tx: t, settle } = tracked(book)
                 let tracing = context()
                 // An async body settles what it owes before the unit closes, as the
                 // unit waits for it (./unit.ts).
-                return lastly(
-                  () =>
-                    after(body(base.history ? { ...t, clock } : t), (out) => {
-                      if (tracing) scope(tracing, settle)
-                      else settle()
-                      return out
-                    }) as R,
-                  close,
-                )
+                return after(
+                  body(base.history ? { ...t, clock } : t),
+                  (out) => {
+                    if (tracing) scope(tracing, settle)
+                    else settle()
+                    return out
+                  },
+                ) as R
               })
             },
             'write',

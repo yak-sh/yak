@@ -7,7 +7,7 @@ import { Database } from './legacy.ts'
 import { loadVocab } from '@yaks/vocab'
 import { insert, renderStable, STOCK_VARIABLES } from '@yaks/sql'
 import { driver } from './native.ts'
-import { storage } from './mod.ts'
+import { backfill, storage } from './mod.ts'
 import { sqlitePath } from './sqlitepath.ts'
 
 let status = Deno.dlopen(sqlitePath, {
@@ -39,6 +39,7 @@ test('a scoped read of a reference steps alike in a large store and a small one'
     s.raise()
     d.query(insert('entity', { id: 1, eid: 'target' }, { id: 2, eid: 'from' }))
     d.query(insert('link', { entity: 2, to: 1 }))
+    backfill(d)
     // Every VM step of every statement one read runs, counted on a copy of it.
     let steps = 0
     let counted = {
@@ -62,10 +63,12 @@ test('a scoped read of a reference steps alike in a large store and a small one'
       return steps
     }
     let small = read()
-    for (let id = 3; id < 1003; id += 500) {
+    // Past the ids the store's own descriptors took.
+    for (let id = 100; id < 1100; id += 500) {
       let ids = Array.from({ length: 500 }, (_, n) => id + n)
       d.query(insert('entity', ...ids.map((n) => ({ id: n, eid: `e${n}` }))))
     }
+    backfill(d)
     let large = read()
     ok(large < small + 100, `${small} steps small, ${large} large`)
   } finally {

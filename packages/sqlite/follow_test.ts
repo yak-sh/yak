@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { col, type CreateTable, insert, lit, select, table } from '@yaks/sql'
 import { columns } from './physical.ts'
-import { preparedDriver, snapshot } from './testing.ts'
+import { classified, preparedDriver, snapshot } from './testing.ts'
 import { add, follow, forget, lacking, printOf } from './follow.ts'
 import { storage as readStore } from './read-store.ts'
 import { parse } from '@yaks/query'
@@ -21,11 +21,11 @@ let log = (cols: CreateTable['cols']): CreateTable => ({
 })
 
 // A file the vocabulary is installed in, holding the note `n1`.
-let image = snapshot(vocab, {}, [
+let image = classified(snapshot(vocab, {}, [
   insert('entity', { id: 1, eid: 'n1', num: 1 }),
   insert('note', { entity: 1, text: 'hi' }),
   log([]),
-])
+]))
 let fresh = () => preparedDriver(image)
 let [a, b] = ['a', 'b'].map((s) => printOf(s, []))
 

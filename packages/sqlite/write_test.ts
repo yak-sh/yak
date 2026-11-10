@@ -197,7 +197,15 @@ test('a patch asks once about identity, whatever the batch is', async () => {
     return n
   }
 
-  asked() // forget what install() asked
+  // Nor is the first entity of a shape, which mints the archetype every
+  // later one is born pointing at (./archetype.ts).
+  await write(s, [
+    { entity: { eid: 'w1' }, product: { price: 1, maker: 'w0' } },
+    { entity: { eid: 'w2' }, doc: { title: 'Cup' }, product: { price: 1 } },
+    { entity: { eid: 'w3' }, review: { stars: 1, product: 'w2' } },
+  ])
+  await s.tx((tx) => tx.remove([{ eid: 'w3' }]))
+  asked() // forget what install() and those asked
   await write(s, [{
     entity: { eid: 'p1' },
     product: { price: 12, maker: 'm1' },
@@ -215,8 +223,9 @@ test('a patch asks once about identity, whatever the batch is', async () => {
   await write(s, [{ entity: { eid: 'p1' }, product: { price: 3 } }])
   assertEquals(asked(), 0)
 
+  // A removal reads which tables its entities hold, off their pointers.
   await s.tx((tx) => tx.remove([{ eid: 'p1' }]))
-  assertEquals(asked(), 0)
+  assertEquals(asked(), 1)
 })
 
 // Prepare the nested store rollback once, including its transaction bookkeeping.
@@ -261,6 +270,9 @@ test('numbering exceptions ask once across tables and entities', async () => {
     ...products,
     { entity: { eid: 's' }, shelf: { aisle: 'A', slot: 1 } },
     { entity: { eid: 'r' }, review: { stars: 5 } },
+    // The shapes the two will move to, so their archetypes stand.
+    { entity: { eid: 's2' }, shelf: { aisle: 'A', slot: 2 }, doc: {} },
+    { entity: { eid: 'r2' }, review: { stars: 5 }, doc: {} },
   ])
   // Another storage over the file holds their identities, but knows nothing
   // of what they wear.
@@ -271,7 +283,9 @@ test('numbering exceptions ask once across tables and entities', async () => {
     { entity: { eid: 's' }, doc: { title: 'Shelf' } },
     { entity: { eid: 'r' }, doc: { title: 'Review' } },
   ])
-  assertEquals(selects, 1) // Exception presence, for the batch; identity held.
+  // Exception presence, for the batch, and the pointers of the two whose
+  // shape moved; identity held.
+  assertEquals(selects, 2)
   let rows = await s.tx((tx) => tx.get(['p0', 'p149', 's', 'r']))
   assertEquals(rows.map((b) => b.entity.num ?? null), [1, 150, null, null])
 })
@@ -287,6 +301,7 @@ test('a patch asks about numbering exceptions only where they decide a number', 
   await write(s, [
     { entity: { eid: 's' }, shelf: { aisle: 'A', slot: 1 } },
     { entity: { eid: 'p' }, product: { price: 1 } },
+    { entity: { eid: 'q' }, product: { price: 1 }, doc: {} },
   ])
   let cost = async (bundles: Bundle[]) => {
     asked = 0
@@ -297,8 +312,9 @@ test('a patch asks about numbering exceptions only where they decide a number', 
   // the identity is held.
   assertEquals(await cost([{ entity: { eid: 's' }, shelf: { slot: 2 } }]), 0)
   assertEquals(await cost([{ entity: { eid: 's' }, doc: null }]), 0)
-  // Memory knows what an entity it wrote wholly wears.
-  assertEquals(await cost([{ entity: { eid: 'p' }, doc: { title: 'Mug' } }]), 0)
+  // Memory knows what an entity it wrote wholly wears: all that is asked is
+  // its pointer, read and moved to the shape it takes.
+  assertEquals(await cost([{ entity: { eid: 'p' }, doc: { title: 'Mug' } }]), 2)
   // A numbered entity given the exception keeps its existing address.
   await write(s, [{ entity: { eid: 'p' }, shelf: { aisle: 'B', slot: 1 } }])
   assertEquals(

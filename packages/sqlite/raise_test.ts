@@ -111,7 +111,7 @@ test('a first write makes its component, with its indexes, and reads it back', a
   equal(names(d, 'index').includes('tag_name'), true)
   equal((await g.read('.doc.loud=RED')).map((b) => b.entity.eid), ['a'])
   await throws(() => g.apply([{ entity: { eid: 'b' }, tag: { name: 'red' } }]))
-  equal(meta(d).get(TABLES), 'doc tag tombstone')
+  equal(meta(d).get(TABLES), 'archetype doc retired tag tombstone')
 })
 
 test('what a host keeps over two tables is made once both stand', async () => {

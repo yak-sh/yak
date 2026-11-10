@@ -218,7 +218,7 @@ names, whichever package keyed it to `entity` (the journal's, an embedding's)
 and every `keep` reference, which carries no key. It walks them by integer id,
 so a page's `next` still marks the place once that page is pruned. `tx.prune()`
 erases a whole page in three statements (`pruneSql`), checking each identity
-once against every table and reference, in the write's transaction.
+against its archetype and incoming references, in the write's transaction.
 
 ## Read
 
@@ -929,15 +929,19 @@ sqlite3 ~/.yak/yak.db "delete from server_meta where k = 'required:@yaks/journal
 
 ### Archetype reads
 
-Load `archetypeDoc` and install the `archetypes()` graph plugin from
-`@yaks/archetype` to maintain each entity's component-set pointer. Storage
-installation classifies existing rows. A **catalog** is a lazy snapshot that
-maps matching archetypes to their integer ids. Presence and kind queries load a
-catalog; value-only queries do not. A page driven from its own component's table
-screens other components by the catalog only while it is held in memory, and
-probes their tables per row otherwise. Applications using `catalog(driver)` to
-compile their own queries must compile and execute within one read transaction,
-as this package's read path does.
+Every file keeps each entity's component-set pointer (`entity.archetype`) and
+the descriptors it names, whatever its vocabulary declares, and installation
+classifies the rows a file already held. Load `archetypeDoc` and install the
+`archetypes()` graph plugin from `@yaks/archetype` for a store to show them:
+`entity.archetype` on what it reads, descriptors as entities, and presence and
+kind queries expose their descriptors. Without them the pointer and its
+descriptors are the store's own bookkeeping. Planning still uses the catalog. A
+**catalog** is a lazy snapshot that maps matching archetypes to their integer
+ids. Presence and kind queries load a catalog; value-only queries do not. A page
+driven from its own component's table screens other components by the catalog
+only while it is held in memory, and probes their tables per row otherwise.
+Applications using `catalog(driver)` to compile their own queries must compile
+and execute within one read transaction, as this package's read path does.
 
 Whole-entity reads group entities by the component tables their archetype
 identifies and query only owners with each component. `get` uses this
@@ -945,14 +949,20 @@ information even for single entities. Readers ignore tables outside their
 vocabulary without changing the descriptor. Only table sets are cached, allowing
 rollback, other writers, and schema changes to remain visible.
 
+No read asks a table whether it holds an entity. A whole read that meets an
+entity with no archetype has a broken row before it, and throws `Unpointed`; the
+store tells its `report`, classifies the entity from the rows it holds, the one
+place tables are asked, and reads again.
+
 Every `Store.tx(body)` maintains archetype pointers for patches, removals, and
-revivals made through its `Tx`. Its **ledger** records component-table presence
-changes and which entities have already been classified; `ledger().owed()` names
-those still needing classification when the callback finishes. A transaction
-opened inside another also hears the outer ones' ledgers. Within the
-transaction, `Tx.get` reads pending component changes from their physical rows.
-`Tx.read` classifies pending changes before querying the archetype index; later
-patches continue from that classified shape.
+revivals made through its `Tx`. The connection's **ledger** (`ledger(driver)`)
+hears each component row that came or went since an entity's pointer was
+written, and follows savepoints and rollbacks; `owed()` names the entities still
+needing classification when the callback finishes, and `held(eid, pointed)` says
+what one holds: its pointer's tables, amended by the rows that moved. Within the
+transaction, `Tx.get` and a removal go by that, and the settlement classifies
+what is owed from it, so none of them asks a table. `Tx.read` overlays those
+pending table sets on the catalog without writing an intermediate archetype.
 
 A raw SQL writer, past the store, must call `reclassify(driver, eids)` inside
 its transaction after changing component rows: whole reads, presence filters and
@@ -960,10 +970,9 @@ deletes all go by the pointer. It returns changed pointers and new descriptors
 as bundles that the application can broadcast; descriptor entities and unknown
 ids are ignored. `drift(driver)` is the audit (`archetype_check`): it reads
 every owner's presence and counts the pointers that disagree, writing nothing;
-`mend(driver)` classifies every one it finds again, a few thousand to a unit.
-Stores without archetypes and unclassified low-level writes fall back to
-inspecting component presence. An incomplete catalog declines the query
-optimization instead of hiding entities.
+`mend(driver)` classifies every one it finds again, a few thousand to a unit. An
+incomplete catalog reports `Unpointed`; a store repairs it before planning
+again.
 
 The same diagnostic sequence is exercised by `inspect_test.ts`; installation and
 repair are outside its measured assertions.
@@ -1074,9 +1083,9 @@ queries, so transactional reads never substitute a committed intermediate count.
 `inspect(driver, limit?, preferred?)` lists tables and indexes without scanning
 component rows. Component `rows` are exact live-owner counts from populations;
 infrastructure `rows` are `null` (unknown), never an implicit table count;
-`identity(driver, eid)` reports physical presence and tombstoning. Both cap
-inspection at 160 tables. The tools declared by `sqliteDoc` check foreign keys,
-SQLite integrity, and archetype pointers;
+`identity(driver, eid)` reports the archetype table set and tombstoning. Both
+cap inspection at 160 tables. The tools declared by `sqliteDoc` check foreign
+keys, SQLite integrity, and archetype pointers;
 `runs({ storage: storage(sql, vocab) }, { sample })` implements them on the
 application's connection. They report findings without repairing data.
 
@@ -1098,8 +1107,8 @@ try {
   let call = { entity: { eid: 'check' }, call: { args: {} } }
   let [clean] = await checks.storage_check(call, g) as Bundle[]
   equal(clean.finding, undefined)
-  let [absent] = await checks.archetype_check(call, g) as Bundle[]
-  equal(absent.finding, { level: 'warn' })
+  let [pointers] = await checks.archetype_check(call, g) as Bundle[]
+  equal(pointers.finding, undefined)
 } finally {
   sql.close()
 }
@@ -1381,10 +1390,14 @@ from a one-row dial, so binding the same connection to another mode of the same
 kind turns the dial and answers the same store. Each view is one select over one
 table, which SQLite folds into any read that names it; a compound one it would
 materialize whole for a left join. A branch's exempt components are the
-exception, a compound of its rows and the live ones. The archetype pointers say
-what an entity holds now, so a mode reads presence from the tables themselves,
-and text search reads the live text. An entity's spine is not versioned: one
-minted after the transaction a mode reads reads as an empty identity.
+exception, a compound of its rows and the live ones. The historical archetype
+index (`$archetype$versions`) keeps membership spans from the version writes. A
+mode reads its table sets there, with live exempt components from the owner's
+current archetype and branch membership overlaid. It asks no component view
+which entities it holds. Property edits keep the same membership span.
+Installation repairs a missing historical index from the versions already held.
+Text search reads the live text. An entity's spine is not versioned: one minted
+after the transaction a mode reads reads as an empty identity.
 [history_test.ts](./history_test.ts) shows each.
 
 ## Limits

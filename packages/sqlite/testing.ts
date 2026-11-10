@@ -26,6 +26,7 @@ import {
   type Stmt,
 } from '@yaks/sql'
 import {
+  backfill,
   EPOCH,
   FIT,
   meta,
@@ -166,6 +167,14 @@ let copied = (from: Snapshot) => {
     throw error
   }
 }
+
+/**
+ * `from` with every entity its statements wrote classified, as a writer past
+ * the store must leave them (./archetype.ts `reclassify`): what a fixture
+ * filled in raw SQL needs before a test reads its entities whole.
+ */
+export let classified = (from: Snapshot): Snapshot =>
+  imaged((d) => void backfill(d), from)
 
 /** A disposable connection holding its own copy of a fixture snapshot. */
 export let preparedDriver = (from: Snapshot): Driver & Disposable => {

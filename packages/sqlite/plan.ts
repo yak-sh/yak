@@ -47,7 +47,7 @@ let shelf = (vocab: Vocab, file: boolean) => {
 
 // A plan but its print, and the text its print digests.
 let draft = (vocab: Vocab, derived: Derived, file: boolean) => {
-  let stmts = [...tabled(vocab, derived, file), ...indexed(vocab)]
+  let stmts = [...tabled(vocab, derived, file), ...indexed(vocab, true)]
   let raised = stmts.filter(makes)
   // What every install makes: a component's own objects are made by its
   // first write (./raise.ts), and are no part of what an install answers for.

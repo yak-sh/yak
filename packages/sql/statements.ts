@@ -13,8 +13,8 @@ export type Statements = {
   inside?: () => boolean
   /** Compound-select limit of the adapter's statement engine. */
   arms?: number
-  /** Entity rows point at the standard archetype table. A null pointer still
-   * needs component-table presence checks until it is classified. */
+  /** Entity rows point at the standard archetype table. A missing pointer
+   * is corruption to report and repair before reading the entity. */
   archetypes?: boolean
   /** Invalidation tokens include writes, DDL and rollback, and other hosts. */
   revision: (scope: 'schema' | 'catalog' | 'data') => number

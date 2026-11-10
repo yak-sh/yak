@@ -42,42 +42,21 @@ test('inspection reports unknown physical rows rather than scanning values', () 
 })
 
 let identified = open(':memory:')
-identified.query({
-  t: 'create table',
-  name: 'entity',
-  cols: [
-    { name: 'id', type: 'integer', pk: true },
-    { name: 'eid', type: 'text' },
-  ],
-})
-for (let name of ['tombstone', 'note']) {
-  identified.query({
-    t: 'create table',
-    name,
-    cols: [{ name: 'entity', type: 'integer' }, {
-      name: 'body',
-      type: 'text',
-    }],
-  })
-}
-identified.query({
-  t: 'insert',
-  into: 'entity',
-  cols: ['id', 'eid'],
-  rows: [[lit(1), lit('a')], [lit(2), lit('b')]],
-})
-identified.query({
-  t: 'insert',
-  into: 'note',
-  cols: ['entity', 'body'],
-  rows: [[lit(1), lit('secret')]],
-})
-identified.query({
-  t: 'insert',
-  into: 'tombstone',
-  cols: ['entity'],
-  rows: [[lit(2)]],
-})
+let identifiedStore = storage(
+  identified,
+  loadVocab([{
+    $defs: {
+      note: { component: true, properties: { body: { type: 'string' } } },
+    },
+  }]),
+)
+identifiedStore.tx((tx) =>
+  tx.patch([
+    { entity: { eid: 'a' }, note: { body: 'secret' } },
+    { entity: { eid: 'b' } },
+  ])
+)
+identifiedStore.tx((tx) => tx.remove([{ eid: 'b' }]))
 
 test('identity inspection sees graves and live component presence without values', () => {
   using db = Object.assign(identified, { [Symbol.dispose]: identified.close })

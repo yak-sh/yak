@@ -9,7 +9,7 @@ import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { by, col, type Driver, insert, select, table } from '@yaks/sql'
 import { mem } from './testing.ts'
-import { storage } from './mod.ts'
+import { drift, storage } from './mod.ts'
 import { runs } from './tools.ts'
 import { checks } from './check.ts'
 
@@ -113,12 +113,66 @@ test('a row landed past the graph drifts its pointer', async () => {
   assert(said.body.includes('in: a'), said.body)
 })
 
-test('a file that keeps no archetypes says so rather than passing', async () => {
-  let { g, host } = file(false)
+test('a store whose vocabulary declares no archetypes keeps its pointers all the same', async () => {
+  let { g, sql, host } = file(false)
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
-  let said = await checkup('archetype_check', host)
-  assertEquals(said.level, 'warn')
-  assert(said.body.includes('keeps no archetypes'), said.body)
+  await g.apply([{ entity: { eid: 'a' }, doc: null }])
+  await g.apply([{ entity: { eid: 'b' }, doc: { title: 'B' } }])
+  await g.apply([{ entity: { eid: 'b' }, $delete: true }])
+  assertEquals((await checkup('archetype_check', host)).level, undefined)
+  assertEquals(drift(sql), { checked: 2, drifted: 0, sample: [] })
+})
+
+test('a store whose vocabulary declares no archetypes shows none: the pointer it keeps is its own', async () => {
+  // The kernel's word for the pointer, in a vocabulary with no archetypes.
+  let { entity, ...rest } = domain.$defs
+  let pointer = { type: 'string', ref: 'archetype', stamped: true }
+  let pointed = {
+    $defs: {
+      ...rest,
+      entity: {
+        ...entity,
+        properties: { ...entity.properties, archetype: pointer },
+      },
+    },
+  }
+  let vocab = loadVocab([pointed])
+  let store = storage(mem(), vocab)
+  store.install()
+  let g = graph({ storage: store, vocab })
+  await g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
+  let shown = (rows: Bundle[]) => rows.map((b) => b.entity.archetype ?? null)
+  assertEquals(shown(await g.get(['a'])), [null])
+  assertEquals(shown(await g.read('.doc&.fields=entity.archetype')), [null])
+  assertEquals(await g.read('.entity.archetype'), [])
+  assertEquals((await g.read('!entity.archetype')).length, 1)
+})
+
+test('an entity met with no archetype is reported once and classified from the rows it holds', async () => {
+  let vocab = loadVocab([archetypeDoc, domain])
+  let sql = mem()
+  let said: Error[] = []
+  let store = storage(sql, vocab, { report: (e) => void said.push(e) })
+  store.install()
+  let g = graph({ storage: store, vocab, plugins: [archetypes()] })
+  await g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
+  // A raw writer: an entity and a row of it, and no pointer.
+  sql.query(insert('entity', { eid: 'raw' }))
+  sql.query({
+    t: 'insert',
+    into: 'doc',
+    cols: ['entity', 'title'],
+    q: select({
+      cols: [col('id'), { t: 'lit', v: 'Raw' }],
+      from: table('entity'),
+      where: by({ eid: 'raw' }),
+    }),
+  })
+  let read = async () => (await g.get(['raw']))[0]?.doc
+  assertEquals(await read(), { title: 'Raw' })
+  assertEquals(await read(), { title: 'Raw' })
+  assertEquals(said.map((e) => e.name), ['Unpointed'])
+  assertEquals(drift(sql).drifted, 0)
 })
 
 test('storage without diagnostics warns rather than assuming SQLite', async () => {
