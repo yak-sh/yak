@@ -113,6 +113,7 @@ export let appWire = (vocab: Vocab, name: string, composition: Composition) => {
   }, { host: g, tools: composition.tools(vocab) })
   let read = (req: Request): ReadOpts => ({
     person: vouchOf(req).person,
+    level: vouchOf(req).level,
     administrative: req.headers.get('x-yak-administrative') == '1',
   })
   let serve = api({
