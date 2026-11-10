@@ -437,14 +437,15 @@ export class Builder {
       })
       // What the loop added to what it was handed: the person's line is
       // already kept, so the transcript and the loop agree on one history.
-      this.#keep(out.lines.slice(was.length + 1))
+      // Kept as the line was, through a window the loop's work passed: the
+      // answer to what a person said is theirs too (M-59093).
+      let reply = out.lines.slice(was.length + 1)
+      this.#ceiling.free(() => this.#keep(reply))
       return [end]
     } catch (e) {
-      if (stopped(e)) {
-        // Stopped before the conversation took the line, it is kept, or a
-        // kept one stays where it is (`#replays`). After, the stop says when
-        // to try again.
-        if (heard) return this.#say([{ done: e.message }])
+      // Stopped before the conversation took the line, it is kept, or a kept
+      // one stays where it is (`#replays`).
+      if (stopped(e) && !heard) {
         return kept == null ? await this.#hold(held, text, e) : []
       }
       // The loop answers its own refusals in sentences; anything that reaches

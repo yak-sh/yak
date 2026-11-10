@@ -315,6 +315,19 @@ test('a line the window stops as it is heard is kept too', async () => {
   assertEquals(o.lines(), ['a recipe box', 'Sure.'])
 })
 
+let answered = await paused()
+test('a reply made as the window passes is kept with the line it answers', async () => {
+  let o = answered
+  let model = o.env.AI as unknown as { run: (...a: unknown[]) => unknown }
+  let run = model.run
+  model.run = (...a) => (o.stop(), run(...a))
+  let end = await o.object.say(o.held, 'a recipe box')
+  assertEquals([end, o.lines()], [[{ done: 'Sure.' }], [
+    'a recipe box',
+    'Sure.',
+  ]])
+})
+
 let formed = await paused()
 test('a form posted to a stopped Builder is answered the line it kept', async () => {
   let o = formed
