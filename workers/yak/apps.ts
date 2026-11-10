@@ -173,7 +173,7 @@ import { broken } from '@yaks/tracker/report'
 import { flood } from './lib/flood.ts'
 import { isVerifiedBot } from '@yaks/platform/bots'
 import { ADDRESS } from './route.ts'
-import { background, caught, defect, refusing } from './defects.ts'
+import { background, caught, defect, refusing, stopped } from './defects.ts'
 import {
   barOf,
   born,
@@ -422,6 +422,14 @@ let rejection = (error: unknown, tags: Record<string, string>) =>
       ...(error instanceof Error ? { name: error.name } : {}),
     },
   }, { status: refusing(error, tags), headers: waited(error) })
+
+// A blob its store could not say how to serve: a stopped store's refusal
+// keeps its status and wait, and anything else is reported and unavailable.
+let unavailable = (error: unknown, tags: Record<string, string>) => {
+  if (stopped(error)) return rejection(error, tags)
+  caught(error, tags)
+  return json(503, 'blob_unavailable')
+}
 
 // A store's answer read as `read` reads it, or, where it refused, the answer
 // itself to relay as it came: its status, and a stopped store's wait.
@@ -1586,8 +1594,11 @@ let gave = async (
         rep = await current()
       }
     } catch (e) {
-      caught(e, { request: 'GET /api/blob', space: space.slug, app: app.slug })
-      return json(503, 'blob_unavailable')
+      return unavailable(e, {
+        request: 'GET /api/blob',
+        space: space.slug,
+        app: app.slug,
+      })
     }
     if (!rep) return json(404, 'no_such_file')
     let to = new URL(req.url)
@@ -1601,8 +1612,11 @@ let gave = async (
   try {
     rep = await servedTo(env, space, app, graph, sha, eid)
   } catch (e) {
-    caught(e, { request: 'GET /api/blob', space: space.slug, app: app.slug })
-    return json(503, 'blob_unavailable')
+    return unavailable(e, {
+      request: 'GET /api/blob',
+      space: space.slug,
+      app: app.slug,
+    })
   }
   if (!rep) return json(404, 'no_such_file')
   let response: Served = {

@@ -31,6 +31,7 @@ for (
     ['a read', 'query?q=.doc', {}, 429],
     ['the graph', 'graph', {}, 429],
     ['the vocabulary', 'vocab', {}, 429],
+    ['a blob', `blob/${'a'.repeat(64)}`, {}, 429],
     ['a write it keeps', 'apply', wrote, 202],
   ] as [string, string, RequestInit, number][]
 ) {
