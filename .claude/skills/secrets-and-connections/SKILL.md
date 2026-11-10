@@ -313,6 +313,15 @@ workers/yak/wrangler.toml. A body with `view: 'events'` and a filter on
 `$metadata.service` = `yak` returns events, `view: 'traces'` returns traces, and
 a filter on `$metadata.traceId` returns one trace's events.
 
+A call the Worker made to an outside service is an event of its own. A filter
+on `url.full` (`includes` the service's host and path), with no `datasets`
+parameter, returns them, each with its address at `source.url.full` and its
+status at `source.http.response.status_code`; with `datasets:
+['cloudflare-workers']` only the invocations come back. In voip.ms's calls
+Cloudflare had redacted the password, the email address and our ticket and
+left the other parameters; what it redacts elsewhere is unchecked, so print
+only the parameters you name.
+
 Wrangler's sign-in gets a 403 from this API. That refusal sends you here, not
 hunting for a token that might work. A token in another project's `.env` was
 minted for that project's job, so another project's `.env` is never read, not
