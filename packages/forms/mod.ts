@@ -50,6 +50,40 @@ export type Form = { form: Settings; questions: readonly Question[] }
 /** Answers keyed by question eid; a repeat answer is an array of Answers. */
 export type Answers = Readonly<Record<string, unknown>>
 
+/** Native controls named by answer path, decoded using their question kinds.
+ * Repeat indices order entries; omitted controls have no answer. */
+export let posted = (form: Form, fields: URLSearchParams): Answers => {
+  let read = (within?: string, prefix = ''): Answers =>
+    Object.fromEntries(
+      form.questions.filter((q) => q.question.within == within)
+        .flatMap<[string, unknown]>(({ entity: { eid }, question: q }) => {
+          let name = prefix + eid
+          if (q.kind == 'repeat') {
+            let indices = [
+              ...new Set([...fields.keys()].flatMap((key) => {
+                if (!key.startsWith(name + '.')) return []
+                let index = key.slice(name.length + 1).split('.')[0]
+                return /^(0|[1-9]\d*)$/.test(index) ? [index] : []
+              })),
+            ].sort((a, b) => Number(a) - Number(b))
+            return indices.length
+              ? [[eid, indices.map((i) => read(eid, `${name}.${i}.`))]]
+              : []
+          }
+          let values = fields.getAll(name).map((v) =>
+            q.kind == 'check' && v == 'true' ? true : v
+          )
+          return values.length
+            ? [[
+              eid,
+              q.kind == 'choices' || values.length > 1 ? values : values[0],
+            ]]
+            : []
+        }),
+    )
+  return kept(form, read())
+}
+
 /** An unanswered question and its path into registration.answers. */
 export type Owed = { question: Question; path: (string | number)[] }
 

@@ -3,17 +3,46 @@
 // form links.
 import { type Comp, mint, signed } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
-import { open } from '@yaks/forms'
+import { type Form, open, posted } from '@yaks/forms'
 import { accepted } from './form-rules.ts'
 import type { Answer } from './apps.ts'
 import type { Stored } from './graph.ts'
 import { appStore } from './directory.ts'
 import { KERNEL } from './meta.ts'
 import { decodedPath } from './request-path.ts'
+import { ADDRESS } from './route.ts'
 
 let NO_STORE = { 'cache-control': 'no-store' }
 let reply = (message: string, status: number) =>
   new Response(message, { status, headers: NO_STORE })
+let native = (req: Request) =>
+  req.method == 'POST' &&
+  req.headers.get('content-type')?.split(';')[0].trim().toLowerCase() ==
+    'application/x-www-form-urlencoded'
+
+let returned = (req: Request, message?: string) => {
+  let door = new URL(req.headers.get(ADDRESS) ?? req.url), page = new URL(door)
+  page.pathname = door.pathname.replace(/\/api\/form\/[^/]+$/, '/')
+  page.search = ''
+  let referer = req.headers.get('referer')
+  try {
+    let from = referer && new URL(referer)
+    if (from && from.origin == door.origin) page = from
+  } catch { /* A malformed referring URL falls back to the app's page. */ }
+  door.search = ''
+  door.hash = ''
+  page.searchParams.set(
+    'yak-form',
+    JSON.stringify({
+      at: door.href,
+      ...message == null ? { sent: true } : { said: message },
+    }),
+  )
+  return new Response(null, {
+    status: 303,
+    headers: { ...NO_STORE, location: page.href },
+  })
+}
 
 let only = (comp: unknown, keys: readonly string[]): Comp =>
   Object.fromEntries(
@@ -57,13 +86,20 @@ export let formIn = async (req: Request, at: Stored): Promise<Response> => {
   if (!row?.form) return reply('No such form.', 404)
   if (req.method == 'GET') return shown(at, eid, row)
   if (req.method != 'POST') return reply('Use GET or POST.', 405)
-  let body: { answers?: unknown } | null
-  try {
-    body = await req.json()
-  } catch {
-    return reply('Submit an answers object.', 400)
+  let answers: unknown
+  if (native(req)) {
+    let questions = await at.graph.read(`.question.form=${JSON.stringify(eid)}`)
+    answers = posted(
+      { form: row.form, questions } as unknown as Form,
+      new URLSearchParams(await req.text()),
+    )
+  } else {
+    try {
+      answers = (await req.json() as { answers?: unknown } | null)?.answers
+    } catch {
+      return reply('Submit an answers object.', 400)
+    }
   }
-  let answers = body?.answers
   if (!answers || typeof answers != 'object' || Array.isArray(answers)) {
     return reply('Submit an answers object.', 400)
   }
@@ -95,7 +131,13 @@ export let forms: Answer = ({ req, env, path, space, app, json }) => {
   // 204, which passes on as it came.
   return appStore(env.STORE, space, app, env).consume(
     `/form?${new URLSearchParams({ name })}`,
-    async (r) => new Response(r.status == 204 ? null : await r.text(), r),
+    async (r) => {
+      let text = r.status == 204 ? '' : await r.text()
+      if (native(req) && r.status < 500) {
+        return returned(req, r.ok ? undefined : text)
+      }
+      return new Response(r.status == 204 ? null : text, r)
+    },
     { method: req.method, body: post ? req.body : null, headers: req.headers },
     KERNEL,
   )

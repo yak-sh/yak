@@ -356,10 +356,17 @@ What it draws:
   nothing is sent.
 - **Closed and thanks.** A form its door says is not `open` shows `form.closed`
   (or "This form is closed."). A sent one shows `form.thanks`, and a button to
-  fill it in again. A refusal shows the door's own words and keeps every answer.
+  fill it in again. A JavaScript submission's refusal shows the door's own words
+  and keeps every answer.
 - **Without JavaScript.** It is a native `<form method="post" action={at}>`,
   each control named by its answer's path (`children.0.born`), with `required`
-  set. The door takes JSON only, so a form posted without JavaScript is refused.
+  set. The door takes URL-encoded controls as well as JSON. A native post
+  redirects with 303 to the referring page (the app root without a same-origin
+  referrer), preserving its query and fragment. Its `yak-form` query parameter
+  is JSON containing the absolute form door URL as `at`, and either `sent: true`
+  or `said` with the refusal. The page can render that feedback without script;
+  Signup consumes its own feedback when mounted and removes the parameter, so
+  filling it in again starts fresh. Native redirects do not retain answers.
 
 Its state is `Signup{door, unread, answers, tried, sending, sent, said}` on
 `signupAt(at)`: the form as the door answered it, why it could not be read, the

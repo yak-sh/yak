@@ -7,7 +7,13 @@ import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { mount } from '../tui/testing.ts'
-import { type Door, Signup, signupAt, signupOf } from './Signup.ts'
+import {
+  type Door,
+  Signup,
+  signupAt,
+  signupOf,
+  signupReturned,
+} from './Signup.ts'
 
 let ask = (
   eid: string,
@@ -75,8 +81,28 @@ let { document, Event } = parseHTML('<html><body><main></main></body></html>')
 
 // A page holding one Signup: its state kept as the page graph would keep it,
 // its door answered by the given rows, and every send remembered.
-let page = async (door: Door | string, refuse?: string) => {
+let page = async (door: Door | string, refuse?: string, feedback?: object) => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let location = Object.getOwnPropertyDescriptor(globalThis, 'location')
+  let history = Object.getOwnPropertyDescriptor(globalThis, 'history')
+  let url = new URL('https://church.example/join?sent=unrelated#card')
+  if (feedback) url.searchParams.set('yak-form', JSON.stringify(feedback))
+  Object.defineProperty(globalThis, 'location', {
+    value: {
+      get href() {
+        return url.href
+      },
+    },
+    configurable: true,
+  })
+  Object.defineProperty(globalThis, 'history', {
+    value: {
+      replaceState: (_state: unknown, _unused: string, href: string) => {
+        url = new URL(href)
+      },
+    },
+    configurable: true,
+  })
   Object.defineProperty(globalThis, 'document', {
     value: document,
     configurable: true,
@@ -120,6 +146,7 @@ let page = async (door: Door | string, refuse?: string) => {
     $,
     $$,
     state: () => signupOf(e),
+    url: () => url,
     text: () => words(root),
     names: () => $$('[name]').map((el) => el.getAttribute('name')),
     type: async (name: string, value: string) => {
@@ -140,9 +167,65 @@ let page = async (door: Door | string, refuse?: string) => {
       await act(() => render(null, root))
       if (prior) Object.defineProperty(globalThis, 'document', prior)
       else Reflect.deleteProperty(globalThis, 'document')
+      if (location) Object.defineProperty(globalThis, 'location', location)
+      else Reflect.deleteProperty(globalThis, 'location')
+      if (history) Object.defineProperty(globalThis, 'history', history)
+      else Reflect.deleteProperty(globalThis, 'history')
     },
   }
 }
+
+test('native return feedback shows thanks once, and preserves unrelated page state', async () => {
+  await using p = await page({ ...card, open: false }, undefined, {
+    at: 'https://church.example/directory/api/form/kids-club',
+    sent: true,
+  })
+  equal(
+    p.text(),
+    'Membership card Thank you. Your answers are in. Fill it in again',
+  )
+  equal(p.url().href, 'https://church.example/join?sent=unrelated#card')
+  await p.press('Fill it in again', 'section')
+  equal(p.state().sent, false)
+  equal(p.text(), 'Membership card Cards are back in January.')
+})
+
+test('native refusals remain visible when the form is now closed', async () => {
+  await using p = await page({ ...card, open: false }, undefined, {
+    at: 'https://church.example/directory/api/form/kids-club',
+    said: 'This form is closed or full.',
+  })
+  equal(p.$('[role=alert]').textContent, 'This form is closed or full.')
+})
+
+test('native feedback belongs only to the posted door', () => {
+  let url = new URL('https://church.example/join')
+  url.searchParams.set(
+    'yak-form',
+    JSON.stringify({
+      at: 'https://elsewhere.example/api/form/kids-club',
+      sent: true,
+    }),
+  )
+  equal(signupReturned('/api/form/kids-club', url.href), undefined)
+  url.searchParams.set(
+    'yak-form',
+    JSON.stringify({
+      at: 'https://church.example/directory/api/form/kids-club',
+      sent: true,
+    }),
+  )
+  equal(
+    signupReturned(
+      './api/form/kids-club',
+      url.href,
+      'https://church.example/directory/',
+    ),
+    { sent: true },
+  )
+  url.searchParams.set('yak-form', 'invalid')
+  equal(signupReturned('/api/form/kids-club', url.href), undefined)
+})
 
 test('Kids Club asks for each child, shows a question only for its answer, and sends what shows', async () => {
   await using p = await page(kids)

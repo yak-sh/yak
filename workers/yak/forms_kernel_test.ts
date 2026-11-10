@@ -1,6 +1,6 @@
 import type { Comp } from '@yaks/graph'
 import { equal, ok, test } from '@yaks/testing'
-import { connector, kernel, letters, signIn } from './probe.ts'
+import { connector, kernel, letters, meta, signIn } from './probe.ts'
 
 let k = await kernel(), owner = await signIn(k)
 let agent = connector(k, owner.cookie)
@@ -183,6 +183,169 @@ test('simultaneous visitors share one capacity and closed forms refuse', () => {
 test('a phone match sends the confirmation to the directory email', () => {
   equal(phoned.status, 204)
   equal(letters(k, 'ann@example.com')[1].subject, 'Contact')
+})
+
+let native = crypto.randomUUID(), children = crypto.randomUUID()
+let born = crypto.randomUUID(), choices = crypto.randomUUID()
+let tick = crypto.randomUUID(), text = crypto.randomUUID()
+await agent.tool('graph_apply', {
+  app,
+  entities: [
+    {
+      entity: { eid: native },
+      alias: { name: 'native' },
+      form: { capacity: 1 },
+    },
+    {
+      entity: { eid: children },
+      question: {
+        form: native,
+        kind: 'repeat',
+        label: 'Children',
+        required: true,
+      },
+    },
+    {
+      entity: { eid: born },
+      question: {
+        form: native,
+        kind: 'date',
+        label: 'Born',
+        within: children,
+        required: true,
+      },
+    },
+    {
+      entity: { eid: choices },
+      question: {
+        form: native,
+        kind: 'choices',
+        label: 'Choices',
+        choices: ['true'],
+      },
+    },
+    {
+      entity: { eid: tick },
+      question: { form: native, kind: 'check', label: 'Tick' },
+    },
+    {
+      entity: { eid: text },
+      question: { form: native, kind: 'line', label: 'Text' },
+    },
+  ],
+})
+let nativePost = (fields: URLSearchParams, referer?: string) =>
+  k.at(host, `/${app}/api/form/native`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      ...referer ? { referer } : {},
+    },
+    body: fields.toString(),
+  })
+let referring = `https://${host}/${app}/join?sent=old&said=old#kids`
+let unfilledNative = await nativePost(new URLSearchParams(), referring)
+let fields = new URLSearchParams([
+  [`${children}.1.${born}`, '2020-03-04'],
+  [`${children}.0.${born}`, '2018-01-02'],
+  [choices, 'true'],
+  [tick, 'true'],
+  [text, 'true'],
+])
+let takenNative = await nativePost(fields, referring)
+let closedNative = await nativePost(fields, referring)
+let awayNative = await nativePost(fields, 'https://elsewhere.example/away')
+let bareNative = await nativePost(fields)
+let invalidReferer = await nativePost(fields, 'invalid URL')
+let missingNative = await k.at(host, `/${app}/api/form/missing`, {
+  method: 'POST',
+  body: '',
+  headers: {
+    'content-type': 'application/x-www-form-urlencoded',
+    referer: referring,
+  },
+})
+let nativeRows = (await agent.answer('graph_query', {
+  app,
+  query: `.registration.form=${native}&*`,
+})).rows
+let domain = `forms-${crypto.randomUUID()}.example.com`
+await meta(k).apply([{
+  hostname: { name: domain, serves: made.value?.eid, stage: 'active' },
+}])
+let domainPost = (referer?: string) =>
+  k.at(domain, '/api/form/native', {
+    method: 'POST',
+    body: fields.toString(),
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      ...referer ? { referer } : {},
+    },
+  })
+let domainNative = await domainPost(`https://${domain}/join?keep=yes#kids`)
+let domainBare = await domainPost()
+
+test('a native form post decodes controls and redirects back with scoped feedback', () => {
+  let door = `https://${host}/${app}/api/form/native`
+  for (
+    let [r, result] of [
+      [unfilledNative, { at: door, said: 'Answer every required question.' }],
+      [takenNative, { at: door, sent: true }],
+      [closedNative, { at: door, said: 'This form is closed or full.' }],
+    ] as const
+  ) {
+    equal(r.status, 303)
+    equal(r.headers.get('cache-control'), 'no-store')
+    let to = new URL(r.headers.get('location')!)
+    equal(JSON.parse(to.searchParams.get('yak-form')!), result)
+    to.searchParams.delete('yak-form')
+    equal(to.href, referring)
+  }
+  equal(nativeRows.length, 1)
+  equal((nativeRows[0].registration as Comp).answers, {
+    [children]: [{ [born]: '2018-01-02' }, { [born]: '2020-03-04' }],
+    [choices]: ['true'],
+    [tick]: true,
+    [text]: 'true',
+  })
+})
+
+test('native refusals return to the app root without a valid same-origin referrer', () => {
+  for (let r of [awayNative, bareNative, invalidReferer]) {
+    equal(r.status, 303)
+    let to = new URL(r.headers.get('location')!)
+    equal(to.origin + to.pathname, `https://${host}/${app}/`)
+    equal(
+      JSON.parse(to.searchParams.get('yak-form')!).said,
+      'This form is closed or full.',
+    )
+  }
+  equal(missingNative.status, 303)
+  equal(
+    JSON.parse(
+      new URL(missingNative.headers.get('location')!)
+        .searchParams.get('yak-form')!,
+    ).said,
+    'No such form.',
+  )
+})
+
+test('native return addresses stay on the browser’s custom domain', () => {
+  for (
+    let [r, page] of [
+      [domainNative, `https://${domain}/join?keep=yes#kids`],
+      [domainBare, `https://${domain}/`],
+    ] as const
+  ) {
+    equal(r.status, 303)
+    let to = new URL(r.headers.get('location')!)
+    equal(JSON.parse(to.searchParams.get('yak-form')!), {
+      at: `https://${domain}/api/form/native`,
+      said: 'This form is closed or full.',
+    })
+    to.searchParams.delete('yak-form')
+    equal(to.href, page)
+  }
 })
 
 // A public app reads to anyone, and a sign-up is still the app's own: only a

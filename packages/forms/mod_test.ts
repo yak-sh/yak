@@ -9,6 +9,7 @@ import {
   missing,
   next,
   open,
+  posted,
   type Question,
 } from './mod.ts'
 
@@ -22,6 +23,55 @@ let question = (
 let form = (...questions: Question[]): Form => ({ form: {}, questions })
 let paths = (f: Form, answers: Answers) =>
   missing(f, answers).map((q) => q.path)
+
+test('native answer paths decode repeats, choices and checked boxes by question kind', () => {
+  let f = form(
+    question('children', { kind: 'repeat' }),
+    question('born', { kind: 'date', within: 'children' }),
+    question('grandchildren', { kind: 'repeat', within: 'children' }),
+    question('name', { within: 'grandchildren' }),
+    question('choose', { kind: 'choose', choices: ['true'] }),
+    question('choices', { kind: 'choices', choices: ['a', 'b'] }),
+    question('single', { kind: 'choices', choices: ['true'] }),
+    question('check', { kind: 'check' }),
+    question('unticked', { kind: 'check' }),
+    question('text'),
+    question('repeated'),
+  )
+  equal(
+    posted(
+      f,
+      new URLSearchParams([
+        ['children.1.born', '2020-03-04'],
+        ['children.0.born', '2018-01-02'],
+        ['children.0.grandchildren.0.name', 'Ada'],
+        ['children.999999999.born', '2022-05-06'],
+        ['choose', 'true'],
+        ['choices', 'a'],
+        ['choices', 'b'],
+        ['single', 'true'],
+        ['check', 'true'],
+        ['text', 'true'],
+        ['repeated', 'one'],
+        ['repeated', 'two'],
+        ['__proto__.polluted', 'true'],
+      ]),
+    ),
+    {
+      children: [
+        { born: '2018-01-02', grandchildren: [{ name: 'Ada' }] },
+        { born: '2020-03-04' },
+        { born: '2022-05-06' },
+      ],
+      choose: 'true',
+      choices: ['a', 'b'],
+      single: ['true'],
+      check: true,
+      text: 'true',
+      repeated: ['one', 'two'],
+    },
+  )
+})
 
 test('required questions precede optional ones, with stable order and skips', () => {
   let f = form(

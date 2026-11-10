@@ -74,6 +74,23 @@ export let signupAt = (at: string): string =>
 export let signupOf = (e?: Bundle): SignupState =>
   (e?.Signup as SignupState | undefined) ?? {}
 
+/** Feedback on the page after a native form post, scoped to this door. */
+export let signupReturned = (
+  at: string,
+  page: string,
+  base = page,
+): Pick<SignupState, 'sent' | 'said'> | undefined => {
+  try {
+    let url = new URL(page), door = new URL(at, base)
+    let result = JSON.parse(url.searchParams.get('yak-form') ?? 'null')
+    door.search = ''
+    door.hash = ''
+    if (result?.at != door.href) return
+    if (result.sent === true) return { sent: true }
+    if (typeof result.said == 'string') return { said: result.said }
+  } catch { /* An unrelated page parameter carries no form feedback. */ }
+}
+
 /** The answer at `path`, set to `value`; undefined removes it. */
 let put = (
   answers: Answers,
@@ -202,6 +219,15 @@ export let Signup = (
   }
   let door = state.door
   useEffect(() => {
+    let page = globalThis.location?.href
+    let result = page &&
+      signupReturned(at, page, globalThis.document?.baseURI || page)
+    if (result) {
+      emit(result)
+      let url = new URL(page)
+      url.searchParams.delete('yak-form')
+      globalThis.history?.replaceState(globalThis.history.state, '', url.href)
+    }
     if (!door && !state.unread) void load()
   }, [at])
   if (!door) {
@@ -258,6 +284,9 @@ let drawn = (
       { class: 'Signup' },
       title,
       paragraphs(settings.closed ?? 'This form is closed.'),
+      state.said
+        ? h(Notice, { mod: 'negative', role: 'alert' }, state.said)
+        : null,
     )
   }
 
