@@ -4,7 +4,6 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import { minted } from '@yaks/graph/identity'
 import { sha256 } from '@yaks/graph/sha256'
-import { bugEid } from '@yaks/tracker'
 import { Unsigned } from '@yaks/host/senders'
 import { sign } from './auth.ts'
 import { capture, caught, origin, queue } from '@yaks/tracker/report'
@@ -38,41 +37,33 @@ export type Env = Omit<Settings, 'TRACKERS'> & {
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // A deploy's canary is the content hash of its bundle and its nonce.
 let receipt = (hash: string, nonce: string) => sha256(`${hash}|${nonce}`)
+/** A deploy's canary: one probe occurrence (@yaks/tracker `probe`), which
+ * travels the queue, intake and grouping as a failure does and is no bug:
+ * grouping writes its receipt, and no bug row, letter or knock follows. */
 export let canary = (
   hash: string,
   version?: string,
-  request?: Request,
   nonce: string = crypto.randomUUID(),
   at = new Date().toISOString(),
-) => {
-  let fault = `tracker-canary|${hash}`
-  let eid = receipt(hash, nonce)
-  let requestEid = sha256(`${eid}|request`)
-  let context = origin(
-    'yak-tracker',
-    version,
-    'fetch.canary',
-    request,
-    requestEid,
-  )
+): Bundle[] => {
+  let { tags, commit } = origin('yak-tracker', version, 'fetch.canary')
   let error = Error(`tracker deploy canary ${hash}`)
   // Repeated synthetic captures carry no varying caller stack.
   delete error.stack
-  let rows = capture(error, {
+  let [row] = capture(error, {
     sink: () => {},
-    ...context,
-    eid,
+    tags,
+    commit,
+    eid: receipt(hash, nonce),
     at,
-    fault,
+    fault: `tracker-canary|${hash}`,
   })
-  // A deployment exercises grouping without notifying a synthetic bug.
-  rows.push({ entity: { eid: bugEid('', fault) }, archived: {} })
-  return rows
+  return [{ ...row, probe: {} }]
 }
-// A deploy whose canary did not arrive, filed on its bundle's own bug. Unlike
-// the canary it is not archived, so its letter reaches an agent and the owner
-// at once. Why is read here, never taken from the caller, and a receipt is one
-// occurrence however often its report is sent.
+// A deploy whose canary did not arrive, filed on its bundle's own bug, which
+// is a failure: its letter reaches an agent and the owner at once. Why is read
+// here, never taken from the caller, and a receipt is one occurrence however
+// often its report is sent.
 export let missing = (
   hash: string,
   nonce: string,
@@ -105,11 +96,28 @@ export let STALL = 120_000
 export type Standing =
   | { arrived: true }
   | { arrived: false; failed: boolean; why: string }
+type Ask = (path: string) => Promise<Response>
+// What the platform object runs when it is not this bundle yet: an object
+// moves to a new version minutes after this Worker. False is this bundle;
+// undefined is an object that could not answer. An object from before the
+// route answers 404 and is not there yet.
+let lagging = async (
+  ask: Ask,
+  hash: string,
+): Promise<string | false | undefined> => {
+  let bundle = await ask('/bundle')
+  if (bundle.status == 404) {
+    return 'its Tracker object runs a release from before /bundle'
+  }
+  if (!bundle.ok) return
+  let held = (await bundle.json()).hash
+  return held != hash && `its Tracker object runs bundle ${held}`
+}
 // Read from the platform object's graph, never waited for: grouping is the
 // alarm's work, so a canary that answered only once grouped would read a
 // stalled queue as silence. Undefined is an object that could not answer.
 let standing = async (
-  ask: (path: string) => Promise<Response>,
+  ask: Ask,
   hash: string,
   eid: string,
   now: number,
@@ -124,30 +132,24 @@ let standing = async (
     failed: true,
     why,
   })
-  // An object moves to a new version minutes after this Worker, so the
-  // canary can arrive only once the object runs this bundle too. An object
-  // from before the route answers 404 and is not there yet.
-  let bundle = await ask('/bundle')
-  if (bundle.status == 404) {
-    return waiting('its Tracker object runs a release from before /bundle')
-  }
-  if (!bundle.ok) return
-  let held = (await bundle.json()).hash
-  if (held != hash) return waiting(`its Tracker object runs bundle ${held}`)
+  // The canary can arrive only once the object runs this bundle too.
+  let lag = await lagging(ask, hash)
+  if (lag == null) return
+  if (lag) return waiting(lag)
   // The canary and the run that groups it, in one read: a run deletes itself
   // as it groups, so one snapshot sees one or the other.
   let read = await ask(`/query?q=${
     encodeURIComponent(
-      `.entity.eid=${eid} .error.fault="tracker-canary|${hash}" | ` +
+      `.entity.eid=${eid} .probe .error.fault="tracker-canary|${hash}" | ` +
         `.effect.handler=error_group .effect.target=${eid}`,
     )
   }`)
   if (!read.ok) return
   let rows: Bundle[] = await read.json()
-  let canary = rows.find((row) => row.error)?.error as Comp | undefined
+  let canary = rows.find((row) => row.probe)?.probe as Comp | undefined
   let run = rows.find((row) => row.effect)?.effect as Comp | undefined
   if (!canary) return waiting('its canary never reached the object')
-  if (canary.bug) return { arrived: true }
+  if (canary.grouped) return { arrived: true }
   if (!run) return waiting('its canary is ungrouped and owes no grouping run')
   if (run.error) return failed(`its grouping threw: ${run.error}`)
   let waited = now - Date.parse(String(run.next ?? run.at))
@@ -254,10 +256,10 @@ export let worker = (
     if (answer.ok) enroll(scope)
     return answer
   }
-  // Where a receipt stands, asked through the object's stable read doors
-  // across Worker/DO deployment propagation. The runtime holds its signing
-  // key; the build learns only whether its canary arrived or failed.
-  let stand = async (hash: string, eid: string) => {
+  // The platform object's stable read doors, asked across Worker/DO
+  // deployment propagation. The runtime holds its signing key; the build
+  // learns only whether its canary arrived or failed.
+  let asking = async (): Promise<Ask | undefined> => {
     if (!env.TRACKER_SECRET) return
     let signed = await ticket({
       scope: platform,
@@ -266,17 +268,17 @@ export let worker = (
       exp: Math.floor(now() / 1000) + 60,
     }, env.TRACKER_SECRET)
     let headers = { authorization: `Bearer ${signed}` }
-    return standing(
-      (path) =>
-        send(
-          platform,
-          new Request(`https://tracker.internal${path}`, { headers }),
-          null,
-        ),
-      hash,
-      eid,
-      now(),
-    )
+    return (path) =>
+      send(
+        platform,
+        new Request(`https://tracker.internal${path}`, { headers }),
+        null,
+      )
+  }
+  // Where a receipt stands.
+  let stand = async (hash: string, eid: string) => {
+    let ask = await asking()
+    return ask && standing(ask, hash, eid, now())
   }
   return {
     fetch: async (request: Request): Promise<Response> => {
@@ -392,14 +394,14 @@ export let worker = (
             )
           }
           if (!env.ERRORS) return json({ error: 'queue unavailable' }, 503)
-          let rows = canary(
-            hash,
-            env.CF_VERSION_METADATA?.id,
-            request,
-            nonce,
-            at,
-          )
-          await env.ERRORS.send(rows)
+          let rows = canary(hash, env.CF_VERSION_METADATA?.id, nonce, at)
+          // An object on the release before would prove nothing of this
+          // bundle, and may not know its words: the canary is sent once the
+          // object runs this bundle, by the publication that finds it there.
+          let ask = await asking()
+          let lag = ask && await lagging(ask, hash)
+          if (lag == null) return json({ error: 'tracker unavailable' }, 503)
+          if (!lag) await env.ERRORS.send(rows)
           return json({ eid: rows[0].entity.eid })
         }
         // Only GET and HEAD carry no body; asking `request.body` instead

@@ -210,8 +210,10 @@ activation are separate account operations.
 The first ordinary wake with all mail settings persists the activation time and
 refreshes the recipient in an already installed platform tracker. Earlier bug
 openings stay unseen and produce no letter; later openings and regressions each
-own one durable letter. Trace intake does not activate mail. Deployment canary
-bugs are archived at intake and produce no notification.
+own one durable letter. Trace intake does not activate mail. A deployment's
+canary is a probe (`probe{grouped}` in
+[@yaks/tracker](../../packages/tracker/README.md#probes)): no bug, so no letter
+and nothing for a fixer.
 
 Workers Builds: repository root, deploy command `sh bin/build-tracker`, with
 build command empty. The wrapper installs Deno and the pinned npm dependencies.
@@ -229,7 +231,7 @@ main's tip has no newer tracker source (the watched paths above) and no live
 version comes from a newer commit; each version's message names its commit and
 bundle. It sets the nonsecret `BUNDLE_HASH` binding and publishes a content-hash
 canary through the Worker's queue. It republishes the same capture every thirty
-seconds until intake and grouping produce its bug, allowing Worker and object
+seconds until intake and grouping write its receipt, allowing Worker and object
 versions to converge. A canary the tracker says failed, or one still missing
 after ten minutes, is reported to the tracker and fails the build. Nothing rolls
 back: the new version stays live, and an agent decides whether to roll back or
@@ -239,22 +241,28 @@ legacy error store is deleted, and yak reporting/read-path changes are outside
 this Worker.
 
 `POST /canary?scope=platform&hash=<bundle-hash>&nonce=<uuid>&at=<iso-time>`
-needs no ticket and returns `{eid}` for a synthetic error. Only the deployed
-`BUNDLE_HASH` is accepted. The timestamp must be canonical ISO UTC, at most
-fifteen minutes old or one minute ahead. The server derives the content-hash eid
-from the bundle hash and nonce; retrying them with the same timestamp preserves
-the entire capture. The request body is ignored. `GET` on the same URL with
-`&eid=<receipt>` returns only `{arrived: boolean, failed?: true}`. It is true
-once that exact canary has reached grouping and the platform Tracker object
-reports the same `BUNDLE_HASH` (its admin-only `GET /bundle`). A Durable Object
-moves to a new version seconds to minutes after the Worker, so until then the
-deploy is not live. Grouping is the object's alarm-driven effect queue, so the
-answer reads the canary and its grouping run from the graph rather than waiting
-for them: a run that threw, or one due for over two minutes, is `failed`. A
-stalled queue is a failed canary, never silence.
+needs no ticket and returns `{eid}` for a probe: one synthetic occurrence that
+travels the queue, intake and the grouping run as a failure does, where grouping
+writes its receipt (`probe.grouped`) and files it under no bug. Only the
+deployed `BUNDLE_HASH` is accepted. The timestamp must be canonical ISO UTC, at
+most fifteen minutes old or one minute ahead. The server derives the
+content-hash eid from the bundle hash and nonce; retrying them with the same
+timestamp preserves the entire capture. The request body is ignored. A Durable
+Object moves to a new version seconds to minutes after the Worker, and one on
+the release before would prove nothing of this bundle, so the probe is sent only
+once the platform Tracker object reports the same `BUNDLE_HASH` (its admin-only
+`GET /bundle`); until then a publication answers its `{eid}` and sends nothing.
+`GET` on the same URL with `&eid=<receipt>` returns only
+`{arrived: boolean, failed?: true}`. It is true once that exact probe has its
+receipt in an object running this bundle. Grouping is the object's alarm-driven
+effect queue, so the answer reads the probe and its grouping run from the graph
+rather than waiting for them: a run that threw, or one due for over two minutes,
+is `failed`. A stalled queue is a failed canary, never silence. A probe moves no
+bug, so a reader polling the bugs is told nothing moved, and each probe's
+grouping deletes the probes grouped over an hour before.
 
 `POST /canary/missing?scope=platform&hash=<bundle-hash>&nonce=<uuid>` needs no
 ticket. Unless that canary arrived (409), it reports the deploy unconfirmed,
-with why as the Worker reads it, on a `tracker-deploy|<hash>` bug that is not
-archived, so it notifies. One nonce is one occurrence however often it is sent.
+with why as the Worker reads it, on a `tracker-deploy|<hash>` bug, which
+notifies like any other. One nonce is one occurrence however often it is sent.
 Graph reads and other tracker operations require scope tickets.

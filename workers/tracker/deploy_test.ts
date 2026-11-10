@@ -124,7 +124,7 @@ let setup = (now: () => number = Date.now) => {
     },
     alarm: () => {
       received = received.map((row) =>
-        row.error ? grouped(row, undefined, [])[0] : row
+        row.probe ? { ...row, ...grouped(row, undefined, [])[0] } : row
       )
       return Promise.resolve()
     },
@@ -179,20 +179,30 @@ let unsigned = setup()
 let unsignedPublication = publication(unsigned.url)
 await publish(unsigned.w, unsigned.url, unsignedPublication)
 
-test('unsigned canary ignores caller data', () => {
+test('unsigned canary is one probe occurrence and ignores caller data', () => {
   let { sent } = unsigned
   equal(sent.length, 1)
-  let [failure, request] = sent[0]
-  equal(failure.during, { request: request.entity.eid })
-  equal((failure.error as Comp).tags, {
+  let [probe, ...rest] = sent[0]
+  equal([rest, probe.probe, probe.during], [[], {}, undefined])
+  equal((probe.error as Comp).tags, {
     script: 'yak-tracker',
     version: '00000000-0000-4000-8000-000000000010',
     entrypoint: 'fetch.canary',
   })
-  equal(
-    (request.request as Comp).url,
-    'https://tracker.test/canary',
-  )
+})
+test('a canary is sent only once the object runs the deployed bundle', async () => {
+  let { sent, object, w, url } = setup()
+  let request = publication(url)
+  for (let runs of [null, 'b'.repeat(64)]) {
+    object.runs = runs
+    equal(await read(w, await publish(w, url, request.clone())), {
+      arrived: false,
+    })
+  }
+  equal(sent, [])
+  object.runs = hash
+  await publish(w, url, request.clone())
+  equal(sent.length, 1)
 })
 test('canary republication retains its immutable capture', async () => {
   let { sent, w, url } = setup()
@@ -451,6 +461,7 @@ standing.push(await read(stalledWorker, `${canaryUrl}&eid=${stalledEid}`))
 let [opened] = await stalled.tracker!.graph.read(
   `.bug.fault="tracker-deploy|${hash}"`,
 )
+let filed = await stalled.tracker!.graph.read('.bug | .mail')
 let late = await stalledWorker.fetch(
   new Request(missingUrl, { method: 'POST' }),
 )
@@ -470,6 +481,9 @@ test('a missing canary is reported to the tracker with why, read there', () => {
 })
 test('an arrived canary is not reported missing', () => {
   equal(late.status, 409)
+})
+test('a grouped canary is no bug and owes no letter', () => {
+  equal(filed.map((row) => row.entity.eid), [opened.entity.eid])
 })
 
 test('a deployment is its bundle and its configuration together', async () => {

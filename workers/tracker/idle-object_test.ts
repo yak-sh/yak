@@ -131,5 +131,5 @@ await active.alarm()
 let [grouped] = await active.tracker!.graph.get([rows[0].entity.eid])
 
 test('the preserved alarm groups the admitted canary', () => {
-  ok((grouped.error as Comp | undefined)?.bug)
+  ok((grouped.probe as Comp | undefined)?.grouped)
 })

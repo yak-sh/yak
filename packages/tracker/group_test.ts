@@ -362,3 +362,22 @@ test('a bug wears the session and work of the occurrence that opened it', async 
   await put(g, occurrence('3', b))
   equal((await bugs(g))[0].during, undefined)
 })
+
+test('a probe is grouped with a receipt and no bug, and clears spent probes', async () => {
+  let g = fixture()
+  let probe = (id: string, grouped?: string): Bundle => ({
+    ...occurrence(id),
+    probe: grouped ? { grouped } : {},
+  })
+  let recent = new Date(Date.now() - 60_000).toISOString()
+  await g.apply([probe('1', '2026-10-02T00:00:01Z'), probe('2', recent)], {
+    trusted: true,
+  })
+  await put(g, probe('3'))
+  await group(g, '3')
+  let [kept, now] = await g.read('.probe * .order=error.at')
+  equal(await bugs(g), [])
+  equal([kept.entity.eid, comp(kept, 'probe').grouped], ['2', recent])
+  equal([now.entity.eid, comp(now, 'error').bug], ['3', undefined])
+  ok(comp(now, 'probe').grouped)
+})

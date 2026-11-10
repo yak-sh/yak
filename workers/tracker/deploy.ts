@@ -1,7 +1,8 @@
 #!/usr/bin/env -S deno run -A
-// Deploy only a changed bundle or configuration, then wait for its queue canary to become a bug
-// in a Tracker object that runs this bundle: objects move to a new version
-// minutes after the Worker, and the deploy is confirmed only once they have.
+// Deploy only a changed bundle or configuration, then wait for its queue
+// canary to be grouped, as a probe that is no bug, in a Tracker object that
+// runs this bundle: objects move to a new version minutes after the Worker,
+// and the deploy is confirmed only once they have.
 // A canary the tracker says failed, or one still missing after ten minutes, is
 // reported to the tracker and fails the build. The new version stays live:
 // whether to roll back or fix forward is an agent's call, never this script's.
