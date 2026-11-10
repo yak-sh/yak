@@ -22,6 +22,11 @@
 // their own act. A task assigned to a person knocks that same session, and
 // nobody else: an assignment is news to the one it names.
 //
+// A person's assistant hears news, not traffic: work they spoke to finishing
+// (completed, cancelled or answered), work newly assigned to them, and a
+// comment that answers one of their own (`comment.reply_to`). Any other
+// comment knocks no session standing for a person, however it watches.
+//
 // Each change knocks a target once, named for the target and the change, so
 // two watchers routed to one session make one knock and a run that is tried
 // again knocks nobody twice. A person's comment already reaches the session
@@ -103,15 +108,27 @@ let subscribed = async (g: G, task: Eid, mode: string): Promise<Eid[]> =>
     )).map((b) => str(comp(b, 'subscription').actor)).filter(Boolean)
     : []
 
-/** The people who commented on `task` themselves: by a person and through no
- * session, as `session_start` reads a person's comment. */
+// A person's own words: by a person and through no session, as
+// `session_start` reads a person's comment.
+let OWN = `.created.by.person&!created.via.${SESSION}`
+
+/** The people who commented on `task` themselves. */
 let spoke = async (g: G, task: Eid): Promise<Eid[]> =>
   g.vocab.comp('person') && g.vocab.comp('comment')
     ? (await g.read(
-      `.comment.target=${task}&.created.by.person&!created.via.${SESSION}` +
-        `&.fields=created.by&.limit=500`,
+      `.comment.target=${task}&${OWN}&.fields=created.by&.limit=500`,
     )).map((b) => str(comp(b, 'created').by)).filter(Boolean)
     : []
+
+/** The person whose own comment `row` answers, if it answers one. */
+let answered = async (g: G, row: Bundle): Promise<Eid> => {
+  let to = str(comp(row, 'comment').reply_to)
+  if (!to || !g.vocab.comp('person')) return ''
+  let [own] = await g.read(
+    `.entity.eid=${JSON.stringify(to)}&${OWN}&.fields=created.by`,
+  )
+  return str(comp(own, 'created').by)
+}
 
 /** The session standing here for the conversation `person` holds with their
  * assistant in another store (./who.ts `standIn`): the newest one said to
@@ -463,6 +480,7 @@ export let knocks = async (
   if (!change) return []
   let { watching, muting } = await watchers(g, task)
   if (given) watching = [given.to]
+  let replied = row.comment ? await answered(g, row) : ''
   // A person's comment reaches the session that filed the task, and the one
   // holding it, through ./listen.ts already.
   let [writer] = change.via ? await g.get([change.via], [SESSION]) : []
@@ -479,6 +497,16 @@ export let knocks = async (
   let worked = !!row.comment && (await taken(g, [eid])).has(eid)
   let to = (await targets(g, watching, muting, !worked, change.by))
     .filter((t) => !knows.has(t))
+  // A comment reaches a person's assistant only when it answers them.
+  if (row.comment && to.length) {
+    let stood = new Map(
+      (await g.get(to, [SESSION])).map((b) => [
+        b.entity.eid,
+        str(comp(b, SESSION).person),
+      ]),
+    )
+    to = to.filter((t) => [replied, ''].includes(stood.get(t) ?? ''))
+  }
   if (!to.length) return []
   let [who] = change.by ? await g.get([change.by], ['doc']) : []
   let name = who ? str(comp(who, 'doc').title) || human(g.vocab)(who) : ''

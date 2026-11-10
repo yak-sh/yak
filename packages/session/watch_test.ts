@@ -52,7 +52,7 @@ let agent = (id: string, more = {}) => ({
 // A project, the persona its agents wear, Jeff, and three agent sessions: the
 // operator Jeff opened, a worker, and one whose harness ended it. `T-7` was
 // filed by `filer` and is assigned to Jeff.
-let office = async (filer = 'worker') => {
+let office = async (filer = 'worker', more: Bundle[] = []) => {
   let fx = effects(vocab)
   let g = graph({
     storage: ram(vocab, { computed: statusComputed, number: true }),
@@ -77,6 +77,7 @@ let office = async (filer = 'worker') => {
     agent('operator', { operator: true }),
     agent('worker'),
     agent('gone', { ended: true }),
+    ...more,
   ], { trusted: true })
   await g.apply([{
     entity: { eid: 't' },
@@ -390,9 +391,47 @@ test('work Jeff commented on tells his conversation when an agent finishes it, n
     by: 'taskmaster',
     via: 'worker',
   })
-  equal((await o.heard('his')).length, 1)
+  equal(await o.heard('his'), [])
   await o.write(comment('c3', 'thanks'))
   equal(await o.heard('his'), [])
+})
+
+test("a comment reaches Jeff's conversation only when it answers his own", async () => {
+  let o = await office()
+  await o.g.apply([his], { trusted: true })
+  await o.write(comment('c1', 'which key?'))
+  let agent = { by: 'taskmaster', via: 'worker' }
+  await o.write(comment('c2', 'landed 1234abc'), agent)
+  await o.write(
+    comment('c3', 'sure', { comment: { target: 't', reply_to: 'c2' } }),
+    agent,
+  )
+  equal(await o.heard('his'), [])
+  await o.write(
+    comment('c4', 'the vault one', {
+      comment: { target: 't', reply_to: 'c1' },
+    }),
+    agent,
+  )
+  equal(
+    (await o.heard('his')).map((line) => line.split(' on ')[1]),
+    [`${o.id} by TaskMaster: the vault one`],
+  )
+  await o.write(
+    comment('c5', 'got it', { comment: { target: 't', reply_to: 'c4' } }),
+  )
+  equal(await o.heard('his'), [])
+})
+
+test("a task filed through Jeff's conversation tells it when it finishes, not of each comment", async () => {
+  let o = await office('his', [his])
+  await o.write(comment('c1', 'landed 1234abc'), {
+    by: 'taskmaster',
+    via: 'worker',
+  })
+  equal(await o.heard('his'), [])
+  await o.write(done, { by: 'taskmaster', via: 'worker' })
+  equal(await o.heard('his'), [`${o.id} completed by TaskMaster: ${TITLE}`])
 })
 
 test('a person with no conversation standing here is knocked nowhere', async () => {

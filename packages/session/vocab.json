@@ -1070,7 +1070,7 @@
         "filed.assignee"
       ],
       "target": ".task|.comment",
-      "description": "knock the sessions watching a task when it is completed, cancelled or answered, or commented on: the session that filed it, those that mention its id, the people who commented on it and the actors subscribed to watch it. A person hears through the session standing for their conversation with their assistant in another store. A task newly assigned to a person knocks that session alone. A session that is over is told through its project's operator. One knock per target and change, none for the writer's own or its subagents', and none for what a managed run's receipt tells the session it knocks: the receipt comment itself, and the run completing or cancelling its task"
+      "description": "knock the sessions watching a task when it is completed, cancelled or answered, or commented on: the session that filed it, those that mention its id, the people who commented on it and the actors subscribed to watch it. A person hears through the session standing for their conversation with their assistant in another store, and that session hears only news: the task finishing, the task newly assigned to that person (which knocks that session alone), or a comment answering one of the person's own; no other comment knocks it. A session that is over is told through its project's operator. One knock per target and change, none for the writer's own or its subagents', and none for what a managed run's receipt tells the session it knocks: the receipt comment itself, and the run completing or cancelling its task"
     },
     "session_start": {
       "effect": true,
