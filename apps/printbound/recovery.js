@@ -40,7 +40,7 @@ export let recovery = async (request, report) => {
     let previous = baseline.get(place)
     if (previous !== undefined && previous !== input.value) {
       desk.restore(place, input.value, previous)
-    } else if (!known.has(place) && !desk.text(place)) {
+    } else if (!known.has(place) && !desk.has(place)) {
       desk.restore(place, input.value)
     }
     baseline.set(place, input.value)
