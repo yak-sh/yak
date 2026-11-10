@@ -222,3 +222,28 @@ test('usage is the count the message ended with, for text and for a call', async
     usage,
   )
 })
+
+test('a message with two calls is a reply holding both, in order', async () => {
+  // The CLI writes one assistant frame per call, each with the message's id.
+  let call = (id: string, q: string) => ({
+    type: 'tool_use',
+    name: 'mcp__harness__graph_query',
+    id,
+    input: { q },
+  })
+  let { reply } = await read(req, [
+    event({ type: 'message_start', message: { id: 'm' } }),
+    begin(0, 'tool_use'),
+    said(call('call-1', 'alpha')),
+    event({ type: 'content_block_stop', index: 0 }),
+    begin(1, 'tool_use'),
+    said(call('call-2', 'beta')),
+    event({ type: 'content_block_stop', index: 1 }),
+    event({ type: 'message_delta', usage: { output_tokens: 110 } }),
+    event({ type: 'message_stop' }),
+  ])
+  assertEquals(reply!.items, [
+    { kind: 'call', id: 'call-1', name: 'graph_query', args: '{"q":"alpha"}' },
+    { kind: 'call', id: 'call-2', name: 'graph_query', args: '{"q":"beta"}' },
+  ])
+})
