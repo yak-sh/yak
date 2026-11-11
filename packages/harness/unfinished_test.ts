@@ -118,3 +118,32 @@ test('a heal-owned fixer waits for its follower, while unowned or muted work rep
   equal(withoutOwnership, 1)
   equal(healReports.length, 2)
 })
+
+// A session a comment started answers that comment; its claim on the task
+// keeps the next comment coming to it, and is no unfinished work once it replied.
+let started = (replied: boolean) => {
+  let reports: string[] = []
+  let read = (q: string) =>
+    Promise.resolve(
+      q.includes('.native')
+        ? [{ entity: { eid: 's' }, session: { source: 'c' } }]
+        : q.includes('.entity.eid=c')
+        ? [{ entity: { eid: 'c' }, comment: { target: 'task' } }]
+        : q.includes('.claim.session')
+        ? [{ entity: { eid: 'task' }, doc: { title: 'Asked' } }]
+        : q.includes('.comment.target=task&.created.via=s') && replied
+        ? [{ entity: { eid: 'reply' } }]
+        : [],
+    )
+  let host = {
+    graph: { vocab: { comp: () => undefined }, read },
+    report: (error: unknown) => void reports.push((error as Error).message),
+  } as unknown as Host
+  return unfinishedNativeFinal(host, 's', settled('a')).then(() => reports)
+}
+test('a comment-started session that answered its comment settles unreported', async () => {
+  equal(await started(true), [])
+  equal(await started(false), [
+    'Native session settled with unfinished claimed work: Asked',
+  ])
+})

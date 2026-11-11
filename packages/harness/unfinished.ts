@@ -30,7 +30,10 @@ async (step, session) => {
 }
 
 /** A native final with unblocked claimed work is not successful completion.
- * Report the idle handoff; do not resume it automatically or spend another turn. */
+ * Report the idle handoff; do not resume it automatically or spend another turn.
+ * A session a person's comment started holds the comment's task so his next
+ * comment reaches it (@yaks/session `starting`), but what it was asked is the
+ * comment: once it has commented back on that task, settling is its answer. */
 export let unfinishedNativeFinal = async (
   host: Host,
   session: string,
@@ -38,9 +41,14 @@ export let unfinishedNativeFinal = async (
 ): Promise<void> => {
   if (step.status != 'settled' || step.did != 'asked') return
   let [native] = await host.graph.read(
-    `.entity.eid=${session}&.native&.fields=entity.eid`,
+    `.entity.eid=${session}&.native&.fields=entity.eid,session.source`,
   )
   if (!native) return
+  let source = (native.session as Comp | undefined)?.source
+  let [asked] = source
+    ? await host.graph.read(`.entity.eid=${source}&.fields=comment.target`)
+    : []
+  let answering = (asked?.comment as Comp | undefined)?.target
   let tasks = await host.graph.read(
     `.task&.claim.session=${session}&!completed&!cancelled&!blocked&.fields=entity.eid,doc.title`,
   )
@@ -53,6 +61,12 @@ export let unfinishedNativeFinal = async (
     : []
   const bug = (fixer?.fixer as Comp | undefined)?.bug
   for (let task of tasks) {
+    if (task.entity.eid == answering) {
+      let [answer] = await host.graph.read(
+        `.comment.target=${answering}&.created.via=${session}&.fields=entity.eid&.limit=1`,
+      )
+      if (answer) continue
+    }
     if (bug && !fixer?.stop && !fixer?.exit) {
       const [muted] = await host.graph.read(
         `.entity.eid=${task.entity.eid}&.filed.project.nofix&.fields=entity.eid`,
