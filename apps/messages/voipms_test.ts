@@ -348,6 +348,40 @@ test('Messages texts a list from the church’s voip.ms line, hears the replies,
     await textIn('dup', BO, 'HELP')
     assertEquals(asked.length, 1)
 
+    // A YES answers a text and is no reply for the office to read as START;
+    // from someone who said STOP it opts them in again.
+    asked.length = 0
+    await textIn('yes-ana', ANA, 'Yes')
+    assertEquals(asked.length, 0)
+    await textIn('stop-yes', BO, 'STOP')
+    asked.length = 0
+    await textIn('yes-bo', BO, 'Yes')
+    assertEquals(asked.map((a) => a.message), [said.start])
+    assertEquals(recipients(m, general).to.map((p) => p.eid).includes(bo), true)
+
+    // A number nobody here has, and anyone who texts JOIN, reaches sign-up.
+    // The Operator is the Builder behind the space; here it only records.
+    let signups: string[] = []
+    let builder = env.BUILDER
+    env.BUILDER = {
+      ...builder,
+      idFromName: (name: string) => builder.idFromName(name),
+      get: () => ({
+        fetch: async (req: Request) => {
+          if (new URL(req.url).pathname != '/operator/signup') {
+            return new Response('no', { status: 404 })
+          }
+          signups.push((await req.json()).request.address)
+          return new Response('{}', { status: 202 })
+        },
+      }),
+    } as unknown as typeof env.BUILDER
+    await textIn('new-1', '+12695550177', 'I want to sign up')
+    await textIn('join-1', ANA, 'join')
+    await textIn('known-1', CY, 'See you at 6')
+    assertEquals(signups, ['+12695550177', ANA])
+    env.BUILDER = builder
+
     // No text from here went to anyone but the people listed.
     assert(!k.reported.length, JSON.stringify(k.reported))
   } finally {

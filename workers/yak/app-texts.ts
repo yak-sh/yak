@@ -22,6 +22,7 @@ import {
   type Keyword,
   keyword,
   type Sender,
+  stoppedBy,
 } from '@yaks/phone'
 import { type App, appStore, directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -117,11 +118,18 @@ let contactOf = async (graph: Meta) => {
   }
 }
 
+/** Whether a text is for sign-up and not the office: from a number the app
+ * does not know, or asking to JOIN, and not from a number that said STOP. */
+export let signsUp = (text: string, known: boolean, stopped: boolean) =>
+  !stopped && (!known || /^\W*join\b/i.test(text))
+
 /**
  * A text that arrived at an app's own number, kept in its store: the text,
  * the end of consent for everyone there with the sender's number when it
  * says STOP and consent again when it says START, and the answer a keyword
- * is owed, sent from the app's number and kept beside it.
+ * is owed, sent from the app's number and kept beside it. Any other text from
+ * a number the app does not know, or one that asks to JOIN, goes on to sign-up
+ * (operator-signup.ts), unless the number said STOP.
  */
 export let appArrived = async (
   env: Env,
@@ -129,20 +137,38 @@ export let appArrived = async (
   arrival: Arrival,
 ) => {
   let graph = metaOf(appStore(env.STORE, line.space, line.app, env), KERNEL)
-  let people = await graph.query(
-    `.phone.number=${JSON.stringify(arrival.from)}`,
-  )
+  let from = JSON.stringify(arrival.from)
+  let people = await graph.query(`.phone.number=${from}`)
+  // What this number said before this text decides whether a YES opts it in.
+  let before = (await graph.query(`.text.from=${from}&?doc`, { trusted: true }))
+    .map((t) => ({
+      ...t.text as { message_id?: string; at?: string },
+      body: (t.doc as { body?: string } | undefined)?.body,
+    }))
+    .filter((t) => t.message_id != arrival.id)
+    .sort((a, b) => String(a.at).localeCompare(String(b.at)))
+    .map((t) => String(t.body ?? ''))
+  let stopped = stoppedBy(before)
   // A provider posts a text again until it is answered; the keyword's answer
   // goes once, with the first.
   let again = (await graph.query(
-    `.text.message_id=${JSON.stringify(arrival.id)}&.text.from=${
-      JSON.stringify(arrival.from)
-    }`,
+    `.text.message_id=${JSON.stringify(arrival.id)}&.text.from=${from}`,
     { trusted: true },
   )).length > 0
-  await graph.apply(kept(arrival, people.map((p) => p.entity.eid)), KERNEL)
-  let word = keyword(arrival.text)
-  if (!word || again) return
+  await graph.apply(
+    kept(arrival, people.map((p) => p.entity.eid), stopped),
+    KERNEL,
+  )
+  let word = keyword(arrival.text, stopped)
+  if (!word) {
+    if (!signsUp(arrival.text, people.length > 0, stopped)) return
+    // A stranger, or anyone asking to join, is signing up (the Operator's
+    // form sign-up), not writing to the office; the text is kept either way.
+    let { signupArrived } = await import('./operator-signup.ts')
+    await signupArrived(env, line.space, { ...arrival, via: arrival.via ?? '' })
+    return
+  }
+  if (again) return
   let said = answers(
     line.space.title || line.space.slug,
     await contactOf(graph),

@@ -17,7 +17,7 @@ export let arrivalEid = (id: string, via?: string): string =>
  * (everyone here with its number, often one, none when nobody has it): the
  * text itself, which stays as the record of what they said; the removal of
  * their consent when it says STOP; and their consent again, in the words they
- * sent, when it says START.
+ * sent, when it says START (or YES, from someone who is `stopped`).
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -29,8 +29,12 @@ export let arrivalEid = (id: string, via?: string): string =>
  *   { person: 'ana', consent: 'Start', at: '2026-11-04T00:00:00Z' })
  * ```
  */
-export let kept = (arrival: Arrival, people: string[]): Bundle[] => {
-  let word = keyword(arrival.text)
+export let kept = (
+  arrival: Arrival,
+  people: string[],
+  stopped = true,
+): Bundle[] => {
+  let word = keyword(arrival.text, stopped)
   return [
     {
       entity: { eid: arrivalEid(arrival.id, arrival.via) },

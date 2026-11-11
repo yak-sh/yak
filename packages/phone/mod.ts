@@ -34,6 +34,7 @@ export {
   type Outcome,
   type Receipt,
   type Sender,
+  stoppedBy,
   type Text,
 } from './text.ts'
 export { type Stash, stash } from './stash.ts'

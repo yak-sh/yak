@@ -92,7 +92,9 @@ let WORDS: Record<string, Keyword> = {
 
 /**
  * The keyword a text is, or null when it says something else. A keyword is
- * the whole text, in any case, with any punctuation around it.
+ * the whole text, in any case, with any punctuation around it. YES opts in
+ * only someone who is `stopped`; from anyone else it answers a question and
+ * is no keyword.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -100,11 +102,22 @@ let WORDS: Record<string, Keyword> = {
  * equal(keyword(' Stop.'), 'stop')
  * equal(keyword('help'), 'help')
  * equal(keyword('YES'), 'start')
+ * equal(keyword('YES', false), null)
+ * equal(keyword('start', false), 'start')
  * equal(keyword('stop the meeting notice'), null)
  * ```
  */
-export let keyword = (text: string): Keyword | null =>
-  WORDS[text.trim().replace(/^\W+|\W+$/g, '').toUpperCase()] ?? null
+export let keyword = (text: string, stopped = true): Keyword | null => {
+  let word = text.trim().replace(/^\W+|\W+$/g, '').toUpperCase()
+  return word == 'YES' && !stopped ? null : WORDS[word] ?? null
+}
+
+/** Whether the person whose texts are `said`, oldest first, last said STOP. */
+export let stoppedBy = (said: string[]): boolean =>
+  said.reduce((out, text) => {
+    let word = keyword(text, out)
+    return word == 'stop' ? true : word == 'start' ? false : out
+  }, false)
 
 /**
  * Whether a text reached the number that sent it. Nobody wrote it to that
