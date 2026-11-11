@@ -2431,14 +2431,24 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     // the reader's visibility before the few are picked out of them. On the
     // box's transcripts, `.content.body~=T-150783 .entry !result !notice`
     // walked 193,696 entries for 116 owners.
-    let few = rest.map((c) =>
-      c.kind == 'pred' && !c.not ? gram(ctx, c) : undefined
-    ).find(Boolean)
+    //
+    // Owners too many to drive the read are tested in the shape's walk, before
+    // any of its rows is sought (`+` keeps them from driving it): a phrase of
+    // common words (`.content.body~="is in it is on the" .entry !result
+    // !notice`) has 121,557 owners, 18,151 of them in the shape's 204,764,
+    // and the walk sought the entity and content of every one of the 204,764
+    // to learn so: 14.5 s on a cold copy of the box, 7.0 s testing them first.
+    let grammed = rest.map((c) =>
+      c.kind == 'pred' && !c.not ? grams(ctx, c) : undefined
+    ).filter((f) => f?.owners)
+    let found = grammed.find((f) => f!.few) ?? grammed[0]
+    let few = found?.few ? found.owners : undefined
     let reading = (where: Frag): Frag => {
-      let w = few
-        ? render(
-          and(among(raw('"entity"."id"'), few), raw(where.sql, where.params)),
-        )
+      let w = found?.owners
+        ? render(and(
+          among(raw(few ? '"entity"."id"' : '+"entity"."id"'), found.owners),
+          raw(where.sql, where.params),
+        ))
         : where
       return {
         sql: `select "entity".${admitted ? '*' : '"id"'} from ${
@@ -2462,7 +2472,9 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
       test: shape,
       whole: !!admitted,
       keyed: !!few,
-      arms: !few && ids && ids.length > 1 && ids.length <= MERGED
+      // Each arm would list the owners again; the shape's owners among them
+      // are few enough to sort.
+      arms: !found && ids && ids.length > 1 && ids.length <= MERGED
         ? ids.map((id) => reading({ sql: `${key} = ?`, params: [id] }))
         : undefined,
     }

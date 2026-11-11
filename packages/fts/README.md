@@ -103,9 +103,11 @@ by key and their shape tested, not picked out of every owner of the shape. A
 needle more rows hold reads in its own order and stops at its page, as it does
 without an index, but tests only the texts the index found: a phrase of common
 words has its trigrams in many texts and its substring in few, and testing every
-text for it read them all. A needle shorter than three characters, and a test
-while `fill` says the index is still being filled, test every text. Bare words
-never read a substring index (`worded(fields)`).
+text for it read them all. Beside a shape, the walk of the archetype index tests
+each owner of the shape for being one of them before any of its rows is read. A
+needle shorter than three characters, and a test while `fill` says the index is
+still being filled, test every text. Bare words never read a substring index
+(`worded(fields)`).
 
 ## The four pieces
 

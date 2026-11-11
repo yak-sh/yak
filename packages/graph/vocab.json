@@ -179,7 +179,7 @@
         "doing": "Looking through the data…",
         "done": "Looked through the data"
       },
-      "description": "Query .component.property=value with & (and), | (or), bare search words, presence .component/!component, or ?component to include without filtering. Always qualify properties. Operators: != ~= < >, lists a,b, ranges 1..9. Directives: .order=-created.at .limit=20 .fields=doc.title .refs=T-12. filters narrow all of q. Returns named components; * or no named component returns whole entities. Bare search defaults to 20 compact hits. doc.body includes $was. graph_show reads whole entities; graph_schema lists vocabulary. https://yaks.app/docs/querying",
+      "description": "Query .component.property=value with & (and), | (or), bare search words, presence .component/!component, or ?component to include without filtering. Always qualify properties. Operators: != ~= < >, lists a,b, ranges 1..9. ~= matches a substring, for an id or a path; to find what someone said about something, use search. Directives: .order=-created.at .limit=20 .fields=doc.title .refs=T-12. filters narrow all of q. Returns named components; * or no named component returns whole entities. Bare search defaults to 20 compact hits. doc.body includes $was. graph_show reads whole entities; graph_schema lists vocabulary. https://yaks.app/docs/querying",
       "input": {
         "q": {
           "type": "string",
