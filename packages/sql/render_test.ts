@@ -12,7 +12,7 @@ import {
   val,
   when,
 } from './mod.ts'
-import { type Cte, raw } from './ast.ts'
+import { type Cte, raw, type Stmt } from './ast.ts'
 import { cursors, deep, DEPTH, inline, LENGTH, VARIABLES } from './render.ts'
 
 test('compiled fragments inline values outside quoted text and names', () => {
@@ -157,8 +157,16 @@ let naming = (ctes: Cte[]) =>
     ),
   })
 
-test('a relation written not materialized is a subquery wherever it is named, each binding its own values in order', () => {
+let limited = (s: Stmt, cap = VARIABLES) => render(s, cap, DEPTH)
+
+test('an engine with no cursor limit binds a shared relation’s values once', () => {
   let r = render(naming([seen]))
+  equal(r.params, ['a', 'b'])
+  equal(r.sql.startsWith('with "seen" as not materialized ('), true)
+})
+
+test('a relation written not materialized is a subquery wherever it is named, each binding its own values in order', () => {
+  let r = limited(naming([seen]))
   equal({ sql: r.sql, params: r.params }, {
     sql:
       'select "s"."id" from (select "id" from "item" where "k" = ?) as "s" ' +
@@ -174,7 +182,7 @@ test('the relations beside one written out stay in the statement’s with', () =
     materialized: true,
     q: select({ cols: [val('m')] }),
   }
-  let r = render(naming([kept, seen]))
+  let r = limited(naming([kept, seen]))
   equal([
     r.sql.startsWith('with "kept" as materialized (select ?) select'),
     r.params,
@@ -182,7 +190,7 @@ test('the relations beside one written out stay in the statement’s with', () =
     true,
     ['m', 'a', 'b', 'a'],
   ])
-  equal(render(naming([seen, kept])).params, ['m', 'a', 'b', 'a'])
+  equal(limited(naming([seen, kept])).params, ['m', 'a', 'b', 'a'])
 })
 
 test('a relation one written out names is written out inside it', () => {
@@ -191,7 +199,7 @@ test('a relation one written out names is written out inside it', () => {
     materialized: false,
     q: select({ cols: [col('id')], from: table('seen') }),
   }
-  let r = render(
+  let r = limited(
     select({
       with: [seen, through],
       cols: [col('id')],
@@ -206,7 +214,7 @@ test('a relation one written out names is written out inside it', () => {
 })
 
 test('a copy past the engine’s parameters is written as literals', () => {
-  let r = render(naming([seen]), 2)
+  let r = limited(naming([seen]), 2)
   equal([r.params, r.sql.endsWith(`where "k" = 'a') as "seen"))`)], [
     ['a', 'b'],
     true,
@@ -214,7 +222,7 @@ test('a copy past the engine’s parameters is written as literals', () => {
 })
 
 test('a table’s index hint is left off a relation written out', () => {
-  let r = render(select({
+  let r = limited(select({
     with: [seen],
     cols: [col('id')],
     from: raw('"seen" as "s" not indexed'),
@@ -229,7 +237,7 @@ test('a relation that names its columns, or leaves the planner to choose, stays 
   for (
     let cte of [{ ...seen, cols: ['id'] }, { ...seen, materialized: undefined }]
   ) {
-    equal(render(naming([cte])).sql.startsWith('with "seen"'), true)
+    equal(limited(naming([cte])).sql.startsWith('with "seen"'), true)
   }
 })
 
@@ -243,7 +251,7 @@ test('a statement that would pass the engine’s length keeps its relation in th
     }),
   }
   equal(
-    render(naming([wide])).sql.startsWith('with "seen" as not materialized'),
+    limited(naming([wide])).sql.startsWith('with "seen" as not materialized'),
     true,
   )
 })

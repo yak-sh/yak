@@ -764,12 +764,12 @@ export let cursors = (sql: string): number => {
  * {@link DEPTH} cursors ({@link cursors}). */
 export let deep = (sql: string): boolean => cursors(sql) >= DEPTH
 
-// A relation written `not materialized` is a subquery wherever it is named:
-// the planner reads it so either way, and a statement that names no common
-// table expression is never refused for its cursors (`cursors`). So such a
-// relation is written where it is named, each copy binding its own
-// parameters while the engine's `cap` has room and writing them as literals
-// past it. For an engine that refuses a naming past `most` cursors, a
+// An engine counting CTE cursors gets a `not materialized` relation as a
+// subquery wherever it is named: the planner reads it so either way, and a
+// statement naming no CTE is never refused for its cursors (`cursors`). An
+// engine with no cursor limit keeps the relation as written. Each copy binds
+// its own parameters while the engine's `cap` has room, then writes them as
+// literals past it. For an engine that refuses a naming past `most` cursors, a
 // statement still past it has its other relations written out too, one at a
 // time until it is under: a materialized one is then read once for each
 // naming, which answers the same rows where the engine would answer none; a
@@ -789,8 +789,7 @@ let settled = new Set<string>()
 let flat = (r: Raw, cap: number, most: number): Raw => {
   let usual = most == DEPTH
   if (
-    !r.sql.includes('with') || usual && settled.has(r.sql) ||
-    most == Infinity && !r.sql.includes(HINT)
+    most == Infinity || !r.sql.includes('with') || usual && settled.has(r.sql)
   ) return r
   let out = r, left = new Set<string>()
   for (let turn = 0; turn < 64 && out.sql.includes(HINT); turn++) {
