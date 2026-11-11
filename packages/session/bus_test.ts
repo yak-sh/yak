@@ -151,6 +151,35 @@ test('native bus delivery appends input and marks the item once', async () => {
   assertEquals((await g.read('.entry.session=native')).length, 3)
 })
 
+test('a knock written through a session the transcript started names that worker; another session\u2019s names none', async () => {
+  let g = await fresh()
+  await g.apply([
+    { entity: { eid: 'worker' }, session: {}, spawned: { parent: 'native' } },
+    {
+      entity: { eid: 'report' },
+      knock: { target: 'native' },
+      doc: { body: 'task done' },
+      $actor: { via: 'worker' },
+    },
+    {
+      entity: { eid: 'aside' },
+      knock: { target: 'native' },
+      doc: { body: 'a reading' },
+      $actor: { via: 'outside' },
+    },
+  ], { trusted: true })
+  await feed(g)
+  let said = new Map(
+    (await g.read('.entry.session=native&.attention&*')).map((e) => [
+      (e.content as { body: string }).body.split(': ').at(-1),
+      e.attention,
+    ]),
+  )
+  assertEquals(said.get('task done'), { worker: 'worker' })
+  assertEquals(said.get('a reading'), {})
+  assertEquals(said.get('child finished'), {})
+})
+
 // How many inputs each committed batch wrote to a transcript from the bus.
 let batches = (g: Graph) => {
   let seen: number[] = []

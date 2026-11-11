@@ -52,6 +52,16 @@ test('what came before the request the newest reply answered is dropped: calls w
   equal(ids(answered(turn, 6)), ['l3', 'l4', 'l5'])
 })
 
+test('what a worker wrote through the bus is its report; a person\u2019s words through it stay', () => {
+  let heard = [
+    line(1, { attention: { worker: 'w' }, content: { body: 'knock: done' } }),
+    line(2, { attention: {}, content: { body: 'comment from Jeff: wait' } }),
+    line(3, { ask: {} }),
+    line(4, { output: { source: 'l3' } }),
+  ]
+  equal(ids(answered(heard, replied(heard, 's')!)), ['l1'])
+})
+
 test('a call still running, or answered since the reply, stays with every answer to it', () => {
   let early = [
     line(1, { call: {} }),

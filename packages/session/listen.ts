@@ -690,8 +690,15 @@ export let replies = (
 /** One thing a session has yet to hear: the item, its readable line, and the
  * other knocks that say the same from the same writer, left at another
  * address the session hears (itself and its project, say). They are one
- * knock, said once and marked said together. */
-export type Owed = { item: Bundle; line: string; same: Bundle[] }
+ * knock, said once and marked said together. `starter` is the session that
+ * started the one the item was written through (`spawned.parent`), where one
+ * did: to that session the item is its worker's report. */
+export type Owed = {
+  item: Bundle
+  line: string
+  same: Bundle[]
+  starter?: Eid
+}
 
 /** What this session has yet to hear. */
 export let pending = async (
@@ -776,11 +783,13 @@ export let owing = async (
     ),
   ]
   let names = new Map<string, string>(), states = new Map<string, string>()
-  let sessions = new Set<Eid>()
+  let sessions = new Set<Eid>(), starters = new Map<string, Eid>()
   for (let b of await graph.get(pointed)) {
     names.set(b.entity.eid, human(vocab)(b))
     if (b.task) states.set(b.entity.eid, statusOf(vocab, b) ?? '')
     if (b[SESSION]) sessions.add(b.entity.eid)
+    let parent = str(comp(b, 'spawned').parent)
+    if (parent) starters.set(b.entity.eid, parent as Eid)
   }
   let named = (eid: string) => names.get(eid) ?? eid
   let state = (eid: string) => states.get(eid) ?? ''
@@ -795,7 +804,8 @@ export let owing = async (
       continue
     }
     let line = said(vocab, item, named, state, writer(item, sessions))
-    let owed = { item, line, same: [] }
+    let starter = starters.get(str(comp(item, 'created').via))
+    let owed: Owed = { item, line, same: [], ...starter ? { starter } : {} }
     if (key) knocks.set(key, owed)
     out.push(owed)
   }

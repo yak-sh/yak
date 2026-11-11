@@ -331,7 +331,9 @@ export let ripe = (
 
 /** Append these lines as inputs, each session's in one committed batch and
  * in the order their items were written, so the session wakes once and one
- * turn takes them all. A batch that fails leaves its items unmarked, so the
+ * turn takes them all. A line a session's own worker wrote names that worker
+ * (`attention{worker}`): its report, which a session that drops leaves out
+ * once it has replied (./pruning.ts). A batch that fails leaves its items unmarked, so the
  * next pass can retry them, and an item another session was given first is
  * left out of it and not said twice. `attention` wakes the effects role's
  * runner. Answers how many were said. */
@@ -340,12 +342,14 @@ export let give = async (g: Graph, due: Due[]): Promise<number> => {
   for (let [session, lines] of groupBy(due, (d) => d.session)) {
     let said = lines
       .toSorted((a, b) => (writtenAt(a) - writtenAt(b)) || 0)
-      .map(({ item, line, same }) => ({
+      .map(({ item, line, same, starter }) => ({
         item,
         same,
         together: [{
           ...input(session, item.entity.eid, line),
-          attention: {},
+          attention: starter == session
+            ? { worker: comp(item, 'created').via }
+            : {},
         }],
       }))
     count += (await deliverAll(g, null, said)).length

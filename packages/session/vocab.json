@@ -160,8 +160,15 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "properties": {},
-      "description": "an entry to be read before the next ask"
+      "properties": {
+        "worker": {
+          "type": "string",
+          "ref": "session",
+          "death": "keep",
+          "description": "the session the item this entry says was written through, where this transcript started it (`spawned.parent`): its worker\u2019s report, never a person\u2019s words"
+        }
+      },
+      "description": "an entry to be read before the next ask: what the session bus says to a native transcript"
     },
     "hooked": {
       "component": true,
@@ -1155,7 +1162,7 @@
       "component": true,
       "type": "object",
       "properties": {},
-      "description": "on a session, or on the persona it wears: its requests leave out what it has replied past. When a request starts after the provider\u2019s cache of the one before has expired, each of its earlier calls with their results, and each worker\u2019s report, that came before the request its newest reply answered is marked `archived`, with no model call; where a summary checkpoint is due while the cache is warm, the same is done first. A person\u2019s words and the session\u2019s own replies always stay, and an archived entry keeps its row"
+      "description": "on a session, or on the persona it wears: its requests leave out what it has replied past. When a request starts after the provider\u2019s cache of the one before has expired, each of its earlier calls with their results, and each worker\u2019s report (`delivery`, `attention{worker}`), that came before the request its newest reply answered is marked `archived`, with no model call; where a summary checkpoint is due while the cache is warm, the same is done first. A person\u2019s words and the session\u2019s own replies always stay, and an archived entry keeps its row"
     },
     "tool_async": {
       "component": true,

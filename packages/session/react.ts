@@ -635,7 +635,7 @@ let compaction = async (o: {
 
 // What a session that drops may leave out is among its own lines of these
 // kinds (./pruning.ts `answered`).
-let DROPPED = [CALL, 'result', 'tool_progress', 'delivery']
+let DROPPED = [CALL, 'result', 'tool_progress', 'delivery', 'attention']
 
 // Whether a session drops: `drops` on its own row, else on the persona it
 // wears. Data, so every runner and the yaks.app Operator turn it on one way.
@@ -650,7 +650,7 @@ let dropping = async (g: Graph, session: Eid): Promise<boolean> => {
 
 /** Leave out of a dropping session's next request what it has replied past:
  * `archived{}` on each of its own earlier calls with their answers and each
- * worker's report (./pruning.ts). No model is asked, every row stays where
+ * worker's report (./pruning.ts `answered`). No model is asked, every row stays where
  * `result_query` and the graph read it, and a fork's inherited lines are its
  * parent's to drop. Answers how many it marked. */
 let drop = async (

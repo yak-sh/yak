@@ -71,8 +71,10 @@ export let replied = (
 }
 
 /** A worker's report: the end of a child session as its parent was told it
- * (`delivery`), never words a person wrote. */
-let report = (b: Bundle): boolean => !!b.delivery
+ * (`delivery`), or what a session it started wrote to it through the bus
+ * (`attention{worker}`). Never words a person wrote. */
+let report = (b: Bundle): boolean =>
+  !!b.delivery || (b.attention as Comp | undefined)?.worker != null
 
 /** What a session that drops leaves out of its next request, among `lines`
  * (its calls, their answers and its workers' reports): those that came before
