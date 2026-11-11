@@ -27,8 +27,14 @@ import { parseQuery, type Pred, resolveRefs } from '../query.ts'
 import { findEid } from '../live.ts'
 import { EID, idOf, kindOf, vocab } from '../types.ts'
 import { entityPath, searchPath } from '../url.ts'
-import { called } from '@yaks/inspect'
-import { bundle, type Entry, extend, registry, renderView } from './registry.ts'
+import {
+  bundle,
+  type Entry,
+  extend,
+  named,
+  registry,
+  renderView,
+} from './registry.ts'
 import { front } from './fields.tsx'
 import { ago } from './Stamp.tsx'
 import { navigate } from './nav.tsx'
@@ -147,10 +153,7 @@ export let inspectIo: Io = {
   id: (b) =>
     idOf({ eid: b.entity.eid, num: Number(b.entity.num), kind: kindOf(b) }),
   kind: kindOf,
-  name: (eid) => {
-    let e = ent(eid)
-    return called(bundle(e), idOf(e), e.kind)
-  },
+  name: named,
   when: ago,
   state: (eid) => (turn.value, front.ent(eid)),
   set: (bs) => {

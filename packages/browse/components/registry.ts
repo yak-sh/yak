@@ -23,6 +23,7 @@ import { Float } from '@yaks/ui'
 import { type ComponentChild, h } from 'preact'
 import { type Signal, signal } from '@preact/signals'
 import { short } from '@yaks/id'
+import { called } from '@yaks/inspect'
 import { parseProp, propAt } from '../props.ts'
 import {
   backlinks,
@@ -264,12 +265,13 @@ let answered = (q: string): Bundle[] | undefined => {
   return held.value
 }
 
-// What an entity is called: its title, or the id a person reads; one this
-// page has never held, its short handle.
-let named = (eid: string) => {
+/** What an entity is called, as @yaks/inspect's `called` says (its title,
+ * else the name its kind gives it: a model's `model.name`); one this page has
+ * never held, its short handle. */
+export let named = (eid: string): string => {
   if (!row(eid).value) return short(eid)
   let e = ent(eid)
-  return e.doc?.title || idOf(e)
+  return called(bundle(e), idOf(e), e.kind)
 }
 
 // What a UX component emits: a value, written through the optimistic path;

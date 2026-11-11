@@ -11,10 +11,12 @@ import {
   defineActions,
   extend,
   has,
+  named,
   registry,
   resolve,
 } from './registry.ts'
 import { mount } from './mount.ts'
+import { cache } from '../live.ts'
 import { type Ent, statusOf } from '../types.ts'
 import { assertEquals } from '@std/assert'
 
@@ -129,4 +131,16 @@ test('override wins its tie', () => {
   using _ = fixtures()
   extend([R('Task', has('doc', 'task'), 'tui-task')])
   assertEquals(tag({ doc: {}, task: {} }, 'Task'), 'tui-task')
+})
+
+test('an entity with no title is named by its kind, as a model by model.name', () => {
+  let eid = '37ee9361-16bc-8bdb-b43e-fab70501095b'
+  cache.value = {
+    [eid]: { entity: { eid, num: 1 }, model: { name: 'claude-haiku-5-5' } },
+  } as unknown as typeof cache.value
+  try {
+    assertEquals(named(eid), 'claude-haiku-5-5')
+  } finally {
+    cache.value = {}
+  }
 })
