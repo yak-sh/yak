@@ -188,6 +188,39 @@ visitor's action to result in an email, have the visitor write the _row_ (the
 sign-up, the order, the question), and have a member's own action, or an agent
 with `graph_apply`, turn it into an email.
 
+## Who can read an email
+
+An email is a row in the app's store, whether the app sent it or received it,
+and so is the recipient row it names. Whoever can read the app can read them: in
+a `public` or `open` app that is anybody with the link, signed in or not, and in
+any app it is every viewer.
+
+So when an email says something about a person (who signed up, their phone
+number, the address it went to), keep the email and its recipient row to the
+app's owners and editors. Declare a component with `"readers": "editor"` in
+`vocab.json` (<https://yaks.app/docs/components.md>, "Rows kept to members:
+`readers`") and put it on both rows when you write them:
+
+    { "$defs": { "office": { "readers": "editor", "floor": "editor",
+        "properties": { "about": { "type": "string" } } } } }
+
+    await apply([
+      { entity: { eid: '$ana' },
+        email: { address: 'ana@example.com' },
+        office: { about: 'sign-up' } },
+      { entity: { eid: '$note' },
+        doc: { title: 'A new volunteer', body: 'Ana Ruiz, 555-0142.' },
+        mail: {},
+        deliver: { to: '$ana' },
+        office: { about: 'sign-up' } },
+    ])
+
+Both rows are then left out of every read by a visitor or a viewer, and the
+email is sent as before. The emails a form sends for a sign-up are kept this way
+by the platform (<https://yaks.app/docs/forms.md>). An email that arrives is
+stored as it came, so an app whose mailbox takes mail people would not want read
+should be `private`.
+
 ## Delivery status: `delivered` and `bounced`
 
 The email row is written first and sent afterwards, so a mail server that is

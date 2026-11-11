@@ -18,7 +18,11 @@ let letter = (
   let person = derivedEid(
     JSON.stringify(['form-address', registration, purpose, to]),
   )
-  return [{ entity: { eid: person }, email: { address: to } }, {
+  // A letter and its address are rows of the app's store, which in a public
+  // or open app anybody reads. Both wear `form_mail`, which keeps them to the
+  // app's owners and editors, as the sign-up itself is kept.
+  let form_mail = { registration, purpose }
+  return [{ entity: { eid: person }, email: { address: to }, form_mail }, {
     entity: {
       eid: derivedEid(
         JSON.stringify(['form-letter', registration, purpose, to]),
@@ -27,6 +31,7 @@ let letter = (
     doc: { title, body },
     mail: { target: registration },
     deliver: { to: person },
+    form_mail,
   }]
 }
 
@@ -104,11 +109,7 @@ export let formPost =
       ): [unknown, string, string] => [
         address(b),
         'notify',
-        // TODO: say `told(form, answers, title)` once a form's letters are
-        // kept to the app's editors. A letter is a row of the app's store, so
-        // in a public or open app anybody can read it, and the answers in it
-        // would pass the sign-up's own `readers`.
-        `A new sign-up for ${title}.`,
+        told(form, answers, title),
       ]),
     ]
     for (let [to, purpose, body] of recipients) {

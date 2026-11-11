@@ -9,7 +9,8 @@ guide:
     public door at ./api/form/<name> that shows one and takes its answers
     whatever the app's access, and what a sign-up sets off without any code: a
     `registration` only the app's owners and editors read, a letter to the
-    person who signed up, and a letter to each person the form notifies. Opening and closing dates, a capacity, drawing a form on a
+    person who signed up, and a letter with their answers to each person the
+    form notifies. Opening and closing dates, a capacity, drawing a form on a
     page, and a plain HTML form that posts to the door.
 ---
 
@@ -185,13 +186,16 @@ Each sign-up the door takes does these, with no code in the app:
 2. **The person gets a letter**, when the form has an `email` question and they
    answered it. Its subject is the form's title and its body is `form.thanks`,
    or "Thank you for signing up for …" without one.
-3. **Each person in `form.notify` gets a letter** saying there is a new sign-up
-   for the form. It does not hold the answers: they open the app to read them.
+3. **Each person in `form.notify` gets a letter** saying there is a new sign-up,
+   with every question answered and its answer, so they know who it was without
+   opening the app.
 
 The letters leave from the app's own address, moments after the sign-up, and
 each is a row like any other letter: `.mail&.delivered` lists what went out
-(<https://yaks.app/docs/mail.md>). Each counts toward the space's monthly email
-allowance.
+(<https://yaks.app/docs/mail.md>). The letters and the address rows written for
+them wear `form_mail{registration, purpose}`, so like the sign-up they are read
+only by the app's owners and editors, and deleting the sign-up deletes them.
+Each letter counts toward the space's monthly email allowance.
 
 What a form does _not_ do is anything later or anything that needs judgment: a
 reminder two days on if nobody has answered, a reply that depends on what was

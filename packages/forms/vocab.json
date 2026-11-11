@@ -231,6 +231,27 @@
         }
       }
     },
+    "form_mail": {
+      "component": true,
+      "type": "object",
+      "description": "a letter a form sent for one sign-up, or the address it went to; read only by the app's owners and editors, as the sign-up is; deleting the sign-up deletes it",
+      "readers": "editor",
+      "required": [
+        "registration"
+      ],
+      "properties": {
+        "registration": {
+          "type": "string",
+          "ref": "registration",
+          "death": "cascade",
+          "description": "the sign-up it was written for"
+        },
+        "purpose": {
+          "type": "string",
+          "description": "confirm for the letter to the person who signed up, notify for one to the people the form names"
+        }
+      }
+    },
     "waitlisted": {
       "component": true,
       "type": "object",
