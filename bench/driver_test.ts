@@ -53,3 +53,19 @@ test('a revision lacking a boundary module runs the driver copy, never a product
   })
   equal(boundaries([`import '@yaks/io/a'`], exports, () => undefined), {})
 })
+
+test('npm workspace imports name the archived product before shared node_modules', () => {
+  let modules = exported('packages/git', {
+    name: '@yaks/git',
+    exports: { '.': './mod.ts', './land': './land.ts' },
+  })
+  let driver = { imports: { '@yaks/git/land': './current/land.ts' } }
+  let config = configured({}, driver, modules, {
+    '@yaks/io': './.carried/io.ts',
+  })
+  equal(config.imports, {
+    '@yaks/git': './packages/git/mod.ts',
+    '@yaks/git/land': './packages/git/land.ts',
+    '@yaks/io': './.carried/io.ts',
+  })
+})

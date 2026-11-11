@@ -620,11 +620,12 @@ let collectAt = async (
       let driverConfig = JSON.parse(
         await Deno.readTextFile(`${driver.root}/deno.json`),
       )
+      let modules = await manifests(target)
       let carried = carry(
         driver.boundaries,
         new Set([
           ...Object.keys(config.imports ?? {}),
-          ...Object.keys(await manifests(target)),
+          ...Object.keys(modules),
         ]),
       )
       for (let specifier of Object.keys(carried)) {
@@ -634,9 +635,10 @@ let collectAt = async (
       }
       await Deno.writeTextFile(
         `${target}/deno.json`,
-        JSON.stringify(configured(config, driverConfig, carried)),
+        JSON.stringify(configured(config, driverConfig, modules, carried)),
       )
-      // Reuse dependencies, not generated product assets or a graph.
+      // Local exports above pin product imports to this archive; the shared
+      // node_modules also holds workspace symlinks into the driver's checkout.
       await Deno.symlink(`${root}/node_modules`, `${target}/node_modules`)
         .catch((e) => {
           if (!(e instanceof Deno.errors.AlreadyExists)) throw e

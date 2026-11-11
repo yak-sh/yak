@@ -30,10 +30,18 @@ type Config = {
 export let configured = (
   product: Config,
   driver: Config,
+  modules: Record<string, string> = {},
   carried: Record<string, string> = {},
 ): Config => ({
   ...product,
-  imports: { ...driver.imports, ...product.imports, ...carried },
+  imports: {
+    ...driver.imports,
+    ...Object.fromEntries(
+      Object.entries(modules).map(([name, file]) => [name, './' + file]),
+    ),
+    ...product.imports,
+    ...carried,
+  },
   workspace: [...new Set([...product.workspace ?? [], './packages/benchmark'])],
 })
 
