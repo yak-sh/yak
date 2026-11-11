@@ -9,7 +9,8 @@
         "doc"
       ],
       "prefix": "E",
-      "description": "one letter's envelope, sent or received",
+      "description": "one letter's envelope, sent or received; in an app, read only by its owners and editors, whatever the app's access",
+      "readers": "editor",
       "properties": {
         "from": {
           "type": "string",

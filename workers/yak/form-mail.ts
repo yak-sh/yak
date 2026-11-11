@@ -8,6 +8,20 @@ let comp = (row: Bundle | undefined, name: string): Comp =>
   row?.[name] as Comp ?? {}
 let address = (row: Bundle | undefined) =>
   comp(row, 'email').address ?? comp(row, 'individual').email
+/** The purposes a form writes a sign-up's letters for: the thanks to the
+ * person who signed up, and the word to each person the form notifies. */
+export let PURPOSES = ['confirm', 'notify'] as const
+
+/** The eids of one of a sign-up's letters and of the address it goes to. */
+export let lettered = (registration: string, purpose: string, to: string) => ({
+  address: derivedEid(
+    JSON.stringify(['form-address', registration, purpose, to]),
+  ),
+  letter: derivedEid(
+    JSON.stringify(['form-letter', registration, purpose, to]),
+  ),
+})
+
 let letter = (
   registration: string,
   purpose: string,
@@ -15,24 +29,21 @@ let letter = (
   title: string,
   body: string,
 ): Bundle[] => {
-  let person = derivedEid(
-    JSON.stringify(['form-address', registration, purpose, to]),
-  )
-  // A letter and its address are rows of the app's store, which in a public
-  // or open app anybody reads. Both wear `form_mail`, which keeps them to the
-  // app's owners and editors, as the sign-up itself is kept.
+  let eid = lettered(registration, purpose, to)
+  // The letter wears `mail`, which keeps it to the app's owners and editors.
+  // Its address is a row of the app's store too, which in a public or open
+  // app anybody reads; `form_mail` keeps both to them, as the sign-up is.
   let form_mail = { registration, purpose }
-  return [{ entity: { eid: person }, email: { address: to }, form_mail }, {
-    entity: {
-      eid: derivedEid(
-        JSON.stringify(['form-letter', registration, purpose, to]),
-      ),
+  return [
+    { entity: { eid: eid.address }, email: { address: to }, form_mail },
+    {
+      entity: { eid: eid.letter },
+      doc: { title, body },
+      mail: { target: registration },
+      deliver: { to: eid.address },
+      form_mail,
     },
-    doc: { title, body },
-    mail: { target: registration },
-    deliver: { to: person },
-    form_mail,
-  }]
+  ]
 }
 
 // An answer as a line of a letter: a list said as its items, a tick as yes

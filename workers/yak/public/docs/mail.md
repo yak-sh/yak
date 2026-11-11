@@ -190,36 +190,36 @@ with `graph_apply`, turn it into an email.
 
 ## Who can read an email
 
-An email is a row in the app's store, whether the app sent it or received it,
-and so is the recipient row it names. Whoever can read the app can read them: in
-a `public` or `open` app that is anybody with the link, signed in or not, and in
-any app it is every viewer.
+An email is a row in the app's store, whether the app sent it or received it.
+Only the app's owners and editors read it, whatever the app's `access`: a
+visitor or a viewer of a `public` or `open` app reads no email, sent or
+received, and the app's own worker and agents read every one.
 
-So when an email says something about a person (who signed up, their phone
-number, the address it went to), keep the email and its recipient row to the
-app's owners and editors. Declare a component with `"readers": "editor"` in
-`vocab.json` (<https://yaks.app/docs/components.md>, "Rows kept to members:
-`readers`") and put it on both rows when you write them:
+The recipient row an email names is an ordinary row, read by whoever can read
+the app: in a `public` or `open` app that is anybody with the link, signed in or
+not. That suits a contact the page shows on purpose, such as the office's
+address. When the recipient row says something about a person (who signed up, or
+where their letter went), keep it to the app's owners and editors too. Declare a
+component with `"readers": "editor"` in `vocab.json`
+(<https://yaks.app/docs/components.md>, "Rows kept to members: `readers`") and
+put it on the recipient row when you write it:
 
-    { "$defs": { "office": { "readers": "editor", "floor": "editor",
-        "properties": { "about": { "type": "string" } } } } }
+    { "$defs": { "volunteer": { "readers": "editor", "floor": "editor",
+        "properties": { "shift": { "type": "string" } } } } }
 
     await apply([
       { entity: { eid: '$ana' },
         email: { address: 'ana@example.com' },
-        office: { about: 'sign-up' } },
+        volunteer: { shift: 'Saturday' } },
       { entity: { eid: '$note' },
         doc: { title: 'A new volunteer', body: 'Ana Ruiz, 555-0142.' },
         mail: {},
-        deliver: { to: '$ana' },
-        office: { about: 'sign-up' } },
+        deliver: { to: '$ana' } },
     ])
 
-Both rows are then left out of every read by a visitor or a viewer, and the
-email is sent as before. The emails a form sends for a sign-up are kept this way
-by the platform (<https://yaks.app/docs/forms.md>). An email that arrives is
-stored as it came, so an app whose mailbox takes mail people would not want read
-should be `private`.
+The row is then left out of every read by a visitor or a viewer, and the email
+is sent as before. The emails a form sends for a sign-up, and the addresses they
+go to, are kept this way by the platform (<https://yaks.app/docs/forms.md>).
 
 ## Delivery status: `delivered` and `bounced`
 

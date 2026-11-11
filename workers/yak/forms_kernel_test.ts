@@ -364,19 +364,34 @@ await agent.tool('app_files', {
 })
 await agent.tool('app_deploy', { app: shown })
 let prayer = crypto.randomUUID(), request = crypto.randomUUID()
+let reply = crypto.randomUUID(), team = crypto.randomUUID()
 await agent.tool('graph_apply', {
   app: shown,
   entities: [
-    { entity: { eid: prayer }, alias: { name: 'pray' }, form: {} },
+    { entity: { eid: team }, email: { address: 'team@example.com' } },
+    {
+      entity: { eid: prayer },
+      alias: { name: 'pray' },
+      form: { notify: [team] },
+    },
     {
       entity: { eid: request },
       question: { form: prayer, kind: 'lines', label: 'Your request' },
+    },
+    {
+      entity: { eid: reply },
+      question: { form: prayer, kind: 'email', label: 'Email', order: 1 },
     },
   ],
 })
 let prayed = await k.at(host, `/${shown}/api/form/pray`, {
   method: 'POST',
-  body: JSON.stringify({ answers: { [request]: 'Heal my daughter Ruth' } }),
+  body: JSON.stringify({
+    answers: {
+      [request]: 'Heal my daughter Ruth',
+      [reply]: 'ruth@example.com',
+    },
+  }),
 })
 await k.settled()
 let stranger = await signIn(k)
@@ -400,6 +415,37 @@ test('a public app keeps its sign-ups from visitors holding no level', async () 
     }
     equal(await asked('.registration .count', cookie), [200, '{"count":0}'])
   }
+})
+
+test("a public app keeps its form's letters and the addresses they went to from visitors", async () => {
+  equal(letters(k, 'ruth@example.com').length, 1)
+  ok(
+    letters(k, 'team@example.com')[0].body.includes('Heal my daughter Ruth'),
+  )
+  for (let cookie of [undefined, stranger.cookie]) {
+    for (
+      let q of ['.mail', '.form_mail', '.email.address=ruth@example.com']
+    ) {
+      equal(await asked(`${q} .count`, cookie), [200, '{"count":0}'], q)
+    }
+  }
+  equal(await asked('.mail .count', owner.cookie), [200, '{"count":2}'])
+})
+
+test('a public app keeps the letters it writes itself from visitors', async () => {
+  await agent.tool('graph_apply', {
+    app: shown,
+    entities: [{
+      entity: { eid: crypto.randomUUID() },
+      doc: { title: 'A new request', body: 'Ruth asked for prayer.' },
+      mail: {},
+      deliver: { to: team },
+    }],
+  })
+  for (let cookie of [undefined, stranger.cookie]) {
+    equal(await asked('.mail .count', cookie), [200, '{"count":0}'])
+  }
+  equal(await asked('.mail .count', owner.cookie), [200, '{"count":3}'])
 })
 
 // A stranger at a private published app is served its sample (visit.ts), and
