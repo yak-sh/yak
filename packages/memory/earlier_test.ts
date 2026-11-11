@@ -56,7 +56,7 @@ let g = {
 let recalled = await earlier(g, {
   person: 'person',
   name: 'Ada',
-  words: 'attachments',
+  words: 'attachments files',
   before: '2026-02-01T00:00:00Z',
 })
 test('recall excludes later words and deduplicates verbatim copies', () => {
@@ -171,6 +171,7 @@ let beside = await earlier({
     return Promise.resolve(
       within.includes('.memory')
         ? [
+          { entity: 'input', similarity: .9, excerpt: '' },
           { entity: 'm', similarity: .8, excerpt: '' },
           { entity: 'far', similarity: .3, excerpt: '' },
         ]
@@ -180,7 +181,7 @@ let beside = await earlier({
     )
   },
 })
-test('the nearest memories and answered decisions ride beside the words, by id and title', () => {
+test('the nearest memories and answered decisions ride beside the words, by id and title, without repeating a quote', () => {
   equal(
     beside.split('\n\n')[1],
     'Nearest memories and decisions (read one by id before relying on it):\n' +
@@ -202,4 +203,19 @@ test('a long quotation is cut at a line and says so', async () => {
   })
   equal(said.split('\n')[1].endsWith('…"'), true)
   equal(said.length < 400, true)
+})
+test('a prompt that names no subject recalls nothing', async () => {
+  for (let words of ['going afk', 'yes']) {
+    equal(
+      await earlier(g, {
+        person: 'person',
+        name: 'Ada',
+        words,
+        before: '2026-02-01T00:00:00Z',
+        meaning: () =>
+          Promise.resolve([{ entity: 'input', similarity: .9, excerpt: '' }]),
+      }),
+      '',
+    )
+  }
 })

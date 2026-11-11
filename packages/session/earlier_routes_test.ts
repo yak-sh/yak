@@ -69,7 +69,7 @@ let prompted = async (rank: number) => {
       method: 'POST',
       body: JSON.stringify({
         hook_event_name: 'UserPromptSubmit',
-        prompt: 'attachments',
+        prompt: 'immutable attachments',
       }),
     }),
   )
