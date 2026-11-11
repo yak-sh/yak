@@ -18,11 +18,11 @@
 // conversation too, starting no turn (operator.ts `note`): the caller's as
 // theirs, and the model's as the Operator's own words.
 //
-// A call has one greeting (`greeting`), said as it is answered. Around the
-// Operator's own model it is spoken here; a talking model's stream opens on
-// it (@yaks/speech `talk`'s `opens`) and hears the caller only once it has
-// been said, so a sound on the line as it picks up is no turn the model
-// answers with a second greeting in its own words.
+// A call has one greeting (`greeting`), said as it is answered, and the
+// caller is heard only once it has played (@yaks/speech `first`), so a hello
+// of theirs or the sound of the line picking up is no turn answered with a
+// second greeting in other words. Around the Operator's own model it is
+// spoken here; a talking model's stream opens on it (`talk`'s `opens`).
 //
 // Everyone the platform knows by number is answered. A call lasts at most MINUTES, and what it costs (the line, what was heard
 // and what was said) is charged to the space as it goes: what is said as it
@@ -34,6 +34,7 @@ import { CallError } from '@yaks/tools'
 import type { Frame, Line, Ring } from '@yaks/phone'
 import {
   type Backend,
+  first,
   type Keyed,
   type Provider,
   type Setup,
@@ -596,9 +597,15 @@ export let converse = (o: Talk): Call => {
   let generation = 0
   let chain = Promise.resolve()
   let stream: Turns | undefined
+  // The call's greeting plays before the caller is heard: what they say
+  // over it, a hello or the sound of picking up, starts no turn, which
+  // would stop the greeting and have the Operator answer with its own.
+  let opens = o.stream && plain(o.hello)
+    ? first(o.stream.line.format)
+    : undefined
   let c = carry(
     o,
-    (audio) => stream?.send(audio),
+    (audio) => stream?.send(opens ? opens.heard(audio) : audio),
     () => stream?.spent().dollars ?? 0,
     () => stream?.close(),
   )
@@ -608,31 +615,37 @@ export let converse = (o: Talk): Call => {
       mine == generation && !c.over() ? play(mine) : undefined
     ).catch(c.report)
   }
-  let speak = (text: string, answer = true) => {
+  // `lead` is told the audio as it is given to the line, and that it all was.
+  let speak = (text: string, answer = true, lead?: typeof opens) => {
     let words = plain(text)
     if (!words || c.over()) return
     spoke = true
     queue(async (mine) => {
-      let reader = (await o.say(words)).getReader()
       let held = new Uint8Array(0)
       let send = () => {
+        lead?.said(held)
         c.play(held, answer)
         held = new Uint8Array(0)
       }
-      while (true) {
-        let next = await reader.read()
-        if (mine != generation || c.over()) {
-          await reader.cancel()
-          return
+      try {
+        let reader = (await o.say(words)).getReader()
+        while (true) {
+          let next = await reader.read()
+          if (mine != generation || c.over()) {
+            await reader.cancel()
+            return
+          }
+          if (next.done) break
+          let more = new Uint8Array(held.length + next.value.length)
+          more.set(held)
+          more.set(next.value, held.length)
+          held = more
+          if (held.length >= CHUNK) send()
         }
-        if (next.done) break
-        let more = new Uint8Array(held.length + next.value.length)
-        more.set(held)
-        more.set(next.value, held.length)
-        held = more
-        if (held.length >= CHUNK) send()
+        send()
+      } finally {
+        lead?.done()
       }
-      send()
     })
   }
   let ack = o.ack ?? []
@@ -667,7 +680,7 @@ export let converse = (o: Talk): Call => {
     },
   })
   c.limit(() => speak(GOODBYE))
-  speak(o.hello, false)
+  speak(o.hello, false, opens)
   return {
     typed: (text) => {
       if (!asked) return

@@ -512,8 +512,21 @@ test('a call says hello, hears a turn, and speaks the reply a sentence at a time
   let c = calling()
   await until(() => c.played() == 1)
   equal(c.said, [HI])
-  c.frame({ event: 'media', media: { track: 'inbound', payload: 'AQI=' } })
-  equal(c.heard, [new Uint8Array([1, 2])])
+  // What the caller says over the greeting, an eighth of a second long, is
+  // a quiet line to whoever listens, so it starts no turn that would stop
+  // the greeting; once it has played, they are heard.
+  let sound = (bytes: Uint8Array) =>
+    c.frame({
+      event: 'media',
+      media: { track: 'inbound', payload: btoa(String.fromCharCode(...bytes)) },
+    })
+  sound(new Uint8Array([1, 2]))
+  sound(new Uint8Array(1000).fill(1))
+  sound(new Uint8Array([1, 2]))
+  equal([c.heard[0], c.heard[2]], [
+    new Uint8Array([255, 255]),
+    new Uint8Array([1, 2]),
+  ])
   // Words before a question are not the caller's reply.
   c.call.typed('Stray words. ')
   c.told().end('Book the hall for Friday')

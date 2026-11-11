@@ -63,6 +63,11 @@ argument; nothing here reads the environment.
   `Duplex` one has said them once it spoke and was quiet 0.6 s. A model that
   begins none in 6 s hears the caller anyway. A call the provider's own line
   carries is asked for them too, its audio heard throughout.
+- `first(format)` is that rule for whoever speaks a call's first words
+  themselves, as a call around `turns` and `speak` does: `said(audio)` takes the
+  words' audio as it is given to the line and `done()` that it all was, and
+  `heard(audio)` answers the caller's audio as the listener should get it, quiet
+  until the words have played.
 - Asked to say given words (`opens`, `say`), a `Turned` model answers with no
   tool, and only its answer plays: gpt-realtime-2.1-mini sometimes says such
   words twice in one response, as a part before its answer and the answer.
