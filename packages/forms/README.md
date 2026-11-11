@@ -50,12 +50,14 @@ marks. Add `doc{title, body}` to a form for its title and introduction.
 
 Question kinds are `line`, `lines`, `choose`, `choices`, `check`, `date`,
 `email`, `phone`, `address`, `file` and `repeat`. `fills` names a directory
-property, such as `individual.born`. On a repeat, `relates` says what each entry
-is to the person it is listed under: `child`, `parent`, `spouse` or `sibling`,
-and absent when the entries are no relation. The core performs no directory
-writes. `notify` lists recipient entity ids; delivery belongs to the caller.
-`seen` is the app page that shows a sign-up (`signups?id={id}`), which the alert
-to those people links to.
+property, such as `individual.born` or `household.city`. A list property gains
+the choices it lacks, and `household` alone on an `address` question fills the
+street, city, region and postal code of the person's household. On a repeat,
+`relates` says what each entry is to the person it is listed under: `child`,
+`parent`, `spouse` or `sibling`, and absent when the entries are no relation.
+The core performs no directory writes. `notify` lists recipient entity ids;
+delivery belongs to the caller. `seen` is the app page that shows a sign-up
+(`signups?id={id}`), which the alert to those people links to.
 
 Registration state comes from marks. `registration.status` is `cancelled` when
 it carries `cancelled{at, by, via, reason}`, then `waitlisted` when it carries

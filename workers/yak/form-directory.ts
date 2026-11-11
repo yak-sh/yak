@@ -30,19 +30,65 @@ export let directoryPhone = (row: Bundle): Bundle => {
     : row
 }
 
+// What `values` adds to `row`'s `comp`: a property it has no value for, and
+// to a list, the items it lacks.
 let fill = (
   vocab: Vocab,
-  person: Bundle,
+  comp: string,
+  row: Bundle,
   values: Record<string, unknown>,
 ): Bundle => {
-  let held = fields(person, 'individual')
-  let props = vocab.props('individual')
+  let held = fields(row, comp)
   let patch = Object.fromEntries(
-    Object.entries(values).filter(([k, v]) =>
-      props.includes(k) && empty(held[k]) && !empty(v)
-    ),
+    Object.entries(values).flatMap(([k, v]): [string, unknown][] => {
+      if (!vocab.props(comp).includes(k) || empty(v)) return []
+      if (!vocab.prop(comp, k)?.types?.includes('array')) {
+        return empty(held[k]) ? [[k, v]] : []
+      }
+      let had = Array.isArray(held[k]) ? held[k] as unknown[] : []
+      let more = [v].flat().filter((x) =>
+        !empty(x) && !had.some((h) => same(h, x))
+      )
+      return more.length ? [[k, [...had, ...more]]] : []
+    }),
   )
-  return directoryPhone({ entity: person.entity, individual: patch })
+  let out = { entity: row.entity, [comp]: patch }
+  return comp == 'individual' ? directoryPhone(out) : out
+}
+
+const tail = /^(.+?),?\s+([A-Za-z]{2})\.?\s+(\d{5}(?:-\d{4})?)$/
+const state = /^([A-Za-z]{2})\.?\s+(\d{5}(?:-\d{4})?)$/
+
+/** A typed postal address as a household's parts: its last line read as
+ * "City, ST 12345" where it reads so, its first line as the street and any
+ * between as the second. What does not read so stays in the street lines. */
+export let address = (text: unknown): Record<string, string> => {
+  let split = (s: string, by: string | RegExp) =>
+    s.split(by).map((l) => l.trim()).filter(Boolean)
+  let lines = split(typeof text == 'string' ? text : '', '\n')
+  if (lines.length == 1) lines = split(lines[0], ',')
+  let last = lines.at(-1) ?? '', end = last.match(tail)
+  let short = !end && lines.length > 2 ? last.match(state) : null
+  let place = end
+    ? { city: end[1], region: end[2], postal: end[3], rest: lines.slice(0, -1) }
+    : short
+    ? {
+      city: lines.at(-2)!,
+      region: short[1],
+      postal: short[2],
+      rest: lines.slice(0, -2),
+    }
+    : { rest: lines }
+  let { rest, ...where } = place
+  let [street, ...more] = rest
+  return Object.fromEntries(
+    Object.entries({
+      street,
+      street2: more.join(', '),
+      ...where,
+      region: where.region?.toUpperCase(),
+    }).filter(([, v]) => !empty(v)),
+  ) as Record<string, string>
 }
 
 // The path, including the repeat index, makes retries and partial answers find
@@ -51,8 +97,11 @@ let guest = (registration: string, path: (string | number)[]) =>
   derivedEid(JSON.stringify(['registration-person', registration, path]))
 let link = (registration: string, path: (string | number)[]) =>
   derivedEid(JSON.stringify(['registration-parent', registration, path]))
+let home = (registration: string, path: (string | number)[]) =>
+  derivedEid(JSON.stringify(['registration-household', registration, path]))
 
-/** The eids of the people and relation rows a sign-up can have created, each
+/** The eids of the people, households and relation rows a sign-up can have
+ * created, each
  * derived from the sign-up and where in its answers the person stands. A row
  * the app wrote, or a person the sign-up matched, is at no such eid. */
 export let signedUp = (
@@ -66,20 +115,36 @@ export let signedUp = (
   }
   return [...scopes.values()].flatMap((path) => [
     guest(registration, path),
+    home(registration, path),
     ...path.length ? [link(registration, path)] : [],
   ])
 }
 
 // Only a guest entirely represented by these answers is disposable. An editor
 // may have added directory details or notes while the sign-up was unfinished.
-let captured = (row: Bundle, values: Record<string, unknown>) =>
+let only = (row: Bundle, names: string[]) =>
   Object.keys(row).every((name) =>
-    ['entity', 'individual', 'phone', 'form_guest', 'created', 'updated']
-      .includes(name)
-  ) && Object.entries(fields(row, 'individual')).every(([prop, value]) =>
-    prop == 'status' ? value == 'guest' : same(value, values[prop])
+    [...names, 'entity', 'form_guest', 'created', 'updated'].includes(name)
+  )
+let captured = (
+  row: Bundle,
+  values: Record<string, unknown>,
+  household: string,
+) =>
+  only(row, ['individual', 'phone']) &&
+  Object.entries(fields(row, 'individual')).every(([prop, value]) =>
+    prop == 'status'
+      ? value == 'guest'
+      : prop == 'household'
+      ? value == household
+      : same(value, values[prop])
   ) && Object.entries(fields(row, 'phone')).every(([prop, value]) =>
     prop == 'number' && same(value, number(values.phone))
+  )
+let housed = (row: Bundle | undefined, values: Record<string, unknown>) =>
+  !!row && only(row, ['household']) &&
+  Object.entries(fields(row, 'household')).every(([prop, value]) =>
+    same(value, values[prop])
   )
 
 // What a repeat's `relates` names each entry, as the directory relation that
@@ -222,6 +287,39 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                 after(person(eid), (row) => row ? [...rows, row] : rows),
             ),
         )
+      // Fill the household `eid` lives in with `house`, making them one at
+      // the sign-up's `path` when they have none.
+      let lodge = (
+        eid: string,
+        house: Record<string, unknown>,
+        registration: string,
+        path: (string | number)[],
+      ) =>
+        !vocab.comp('household') || !Object.keys(house).length
+          ? undefined
+          : after(person(eid), (row) => {
+            let held = fields(row, 'individual').household
+            let id = typeof held == 'string' ? held : home(registration, path)
+            return after(tx.get([id]), ([found]) => {
+              let alive = found?.household && !dead(found) ? found : undefined
+              let patch = fill(
+                vocab,
+                'household',
+                alive ?? { entity: { eid: id } },
+                house,
+              )
+              let fills = Object.keys(fields(patch, 'household')).length
+              if (!alive && !fills) return
+              if (fills) {
+                out.push(
+                  alive ? patch : { ...patch, form_guest: { registration } },
+                )
+              }
+              if (held != id) {
+                save({ entity: { eid }, individual: { household: id } })
+              }
+            })
+          })
       let register = (patch: Bundle) =>
         after(tx.get([patch.entity.eid], ['registration']), ([before]) => {
           let registration = {
@@ -236,25 +334,30 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
             (rows) => {
               let form: Form = { form: {}, questions: rows as Question[] }
               let answers = registration.answers as Answers ?? {}
-              let groups = new Map<
-                string,
-                { path: (string | number)[]; values: Record<string, unknown> }
-              >()
-              groups.set('[]', { path: [], values: {} })
+              type Group = {
+                path: (string | number)[]
+                values: Record<string, unknown>
+                house: Record<string, unknown>
+              }
+              let groups = new Map<string, Group>()
+              groups.set('[]', { path: [], values: {}, house: {} })
               let contacts = new Map<string, Record<string, unknown>>()
               for (let { question, path, value } of answered(form, answers)) {
-                let prop = question.question.fills?.match(
-                  /^individual\.([a-z_]+)$/,
-                )
-                  ?.[1]
+                let [comp, prop, ...more] =
+                  question.question.fills?.split('.') ?? []
                 let scope = path.slice(0, -1), key = JSON.stringify(scope)
                 let kind = question.question.kind
                 if (kind == 'phone' || kind == 'email') {
                   contacts.set(key, { ...contacts.get(key), [kind]: value })
                 }
-                if (!prop) continue
-                let group = groups.get(key) ?? { path: scope, values: {} }
-                group.values[prop] = value
+                if (more.length) continue
+                let group = groups.get(key) ??
+                  { path: scope, values: {}, house: {} }
+                if (comp == 'individual' && prop) group.values[prop] = value
+                else if (comp == 'household' && prop) group.house[prop] = value
+                else if (comp == 'household' && kind == 'address') {
+                  Object.assign(group.house, address(value))
+                } else continue
                 groups.set(key, group)
               }
               let parents = new Map<string, string>()
@@ -262,7 +365,7 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
               return each(
                 [...groups].sort((a, b) => a[1].path.length - b[1].path.length),
                 undefined as void,
-                (_, [key, { path, values }]) => {
+                (_, [key, { path, values, house }]) => {
                   let eid =
                     !path.length && typeof registration.person == 'string'
                       ? registration.person
@@ -289,6 +392,80 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                           !taken.has(b.entity.eid) && named(b, values)
                         ),
                     )
+                  // What the sign-up's person, now `who`, entails: the
+                  // sign-up names them, a provisional guest they turned out
+                  // to be is folded into them, and a repeat entry is related
+                  // to the person it is listed under.
+                  let settle = (
+                    who: Bundle,
+                    matched: Bundle | undefined,
+                    held: Bundle | undefined,
+                  ) => {
+                    if (!path.length) {
+                      out.push({
+                        entity: patch.entity,
+                        registration: { person: who.entity.eid },
+                      })
+                      if (
+                        eid == provisional && held && who.entity.eid != eid
+                      ) {
+                        return after(
+                          tx.read(`.refs=${quoted(eid)}&*`),
+                          (refs) => {
+                            let side = (r: Bundle) =>
+                              (['a', 'b'] as const).find((s) =>
+                                fields(r, 'relation')[s] == eid
+                              )
+                            let owned = refs.every((r) =>
+                              r.entity.eid == patch.entity.eid || side(r)
+                            )
+                            let derived = home(patch.entity.eid, [])
+                            if (owned && captured(held, values, derived)) {
+                              out.push(
+                                ...refs.filter((r) => r.relation).map((
+                                  r,
+                                ) => ({
+                                  entity: r.entity,
+                                  relation: { [side(r)!]: who.entity.eid },
+                                })),
+                              )
+                              out.push({ entity: { eid }, $delete: true })
+                              written.delete(eid)
+                              return after(
+                                after(
+                                  person(who.entity.eid),
+                                  (row) =>
+                                    fields(row, 'individual').household ==
+                                        derived
+                                      ? []
+                                      : tx.get([derived]),
+                                ),
+                                ([left]) => {
+                                  if (housed(left, house)) {
+                                    out.push({
+                                      entity: { eid: derived },
+                                      $delete: true,
+                                    })
+                                  }
+                                },
+                              )
+                            }
+                          },
+                        )
+                      }
+                    } else if (rel && !matched) {
+                      out.push({
+                        entity: { eid: link(patch.entity.eid, path) },
+                        relation: {
+                          kind: rel.kind,
+                          [rel.entry]: who.entity.eid,
+                          [other(rel.entry)]: outer,
+                        },
+                        form_guest: { registration: patch.entity.eid },
+                      })
+                    }
+                    return undefined
+                  }
                   return after(person(eid), (held) =>
                     after(
                       !path.length && (!held || eid == provisional)
@@ -306,54 +483,13 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                             form_guest: { registration: patch.entity.eid },
                           }
                         if (!found) save(who)
-                        save(fill(vocab, who, values))
+                        save(fill(vocab, 'individual', who, values))
                         parents.set(key, who.entity.eid)
                         taken.add(who.entity.eid)
-                        if (!path.length) {
-                          out.push({
-                            entity: patch.entity,
-                            registration: { person: who.entity.eid },
-                          })
-                          if (
-                            eid == provisional && held && who.entity.eid != eid
-                          ) {
-                            return after(
-                              tx.read(`.refs=${quoted(eid)}&*`),
-                              (refs) => {
-                                let side = (r: Bundle) =>
-                                  (['a', 'b'] as const).find((s) =>
-                                    fields(r, 'relation')[s] == eid
-                                  )
-                                let owned = refs.every((r) =>
-                                  r.entity.eid == patch.entity.eid || side(r)
-                                )
-                                if (owned && captured(held, values)) {
-                                  out.push(
-                                    ...refs.filter((r) => r.relation).map((
-                                      r,
-                                    ) => ({
-                                      entity: r.entity,
-                                      relation: { [side(r)!]: who.entity.eid },
-                                    })),
-                                  )
-                                  out.push({ entity: { eid }, $delete: true })
-                                  written.delete(eid)
-                                }
-                              },
-                            )
-                          }
-                        } else if (rel && !matched) {
-                          out.push({
-                            entity: { eid: link(patch.entity.eid, path) },
-                            relation: {
-                              kind: rel.kind,
-                              [rel.entry]: who.entity.eid,
-                              [other(rel.entry)]: outer,
-                            },
-                            form_guest: { registration: patch.entity.eid },
-                          })
-                        }
-                        return undefined
+                        return after(
+                          lodge(who.entity.eid, house, patch.entity.eid, path),
+                          () => settle(who, matched, held),
+                        )
                       },
                     ))
                 },

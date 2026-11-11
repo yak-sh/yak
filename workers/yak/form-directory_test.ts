@@ -7,7 +7,7 @@ import { phoneDoc } from '@yaks/phone'
 import { equal, test, throws } from '@yaks/testing'
 import { storage } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
-import { directoryForms, directoryPhone } from './form-directory.ts'
+import { address, directoryForms, directoryPhone } from './form-directory.ts'
 
 let text = { type: 'string' }
 let vocab = loadVocab([kernelDoc, formsDoc, phoneDoc, {
@@ -21,7 +21,17 @@ let vocab = loadVocab([kernelDoc, formsDoc, phoneDoc, {
         email: text,
         born: text,
         status: text,
+        household: { ...text, ref: 'entity', death: 'detach' },
+        interests: { type: 'array', items: text },
       },
+    },
+    household: {
+      component: true,
+      properties: Object.fromEntries(
+        ['street', 'street2', 'city', 'region', 'postal', 'email'].map((
+          prop,
+        ) => [prop, text]),
+      ),
     },
     doc: { component: true, properties: { body: text } },
     relation: {
@@ -68,6 +78,25 @@ let setup = async (seed: Bundle[] = []) => {
           },
         })),
       ]),
+    {
+      entity: { eid: 'home' },
+      question: {
+        form: 'form',
+        label: 'Address',
+        kind: 'address',
+        fills: 'household',
+      },
+    },
+    {
+      entity: { eid: 'wants' },
+      question: {
+        form: 'form',
+        label: 'I want',
+        kind: 'choices',
+        choices: ['a mailbox', 'emails', 'texts'],
+        fills: 'individual.interests',
+      },
+    },
     {
       entity: { eid: 'hidden' },
       question: {
@@ -373,4 +402,101 @@ await rollback.apply(await phoned.read('.form|.question'))
 test('a failed durable registration rolls back its directory changes', async () => {
   await throws(() => rollback.apply(sign({ first: 'New' })), 'failed commit')
   equal(await rollback.read('.individual|.registration|.relation'), [])
+})
+
+for (
+  let [typed, parts] of [
+    ['12 Elm St\nApt 3\nSpringfield, mi 49001', {
+      street: '12 Elm St',
+      street2: 'Apt 3',
+      city: 'Springfield',
+      region: 'MI',
+      postal: '49001',
+    }],
+    ['12 Elm St, Springfield, MI 49001-1234', {
+      street: '12 Elm St',
+      city: 'Springfield',
+      region: 'MI',
+      postal: '49001-1234',
+    }],
+    ['12 Elm St\nSpringfield\nMI 49001', {
+      street: '12 Elm St',
+      city: 'Springfield',
+      region: 'MI',
+      postal: '49001',
+    }],
+    ['Rural Route 2, Box 9', { street: 'Rural Route 2', street2: 'Box 9' }],
+    ['  ', {}],
+  ] as const
+) {
+  test(`an address typed as ${JSON.stringify(typed)} reads as its parts`, () =>
+    equal(address(typed), parts as Record<string, string>))
+}
+
+let typed = '12 Elm St\nSpringfield, MI 49001'
+let household = async (g: Awaited<ReturnType<typeof setup>>, eid: string) => {
+  let [row] = await g.get([eid])
+  let [home] = await g.get([String((row.individual as Comp).household)])
+  return home
+}
+
+test("a guest's address makes their household, which the sign-up made", async () => {
+  let g = await setup()
+  await g.apply(sign({ first: 'New', home: typed }))
+  let guest = String(((await g.get(['signup']))[0].registration as Comp).person)
+  let home = await household(g, guest)
+  equal(home.household, {
+    street: '12 Elm St',
+    city: 'Springfield',
+    region: 'MI',
+    postal: '49001',
+  })
+  equal((home.form_guest as Comp).registration, 'signup')
+})
+
+test("a member's address fills only the blanks of the household they live in", async () => {
+  let g = await setup([
+    { entity: { eid: 'house' }, household: { street: '1 Oak Ave' } },
+    { ...fixture, individual: { ...fixture.individual, household: 'house' } },
+  ])
+  await g.apply(sign({ phone: '+12695550142', home: typed }))
+  equal((await g.get(['house']))[0].household, {
+    street: '1 Oak Ave',
+    city: 'Springfield',
+    region: 'MI',
+    postal: '49001',
+  })
+  equal((await g.read('.household')).length, 1)
+})
+
+test('choices add to the list on the person, keeping what it held', async () => {
+  let g = await setup([{
+    ...fixture,
+    individual: { ...fixture.individual, interests: ['emails'] },
+  }])
+  await g.apply(sign({ phone: '+12695550142', wants: ['a mailbox', 'emails'] }))
+  equal(
+    ((await g.get(['member']))[0].individual as Comp).interests,
+    ['emails', 'a mailbox'],
+  )
+})
+
+test('a provisional guest matched to a housed member leaves no household behind', async () => {
+  let g = await setup([
+    { entity: { eid: 'house' }, household: {} },
+    { ...fixture, individual: { ...fixture.individual, household: 'house' } },
+  ])
+  await g.apply(sign({ first: 'Annie', home: typed }))
+  await g.apply(sign({ first: 'Annie', phone: '+12695550142', home: typed }))
+  equal((await g.read('.household')).map((h) => h.entity.eid), ['house'])
+  equal(((await g.get(['house']))[0].household as Comp).city, 'Springfield')
+})
+
+test('a provisional guest matched to an unhoused member hands them its household', async () => {
+  let g = await setup([fixture])
+  await g.apply(sign({ first: 'Annie', home: typed }))
+  await g.apply(sign({ first: 'Annie', phone: '+12695550142', home: typed }))
+  equal((await g.read('.household')).length, 1)
+  equal(((await household(g, 'member')).household as Comp).street, '12 Elm St')
+  equal((await g.read('.individual')).length, 1)
 })

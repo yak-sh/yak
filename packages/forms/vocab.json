@@ -138,7 +138,7 @@
         },
         "fills": {
           "type": "string",
-          "description": "directory property filled by this answer, such as individual.born"
+          "description": "directory property filled by this answer, such as individual.born or household.city; a list property gains the choices it lacks, and household alone on an address question fills the street, city, region and postal code of the household the person lives in, making one when they have none"
         },
         "relates": {
           "type": "string",
