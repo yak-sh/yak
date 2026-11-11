@@ -142,10 +142,13 @@ let said = (call: Bundle, body: string): Bundle => ({
  * otherwise the last thing it said. */
 export let briefOf = reportOf
 
-// A run is over when whatever is behind it is over. A provider that prints its
-// final event and then lingers has a `stop` entry and is still running, so a
-// managed request also waits for the final import receipt.
-let over = async (
+/** Whether a session's run is over, given the status its entries leave
+ * (@yaks/session `entryStatus`): whatever is behind it is over. A provider
+ * that prints its final event and then lingers has a `stop` entry and is
+ * still running, so a managed request also waits for the final import
+ * receipt; a transcript with no process is over once its turn settles, stops
+ * or fails. */
+export let over = async (
   graph: Graph,
   row: Bundle,
   status: string,

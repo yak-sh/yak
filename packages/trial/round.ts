@@ -29,13 +29,26 @@ export let find = async (g: Graph, word: string): Promise<Eid> => {
   return round.entity.eid
 }
 
+/** Whether a row is still to be returned (./run.ts): an attempt a model is to
+ * write that has no `output`, or a guess with no `guesses`. */
+export let unreturned = (b: Bundle): boolean =>
+  b.writing
+    ? !!attempt(b).variant && !attempt(b).output
+    : !!b.guess && !(b.guess as Record<string, unknown>).guesses
+
 /** Everything a round's deck and tally read: the round, its attempts, their
  * variants and cases, its pairs, each preference, mark and guess aimed at
  * one of its attempts, the judges those name, and the title of whoever set
- * the round's passing share. */
-export let gather = async (g: Graph, round: Eid): Promise<Bundle[]> => {
+ * the round's passing share. An attempt or a guess still to be returned is
+ * no attempt or guess yet, and is left out unless `planned` asks for them. */
+export let gather = async (
+  g: Graph,
+  round: Eid,
+  planned = false,
+): Promise<Bundle[]> => {
   let r = JSON.stringify(round)
-  let attempts = await g.read(`.writing .writing.round=${r} *`)
+  let here = (b: Bundle) => planned || !unreturned(b)
+  let attempts = (await g.read(`.writing .writing.round=${r} *`)).filter(here)
   let of = (prop: string) =>
     attempts.map((a) => attempt(a)[prop]).filter((e) => e).map(String)
   let [head, ...rest] = await Promise.all([
@@ -45,8 +58,9 @@ export let gather = async (g: Graph, round: Eid): Promise<Bundle[]> => {
     g.read(`.grabbed .grabbed.attempt.writing.round=${r} *`),
     g.read(`.guess .guess.attempt.writing.round=${r} *`),
   ])
+  let aimed = rest.flat().filter(here)
   let named = (comp: string) =>
-    rest.flat().map((b) => (b[comp] as { judge?: unknown })?.judge)
+    aimed.map((b) => (b[comp] as { judge?: unknown })?.judge)
   let judges = [...new Set([...named('preference'), ...named('guess')])]
     .filter((e) => e).map(String)
   let by = (head[0]?.passing as { by?: unknown })?.by
@@ -55,7 +69,7 @@ export let gather = async (g: Graph, round: Eid): Promise<Bundle[]> => {
     by ? g.get([String(by)], ['doc']) : [],
   ])
   return [...head, ...more.flat()].filter((b) => b)
-    .concat(attempts, rest.flat())
+    .concat(attempts, aimed)
 }
 
 /** How a round's file named a variant or a case: the key it was loaded under
@@ -97,10 +111,11 @@ export let load = async (
   let round = patches.find((p) => p.round)?.entity.eid ??
     await find(g, file.key)
   let now = new Set(made.map((b) => b.entity.eid))
-  let stale = (await gather(g, round)).filter((b) =>
+  let stale = (await gather(g, round, true)).filter((b) =>
     !now.has(b.entity.eid) && (b.pair || b.guess || attempt(b).variant)
   )
-  let gone = stale.filter((b) => !b.writing)
+  // An attempt nobody wrote has nothing resting on it, and goes with the plan.
+  let gone = stale.filter((b) => !b.writing || unreturned(b))
   if (gone.length) {
     await g.apply(gone.map((b) => ({ entity: b.entity, $delete: true })))
   }

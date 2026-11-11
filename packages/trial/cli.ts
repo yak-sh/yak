@@ -1,6 +1,7 @@
 // The trial commands a person types. `yak trial score` scores every context
 // case the graph holds under a variant (./moment.ts); `yak trial load` reads a
-// skill round's file into rows and `yak trial drop` removes a round
+// skill round's file into rows, `yak trial run` asks the writers and judges
+// the round still owes (./run.ts) and `yak trial drop` removes a round
 // (./round.ts). Each only hands the work the host's graph and what it read
 // from this machine.
 import type { CliCommand } from '@yaks/cli/host'
@@ -75,6 +76,45 @@ export let commands: CliCommand[] = [{
         `\npage: /trial/${file.key}\ntally: yak trial tally ${file.key}`,
     )
     return 0
+  },
+}, {
+  name: 'trial_run',
+  noun: 'trial',
+  verb: 'run',
+  description:
+    'Run what a skill round still owes: each attempt planned and not yet written is asked of a writer, then each guess planned of a judge, every one a session offered no tools, the persona arm selecting its persona. Says first what it will cost at list price by what earlier rows cost, writes each row as its session ends, and asks nothing more at the cap. Running it again asks only what never returned.',
+  inputSchema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['round', 'cap'],
+    properties: {
+      round,
+      cap: {
+        type: 'number',
+        minimum: 0,
+        description:
+          'the dollars it may spend at list price; 0 says the cost and asks nothing',
+      },
+      jobs: {
+        type: 'integer',
+        minimum: 1,
+        description: 'how many calls go at once (default 6)',
+      },
+    },
+  },
+  positional: ['round'],
+  run: async (args, host, context) => {
+    let { find, gather, keyed } = await import('./round.ts')
+    let { run } = await import('./run.ts')
+    let eid = await find(host.graph, String(args.round))
+    let ran = await run(host.graph, eid, {
+      cap: Number(args.cap),
+      jobs: args.jobs == null ? undefined : Number(args.jobs),
+      label: await keyed(host.graph, await gather(host.graph, eid, true)),
+      out: context.out,
+      signal: host.stopping,
+    })
+    return ran.failed ? 1 : 0
   },
 }, {
   name: 'trial_drop',

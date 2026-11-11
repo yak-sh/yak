@@ -57,6 +57,20 @@ export type RoundFile = {
   output: string[]
   /** the persona a `persona: true` writer carried, by id (`N-4053`) */
   persona?: string | null
+  /** the provider and model its writers and judges are asked, by name */
+  using?: { provider: string; model: string; effort?: string }
+  /** the wording its writers are given (`writers{task, skilled, rule}`) */
+  writers?: { task: string; skilled?: string; rule?: string }
+  /** attempts still to be written, and the judges to ask of each: every
+   * variant at every case, by each arm (`true` carries the persona), `runs`
+   * times over */
+  plan?: {
+    variants: string[]
+    cases: string[]
+    personas: boolean[]
+    runs?: number
+    judges?: string[]
+  }
   variants?: {
     key: string
     title: string
@@ -90,12 +104,23 @@ export type RoundFile = {
     model?: string
     at?: string
     reply?: string
-    output: Record<string, string>
+    /** absent on an attempt still to be written */
+    output?: Record<string, string>
     usage?: { input?: number; output?: number; dollars?: number; ms?: number }
   }[]
   /** automated judges, each found again as `judge:<skill>:<key>`; `taught`
-   * for one handed a person's taps as examples */
-  judges?: { key: string; title: string; taught?: boolean }[]
+   * for one handed a person's taps as examples. One that guesses says its
+   * `form`, the parts it is `shown`, its `question` and its `cap`
+   * (`judge{taught, form, shown, question, cap}`) */
+  judges?: {
+    key: string
+    title: string
+    taught?: boolean
+    form?: string
+    shown?: string[]
+    question?: string
+    cap?: number
+  }[]
   pairs?: [string, string][]
   /** planted known answers: pairs whose winner is settled, the winner first.
    * Each is a pair of the deck besides `pairs`, placed among them */
@@ -103,15 +128,17 @@ export type RoundFile = {
   guesses?: {
     attempt: string
     /** the key of the judge that guessed; a guess naming none is given the
-     * round's guessing game in its form, `<round>.guess-<form>` */
+     * round's guessing game in its form, `<round>.guess-<form>`. One that
+     * names a judge and has no `guesses` is still to be asked */
     judge?: string
-    form: string
+    form?: string
     model?: string
-    guesses: string[]
+    guesses?: string[]
     among?: string[]
     rank?: number | null
     cap?: number
     leaked?: string[]
+    dollars?: number | null
   }[]
 }
 
@@ -133,6 +160,34 @@ export let loaded = (comp: string, round: string, ...key: string[]): Eid =>
 let some = (o: Record<string, unknown>): Record<string, unknown> =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v != null))
 
+/// planned({ variants: ['none'], cases: ['office'], personas: [false, true] }).attempts.map((a) => a.key) -> ['office.none.blank.1', 'office.none.persona.1']
+/** A plan written out: one attempt still to be written for each case,
+ * variant, arm and run, and one guess still to be asked for each of them and
+ * each judge the plan names. */
+export let planned = (
+  plan: NonNullable<RoundFile['plan']>,
+): Required<Pick<RoundFile, 'attempts' | 'guesses'>> => {
+  let attempts = plan.cases.flatMap((kase) =>
+    plan.variants.flatMap((variant) =>
+      plan.personas.flatMap((persona) =>
+        Array.from({ length: plan.runs ?? 1 }, (_, i) => ({
+          key: `${kase}.${variant}.${persona ? 'persona' : 'blank'}.${i + 1}`,
+          case: kase,
+          variant,
+          persona,
+          run: i + 1,
+        }))
+      )
+    )
+  )
+  return {
+    attempts,
+    guesses: attempts.flatMap((a) =>
+      (plan.judges ?? []).map((judge) => ({ attempt: a.key, judge }))
+    ),
+  }
+}
+
 /**
  * The rows of a round file, as one batch: the round, its variants and cases
  * (each under its name, so a file that names one a former round loaded lands
@@ -141,6 +196,12 @@ let some = (o: Record<string, unknown>): Record<string, unknown> =>
  * former round loaded.
  */
 export let rows = (file: RoundFile): Bundle[] => {
+  let plan = file.plan ? planned(file.plan) : { attempts: [], guesses: [] }
+  file = {
+    ...file,
+    attempts: [...file.attempts ?? [], ...plan.attempts],
+    guesses: [...file.guesses ?? [], ...plan.guesses],
+  }
   let held = (keys: { key: string }[] = []) => new Set(keys.map((k) => k.key))
   let variants = held(file.variants), cases = held(file.cases)
   let attempts = held(file.attempts)
@@ -154,16 +215,17 @@ export let rows = (file: RoundFile): Bundle[] => {
   }
   // A guess that names no judge is the round's own guessing game in its form.
   let game = (form: string) => `${file.key}.guess-${form}`
+  let form = (g: { form?: string }) => g.form ?? 'open'
   let judges = [
     ...file.judges ?? [],
     ...[
       ...new Set(
-        (file.guesses ?? []).filter((g) => !g.judge).map((g) => g.form),
+        (file.guesses ?? []).filter((g) => !g.judge).map((g) => form(g)),
       ),
-    ].map((form) => ({
+    ].map((form): NonNullable<RoundFile['judges']>[number] => ({
       key: game(form),
       title: `The guessing game, ${form} form (${file.key})`,
-      taught: undefined,
+      form,
     })),
   ]
   let judged = held(judges)
@@ -176,9 +238,12 @@ export let rows = (file: RoundFile): Bundle[] => {
       ((file.pairs?.length ?? 0) + 1) - 0.5
   let models = [
     ...new Set(
-      [...file.attempts ?? [], ...file.guesses ?? []].flatMap((x) =>
-        x.model ? [x.model] : []
-      ),
+      [
+        ...file.using ? [file.using] : [],
+        ...file.attempts ?? [],
+        ...file.guesses ?? [],
+      ]
+        .flatMap((x) => x.model ? [x.model] : []),
     ),
   ]
   let nth = new Map<string, number>()
@@ -188,7 +253,23 @@ export let rows = (file: RoundFile): Bundle[] => {
       alias: { name: named.round(file.key) },
       round: { skill: file.skill, parts: file.output },
       doc: { title: file.title },
+      ...file.writers ? { writers: some(file.writers) } : {},
+      ...file.using
+        ? {
+          using: some({
+            provider: '$provider',
+            model: `$model:${file.using.model}`,
+            effort: file.using.effort,
+          }),
+        }
+        : {},
     },
+    ...file.using
+      ? [{
+        entity: { eid: '$provider' },
+        provider: { name: file.using.provider },
+      }]
+      : [],
     ...(file.variants ?? []).map((v): Bundle => ({
       entity: { eid: `$variant:${v.key}` },
       alias: { name: named.variant(file.skill, v.key) },
@@ -224,7 +305,13 @@ export let rows = (file: RoundFile): Bundle[] => {
     ...judges.map((j): Bundle => ({
       entity: { eid: `$judge:${j.key}` },
       alias: { name: named.judge(file.skill, j.key) },
-      judge: some({ taught: j.taught }),
+      judge: some({
+        taught: j.taught,
+        form: j.form,
+        shown: j.shown,
+        question: j.question,
+        cap: j.cap,
+      }),
       doc: { title: j.title },
     })),
     ...models.map((name): Bundle => ({
@@ -282,14 +369,28 @@ export let rows = (file: RoundFile): Bundle[] => {
       }
     }),
     ...(file.guesses ?? []).map((g): Bundle => {
-      let said = [g.attempt, g.form, g.model ?? '']
+      // A judge guesses once at an attempt; guesses that name none are told
+      // apart by their form, their model and their place among the like.
+      let said = g.judge
+        ? [g.attempt, g.judge]
+        : [g.attempt, g.form ?? '', g.model ?? '']
       let n = nth.get(said.join('|')) ?? 0
       nth.set(said.join('|'), n + 1)
       return {
-        entity: { eid: loaded('guess', file.key, ...said, String(n)) },
+        entity: {
+          eid: loaded(
+            'guess',
+            file.key,
+            ...said,
+            ...g.judge ? [] : [String(n)],
+          ),
+        },
+        ...g.dollars != null
+          ? { cost: { dollars: g.dollars, reported: false } }
+          : {},
         guess: some({
           attempt: attempt(g.attempt),
-          judge: judge(g.judge ?? game(g.form)),
+          judge: judge(g.judge ?? game(form(g))),
           form: g.form,
           model: g.model && `$model:${g.model}`,
           guesses: g.guesses,

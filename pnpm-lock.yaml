@@ -5055,6 +5055,12 @@ importers:
       '@yaks/query':
         specifier: 0.2.32
         version: link:../query
+      '@yaks/session':
+        specifier: 0.2.33
+        version: link:../session
+      '@yaks/spawn':
+        specifier: 0.2.28
+        version: link:../spawn
       '@yaks/tools':
         specifier: 0.2.30
         version: link:../tools
@@ -5068,18 +5074,21 @@ importers:
       '@yaks/edge':
         specifier: 0.2.24
         version: link:../edge
+      '@yaks/kernel':
+        specifier: 0.2.28
+        version: link:../kernel
       '@yaks/key':
         specifier: 0.2.24
         version: link:../key
       '@yaks/memory':
         specifier: 0.2.23
         version: link:../memory
+      '@yaks/process':
+        specifier: 0.2.28
+        version: link:../process
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram
-      '@yaks/session':
-        specifier: 0.2.33
-        version: link:../session
       '@yaks/task':
         specifier: 0.2.23
         version: link:../task

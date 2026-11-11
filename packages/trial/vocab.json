@@ -43,7 +43,7 @@
       "component": true,
       "type": "object",
       "embed": false,
-      "description": "one round of a skill trial: attempts at cases under variants, the pairs a person compares and the judges' scores, read back to plan the next round. Its title is its `doc`",
+      "description": "one round of a skill trial: attempts at cases under variants, the pairs a person compares and the judges' scores, read back to plan the next round. Its title is its `doc`. What its writers are told is its `writers`, and the model they and its judges are asked is its `using` (@yaks/session)",
       "properties": {
         "skill": {
           "type": "string",
@@ -55,6 +55,26 @@
             "type": "string"
           },
           "description": "the names of the parts every attempt returns, in the order a page draws them: `[\"headline\", \"brief\", \"description\"]`"
+        }
+      }
+    },
+    "writers": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "on a round: the wording every writer in it is given, with the variant and the case filled in. It is the skill's own: the runner holds no words of it, and reads what comes back as the last ```json block of the reply, one key for each of the round's `parts`",
+      "properties": {
+        "task": {
+          "type": "string",
+          "description": "what a writer is asked: `$case` is the case's text, `$skill` the variant's and `$rule` the `rule` where it applies"
+        },
+        "skilled": {
+          "type": "string",
+          "description": "what a writer handed a variant with a text is asked instead; `task` where absent"
+        },
+        "rule": {
+          "type": "string",
+          "description": "what a writer of a `riddle` case is also told, so the answer is not given away: it fills `$rule`, which is empty for any other case"
         }
       }
     },
@@ -96,11 +116,30 @@
       "component": true,
       "type": "object",
       "embed": false,
-      "description": "an automated judge of a skill trial: anything that compares or scores writings and is not a person (the guessing game in one form, a reader, a selector built from a person's taps). Its title is its `doc`. Each verdict names it (`preference{judge}`, `guess{judge}`), and its verdicts count in a round only once it agrees with enough of the round's known answers (`passing{share}`)",
+      "description": "an automated judge of a skill trial: anything that compares or scores writings and is not a person (the guessing game in one form, a reader, a selector built from a person's taps). Its title is its `doc`. Each verdict names it (`preference{judge}`, `guess{judge}`), and its verdicts count in a round only once it agrees with enough of the round's known answers (`passing{share}`). One that guesses is shown an attempt at a `riddle` case and asked what it describes; the model it is asked is its own `using` (@yaks/session), or else its round's",
       "properties": {
         "taught": {
           "type": "boolean",
           "description": "it was handed a person's taps as examples (a selector), so those taps cannot test it: it is scored only on planted answers and on taps whose pair is `held_out`"
+        },
+        "form": {
+          "type": "string",
+          "description": "how it guesses. `open`: it lists guesses in order, as `{\"guesses\": [names]}`; `among`: it also sees the texts of every case in the riddle's group, labelled by letter, and ranks the letters, as `{\"ranking\": [letters]}`"
+        },
+        "shown": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "the parts of an attempt it is shown, of the round's `parts`: `[\"headline\"]`; all of them where absent"
+        },
+        "question": {
+          "type": "string",
+          "description": "what it is asked: `$output` is the parts shown, and in the `among` form `$n` is how many cases it chooses among and `$sheets` their texts"
+        },
+        "cap": {
+          "type": "integer",
+          "description": "how many guesses it is allowed in the `open` form (default 10)"
         }
       }
     },
@@ -259,6 +298,12 @@
         "output": {
           "type": "object",
           "description": "the work itself, by the round's `parts`: `{headline, brief, description}`"
+        },
+        "session": {
+          "type": "string",
+          "ref": "session",
+          "death": "detach",
+          "description": "the session asked to write it. An attempt with a `variant` and no `output` is planned: not yet asked where it names no session, and not yet returned where it does"
         }
       }
     },
@@ -444,6 +489,12 @@
             "type": "string"
           },
           "description": "forbidden strings found in the attempt, which give the answer away"
+        },
+        "session": {
+          "type": "string",
+          "ref": "session",
+          "death": "detach",
+          "description": "the session asked. A guess with no `guesses` is planned: not yet asked where it names no session, and not yet returned where it does"
         }
       }
     },

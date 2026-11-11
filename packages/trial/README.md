@@ -69,22 +69,24 @@ the skill and one case, a person taps through pairs of what they returned,
 judges score the rest, and the tally of both plans the next round. Whoever runs
 the writers writes a round file; everything after that is rows.
 
-| on an entity                                                                | what it is                                                                                                        |
-| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `round{skill, parts}` + `doc{title}`                                        | one round: the skill it develops and the parts every attempt returns                                              |
-| `variant{body, theory, source, licence, from}` + `doc{title}`               | a candidate text of the skill, installed nowhere                                                                  |
-| `case{body, base}` + `doc{title}`                                           | what a writer is handed; cases with one `base` are about one thing                                                |
-| `riddle{name, aliases, forbidden, forbidden_exact, group}`                  | on a case: a judge guesses what the attempt describes                                                             |
-| `found{name, source}`                                                       | on a case: something its maker published, kept to learn a judge's taste                                           |
-| `writing{round, case, variant, persona, run, model, at, ms, reply, output}` | what one writer returned, beside @yaks/model's `usage{input_tokens, output_tokens}` and `cost{dollars, reported}` |
-| `pair{round, a, b, ord}`                                                    | two attempts planned for comparison                                                                               |
-| `known{winner}`                                                             | on a pair: its winner was settled when it was planned (a planted known answer)                                    |
-| `held_out{at, by, via}`                                                     | on a pair: a person's tap on it is kept from every selector's examples                                            |
-| `preference{first, second, chose, judge, why}`                              | one comparison; no `chose` is neither, no `judge` is a person's tap, by its `created.by`                          |
-| `grabbed{attempt}`                                                          | its `created.by` found the attempt appealing on its own                                                           |
-| `judge{taught}` + `doc{title}`                                              | an automated judge; `taught` when it was handed a person's taps as examples                                       |
-| `guess{attempt, judge, form, model, guesses, among, rank, cap, leaked}`     | one judge's guesses at a riddle attempt                                                                           |
-| `passing{share, at, by, via}`                                               | on a round: how much of the known answers a judge must get right before its verdicts count                        |
+| on an entity                                                                         | what it is                                                                                                                  |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `round{skill, parts}` + `doc{title}`                                                 | one round: the skill it develops and the parts every attempt returns                                                        |
+| `writers{task, skilled, rule}`                                                       | on a round: the wording its writers are given                                                                               |
+| `using{provider, model, effort}`                                                     | on a round or a judge: the model asked (@yaks/session)                                                                      |
+| `variant{body, theory, source, licence, from}` + `doc{title}`                        | a candidate text of the skill, installed nowhere                                                                            |
+| `case{body, base}` + `doc{title}`                                                    | what a writer is handed; cases with one `base` are about one thing                                                          |
+| `riddle{name, aliases, forbidden, forbidden_exact, group}`                           | on a case: a judge guesses what the attempt describes                                                                       |
+| `found{name, source}`                                                                | on a case: something its maker published, kept to learn a judge's taste                                                     |
+| `writing{round, case, variant, persona, run, model, at, ms, reply, output, session}` | what one writer returned, beside @yaks/model's `usage{input_tokens, output_tokens}` and `cost{dollars, reported}`           |
+| `pair{round, a, b, ord}`                                                             | two attempts planned for comparison                                                                                         |
+| `known{winner}`                                                                      | on a pair: its winner was settled when it was planned (a planted known answer)                                              |
+| `held_out{at, by, via}`                                                              | on a pair: a person's tap on it is kept from every selector's examples                                                      |
+| `preference{first, second, chose, judge, why}`                                       | one comparison; no `chose` is neither, no `judge` is a person's tap, by its `created.by`                                    |
+| `grabbed{attempt}`                                                                   | its `created.by` found the attempt appealing on its own                                                                     |
+| `judge{taught, form, shown, question, cap}` + `doc{title}`                           | an automated judge; `taught` when it was handed a person's taps as examples; one that guesses says how and what it is asked |
+| `guess{attempt, judge, form, model, guesses, among, rank, cap, leaked, session}`     | one judge's guesses at a riddle attempt                                                                                     |
+| `passing{share, at, by, via}`                                                        | on a round: how much of the known answers a judge must get right before its verdicts count                                  |
 
 Variants, cases, attempts and what judges them are kept out of embedding, and
 their text is in their own components, not `doc{body}`, so no agent meets a
@@ -98,6 +100,7 @@ row always names one.
 
 ```sh
 yak trial load rounds/r1/round.json  # rows; loading again replaces them
+yak trial run copy-r2 --cap 20       # ask the writers and judges it still owes
 yak trial tally copy-r1              # what the round's rows say, as text
 yak trial pass copy-r1 0.8           # what a judge must get right; a person's to set
 yak trial hold copy-r1 0.25          # keep a quarter of the pairs from selectors
@@ -107,14 +110,81 @@ yak trial drop copy-r1               # the round and what only it used
 A round file is JSON: `key`, `title`, `skill`, `output` (the parts), `persona`
 (the id of the persona a `persona: true` writer carried), then `variants`,
 `cases`, `attempts`, `judges`, `pairs`, `known` and `guesses`, each naming the
-others by `key` (`RoundFile` in ./skill.ts). The round is found again as
-`round:<key>`, a variant as `variant:<skill>:<key>`, a case as
-`case:<skill>:<key>` and a judge as `judge:<skill>:<key>` (@yaks/alias), so a
-later round's file reuses one by naming its key, and one that restates it
-replaces its text. Give a changed variant a new key and say what it came `from`.
-Attempts, pairs and guesses are on eids derived from the round's key and their
-own. A guess that names no judge is given the round's own guessing game in its
-form (`<round>.guess-open`).
+others by `key`, and for a round still to be run `using`, `writers` and `plan`
+(`RoundFile` in ./skill.ts). The round is found again as `round:<key>`, a
+variant as `variant:<skill>:<key>`, a case as `case:<skill>:<key>` and a judge
+as `judge:<skill>:<key>` (@yaks/alias), so a later round's file reuses one by
+naming its key, and one that restates it replaces its text. Give a changed
+variant a new key and say what it came `from`. Attempts, pairs and guesses are
+on eids derived from the round's key and their own. A guess that names no judge
+is given the round's own guessing game in its form (`<round>.guess-open`).
+
+### Running a round
+
+A round's file can plan what nobody has written yet. An attempt with no `output`
+and a guess with no `guesses` are planned rows, and `plan` writes them out: one
+attempt for each case, variant, arm and run, and one guess of each for every
+judge it names. A planned row is no attempt yet: the page and the tally leave it
+out until it returns.
+
+````jsonc
+{
+  "key": "copy-r2",
+  "title": "Round two",
+  "skill": "copywriting",
+  "output": ["headline", "brief", "description"],
+  "persona": "N-4053",
+  "using": { "provider": "claude", "model": "sonnet" },
+  "writers": {
+    "task": "Write a pitch … as JSON in a ```json block with the keys \"headline\", \"brief\" and \"description\".$rule\n\n-----\n$case\n-----\n",
+    "skilled": "You have been given a skill … \n-----\n$skill\n-----\n\nWrite a pitch …$rule\n\n-----\n$case\n-----\n",
+    "rule": "\n\nThe sheet leaves out the company's name on purpose …"
+  },
+  "judges": [{
+    "key": "headline",
+    "title": "The headline alone",
+    "form": "open",
+    "shown": ["headline"],
+    "cap": 10,
+    "question": "Below is a pitch … Which company is it? … {\"guesses\": [\"...\"]}\n\n-----\n$output\n-----"
+  }],
+  "plan": {
+    "variants": ["none", "candid"],
+    "cases": ["make"],
+    "personas": [false, true],
+    "runs": 2,
+    "judges": ["headline"]
+  }
+}
+````
+
+`yak trial run <round> --cap <dollars>` then asks what the round owes, `--jobs`
+at a time (six by default): the writers, then the judges of what was written.
+
+- **Every word is the round's.** A writer is given `writers.task`, or
+  `writers.skilled` when its variant has a text, with `$case`, `$skill` and
+  `$rule` filled in; `rule` is said only where the case is a `riddle`. A judge
+  is given its `question` with `$output`, the parts it is `shown` (all of them
+  where it names none). In the `among` form `$sheets` is the text of every case
+  in the riddle's group under a letter, in an order the case decides, and `$n`
+  how many. The runner holds none of the wording. It reads a reply as its last
+  `` ```json `` block: an object with a key for each of the round's parts from a
+  writer, `{"guesses": [names]}` from an `open` judge, `{"ranking": [letters]}`
+  from one choosing `among`.
+- **Each call is a session**, asked once and offered no tools
+  (`sending{tools: []}`). @yaks/spawn starts such a run bare: none of its
+  provider's tools, settings, instruction files, skills or MCP servers, in an
+  empty directory. The persona arm differs by one thing: its session selects the
+  round's persona, which reaches the provider through its instruction flag.
+- **It says the cost first**: the mean of what earlier rows of the kind cost (a
+  writer by arm, a judge by form) for each call owed, at list price. It asks
+  nothing more once what it spent, with what the calls going are expected to,
+  would pass the cap. `--cap 0` says the cost and asks nothing.
+- **A row is written as its session ends**, with `usage` and `cost` summed from
+  the session's requests. The row names its session in the write that asks, so a
+  run stopped part way loses nothing: the next reads what each session said
+  since and asks only what never returned. A reply with nothing readable is kept
+  on the attempt as `reply`, and the next run asks again.
 
 ### The page
 

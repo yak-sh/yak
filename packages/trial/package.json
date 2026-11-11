@@ -8,6 +8,7 @@
     "./moment": "./moment.ts",
     "./skill": "./skill.ts",
     "./round": "./round.ts",
+    "./run": "./run.ts",
     "./tools": "./tools.ts",
     "./routes": "./routes.ts",
     "./page": "./page.ts",
@@ -26,16 +27,19 @@
     "@yaks/model": "0.2.32",
     "@yaks/persona": "0.2.23",
     "@yaks/query": "0.2.32",
+    "@yaks/session": "0.2.33",
+    "@yaks/spawn": "0.2.28",
     "@yaks/tools": "0.2.30",
     "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {
     "@yaks/doc": "0.2.24",
     "@yaks/edge": "0.2.24",
+    "@yaks/kernel": "0.2.28",
     "@yaks/key": "0.2.24",
     "@yaks/memory": "0.2.23",
+    "@yaks/process": "0.2.28",
     "@yaks/ram": "0.2.24",
-    "@yaks/session": "0.2.33",
     "@yaks/task": "0.2.23",
     "@yaks/testing": "0.2.30",
     "linkedom": "^0.18.12"
