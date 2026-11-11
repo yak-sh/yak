@@ -73,6 +73,20 @@ test('a computed import and a file read are part of what a process runs', async 
     }),
     'packages/web/styles.css differs',
   )
+  // A JSON module is a root too, also where the graph reaches it by a literal
+  // import with its attribute.
+  let json = {
+    ...FILES,
+    'packages/cli/main.ts':
+      "import meta from './meta.json' with { type: 'json' }\nexport let a = meta",
+    'packages/cli/meta.json': '{}',
+  }
+  assertEquals(
+    await trees(json, { 'packages/cli/meta.json': '[]' }, {
+      imports: ['packages/cli/meta.json'],
+    }),
+    'packages/cli/meta.json differs',
+  )
 })
 
 test('a supervised process keeps what it imports and reads in its tree, and its config', async () => {

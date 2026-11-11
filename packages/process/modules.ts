@@ -28,6 +28,14 @@ export type Info = {
   }>
 }
 
+// A root as the entry imports it. A JSON module wants its attribute: without
+// it Deno lists the file as an error with no local path, the same entry as
+// where the graph reaches it properly, so the file drops out of the graph.
+let root = (url: string) =>
+  `import ${JSON.stringify(url)}${
+    /\.json$/.test(new URL(url).pathname) ? " with { type: 'json' }" : ''
+  }`
+
 /** The module graph reached from `roots` (URLs) in the tree at `cwd`, a
  * dynamic import of a literal specifier included, or undefined when deno
  * cannot say. Deno resolves it by the tree's lock, and writes what it
@@ -42,7 +50,7 @@ export let modules = async (
     let entry = `${dir}/entry.ts`
     await writeFile(
       entry,
-      roots.map((r) => `import ${JSON.stringify(r)}`).join('\n'),
+      roots.map(root).join('\n'),
     )
     let lock = await copyFile(`${cwd}/deno.lock`, `${dir}/deno.lock`)
       .then(() => `--lock=${dir}/deno.lock`, () => '--no-lock')
