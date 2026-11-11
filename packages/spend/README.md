@@ -37,8 +37,10 @@ A day's tally is a `spend` row on an eid derived from its `day`, holding its
   Code transcript or a Codex rollout bills the account whose directory holds it;
   one the native harness sent bills the account its `using` provider's CLI signs
   in with here (Claude's CLI Claude Code's; Codex's CLI, and OpenAI signed in
-  with ChatGPT, Codex's); a request paid by the token (OpenRouter, OpenAI with
-  an API key) bills none (`PLANS`, `planOf` in ./day.ts).
+  with ChatGPT, Codex's); a managed run's transcript is its command's output, in
+  no account's directory, so its requests bill the account of the provider its
+  session asked for; a request paid by the token (OpenRouter, OpenAI with an API
+  key) bills none (`PLANS`, `planOf` in ./day.ts).
 
 Dollars are what the provider reported, else the tokens at the model row's
 `price`. The totals are measured; the split across parts, and across a session's

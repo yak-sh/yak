@@ -51,7 +51,11 @@ export let PLANS = (key = false): Map<Eid, Runner> => {
  * transcript is in, which `paths` says where each file of this computer is
  * and `homes` where each account keeps its own; else, for one the native
  * harness sent, the account the CLI of its `using` provider signs in with
- * here. A request that billed no plan was paid by the token.
+ * here. A managed run's transcript is its command's output, kept in no
+ * account's home, so its requests bill the account of the provider its
+ * session asked for: of the session's requests in `asked`, each the entry
+ * that asked and the provider, the last at or before this one. A request
+ * that billed no plan was paid by the token.
  *
  * ```ts
  * import { planOf, PLANS } from './day.ts'
@@ -69,21 +73,59 @@ export let PLANS = (key = false): Map<Eid, Runner> => {
  * equal(plan({ ...r, using: { provider: p('openai') } }), accountEid(home('codex')!))
  * equal(planOf(PLANS(true))({ ...r, using: { provider: p('openai') } }), undefined)
  * equal(plan({ ...r, using: { provider: p('openrouter') } }), undefined)
+ *
+ * let asked = new Map([['s', [[1, p('claude')], [9, p('openrouter')]] as [number, string][]]])
+ * let run = planOf(PLANS(), new Map([['o', '/u/.tasks/processes/s.out']]), homes, asked)
+ * let sent = (seq: number) => ({ ...r, lines: { file: 'o' }, entry: { session: 's', seq } })
+ * equal([run(sent(4)), run(sent(12))], [accountEid(home('claude')!), undefined])
  * ```
  */
 export let planOf = (
   plans: Map<Eid, Runner>,
   paths: Map<Eid, string> = new Map(),
   homes: Map<string, Eid> = new Map(),
+  asked: Map<Eid, [number, Eid][]> = new Map(),
 ) =>
 (b: Bundle): Eid | undefined => {
-  let served = str(comp(b, 'using').provider)
-  if (served) {
-    let dir = plans.has(served) ? home(plans.get(served)!) : undefined
+  let signed = (provider?: Eid) => {
+    let dir = plans.has(provider ?? '')
+      ? home(plans.get(provider!)!)
+      : undefined
     return dir && accountEid(dir)
   }
+  let served = str(comp(b, 'using').provider)
+  if (served) return signed(served)
   let source = paths.get(str(comp(b, 'lines').file)) ?? ''
-  return [...homes].find(([dir]) => source.startsWith(`${dir}/`))?.[1]
+  let kept = [...homes].find(([dir]) => source.startsWith(`${dir}/`))?.[1]
+  if (kept) return kept
+  let { session, seq } = comp(b, 'entry')
+  return signed(
+    asked.get(str(session))?.findLast(([at]) => at <= Number(seq))?.[1],
+  )
+}
+
+// The provider each of these sessions asked for, at each entry that asked: a
+// managed run's requests (@yaks/spawn), in the order they were made.
+let requested = async (
+  g: Graph,
+  sessions: Eid[],
+): Promise<Map<Eid, [number, Eid][]>> => {
+  let out = new Map<Eid, [number, Eid][]>()
+  for (let i = 0; i < sessions.length; i += 200) {
+    let rows = await g.rows(
+      `.using !lines !ask .entry.session=${
+        sessions.slice(i, i + 200).join(',')
+      } .order=entry.seq .fields=entry.session,entry.seq,using.provider`,
+    ) as Record<string, unknown>[]
+    for (let r of rows) {
+      let provider = str(r['using.provider'])
+      if (!provider) continue
+      let s = str(r['entry.session'])
+      let at = out.get(s) ?? out.set(s, []).get(s)!
+      at.push([Number(r['entry.seq']), provider])
+    }
+  }
+  return out
 }
 
 // Where each transcript the rows were read from is on this computer's disks.
@@ -268,6 +310,7 @@ export let known = async (
     PLANS(!!env.get('OPENAI_API_KEY')),
     await located(g, rows),
     homes,
+    await requested(g, sessions),
   )
   let plans = new Map(
     rows.flatMap((b): [Eid, Eid][] => {
