@@ -1,7 +1,7 @@
 // The connector through the whole kernel (probe.ts `kernel`), by subject.
 import { listable } from './shelf.ts'
 import { COOKIE as HOME } from './variant.ts'
-import { EXAMPLES } from './site/home.tsx'
+import { HOME as EXAMPLES } from './demos.ts'
 import { test } from '@yaks/testing'
 import {
   assert,

@@ -81,6 +81,7 @@ import { sheeted } from './sheets.ts'
 import { browserOf } from './session.ts'
 import { caught } from './defects.ts'
 import { DEMO } from './gallery-demo.ts'
+import { DEMOS } from './demos.ts'
 import { PICTURES } from './kept-page.ts'
 import { opens } from './sample.ts'
 import type { Args, Ctx, Out } from './tool.ts'
@@ -885,21 +886,8 @@ export let answer = async (
 
 // ---- the home page's examples ------------------------------------------
 
-// The examples a home page's carousel shows when it names none of its own:
-// things for home, for a group, and for fun. Gallery approval and listing
-// recency do not decide which apps the platform features.
-export let DEMOS = [
-  'garden',
-  'bookclub',
-  'trip',
-  'recipes',
-  'guestbook',
-  'chores',
-  'housebook',
-  'sound-lab',
-  'vale',
-]
-
+// The apps the platform features: every app a home page shows (demos.ts).
+// Gallery approval and listing recency do not decide which they are.
 export let featured = (space: Space, app: App) =>
   space.slug == DEMO && DEMOS.includes(app.slug)
 

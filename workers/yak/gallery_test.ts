@@ -15,7 +15,6 @@ import {
   CODE_REVIEW,
   codeReviewLetter,
   decision,
-  DEMOS,
   door,
   examples,
   found,
@@ -37,6 +36,7 @@ import {
   ticketed,
 } from './gallery.ts'
 import { standing } from './gallery-row.ts'
+import { BUILD, DEMOS, HOME } from './demos.ts'
 import type { Env } from './env.ts'
 import { markup } from './html.ts'
 import { app, cards, space } from './testing.ts'
@@ -156,7 +156,10 @@ test('a private app the home page features shows its image without a listing', a
     let path = `${IMAGE}${current.eid}/chosen`
     return image(dir, objects, path).then((r) => r.status)
   }
-  assertEquals(await shown('housebook', 'yourname'), 200)
+  // Every app a home page shows, whichever page names it.
+  for (let [slug] of [...HOME, ...BUILD]) {
+    assertEquals(await shown(slug, 'yourname'), 200, slug)
+  }
   assertEquals(await shown('housebook', 'jeff'), 404)
   assertEquals(await shown('ledger', 'yourname'), 404)
 })

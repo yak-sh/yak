@@ -9,24 +9,7 @@ import { FREE } from '../meter.ts'
 import { Page, Yours } from './frame.tsx'
 import { Cost, Examples } from './home.tsx'
 import { Idle } from '../mascot.ts'
-
-// The apps its carousel turns through, things for work first: each one's
-// address in yourname's space, its name and what it is for.
-let EXAMPLES = [
-  [
-    'menu',
-    'Wren’s Bakery',
-    'A market stall’s menu with prices, marked sold out from a phone.',
-  ],
-  [
-    'directory',
-    'Church Directory',
-    'A members-only directory with families, photos and birthdays.',
-  ],
-  ['trip', 'Travel Planner', "Plan the days, who's coming and what to pack."],
-  ['recipes', 'Recipe Box', 'Save recipes and share them with family.'],
-  ['chores', 'Chore Chart', 'Keep track of whose turn it is.'],
-]
+import { BUILD } from '../demos.ts'
 
 export let Build = () => (
   <Page
@@ -79,7 +62,7 @@ export let Build = () => (
           </a>
         </p>
       </div>
-      <Examples apps={EXAMPLES}>
+      <Examples apps={BUILD}>
         Each of these apps runs on yaks.app. Open one to try it, or get a copy
         of your own and ask for changes.{' '}
         <a href='/gallery'>See more in the gallery</a>.

@@ -5,6 +5,7 @@ import { GET_PLAN } from '../route.ts'
 import { START } from '../newcomer.ts'
 import { Data, Page, Yours } from './frame.tsx'
 import { Idle } from '../mascot.ts'
+import { type Example, HOME } from '../demos.ts'
 
 // What an engine reads of the page.
 let data = {
@@ -109,44 +110,14 @@ let data = {
   ],
 }
 
-// The apps the carousel turns through: each one's address in yourname's
-// space, its name and what it is for.
-export let EXAMPLES = [
-  ['garden', 'Garden Diary', 'Note what you planted and how it grew.'],
-  ['bookclub', 'Book Club', 'Choose books and plan your next meeting.'],
-  ['trip', 'Travel Planner', "Plan the days, who's coming and what to pack."],
-  ['recipes', 'Recipe Box', 'Save recipes and share them with family.'],
-  [
-    'guestbook',
-    'Birthday Guestbook',
-    'Collect birthday messages from friends.',
-  ],
-  ['chores', 'Chore Chart', 'Keep track of whose turn it is.'],
-  [
-    'housebook',
-    'Housebook',
-    'Your home’s manual: appliances, upkeep, paint colors and papers.',
-  ],
-  [
-    'sound-lab',
-    'Sound Lab',
-    'Build beats, shape sounds and export your music.',
-  ],
-  [
-    'vale',
-    'Mossvale',
-    'A fantasy world to play in the browser, with quests and crafting.',
-  ],
-]
-
 /** The examples, one card at a time (carousel.js): apps in yourname's space,
  * each named by its address there (`data-demo`), which the served page swaps
  * for the gallery's cards (gallery.ts `showcase`), and under them what a
  * visitor can do with one. */
 export let Examples = (
-  { children, apps = EXAMPLES }: {
+  { children, apps = HOME }: {
     children: ComponentChildren
-    apps?: string[][]
+    apps?: Example[]
   },
 ) => (
   <section
