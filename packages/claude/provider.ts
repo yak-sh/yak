@@ -12,6 +12,7 @@ import {
   type Lent,
   type Model,
 } from '@yaks/model'
+import { mark } from './mark.ts'
 import type { Options } from './mod.ts'
 import { claudeDoc } from './vocab.ts'
 
@@ -31,13 +32,7 @@ export let providers = (
       {
         vocab: claudeDoc,
         info: true,
-        mark: (reply) => ({
-          claude: {
-            response_id: reply.id,
-            session_id: (reply as typeof reply & { claudeSession?: string })
-              .claudeSession,
-          },
-        }),
+        mark,
       },
     ),
   }

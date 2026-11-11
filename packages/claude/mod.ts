@@ -22,6 +22,7 @@ import {
   type Usage,
 } from '@yaks/model'
 import { metered } from './limits.ts'
+import { mark } from './mark.ts'
 import { offer } from './offer.ts'
 
 /** Host override, chiefly for deterministic CLI contract tests. */
@@ -471,12 +472,7 @@ export let claude = (opts: Options = {}): Model & AsyncDisposable => {
     list: () => Promise.resolve(listing()),
     info: (name: string) =>
       Promise.resolve(listing().find((m) => m.name == name)),
-    mark: (reply: Reply) => ({
-      claude: {
-        response_id: reply.id,
-        session_id: (reply as Reply & { claudeSession?: string }).claudeSession,
-      },
-    }),
+    mark,
     vocab: claudeDoc,
     /** Ends the processes waiting for steps. */
     [Symbol.asyncDispose]: async () => {

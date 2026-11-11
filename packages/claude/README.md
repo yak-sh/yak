@@ -61,6 +61,15 @@ first text in 612–2015 ms (median 876) this way, and 858–2949 ms (median 114
 with a process started per step. workers/yak/README.md has the rest of an
 Operator step's time.
 
+## When the cache goes cold
+
+The CLI chooses how long the prompt cache keeps a prefix, and a reply names no
+expiry. `mark(reply, cache)` writes
+`claude{response_id, session_id, cache_expires_at}`: the expiry is the request's
+start plus the lifetime its provider row records, `provider{cache_retention}` in
+seconds ([@yaks/model](../model/README.md), "Cached-prefix expiry"). Where the
+row records none the expiry is null, which every reader takes as cold.
+
 ## What is not graph-native
 
 `claude` owns subscription authentication, transport/init diagnostics, internal
