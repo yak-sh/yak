@@ -266,16 +266,24 @@ let looping = async (each: Each, reader?: Bound['reader']) => {
   let theirs = feedOf({ rows: (s) => db.query(s) })
   let time = clock()
   let told: unknown[] = []
+  let stopping = new AbortController()
+  let releases: (() => void | Promise<void>)[] = []
   let host = {
     storage: { statements: statements(db), get: () => [] },
     reader,
-    stopping: new AbortController().signal,
+    stopping: stopping.signal,
     report: (e: unknown) => void told.push(e),
+    defer: (release: () => void | Promise<void>) => void releases.push(release),
   }
   feed(host, { every: 1, timer: (fn, ms) => time.after(ms, fn) })(each)
   await time.advance(1)
   let write = (eid: string) => theirs.write(wrote([page('p')(eid)]))
-  return { write, told, look: (n = 1) => time.advance(n) }
+  // The host closing: stopped, then its plugins' releases awaited.
+  let close = () => {
+    stopping.abort()
+    return Promise.all(releases.map((release) => release()))
+  }
+  return { write, told, look: (n = 1) => time.advance(n), close }
 }
 let firsts = (news: News) => news.applied.map((tx) => tx[0].entity.eid)
 
@@ -369,4 +377,25 @@ test('news passed over after failing tells the consumer it missed some', async (
   assertEquals(failing.slice(0, TRIES).map(firsts), Array(TRIES).fill(['p1']))
   assertEquals(failing.slice(TRIES).map((n) => n.missed), [true])
   assertEquals(refusing.told.length, 1)
+})
+
+let held = Promise.withResolvers<void>()
+let holding = Promise.withResolvers<void>()
+let closing = await looping(async () => {
+  holding.resolve()
+  await held.promise
+})
+test('a host closing waits out the look under way, and looks no more', async () => {
+  closing.write('p1')
+  void closing.look()
+  await holding.promise
+  let closed = false
+  let done = closing.close().then(() => closed = true)
+  await Promise.resolve()
+  assertEquals(closed, false)
+  held.resolve()
+  await done
+  closing.write('p2')
+  await closing.look()
+  assertEquals(closing.told, [])
 })

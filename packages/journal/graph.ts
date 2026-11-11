@@ -207,12 +207,17 @@ export let TRIES = 5
  * keeps (./feed.ts `KEEP`). What still never reaches it (a process asleep past
  * that, news passed over) comes with `missed`, and the consumer reads again
  * what it holds: it ends up correct on its own.
+ *
+ * A look reads through the host's reader, and the consumer may take its time:
+ * stopping cancels the next look, and the host's release (`defer`) waits out
+ * the one under way, so no read outlives the plugins into a closed reader.
  */
 export let feed = (
   host: Bound & {
     storage: { get: Read }
     stopping: AbortSignal
     report?: (error: unknown) => void | Promise<void>
+    defer?: (release: () => void | Promise<void>) => void
   },
   options: { every?: number; timer?: Timer } = {},
 ) =>
@@ -267,7 +272,9 @@ export let feed = (
   }
   // A read that fails is tried again at the next look, since the cursor moves
   // only past what was read.
-  let look = async () => {
+  let looking: Promise<unknown> | undefined
+  let look = () => looking = looked()
+  let looked = async () => {
     try {
       heard.push(...(await next()).map((h) => h.wrote))
     } catch (err) {
@@ -283,6 +290,11 @@ export let feed = (
     stopped = true
     cancel()
   }
+  host.defer?.(async () => {
+    stop()
+    await looking
+    await taking
+  })
   if (host.stopping.aborted) return stop
   host.stopping.addEventListener('abort', stop, { once: true })
   cancel = timer(look, every)
