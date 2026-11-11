@@ -17,8 +17,8 @@ export type Asked = {
 }
 
 /** A display address or its immutable physical handle selects the same store;
- * several, comma apart, select the stores of each (a stopped sweep names what
- * is left that way). */
+ * several, comma apart, select the stores of each (a stopped sweep names the
+ * handles of what is left that way). */
 export let select = (stores: Swept[], where?: string): Swept[] => {
   let names = where?.split(',').filter(Boolean) ?? []
   return stores.filter((store) =>
@@ -116,7 +116,8 @@ export let sweep = async (o: {
   }
   let left = o.stores.slice(asked)
   if (left.length) {
-    let names = left.map((s) => s.at)
+    // By handle: a display address can be shared, or hold a space.
+    let names = left.map((s) => s.store)
     throw new Interrupted(
       `the sweep stopped: ${asked} of ${o.stores.length} stores asked, ` +
         `${failed.length} failed, ${names.length} never asked. ` +

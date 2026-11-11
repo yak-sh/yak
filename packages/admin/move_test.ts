@@ -91,13 +91,19 @@ test('mover selection keeps a physical handle reachable after display deduplicat
   assertEquals(select(stores, 'absent'), [])
 })
 
-test('a sweep that stops says so, and names the stores never asked', async () => {
-  let stores = ['a', 'b', 'c', 'd'].map((at) => ({ store: at, at }))
+test('a sweep that stops names a --where that asks exactly the stores it never asked', async () => {
+  // Two stores share a display address, and one address holds a space.
+  let stores = [
+    { store: 'a.1', at: 'a' },
+    { store: 'b.1', at: 'b' },
+    { store: 'b.2', at: 'b' },
+    { store: 'b.3', at: 'b sample' },
+  ]
   let stop = new AbortController()
   let sweeping = sweep({
     stores,
     ask: (store) => {
-      if (store == 'b') stop.abort()
+      if (store == 'a.1') stop.abort()
       return Promise.resolve({ store, rules: [] })
     },
     pace: 0,
@@ -106,10 +112,12 @@ test('a sweep that stops says so, and names the stores never asked', async () =>
   })
   let e = await sweeping.then(() => null, (e) => e)
   assertEquals(e instanceof Interrupted, true)
+  let where = e.message.match(/ --where (\S+)$/)![1]
   assertEquals(
-    e.message,
-    'the sweep stopped: 2 of 4 stores asked, 0 failed, 2 never asked. ' +
-      'Ask them with --where c,d',
+    e.message.startsWith(
+      'the sweep stopped: 1 of 4 stores asked, 0 failed, 3 never asked.',
+    ),
+    true,
   )
-  assertEquals(select(stores, 'c,d').map((s) => s.at), ['c', 'd'])
+  assertEquals(select(stores, where), stores.slice(1))
 })
