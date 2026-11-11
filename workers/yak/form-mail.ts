@@ -104,7 +104,11 @@ export let formPost =
       ): [unknown, string, string] => [
         address(b),
         'notify',
-        told(form, answers, title),
+        // TODO: say `told(form, answers, title)` once a form's letters are
+        // kept to the app's editors. A letter is a row of the app's store, so
+        // in a public or open app anybody can read it, and the answers in it
+        // would pass the sign-up's own `readers`.
+        `A new sign-up for ${title}.`,
       ]),
     ]
     for (let [to, purpose, body] of recipients) {
