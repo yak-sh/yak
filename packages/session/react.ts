@@ -1,5 +1,5 @@
 import { compactAsk } from './compact_ask.ts'
-import { checkpointOf, pruning } from './pruning.ts'
+import { answered, checkpointOf, pruning, replied } from './pruning.ts'
 import { entryStatus, reach } from './reach.ts'
 import { actionable, exceptionOf } from '@yaks/tools/fault'
 import { UnfinishedCall } from '@yaks/tools/errors'
@@ -84,6 +84,7 @@ import {
 } from './native.ts'
 import {
   cachedInstructions,
+  cold,
   kindOf,
   newestAsk,
   openCalls,
@@ -607,7 +608,11 @@ let compaction = async (o: {
   )
   let count = (b?: Bundle) =>
     Number(comp(b ?? {} as Bundle, USAGE)?.input_tokens)
-  let counted = asks.findLast((b) => count(b) > 0)
+  // A count taken under other archive marks weighed another context.
+  let last = asks.findLast((b) => count(b) > 0)
+  let counted = last && comp(last, ASK)?.pruning === pruning(o.entries)
+    ? last
+    : undefined
   let after = counted ? o.said.filter((b) => seqOf(b) > seqOf(counted)) : o.said
   let weight = (counted ? count(counted) : o.fixed) +
     sum((await weigh(after)).sizes)
@@ -626,6 +631,51 @@ let compaction = async (o: {
   )
   let chunk = prefix(o.said, sizes.map((n) => n * scale), keep)
   return { chunk, results }
+}
+
+// What a session that drops may leave out is among its own lines of these
+// kinds (./pruning.ts `answered`).
+let DROPPED = [CALL, 'result', 'tool_progress', 'delivery']
+
+// Whether a session drops: `drops` on its own row, else on the persona it
+// wears. Data, so every runner and the yaks.app Operator turn it on one way.
+let dropping = async (g: Graph, session: Eid): Promise<boolean> => {
+  if (!g.vocab.comp('drops') || !g.vocab.comp('archived')) return false
+  let [row] = await g.get([session], ['session', 'drops'])
+  if (row?.drops) return true
+  let persona = comp(row ?? {} as Bundle, 'session')?.persona
+  let [worn] = persona == null ? [] : await g.get([String(persona)], ['drops'])
+  return !!worn?.drops
+}
+
+/** Leave out of a dropping session's next request what it has replied past:
+ * `archived{}` on each of its own earlier calls with their answers and each
+ * worker's report (./pruning.ts). No model is asked, every row stays where
+ * `result_query` and the graph read it, and a fork's inherited lines are its
+ * parent's to drop. Answers how many it marked. */
+let drop = async (
+  g: Graph,
+  session: Eid,
+  entries: Bundle[],
+): Promise<number> => {
+  let before = replied(entries, session)
+  if (before == null || !await dropping(g, session)) return 0
+  let kinds = DROPPED.filter((n) => g.vocab.comp(n)).map((n) => '.' + n)
+  let gone = answered(
+    await g.read(`.entry.session=${session} !archived ${kinds.join('|')}`),
+    before,
+  )
+  if (gone.length) {
+    await g.apply(
+      gone.map((b) => ({
+        entity: { eid: b.entity.eid },
+        archived: {},
+        $actor: { via: session },
+      })),
+      { trusted: true },
+    )
+  }
+  return gone.length
 }
 
 // A task's current specification is graph data, never a summary of what a
@@ -1570,6 +1620,14 @@ export let react = async (
   asked = newestAsk(
     entries.filter((b) => attemptState(b) == 'completed'),
   )
+  // Once the provider's cache is cold a request pays for its whole context
+  // whatever it sends, so a session that drops (`drops`) leaves out what it
+  // has replied past at no cost in cache and with no model call. The step is
+  // then taken again on what is left.
+  if (
+    !(unfinished && executor) && cold(entries, session) &&
+    await drop(g, session, entries)
+  ) return react(g, session, deps)
   let checkpoint = checkpointOf(entries)
   const sameModel = asked &&
     comp(asked, ASK)?.pruning === pruning(entries) &&
@@ -1757,6 +1815,12 @@ export let react = async (
   let summarizing = cut && sending?.window == null
     ? await compaction(cut)
     : undefined
+  // Where a summary is due while the cache is warm, a session that drops
+  // does that first and pays one cache write; the summary follows only if
+  // what is left still fills the share.
+  if (summarizing && await drop(g, session, entries)) {
+    return react(g, session, deps)
+  }
   if (summarizing && !checkpoint) {
     held = await tasksOf(g, session)
     cut!.fixed += tokens(JSON.stringify(taskItems(snapshot(held))).length)

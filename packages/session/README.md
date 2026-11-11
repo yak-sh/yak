@@ -138,6 +138,28 @@ anchor before the checkpoint is not reused. Every request names its session as
 `Request.conversation`, so between checkpoints a provider that keys its prompt
 cache by conversation reads the unchanged prefix from it.
 
+A session that wears `drops{}`, or whose persona does, shrinks without a
+summary. It leaves out what it has replied past: each of its own calls with its
+result, and each worker's report (`delivery`), that came before the request its
+newest reply answered. That reply is what keeps what the session took from them.
+A person's words and the session's own replies are never left out, a call still
+running stays with every answer to it, and a fork leaves its parent's lines to
+its parent. Leaving out is the `archived{}` mark, so no model is asked, the row
+stays, and its result is still read by id (`result_query`). It happens at two
+moments:
+
+1. A request starts after the provider's cache of the one before has expired
+   (`cold`, from the ask's recorded `cache_expires_at`). The request pays for
+   its whole context either way, so the drop costs nothing. An ask whose
+   provider recorded no expiry is not cold.
+2. A summary is due while the cache is warm. The drop is done first and costs
+   one cache write; the summary follows only if what is left still fills the
+   share.
+
+A drop changes the archive marks, so the next request replays the conversation
+with no provider anchor, and a checkpoint written before it no longer stands:
+the words and replies it summarized are sent again.
+
 A fork has `fork{from}` on its session entity. Its logical transcript contains
 the parent transcript through the referenced entry, followed by its own entries.
 Provider continuation data is stored as a provider-specific component on an ask

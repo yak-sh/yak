@@ -104,23 +104,40 @@ export let ordered = (entries: Bundle[]): Bundle[] =>
 export let newestAsk = (entries: Bundle[]): Bundle | undefined =>
   ordered(entries).findLast((b) => kindOf(b) == 'ask')
 
+// When the prefix a session's newest ask cached leaves its provider's prompt
+// cache (its provider component's `cache_expires_at`, @yaks/model
+// `cachedPrefixExpires`). Unknown for an ask of another transcript, one not
+// answered, or one whose provider records no expiry.
+let expiry = (entries: Bundle[], session: string): number | undefined => {
+  let ask = newestAsk(entries)
+  if (!ask || (ask.entry as Comp | undefined)?.session != session) return
+  let expires = cachedPrefixExpires(ask)
+  return expires ? Date.parse(expires) : undefined
+}
+
 /** The instructions a session's newest ask sent, while the prefix it cached
- * is still in the provider's prompt cache (its provider component's
- * `cache_expires_at`, @yaks/model `cachedPrefixExpires`). An ask of another
- * transcript, one not answered, or one whose expiry is unknown keeps none. */
+ * is still in the provider's prompt cache. An ask whose expiry is unknown
+ * keeps none. */
 export let cachedInstructions = (
   entries: Bundle[],
   session: string,
   now: number = Date.now(),
 ): string | undefined => {
-  let ask = newestAsk(entries)
-  if (!ask || (ask.entry as Comp | undefined)?.session != session) return
-  let expires = cachedPrefixExpires(ask)
-  let said = (ask.sending as Comp | undefined)?.instructions
-  return expires && Date.parse(expires) > now && typeof said == 'string'
+  let said = (newestAsk(entries)?.sending as Comp | undefined)?.instructions
+  return (expiry(entries, session) ?? -Infinity) > now &&
+      typeof said == 'string'
     ? said
     : undefined
 }
+
+/** Whether the prefix a session's newest ask cached is known to have expired,
+ * so the next request pays for its whole context whatever it sends. An
+ * unknown expiry is not cold: nothing says the cache is gone. */
+export let cold = (
+  entries: Bundle[],
+  session: string,
+  now: number = Date.now(),
+): boolean => (expiry(entries, session) ?? Infinity) <= now
 
 let callsIn = (all: Bundle[]): Bundle[] => {
   let answered = new Set(
