@@ -49,6 +49,12 @@
         "group": { "type": "string", "ref": "entity", "death": "detach" }
       }
     },
+    "help": {
+      "description": "who to call when a person texts HELP: the church office's number, which the platform adds to its answer; kept from the directory's congregation phone",
+      "properties": {
+        "contact": { "type": "string" }
+      }
+    },
     "copy": {
       "description": "on a text: the broadcast it is one copy of",
       "properties": {

@@ -8,9 +8,10 @@ import {
   plural,
   reach,
   recipients,
-  segments,
+  room,
   shown,
   signed,
+  size,
   when,
 } from './model.js'
 
@@ -79,11 +80,15 @@ export let inbox = (m, ui) => {
   }`
 }
 
+// The line (voip.ms) reports a text accepted, not that a phone received it,
+// so a sent text is "Sent", never "Delivered".
 let state = (t) =>
   t.state == 'delivered'
-    ? 'Delivered'
+    ? 'Sent'
     : t.state == 'bounced'
     ? html`<span class="bad">Not sent: ${t.reason}</span>`
+    : t.reason
+    ? `Waiting to try again: ${t.reason}`
     : 'Sending…'
 
 export let thread = (m, number, who, ui) => {
@@ -191,7 +196,7 @@ export let send = (m, who, ui) => {
       <textarea id="broadcast-text" name="body" rows="6" placeholder="Write the message…" required></textarea>
       <p class="hint" id="broadcast-count">${count(m, ui.body)}</p>
       ${
-      ui.confirm ? confirm(m, ui.confirm, ui.body) : html`
+      ui.confirm ? confirm(m, ui.confirm, ui.body, ui.now) : html`
         <button class="btn primary big"
           type="submit">${icon('send')}Review and send</button>
       `
@@ -213,21 +218,40 @@ export let send = (m, who, ui) => {
 /** The line under the message box: what it will read as and how long it is. */
 export let count = (m, body) => {
   if (!String(body ?? '').trim()) {
-    return `Each text begins with “${
-      m.church?.name || 'the church'
-    }:” so people know who it's from.`
+    return 'Texts go out from the church’s own number. Up to 160 characters is one text.'
   }
-  let s = segments(signed(m.church?.name, body))
-  return `${s.chars} characters · sent as ${plural(s.texts, 'text')}${
-    s.plain ? '' : ' (emoji and curly quotes make texts shorter)'
+  let s = size(signed(m.church?.name, body))
+  return `${s.chars} characters · ${
+    s.kind == 'sms'
+      ? 'one text'
+      : s.kind == 'mms'
+      ? 'over 160, so it goes as one picture message (MMS), which costs more'
+      : 'too long: the line carries at most 2,048 characters'
+  }${
+    s.plain
+      ? ''
+      : '. Emoji and curly quotes may not arrive; plain letters always do'
   }`
 }
 
-let confirm = (m, group, body) => {
+// What a send does against the line's 100 texts a day, said before it goes.
+let limit = ({ used, go, over }, count) =>
+  over
+    ? html`
+      <p
+        class="bad">The church’s line sends 100 texts a day, and ${plural(
+          used,
+          'text',
+        )} went in the last day, so only ${go} of these ${count} can go now. The other ${over} will show as not sent, and you can send them tomorrow from the Sent page.</p>
+    `
+    : ''
+
+let confirm = (m, group, body, now) => {
   let g = m.groups.get(group)
   let { to, left } = recipients(m, group)
   let reasons = Object.entries(Object.groupBy(left, (l) => l.why))
     .map(([why, ls]) => `${ls.length} ${why}`)
+  let long = size(signed(m.church?.name, body)).kind == 'long'
   return html`<div class="confirm" role="alertdialog" aria-labelledby="confirm-title">
     <h3 id="confirm-title">Send to ${
     plural(to.length, 'person', 'people')
@@ -240,9 +264,15 @@ let confirm = (m, group, body) => {
       } won't get it: ${reasons.join(', ')}.</p>`
       : ''
   }
+    ${limit(room(m, to.length, now), to.length)}
+    ${
+    long
+      ? html`<p class="bad">This message is too long to send. Shorten it.</p>`
+      : ''
+  }
     <div class="actions">
       <button class="btn primary big" type="button" data-act="send" ${
-    to.length ? '' : 'disabled'
+    to.length && !long ? '' : 'disabled'
   }>Send now</button>
       <button class="btn big" type="button" data-act="cancel">Not yet</button>
     </div>
@@ -251,7 +281,7 @@ let confirm = (m, group, body) => {
 
 let summary = (r) =>
   [
-    r.delivered.length && `${r.delivered.length} delivered`,
+    r.delivered.length && `${r.delivered.length} sent`,
     r.bounced.length && `${r.bounced.length} not sent`,
     r.sending.length && `${r.sending.length} sending`,
   ].filter(Boolean).join(' · ') || 'Nobody'
@@ -268,7 +298,7 @@ let sentRow = (m, b, ui) =>
         )}</span></span>${icon('next')}</a>
   `
 
-export let sent = (m, eid, ui) => {
+export let sent = (m, eid, who, ui) => {
   let b = m.broadcasts.get(eid)
   if (!b) {
     return html`${
@@ -293,6 +323,7 @@ export let sent = (m, eid, ui) => {
     r.bounced.length
       ? html`
         <h2>Not sent</h2>
+        <p class="muted">Nothing is lost: these can be sent again.</p>
         <ul class="people">${r.bounced.map((x) =>
           person(
             x,
@@ -301,6 +332,13 @@ export let sent = (m, eid, ui) => {
             `,
           )
         )}</ul>
+        ${who.writes
+          ? html`<p><button class="btn" type="button" data-act="again" data-id="${eid}">${
+            icon('send')
+          }Send again to ${
+            plural(r.bounced.length, 'person', 'people')
+          }</button></p>`
+          : ''}
       `
       : ''
   }
@@ -308,14 +346,21 @@ export let sent = (m, eid, ui) => {
     r.sending.length
       ? html`
         <h2>Sending</h2>
-        <ul class="people">${r.sending.map((x) => person(x))}</ul>
+        <ul class="people">${r.sending.map((x) =>
+          person(
+            x,
+            x.text.reason
+              ? html`<span class="muted">${x.text.reason}</span>`
+              : '',
+          )
+        )}</ul>
       `
       : ''
   }
     ${
     r.delivered.length
       ? html`
-        <h2>Delivered</h2>
+        <h2>Sent</h2>
         <ul class="people">${r.delivered.map((x) => person(x))}</ul>
       `
       : ''
@@ -455,7 +500,7 @@ export let stoppedList = (m, ui) => {
 export let screen = (m, path, who, ui) => {
   let [head, id] = path.split('/')
   if (head == 'send') return { tab: 'send', body: send(m, who, ui) }
-  if (head == 'sent') return { tab: 'send', body: sent(m, id, ui) }
+  if (head == 'sent') return { tab: 'send', body: sent(m, id, who, ui) }
   if (head == 'lists' && id) return { tab: 'lists', body: list(m, id, who, ui) }
   if (head == 'lists') return { tab: 'lists', body: lists(m, who) }
   if (head == 'stopped') return { tab: 'lists', body: stoppedList(m, ui) }

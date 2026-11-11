@@ -32,9 +32,10 @@ export let VOIPMS = {
   callback: 'id={ID}&from={FROM}&to={TO}&message={MESSAGE}',
   blocked: {
     limit_reached:
-      'voip.ms sends at most 100 texts a day from its API unless the account asks for more, and today’s are spent.',
-    sms_toolong: 'That text is longer than voip.ms carries.',
-    invalid_dst: 'voip.ms cannot text that number.',
+      'voip.ms allows 100 texts a day from this line, and today’s are spent. Send it again tomorrow.',
+    sms_toolong: 'The text is longer than voip.ms carries (2,048 characters).',
+    invalid_dst:
+      'voip.ms says this number cannot get texts. It may be a landline or mistyped; check it in the directory.',
   } as Record<string, string>,
   denied: {
     ip_not_enabled:
@@ -129,7 +130,7 @@ export let voipms = (
     if (response.status >= 500 || response.status == 429) {
       await response.body?.cancel()
       throw new Unsent(
-        `voip.ms answered ${response.status} to ${method}`,
+        `voip.ms is not answering right now (${response.status} to ${method}); yaks.app will try again`,
         30_000,
       )
     }

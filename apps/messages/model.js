@@ -12,7 +12,7 @@ export let FILTERS = {
     '.individual&.fields=individual.first,individual.middle,individual.last,individual.nickname,individual.suffix,individual.phone,individual.status,individual.deceased',
   church: '.congregation',
   lists:
-    '(.group|.membership|.broadcast|.phone|.sms_consent)&?doc&?group&?membership&?broadcast&?phone&?sms_consent&?created',
+    '(.group|.membership|.broadcast|.phone|.sms_consent|.help)&?doc&?group&?membership&?broadcast&?phone&?sms_consent&?help&?created',
   texts: '.text&?doc&?deliver&?delivered&?bounced&?copy&?archived&?created',
 }
 
@@ -69,14 +69,14 @@ let byTime = (a, b) => a.at.localeCompare(b.at)
 export let consentWords = (church) =>
   `Asked to receive texts from ${church}: prayer requests, news and reminders, a few a week. Msg & data rates may apply. Reply STOP to opt out, HELP for help.`
 
-/** Every text a church sends opens with the church's name, so the person
- * knows who it is from. */
-export let signed = (church, body) => {
-  let text = String(body ?? '').trim()
-  return !church || text.toLowerCase().startsWith(church.toLowerCase())
-    ? text
-    : `${church}: ${text}`
-}
+/** The words of a text as sent. The church texts from its own number, so
+ * nothing is added to them. */
+export let signed = (_church, body) => String(body ?? '').trim()
+
+/** What the church's texting line (voip.ms) takes: up to `sms` characters go
+ * as one SMS, up to `mms` as one picture message (MMS) with no picture, and
+ * the API carries `day` texts a day, either kind. */
+export let LINE = { sms: 160, mms: 2048, day: 100 }
 
 // GSM-7 holds 160 characters a text and 153 in each part of a longer one;
 // anything outside it (an emoji, curly quotes) makes every part 70 or 67.
@@ -90,6 +90,39 @@ export let segments = (text) => {
     (plain ? (s.match(/[\^{}\\[~\]|€]/g)?.length ?? 0) : 0)
   let [one, part] = plain ? [160, 153] : [70, 67]
   return { chars: n, texts: n <= one ? 1 : Math.ceil(n / part), plain }
+}
+
+/** What the line does with `text`: it counts characters as the line does
+ * (UTF-16 units), and sends up to LINE.sms as an SMS, more as an MMS, and
+ * more than LINE.mms not at all. Either way it is one text against the day. */
+export let size = (text) => {
+  let s = String(text ?? '')
+  return {
+    chars: s.length,
+    kind: s.length <= LINE.sms ? 'sms' : s.length <= LINE.mms ? 'mms' : 'long',
+    plain: segments(s).plain,
+  }
+}
+
+const DAY = 86400000
+/** How many texts the line has taken in the 24 hours before `now`: those it
+ * accepted, those waiting to go, and its automatic answers. A text it refused
+ * does not count. The line's other uses (the Operator's) are not seen here. */
+export let usedToday = (m, now = new Date()) =>
+  m.texts.filter((t) =>
+    t.out && t.state != 'bounced' && now - new Date(t.at) < DAY &&
+    new Date(t.at) <= now
+  ).length
+
+/** What sending `count` texts now does against the day: how many there is room
+ * for, and how many would be left over for another day. */
+export let room = (m, count, now = new Date()) => {
+  let left = Math.max(0, LINE.day - usedToday(m, now))
+  return {
+    used: usedToday(m, now),
+    go: Math.min(count, left),
+    over: Math.max(0, count - left),
+  }
 }
 
 /**
@@ -108,6 +141,7 @@ export let gather = (rows) => {
     consent: new Map(), // person eid -> {eid, consent, at}
     groups: new Map(),
     broadcasts: new Map(),
+    help: /** @type {{ eid: string, contact: string } | null} */ (null),
     texts: [],
   }
   let memberships = []
@@ -126,6 +160,7 @@ export let gather = (rows) => {
         eid,
       ])
     }
+    if (r.help) m.help = { eid, contact: r.help.contact || '' }
     if (r.sms_consent) {
       m.consent.set(ref(r.sms_consent.person), { ...r.sms_consent, eid })
     }
@@ -162,20 +197,27 @@ export let gather = (rows) => {
   for (let g of m.groups.values()) {
     g.members.sort((a, b) => sortKey(a.person).localeCompare(sortKey(b.person)))
   }
+  m.texts.sort(byTime)
+  // A broadcast's copy to a person is the last one: a text sent again to
+  // someone it did not reach replaces the one that bounced.
   for (let t of m.texts) {
     if (!t.out) continue
     t.number ??= m.numbers.get(t.to) ?? null
     let b = t.broadcast && m.broadcasts.get(t.broadcast)
-    if (b) b.copies.push(t)
+    if (!b) continue
+    let i = b.copies.findIndex((c) => c.to == t.to)
+    if (i < 0) b.copies.push(t)
+    else b.copies[i] = t
   }
-  m.texts.sort(byTime)
   m.stopped = stopped(m.texts)
   return m
 }
 
 // One text, sent or received, as the page reads it.
 let textOf = (r) => {
-  let out = !!r.deliver
+  // The platform's own answers (STOP, HELP) carry no `deliver`, only how
+  // they went.
+  let out = !!(r.deliver || r.delivered || r.bounced)
   return {
     eid: eidOf(r),
     out,
@@ -183,7 +225,7 @@ let textOf = (r) => {
     // A text that arrived says where it came from; one sent says where it
     // went once it left, and until then is the number of `deliver.to`.
     number: out ? r.text.to || null : r.text.from || null,
-    to: out ? ref(r.deliver.to) : null,
+    to: out ? ref(r.deliver?.to) : null,
     at: (out ? r.delivered?.at : r.text.at) || r.created?.at || '',
     state: !out
       ? 'in'
@@ -192,7 +234,8 @@ let textOf = (r) => {
       : r.bounced
       ? 'bounced'
       : 'sending',
-    reason: r.bounced?.reason || '',
+    // Why it was not sent, or why it waits to be tried again.
+    reason: r.bounced?.reason || r.deliver?.waiting || '',
     by: out ? r.created?.by?.name || null : null,
     broadcast: ref(r.copy?.broadcast),
     archived: !!r.archived,
@@ -218,7 +261,7 @@ export let why = (m, p) =>
     : !p.mobile
     ? 'no mobile number in the directory'
     : m.stopped.has(p.mobile)
-    ? 'texted STOP'
+    ? 'opted out (texted STOP)'
     : !m.consent.has(p.eid)
     ? 'has not agreed to texts'
     : null
@@ -239,25 +282,52 @@ export let recipients = (m, group) => {
  */
 export let broadcastBundles = (m, group, body, eid = '$broadcast') => {
   let text = signed(m.church?.name, body)
-  /** @type {Bundle[]} */
-  let out = [{
+  return [{
     entity: { eid },
     broadcast: { group },
     doc: { body: text },
-  }]
-  for (let p of recipients(m, group).to) {
-    if (m.numbers.get(p.eid) != p.mobile) {
-      out.push({ entity: { eid: p.eid }, phone: { number: p.mobile } })
-    }
-    out.push({
+  }, ...copyBundles(m, recipients(m, group).to, text, eid)]
+}
+
+// One text of `text` to each of `people`, each a copy of the broadcast, with
+// the number the directory has for them now.
+let copyBundles = (m, people, text, broadcast) =>
+  people.flatMap((p) => [
+    ...m.numbers.get(p.eid) != p.mobile
+      ? [{ entity: { eid: p.eid }, phone: { number: p.mobile } }]
+      : [],
+    {
       entity: { eid: `$text-${p.eid}` },
       text: {},
       doc: { body: text },
       deliver: { to: p.eid },
-      copy: { broadcast: eid },
-    })
-  }
-  return out
+      copy: { broadcast },
+    },
+  ])
+
+/** The bundle that gives the platform the office number to put in its answer
+ * to HELP, when the church's phone in the directory is not what it has. */
+export let helpBundles = (m) => {
+  let contact = String(m.church?.phone ?? '').trim()
+  return !contact || contact == m.help?.contact ? [] : [
+    m.help ? { entity: { eid: m.help.eid }, help: { contact } } : {
+      entity: { eid: '$help' },
+      alias: { name: 'help' },
+      help: { contact },
+    },
+  ]
+}
+
+/** The bundles that send a broadcast again to the people it did not reach
+ * and who can be texted now. Nothing is lost when a send stops short (the
+ * day's limit, a line that was down): what did not go goes when this is
+ * sent. */
+export let resendBundles = (m, broadcast) => {
+  let b = m.broadcasts.get(broadcast)
+  let people = reach(m, broadcast).bounced.flatMap(({ person }) =>
+    person && !why(m, person) ? [person] : []
+  )
+  return b ? copyBundles(m, people, b.body, broadcast) : []
 }
 
 /** What a broadcast reached: delivered, not sent (with the reason), and still

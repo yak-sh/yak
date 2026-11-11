@@ -63,6 +63,24 @@ test('a text the carrier blocks is bounced with its reason and fails nothing', a
   assertEquals((await one(g, eid))?.bounced?.reason, 'Not registered yet.')
 })
 
+test('a failure that is not a carrier’s no is bounced in plain words, with the cause after them', async () => {
+  let g = rig({
+    send: () => Promise.reject(new Error('the sender fell over')),
+  })
+  let eid = crypto.randomUUID()
+  try {
+    await g.apply([...person, outbound(eid)])
+  } catch { /* the sender's fault is thrown on, to the host's reporter */ }
+  let reason = String((await one(g, eid))?.bounced?.reason)
+  assertEquals(
+    reason.startsWith(
+      'This text could not be sent because of a fault on our side',
+    ),
+    true,
+  )
+  assertEquals(reason.endsWith('(the sender fell over)'), true)
+})
+
 test('a text to someone who has not agreed is bounced and never handed over', async () => {
   let texts = stash()
   let g = rig(texts)

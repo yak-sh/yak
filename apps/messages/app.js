@@ -8,8 +8,10 @@ import {
   doneBundles,
   FILTERS,
   gather,
+  helpBundles,
   joinBundles,
   replyBundles,
+  resendBundles,
 } from './model.js'
 import { theme } from './theme.js'
 
@@ -84,10 +86,18 @@ let draw = (moved = false) => {
 }
 
 let rows = () => Object.values(answers).flat()
+let helping = false
 let refresh = () => {
   m = gather(rows())
   theme(m.church)
   draw()
+  // The office number the platform gives in its answer to HELP follows the
+  // directory's.
+  let help = who.writes && !helping ? helpBundles(m) : []
+  if (help.length) {
+    helping = true
+    act(() => apply(help))().finally(() => (helping = false))
+  }
 }
 
 let send = act(async () => {
@@ -119,6 +129,10 @@ let acts = {
   done: act(async (number) => {
     let c = conversations(m).find((c) => c.number == number)
     if (c) await apply(doneBundles(c))
+  }),
+  again: act(async (eid) => {
+    await apply(resendBundles(m, eid))
+    toast('Sending again.')
   }),
   pick: (_, el) => {
     ui.group = el.value
@@ -214,5 +228,5 @@ for (let [k, filter] of Object.entries(FILTERS)) {
 }
 me().then((got) => {
   who = got
-  draw()
+  refresh()
 })

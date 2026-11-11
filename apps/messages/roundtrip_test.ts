@@ -160,7 +160,7 @@ test('Messages texts a list from the church, keeps the replies, and answers STOP
     assertEquals(texted.splice(0), [{
       from: FREE,
       to: ANA,
-      text: 'Locust Grove: Prayer meeting moved to 7.',
+      text: 'Prayer meeting moved to 7.',
     }])
     assertEquals(pilot.delivered.map((d) => d.person?.eid), [ana])
     assertEquals(pilot.bounced.map((d) => [d.person?.eid, d.text.reason]), [
@@ -245,7 +245,7 @@ test('Messages texts a list from the church, keeps the replies, and answers STOP
     assertEquals(
       recipients(m, general).left.map((l) => [l.person.eid, l.why]),
       [
-        [bo, 'texted STOP'],
+        [bo, 'opted out (texted STOP)'],
       ],
     )
     await send('Choir practice is cancelled.')

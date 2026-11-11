@@ -13,7 +13,7 @@ import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import type { Handler } from '@yaks/effects'
 import { Unsent } from '@yaks/host/senders'
-import { Blocked, consentEid, type Sender } from './text.ts'
+import { Blocked, consentEid, Denied, type Sender } from './text.ts'
 
 /** How the effect is built. */
 export type Texting = {
@@ -95,7 +95,14 @@ export let sending =
         }])
         throw error
       }
-      await bounce(error instanceof Error ? error.message : String(error))
+      let why = error instanceof Error ? error.message : String(error)
+      // Only a carrier's no and a refused key are said as they are; any other
+      // failure is ours, reported below, and said so.
+      await bounce(
+        error instanceof Blocked || error instanceof Denied
+          ? why
+          : `This text could not be sent because of a fault on our side, which has been reported. (${why})`,
+      )
       if (error instanceof Blocked) return
       throw error
     }

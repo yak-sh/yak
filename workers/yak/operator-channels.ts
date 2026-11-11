@@ -463,7 +463,6 @@ export let channels = (env: Env): Record<string, Channel> => {
     let { DISCLOSURE, signingIn } = await import('./operator-texts.ts')
     let { phoneOf } = await import('./phones.ts')
     let { charged, costOf, unpaid } = await import('./text-spend.ts')
-    let end = textSigned(space) + (request.signup ? `\n${DISCLOSURE}` : '')
     // A text to a number someone connected is answered from it, paid by
     // them (operator-line.ts `accountFor`); one to the space's or the
     // platform's from its phone, paid from the space's budget.
@@ -471,6 +470,9 @@ export let channels = (env: Env): Record<string, Channel> => {
     let line = back.from && back.from != space.sender?.number
       ? await accountFor(env, back.from)
       : null
+    // On a space's own line the answer is signed as the space.
+    let end = (line ? `— ${space.title || space.slug}` : textSigned(space)) +
+      (request.signup ? `\n${DISCLOSURE}` : '')
     let phone = line || await phoneOf(
       env,
       request.via ? { ...space.sender, via: request.via } : space.sender,

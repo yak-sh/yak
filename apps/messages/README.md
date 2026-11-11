@@ -29,7 +29,12 @@ and keeps none of its own copy. What this app keeps sits on the same eids:
 
 STOP and HELP are the platform's to answer. Someone who texted STOP (and not
 START since) is opted out, worked out from their texts, so a list skips them and
-the office cannot add them back. Every text opens with the church's name.
+the office cannot add them back. Texts go out from the church's own number and
+carry no name prefix. The platform's answer to HELP gives the office number kept
+as `help{contact}`, which the page copies from the directory. A message over 160
+characters goes as one picture message (MMS), up to 2,048; the line carries 100
+texts a day, so a send that passes it leaves the rest "not sent", to be sent
+again.
 
 `model.js` holds all of it as pure functions over the store's rows, `views.js`
 the screens, and `app.js` the page that wires them to `./api/client.js`. Run

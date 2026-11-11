@@ -9,7 +9,10 @@ import {
   reach,
   recipients,
   replyBundles,
+  resendBundles,
+  room,
   segments,
+  size,
   stopped,
 } from './model.js'
 
@@ -33,7 +36,7 @@ let arrived = (
 let sent = (eid: string, to: string, more = {}) => ({
   entity: { eid },
   text: {},
-  doc: { body: 'Locust Grove Church: Pray for Ruth.' },
+  doc: { body: 'Pray for Ruth.' },
   deliver: { to },
   created: { at: '2026-11-02T10:00:00Z' },
   ...more,
@@ -88,7 +91,7 @@ test('a list reaches who agreed and has a mobile, and says why it skips the rest
       l: { person: { eid: string }; why: string },
     ) => [l.person.eid, l.why]),
     [
-      ['bo', 'texted STOP'],
+      ['bo', 'opted out (texted STOP)'],
       ['cy', 'no mobile number in the directory'],
       ['di', 'has passed away'],
       ['ed', 'has not agreed to texts'],
@@ -113,13 +116,13 @@ test('a broadcast is one signed text a person, with the number the directory has
     {
       entity: { eid: 'b1' },
       broadcast: { group: 'prayer' },
-      doc: { body: 'Locust Grove Church: Pray for Ruth.' },
+      doc: { body: 'Pray for Ruth.' },
     },
     { entity: { eid: 'ana' }, phone: { number: '+12695550142' } },
     {
       entity: { eid: '$text-ana' },
       text: {},
-      doc: { body: 'Locust Grove Church: Pray for Ruth.' },
+      doc: { body: 'Pray for Ruth.' },
       deliver: { to: 'ana' },
       copy: { broadcast: 'b1' },
     },
@@ -246,4 +249,81 @@ test('a text is counted in the parts a phone receives', () => {
   assertEquals(segments('a'.repeat(161)).texts, 2)
   assertEquals(segments('Praying 🙏').plain, false)
   assertEquals(segments('x'.repeat(71) + '🙏').texts, 2)
+})
+
+test('the line sends up to 160 characters as a text, up to 2,048 as a picture message, and no more', () => {
+  assertEquals(
+    [160, 161, 2048, 2049].map((n) => size('a'.repeat(n)).kind),
+    ['sms', 'mms', 'mms', 'long'],
+  )
+})
+
+test('the day’s room counts the last 24 hours of texts the line took, not those it refused', () => {
+  let now = new Date('2026-11-04T12:00:00Z')
+  let at = (hours: number) => new Date(+now - hours * 3600e3).toISOString()
+  let m = store(
+    ...Array.from(
+      { length: 98 },
+      (_, i) => sent(`s${i}`, 'ana', { delivered: { at: at(2) } }),
+    ),
+    sent('old', 'ana', { delivered: { at: at(30) } }),
+    sent('refused', 'bo', { bounced: { at: at(1), reason: 'limit' } }),
+    sent('waiting', 'ana', { created: { at: at(1) } }),
+  )
+  assertEquals(room(m, 5, now), { used: 99, go: 1, over: 4 })
+  assertEquals(room(store(), 5, now), { used: 0, go: 5, over: 0 })
+})
+
+test('the platform’s answer to STOP is an outgoing text in the thread, not a conversation of its own', () => {
+  let m = store(
+    arrived('t1', '+12695550143', 'STOP', '2026-11-03T00:00:00Z'),
+    {
+      entity: { eid: 'a1' },
+      text: { from: '+12695550100', to: '+12695550143' },
+      doc: { body: 'You are unsubscribed.' },
+      delivered: { at: '2026-11-03T00:00:01Z' },
+    },
+  )
+  let cs = conversations(m)
+  assertEquals(cs.length, 1)
+  assertEquals(cs[0].texts.map((t: { out: boolean }) => t.out), [false, true])
+})
+
+test('sending again reaches only the people a broadcast missed who can be texted now, and replaces their bounce', () => {
+  let b1 = {
+    entity: { eid: 'b1' },
+    broadcast: { group: 'prayer' },
+    doc: { body: 'x' },
+  }
+  let missed = (eid: string, more = {}) =>
+    sent(eid, 'bo', {
+      copy: { broadcast: 'b1' },
+      bounced: { at: '2026-11-02T10:01:00Z', reason: 'limit' },
+      ...more,
+    })
+  let m = store(
+    b1,
+    sent('s1', 'ana', {
+      copy: { broadcast: 'b1' },
+      delivered: { at: '2026-11-02T10:01:00Z' },
+    }),
+    missed('s2'),
+  )
+  assertEquals(
+    resendBundles(m, 'b1').map((x: { entity: { eid: string } }) =>
+      x.entity.eid
+    ),
+    ['bo', '$text-bo'],
+  )
+  m = store(
+    b1,
+    missed('s2'),
+    missed('s3', {
+      bounced: undefined,
+      created: { at: '2026-11-03T10:00:00Z' },
+      delivered: { at: '2026-11-03T10:01:00Z' },
+    }),
+  )
+  assertEquals(reach(m, 'b1').bounced, [])
+  assertEquals(resendBundles(m, 'b1'), [])
 })

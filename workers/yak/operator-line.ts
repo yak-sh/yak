@@ -408,10 +408,18 @@ export let phoneSend = (
   },
 })
 
+// Whether a connection held by `owner` may text for `space`: the space's own,
+// or a person's who writes in it.
+let speaks = async (env: Env, space: Space, owner: string) => {
+  if (owner == space.eid) return true
+  let { directoryOf } = await import('./directory.ts')
+  return !!owner && writes(await directoryOf(env.STORE).role(space, owner))
+}
+
 /** The account that sends from `number`: the one a connection holding it
  * opens, as listed beside it; null when no connection holds it or its key is
- * missing. */
-export let accountFor = async (env: Env, number: string) => {
+ * missing. Given a `space`, only a connection it may use counts. */
+export let accountFor = async (env: Env, number: string, space?: Space) => {
   let [held] = await meta(env).query(
     `.${OWN}.number=${JSON.stringify(number)}&*`,
   )
@@ -422,6 +430,8 @@ export let accountFor = async (env: Env, number: string) => {
       : `.${CONNECTION}.account=${JSON.stringify(number)}&*`,
   )
   connection = line?.entity.eid ?? ''
+  let owner = String(comp(line, CONNECTION).owner ?? '')
+  if (space && !await speaks(env, space, owner)) return null
   let via = String(comp(line, CONNECTION).integration ?? '')
   let own = (await owned(env))[via]
   return own && accountOf(ctxOf(env), own, via, connection, number)
@@ -637,6 +647,14 @@ export let lineDoor = async (
     ? [mine]
     : (await dir.seats(owner)).filter((s) => writes(s.role))
       .sort((a, b) => Number(!!b.own) - Number(!!a.own)).map((s) => s.space)
+  // A number an app of those spaces holds is that app's (app-texts.ts): what
+  // comes to it is the office's to read, not an Operator's to answer.
+  let app = await dir.lined(arrival.to)
+  if (app && spaces.some((s) => s.eid == app.space.eid)) {
+    let { appArrived } = await import('./app-texts.ts')
+    await appArrived(env, app, { ...arrival, via })
+    return ok()
+  }
   let { builderOf, SPACE } = await import('./build-door.ts')
   for (let space of spaces.filter((s) => !s.trashed)) {
     let response = await builderOf(env, space.eid)(() =>
