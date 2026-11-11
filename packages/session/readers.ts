@@ -314,6 +314,15 @@ let line: Reader = (e) => {
   let a = obj(e.attachment)
   let entries: Comps[] = e.type == 'user' && e.isCompactSummary
     ? said(text(obj(e.message).content), { checkpoint: {}, notice: {} })
+    // An answer Claude Code wrote itself for a refused call (its `error`:
+    // `rate_limit` for a plan limit, `billing_error`, ...) is a refusal, its
+    // text the reason.
+    : e.type == 'assistant' && str(e.error)
+    ? [{
+      refusal: { code: str(e.error) },
+      content: { body: text(obj(e.message).content) },
+      output: {},
+    }]
     : e.type == 'assistant'
     ? [...blocks(e).flatMap(assistant), ...requested(e)]
     : e.type == 'user'

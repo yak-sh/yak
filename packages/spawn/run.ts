@@ -832,7 +832,12 @@ let ended = async (
   if (stop && seq(stop) > seq(request)) return
   let row = await ran(g, session)
   let code = comp(row, EXIT)?.code as number | null | undefined
-  let why = code === 0 ? '' : await cause(session, row, o)
+  let limit = code === 0 ? undefined : await limited(g, session, seq(request))
+  let why = code === 0
+    ? ''
+    : limit
+    ? `the provider's plan limit ended the run: ${limit}`
+    : await cause(session, row, o)
   await g.apply([{
     entity: {
       eid: (o.mint ?? (() =>
@@ -843,7 +848,9 @@ let ended = async (
     stop: {},
     ...(code === 0 ? {} : {
       failed: {
-        reason: code == null
+        reason: limit
+          ? 'Plan limit reached'
+          : code == null
           ? 'Provider exit was not observed'
           : `Provider exited ${code}`,
       },
@@ -852,10 +859,24 @@ let ended = async (
     }),
   }], { trusted: true })
   // A run nobody asked to stop that ended any way but cleanly is a failure,
-  // told where it is seen.
-  if (code !== 0 && !row?.stop) {
+  // told where it is seen. One its plan's limit ended is the plan working.
+  if (code !== 0 && !row?.stop && !limit) {
     failure(o, session, 'run ended', `a spawned run ended: ${why}`)
   }
+}
+
+// What the provider said of the plan limit that refused this turn (a
+// `refusal{code: rate_limit}` after the request), if one did.
+let limited = async (
+  g: Graph,
+  session: string,
+  after: number,
+): Promise<string | undefined> => {
+  let [hit] = await g.read(
+    `.entry.session=${session}&.refusal.code=rate_limit&.entry.seq>${after}` +
+      `&.order=-entry.seq&.limit=1&*`,
+  )
+  return hit && String(comp(hit, 'content')?.body || 'the plan limit')
 }
 
 // The signals a provider is commonly ended by, by number: a wrapper's `wait`

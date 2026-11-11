@@ -174,8 +174,13 @@ test('a checkout whose removal was cut off is finished, not read as one', async 
 
 // How a run that ended `code`, having printed `err` on stderr, reads at its
 // end, and the failures told of it; `asked` when somebody stopped it.
-let ending = async (code: number, err: string, asked = false) => {
-  let { g, dir, close } = await logged([], code)
+let ending = async (
+  code: number,
+  err: string,
+  asked = false,
+  lines: unknown[] = [],
+) => {
+  let { g, dir, close } = await logged(lines, code)
   Deno.writeTextFileSync(`${dir}/S1.err`, err)
   if (asked) await g.apply([{ entity: { eid: 'S1' }, stop: {} }])
   let told: string[] = []
@@ -200,6 +205,21 @@ test('a run that ends badly says how in its last line, and is told unless asked'
     'the provider was ended by SIGTERM (exit 143)',
     [],
   ])
+})
+
+test("a run its plan's limit ends says so, and is no failure", async () => {
+  let limit = "You've reached your Fable limit."
+  assertEquals(
+    await ending(1, 'Warning: claude.ai MCP servers blocked by policy', false, [
+      {
+        type: 'assistant',
+        error: 'rate_limit',
+        message: { content: [{ type: 'text', text: limit }] },
+      },
+      { type: 'result', subtype: 'success', is_error: true, result: limit },
+    ]),
+    [`the provider's plan limit ended the run: ${limit}`, []],
+  )
 })
 
 let said = [
