@@ -116,6 +116,18 @@ test('native answers preserve retained references to another store', () =>
       person: { name: 'Bob', friend: 'person-in-another-store' },
     }],
   ))
+// A rehearsal's answer names entities its rolled-back batch created, which no
+// row holds: one the reader may see keeps its references, a foreign one not.
+let rehearsed = (by: string) =>
+  sync(read.answer([
+    { entity: { eid: 'fresh' }, draft: { by, text: 'new' } },
+    { entity: { eid: 'reply' }, draft: { by: 'bob', parent: 'fresh' } },
+  ], { person: 'bob', native: true })).at(-1)?.draft
+test('native answers keep references to entities the answer carries', () =>
+  equal([rehearsed('bob'), rehearsed('alice')], [
+    { by: 'bob', parent: 'fresh' },
+    { by: 'bob', parent: null },
+  ]))
 // A deleted draft holds nothing left to say whose it was. A store that keeps
 // a history (@yaks/journal) says it, so its author's answers name it and no
 // one else's do; where no history is kept, nobody's do.

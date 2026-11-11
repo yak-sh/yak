@@ -387,24 +387,35 @@ export let personal = (
     // Subscription relays and coverage carry patches, whose owner need not be
     // present. Consult canonical rows instead of trusting incoming bylines.
     // Rows the store read under this scope are already what it allows.
+    // An entity the answer itself carries is one the reader can resolve: a
+    // rehearsal's batch was rolled back, so what it created is in no row, yet
+    // its references to that are the ids it would have written.
     answer: ({ opts, tx, screened }, bundles) => {
       if (!caller(opts) || !bundles.length || screened) return bundles
       let hidden = unseen(opts), aside = withheld(opts)
       if (
         !entries.length && !inherited.length && !hidden.length && !aside.length
       ) return bundles
+      let carried = new Map(bundles.map((b) => [b.entity.eid, b]))
       return after(tx.get(bundles.map((b) => b.entity.eid), comps), (rows) => {
         let held = new Map(rows.map((b) => [b.entity.eid, b]))
         let targets = [
-          ...new Set(rows.flatMap((b) =>
-            inherited.flatMap(([name, prop]) => {
-              let target = (b[name] as Comp | undefined)?.[prop]
-              return typeof target == 'string' ? [target] : []
-            })
-          )),
+          ...new Set(
+            bundles.flatMap((b) =>
+              inherited.flatMap(([name, prop]) => {
+                let target = ((held.get(b.entity.eid) ?? b)[name] as
+                  | Comp
+                  | undefined)?.[prop]
+                return typeof target == 'string' ? [target] : []
+              })
+            ),
+          ),
         ]
         return after(tx.get(targets, comps), (sources) => {
-          let byId = new Map(sources.map((b) => [b.entity.eid, b]))
+          let byId = new Map([
+            ...carried,
+            ...sources.map((b) => [b.entity.eid, b] as const),
+          ])
           let visible = bundles.flatMap((b) => {
             let row = held.get(b.entity.eid)
             if (foreign(row ?? b, opts)) return []
@@ -473,6 +484,7 @@ export let personal = (
                   [
                     ...rows.filter((b) => !dead(b) && !foreign(b, opts)),
                     ...seen,
+                    ...visible,
                   ]
                     .map((b) => b.entity.eid),
                 )

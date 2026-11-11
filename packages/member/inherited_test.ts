@@ -84,4 +84,16 @@ for (let [name, store] of Object.entries({ RAM: ram(vocab), SQL: sql })) {
     })
     equal(await g.read('.page *', { person: 'bob' }), [])
   })
+  // A rehearsal's answer: its source was created by the rolled-back batch.
+  test(`${name} a row whose source the answer carries inherits it`, async () => {
+    let answered = async (person: string) =>
+      ids(
+        await g.answer([
+          { entity: { eid: 'draft' }, private: { by: 'alice' } },
+          { entity: { eid: 'note' }, page: { source: 'draft', text: 'new' } },
+        ], { person }),
+      )
+    equal(await answered('alice'), ['draft', 'note'])
+    equal(await answered('bob'), [])
+  })
 }
