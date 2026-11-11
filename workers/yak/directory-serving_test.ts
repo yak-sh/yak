@@ -179,7 +179,7 @@ test('directory serving: a known public page answers within the stall deadline w
   ok(publicPage.waited)
   equal([publicPage.status, publicPage.got], [200, publicPage.body])
   equal(publicPage.reads, 2)
-  equal(publicPage.files, 2) // Rendered anew, not an old page response.
+  equal(publicPage.files, 4) // Rendered anew (page and its redirects), not an old page response.
 })
 
 let sitePage = await (async () => {
@@ -257,7 +257,7 @@ for (let known of [false, true]) {
   unavailable.push({ pending: read.pending(), files: f.fileReads() })
 }
 test('directory serving: cold and fenced copies wait, never returning old pages', () => {
-  equal(unavailable, [{ pending: true, files: 0 }, { pending: true, files: 1 }])
+  equal(unavailable, [{ pending: true, files: 0 }, { pending: true, files: 2 }])
 })
 
 let privatePage = await (async () => {

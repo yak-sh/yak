@@ -1116,9 +1116,11 @@ let asset = async (
   let prefix = prefixOf(space, app)
   let decoded = decodedPath(path)
   if (decoded == null || inside(decoded)) return nothingHere(env)
-  let gone = files.page(path) &&
-    await redirected(req, env, app, prefix, decoded, at)
-  if (gone) return gone
+  // Asked beside the page's bytes, not before them: no page waits on it.
+  let gone = files.page(path)
+    ? redirected(req, env, app, prefix, decoded, at)
+    : null
+  gone?.catch(() => {})
   let range = req.method == 'GET' ? req.headers.get('range') : null
   let got = await c.time(
     'bytes',
@@ -1143,6 +1145,11 @@ let asset = async (
     )
   ) {
     c.include(got.headers.get('server-timing'))
+  }
+  let sent = await gone
+  if (sent) {
+    await got.body?.cancel()
+    return sent
   }
   // A folder asked for without its slash is sent to it (files.ts `resolve`),
   // keeping the query: the location is relative, so it holds at any mount.
