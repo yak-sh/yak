@@ -435,6 +435,7 @@ let voiced = (said: string): Layer[] =>
 let NOTES: Record<string, string> = {
   'harness:fork': 'That it is a fork of the conversation',
   'delegation:instructions': 'The guidance it was started with',
+  'operator:earlier': 'What the person said before on this',
 }
 
 // One entry holding a context's layers, each closed until opened; one that

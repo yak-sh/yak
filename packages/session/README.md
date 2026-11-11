@@ -1109,6 +1109,14 @@ a plugin option); a slower one is left out of that prompt's context. With the
 server down, `yak session context --hook -` prints the timing alone.
 Session-start context is independent.
 
+The person's words reach an agent through other doors too, and the same recall
+(`recall` in [`recall.ts`](./recall.ts)) rides under each: a comment or letter
+of theirs that the bus owes a session, said at the hook door, beside a tool
+reply or as a native transcript's input, and the comment a session is started
+on. Its subject is the item's words, and only what the person said before the
+item was written is recalled. An item anyone else wrote arrives alone.
+`yak session listen` prints one line an item and adds nothing to it.
+
 ### Request context
 
 A runner projects explicit transcript inputs, admitted instructions and

@@ -16,26 +16,16 @@
 // 400. Anything else that goes wrong is thrown to the host, which reports it;
 // the harness treats a failed hook as nothing to add and carries on.
 
-import { earlier } from '@yaks/memory/earlier'
-import type { Host, Meaning } from '@yaks/host'
+import type { Host } from '@yaks/host'
 import type { Authenticate, Route } from '@yaks/api'
 import { type Door, heard, type Hook } from './bus.ts'
 import { hear } from './announce.ts'
 import type { Runner } from '@yaks/tools'
 import { lifecycle } from './lifecycle.ts'
 import { promptContext } from './prompt.ts'
+import { RECALL, recall, type Recalling } from './recall.ts'
 
-/** How long a prompt waits for earlier words before going without them. */
-export let RECALL = 700
-
-// The text a promise gives within `ms`, or none once they pass.
-let within = (ms: number, text: Promise<string>): Promise<string> => {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  return Promise.race([
-    text,
-    new Promise<string>((done) => timer = setTimeout(done, ms, '')),
-  ]).finally(() => clearTimeout(timer))
-}
+export { RECALL }
 
 /** Where the harness posts its hook events. */
 export let PATH = '/session/hook'
@@ -48,30 +38,13 @@ let open = (request: Request): Promise<boolean> =>
 
 /** `POST /session/hook`: one hook event in, the context it adds out. */
 export let routes = (
-  host: Door & {
-    config?: { person?: string }
-    meaning?: Meaning
+  host: Door & Recalling & {
     who?: Authenticate
     runner?: Runner
     text?: Host['text']
-    report?: Host['report']
   },
   { wait = RECALL }: { wait?: number } = {},
 ): Route[] => {
-  // The person's eid, once the config names them.
-  let person = async () => {
-    let said = host.config?.person
-    return said
-      ? (await host.graph.address([said])).get(said) ?? said
-      : undefined
-  }
-  let recall = async (words: string, before: string) =>
-    earlier(host.graph, {
-      person: await person(),
-      words,
-      before,
-      meaning: host.meaning,
-    })
   return [{
     method: 'POST',
     path: '/session/earlier',
@@ -87,7 +60,9 @@ export let routes = (
       if (typeof input?.words != 'string' || typeof input?.before != 'string') {
         return new Response('', { status: 400 })
       }
-      return new Response(await recall(input.words, input.before))
+      return new Response(
+        await recall(host, null).said(input.words, input.before),
+      )
     },
   }, {
     method: 'POST',
@@ -105,13 +80,9 @@ export let routes = (
       let event = hook as Record<string, unknown>
       if (event.hook_event_name == 'UserPromptSubmit') {
         let words = typeof event.prompt == 'string' ? event.prompt : ''
-        let recalled = await within(
-          wait,
-          recall(words, new Date().toISOString()).catch(async (e) => {
-            if (!host.report) throw e
-            await host.report(e)
-            return ''
-          }),
+        let recalled = await recall(host, wait).said(
+          words,
+          new Date().toISOString(),
         )
         let text = [
           promptContext(event),

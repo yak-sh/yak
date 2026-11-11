@@ -491,9 +491,9 @@ export let held = async (
 let author = (b: Bundle): string =>
   str(comp(b, 'created').via) || str(comp(b, 'created').by)
 
-// An item's words. A knock's ride in `doc` or, from a session's own notices
-// (wake.ts), in `content{body}`; a letter delivered is said by its subject.
-let words = (b: Bundle): string => {
+/** An item's words. A knock's ride in `doc` or, from a session's own notices
+ * (wake.ts), in `content{body}`; a letter delivered is said by its subject. */
+export let words = (b: Bundle): string => {
   let doc = comp(b, 'doc')
   return fold(
     b.deliver

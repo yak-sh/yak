@@ -17,7 +17,7 @@ import { openingFor } from './instructions.ts'
 import type { Handlers } from '@yaks/effects'
 import type { Host } from '@yaks/host'
 
-import { running, starting } from '@yaks/session'
+import { recall, running, starting } from '@yaks/session'
 import { usingFor } from './default.ts'
 import { lend, offering } from './agent.ts'
 import { here, type Opts } from './local.ts'
@@ -148,6 +148,7 @@ export let effects = (
       }),
     ),
     ...starting(g, {
+      beside: recall(host).beside,
       limit: typeof options.starts == 'number' ? options.starts : undefined,
       opening: async (work) => ({
         persona: (await openingFor(g, {}, host.workspaces, { work })).persona,

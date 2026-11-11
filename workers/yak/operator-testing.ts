@@ -66,9 +66,14 @@ export let operatorMemory = (
   options: Parameters<typeof operatorGraph>[2] = {},
 ) => ({ ...operatorGraph(storage, [], { clock, ...options }), storage })
 
-/** The Operator's HTTP and page-frame handlers over a private RAM graph. */
-export let operatorService = (env: Env, held: Held, options: Options) => {
-  let store = operatorMemory()
+/** The Operator's HTTP and page-frame handlers over a private RAM graph, or
+ * over `store`, for what a RAM graph lacks (ranked text search). */
+export let operatorService = (
+  env: Env,
+  held: Held,
+  options: Options,
+  store: ReturnType<typeof operatorGraph> = operatorMemory(),
+) => {
   let sockets: Listener[] = []
   let frames = operatorFrames(
     store,

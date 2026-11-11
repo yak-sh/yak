@@ -58,6 +58,7 @@ import { agents, operatorProviders } from './config.ts'
 import { inputSchemaOf } from '@yaks/tools/schema'
 import { CallError, invoke } from '@yaks/tools'
 import { loadTools, textSearch } from '@yaks/graph/tools'
+import { earlier } from '@yaks/memory/earlier'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { ORACLE } from '@yaks/topic'
 import { runs as memoryRuns } from '@yaks/memory/tools'
@@ -918,6 +919,8 @@ let TOLD = ' The people who run yaks.app have been told.'
 // how long a turn waits after its machine's providers refused it (ms).
 let REACHES = new Set(['unreachable', 'stalled'])
 let SPENT = 60 * 60_000
+// How long a person's words wait for what they said before (`before`).
+let RECALL = 700
 
 /**
  * What ended a session's work: its newest reply, else what kept it from one,
@@ -1943,6 +1946,41 @@ export let operating = (
     using: usingOf(o.model, o.provider),
     $actor: { by, via: session },
   })
+  // What the person said before on the subject of the words they now give
+  // their conversation, as a note beside those words: what its
+  // model no longer has in front of it, said in another session or before
+  // this one's newest checkpoint. A recall slower than RECALL or one that
+  // fails is reported or left out, and the words go on alone.
+  let before = async (
+    session: string,
+    text: string,
+    held: Asker,
+    space: Space,
+  ): Promise<Bundle[]> => {
+    let [cut] = g.vocab.comp('checkpoint')
+      ? await g.read(
+        `.entry.session=${session}&.checkpoint&.order=-entry.seq&.limit=1&.fields=created.at`,
+      )
+      : []
+    let at = comp(cut, 'created')?.at
+    let body = await earlier(g, {
+      person: held.person,
+      words: text,
+      before: new Date().toISOString(),
+      among: `(.entry.session!=${session})` +
+        (at ? `|(.created.at<${JSON.stringify(at)})` : ''),
+      wait: RECALL,
+    }).catch((e) => (caught(e, { request: 'operator recall' }), ''))
+    return body
+      ? [{
+        entity: { eid: crypto.randomUUID() },
+        entry: { session },
+        prompt: { scope: 'local', source: 'operator:earlier' },
+        content: { body },
+        $actor: { by: space.eid, via: session },
+      }]
+      : []
+  }
   let started = (session: string, by: string, space: Space) =>
     begin(g, undefined, {
       eid: session,
@@ -1991,8 +2029,11 @@ export let operating = (
       if (!await conversed(store, session)) {
         await started(session, held.person, space)
       }
+      let theirs = by == held.person && !o.signup &&
+        !OWN.has(o.channel ?? '')
       await g.apply([
         await carrying(session, held, space, o, !o.signup),
+        ...theirs ? await before(session, text, held, space) : [],
         given(session, input, text + reference, by, o),
         ...attachmentRows(o.request ?? input, [
           ...o.files ?? [],

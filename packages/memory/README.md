@@ -247,6 +247,11 @@ decision with its choice). A quarantined memory is not offered, nor one already
 quoted; a memory kept on an untitled entry shows its words. Agent prose outside
 a quotation is not returned, and duplicate quotations are shown once.
 
+A person the graph has no name for has no attributed quotations, only their own
+inputs. `among` is a filter line those inputs are kept to, such as the ones the
+agent answering does not already have in front of it. With `wait`, a recall
+slower than that many milliseconds answers nothing.
+
 ```ts
 import { ownWords } from '@yaks/memory/earlier'
 import { equal } from '@yaks/testing'

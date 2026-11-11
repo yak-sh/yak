@@ -49,6 +49,7 @@ import {
   type Routes,
   undeliver,
 } from './listen.ts'
+import { type Beside, recall, type Recalling } from './recall.ts'
 import { sessionFor } from './who.ts'
 
 let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
@@ -289,12 +290,17 @@ export let input = (session: Eid, item: Eid, body: string): Bundle => ({
 })
 
 /** One pass over native sessions: each line {@link due} is appended as an
- * input. A failed append leaves the item unmarked, so the next pass can retry
- * it, and an item another session was given first is not said twice.
- * `attention` wakes the effects role's runner. */
-export let feed = async (g: Graph, at?: Scope): Promise<number> => {
+ * input, with what `beside` sets under it (./recall.ts). A failed append
+ * leaves the item unmarked, so the next pass can retry it, and an item
+ * another session was given first is not said twice. `attention` wakes the
+ * effects role's runner. */
+export let feed = async (
+  g: Graph,
+  at?: Scope,
+  beside: Beside = (owed) => Promise.resolve(owed),
+): Promise<number> => {
   let count = 0
-  for (let { session, item, line, same } of await due(g, at)) {
+  for (let { session, item, line, same } of await beside(await due(g, at))) {
     let entry = { ...input(session, item.entity.eid, line), attention: {} }
     if (await deliver(g, null, item, [entry], same)) count++
   }
@@ -307,11 +313,7 @@ export let feed = async (g: Graph, at?: Scope): Promise<number> => {
  * everything every `every` ms. A pass that fails is reported and its scope
  * asked about again after `every` ms; `wait` is the clock that waits. */
 export let follow = async (
-  host: {
-    graph: Graph
-    feed?: Feed
-    report?: (error: unknown) => void | Promise<void>
-  },
+  host: Recalling & { feed?: Feed },
   signal: AbortSignal,
   options: {
     every?: number
@@ -319,6 +321,7 @@ export let follow = async (
   } = {},
 ): Promise<void> => {
   let { every = 1000, wait = sleep } = options
+  let { beside } = recall(host)
   let next = scope(true)
   let bell = resolvers<void>()
   let ring = () => bell.resolve()
@@ -335,7 +338,7 @@ export let follow = async (
       let now = stop ? next : scope(true)
       next = scope()
       try {
-        if (!idle(now)) await feed(host.graph, now)
+        if (!idle(now)) await feed(host.graph, now, beside)
       } catch (error) {
         await (host.report?.(error) ?? console.error('session bus —', error))
         merge(next, now)
@@ -361,9 +364,9 @@ export type Ledger = {
   owed: (session: Eid) => Promise<News>
 }
 
-/** What a door over this host's graph needs to hear for one session. */
-export type Door = {
-  graph: Graph
+/** What a door over this host's graph needs to hear for one session, and to
+ * set beside its person's words what they said before (./recall.ts). */
+export type Door = Recalling & {
   feed?: Feed
   stopping?: AbortSignal
 }
@@ -468,7 +471,8 @@ export let ledger = (host: Door): Ledger | undefined => {
   return made
 }
 
-// Every line owed to an outside session, each marked said as it is taken.
+// Every line owed to an outside session, each marked said as it is taken,
+// and under a line the host's person wrote, what they said before.
 // The mark names the session it was said to as what carried it, as
 // `yak session listen` does, not the process whose door said it.
 let owed = async (host: Door, id: Eid): Promise<Owed[]> => {
@@ -479,7 +483,7 @@ let owed = async (host: Door, id: Eid): Promise<Owed[]> => {
       out.push(said)
     }
   }
-  return out
+  return recall(host).beside(out)
 }
 
 // Whether a session's harness reports to the hook door. Both doors below run

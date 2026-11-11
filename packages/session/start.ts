@@ -34,6 +34,7 @@ import { absent, and, eq, fields, present } from '@yaks/query'
 import { input } from './bus.ts'
 import { CLAIM, SESSION } from './comp.ts'
 import { atWork, deliver, said } from './listen.ts'
+import type { Beside } from './recall.ts'
 
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 let comp = (b: Bundle | undefined, name: string): Comp =>
@@ -56,6 +57,9 @@ export type Starting = {
   /** how long a start past the limit waits before it asks again, in
    * milliseconds (default ten seconds) */
   wait?: number
+  /** sets under a comment its person wrote what they said before
+   * (./recall.ts) */
+  beside?: Beside
 }
 
 /** The sessions started on a comment that are at work now, mid-turn. */
@@ -99,6 +103,7 @@ export let start = async (
   g: Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>,
   comment: Eid,
   opening: Starting['opening'],
+  beside: Beside = (owed) => Promise.resolve(owed),
 ): Promise<Eid | undefined> => {
   let [item] = await g.get([comment])
   let on = str(comp(item, 'comment').target)
@@ -124,7 +129,10 @@ export let start = async (
   for (let b of await g.get([...names.keys()])) {
     names.set(b.entity.eid, human(g.vocab)(b))
   }
-  let line = said(g.vocab, item, (eid) => names.get(eid) ?? eid, undefined, by)
+  let [{ line }] = await beside([{
+    item,
+    line: said(g.vocab, item, (eid) => names.get(eid) ?? eid, undefined, by),
+  }])
   let { persona, using } = await opening(on)
   let project = str(comp(task, 'filed').project)
   let unmarked = ['completed', 'cancelled'].filter((c) => g.vocab.comp(c))
@@ -193,7 +201,7 @@ export let starting = (g: Graph, options: Starting): Handlers => {
     session_start: (e, _tx, _write, attempt) =>
       serial(async () => {
         if ((await busy(g)).length < limit) {
-          await start(g, e.entity.eid, options.opening)
+          await start(g, e.entity.eid, options.opening, options.beside)
         } else if (attempt?.defer) await attempt.defer(wait)
         else {
           throw new Error(
