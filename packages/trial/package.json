@@ -25,6 +25,7 @@
     "@yaks/embedding": "0.2.30",
     "@yaks/file": "0.2.28",
     "@yaks/graph": "0.2.33",
+    "@yaks/id": "0.2.23",
     "@yaks/match": "0.2.30",
     "@yaks/memory": "0.2.23",
     "@yaks/model": "0.2.32",

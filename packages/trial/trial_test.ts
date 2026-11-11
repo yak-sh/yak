@@ -12,7 +12,15 @@ import { loadVocab } from '@yaks/vocab'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { tally, trialDoc } from './mod.ts'
 import { type Arrival, asking, before, cases, run, WORDS } from './moment.ts'
-import { drafted, open, said as saidBefore } from './arrive.ts'
+import {
+  carried,
+  drafted,
+  naming,
+  open,
+  said as saidBefore,
+  standing,
+  theirs,
+} from './arrive.ts'
 
 let obj = { component: true, type: 'object' }
 let props = (p: Record<string, string>) => ({
@@ -34,6 +42,7 @@ let vocab = loadVocab([edgeDoc, docDoc, personaDoc, memoryDoc, trialDoc, {
     decision: obj,
     decided: props({ at: 'string', by: 'string', choice: 'string' }),
     session: props({ persona: 'string' }),
+    spawned: props({ parent: 'string' }),
     entry: props({ session: 'string', seq: 'number' }),
     checkpoint: obj,
     notice: obj,
@@ -326,4 +335,120 @@ for (
 test('trial: a recall keyed on the agent lists only what reaches its floor', async () => {
   assertEquals((await drafting('entry', .8)).parts[0].eids, ['m'])
   assertEquals((await drafting('entry', .95)).parts, [])
+})
+
+// Where a door stands at e7 (11:17), its window opening at `since`.
+let stand = (had: Bundle[] = [], since = '2026-11-10T11:12:00.000Z') => ({
+  storage: g.storage,
+  vocab,
+  m: { entry: 'e7', session: 's', seq: 7, at: '2026-11-10T11:17:00.000Z' },
+  had,
+  since,
+})
+let by = (eid: string, when: string, more: Record<string, unknown>) => ({
+  entity: { eid },
+  doc: { title: '', body: `words ${eid}` },
+  created: { at: when, by: 'jeff' },
+  ...more,
+})
+
+test("trial: theirs is the person's comments and answers of the day on what the window names", async () => {
+  await g.apply([
+    { entity: { eid: 'named' }, task: {}, ...at(early) },
+    by('onit', '2026-11-10T11:13:00.000Z', { comment: { target: 'named' } }),
+    by('seen', '2026-11-10T11:13:00.000Z', { comment: { target: 'named' } }),
+    by('elsewhere', '2026-11-10T11:13:00.000Z', {
+      comment: { target: 'x1' },
+    }),
+    by('lastweek', '2026-11-03T11:13:00.000Z', {
+      comment: { target: 'named' },
+    }),
+    by('tardy', late, { comment: { target: 'named' } }),
+    by('priced', early, {
+      decision: {},
+      decided: { at: '2026-11-10T10:00:00.000Z', by: 'jeff', choice: 'Pro' },
+    }),
+  ])
+  let had = [
+    entry(5, 'read named and seen', { result: {} }),
+    entry(6, '"priced" is still open', { call: {} }),
+  ] as Bundle[]
+  let [part] = await theirs('jeff')(stand(had))
+  assertEquals(part.eids.toSorted(), ['onit', 'priced'])
+  assertEquals(part.text.includes('→ Pro'), true)
+})
+
+test('trial: carried is what the session kept of the person before its compaction: memories of their words, tasks that quote them', async () => {
+  let quote = 'knocks go to a helper with a fresh context, not to the operator'
+  await g.apply([
+    {
+      ...said(1, quote),
+      entity: { eid: 'his' },
+      ...at('2026-11-10T11:05:00.000Z'),
+      created: { at: '2026-11-10T11:05:00.000Z', by: 'jeff' },
+    },
+    {
+      ...said(9, 'fable is capped at half'),
+      entity: { eid: 'kept' },
+      created: { at: '2026-11-09T21:29:00.000Z', by: 'jeff' },
+      memory: { at: '2026-11-09T21:30:00.000Z', via: 's' },
+    },
+    {
+      entity: { eid: 'filed' },
+      task: {},
+      doc: { title: 'Knocks', body: `Jeff, verbatim: "${quote}"` },
+      created: { at: '2026-11-10T11:06:00.000Z', via: 's' },
+    },
+    {
+      entity: { eid: 'unquoted' },
+      task: {},
+      doc: { title: 'Other', body: 'nothing he said' },
+      created: { at: '2026-11-10T11:06:00.000Z', via: 's' },
+    },
+  ], { trusted: true })
+  let summary = entry(2, 'summary', { checkpoint: {} }) as Bundle
+  let [part] = await carried('jeff')(
+    stand([summary], '2026-11-10T11:12:00.000Z'),
+  )
+  assertEquals(part.eids, ['kept', 'filed'])
+  assertEquals(await carried('jeff')(stand([], '2026-11-10T11:12:00.000Z')), [])
+})
+
+test('trial: standing is the person and the notices that came more than once to the session or its parent', async () => {
+  let notice = (eid: string, session: string, when: string, body: string) => ({
+    entity: { eid },
+    entry: { session, seq: 0 },
+    content: { body },
+    notice: {},
+    ...at(when),
+  })
+  await g.apply([
+    {
+      entity: { eid: 'kid' },
+      session: { persona: 'p' },
+      spawned: { parent: 's' },
+      ...at('2026-11-10T11:20:00.000Z'),
+    },
+    doc('jeff', early, { doc: { title: 'Jeff', body: 'The owner.' } }),
+    notice('pace1', 's', '2026-11-10T09:35:00.000Z', 'Work-pace check'),
+    notice('pace2', 's', '2026-11-10T10:35:00.000Z', 'Work-pace  check'),
+    notice('once', 's', '2026-11-10T10:40:00.000Z', 'a task finished'),
+  ])
+  let parts = await standing('jeff')({
+    ...stand([], '2026-11-10T11:20:00.000Z'),
+    m: { entry: 'k1', session: 'kid', seq: 1, at: '2026-11-10T11:30:00.000Z' },
+  })
+  assertEquals(parts.map((p) => [p.door, p.eids]), [
+    ['persona', ['jeff']],
+    ['notice', ['pace1', 'pace2']],
+  ])
+})
+
+test('trial: a window names a row by its eid, its number or its short handle', () => {
+  let names = naming([entry(5, 'see T-41 and #0123456789', { result: {} })])
+  let row = (eid: string, num?: number) => ({ entity: { eid, num } })
+  assertEquals(
+    [row('x', 41), row('01234567-89ab'), row('e5'), row('y', 4)].map(names),
+    [true, true, true, false],
+  )
 })

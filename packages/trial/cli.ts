@@ -30,10 +30,21 @@ export let commands: CliCommand[] = [{
       arrive: {
         type: 'array',
         items: {
-          enum: ['beside', 'related', 'said', 'open', 'entry', 'call', 'reply'],
+          enum: [
+            'beside',
+            'related',
+            'said',
+            'open',
+            'entry',
+            'call',
+            'reply',
+            'theirs',
+            'carried',
+            'standing',
+          ],
         },
         description:
-          "doors that add to the persona: beside (the prompt recall beside the person's words), related (the related list beside a write's hits), said (the person's earlier words and answered decisions beside each thing the session wrote), open (what is open with the person at start), or the resources nearest the agent's own words once: entry (its erring entry), call (its last tool call), reply (its last reply or reasoning)",
+          "doors that add to the persona: beside (the prompt recall beside the person's words), related (the related list beside a write's hits), said (the person's earlier words and answered decisions beside each thing the session wrote), open (what is open with the person at start), or the resources nearest the agent's own words once: entry (its erring entry), call (its last tool call), reply (its last reply or reasoning); or by link: theirs (the person's comments and answers of the day on what the window names), carried (after a compaction, the person's words to the session in the day before it and the tasks it filed quoting them), standing (at start, who the person is and the notices that came more than once in the day to the session or its parent)",
       },
       floor: {
         type: 'number',
@@ -69,10 +80,13 @@ export let commands: CliCommand[] = [{
         ? (await host.graph.address([said])).get(said) ?? said
         : undefined
       if (
-        doors.some((d) => ['beside', 'said', 'open'].includes(d)) && !person
+        doors.some((d) =>
+          ['beside', 'said', 'open', 'theirs', 'carried', 'standing']
+            .includes(d)
+        ) && !person
       ) {
         throw new Error(
-          'beside, said and open need the config to name its person',
+          'beside, said, open, theirs, carried and standing need the config to name its person',
         )
       }
       let floor = typeof args.floor == 'number' ? args.floor : undefined
@@ -101,6 +115,9 @@ export let commands: CliCommand[] = [{
         entry: drafted('entry'),
         call: drafted('call'),
         reply: drafted('reply'),
+        theirs: () => arrive.theirs(person!),
+        carried: () => arrive.carried(person!),
+        standing: () => arrive.standing(person!),
       }
       let [as] = [...(await host.graph.address([args.under])).values()]
       variant = {

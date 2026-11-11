@@ -60,19 +60,23 @@ case then wears its own session's persona, the doors named add to it
 (`@yaks/trial/arrive`), and the rows are written under the persona `--under`
 names, whose text says what the doors add and which no session wears:
 
-| door      | what arrives                                                                                                                                                                                             |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `beside`  | beside each of the person's inputs, the prompt hook's recall (@yaks/memory/earlier), its memories and decisions kept to `--floor`                                                                        |
-| `related` | beside each write's hit rows, the few nearest resources of any kind to what it made (`hit.related`, @yaks/embedding/neighbours)                                                                          |
-| `said`    | beside each thing the session wrote, what its write is answered with from memory (@yaks/memory/graph): the person's nearest earlier words at least `--floor` similar, and the nearest answered decisions |
-| `open`    | at the session's start and after each compaction, the tasks and decisions open with the person, and the decisions they answered the day before                                                           |
-| `entry`   | once, the `--few` resources nearest in meaning to the agent's erring entry, each at least `--floor` similar: what a check of an output before it is sent sees                                            |
-| `call`    | the same, keyed on the agent's last tool call before the entry, its arguments as text: what the post-tool hook sees                                                                                      |
-| `reply`   | the same, keyed on the agent's last reply or reasoning before the entry: what a hook at the next prompt sees                                                                                             |
+| door       | what arrives                                                                                                                                                                                             |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `beside`   | beside each of the person's inputs, the prompt hook's recall (@yaks/memory/earlier), its memories and decisions kept to `--floor`                                                                        |
+| `related`  | beside each write's hit rows, the few nearest resources of any kind to what it made (`hit.related`, @yaks/embedding/neighbours)                                                                          |
+| `said`     | beside each thing the session wrote, what its write is answered with from memory (@yaks/memory/graph): the person's nearest earlier words at least `--floor` similar, and the nearest answered decisions |
+| `open`     | at the session's start and after each compaction, the tasks and decisions open with the person, and the decisions they answered the day before                                                           |
+| `entry`    | once, the `--few` resources nearest in meaning to the agent's erring entry, each at least `--floor` similar: what a check of an output before it is sent sees                                            |
+| `call`     | the same, keyed on the agent's last tool call before the entry, its arguments as text: what the post-tool hook sees                                                                                      |
+| `reply`    | the same, keyed on the agent's last reply or reasoning before the entry: what a hook at the next prompt sees                                                                                             |
+| `theirs`   | the person's comments of the day on rows the session's window names (by eid, number or short handle), and the named decisions they answered, with the choice: links, not meaning                         |
+| `carried`  | after a compaction, what the session kept of the person's words in the day before it: the memories it saved of them, and the tasks it filed quoting them                                                 |
+| `standing` | at the window's start, the person's own row, and each notice that came more than once in the day before to the session or the session that spawned it                                                    |
 
 ```sh
 yak trial score --under <persona> --arrive beside --floor 0.6
 yak trial score --under <persona> --arrive call --few 8 --floor 0.65
+yak trial score --under <persona> --arrive theirs
 ```
 
 The recall is given all the time it needs; the live hook gives it 700 ms.
