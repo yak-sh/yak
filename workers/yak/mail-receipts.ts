@@ -47,9 +47,13 @@ export let receipts = async (
   } else if (tags?.yak_store) {
     let name = new TextDecoder().decode(fromBase64url(tags.yak_store))
     let graph = metaOf(storeOf(env.STORE, name), KERNEL)
+    // The letter is the platform's own bookkeeping, read whoever its readers
+    // are: an app's letters are kept to its owners and editors (`mail`).
     await receipted({
       get: (eids) =>
-        graph.query(stringify(and(eq('entity.eid', list(...eids)), every()))),
+        graph.query(stringify(and(eq('entity.eid', list(...eids)), every())), {
+          trusted: true,
+        }),
       apply: (bundles) => graph.apply(bundles, KERNEL),
     }, found)
   }

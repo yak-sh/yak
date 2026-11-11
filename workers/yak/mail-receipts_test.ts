@@ -13,6 +13,7 @@ import type { Namespace } from './door.ts'
 
 let secret = 'whsec_' + btoa('a receiver key for these fixtures')
 let id = '6ca77c5a-080e-44d4-a6df-0923d949763f'
+// An app's letter, kept to its editors: only a trusted read sees it.
 let row: Bundle = { entity: { eid: id }, mail: { from: 'home@yaks.app' } }
 let writes = 0, names: string[] = []
 let store: Namespace = {
@@ -33,7 +34,8 @@ let store: Namespace = {
         writes++
         return Response.json(batch)
       }
-      return Response.json([row])
+      let trusted = new URL(request.url).searchParams.get('trusted') == '1'
+      return Response.json(trusted ? [row] : [])
     },
   }),
 }
@@ -43,7 +45,7 @@ let env = {
   RESEND_WEBHOOK_SECRET: secret,
 }
 
-test('an app receipt fills the recorded letter without sending another letter', async () => {
+test('an app receipt fills the recorded letter, whoever may read it, without sending another letter', async () => {
   let arrived = {
     type: 'email.sent',
     data: {
