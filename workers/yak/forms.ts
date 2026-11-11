@@ -3,11 +3,12 @@
 // form links. A caller signed in as one of the app's own people (recognized.ts)
 // is shown the answers their row already holds, and their sign-up names them.
 import { type Comp, mint, signed } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { Refused } from '@yaks/graph/errors'
 import { type Form, open, posted, prefilled } from '@yaks/forms'
 import { accepted } from './form-rules.ts'
 import type { Answer } from './apps.ts'
-import type { Door } from './door.ts'
+import { type Door, IDEMPOTENCY } from './door.ts'
 import type { Stored } from './graph.ts'
 import { appStore } from './directory.ts'
 import { KERNEL } from './meta.ts'
@@ -117,10 +118,18 @@ export let formIn = async (req: Request, at: Stored): Promise<Response> => {
   if (!answers || typeof answers != 'object' || Array.isArray(answers)) {
     return reply('Submit an answers object.', 400)
   }
+  // A submission the door sends again, because a deploy's restart cut off its
+  // answer, carries the key it carried the first time, and names the same
+  // registration: one that landed is not filed twice.
+  let key = req.headers.get(IDEMPOTENCY)
+  let filed = key ? derivedEid(JSON.stringify(['registration', key])) : mint()
+  if (key && (await at.graph.get([filed], ['registration']))[0]) {
+    return new Response(null, { status: 204, headers: NO_STORE })
+  }
   let me = await recognized(at, person)
   try {
     await at.graph.apply(signed([{
-      entity: { eid: mint() },
+      entity: { eid: filed },
       registration: {
         form: eid,
         answers,
@@ -137,7 +146,9 @@ export let formIn = async (req: Request, at: Stored): Promise<Response> => {
   return new Response(null, { status: 204, headers: NO_STORE })
 }
 
-export let forms: Answer = ({ req, env, path, space, app, who, json }) => {
+export let forms: Answer = async (
+  { req, env, path, space, app, who, json },
+) => {
   let match = path.match(/^\/form\/([^/]+)$/)
   if (!match) return null
   let post = req.method == 'POST'
@@ -145,8 +156,11 @@ export let forms: Answer = ({ req, env, path, space, app, who, json }) => {
   let name = decodedPath(match[1])
   if (!name) return reply('No such form.', 404)
   // A store still on code from before GET showed a form answers it an empty
-  // 204, which passes on as it came.
-  return appStore(env.STORE, space, app, env).consume(
+  // 204, which passes on as it came. A submission is sent as its bytes, never
+  // its stream, so the door can send it again when a deploy's restart cuts it
+  // off (door.ts `storeOf`).
+  let body = post ? await req.arrayBuffer() : null
+  return await appStore(env.STORE, space, app, env).consume(
     `/form?${new URLSearchParams({ name })}`,
     async (r) => {
       let text = r.status == 204 ? '' : await r.text()
@@ -155,7 +169,7 @@ export let forms: Answer = ({ req, env, path, space, app, who, json }) => {
       }
       return new Response(r.status == 204 ? null : text, r)
     },
-    { method: req.method, body: post ? req.body : null, headers: req.headers },
+    { method: req.method, body, headers: req.headers },
     who.person ? { ...KERNEL, 'x-yak-person': who.person } : KERNEL,
   )
 }

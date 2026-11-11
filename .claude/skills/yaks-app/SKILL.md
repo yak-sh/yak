@@ -188,7 +188,10 @@ occurrence carries the version it ran (`commit`); one from the previous version
 in that window is the lag, not the change. Keep a Worker-to-store call working
 against the previous store code. A restart can cut off an answer already being
 read, so the store door (door.ts `storeOf`) reads every answer it may send again
-whole inside its retry, and a caller never handles a reset. A lost connection
+whole inside its retry, and a caller never handles a reset. It can send a call again
+only when its body is bytes, so a caller hands it a visitor's body read whole,
+never the request's stream, and a store's write answers a resend's idempotency
+key without applying it twice (forms.ts `formIn`). A lost connection
 ("Network connection lost.") is a reset too (@yaks/durable-object `moved`): a
 call cut off is sent again, and an instance whose own storage lost its
 connection reports nothing it meets, since its replacement redoes the work
