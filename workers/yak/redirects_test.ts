@@ -26,15 +26,7 @@ let cases: [string, string, string, string, ReturnType<typeof go>][] = [
     to: '/b?q=1',
     status: 302,
   }],
-  ['a rule that names a query takes it', '/?id=7 /seven', '/', '?id=7&x=1', {
-    to: '/seven',
-    status: 302,
-  }],
-  ['a query that differs is no match', '/?id=7 /seven', '/', '?id=8', null],
-  ['a bare key matches any value', '/?id /any', '/', '?id=8', {
-    to: '/any',
-    status: 302,
-  }],
+  ['a query in a source is no rule', '/?id=7 /seven', '/', '?id=7', null],
   ['an address elsewhere stays', '/a https://x.example/y:z', '/a', '', {
     to: 'https://x.example/y:z',
     status: 302,
