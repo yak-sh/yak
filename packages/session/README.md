@@ -901,7 +901,7 @@ wearing `persona`, whose context holds only what was waiting.
 | Addressed to the operator                                                                                                                                                            | The operator's own, never routine                                                                                                    |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | a knock at the project, at a project filed under it at any depth, or at a session a person opened (`session.operator`) wearing a persona homed there                                 | a person's act or words: `knock.from`, else the knock's writer, wears `person`; a letter's `mail.from` is a person's `email.address` |
-| a letter that arrived for one of those projects or for an address filed under one, unless it answers a letter another session wrote that is not over (that session hears the answer) | a hand-up: a knock written through a helper's session                                                                                |
+| a letter that arrived for one of those projects or for an address filed under one, unless it answers a letter another session wrote that is not over (that session hears the answer) | a hand-up: a knock written through a helper's session, or through a session opened on a topic (`session.topic`)                      |
 
 The rule runs in the write that leaves the knock or letter (`routing`, a
 `precondition` hook in [`routine.ts`](./routine.ts)) and marks a routine one
@@ -925,16 +925,27 @@ which asks again. Two workers that race to start one hold a waiting item in
 common, and the guard on its `notified` lets one write through.
 
 A helper hands up what needs the operator's judgment or a person with
-`yak session send <operator> "<one line with the id>"`: a knock at the operator
-written through the helper, which the rule leaves unmarked. Two more hand-ups
-are written for it, each naming what it had taken: a helper that exited with
-anything but 0, and one the next routine item asks to stop before starting
-another, because its transcript gained no entry for 5 minutes (`QUIET`) or it
-was still going after 30 (`LIMIT`). That hand-up carries the helper's last
-words. A run that has said its last words can linger for good on a background
-command it started, and everything behind it would wait. A helper's own ending
-knocks nobody (`reported`), and a run it started that ends after it knocks the
-operator, where it is routine again.
+`yak session handup <id> "<one line>"` (`session_handup`): a knock at the
+operator written through the helper, which the rule leaves unmarked. The knock
+names the entity it concerns in `knock.about`, and its line starts with that
+entity's id. With no operator's session able to hear, it waits at the project
+for the next one a person opens.
+
+The session that stays on a topic (see Standing duties) is no helper, and hands
+up with the same tool: its project is the home of the persona it wears. That
+knock is all of its writing that reaches another session. Such sessions do not
+message each other or the operator, and what needs a person is a decision or a
+task assigned to them, not a hand-up. The same line from any other session is an
+ordinary knock at the operator, and so routine.
+
+Two more hand-ups are written for a helper, each naming what it had taken: a
+helper that exited with anything but 0, and one the next routine item asks to
+stop before starting another, because its transcript gained no entry for 5
+minutes (`QUIET`) or it was still going after 30 (`LIMIT`). That hand-up carries
+the helper's last words. A run that has said its last words can linger for good
+on a background command it started, and everything behind it would wait. A
+helper's own ending knocks nobody (`reported`), and a run it started that ends
+after it knocks the operator, where it is routine again.
 
 A run's ending and a task's mark are routine to read, not to hear of. When a
 helper exits, each task it took a run's report or a mark for reaches the session

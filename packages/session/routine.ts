@@ -22,8 +22,10 @@
 //   the knock, wears `person`; a letter's `mail.from` is a person's address.
 //   A watcher's knock telling of the owner's comment or answer, his text and
 //   his mail all name him so.
-// - a helper's hand-up: the knock was written through a session wearing
-//   `helping`.
+// - a hand-up: the knock was written through a session wearing `helping`, or
+//   through one opened on a topic (@yaks/topic's `session.topic`, read by
+//   name). The session that stays on a topic is no helper, and a hand-up is
+//   all of its writing that reaches another session.
 //
 // A routine item gets `routine{project}` in the same batch, so no listener
 // ever reads it as the operator's (./listen.ts leaves it out) and
@@ -60,6 +62,15 @@ let wearing = async (tx: Tx, ids: Eid[], name: string): Promise<Set<Eid>> =>
   new Set(
     (ids.length ? await tx.get(ids, [name]) : [])
       .filter((b) => b[name]).map((b) => b.entity.eid),
+  )
+
+// Which of `ids` a knock written through is a hand-up: a helper, or a session
+// opened on a topic.
+let handing = async (tx: Tx, ids: Eid[]): Promise<Set<Eid>> =>
+  new Set(
+    (ids.length ? await tx.get(ids, [HELPING, SESSION]) : [])
+      .filter((b) => b[HELPING] || comp(b, SESSION).topic)
+      .map((b) => b.entity.eid),
   )
 
 // How far up a line of projects is followed: a longer one is a cycle.
@@ -171,11 +182,11 @@ let routed = async (
   let via = (b: Bundle) => str(writer(b.entity.eid).via)
   let sender = (b: Bundle) => str(comp(b, 'mail').from).toLowerCase()
   let people = await wearing(tx, unique(knocks.map(from)), 'person')
-  let helpers = await wearing(tx, unique(knocks.map(via)), HELPING)
+  let up = await handing(tx, unique(knocks.map(via)))
   let persons = await personal(tx, vocab, unique(letters.map(sender)))
   let theirs = await answering(tx, letters)
   let routine = new Set([
-    ...knocks.filter((b) => !people.has(from(b)) && !helpers.has(via(b))),
+    ...knocks.filter((b) => !people.has(from(b)) && !up.has(via(b))),
     ...letters.filter((b) => !persons.has(sender(b)) && !theirs.has(b)),
   ])
   return bundles.map((b) =>

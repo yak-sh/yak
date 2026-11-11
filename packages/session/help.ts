@@ -17,11 +17,13 @@
 //
 // Only a hand-up reaches the operator: a knock written through a helper,
 // which ./routine.ts leaves unmarked. The helper writes its own with
-// `yak session send`. This file writes two, each naming what the helper had
-// taken: one that ended badly, and one the next routine item stops because it
-// said nothing for {@link QUIET} or was still going after {@link LIMIT}. A run
-// that has said its last words can linger for good on a background command
-// it started, and everything behind it would wait.
+// `session_handup` ({@link handed}), and so does a session opened on a topic,
+// which is no helper and has no other way to reach another session. This file
+// writes two, each naming what the helper had taken: one that ended badly,
+// and one the next routine item stops because it said nothing for
+// {@link QUIET} or was still going after {@link LIMIT}. A run that has said
+// its last words can linger for good on a background command it started, and
+// everything behind it would wait.
 //
 // A run's ending and a task's mark are not routine to the session that
 // started the run or watches the task, only their reading is. When a helper
@@ -42,7 +44,7 @@ import { token } from '@yaks/graph/sha256'
 import { human } from '@yaks/id'
 import { absent, and, eq, every, fields, present } from '@yaks/query'
 import { SESSION } from './comp.ts'
-import { ended as over, type Owed, owing } from './listen.ts'
+import { ended as over, type Owed, owing, worksFor } from './listen.ts'
 import { HELPER, HELPING, ROUTINE } from './routine.ts'
 import { operatorOf } from './watch.ts'
 import { STOP_ENTRY } from './native.ts'
@@ -79,6 +81,35 @@ export let waiting = (g: G, project: Eid): Promise<Bundle[]> =>
     every(),
   )))
 
+// Who hears a project's hand-up: its operator while one can hear, else the
+// project, where it waits for the next session a person opens.
+let hears = async (g: G, project: Eid): Promise<Eid> =>
+  await operatorOf(g, project) ?? project
+
+/** The knock `session` hands up with: one line at the operator of the project
+ * it works for (a helper's `helping.project`, else the home of the persona it
+ * wears), led by the id of the entity it concerns. The door writes it through
+ * that session, which is what makes it a hand-up for a helper and for a
+ * session opened on a topic (./routine.ts). None where the session works for
+ * no project. */
+export let handed = async (
+  g: G,
+  session: Eid,
+  about: Eid,
+  line: string,
+): Promise<Bundle | undefined> => {
+  let [from] = await g.get([session], [HELPING, SESSION])
+  let project = str(comp(from, HELPING).project) ||
+    (await worksFor(g, from))[0]
+  if (!project) return
+  let [concerns] = await g.get([about])
+  return {
+    entity: { eid: '$knock' },
+    knock: { target: await hears(g, project), about },
+    doc: { body: `${human(g.vocab)(concerns)}: ${line.trim()}` },
+  }
+}
+
 // A knock at the operator written through `helper`, which makes it a hand-up
 // (./routine.ts). Named for what it tells, so a run again tells it once.
 let handUp = async (
@@ -88,8 +119,7 @@ let handUp = async (
   body: string,
   to?: Eid,
 ) => {
-  let project = str(comp(helper, HELPING).project)
-  to ??= await operatorOf(g, project) ?? project
+  to ??= await hears(g, str(comp(helper, HELPING).project))
   try {
     await g.apply(
       signed([{
@@ -185,22 +215,10 @@ let atWork = async (g: G, project: Eid, o: Opts): Promise<boolean> => {
 
 // What a helper is told: whose place it takes, how to hand up, and each
 // waiting knock whole. How each kind is handled is its persona's to say.
-let brief = (
-  g: G,
-  home: Bundle,
-  operator: Bundle | undefined,
-  owed: Owed[],
-): string => {
+let brief = (g: G, home: Bundle, owed: Owed[]): string => {
   let name = human(g.vocab)
   let project = [name(home), str(comp(home, 'doc').title)].filter(Boolean)
     .join(' ')
-  // With no operator's session open, the hand-up waits at the project for the
-  // next one a person opens. Each command names its entity by eid: a session
-  // with no number reads `#…`, which a shell takes for a comment.
-  let up = operator
-    ? `\`yak session send ${operator.entity.eid} "<line>"\``
-    : `\`yak graph apply '$k .knock.target=${home.entity.eid} ` +
-      `.doc.body="<line>"'\``
   return [
     `You are the helper of ${project}'s operator. ${owed.length} ` +
     `item${s(owed.length)} arrived for the operator and ${
@@ -208,7 +226,10 @@ let brief = (
     } yours to take in its place, so its own session is not woken. Handle ` +
     'each as the operator would and record what you did in the graph, where ' +
     "the work lives. Hand up only what needs the operator's judgment or a " +
-    `person, as one short line with the id: ${up}.`,
+    'person, as one short line about the entity it concerns: ' +
+    // Quoted: an id with no number reads `#…`, which a shell takes for a
+    // comment.
+    '`yak session handup \'<id>\' "<line>"`.',
     ...owed.map((o) => o.line),
   ].join('\n\n')
 }
@@ -256,7 +277,7 @@ export let take = async (g: G, project: Eid, o: Opts = {}): Promise<void> => {
       {
         entity: { eid: mint() },
         entry: { session },
-        content: { body: brief(g, home, operator, owed) },
+        content: { body: brief(g, home, owed) },
         using: {
           provider,
           ...model ? { model } : {},

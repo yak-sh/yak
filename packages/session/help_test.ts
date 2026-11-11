@@ -1,10 +1,12 @@
 // A project wearing `helper` has its operator's routine taken by a helper: a
 // knock no person wrote starts one session with everything waiting, one at a
-// time, and only a person's words and a helper's hand-up reach the operator,
-// committed and run as the rule (./routine.ts) and `session_help` are.
+// time, and only a person's words and a hand-up reach the operator, from a
+// helper or from a session opened on a topic, committed and run as the rule
+// (./routine.ts) and `session_help` are.
 
 import { type Bundle, graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
+import { signed } from '@yaks/graph/provenance'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { effects } from '@yaks/effects'
@@ -21,13 +23,16 @@ import { personaDoc } from '@yaks/persona/vocab'
 import { projectDoc } from '@yaks/project/vocab'
 import { processDoc } from '@yaks/process/vocab'
 import { taskDoc } from '@yaks/task/vocab'
-import { equal, test } from '@yaks/testing'
+import { edgeDoc, edgeKeywords } from '@yaks/edge'
+import { topicDoc } from '@yaks/topic/vocab'
+import { equal, test, throws } from '@yaks/testing'
 import { sessionDoc } from './comp.ts'
 import { statusComputed } from './state.ts'
 import { sessions } from './plugin.ts'
 import { help, LIMIT, QUIET } from './help.ts'
 import { hear } from './listen.ts'
 import { reported } from './watch.ts'
+import { runs } from './tools.ts'
 
 let vocab = loadVocab([
   kernelDoc,
@@ -43,7 +48,9 @@ let vocab = loadVocab([
   projectDoc,
   processDoc,
   taskDoc,
-], [kernelKeywords, idKeywords])
+  edgeDoc,
+  topicDoc,
+], [kernelKeywords, idKeywords, edgeKeywords])
 
 let CLAUDE = identityEid('provider', ['claude'])
 let SONNET = identityEid('model', ['sonnet'])
@@ -51,9 +58,10 @@ let HELPER = { persona: 'taskmaster', provider: CLAUDE, model: SONNET }
 
 type Row = Record<string, Record<string, unknown>>
 
-// A project whose operator has a helper, the persona both wear, Jeff, and the
-// session Jeff opened. `knock` leaves one at the project (or `to`) and runs
-// what the commit owes; `ahead` moves the helper's clock.
+// A project whose operator has a helper, the persona both wear, Jeff, the
+// session Jeff opened and a task. `knock` leaves one at the project (or `to`)
+// and runs what the commit owes; `handUp` is `session_handup` called through a
+// session, written as its door writes it; `ahead` moves the helper's clock.
 let office = async (helper: object | null = HELPER) => {
   let fx = effects(vocab)
   let g = graph({
@@ -86,7 +94,19 @@ let office = async (helper: object | null = HELPER) => {
       entity: { eid: 'operator' },
       session: { id: 'operator', persona: 'taskmaster', operator: true },
     },
+    { entity: { eid: 'gate' }, task: {}, doc: { title: 'Fix the gate' } },
   ])
+  let { session_handup } = runs({ vocab })
+  let handUp = async (via: string | undefined, text: string) => {
+    let call = {
+      entity: { eid: 'call' },
+      call: { args: { about: 'gate', text } },
+      ...via ? { $actor: { via } } : {},
+    }
+    let made = await session_handup!(call, g) as Bundle[]
+    await write(signed(made, { via }))
+    return made
+  }
   let n = 0
   let knock = (body: string, more: Bundle | object = {}, to = 'p') =>
     write([{
@@ -135,6 +155,7 @@ let office = async (helper: object | null = HELPER) => {
     write,
     fx: () => fx.idle(),
     knock,
+    handUp,
     letter,
     helpers,
     heard,
@@ -260,12 +281,50 @@ test('a helper’s hand-up reaches the operator, and its own ending knocks nobod
   let o = await office()
   await o.knock('New bug: gate failed')
   let [h] = await o.helpers()
-  await o.knock('T-9 needs your call', { $actor: { via: h.eid } }, 'operator')
-  equal(await o.heard(), ['T-9 needs your call'])
+  await o.handUp(h.eid, 'needs your call')
+  equal(await o.heard(), ['T-7: needs your call'])
   await o.exit(h.eid, 0)
   equal(await reported(o.g, h.eid), { tasks: [] })
   equal(await o.heard(), [])
   equal((await o.helpers()).length, 1)
+})
+
+test('a session opened on a topic hands up as a helper does, and any other session’s line is the helper’s', async () => {
+  let o = await office()
+  await o.write([
+    { entity: { eid: 'funnel' }, topic: { name: 'funnel' } },
+    {
+      entity: { eid: 'head' },
+      session: { id: 'head', persona: 'taskmaster', topic: 'funnel' },
+    },
+    { entity: { eid: 'worker' }, session: { id: 'w', persona: 'taskmaster' } },
+  ])
+  await o.handUp('head', 'two reverts would fix it, and which is yours')
+  equal(await o.helpers(), [])
+  equal(await o.heard(), [
+    'T-7: two reverts would fix it, and which is yours',
+  ])
+  await o.handUp('worker', 'landed')
+  equal((await o.helpers()).map((h) => h.told), [['T-7: landed']])
+  equal(await o.heard(), [])
+})
+
+test('a hand-up waits at the project while no operator can hear, and no session that works for none hands up', async () => {
+  let o = await office()
+  await o.write([
+    { entity: { eid: 'funnel' }, topic: { name: 'funnel' } },
+    {
+      entity: { eid: 'head' },
+      session: { id: 'head', persona: 'taskmaster', topic: 'funnel' },
+    },
+    { entity: { eid: 'operator' }, session: { ended: true } },
+    { entity: { eid: 'stray' }, session: { id: 'stray' } },
+  ])
+  let [made] = await o.handUp('head', 'needs your call')
+  equal(made.knock, { target: 'p', about: 'gate' })
+  equal(await o.helpers(), [])
+  await throws(() => o.handUp('stray', 'needs your call'), /works for one/)
+  await throws(() => o.handUp(undefined, 'needs your call'), /no session/)
 })
 
 test('a helper that ended badly is handed up with what it had taken', async () => {

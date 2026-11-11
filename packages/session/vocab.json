@@ -691,7 +691,7 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "description": "on a knock: a helper's to take, never said to the operator's session. Written with the knock when it is addressed to the operator of a project wearing `helper` and is neither a person's words nor a helper's hand-up",
+      "description": "on a knock: a helper's to take, never said to the operator's session. Written with the knock when it is addressed to the operator of a project wearing `helper` and is neither a person's words nor a hand-up: a knock written through a helper, or through a session opened on a topic",
       "properties": {
         "project": {
           "type": "string",
@@ -865,6 +865,33 @@
           "description": "with once, seconds nothing new must come before it ends (default 5, at most 6 times that after the first line; 0 ends with the first read that prints anything)"
         }
       }
+    },
+    "session_handup": {
+      "tool": true,
+      "destructive": false,
+      "noun": "session",
+      "verb": "handup",
+      "title": "Hand something up to the operator",
+      "description": "Hand up what needs the operator\u2019s judgment, as one short line about the entity it concerns. It knocks the operator of the project the calling session works for, or waits at the project until a person opens a session for it. From a helper, or from a session opened on a topic, the operator\u2019s own session hears it; such a session reaches no other session any other way. What needs a person is a decision or a task assigned to them (decision_new, task_new), not a hand-up. Returns the knock.",
+      "input": {
+        "about": {
+          "type": "string",
+          "ref": "entity",
+          "description": "What it concerns: the id of the task, bug, decision or other entity. The line is said after it."
+        },
+        "text": {
+          "type": "string",
+          "description": "One short line: what needs the operator\u2019s judgment."
+        }
+      },
+      "required": [
+        "about",
+        "text"
+      ],
+      "positional": [
+        "about",
+        "text"
+      ]
     },
     "session_brief": {
       "tool": true,

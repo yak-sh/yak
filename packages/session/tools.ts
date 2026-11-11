@@ -90,6 +90,7 @@ let wake = () => import('./wake.ts')
 let hooks = () => import('./hooks.ts')
 let cache = () => import('./cache.ts')
 let personas = () => import('@yaks/persona')
+let help = () => import('./help.ts')
 
 let str = (v: unknown): string => v == null ? '' : String(v)
 
@@ -255,6 +256,29 @@ export let runs = (
         [SESSION]: { id },
       },
     ]
+  },
+
+  // A hand-up is the caller's own knock: the door writes what this returns
+  // through the session that asked, and that is what makes it one
+  // (./routine.ts).
+  session_handup: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let session = str(who(call)?.via)
+    let knock = session
+      ? await (await help()).handed(
+        graph,
+        session,
+        str(args.about),
+        str(args.text),
+      )
+      : undefined
+    if (!knock) {
+      throw new Refused(
+        'a hand-up goes to the operator of the project a session works ' +
+          'for, and this call came through no session that works for one',
+      )
+    }
+    return [knock]
   },
 
   // The start of the loop: the transcript becomes an entity, and what it
