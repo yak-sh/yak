@@ -266,9 +266,12 @@ export let neighbours = (host: Host, options: Options = {}): Reply => {
     let meant = now.embedder
       ? await vectored(db, now.embedder, made)
       : new Set<Eid>()
-    // What the calling session wrote is its own, and no news to it.
+    // What the calling session wrote is its own, and no news to it. `!=`
+    // holds where `created.via` is absent too (@yaks/sql `ne`), and spelling
+    // that out as an OR made the screen a union over every `created` row:
+    // over two minutes on the box's graph.
     let via = who(call)?.via
-    let others = via ? [or(absent('created.via'), ne('created.via', via))] : []
+    let others = via ? [ne('created.via', via)] : []
     let out: Bundle[] = []
     for (let s of made) {
       let meaning = meant.has(s.entity)
