@@ -99,7 +99,11 @@ export let bucket = () => {
     etags.set(bytes, next)
     return next
   }
-  let put = (k: string, v: ArrayBuffer | ArrayBufferView | string) => {
+  let put = async (
+    k: string,
+    v: ArrayBuffer | ArrayBufferView | string | ReadableStream<Uint8Array>,
+  ) => {
+    if (v instanceof ReadableStream) v = await new Response(v).arrayBuffer()
     let bytes = typeof v == 'string'
       ? new TextEncoder().encode(v)
       : v instanceof ArrayBuffer
@@ -107,7 +111,6 @@ export let bucket = () => {
       : new Uint8Array(v.buffer, v.byteOffset, v.byteLength)
     held.set(k, new Uint8Array(bytes))
     if (!at.has(k)) at.set(k, Date.now())
-    return Promise.resolve()
   }
   return {
     held,

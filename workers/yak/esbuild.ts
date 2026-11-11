@@ -40,6 +40,7 @@ import { type Config, sourceOf } from './wrangler_app.ts'
 import { url } from './host.ts'
 import { fillable, noted, valid as sharedPath } from './shared.ts'
 import { RECORD, used } from './toolkit.ts'
+import { keepShared } from './shared-files.ts'
 
 export let LOCK = 'package-lock.json'
 
@@ -309,9 +310,7 @@ export let writeResources = async (
     ),
   )
   await Promise.all([
-    ...Object.entries(answer.shared ?? {}).map(([path, code]) =>
-      blobs.put(path, encode(code))
-    ),
+    keepShared(blobs, answer.shared ?? {}),
     noted(blobs, answer.tarballs ?? {}),
   ])
 }

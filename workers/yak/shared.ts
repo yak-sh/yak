@@ -2,6 +2,8 @@
 // package graph, including dependency URLs and resources. They have their own
 // storage namespace: an app's private content-addressed bytes never cross this
 // door. These URLs outlive releases and apps, as browser caches do.
+// Each compiled group is one object (shared-files.ts), served at the same file
+// URLs as the individually stored modules older releases still use.
 //
 // An npm package's home (@yaks/esbuild home.ts) is served here too:
 // `__packages/<sha256>/` holds the files of the registry tarball whose SHA-256
@@ -15,6 +17,7 @@ import { REGISTRY } from '@yaks/esbuild'
 import { immutable } from './cache.ts'
 import type { Env } from './env.ts'
 import { r2RawObjects } from './lib/objects.ts'
+import { openShared } from './shared-files.ts'
 
 export let PREFIX = '__packages/'
 
@@ -88,7 +91,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let path = new URL(req.url).pathname.slice(1)
   let raw = r2RawObjects(env.BLOBS)
   let object = valid(path)
-    ? await raw.open(path) ?? await filled(raw, path)
+    ? await openShared(raw, path) ?? await filled(raw, path)
     : null
   if (!object) {
     return new Response('not found', {
