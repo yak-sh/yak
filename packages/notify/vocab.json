@@ -32,6 +32,7 @@
       "component": true,
       "type": "object",
       "kind": true,
+      "notice": true,
       "prefix": "K",
       "properties": {
         "target": {
@@ -58,6 +59,7 @@
       "component": true,
       "type": "object",
       "kind": true,
+      "notice": true,
       "before": [
         "doc"
       ],

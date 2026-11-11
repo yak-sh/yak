@@ -114,6 +114,9 @@ export type CompInfo = {
   /** false = an entity wearing it is found by no search (@yaks/fts,
    * @yaks/embedding) */
   found: boolean
+  /** true = an entity wearing it is a one-off record, not a resource: a
+   * knock, a transcript entry (@yaks/embedding `neighbours`) */
+  notice: boolean
   /** false = the journal records no write of it (@yaks/journal) */
   journal: boolean
   kind: boolean // this comp names a display kind
@@ -303,6 +306,7 @@ export type PropSchema = {
   wire?: boolean
   embed?: boolean
   found?: boolean
+  notice?: boolean
   journal?: boolean
   // On a property a boolean (this property alone); on a component the composite
   // property lists. `Vocab.indexes` merges the two forms. Stored references are

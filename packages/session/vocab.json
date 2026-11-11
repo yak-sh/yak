@@ -353,6 +353,7 @@
       "component": true,
       "type": "object",
       "kind": true,
+      "notice": true,
       "lazy": true,
       "unique": [
         [

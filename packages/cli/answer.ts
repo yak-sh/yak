@@ -63,8 +63,10 @@ type Hit = {
   source: 'text' | 'meaning' | 'both'
   session?: string
   speaker?: 'input' | 'output'
-  /** the entity a call just made that this one was found near */
+  /** the entity a call just made that this one may be a twin of */
   near?: string
+  /** the entity a call just made that this one is a related resource of */
+  related?: string
   status?: string
 }
 
@@ -92,6 +94,9 @@ let hitOf = (b: Bundle): Hit | null => {
       ? 'output'
       : undefined,
     near: 'near' in h && typeof h.near == 'string' ? h.near : undefined,
+    related: 'related' in h && typeof h.related == 'string'
+      ? h.related
+      : undefined,
     status: 'status' in h && typeof h.status == 'string' ? h.status : undefined,
   }
 }
@@ -118,7 +123,11 @@ let hit = <Node>(
   return h(
     'span',
     { class: 'SearchHit' },
-    found.near ? `near ${s.name(found.near)}: ` : '',
+    found.near
+      ? `near ${s.name(found.near)}: `
+      : found.related
+      ? `related to ${s.name(found.related)}: `
+      : '',
     s.id(b),
     title ? ` ${title}` : '',
     ` · ${kind}`,

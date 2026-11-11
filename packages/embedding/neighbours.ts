@@ -2,10 +2,20 @@
 // (./graph.ts), which a direct tool call's answer carries beside the tool's
 // own (@yaks/tools `Opts.reply`).
 //
-// An entity a call created — a task, a memory, a comment — comes back with the
-// few existing entities of its kind nearest to it, so whoever wrote it sees at
-// once whether the graph already holds it, and keeps the one that stands
-// instead of two. A call that created nothing is answered as it was.
+// An entity a call made — a task, a memory, a comment — comes back with two
+// short lists. The first is the few existing entities of its kind nearest to
+// it (`hit.near`), so whoever wrote it sees at once whether the graph already
+// holds it, and keeps the one that stands instead of two. The second is the
+// few nearest of any kind that is a resource (`hit.related`): the memories,
+// tasks, designs and topics it bears on, and the words a person wrote. A
+// one-off record (a kind the vocabulary marks `notice`: a knock, a transcript
+// entry) is left out of it unless a person wrote it. A call that made nothing
+// is answered as it was.
+//
+// Made means created, or marked as a kind for the first time: memory_save
+// keeps a person's words where they were said, by marking the transcript entry
+// or comment that holds them a `memory`, and that memory is as new as a
+// created one.
 //
 // A new entity has no vector yet: the sweep (./sweep.ts) makes them off the
 // write path, seconds later. So this makes the vector now, for the few
@@ -22,7 +32,18 @@
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { called } from '@yaks/graph/hit'
 import type { Reply } from '@yaks/tools'
-import { and, every, limit, near, order, present, text } from '@yaks/query'
+import {
+  absent,
+  and,
+  type Clause,
+  every,
+  limit,
+  near,
+  or,
+  order,
+  present,
+  text,
+} from '@yaks/query'
 import {
   as,
   col,
@@ -44,7 +65,7 @@ import { SIMILAR } from './compile.ts'
 // The ordering @yaks/fts gives a text search: closest match first.
 let SEARCH = 'search'
 
-/** How many neighbours each new entity is answered with. */
+/** How many neighbours of each list a new entity is answered with. */
 export let FEW = 3
 
 /** How many of one call's new entities are looked at: a plan of twenty
@@ -83,15 +104,20 @@ let textOf = (b: Bundle, prose: Field[]): string =>
     .filter((v): v is string => typeof v == 'string' && !!v.trim())
     .join('\n')
 
+// Which list a neighbour is in: `near`, a possible twin of the same kind, or
+// `related`, a resource of any kind.
+type List = 'near' | 'related'
+
 // One neighbour, as a search answers one (@yaks/cli, @yaks/tools `worded`): a
 // `hit` naming the id it is called by (@yaks/graph/hit `called`), its kind,
 // its title and its status where it has them, whether meaning or words found
-// it, and `near`, the new entity it was found near. An entity with no title is
-// shown by an excerpt of its text instead.
+// it, and, under its list's name, the new entity it was found near. An entity
+// with no title is shown by an excerpt of its text instead.
 let hit = (
   vocab: Vocab,
   b: Bundle,
   of: Eid,
+  list: List,
   source: 'meaning' | 'text',
   prose: Field[],
 ): Bundle => {
@@ -105,7 +131,7 @@ let hit = (
       ...title ? { title } : {},
       snippet: title ? '' : excerpt(textOf(b, prose)),
       source,
-      near: of,
+      [list]: of,
       ...status ? { status } : {},
     },
   }
@@ -160,22 +186,45 @@ let vectored = async (
 let words = (s: string): string[] =>
   (s.split('\n')[0].match(/[\p{L}\p{N}]{3,}/gu) ?? []).slice(0, 8)
 
+// The kind a written bundle made its entity, if it made one: a created
+// entity's kind, or a kind that is a mark (@yaks/vocab `CompInfo.mark`) whose
+// `at` this write stamped, so marked for the first time.
+let became = (vocab: Vocab, b: Bundle): string | undefined => {
+  if (b.tombstone) return undefined
+  if (b.created) return vocab.kindOf(b)
+  return Object.keys(b).find((c) => {
+    let info = vocab.comp(c)
+    return info?.kind && info.mark && (b[c] as Comp | undefined)?.at
+  })
+}
+
+// What a related resource is: wearing no notice, or written by a person,
+// where the vocabulary knows people.
+let resources = (vocab: Vocab): Clause[] => {
+  let notices = vocab.all.filter((c) => vocab.comp(c)?.notice)
+  if (!notices.length) return []
+  let none = and(...notices.map(absent))
+  return [vocab.comp('person') ? or(none, present('created.by.person')) : none]
+}
+
 /**
- * The reply: for each entity the call's write created (it wears the `created`
- * that write stamped), its nearest few existing entities of the same kind, as
+ * The reply: for each entity the call's write made, its nearest few existing
+ * entities of the same kind, then its nearest few resources of any kind, as
  * `hit` bundles.
  */
 export let neighbours = (host: Host, options: Options = {}): Reply => {
   let db = statements(host.storage)
   // Words are a query only where the vocabulary indexes words at all.
   let indexed = fields(host.vocab, searched).length > 0
+  let kept = resources(host.vocab)
   return async (_call, _answer, wrote) => {
-    let fresh = new Set(
-      wrote.filter((b) => b.created && !b.tombstone).map((b) => b.entity.eid),
-    )
-    let born = wrote.filter((b) =>
-      fresh.has(b.entity.eid) && host.vocab.kindOf(b) != 'entity'
-    )
+    let kinds = new Map<Eid, string>()
+    for (let b of wrote) {
+      let kind = became(host.vocab, b)
+      if (kind) kinds.set(b.entity.eid, kind)
+    }
+    let fresh = new Set(kinds.keys())
+    let born = [...kinds].filter(([, k]) => k != 'entity').map(([e]) => e)
     if (!born.length) return []
     let now = await ready(host.vocab, options, host.graph, host.embedders)
     let prose = resolved(now.text, host.derived)
@@ -183,30 +232,39 @@ export let neighbours = (host: Host, options: Options = {}): Reply => {
     let made = sources(
       db,
       prose,
-      owners(db, born.map((b) => b.entity.eid)),
+      owners(db, born),
     ).slice(0, MOST)
     if (!made.length) return []
     let meant = now.embedder
       ? await vectored(db, now.embedder, made)
       : new Set<Eid>()
-    let kinds = new Map(born.map((b) => [b.entity.eid, host.vocab.kindOf(b)]))
     let out: Bundle[] = []
     for (let s of made) {
-      let kind = present(kinds.get(s.entity)!)
-      // Room for the other new ones, which are not neighbours yet.
-      let room = limit(FEW + fresh.size)
+      let meaning = meant.has(s.entity)
       let terms = words(s.text)
-      let asked = meant.has(s.entity)
-        ? and(kind, near(s.entity), order(SIMILAR), room, every())
-        : indexed && terms.length
-        ? and(kind, ...terms.map(text), order(SEARCH), room, every())
-        : null
-      if (!asked) continue
-      let found = (await host.graph.read(asked))
-        .filter((b) => !fresh.has(b.entity.eid))
-        .slice(0, FEW)
-      let source: 'meaning' | 'text' = meant.has(s.entity) ? 'meaning' : 'text'
-      out.push(...found.map((b) => hit(host.vocab, b, s.entity, source, prose)))
+      if (!meaning && !(indexed && terms.length)) continue
+      let source: 'meaning' | 'text' = meaning ? 'meaning' : 'text'
+      let shown = new Set(fresh)
+      // The nearest few matching `by`, past the ones already shown: room for
+      // them, which are not neighbours yet.
+      let nearest = async (list: List, by: Clause[]) => {
+        let room = limit(FEW + shown.size)
+        let ranked = meaning
+          ? [near(s.entity), order(SIMILAR)]
+          : [...terms.map(text), order(SEARCH)]
+        let found =
+          (await host.graph.read(and(...by, ...ranked, room, every())))
+            .filter((b) => !shown.has(b.entity.eid))
+            .slice(0, FEW)
+        found.forEach((b) => shown.add(b.entity.eid))
+        out.push(
+          ...found.map((b) =>
+            hit(host.vocab, b, s.entity, list, source, prose)
+          ),
+        )
+      }
+      await nearest('near', [present(kinds.get(s.entity)!)])
+      await nearest('related', kept)
     }
     return out
   }

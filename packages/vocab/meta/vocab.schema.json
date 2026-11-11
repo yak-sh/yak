@@ -269,6 +269,9 @@
         "found": {
           "type": "boolean"
         },
+        "notice": {
+          "type": "boolean"
+        },
         "journal": {
           "type": "boolean"
         },

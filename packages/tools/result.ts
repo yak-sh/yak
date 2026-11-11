@@ -133,7 +133,8 @@ let capped = (pieces: Iterable<string>, n: number, most: number) => {
 // A search answer carries a query-only hit, not the entity's whole body: the
 // id it is called by (its human id where it has one, @yaks/graph/hit), the
 // kind, title and words that found it, and, for a neighbour of something a
-// call just made, the entity it is `near` and its `status`. Say that hit as one
+// call just made, the entity it is `near` (a possible twin) or `related` to (a
+// resource of another kind or further off) and its `status`. Say that hit as one
 // line for an MCP reader; structuredContent keeps its fields.
 let hitOf = (b: Bundle): Comp | null => {
   let hit = b.hit as Comp | undefined
@@ -154,11 +155,13 @@ let hitLine = (b: Bundle, hit: Comp): string => {
   let title = said('title')
   let status = said('status')
   let near = said('near')
+  let related = said('related')
   let source = hit.source == 'meaning' ? ' (meaning)' : ''
   let snippet = clean(String(hit.snippet).replace(mark, '*$1*'))
-  return `${near ? `near ${near}: ` : ''}${id}${title ? ` ${title}` : ''} · ${
-    clean(String(hit.kind))
-  }${status ? ` ${status}` : ''}${source}${snippet ? ` — ${snippet}` : ''}`
+  let of = near ? `near ${near}: ` : related ? `related to ${related}: ` : ''
+  return `${of}${id}${title ? ` ${title}` : ''} · ${clean(String(hit.kind))}${
+    status ? ` ${status}` : ''
+  }${source}${snippet ? ` — ${snippet}` : ''}`
 }
 
 // What a tool's text answer carries: the spine every row has (@yaks/kernel),

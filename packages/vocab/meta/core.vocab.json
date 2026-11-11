@@ -189,6 +189,11 @@
       "type": "boolean",
       "default": true
     },
+    "notice": {
+      "description": "true = an entity wearing this component is a one-off record of something that happened, not a resource anyone keeps: a knock, a transcript entry, a notification. What a new entity relates to (@yaks/embedding `neighbours`) leaves it out, unless a person wrote it. Default false.",
+      "type": "boolean",
+      "default": false
+    },
     "journal": {
       "description": "false = the journal (@yaks/journal) records no write of this component: it has no history and no undo, and other processes following the journal's feed never hear of it. An entity holding nothing else leaves no trace, its deletion included. For a process's own bookkeeping, like an effect run. Default true.",
       "type": "boolean",

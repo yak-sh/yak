@@ -1,7 +1,7 @@
 // A write through the tools answers what it made is near: the host composes
 // this plugin's reply into its one runner (@yaks/cli `compose`), and a task,
-// a memory or a comment created by a call comes back with its nearest few of
-// the same kind.
+// a memory or a comment a call made comes back with its nearest few of the
+// same kind, then its nearest few resources of any kind.
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
@@ -21,6 +21,8 @@ let PLUGINS: Plug[] = [
   '@yaks/task',
   '@yaks/memory',
   '@yaks/model',
+  '@yaks/notify',
+  '@yaks/persona',
 ]
 
 // A graph with this plugin, its embedder as given.
@@ -42,13 +44,15 @@ let SHELF = [
   { title: 'Fix the login page crash on submit', memory: true },
 ]
 
-// The graph before the call: two tasks and a memory, each with its vector.
-let stocked = async (yak: Yak) => {
+// The graph before the call: two tasks, a memory and whatever else is given,
+// each with its vector.
+let stocked = async (yak: Yak, more: Bundle[] = []) => {
   await yak.graph.apply(SHELF.map((s, i) => ({
     entity: { eid: `old-${i}` },
     doc: { title: s.title },
     ...s.memory ? { memory: {} } : { task: {} },
   })))
+  if (more.length) await yak.graph.apply(more)
   await sweep(
     yak.storage.statements,
     fields(yak.vocab, searched),
@@ -68,11 +72,15 @@ let call = async (yak: Yak, tool: string, args: Record<string, unknown>) => {
   )
 }
 
-let hits = (answer: Bundle[]): Comp[] =>
-  answer.filter((b) => b.hit).map((b) => {
-    let { near: _, ...h } = b.hit as Comp
+// The hits of one list: `near`, the possible twins, or `related`.
+let hits = (answer: Bundle[], list = 'near'): Comp[] =>
+  answer.filter((b) => (b.hit as Comp | undefined)?.[list]).map((b) => {
+    let { [list]: _, ...h } = b.hit as Comp
     return { eid: b.entity.eid, ...h }
   })
+
+let eids = (answer: Bundle[], list = 'near') =>
+  hits(answer, list).map((h) => h.eid)
 
 let made = (answer: Bundle[]) => answer.find((b) => b.created)!.entity.eid
 
@@ -85,6 +93,8 @@ test('a new task answers its nearest tasks, and not itself or a memory', async (
     })
     let found = hits(answer)
     assertEquals(found.map((h) => h.eid), ['old-0', 'old-1'])
+    // The memory saying the same is related, though not a task.
+    assertEquals(eids(answer, 'related'), ['old-2'])
     assertEquals(found[0], {
       eid: 'old-0',
       id: 'old-0',
@@ -96,7 +106,7 @@ test('a new task answers its nearest tasks, and not itself or a memory', async (
     })
     // What a model reads: the new task, then a line for each neighbour.
     assertEquals(
-      worded(answer).split('\n').filter((l) => l.startsWith('near')),
+      worded(answer).split('\n').filter((l) => /^(near|related)/.test(l)),
       [
         `near ${
           made(answer)
@@ -104,6 +114,9 @@ test('a new task answers its nearest tasks, and not itself or a memory', async (
         `near ${
           made(answer)
         }: old-1 Paint the garden shed green · task open (meaning)`,
+        `related to ${
+          made(answer)
+        }: old-2 Fix the login page crash on submit · memory (meaning)`,
       ],
     )
 
@@ -116,7 +129,7 @@ test('a new task answers its nearest tasks, and not itself or a memory', async (
       })),
     })
     let each = ['old-0', made(answer), 'old-1']
-    assertEquals(hits(plan).map((h) => h.eid), [...each, ...each])
+    assertEquals(eids(plan), [...each, ...each])
 
     // A write that created nothing is answered as it was.
     let moved = await call(yak, 'task_update', {
@@ -149,6 +162,38 @@ test('a comment answers comments near it, shown by their words', async () => {
       snippet: 'The crash is in the submit handler of the login form.',
       source: 'meaning',
     }])
+  } finally {
+    await yak.close()
+  }
+})
+
+test('a memory marked on words already said answers memories and what a person wrote', async () => {
+  let yak = await open({ provider: 'hash' })
+  try {
+    let said = 'The login page crash on submit is fixed'
+    await stocked(yak, [
+      { entity: { eid: 'ada' }, person: {}, doc: { title: 'Ada' } },
+      { entity: { eid: 'bot' }, doc: { title: 'a script' } },
+      {
+        entity: { eid: 'words' },
+        comment: { target: 'old-0' },
+        doc: { body: said },
+      },
+      ...['ada', 'bot'].map((by) => ({
+        entity: { eid: `knock-${by}` },
+        knock: { target: 'old-0' },
+        doc: { body: `${said} exited 0` },
+        $actor: { by },
+      })),
+    ])
+    let answer = await call(yak, 'memory_save', { on: 'words' })
+    assertEquals(eids(answer), ['old-2'])
+    // A person's knock is a resource; a script's is a one-off notice.
+    let related = eids(answer, 'related')
+    assertEquals(related.includes('knock-ada'), true)
+    assertEquals(related.includes('knock-bot'), false)
+    // Marking it again makes nothing new.
+    assertEquals(hits(await call(yak, 'memory_save', { on: 'words' })), [])
   } finally {
     await yak.close()
   }
