@@ -99,9 +99,22 @@ test("a tool's guidance is where the tool is given", () => {
   let spawn = first.tools.find((t) => t.name == 'spawn')!
   assertStringIncludes(spawn.description, 'use spawn with model claude-opus')
   assert(!String(first.instructions).includes('use spawn with model'))
-  assert(!first.tools.some((t) => t.name == 'task_update'))
+  let update = first.tools.find((t) => t.name == 'task_update')!
+  assert(!update.description.includes('carries on that task'))
   let close = tasked.tools.find((t) => t.name == 'task_update')!
   assertStringIncludes(close.description, 'carries on that task')
+})
+
+test("an Operator holds the space's task and goal tools, and leaves answering its questions to the person", () => {
+  let names = first.tools.map((t) => t.name)
+  let work = ['task_new', 'task_list', 'task_update', 'decision_new']
+  assertEquals(
+    [...work, 'goal_new', 'goal_list', 'goal_update'].filter((n) =>
+      !names.includes(n)
+    ),
+    [],
+  )
+  assert(!names.includes('decision_answer'))
 })
 
 let legacy = operatorMemory()

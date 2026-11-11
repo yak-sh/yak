@@ -3603,6 +3603,12 @@
       "packages/goal": {
         "packageJson": {
           "dependencies": [
+            "npm:@yaks/doc@0.2.24",
+            "npm:@yaks/edge@0.2.24",
+            "npm:@yaks/graph@0.2.33",
+            "npm:@yaks/query@0.2.32",
+            "npm:@yaks/ram@0.2.24",
+            "npm:@yaks/testing@0.2.30",
             "npm:@yaks/vocab@0.2.32"
           ]
         }

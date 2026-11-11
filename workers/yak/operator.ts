@@ -62,8 +62,7 @@ import { earlier } from '@yaks/memory/earlier'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { ORACLE } from '@yaks/topic'
 import { runs as memoryRuns } from '@yaks/memory/tools'
-import { taskDoc } from '@yaks/task/vocab'
-import { runs as taskRuns } from '@yaks/task/tools'
+import { held, workNames } from './operator-tasks.ts'
 import { worded } from '@yaks/tools'
 import { keepResult, resultValue } from './results.ts'
 import { outputView } from '@yaks/context'
@@ -304,12 +303,14 @@ let SELF = {
 let mine = new Set(['memory_save', 'memory_recall', 'memory_around'])
 // The connector's tools the Operator holds as its own: memory_save and
 // memory_recall are its own memories (the space's are store_memory_save and
-// store_memory_recall), mail_send is its own letter for the person it works
+// store_memory_recall), the tasks and goals are its own store's
+// (operator-tasks.ts), mail_send is its own letter for the person it works
 // for (an app's is store_mail_send), and operator_chat and operator_read reach
 // the Operator itself, whose fork, spawn and reads with self are its own of
 // them.
 let ownNamed = new Set([
   ...mine,
+  ...workNames,
   'mail_send',
   'operator_chat',
   'operator_run',
@@ -374,7 +375,7 @@ export let operatorRoster = async (
       ? [
         ...listing({ graph: self, search: textSearch(self) }),
         ...loadTools([memoryDoc], memoryRuns()),
-        ...loadTools([taskDoc], taskRuns()),
+        ...held(),
       ].map(namedTool).map((t) => [t.name, t])
       : [],
   )
@@ -485,13 +486,10 @@ export let operatorRoster = async (
       }
     }),
     ...[...own.values()]
-      .filter((t) =>
-        mine.has(t.name) || (tasked && t.name == 'task_update') ||
-        t.name == 'decision_new'
-      )
+      .filter((t) => mine.has(t.name) || workNames.has(t.name))
       .map((t) => {
         let tool = { ...shaped(t), run: run(t, self, self) }
-        if (t.name == 'task_update') {
+        if (tasked && t.name == 'task_update') {
           return { ...tool, description: t.description + ON_TASK }
         }
         if (t.name != 'decision_new') return tool

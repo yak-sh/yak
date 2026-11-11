@@ -1,11 +1,17 @@
+import type { Bundle } from '@yaks/graph'
 import type { Args, Ctx, Tool } from './tool.ts'
 import { inSpace, refuse, rejected, SPACE, str } from './tool.ts'
 import { builderOf, SPACE as HEADER } from './build-door.ts'
 import { writes } from '@yaks/member'
 import { vouched } from './session.ts'
 
-let ask = async (ctx: Ctx, args: Args, path: string) => {
-  let { space, who } = await inSpace(ctx, args, path != '/operator/read', true)
+let ask = async (
+  ctx: Ctx,
+  args: Args,
+  path: string,
+  write = path != '/operator/read',
+) => {
+  let { space, who } = await inSpace(ctx, args, write, true)
   if (!writes(who.role)) {
     throw refuse('access', 'only a member who writes can read operator work')
   }
@@ -26,6 +32,17 @@ let ask = async (ctx: Ctx, args: Args, path: string) => {
   }
   return { space, text: String(value.text ?? JSON.stringify(value)), value }
 }
+
+/** A tool on the space's tasks and goals, run in its Operator's store
+ * (operator-tasks.ts `working`), answering the bundles it applied there. */
+export let operatorWork = async (
+  ctx: Ctx,
+  name: string,
+  { space, ...args }: Args,
+  write: boolean,
+): Promise<Bundle[]> =>
+  (await ask(ctx, { space, tool: name, args }, '/operator/tool', write))
+    .value as unknown as Bundle[]
 
 let chat: Omit<Tool, 'title' | 'description'> = {
   name: 'operator_chat',

@@ -14,6 +14,8 @@ import { load, vocabFacets } from './load.ts'
 import { type Door, storeOf } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { mailbox } from './directory.ts'
+import { shared } from './operator-tasks.ts'
+import { operatorWork } from './operator-tools.ts'
 import { KERNEL } from './meta.ts'
 import { titling, vouched, type Who } from './session.ts'
 import {
@@ -67,14 +69,22 @@ export let storedTools = (
   )
 
 // Read from the declarations the first time the connector asks, not when the
-// module loads: most requests an isolate starts for never list a tool.
+// module loads: most requests an isolate starts for never list a tool. Beside
+// the stores' own are the space's tasks and goals, which its Operator keeps
+// (operator-tasks.ts).
 let declarations = once(() =>
-  (['directory', 'app'] as const).flatMap((kind) =>
-    contributions(kind).flatMap(({ docs }) =>
-      toolsIn(docs).filter((d) => !d.surfaces || d.surfaces.includes('mcp'))
-        .map((definition) => ({ kind, definition, name: definition.name! }))
-    )
-  )
+  [
+    ...(['directory', 'app'] as const).flatMap((kind) =>
+      contributions(kind).flatMap(({ docs }) =>
+        toolsIn(docs).map((definition) => ({ kind, definition }))
+      )
+    ),
+    ...shared().map((definition) => ({
+      kind: 'operator' as const,
+      definition,
+    })),
+  ].filter(({ definition: d }) => !d.surfaces || d.surfaces.includes('mcp'))
+    .map((d) => ({ ...d, name: d.definition.name! }))
 )
 // These names keep their published argument and answer forms. The package's
 // unambiguous name is prefixed at the transport boundary until that listing goes.
@@ -150,6 +160,7 @@ export let invokePackage = async (
   let { kind, definition } = declaration
   let { space: _, app: appArg, ...input } = args
   let write = definition.readOnly !== true
+  if (kind == 'operator') return await operatorWork(ctx, name, args, write)
   let appTarget = kind == 'app' ? await inApp(ctx, args, write) : undefined
   let target = appTarget ?? await inSpace(ctx, args, write)
   let { space, who } = target

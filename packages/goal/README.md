@@ -14,7 +14,21 @@ completion operation; query its `satisfies` relationships to see progress.
 
 The root import exports `goalDoc`, a JSON Schema document. `@yaks/goal/vocab`
 also exports `docs: [goalDoc]` for plugin loaders. This package has no storage
-implementation, tools, or duties.
+implementation or duties.
+
+## Tools
+
+`@yaks/goal/tools` exports `runs()`, the implementations of the tools
+./vocab.json declares. Each returns bundles for its host to apply.
+
+- `goal_new{title, body, scope, satisfied_by}` sets a goal. Each id in
+  `satisfied_by` gets a `satisfies` link from that work to the goal.
+- `goal_list{query, limit}` returns whole goals, narrowed by `.goal`. Without a
+  query it returns every goal, since none is ever finished.
+- `goal_update{goal, title, body, scope, satisfied_by}` patches what it names
+  (`null` clears) and links more work.
+
+The work that served a goal is `.satisfies&.edge.to=<goal>`.
 
 ## Example
 
@@ -48,5 +62,5 @@ before writing `goal.scope`.
 
 ## Compatibility
 
-Deno, Node and browsers. The package exports JSON declarations and makes no
-runtime calls.
+Deno, Node and browsers. The tools make no runtime calls beyond the graph they
+are handed.

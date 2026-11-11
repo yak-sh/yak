@@ -4,12 +4,20 @@
   "type": "module",
   "exports": {
     ".": "./mod.ts",
-    "./vocab": "./vocab.ts"
+    "./vocab": "./vocab.ts",
+    "./tools": "./tools.ts"
   },
   "license": "Apache-2.0",
   "description": "A standing purpose that work satisfies, and the link recording which work satisfied it.",
   "dependencies": {
+    "@yaks/graph": "0.2.33",
+    "@yaks/query": "0.2.32",
     "@yaks/vocab": "0.2.32"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@yaks/doc": "0.2.24",
+    "@yaks/edge": "0.2.24",
+    "@yaks/ram": "0.2.24",
+    "@yaks/testing": "0.2.30"
+  }
 }

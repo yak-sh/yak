@@ -1143,6 +1143,16 @@ them, `earlier: {count, before}` says how many and the `before` to pass for the
 A settled model turn may be a question: the operator explicitly completes a task
 through `task_update` after finishing it.
 
+The space's tasks and goals are kept in its Operator's store. An Operator holds
+@yaks/task's and @yaks/goal's tools as the packages declare them: `task_new`,
+`task_list`, `task_update`, `goal_new`, `goal_list` and `goal_update` (a goal is
+never finished; `satisfied_by` links the work that serves it), and
+`decision_new`, its question to the person it works for, who answers it in
+Updates. The connector lists the same task and goal declarations
+(operator-tasks.ts `shared`), each taking `space`, for a member who writes
+there. A call is sent to the space's Builder object at `/operator/tool` and runs
+in the Operator's store as the caller.
+
 The fork inherits the main conversation's completed context. Each caller input
 and reply stays in the fork. Five minutes without another input closes a settled
 chat, after its helpers finish, and writes one passive notice in the main

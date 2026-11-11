@@ -1459,6 +1459,14 @@ export let operatorRequest = async (
   if (path == '/operator/stop') {
     return Response.json(await operator.stop(String(args.task ?? ''), person))
   }
+  // The space's tasks and goals, as the connector reaches them
+  // (operator-tasks.ts).
+  if (path == '/operator/tool') {
+    let { working } = await import('./operator-tasks.ts')
+    return Response.json(
+      await working(store, person, String(args.tool), args.args ?? {}),
+    )
+  }
   if (path == '/operator/archive') {
     let ids = Array.isArray(args.ids) ? args.ids.map(String) : []
     if (!ids.length) {

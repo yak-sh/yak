@@ -9,6 +9,7 @@ import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
 import { provenanceDoc } from '@yaks/provenance/vocab'
 import { docDoc } from '@yaks/doc/vocab'
 import { taskDoc } from '@yaks/task/vocab'
+import { goalDoc } from '@yaks/goal/vocab'
 import { personaDoc } from '@yaks/persona'
 import { projectDoc } from '@yaks/project/vocab'
 import { sessionDoc } from '@yaks/session/vocab'
@@ -59,6 +60,8 @@ export let operatorVocab = loadVocab([
   provenanceDoc,
   docDoc,
   taskDoc,
+  // The space's goals and the work that serves them (operator-tasks.ts).
+  goalDoc,
   projectDoc,
   personaDoc,
   sessionDoc,

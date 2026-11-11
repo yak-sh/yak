@@ -31,6 +31,118 @@
       "reversed": "satisfied by",
       "properties": {},
       "description": "the relation on a link: doing this served that purpose"
+    },
+    "goal_new": {
+      "tool": true,
+      "destructive": false,
+      "noun": "goal",
+      "verb": "new",
+      "title": "Set a goal",
+      "description": "Set a standing purpose that work serves rather than finishes: it has no status and is never done. satisfied_by links the work that already serves it. Returns applied bundles.",
+      "input": {
+        "title": {
+          "type": "string",
+          "description": "The purpose, in a line."
+        },
+        "body": {
+          "type": "string",
+          "description": "What it means and how to tell it is served, as Markdown.",
+          "short": "b"
+        },
+        "scope": {
+          "type": "string",
+          "ref": "project",
+          "description": "Project id or name it holds for; omit for everywhere.",
+          "short": "p"
+        },
+        "satisfied_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ids of the work that served this goal: each becomes a satisfies link from it to the goal."
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "positional": [
+        "title",
+        "body"
+      ]
+    },
+    "goal_list": {
+      "tool": true,
+      "noun": "goal",
+      "verb": "list",
+      "title": "List goals",
+      "description": "Return whole goals matching query, always narrowed by .goal; without one, every goal. Filters use .component.property=value; bare words search text. The work serving a goal is .satisfies.to=<goal>.",
+      "input": {
+        "query": {
+          "type": "string",
+          "description": "Query narrowed by .goal."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum results.",
+          "short": "n"
+        }
+      },
+      "readOnly": true,
+      "positional": [
+        "query"
+      ]
+    },
+    "goal_update": {
+      "tool": true,
+      "destructive": false,
+      "noun": "goal",
+      "verb": "update",
+      "title": "Update a goal",
+      "description": "Patch a goal's words or scope, and link work that serves it. Omitted fields stay; null clears. Returns applied bundles.",
+      "input": {
+        "goal": {
+          "type": "string",
+          "ref": "goal",
+          "description": "Goal id or name."
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Replacement title."
+        },
+        "body": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Replacement body, as Markdown."
+        },
+        "scope": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "ref": "project",
+          "description": "Project id or name it holds for; null makes it hold everywhere.",
+          "short": "p"
+        },
+        "satisfied_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ids of the work that served this goal: each becomes a satisfies link from it to the goal."
+        }
+      },
+      "required": [
+        "goal"
+      ],
+      "positional": [
+        "goal"
+      ]
     }
   }
 }
