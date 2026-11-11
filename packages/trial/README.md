@@ -78,33 +78,43 @@ the writers writes a round file; everything after that is rows.
 | `found{name, source}`                                                       | on a case: something its maker published, kept to learn a judge's taste                                           |
 | `writing{round, case, variant, persona, run, model, at, ms, reply, output}` | what one writer returned, beside @yaks/model's `usage{input_tokens, output_tokens}` and `cost{dollars, reported}` |
 | `pair{round, a, b, ord}`                                                    | two attempts planned for comparison                                                                               |
-| `preference{first, second, chose, why}`                                     | one comparison by its `created.by`; no `chose` is neither                                                         |
+| `known{winner}`                                                             | on a pair: its winner was settled when it was planned (a planted known answer)                                    |
+| `held_out{at, by, via}`                                                     | on a pair: a person's tap on it is kept from every selector's examples                                            |
+| `preference{first, second, chose, judge, why}`                              | one comparison; no `chose` is neither, no `judge` is a person's tap, by its `created.by`                          |
 | `grabbed{attempt}`                                                          | its `created.by` found the attempt appealing on its own                                                           |
-| `guess{attempt, form, model, guesses, among, rank, cap, leaked}`            | one judge's guesses at a riddle attempt                                                                           |
+| `judge{taught}` + `doc{title}`                                              | an automated judge; `taught` when it was handed a person's taps as examples                                       |
+| `guess{attempt, judge, form, model, guesses, among, rank, cap, leaked}`     | one judge's guesses at a riddle attempt                                                                           |
+| `passing{share, at, by, via}`                                               | on a round: how much of the known answers a judge must get right before its verdicts count                        |
 
 Variants, cases, attempts and what judges them are kept out of embedding, and
 their text is in their own components, not `doc{body}`, so no agent meets a
 candidate skill or a pitch unasked in a search.
 
 A person's own attempt has no `variant`, `persona` or `model`: its writer is its
-`created.by`. A judge that is an agent writes the same `preference` rows a
-person does, and is told apart by `created.by`.
+`created.by`. An automated judge writes the same `preference` rows a person does
+and names itself in `judge`. A row that names no judge is read as a person's
+tap, and a person's tap is an answer every judge is scored against, so a model's
+row always names one.
 
 ```sh
 yak trial load rounds/r1/round.json  # rows; loading again replaces them
 yak trial tally copy-r1              # what the round's rows say, as text
+yak trial pass copy-r1 0.8           # what a judge must get right; a person's to set
+yak trial hold copy-r1 0.25          # keep a quarter of the pairs from selectors
 yak trial drop copy-r1               # the round and what only it used
 ```
 
 A round file is JSON: `key`, `title`, `skill`, `output` (the parts), `persona`
 (the id of the persona a `persona: true` writer carried), then `variants`,
-`cases`, `attempts`, `pairs` and `guesses`, each naming the others by `key`
-(`RoundFile` in ./skill.ts). The round is found again as `round:<key>`, a
-variant as `variant:<skill>:<key>` and a case as `case:<skill>:<key>`
-(@yaks/alias), so a later round's file reuses a variant or case by naming its
-key, and one that restates it replaces its text. Give a changed variant a new
-key and say what it came `from`. Attempts, pairs and guesses are on eids derived
-from the round's key and their own.
+`cases`, `attempts`, `judges`, `pairs`, `known` and `guesses`, each naming the
+others by `key` (`RoundFile` in ./skill.ts). The round is found again as
+`round:<key>`, a variant as `variant:<skill>:<key>`, a case as
+`case:<skill>:<key>` and a judge as `judge:<skill>:<key>` (@yaks/alias), so a
+later round's file reuses one by naming its key, and one that restates it
+replaces its text. Give a changed variant a new key and say what it came `from`.
+Attempts, pairs and guesses are on eids derived from the round's key and their
+own. A guess that names no judge is given the round's own guessing game in its
+form (`<round>.guess-open`).
 
 ### The page
 
@@ -130,9 +140,66 @@ browser and sent again. Opened again, the page starts at the first pair without
 a preference. The same address asked with `accept: application/json` answers the
 decks (`deck` in ./skill.ts).
 
-The tally counts, for each variant, persona arm and case: attempts, comparisons
-shown, preferred, neither, grabbed, the mean guesses until right (a miss counts
-as its cap plus one) and how often a pick among the group was right. It then
-says whether the variants preferred are the ones guessed soonest (Spearman's rho
-over the variants that have both), lists each attempt that grabbed, and each
-why.
+### Known answers
+
+An automated judge earns trust the way a new reviewer does: answers already
+settled are slipped in among the rest, unmarked, and the judge must get them
+right before anything else it says is used.
+
+A **known answer** is a pair whose winner is settled, and there are two kinds:
+
+1. **A person's tap.** Every `preference` with a `chose` and no `judge` is one,
+   from the moment it is written. A pair a person called neither, or that two
+   people chose differently in, is not known.
+2. **A planted pair.** A pair wearing `known{winner}`, such as something
+   published set against a deliberately weak rewrite of the same facts. A round
+   file lists them under `known`, the winner first, and the loader places each
+   among the planned pairs. A person's tap on a planted pair outranks the plant.
+
+`.pair .known` and `.preference !.preference.judge` tell known from unknown.
+Nothing a judge is handed does: `deck(all, judge)` is the same cards for a
+person and for an automated judge, each carrying that judge's own verdicts and
+nobody else's.
+
+**A judge's pick of a pair** is read from its own rows (`picker` in ./skill.ts):
+
+- A judge that compares two attempts writes a `preference` naming itself, and
+  its pick is the attempt it `chose`.
+- A judge that scores one attempt at a time, like the guessing game, picks the
+  attempt it was less far from right on: in the open form the one it guessed in
+  fewer guesses, taking the mean over its guesses at each and counting a miss as
+  its cap plus one; in the among form the one it picked right more often. So the
+  guessing game sits a known pair only when it has guessed at both of its
+  attempts, and both must be attempts at a `riddle` case.
+- Neither, or the same score for both, is a verdict that agrees with no answer.
+
+A judge **passes** a round when its pick is the winner on at least the round's
+`passing{share}` of the known answers it sat. That share is a person's to set
+(`yak trial pass <round> 0.8`), and the tally says who set it. With no share
+set, or no known answer sat, no judge has passed. Nothing is refused on a
+failure: the tally prints the judge apart.
+
+**Held out.** A selector is a judge built from a person's taps
+(`judge{taught:
+true}`), so those taps cannot test it.
+`yak trial hold <round> <share>` marks that share of the round's pairs
+`held_out`, choosing among pairs nobody has tapped yet, so the split is rows
+written before the taps and is the same on every run. `examples(all, person)` is
+what a selector is handed: that person's taps less every held-out pair's. A
+taught judge is scored only on planted pairs and on taps of held-out pairs.
+
+### The tally
+
+The tally first counts a person's taps, for each variant, persona arm and case:
+attempts, comparisons shown, preferred, neither and grabbed. Then:
+
+- the round's known answers, how many pairs are held out, and the passing share;
+- each judge: how many known answers it sat, how many it agreed on, and whether
+  it passed, failed, is untested or has no passing share to meet;
+- each judge that passed, with its verdicts on the pairs that have no known
+  answer (`judged`, `picked`) and, for a guessing judge, its mean guesses until
+  right (a miss counts as its cap plus one), how often a pick among the group
+  was right, and whether the variants a person preferred are the ones it guessed
+  soonest (Spearman's rho over the variants that have both);
+- every other judge the same way under "Not to be used", apart;
+- each attempt that grabbed, and each why.

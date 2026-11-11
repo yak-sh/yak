@@ -30,8 +30,9 @@ export let find = async (g: Graph, word: string): Promise<Eid> => {
 }
 
 /** Everything a round's deck and tally read: the round, its attempts, their
- * variants and cases, its pairs, and each preference, mark and guess aimed
- * at one of its attempts. */
+ * variants and cases, its pairs, each preference, mark and guess aimed at
+ * one of its attempts, the judges those name, and the title of whoever set
+ * the round's passing share. */
 export let gather = async (g: Graph, round: Eid): Promise<Bundle[]> => {
   let r = JSON.stringify(round)
   let attempts = await g.read(`.writing .writing.round=${r} *`)
@@ -44,7 +45,17 @@ export let gather = async (g: Graph, round: Eid): Promise<Bundle[]> => {
     g.read(`.grabbed .grabbed.attempt.writing.round=${r} *`),
     g.read(`.guess .guess.attempt.writing.round=${r} *`),
   ])
-  return [...head.filter((b) => b), ...attempts, ...rest.flat()]
+  let named = (comp: string) =>
+    rest.flat().map((b) => (b[comp] as { judge?: unknown })?.judge)
+  let judges = [...new Set([...named('preference'), ...named('guess')])]
+    .filter((e) => e).map(String)
+  let by = (head[0]?.passing as { by?: unknown })?.by
+  let more = await Promise.all([
+    g.get(judges),
+    by ? g.get([String(by)], ['doc']) : [],
+  ])
+  return [...head, ...more.flat()].filter((b) => b)
+    .concat(attempts, rest.flat())
 }
 
 /** How a round's file named a variant or a case: the key it was loaded under
@@ -102,18 +113,20 @@ export let load = async (
 }
 
 /** Deletes a round and what hangs from it (attempts, pairs, taps, guesses),
- * then each variant and case no other round's attempt names. */
+ * then each variant and case no other round's attempt names, and each judge
+ * no verdict is left from. */
 export let drop = async (g: Graph, round: Eid): Promise<number> => {
   let all = await gather(g, round)
-  let shared = all.filter((b) => b.variant || b.case)
+  let shared = all.filter((b) => b.variant || b.case || b.judge)
   await g.apply([{ entity: { eid: round }, $delete: true }])
   let unused: Bundle[] = []
   for (let b of shared) {
-    let prop = b.variant ? 'variant' : 'case'
-    let n = await g.read(
-      `.writing .writing.${prop}=${JSON.stringify(b.entity.eid)} .limit=1`,
-    )
-    if (!n.length) unused.push({ entity: b.entity, $delete: true })
+    let eid = JSON.stringify(b.entity.eid)
+    let names = b.judge
+      ? [`.preference .preference.judge=${eid}`, `.guess .guess.judge=${eid}`]
+      : [`.writing .writing.${b.variant ? 'variant' : 'case'}=${eid}`]
+    let left = await Promise.all(names.map((q) => g.read(`${q} .limit=1`)))
+    if (!left.flat().length) unused.push({ entity: b.entity, $delete: true })
   }
   if (unused.length) await g.apply(unused)
   return all.length

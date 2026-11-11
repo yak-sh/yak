@@ -58,6 +58,52 @@
         }
       }
     },
+    "passing": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "on a round: how much of what a judge sat it must get right before its verdicts count. A person sets it (`yak trial pass`); a round without one has passed no judge. It refuses nothing: the tally prints a judge that falls short apart, as not to be used",
+      "properties": {
+        "share": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "the least share, 0 to 1, of the known answers a judge sat on which its pick must be the winner"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was set"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who set it"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the session or client the write came in on"
+        }
+      }
+    },
+    "judge": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "an automated judge of a skill trial: anything that compares or scores writings and is not a person (the guessing game in one form, a reader, a selector built from a person's taps). Its title is its `doc`. Each verdict names it (`preference{judge}`, `guess{judge}`), and its verdicts count in a round only once it agrees with enough of the round's known answers (`passing{share}`)",
+      "properties": {
+        "taught": {
+          "type": "boolean",
+          "description": "it was handed a person's taps as examples (a selector), so those taps cannot test it: it is scored only on planted answers and on taps whose pair is `held_out`"
+        }
+      }
+    },
     "variant": {
       "component": true,
       "type": "object",
@@ -246,11 +292,53 @@
         }
       }
     },
+    "known": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "on a pair: its winner was settled when it was planned, such as something published set against a deliberately weak rewrite of the same facts. A planted known answer, slipped into the deck to test each judge; nothing a judge is handed says which pairs wear it. A person's tap on the pair outranks it",
+      "properties": {
+        "winner": {
+          "type": "string",
+          "ref": "writing",
+          "death": "cascade",
+          "description": "the one of the pair's two attempts every judge should pick"
+        }
+      }
+    },
+    "held_out": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "on a pair: a person's tap on it is kept out of every selector's examples, so a selector can be tested on it. Marked before the pair is tapped (`yak trial hold`) and never moved, so the split is the same on every run",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was held out"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who held it out"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the session or client the write came in on"
+        }
+      }
+    },
     "preference": {
       "component": true,
       "type": "object",
       "embed": false,
-      "description": "one comparison of two attempts by its writer (`created.by`): which they would rather read on from, or neither. One row per judge and pair; choosing again changes it",
+      "description": "one comparison of two attempts: which the judge would rather read on from, or neither. One row per judge and pair; choosing again changes it. A person's tap names no `judge` (they are its `created.by`), and with a `chose` it is a known answer: the pick every automated judge of the round is scored against",
       "properties": {
         "first": {
           "type": "string",
@@ -269,6 +357,12 @@
           "ref": "writing",
           "death": "cascade",
           "description": "the one preferred; absent when neither was"
+        },
+        "judge": {
+          "type": "string",
+          "ref": "judge",
+          "death": "cascade",
+          "description": "the automated judge that made the comparison; absent on a person's own. A model's row must name one, or it is read as a person's"
         },
         "why": {
           "type": "string",
@@ -301,6 +395,12 @@
           "ref": "writing",
           "death": "cascade",
           "description": "the attempt guessed at"
+        },
+        "judge": {
+          "type": "string",
+          "ref": "judge",
+          "death": "cascade",
+          "description": "the automated judge that guessed; absent on a person's own. A model's row must name one, or it is read as a person's"
         },
         "form": {
           "type": "string",
@@ -347,12 +447,62 @@
         }
       }
     },
+    "trial_pass": {
+      "tool": true,
+      "noun": "trial",
+      "verb": "pass",
+      "title": "Set what a judge must get right in a round",
+      "description": "Set a round's passing share: how much of the known answers a judge sat it must agree with before its verdicts count. A number for a person to choose; the tally says who set it.",
+      "input": {
+        "round": {
+          "type": "string",
+          "description": "the round: its key as loaded (`copy-r1`), its id or its eid"
+        },
+        "share": {
+          "type": "number",
+          "description": "the least share of known answers agreed with, 0 to 1: `0.8`"
+        }
+      },
+      "required": [
+        "round",
+        "share"
+      ],
+      "positional": [
+        "round",
+        "share"
+      ]
+    },
+    "trial_hold": {
+      "tool": true,
+      "noun": "trial",
+      "verb": "hold",
+      "title": "Hold out some of a round's pairs",
+      "description": "Mark a share of a round's pairs `held_out`, chosen from those no person has tapped yet: a person's tap on one is kept from every selector's examples and tests the selector instead. Run again, it adds only what the share still lacks and moves nothing.",
+      "input": {
+        "round": {
+          "type": "string",
+          "description": "the round: its key as loaded (`copy-r1`), its id or its eid"
+        },
+        "share": {
+          "type": "number",
+          "description": "the share of the round's pairs to hold out, 0 to 1: `0.25`"
+        }
+      },
+      "required": [
+        "round",
+        "share"
+      ],
+      "positional": [
+        "round",
+        "share"
+      ]
+    },
     "trial_tally": {
       "tool": true,
       "noun": "trial",
       "verb": "tally",
       "title": "Tally a round of a skill trial",
-      "description": "Print what a round's rows say: for each variant, persona arm and case, how often its attempts were preferred, how often neither was, and how many grabbed the judge; the judges' mean guesses until right; and whether the two agree. Reads only.",
+      "description": "Print what a round's rows say: for each variant, persona arm and case, how often a person preferred its attempts, how often neither, and how many grabbed them; then the round's known answers, each automated judge's agreement on them, and each judge's verdicts on the rest, a judge that did not pass shown apart as not to be used. Reads only.",
       "input": {
         "round": {
           "type": "string",
