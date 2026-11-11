@@ -16,12 +16,28 @@ export let commands: CliCommand[] = [{
   noun: 'trial',
   verb: 'score',
   description:
-    'Score every miss in the graph under a persona (by default the one each session wore): writes trial{case, variant, asked, unasked, tokens} and prints the tally.',
+    "Score every miss in the graph under a persona (by default the one each session wore): writes trial{case, variant, asked, unasked, tokens} and prints the tally. With `arrive`, each case wears its own session's persona and the doors named add to it (@yaks/trial/arrive), and the rows are written under the persona `under` names.",
   inputSchema: {
     type: 'object',
     additionalProperties: false,
     properties: {
       variant: { type: 'string', description: 'persona eid to score' },
+      under: {
+        type: 'string',
+        description:
+          'with arrive: the persona the rows are written under, which says what the doors add',
+      },
+      arrive: {
+        type: 'array',
+        items: { enum: ['beside', 'related', 'open'] },
+        description:
+          "doors that add to the persona: beside (the prompt recall beside the person's words), related (the related list beside a write's hits), open (what is open with the person at start)",
+      },
+      floor: {
+        type: 'number',
+        description:
+          'with beside: the similarity a memory or decision must reach (default the live one)',
+      },
     },
   },
   positional: ['variant'],
@@ -29,16 +45,45 @@ export let commands: CliCommand[] = [{
     let { cases, run } = await import('./moment.ts')
     let { tally } = await import('./mod.ts')
     if (!host.search) throw new Error('this graph has no search')
+    let doors = Array.isArray(args.arrive) ? args.arrive.map(String) : []
+    let variant: Parameters<typeof run>[4] = typeof args.variant == 'string'
+      ? args.variant
+      : undefined
+    if (doors.length) {
+      if (typeof args.under != 'string') {
+        throw new Error(
+          'arrive needs `under`: the persona to write the rows under',
+        )
+      }
+      let arrive = await import('./arrive.ts')
+      let said = host.config.person
+      let person = said
+        ? (await host.graph.address([said])).get(said) ?? said
+        : undefined
+      if (doors.some((d) => d != 'related') && !person) {
+        throw new Error('beside and open need the config to name its person')
+      }
+      let floor = typeof args.floor == 'number' ? args.floor : undefined
+      let made = {
+        beside: () =>
+          arrive.beside(host.graph, {
+            person: person!,
+            meaning: host.meaning,
+            floor,
+          }),
+        related: () => arrive.related(host.graph),
+        open: () => arrive.open(person!),
+      }
+      let [as] = [...(await host.graph.address([args.under])).values()]
+      variant = {
+        as: as ?? args.under,
+        arrivals: doors.map((d) => made[d as keyof typeof made]()),
+      }
+    }
     let all = await cases(host.storage)
     let rows = []
     for (let c of all) {
-      let row = await run(
-        host.storage,
-        host.vocab,
-        host.search,
-        c,
-        typeof args.variant == 'string' ? args.variant : undefined,
-      )
+      let row = await run(host.storage, host.vocab, host.search, c, variant)
       if (row) rows.push(row)
     }
     if (rows.length) await host.graph.apply(rows)

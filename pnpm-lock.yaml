@@ -5052,6 +5052,9 @@ importers:
       '@yaks/cli':
         specifier: 0.2.33
         version: link:../cli
+      '@yaks/embedding':
+        specifier: 0.2.30
+        version: link:../embedding
       '@yaks/file':
         specifier: 0.2.28
         version: link:../file
@@ -5061,6 +5064,9 @@ importers:
       '@yaks/match':
         specifier: 0.2.30
         version: link:../match
+      '@yaks/memory':
+        specifier: 0.2.23
+        version: link:../memory
       '@yaks/model':
         specifier: 0.2.32
         version: link:../model
@@ -5095,9 +5101,6 @@ importers:
       '@yaks/key':
         specifier: 0.2.24
         version: link:../key
-      '@yaks/memory':
-        specifier: 0.2.23
-        version: link:../memory
       '@yaks/process':
         specifier: 0.2.28
         version: link:../process

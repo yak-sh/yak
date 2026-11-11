@@ -153,34 +153,37 @@ let kept: Bundle[] = [{
   doc: { title: 'Where do attachments live?' },
 }, { entity: { eid: 'far', num: 3 }, memory: {}, doc: { title: 'Unrelated' } }]
 let asked: string[] = []
-let beside = await earlier({
-  ...g,
-  read: () => Promise.resolve([]),
-  get: (ids: string[]) =>
-    Promise.resolve(
-      [...rows, ...kept].filter((b) => ids.includes(b.entity.eid)),
-    ),
-} as unknown as Graph, {
-  person: 'person',
-  name: 'Ada',
-  words: 'where should attachment files live',
-  before: '2026-02-01T00:00:00Z',
-  meaning: (_, opts) => {
-    asked.push(opts?.within ?? '')
-    let within = opts?.within ?? ''
-    return Promise.resolve(
-      within.includes('.memory')
-        ? [
-          { entity: 'input', similarity: .9, excerpt: '' },
-          { entity: 'm', similarity: .8, excerpt: '' },
-          { entity: 'far', similarity: .3, excerpt: '' },
-        ]
-        : within.includes('.decision')
-        ? [{ entity: 'd', similarity: .7, excerpt: '' }]
-        : [{ entity: 'input', similarity: .9, excerpt: '' }],
-    )
-  },
-})
+let recall = (floor?: number) =>
+  earlier({
+    ...g,
+    read: () => Promise.resolve([]),
+    get: (ids: string[]) =>
+      Promise.resolve(
+        [...rows, ...kept].filter((b) => ids.includes(b.entity.eid)),
+      ),
+  } as unknown as Graph, {
+    person: 'person',
+    name: 'Ada',
+    words: 'where should attachment files live',
+    before: '2026-02-01T00:00:00Z',
+    floor,
+    meaning: (_, opts) => {
+      asked.push(opts?.within ?? '')
+      let within = opts?.within ?? ''
+      return Promise.resolve(
+        within.includes('.memory')
+          ? [
+            { entity: 'input', similarity: .9, excerpt: '' },
+            { entity: 'm', similarity: .8, excerpt: '' },
+            { entity: 'far', similarity: .3, excerpt: '' },
+          ]
+          : within.includes('.decision')
+          ? [{ entity: 'd', similarity: .7, excerpt: '' }]
+          : [{ entity: 'input', similarity: .9, excerpt: '' }],
+      )
+    },
+  })
+let beside = await recall()
 test('the nearest memories and answered decisions ride beside the words, by id and title, without repeating a quote', () => {
   equal(
     beside.split('\n\n')[1],
@@ -189,6 +192,13 @@ test('the nearest memories and answered decisions ride beside the words, by id a
       'D-9 · Where do attachments live? → blobs',
   )
   equal(asked.some((w) => w.includes('!quarantined')), true)
+})
+test('a floor keeps only the memories and decisions at least that near', async () => {
+  equal(
+    (await recall(.75)).split('\n\n')[1],
+    'Nearest memories and decisions (read one by id before relying on it):\n' +
+      'M-7 · Attachments are immutable files',
+  )
 })
 test('a long quotation is cut at a line and says so', async () => {
   let long = 'attachment files '.repeat(40)

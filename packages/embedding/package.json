@@ -7,7 +7,8 @@
     "./vocab": "./vocab.ts",
     "./tools": "./tools.ts",
     "./graph": "./graph.ts",
-    "./service": "./service.ts"
+    "./service": "./service.ts",
+    "./neighbours": "./neighbours.ts"
   },
   "license": "Apache-2.0",
   "description": "Maintains text embeddings for graph entities and adds nearest-neighbor ranking to queries through an injected embedder.",

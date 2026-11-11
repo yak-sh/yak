@@ -68,6 +68,9 @@ type Asked = {
   /** a filter line the person's own inputs are kept to, such as those the
    * agent answering does not already have in front of it */
   among?: string
+  /** the similarity a memory or decision must reach to be listed (default
+   * {@link FLOOR}) */
+  floor?: number
 }
 
 async function recalled(g: Graph, options: Asked): Promise<string> {
@@ -112,7 +115,7 @@ async function recalled(g: Graph, options: Asked): Promise<string> {
   // match: such a prompt brings nothing.
   if (tokens.length < 2) return ''
   // What was kept or settled is ranked beside the words, not after them.
-  let held = decided(g, words, before, meaning)
+  let held = decided(g, words, before, meaning, options.floor)
   let hits = meaning
     ? await meaning(words, { within, limit: 24 }).catch(() => [])
     : []
@@ -227,14 +230,19 @@ let titleOf = (b: Bundle): string => {
   return clip(choice ? `${title} → ${choice}` : title)
 }
 
+/** How near in meaning a memory or decision must be to be listed. */
+export let FLOOR = .65
+
 /** The memories and answered decisions nearest the words in meaning: what was
- * already kept or settled on the subject. A quarantined memory is not offered;
- * without a meaning index there is nothing to rank by, so nothing. */
+ * already kept or settled on the subject, at least `floor` similar. A
+ * quarantined memory is not offered; without a meaning index there is nothing
+ * to rank by, so nothing. */
 export async function decided(
   g: Graph,
   words: string,
   before: string,
   meaning?: Meaning,
+  floor = FLOOR,
 ): Promise<Bundle[]> {
   if (!meaning || !words.trim()) return []
   let at = `.created.at<${JSON.stringify(before)}`
@@ -250,7 +258,7 @@ export async function decided(
       ? ask(`(${at}) .decision .decided`, 2)
       : [],
   ])
-  let ids = [...memories, ...decisions].filter((h) => h.similarity >= .65)
+  let ids = [...memories, ...decisions].filter((h) => h.similarity >= floor)
     .map((h) => h.entity)
   if (!ids.length) return []
   let rows = await g.get(ids, [

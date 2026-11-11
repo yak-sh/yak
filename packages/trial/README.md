@@ -53,6 +53,25 @@ yak trial score <persona>  # every case, under another persona
 It prints the tally: cases, how many the graph held, how many were in front
 unasked, how many a search found, and the mean tokens.
 
+### Doors a variant adds
+
+A variant can add to what arrives at a door beyond its persona's parts. Each
+case then wears its own session's persona, the doors named add to it
+(`@yaks/trial/arrive`), and the rows are written under the persona `--under`
+names, whose text says what the doors add and which no session wears:
+
+| door      | what arrives                                                                                                                                   |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `beside`  | beside each of the person's inputs, the prompt hook's recall (@yaks/memory/earlier), its memories and decisions kept to `--floor`              |
+| `related` | beside each write's hit rows, the few nearest resources of any kind to what it made (`hit.related`, @yaks/embedding/neighbours)                |
+| `open`    | at the session's start and after each compaction, the tasks and decisions open with the person, and the decisions they answered the day before |
+
+```sh
+yak trial score --under <persona> --arrive beside --floor 0.6
+```
+
+The recall is given all the time it needs; the live hook gives it 700 ms.
+
 ```ts
 import { trial } from '@yaks/trial'
 

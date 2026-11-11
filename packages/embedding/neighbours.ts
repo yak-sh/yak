@@ -226,9 +226,9 @@ let became = (vocab: Vocab, b: Bundle): string | undefined => {
   })
 }
 
-// What a neighbour in either list is: wearing no notice, or written by a
-// person, where the vocabulary knows people.
-let resources = (vocab: Vocab): Clause[] => {
+/** What a neighbour in either list is: wearing no notice, or written by a
+ * person, where the vocabulary knows people. */
+export let resources = (vocab: Vocab): Clause[] => {
   let notices = vocab.all.filter((c) => vocab.comp(c)?.notice)
   if (!notices.length) return []
   let none = and(...notices.map(absent))

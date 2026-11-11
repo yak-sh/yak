@@ -98,14 +98,16 @@ export let moment = async (
 // input or the brief it was spawned with. Harness text (a notice, a skill
 // loaded, a child's delivery) and the agent's own entries have no author.
 let own = ['output', 'call', 'result', 'reasoning', 'ask', 'checkpoint']
-let prompt = (b: Bundle): boolean =>
+/** Whether an entry is words someone wrote to the agent. */
+export let prompt = (b: Bundle): boolean =>
   !own.some((c) => b[c]) && !!str(comp(b, 'created').by) && !!text(b).trim()
 
 let seqOf = (b: Bundle): number => Number(comp(b, 'entry').seq ?? 0)
 
-// The hit rows a write's result carries: bundles wearing a `hit` that names
-// the entity it was found near. A search's hits name none, and were asked for.
-let hits = (b: Bundle): Bundle[] => {
+/** The hit rows a write's result carries: bundles wearing a `hit` that names
+ * the entity it was found near. A search's hits name none, and were asked
+ * for. */
+export let hits = (b: Bundle): Bundle[] => {
   let body = text(b)
   if (!b.result || !body.startsWith('{')) return []
   try {
@@ -136,16 +138,32 @@ export let window = async (storage: Reads, m: Moment): Promise<Bundle[]> => {
   return rows.toSorted((a, b) => seqOf(a) - seqOf(b))
 }
 
-/** What the variant put in front of the agent before its entry, door by
- * door. */
+/** Where a variant stands when it adds to a door: the case's moment, the
+ * session's entries the agent had then, and when they begin (the session's
+ * start or its latest compaction). */
+export type At = {
+  storage: Reads
+  vocab: Vocab
+  m: Moment
+  had: Bundle[]
+  since: string
+}
+
+/** What a variant adds at a door beyond its persona (./arrive.ts): rows a
+ * saved query or a recall would have put in front of the agent. */
+export type Arrival = (at: At) => Promise<Part[]>
+
+/** What the persona put in front of the agent before its entry, door by
+ * door, and what each arrival adds. */
 export let front = async (
   storage: Reads,
   vocab: Vocab,
-  variant: Eid,
+  persona: Eid,
   m: Moment,
+  arrivals: Arrival[] = [],
 ): Promise<Part[]> => {
   let then = asOf(storage, vocab, m.at)
-  let worn = await wear(then, vocab)(variant)
+  let worn = await wear(then, vocab)(persona)
   let had = await window(storage, m)
   let since = createdAt(had[0] ?? { entity: { eid: '' } }) || m.at
   let knocked = (await then.read(and(
@@ -179,6 +197,9 @@ export let front = async (
         text: returned.map((b) => JSON.stringify(b.hit)).join('\n'),
       }]
       : [],
+    ...(await Promise.all(
+      arrivals.map((a) => a({ storage, vocab, m, had, since })),
+    )).flat(),
   ]
 }
 
@@ -223,25 +244,34 @@ export let cases = async (
     }]
   })
 
-/** Score one case under a variant, or under the persona its session wore when
- * no variant is named. Undefined when its entry is not in the graph. */
+/** A variant that adds to the doors: the persona its rows are written under,
+ * which says what it adds, and the arrivals that add it. Each case wears its
+ * session's own persona beneath them. */
+export type Adding = { as: Eid; arrivals: Arrival[] }
+
+/** Score one case under a variant: a persona, an {@link Adding}, or, when none
+ * is named, the persona its session wore. Undefined when its entry is not in
+ * the graph. */
 export let run = async (
   storage: Reads,
   vocab: Vocab,
   search: Search,
   c: Case & { entry: Eid },
-  variant?: Eid,
+  variant?: Eid | Adding,
 ): Promise<Bundle | undefined> => {
   let m = await moment(storage, c.entry)
   if (!m) return
   let [session] = await storage.get([m.session])
-  let persona = variant ?? str(comp(session, 'session').persona)
+  let persona = typeof variant == 'string'
+    ? variant
+    : str(comp(session, 'session').persona)
   if (!persona) return
+  let adding = typeof variant == 'object' ? variant : undefined
   let had = await window(storage, m)
   return trial(
     c,
-    persona,
-    await front(storage, vocab, persona, m),
+    adding?.as ?? persona,
+    await front(storage, vocab, persona, m, adding?.arrivals),
     await found(storage, vocab, search, asking(had), m.at),
   )
 }

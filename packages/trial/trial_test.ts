@@ -11,7 +11,8 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { tally, trialDoc } from './mod.ts'
-import { asking, before, cases, run, WORDS } from './moment.ts'
+import { type Arrival, asking, before, cases, run, WORDS } from './moment.ts'
+import { open } from './arrive.ts'
 
 let obj = { component: true, type: 'object' }
 let props = (p: Record<string, string>) => ({
@@ -28,6 +29,9 @@ let vocab = loadVocab([edgeDoc, docDoc, personaDoc, memoryDoc, trialDoc, {
     completed: props({ at: 'string' }),
     notified: props({ at: 'string', via: 'string' }),
     task: { ...obj, status: { completed: 'done', default: 'open' } },
+    filed: props({ assignee: 'string' }),
+    decision: obj,
+    decided: props({ at: 'string', by: 'string', choice: 'string' }),
     session: props({ persona: 'string' }),
     entry: props({ session: 'string', seq: 'number' }),
     checkpoint: obj,
@@ -178,4 +182,56 @@ test('trial: the cases are the misses, and their tally', async () => {
 test('trial: the search is asked a phrase, the first words of a long message', () => {
   let long = Array.from({ length: 30 }, (_, i) => `w${i}`).join(', ')
   assertEquals(asking([said(1, long)]).split(' ').length, WORDS)
+})
+
+test("trial: a variant that adds a door is written under its own name, over the session's persona", async () => {
+  let saw: string[] = []
+  let door: Arrival = (
+    { since },
+  ) => (saw.push(since),
+    Promise.resolve([{ door: 'notice', eids: ['x1'], text: 'x1' }]))
+  let row = await run(g.storage, vocab, search, {
+    eid: 'c',
+    entry: 'e7',
+    needed: 'm',
+  }, { as: 'v', arrivals: [door] })
+  let t = row?.trial as Record<string, unknown>
+  assertEquals([t.variant, t.unasked], ['v', true])
+  assertEquals(saw, ['2026-11-10T11:12:00.000Z'])
+  let other = await run(g.storage, vocab, search, {
+    eid: 'c',
+    entry: 'e7',
+    needed: 'x1',
+  }, { as: 'v', arrivals: [door] })
+  assertEquals((other?.trial as Record<string, unknown>).unasked, true)
+})
+
+test('trial: open with a person at start is what was open with them then, and what they answered the day before', async () => {
+  let filed = { filed: { assignee: 'jeff' }, task: {} }
+  let answered = (eid: string, when: string) => ({
+    entity: { eid },
+    decision: {},
+    decided: { at: when, by: 'jeff', choice: 'yes' },
+    doc: { title: eid },
+    ...at('2026-11-01T00:00:00.000Z'),
+  })
+  await g.apply([
+    doc('ask', early, filed),
+    doc('shut', early, {
+      ...filed,
+      completed: { at: '2026-11-10T11:05:00.000Z' },
+    }),
+    doc('reopened', early, { ...filed, completed: { at: late } }),
+    doc('after', late, filed),
+    answered('settled', '2026-11-10T09:00:00.000Z'),
+    answered('stale', '2026-11-08T09:00:00.000Z'),
+  ])
+  let [part] = await open('jeff')({
+    storage: g.storage,
+    vocab,
+    m: { session: 's', seq: 7, at: '2026-11-10T11:17:00.000Z' },
+    had: [],
+    since: '2026-11-10T11:12:00.000Z',
+  })
+  assertEquals(part.eids.toSorted(), ['ask', 'reopened', 'settled'])
 })
