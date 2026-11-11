@@ -2,8 +2,9 @@
 // own module (`@yaks/model/route`) so what reads a default loads nothing else.
 // The offerings are graph data, `routes` edges to `serves` edges, and so are
 // the readings (`rate_limit`); the one who asks reads both and hands them
-// here. A rule narrows the offerings, best first, and the first one left is
-// the answer. Today there is one rule: the plan with the most usage left.
+// here. Each rule orders the offerings it can speak for, best first, and the
+// first rule that speaks for any answers. There are two: a pinned offering,
+// then the plan with the most usage left.
 
 import type { Eid } from '@yaks/graph'
 
@@ -15,6 +16,9 @@ export type Route = {
   name: string
   /** the provider whose plan limits meter it (`provider.plan`, else its own) */
   plan: Eid
+  /** when it was pinned (`routes.pinned`): a pinned offering is the answer,
+   * whatever the plans read */
+  pinned?: string
 }
 
 /** A plan limit's latest reading, as its `rate_limit` row holds it. */
@@ -29,8 +33,8 @@ export type Reading = {
 }
 
 /** What a router is asked: the offerings, what is known of their plans, and
- * the moment. A later rule's parameter (the work's kind, a pinned model) is
- * another property here. */
+ * the moment. A later rule's parameter (the work's kind) is another property
+ * here. */
 export type Asked = { routes: Route[]; readings: Reading[]; now: number }
 
 /** The offering chosen and, in one line, why. */
@@ -56,15 +60,21 @@ let roomiest: Rule = (routes, { readings, now }) =>
     let r = reading(route.plan, readings)
     if (!r) return []
     let left = r.resets && Date.parse(r.resets) <= now ? 100 : 100 - r.used
-    return [{ left, route, note: `${left}% of its ${span(r.window)} left` }]
+    return [{ left, route, note: `has ${left}% of its ${span(r.window)} left` }]
   }).sort((a, b) => b.left - a.left)
     .map(({ route, note }) => ({ ...route, note }))
 
-let rules: Rule[] = [roomiest]
+// The pinned offering, the newest pin where more than one is.
+let pinned: Rule = (routes) =>
+  routes.filter((r) => r.pinned)
+    .sort((a, b) => b.pinned!.localeCompare(a.pinned!))
+    .slice(0, 1).map((r) => ({ ...r, note: 'is pinned' }))
+
+let rules: Rule[] = [pinned, roomiest]
 
 /**
- * The offering to ask, or nothing where no rule can say: no routes, or no
- * reading of any of their plans.
+ * The offering to ask, or nothing where no rule can say: no routes, or none
+ * pinned and no reading of any of their plans.
  *
  * ```ts
  * import { route } from './route.ts'
@@ -90,18 +100,24 @@ let rules: Rule[] = [roomiest]
  * // A plan nothing has read can't win, and with no reading nothing is chosen.
  * equal(ask([week('claude', 99)])?.why, 'opus has 1% of its week left')
  * equal(ask([]), undefined)
+ * // A pinned offering wins over usage, and needs no reading.
+ * let pin = { ...routes[0], pinned: '2026-11-11T00:00:00Z' }
+ * equal(route({ routes: [pin, routes[1]], readings: [week('codex', 0)], now }), {
+ *   provider: 'claude',
+ *   model: 'opus',
+ *   why: 'opus is pinned',
+ * })
+ * equal(route({ routes: [pin], readings: [], now })?.model, 'opus')
  * ```
  */
 export let route = (asked: Asked): Routed | undefined => {
-  let left = rules.reduce<Weighed[]>(
-    (routes, rule) => rule(routes, asked),
-    asked.routes,
-  )
+  let left = rules.map((rule) => rule(asked.routes, asked))
+    .find((routes) => routes.length) ?? []
   return left.length
     ? {
       provider: left[0].provider,
       model: left[0].model,
-      why: left.map((r) => `${r.name} has ${r.note}`).join(', '),
+      why: left.map((r) => `${r.name} ${r.note}`).join(', '),
     }
     : undefined
 }

@@ -1,10 +1,11 @@
 // A session that names no model asks the offering the router chooses among
 // those the harness routes, and records why; one that names a model keeps it.
 import { equal, test } from '@yaks/testing'
+import { assertRejects } from '@std/assert'
 import type { Model } from '@yaks/model'
 import { type Comp, identityEid } from '@yaks/graph'
 import { link } from '@yaks/edge'
-import { HARNESS, usingFor } from './default.ts'
+import { HARNESS, pin, usingFor } from './default.ts'
 import { seed } from './agent.ts'
 import { local } from './local.ts'
 import { harness } from './testing.ts'
@@ -86,8 +87,39 @@ test('the default is the routed offering whose plan has the most usage left', as
       model: M('sol'),
       why: 'sol has 10% of its week left',
     })
+    // A pin wins over usage: Astra, on the plan Sol spends, read after it.
+    await h.g.apply([
+      ...seed({ provider: 'openai', model: 'astra' }),
+      link(
+        HARNESS,
+        'routes',
+        link(P('openai'), 'serves', M('astra')).entity.eid,
+        2,
+      ),
+    ], { trusted: true })
+    equal(
+      await start(),
+      'opus has 16% of its week left, sol has 10% of its week left, ' +
+        'astra has 10% of its week left',
+    )
+    await pin(h.g, 'astra')
+    equal(await start(), 'astra is pinned')
+    await pin(h.g, 'opus')
+    equal(await start(), 'opus is pinned')
+    await assertRejects(() => pin(h.g, 'luna'), Error, 'sol, opus, astra')
+    // Cleared, routing resumes.
+    await pin(h.g)
+    await h.g.apply([week('claude', 95)], { trusted: true })
+    equal(
+      (await start())?.toString().split(',')[0],
+      'sol has 10% of its week left',
+    )
     equal(asked.map((line) => line.split(' ')[1]).slice(1), [
       'sol',
+      'opus',
+      'sol',
+      'opus',
+      'astra',
       'opus',
       'sol',
     ])

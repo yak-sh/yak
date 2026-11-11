@@ -13,7 +13,8 @@
 // serving the effects role. Drawing the reply is the caller's: a line
 // on a command line, the harness itself under `--tui` (./view.ts).
 // `model_list` lists a configured provider's catalog, signed in as the
-// harness signs in to it. A tool answers, it does not write to a terminal.
+// harness signs in to it, and `model_pin` pins the default to one routed
+// model or clears the pin. A tool answers, it does not write to a terminal.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
@@ -28,7 +29,7 @@ import { and, conjoin, parse, stringify } from '@yaks/query'
 import { newestOf, usingOf } from '@yaks/session'
 import { changes } from '@yaks/session/wait'
 import { begin, seed, through } from './agent.ts'
-import { defaultUsing } from './default.ts'
+import { defaultUsing, pin, routing } from './default.ts'
 import { selectedUsing } from './model_selection.ts'
 import { configured, lending } from './providers.ts'
 import { signins } from '@yaks/connections'
@@ -394,6 +395,27 @@ export let runs = (host?: Host): Runs => ({
           `  ${name}` + (context ? `  ${context} tokens` : '')
         ),
       ].join('\n'),
+    )]
+  },
+  model_pin: async (call, graph) => {
+    let args = argsOf(call)
+    let model = word(args, 'model')
+    if (model && args.clear) {
+      throw new Refused('Name a model to pin, or --clear, not both')
+    }
+    if (model || args.clear) await pin(graph, model, { by: caller(call) })
+    let routes = (await routing(graph)).map((r) => r.name)
+    let using = await defaultUsing(graph)
+    let name = nameOf((await graph.get([String(using.model)]))[0], MODEL)
+    let now = `${name}${using.why ? ` (${using.why})` : ''}`
+    return [text(
+      call,
+      model
+        ? `The default is pinned to ${model}. Every native session that ` +
+          `names no model asks it, heal's fixers among them, until ` +
+          `\`yak model pin --clear\`.`
+        : `${args.clear ? 'The pin is cleared. ' : ''}The default is ${now}.` +
+          ` It routes: ${routes.join(', ') || 'no models'}.`,
     )]
   },
 })

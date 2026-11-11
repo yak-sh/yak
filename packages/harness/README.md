@@ -123,16 +123,16 @@ budgets.
 
 ## Exports
 
-| Import                  | Main exports                                                                                            |
-| ----------------------- | ------------------------------------------------------------------------------------------------------- |
-| `@yaks/harness`         | `agent`, `seed`, `sessionTitle`, `titleOf`, and their types; web platform only                          |
-| `@yaks/harness/default` | `defaultUsing(graph)`, `usingFor(graph, work)` and `HARNESS`, alone, for packages that request sessions |
-| `@yaks/harness/local`   | `local`, `hosted`, `harnessTools`, `graphTools`, and their types                                        |
-| `@yaks/harness/tui`     | `views`: a lone session or entry, drawn as the terminal app                                             |
-| `@yaks/harness/vocab`   | `docs`, the harness's own words                                                                         |
-| `@yaks/harness/tools`   | `runs(host)`, the functions behind the tools `vocab.json` declares                                      |
-| `@yaks/harness/cli`     | `commands`, the session terminal control                                                                |
-| `@yaks/harness/routes`  | `routes(host, options)`: `POST /model/step`, answered from this machine's providers                     |
+| Import                  | Main exports                                                                                                                                  |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/harness`         | `agent`, `seed`, `sessionTitle`, `titleOf`, and their types; web platform only                                                                |
+| `@yaks/harness/default` | `defaultUsing(graph)`, `usingFor(graph, work)`, `routing(graph)`, `pin(graph, name)` and `HARNESS`, alone, for packages that request sessions |
+| `@yaks/harness/local`   | `local`, `hosted`, `harnessTools`, `graphTools`, and their types                                                                              |
+| `@yaks/harness/tui`     | `views`: a lone session or entry, drawn as the terminal app                                                                                   |
+| `@yaks/harness/vocab`   | `docs`, the harness's own words                                                                                                               |
+| `@yaks/harness/tools`   | `runs(host)`, the functions behind the tools `vocab.json` declares                                                                            |
+| `@yaks/harness/cli`     | `commands`, the session terminal control                                                                                                      |
+| `@yaks/harness/routes`  | `routes(host, options)`: `POST /model/step`, answered from this machine's providers                                                           |
 
 ## Use
 
@@ -270,6 +270,18 @@ yak graph apply --bundles '[
 Deleting a `routes` edge takes its model out, and with none left the row's
 `using` is the default again. A project routes its own work the same way, by
 `routes` edges from the project.
+
+`yak model pin <model>` pins the default to one of the models it routes,
+whatever the plans read, and `yak model pin --clear` resumes routing; alone,
+`yak model pin` says what the default is now and which models it routes
+(`model_pin` through MCP). A pin is the mark `routes{pinned}` on that model's
+`routes` edge, which the router reads with the rest, and a pinned session's
+first input says so (`using.why`: "gpt-6-astra is pinned"). Only a routed model
+can be pinned, so GPT-6 Astra is routed beside Sol, on the same ChatGPT plan;
+offerings that weigh alike keep the order of their edges (`edge.ord`, then the
+earliest routed), so Sol still answers for that plan unless Astra is pinned. A
+pin moves everything that asks the default, @yaks/heal's fixers among them. A
+session that names its model, or has already started, keeps its own.
 
 A session started on a person's comment (@yaks/session
 [A comment starts a session](../session/README.md#a-comment-starts-a-session))
@@ -1061,16 +1073,16 @@ Pass `wait: false` to either tool to return the session immediately; the runner
 continues independently. For example, `session_new` with
 `{ "prompt": "Reply with ok", "wait": false }` returns the new session id.
 `model_list` is offered on a command line only (`surfaces`), because it reads
-that machine's model credentials. `session_list` is offered everywhere. With no
-arguments it answers the 20 newest live sessions (no `session.ended` mark), each
-with its status, and, when more match, a last row saying how to read on; `query`
-and `limit` ask for others (`.session` is every status). A row carries
-`session`, `created`, `spawned`, `doc` and `exit`; a session's command line and
-context sizes are kilobytes each, read with `graph_show` or a query naming `*`.
-Both word orders (`session list`, `list
-session`) derive from the same noun and
-verb, without alias declarations. See
-[the command-line entry point and the export shape](../cli/README.md).
+that machine's model credentials; `model_pin` is offered on both. `session_list`
+is offered everywhere. With no arguments it answers the 20 newest live sessions
+(no `session.ended` mark), each with its status, and, when more match, a last
+row saying how to read on; `query` and `limit` ask for others (`.session` is
+every status). A row carries `session`, `created`, `spawned`, `doc` and `exit`;
+a session's command line and context sizes are kilobytes each, read with
+`graph_show` or a query naming `*`. Both word orders (`session list`,
+`list
+session`) derive from the same noun and verb, without alias declarations.
+See [the command-line entry point and the export shape](../cli/README.md).
 
 ### Answering another host's model steps
 

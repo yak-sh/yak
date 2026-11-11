@@ -160,6 +160,26 @@
         }
       }
     },
+    "model_pin": {
+      "tool": true,
+      "noun": "model",
+      "verb": "pin",
+      "title": "Pin the default model, or clear the pin",
+      "description": "Pin what a native session asks when nothing names a model to one of the models the default routes, whatever the plans' usage reads, or clear the pin so routing by usage resumes. Everything that asks the default moves with it, heal's fixers among them; a session that names its model, and one already started, keep theirs. With neither a model nor clear, say what the default is now and which models it routes.",
+      "input": {
+        "model": {
+          "type": "string",
+          "description": "The routed model to pin, by name (gpt-6-astra, claude-opus-5-5)"
+        },
+        "clear": {
+          "type": "boolean",
+          "description": "Clear the pin: the default is routed by the plans' usage again"
+        }
+      },
+      "positional": [
+        "model"
+      ]
+    },
     "conversation_projects": {
       "tool": true,
       "surfaces": [

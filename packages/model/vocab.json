@@ -177,8 +177,14 @@
       "type": "object",
       "edge": "routes",
       "reversed": "routed by",
-      "description": "an edge relation, from a row whose `using` is a default to an offering (a `serves` edge): the default is chosen among the offerings it routes, the one whose plan has the most usage left, and its own `using` answers only where no plan has a reading",
-      "properties": {}
+      "description": "an edge relation, from a row whose `using` is a default to an offering (a `serves` edge): the default is chosen among the offerings it routes, the pinned one, else the one whose plan has the most usage left, and its own `using` answers only where none is pinned and no plan has a reading",
+      "properties": {
+        "pinned": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when this offering was pinned: while the mark is set the default is this offering whatever the plans read, and removing it resumes routing"
+        }
+      }
     },
     "usage": {
       "component": true,

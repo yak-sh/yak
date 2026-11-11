@@ -372,19 +372,22 @@ is the directory of the account a CLI signs in with, and `accountEid` its row.
 
 A **router** chooses which of several offerings a default runs on.
 `route({routes, readings, now})` (`@yaks/model/route`) is pure: `routes` are the
-offerings, each `{provider, model, name, plan}` with `plan` the provider whose
-limits meter it, and `readings` are `rate_limit` rows. It answers
-`{provider, model, why}`, or nothing where no rule can say. A rule narrows the
-offerings, best first, and the first one left is the answer; `why` says in one
-line what each rule learned. Today's one rule keeps the offerings whose plan has
-a reading, the one with the most of its longest window left first, and counts a
-window that has reset since its reading as unused. A parameter for a later rule
-(the work's kind, a pinned model) is another property of what is asked.
+offerings, each `{provider, model, name, plan, pinned}` with `plan` the provider
+whose limits meter it, and `readings` are `rate_limit` rows. It answers
+`{provider, model, why}`, or nothing where no rule can say. Each rule orders the
+offerings it can speak for, best first, and the first rule that speaks for any
+answers; `why` says in one line what it learned. There are two. A pinned
+offering (`pinned`, the time it was pinned) is the answer whatever the plans
+read. Otherwise the offerings whose plan has a reading are weighed, the one with
+the most of its longest window left first, and a window that has reset since its
+reading counts as unused. A parameter for a later rule (the work's kind) is
+another property of what is asked.
 
 In a graph the offerings are data: a **routes** edge from the row whose `using`
-is the default to a `serves` edge, and `provider{plan}` on a provider that
-spends another's plan. @yaks/harness reads them for what a native session asks
-by default ([harness](../harness/README.md)).
+is the default to a `serves` edge, `routes{pinned}` on the one that is pinned,
+and `provider{plan}` on a provider that spends another's plan. @yaks/harness
+reads them for what a native session asks by default
+([harness](../harness/README.md)).
 
 A model a graph meets for the first time, by a request that names it or an
 imported transcript, is given its vendor's list price (`listPrice(name)`), so

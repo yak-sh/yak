@@ -81,13 +81,14 @@ task and fixers again. The request is a `session{operator}` with `fixer{bug}`,
 an `entry{session}` with `content{body}` and
 `using{provider, model, effort, why}`, and a `claim{session}` on the task. The
 provider and model are the native harness's default (`defaultUsing` from
-`@yaks/harness/default`: the offering its router chooses, else the `using` on
-the harness's package row), read when the request is written, so the graph write
-that changes every native session's model changes the fixers' too; the request
-fails while no default is set. No process starts inside the follower; the native
-harness answers the request. The entry names the task and the fixer's last step:
-once the fix is live, resolve the bug with its explanation through `cli`'s
-`bug resolve`, which the tracker requires of every resolution
+`@yaks/harness/default`: the offering its router chooses, the pinned one where
+`yak model pin` pinned one, else the `using` on the harness's package row), read
+when the request is written, so the graph write that changes every native
+session's model changes the fixers' too; the request fails while no default is
+set. No process starts inside the follower; the native harness answers the
+request. The entry names the task and the fixer's last step: once the fix is
+live, resolve the bug with its explanation through `cli`'s `bug resolve`, which
+the tracker requires of every resolution
 ([tracker](../tracker/README.md#resolving-a-bug)). Its instructions name the
 authoritative tracker and require a `bug show` readback there. Both commands
 remove inherited `YAKS_HOST` defensively for bare `yak`, while preserving the

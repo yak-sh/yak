@@ -105,10 +105,13 @@ default sandbox adapter and records its pending intention.
 
 Without model flags, the harness's default answers
 (packages/harness/default.ts): of the offerings its package row `routes`, the
-one whose plan has the most usage left (@yaks/model `route`, over the
-`rate_limit` readings), else that row's `using`. The session's first input
-records the choice and why as `using{provider, model, why}`, and a session that
-names a model keeps it. `yak model list` is the configured
+pinned one, else the one whose plan has the most usage left (@yaks/model
+`route`, over the `rate_limit` readings), else that row's `using`. The
+session's first input records the choice and why as
+`using{provider, model, why}`, and a session that names a model keeps it.
+`yak model pin <model>` pins the default to one routed model and
+`yak model pin --clear` resumes routing; a pin moves heal's fixers too.
+`yak model list` is the configured
 endpoint's catalogue; a one-line probe settles whether an unlisted name runs:
 `yak session new "Reply with only: ok" --provider openai --model <name> --effort low`.
 
