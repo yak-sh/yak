@@ -736,8 +736,7 @@ test('dead mail cleanup refuses a claim or changed selection after reading', asy
   assertEquals(deadMailInboxMove(deadMail('new', { attempts: 1 })), [])
 })
 
-// Rehearsal-only until the owner has reviewed the all-store report.
-test('legacy done effect cleanup rehearses without moving human data or failures', async () => {
+test('legacy done effect cleanup moves done runs, never human data or failures', async () => {
   let s = await store(0, doneEffectsRule)
   await s.apply([
     { entity: { eid: 'done' }, effect: { state: 'done' } },
@@ -757,7 +756,7 @@ test('legacy done effect cleanup rehearses without moving human data or failures
   assertEquals(report.rows, 2)
   assertEquals(report.failed, undefined)
   assertEquals(await s.query('.effect&*'), before)
-  s.wake({ ...doneEffectsRule, live: 'apps' })
+  s.wake(doneEffectsRule)
   for (let i = 0; i < 5 && (await s.query('.effect.state=done')).length; i++) {
     await s.alarm()
   }

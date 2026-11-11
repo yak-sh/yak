@@ -137,8 +137,11 @@ export let dispatchRule: Rule & { find: string } = {
 
 /** Every rule a release carries. A rule leaves in the release after the sweep
  * reports every store done with it, with the old words it moved out of. */
+/** Runs left `done` from before the pool deleted a run once it succeeded.
+ * Each is deleted, or loses only `effect` where it carries more. */
 export let doneEffectsRule: Rule = {
   mark: 'yak/store/done-effects/1',
+  live: 'apps',
   find: '.effect.state=done&*',
   move: doneRun,
 }
