@@ -17,6 +17,8 @@ import { equal, test } from '@yaks/testing'
 import { memberDoc } from './comp.ts'
 import { memberKeywords } from './keywords.ts'
 import { declarationsOf, personal } from './personal.ts'
+import { token } from '@yaks/graph/sha256'
+import type { Asked } from './asking.ts'
 import { PRIVACY, privacy } from './privacy.ts'
 
 let ref = { type: 'string', ref: 'entity', death: 'keep' }
@@ -185,3 +187,32 @@ for (let [name, make] of Object.entries(stores)) {
     })
   }
 }
+
+test('declarations hash a floor as ever and conditions as part of them', () => {
+  let order = loadVocab({
+    $defs: {
+      entity: { component: true, type: 'object' },
+      order: {
+        component: true,
+        type: 'object',
+        properties: { kind: { type: 'string' } },
+      },
+    },
+  })
+  let hashed = (asked: Asked) =>
+    privacy({
+      owners: [],
+      through: [],
+      floors: [['order', asked]],
+      vocab: order,
+    })
+      .hash
+  equal(
+    hashed('editor'),
+    token({ owners: [], through: [], floors: [['order', 'editor']] })!
+      .slice(0, 16),
+  )
+  let rush = hashed({ editor: '.order.kind=rush' })
+  equal(rush == hashed({ editor: '.order.kind=gift' }), false)
+  equal(rush == hashed('editor'), false)
+})

@@ -3,7 +3,8 @@
 import { type Bundle, type Comp, graph, type ReadOpts } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { equal, test } from '@yaks/testing'
+import { equal, test, throws } from '@yaks/testing'
+import { memberDoc } from './comp.ts'
 import { memberKeywords } from './keywords.ts'
 import { personal } from './personal.ts'
 
@@ -68,3 +69,82 @@ for (let [who, opts, sees] of readers) {
       equal(!!await ask(opts), sees))
   }
 }
+
+// A `readers` object asks a floor only of the entities its queries match.
+// `!=` matches an absent property, so the directory names its own.
+let directory = loadVocab([memberDoc, {
+  $defs: {
+    entity: { component: true, type: 'object' },
+    individual: {
+      component: true,
+      type: 'object',
+      readers: {
+        editor: '.individual.status&.individual.status!=member,attender',
+      },
+      properties: { status: { type: 'string' } },
+    },
+  },
+}], [memberKeywords])
+let person = (eid: string, status?: string) => ({
+  entity: { eid },
+  individual: status ? { status } : {},
+})
+let roll = async (...rows: Bundle[]) => {
+  let g = graph({ vocab: directory, storage: ram(directory) })
+  g.use(personal(directory))
+  await g.apply(rows, { trusted: true })
+  let read = async (level: 'viewer' | 'editor') =>
+    (await g.read('.individual', { person: 'kim', level }))
+      .map((b) => b.entity.eid).sort()
+  return { g, read }
+}
+let people = [
+  person('noah', 'member'),
+  person('ada', 'attender'),
+  person('ruth', 'former'),
+  person('kid'),
+]
+
+test('a viewer reads the entities the conditions leave, an editor all', async () => {
+  let { read } = await roll(...people)
+  equal(await read('viewer'), ['ada', 'kid', 'noah'])
+  equal(await read('editor'), ['ada', 'kid', 'noah', 'ruth'])
+})
+
+test('a write that changes the property moves the entity either way', async () => {
+  let { g, read } = await roll(...people)
+  await g.apply([person('ruth', 'member'), person('noah', 'guest')], {
+    trusted: true,
+  })
+  equal(await read('viewer'), ['ada', 'kid', 'ruth'])
+  await g.apply([{ entity: { eid: 'noah' }, individual: { status: null } }], {
+    trusted: true,
+  })
+  equal(await read('viewer'), ['ada', 'kid', 'noah', 'ruth'])
+})
+
+test('a subscription relay leaves out what the conditions keep', async () => {
+  let { g } = await roll(...people)
+  let relay = async (eid: string) =>
+    (await g.answer([person(eid, 'former')], {
+      person: 'kim',
+      level: 'viewer',
+      patch: true,
+    })).length
+  equal([await relay('ruth'), await relay('kid')], [0, 1])
+})
+
+test('conditions need a vocabulary that keeps _privacy', () => {
+  let bare = loadVocab({
+    $defs: {
+      entity: { component: true, type: 'object' },
+      line: {
+        component: true,
+        type: 'object',
+        readers: { editor: '.line.x' },
+        properties: { x: { type: 'string' } },
+      },
+    },
+  }, [memberKeywords])
+  return throws(() => personal(bare), '_privacy')
+})

@@ -8,7 +8,8 @@
 // holding words it did not declare; `floor` is a vocabulary saying it about its
 // own, so an app that declares a word also declares who may write it.
 // `readers` is the same ladder for whoever reads it: an entity wearing the
-// component is seen only by readers standing on that floor, whatever the mode.
+// component is seen only by readers standing on that floor, whatever the mode;
+// an object of floors to queries asks a floor only of the entities it matches.
 // `permit` lets the owner of a stored reference answer with a companion mark,
 // without gaining the declaring row or permission to change its request.
 // `personal` names the owner of a private entity or private person component.
@@ -16,6 +17,7 @@
 import type { Keywords, Vocab, VocabDoc } from '@yaks/vocab'
 import { marked } from '@yaks/graph/provenance'
 import doc from './meta/member.vocab.json' with { type: 'json' }
+import { type Asked, askedErrors, askedOf, asking } from './asking.ts'
 import { floor, type Floors, isFloor } from './words.ts'
 
 /** The URI a vocabulary file declares under `$vocabulary` to use member keywords. */
@@ -32,14 +34,14 @@ export let memberKeywords: Keywords = {
   doc,
 }
 
-// Component → floor, as one keyword of a loaded vocabulary declares them.
-let ladder = (v: Vocab, keyword: 'floor' | 'readers'): Floors =>
+// Component → what one keyword of a loaded vocabulary declares of it.
+let said = <T>(v: Vocab, keyword: string, read: (said: unknown) => T) =>
   Object.fromEntries(
     v.all.flatMap((c) => {
       let said = v.comp(c)?.keywords[keyword]
-      return said === undefined ? [] : [[c, floor(said)]]
+      return said === undefined ? [] : [[c, read(said)]]
     }),
-  )
+  ) as Record<string, T>
 
 /**
  * The floors a loaded vocabulary declares, component → floor.
@@ -57,10 +59,11 @@ let ladder = (v: Vocab, keyword: 'floor' | 'readers'): Floors =>
  * assertEquals(floorsIn(v), { line: 'person' })
  * ```
  */
-export let floorsIn = (v: Vocab): Floors => ladder(v, 'floor')
+export let floorsIn = (v: Vocab): Floors => said(v, 'floor', floor)
 
 /**
- * The floors a loaded vocabulary asks of readers, component → floor.
+ * What a loaded vocabulary asks of readers, component → a floor, or the
+ * queries that choose one (./asking.ts).
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -75,11 +78,13 @@ export let floorsIn = (v: Vocab): Floors => ladder(v, 'floor')
  * assertEquals(readersIn(v), { signup: 'viewer' })
  * ```
  */
-export let readersIn = (v: Vocab): Floors => ladder(v, 'readers')
+export let readersIn = (v: Vocab): Record<string, Asked> =>
+  said(v, 'readers', askedOf)
 
 /**
- * Every `floor` or `readers` a document declares that is not a floor, as
- * sentences, the way @yaks/vocab's `storable` answers.
+ * Every `floor` or `readers` a document declares that is not a floor, or a
+ * `readers` condition that is no query of the component, as sentences, the way
+ * @yaks/vocab's `storable` answers.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -91,17 +96,26 @@ export let readersIn = (v: Vocab): Floors => ladder(v, 'readers')
  * ```
  */
 export let floored = (d: VocabDoc): string[] =>
-  Object.entries(d.$defs ?? {}).flatMap(([name, s]) =>
-    [
-      ['floor', `is floored`, 'a floor'],
-      ['readers', 'is read by', 'readers'],
-    ].flatMap(([keyword, says, is]) =>
-      s?.[keyword] === undefined || isFloor(s[keyword]) ? [] : [
-        `${name} ${says} "${s[keyword]}" — ${is} is person, viewer, editor ` +
-        'or owner',
-      ]
-    )
-  )
+  Object.entries(d.$defs ?? {}).flatMap(([name, s]) => [
+    ...s?.floor === undefined || isFloor(s.floor) ? [] : [
+      `${name} is floored "${s.floor}" — a floor is person, viewer, editor ` +
+      'or owner',
+    ],
+    ...s?.readers === undefined ? [] : askedErrors(name, s.readers),
+  ])
+
+/** The `readers` conditions that name a property the loaded vocabulary does
+ * not declare, as sentences: what {@link floored} cannot see in a document
+ * alone. */
+export let conditioned = (v: Vocab): string[] =>
+  Object.entries(readersIn(v)).flatMap(([name, asked]) => {
+    try {
+      asking(asked, v)
+      return []
+    } catch (e) {
+      return [`${name} is read by conditions that do not apply: ${e}`]
+    }
+  })
 
 /** Declaring component → companion mark → its local reference property. */
 export type Permits = Record<string, Record<string, string>>

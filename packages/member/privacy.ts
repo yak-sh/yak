@@ -22,6 +22,7 @@ import { dead } from '@yaks/graph/bundle'
 import { token } from '@yaks/graph/sha256'
 import type { Bundle, Comp, Tracker, Tx } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
+import { type Ask, type Asked, asking, conditions } from './asking.ts'
 import { type Floor, type Level, LEVELS, reaches } from './words.ts'
 
 /** What a store answers, now or later: a synchronous store's transaction
@@ -33,11 +34,13 @@ export let PRIVACY = '_privacy'
 
 /** The declarations an entity's privacy is reckoned from: who owns each
  * `personal` component, the reference each inherited one reads its source
- * through, and the floor each `readers` one asks. */
+ * through, and what each `readers` one asks, which the `vocab` matches the
+ * queries of one against an entity's bundle. */
 export type Declared = {
   owners: [string, string][]
   through: [string, string][]
-  floors: [string, Floor][]
+  floors: [string, Asked][]
+  vocab?: Vocab
 }
 
 let ref = (b: Bundle | undefined, comp: string, prop: string) => {
@@ -110,11 +113,22 @@ export type Privacy = {
  */
 export let privacy = (declared: Declared): Privacy => {
   // In one order, so that the same declarations hash the same however given.
-  let sorted = <T extends [string, string]>(pairs: T[]) =>
+  let sorted = <T extends [string, unknown]>(pairs: T[]) =>
     pairs.toSorted(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
   let owners = sorted(declared.owners), through = sorted(declared.through)
   let floors = sorted(declared.floors)
-  let hash = token({ owners, through, floors })!.slice(0, 16)
+  let asks = new Map<string, Ask>(
+    floors.map(([name, asked]) => [name, asking(asked, declared.vocab)]),
+  )
+  // A floor alone hashes as it always has; conditions, lowest floor first.
+  let hash = token({
+    owners,
+    through,
+    floors: floors.map(([name, asked]) => [
+      name,
+      typeof asked == 'string' ? asked : conditions(asked),
+    ]),
+  })!.slice(0, 16)
   /** What an entity's privacy is read from. */
   let bearing = [
     ...new Set([...owners, ...through, ...floors].map(([name]) => name)),
@@ -128,7 +142,10 @@ export let privacy = (declared: Declared): Privacy => {
       let c = b[name] as Comp | undefined
       if (c) persons.push(c[by] == null ? null : String(c[by]))
     }
-    for (let [name, floor] of floors) if (b[name]) asked.add(floor)
+    for (let [name] of floors) {
+      let floor = b[name] && asks.get(name)!(b)
+      if (floor) asked.add(floor)
+    }
   }
 
   /** The privacy `e` makes, its sources read through `at`: none for an

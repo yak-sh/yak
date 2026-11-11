@@ -21,6 +21,7 @@ import { acceptsErrors, blobKeywords } from '@yaks/blob'
 import { edgeKeywords } from '@yaks/edge'
 import { keyKeywords } from '@yaks/key'
 import {
+  conditioned,
   floored,
   isFloor,
   memberKeywords,
@@ -701,11 +702,12 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   // deploys.
   if (
     Object.values(doc.$defs ?? {}).some((s) =>
-      s.permit !== undefined || s.personal !== undefined
+      s.permit !== undefined || s.personal !== undefined ||
+      typeof s.readers == 'object'
     )
   ) {
     let v = composed(pluginsOf(doc), [doc], appOptions).vocab
-    let errors = [...permitted(v), ...unowned(v)]
+    let errors = [...permitted(v), ...unowned(v), ...conditioned(v)]
     if (errors.length) {
       throw refuse('arguments', `${file}: ${errors.join('; ')}`)
     }

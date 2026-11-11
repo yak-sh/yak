@@ -1256,6 +1256,47 @@ test('a subscription is answered, and a commit reaches the socket', async () => 
   assertEquals(pushed.bundles[0].entity.eid, CAKE)
 })
 
+test('a viewer subscribed to rows kept by conditions is sent the others, and no patch of a kept one', async () => {
+  let ctx = state()
+  let store = await cookbook(
+    ctx,
+    JSON.stringify({
+      $defs: {
+        individual: {
+          readers: { editor: '.individual.status=former' },
+          properties: { status: { type: 'string' } },
+        },
+      },
+    }),
+  )
+  let [ruth, noah] = [crypto.randomUUID(), crypto.randomUUID()]
+  let people = (status: string) =>
+    [ruth, noah].map((eid) => ({ entity: { eid }, individual: { status } }))
+  await post(store, '/apply', people('member'), owner)
+  let ws = wire()
+  ws.serializeAttachment({ read: { person: 'kim', level: 'viewer' } })
+  ctx.live.push(ws)
+  let eids = () =>
+    ws.sent.flatMap((f) => (f as { bundles?: Bundle[] }).bundles ?? [])
+      .map((b) => b.entity.eid)
+  await store.webSocketMessage(
+    ws,
+    JSON.stringify({ subscribe: '.individual', id: 'all' }),
+  )
+  assertEquals(eids().sort(), [noah, ruth].sort())
+  ws.sent.length = 0
+  await post(
+    store,
+    '/apply',
+    [ruth, noah].map((eid) => ({
+      entity: { eid },
+      individual: { status: eid == ruth ? 'former' : 'attender' },
+    })),
+    owner,
+  )
+  assertEquals(eids(), [noah])
+})
+
 test("a page's subscription leaves out the platform's rows unless it names one", async () => {
   let ctx = state()
   let store = await cookbook(ctx)
@@ -1561,6 +1602,33 @@ test('a stored component holds its floor and a pace per entity and vouched instr
   assertEquals(await said(own, first, 'Owner again'), [429, 'Paced'])
   let r = await post(store, '/vocab', chat('admin'), own)
   assertStringIncludes((await r.json()).message, 'line is floored "admin"')
+})
+
+test('a readers condition that names no floor, parses no query or names no property is refused with its component', async () => {
+  let store = await cookbook()
+  let refused = async (readers: unknown) =>
+    (await (await post(
+      store,
+      '/vocab',
+      JSON.stringify({
+        $defs: {
+          individual: { readers, properties: { status: { type: 'string' } } },
+        },
+      }),
+      owner,
+    )).json()).message as string
+  assertStringIncludes(
+    await refused({ admin: '.individual.status=x' }),
+    'individual is read by "admin"',
+  )
+  assertStringIncludes(
+    await refused({ editor: '.individual.status=x|' }),
+    'individual is read by editors where',
+  )
+  assertStringIncludes(
+    await refused({ editor: '.individual.nope=x' }),
+    'individual is read by conditions that do not apply',
+  )
 })
 
 // A name outlives the batch (T-34390): @yaks/key carries it, @yaks/alias

@@ -15,12 +15,30 @@
       ]
     },
     "readers": {
-      "description": "The least a reader of this component holds, whatever the app's mode: an entity wearing it is seen only by such readers. \"person\" is anyone signed in; \"viewer\", \"editor\" and \"owner\" are that level on the app, or more. Absent, the app's access mode decides alone.",
-      "enum": [
-        "person",
-        "viewer",
-        "editor",
-        "owner"
+      "description": "The least a reader of this component holds, whatever the app's mode: an entity wearing it is seen only by such readers. \"person\" is anyone signed in; \"viewer\", \"editor\" and \"owner\" are that level on the app, or more. Absent, the app's access mode decides alone. An object maps floors to queries on the component's own properties instead: an entity asks the highest floor whose query its bundle matches, and nothing when it matches none.",
+      "oneOf": [
+        {
+          "enum": [
+            "person",
+            "viewer",
+            "editor",
+            "owner"
+          ]
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "person",
+              "viewer",
+              "editor",
+              "owner"
+            ]
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
       ]
     },
     "permit": {

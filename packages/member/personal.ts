@@ -16,6 +16,7 @@ import type {
 } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { Denied } from './deny.ts'
+import { asking, top } from './asking.ts'
 import { readersIn } from './keywords.ts'
 import { type Declared, kept, privacy } from './privacy.ts'
 import { type Level, LEVELS, stands } from './words.ts'
@@ -117,6 +118,7 @@ export let declarationsOf = (
   ),
   through: Object.entries(through),
   floors: Object.entries(readersIn(vocab)),
+  vocab,
 })
 
 /** Protect person-owned data at reads and at every transaction write,
@@ -140,25 +142,37 @@ export let personal = (
     }
   }
   let floors = Object.entries(readersIn(vocab))
+  if (floors.some(([, asked]) => typeof asked != 'string') && !kept(vocab)) {
+    // Conditions are matched where an entity's privacy is reckoned; a store
+    // that keeps none could only read them by hiding the whole component.
+    throw new Error('readers conditions need a vocabulary that keeps _privacy')
+  }
+  let asks = floors.map(([name, asked]) => ({
+    name,
+    ask: asking(asked, vocab),
+    top: top(asked),
+  }))
   // What a write's ownership is checked by, and what a read's visibility is.
   let owned = [...new Set([...Object.keys(owners), ...Object.keys(through)])]
   let comps = [...owned, ...floors.map(([name]) => name)]
   let entityOwned = entries.filter(([, by]) => by != 'entity')
-  // The components kept from this reader: those whose readers' floor it does
-  // not stand on.
+  // The components that may be kept from this reader: those whose readers'
+  // highest floor it does not stand on. One that asks by conditions is kept
+  // whole where the store reads by its declarations, never by its privacy.
   let unseen = (opts: ReadOpts) =>
-    floors.filter(([, floor]) =>
-      !stands(opts.person ?? null, vouched(opts.level), floor)
-    ).map(([name]) => name)
-  let foreign = (
-    row: Bundle,
-    person: string | null | undefined,
-    hidden: string[],
-  ) =>
-    hidden.some((name) => row[name] != null) ||
+    asks.filter(({ top }) =>
+      !stands(opts.person ?? null, vouched(opts.level), top)
+    ).map(({ name }) => name)
+  // Whether a row is kept from this reader: by a component asking a floor it
+  // does not stand on, or by another person's private one.
+  let foreign = (row: Bundle, opts: ReadOpts) =>
+    asks.some(({ name, ask }) => {
+      let floor = row[name] != null && ask(row)
+      return floor && !stands(opts.person ?? null, vouched(opts.level), floor)
+    }) ||
     entityOwned.some(([name, by]) => {
       let c = row[name] as Comp | undefined
-      return c && (!person || c[by] != person)
+      return c && (!opts.person || c[by] != opts.person)
     })
   // The entities `who` may see: each holds no private component, or holds it
   // as theirs, and holds none kept from them.
@@ -382,14 +396,14 @@ export let personal = (
           let byId = new Map(sources.map((b) => [b.entity.eid, b]))
           let visible = bundles.flatMap((b) => {
             let row = held.get(b.entity.eid)
-            if (foreign(row ?? b, opts.person, hidden)) return []
+            if (foreign(row ?? b, opts)) return []
             if (
               inherited.some(([name, prop]) => {
                 let comp = (row ?? b)[name] as Comp | undefined
                 if (!comp) return false
                 let source = byId.get(String(comp[prop]))
                 return !source || dead(source) ||
-                  foreign(source, opts.person, hidden)
+                  foreign(source, opts)
               })
             ) return []
             let out = { ...b }
@@ -444,9 +458,7 @@ export let personal = (
               return after(seen, (seen) => {
                 let allowed = new Set(
                   [
-                    ...rows.filter((b) =>
-                      !dead(b) && !foreign(b, opts.person, hidden)
-                    ),
+                    ...rows.filter((b) => !dead(b) && !foreign(b, opts)),
                     ...seen,
                   ]
                     .map((b) => b.entity.eid),

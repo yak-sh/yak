@@ -4049,6 +4049,7 @@
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/host@0.2.29",
             "npm:@yaks/journal@0.2.30",
+            "npm:@yaks/match@0.2.30",
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/sqlite@0.2.30",

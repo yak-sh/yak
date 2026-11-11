@@ -3174,6 +3174,9 @@ importers:
       '@yaks/host':
         specifier: 0.2.29
         version: link:../host
+      '@yaks/match':
+        specifier: 0.2.30
+        version: link:../match
       '@yaks/query':
         specifier: 0.2.32
         version: link:../query

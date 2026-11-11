@@ -588,6 +588,41 @@ signed out or holding no role reads none, nor counts them. The platform's
 the app read sign-ups, never its viewers. `readers` keeps rows from readers
 only; who may write them is still `floor` and the app's access.
 
+**Only some rows: `readers` with queries.** Instead of a floor, `readers` can be
+an object mapping a floor to a query on the component's own properties. An
+entity wearing the component asks the highest floor whose query its own row
+matches, and asks nothing of its readers when it matches none, so it is read as
+if the component declared no `readers`. A query that tests anything but the
+component's own properties is refused at `app_deploy`, as is a floor that does
+not exist, a query that does not parse and a property the component does not
+declare.
+
+`!=` matches a row whose property is absent, as `=` never does. A people
+directory whose members join as viewers, where only members and attenders (and
+people with no status, such as children listed with their parents) are shown to
+viewers, and everyone else (former, nonmember, guest, any status added later) is
+read by editors and owners alone, names the status it tests for being present:
+
+    { "$defs": {
+        "individual": {
+          "readers": {
+            "editor": ".individual.status&.individual.status!=member,attender"
+          },
+          "properties": {
+            "first":  { "type": "string" },
+            "phone":  { "type": "string" },
+            "status": { "type": "string" } } } } }
+
+`.individual.status` is true of a row with a status, so a row with none asks
+nothing and every viewer reads it, and `!=member,attender` is true of any other
+status. Writing `.individual.status!=member,attender` alone would keep the
+people with no status from viewers too. The floor is kept on the entity when it
+is written, so a write that changes `status` moves the person in or out of view
+in the same commit, through every read and every live subscription. Adding or
+changing a condition in `vocab.json` re-reckons every entity of the app in the
+background at the next deploy; until it finishes, viewers read none of the rows
+of a component whose conditions they might be kept from.
+
 ## Private per-person rows: `personal`
 
 In an app shared between members (<https://yaks.app/docs/sharing.md>), every

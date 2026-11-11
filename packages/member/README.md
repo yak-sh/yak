@@ -201,6 +201,18 @@ anyone reads a `public` form and only the app's editors and owners read the
 sign-ups. `readersIn(vocab)` reads the declarations back, and `floored(doc)`
 reports a `readers` that is not a floor too.
 
+`readers` can also map floors to queries on the component's own properties,
+`{ "editor": ".individual.status&.individual.status!=member,attender" }`: an
+entity asks the highest floor whose query its own bundle matches (run in memory
+by @yaks/match, where `_privacy` is reckoned), and nothing when it matches none.
+`!=` matches an absent property, so the example names `.individual.status` first
+to leave an entity with no status to every reader. The conditions are part of
+the declarations' `hash`, so changing one has every entity re-reckoned and a
+string-only declaration hashes as it always has. `floored(doc)` refuses a key
+that is no floor and a query that does not parse or tests another component,
+`conditioned(vocab)` one naming a property the vocabulary lacks, and
+`personal(vocab)` refuses conditions in a vocabulary that keeps no `_privacy`.
+
 The [person-owned data](#person-owned-data) plugin enforces it, at the same
 reads and with the same bypasses. Each external read supplies `ReadOpts.level`
 beside `ReadOpts.person`: the level the host verified the person holds on the
@@ -383,23 +395,23 @@ invitation handler.
 
 The main export includes:
 
-| Exports                                                                                   | Purpose                                                                                                         |
-| ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `memberDoc`                                                                               | Vocabulary document containing access components and pacing metadata.                                           |
-| `MEMBER`, `GRANT`, `ACCESS`, `GOVERNED`                                                   | Component names and the list requiring owner permission.                                                        |
-| `Role`, `Level`, `Mode`; `ROLES`, `LEVELS`, `MODES`                                       | Value types and their supported values.                                                                         |
-| `role`, `level`, `mode`                                                                   | Read a value with its default: member, viewer or private.                                                       |
-| `reads`, `edits`, `callsOut`, `writes`, `reaches`                                         | Pure permission checks.                                                                                         |
-| `members(guard)`                                                                          | Graph plugin with the vocabulary, permission-read requirements and write hook.                                  |
-| `guarding(guard)`, `wanting(guard)`, `actorOf`, `asks`                                    | Write hook and supporting helpers.                                                                              |
-| `policy(storage, where)`                                                                  | Read and write checks bound to storage.                                                                         |
-| `modeOn`, `levelOn`, `readsOn`, `writesOn`                                                | Checks using an existing graph transaction.                                                                     |
-| `Guard`, `Floors`, `Viewer`, `Where`, `Policy`                                            | Configuration and policy types.                                                                                 |
-| `Denied`                                                                                  | Error with `actor`, `app`, `need` and `act` fields.                                                             |
-| `owns(owner, who)`, `Owner`                                                               | Match verified `{by, via}` against a row's recorded owner; a bound person takes precedence over its instrument. |
-| `memberKeywords`, `floorsIn`, `readersIn`, `floored`, `permitsIn`, `permitted`; `Permits` | Permission declarations, their validation and loaded forms.                                                     |
-| `personal`, `personalsIn`, `unowned`; `Personal`                                          | Person-owned policy, its validated declarations and their refusals.                                             |
-| `privacy`, `declarationsOf`, `kept`, `PRIVACY`; `Declared`, `Privacy`                     | Each entity's kept privacy: how it is reckoned, written, found stale and read.                                  |
+| Exports                                                                                                  | Purpose                                                                                                         |
+| -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `memberDoc`                                                                                              | Vocabulary document containing access components and pacing metadata.                                           |
+| `MEMBER`, `GRANT`, `ACCESS`, `GOVERNED`                                                                  | Component names and the list requiring owner permission.                                                        |
+| `Role`, `Level`, `Mode`; `ROLES`, `LEVELS`, `MODES`                                                      | Value types and their supported values.                                                                         |
+| `role`, `level`, `mode`                                                                                  | Read a value with its default: member, viewer or private.                                                       |
+| `reads`, `edits`, `callsOut`, `writes`, `reaches`                                                        | Pure permission checks.                                                                                         |
+| `members(guard)`                                                                                         | Graph plugin with the vocabulary, permission-read requirements and write hook.                                  |
+| `guarding(guard)`, `wanting(guard)`, `actorOf`, `asks`                                                   | Write hook and supporting helpers.                                                                              |
+| `policy(storage, where)`                                                                                 | Read and write checks bound to storage.                                                                         |
+| `modeOn`, `levelOn`, `readsOn`, `writesOn`                                                               | Checks using an existing graph transaction.                                                                     |
+| `Guard`, `Floors`, `Viewer`, `Where`, `Policy`                                                           | Configuration and policy types.                                                                                 |
+| `Denied`                                                                                                 | Error with `actor`, `app`, `need` and `act` fields.                                                             |
+| `owns(owner, who)`, `Owner`                                                                              | Match verified `{by, via}` against a row's recorded owner; a bound person takes precedence over its instrument. |
+| `memberKeywords`, `floorsIn`, `readersIn`, `floored`, `conditioned`, `permitsIn`, `permitted`; `Permits` | Permission declarations, their validation and loaded forms.                                                     |
+| `personal`, `personalsIn`, `unowned`; `Personal`                                                         | Person-owned policy, its validated declarations and their refusals.                                             |
+| `privacy`, `declarationsOf`, `kept`, `PRIVACY`; `Declared`, `Privacy`                                    | Each entity's kept privacy: how it is reckoned, written, found stale and read.                                  |
 
 ## What is deliberately not here
 

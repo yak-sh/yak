@@ -69,11 +69,11 @@ export type Floor = 'person' | Level
 /** The floor each component asks of whoever writes it, by name. */
 export type Floors = Record<string, Floor>
 
-// The floors, least to most.
-let ladder: Floor[] = ['person', ...LEVELS]
+/** The floors, least to most. */
+export let FLOORS: Floor[] = ['person', ...LEVELS]
 
 /** Is this a floor? */
-export let isFloor = (v: unknown): v is Floor => ladder.includes(v as Floor)
+export let isFloor = (v: unknown): v is Floor => FLOORS.includes(v as Floor)
 
 /** Read a declared floor: one this package does not know asks the most. */
 export let floor = (v: unknown): Floor => isFloor(v) ? v : 'owner'
