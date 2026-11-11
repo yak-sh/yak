@@ -12,7 +12,9 @@
 //     yields between batches, so requests interleave. An alarm moves a few
 //     batches and comes back for the rest.
 //   - every bound is counted in rows, never in time: inside a Worker the clock
-//     stands still while code runs, and moves only when it waits.
+//     stands still while code runs, and moves only when it waits. A store's
+//     mover spends at most `SHARE` of its ceiling's windows, then comes back
+//     once they end.
 //   - a batch that fails unwinds and is reported, and the store keeps serving
 //     the shape it holds. This incarnation leaves that rule alone; the next
 //     one, which a fix arrives as, tries again.
@@ -135,8 +137,6 @@ export let dispatchRule: Rule & { find: string } = {
   move: dispatchMove,
 }
 
-/** Every rule a release carries. A rule leaves in the release after the sweep
- * reports every store done with it, with the old words it moved out of. */
 /** Runs left `done` from before the pool deleted a run once it succeeded.
  * Each is deleted, or loses only `effect` where it carries more. */
 export let doneEffectsRule: Rule = {
@@ -176,6 +176,8 @@ export let takeRule: Rule = {
   },
 }
 
+/** Every rule a release carries. A rule leaves in the release after the sweep
+ * reports every store done with it, with the old words it moved out of. */
 export let RULES: Rule[] = [
   deadMailInboxRule,
   doneEffectsRule,
@@ -243,6 +245,13 @@ export let SIZE = 50
 export let BATCHES = 5
 export let PAUSE = 1_000
 export let REHEARSED = 20
+
+/** The share of each of its store's windows (@yaks/durable-object `WINDOWS`)
+ * a mover spends before it waits for the window to end, leaving the rest to
+ * the store's requests. Bounded in batches alone it outran them: vale's 48,755
+ * done runs, deleted 250 an alarm with every index row they held, wrote
+ * 100,000 rows inside a minute. */
+export let SHARE = 0.5
 
 /** Whether a rule runs for real in this store. */
 export let runs = (rule: Rule, store: string) =>

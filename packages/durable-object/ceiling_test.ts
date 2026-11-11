@@ -274,3 +274,45 @@ test('an object keeps its windows only as they pass half, and all, of what they 
   let { c } = instance()
   equal(c.stopped(), 0)
 })
+
+test('work that can wait is told how long until every window is under its share', () => {
+  let { c, clock, ran } = bound()
+  equal(c.under(0.5), 0)
+  ran(0, 0, 499)
+  equal(c.under(0.5), 0)
+  ran(0, 0, 1)
+  equal(c.under(0.5), 60_000)
+  clock.at = 60_000
+  equal(c.under(0.5), 0)
+  // The hour holds what its minutes spent.
+  ran(0, 0, 1_000)
+  clock.at = 120_000
+  equal(c.under(0.5), 3_480_000)
+})
+
+test('a written runaway names what wrote, never statements that only read', () => {
+  let told: Record<string, string>[] = []
+  let c = ceiling({
+    windows: [{ ms: 60_000, read: 1e9, written: 100 }],
+    now: () => 0,
+    report: (_, { tags }) => told.push(tags),
+  })
+  c.count({
+    shape: () => 'select',
+    rowsRead: 5_000,
+    rowsWritten: 0,
+    returned: 1,
+  })
+  for (let i = 0; i < 11; i++) {
+    c.count({
+      shape: () => 'delete',
+      rowsRead: 0,
+      rowsWritten: 10,
+      returned: 0,
+    })
+  }
+  equal(told.map((t) => [t.statements, t.unnamed]), [[
+    '[]',
+    '110 rows written by statements too small or too many to name',
+  ]])
+})

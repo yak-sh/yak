@@ -390,6 +390,7 @@ import {
   type Rule,
   RULES,
   runs,
+  SHARE,
   SIZE,
   step,
 } from './mover.ts'
@@ -3487,9 +3488,12 @@ export class Store {
     // is one read, and finishes without spending one.
     let left = BATCHES
     let name = this.#get('name') ?? ''
+    // How long until the store spent under its mover's share of its windows.
+    let wait = 0
     for (let rule of this.#owing()) {
       while (
-        left > 0 && !this.#refused && (!this.#dormant || this.#moveOnly)
+        left > 0 && !this.#refused && (!this.#dormant || this.#moveOnly) &&
+        !(wait = this.#ceiling.under(SHARE))
       ) {
         let held: (() => void | Promise<void>)[] = []
         let was = this.#stamp(rule)
@@ -3559,8 +3563,12 @@ export class Store {
         await new Promise((r) => setTimeout(r, 0))
       }
     }
-    if (this.#owing().length) await this.#arming(this.#soon(), 'mover')
-    else if (this.#dormant && this.#moveOnly) {
+    if (this.#owing().length) {
+      await this.#arming(
+        wait ? new Date(this.#now() + wait).toISOString() : this.#soon(),
+        'mover',
+      )
+    } else if (this.#dormant && this.#moveOnly) {
       this.#moveOnly = false
       await this.#ctx.storage.put?.('moving', false)
       if (this.#dormant && !this.#moveOnly) {

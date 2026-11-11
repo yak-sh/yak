@@ -166,6 +166,11 @@ export type Ceiling = {
   refusal: (writing?: boolean) => Stopped | null
   /** How long until a statement is admitted, in ms: 0 when one is now. */
   stopped: (writing?: boolean) => number
+  /** How long until the object has spent under `share` of every window's
+   * rows, read and written, in ms: 0 when it has now. Work that can wait (a
+   * store's mover) asks it before it spends more, and leaves the rest of each
+   * window to the object's requests. */
+  under: (share: number) => number
   /** Run statements a stopped object must still take: `body`'s own, and
    * those of the work it awaits until it settles. What they cost is told,
    * and stops nothing. */
@@ -180,6 +185,19 @@ let rows = (n: number) =>
   n >= 1e6
     ? `${+(n / 1e6).toFixed(1)}M`
     : String(Math.round(n)).replace(/\B(?=(\d{3})+$)/g, ',')
+
+// Rows of a kind a tally spent.
+let amount = (c: Cost, k: Kind) => k == 'read' ? c.rowsRead : c.rowsWritten
+
+// What the statements a runaway cannot name spent of its kind: those under
+// `NAMED` rows, and those past the shapes it keeps. Many small ones (a
+// mover's deletes, each a few rows with its indexes) can pass a window with no
+// named statement that spent any.
+let unnamed = (g: Group, k: Kind) => {
+  let named = [...g.shapes.values()].reduce((n, e) => n + amount(e, k), 0)
+  return `${rows(amount(g.total, k) - named)} rows ${k} by statements too ` +
+    `small or too many to name`
+}
 
 let span = (ms: number) => ms >= HOUR ? `${ms / HOUR} h` : `${ms / 60_000} min`
 
@@ -286,6 +304,16 @@ export let ceiling = (
     }
     return { wait: Math.max(0, until - at), kind }
   }
+  let under = (share: number) => {
+    let at = now(), until = at
+    for (let s of live()) {
+      if (at - s.since >= s.ms) continue
+      if (KINDS.some((k) => spent(s, k) >= share * s[k])) {
+        until = Math.max(until, s.since + s.ms)
+      }
+    }
+    return until - at
+  }
   let count = (
     { shape, rowsRead, rowsWritten, returned, matched }: Counted,
   ) => {
@@ -320,7 +348,7 @@ export let ceiling = (
           },
           k == 'read' ? 3 : 0,
           k == 'read' ? 0 : 3,
-        ).statements
+        ).statements.filter((e) => amount(e, k) > 0)
         tell.push([
           new Runaway(
             `${rows(n)} rows ${k} in ${span(s.ms)}, past the ${rows(s[k])} ` +
@@ -344,6 +372,7 @@ export let ceiling = (
                 rowsRead: e.rowsRead,
                 rowsWritten: e.rowsWritten,
               }))),
+              ...amount(s.all.other, k) ? { unnamed: unnamed(s.all, k) } : {},
             },
           },
         ])
@@ -407,6 +436,7 @@ export let ceiling = (
     count,
     refusal,
     stopped: (writing) => refusal(writing)?.retry.after ?? 0,
+    under,
     free: (body) => {
       let work = { open: true }
       open++

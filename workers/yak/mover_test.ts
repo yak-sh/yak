@@ -32,6 +32,7 @@ import { importedRule, importedSource } from './imported-move.ts'
 import { type Rule } from './mover.ts'
 import { state } from './testing.ts'
 import { driver } from '@yaks/durable-object'
+import { bounded, type Options } from '@yaks/durable-object/ceiling'
 
 let NAME = 'ada/notes'
 
@@ -64,8 +65,10 @@ let movingStore = async (
   n: number,
   env: ConstructorParameters<typeof Store>[1],
   rules: Rule[],
+  ceiling?: Options,
 ) => {
   let ctx = state()
+  let bound = bounded(ctx.storage, ceiling ?? {})
   let o = new Store(ctx, env, rules)
   let fetch = (r: Request) => o.fetch(r)
   let door = doorOf(fetch, NAME)
@@ -97,6 +100,9 @@ let movingStore = async (
       return () => ctx.storage.sql.exec = exec
     },
     alarm: () => o.alarm(),
+    /** Spend rows written against the store's ceiling, as its requests do. */
+    write: (rowsWritten: number) =>
+      bound.count({ shape: () => 'w', rowsRead: 0, rowsWritten, returned: 0 }),
     query: (q: string) => meta.query(q),
     declare: (doc: unknown) => post('/vocab', JSON.stringify(doc)),
     apply: (rows: Bundle[]) => meta.apply(rows, KERNEL),
@@ -734,6 +740,22 @@ test('dead mail cleanup refuses a claim or changed selection after reading', asy
   }
   assertEquals(deadMailInboxMove({ entity: { eid: 'absent' } }), [])
   assertEquals(deadMailInboxMove(deadMail('new', { attempts: 1 })), [])
+})
+
+test('a mover past its share of a window waits for the window to end', async () => {
+  let at = { t: 0 }
+  let s = await movingStore(120, {}, [rule()], {
+    now: () => at.t,
+    windows: [{ ms: 60_000, read: 1e9, written: 1_000 }],
+  })
+  s.write(500)
+  await s.alarm()
+  at.t = 59_999
+  await s.alarm()
+  assertEquals(await count(s, '.was'), 120)
+  at.t = 60_000
+  await s.alarm()
+  assertEquals(await count(s, '.was'), 0)
 })
 
 test('legacy done effect cleanup moves done runs, never human data or failures', async () => {
