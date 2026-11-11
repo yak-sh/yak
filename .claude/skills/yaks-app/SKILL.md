@@ -534,6 +534,19 @@ checks`; `operator_chat --space checks` reaches its Operator. `checks` is
 in idle-spaces.ts `PROTECTED`, so the sweep never takes it. Nothing an agent
 tests runs in `jeff` or another person's space.
 
+A call to the Operator is checked the same way, from a number of our own:
+`scripts/test-call.ts` beside this skill dials the platform's number from the
+idle Telnyx number the `checks` account is known by (its person's
+`phone{number}` in `yak/platform`), says each line you give it at its second,
+and writes the call's two-channel recording. The call reaches the `checks`
+Operator, whose `operator{voice, voice_model}` says how it is answered: ask it
+through `operator_chat` to set them for the path you are checking (a Deepgram
+voice, `gpt-realtime-2.1-mini`, `gpt-live-1`) and to put them back. What it
+said and heard is in its conversation (`yak admin copy checks`, the
+`operator_call` rows), and @yaks/speech `hear` reads the recording. A talking
+model's opening is checked without a phone by `talk()` against OpenAI with
+μ-law clips at real time, which is how T-161675 measured 80 of them.
+
 - `yak admin query <space>/<app> <query>` reads a store, and
   `yak admin apply <space>/<app> <bundles>` patches, adds or deletes its rows
   through the store's own apply (`--check` rehearses and keeps nothing). Both go
