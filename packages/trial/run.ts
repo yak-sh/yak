@@ -200,6 +200,9 @@ export type Call = {
   persona?: Eid
   using: Row
   session?: Eid
+  /** a guess at an attempt not yet written: counted in what the run will
+   * cost, and asked once its attempt is */
+  waits?: boolean
   read: (reply: string) => Row | undefined
 }
 
@@ -209,13 +212,13 @@ export type Label = (b: Bundle) => string
 
 /**
  * The calls a round still owes, writers first: each attempt with a variant
- * and no output, then each guess with no guesses whose attempt has been
- * written. A guess at an attempt still unwritten waits for a later look.
+ * and no output, then each guess with no guesses. A guess at an attempt still
+ * unwritten `waits`: what it asks is not known until a later look.
  */
 export let owed = async (
   g: Graph,
   round: Eid,
-  label: Label = (b) => str(comp(b, 'doc').title),
+  labelOf: Label = (b) => str(comp(b, 'doc').title),
 ): Promise<Call[]> => {
   let r = JSON.stringify(round)
   let [[head], attempts, guesses] = await Promise.all([
@@ -252,8 +255,8 @@ export let owed = async (
       variant: named.get(str(at.variant))!,
       kase: named.get(str(at.case))!,
       name: [
-        label(named.get(str(at.case))!),
-        label(named.get(str(at.variant))!),
+        labelOf(named.get(str(at.case))!),
+        labelOf(named.get(str(at.variant))!),
         at.persona ? 'persona' : 'blank',
         str(at.run ?? 1),
       ].join('.'),
@@ -283,9 +286,24 @@ export let owed = async (
     let said = comp(w, 'guess')
     let a = written.get(str(said.attempt))
     let judge = named.get(str(said.judge))
-    if (!a || !judge || unreturned(a)) continue
+    if (!a || !judge) continue
     let { kase, name } = of(a)
     let form = str(comp(judge, 'judge').form) || 'open'
+    let using = judge.using ? comp(judge, 'using') : comp(head, 'using')
+    let label = `${name} ? ${labelOf(judge)}`
+    if (unreturned(a)) {
+      judges.push({
+        row: w.entity.eid,
+        comp: 'guess',
+        kind: form,
+        label,
+        text: '',
+        using,
+        waits: true,
+        read: () => undefined,
+      })
+      continue
+    }
     let asked = question(
       judge,
       head,
@@ -297,9 +315,9 @@ export let owed = async (
       row: w.entity.eid,
       comp: 'guess',
       kind: form,
-      label: `${name} ? ${label(judge)}`,
+      label,
       text: asked.text,
-      using: judge.using ? comp(judge, 'using') : comp(head, 'using'),
+      using,
       ...said.session ? { session: str(said.session) } : {},
       read: (reply) => {
         let read = asked.read(reply)
@@ -498,16 +516,15 @@ export let run = async (g: Graph, round: Eid, o: Opts): Promise<Ran> => {
       (first.some((c) => cost(c) != null)
         ? `, about ${dollars(total)} at list price by what earlier rows cost`
         : ', and no earlier row says what one costs') +
-      `; judges of what is yet to be written come after. Cap ${
-        dollars(o.cap)
-      }.`,
+      `. Cap ${dollars(o.cap)}.`,
   )
   let stopped = false
   // Two looks: the writers and the judges of what was already written, then
   // the judges of what the first look wrote.
   for (let look of [first, undefined]) {
-    let calls = look ??
-      (await owed(g, round, o.label)).filter((c) => c.comp == 'guess')
+    let calls = (look ??
+      (await owed(g, round, o.label)).filter((c) => c.comp == 'guess'))
+      .filter((c) => !c.waits)
     // What an earlier run asked is read first, and costs this run nothing.
     let again: Call[] = []
     await work(calls.filter((c) => c.session), async (c) => {

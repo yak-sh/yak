@@ -218,7 +218,8 @@ let again = await run(whole.g, whole.round, {
 })
 
 test('it says what the run will cost before it asks, and a second run asks nothing', () => {
-  ok(lines[0].startsWith('4 writers and 0 judges to ask'), lines[0])
+  // The judges of what is yet to be written are counted too.
+  ok(lines[0].startsWith('4 writers and 8 judges to ask'), lines[0])
   ok(lines[0].endsWith('Cap $1.00.'), lines[0])
   equal(again, { asked: 0, returned: 0, failed: 0, left: 0, spent: 0 })
   equal(whole.asked.length, 12)
@@ -244,7 +245,7 @@ test('the cap stops the asking, and the next run asks only what is left', () => 
   // One writer is left, and the judges of the three that were written.
   equal([short.asked, short.left, short.spent], [3, 7, 0.03])
   // What it wrote says what a call costs, so the next run counts ahead.
-  ok(counted[0].includes('about $0.07 at list price'), counted[0])
+  ok(counted[0].includes('about $0.09 at list price'), counted[0])
   equal([rest.asked, rest.left, capped.asked.length], [9, 0, 12])
 })
 

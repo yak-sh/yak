@@ -131,7 +131,7 @@ export let load = async (
  * then each variant and case no other round's attempt names, and each judge
  * no verdict is left from. */
 export let drop = async (g: Graph, round: Eid): Promise<number> => {
-  let all = await gather(g, round)
+  let all = await gather(g, round, true)
   let shared = all.filter((b) => b.variant || b.case || b.judge)
   await g.apply([{ entity: { eid: round }, $delete: true }])
   let unused: Bundle[] = []
