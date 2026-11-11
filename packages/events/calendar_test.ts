@@ -89,3 +89,31 @@ test('calendar recurrence carries each event time zone and local start and end',
   ok(allDay.includes('DTEND;VALUE=DATE:20261109\r\n'))
   equal(allDay.includes('TZID'), false)
 })
+
+let zoned = (zone: string, starts: string) =>
+  calendar([{ ...row, event: { starts, zone, repeats: 'FREQ=WEEKLY' } }])
+
+test('a feed defines each time zone it names, once, with the rule its changes follow', () => {
+  let text = zoned('America/Detroit', '2026-10-25T10:00:00')
+  equal(text.match(/BEGIN:VTIMEZONE/g)?.length, 1)
+  for (
+    let line of [
+      'TZID:America/Detroit',
+      'TZOFFSETFROM:-0500',
+      'TZOFFSETTO:-0400',
+      'DTSTART:19700308T020000',
+      'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU',
+      'DTSTART:19701101T020000',
+      'RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU',
+    ]
+  ) ok(text.includes(`${line}\r\n`), line)
+  ok(text.indexOf('END:VTIMEZONE') < text.indexOf('BEGIN:VEVENT'))
+  equal(calendar([row]).includes('VTIMEZONE'), false)
+})
+
+test('time zones that end on the last Sunday or never change are defined too', () => {
+  ok(zoned('Europe/London', '2026-10-25T10:00:00').includes('BYDAY=-1SU'))
+  let fixed = zoned('America/Phoenix', '2026-10-25T10:00:00')
+  ok(fixed.includes('TZOFFSETTO:-0700\r\n'))
+  equal(fixed.includes('RRULE:FREQ=YEARLY'), false)
+})

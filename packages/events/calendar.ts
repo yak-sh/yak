@@ -1,6 +1,7 @@
 // RFC 5545 text output, independent of HTTP and graph reads.
 import { day, type Event, instant, iso, repeats, rule, span } from './time.ts'
 import { floating, zone } from './zone.ts'
+import { vtimezone } from './vtimezone.ts'
 
 /** An event's graph identity, calendar aspect, cover and modification stamps. */
 export type Entry = {
@@ -65,7 +66,18 @@ let entry = (row: Entry) => {
   ]
 }
 
-/** A subscribable calendar: stable UIDs, native recurrence, CRLF, escaped
+// The definition of each zone a timed event names, by the latest year it starts in.
+let zones = (rows: readonly Entry[]) => {
+  let years = new Map<string, number>()
+  for (let { event } of rows) {
+    if (day(event.starts) || !event.zone) continue
+    let year = new Date(span(event)[0]).getUTCFullYear()
+    years.set(zone(event.zone), Math.max(year, years.get(event.zone) ?? 0))
+  }
+  return [...years].sort().flatMap(([name, year]) => vtimezone(name, year))
+}
+
+/** A subscribable calendar: stable UIDs, native recurrence, VTIMEZONEs, CRLF, escaped
  * text and UTF-8 lines folded at 75 octets. Caller supplies visible rows. */
 export let calendar = (rows: readonly Entry[]): string =>
   [
@@ -73,6 +85,7 @@ export let calendar = (rows: readonly Entry[]): string =>
     'VERSION:2.0',
     'PRODID:-//yaks.app//Calendar//EN',
     'CALSCALE:GREGORIAN',
+    ...zones(rows),
     ...[...rows].sort((a, b) =>
       a.entity.eid < b.entity.eid ? -1 : a.entity.eid > b.entity.eid ? 1 : 0
     )
