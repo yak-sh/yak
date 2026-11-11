@@ -13,6 +13,7 @@
 // kept versions and the restores from docs/errors.md; support from
 // support.ts; the numbers from meter.ts, versions.ts, recover.ts and directory.ts.
 import { Button, Card, Field, Form } from '@yaks/ui'
+import { html } from '@yaks/mail'
 import { GET_PLAN } from '../route.ts'
 import { KEEPING, START } from '../newcomer.ts'
 import { BLOCK, LETTERS, PRICE, YEARLY } from '../meter.ts'
@@ -40,6 +41,59 @@ let sample = (slug: string, said: string) => (
   <a href={`https://yourname.yaks.app/${slug}/`} data-cta='examples'>
     {said} <span aria-hidden='true'>↗</span>
   </a>
+)
+
+type Mail = { from: string; to: string; subject: string; body: string }
+
+// The exchange the page shows took place: an email sent to the demo space's
+// assistant on 2026-11-11 about its visitor card
+// (https://yourname.yaks.app/visitors/), and the answer that came back 39
+// seconds later, each word for word. The people in it are made up. To show
+// another, email yourname@yaks.app from a member's address and copy both
+// letters from the mailbox they arrive in.
+let ASKED: Mail = {
+  from: 'admin@bot.yak.sh',
+  to: 'yourname@yaks.app',
+  subject: 'Visitor cards',
+  body:
+    'Pastor Dan called Tom Reyes this morning. Can you tick him off the visitor card list, and tell me who is still waiting for a call?',
+}
+let ANSWERED: Mail = {
+  from: 'yourname@yaks.app',
+  to: 'admin@bot.yak.sh',
+  subject: 'Re: Visitor cards',
+  body:
+    `Tom Reyes is ticked off as called. There was only one Tom Reyes, and I checked that the saved row shows it.
+
+One visitor is still waiting for a call:
+
+- **Grace Lindqvist**
+  - Phone: 555-0109
+  - Email: grace.lindqvist@bot.yak.sh
+  - Note: "My husband is having surgery on Thursday. Please pray for him."
+
+Cove
+yourname’s Operator`,
+}
+
+// A letter as its reader got it: its body is drawn by the function that
+// makes every letter's HTML (@yaks/mail `html`), under who sent it and its
+// subject.
+let Letter = (
+  { by, mail, back }: { by: string; mail: Mail; back?: boolean },
+) => (
+  <Card as='div' class={`Letter${back ? ' Letter-back' : ''}`}>
+    <p class='Letter_By'>{by}</p>
+    <p class='Letter_Head'>
+      <b>{mail.subject}</b>
+      <br />
+      From {mail.from} to {mail.to}
+    </p>
+    <div
+      class='Letter_Body'
+      dangerouslySetInnerHTML={{ __html: html(mail.body) }}
+    />
+  </Card>
 )
 
 export let Organizations = () => (
@@ -101,22 +155,10 @@ export let Organizations = () => (
       </div>
       <div class='Letters' role='group' aria-labelledby='asked'>
         <p class='Note Note-small' id='asked'>
-          An example of asking, by email
+          An email to the assistant, and its answer 39 seconds later
         </p>
-        <Card as='div' class='Letter'>
-          <p class='Letter_By'>The office writes</p>
-          <p>
-            We're closed the Friday after Thanksgiving. Can you put that on the
-            home page, and take down the craft fair sign-up? It's full.
-          </p>
-        </Card>
-        <Card as='div' class='Letter Letter-back'>
-          <p class='Letter_By'>The assistant writes back</p>
-          <p>
-            Done. The home page says the office is closed that Friday, and the
-            craft fair sign-up now says it is full.
-          </p>
-        </Card>
+        <Letter by='The office writes' mail={ASKED} />
+        <Letter by='The assistant writes back' mail={ANSWERED} back />
       </div>
     </section>
     <section class='Yours' aria-labelledby='missing'>
@@ -150,7 +192,8 @@ export let Organizations = () => (
       </dl>
       <p class='Note Note-small'>
         These three were first built for a church office. Ask for what your
-        office needs, such as a page of meeting minutes or a price list.
+        office needs, such as a calendar for the park pavilion that emails you
+        each request and reminds you of one that has waited two days.
       </p>
     </section>
     <section class='How' aria-labelledby='together'>

@@ -734,6 +734,29 @@
     font-weight: 700;
   }
 
+  .Letter_Head {
+    color: var(--muted);
+    font-size: var(--small);
+    overflow-wrap: anywhere;
+  }
+
+  .Letter_Head b {
+    color: var(--text);
+  }
+
+  .Letter_Body {
+    display: grid;
+    gap: 0.5rem;
+    overflow-wrap: anywhere;
+  }
+
+  .Letter_Body ul {
+    display: grid;
+    gap: 0.35rem;
+    padding-inline-start: 1.1rem;
+    list-style: disc;
+  }
+
   /* What a person pays now, typed beside a plan's price (saving.js): the
      amounts side by side where they fit, and the sum said under them. It is
      hidden until its script runs. */
