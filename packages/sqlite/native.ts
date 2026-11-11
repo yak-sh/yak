@@ -137,22 +137,6 @@ let decoder = (names: string[], compile: Statement['getRowObject']) => {
   return made
 }
 
-// A statement SQLite will not compile or run says which it was: the message
-// names the fault, and only the statement shows where it is, once the error
-// has crossed a worker and reached its caller (its enumerable properties do).
-// A kept statement is compiled again when the schema moves under it, at its
-// step, so a fault of compiling can surface there too.
-let named = (error: unknown, sql: string) =>
-  error instanceof Error ? Object.assign(error, { statement: sql }) : error
-
-let compile = (db: Database, sql: string) => {
-  try {
-    return db.prepare(sql)
-  } catch (error) {
-    throw named(error, sql)
-  }
-}
-
 export let prepared = (db: Database) => {
   // SQLite integers are 64-bit. The library's default reader truncates them
   // to 32 bits; safe JS integers must round-trip through every driver caller.
@@ -161,7 +145,7 @@ export let prepared = (db: Database) => {
     (steps ??= bindSteps()).symbols
   let commands = new WeakSet<ReturnType<Database['prepare']>>()
   let prepare = (sql: string) => {
-    let statement = compile(db, sql)
+    let statement = db.prepare(sql)
     // DDL, transaction boundaries and writes without RETURNING have no row
     // shape. Running them needs no decoder or repeated column-name reads. One
     // may still step more than once, as `pragma incremental_vacuum(n)` gives
@@ -247,7 +231,7 @@ export let prepared = (db: Database) => {
       // again. Resetting reports the step's failure again, so the step's
       // error is the one thrown; nothing with possible side effects retries.
       reset(statement.unsafeHandle)
-      throw named(error, sql)
+      throw error
     }
   }
 }

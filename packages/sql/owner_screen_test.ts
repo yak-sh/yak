@@ -13,7 +13,10 @@ let vocab = loadVocab({
   $defs: {
     topic: {
       component: true,
-      properties: { notes: { type: 'string', computed: true } },
+      properties: {
+        notes: { type: 'string', computed: true },
+        named: { type: 'string', computed: true },
+      },
     },
     note: {
       component: true,
@@ -25,18 +28,18 @@ let vocab = loadVocab({
     hidden: { component: true },
   },
 })
-// The texts of the notes on a topic.
-let derived = {
-  'topic.notes': {
-    tag: 'text' as const,
-    expr: (owner: ReturnType<typeof col>) =>
-      sub(select({
-        cols: [fn('group_concat', col('text', 'n'), lit(','))],
-        from: table('note', 'n'),
-        where: eq(col('topic', 'n'), owner),
-      })),
-  },
-}
+// The texts of the notes on a topic, read through the alias `as`: `named`
+// names its rows as the scope's own component is named.
+let texts = (as: string) => ({
+  tag: 'text' as const,
+  expr: (owner: ReturnType<typeof col>) =>
+    sub(select({
+      cols: [fn('group_concat', col('text', as), lit(','))],
+      from: table('note', as),
+      where: eq(col('topic', as), owner),
+    })),
+})
+let derived = { 'topic.notes': texts('n'), 'topic.named': texts('hidden') }
 let store = storage(preparedDriver(snapshot(vocab, { derived })), vocab, {
   derived,
   schemaReady: () => true,
@@ -50,11 +53,14 @@ await g.apply([
 ])
 await g.apply([{ entity: { eid: 'gone' }, $delete: true }])
 
-// Each topic row's notes, in a stable order.
+// Each topic row's notes, in a stable order, as both properties read them.
 let notes = (rows: Bundle[]) =>
-  rows.map((b) =>
-    String((b.topic as { notes?: string })?.notes).split(',').sort().join(',')
-  )
+  rows.flatMap((b) => {
+    let t = b.topic as Record<string, string | undefined>
+    return ['notes', 'named'].map((p) =>
+      String(t?.[p]).split(',').sort().join(',')
+    )
+  })
 let scopes = [
   ['no scope', undefined, 'kept,seen'],
   ['an absent component', '!hidden', 'seen'],
@@ -63,9 +69,14 @@ for (let [name, entity, want] of scopes) {
   let opts = entity ? { visibility: { entity } } : {}
   test(`a derived read follows ${name} on its rows' owners, through a query`, () =>
     equal(
-      notes(store.read('.entity.eid=t .fields=topic.notes', opts) as Bundle[]),
-      [want],
+      notes(
+        store.read(
+          '.entity.eid=t .fields=topic.notes,topic.named',
+          opts,
+        ) as Bundle[],
+      ),
+      [want, want],
     ))
   test(`a derived read follows ${name} on its rows' owners, through a gather`, () =>
-    equal(notes(store.get(['t'], ['topic'], opts) as Bundle[]), [want]))
+    equal(notes(store.get(['t'], ['topic'], opts) as Bundle[]), [want, want]))
 }

@@ -14,10 +14,28 @@ import {
   writing,
 } from '@yaks/sql/core'
 
+// A statement SQLite will not compile or run says which it was: the message
+// names the fault, and only the statement shows where it is, once the error
+// has crossed a worker and reached its caller and the tracker (its enumerable
+// properties do). A kept statement is compiled again at its step when the
+// schema moved under it, so a fault of compiling can surface there too.
+let naming =
+  (run: (sql: string, params: Param[]) => Row[]) =>
+  (sql: string, params: Param[]): Row[] => {
+    try {
+      return run(sql, params)
+    } catch (error) {
+      throw error instanceof Error
+        ? Object.assign(error, { statement: sql })
+        : error
+    }
+  }
+
 export let driver = (
-  run: (sql: string, params: Param[]) => Row[],
+  ran: (sql: string, params: Param[]) => Row[],
   opts: { file: boolean; before?: (s: Stmt) => void; changes?: () => number },
 ): Driver => {
+  let run = naming(ran)
   let query = (s: Stmt): Row[] => {
     opts.before?.(s)
     // Each statement is kept by its text (./native.ts `prepared`), and a list

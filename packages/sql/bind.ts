@@ -5414,10 +5414,13 @@ let admitting = (
   base: Dialect,
 ): Cond => {
   let query = parsed(scope)
-  let key = inline(owner)
   let direct = ownerKeyed(vocab, opts, query)
   // Keyed to the owner, each component the scope reads is joined on the owner
-  // in hand, beside one row standing for the spine.
+  // in hand, held by the one row standing for the spine. Its joins are named
+  // as their components are, so they never name the row they screen: one
+  // read as `"text"` (a derived property's alias for `content`) would be the
+  // scope's own `text` table there, joined to its right.
+  let key = direct ? '"__owner"."id"' : inline(owner)
   let keyedTo: Dialect = {
     ...base,
     indexed: undefined,
@@ -5453,7 +5456,9 @@ let admitting = (
   )
   return exists({
     ...owners,
-    ...direct ? { from: raw('(select 1) as "__owner"') } : {},
+    ...direct
+      ? { from: raw(`(select ${inline(owner)} as "id") as "__owner"`) }
+      : {},
     cols: [val(1)],
     where: direct
       ? owners.where
