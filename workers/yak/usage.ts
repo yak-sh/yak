@@ -59,6 +59,7 @@ import {
   level,
   monthOf,
   none,
+  requestUnits,
   spent,
   thisMonth,
   WARN,
@@ -66,7 +67,7 @@ import {
 import { mail } from './mail.ts'
 import { type Host, replyTo } from './host.ts'
 import { KERNEL, meta } from './meta.ts'
-import { type Alerts, type Usage, warning } from './usage-alert.ts'
+import { type Alerts, type Hour, type Usage, warning } from './usage-alert.ts'
 import { type Answer as Asked, ask, said } from '@yaks/cloudflare/analytics'
 import { caught } from './defects.ts'
 import { visited } from './views.ts'
@@ -81,7 +82,7 @@ import { visited } from './views.ts'
 // Cloudflare holds, so a late count corrects itself. The newest days come
 // first, so a limit reached forgets the oldest.
 export let QUERY =
-  `query Meter($account: string!, $since: string!, $recent: string!, $until: string!) {
+  `query Meter($account: string!, $since: string!, $recent: string!, $until: string!, $hourSince: string!, $hourUntil: string!) {
   viewer {
     accounts(filter: {accountTag: $account}) {
       durableObjectsInvocationsAdaptiveGroups(
@@ -118,6 +119,21 @@ export let QUERY =
         limit: 1
         filter: {datetime_geq: $since, datetime_lt: $until}
       ) { sum { requests cpuTimeUs } }
+      hourInvocations: durableObjectsInvocationsAdaptiveGroups(
+        limit: 100
+        filter: {datetime_geq: $hourSince, datetime_lt: $hourUntil}
+      ) {
+        dimensions { type }
+        sum { requests }
+      }
+      hourPeriodic: durableObjectsPeriodicGroups(
+        limit: 1
+        filter: {datetime_geq: $hourSince, datetime_lt: $hourUntil}
+      ) { sum { rowsRead rowsWritten duration inboundWebsocketMsgCount } }
+      hourWorkers: workersInvocationsAdaptive(
+        limit: 1
+        filter: {datetime_geq: $hourSince, datetime_lt: $hourUntil}
+      ) { sum { requests cpuTimeUs } }
     }
   }
 }`
@@ -142,6 +158,9 @@ type Data = {
       accountInvocations?: Group[]
       accountPeriodic?: Group[]
       accountWorkers?: Group[]
+      hourInvocations?: Group[]
+      hourPeriodic?: Group[]
+      hourWorkers?: Group[]
     }[]
   }
 }
@@ -197,8 +216,25 @@ export let daysOfAnswer = (answer: Answer): Map<string, ByDay> => {
 // published app lands: yak-front answers it from the cache and no store hears.
 // The ungrouped aliases are one row each, so the 10,000-app meter limit cannot
 // truncate these totals. Active-socket messages live in periodic metrics;
-// hibernated-socket messages live in invocations. Add both as raw events so
-// this early warning cannot miss either path; billing discounts them later.
+// hibernated-socket messages live in invocations. The monthly allowance warning
+// counts both as raw events; the settled hour discounts messages for pricing.
+let sum = (groups: Group[], key: keyof NonNullable<Group['sum']>) =>
+  groups.reduce((total, group) => total + (group.sum?.[key] ?? 0), 0)
+
+let totals = (
+  invocations: Group[],
+  periodic: Group[],
+  workers: Group[] = [],
+) => ({
+  requests: sum(invocations, 'requests') +
+    sum(periodic, 'inboundWebsocketMsgCount'),
+  rows_read: sum(periodic, 'rowsRead'),
+  rows_written: sum(periodic, 'rowsWritten'),
+  duration: sum(periodic, 'duration'),
+  workers: sum(workers, 'requests'),
+  cpu: sum(workers, 'cpuTimeUs') / 1000,
+})
+
 export let accountOf = (answer: Answer, now: Date): Usage | null => {
   let account = answer.data?.viewer?.accounts?.[0]
   if (!account) return null
@@ -208,25 +244,52 @@ export let accountOf = (answer: Answer, now: Date): Usage | null => {
   return {
     month: monthOf(now),
     at: now.toISOString(),
-    requests: (account.accountInvocations[0]?.sum?.requests ?? 0) +
-      (account.accountPeriodic[0]?.sum?.inboundWebsocketMsgCount ?? 0),
-    rows_read: account.accountPeriodic[0]?.sum?.rowsRead ?? 0,
-    rows_written: account.accountPeriodic[0]?.sum?.rowsWritten ?? 0,
-    duration: account.accountPeriodic[0]?.sum?.duration ?? 0,
-    workers: account.accountWorkers?.[0]?.sum?.requests ?? 0,
-    cpu: (account.accountWorkers?.[0]?.sum?.cpuTimeUs ?? 0) / 1000,
+    ...totals(
+      account.accountInvocations,
+      account.accountPeriodic,
+      account.accountWorkers,
+    ),
   }
 }
 
-let accountAlert = async (env: Env, usage: Usage) => {
+export let interval = (now: Date): Pick<Hour, 'since' | 'until'> => {
+  let until = Math.floor((now.getTime() - 10 * 60_000) / 3_600_000) * 3_600_000
+  return {
+    since: new Date(until - 3_600_000).toISOString(),
+    until: new Date(until).toISOString(),
+  }
+}
+
+export let hourOf = (answer: Answer, now: Date): Hour | null => {
+  let account = answer.data?.viewer?.accounts?.[0]
+  if (!account) return null
+  let { hourInvocations, hourPeriodic, hourWorkers } = account
+  if (!hourInvocations || !hourPeriodic || !hourWorkers) {
+    throw new Error('analytics: hourly usage is absent')
+  }
+  let hibernated = sum(
+    hourInvocations.filter((g) => g.dimensions?.type == 'hibernation'),
+    'requests',
+  )
+  return {
+    ...interval(now),
+    ...totals(hourInvocations, hourPeriodic, hourWorkers),
+    requests: requestUnits({
+      requests: sum(hourInvocations, 'requests'),
+      ws_hibernated: hibernated,
+      ws_messages: hibernated + sum(hourPeriodic, 'inboundWebsocketMsgCount'),
+    }),
+  }
+}
+
+let accountAlert = async (env: Env, usage: Usage, hour: Hour | null) => {
   let graph = meta(env)
   let [row] = await graph.query('.entity.eid=yak-meter') as {
-    account_usage?: Usage
     account_alert?: Alerts
   }[]
   let { body, next } = warning(
-    row?.account_usage ?? null,
     usage,
+    hour,
     row?.account_alert ?? null,
   )
   if (body) {
@@ -390,6 +453,7 @@ let capsTold = async (env: Env, dir: Dir, spaces: Space[], now: Date) => {
 export let sweep = async (env: Env, now = new Date()) => {
   let month = monthOf(now)
   let at = now.toISOString()
+  let hour = interval(now)
   let answer = env.CF_ANALYTICS_TOKEN
     ? await ask<Data>(env, QUERY, {
       account: env.CF_ACCOUNT ?? '',
@@ -397,6 +461,8 @@ export let sweep = async (env: Env, now = new Date()) => {
       recent: new Date(Date.parse(series(null, 30, now.getTime()).from))
         .toISOString(),
       until: at,
+      hourSince: hour.since,
+      hourUntil: hour.until,
     })
     : null
   let counts = answer ? read(answer) : null
@@ -437,7 +503,7 @@ export let sweep = async (env: Env, now = new Date()) => {
   if (entities.length) await stamp(env, { entities }, { stamp: false })
   await capsTold(env, dir, spaces.map((s) => s.space), now)
   let account = answer && accountOf(answer, now)
-  if (account) await accountAlert(env, account)
+  if (answer && account) await accountAlert(env, account, hourOf(answer, now))
   if (refused.length) throw refused[0]
   return entities.length + (account ? 1 : 0)
 }

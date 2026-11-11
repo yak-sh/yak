@@ -15,6 +15,8 @@ import {
   fileSizes,
   full,
   fullFiles,
+  hourOf,
+  interval,
   measured,
   read,
   sweep,
@@ -92,6 +94,21 @@ let ANSWER = {
         ],
         accountInvocations: [{ sum: { requests: 2240 } }],
         accountWorkers: [{ sum: { requests: 30000, cpuTimeUs: 45_000_000 } }],
+        hourInvocations: [
+          { dimensions: { type: 'http' }, sum: { requests: 100 } },
+          { dimensions: { type: 'hibernation' }, sum: { requests: 400 } },
+          { dimensions: { type: 'jsrpc' }, sum: { requests: 3 } },
+          { dimensions: { type: 'unknown' }, sum: { requests: 2 } },
+        ],
+        hourPeriodic: [{
+          sum: {
+            rowsRead: 12e6,
+            rowsWritten: 4000,
+            duration: 25,
+            inboundWebsocketMsgCount: 600,
+          },
+        }],
+        hourWorkers: [{ sum: { requests: 3000, cpuTimeUs: 5_000_000 } }],
         accountPeriodic: [{
           sum: {
             rowsRead: 920783,
@@ -182,6 +199,9 @@ test('meter queries distinguish the same handle in two deployments', async () =>
             })),
             accountInvocations: [{ sum: { requests: 7 } }],
             accountPeriodic: [{ sum: { rowsRead: 7, duration: 1 } }],
+            hourInvocations: [],
+            hourPeriodic: [],
+            hourWorkers: [],
           }],
         },
       },
@@ -250,6 +270,40 @@ test('account usage includes the directory and active-socket messages', () => {
     workers: 30000,
     cpu: 45000,
   })
+})
+
+test('the priced hour counts HTTP, RPC and unknown types once, and socket messages 20:1', () => {
+  assertEquals(hourOf(ANSWER, new Date('2026-09-28T10:00:00Z')), {
+    since: '2026-09-28T08:00:00.000Z',
+    until: '2026-09-28T09:00:00.000Z',
+    requests: 155,
+    rows_read: 12e6,
+    rows_written: 4000,
+    duration: 25,
+    workers: 3000,
+    cpu: 5000,
+  })
+})
+
+test('the priced hour is complete and has settled for at least ten minutes across a month boundary', () => {
+  assertEquals(
+    ['00:00:00', '00:09:59', '00:10:00'].map((time) =>
+      interval(new Date(`2026-11-01T${time}Z`))
+    ),
+    [
+      { since: '2026-10-31T22:00:00.000Z', until: '2026-10-31T23:00:00.000Z' },
+      { since: '2026-10-31T22:00:00.000Z', until: '2026-10-31T23:00:00.000Z' },
+      { since: '2026-10-31T23:00:00.000Z', until: '2026-11-01T00:00:00.000Z' },
+    ],
+  )
+})
+
+test('a missing hourly reading is not a quiet hour', () => {
+  assertThrows(
+    () => hourOf({ data: { viewer: { accounts: [{}] } } }, new Date()),
+    Error,
+    'hourly usage is absent',
+  )
 })
 
 test('a store in one dataset and not the other still reads', () => {
@@ -973,6 +1027,9 @@ test('spends counted at once all count, and the sweep keeps them', async () => {
     durableObjectsPeriodicGroups: [],
     accountInvocations: [],
     accountPeriodic: [],
+    hourInvocations: [],
+    hourPeriodic: [],
+    hourWorkers: [],
   }
   globalThis.fetch = (_to, init) =>
     Promise.resolve(
