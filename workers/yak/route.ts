@@ -376,6 +376,67 @@ export let aimedAt = (
   mount: app ? '/' : null,
 })
 
+/** A custom domain as the directory reads it (directory.ts `serves`): the
+ * place it opens, and how far it has come. */
+export type Domain = {
+  space: { slug: string }
+  app: { slug: string } | null
+  host: {
+    eid: string
+    stage: string | null
+    verified: string | null
+    verification: unknown
+    to: string | null
+  }
+}
+
+/** Whether a domain serves its place: provisioned, and shown to be its
+ * owner's where Cloudflare asked for that. Anything else is answered the
+ * page that says how far it has come (kernel.ts `settling`). */
+export let ready = (at: Domain | null) =>
+  at?.host.stage == 'active' &&
+  (!!at.host.verified || at.host.verification == null)
+
+/** A request to a custom domain, carried to the address its place already
+ * has on our own zone (`aimedAt`), naming the address the browser asked
+ * (`ADDRESS`) and, for an app's domain, the mount it answers at (`MOUNT`).
+ *
+ * ```ts
+ * import { ADDRESS, aim, MOUNT } from './route.ts'
+ * import { assertEquals } from '@std/assert'
+ * let host = { eid: 'h', stage: 'active', verified: null, verification: null, to: null }
+ * let at = { space: { slug: 'ada' }, app: { slug: 'menu' }, host }
+ * let req = aim(new Request('http://her.com/soup?x=1'), 'her.com', at)
+ * assertEquals(req.url, 'https://ada.yaks.app/menu/soup?x=1')
+ * assertEquals(req.headers.get(ADDRESS), 'https://her.com/soup?x=1')
+ * assertEquals(req.headers.get(MOUNT), '/')
+ * ```
+ */
+export let aim = (req: Request, host: string, at: Domain, env: Host = {}) => {
+  let url = new URL(req.url)
+  let address = new URL(req.url)
+  address.host = host
+  address.port = ''
+  address.protocol = 'https:'
+  let to = aimedAt(at.space.slug, at.app?.slug ?? null, url.pathname, env)
+  url.protocol = 'https:'
+  url.host = to.host
+  url.pathname = to.pathname
+  let headers = new Headers(req.headers)
+  headers.set(ADDRESS, address.href)
+  if (to.mount) headers.set(MOUNT, to.mount)
+  return new Request(url, new Request(req, { headers }))
+}
+
+// The path a customer's own hostname answers the handoff at (handoff.ts).
+// Namespaced so an app's own routes do not collide with it.
+export let HANDOFF = '/__yak/signin'
+
+/** Whether this is a custom domain's sign-in handoff, the one identity door
+ * a customer's own hostname answers (identity.ts `handoff`). */
+export let handedOff = (host: string, pathname: string, env: Host = {}) =>
+  foreign(host, env) && pathname == HANDOFF
+
 /** Whether a hostname is this machine's: a local dev run's, never deployed. */
 export let loopback = (host: string) =>
   host == 'localhost' || host == '127.0.0.1' || host == '[::1]' ||

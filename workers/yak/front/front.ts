@@ -9,7 +9,9 @@
 // secret and opens no store. What it can't decide from the request alone (a
 // signature, who someone is, whether a custom domain is anybody's) is the
 // kernel's, so a person's cookie it may rely on is read only to route: a forged
-// one earns the slow path, and the kernel verifies whatever comes to it.
+// one earns the slow path, and the kernel verifies whatever comes to it. A
+// custom domain is asked of Site by its own hostname, and Site reads the
+// directory for it on a miss.
 import { caught, origin, queue, type Sink } from '@yaks/tracker/report'
 import type { Fetcher } from '../env.ts'
 import { sealed } from '../cache.ts'
@@ -37,7 +39,16 @@ import {
   type Visited,
 } from '../view-point.ts'
 import { type Conversion, conversionOf, keep } from '../arrival.ts'
-import { foreign, hostOf, loopback, platform, spaceDoor } from '../route.ts'
+import {
+  foreign,
+  guarded,
+  handedOff,
+  hostOf,
+  loopback,
+  platform,
+  sameOrigin,
+  spaceDoor,
+} from '../route.ts'
 import * as variant from '../variant.ts'
 import type { Clock } from '@yaks/fp'
 import { overdue, watch } from '../lib/watch.ts'
@@ -160,8 +171,11 @@ export let kept = (
 ): Promise<Response | number | null> | null => {
   let host = hostOf(req, env), path = new URL(req.url).pathname
   if (
-    (req.method != 'GET' && req.method != 'HEAD') || foreign(host, env) ||
-    platform(host, path, env) || !settled(req)
+    (req.method != 'GET' && req.method != 'HEAD') ||
+    platform(host, path, env) || handedOff(host, path, env) ||
+    guarded(req.method, path) &&
+      !sameOrigin(host, req.headers.get('origin'), env) ||
+    !settled(req)
   ) return null
   if (host == apex(env)) {
     if (!isListing(path) || (path == LOGIN && !stranger(req))) return null
@@ -193,8 +207,12 @@ export let kept = (
       },
     )
   }
-  // `x.y.yaks.app` is the kernel's to say what it is (route.ts `route`).
-  if (host.slice(0, -apex(env).length - 1).includes('.')) return null
+  // `x.y.yaks.app` is the kernel's to say what it is (route.ts `route`). A
+  // custom domain is asked of Site by its own hostname, as a space's is, and
+  // Site reads whose it is (site.ts `atDomain`).
+  if (
+    !foreign(host, env) && host.slice(0, -apex(env).length - 1).includes('.')
+  ) return null
   if (spaceDoor(path)) return null
   return asked(req, env.SITE, host, null, timer(said), (answer, at) => {
     if (env.VIEWS && isView(answer)) {

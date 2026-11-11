@@ -208,6 +208,19 @@ test('a kept page answers from the edge with no kernel, counted once', async () 
   assertEquals(f.points.length, 2)
 })
 
+// A custom domain is asked of Site by its own hostname, which reads whose it
+// is (site.ts `atDomain`), and a pass goes on to the kernel.
+test("a custom domain's kept page answers from the edge by its hostname", async () => {
+  let f = front(() => page())
+  let res = await f.go('https://their-domain.com/menu')
+  assertEquals(await res.text(), '<body>kept</body>')
+  assertEquals(f.asked, [pageAt('their-domain.com', '/menu', null)])
+  assertEquals(f.forwarded.length, 0)
+  let passed = front(() => new Response(null, { status: 204 }))
+  let theirs = await passed.go('https://their-domain.com/menu')
+  assertEquals(await theirs.text(), 'kernel')
+})
+
 // The page's scripts ask its store next, so a page a browser runs starts it,
 // sent or revalidated; bytes it loads start nothing, and nor does a page kept
 // before it said its store.
@@ -266,7 +279,10 @@ test('what no kept page may answer goes to the kernel without asking Site', asyn
     ['https://ada.yaks.app/cookbook.git/info/refs'],
     ['https://ada.yaks.app/cookbook/info/refs'],
     ['https://ada.yaks.app/_yaks/hooks/x'],
-    ['https://their-domain.com/'],
+    ['https://their-domain.com/__yak/signin?token=x'],
+    ['https://ada.yaks.app/cookbook/api/client.js', {
+      headers: { origin: 'https://rex.yaks.app' },
+    }],
     ['https://a.b.yaks.app/'],
     ['https://yaks.app/login', {
       headers: { cookie: `yak_session=${body({})}` },

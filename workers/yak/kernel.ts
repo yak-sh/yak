@@ -98,20 +98,21 @@ import { directory } from './directory.ts'
 import { customOf, reading, refresh, type Step } from './domains.ts'
 import { identity } from './doors.ts'
 import { bound, type Env, type Inbound } from './env.ts'
-import { HANDOFF } from './handoff.ts'
 import { apex } from './host.ts'
 import { lost, oops, provisioning } from './pages.ts'
 import { hook } from './connections.ts'
 import {
   ADDRESS,
-  aimedAt,
+  aim,
   askable,
   foreign,
   guarded,
+  handedOff,
   hostOf,
   MOUNT,
   paged,
   platform,
+  ready,
   type Route,
   route,
   sameOrigin,
@@ -173,10 +174,7 @@ let settling = async (env: Env, host: string): Promise<Response | null> => {
   if (!foreign(host, env)) return null
   let served = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
     .serves(host)
-  if (
-    served?.host.stage == 'active' &&
-    (served.host.verified || served.host.verification == null)
-  ) return null
+  if (ready(served)) return null
   let how: Step[] | null = null
   let stage: 'pending' | 'active' | 'error' = served?.host.stage == 'error'
     ? 'error'
@@ -225,20 +223,7 @@ let aimed = async (req: Request, env: Env, host: string) => {
   if (!foreign(host, env)) return null
   let at = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
     .serves(host)
-  if (!at) return null
-  let url = new URL(req.url)
-  let address = new URL(req.url)
-  address.host = host
-  address.port = ''
-  address.protocol = 'https:'
-  let to = aimedAt(at.space.slug, at.app?.slug ?? null, url.pathname, env)
-  url.protocol = 'https:'
-  url.host = to.host
-  url.pathname = to.pathname
-  let headers = new Headers(req.headers)
-  headers.set(ADDRESS, address.href)
-  if (to.mount) headers.set(MOUNT, to.mount)
-  return new Request(url, new Request(req, { headers }))
+  return at ? aim(req, host, at, env) : null
 }
 
 // A hostname that sends its visitors to another of its place's hostnames
@@ -417,7 +402,7 @@ let router = {
       // host-only session cookie rather than the app store answering a sign-in
       // path. It is a foreign host by construction — a space's `.yaks.app`
       // hostname already carries the platform cookie and never needs it.
-      if (foreign(host, env) && asked == HANDOFF) {
+      if (handedOff(host, asked, env)) {
         return sealed(
           await bound(env.IDENTITY, identity, env).fetch(req),
           env,

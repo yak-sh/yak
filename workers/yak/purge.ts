@@ -44,6 +44,9 @@ export type Purges = { purge(tags: string[]): Promise<Purged> }
 export let SITE_TAG = 'site'
 export let appTag = (eid: string) => `app:${eid}`
 export let spaceTag = (eid: string) => `space:${eid}`
+/** The tag on every answer at a custom domain's own address, by its hostname
+ * row: attaching, detaching or moving it takes them out. */
+export let hostTag = (eid: string) => `host:${eid}`
 /** The tag on a listed app's picture when its files choose it (gallery.ts
  * `CARD`), which a release can change and the listings beside it cannot. */
 export let cardTag = (eid: string) => `card:${eid}`

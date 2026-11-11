@@ -10,11 +10,9 @@
 // handler there adds only the cookie and the redirect.
 import type { Host } from './host.ts'
 import { opened, seal } from './lib/token.ts'
-import { foreign } from './route.ts'
+import { foreign, HANDOFF } from './route.ts'
 
-// The path a customer's own hostname answers the handoff at. Namespaced so an
-// app's own routes do not collide with it.
-export let HANDOFF = '/__yak/signin'
+export { HANDOFF }
 export let HANDOFF_LIFE = 60
 export type Hand = {
   person: string

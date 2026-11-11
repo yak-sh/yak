@@ -31,6 +31,10 @@
 // and once they hold one theirs is a member's. A seat taken away owes
 // nothing, since a member's index was never kept.
 //
+// A custom domain's own address keeps its pages tagged with its hostname row
+// (site.ts `atDomain`), so a domain attached, detached, moved or shown to be
+// its owner's purges them, and a detach answers once its pages are gone.
+//
 // The listings (home and /gallery, site.ts) are the site's, and a write to a
 // published app owes them only when it changes what they show of it
 // (`LISTING`, T-143236): a purge empties them in every colo, and agents
@@ -48,7 +52,14 @@ import { dead, TOMBSTONE } from '@yaks/graph/bundle'
 import { after } from '@yaks/fp'
 import type { Options } from './store.ts'
 import { APP_PARTS, idOf, publishingOf, SPACE_PARTS } from '../directory.ts'
-import { appTag, cardTag, purge, SITE_TAG, spaceTag } from '../purge.ts'
+import {
+  appTag,
+  cardTag,
+  hostTag,
+  purge,
+  SITE_TAG,
+  spaceTag,
+} from '../purge.ts'
 
 // What a row is made of (directory.ts) is what its pages can show, except
 // these: an app's draft, its counters and its gallery listing (but for the
@@ -102,8 +113,10 @@ let unshown = (b: Bundle, row: Bundle) =>
 // Whether an app's row has a chosen screenshot.
 let shot = (row: Bundle) =>
   !!(row.screenshot as { blob?: string | null } | undefined)?.blob
+// A custom domain's row: what its own address answers (site.ts `atDomain`).
+let DOMAIN = ['hostname', 'verified']
 // Whether an entity as it stands holds anything a page shows.
-let shown = (row: Bundle) => has(row, [...SHOWN, ...LISTED])
+let shown = (row: Bundle) => has(row, [...SHOWN, ...LISTED, 'hostname'])
 // Whether a patch writes something a page could show.
 let shows = (b: Bundle) =>
   SHOWN.some((part) =>
@@ -182,12 +195,18 @@ let shows = (b: Bundle) =>
  * let seats = async (eids: string[]) =>
  *   eids.map((eid) => ({ entity: { eid }, member: { space: 's', person: 'p' } }))
  * assertEquals(await owed([{ entity: { eid: 'm' }, member: { role: 'owner' } }], seats), ['space:s'])
+ * // A custom domain attached, moved or shown to be its owner's: what its
+ * // own address answers.
+ * let domain = async (eids: string[]) =>
+ *   eids.map((eid) => ({ entity: { eid }, hostname: { name: 'her.com', serves: 'x' } }))
+ * assertEquals(await owed([{ entity: { eid: 'h' }, hostname: { to: null } }], domain), ['host:h'])
+ * assertEquals(await owed([{ entity: { eid: 'h' }, verified: { at: 'now' } }], domain), ['host:h'])
  * // A new fee changes what /pricing quotes.
  * assertEquals(await owed([{ entity: { eid: 'm' }, fee: { bps: 250 } }], offered), ['site'])
  * // A delete owes every page its entity could have been on, unless it was
  * // one no page shows.
  * let buried = { entity: { eid: 'c' }, tombstone: {} }
- * assertEquals(await owed([buried], rows), ['site', 'app:c', 'space:c'])
+ * assertEquals(await owed([buried], rows), ['site', 'app:c', 'space:c', 'host:c'])
  * assertEquals(await owed([buried], rows, new Set(['c'])), [])
  * ```
  */
@@ -202,9 +221,11 @@ export let owed = async (
   for (let b of gone) {
     tags.add(appTag(b.entity.eid))
     tags.add(spaceTag(b.entity.eid))
+    tags.add(hostTag(b.entity.eid))
   }
   let touched = applied.filter((b) =>
-    !b.tombstone && (shows(b) || 'gallery' in b || 'member' in b)
+    !b.tombstone &&
+    (shows(b) || 'gallery' in b || 'member' in b || has(b, DOMAIN))
   )
   let now = new Map(
     (touched.length ? await rows(touched.map((b) => b.entity.eid)) : [])
@@ -214,6 +235,7 @@ export let owed = async (
     let row = now.get(b.entity.eid)
     let seat = row?.member as { space: string | { eid: string } } | undefined
     if (seat && 'member' in b) tags.add(spaceTag(idOf(seat.space)))
+    if (row?.hostname && has(b, DOMAIN)) tags.add(hostTag(b.entity.eid))
     if (row?.app) {
       if ((row.published || 'published' in b) && lists(b)) tags.add(SITE_TAG)
       // A card with no screenshot points where its files say (gallery.ts
@@ -275,7 +297,7 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => {
       )
       return applied
     },
-    { keys: [...PARTS, ...LISTED, 'member', TOMBSTONE] },
+    { keys: [...PARTS, ...LISTED, 'member', ...DOMAIN, TOMBSTONE] },
   )
   return [{
     name: 'yak/pages',

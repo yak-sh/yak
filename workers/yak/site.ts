@@ -11,6 +11,7 @@ import { edged } from './apps.ts'
 import {
   isListing,
   isStatic,
+  KEEP,
   KEPT,
   listing,
   listingAt,
@@ -19,7 +20,8 @@ import {
   shareable,
   visitor,
 } from './kept-page.ts'
-import { kept } from './page-cache.ts'
+import { kept, passed } from './page-cache.ts'
+import { aim, foreign, handedOff, hostOf, ready } from './route.ts'
 import { r2Objects } from './lib/objects.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -31,7 +33,7 @@ import { apex, type Host, hosted, url } from './host.ts'
 import { lost } from './pages.ts'
 import { askEmail } from './signin-pages.ts'
 import { matches } from './public-cache.ts'
-import { cardTag, SITE_TAG } from './purge.ts'
+import { cardTag, hostTag, SITE_TAG } from './purge.ts'
 import { named, sheeted } from './sheets.ts'
 import { priceAt } from './sell.ts'
 import { type Clock, clock, timed } from './timing.ts'
@@ -70,10 +72,37 @@ let checksum = async (body: string) =>
     ),
   ].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 
+// A page at a custom domain's own address, as Site serves it (yak-front keys
+// it by the hostname the browser asked, front.ts `kept`): the domain read as
+// the gateway reads it (kernel.ts `settling`, `forwarded`, `aimed`), its
+// request carried to its place's own address, and what it keeps tagged with
+// the domain beside its app and space, so attaching, detaching or moving the
+// domain takes it out (facets/pages-graph.ts). A domain that isn't serving
+// its place, sends its visitors on or is nobody's is the gateway's: a pass.
+let atDomain = async (asked: Request, env: Env, host: string) => {
+  let at = await directory(bound(env.DIRECTORY, dirPart.fetch, env), {
+    time: env.CLOCK,
+    public: true,
+  }).serves(host)
+  if (
+    !at || !ready(at) || at.host.to ||
+    handedOff(host, new URL(asked.url).pathname, env)
+  ) {
+    return passed()
+  }
+  let page = await edged(aim(asked, host, at, env), env)
+  let tags = page.headers.get(KEEP)
+  if (tags) page.headers.set(KEEP, `${tags},${hostTag(at.host.eid)}`)
+  return page
+}
+
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let asked = req.method == 'GET' ? visitor(req.url, req) : null
   if (asked) {
-    let page = await edged(asked, env)
+    let host = hostOf(asked, env)
+    let page = foreign(host, env)
+      ? await atDomain(asked, env, host)
+      : await edged(asked, env)
     let copied = page.headers.has('x-yak-directory-copy')
     page.headers.delete('x-yak-directory-copy')
     let answer = await kept(page, personal(req.url))
