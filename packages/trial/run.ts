@@ -404,7 +404,7 @@ let ended = async (g: Graph, session: Eid) => {
   let [said, paid] = await Promise.all([
     saidOf(g, session),
     g.read(
-      `.entry.session=${s} .usage .fields=usage.input_tokens,usage.output_tokens,cost.dollars,ask.to`,
+      `.entry.session=${s} .usage .fields=usage.input_tokens,usage.output_tokens,cost.dollars,cost.reported,ask.to`,
     ),
   ])
   let sum = (name: string, prop: string) => {
@@ -417,6 +417,9 @@ let ended = async (g: Graph, session: Eid) => {
     reply: said && !said.stop ? textOf(said) : '',
     why: said?.stop ? textOf(said) : '',
     cost: sum('cost', 'dollars'),
+    // Reported only where its provider said every dollar of it; a request
+    // weighed at its model's price is not.
+    reported: paid.every((b) => !b.cost || comp(b, 'cost').reported === true),
     usage: some({
       input_tokens: sum('usage', 'input_tokens'),
       output_tokens: sum('usage', 'output_tokens'),
@@ -461,7 +464,7 @@ export let run = async (g: Graph, round: Eid, o: Opts): Promise<Ran> => {
       ...Object.keys(end.usage).length ? { usage: end.usage } : {},
       ...end.cost == null
         ? {}
-        : { cost: { dollars: end.cost, reported: true } },
+        : { cost: { dollars: end.cost, reported: end.reported } },
     }])
     out(
       `${c.label}: ${
