@@ -8,10 +8,11 @@ import {
   open,
   prefilled,
 } from '@yaks/forms'
-import { type Bundle, type Comp, derivedEid, mint, signed } from '@yaks/graph'
+import { type Bundle, type Comp, mint, signed } from '@yaks/graph'
 import { consentEid } from '@yaks/phone'
 import { Refused } from '@yaks/graph/errors'
 import type { Stored } from './graph.ts'
+import { texterEid } from './form-phone.ts'
 import { accepted } from './form-rules.ts'
 import { calendarScope, personalFeed } from './calendar.ts'
 
@@ -211,10 +212,14 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
     let [texter] = agreed
       ? await at.graph.read(`.phone.number=${quoted(args.phone)}&.limit=1`)
       : []
-    let person = texter?.entity.eid ?? derivedEid('form-texter|' + args.person)
+    let person = texter?.entity.eid ?? texterEid(args.person)
     let consent: Bundle[] = agreed
       ? [
-        { entity: { eid: person }, phone: { number: args.phone } },
+        ...texter ? [] : [{
+          entity: { eid: person },
+          phone: { number: args.phone },
+          form_phone: { submitter: args.person },
+        }],
         {
           entity: { eid: consentEid(person) },
           sms_consent: {

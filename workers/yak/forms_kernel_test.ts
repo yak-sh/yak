@@ -454,7 +454,11 @@ test('a public app keeps its texts, sent or received, and who agreed to them fro
   await agent.tool('graph_apply', {
     app: shown,
     entities: [
-      { entity: { eid: ana }, phone: { number: '+12695550142' } },
+      {
+        entity: { eid: ana },
+        phone: { number: '+12695550142' },
+        form_phone: { submitter: owner.person },
+      },
       {
         entity: { eid: consentEid(ana) },
         sms_consent: { person: ana, consent: 'Text me about prayer.' },
@@ -473,10 +477,11 @@ test('a public app keeps its texts, sent or received, and who agreed to them fro
     ],
   })
   for (let cookie of [undefined, stranger.cookie]) {
-    for (let q of ['.text', '.sms_consent']) {
+    for (let q of ['.text', '.sms_consent', '.phone', '.form_phone']) {
       equal(await asked(`${q} .count`, cookie), [200, '{"count":0}'], q)
     }
   }
+  equal(await asked('.phone .count', owner.cookie), [200, '{"count":1}'])
   equal(await asked('.text .count', owner.cookie), [200, '{"count":2}'])
   equal(await asked('.sms_consent .count', owner.cookie), [
     200,

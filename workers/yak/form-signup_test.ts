@@ -6,6 +6,7 @@ import { docDoc } from '@yaks/doc'
 import { consentEid, phoneDoc } from '@yaks/phone'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
+import { memberKeywords, personal } from '@yaks/member'
 import { equal, ok, test } from '@yaks/testing'
 import { signupIn } from './signup.ts'
 import { formRules } from './form-rules.ts'
@@ -23,14 +24,14 @@ let vocab = loadVocab([kernelDoc, formsDoc, eventsDoc, docDoc, phoneDoc, {
       ),
     },
   },
-}])
+}], [memberKeywords])
 let fixture = async (questions: Bundle[], extras: Bundle[] = []) => {
   let storage = ram(vocab)
   let reopen = () =>
     graph({
       vocab,
       storage,
-      plugins: [formRules(() => 1000), directoryForms(vocab)],
+      plugins: [formRules(() => 1000), directoryForms(vocab), personal(vocab)],
     })
   let g = reopen()
   await g.apply([
@@ -201,13 +202,14 @@ let yes = await consent.run('answer', {
   value: true,
   space: 'church',
 })
+let [consentPhone] = await consent.g.read('.phone')
+let [consentRow] = await consent.g.get([consentEid(consentPhone.entity.eid)])
 test('only an explicit answer to the mapped consent question agrees in the church’s words', async () => {
   equal(before, [])
   equal(yes.status, 200)
   let [texter] = await consent.g.read('.phone.number="+12695550142"')
   let person = texter.entity.eid
-  let [agreed] = await consent.g.get([consentEid(person)])
-  equal(agreed.sms_consent, {
+  equal(consentRow.sms_consent, {
     person,
     consent: 'Church announcements by text\nReply STOP to opt out.',
     at: '1970-01-01T00:00:01.000Z',
@@ -223,4 +225,61 @@ let ns = (await no.run('start')).value.registration
 await no.run('answer', { registration: ns, path: ['texts'], value: false })
 test('declining a consent question does not agree to texts', async () => {
   equal(await no.g.read('.sms_consent'), [])
+})
+
+let visible = async (person: string | null, level?: string) =>
+  (await consent.g.read('.phone', { person, level })).length
+let firstReaders = await Promise.all([
+  visible(null),
+  visible('reader', 'viewer'),
+  visible('reader', 'editor'),
+])
+await consent.g.apply([
+  { entity: { eid: 'second-form' }, form: {} },
+  {
+    entity: { eid: 'second-consent' },
+    question: {
+      form: 'second-form',
+      kind: 'check',
+      fills: 'sms_consent.consent',
+    },
+  },
+])
+let again =
+  (await consent.run('start', { form: 'second-form' })).value.registration
+await consent.run('answer', {
+  registration: again,
+  path: ['second-consent'],
+  value: 'yes',
+})
+
+test("a text sign-up's phone is kept to editors, including after the texter signs up again", async () => {
+  equal(firstReaders, [0, 0, 1])
+  equal(
+    await Promise.all([
+      visible(null),
+      visible('reader', 'viewer'),
+      visible('reader', 'editor'),
+    ]),
+    [0, 0, 1],
+  )
+})
+
+let known = await fixture([
+  question('texts', { kind: 'check', fills: 'sms_consent.consent' }),
+], [{
+  entity: { eid: 'staff' },
+  phone: { number: '+12695550142' },
+  doc: { title: 'Staff' },
+}])
+let original = await known.g.get(['staff'])
+let ks = (await known.run('start')).value.registration
+await known.run('answer', { registration: ks, path: ['texts'], value: true })
+test('agreeing to texts keeps an existing app-owned phone row as the app wrote it', async () => {
+  equal(await known.g.get(['staff']), original)
+  equal((await known.g.read('.phone', { person: null })).length, 1)
+  equal(
+    ((await known.g.read('.sms_consent'))[0].sms_consent as Comp).person,
+    'staff',
+  )
 })
