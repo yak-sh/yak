@@ -52,10 +52,13 @@ existing `.yaks.app` address in the meantime.
 
 ## Tools: `domain_attach`, `domain_status`, `domain_detach`
 
-- `domain_attach(app?, hostname)` — provisions the hostname and returns the
+- `domain_attach(app?, hostname, to?)` — provisions the hostname and returns the
   CNAME and ownership TXT record to add, with each record's full name and exact
   value. With `app`, the domain is attached to that app; without it, to the
-  space. Only the space owner may attach a domain.
+  space. With `to`, another domain already attached to the same place, this one
+  sends every visitor there instead of serving the place itself. Attaching an
+  attached domain again sets `to` and changes nothing else. Only the space owner
+  may attach a domain.
 - `domain_status(hostname?)` — reports what each domain points at and how far
   provisioning has progressed, as the four steps that can be outstanding
   (described below). Omit `hostname` to list every domain in the space.
@@ -64,7 +67,13 @@ existing `.yaks.app` address in the meantime.
 
 A domain points at one space or app, and a hostname can be attached to only one
 place on the whole platform. `www.example.com` and `example.com` are two
-hostnames, so attach both if the person wants both.
+hostnames, so attach both if the person wants both. To have the site answer at
+one of them, attach the other with `to`:
+`domain_attach(app, hostname:
+'example.com', to: 'www.example.com')` sends every
+visitor to the bare domain on to `https://www.example.com`, path and query kept,
+with a permanent redirect. Detaching `www.example.com` makes `example.com` serve
+the place again.
 
 ## DNS records: CNAME and ownership TXT
 

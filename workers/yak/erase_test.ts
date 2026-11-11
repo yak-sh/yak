@@ -90,6 +90,7 @@ let app = (over: Partial<App> = {}): App => ({
 let host = (name: string): Host => ({
   verification: null,
   verified: null,
+  to: null,
   eid: `host-${name}`,
   name,
   serves: 'app-eid',

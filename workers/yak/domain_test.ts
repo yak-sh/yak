@@ -442,6 +442,8 @@ test(
       await agent.tool('app_set', { space: jeff12, app: 'site', home: true })
       await agent.tool('app_deploy', { space: jeff12, app: 'recipes' })
       let dir = meta(k)
+      let said = (p: Promise<string>) =>
+        p.then((t) => t, (e: Error) => e.message)
       let pending = async (host: string) => {
         let [row] = await dir.query(`.hostname.name=${host}`)
         assertObjectMatch(row, { hostname: { stage: 'pending' } })
@@ -535,6 +537,35 @@ test(
       await domainState(k, legacy, { ssl: { status: 'active' } })
       assertEquals((await k.at(legacy, '/')).status, 200)
 
+      // Attached again with `to`, a domain sends its visitors to the other,
+      // path and query kept, so the app answers at one address. It may send
+      // only to a domain of the same place that serves it.
+      let to = (hostname: string, to: string, app = 'recipes') =>
+        said(agent.tool('domain_attach', { space: jeff12, app, hostname, to }))
+      assertStringIncludes(
+        await to(legacy, herbusiness104),
+        `It sends every visitor to https://${herbusiness104}/`,
+      )
+      let sent = await k.at(legacy, '/menu.html?x=1', { redirect: 'manual' })
+      assertEquals(sent.status, 301)
+      assertEquals(
+        sent.headers.get('location'),
+        `https://${herbusiness104}/menu.html?x=1`,
+      )
+      assertStringIncludes(await to(legacy, legacy), 'cannot send visitors')
+      assertStringIncludes(
+        await to(legacy, ourbookclub104),
+        `${ourbookclub104} is not a domain of ${jeff12}/recipes`,
+      )
+      assertStringIncludes(
+        await to(herbusiness104, legacy),
+        `${legacy} sends its own visitors to ${herbusiness104}`,
+      )
+      assertStringIncludes(
+        await agent.tool('domain_status', { space: jeff12, hostname: legacy }),
+        `It sends every visitor to https://${herbusiness104}/`,
+      )
+
       // Detached, the space keeps the one address it always had, and the app's
       // own domain is untouched.
       let gone = await agent.tool('domain_detach', {
@@ -562,6 +593,11 @@ test(
         space: jeff12,
         hostname: herbusiness104,
       })
+      // What sent its visitors there serves the app again.
+      assertEquals(
+        (await k.at(legacy, '/', { redirect: 'manual' })).status,
+        200,
+      )
       let again = await agent.tool('domain_attach', {
         space: jeff12,
         app: 'recipes',

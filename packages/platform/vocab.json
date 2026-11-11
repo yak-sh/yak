@@ -205,6 +205,10 @@
           "death": "cascade",
           "description": "what the name opens: a space, whose front page it opens at `/` with every app at `/<app>/`, or a single app, which it opens at `/`"
         },
+        "to": {
+          "type": "string",
+          "description": "another hostname of the same place that this one sends every visitor to, path and query kept, with a 301: the bare domain sending its visitors to www; absent where this hostname serves the place itself"
+        },
         "stage": {
           "type": "string",
           "enum": [

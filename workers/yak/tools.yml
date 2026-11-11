@@ -811,7 +811,10 @@ domain_attach:
     domain; leave app out and the whole space answers there, exactly as it
     does at <space>.yaks.app: the front page at /, every app at /<app>/. A
     space and each of its apps can have their own domain at the same time.
-    The tool registers the hostname here and returns the DNS record the
+    To answer at one address, attach both www.example.com and example.com,
+    the second with to: 'www.example.com', and every visitor to the bare
+    domain is sent to www, path and all; attaching an attached domain again
+    changes only that. The tool registers the hostname here and returns the DNS record the
     person has to add where their domain is managed, in the response text:
     type, name, value. Nothing serves until that record is in place at the
     registrar; domain_status reports when it has arrived. Only the space

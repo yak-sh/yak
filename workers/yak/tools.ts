@@ -598,11 +598,20 @@ let place = (space: Space, app: App | null) =>
 // And what that means at the domain, in a sentence, because the difference is
 // the whole feature: a space's domain is the space's own hostname under
 // another name, and an app's domain is that app and nothing else.
-let serving = (host: string, app: App | null) =>
-  app
+let serving = (host: string, app: App | null, to: string | null = null) =>
+  to
+    ? `It sends every visitor to https://${to}/, path and all.`
+    : app
     ? `The app answers at https://${host}/.`
     : `Its front page answers at https://${host}/ and every app at ` +
       `https://${host}/<app>/.`
+
+let TO = str(
+  'another domain of the same space or app, already attached, that this one ' +
+    'sends every visitor to, path and all: www.herbusiness.com, so ' +
+    'herbusiness.com opens it. Leave it out and this domain serves the place ' +
+    'itself. Attaching a domain that is already attached sets this again',
+)
 
 let slug = (v: unknown, what: string) => {
   let s = text(v, what)
@@ -5452,11 +5461,12 @@ let OURS: Row[] = [
     openWorld: true,
     input: {
       type: 'object',
-      properties: { space: SPACE, app: APP, hostname: HOSTNAME },
+      properties: { space: SPACE, app: APP, hostname: HOSTNAME, to: TO },
       required: ['hostname'],
     },
     run: async (ctx, args) => {
       let host = hostname(args.hostname)
+      let to = args.to == null || args.to === '' ? null : hostname(args.to)
       // The app is the whole difference between the two forms, so it is the
       // one argument that says which: named, the domain is that app's; left
       // out, it is the space's (T-34596).
@@ -5486,10 +5496,47 @@ let OURS: Row[] = [
           space,
         }
       }
+      // Where it sends its visitors is a domain already serving this same
+      // place, and one that serves it rather than sending on: so no chain of
+      // moves can close into a loop.
+      let rows = await ctx.dir.hosts(space)
+      let aim = (app ?? space).eid
+      if (to) {
+        let sibling = rows.find((h) => h.name == to)
+        if (to == host) {
+          throw refuse('arguments', `${host} cannot send visitors to itself`)
+        }
+        if (!sibling || sibling.serves != aim) {
+          throw refuse(
+            'arguments',
+            `${to} is not a domain of ${place(space, app)} — domain_attach ` +
+              'it there first, then this one with to',
+          )
+        }
+        if (sibling.to) {
+          throw refuse(
+            'arguments',
+            `${to} sends its own visitors to ${sibling.to} — name that one`,
+          )
+        }
+      }
       // One hostname is one place. Whose it is stays out of the refusal
       // unless it is this space's: another space's app names are not this
-      // caller's to learn.
+      // caller's to learn. Attached here already, to this place, attaching it
+      // again says where it sends its visitors, and nothing else changes.
       let taken = await ctx.dir.serves(host)
+      let mine = taken && rows.find((h) => h.name == host && h.serves == aim)
+      if (mine) {
+        await ctx.dir.apply({
+          entities: [{ entity: { eid: mine.eid }, hostname: { to } }],
+        }, vouched(who))
+        return {
+          text: `${host} is attached to ${place(space, app)}. ${
+            serving(host, app, to)
+          }`,
+          space,
+        }
+      }
       if (taken) {
         throw refuse(
           'conflict',
@@ -5513,10 +5560,11 @@ let OURS: Row[] = [
           entity: { eid },
           hostname: {
             name: host,
-            serves: (app ?? space).eid,
+            serves: aim,
             stage: 'pending',
             verification: {},
             at,
+            to,
           },
         }],
       }, vouched(who))
@@ -5538,7 +5586,7 @@ let OURS: Row[] = [
       return {
         text:
           `${host} is attached to ${place(space, app)}. ${
-            serving(host, app)
+            serving(host, app, to)
           }\n\n` +
           `Add these records where ${host}'s DNS is managed:\n\n` +
           recs.map((r) => `  ${r.type}  ${r.name}  →  ${r.value}`).join('\n') +
@@ -5597,7 +5645,7 @@ let OURS: Row[] = [
         lines.push(
           `${row.name} → ${where}` +
             (stage == 'active' ? ' — live.' : '.') +
-            ` ${serving(row.name, app)}` +
+            ` ${serving(row.name, app, row.to)}` +
             '\n' +
             (how
               ? reading(how)
@@ -5639,9 +5687,18 @@ let OURS: Row[] = [
       // leaves a row pointing at a hostname already given back — which the
       // next call finds and finishes. The other order leaves a billable
       // custom hostname nothing here remembers.
+      // A domain that sent its visitors here serves its place again, since
+      // here is gone.
       let had = await release(ctx.env, host)
+      let senders = (await ctx.dir.hosts(space)).filter((h) => h.to == host)
       await ctx.dir.apply({
-        entities: [{ entity: { eid: row.eid }, tombstone: {} }],
+        entities: [
+          { entity: { eid: row.eid }, tombstone: {} },
+          ...senders.map((h) => ({
+            entity: { eid: h.eid },
+            hostname: { to: null },
+          })),
+        ],
       }, vouched(who))
       // What it was serving keeps the address it always had: an app its own,
       // a space its bare hostname, which is where the domain was carrying the

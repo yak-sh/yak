@@ -241,6 +241,21 @@ let aimed = async (req: Request, env: Env, host: string) => {
   return new Request(url, new Request(req, { headers }))
 }
 
+// A hostname that sends its visitors to another of its place's hostnames
+// (directory.ts `Host`): the bare domain to www, say, so the place answers at
+// one address whichever the visitor typed. The same permanent move a renamed
+// space makes (apps.ts `moved`), path and query kept. It is asked after
+// `settling`, so the hostname itself has its certificate and the move is
+// served over it.
+let forwarded = async (req: Request, env: Env, host: string) => {
+  if (!foreign(host, env)) return null
+  let at = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
+    .serves(host)
+  if (!at?.host.to) return null
+  let url = new URL(req.url)
+  return apps.moved(req, `https://${at.host.to}${url.pathname}${url.search}`)
+}
+
 // A page on somebody else's address, writing or at one of our graph doors
 // (route.ts `sameOrigin`, `guarded`). It is refused in the shape every other api
 // refusal has (apps.ts `json`) — a code the page's code reads, a sentence its
@@ -414,6 +429,8 @@ let router = {
       // a host like this gets the same branded page, not just `/`.
       let hold = await settling(env, host)
       if (hold) return sealed(hold, env)
+      let sent = await forwarded(req, env, host)
+      if (sent) return sealed(sent, env)
       // Space isolation, and the one place it holds (route.ts `sameOrigin`).
       // Here, before `aimed` moves the address, because what must match is
       // what the browser addressed: a page at `herbusiness.com` asking its

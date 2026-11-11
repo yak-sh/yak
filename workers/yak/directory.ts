@@ -616,7 +616,8 @@ export let overdue = <T extends { trashed: Trashed | null }>(
 // A hostname a person owns, aimed at one place (platform.rs `Hostname`,
 // T-33037): `serves` is the eid of the space it opens, or of the one app it
 // opens (T-34596). How far provisioning has come, and when that was last read
-// from Cloudflare.
+// from Cloudflare. `to` is another hostname of that place this one sends its
+// visitors to (kernel.ts `forwarded`), or null where it serves the place.
 export type HostStage = 'pending' | 'active' | 'error'
 /** A number the platform holds for a space, bought through the phone `via`
  * at its price in dollars (numbers.ts), and the toll-free verification
@@ -641,6 +642,7 @@ export type Host = {
   at: string
   verification: Partial<Rec> | null
   verified: string | null
+  to: string | null
 }
 
 // A reference property, as a read hands it back: the bare eid, or `{eid, name}`
@@ -754,6 +756,7 @@ export type Row = {
     stage?: HostStage | null
     at?: string | null
     verification?: Partial<Rec> | null
+    to?: string | null
   }
   verified?: { at?: string | null }
   deploy?: {
@@ -1551,6 +1554,7 @@ let hostOf = (r: Row): Host => ({
   at: r.hostname!.at ?? '',
   verification: r.hostname!.verification ?? null,
   verified: r.verified?.at ?? null,
+  to: r.hostname!.to || null,
 })
 
 // A deploy of an app, as versions.ts reads one: the manifest parsed, since
