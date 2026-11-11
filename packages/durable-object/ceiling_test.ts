@@ -98,6 +98,14 @@ for (let n of [0, 3]) {
   })
 }
 
+test('an analysis reads every row it counts, and is no scan', () => {
+  let { sql, told } = aggregate([])
+  sql.query({ t: 'analyze', table: 'effect' })
+  equal(told, [])
+  sql.query(select({ from: table('effect') }))
+  equal(told, ['Scan'])
+})
+
 test('an object past a window is told once and takes nothing until it ends', () => {
   let { c, clock, told, ran } = bound({ refuse: true })
   ran(600_000)

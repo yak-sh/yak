@@ -182,7 +182,7 @@ export let driver = (
       cursor = durable.sql.exec(sql, ...params.map(bind))
       let rows = cursor.toArray().map(unbind)
       returned = rows.length
-      matched = cardinality(s, rows)
+      matched = cardinality(s, rows, cursor.rowsRead ?? 0)
       if (observe && cursor.rowsRead != null && cursor.rowsWritten != null) {
         try {
           observe({

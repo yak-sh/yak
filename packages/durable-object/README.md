@@ -40,9 +40,10 @@ hour (`WINDOWS`). Two failures are reported as they happen:
 
 - `Scan`: one statement read `SCAN` (100,000) rows or more and `FAR` (100) times
   what its answer represents or it wrote. A direct `COUNT(*)` answer represents
-  its counted inputs, including each group's count in a tally. It is reported
-  once an hour for each statement shape, with the shape; the ratio alone does
-  not establish which indexes the engine used.
+  its counted inputs, including each group's count in a tally, and an `ANALYZE`
+  represents every row it reads to count. It is reported once an hour for each
+  statement shape, with the shape; the ratio alone does not establish which
+  indexes the engine used.
 - `Runaway`: the object's statements together passed a window's rows. It is
   reported once for that window, with the costliest shapes.
 

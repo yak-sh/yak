@@ -42,6 +42,11 @@ test('aggregate cardinality counts the inputs represented by each group once', (
   equal(cardinality(query, [{ n: 0, again: 0 }]), 1)
 })
 
+test('an analysis represents every row it reads to count', () => {
+  equal(cardinality({ t: 'analyze', table: 'updated' }, [], 129_422), 129_422)
+  equal(cardinality(select({ from: table('updated') }), [], 129_422), 0)
+})
+
 for (
   let [name, expr] of [
     ['nullable count', fn('count', col('value'))],

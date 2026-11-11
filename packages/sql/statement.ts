@@ -58,9 +58,12 @@ export let writing = (s: Stmt): boolean =>
 
 /** Rows represented by an answer, including each group's COUNT(*) inputs.
  * Only a direct, named COUNT(*) qualifies: nullable/distinct counts, windows
- * and scalar subqueries do not measure the outer selection's cardinality. */
-export let cardinality = (s: Stmt, rows: Row[]): number => {
-  if (s.t == 'raw' && s.origin) return cardinality(s.origin, rows)
+ * and scalar subqueries do not measure the outer selection's cardinality. An
+ * `ANALYZE` answers nothing, but its statistics count every row it `read`, so
+ * it represents them all. */
+export let cardinality = (s: Stmt, rows: Row[], read = 0): number => {
+  if (s.t == 'raw' && s.origin) return cardinality(s.origin, rows, read)
+  if (s.t == 'analyze') return Math.max(rows.length, read)
   if (s.t != 'select') return rows.length
   let counts = (s.cols ?? []).flatMap((c) =>
     c.t == 'as' && c.e.t == 'fn' && c.e.name.toLowerCase() == 'count' &&
