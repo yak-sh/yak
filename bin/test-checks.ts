@@ -27,7 +27,7 @@ let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
 // plugin it packs, every workspace manifest, whose exports load.ts lists, and
 // every vocab.json, whose words the components page prints.
 let generated = (path: string) =>
-  /^(?:workers\/yak|plugins\/yaks\.app)\/|(?:^|\/)(?:deno|vocab)\.json$/
+  /^(?:workers\/yak|plugins\/yaks\.app)\/|(?:^|\/)(?:deno|package|vocab)\.json$/
     .test(path)
 // The workspace member a path is in, by the layout package.json's workspaces
 // name; bin/publish.ts dry-runs those that publish.
