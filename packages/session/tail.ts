@@ -84,6 +84,8 @@ export type Tail = {
   marked: number
   /** the byte the next read starts at */
   at: number
+  /** when the newest line that says so was written */
+  time?: string
   rest: string
   dec: TextDecoder
   /** what the requests read so far carried (./parts.ts), followed from the
@@ -279,6 +281,16 @@ export let imported = (
 
 // One line's rows, and when the harness wrote it.
 type Line = { bundles: Bundle[]; at?: string }
+
+// What a line says, its plan-limit readings timed: a line that reports limits
+// and says no time of its own (Claude's `rate_limit_event`) was written after
+// the newest line that said one, which `last` keeps.
+let timed = (said: Said, last: { time?: string }): Said => {
+  last.time = said.at ?? last.time
+  return said.limits && !said.at && last.time
+    ? { ...said, at: last.time }
+    : said
+}
 
 // How many lines one transaction writes at most, and how much text: a line
 // to a transaction rewrites the same index pages once per line, which is
@@ -677,7 +689,7 @@ export let pull = async (
       let line = ++t.line
       let event = parsed(raw)
       if (!event) continue
-      let said = read(event)
+      let said = timed(read(event), t)
       if (t.walk) { for (let f of said.fixed ?? []) fix(t.walk, f) }
       let kept = o.prose ? said.entries.filter(retained) : said.entries
       if (!kept.length && !said.about && !said.limits?.length) continue
@@ -818,6 +830,7 @@ export let recount = async (
   let key = own ? o.session : `${o.session} ${path}`
   let w = walker()
   let line = 0, wrote = 0, placed = false
+  let last: { time?: string } = {}
   let run: (Line & { line: number; said: Said; made: Bundle[] })[] = []
   let size = 0
   let flush = async () => {
@@ -860,7 +873,7 @@ export let recount = async (
     line++
     let event = parsed(raw)
     if (!event) continue
-    let said = read(event)
+    let said = timed(read(event), last)
     for (let f of said.fixed ?? []) fix(w, f)
     let made = imported(said, {
       session: o.session,

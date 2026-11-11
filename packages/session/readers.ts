@@ -65,6 +65,30 @@ export type Limit = {
 /** A harness's line format. */
 export type Reader = (e: Event) => Said
 
+/**
+ * A reader whose plan limits are one account's: the account that keeps the
+ * transcript, or the one a run signs in with. A reading that names no account
+ * is a different row from the same plan's reading that names one.
+ *
+ * ```ts
+ * import { accounted, claude } from '@yaks/session'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let week = { utilization: 0.25, resetsAt: 1794913200 }
+ * let line = { type: 'rate_limit_event', rate_limit_info: { unifiedWindows: { seven_day: week } } }
+ * assertEquals(accounted(claude, 'a')(line).limits?.[0].account, 'a')
+ * ```
+ */
+export let accounted = (read: Reader, account?: string): Reader =>
+  account
+    ? (e) => {
+      let said = read(e)
+      return said.limits
+        ? { ...said, limits: said.limits.map((l) => ({ ...l, account })) }
+        : said
+    }
+    : read
+
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 let obj = (v: unknown): Event =>
   v && typeof v == 'object' && !Array.isArray(v) ? v as Event : {}
@@ -346,12 +370,41 @@ let line: Reader = (e) => {
     ? { session: { id: String(e.session_id) } }
     : undefined
   let fixed = fixedOf(e)
+  let limits = e.type == 'rate_limit_event'
+    ? metered(obj(e.rate_limit_info))
+    : []
   return {
     entries,
     ...(about ? { about } : {}),
     ...(at ? { at } : {}),
     ...(fixed.length ? { fixed } : {}),
+    ...(limits.length ? { limits } : {}),
   }
+}
+
+// Claude's plan windows a reading is kept of, in minutes.
+let WINDOWS: Record<string, number> = { five_hour: 300, seven_day: 10080 }
+
+// Claude's plan limits, as a `rate_limit_event` of the stream reports them:
+// each window's fraction used and when it resets (`unifiedWindows`), whatever
+// the status; where an older CLI sends none, the one window the event is
+// about, which says how much is used only past a warning.
+let metered = (info: Event): Limit[] => {
+  let each = obj(info.unifiedWindows)
+  let windows = Object.keys(each).length
+    ? each
+    : { [str(info.rateLimitType)]: info }
+  return Object.entries(WINDOWS).flatMap(([name, window]) => {
+    let w = obj(windows[name])
+    return count(w.utilization) == null ? [] : [{
+      provider: 'claude',
+      window,
+      used: Math.round(Number(w.utilization) * 100),
+      ...count(w.resetsAt) == null
+        ? {}
+        : { resets: new Date(Number(w.resetsAt) * 1000).toISOString() },
+    }]
+  })
 }
 
 /**
@@ -362,7 +415,10 @@ let line: Reader = (e) => {
  * adds the line that opens a run and the one that closes each turn. A side
  * conversation, which older files keep inline and the stream marks with the
  * call that started it, is a subagent's, read from its own transcript, not
- * this session's.
+ * this session's. The stream also says how much of the plan's limits is used
+ * (`rate_limit_event`), whenever a window's percentage moves; an interactive
+ * session's file does not, and its status line is read instead
+ * (@yaks/spend).
  *
  * ```ts
  * import { claude } from '@yaks/session'
@@ -372,6 +428,11 @@ let line: Reader = (e) => {
  * assertEquals(claude(typed).entries, [{ content: { body: 'hi' } }])
  * let aside = { type: 'assistant', parent_tool_use_id: 'toolu_1', message: { content: 'done' } }
  * assertEquals(claude(aside).entries, [])
+ * let week = { utilization: 0.25, resetsAt: 1794913200, status: 'allowed' }
+ * let metered = { type: 'rate_limit_event', rate_limit_info: { status: 'allowed', unifiedWindows: { seven_day: week } } }
+ * assertEquals(claude(metered).limits, [
+ *   { provider: 'claude', window: 10080, used: 25, resets: '2026-11-17T11:00:00.000Z' },
+ * ])
  * ```
  */
 export let claude: Reader = (e) =>

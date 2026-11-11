@@ -1,6 +1,8 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
+import { accountEid } from '@yaks/model'
 import { processes } from '@yaks/process'
 import { onDisk } from '@yaks/file/local'
 import { sessionDerived, sessions } from '@yaks/session'
@@ -346,6 +348,43 @@ test('a run that ended while nobody read its log is read to its end on start-up'
       return comp(e.at(-1), 'stop') && e
     }, 'the ending')
     assertEquals(comp(got[1], 'content').body, 'hi')
+  } finally {
+    close()
+  }
+})
+
+test("the plan limits a run's log reports are kept as its account's reading, taken when the line before was written", async () => {
+  let at = '2026-11-11T20:00:19.278Z'
+  let week = { utilization: 0.82, resetsAt: 1794913200, status: 'allowed' }
+  let { g, dir, close } = await logged([
+    { ...said[0], timestamp: at },
+    {
+      type: 'rate_limit_event',
+      rate_limit_info: {
+        status: 'allowed',
+        unifiedWindows: { seven_day: week },
+      },
+    },
+    said[1],
+  ])
+  try {
+    await resume(g, {
+      dir,
+      adapters: { fake: claude },
+      env: { CLAUDE_CONFIG_DIR: '/u/.claude-work' },
+    })
+    let row = await until(
+      async () => (await g.read('.rate_limit *') as Bundle[])[0],
+      'the reading',
+    )
+    assertEquals(row?.rate_limit, {
+      provider: identityEid('provider', ['claude']),
+      account: accountEid('/u/.claude-work'),
+      window: 10080,
+      used: 82,
+      resets: '2026-11-17T11:00:00.000Z',
+      at,
+    })
   } finally {
     close()
   }

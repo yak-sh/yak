@@ -291,7 +291,7 @@
         "account": {
           "type": "string",
           "ref": "account",
-          "description": "the account whose plan it is, where the reading came from one: a transcript of that account, or its status line",
+          "description": "the account whose plan it is, where the reading came from one: a transcript or a run of that account, or its status line",
           "identity": true
         },
         "used": {

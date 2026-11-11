@@ -47,7 +47,13 @@ import type { Feed } from '@yaks/host'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import { follow } from './bus.ts'
 import { SESSION } from './comp.ts'
-import { claude, codexRollout, type Reader, subagent } from './readers.ts'
+import {
+  accounted,
+  claude,
+  codexRollout,
+  type Reader,
+  subagent,
+} from './readers.ts'
 import { reapLeases } from './reap.ts'
 import { endGone } from './ended.ts'
 import {
@@ -316,10 +322,7 @@ let opened = async (
 let format = (f: Found, t: Pick<Tail, 'operator'> = {}): Reader =>
   f.runner == 'codex'
     ? (e: Parameters<typeof codexRollout>[0]) => {
-      let said = codexRollout(e)
-      if (said.limits && f.account) {
-        said.limits = said.limits.map((l) => ({ ...l, account: f.account }))
-      }
+      let said = accounted(codexRollout, f.account)(e)
       if (
         e.type == 'session_meta' &&
         (e.payload as { id?: string })?.id != f.id

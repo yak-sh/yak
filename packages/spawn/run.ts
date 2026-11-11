@@ -55,6 +55,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import { edgeEid } from '@yaks/edge'
 import {
+  accounted,
   CLAIM,
   cleanEnd,
   firstInput,
@@ -71,6 +72,8 @@ import {
   unanswered,
 } from '@yaks/session'
 import { pull, recount, type Tail, tail } from '@yaks/session/tail'
+import { home as signedIn } from '@yaks/session/files'
+import { accountEid } from '@yaks/model'
 import { kept } from '@yaks/session/service'
 import {
   clean,
@@ -334,6 +337,18 @@ let answering = (read: Reader, ask: Comp): Reader => (e) => {
   }
 }
 
+// How a run's log reads: its usage answers `ask`, and the plan limits it
+// reports are of the account its CLI signs in with in the run's environment.
+let reading = (adapter: Adapter, ask: Comp, o: Opts): Reader => {
+  let env = { ...o.env ?? system.env.toObject(), ...adapter.env }
+  let dir = adapter.account &&
+    signedIn(adapter.account, { get: (name) => env[name] })
+  return accounted(
+    answering(adapter.read, ask),
+    dir ? accountEid(dir) : undefined,
+  )
+}
+
 /**
  * Read a run's log into its transcript until the run is over.
  *
@@ -587,7 +602,7 @@ export let start = async (
       .catch(told(o))
   }
   let through = String(job.ask.through)
-  follow(g, session, answering(adapter.read, job.ask), o, { through, tail: t })
+  follow(g, session, reading(adapter, job.ask, o), o, { through, tail: t })
     .catch(told(o))
   return run
 }
@@ -703,7 +718,7 @@ let readOn = async (g: Graph, session: string, o: Opts): Promise<void> => {
   let request = await latestRequest(g, session)
   if (job && adapter) {
     let ask = { ...job.ask, through: request?.entity.eid ?? job.ask.through }
-    follow(g, session, answering(adapter.read, ask), o, {
+    follow(g, session, reading(adapter, ask, o), o, {
       through: String(ask.through),
     }).catch(told(o))
   }

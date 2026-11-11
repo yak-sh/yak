@@ -743,8 +743,8 @@ so the duty reads every account it finds (`homes` in ./files.ts): the ones
 its `sessions`. They are found again as often as transcripts are listed. Each is
 an `account{home, provider}` row (@yaks/model), and each transcript keeps its
 account: a Codex rollout's plan readings are that account's `rate_limit` rows,
-and @yaks/spend bills a request to the account whose directory holds its
-transcript.
+as are those a `claude -p` run reports in its stream (`rate_limit_event`), and
+@yaks/spend bills a request to the account whose directory holds its transcript.
 
 ## Identity and HTTP attribution
 

@@ -28,6 +28,7 @@
 
 import { type Reader, readers } from '@yaks/session'
 import { VIA } from '@yaks/session/graph'
+import type { Home } from '@yaks/session/files'
 
 /** What a run was asked for; the command line is built from it. */
 export type Job = {
@@ -69,6 +70,9 @@ export type Adapter = {
   file?: string
   /** variables its provider is run with, over the server's environment */
   env?: Record<string, string>
+  /** the CLI whose sign-in it runs with, which names the account the plan
+   * limits it reports are of (@yaks/session `home`) */
+  account?: Home['runner']
 }
 
 let servers = (j: Job) => Object.entries(j.mcp ?? {})
@@ -150,6 +154,7 @@ export let claude: Adapter = {
   // started, but stops them after ten minutes unless this ceiling is 0. A run
   // that waits on its helpers lives until they report.
   env: { CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: '0' },
+  account: 'claude',
 }
 
 // A TOML basic string, which is how `codex -c` reads a value: JSON's string
@@ -208,6 +213,7 @@ export let codex: Adapter = {
   },
   read: readers.codex,
   file: 'AGENTS.md',
+  account: 'codex',
 }
 
 /**

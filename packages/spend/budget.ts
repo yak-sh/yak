@@ -8,8 +8,11 @@ import * as io from '@yaks/file/io'
  * `FIVE_HOUR_PCT`, `FIVE_HOUR_RESET` and `UPDATED_AT`, times in epoch
  * seconds. The limits are the account's, so the newest file is the reading,
  * of the account `yak serve`'s environment signs in with, or of the one a
- * `CLAUDE_CONFIG_DIR` line in it names. Codex's arrive with its sessions,
- * each account's in its own (@yaks/session's importer).
+ * `CLAUDE_CONFIG_DIR` line in it names. Only an interactive session has a
+ * status line: a `claude -p` run reports its limits in its stream, read with
+ * the run (@yaks/session's `claude` reader), and the newer of the two
+ * readings is the one kept. Codex's arrive with its sessions, each account's
+ * in its own (@yaks/session's importer).
  *
  * @module
  */

@@ -77,9 +77,12 @@ yesterday, for the first hours of a day), and keeps the Claude plan's newest
 limits as `rate_limit` rows, read from the cache claude-status writes
 (`~/.cache/claude-usage`, or `$CLAUDE_USAGE_DIR`): the limits of the account
 `yak serve`'s environment signs in with, or of the one a `CLAUDE_CONFIG_DIR=`
-line in the reading names. Codex's limits arrive with its sessions, each
-account's with its own. Options: `every` (milliseconds) and `usage` (the cache
-directory).
+line in the reading names. That cache is filled by an interactive session's
+status line alone. A `claude -p` run reports the same limits in its own stream,
+and they arrive with the run (@yaks/session's `claude` reader), so the readings
+stay fresh with nobody in Claude Code. Codex's limits arrive with its sessions,
+each account's with its own. Options: `every` (milliseconds) and `usage` (the
+cache directory).
 
 `@yaks/spend/graph` is what marks a day `untallied`: a request written after its
 day ended, as every request of a transcript read in after the fact is, marks its
