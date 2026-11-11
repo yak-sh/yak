@@ -13,6 +13,8 @@
  *   earlier words, at a floor, and the nearest answered decisions.
  * - {@link open}: at the session's start and after each compaction, what was
  *   open with the person, and the decisions they answered in the day before.
+ * - {@link drafted}: once, the few resources nearest in meaning to the agent's
+ *   own words: its erring entry, its last tool call, or its last reply.
  *
  * Each reads the graph as it stands now, cut back at the moment: a row
  * created later is left out, and a body edited since reads as it does now.
@@ -38,9 +40,11 @@ import {
   near,
   order,
   present,
+  stringify,
 } from '@yaks/query'
+import type { Vocab } from '@yaks/vocab'
 import type { Part } from './mod.ts'
-import { type Arrival, asOf, hits, prompt } from './moment.ts'
+import { type Arrival, asOf, type At, hits, prompt } from './moment.ts'
 
 let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
@@ -217,3 +221,56 @@ export let open =
       }]
       : []
   }
+
+/** Which of the agent's own words a {@link drafted} recall is keyed on: the
+ * erring entry itself (what a check of an output before it is sent sees), its
+ * last tool call before it (the post-tool hook), or its last reply or
+ * reasoning before it (a hook at the next prompt). */
+export type Key = 'entry' | 'call' | 'reply'
+
+/** The words an entry of the agent's says: a call's arguments as text, and
+ * otherwise its body. */
+export let words = (b: Bundle | undefined): string =>
+  !b ? '' : b.call ? JSON.stringify(comp(b, 'call').args ?? {}) : body(b)
+
+/** The agent's words a {@link Key} names, at a case's moment. */
+export let keyed = async (
+  { storage, m, had }: Pick<At, 'storage' | 'm' | 'had'>,
+  key: Key,
+): Promise<string> =>
+  key == 'entry'
+    ? words((await storage.get([m.entry]))[0])
+    : words(had.findLast((b) =>
+      key == 'call' ? !!b.call : !!(b.output || b.reasoning)
+    ))
+
+/** The filter line a recall at the moment is kept to: resources only (no
+ * one-off entry but a person's words), created before it. */
+export let durable = (vocab: Vocab, at: string): string =>
+  stringify(and(lt('created.at', at), ...resources(vocab)))
+
+/** The `few` resources nearest in meaning to the agent's words that `key`
+ * names, each at least `floor` similar, as one notice of lines by id. */
+export let drafted = (
+  g: Graph,
+  meaning: Meaning,
+  { key, few = 4, floor = 0 }: { key: Key; few?: number; floor?: number },
+): Arrival =>
+async (at) => {
+  let text = await keyed(at, key)
+  if (!text.trim()) return []
+  let hits = (await meaning(text, {
+    within: durable(at.vocab, at.m.at),
+    limit: few,
+  })).filter((h) => h.similarity >= floor)
+  if (!hits.length) return []
+  let rows = await g.get(hits.map((h) => h.entity))
+  let name = called(at.vocab)
+  return [{
+    door: 'notice',
+    eids: rows.map((b) => b.entity.eid),
+    text: rows.map((b) =>
+      `${name(b)} · ${str(comp(b, 'doc').title) || body(b).slice(0, 120)}`
+    ).join('\n'),
+  }]
+}

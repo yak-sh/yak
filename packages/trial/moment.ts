@@ -81,7 +81,7 @@ export let asOf = (storage: Reads, vocab: Vocab, at: string): Reads => {
 }
 
 /** The erring entry a case names, as the trial needs it. */
-export type Moment = { session: Eid; seq: number; at: string }
+export type Moment = { entry: Eid; session: Eid; seq: number; at: string }
 
 /** Where a case's entry stands: its session, its place and its time. */
 export let moment = async (
@@ -91,7 +91,7 @@ export let moment = async (
   let [b] = await storage.get([entry])
   let e = comp(b, 'entry')
   if (!b || typeof e.session != 'string' || typeof e.seq != 'number') return
-  return { session: e.session, seq: e.seq, at: createdAt(b) }
+  return { entry, session: e.session, seq: e.seq, at: createdAt(b) }
 }
 
 // What a model turn answers: words someone wrote to the agent, a person's

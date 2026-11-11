@@ -29,14 +29,22 @@ export let commands: CliCommand[] = [{
       },
       arrive: {
         type: 'array',
-        items: { enum: ['beside', 'related', 'said', 'open'] },
+        items: {
+          enum: ['beside', 'related', 'said', 'open', 'entry', 'call', 'reply'],
+        },
         description:
-          "doors that add to the persona: beside (the prompt recall beside the person's words), related (the related list beside a write's hits), said (the person's earlier words and answered decisions beside each thing the session wrote), open (what is open with the person at start)",
+          "doors that add to the persona: beside (the prompt recall beside the person's words), related (the related list beside a write's hits), said (the person's earlier words and answered decisions beside each thing the session wrote), open (what is open with the person at start), or the resources nearest the agent's own words once: entry (its erring entry), call (its last tool call), reply (its last reply or reasoning)",
       },
       floor: {
         type: 'number',
         description:
-          "with beside: the similarity a memory or decision must reach; with said: the similarity the person's words must reach (default the live ones)",
+          "with beside: the similarity a memory or decision must reach; with said: the similarity the person's words must reach (default the live ones); with entry, call or reply: the similarity a resource must reach (default none)",
+      },
+      few: {
+        type: 'integer',
+        minimum: 1,
+        description:
+          'with entry, call or reply: how many resources are listed (default 4)',
       },
     },
   },
@@ -60,12 +68,21 @@ export let commands: CliCommand[] = [{
       let person = said
         ? (await host.graph.address([said])).get(said) ?? said
         : undefined
-      if (doors.some((d) => d != 'related') && !person) {
+      if (
+        doors.some((d) => ['beside', 'said', 'open'].includes(d)) && !person
+      ) {
         throw new Error(
           'beside, said and open need the config to name its person',
         )
       }
       let floor = typeof args.floor == 'number' ? args.floor : undefined
+      let few = typeof args.few == 'number' ? args.few : undefined
+      let drafted = (key: 'entry' | 'call' | 'reply') => () => {
+        if (!host.meaning) {
+          throw new Error('this graph has no search by meaning')
+        }
+        return arrive.drafted(host.graph, host.meaning, { key, few, floor })
+      }
       let made = {
         beside: () =>
           arrive.beside(host.graph, {
@@ -81,6 +98,9 @@ export let commands: CliCommand[] = [{
             floor,
           }),
         open: () => arrive.open(person!),
+        entry: drafted('entry'),
+        call: drafted('call'),
+        reply: drafted('reply'),
       }
       let [as] = [...(await host.graph.address([args.under])).values()]
       variant = {

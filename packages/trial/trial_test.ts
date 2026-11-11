@@ -12,7 +12,7 @@ import { loadVocab } from '@yaks/vocab'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { tally, trialDoc } from './mod.ts'
 import { type Arrival, asking, before, cases, run, WORDS } from './moment.ts'
-import { open, said as saidBefore } from './arrive.ts'
+import { drafted, open, said as saidBefore } from './arrive.ts'
 
 let obj = { component: true, type: 'object' }
 let props = (p: Record<string, string>) => ({
@@ -230,7 +230,7 @@ test('trial: open with a person at start is what was open with them then, and wh
   let [part] = await open('jeff')({
     storage: g.storage,
     vocab,
-    m: { session: 's', seq: 7, at: '2026-11-10T11:17:00.000Z' },
+    m: { entry: 'e7', session: 's', seq: 7, at: '2026-11-10T11:17:00.000Z' },
     had: [],
     since: '2026-11-10T11:12:00.000Z',
   })
@@ -265,10 +265,64 @@ test("trial: said is the person's earlier words near what the session wrote in t
   })({
     storage: g.storage,
     vocab,
-    m: { session: 's', seq: 7, at: '2026-11-10T11:17:00.000Z' },
+    m: { entry: 'e7', session: 's', seq: 7, at: '2026-11-10T11:17:00.000Z' },
     had: [],
     since: '2026-11-10T11:12:00.000Z',
   })
   assertEquals(keyed, ['Text the church line'])
   assertEquals([part.door, part.eids], ['hit', ['word']])
+})
+
+// The agent's own words a recall is keyed on, and what it lists: a meaning
+// search that records what it was asked and answers m above x1 above x2.
+let drafting = (key: 'entry' | 'call' | 'reply', floor?: number) => {
+  let heard: { words: string; within?: string; limit?: number }[] = []
+  let meaning = (
+    words: string,
+    o: { within?: string; limit?: number } = {},
+  ) => {
+    heard.push({ words, ...o })
+    return Promise.resolve(
+      [['m', .9], ['x1', .7], ['x2', .5]].slice(0, o.limit)
+        .map(([entity, similarity]) => ({
+          entity: entity as string,
+          similarity: similarity as number,
+          excerpt: '',
+        })),
+    )
+  }
+  let had = [
+    entry(3, 'first reply', { output: {} }),
+    entry(4, '', { call: { args: { task: 'T-1' } } }),
+    entry(5, 'last reply', { output: {} }),
+    entry(6, '', { call: { args: { body: 'last call' } } }),
+    entry(6, 'a result', { result: {} }),
+  ] as Bundle[]
+  return drafted(g, meaning, { key, few: 2, floor })({
+    storage: g.storage,
+    vocab,
+    m: { entry: 'e7', session: 's', seq: 7, at: '2026-11-10T11:17:00.000Z' },
+    had,
+    since: '2026-11-10T11:12:00.000Z',
+  }).then((parts) => ({ parts, heard }))
+}
+
+for (
+  let [key, words] of [
+    ['entry', 'wrong answer'],
+    ['call', '{"body":"last call"}'],
+    ['reply', 'last reply'],
+  ] as const
+) {
+  test(`trial: a recall keyed on the agent's ${key}`, async () => {
+    let { parts, heard } = await drafting(key)
+    assertEquals(heard.map((h) => [h.words, h.limit]), [[words, 2]])
+    assertEquals(heard[0].within?.includes('2026-11-10T11:17:00.000Z'), true)
+    assertEquals(parts.map((p) => [p.door, p.eids]), [['notice', ['m', 'x1']]])
+  })
+}
+
+test('trial: a recall keyed on the agent lists only what reaches its floor', async () => {
+  assertEquals((await drafting('entry', .8)).parts[0].eids, ['m'])
+  assertEquals((await drafting('entry', .95)).parts, [])
 })
