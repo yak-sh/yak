@@ -64,7 +64,7 @@
         },
         "reply_address": {
           "type": "string",
-          "description": "where an answer to a letter that arrived goes, from its `Reply-To:` header — absent when the header was, and then an answer goes to `from`",
+          "description": "where an answer to this letter goes: for one that arrived, its `Reply-To:` header; for one we send, the `Reply-To:` it leaves with. Absent, an answer goes to `from`",
           "examples": [
             "ana@example.com"
           ]

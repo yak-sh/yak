@@ -214,6 +214,17 @@ test('a reply threads on what the answered letter went out as', async () => {
   assertEquals(post.last()?.replyTo, 'stash-1')
 })
 
+test('a letter that names where answers go leaves with that Reply-To', async () => {
+  let { g, post } = await seeded()
+  await g.apply([{
+    entity: { eid: letter },
+    doc: { title: 'hi', body: 'hi' },
+    mail: { from: 'hello@books.example', reply_address: 'kim@example.org' },
+    deliver: { to: ana },
+  }])
+  assertEquals(post.last()?.replyAddress, 'kim@example.org')
+})
+
 let threadedClub = await seeded()
 await threadedClub.g.apply([{
   entity: { eid: letter },

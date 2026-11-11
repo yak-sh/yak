@@ -7,7 +7,7 @@ import { docDoc } from '@yaks/doc'
 import { loadVocab } from '@yaks/vocab'
 import { equal, test } from '@yaks/testing'
 import { memberKeywords, personal } from '@yaks/member'
-import { formPost } from './form-mail.ts'
+import { formPost, siteOf } from './form-mail.ts'
 
 let vocab = loadVocab([formsDoc, kernelDoc, mailDoc, docDoc], [memberKeywords])
 let g = graph({ vocab, storage: ram(vocab) })
@@ -34,7 +34,13 @@ await g.apply([
   },
 ])
 g.use(personal(vocab))
-let send = formPost({ app: 'app', graph: g })
+let send = formPost(
+  {
+    app: 'app',
+    graph: g,
+    mail: () => 'ward.app@yaks.test',
+  } as unknown as Parameters<typeof formPost>[0],
+)
 let retry = () =>
   send(
     { kind: 'created', entity: { eid: 'signup' }, name: 'completed', comp: {} },
@@ -55,7 +61,11 @@ test("the letter to a form's people says what was answered", async () => {
   await retry()
   let bodies = (await g.read('.mail&?doc')).map((row) => (row.doc as Comp).body)
   equal(
-    bodies.includes('A new sign-up for Sign-up.\n\n- Email: guest@example.com'),
+    bodies.some((body) =>
+      String(body).startsWith(
+        'A new sign-up for Sign-up.\n\n- Email: guest@example.com',
+      )
+    ),
     true,
   )
 })
@@ -84,4 +94,24 @@ test("the letter to a form's people is told apart from the thanks", async () => 
     (row.doc as Comp).title
   )
   equal(titles.sort(), ['New sign-up: Sign-up', 'Sign-up'])
+})
+
+test("the letter to a form's people can be answered at the registrant and opens the sign-up", async () => {
+  await retry()
+  let [alert] = (await g.read('.mail&?doc&?deliver')).filter((row) =>
+    (row.doc as Comp).title == 'New sign-up: Sign-up'
+  )
+  equal((alert.mail as Comp).reply_address, 'guest@example.com')
+  equal(
+    String((alert.doc as Comp).body).endsWith(
+      '\n\nSee it: https://ward.yaks.test/app/signups?id=signup',
+    ),
+    true,
+  )
+})
+
+test("an app's site is read from the address its letters leave under", () => {
+  equal(siteOf('ward.app@yaks.app'), 'https://ward.yaks.app/app/')
+  equal(siteOf('ward@yaks.app'), 'https://ward.yaks.app/')
+  equal(siteOf(null), undefined)
 })

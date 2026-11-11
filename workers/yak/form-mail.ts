@@ -28,6 +28,7 @@ let letter = (
   to: string,
   title: string,
   body: string,
+  mail: Comp = {},
 ): Bundle[] => {
   let eid = lettered(registration, purpose, to)
   // The letter wears `mail`, which keeps it to the app's owners and editors.
@@ -39,7 +40,7 @@ let letter = (
     {
       entity: { eid: eid.letter },
       doc: { title, body },
-      mail: { target: registration },
+      mail: { target: registration, ...mail },
       deliver: { to: eid.address },
       form_mail,
     },
@@ -107,6 +108,16 @@ export let told = (form: Form, answers: Answers, title: string): string => {
     .join('\n\n')
 }
 
+/** Where an app's pages are served, from the address its letters leave under:
+ * `<space>.<app>@<apex>`, or `<space>@<apex>` for the app that is the
+ * space's home. */
+export let siteOf = (mail: string | null): string | undefined => {
+  let [, name, apex] =
+    /^([a-z0-9-]+(?:\.[a-z0-9-]+)?)@(.+)$/.exec(mail ?? '') ?? []
+  let [space, app] = (name ?? '').split('.')
+  return space ? `https://${space}.${apex}/${app ? `${app}/` : ''}` : undefined
+}
+
 export let formPost =
   (at: Pick<Stored, 'app' | 'graph'>): Handler => async (event) => {
     let [row] = await at.graph.get([event.entity.eid])
@@ -131,6 +142,12 @@ export let formPost =
       (a.question.question.kind == 'email' ||
         a.question.question.fills == 'individual.email')
     )?.value ?? address(people.find((b) => b.entity.eid == person))
+    // The app's Sign-ups page holds this sign-up (`signups?id=`).
+    let site = siteOf(at.mail())
+    let open = site ? `\n\nSee it: ${site}signups?id=${row.entity.eid}` : ''
+    let replies = typeof email == 'string' && email.trim()
+      ? { reply_address: email.trim() }
+      : {}
     let recipients: [unknown, string, string][] = [
       [
         email,
@@ -142,13 +159,20 @@ export let formPost =
       ): [unknown, string, string] => [
         address(b),
         'notify',
-        told(form, answers, title),
+        told(form, answers, title) + open,
       ]),
     ]
     for (let [to, purpose, body] of recipients) {
       if (typeof to != 'string' || !to.trim()) continue
       let subject = purpose == 'notify' ? `New sign-up: ${title}` : title
-      let batch = letter(row.entity.eid, purpose, to.trim(), subject, body)
+      let batch = letter(
+        row.entity.eid,
+        purpose,
+        to.trim(),
+        subject,
+        body,
+        purpose == 'notify' ? replies : {},
+      )
       if ((await at.graph.get([batch[1].entity.eid])).length) continue
       await at.graph.apply(signed(batch, { by: at.app }))
     }

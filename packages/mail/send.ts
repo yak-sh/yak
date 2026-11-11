@@ -110,6 +110,9 @@ export let message = (
     text: text(body),
     html: html(body),
     ...(replyTo ? { replyTo } : {}),
+    ...(str(mail, 'reply_address')
+      ? { replyAddress: str(mail, 'reply_address') }
+      : {}),
   }
 }
 
