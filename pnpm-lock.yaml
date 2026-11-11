@@ -2138,9 +2138,28 @@ importers:
 
   packages/goal:
     dependencies:
+      '@yaks/graph':
+        specifier: 0.2.33
+        version: link:../graph
+      '@yaks/query':
+        specifier: 0.2.32
+        version: link:../query
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab
+    devDependencies:
+      '@yaks/doc':
+        specifier: 0.2.24
+        version: link:../doc
+      '@yaks/edge':
+        specifier: 0.2.24
+        version: link:../edge
+      '@yaks/ram':
+        specifier: 0.2.24
+        version: link:../ram
+      '@yaks/testing':
+        specifier: 0.2.30
+        version: link:../testing
 
   packages/graph:
     dependencies:
