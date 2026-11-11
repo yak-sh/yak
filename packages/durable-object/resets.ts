@@ -87,13 +87,71 @@ export type Own = {
  * assertEquals(replaced({ ...live, sql: { exec: cut } }), true)
  * ```
  */
-export let replaced = (storage: Own): boolean => {
+export let replaced = (storage: Own): boolean => vacated(storage) != null
+
+// The runtime's words for the move, as this instance's storage refuses in
+// them, or null while the instance is the live one.
+let vacated = (storage: Own): Error | null => {
   try {
     storage.transactionSync(() => storage.sql.exec('SELECT 1'))
-    return false
+    return null
   } catch (e) {
-    return moved(e)
+    return moved(e) ? e as Error : null
   }
+}
+
+/** How often `vacating` asks whether the instance was replaced. */
+export let LOOK = 2_000
+
+/**
+ * `run`'s answer, or the runtime's words once it moves the object off this
+ * instance while `run` has not answered. An instance reset under a request
+ * still runs it, and what the request waits on can stay unsettled after the
+ * reset, so the request never answers (T-160126). Failed in the words
+ * `evicted` knows, it is sent again by its caller to the instance that took
+ * its place, and the work left behind here can write nothing. While `run`
+ * waits, `replaced` is asked every `every` ms on `clock`.
+ *
+ * ```ts
+ * import { assertEquals, assertRejects } from '@std/assert'
+ * import { clock } from '@yaks/testing'
+ * let reset = false
+ * let storage = {
+ *   sql: { exec: () => [] },
+ *   transactionSync: <T>(body: () => T) => {
+ *     if (reset) throw new Error('Durable Object reset because its code was updated.')
+ *     return body()
+ *   },
+ * }
+ * let time = clock()
+ * assertEquals(await vacating(() => Promise.resolve('ok'), storage, time), 'ok')
+ * let stuck = vacating(() => new Promise<never>(() => {}), storage, time)
+ * await time.advance(LOOK)
+ * reset = true
+ * await time.advance(LOOK)
+ * await assertRejects(() => stuck, Error, 'reset because its code was updated')
+ * ```
+ */
+export let vacating = <T>(
+  run: () => T,
+  storage: Own,
+  clock: Clock = system,
+  every = LOOK,
+): T => {
+  let answer = run()
+  if (!(answer instanceof Promise)) return answer
+  return new Promise((resolve, reject) => {
+    let stop = () => {}
+    let look = () => {
+      stop = clock.after(every, () => {
+        let gone = vacated(storage)
+        if (gone) reject(gone)
+        else look()
+      })
+    }
+    look()
+    answer.then(resolve, reject).finally(() => stop())
+  }) as T
 }
 
 /**

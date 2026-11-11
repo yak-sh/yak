@@ -80,12 +80,14 @@ export {
   evicted,
   jittered,
   killed,
+  LOOK,
   moved,
   opaque,
   type Own,
   replaced,
   retried,
   starved,
+  vacating,
 } from './resets.ts'
 export { profile, type Summary } from './profile.ts'
 export {

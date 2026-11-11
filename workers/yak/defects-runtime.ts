@@ -5,7 +5,7 @@ import { caught, defect, watched, within } from './defects.ts'
 import { origin } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
 import { learn, restarting } from './running.ts'
-import { type Own, replaced } from '@yaks/durable-object/resets'
+import { type Own, replaced, vacating } from '@yaks/durable-object/resets'
 import { bounded, type Report } from '@yaks/durable-object/ceiling'
 
 let clock = {
@@ -51,7 +51,16 @@ export let entry = <T>(
     within(
       env,
       { request },
-      http ? () => watched(run, env.CLOCK) : run,
+      // A request whose instance the runtime replaced fails as evicted, so
+      // its caller's resend reaches the live one (@yaks/durable-object
+      // `vacating`).
+      http
+        ? () =>
+          watched(
+            own(state) ? () => vacating(run, state.storage, env.CLOCK) : run,
+            env.CLOCK,
+          )
+        : run,
       clock,
       {
         retain: waitUntil,
