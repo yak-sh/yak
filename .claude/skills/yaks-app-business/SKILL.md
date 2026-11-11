@@ -19,8 +19,9 @@ says who yaks.app is for.
 The principles are `business-model`, and they hold for every venture; load it
 first. This skill is how they land here. Jeff's words are in M-131884 and
 M-157410. The strategy is D-154810: who yaks.app goes to first, what the
-platform still lacks for them, what is measured and what is charged. The model
-for people who come alone, with their personas, the plans and the site's
+platform still lacks for them, what is measured and what is charged. The people
+themselves, organizations first, each with a problem, a week and a use-case, are
+D-158979. The model for people who come alone, the plans and the site's
 information architecture, is D-131886.
 
 A public page holds only what a visitor needs. No draft marker, task or memory
@@ -81,8 +82,8 @@ everything for you, including building". You get an Operator that does things
 for you: you chat with it, email it, text it or call it, and it builds the apps
 it needs along the way.
 
-The individual people who use yaks.app today are literal too, and D-131886 has
-each in full:
+The individual people who use yaks.app today are literal too. D-158979 has
+each as a person to write for, and D-131886 has the model built on them:
 
 - **Jill** builds tools for her work and for a hobby business, in one free
   space. She gets value and says she'd pay, yet pays nothing because

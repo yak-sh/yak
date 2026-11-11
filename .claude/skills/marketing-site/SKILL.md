@@ -138,13 +138,28 @@ first screen of a phone, with room to spare. The lead answers "what is this?"
 and nothing else; whatever more it wants to say goes where the outline puts
 it.
 
-**Start from the people.** Each venture names who it's for in a design with
-its personas (yaks.app's is D-131886, reached through `yaks-app-business`).
-Read it before writing a line, and write for one of them: their work, their
-problem, the words they'd use for it. The examples on the page should be things
-that person would ask for, named the way they'd name them. "A menu for your
-side business" tells a baker the page is about them; "a world you can explore
-together" tells them nothing.
+**Start from a person and one thing they would get done.** Jeff, verbatim
+(M-131884): "all functionality must be rooted in use-cases or personas. who is
+this for? what problem is it solving? how does it fit into their workflow? all
+else is downstream of this." Copy written from a product's facts alone restates
+the product: handed yaks.app's fact sheet and no person, 20 of 24 writers
+returned its first bullet as their headline (T-157536). Handed a church
+secretary and a Christmas tea that has to go on the calendar, the same writers
+wrote about the tea.
+
+So each venture keeps the people it is for as a design: who each is, their
+problem, what they use today, how the work fits their week and one use-case,
+every sentence with where it was read. yaks.app's is D-158979. Open it before
+writing a line, choose one person, and put that person and the use-case at the
+top of your draft, in their words where any are recorded. When you hand the
+writing to another agent, the brief carries the person and the use-case in
+full: an id is a hop a writer may not take. Where the record says "not
+recorded", leave the gap. A persona you made up is your own guess handed back
+to you as a fact, and the pitch written to it is about nobody.
+
+The examples on the page should be things that person would ask for, named the
+way they'd name them. "A menu for your side business" tells a baker the page is
+about them; "a world you can explore together" tells them nothing.
 
 **A stranger gets each example at a glance.** Its name and one line say what
 it is to someone with no context. A niche example only the people in that niche
@@ -261,7 +276,7 @@ Each venture's voice (yaks.app's is "soft and friendly", in
 
 ## Where to look
 
-- **Who it's for:** the venture's persona design (yaks.app: D-131886).
+- **Who it's for:** the venture's design of its people (yaks.app: D-158979).
 - **The one-liner:** the venture's own (yaks.app: M-37845's "The pitch
   today"), used as it stands until a better line replaces every copy.
 - **What the product does:** the guide pages and the code. For yaks.app that's
