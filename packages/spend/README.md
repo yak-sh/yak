@@ -99,9 +99,13 @@ request arriving during the tally marks the day again.
 - `yak spend show [since] [--until day] [--top n]` reports a span of days, by
   default the Claude plan's week. A day is written in the time grammar
   (@yaks/vocab `timeSpan`): `2026-10-13`, `yesterday`, `3 days ago`.
+- `yak spend tally [since]` tallies each day since a day (default today) again
+  from the requests the graph holds, in a few seconds a day: a changed price or
+  plan shows without waiting for the duty's next pass.
 - `yak spend backfill <since>` measures the requests of every transcript,
   managed run and graph session written since a day (@yaks/session and
-  @yaks/spawn `recounted`), then tallies each day.
+  @yaks/spawn `recounted`), then tallies each day. It reads every one of those
+  transcripts whole, so a busy day takes about half a minute.
 
 ## A topic's share
 

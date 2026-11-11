@@ -307,7 +307,7 @@ let settled = async (
   let eids = new Set(run.flatMap((l) => l.bundles.map((b) => b.entity.eid)))
   let read = new Map<Eid, string>()
   let held = new Set<Eid>()
-  for (let r of eids.size ? await g.get([...eids]) : []) {
+  for (let r of eids.size ? await g.get([...eids], ['rate_limit']) : []) {
     if (!r || r[TOMBSTONE] != null) continue
     held.add(r.entity.eid)
     read.set(r.entity.eid, String(comp(r, 'rate_limit')?.at ?? ''))
@@ -833,8 +833,21 @@ export let recount = async (
     size = 0
     if (!lines.length) return
     let places = lines.flatMap((l) => placesOf(key, l.line, l.said))
+    // Which places hold usage is read alone; a whole entry, with all it
+    // says, only where the usage is one this reading does not make.
     let rows = new Map<Eid, Bundle>()
-    for (let r of places.length ? await g.get(places) : []) {
+    for (let r of places.length ? await g.get(places, ['usage']) : []) {
+      if (r) rows.set(r.entity.eid, r)
+    }
+    let made = new Set(
+      lines.flatMap((l) => l.made.filter((b) => b.usage)).map((b) =>
+        b.entity.eid
+      ),
+    )
+    let stale = [...rows.values()].filter((r) =>
+      r.usage && !made.has(r.entity.eid)
+    ).map((r) => r.entity.eid)
+    for (let r of stale.length ? await g.get(stale) : []) {
       if (r) rows.set(r.entity.eid, r)
     }
     let gone = lines.map((l) => unspent(rows, key, l.line, l.said, l.made))

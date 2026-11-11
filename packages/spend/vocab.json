@@ -181,6 +181,22 @@
       "readOnly": true,
       "positional": ["since"]
     },
+    "spend_tally": {
+      "tool": true,
+      "surfaces": ["cli"],
+      "noun": "spend",
+      "verb": "tally",
+      "title": "Tally days again from their requests",
+      "description": "Tally each day since a day again from the requests the graph holds, as the duty does every ten minutes: a changed price or plan shows at once. Measures nothing; a transcript's requests are measured by spend_backfill.",
+      "input": {
+        "since": {
+          "type": "string",
+          "format": "date",
+          "description": "the first UTC day, `2026-10-13`, `yesterday` or `3 days ago` (default: today)"
+        }
+      },
+      "positional": ["since"]
+    },
     "spend_backfill": {
       "tool": true,
       "surfaces": ["cli"],

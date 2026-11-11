@@ -1,7 +1,8 @@
 /**
- * The tools: `spend_show` reports a span of days from their tallies, and
+ * The tools: `spend_show` reports a span of days from their tallies,
+ * `spend_tally` tallies days again from the requests the graph holds, and
  * `spend_backfill` measures past requests (@yaks/session, @yaks/spawn
- * `recounted`) and tallies their days. `shared` reads each topic's share of
+ * `recounted`) first. `shared` reads each topic's share of
  * the week against what its sessions used (./use.ts).
  *
  * @module
@@ -255,13 +256,25 @@ export let backfill = async (
   let spawn = await import('@yaks/spawn')
   let read = await session.recounted(g, since, { person, now })
   let runs = await spawn.recounted(g, since)
-  let days = 0
-  for (let d = since; d <= dayOf(now); d = after(d)) {
-    await recompute(g, d)
-    days++
-  }
   return `measured ${read} requests from transcripts and the graph's ` +
-    `sessions and ${runs} from managed runs; tallied ${days} days from ${since}`
+    `sessions and ${runs} from managed runs; ${await tallied(g, since, now)}`
+}
+
+/** Tally each day from `since` to today again from the requests the graph
+ * holds, measuring nothing: what a changed price or plan needs to show
+ * before the duty's next pass. Says what it tallied. */
+export let tallied = async (
+  g: Graph,
+  since: string,
+  now: number = Date.now(),
+): Promise<string> => {
+  let days: Spend[] = []
+  for (let d = since; d <= dayOf(now); d = after(d)) {
+    days.push(await recompute(g, d))
+  }
+  let all = merged(days)
+  return `tallied ${days.length} days from ${since}: ${all.requests} ` +
+    `requests, ${dollars(all.dollars)}`
 }
 
 /** The tools this package runs; a transcript read in is signed with the
@@ -279,6 +292,11 @@ export let runs = (host?: { config?: { person?: string } }): Runs => ({
       }),
     )
   },
+  spend_tally: async (call, graph) =>
+    answer(
+      call,
+      await tallied(graph, dayArg(argsOf(call).since) ?? dayOf(Date.now())),
+    ),
   spend_backfill: async (call, graph) => {
     let since = dayArg(argsOf(call).since)
     if (!since) throw new Refused('say since, the first UTC day to measure')

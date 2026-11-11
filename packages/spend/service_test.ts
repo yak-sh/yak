@@ -3,6 +3,7 @@ import { equal, test } from '@yaks/testing'
 import { compose } from '@yaks/cli/host'
 import { listPrice } from '@yaks/model'
 import { pass } from './service.ts'
+import { tallied } from './tools.ts'
 import { dayEid } from './window.ts'
 
 let box = async () => {
@@ -87,4 +88,29 @@ test('a request to an alias is weighed at the price of the release that answered
   let day = new Date().toISOString().slice(0, 10)
   let spend = (await graph.get([dayEid(day)]))[0].spend as { dollars: number }
   equal([unpriced, spend.dollars], [[], listPrice('claude-fable-5-2')!.input])
+})
+
+test('a tally on demand reads the requests the graph holds at their price now', async () => {
+  let { graph, asked } = await box()
+  let at = '2026-11-12T08:00:00.000Z', now = Date.parse(at)
+  let [model] = await graph.apply([
+    {
+      entity: { eid: '$m' },
+      model: { name: 'm' },
+      price: { input: 4000, cached: 0, output: 0 },
+    },
+  ])
+  await asked('a', at, model.entity.eid)
+  equal(
+    await tallied(graph, '2026-11-12', now),
+    'tallied 1 days from 2026-11-12: 1 requests, $4.00',
+  )
+  await graph.apply([{
+    entity: model.entity,
+    price: { input: 8000, cached: 0, output: 0 },
+  }])
+  equal(
+    await tallied(graph, '2026-11-12', now),
+    'tallied 1 days from 2026-11-12: 1 requests, $8.00',
+  )
 })
