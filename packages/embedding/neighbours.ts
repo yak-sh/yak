@@ -8,9 +8,14 @@
 // holds it, and keeps the one that stands instead of two. The second is the
 // few nearest of any kind that is a resource (`hit.related`): the memories,
 // tasks, designs and topics it bears on, and the words a person wrote. A
-// one-off record (a kind the vocabulary marks `notice`: a knock, a transcript
-// entry) is left out of it unless a person wrote it. A call that made nothing
-// is answered as it was.
+// one-off record (wearing a component the vocabulary marks `notice`: a knock,
+// a transcript entry) is in neither list unless a person wrote it, even where
+// it also wears the kind: a run's receipt is a comment and a knock at once.
+// Nor is anything the calling session wrote itself, which it already holds:
+// a helper commenting twice is not told of its first comment. A comment is
+// shown with the id of what it is on (`hit.target`), since a comment's words
+// alone do not say which task they are about. A call that made nothing is
+// answered as it was.
 //
 // Made means created, or marked as a kind for the first time: memory_save
 // keeps a person's words where they were said, by marking the transcript entry
@@ -29,7 +34,8 @@
 // Nothing here fails a write. The write committed before a reply is asked
 // for, and a model out of reach only means fewer neighbours.
 
-import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { type Bundle, type Comp, type Eid, type Graph, who } from '@yaks/graph'
+
 import { called } from '@yaks/graph/hit'
 import type { Reply } from '@yaks/tools'
 import {
@@ -38,6 +44,7 @@ import {
   type Clause,
   every,
   limit,
+  ne,
   near,
   or,
   order,
@@ -110,9 +117,10 @@ type List = 'near' | 'related'
 
 // One neighbour, as a search answers one (@yaks/cli, @yaks/tools `worded`): a
 // `hit` naming the id it is called by (@yaks/graph/hit `called`), its kind,
-// its title and its status where it has them, whether meaning or words found
-// it, and, under its list's name, the new entity it was found near. An entity
-// with no title is shown by an excerpt of its text instead.
+// its title and its status where it has them, the id of what a comment is on,
+// whether meaning or words found it, and, under its list's name, the new
+// entity it was found near. An entity with no title is shown by an excerpt of
+// its text instead.
 let hit = (
   vocab: Vocab,
   b: Bundle,
@@ -120,6 +128,7 @@ let hit = (
   list: List,
   source: 'meaning' | 'text',
   prose: Field[],
+  on?: string,
 ): Bundle => {
   let title = said(b, 'title')
   let status = said(b, 'status')
@@ -129,12 +138,31 @@ let hit = (
       id: called(vocab)(b),
       kind: vocab.kindOf(b),
       ...title ? { title } : {},
+      ...on ? { target: on } : {},
       snippet: title ? '' : excerpt(textOf(b, prose)),
       source,
       [list]: of,
       ...status ? { status } : {},
     },
   }
+}
+
+// The ids the comments among these are on, by the comment's eid, each as a
+// line names it (its human id where it has one).
+let targets = async (
+  host: Host,
+  found: Bundle[],
+): Promise<Map<Eid, string>> => {
+  let on = new Map<Eid, Eid>()
+  for (let b of found) {
+    let target = (b.comment as Comp | undefined)?.target
+    if (typeof target == 'string') on.set(b.entity.eid, target)
+  }
+  if (!on.size) return new Map()
+  let rows = await host.graph.get([...new Set(on.values())], host.vocab.kinds)
+  let name = called(host.vocab)
+  let named = new Map(rows.map((r) => [r.entity.eid, name(r)]))
+  return new Map([...on].map(([c, t]) => [c, named.get(t) ?? t]))
 }
 
 // The integer ids these eids' rows are keyed by, for the ones this database
@@ -198,8 +226,8 @@ let became = (vocab: Vocab, b: Bundle): string | undefined => {
   })
 }
 
-// What a related resource is: wearing no notice, or written by a person,
-// where the vocabulary knows people.
+// What a neighbour in either list is: wearing no notice, or written by a
+// person, where the vocabulary knows people.
 let resources = (vocab: Vocab): Clause[] => {
   let notices = vocab.all.filter((c) => vocab.comp(c)?.notice)
   if (!notices.length) return []
@@ -217,7 +245,7 @@ export let neighbours = (host: Host, options: Options = {}): Reply => {
   // Words are a query only where the vocabulary indexes words at all.
   let indexed = fields(host.vocab, searched).length > 0
   let kept = resources(host.vocab)
-  return async (_call, _answer, wrote) => {
+  return async (call, _answer, wrote) => {
     let kinds = new Map<Eid, string>()
     for (let b of wrote) {
       let kind = became(host.vocab, b)
@@ -238,6 +266,9 @@ export let neighbours = (host: Host, options: Options = {}): Reply => {
     let meant = now.embedder
       ? await vectored(db, now.embedder, made)
       : new Set<Eid>()
+    // What the calling session wrote is its own, and no news to it.
+    let via = who(call)?.via
+    let others = via ? [or(absent('created.via'), ne('created.via', via))] : []
     let out: Bundle[] = []
     for (let s of made) {
       let meaning = meant.has(s.entity)
@@ -252,19 +283,29 @@ export let neighbours = (host: Host, options: Options = {}): Reply => {
         let ranked = meaning
           ? [near(s.entity), order(SIMILAR)]
           : [...terms.map(text), order(SEARCH)]
-        let found =
-          (await host.graph.read(and(...by, ...ranked, room, every())))
-            .filter((b) => !shown.has(b.entity.eid))
-            .slice(0, FEW)
+        let found = (await host.graph.read(
+          and(...by, ...kept, ...others, ...ranked, room, every()),
+        ))
+          .filter((b) => !shown.has(b.entity.eid))
+          .slice(0, FEW)
         found.forEach((b) => shown.add(b.entity.eid))
+        let on = await targets(host, found)
         out.push(
           ...found.map((b) =>
-            hit(host.vocab, b, s.entity, list, source, prose)
+            hit(
+              host.vocab,
+              b,
+              s.entity,
+              list,
+              source,
+              prose,
+              on.get(b.entity.eid),
+            )
           ),
         )
       }
       await nearest('near', [present(kinds.get(s.entity)!)])
-      await nearest('related', kept)
+      await nearest('related', [])
     }
     return out
   }

@@ -134,7 +134,8 @@ let capped = (pieces: Iterable<string>, n: number, most: number) => {
 // id it is called by (its human id where it has one, @yaks/graph/hit), the
 // kind, title and words that found it, and, for a neighbour of something a
 // call just made, the entity it is `near` (a possible twin) or `related` to (a
-// resource of another kind or further off) and its `status`. Say that hit as one
+// resource of another kind or further off), its `status`, and for a comment
+// the `target` it is on. Say that hit as one
 // line for an MCP reader; structuredContent keeps its fields.
 let hitOf = (b: Bundle): Comp | null => {
   let hit = b.hit as Comp | undefined
@@ -154,6 +155,7 @@ let hitLine = (b: Bundle, hit: Comp): string => {
   let id = said('id') || b.entity.eid
   let title = said('title')
   let status = said('status')
+  let target = said('target')
   let near = said('near')
   let related = said('related')
   let source = hit.source == 'meaning' ? ' (meaning)' : ''
@@ -161,7 +163,7 @@ let hitLine = (b: Bundle, hit: Comp): string => {
   let of = near ? `near ${near}: ` : related ? `related to ${related}: ` : ''
   return `${of}${id}${title ? ` ${title}` : ''} · ${clean(String(hit.kind))}${
     status ? ` ${status}` : ''
-  }${source}${snippet ? ` — ${snippet}` : ''}`
+  }${target ? ` on ${target}` : ''}${source}${snippet ? ` — ${snippet}` : ''}`
 }
 
 // What a tool's text answer carries: the spine every row has (@yaks/kernel),

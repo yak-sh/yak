@@ -60,13 +60,20 @@ let stocked = async (yak: Yak, more: Bundle[] = []) => {
   )
 }
 
-let call = async (yak: Yak, tool: string, args: Record<string, unknown>) => {
+// A call, through the session `via` where one is given.
+let call = async (
+  yak: Yak,
+  tool: string,
+  args: Record<string, unknown>,
+  via?: string,
+) => {
   await yak.runner.ensure([tool])
   let id = mint()
   return answerOf(
     await yak.runner.call({
       entity: { eid: id },
       call: { to: toolEid(tool), args },
+      ...via ? { $actor: { via } } : {},
     }),
     id,
   )
@@ -159,9 +166,50 @@ test('a comment answers comments near it, shown by their words', async () => {
     })
     assertEquals(hits(answer).map(({ eid: _, id: __, ...h }) => h), [{
       kind: 'comment',
+      target: 'old-0',
       snippet: 'The crash is in the submit handler of the login form.',
       source: 'meaning',
     }])
+    assertEquals(
+      worded(answer).split('\n').find((l) => l.startsWith('near'))
+        ?.includes('· comment on old-0 (meaning) — The crash'),
+      true,
+    )
+  } finally {
+    await yak.close()
+  }
+})
+
+test("a comment's neighbours leave out a run's receipt and the session's own comments", async () => {
+  let yak = await open({ provider: 'hash' })
+  try {
+    let said = 'The crash is in the submit handler of the login form.'
+    await stocked(yak, [
+      ...['me', 'them'].map((eid) => ({
+        entity: { eid },
+        doc: { title: eid },
+      })),
+      {
+        entity: { eid: 'receipt' },
+        doc: { title: '#run — exited 0', body: said },
+        comment: { target: 'old-0' },
+        knock: { target: 'old-0' },
+      },
+    ])
+    await call(yak, 'comment_new', { target: 'old-0', body: said }, 'me')
+    let mine = await call(yak, 'comment_new', {
+      target: 'old-1',
+      body: said,
+    }, 'me')
+    assertEquals(hits(mine), [])
+    assertEquals(hits(mine, 'related').some((h) => h.kind == 'comment'), false)
+    // Another session's twin is a twin.
+    let theirs = await call(yak, 'comment_new', {
+      target: 'old-1',
+      body: said,
+    }, 'them')
+    assertEquals(hits(theirs).length, 2)
+    assertEquals(eids(theirs).includes('receipt'), false)
   } finally {
     await yak.close()
   }
