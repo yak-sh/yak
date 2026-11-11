@@ -8,8 +8,6 @@ import { derivedEid } from '@yaks/graph/identity'
 import { type Machine, settle } from '@yaks/machine'
 import { targetFor, unlent, type Workspaces } from '@yaks/machine/targets'
 import type { ChildLimits } from '@yaks/session'
-import { type Snapshot, snapshot } from '@yaks/context'
-import { type As, owed } from '@yaks/persona'
 import { isAbsolute, relative, resolve } from 'node:path/posix'
 import type { Host } from '@yaks/host'
 
@@ -24,21 +22,6 @@ export let sessionCwd = async (
 ): Promise<string | undefined> => {
   let home = (await g.get([session], ['home']))[0]?.home as Comp | undefined
   return home?.cwd == null ? fallback : String(home.cwd)
-}
-export let owing = async (
-  g: Graph,
-  home: Comp,
-  files: Snapshot[],
-  context: As = {},
-): Promise<Snapshot[]> => {
-  if (!home.cwd && !context.persona && !context.work) return []
-  let owes = await owed(
-    g,
-    String(home.cwd ?? ''),
-    files.map((f) => f.body),
-    context,
-  )
-  return owes ? [await snapshot(owes.text, owes.source)] : []
 }
 export type WorkspaceFile = { path: string; bytes: Uint8Array }
 export let machines = (

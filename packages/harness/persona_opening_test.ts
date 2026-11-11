@@ -1,8 +1,9 @@
 // A session any door writes as data (a browser's chat: the session, the
-// persona it wears, the topic it is opened on, its first message) opens with
-// that persona's instructions, the topic's tree after them, and the tools the
-// persona offers, admitted by the runner before its first turn.
-import { equal, ok, test } from '@yaks/testing'
+// persona it wears, the topic it is opened on, its first message) is offered
+// the tools its persona offers, admitted by the runner before its first turn.
+// The persona's text and the topic's tree are no part of what it opens with:
+// each ask is told them afresh (./wear_test.ts).
+import { equal, test } from '@yaks/testing'
 import { compose } from '@yaks/cli/host'
 import { type Comp, identityEid } from '@yaks/graph'
 import { link } from '@yaks/edge'
@@ -100,20 +101,43 @@ let opened = await (async () => {
         }),
       ]))[0]
     let helped = await from('helper')
-    let prompts = (s: string) =>
-      g.read(`.entry.session=${s}&.prompt&*&.order=entry.seq`)
+    // Begun with no message, a session has nothing to carry its tools until
+    // its first line arrives, which the runner then admits them on.
+    await g.apply([{
+      entity: { eid: 'later' },
+      entry: { session: command },
+      using: { provider },
+      content: { body: 'What do you look after?' },
+    }], { trusted: true })
+    await handlers.session_run(
+      { entity: { eid: 'later' } } as never,
+      g,
+      {} as never,
+      {} as never,
+    )
+    let said = await begin(g, 'What do you look after?', {
+      ...await openingFor(g, {}, undefined, { persona: 'farmer' }),
+      using: { provider },
+    })
+    let entries = (s: string) =>
+      g.read(`.entry.session=${s}&!ask&*&.order=entry.seq`)
+    let rejected = await openingFor(g, {}, undefined, {
+      persona: 'oracle',
+      topic: 'nowhere',
+    }).then(() => undefined, (error) => String(error.message))
     return {
-      worn: await prompts('worn'),
-      tooled: await prompts('tooled'),
-      commanded: await prompts(command),
-      plain: await prompts('plain'),
-      topical: await prompts('topical'),
-      asked: await prompts(asked),
-      session: (await g.get(['worn']))[0],
+      worn: await entries('worn'),
+      tooled: await entries('tooled'),
+      commanded: await entries(command),
+      said: await entries(said),
+      plain: await entries('plain'),
+      topical: await entries('topical'),
       opened: (await g.get([asked]))[0],
+      session: (await g.get(['worn']))[0],
       helped,
-      helpedPrompts: await prompts(helped.entity.eid),
+      helpedOpening: await openingFor(g, {}, undefined, { starter: 'helper' }),
       named: await from('named'),
+      rejected,
       yaks,
     }
   } finally {
@@ -121,11 +145,12 @@ let opened = await (async () => {
   }
 })()
 
-let offered = (prompt: Comp) => (prompt.sending as Comp | undefined)?.tools
+let offered = (entry: Comp) => (entry.sending as Comp | undefined)?.tools
+let prompts = (entries: Comp[]) => entries.filter((e) => e.prompt)
 
-test('a session wearing a persona opens with its instructions once, on no machine', () => {
-  equal(opened.worn.length, 1)
-  ok(String((opened.worn[0].content as Comp).body).includes('Tend the topic'))
+test('a session wearing a persona opens with no copy of it, on no machine', () => {
+  equal(prompts(opened.worn), [])
+  equal(prompts(opened.topical), [])
   equal(opened.session.home, undefined)
 })
 
@@ -134,35 +159,27 @@ test('a persona offering no tools leaves the runner its own', () => {
 })
 
 test('a persona offers its sessions the tools it and the personas it contains contain', () => {
-  equal(opened.tooled.length, 1)
   equal(offered(opened.tooled[0]), ['topic_find', 'search'])
 })
 
-test('a session begun wearing a persona is offered the same tools', () => {
-  equal(opened.commanded.length, 1)
+test('a session begun wearing a persona is offered the same tools on its first line', () => {
+  equal(offered(opened.said[0]), ['topic_find', 'search'])
   equal(offered(opened.commanded[0]), ['topic_find', 'search'])
 })
 
 test('a session wearing no persona is opened with nothing', () => {
-  equal(opened.plain.length, 0)
+  equal(prompts(opened.plain), [])
+  equal(offered(opened.plain[0]), undefined)
 })
 
-let said = (prompts: Comp[]) =>
-  prompts.map((p) => String((p.content as Comp).body))
-
-test('a session on a topic opens with its persona, then the topic compiled', () => {
-  for (let prompts of [opened.topical, opened.asked]) {
-    let [persona, topic] = said(prompts)
-    ok(persona.includes('Tend the topic of yaks.'))
-    ok(topic.includes('Yaks\n\nWhat belongs under yaks.'), topic)
-    ok(topic.includes('A yak is a bovid.'))
-  }
+test('a session on a topic names the topic, and a topic that is not there is refused', () => {
   equal((opened.opened.session as Comp).topic, opened.yaks)
+  equal(opened.rejected, 'no topic called nowhere')
 })
 
 test('a session its starter begins wears the persona its starter wears', () => {
   equal((opened.helped.session as Comp).persona, 'farmer')
-  equal(offered(opened.helpedPrompts[0]), ['topic_find', 'search'])
+  equal(opened.helpedOpening.tools, ['topic_find', 'search'])
 })
 
 test('a session whose starter wears no persona works as its starter does', () => {

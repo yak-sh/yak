@@ -1,42 +1,102 @@
-// The persona a transcript wears, said afresh for each ask (agent.ts `wear`):
-// read through @yaks/persona alone, so a host that runs no machine (the
-// yaks.app Worker) loads nothing of the instruction files beside it.
+// The persona a transcript wears and the topic it is opened on, said afresh
+// for each ask (agent.ts `wear`): read through @yaks/persona and @yaks/topic
+// alone, so a host that runs no machine (the yaks.app Worker) loads nothing
+// of the instruction files beside it.
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { type Reads, voice, wear } from '@yaks/persona'
+import { PART, type Reads, voice, wear, wearing } from '@yaks/persona'
+import { compile, gather } from '@yaks/topic'
 
-// How far up its starters a transcript's persona is looked for: a fork of a
-// helper of a conversation is three.
+// How far up its starters what a transcript is opened as is looked for: a
+// fork of a helper of a conversation is three.
 let STARTERS = 16
 
-/** The persona a transcript wears: its own `session.persona`, else that of
- * the session that started it, since a fork or a helper works as the one that
- * started it does. */
-export let personaOf = async (
-  g: Graph,
-  session: Eid,
-): Promise<Eid | undefined> => {
+/** What a transcript is opened as: the persona it wears and the topic it is
+ * opened on, with the project it is filed under and the directory it works
+ * in where this graph keeps those. */
+export type Opened = {
+  persona?: Eid
+  topic?: Eid
+  project?: Eid
+  cwd?: string
+}
+
+/** What a transcript is opened as: its own `session{persona, topic}`, else
+ * those of the session that started it, since a fork or a helper works as the
+ * one that started it does. */
+export let openedAs = async (g: Graph, session: Eid): Promise<Opened> => {
+  // Only what this graph declares: one made without personas, topics or
+  // projects opens its transcripts as nothing.
+  let fields = [
+    ['session', 'persona'],
+    ['session', 'topic'],
+    ['spawned', 'parent'],
+    ['filed', 'project'],
+    ['home', 'cwd'],
+  ].filter(([comp, prop]) => g.vocab.prop(comp, prop)).map((f) => f.join('.'))
   let at: Eid | undefined = session
   for (let i = 0; at && i < STARTERS; i++) {
     let [row]: Bundle[] = await g.read(
-      `.entity.eid=${at}&.fields=session.persona,spawned.parent`,
+      `.entity.eid=${at}&.fields=${fields}`,
     )
-    let persona = (row?.session as Comp | undefined)?.persona
-    if (persona) return String(persona)
+    let s = row?.session as Comp | undefined
+    if (s?.persona || s?.topic) {
+      let project = (row.filed as Comp | undefined)?.project
+      let cwd = (row.home as Comp | undefined)?.cwd
+      return {
+        ...s.persona ? { persona: String(s.persona) } : {},
+        ...s.topic ? { topic: String(s.topic) } : {},
+        ...project ? { project: String(project) } : {},
+        ...cwd ? { cwd: String(cwd) } : {},
+      }
+    }
     let parent = (row?.spawned as Comp | undefined)?.parent
     at = parent ? String(parent) : undefined
   }
+  return {}
 }
 
-/** The text of the persona a transcript wears ({@link personaOf}), its bases
- * read from `bases` (@yaks/persona `wear`), or undefined where it wears none.
- * Read on each call, so an edit to the persona or a base reaches a transcript
- * on its next ask. */
+/** The persona a transcript wears ({@link openedAs}). */
+export let personaOf = async (
+  g: Graph,
+  session: Eid,
+): Promise<Eid | undefined> => (await openedAs(g, session)).persona
+
+/** How a transcript's persona is said: where its bases (`persona.base`) are
+ * kept when this graph does not keep them, and whether the tree of the topic
+ * it is opened on follows the persona's text. */
+export type Wear = { bases?: Reads; topic?: boolean }
+
+// The persona as its session opened wearing it (@yaks/persona `wearing`): one
+// that is the common persona of the session's work or checkout is heard with
+// each common persona above it, and any other on its base.
+let worn = async (g: Graph, as: Opened, bases?: Reads) => {
+  if (!as.persona) return
+  let common = as.project || as.cwd
+    ? await wearing(g, as.cwd ?? '', { work: as.project })
+    : undefined
+  return common?.persona.entity.eid == as.persona
+    ? common
+    : await wear(g.storage, g.vocab, bases)(as.persona)
+}
+
+/** What a transcript wears, as text: its persona ({@link openedAs}), its
+ * bases read from `how.bases` (@yaks/persona `wear`), and where `how.topic`
+ * asks, the tree of the topic it is opened on after it (@yaks/topic
+ * `compile`). Undefined where it wears no persona and is opened on no topic.
+ * Read on each call, so an edit to the persona, a base or the topic reaches a
+ * transcript on its next ask. */
 export let wornBy = async (
   g: Graph,
   session: Eid,
-  bases?: Reads,
+  how: Wear = {},
 ): Promise<string | undefined> => {
-  let persona = await personaOf(g, session)
-  let worn = persona && await wear(g.storage, g.vocab, bases)(persona)
-  return worn ? voice(g.vocab)(worn) : undefined
+  let as = await openedAs(g, session)
+  let [persona, topic] = await Promise.all([
+    worn(g, as, how.bases),
+    how.topic && as.topic ? gather(g)(as.topic) : undefined,
+  ])
+  return [
+    persona && voice(g.vocab)(persona).trimEnd(),
+    topic && compile(g.vocab)(topic),
+  ].filter(Boolean).join(PART) || undefined
 }

@@ -224,3 +224,33 @@ export let owed = async (
   let w = here && says(here) ? beside(worn, here) : worn
   return { source: human(g.vocab)(w.persona), text: voice(g.vocab)(w) }
 }
+
+// Whether `worn` says everything `said` does.
+let within = (worn: Worn, said: Worn): boolean => {
+  let all = new Set([worn.persona, ...worn.contains].map(eidOf))
+  return [said.persona, ...said.contains].every((b) => all.has(eidOf(b)))
+}
+
+/**
+ * The instruction files an agent still reads when its host says its persona
+ * whole, afresh on every ask ({@link wearing}): each of `files` but one that
+ * is exactly the projection of the persona it wears, or of the checkout's
+ * where the worn one says all of it, which would say the same twice and go
+ * stale beside it.
+ *
+ * ```ts ignore
+ * let kept = await unsaid(g, '/srv/runs/S-1', [agentsMd], { work: 'T-7' })
+ * ```
+ */
+export let unsaid = async (
+  g: Graph,
+  path: string,
+  files: string[],
+  as: As = {},
+): Promise<string[]> => {
+  let { worn, here } = await resolved(g, path, as)
+  if (!worn) return files
+  let said = [worn, ...here && within(worn, here) ? [here] : []]
+    .map(projection(g.vocab))
+  return files.filter((f) => !said.includes(f))
+}

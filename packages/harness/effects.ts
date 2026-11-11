@@ -53,13 +53,14 @@ export let effects = (
   let g = host.graph
   let entries = (session: string, q: string) =>
     g.read(`.entry.session=${session}&${q}&.limit=1&.fields=entity.eid`)
-  // The instructions a transcript opens with, admitted once before it is
-  // answered, when whoever began it wrote none: an HTTP fixer's (its home,
-  // its claimed task or project), or the persona a session wears and the
-  // topic it is opened on, as any door writes them (a browser's chat names
-  // the persona, the topic and its first message, no more), with the tools
-  // that persona offers. They are admitted only before the first turn, so a
-  // session whose persona owes nothing beside its files is not asked again.
+  // What a transcript opens with, admitted once before it is answered, when
+  // whoever began it wrote none: an HTTP fixer's instruction files (its home,
+  // its claimed task or project), and the tools the persona a session wears
+  // offers, as any door writes one (a browser's chat names the persona, the
+  // topic and its first message, no more). The persona's text and the topic's
+  // tree are not admitted: every ask is told them afresh (./local.ts `wear`).
+  // Admitted only before the first turn, so a session whose persona offers
+  // nothing beside its files is not asked again.
   let opening = async (session: string) => {
     let [owner] = await g.get([session])
     let s = owner?.session as Comp | undefined
@@ -85,34 +86,42 @@ export let effects = (
       } else if ((await entries(session, '.ask')).length) return
       // Preparation is restartable. Admit each immutable source only once.
       if ((await entries(session, '.prompt')).length) return
+      if ((await entries(session, '.sending')).length) return
       let work = fixer
         ? (await g.read(`.claim.session=${session}&.task&.limit=1`))[0]
           ?.entity.eid ?? (owner.filed as Comp | undefined)?.project
         : undefined
-      let { files, tools } = await openingFor(
+      let { files, tools, persona: worn } = await openingFor(
         g,
         { ...owner.home as Comp | undefined },
         host.workspaces,
         { persona, work: work as string | undefined, topic },
       )
-      if (files.length) {
-        await g.apply(
-          offering(
-            files.map((file) =>
-              promptEntry(
-                session,
-                undefined,
-                file.body,
-                file.source,
-                'shared',
-                file.revision,
-              )
-            ),
-            tools,
-          ),
-          { trusted: true },
-        )
-      }
+      // The tools ride the last file, else the line that asks for this turn.
+      let [asking] = files.length || !tools ? [] : await g.read(
+        `.entry.session=${session}&.order=-entry.seq&.limit=1&.fields=entity.eid`,
+      )
+      let opened = [
+        ...files.map((file) =>
+          promptEntry(
+            session,
+            undefined,
+            file.body,
+            file.source,
+            'shared',
+            file.revision,
+          )
+        ),
+        ...asking ? [{ entity: { eid: asking.entity.eid } }] : [],
+      ]
+      let writes = [
+        // A persona its work chose is recorded, so each ask is told it.
+        ...worn && !persona
+          ? [{ entity: { eid: session }, session: { persona: worn } }]
+          : [],
+        ...offering(opened, tools),
+      ]
+      if (writes.length) await g.apply(writes, { trusted: true })
     } catch (error) {
       // Configuration cannot improve by repeating the same preparation.
       // Keep a terminal answer in the transcript, also seen after restart.

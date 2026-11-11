@@ -2,11 +2,16 @@ import { test } from '@yaks/testing'
 import type { Comp } from '@yaks/graph'
 import { assertEquals, assertRejects } from '@std/assert'
 import { promptEntry, snapshot } from '@yaks/context'
-import { instructionFiles, instructionsFor } from './instructions.ts'
+import {
+  instructionFiles,
+  instructionsFor,
+  openingFor,
+} from './instructions.ts'
 
 import type { Harness } from './store.ts'
 import { input } from '../openai/responses.ts'
 import { voice, wear } from '@yaks/persona'
+import { projection } from '../persona/owed.ts'
 import { begin } from './agent.ts'
 import { attachedWorkspace, harness } from './testing.ts'
 import { local } from './local.ts'
@@ -70,24 +75,36 @@ test('instruction admission snapshots machine files in stable ancestor order', a
     ])
     let binding = await attachedWorkspace(h, dir + '/orphan')
     let home = { workspace: binding.workspace, cwd: dir + '/orphan' }
+    // A projection gone missing is refused where nothing is worn; the work's
+    // persona is worn instead of read, so no file stands in for it.
     await assertRejects(
       () => instructionsFor(h.g, home, binding.workspaces),
       Error,
       'Instruction projection is missing',
     )
-    let admittedFiles = await instructionsFor(
-      h.g,
-      home,
-      binding.workspaces,
-      { work: task },
+    await assertRejects(
+      () => openingFor(h.g, home, binding.workspaces),
+      Error,
+      'Instruction projection is missing',
     )
-    assertEquals(admittedFiles.length, 1)
+    let opened = await openingFor(h.g, home, binding.workspaces, { work: task })
+    assertEquals(opened, { files: [], persona })
+    // A file that is the worn persona's projection is left out; another stays.
+    await Deno.mkdir(dir + '/kept')
+    await Deno.writeTextFile(
+      dir + '/kept/AGENTS.md',
+      projection(h.g.vocab)((await wear(h.g.storage, h.g.vocab)(persona))!),
+    )
+    let kept = await attachedWorkspace(h, dir + '/kept')
+    let said = { workspace: kept.workspace, cwd: dir + '/kept' }
     assertEquals(
-      admittedFiles[0].body,
-      voice(h.g.vocab)(
-        (await wear(h.g.storage, h.g.vocab)(persona))!,
-      ),
+      (await openingFor(h.g, said, kept.workspaces, { work: task })).files,
+      [],
     )
+    await Deno.writeTextFile(dir + '/kept/AGENTS.md', 'Mind the gap.')
+    let admittedFiles =
+      (await openingFor(h.g, said, kept.workspaces, { work: task })).files
+    assertEquals(admittedFiles.map((f) => f.body), ['Mind the gap.'])
     let session = await begin(h.g, 'Fix this task.', {
       files: admittedFiles,
       home,
@@ -230,17 +247,18 @@ test('a native session carries its chosen graph persona into the model request',
   try {
     let id = await a.start('work', { persona })
     await a.idle(id)
-    let expected = voice(h.g.vocab)(
-      (await wear(h.g.storage, h.g.vocab)(persona))!,
-    )
+    // The machine's file is a snapshot. The persona is no entry: the box
+    // wears it, so each ask is told it as it reads then (./wear_test.ts).
     assertEquals(
       requests[0].items.filter((i) => i.kind == 'instruction').map((i) =>
         i.text
       ),
-      [
-        'From the system:\nRepository guidance.',
-        'From the system:\n' + expected,
-      ],
+      ['From the system:\nRepository guidance.'],
+    )
+    assertEquals(
+      requests[0].instructions,
+      voice(h.g.vocab)((await wear(h.g.storage, h.g.vocab)(persona))!)
+        .trimEnd(),
     )
     let [session] = await h.g.get([id])
     assertEquals((session.session as Comp).persona, persona)

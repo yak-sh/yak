@@ -39,10 +39,10 @@ A session can be **opened on a topic**: this package adds `topic` to
 [@yaks/session](../session)'s `session`, the topic it was opened on, beside the
 persona it wears. Such a session wears one persona, the **oracle** (`ORACLE`, a
 persona at an eid every graph derives alike), unless whoever opened it named
-another, and it starts from the topic's tree, compiled into one markdown
-document after the persona's text. No persona is made or kept per topic: the
-topic tree is the one tree to maintain, and the oracle is what every topic
-session hears.
+another, and each of its asks is told the topic's tree as it reads then,
+compiled into one markdown document after the persona's text (@yaks/harness
+`wear`). No persona is made or kept per topic: the topic tree is the one tree to
+maintain, and the oracle is what every topic session hears.
 
 The tree a topic compiles to (`gather` reads it, `compile` writes it):
 

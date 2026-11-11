@@ -3,6 +3,7 @@ import { Refused } from '@yaks/graph/errors'
 import { equal, ok, test } from '@yaks/testing'
 import { compose } from '@yaks/cli/host'
 import { type Comp, identityEid } from '@yaks/graph'
+import { link } from '@yaks/edge'
 import { effects } from './effects.ts'
 import { at, attachedWorkspace } from './testing.ts'
 
@@ -56,10 +57,18 @@ let http = await (async () => {
         entity: { eid: identityEid('provider', ['openai']) },
         provider: { name: 'openai' },
       },
+      { entity: { eid: 'venture' }, project: {} },
+      {
+        entity: { eid: 'common' },
+        persona: { home: 'venture' },
+        doc: { title: 'Common', body: 'Fix the cause.' },
+      },
+      link('venture', 'contains', 'common'),
       {
         entity: { eid: 'fixer' },
         session: {},
         fixer: { bug: '55555555-5555-4555-8555-555555555555' },
+        filed: { project: 'venture' },
       },
       {
         entity: { eid: 'input' },
@@ -99,6 +108,8 @@ test('HTTP fixer routing admits a native home and immutable instructions once', 
   equal(http.homes, 1)
   equal(http.prompts.length, 1)
   equal((http.prompts[0].content as Comp).body, 'Preserve the task claim.\n')
+  // Its project's persona is worn, not copied: each ask is told it afresh.
+  equal((http.session.session as Comp).persona, 'common')
   equal(http.session.process, undefined)
 })
 

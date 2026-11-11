@@ -14,7 +14,7 @@ import { vaultOf } from '../packages/cli/vault.ts'
 import { signedIn } from '@yaks/openai/provider'
 import { signins } from '@yaks/connections'
 import { instructionFiles } from '../packages/harness/instructions.ts'
-import { owing } from '../packages/harness/session_machines.ts'
+import { owed } from '@yaks/persona'
 import { executionWorkspace } from '@yaks/machine/execution'
 import { localConnector } from '@yaks/machine/connectors'
 import { responses } from '@yaks/openai'
@@ -331,7 +331,7 @@ export async function run(packet: Packet, options: {
     : plugins
   if (options.persona && !packet.snapshot && !packet.files) {
     throw new Error(
-      'Explicit persona needs private packet.snapshot rows for the existing owing() resolver, or packet.files frozen snapshots',
+      'Explicit persona needs private packet.snapshot rows for @yaks/persona owed, or packet.files frozen snapshots',
     )
   }
   let source = packet.snapshot ?? (await Promise.all(
@@ -384,14 +384,13 @@ export async function run(packet: Packet, options: {
         ? await instructionFiles(explicit, options.cwd)
         : [])
     if (options.persona && !packet.files) {
-      files.push(
-        ...await owing(
-          setup.graph,
-          { cwd: options.cwd },
-          files,
-          { persona: options.persona },
-        ),
+      let owes = await owed(
+        setup.graph,
+        options.cwd,
+        files.map((f) => f.body),
+        { persona: options.persona },
       )
+      if (owes) files.push(await snapshot(owes.text, owes.source))
     }
   } finally {
     await setup.close()

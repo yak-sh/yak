@@ -172,23 +172,25 @@ Ctrl+O selects a new session, PgUp / PgDn scroll, and Ctrl+C quits. Shift+Enter
 needs a terminal supporting kitty keyboard sequences (Alt+Enter also inserts a
 newline). On a new session, NORMAL `P` chooses a persona from the graph for that
 session. `--persona` accepts a persona id or registered name; the session keeps
-that choice and snapshots its instructions before its first message.
+that choice, and each of its asks is told the persona as it reads then.
 
 `--topic` opens the session on a topic ([@yaks/topic](../topic)): it keeps the
 topic as `session.topic`, wears the oracle persona (`ORACLE`) unless `--persona`
-names another, and snapshots the topic tree compiled from it (what
-`yak topic read` prints) after the persona's instructions. A question the topic
+names another, and each of its asks is told the topic tree compiled from it
+(what `yak topic read` prints) after the persona's text. A question the topic
 already answers is answered with no tool call.
 
 What a session is offered is its work's to say: a persona that contains
 registered tools, itself or through a persona it includes (@yaks/persona
 `offer`), offers exactly those tools to every session wearing it, chosen or
 common, from whatever door opened it. The opening records them as the
-`sending.tools` of its last instruction entry, so each turn is offered those and
-nothing else, and no skill catalogue unless `skill_read` is among them. A
-persona containing no tool leaves the runner's own set. A tool is the
-`tool{name}` row its host registers (`.tool.name=topic_find`), and a persona
-offers it by a `contains` edge to that row.
+`sending.tools` of its last entry (an instruction file, else the first message,
+which the runner stamps before its first turn where a session was begun with
+none), so each turn is offered those and nothing else, and no skill catalogue
+unless `skill_read` is among them. A persona containing no tool leaves the
+runner's own set. A tool is the `tool{name}` row its host registers
+(`.tool.name=topic_find`), and a persona offers it by a `contains` edge to that
+row.
 
 The harness names no provider. A provider is a plugin that exports `./provider`
 (@yaks/model `ProviderFacet`): `@yaks/openai`, `@yaks/openrouter`,
@@ -608,45 +610,54 @@ instructions; it is an explicit wake-producing operation, not a passive notice.
 OpenAI receives ordered developer messages, including instructions added during
 the conversation.
 
-Root sessions record the persona they wear through `@yaks/persona` and
-`@yaks/context`, along with any prompt snapshots their caller supplies. A
-session any other door writes as data, wearing a persona and holding no
-instructions (browse's chat on a persona writes `session{operator, persona}`,
-`native{}` and its first entry; on a topic,
-`session{operator, persona, topic}`), has that persona's instructions, and the
-topic's tree after them, admitted by the runner before its first turn, on no
-machine unless its home names a workspace (./effects.ts). Starting one does not
-read the CLI host's instruction files. Reading a machine file through a tool
-does not make it instructions: the caller must explicitly admit it through the
-prompt channel. Existing `opts.instructions` and `sending.instructions` remain
-the base instruction channel; delegated `instructions` append local guidance
-rather than replacing that base.
+Root sessions record the persona they wear through `@yaks/persona`, along with
+any prompt snapshots their caller supplies: the instruction files of the machine
+their home names. The persona's text and the topic's tree are never among those
+snapshots, since every ask is told both afresh (`wear`, below), and a file that
+is exactly the worn persona's projection is left out with them (@yaks/persona
+`unsaid`). A session any other door writes as data, wearing a persona and
+holding no instructions (browse's chat on a persona writes
+`session{operator, persona}`, `native{}` and its first entry; on a topic,
+`session{operator, persona, topic}`), has the tools that persona offers admitted
+by the runner before its first turn, on no machine unless its home names a
+workspace (./effects.ts). Starting one does not read the CLI host's instruction
+files. Reading a machine file through a tool does not make it instructions: the
+caller must explicitly admit it through the prompt channel. Existing
+`opts.instructions` and `sending.instructions` remain the base instruction
+channel; delegated `instructions` append local guidance rather than replacing
+that base.
 
 A host whose transcripts run for weeks lends `wear` instead of opening them with
-a snapshot: every ask's system prompt is the persona the transcript wears
+a snapshot, as the box does (./local.ts `here`) and the yaks.app Operator does:
+every ask's system prompt is the persona the transcript wears
 (`session.persona`, or that of the session that started it, so a fork or a
 helper wears its parent's), said by @yaks/persona `voice`, and then whatever
-`opts.instructions` adds. Both are read again for an ask once the prefix the
-transcript's last ask cached has expired at the provider, so an edit to the
-persona, or to the base it is worn on (`persona.base`), reaches the transcript
-on its first turn after a pause, never rewriting a prefix still in the cache
-(@yaks/session `cachedInstructions`). `sending.instructions` records the text
-each ask was sent. `wear.bases` is where those bases are kept when this graph
-does not keep them; the yaks.app Operator wears each space's persona on the
-platform's, which the directory keeps.
+`opts.instructions` adds. One that is the common persona of the session's
+project or checkout is said with each common persona above it, as @yaks/persona
+`wearing` resolves it. `wear.topic` says the tree of the topic the transcript is
+opened on (`session.topic`, @yaks/topic `compile`) after the persona; the box
+sets it, and the Operator compiles its own. A transcript that wears nothing
+keeps the instructions its first line chose (a builder's contract). All of it is
+read again for an ask once the prefix the transcript's last ask cached has
+expired at the provider, so an edit to the persona, or to the base it is worn on
+(`persona.base`), reaches the transcript on its first turn after a pause, never
+rewriting a prefix still in the cache (@yaks/session `cachedInstructions`).
+`sending.instructions` records the text each ask was sent. `wear.bases` is where
+those bases are kept when this graph does not keep them; the yaks.app Operator
+wears each space's persona on the platform's, which the directory keeps.
 
-Fresh children copy shared prompt snapshots from their parent. Forks copy no
-files: their exact inherited prefix is followed by a local fork-execution note,
-optional child guidance, and the assignment. Fresh children intentionally
-inherit the parent's file snapshots even when assigned a different home; loading
-instruction files from the new directory requires an explicit action. A
-renamed/deleted source doesn't alter history. There are no UI controls for
-choosing instruction files or prompt supersession. Prompt entries have a
-query-matched transcript renderer that shows one clipped line with sequence,
-scope, and source name. Instruction text remains stored and is sent to the
-provider unchanged; compact display does not remove it from context. Fork notes
-are guidance, not a prohibition on useful delegation. Provider cache hits are
-not guaranteed.
+Fresh children copy shared prompt snapshots from their parent, and are told the
+persona and topic of the session that started them. Forks copy no files: their
+exact inherited prefix is followed by a local fork-execution note, optional
+child guidance, and the assignment. Fresh children intentionally inherit the
+parent's file snapshots even when assigned a different home; loading instruction
+files from the new directory requires an explicit action. A renamed/deleted
+source doesn't alter history. There are no UI controls for choosing instruction
+files or prompt supersession. Prompt entries have a query-matched transcript
+renderer that shows one clipped line with sequence, scope, and source name.
+Instruction text remains stored and is sent to the provider unchanged; compact
+display does not remove it from context. Fork notes are guidance, not a
+prohibition on useful delegation. Provider cache hits are not guaranteed.
 
 #### Prompt history and cache limits
 

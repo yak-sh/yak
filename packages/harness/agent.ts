@@ -73,8 +73,8 @@ import {
 } from './model_selection.ts'
 import { type EntrySource, entrySource, type SourceRequest } from './detail.ts'
 import { inheritedInstructions } from './legacy_instructions.ts'
-import { wornBy } from './worn.ts'
-import { PART, type Reads } from '@yaks/persona'
+import { type Wear, wornBy } from './worn.ts'
+import { PART } from '@yaks/persona'
 import { type RuntimeAction, runtimeAction, runtimeRows } from './runtime.ts'
 
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
@@ -207,9 +207,10 @@ export type Opts<H extends Host = Host> = ChildLimits & {
    * the system prompt and `instructions` follows it, both read again for
    * every ask, so an edit to the persona reaches a transcript on its next
    * turn. `bases` is where a persona's base (`persona.base`) is kept when this
-   * graph does not keep it. A host that opens a transcript with its persona's
-   * text (`opening`) leaves this out. */
-  wear?: { bases?: Reads }
+   * graph does not keep it, and `topic` says the tree of the topic the
+   * transcript is opened on (`session.topic`) after the persona. A transcript
+   * that wears nothing keeps the instructions it was given. */
+  wear?: Wear
   /** Maximum tool-result UTF-8 bytes before model-facing handle projection. */
   outputLimit?: number
   /** A multi-user host supplies its scoped result storage at the same model boundary. */
@@ -353,11 +354,24 @@ export let begin = async (
       ? (await lineage(g, o.work)).find((b) => b.project)?.entity.eid
       : undefined)
   let session = o.eid ?? crypto.randomUUID() as Eid
+  let files = (o.files ?? []).map((f, i) => ({
+    ...promptEntry(session, i + 1, f.body, f.source, 'shared', f.revision),
+    $actor: through(session),
+  }))
+  // The tools ride the opening's last entry: the message, where one is given.
   let context = offering(
-    (o.files ?? []).map((f, i) => ({
-      ...promptEntry(session, i + 1, f.body, f.source, 'shared', f.revision),
-      $actor: through(session),
-    })),
+    [
+      ...files,
+      ...prompt
+        ? [{
+          entity: { eid: crypto.randomUUID() as Eid },
+          [ENTRY]: { session, seq: files.length + 1 },
+          [CONTENT]: { body: prompt },
+          using: o.using,
+          $actor: through(session, o.by),
+        }]
+        : [],
+    ],
     o.tools,
   )
   await g.apply([
@@ -378,15 +392,6 @@ export let begin = async (
       $actor: through(session, o.by),
     },
     ...context,
-    ...prompt
-      ? [{
-        entity: { eid: crypto.randomUUID() as Eid },
-        [ENTRY]: { session, seq: context.length + 1 },
-        [CONTENT]: { body: prompt },
-        using: o.using,
-        $actor: through(session, o.by),
-      }]
-      : [],
   ])
   return session
 }
@@ -561,13 +566,17 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       // What was sent before already says the persona, so only what the host
       // adds follows the persona's text as it reads now, a part of its own.
       // The two are read at once.
+      let reads = typeof opts.instructions == 'function'
+        ? opts.instructions
+        : undefined
       let [worn, added] = await Promise.all([
-        wornBy(h.g, session, opts.wear.bases),
-        typeof opts.instructions == 'function'
-          ? opts.instructions(session)
-          : opts.instructions,
+        wornBy(h.g, session, opts.wear),
+        reads ? reads(session) : opts.instructions as string | undefined,
       ])
-      return [worn?.trimEnd(), added].filter(Boolean).join(PART) || undefined
+      // A transcript wearing nothing is told what it was told before: the
+      // instructions its first line chose (a builder's contract) stand.
+      if (!worn && !reads) return inheritedInstructions(inherited, added)
+      return [worn, added].filter(Boolean).join(PART) || undefined
     },
     inputText: async (transcript) =>
       inputText(transcript, await senders(h.g, transcript), opts.inputSource),

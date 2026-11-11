@@ -5,11 +5,9 @@ import { targetFor, type Workspaces } from '@yaks/machine/targets'
 import type { Comp, Eid, Graph } from '@yaks/graph'
 import { type Snapshot, snapshot } from '@yaks/context'
 import type { Machine } from '@yaks/machine'
-import { owing } from './session_machines.ts'
 import { personaOf } from './worn.ts'
-import { type As, offer, wearing } from '@yaks/persona'
-import { compile, gather } from '@yaks/topic'
-import { human } from '@yaks/id'
+import { type As, offer, unsaid, wearing } from '@yaks/persona'
+import { gather } from '@yaks/topic'
 
 /** Each directory from the root down to `dir`, an absolute path. */
 let ancestors = (dir: string): string[] =>
@@ -57,62 +55,51 @@ let unavailable = (paths: string[]) =>
       '. Supply --persona or --work with the graph task or project.',
   )
 
+// The instruction files of the machine a home names, and the projections
+// missing among them. A home naming no directory reads none.
 let admitted = async (
-  g: Graph,
-  machine: Machine | undefined,
+  machine: Machine,
   home: Comp,
-  context: As,
-): Promise<Snapshot[]> => {
-  let missing: string[] = []
-  let files = machine && home.cwd
+  missing: string[],
+): Promise<Snapshot[]> =>
+  home.cwd
     ? await instructionFiles(machine, String(home.cwd), undefined, missing)
     : []
-  let graph = await owing(g, home, files, context)
-  if (
-    missing.length && !graph.length &&
-    !(await owing(g, home, [], context)).length
-  ) throw unavailable(missing)
-  return [...files, ...graph]
-}
 
-/** Opening a graph-only session does not acquire any machine. An explicit
- * ready workspace may be connected because instruction admission reads files. */
+/** The instruction files a session opening at `home` reads from its machine.
+ * Opening a graph-only session does not acquire any machine. An explicit
+ * ready workspace may be connected because instruction admission reads files.
+ * A projection gone missing is kept in `missing` where given, and refused
+ * where not. */
 export let instructionsFor = async (
   g: Graph,
   home: Comp,
   workspaces?: Workspaces,
-  context: As = {},
+  missing?: string[],
 ): Promise<Snapshot[]> => {
-  if (home.workspace) {
-    let [row] = await g.get([String(home.workspace)])
-    if (row?.pending) return admitted(g, undefined, home, context)
-    if (!workspaces) {
-      throw new Refused('This host lends no workspace execution binding')
-    }
-    let target = await targetFor(g, undefined, home)
-    home.cwd ??= target.cwd
-    return admitted(
-      g,
-      await workspaces.connect(target.workspace),
-      home,
-      context,
-    )
+  if (!home.workspace) return []
+  let [row] = await g.get([String(home.workspace)])
+  if (row?.pending) return []
+  if (!workspaces) {
+    throw new Refused('This host lends no workspace execution binding')
   }
-  return admitted(g, undefined, home, context)
-}
-
-/** The topic a session is opened on, as its context: the topic tree compiled
- * from it (@yaks/topic `gather`, `compile`), one snapshot named by the
- * topic's id. A topic that is not there is refused, as a persona is. */
-export let topical = async (g: Graph, topic: string): Promise<Snapshot> => {
-  let got = await gather(g)(topic)
-  if (!got) throw new Refused(`no topic called ${topic}`)
-  return await snapshot(compile(g.vocab)(got), human(g.vocab)(got.topic))
+  let target = await targetFor(g, undefined, home)
+  home.cwd ??= target.cwd
+  let lost: string[] = []
+  let files = await admitted(
+    await workspaces.connect(target.workspace),
+    home,
+    lost,
+  )
+  if (lost.length && !missing) throw unavailable(lost)
+  missing?.push(...lost)
+  return files
 }
 
 /** Who a session is and what it is opened on: its persona or work (@yaks/persona
- * `As`), the topic whose tree follows the persona's text, and the session
- * that started it, whose persona it wears where nothing else gives one. */
+ * `As`), the topic whose tree follows the persona's text on every ask, and the
+ * session that started it, whose persona it wears where nothing else gives
+ * one. */
 export type On = As & { topic?: string; starter?: Eid }
 
 // Who a session wears where nothing chose it a persona and neither its work
@@ -125,11 +112,17 @@ let starting = async (g: Graph, home: Comp, context: On): Promise<On> => {
   return persona ? { ...context, persona } : context
 }
 
-/** What a session opening here begins with: its instruction files, the topic
- * it is opened on after them, the persona it wears (@yaks/persona `wearing`,
- * else its starter's) and the names of the tools that persona offers
- * (@yaks/persona `offer`), which are then all a turn is offered. No `tools`
- * where that persona offers none, which leaves the runner's own set. */
+/** What a session opening here begins with: the instruction files of its
+ * machine, the persona it wears (@yaks/persona `wearing`, else its starter's)
+ * and the names of the tools that persona offers (@yaks/persona `offer`),
+ * which are then all a turn is offered. No `tools` where that persona offers
+ * none, which leaves the runner's own set.
+ *
+ * The persona's text and the topic's tree are not among the files: the runner
+ * says both afresh on every ask (./worn.ts `wornBy`), so a file that only
+ * projects the persona is left out too (@yaks/persona `unsaid`). A topic that
+ * is not there is refused, as a persona is, and so is a projection gone
+ * missing where nothing is worn. */
 export let openingFor = async (
   g: Graph,
   home: Comp,
@@ -137,9 +130,18 @@ export let openingFor = async (
   context: On = {},
 ): Promise<{ files: Snapshot[]; persona?: Eid; tools?: string[] }> => {
   let as = await starting(g, home, context)
-  let files = await instructionsFor(g, home, workspaces, as)
-  if (as.topic) files.push(await topical(g, as.topic))
-  let worn = await wearing(g, String(home.cwd ?? ''), as)
+  if (as.topic && !await gather(g)(as.topic)) {
+    throw new Refused(`no topic called ${as.topic}`)
+  }
+  let missing: string[] = []
+  let files = await instructionsFor(g, home, workspaces, missing)
+  let cwd = String(home.cwd ?? '')
+  let worn = await wearing(g, cwd, as)
+  if (missing.length && !worn) throw unavailable(missing)
+  if (worn && files.length) {
+    let kept = await unsaid(g, cwd, files.map((f) => f.body), as)
+    files = files.filter((f) => kept.includes(f.body))
+  }
   let tools = offer(worn)
   return {
     files,

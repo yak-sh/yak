@@ -44,4 +44,12 @@ export {
   TOOL,
   wear,
 } from './worn.ts'
-export { type As, carried, common, type Owed, owed, wearing } from './owed.ts'
+export {
+  type As,
+  carried,
+  common,
+  type Owed,
+  owed,
+  unsaid,
+  wearing,
+} from './owed.ts'

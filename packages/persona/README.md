@@ -247,6 +247,12 @@ persona is refused); `{ work }`, the task or project the agent works on, makes
 it the common persona of the work's lineage, less what a file there already says
 of the checkout's.
 
+A harness that says the persona whole on every ask, instead of once beside the
+files, asks the reverse: `unsaid(graph, path, files, as)` is each of `files` but
+one that is exactly the projection of the persona worn, or of the checkout's
+where the worn one says all of it, which would say the same twice and go stale
+beside it.
+
 `carried(graph, path)` is that common persona alone, as `wear` returns it: the
 persona a session started anywhere in the checkout wears (@yaks/session's
 `session_context`).
@@ -308,17 +314,17 @@ is drawn as its source, as written.
 
 ## Exports
 
-| subpath          | what it provides                                                                                        |
-| ---------------- | ------------------------------------------------------------------------------------------------------- |
-| `.`              | `wear`, `voice`, `owed`, `wearing`, `offer`, `common`, the component names, and the vocabulary document |
-| `./vocab`        | the component declarations alone                                                                        |
-| `./part`         | `PART`, what stands between the parts of what an agent is told, importing nothing else                  |
-| `./tools`        | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes                               |
-| `./effects`      | `effects(host, {files, skills})` — independently enables persona files and skills                       |
-| `./skills`       | Graph skill reads and read-only checkout views                                                          |
-| `./skill-text`   | Portable skill parsing, frontmatter and rendering                                                       |
-| `./skill-mirror` | `syncSkills`, `skillRoots` — bidirectional landed repository mirror                                     |
-| `./views`        | `inspectViews()`, `tabs`, `destinations`, `icons` — the desk, as the browsing app draws it              |
+| subpath          | what it provides                                                                                                  |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `.`              | `wear`, `voice`, `owed`, `unsaid`, `wearing`, `offer`, `common`, the component names, and the vocabulary document |
+| `./vocab`        | the component declarations alone                                                                                  |
+| `./part`         | `PART`, what stands between the parts of what an agent is told, importing nothing else                            |
+| `./tools`        | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes                                         |
+| `./effects`      | `effects(host, {files, skills})` — independently enables persona files and skills                                 |
+| `./skills`       | Graph skill reads and read-only checkout views                                                                    |
+| `./skill-text`   | Portable skill parsing, frontmatter and rendering                                                                 |
+| `./skill-mirror` | `syncSkills`, `skillRoots` — bidirectional landed repository mirror                                               |
+| `./views`        | `inspectViews()`, `tabs`, `destinations`, `icons` — the desk, as the browsing app draws it                        |
 
 The two edge relations are borrowed rather than invented here: `contains` is
 [@yaks/task](../task)'s and `reads` is [@yaks/kernel](../kernel)'s. A relation

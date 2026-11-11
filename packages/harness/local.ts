@@ -117,7 +117,8 @@ export type Here = {
 /** What this machine lends an agent over `h`: the models of the providers its
  * config names, over its credentials and sign-ins, the workspace and sandbox
  * bindings, the MCP servers, the pictures, the instruction files where a
- * session opens, and where a defect is written. */
+ * session opens, the persona and topic each of its asks is told afresh, and
+ * where a defect is written. */
 export let here = async (
   h: Harness,
   opts: Omit<Opts, 'h'> = {},
@@ -170,6 +171,10 @@ export let here = async (
     named: () =>
       named ??= graphTools(h.g, { tools: h.hostTools?.(), reply: h.reply }),
     streaming: streamingEnabled(opts, env),
+    // A session here may run for weeks, so no ask is told a snapshot from the
+    // day it opened: each says the persona it wears and the topic it is
+    // opened on as they read now, once its cached prefix has expired.
+    wear: { topic: true },
     opening: async (persona) => {
       let home = opts.workspace
         ? { workspace: opts.workspace, ...opts.cwd ? { cwd: opts.cwd } : {} }
