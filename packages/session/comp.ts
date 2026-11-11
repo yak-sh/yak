@@ -23,7 +23,8 @@
 //     + sending{input, instructions, window, tools}
 //                            set or switch on an input; served on an ask
 //     + questions{asked}     typed questions the next ask carries
-//     + ask{to, through}     the model was asked, from the prefix at `through`
+//     + ask{to, served, through} the model was asked, from the prefix at
+//                            `through`; `served` answered, where it differs
 //     + answer{question, …}  beside output: the model's answer to one of them
 //     + call{to, id, args, source}
 //                            a tool the model asked for, from that ask

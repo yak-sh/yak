@@ -199,7 +199,12 @@ export let tally = (day: string, rows: Bundle[], known: Known): Spend => {
   let out = empty(day)
   for (let b of rows) {
     let u = comp(b, 'usage') as Usage
-    let model = String(comp(b, 'ask').to ?? comp(b, 'using').model ?? '')
+    // Weighed at the price of the model that answered, else the one asked;
+    // with neither priced, the one that answered is the one to price.
+    let ask = comp(b, 'ask')
+    let models = [ask.served, ask.to ?? comp(b, 'using').model]
+      .filter((m) => m != null).map(String)
+    let model = models.find((m) => known.prices.has(m)) ?? models[0] ?? ''
     let price = known.prices.get(model)
     let hour = hourly(u)
     let weigh = (p: Paid) => price ? dollars(price, p, hour) : 0

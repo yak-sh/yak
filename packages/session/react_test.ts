@@ -200,6 +200,22 @@ test('an input is asked, a tool call is run, the transcript settles', async () =
   }])
 })
 
+test('an ask answered by another model than it asked names the one that answered', async () => {
+  let answered = async (name: string) => {
+    let g = world()
+    let { model } = scripted([{ ...says('r1', 'done'), model: name }])
+    await rest(g, ids.s, { model, tools: [echo], mint })
+    let { ask } = (await transcript(g, ids.s)).find((b) => b.ask)!
+    let served = (ask as Comp).served as string | undefined
+    return [served, served && (await g.get([served]))[0]?.model]
+  }
+  let release = identityEid('model', ['fake-1-20261111'])
+  assertEquals(await answered('fake-1-20261111'), [release, {
+    name: 'fake-1-20261111',
+  }])
+  assertEquals(await answered('fake-1'), [undefined, undefined])
+})
+
 test('a turn whose using names tools is offered those alone, the runner’s by name too', async () => {
   let g = world()
   let shout = {

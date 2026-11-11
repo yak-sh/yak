@@ -68,20 +68,20 @@ A session entity has a `session` component. Each transcript entry is a separate
 entity with `entry{session, seq}`. A **bundle** is one entity's components as a
 JSON object. The components beside `entry` determine its type:
 
-| Components                            | Meaning                            |
-| ------------------------------------- | ---------------------------------- |
-| `content{body}` without `output`      | input from a person or system      |
-| `ask{to, through}`                    | a request to a model               |
-| `content{body}` with `output{source}` | model output                       |
-| `call{to, name, id, args, source}`    | a tool call requested by a model   |
-| `result{call}` with `content`         | a tool result                      |
-| `using{provider, model, effort, …}`   | model selection on an input or ask |
-| `usage` and `cost` beside an ask      | what the request used and cost     |
-| `questions{asked}`                    | typed questions for the next ask   |
-| `answer{question, …}` with `output`   | a model's answer to one question   |
-| `stop`                                | no further transcript work         |
-| `refusal{code}`                       | an expected failure                |
-| `exception`                           | an unexpected failure              |
+| Components                            | Meaning                                    |
+| ------------------------------------- | ------------------------------------------ |
+| `content{body}` without `output`      | input from a person or system              |
+| `ask{to, served, through}`            | a request to a model, and what answered it |
+| `content{body}` with `output{source}` | model output                               |
+| `call{to, name, id, args, source}`    | a tool call requested by a model           |
+| `result{call}` with `content`         | a tool result                              |
+| `using{provider, model, effort, …}`   | model selection on an input or ask         |
+| `usage` and `cost` beside an ask      | what the request used and cost             |
+| `questions{asked}`                    | typed questions for the next ask           |
+| `answer{question, …}` with `output`   | a model's answer to one question           |
+| `stop`                                | no further transcript work                 |
+| `refusal{code}`                       | an expected failure                        |
+| `exception`                           | an unexpected failure                      |
 
 `entry.seq` is assigned transactionally when omitted. `appendEntry()` is the
 usual way to append text.

@@ -13,8 +13,9 @@
  *   person or a system; with an `output{source}` beside it (the ask it answers)
  *   it is what a model returned. A `result`, `refusal` or `exception` carries its
  *   prose the same way.
- * - `ask{to, through}` — the runner asked a model, from the prefix ending at
- *   `through`. What the provider keeps about it is the provider's own component
+ * - `ask{to, served, through}` — the runner asked a model, from the prefix
+ *   ending at `through`; `served` is the model that answered, where the reply
+ *   names another (an alias answered by a release). What the provider keeps about it is the provider's own component
  *   on the same entry (`@yaks/openai` declares `openai{response_id}`).
  * - `call{to, id, args, source}` — a tool the model asked for, from that ask;
  *   `result{call}` is what the tool returned.

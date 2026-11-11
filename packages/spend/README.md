@@ -42,9 +42,11 @@ A day's tally is a `spend` row on an eid derived from its `day`, holding its
   session asked for; a request paid by the token (OpenRouter, OpenAI with an API
   key) bills none (`PLANS`, `planOf` in ./day.ts).
 
-Dollars are what the provider reported, else the tokens at the model row's
-`price`. The totals are measured; the split across parts, and across a session's
-tasks, is estimated.
+Dollars are what the provider reported, else the tokens at the `price` of the
+model that answered (`ask.served`: a Claude Code alias such as `fable` is
+answered by a release such as `claude-fable-5-2`), else of the model asked. The
+totals are measured; the split across parts, and across a session's tasks, is
+estimated.
 
 ```ts
 import { merged, tally } from '@yaks/spend'

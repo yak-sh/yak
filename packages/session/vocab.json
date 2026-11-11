@@ -60,6 +60,12 @@
           "death": "keep",
           "description": "the model entity asked"
         },
+        "served": {
+          "type": "string",
+          "ref": "model",
+          "death": "keep",
+          "description": "the model entity that answered, where its reply names one other than `to`: a Claude Code alias such as `fable` is answered by a release such as `claude-fable-5-2`, and the release is what has a price"
+        },
         "through": {
           "type": "string",
           "ref": "entry",

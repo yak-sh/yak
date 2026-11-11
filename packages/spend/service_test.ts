@@ -70,3 +70,21 @@ test('a model row with no price takes its list price when a tally meets it', asy
   equal(await priced('claude-opus-4-8[1m]'), [listPrice('claude-opus-4-8'), 0])
   equal(await priced('no-such-model'), [undefined, 1])
 })
+
+test('a request to an alias is weighed at the price of the release that answered it', async () => {
+  let { graph } = await box()
+  let [alias, release] = await graph.apply([
+    { entity: { eid: '$a' }, model: { name: 'fable' } },
+    { entity: { eid: '$r' }, model: { name: 'claude-fable-5-2' } },
+  ])
+  await graph.apply([{
+    entity: { eid: 'q' },
+    entry: { session: 's' },
+    ask: { to: alias.entity.eid, served: release.entity.eid },
+    usage: { input_tokens: 1e6, output_tokens: 0 },
+  }])
+  let unpriced = await pass(graph)
+  let day = new Date().toISOString().slice(0, 10)
+  let spend = (await graph.get([dayEid(day)]))[0].spend as { dollars: number }
+  equal([unpriced, spend.dollars], [[], listPrice('claude-fable-5-2')!.input])
+})

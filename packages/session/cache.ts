@@ -133,7 +133,8 @@ export let cacheOf = (
     if (from && instant! < from || until && instant! >= until) continue
     let using = comp(b, 'using')
     let provider = str(using.provider)
-    let model = str(comp(b, 'ask').to) || str(using.model)
+    let model = str(comp(b, 'ask').served) || str(comp(b, 'ask').to) ||
+      str(using.model)
     let input = count(comp(b, 'usage').input_tokens)
     let cached = count(comp(b, 'usage').cached_tokens)
     requests.push({
@@ -221,6 +222,7 @@ export let cacheRead = async (
       str(comp(b, 'using').provider),
       str(comp(b, 'using').model),
       str(comp(b, 'ask').to),
+      str(comp(b, 'ask').served),
     ]),
     ['provider', 'model'],
   )

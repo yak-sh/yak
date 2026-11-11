@@ -872,8 +872,18 @@ export let react = async (
     requestedAt?: number,
     saved?: ModelResult,
   ): Promise<Step> => {
+    // The model that answered, where the reply names another than the one
+    // asked: an alias is answered by a release, and the release is what has a
+    // price. Its row is named here, and @yaks/model `requesting` prices it.
+    let answered = reply.model ? identityEid(MODEL, [reply.model]) : undefined
+    let served = answered && answered != comp(ask, ASK)?.to
+      ? [{ entity: { eid: answered }, [MODEL]: { name: reply.model } }]
+      : []
     const finalAsk: Bundle = {
       ...ask,
+      ...served.length
+        ? { [ASK]: { ...comp(ask, ASK), served: answered } }
+        : {},
       ...(saved ? saved.mark : providerModel.mark?.(
         reply,
         requestedAt == null ? undefined : { requestedAt },
@@ -903,6 +913,7 @@ export let react = async (
     // are kept.
     let added: Bundle[] = [
       finalAsk,
+      ...served,
       ...await carried(g, session, sent),
       ...saved ? [] : await readings(g, reply.limits),
     ]

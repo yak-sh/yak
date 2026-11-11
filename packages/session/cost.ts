@@ -25,11 +25,13 @@ import type { DerivedProp } from '@yaks/sql'
 import { col, eq, fn, join, select, sub, table } from '@yaks/sql/core'
 import { ASK, USING } from './native.ts'
 
-// The model an entry asked (`ask.to`), or the one its `using` names.
-let served = (b: Bundle | undefined): string | undefined => {
-  let to = (b?.[ASK] as Comp | undefined)?.to ??
-    (b?.[USING] as Comp | undefined)?.model
-  return to == null ? undefined : String(to)
+// The models whose price weighs an entry, first that has one: the model that
+// answered (`ask.served`), then the one it asked (`ask.to`) or its `using`
+// names.
+let served = (b: Bundle | undefined): string[] => {
+  let ask = b?.[ASK] as Comp | undefined
+  let to = ask?.to ?? (b?.[USING] as Comp | undefined)?.model
+  return [ask?.served, to].filter((m) => m != null).map(String)
 }
 
 /**
@@ -48,8 +50,12 @@ export let weighing: Hook = (bundles, tx) => {
     let stored = new Map(held.map((b) => [b.entity.eid, b]))
     let was = (b: Bundle) => stored.get(b.entity.eid)
     let fresh = owed.filter((b) => !was(b)?.[COST])
-    let model = (b: Bundle) => served(b) ?? served(was(b))
-    let models = [...new Set(fresh.map(model).filter((m) => m != null))]
+    let model = (b: Bundle) => {
+      let w = was(b)
+      let over = (c: string) => ({ ...w?.[c] as Comp, ...b[c] as Comp })
+      return served({ ...b, [ASK]: over(ASK), [USING]: over(USING) })
+    }
+    let models = [...new Set(fresh.flatMap(model))]
     return after(models.length ? tx.get(models, [PRICE]) : [], (rows) => {
       let price = new Map(
         [...rows, ...bundles].filter((r) => r[PRICE]).map((r) => [
@@ -58,7 +64,8 @@ export let weighing: Hook = (bundles, tx) => {
         ]),
       )
       return bundles.map((b) => {
-        let at = fresh.includes(b) && price.get(model(b) ?? '')
+        let at = fresh.includes(b) &&
+          model(b).map((m) => price.get(m)).find(Boolean)
         if (!at) return b
         let usage = { ...was(b)?.[USAGE] as Usage, ...b[USAGE] as Usage }
         let dollars = weigh(at as Price, usage)
