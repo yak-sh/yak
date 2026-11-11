@@ -119,7 +119,7 @@ export let siteOf = (mail: string | null): string | undefined => {
 }
 
 export let formPost =
-  (at: Pick<Stored, 'app' | 'graph'>): Handler => async (event) => {
+  (at: Pick<Stored, 'app' | 'graph' | 'mail'>): Handler => async (event) => {
     let [row] = await at.graph.get([event.entity.eid])
     if (!at.app || !row?.registration || !row.completed) return
     let registration = comp(row, 'registration'),
