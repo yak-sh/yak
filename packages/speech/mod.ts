@@ -6,10 +6,18 @@
 
 export { DEEPGRAM } from './deepgram.ts'
 export { OPENAI } from './openai.ts'
-export { base64, mulawed, mulawOf, sounds, trimmed, unbase64 } from './audio.ts'
+export {
+  base64,
+  mulawed,
+  mulawOf,
+  muted,
+  sounds,
+  trimmed,
+  unbase64,
+} from './audio.ts'
 export { query } from './query.ts'
 import { message } from '@yaks/model'
-import { sounds, trimmed } from './audio.ts'
+import { muted, sounds, trimmed } from './audio.ts'
 
 /** How audio is encoded: an MP3, or raw samples at a rate (`mulaw` is the
  * telephone's 8 kHz μ-law; `linear16` is 16-bit PCM). */
@@ -62,6 +70,12 @@ export type Said = {
   audio?: Uint8Array
   /** what the model said, once said */
   said?: string
+  /** the part of a response the `audio` or the words `said` belong to, by
+   * its id, where a response has parts */
+  of?: string
+  /** the model began a part it says before its answer, by its id: a word
+   * while it works, or its answer rehearsed */
+  aside?: string
   /** the next of the model's words, said as it speaks */
   saying?: string
   /** the stream takes what is sent after its opening from now on, held
@@ -97,6 +111,8 @@ export type Setup = {
   speed: number
   instructions: string
   tools: { name: string; description: string; parameters: object }[]
+  /** its first words, said as the stream opens (`Talking.opens`) */
+  opens?: string
   /** a larger model a duplex model hands its work to on the provider's
    * side, one of its `backends`, told `instructions` and calling `tools`
    * through `told.call`; without one, the work goes to whoever runs the
@@ -230,6 +246,9 @@ export type Duplex = {
   perMinute: number
   /** the model asked to say `text` now */
   say: (text: string) => string[]
+  /** the model asked for its first words, `text`, once its session started;
+   * the session it is set up with (`Setup.opens`) asks the same */
+  opens: (text: string) => string[]
   /** the larger models it hands its work to on the provider's side
    * (`Setup.backend`), the quickest first */
   backends: string[]
@@ -660,6 +679,13 @@ let QUIET = 0.7
 // longer than a caller's pause to think.
 let LONG = 5
 
+// The seconds a duplex model is quiet after its first words before they are
+// over: gpt-live-1 paused up to 0.4 s between a greeting's sentences. And the
+// seconds a stream waits for a model to begin its first words before the
+// caller is heard anyway.
+let PAUSED = 0.6
+let SILENT = 6
+
 // The stream's own tool: the model asks for it to say nothing while the
 // caller has more to say.
 let LISTEN = {
@@ -678,6 +704,11 @@ export type Talking = {
   speed?: number
   instructions: string
   tools?: Setup['tools']
+  /** its first words, said as the stream opens: the model is asked for them
+   * once, and the caller's audio reaches it as a quiet line until they have
+   * played, so a sound made as the call is picked up, or a hello said over
+   * them, is no turn it answers */
+  opens?: string
   /** a duplex model's larger model on the provider's side (`Setup.backend`) */
   backend?: Backend
 }
@@ -716,6 +747,7 @@ let setup = (
   instructions: wording(o.instructions) +
     '\n\nMessages name their source. Source labels are context for you; never read them aloud.',
   tools: t.duplex ? [] : [LISTEN, ...o.tools ?? []],
+  ...o.opens ? { opens: o.opens } : {},
   ...t.duplex && o.backend
     ? {
       backend: { ...o.backend, instructions: wording(o.backend.instructions) },
@@ -760,6 +792,17 @@ export let hangup = (o: Calling & { call: string }): Promise<void> =>
  * tools it asks for, each answered with its output before it goes on. The
  * provider's `talk` entry for `model` says how (its first model by default);
  * one without it refuses.
+ *
+ * Given `opens`, the model's first words, it is asked for them as the stream
+ * opens, and the caller's audio reaches it as a quiet line (`muted`) until
+ * they have played: what the caller says over them, a hello or the sound of
+ * picking up, is no turn the model answers with a greeting of its own. A
+ * model that never begins them hears the caller after `SILENT`. A call its
+ * own line carries is asked for them too, its audio heard throughout.
+ *
+ * Asked to say given words (`opens`, `say`), a `Turned` model answers with
+ * no tool, and only its answer plays: a part it says before the answer
+ * (`Said.aside`) would be the words a second time.
  *
  * A `Duplex` model takes its own turns and hands its work to
  * `told.delegate`: everything below is for a `Turned` one, which takes a
@@ -817,6 +860,16 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
   // again if it was refused; waiting asks to go on are one.
   let busy = false, last: string | undefined
   let waiting: string[] = [], goOn = t.respond()
+  // The responses asked to say given words, and whether the one under way
+  // is one. Such a response plays its answer alone: what the model says
+  // before it (`aside`) is the words a second time, or words of its own.
+  let scripts = new Set<string>(), scripted = false
+  let asides = new Set<string>()
+  let script = (text: string) => {
+    let m = t.respond(text)
+    scripts.add(m)
+    ask(m)
+  }
   // What the caller has said since they started talking, whether it stopped
   // the model, and whether the response it stopped is still sending audio.
   let hearing = '', over = false, hushed = false
@@ -832,6 +885,14 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
   let held: { run: () => void; drop?: () => void }[] | undefined
   let out = (run: () => void, drop?: () => void) =>
     held ? held.push({ run, drop }) : run()
+  // Its first words (`opens`), on a stream that carries the caller's audio:
+  // the seconds of them it has spoken, the seconds the line ran before they
+  // began and since, and whether it is done speaking them. The model writes
+  // them faster than they are said, so they are over once the line has run
+  // as long as they last, or it never began them.
+  let first = o.opens && o.format
+    ? { spoken: 0, waited: 0, played: 0, done: false }
+    : undefined
   let end = () => {
     if (ended) return
     ended = true
@@ -894,22 +955,29 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
           held = undefined
           for (let { run } of h) run()
         }
-        let audio = said.audio
+        if (said.aside) asides.add(said.aside)
+        let spare = scripted && said.of != undefined && asides.has(said.of)
+        let audio = spare ? undefined : said.audio
+        if (audio && first && !first.done) {
+          first.spoken += seconds(audio.length)
+        }
         if (audio && !hushed) {
           out(() => (pending = undefined, o.told.audio(audio)))
         }
-        let text = said.said
+        let text = spare ? undefined : said.said
         if (text) out(() => o.told.said?.(text))
         if (said.plays) o.told.plays?.()
         if (said.spent) dollars += said.spent
         if (said.begun) {
           busy = true
+          scripted = scripts.has(last!)
           if (hushed) s.send(t.cancel)
         }
         if (said.busy && last) waiting.unshift(last), busy = true
         if (said.done) {
           out(() => o.told.done?.(), () => o.told.done?.())
           busy = hushed = false
+          if (first) first.done = true
           next()
         }
         if (said.error) o.told.lost?.(said.error)
@@ -949,10 +1017,19 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
     (reason, clean) =>
       joined && clean ? o.told.ended?.() : o.told.lost?.(reason),
   )
+  if (o.opens) script(o.opens)
   return {
     send: (audio) => {
       if (s.closed() || !o.format) return
       bytes += audio.length
+      if (first) {
+        first[first.spoken ? 'played' : 'waited'] += seconds(audio.length)
+        let over = first.done
+          ? first.played >= first.spoken
+          : first.waited >= SILENT
+        if (over) first = undefined
+        else audio = muted(audio, o.format)
+      }
       s.send(t.audio(audio))
       if (!sounds(audio, o.format)) {
         quiet += seconds(audio.length)
@@ -962,7 +1039,7 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
       quiet = 0
       if (pending) withdraw(), ended = false
     },
-    say: (text, from) => ask(t.respond(wording(text, from))),
+    say: (text, from) => script(wording(text, from)),
     tell: (text, from) => {
       for (let m of t.tell(wording(text, from))) s.send(m)
     },
@@ -1011,6 +1088,16 @@ let duplexed = (o: Talks, t: Talker & Duplex): Talk => {
   // What is sent before the stream is ready, sent once it is.
   let held: string[] | undefined = []
   let send = (m: string) => held ? held.push(m) : s.send(m)
+  // Its first words (`opens`): whether it has begun them, the seconds it has
+  // been quiet since, and the seconds the caller's line ran before them.
+  // They are over once it has spoken and paused, or never began them.
+  let first = o.opens ? { began: false, quiet: 0, waited: 0 } : undefined
+  let spoken = (audio: Uint8Array) => {
+    if (!first) return
+    if (sounds(audio, format)) first.began = true, first.quiet = 0
+    else if (first.began) first.quiet += audio.length / perSecond(format)!
+    if (first.quiet >= PAUSED) first = undefined
+  }
   let s = stream(
     o,
     o.provider.live + t.path(set.model),
@@ -1022,6 +1109,7 @@ let duplexed = (o: Talks, t: Talker & Duplex): Talk => {
         if (x.hearing) said(), hearing += x.hearing
         if (x.saying) heard(), saying += x.saying
         if (x.audio) {
+          spoken(x.audio)
           if (spoke && sounds(x.audio, format)) {
             spoke = false
             o.told.stopped?.(quiet)
@@ -1068,10 +1156,16 @@ let duplexed = (o: Talks, t: Talker & Duplex): Talk => {
     let seconds = bytes / perSecond(format)!
     return { seconds, dollars: seconds / 60 * t.perMinute + backed }
   }
+  if (o.opens) t.opens(o.opens).forEach(send)
   return {
     send: (audio) => {
       if (s.closed()) return
       bytes += audio.length
+      if (first && !first.began) {
+        first.waited += audio.length / perSecond(format)!
+        if (first.waited >= SILENT) first = undefined
+      }
+      if (first) audio = muted(audio, format)
       send(t.audio(audio))
       if (sounds(audio, format)) spoke = true, quiet = 0
       else quiet += audio.length / perSecond(format)!

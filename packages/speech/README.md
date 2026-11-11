@@ -33,7 +33,7 @@ argument; nothing here reads the environment.
   whatever is playing to them), `told.end(text)` when they finish one, and
   `told.lost(reason)` when the stream drops. `spent()` answers the seconds heard
   so far and their cost, and `close()` ends the stream answering the same.
-- `talk({provider, key, format, instructions, tools?, model?, voice?, speed?, told})`
+- `talk({provider, key, format, instructions, tools?, model?, voice?, speed?, opens?, told})`
   is a model that hears and speaks itself, `model` one of a `provider.talk`
   entry's (`talkerOf(provider, model)`; the first by default), which is `Turned`
   or `Duplex`. A `Turned` one (the realtime models) takes a turn as it is told
@@ -54,6 +54,18 @@ argument; nothing here reads the environment.
   `close()` ends it answering the same, each response priced at its model's
   rates, or the stream's when it names none. A provider without the model
   refuses.
+- `opens` is the model's first words, a call's greeting. Either kind of model is
+  asked for them once as the stream opens, and the caller's audio reaches it as
+  a quiet line (`muted`) until they have played: a hello the caller says over
+  them, or the sound of the line picking up, is no turn for the model to answer
+  with a greeting of its own. A `Turned` model writes them faster than they are
+  said, so they have played once the line has run as long as they last; a
+  `Duplex` one has said them once it spoke and was quiet 0.6 s. A model that
+  begins none in 6 s hears the caller anyway. A call the provider's own line
+  carries is asked for them too, its audio heard throughout.
+- Asked to say given words (`opens`, `say`), a `Turned` model answers with no
+  tool, and only its answer plays: gpt-realtime-2.1-mini sometimes says such
+  words twice in one response, as a part before its answer and the answer.
 - A `Duplex` one (gpt-live-1) hears and speaks at once and takes its own turns:
   it yields to the caller and waits through their pauses itself, and its audio
   comes as it is said, quiet and all, so nothing here stops it, ends a turn or

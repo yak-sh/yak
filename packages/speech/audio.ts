@@ -90,6 +90,20 @@ export let sounds = (bytes: Uint8Array, format: Raw): boolean => {
 }
 
 /**
+ * A quiet line as long as `bytes`, in their format.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { muted, sounds } from '@yaks/speech'
+ * let mulaw = { encoding: 'mulaw', rate: 8000 } as const
+ * let quiet = muted(new Uint8Array([0x10, 0x20, 0x30]), mulaw)
+ * equal([quiet.length, sounds(quiet, mulaw)], [3, false])
+ * ```
+ */
+export let muted = (bytes: Uint8Array, format: Raw): Uint8Array =>
+  new Uint8Array(bytes.length).fill(format.encoding == 'mulaw' ? 0xff : 0)
+
+/**
  * A stream of μ-law at `rate` Hz without the silence before its first sound
  * and after its last, but `keep` seconds of each. A provider pads every
  * clip it speaks, and speaking faster never shortens the padding, so a call

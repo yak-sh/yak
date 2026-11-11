@@ -91,13 +91,14 @@ let carried = () => {
   let hungUp = 0, asked: string[] = [], reported: unknown[] = []
   let call = talking({
     call: 'rtc_1',
-    talk: (told) =>
+    talk: (told, opens) =>
       talk({
         provider: OPENAI,
         key: 'k1',
         call: 'rtc_1',
         instructions: 'Be the Operator.',
         told,
+        opens,
         open: () => socket,
       }),
     note: () => Promise.resolve(),
@@ -123,7 +124,8 @@ test('a carried call says hello on the line, times its turns by when the model s
     type: 'response.create',
     response: {
       instructions:
-        'Say only the message below, without reading its source label aloud:\nFrom the system:\nHi.',
+        'Say only the message below, without reading its source label aloud:\nHi.',
+      tool_choice: 'none',
     },
   }])
   c.tell(

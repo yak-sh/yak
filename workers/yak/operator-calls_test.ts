@@ -659,6 +659,8 @@ let talkingCall = (real = false, given: Partial<Talking> = {}) => {
   let told!: Talked
   let heard: Uint8Array[] = [], said: string[] = [], asked: string[] = []
   let noted: [string, boolean][] = [], known: string[] = []
+  // What its stream was opened on: the call's one greeting.
+  let opened: string[] = []
   let done: Parameters<Around['done']>[0][] = []
   // The realtime stream's socket: what was sent on it, and its messages.
   let stream: Record<string, ((e: { data?: unknown }) => void)[]> = {}
@@ -666,8 +668,9 @@ let talkingCall = (real = false, given: Partial<Talking> = {}) => {
   let call = talking({
     call: 'v3:t',
     stream: { wire, line },
-    talk: (t) => {
+    talk: (t, opens) => {
       told = t
+      opened.push(opens)
       if (real) {
         return talk({
           provider: OPENAI,
@@ -676,6 +679,7 @@ let talkingCall = (real = false, given: Partial<Talking> = {}) => {
           instructions: 'Be the Operator.',
           tools: [],
           told: t,
+          opens,
           open: () => ({
             send: (data) => void streamed.push(JSON.parse(String(data))),
             close: () => {},
@@ -724,6 +728,7 @@ let talkingCall = (real = false, given: Partial<Talking> = {}) => {
     told: () => told,
     heard,
     said,
+    opened,
     asked,
     noted,
     known,
@@ -777,9 +782,27 @@ test('a recorded call answers small talk itself, keeping it in the conversation,
   equal(c.done[0].heard.toFixed(6), '0.005918')
 })
 
+test('a call on a talking model has one greeting: its model is asked for it once, and a hello said over it is a quiet line to the model', () => {
+  let c = talkingCall(true)
+  let hello = () =>
+    c.frame({ event: 'media', media: { track: 'inbound', payload: 'EBAQ' } })
+  let heard = () =>
+    c.streamed.filter((m) => m.audio).map((m) => m.audio).join(' ')
+  hello()
+  c.tell(HELLO)
+  // The model heard a quiet line while its greeting had still to play, and
+  // hears the caller once it has: nothing asks it for a second.
+  hello()
+  equal(heard(), '//// EBAQ')
+  let asked = c.streamed.filter((m) => m.type == 'response.create')
+  equal(asked.map((m) => JSON.stringify(m).includes(HI)), [true])
+  equal(c.noted, [["Hi, it's Elihu.", true]])
+})
+
 test('a talking model hears the call, asks the Operator, and says its answer', async () => {
   let c = talkingCall()
-  equal(c.said, [HI])
+  // Its stream opens on the greeting, which nothing else asks it to say.
+  equal([c.opened, c.said], [[HI], []])
   c.frame({ event: 'media', media: { track: 'inbound', payload: 'AQI=' } })
   equal(c.heard, [new Uint8Array([1, 2])])
   c.told().stopped!()

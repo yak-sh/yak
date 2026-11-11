@@ -93,6 +93,8 @@ type Event = {
   call_id?: string
   name?: string
   arguments?: string
+  item_id?: string
+  item?: { id?: string; phase?: string }
   response?: { usage?: Usage }
   error?: { message?: string; code?: string }
 }
@@ -259,11 +261,19 @@ export let OPENAI: Provider = {
         case 'conversation.item.input_audio_transcription.delta':
           if (e.delta) said.push({ hearing: e.delta })
           break
+        // What a response says before its answer is an item of its own.
+        case 'response.output_item.added':
+          if (e.item?.phase == 'commentary' && e.item.id) {
+            said.push({ aside: e.item.id })
+          }
+          break
         case 'response.output_audio.delta':
-          if (e.delta) said.push({ audio: unbase64(e.delta) })
+          if (e.delta) said.push({ audio: unbase64(e.delta), of: e.item_id })
           break
         case 'response.output_audio_transcript.done':
-          if (e.transcript?.trim()) said.push({ said: e.transcript.trim() })
+          if (e.transcript?.trim()) {
+            said.push({ said: e.transcript.trim(), of: e.item_id })
+          }
           break
         case 'response.function_call_arguments.done':
           said.push({
@@ -307,6 +317,8 @@ export let OPENAI: Provider = {
         item: { type: 'function_call_output', call_id: call, output },
       }),
     ],
+    // Asked to say a message with its tools at hand, it sometimes asked to
+    // listen instead and said nothing.
     respond: (text, tools) =>
       JSON.stringify({
         type: 'response.create',
@@ -315,6 +327,7 @@ export let OPENAI: Provider = {
             ...text == undefined ? {} : {
               instructions:
                 `Say only the message below, without reading its source label aloud:\n${text}`,
+              tool_choice: 'none',
             },
             ...tools &&
               { tools: tools.map((t) => ({ type: 'function', ...t })) },
@@ -387,6 +400,18 @@ export let OPENAI: Provider = {
       session: {
         model: setup.model,
         instructions: setup.instructions,
+        // Its first words are asked for from the start, and again once the
+        // session started (`opens`), as OpenAI has a greeting asked for.
+        // https://developers.openai.com/api/docs/guides/live-conversations#greet-before-the-caller-speaks
+        ...setup.opens
+          ? {
+            input: [{
+              type: 'message',
+              role: 'developer',
+              content: [{ type: 'input_text', text: greet(setup.opens) }],
+            }],
+          }
+          : {},
         audio: {
           ...setup.format ? { format: wired(setup.format) } : {},
           output: { voice: setup.voice },
@@ -486,9 +511,14 @@ export let OPENAI: Provider = {
       JSON.stringify({ type: 'response.create' }),
     ],
     say: (text) => appended('commentary', text),
+    opens: (text) => appended('commentary', greet(text)),
     tell: (text) => appended('thinking', text),
   }],
 }
+
+// What GPT-Live is asked for as its stream opens.
+let greet = (text: string) =>
+  `Say exactly this to the caller now, word for word: "${text}" Then pause and listen.`
 
 let posted = (path: string, body?: object) => ({
   path,

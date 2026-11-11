@@ -176,7 +176,8 @@ export let carrying = async (
   }
   let made = c.talks(
     {},
-    (told) => talk({ ...call, ...how, ...c.how, told, open: upgraded }),
+    (told, opens) =>
+      talk({ ...call, ...how, ...c.how, told, opens, open: upgraded }),
   )
   c.begin(made)
   made.ended.finally(() => joined.delete(ticket.call))

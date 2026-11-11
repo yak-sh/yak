@@ -18,6 +18,12 @@
 // conversation too, starting no turn (operator.ts `note`): the caller's as
 // theirs, and the model's as the Operator's own words.
 //
+// A call has one greeting (`greeting`), said as it is answered. Around the
+// Operator's own model it is spoken here; a talking model's stream opens on
+// it (@yaks/speech `talk`'s `opens`) and hears the caller only once it has
+// been said, so a sound on the line as it picks up is no turn the model
+// answers with a second greeting in its own words.
+//
 // Everyone the platform knows by number is answered. A call lasts at most MINUTES, and what it costs (the line, what was heard
 // and what was said) is charged to the space as it goes: what is said as it
 // is said, the line and what was heard every CHARGED and as the call ends,
@@ -350,7 +356,9 @@ export type Tools = Awaited<ReturnType<Operator['tools']>>
 
 /** A call a model hears and speaks itself, asking the Operator. */
 export type Talking = Around & {
-  talk: (told: Talked) => Talker
+  /** its stream, opened on `opens`: the call's `hello`, the model's first
+   * words, said before it hears the caller (@yaks/speech `talk`) */
+  talk: (told: Talked, opens: string) => Talker
   /** its status tools beside `ask`, each answered by reading */
   looks?: Look[]
   /** the Operator's own tools, for a larger model the talking model hands
@@ -739,7 +747,10 @@ export let backed = (name: string, now: Date) =>
  * caller's audio goes to it and its audio to them, and what it asks of the
  * Operator (`ASK`) goes to their one conversation, the Operator's answer
  * given back for it to say. An answer that comes with nothing asked, such as
- * a helper's outcome, it says as it comes.
+ * a helper's outcome, it says as it comes. Its stream opens on the call's
+ * `hello`, the one greeting a call has: the model says it and hears the
+ * caller only once it has, so a hello of theirs said over it, or the sound
+ * of the line picking up, is not answered with a second.
  */
 export let talking = (o: Talking): Call => {
   let pending: ((text: string) => void)[] = []
@@ -825,9 +836,8 @@ export let talking = (o: Talking): Call => {
       c.report(
         new Error(`A call's talk model refused what it was sent: ${why}`),
       ),
-  })
+  }, o.hello)
   c.limit(() => talker?.say(GOODBYE))
-  if (o.hello) talker.say(o.hello)
   // What it knows of the Operator: the conversation and the work as the
   // call starts, then the work again a moment after it moves, when what it
   // says changed.
@@ -1102,7 +1112,7 @@ export let calling = async (
     /** what a talking model is set up with: who it is, and its tools */
     how,
     /** a talking model's call, `talk` opening its stream */
-    talks: (more: Pick<Talking, 'stream'>, talk: (told: Talked) => Talker) => {
+    talks: (more: Pick<Talking, 'stream'>, talk: Talking['talk']) => {
       if (opens.began) note('', { began: true })
       return talking({
         ...around,
@@ -1162,7 +1172,7 @@ export let answering = async (
   let stream = { wire: pair[1], line }
   c.begin(
     setup.talks
-      ? c.talks({ stream }, (told) =>
+      ? c.talks({ stream }, (told, opens) =>
         talk({
           ...speech,
           ...c.how,
@@ -1171,6 +1181,7 @@ export let answering = async (
           voice: setup.voice,
           speed: setup.speed,
           told,
+          opens,
           open: upgraded,
         }))
       : converse({

@@ -9,10 +9,12 @@ import {
   OPENAI,
   type Provider,
   type Socket,
+  sounds,
   speak,
   SpeechError,
   talk,
   turns,
+  unbase64,
   type Words,
 } from './mod.ts'
 
@@ -228,20 +230,47 @@ test('a μ-law clip comes without the silence its provider padded it with', asyn
   equal(audio.length, 1100)
 })
 
+let MULAW = { encoding: 'mulaw', rate: 8000 } as const
+let HELLO = 'Hi Jeff, Elihu here. How can I help?'
+
+// A caller's line on a talk stream: `say` and `hush` send seconds of a sound
+// or of a quiet line, and `heard` is whether each frame the model was sent
+// since it last answered holds a sound.
+let line = (
+  s: ReturnType<typeof socket>,
+  stream: { send: (audio: Uint8Array) => void },
+) => {
+  let from = 0
+  let frame = (byte: number) => (seconds: number) =>
+    stream.send(new Uint8Array(seconds * MULAW.rate).fill(byte))
+  return {
+    say: frame(0x10),
+    hush: frame(0xff),
+    heard: () => {
+      let sent = s.json().filter((m) => m.audio)
+      let frames = sent.slice(from).map((m) => sounds(unbase64(m.audio), MULAW))
+      from = sent.length
+      return frames
+    },
+  }
+}
+
 // A talk stream on OpenAI's realtime model, the caller's audio sent and the
 // model's events fired back.
 let talking = (
   calls: (name: string, args: string) => Promise<Words>,
   speed?: number,
+  opens?: string,
 ) => {
   let s = socket()
   let told: unknown[] = []
   let stream = talk({
     provider: OPENAI,
     key: 'k1',
-    format: { encoding: 'mulaw', rate: 8000 },
+    format: MULAW,
     voice: 'cedar',
     speed,
+    opens,
     instructions: 'Be brief.',
     tools: [{ name: 'ask', description: 'Ask.', parameters: {} }],
     open: s.open,
@@ -459,6 +488,96 @@ test('a caller talking over the model stops it only once their words say somethi
   event({ type: 'response.output_audio.delta', delta: 'Aw==' })
   equal(told, [[1], 'over', 'done', 'over', [3]])
   equal(cancels(), 1)
+})
+
+test('a stream that opens on the model’s first words asks for them once, and the model hears a quiet line until they have played', () => {
+  let { s, told, stream, event } = talking(
+    () => Promise.resolve(''),
+    1,
+    HELLO,
+  )
+  let caller = line(s, stream)
+  s.fire('open')
+  // Its own words, so they name no source to read aloud, and it has no
+  // tool to ask for in place of saying them.
+  equal(s.json().filter((m) => m.type == 'response.create'), [{
+    type: 'response.create',
+    response: {
+      instructions:
+        `Say only the message below, without reading its source label aloud:\n${HELLO}`,
+      tool_choice: 'none',
+    },
+  }])
+  // A hello of the caller's as the line picks up, and another over half a
+  // second of greeting, are a quiet line to the model: it has no turn to
+  // answer with a greeting of its own.
+  caller.say(0.5)
+  event({ type: 'response.created' })
+  event({
+    type: 'response.output_audio.delta',
+    delta: btoa('\x10'.repeat(4000)),
+  })
+  event({ type: 'response.done' })
+  caller.say(0.25)
+  equal(caller.heard(), [false, false])
+  // The greeting has played once the line has run as long as it lasts.
+  caller.say(0.25)
+  caller.say(0.5)
+  equal(caller.heard(), [true, true])
+  equal(told.filter((t) => t == 'done').length, 1)
+  equal(s.json().filter((m) => m.type == 'response.create').length, 1)
+})
+
+test('a response asked to say given words plays its answer alone, not the words it says before it', () => {
+  let { s, told, stream, event } = talking(() => Promise.resolve(''))
+  s.fire('open')
+  let part = (id: string, phase: string, byte: string, transcript: string) => {
+    event({ type: 'response.output_item.added', item: { id, phase } })
+    event({ type: 'response.output_audio.delta', item_id: id, delta: byte })
+    event({
+      type: 'response.output_audio_transcript.done',
+      item_id: id,
+      transcript,
+    })
+  }
+  let respond = () => {
+    event({ type: 'response.created' })
+    part('i1', 'commentary', 'AQ==', 'One moment.')
+    part('i2', 'final_answer', 'Ag==', 'Booked.')
+    event({ type: 'response.done' })
+  }
+  // The model said the line twice in one response, as two parts.
+  stream.say('Booked.')
+  respond()
+  equal(told, [[2], { said: 'Booked.' }, 'done'])
+  // A turn's answer keeps the word the model says while it works.
+  told.length = 0
+  event({ type: 'input_audio_buffer.speech_started' })
+  event({ type: 'input_audio_buffer.speech_stopped' })
+  event({
+    type: 'conversation.item.input_audio_transcription.completed',
+    transcript: 'Book it.',
+  })
+  respond()
+  equal(told, [
+    'stopped',
+    { heard: 'Book it.' },
+    [1],
+    { said: 'One moment.' },
+    [2],
+    { said: 'Booked.' },
+    'done',
+  ])
+})
+
+test('a model that never begins its first words hears the caller after six seconds', () => {
+  let { s, stream } = talking(() => Promise.resolve(''), 1, HELLO)
+  let caller = line(s, stream)
+  s.fire('open')
+  caller.say(5.5)
+  caller.say(0.5)
+  caller.say(1)
+  equal(caller.heard(), [false, true, true])
 })
 
 // A talk stream a caller speaks to: `speak` starts their turn, `quiet` is
@@ -723,6 +842,55 @@ test('GPT-Live is started, takes its own turns, keeps each side’s words as lin
   })
   // Priced by the minute of the stream, $0.05.
   equal(stream.close(), { seconds: 0.42, dollars: 0.035 / 100 })
+})
+
+test('GPT-Live opens on its first words, asked for as it starts and once it has, and hears a quiet line until it has said them and paused', () => {
+  let s = socket()
+  let stream = talk({
+    provider: OPENAI,
+    key: 'k1',
+    model: 'gpt-live-1',
+    format: MULAW,
+    instructions: 'Be brief.',
+    opens: HELLO,
+    open: s.open,
+    told: { audio: () => {}, call: () => Promise.resolve('') },
+  })
+  let caller = line(s, stream)
+  let event = (e: object) => s.fire('message', JSON.stringify(e))
+  let says = (byte: number, seconds: number) =>
+    event({
+      type: 'session.output_audio.delta',
+      delta: btoa(String.fromCharCode(byte).repeat(seconds * MULAW.rate)),
+    })
+  s.fire('open')
+  let greet =
+    `Say exactly this to the caller now, word for word: "${HELLO}" Then pause and listen.`
+  equal(s.json()[0].session.input, [{
+    type: 'message',
+    role: 'developer',
+    content: [{ type: 'input_text', text: greet }],
+  }])
+  event({ type: 'session.started' })
+  equal(s.json().slice(1), [{
+    type: 'session.commentary.append',
+    delegation_id: null,
+    content: greet,
+  }])
+  // The caller's hello before it speaks, over its greeting, and in the
+  // 0.4 s it pauses between two sentences of it, is a quiet line.
+  caller.say(0.5)
+  says(0x10, 1)
+  caller.say(0.5)
+  says(0xff, 0.4)
+  caller.say(0.5)
+  says(0x10, 1)
+  equal(caller.heard(), [false, false, false])
+  // Quiet 0.6 s, it has said them: the caller is heard.
+  says(0xff, 0.6)
+  caller.say(0.5)
+  equal(caller.heard(), [true])
+  stream.close()
 })
 
 test('GPT-Live hands its work to a larger model on OpenAI’s side, whose tool calls are answered here and whose tokens are priced', async () => {
