@@ -5028,21 +5028,36 @@ importers:
 
   packages/trial:
     dependencies:
+      '@yaks/alias':
+        specifier: 0.2.24
+        version: link:../alias
+      '@yaks/api':
+        specifier: 0.2.29
+        version: link:../api
       '@yaks/cli':
         specifier: 0.2.33
         version: link:../cli
+      '@yaks/file':
+        specifier: 0.2.28
+        version: link:../file
       '@yaks/graph':
         specifier: 0.2.33
         version: link:../graph
       '@yaks/match':
         specifier: 0.2.30
         version: link:../match
+      '@yaks/model':
+        specifier: 0.2.32
+        version: link:../model
       '@yaks/persona':
         specifier: 0.2.23
         version: link:../persona
       '@yaks/query':
         specifier: 0.2.32
         version: link:../query
+      '@yaks/tools':
+        specifier: 0.2.30
+        version: link:../tools
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab
@@ -5053,6 +5068,9 @@ importers:
       '@yaks/edge':
         specifier: 0.2.24
         version: link:../edge
+      '@yaks/key':
+        specifier: 0.2.24
+        version: link:../key
       '@yaks/memory':
         specifier: 0.2.23
         version: link:../memory

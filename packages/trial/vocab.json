@@ -7,7 +7,10 @@
     "trial": {
       "component": true,
       "type": "object",
-      "identity": ["case", "variant"],
+      "identity": [
+        "case",
+        "variant"
+      ],
       "description": "one variant scored on one case: whether the fact the case's agent lacked was in front of it, unasked, before it erred, and whether a search with the words it was answering finds it. Its eid is derived from the case and the variant, so a rerun replaces the score",
       "properties": {
         "case": {
@@ -35,6 +38,334 @@
           "description": "the size of what the variant put in front of the agent, at four characters a token"
         }
       }
+    },
+    "round": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "one round of a skill trial: attempts at cases under variants, the pairs a person compares and the judges' scores, read back to plan the next round. Its title is its `doc`",
+      "properties": {
+        "skill": {
+          "type": "string",
+          "description": "the name of the skill the round develops, `copywriting`; a round file's variants and cases are named under it (`variant:copywriting:none`)"
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "the names of the parts every attempt returns, in the order a page draws them: `[\"headline\", \"brief\", \"description\"]`"
+        }
+      }
+    },
+    "variant": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "a candidate text of a skill, handed to a writer in a skill trial and installed nowhere. Its title is its `doc`; it is kept out of search and embedding so no agent meets it unasked",
+      "properties": {
+        "body": {
+          "type": "string",
+          "description": "the text handed to the writer; empty for the control that gets no skill"
+        },
+        "theory": {
+          "type": "string",
+          "description": "one line: what this variant believes makes the work good"
+        },
+        "source": {
+          "type": "string",
+          "description": "where the text came from when it was not written here: a URL, or `path@sha`"
+        },
+        "licence": {
+          "type": "string",
+          "description": "the licence the source gives the text under"
+        },
+        "from": {
+          "type": "string",
+          "ref": "variant",
+          "death": "detach",
+          "description": "the variant this one was changed from, in a later round"
+        }
+      }
+    },
+    "case": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "what a writer in a skill trial is handed to work on: a brief, or (wearing `riddle`) a fact sheet. Its title is its `doc`",
+      "properties": {
+        "body": {
+          "type": "string",
+          "description": "the text the writer is handed"
+        },
+        "base": {
+          "type": "string",
+          "ref": "case",
+          "death": "detach",
+          "description": "the case this one adds input to (the same facts plus the owner's words): two cases with one base are about one thing, so their attempts can be compared"
+        }
+      }
+    },
+    "riddle": {
+      "component": true,
+      "type": "object",
+      "description": "on a case: the writer describes a named thing from its fact sheet without naming it, and a judge who sees only the attempt guesses what it is",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "the answer: the thing's name"
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "other guesses that count as right"
+        },
+        "forbidden": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "substrings an attempt may not contain, in any case"
+        },
+        "forbidden_exact": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "whole words an attempt may not contain, case-sensitive"
+        },
+        "group": {
+          "type": "string",
+          "description": "the cluster of similar things it sits in; a judge choosing `among` sees the group's fact sheets"
+        }
+      }
+    },
+    "found": {
+      "component": true,
+      "type": "object",
+      "description": "on a case: something its maker published themselves (a first home page, a launch post), found and kept to learn a judge's taste. Its one attempt holds the text with the name masked in `output` and the original in `reply`, and a page showing it says nothing that names it",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "who published it"
+        },
+        "source": {
+          "type": "string",
+          "description": "where it was read: a URL"
+        }
+      }
+    },
+    "attempt": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "what one writer returned for one case in a skill trial. A model's attempt names its variant, persona, run and model, and wears `usage` and `cost`; a person's own attempt names only its round and case, and its writer is its `created.by`",
+      "properties": {
+        "round": {
+          "type": "string",
+          "ref": "round",
+          "death": "cascade",
+          "description": "the round it was written in"
+        },
+        "case": {
+          "type": "string",
+          "ref": "case",
+          "death": "cascade",
+          "description": "the case the writer was handed"
+        },
+        "variant": {
+          "type": "string",
+          "ref": "variant",
+          "death": "cascade",
+          "description": "the skill text the writer was handed; absent on a person's own attempt"
+        },
+        "persona": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "the persona the writer carried; absent when it carried none (a blank model)"
+        },
+        "run": {
+          "type": "integer",
+          "description": "which of the repeated runs of the same case, variant and persona"
+        },
+        "model": {
+          "type": "string",
+          "ref": "model",
+          "death": "keep",
+          "description": "the model that wrote it"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when the writer ran"
+        },
+        "ms": {
+          "type": "integer",
+          "description": "how long the writer took"
+        },
+        "reply": {
+          "type": "string",
+          "description": "everything the writer said, its working included"
+        },
+        "output": {
+          "type": "object",
+          "description": "the work itself, by the round's `parts`: `{headline, brief, description}`"
+        }
+      }
+    },
+    "pair": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "two attempts a person is asked to compare, planned by whoever ran the round. Which is shown first is the page's to shuffle",
+      "properties": {
+        "round": {
+          "type": "string",
+          "ref": "round",
+          "death": "cascade",
+          "description": "the round whose deck it is in"
+        },
+        "a": {
+          "type": "string",
+          "ref": "attempt",
+          "death": "cascade",
+          "description": "one attempt"
+        },
+        "b": {
+          "type": "string",
+          "ref": "attempt",
+          "death": "cascade",
+          "description": "the other"
+        },
+        "ord": {
+          "type": "number",
+          "description": "its place in the deck"
+        }
+      }
+    },
+    "preference": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "one comparison of two attempts by its writer (`created.by`): which they would rather read on from, or neither. One row per judge and pair; choosing again changes it",
+      "properties": {
+        "first": {
+          "type": "string",
+          "ref": "attempt",
+          "death": "cascade",
+          "description": "the attempt shown first"
+        },
+        "second": {
+          "type": "string",
+          "ref": "attempt",
+          "death": "cascade",
+          "description": "the attempt shown second"
+        },
+        "chose": {
+          "type": "string",
+          "ref": "attempt",
+          "death": "cascade",
+          "description": "the one preferred; absent when neither was"
+        },
+        "why": {
+          "type": "string",
+          "description": "a few words of why, when the judge gave any"
+        }
+      }
+    },
+    "grabbed": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "its writer (`created.by`) found this attempt appealing on its own, whatever it was compared with. Deleting the row takes the mark back",
+      "properties": {
+        "attempt": {
+          "type": "string",
+          "ref": "attempt",
+          "death": "cascade",
+          "description": "the attempt that grabbed them"
+        }
+      }
+    },
+    "guess": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "one judge's guesses at what a riddle attempt describes, having seen only the attempt",
+      "properties": {
+        "attempt": {
+          "type": "string",
+          "ref": "attempt",
+          "death": "cascade",
+          "description": "the attempt guessed at"
+        },
+        "form": {
+          "type": "string",
+          "enum": [
+            "open",
+            "among"
+          ],
+          "description": "`open`: the judge lists guesses in order; `among`: the judge also sees the fact sheets of the case's group and picks"
+        },
+        "model": {
+          "type": "string",
+          "ref": "model",
+          "death": "keep",
+          "description": "the model that judged"
+        },
+        "guesses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "what it guessed, in order"
+        },
+        "among": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "the choices it was shown, in the `among` form"
+        },
+        "rank": {
+          "type": "integer",
+          "description": "the 1-based place of the right answer among its guesses; absent when it was not within `cap`"
+        },
+        "cap": {
+          "type": "integer",
+          "description": "how many guesses it was allowed"
+        },
+        "leaked": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "forbidden strings found in the attempt, which give the answer away"
+        }
+      }
+    },
+    "trial_tally": {
+      "tool": true,
+      "noun": "trial",
+      "verb": "tally",
+      "title": "Tally a round of a skill trial",
+      "description": "Print what a round's rows say: for each variant, persona arm and case, how often its attempts were preferred, how often neither was, and how many grabbed the judge; the judges' mean guesses until right; and whether the two agree. Reads only.",
+      "input": {
+        "round": {
+          "type": "string",
+          "description": "the round: its key as loaded (`copy-r1`), its id or its eid"
+        }
+      },
+      "required": [
+        "round"
+      ],
+      "readOnly": true,
+      "positional": [
+        "round"
+      ]
     }
   }
 }

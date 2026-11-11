@@ -1,10 +1,19 @@
-// `yak trial`: score every case the graph holds under a variant, write each
-// trial row, and print the tally. The work is ./moment.ts's; this only hands
-// it the host's storage and search.
+// The trial commands a person types. `yak trial score` scores every context
+// case the graph holds under a variant (./moment.ts); `yak trial load` reads a
+// skill round's file into rows and `yak trial drop` removes a round
+// (./round.ts). Each only hands the work the host's graph and what it read
+// from this machine.
 import type { CliCommand } from '@yaks/cli/host'
 
+let round = {
+  type: 'string',
+  description: 'the round: the key it was loaded under, its id or its eid',
+}
+
 export let commands: CliCommand[] = [{
-  name: 'trial',
+  name: 'trial_score',
+  noun: 'trial',
+  verb: 'score',
   description:
     'Score every miss in the graph under a persona (by default the one each session wore): writes trial{case, variant, asked, unasked, tokens} and prints the tally.',
   inputSchema: {
@@ -33,6 +42,57 @@ export let commands: CliCommand[] = [{
     }
     if (rows.length) await host.graph.apply(rows)
     context.out(JSON.stringify(tally(rows, all), null, 2))
+    return 0
+  },
+}, {
+  name: 'trial_load',
+  noun: 'trial',
+  verb: 'load',
+  description:
+    'Load a skill round from its file (round.json): its variants, cases, attempts, pairs and guesses become rows. Loading the file again replaces them.',
+  inputSchema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['file'],
+    properties: {
+      file: { type: 'string', description: 'the round file, JSON' },
+    },
+  },
+  positional: ['file'],
+  run: async (args, host, context) => {
+    let { readTextFile } = await import('@yaks/file/io')
+    let { load } = await import('./round.ts')
+    let file = JSON.parse(await readTextFile(String(args.file)))
+    let did = await load(host.graph, file)
+    context.out(
+      `${file.key}: ${did.rows} rows loaded as round ${did.round}` +
+        (did.removed
+          ? `, ${did.removed} pairs and guesses no longer in the file removed`
+          : '') +
+        (did.left
+          ? `, ${did.left} attempts no longer in the file left in place`
+          : '') +
+        `\npage: /trial/${file.key}\ntally: yak trial tally ${file.key}`,
+    )
+    return 0
+  },
+}, {
+  name: 'trial_drop',
+  noun: 'trial',
+  verb: 'drop',
+  description:
+    'Delete a skill round: its attempts, pairs, taps and guesses, and each variant and case no other round uses.',
+  inputSchema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['round'],
+    properties: { round },
+  },
+  positional: ['round'],
+  run: async (args, host, context) => {
+    let { drop, find } = await import('./round.ts')
+    let eid = await find(host.graph, String(args.round))
+    context.out(`dropped ${await drop(host.graph, eid)} rows`)
     return 0
   },
 }]
