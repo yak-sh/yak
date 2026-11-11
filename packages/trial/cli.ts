@@ -29,14 +29,14 @@ export let commands: CliCommand[] = [{
       },
       arrive: {
         type: 'array',
-        items: { enum: ['beside', 'related', 'open'] },
+        items: { enum: ['beside', 'related', 'said', 'open'] },
         description:
-          "doors that add to the persona: beside (the prompt recall beside the person's words), related (the related list beside a write's hits), open (what is open with the person at start)",
+          "doors that add to the persona: beside (the prompt recall beside the person's words), related (the related list beside a write's hits), said (the person's earlier words and answered decisions beside each thing the session wrote), open (what is open with the person at start)",
       },
       floor: {
         type: 'number',
         description:
-          'with beside: the similarity a memory or decision must reach (default the live one)',
+          "with beside: the similarity a memory or decision must reach; with said: the similarity the person's words must reach (default the live ones)",
       },
     },
   },
@@ -61,7 +61,9 @@ export let commands: CliCommand[] = [{
         ? (await host.graph.address([said])).get(said) ?? said
         : undefined
       if (doors.some((d) => d != 'related') && !person) {
-        throw new Error('beside and open need the config to name its person')
+        throw new Error(
+          'beside, said and open need the config to name its person',
+        )
       }
       let floor = typeof args.floor == 'number' ? args.floor : undefined
       let made = {
@@ -72,6 +74,12 @@ export let commands: CliCommand[] = [{
             floor,
           }),
         related: () => arrive.related(host.graph),
+        said: () =>
+          arrive.said(host.graph, {
+            person: person!,
+            meaning: host.meaning,
+            floor,
+          }),
         open: () => arrive.open(person!),
       }
       let [as] = [...(await host.graph.address([args.under])).values()]

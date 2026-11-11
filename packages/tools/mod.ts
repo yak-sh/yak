@@ -42,6 +42,7 @@ export {
   WORDS,
 } from './result.ts'
 export {
+  became,
   type Invocation,
   keeps,
   type Opts,

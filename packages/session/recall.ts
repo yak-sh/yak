@@ -2,7 +2,8 @@
 // their words (@yaks/memory/earlier), for every door that hands those words
 // to the agent answering them: the prompt hook (./routes.ts), and a comment
 // or letter of theirs the bus owes a session (./bus.ts), or a session is
-// started on (./start.ts). The recall gets RECALL ms; a slower one is left
+// started on (./start.ts). What an agent writes is answered the same way by
+// @yaks/memory/graph, keyed on what it wrote. The recall gets RECALL ms; a slower one is left
 // out rather than holding the words, and one that fails is reported and left
 // out the same way.
 

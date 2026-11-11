@@ -8,7 +8,8 @@
     "./tools": "./tools.ts",
     "./inspect": "./inspect.ts",
     "./views": "./views.ts",
-    "./earlier": "./earlier.ts"
+    "./earlier": "./earlier.ts",
+    "./graph": "./graph.ts"
   },
   "license": "Apache-2.0",
   "description": "Stores a person's words with context as graph entities and retrieves them for subsequent conversations.",
@@ -16,8 +17,10 @@
     "@yaks/doc": "0.2.24",
     "@yaks/graph": "0.2.33",
     "@yaks/host": "0.2.29",
+    "@yaks/id": "0.2.23",
     "@yaks/inspect": "0.2.30",
     "@yaks/query": "0.2.32",
+    "@yaks/tools": "0.2.30",
     "@yaks/ui": "0.2.30",
     "@yaks/vocab": "0.2.32",
     "preact": "10.29.7"

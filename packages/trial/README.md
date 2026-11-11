@@ -60,11 +60,12 @@ case then wears its own session's persona, the doors named add to it
 (`@yaks/trial/arrive`), and the rows are written under the persona `--under`
 names, whose text says what the doors add and which no session wears:
 
-| door      | what arrives                                                                                                                                   |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `beside`  | beside each of the person's inputs, the prompt hook's recall (@yaks/memory/earlier), its memories and decisions kept to `--floor`              |
-| `related` | beside each write's hit rows, the few nearest resources of any kind to what it made (`hit.related`, @yaks/embedding/neighbours)                |
-| `open`    | at the session's start and after each compaction, the tasks and decisions open with the person, and the decisions they answered the day before |
+| door      | what arrives                                                                                                                                                                                             |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `beside`  | beside each of the person's inputs, the prompt hook's recall (@yaks/memory/earlier), its memories and decisions kept to `--floor`                                                                        |
+| `related` | beside each write's hit rows, the few nearest resources of any kind to what it made (`hit.related`, @yaks/embedding/neighbours)                                                                          |
+| `said`    | beside each thing the session wrote, what its write is answered with from memory (@yaks/memory/graph): the person's nearest earlier words at least `--floor` similar, and the nearest answered decisions |
+| `open`    | at the session's start and after each compaction, the tasks and decisions open with the person, and the decisions they answered the day before                                                           |
 
 ```sh
 yak trial score --under <persona> --arrive beside --floor 0.6

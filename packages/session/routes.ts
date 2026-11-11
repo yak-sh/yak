@@ -10,7 +10,8 @@
 // A prompt is answered with its transcript's timing and, beside it, what the
 // configured person said, kept and decided before on the same subject
 // (@yaks/memory/earlier). The recall gets RECALL ms; a slower one is left out
-// of this prompt's context rather than holding the turn.
+// of this prompt's context rather than holding the turn. A prompt the harness
+// wrote, a background task's notification, recalls nothing.
 //
 // A body that is not a hook event is the caller's mistake, refused with a
 // 400. Anything else that goes wrong is thrown to the host, which reports it;
@@ -35,6 +36,11 @@ export let PATH = '/session/hook'
 // only once the event loop turns, so the door lets it turn before asking.
 let open = (request: Request): Promise<boolean> =>
   new Promise((done) => setTimeout(() => done(!request.signal.aborted)))
+
+// A prompt the harness wrote itself: Claude Code submits a finished
+// background task's notification as a prompt. It is nobody's words, so
+// nothing was said before on its subject.
+let NOTICE = /^\s*<task-notification>/
 
 /** `POST /session/hook`: one hook event in, the context it adds out. */
 export let routes = (
@@ -80,10 +86,9 @@ export let routes = (
       let event = hook as Record<string, unknown>
       if (event.hook_event_name == 'UserPromptSubmit') {
         let words = typeof event.prompt == 'string' ? event.prompt : ''
-        let recalled = await recall(host, wait).said(
-          words,
-          new Date().toISOString(),
-        )
+        let recalled = NOTICE.test(words)
+          ? ''
+          : await recall(host, wait).said(words, new Date().toISOString())
         let text = [
           promptContext(event),
           recalled,

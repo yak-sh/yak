@@ -104,7 +104,9 @@ these are the words for it:
 - **Neighbours on write:** a tool call that creates a task, memory or comment
   answers its three nearest of the same kind ("A write answers what it is
   near"). The doc view's similar-task twins cut at `FLOOR` in
-  packages/browse/twin.ts.
+  packages/browse/twin.ts. @yaks/memory answers the same call with the
+  person's earlier words and answered decisions near what it made
+  (packages/memory/README.md, "Earlier words beside a write").
 
 ## In yaks.app stores
 
@@ -152,6 +154,11 @@ a caller may read. The `search` tool merges it with full-text hits.
 - **A similarity floor belongs to its model's space.** A threshold measured on
   one model means something else on another, so a new model means measuring
   the floor again (twin.ts says how it was measured).
+- **A long text is near everything.** In granite-embedding-30m-english a
+  prompt's unrelated neighbours stop at about .64, but a whole task or comment
+  sits at .70 to .80 from dozens of the person's words: over 73 writes the
+  third-nearest was at .74 in the median. A floor is measured for the length of
+  text it is keyed on, and a rank among long texts says little (T-161252).
 - **Changing the model or width is a migration** (`data-migration`). Every
   vector is made again. On the box, while two models share the table no index
   is built and every search reads every vector; in a store, `.near` answers

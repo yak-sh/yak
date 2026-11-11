@@ -1,6 +1,6 @@
 import { equal, test } from '@yaks/testing'
 import type { Bundle, Graph } from '@yaks/graph'
-import { earlier, ownWords } from './earlier.ts'
+import { bearing, earlier, ownWords } from './earlier.ts'
 
 let input: Bundle = {
   entity: { eid: 'input' },
@@ -34,6 +34,18 @@ test('earlier words keep authored text and strip only an explicit quote wrapper'
     [],
   )
   equal(ownWords({ ...input, output: { source: 'ask' } }, 'person', 'Ada'), [])
+  equal(
+    ownWords(
+      {
+        ...quote,
+        doc: { body: 'test the other number' },
+        created: input.created,
+      },
+      'person',
+      'Ada',
+    )[0].words,
+    'test the other number',
+  )
   equal(ownWords(input, 'other', 'Ada'), [])
 })
 let rows = [input, quote, {
@@ -178,7 +190,7 @@ let recall = (floor?: number) =>
             { entity: 'far', similarity: .3, excerpt: '' },
           ]
           : within.includes('.decision')
-          ? [{ entity: 'd', similarity: .7, excerpt: '' }]
+          ? [{ entity: 'd', similarity: .78, excerpt: '' }]
           : [{ entity: 'input', similarity: .9, excerpt: '' }],
       )
     },
@@ -195,7 +207,7 @@ test('the nearest memories and answered decisions ride beside the words, by id a
 })
 test('a floor keeps only the memories and decisions at least that near', async () => {
   equal(
-    (await recall(.75)).split('\n\n')[1],
+    (await recall(.79)).split('\n\n')[1],
     'Nearest memories and decisions (read one by id before relying on it):\n' +
       'M-7 · Attachments are immutable files',
   )
@@ -228,4 +240,79 @@ test('a prompt that names no subject recalls nothing', async () => {
       '',
     )
   }
+})
+
+// What an agent wrote, and what the person said and decided near it.
+let own: Bundle = {
+  entity: { eid: 'own' },
+  comment: { target: 't' },
+  doc: { body: 'test with the other number' },
+  created: { by: 'person', at: '2026-01-03T00:00:00Z', via: 'web' },
+}
+let told: Bundle = {
+  ...input,
+  entity: { eid: 'told' },
+  entry: { session: 'agent' },
+  content: { body: 'forward texts to email' },
+  created: { by: 'person', at: '2026-01-04T00:00:00Z' },
+}
+let near = [input, own, told, ...kept]
+let bears = (
+  sims: Record<string, number>,
+  rest: Partial<Parameters<typeof bearing>[1]> = {},
+) =>
+  bearing({
+    ...g,
+    get: (ids: string[]) =>
+      Promise.resolve(near.filter((b) => ids.includes(b.entity.eid))),
+  } as unknown as Graph, {
+    person: 'person',
+    name: 'Ada',
+    words: 'Text the church line\nA reply proves texts arrive',
+    before: '2026-02-01T00:00:00Z',
+    meaning: (_, opts) =>
+      Promise.resolve(
+        (opts?.within?.includes('.decision') ? ['d'] : ['own', 'told', 'input'])
+          .map((entity) => ({
+            entity,
+            similarity: sims[entity] ?? 0,
+            excerpt: '',
+          })),
+      ),
+    ...rest,
+  })
+let ids = async (found: ReturnType<typeof bearing>) => {
+  let { said, decided } = await found
+  return [...said.map((q) => q.id), ...decided.map((b) => b.entity.eid)]
+}
+test("what an agent wrote is answered with the person's nearest words and answered decisions, nearest first", async () => {
+  let found = await bears({ own: .9, told: .85, input: .5, d: .8 })
+  equal(found.said.map((q) => [q.id, q.words]), [
+    ['#own', 'test with the other number'],
+    ['#told', 'forward texts to email'],
+  ])
+  equal(found.decided.map((b) => b.entity.eid), ['d'])
+})
+test('words and decisions that are not near what was written do not arrive', async () => {
+  equal(await ids(bears({ own: .7, told: .7, input: .7, d: .7 })), [])
+  equal(await ids(bears({ own: .7, d: .7 }, { floor: .6 })), ['#own'])
+})
+test('what the writing session was told since its compaction is left out', async () => {
+  let sims = { own: .9, told: .9 }
+  equal(await ids(bears(sims, { held: { via: 'agent' } })), ['#own'])
+  equal(
+    await ids(
+      bears(sims, { held: { via: 'agent', since: '2026-01-05T00:00:00Z' } }),
+    ),
+    ['#own', '#told'],
+  )
+})
+test('with no meaning index, or past its wait, nothing bears', async () => {
+  equal(await ids(bears({ own: .9 }, { meaning: undefined })), [])
+  let slow = bears({ own: .9 }, {
+    wait: 5,
+    meaning: () => new Promise((done) => setTimeout(done, 40, [])),
+  })
+  equal(await ids(slow), [])
+  await new Promise((done) => setTimeout(done, 45))
 })

@@ -37,7 +37,7 @@
 import { type Bundle, type Comp, type Eid, type Graph, who } from '@yaks/graph'
 
 import { called } from '@yaks/graph/hit'
-import type { Reply } from '@yaks/tools'
+import { became, type Reply } from '@yaks/tools'
 import {
   absent,
   and,
@@ -213,18 +213,6 @@ let vectored = async (
 // the short ones left out, since every word must match.
 let words = (s: string): string[] =>
   (s.split('\n')[0].match(/[\p{L}\p{N}]{3,}/gu) ?? []).slice(0, 8)
-
-// The kind a written bundle made its entity, if it made one: a created
-// entity's kind, or a kind that is a mark (@yaks/vocab `CompInfo.mark`) whose
-// `at` this write stamped, so marked for the first time.
-let became = (vocab: Vocab, b: Bundle): string | undefined => {
-  if (b.tombstone) return undefined
-  if (b.created) return vocab.kindOf(b)
-  return Object.keys(b).find((c) => {
-    let info = vocab.comp(c)
-    return info?.kind && info.mark && (b[c] as Comp | undefined)?.at
-  })
-}
 
 /** What a neighbour in either list is: wearing no notice, or written by a
  * person, where the vocabulary knows people. */

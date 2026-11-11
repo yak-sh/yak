@@ -238,14 +238,15 @@ Apache-2.0
 ## Earlier words beside a prompt
 
 `@yaks/memory/earlier` offers `earlier(graph, options)`: a bounded read of
-strictly earlier person-authored transcript inputs and comments explicitly
-attributing a verbatim quotation to that person, and of the memories and
-answered decisions nearest the prompt in meaning. It returns at most three
-quotations, a line each with its source id and date, cut at 280 characters with
-a closing `…`, and at most four memories and decisions by id and title (a
-decision with its choice). A quarantined memory is not offered, nor one already
-quoted; a memory kept on an untitled entry shows its words. Agent prose outside
-a quotation is not returned, and duplicate quotations are shown once.
+strictly earlier person-authored transcript inputs, comments the person wrote
+and comments explicitly attributing a verbatim quotation to that person, and of
+the memories and answered decisions nearest the prompt in meaning, at least
+`FLOOR` similar. It returns at most three quotations, a line each with its
+source id and date, cut at 280 characters with a closing `…`, and at most four
+memories and decisions by id and title (a decision with its choice). A
+quarantined memory is not offered, nor one already quoted; a memory kept on an
+untitled entry shows its words. Agent prose outside a quotation is not returned,
+and duplicate quotations are shown once.
 
 A person the graph has no name for has no attributed quotations, only their own
 inputs. `among` is a filter line those inputs are kept to, such as the ones the
@@ -276,3 +277,31 @@ No model composes an answer, no recall event is written, and no historical
 quotation becomes an instruction. The similarity floor is calibrated for
 Granite's 30M English embedding space; other embedding spaces need their own
 measurement.
+
+## Earlier words beside a write
+
+A prompt recalls by the person's message. What an agent then does about it is
+often nearer to something they said before than the message was, so a write is
+answered with it too. As a plugin, `@yaks/memory/graph` exports `reply(host)`:
+what a direct tool call's answer carries beside the tool's own
+([@yaks/tools](../tools/README.md) `Reply`), next to the neighbours
+@yaks/embedding answers with. For each entity the call's write made, up to
+three, it answers `bearing(graph, options)`:
+
+- the configured person's nearest earlier words, three at most, each at least
+  `SAID` similar to the entity's title and words;
+- the nearest answered decisions, two at most, each at least `FLOOR` similar.
+
+Each is a `hit` naming under `said` the entity it bears on and under `by` the
+person, so a model reads
+`Ada earlier, on T-12: C-7 · comment on T-3 (meaning) —
+2026-01-03 "test with the other number"`.
+What the calling session wrote or was told since its latest compaction is left
+out, since it holds that already, and the person's own writes are answered with
+nothing. The recall waits a second and then answers nothing; it never fails or
+holds the write. A host with no configured person or no meaning index answers
+nothing.
+
+Both floors belong to the embedder's space and were measured on the box's model
+(the constants say how). `yak trial score --arrive said` replays this door over
+the cases a graph holds (@yaks/trial).

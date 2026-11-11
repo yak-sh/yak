@@ -85,6 +85,7 @@ import {
   worded,
 } from './result.ts'
 import type { Clock } from '@yaks/fp'
+import type { Vocab } from '@yaks/vocab'
 import { type Registry, registryOf } from './registry.ts'
 
 // What each call is doing right now in this process, keyed per graph, not per
@@ -182,6 +183,19 @@ export type Reply = (
   answer: Bundle[],
   wrote: Bundle[],
 ) => Promise<Bundle[]>
+
+/** The kind a written bundle made its entity, if it made one: a created
+ * entity's kind, or a kind that is a mark (@yaks/vocab `CompInfo.mark`) whose
+ * `at` this write stamped, so marked for the first time. What a {@link Reply}
+ * reads of `wrote` to find the entities its call made. */
+export let became = (vocab: Vocab, b: Bundle): string | undefined => {
+  if (b.tombstone) return undefined
+  if (b.created) return vocab.kindOf(b)
+  return Object.keys(b).find((c) => {
+    let info = vocab.comp(c)
+    return info?.kind && info.mark && (b[c] as Comp | undefined)?.at
+  })
+}
 
 /** One admitted call, retaining its tool through execution while registration
  * advertises the provider's current declaration at the stable tool identity. */

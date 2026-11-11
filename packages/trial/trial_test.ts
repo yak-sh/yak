@@ -12,7 +12,7 @@ import { loadVocab } from '@yaks/vocab'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { tally, trialDoc } from './mod.ts'
 import { type Arrival, asking, before, cases, run, WORDS } from './moment.ts'
-import { open } from './arrive.ts'
+import { open, said as saidBefore } from './arrive.ts'
 
 let obj = { component: true, type: 'object' }
 let props = (p: Record<string, string>) => ({
@@ -25,7 +25,8 @@ let vocab = loadVocab([edgeDoc, docDoc, personaDoc, memoryDoc, trialDoc, {
   $defs: {
     contains: { ...obj, edge: true },
     content: props({ body: 'string' }),
-    created: props({ at: 'string', by: 'string' }),
+    created: props({ at: 'string', by: 'string', via: 'string' }),
+    comment: props({ target: 'string' }),
     completed: props({ at: 'string' }),
     notified: props({ at: 'string', via: 'string' }),
     task: { ...obj, status: { completed: 'done', default: 'open' } },
@@ -234,4 +235,40 @@ test('trial: open with a person at start is what was open with them then, and wh
     since: '2026-11-10T11:12:00.000Z',
   })
   assertEquals(part.eids.toSorted(), ['ask', 'reopened', 'settled'])
+})
+
+test("trial: said is the person's earlier words near what the session wrote in the window", async () => {
+  let wrote = (eid: string, title: string, when: string) => ({
+    entity: { eid },
+    task: {},
+    doc: { title },
+    created: { at: when, via: 's' },
+  })
+  await g.apply([
+    wrote('stale', 'An older task', '2026-11-10T11:11:00.000Z'),
+    wrote('filed', 'Text the church line', '2026-11-10T11:14:00.000Z'),
+    {
+      entity: { eid: 'word' },
+      comment: { target: 'm' },
+      doc: { body: 'test with the other number' },
+      created: { at: early, by: 'jeff' },
+    },
+  ])
+  let keyed: string[] = []
+  let [part] = await saidBefore(g, {
+    person: 'jeff',
+    meaning: (words, opts) => {
+      if (opts?.within?.includes('.decision')) return Promise.resolve([])
+      keyed.push(words)
+      return Promise.resolve([{ entity: 'word', similarity: .9, excerpt: '' }])
+    },
+  })({
+    storage: g.storage,
+    vocab,
+    m: { session: 's', seq: 7, at: '2026-11-10T11:17:00.000Z' },
+    had: [],
+    since: '2026-11-10T11:12:00.000Z',
+  })
+  assertEquals(keyed, ['Text the church line'])
+  assertEquals([part.door, part.eids], ['hit', ['word']])
 })

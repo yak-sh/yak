@@ -8,6 +8,9 @@
  * - {@link related}: beside each write's hit rows, the few nearest resources
  *   of any kind (@yaks/embedding/neighbours `hit.related`), as the graph
  *   stood when the write returned.
+ * - {@link said}: beside each thing the session wrote, what a write is
+ *   answered with from memory (@yaks/memory/graph): the person's nearest
+ *   earlier words, at a floor, and the nearest answered decisions.
  * - {@link open}: at the session's start and after each compaction, what was
  *   open with the person, and the decisions they answered in the day before.
  *
@@ -20,12 +23,15 @@
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { called } from '@yaks/graph/hit'
 import type { Meaning } from '@yaks/host'
-import { earlier } from '@yaks/memory/earlier'
+import { bearing, clip, earlier, titleOf } from '@yaks/memory/earlier'
+import { textOf } from '@yaks/memory/graph'
 import { FEW, resources } from '@yaks/embedding/neighbours'
 import {
+  absent,
   and,
   eq,
   every,
+  gt,
   limit,
   lt,
   ne,
@@ -122,6 +128,63 @@ export let related = (g: Graph): Arrival => {
         ).join('\n'),
       }]
       : []
+  }
+}
+
+/** What a write is answered with from memory, beside each thing the session
+ * wrote in the window: the person's nearest earlier words at least `floor`
+ * similar, and the nearest answered decisions, as the graph stood when it was
+ * written. What the session was told in the window is left out, as it is
+ * live. Cases that share a session share its writes, so each is read once. */
+export let said = (
+  g: Graph,
+  { person, meaning, floor }: {
+    person: Eid
+    meaning?: Meaning
+    floor?: number
+  },
+): Arrival => {
+  let read = new Map<Eid, ReturnType<typeof bearing>>()
+  return async ({ vocab, m, since }) => {
+    let wrote = (await g.read(and(
+      eq('created.via', m.session),
+      gt('created.at', since),
+      lt('created.at', m.at),
+      absent('entry'),
+      every(),
+    ))).filter((b) => vocab.kindOf(b) != 'entity' && textOf(b).trim())
+    let name = called(vocab)
+    let eids: Eid[] = []
+    let lines: string[] = []
+    for (let b of wrote) {
+      let key = b.entity.eid
+      if (!read.has(key)) {
+        read.set(
+          key,
+          bearing(g, {
+            person,
+            words: textOf(b),
+            before: at(b),
+            meaning,
+            floor,
+            held: { via: m.session, since },
+            wait: null,
+          }),
+        )
+      }
+      let found = await read.get(key)!
+      for (let q of found.said) {
+        eids.push(q.from.entity.eid)
+        lines.push(
+          `${q.id} · ${q.at.slice(0, 10)} · ${JSON.stringify(clip(q.words))}`,
+        )
+      }
+      for (let d of found.decided) {
+        eids.push(d.entity.eid)
+        lines.push(`${name(d)} · ${titleOf(d)}`)
+      }
+    }
+    return lines.length ? [{ door: 'hit', eids, text: lines.join('\n') }] : []
   }
 }
 

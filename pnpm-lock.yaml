@@ -3211,12 +3211,18 @@ importers:
       '@yaks/host':
         specifier: 0.2.29
         version: link:../host
+      '@yaks/id':
+        specifier: 0.2.23
+        version: link:../id
       '@yaks/inspect':
         specifier: 0.2.30
         version: link:../inspect
       '@yaks/query':
         specifier: 0.2.32
         version: link:../query
+      '@yaks/tools':
+        specifier: 0.2.30
+        version: link:../tools
       '@yaks/ui':
         specifier: 0.2.30
         version: link:../ui

@@ -40,7 +40,7 @@ let said = {
   content: { body: 'keep attachments immutable' },
   created: { by: 'ada', at: '2026-01-01T00:00:00Z' },
 }
-let prompted = async (rank: number) => {
+let prompted = async (rank: number, prompt = 'immutable attachments') => {
   let graph = {
     vocab: { comp: () => undefined, all: [], kindOf: () => 'entry' },
     address: (ids: string[]) =>
@@ -69,7 +69,7 @@ let prompted = async (rank: number) => {
       method: 'POST',
       body: JSON.stringify({
         hook_event_name: 'UserPromptSubmit',
-        prompt: 'immutable attachments',
+        prompt,
       }),
     }),
   )
@@ -80,4 +80,8 @@ test("a prompt's context carries its person's earlier words on the subject", asy
 })
 test('a recall slower than its wait is left out rather than holding the prompt', async () => {
   equal(await prompted(60), '')
+})
+test("a background task's notification is nobody's words and recalls nothing", async () => {
+  let notice = '<task-notification>\nimmutable attachments</task-notification>'
+  equal(await prompted(0, notice), '')
 })

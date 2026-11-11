@@ -67,6 +67,10 @@ type Hit = {
   near?: string
   /** the entity a call just made that this one is a related resource of */
   related?: string
+  /** the entity a call just made that this one was said or decided before
+   * on, and the name of who said it */
+  said?: string
+  by?: string
   status?: string
 }
 
@@ -97,6 +101,8 @@ let hitOf = (b: Bundle): Hit | null => {
     related: 'related' in h && typeof h.related == 'string'
       ? h.related
       : undefined,
+    said: 'said' in h && typeof h.said == 'string' ? h.said : undefined,
+    by: 'by' in h && typeof h.by == 'string' ? h.by : undefined,
     status: 'status' in h && typeof h.status == 'string' ? h.status : undefined,
   }
 }
@@ -127,6 +133,8 @@ let hit = <Node>(
       ? `near ${s.name(found.near)}: `
       : found.related
       ? `related to ${s.name(found.related)}: `
+      : found.said
+      ? `${safe(found.by ?? 'said')} earlier, on ${s.name(found.said)}: `
       : '',
     s.id(b),
     title ? ` ${title}` : '',
