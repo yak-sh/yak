@@ -37,7 +37,9 @@
         "seen": {
           "type": "string",
           "description": "the page of the app, relative to its address, where a sign-up is read, with {id} standing for the registration; the alert to the people the form notifies links to it when it is set",
-          "examples": ["signups?id={id}"]
+          "examples": [
+            "signups?id={id}"
+          ]
         },
         "notify": {
           "type": "array",
@@ -299,7 +301,10 @@
       "properties": {
         "why": {
           "type": "string",
-          "enum": ["trap", "quick"],
+          "enum": [
+            "trap",
+            "quick"
+          ],
           "description": "trap when the field people never see was filled in, quick when the form was sent sooner than a person could fill it in"
         },
         "at": {
@@ -350,6 +355,14 @@
           "stamped": true
         }
       }
+    },
+    "form_post": {
+      "effect": true,
+      "created": [
+        "completed"
+      ],
+      "target": ".registration",
+      "description": "Notify a completed registration’s recipients and email its confirmation."
     }
   }
 }

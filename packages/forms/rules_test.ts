@@ -5,9 +5,9 @@ import { mailDoc } from '@yaks/mail'
 import { docDoc } from '@yaks/doc'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/durable-object'
-import { durable } from '../../packages/durable-object/testing.ts'
+import { durable } from '../durable-object/testing.ts'
 import { equal, test, throws } from '@yaks/testing'
-import { formRules } from './form-rules.ts'
+import { formRules } from './rules.ts'
 
 let vocab = loadVocab([formsDoc, kernelDoc, mailDoc, docDoc])
 let store = storage(durable(), vocab)

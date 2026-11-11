@@ -6,6 +6,7 @@ import { type Comp, mint, signed } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Refused } from '@yaks/graph/errors'
 import {
+  accepted,
   type Answers,
   type Form,
   missing,
@@ -16,7 +17,6 @@ import {
   type Signs,
   signsOf,
 } from '@yaks/forms'
-import { accepted } from './form-rules.ts'
 import type { Answer } from './apps.ts'
 import { type Door, IDEMPOTENCY } from './door.ts'
 import type { Stored } from './graph.ts'

@@ -1,4 +1,4 @@
-import { type Comp, graph } from '@yaks/graph'
+import { type Comp, graph, signed } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { formsDoc } from '@yaks/forms/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
@@ -7,7 +7,7 @@ import { docDoc } from '@yaks/doc'
 import { loadVocab } from '@yaks/vocab'
 import { equal, test } from '@yaks/testing'
 import { memberKeywords, personal } from '@yaks/member'
-import { formPost, siteOf } from './form-mail.ts'
+import { formPost } from './mail.ts'
 
 let vocab = loadVocab([formsDoc, kernelDoc, mailDoc, docDoc], [memberKeywords])
 let g = graph({ vocab, storage: ram(vocab) })
@@ -38,13 +38,10 @@ await g.apply([
   },
 ])
 g.use(personal(vocab))
-let send = formPost(
-  {
-    app: 'app',
-    graph: g,
-    mail: () => 'ward.app@yaks.test',
-  } as unknown as Parameters<typeof formPost>[0],
-)
+let send = formPost({
+  post: (letters) => g.apply(signed(letters, { by: 'app' })),
+  site: () => 'https://ward.yaks.test/app/',
+})
 let retry = () =>
   send(
     { kind: 'created', entity: { eid: 'signup' }, name: 'completed', comp: {} },
@@ -112,12 +109,6 @@ test("the letter to a form's people can be answered at the registrant and opens 
     ),
     true,
   )
-})
-
-test("an app's site is read from the address its letters leave under", () => {
-  equal(siteOf('ward.app@yaks.app'), 'https://ward.yaks.app/app/')
-  equal(siteOf('ward@yaks.app'), 'https://ward.yaks.app/')
-  equal(siteOf(null), undefined)
 })
 
 test('a form that names no page for its sign-ups gets an alert without a link', async () => {

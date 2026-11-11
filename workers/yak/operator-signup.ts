@@ -1,6 +1,7 @@
 import type { Tool } from '@yaks/session'
 import type { Arrival } from '@yaks/phone'
 import { Blocked, keyword } from '@yaks/phone'
+import { formKeyword } from '@yaks/forms/text'
 import { type Bundle, derivedEid, type Graph } from '@yaks/graph'
 import {
   appStore,
@@ -16,10 +17,6 @@ import { builderOf, SPACE } from './build-door.ts'
 import { requestId } from './operator-channels.ts'
 import { phonedIn, textedOperator } from './operator-texts.ts'
 import { reachOf } from './operator-reach.ts'
-
-/** A yes answers a form question; the named carrier commands keep their aliases. */
-export let formKeyword = (text: string) =>
-  /^\W*yes\W*$/i.test(text.trim()) ? null : keyword(text)
 
 let consentAt = (arrival: Pick<Arrival, 'from' | 'to'>) =>
   derivedEid(JSON.stringify(['text-consent', arrival.from, arrival.to]))

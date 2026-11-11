@@ -1,12 +1,14 @@
 // The form conversation keeps its progress in the registration, in the app.
 // Only the kernel brings a vouched submitter to this door.
 import {
+  accepted,
   type Answers,
   type Form,
   missing,
   next,
   open,
   prefilled,
+  step,
 } from '@yaks/forms'
 import { type Bundle, type Comp, mint, signed } from '@yaks/graph'
 import { consentEid } from '@yaks/phone'
@@ -14,7 +16,6 @@ import { withPhone } from '@yaks/people'
 import { Refused } from '@yaks/graph/errors'
 import type { Stored } from './graph.ts'
 import { texterEid } from './form-phone.ts'
-import { accepted } from './form-rules.ts'
 import { calendarScope, personalFeed } from './calendar.ts'
 
 let comp = (row: Bundle | undefined, name: string): Comp =>
@@ -67,21 +68,6 @@ let progress = async (
   thanks: form.form.thanks,
   calendar: await link(at, person),
 })
-
-// A path comes only from next(), never from a model-supplied property name.
-let answering = (
-  answers: Answers,
-  path: (string | number)[],
-  value: unknown,
-) => {
-  let out = structuredClone(answers) as Record<string, unknown>
-  let scope: Record<string, unknown> | unknown[] = out
-  for (let key of path.slice(0, -1)) {
-    scope = (scope as Record<string | number, unknown>)[key] as typeof scope
-  }
-  ;(scope as Record<string | number, unknown>)[path.at(-1)!] = value
-  return out
-}
 
 // The texting number is theirs: the platform received the text from it.
 let initial = async (at: Stored, form: Form, phone: string) => {
@@ -185,23 +171,10 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
     if (!row) throw new Refused('No such registration.')
     let { form } = await definition(at, String(comp(row, 'registration').form))
     let answers = comp(row, 'registration').answers as Answers ?? {}
-    let owed = next(form, answers)
-    if (!owed) return Response.json(await progress(at, row, form, args.person))
-    if (quoted(args.path) != quoted(owed.path)) {
-      throw new Refused(
-        'That question has changed. Read your registration again.',
-      )
-    }
-    if (
-      args.value === undefined ||
-      args.value === null && owed.question.question.required
-    ) {
-      throw new Refused(
-        'Answer this required question; only optional questions can be skipped.',
-      )
-    }
-    let updated = answering(answers, owed.path, args.value)
-    let question = owed.question.question
+    let took = step(form, answers, args.path, args.value)
+    if (!took) return Response.json(await progress(at, row, form, args.person))
+    let updated = took.answers
+    let question = took.question.question
     let agreed = question.fills == 'sms_consent.consent' &&
       (args.value === true ||
         typeof args.value == 'string' && /^yes$/i.test(args.value.trim()))

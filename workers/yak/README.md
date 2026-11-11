@@ -636,8 +636,8 @@ them. Nobody else is answered any.
 
 A completed sign-up whose form says `shares{question, is}`, and whose answer to
 that question is `is`, also writes `shared{form, registration, answers, at}`
-with its answers to the questions marked `question.shared` (form-rules.ts). The
-app's viewers read it; the registration stays with its editors.
+with its answers to the questions marked `question.shared` (@yaks/forms
+rules.ts). The app's viewers read it; the registration stays with its editors.
 
 `doc` and `form` carry only the properties shown, those the form has, never
 `form.notify`. `open` is @yaks/forms `open` now, over the count of accepted

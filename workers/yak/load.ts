@@ -198,6 +198,8 @@ let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/draft/graph': () => import('@yaks/draft/graph'),
   '@yaks/edge/graph': () => import('@yaks/edge/graph'),
   '@yaks/egress/graph': () => import('@yaks/egress/graph'),
+  '@yaks/forms/graph': () => import('@yaks/forms/graph'),
+  '@yaks/forms/effects': () => import('@yaks/forms/effects'),
   '@yaks/id/graph': () => import('@yaks/id/graph'),
   '@yaks/key/graph': () => import('@yaks/key/graph'),
   '@yaks/mail/graph': () => import('@yaks/mail/graph'),

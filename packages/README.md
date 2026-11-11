@@ -53,7 +53,10 @@ grouped approximately by function, **not** by dependency order.
   functions for question progress and sign-up availability.
 
   Its `./fill` adapter supplies @yaks/ux `Submit` and `Fields` with question
-  visibility, validation and form transport.
+  visibility, validation and form transport. Its `./graph` and `./effects` are
+  the plugin a store runs forms with: the rules a registration is accepted by,
+  and `form_post`, the letters a completed one owes, on a clock and a writer its
+  host gives.
 - **[@yaks/people](./people)** — An app's own people as
   `individual{first, last, born, email, phone, household, status, deceased, …}`,
   `household{street, street2, city, region, postal, …}` and

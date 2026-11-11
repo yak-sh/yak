@@ -2,6 +2,7 @@
 // loads the rows and supplies the time and registration count.
 
 import { same } from '@yaks/fp'
+import { Refused } from '@yaks/graph/errors'
 
 /** The kinds a question can ask. */
 export type Kind =
@@ -317,5 +318,86 @@ export let signsOf = (fields: URLSearchParams): Signs => {
   return {
     ...trap == null ? {} : { trap },
     ...took && Number.isFinite(Number(took)) ? { took: Number(took) } : {},
+  }
+}
+
+/** A form's accepted registrations, read only as far as its capacity, which
+ * is all `open` needs of the count. */
+/// accepted('f', 0) -> '.registration.form="f"&.completed&!cancelled&!waitlisted&.limit=1'
+export let accepted = (id: string, capacity: number): string =>
+  `.registration.form=${
+    JSON.stringify(id)
+  }&.completed&!cancelled&!waitlisted&.limit=${Math.max(1, capacity)}`
+
+/** What one reply in a sign-up by conversation does: `value` recorded at
+ * `path`, the place of the question {@link next} owes. */
+export type Step = {
+  /** the answers with this one recorded */
+  answers: Answers
+  /** the question it answered */
+  question: Question
+  /** every required question is answered now */
+  complete: boolean
+}
+
+// A path comes only from next(), never from a model-supplied property name.
+let answering = (
+  answers: Answers,
+  path: (string | number)[],
+  value: unknown,
+): Answers => {
+  let out = structuredClone(answers) as Record<string, unknown>
+  let scope: Record<string, unknown> | unknown[] = out
+  for (let key of path.slice(0, -1)) {
+    scope = (scope as Record<string | number, unknown>)[key] as typeof scope
+  }
+  ;(scope as Record<string | number, unknown>)[path.at(-1)!] = value
+  return out
+}
+
+/**
+ * Record one reply to the question a sign-up owes, the way a conversation
+ * asks them one at a time: undefined when nothing is owed, and refused when
+ * `path` is not the question owed now, or when `value` skips (null) a
+ * required one.
+ *
+ * ```ts
+ * import { step } from '@yaks/forms'
+ * import { equal, throws } from '@yaks/testing'
+ * let form = {
+ *   form: {},
+ *   questions: [{ entity: { eid: 'name' }, question: { form: 'f', label: 'Name', kind: 'line' as const, required: true } }],
+ * }
+ * equal(step(form, {}, ['name'], 'Ann')?.answers, { name: 'Ann' })
+ * equal(step(form, {}, ['name'], 'Ann')?.complete, true)
+ * throws(() => step(form, {}, ['name'], null))
+ * equal(step(form, { name: 'Ann' }, ['name'], 'Bo'), undefined)
+ * ```
+ */
+export let step = (
+  form: Form,
+  answers: Answers,
+  path: readonly (string | number)[] | undefined,
+  value: unknown,
+): Step | undefined => {
+  let owed = next(form, answers)
+  if (!owed) return undefined
+  if (JSON.stringify(path) != JSON.stringify(owed.path)) {
+    throw new Refused(
+      'That question has changed. Read your registration again.',
+    )
+  }
+  if (
+    value === undefined || value === null && owed.question.question.required
+  ) {
+    throw new Refused(
+      'Answer this required question; only optional questions can be skipped.',
+    )
+  }
+  let updated = answering(answers, owed.path, value)
+  return {
+    answers: updated,
+    question: owed.question,
+    complete: !missing(form, updated).length,
   }
 }

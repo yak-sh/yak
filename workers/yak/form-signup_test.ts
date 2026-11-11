@@ -9,7 +9,7 @@ import { ram } from '@yaks/ram'
 import { memberKeywords, personal } from '@yaks/member'
 import { equal, ok, test } from '@yaks/testing'
 import { signupIn } from './signup.ts'
-import { formRules } from './form-rules.ts'
+import { formRules } from '@yaks/forms/graph'
 import { plugins as people } from '@yaks/people/graph'
 import type { Stored } from './graph.ts'
 

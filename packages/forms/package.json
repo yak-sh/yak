@@ -5,20 +5,29 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
-    "./fill": "./fill.ts"
+    "./fill": "./fill.ts",
+    "./graph": "./graph.ts",
+    "./effects": "./effects.ts",
+    "./text": "./text.ts"
   },
   "license": "Apache-2.0",
-  "description": "Form, question and registration rows, with pure functions for the next question, missing required answers and sign-up availability.",
+  "description": "Form, question and registration rows, with pure functions for the next question, missing required answers and sign-up availability, the rules a registration is accepted by and the letters a completed one owes.",
   "dependencies": {
+    "@yaks/effects": "0.2.33",
     "@yaks/fp": "0.2.23",
-    "@yaks/vocab": "0.2.32",
-    "@yaks/ux": "0.2.23",
-    "@yaks/ui": "0.2.30",
     "@yaks/graph": "0.2.33",
+    "@yaks/phone": "0.2.30",
+    "@yaks/ui": "0.2.30",
+    "@yaks/ux": "0.2.23",
+    "@yaks/vocab": "0.2.32",
     "preact": "10.29.7"
   },
   "devDependencies": {
+    "@yaks/doc": "0.2.24",
+    "@yaks/durable-object": "0.2.28",
     "@yaks/kernel": "0.2.28",
+    "@yaks/mail": "0.2.23",
+    "@yaks/member": "0.2.25",
     "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.30",
     "@yaks/client": "0.2.24",

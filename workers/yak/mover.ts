@@ -62,8 +62,6 @@ import { operatorNameRule } from './operator-name.ts'
 import { sellerRule } from './seller-move.ts'
 import { describedRule } from './described-move.ts'
 import { proRule } from './pro-move.ts'
-import { formMailRule } from './form-mail-move.ts'
-import { formPhoneRule } from './form-phone-move.ts'
 import { recipientRule } from './recipient-move.ts'
 export type MoveContext = { store: string; app?: string; space?: string }
 
@@ -197,8 +195,6 @@ export let RULES: Rule[] = [
   sellerRule,
   describedRule,
   proRule,
-  formMailRule,
-  formPhoneRule,
   recipientRule,
 ]
 

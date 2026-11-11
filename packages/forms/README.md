@@ -4,6 +4,9 @@ Form, question and registration rows, with pure functions for question progress
 and sign-up availability. The caller supplies the rows, answers, time and count;
 these functions read no storage and perform no effects. The `./fill` export
 adapts form rows and HTTP calls to the interface components in @yaks/ux.
+`./graph` and `./effects` are the plugin a store runs forms with: the rules a
+registration is accepted by and the letters a completed one owes (see
+[The plugin](#the-plugin)). `./text` says which texts answer a sign-up by text.
 
 A **question** is a graph bundle with `entity.eid` and
 `question{form, label,
@@ -58,9 +61,9 @@ choices it lacks, and `household` alone on an `address` question fills the
 street, city, region and postal code of the person's household. On a repeat,
 `relates` says what each entry is to the person it is listed under: `child`,
 `parent`, `spouse` or `sibling`, and absent when the entries are no relation.
-The core performs no directory writes. `notify` lists recipient entity ids;
-delivery belongs to the caller. `seen` is the app page that shows a sign-up
-(`signups?id={id}`), which the alert to those people links to.
+The core performs no directory writes: matching a sign-up to an app's people is
+@yaks/people's. `notify` lists recipient entity ids. `seen` is the app page that
+shows a sign-up (`signups?id={id}`), which the alert to those people links to.
 
 Registration state comes from marks. `registration.status` is `cancelled` when
 it carries `cancelled{at, by, via, reason}`, then `waitlisted` when it carries
@@ -211,6 +214,30 @@ equal(screened({ trap: '', took: 8000 }), undefined)
 equal(screened({ trap: 'https://spam.example' }), 'trap')
 equal(screened(signsOf(new URLSearchParams('yak-took=150'))), 'quick')
 ```
+
+## The plugin
+
+`plugins(host, options)` from `@yaks/forms/graph` is the rule that accepts a
+registration in its own transaction: a `completed` one is refused while a
+required question is unanswered, a file answer names no stored file, or the form
+is closed or full (`open`, on `options.now`, `Date.now` by default), and one
+whose answer says to share it writes `shared{…}` beside it.
+
+`effects(host, options)` from `@yaks/forms/effects` is `form_post`, owed by a
+completed registration that is not `held`: a confirmation to the address the
+sign-up gave and a letter to each person in `form.notify` (`told`), each once
+however often it is retried, wearing `form_mail{registration, purpose}`. The
+host says how they are written (`options.post`, the effect's own write by
+default), where the app's pages are for the `seen` link (`options.site`), and
+where a notified person whose row has no `email{address}` is written to
+(`options.addressOf`).
+
+A conversation asks one question at a time: `step(form, answers, path,
+value)`
+records a reply to the question `next` owes, refusing one for another question
+or a skipped required one, and says whether the sign-up is complete.
+`formKeyword` from `@yaks/forms/text` tells a carrier's STOP or HELP from a
+reply, a bare yes being a reply.
 
 ## Filling forms
 

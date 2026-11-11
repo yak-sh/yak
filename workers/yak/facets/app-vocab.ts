@@ -104,13 +104,6 @@ export let kernelDoc: VocabDoc = {
       description:
         'Extract stored documents once into searchable pages, reading scanned pages too.',
     },
-    form_post: {
-      effect: true,
-      created: ['completed'],
-      target: '.registration',
-      description:
-        'Notify a completed registration’s recipients and email its confirmation.',
-    },
     delete_upload: {
       effect: true,
       removed: ['blob'],

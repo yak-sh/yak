@@ -286,6 +286,7 @@ import { DELIVER, MAIL } from '@yaks/mail'
 import { subscription } from './notices.ts'
 import { formIn } from './forms.ts'
 import { signupIn } from './signup.ts'
+import { formsOptions } from './forms-host.ts'
 import { calendarIn } from './calendar.ts'
 import {
   Denied,
@@ -1534,6 +1535,7 @@ export class Store {
         if (plugin == '@yaks/mail') {
           return { ...options, domain: apex(this.#bind) }
         }
+        if (plugin == '@yaks/forms') return { ...options, ...formsOptions(at) }
         if (plugin == '@yaks/rtc') {
           return { ...options, realtime: realtimeOf(this.#bind) }
         }

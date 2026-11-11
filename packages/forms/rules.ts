@@ -1,13 +1,14 @@
 // Availability and completion are checked in the registration’s transaction,
 // and what its sender chose to share is written beside it.
 import {
+  accepted,
   answered,
   type Answers,
   type Form,
   missing,
   open,
   shared,
-} from '@yaks/forms'
+} from './mod.ts'
 import { composed } from '@yaks/graph/bundle'
 import { after, each } from '@yaks/fp'
 import {
@@ -22,20 +23,15 @@ import { Refused } from '@yaks/graph/errors'
 let comp = (row: Bundle | undefined, name: string): Comp =>
   row?.[name] as Comp ?? {}
 let quote = (value: unknown) => JSON.stringify(value)
-/** A form's accepted registrations, read only as far as its capacity, which
- * is all `open` needs of the count. */
-export let accepted = (id: string, capacity: number) =>
-  `.registration.form=${quote(id)}&.completed&!cancelled&!waitlisted&.limit=${
-    Math.max(1, capacity)
-  }`
 // A retried completion finds the same shared row again.
 let share = (registration: string) =>
   derivedEid(JSON.stringify(['registration-shared', registration]))
 
+/** The rules a registration is accepted by, read against `now`. */
 export let formRules = (
   now: () => number,
 ): Plugin => ({
-  name: 'yak/forms',
+  name: '@yaks/forms',
   admission: () => true,
   hooks: {
     rules: hook(['registration', 'completed'], (bundles, tx) => {

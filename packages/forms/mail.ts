@@ -1,20 +1,23 @@
-// Letters are separate writes so their bodies pass through blob preparation.
-import { answered, type Answers, type Form } from '@yaks/forms'
-import { type Bundle, type Comp, derivedEid, signed } from '@yaks/graph'
+// The letters a completed sign-up owes: its thanks to the person who signed
+// up and the word to each person the form notifies. Letters are separate
+// writes so their bodies pass through blob preparation.
+import { answered, type Answers, type Form } from './mod.ts'
+import { type Bundle, type Comp, derivedEid } from '@yaks/graph'
 import type { Handler } from '@yaks/effects'
-import { emailOf } from '@yaks/people'
-import type { Stored } from './graph.ts'
+import type { Options } from './options.ts'
 
 let comp = (row: Bundle | undefined, name: string): Comp =>
   row?.[name] as Comp ?? {}
-let address = (row: Bundle | undefined) =>
-  comp(row, 'email').address ?? emailOf(row)
 /** The purposes a form writes a sign-up's letters for: the thanks to the
  * person who signed up, and the word to each person the form notifies. */
-export let PURPOSES = ['confirm', 'notify'] as const
+export let PURPOSES: readonly ['confirm', 'notify'] = ['confirm', 'notify']
 
 /** The eids of one of a sign-up's letters and of the address it goes to. */
-export let lettered = (registration: string, purpose: string, to: string) => ({
+export let lettered = (
+  registration: string,
+  purpose: string,
+  to: string,
+): { address: string; letter: string } => ({
   address: derivedEid(
     JSON.stringify(['form-address', registration, purpose, to]),
   ),
@@ -66,17 +69,18 @@ let said = (value: unknown): string =>
  * each child or helper reads as one person.
  *
  * ```ts
- * import { assertEquals } from '@std/assert'
+ * import { told } from '@yaks/forms/effects'
+ * import { equal } from '@yaks/testing'
  * let ask = (eid: string, label: string, order: number, within?: string, kind = 'line') => ({
  *   entity: { eid },
  *   question: { form: 'f', label, kind: kind as 'line', order, within },
  * })
  * let form = { form: {}, questions: [ask('n', 'Your name', 1), ask('h', 'How can we help?', 2), ask('c', 'Child', 3, undefined, 'repeat'), ask('k', 'Name', 4, 'c')] }
- * assertEquals(
+ * equal(
  *   told(form, { n: 'Linda Park', h: 'A ride on Sunday', c: [{ k: 'Bo' }, { k: 'Cy' }] }, 'Visitor card'),
  *   'A new sign-up for Visitor card.\n\n- Your name: Linda Park\n- How can we help? A ride on Sunday\n\nChild 1\n- Name: Bo\n\nChild 2\n- Name: Cy',
  * )
- * assertEquals(told(form, {}, 'Visitor card'), 'A new sign-up for Visitor card.')
+ * equal(told(form, {}, 'Visitor card'), 'A new sign-up for Visitor card.')
  * ```
  */
 export let told = (form: Form, answers: Answers, title: string): string => {
@@ -109,34 +113,28 @@ export let told = (form: Form, answers: Answers, title: string): string => {
     .join('\n\n')
 }
 
-/** Where an app's pages are served, from the address its letters leave under:
- * `<space>.<app>@<apex>`, or `<space>@<apex>` for the app that is the
- * space's home. */
-export let siteOf = (mail: string | null): string | undefined => {
-  let [, name, apex] =
-    /^([a-z0-9-]+(?:\.[a-z0-9-]+)?)@(.+)$/.exec(mail ?? '') ?? []
-  let [space, app] = (name ?? '').split('.')
-  return space ? `https://${space}.${apex}/${app ? `${app}/` : ''}` : undefined
-}
-
+/** `form_post`: write a completed sign-up's letters, each once however often
+ * it is retried. A sign-up still held for a bot's writes none until it is
+ * accepted. */
 export let formPost =
-  (at: Pick<Stored, 'app' | 'graph' | 'mail'>): Handler => async (event) => {
-    let [row] = await at.graph.get([event.entity.eid])
-    // A sign-up still held for a bot's writes no letter until it is accepted.
-    if (!at.app || !row?.registration || !row.completed || row.held) return
+  (options: Options = {}): Handler => async (event, tx, write) => {
+    let [row] = await tx.get([event.entity.eid])
+    if (!row?.registration || !row.completed || row.held) return
+    let address = (b: Bundle | undefined) =>
+      comp(b, 'email').address ?? options.addressOf?.(b)
     let registration = comp(row, 'registration'),
       formId = String(registration.form)
-    let [source] = await at.graph.get([formId])
+    let [source] = await tx.get([formId])
     if (!source?.form) return
     let form: Form = {
       form: comp(source, 'form'),
-      questions: await at.graph.read(
+      questions: await tx.read(
         `.question.form=${JSON.stringify(formId)}`,
       ) as unknown as Form['questions'],
     }
     let person = String(registration.person ?? '')
     let notify = [...(form.form.notify ?? [])]
-    let people = await at.graph.get([...notify, ...person ? [person] : []])
+    let people = await tx.get([...notify, ...person ? [person] : []])
     let title = String(comp(source, 'doc').title ?? 'Sign-up')
     let answers = registration.answers as Answers ?? {}
     let email = answered(form, answers).find((a) =>
@@ -145,7 +143,7 @@ export let formPost =
         a.question.question.fills?.endsWith('.email'))
     )?.value ?? address(people.find((b) => b.entity.eid == person))
     // The page the form says shows a sign-up, if it says.
-    let site = siteOf(at.mail()), page = form.form.seen
+    let site = options.site?.(), page = form.form.seen
     let open = site && page
       ? `\n\nSee it: ${site}${page.replaceAll('{id}', row.entity.eid)}`
       : ''
@@ -166,6 +164,7 @@ export let formPost =
         told(form, answers, title) + open,
       ]),
     ]
+    let post = options.post ?? write
     for (let [to, purpose, body] of recipients) {
       if (typeof to != 'string' || !to.trim()) continue
       let subject = purpose == 'notify' ? `New sign-up: ${title}` : title
@@ -177,7 +176,7 @@ export let formPost =
         body,
         purpose == 'notify' ? replies : {},
       )
-      if ((await at.graph.get([batch[1].entity.eid])).length) continue
-      await at.graph.apply(signed(batch, { by: at.app }))
+      if ((await tx.get([batch[1].entity.eid])).length) continue
+      await post(batch)
     }
   }
