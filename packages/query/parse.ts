@@ -39,6 +39,7 @@ import {
   Value,
   WALK_DEPTH,
 } from './ast.ts'
+import { OPERATORS } from './teach.ts'
 import { frozen } from '@yaks/fp'
 
 // ---- values ----
@@ -173,6 +174,16 @@ let OPS = /^(!=|~=|<=|>=|->|<-|<|>|=)/
 // with no value, and a dotted prefix `!.p` are refused.
 let spelled = (token: string, one: string) =>
   new SyntaxError(`${token} is written ${one}`)
+
+// A path followed by something no operator begins (`.p~v`, `.p?created`): the
+// refusal names the operators there are, and the two ways to match text.
+let unknown = (token: string) =>
+  new SyntaxError(
+    `not a clause: ${token}; an operator is one of ` +
+      `${OPERATORS.map((o) => o.spell).join(' ')} ` +
+      `(.doc.title~=cake matches part of a value), ` +
+      `a bare word searches all indexed text, and .near=T-42 ranks by meaning`,
+  )
 
 // ---- qualifiers ----
 
@@ -406,7 +417,7 @@ export let parseDot = (token: string): Clause[] | null => {
   let o = rest.match(OPS)
   if (!o) {
     if (!dotted && bracket == null) return null
-    throw new SyntaxError(`not a clause: ${token}`)
+    throw unknown(token)
   }
   let op: string = o[1]
   let rawValue = rest.slice(op.length)

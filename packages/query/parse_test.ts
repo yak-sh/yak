@@ -428,6 +428,17 @@ test('refusals', () => {
   assertThrows(() => parse('?doc[x]'), Error, 'not a clause')
 })
 
+// A path with no operator the grammar has is refused with the ones it has.
+for (let token of ['.web.url~cloudflare', '.individual?created']) {
+  test(`${token} is refused with the operators`, () => {
+    assertThrows(
+      () => parse(token),
+      SyntaxError,
+      `not a clause: ${token}; an operator is one of = != ~= < <= > >=`,
+    )
+  })
+}
+
 // Kept app releases still send suffix presence and optional forms; each reads
 // as the prefix form it has now, in a strict query too.
 for (
