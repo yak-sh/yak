@@ -23,6 +23,7 @@ let who = (over: Partial<Worn> = {}): Worn => ({
   contains: [],
   names: [],
   tools: [],
+  queries: [],
   ...over,
 })
 

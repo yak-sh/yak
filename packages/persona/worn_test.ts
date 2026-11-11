@@ -16,7 +16,7 @@ import {
   voiced,
   world,
 } from './testing.ts'
-import { offer, wear } from './worn.ts'
+import { fold, offer, wear } from './worn.ts'
 import { voice, type Worn } from './voice.ts'
 
 // Sync in, sync out: @yaks/ram answers immediately, so a test that had to
@@ -225,4 +225,26 @@ test('a contained tool is never carried or said', () => {
 
 test('a persona containing no tool offers nothing, leaving the runner its own', () => {
   assertEquals(offer(now(tooled, 'n3')), undefined)
+})
+
+// n1 contains the saved query q1 and the persona n2, which contains q2.
+let asking = graph(
+  voiced('n2', 'base', 'the floor'),
+  { entity: { eid: 'q1' }, doc: { title: 'open' }, board: { query: '.a' } },
+  { entity: { eid: 'q2' }, doc: { title: 'answered' }, board: { query: '.b' } },
+  link('n1', 'contains', 'q1'),
+  link('n1', 'contains', 'n2'),
+  link('n2', 'contains', 'q2'),
+)
+
+test('a contained saved query is run at delivery, never carried or said', () => {
+  let worn = now(asking, 'n1')!
+  assertEquals(ids(worn.queries), ['q1', 'q2'])
+  assertEquals(ids(worn.contains), ['n2'])
+  assert(!voice(said)(worn).includes('open'))
+})
+
+test('personas folded as one run every query once', () => {
+  let one = now(asking, 'n1')!, two = now(asking, 'n2')!
+  assertEquals(ids(fold(two, one).queries), ['q2', 'q1'])
 })

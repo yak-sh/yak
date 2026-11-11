@@ -53,6 +53,11 @@ export type Worn = {
    * (@yaks/tools' `tool{name}`) it or a persona it includes contains. Never
    * part of its text. */
   tools: Bundle[]
+  /** the saved queries a session wearing it is told the rows of when it
+   * starts and after each compaction: each `board{query}` (@yaks/project) it
+   * or a persona it includes contains. Resolved at delivery, never part of
+   * its text. */
+  queries: Bundle[]
 }
 
 /** The heading over the documents a persona only mentions by id. */

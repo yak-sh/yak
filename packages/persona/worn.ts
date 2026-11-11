@@ -21,7 +21,10 @@
 // top of it without anybody copying its text. A persona reached by `reads` is
 // only listed: the edge records where it is, not that its text belongs here.
 // A registered tool it contains is offered to whoever wears it rather than
-// said, and an included persona's tools are offered with its own.
+// said, and an included persona's tools are offered with its own. A saved
+// query it contains (@yaks/project's `board{query}`) is not said either: its
+// rows are, when they are delivered (reference at authoring, resolve at
+// delivery), and an included persona's queries are run with its own.
 //
 // A persona may be worn on a base (`persona.base`): the base's text and
 // documents come first, and this persona's follow them, as {@link fold} says
@@ -54,6 +57,10 @@ export let READS = 'reads'
 
 /** A registered tool (@yaks/tools): contained, it is offered, not said. */
 export let TOOL = 'tool'
+
+/** A saved query (@yaks/project): contained, its rows are delivered, not its
+ * text. */
+export let QUERY = 'board'
 
 // How deep personas may be nested. A base under a base under a base is a graph
 // somebody drew by hand; deeper than this means a cycle, and a cycle is what
@@ -176,6 +183,7 @@ let gathered = (
       let contained = new Map<Eid, Bundle>()
       let names = new Map<Eid, Bundle>()
       let tools = new Map<Eid, Bundle>()
+      let queries = new Map<Eid, Bundle>()
       let seen = new Set<Eid>([eid])
       let level = [eid]
       return after(
@@ -191,6 +199,10 @@ let gathered = (
                   let b = by.get(id)
                   if (b?.[TOOL]) {
                     tools.set(id, b)
+                    continue
+                  }
+                  if (b?.[QUERY]) {
+                    queries.set(id, b)
                     continue
                   }
                   // `seen` holds the persona itself, so a cycle of
@@ -238,6 +250,7 @@ let gathered = (
             contains: [...contained.values()],
             names: [...names.values()],
             tools: [...tools.values()],
+            queries: [...queries.values()],
           }
         },
       )
@@ -258,6 +271,7 @@ export let fold = (head: Worn, ...more: Worn[]): Worn => {
   let contained = new Map(head.contains.map((b) => [eidOf(b), b]))
   let names = new Map(head.names.map((b) => [eidOf(b), b]))
   let tools = new Map(head.tools.map((b) => [eidOf(b), b]))
+  let queries = new Map(head.queries.map((b) => [eidOf(b), b]))
   for (let w of more) {
     for (let b of [w.persona, ...w.contains]) {
       if (eidOf(b) != lead && !contained.has(eidOf(b))) {
@@ -266,6 +280,9 @@ export let fold = (head: Worn, ...more: Worn[]): Worn => {
     }
     for (let b of w.names) if (!names.has(eidOf(b))) names.set(eidOf(b), b)
     for (let b of w.tools) if (!tools.has(eidOf(b))) tools.set(eidOf(b), b)
+    for (let b of w.queries) {
+      if (!queries.has(eidOf(b))) queries.set(eidOf(b), b)
+    }
   }
   for (let id of [lead, ...contained.keys()]) names.delete(id)
   return {
@@ -273,6 +290,7 @@ export let fold = (head: Worn, ...more: Worn[]): Worn => {
     contains: [...contained.values()],
     names: [...names.values()],
     tools: [...tools.values()],
+    queries: [...queries.values()],
   }
 }
 
@@ -280,8 +298,8 @@ export let fold = (head: Worn, ...more: Worn[]): Worn => {
  * What `w` says that `said` does not: a document `said` includes is dropped in
  * both forms, and one it only names loses only its name, since including it in
  * full still earns its place. `w` keeps its own lead and its tools, which are
- * offered, not said. How a file read beside another avoids saying anything
- * twice.
+ * offered, not said, and its queries, whose rows are delivered. How a file
+ * read beside another avoids saying anything twice.
  */
 export let beside = (w: Worn, said: Worn): Worn => {
   let included = new Set([said.persona, ...said.contains].map(eidOf))
@@ -291,6 +309,7 @@ export let beside = (w: Worn, said: Worn): Worn => {
     contains: w.contains.filter((b) => !included.has(eidOf(b))),
     names: w.names.filter((b) => !named.has(eidOf(b))),
     tools: w.tools,
+    queries: w.queries,
   }
 }
 

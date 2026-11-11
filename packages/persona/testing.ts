@@ -87,6 +87,12 @@ let doc: VocabDoc = {
       type: 'object',
       properties: { name: { type: 'string' } },
     },
+    // @yaks/project's saved query, whose rows a persona containing it is told.
+    board: {
+      component: true,
+      type: 'object',
+      properties: { query: { type: 'string' } },
+    },
   },
 }
 

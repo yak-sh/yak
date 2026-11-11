@@ -11,13 +11,15 @@
 // between, the package's duty reads from the harness's own transcript file
 // (./service.ts).
 //
-// What A session should be told is undecided. `session_context` returns what a
-// hook needs and nothing else: the transcript becomes an entity under the
-// harness's own id for it, and what comes back is that entity's id and the work
-// it holds a lock on. There was a composed digest here — the owner's turns, a
-// handoff, recalled memories, the standing goals — and it is gone (T-37707):
-// the owner's word is that the existing system never worked well and none of it
-// is worth porting until there is a design. Leave it so.
+// What a session is told is computed rows, never prose and never recalled
+// memories (D-155194). `session_context` returns what a hook needs: the
+// transcript becomes an entity under the harness's own id for it, and what
+// comes back is that entity's id, the work it holds a lock on, and the rows of
+// each saved query its persona contains, run at the moment they are said. The
+// hook runs at a session's start and again after each compaction, which is
+// when a summary may have kept an id and dropped what became of it. There was
+// a composed digest here — the owner's turns, a handoff, recalled memories,
+// the standing goals — and it is gone (T-37707).
 //
 // A harness hands its event over as JSON on stdin, which reaches a tool as the
 // `hook` argument (`yak session context --hook -`). Parsing it here is what
@@ -135,11 +137,59 @@ export let wakes = (id: string): string =>
   `that was waiting, each item whole on one line: read all of the output, ` +
   `and no item needs a second command to read.`
 
-/** One entity as a person reads it: its id, and its title where it has one. */
+/** One entity as a person reads it: its id, its title where it has one, and
+ * the answer where it is a decided question (@yaks/kernel `decided.choice`,
+ * the chosen label or the words of a custom answer). */
 export let line = (vocab: Vocab, b: Bundle): string => {
   let id = human(vocab)(b)
   let title = str(comp(b, 'doc').title)
-  return title ? `${id} — ${title}` : id
+  let choice = str(comp(b, 'decided').choice)
+  return [id, title, choice && `answered: ${choice}`].filter(Boolean)
+    .join(' — ')
+}
+
+/** One heading over the rows under it, each a {@link line}. */
+let section = (vocab: Vocab, title: string, rows: Bundle[]): string[] => [
+  `## ${title}`,
+  ...rows.length ? rows.map((b) => `- ${line(vocab, b)}`) : ['nothing'],
+]
+
+/**
+ * The saved queries a session is told the rows of, each as its title and its
+ * rows: those its persona contains (@yaks/persona `queries`) and, for an
+ * operator, those of the persona its project's operator wears
+ * (`helper{persona}`, ./routine.ts), since an operator session wears its
+ * checkout's common persona. Each query is run now, at delivery (M-4063), so
+ * a compaction summary that kept an id as open is answered by what is.
+ */
+export let asked = async (
+  graph: Graph,
+  persona: string | undefined,
+  operator: boolean,
+): Promise<[string, Bundle[]][]> => {
+  if (!persona || !graph.vocab.comp('board')) return []
+  let { wearing, fold } = await personas()
+  let wear = (eid: string) => wearing(graph, '', { persona: eid })
+  let own = await wear(persona)
+  let lead = operator && own
+    ? str(
+      comp(
+        (await graph.get([str(comp(own.persona, 'persona').home)]))[0],
+        'helper',
+      ).persona,
+    )
+    : ''
+  let theirs = lead && lead != persona ? await wear(lead) : undefined
+  let worn = own && theirs ? fold(own, theirs) : own ?? theirs
+  return await Promise.all((worn?.queries ?? []).map(async (b) => {
+    let query = str(comp(b, 'board').query)
+    let rows = query ? await graph.read(query) : []
+    let title = str(comp(b, 'doc').title) || query
+    return [title, await graph.get(rows.map((r) => r.entity.eid))] as [
+      string,
+      Bundle[],
+    ]
+  }))
 }
 
 // An eid a query may name: a `$alias` is a bundle the batch has yet to mint,
@@ -327,6 +377,12 @@ export let runs = (
     let held = minted(eid)
       ? await graph.read(`.${CLAIM}.session=${JSON.stringify(eid)}&*`)
       : []
+    let operator = comp(found, SESSION).operator == true
+    let told = await asked(
+      graph,
+      str(comp(found, SESSION).persona) || persona,
+      operator,
+    )
     return [
       // Only the difference is written back — a transcript's own properties are
       // not this tool's to restate.
@@ -346,11 +402,12 @@ export let runs = (
         entity: { eid: '$said' },
         content: {
           body: [
-            '## claimed',
-            ...held.length
-              ? held.map((b) => `- ${line(host.vocab, b)}`)
-              : ['nothing'],
-            ...comp(found, SESSION).operator == true ? [wakes(id)] : [],
+            ...section(host.vocab, 'claimed', held),
+            ...told.flatMap(([title, rows]) => [
+              '',
+              ...section(host.vocab, title, rows),
+            ]),
+            ...operator ? [wakes(id)] : [],
           ].join('\n'),
         },
         output: { source: call.entity.eid },

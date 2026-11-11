@@ -171,6 +171,62 @@ test('a session that wears a persona keeps it', async () => {
   assertEquals(await wears('chose', '/r'), undefined)
 })
 
+// Saved queries: the common persona n1 contains "open", and n3, the persona
+// p1's operator wears, contains "answered". Each is run as the hook speaks.
+let asking = fleet('/r', fleetVocab)
+asking.apply([
+  {
+    entity: { eid: 'q1' },
+    doc: { title: 'open' },
+    board: { query: '.doc.title=one' },
+  },
+  {
+    entity: { eid: 'q2' },
+    doc: { title: 'answered' },
+    board: { query: '.doc.title=two' },
+  },
+  {
+    entity: { eid: 'n3' },
+    doc: { title: 'operator' },
+    persona: { home: 'p1' },
+  },
+  { entity: { eid: 'p1' }, helper: { persona: 'n3' } },
+  { entity: { eid: 'e1' }, edge: { from: 'n1', to: 'q1' }, contains: {} },
+  { entity: { eid: 'e2' }, edge: { from: 'n3', to: 'q2' }, contains: {} },
+  {
+    entity: { eid: 's1' },
+    session: { id: 'op', persona: 'n1', operator: true },
+  },
+  { entity: { eid: 's2' }, session: { id: 'plain', persona: 'n1' } },
+  { entity: { eid: 's3' }, session: { id: 'coder', persona: 'n2' } },
+])
+let told = async (session: string) =>
+  comp(
+    (await tools.session_context!(
+      { entity: { eid: 'c1' }, call: { args: { session } } },
+      asking,
+    ) as Bundle[])[1],
+    'content',
+  ).body as string
+let headed = (body: string) =>
+  body.split('\n\n').map((part) => part.split('\n').slice(0, 2))
+
+test('a session is told the rows of the saved queries its persona contains', async () => {
+  assertEquals(headed(await told('plain')), [
+    ['## claimed', 'nothing'],
+    ['## open', '- D-8 — one'],
+  ])
+  assertEquals(headed(await told('coder')), [['## claimed', 'nothing']])
+})
+
+test("an operator is told its operator persona's queries too", async () => {
+  assertEquals(headed(await told('op')).slice(0, 3), [
+    ['## claimed', 'nothing'],
+    ['## open', '- D-8 — one'],
+    ['## answered', '- D-9 — two'],
+  ])
+})
+
 // A caller naming a transcript by its eid, as an MCP connection names its own:
 // the transcript keeps the id it is found by.
 let named = async (session: string) =>
