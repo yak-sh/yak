@@ -28,8 +28,6 @@ export type Sent = { to: string; status: number }
 
 let STATUSES = [301, 302, 303, 307, 308]
 
-/// trimmed('/a/b/') -> '/a/b'
-/// trimmed('/') -> '/'
 let trimmed = (path: string) =>
   path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path
 
