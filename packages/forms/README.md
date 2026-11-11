@@ -199,9 +199,9 @@ to its sending. `screened(signs)` says why a sending is taken for a bot's:
 (2 seconds). An absent sign says nothing. `signsOf(fields)` reads them from a
 native post, whose controls are named by `SIGNS` (`yak-trap`, `yak-took`).
 
-A door keeps a sign-up it takes for a bot's, wearing `held{why}` and no
-`completed`. Its status is `held`. Accepting it is removing `held` and marking
-it `completed`, which runs everything completion runs.
+A door keeps a sign-up it takes for a bot's, wearing `held{why, at, by, via}`
+and no `completed`. Its status is `held`. Accepting it is removing `held` and
+marking it `completed`, which runs everything completion runs.
 
 ```ts
 import { screened, signsOf } from '@yaks/forms'

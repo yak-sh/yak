@@ -213,10 +213,10 @@ two seconds. A sign-up from somebody signed in as one of the app's own people is
 never screened.
 
 A sign-up taken for a bot's is still kept: a person's answers are never lost to
-a wrong guess. It is a `registration` wearing `held{why, at}`, where `why` is
-`trap` or `quick`, and no `completed`; its status is `held`. It sends no letter,
-fills nothing in the directory and takes no place against `capacity`. The
-visitor is answered as anyone else is.
+a wrong guess. It is a `registration` wearing `held{why, at, by, via}`, where
+`why` is `trap` or `quick`, and no `completed`; its status is `held`. It sends
+no letter, fills nothing in the directory and takes no place against `capacity`.
+The visitor is answered as anyone else is.
 
 The page that lists sign-ups shows the held ones under their own heading, read
 with `subscribe('.registration&.held', draw)`. An owner or editor accepts one by

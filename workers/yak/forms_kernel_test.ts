@@ -784,12 +784,13 @@ test('a sign-up taken for a bot’s is kept and held, and sends nothing', () => 
       ((r.registration as Comp).answers as Comp)[visitName],
       (r.registration as Comp).status,
       (r.held as Comp)?.why,
+      !!(r.held as Comp)?.at,
       !!r.completed,
     ]).sort(),
     [
-      ['Hasty', 'held', 'quick', false],
-      ['Plain', 'held', 'trap', false],
-      ['Spam', 'held', 'trap', false],
+      ['Hasty', 'held', 'quick', true, false],
+      ['Plain', 'held', 'trap', true, false],
+      ['Spam', 'held', 'trap', true, false],
     ],
   )
   equal(quiet, 0)

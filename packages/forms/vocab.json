@@ -307,6 +307,20 @@
           "format": "date-time",
           "stamped": true,
           "description": "when the door held it"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "who the door held it for: the visitor who sent it",
+          "stamped": true
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the session or client that wrote the mark",
+          "stamped": true
         }
       }
     },
