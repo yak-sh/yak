@@ -48,8 +48,10 @@ and refusal state use the `/front` vocabulary.
 A table's sortable heading is a button: pressing it runs the rows by that
 column, again the other way, then as they came, and `aria-sort` and an arrow say
 which. A query's rows are run by the graph (`.order=`), each component's column
-by the first property it shows. A table holding every row sorts it through
-@yaks/ux `sortRows`: numbers as numbers, an empty value last.
+by the first property it shows, and the order is the query line's own, so the
+page's address keeps it through a reload or a shared link. A table holding every
+row sorts it through @yaks/ux `sortRows`: numbers as numbers, an empty value
+last.
 
 ## What an entity holds, in order
 

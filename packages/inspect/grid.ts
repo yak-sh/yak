@@ -7,7 +7,9 @@
  * rows by it, then back the other way, then as they came.
  * A long table shows a page of rows at a time, with a `Pager` under it. How
  * the rows run and which page shows are the table's state in the page's own
- * graph (./state.ts `grid`), so a page shown again shows as it was left.
+ * graph (./state.ts `grid`), so a page shown again shows as it was left; a
+ * page that keeps its order elsewhere (a query's page, in its line and so its
+ * address) hands it in as `sorts`.
  *
  * A table paged by the graph asks for one page at a time (`paged`), and the
  * graph sorts it; one whose rows are all in hand (a tally, a component's
@@ -183,6 +185,9 @@ export type GridProps = {
   /** the rows a row holds, which make the table a tree: shown under it once
    * its toggle opens it. A tree holds all its rows, as a `local` table does */
   holds?: (b: Bundle) => Bundle[]
+  /** the order the page keeps for the table, and where a pressed heading
+   * sends the next one; without it the order is the table's state */
+  sorts?: { order?: string; to: (order?: string) => void }
 }
 
 /** What a pager is drawn with: the table it pages, how many rows this page
@@ -277,10 +282,11 @@ export let Grid = (p: GridProps): JSX.Element => {
   let { io, id, columns, local, holds } = p
   let size = p.size ?? SIZE
   let g = grid(io, id)
+  let order = p.sorts ? p.sorts.order : g.order
   let open = g.open ?? []
   let tree: Branch[] = holds
-    ? unfold(p.rows, columns, g.order, open, holds)
-    : (local ? run(p.rows, columns, g.order) : p.rows)
+    ? unfold(p.rows, columns, order, open, holds)
+    : (local ? run(p.rows, columns, order) : p.rows)
       .map((b) => ({ b, depth: 0, holds: false }))
   let rows = tree.map((t) => t.b)
   let after = g.after ?? []
@@ -291,8 +297,9 @@ export let Grid = (p: GridProps): JSX.Element => {
     : p.pick ?? ((b: Bundle) => b.entity.eid)
   let sort = (c: Column) => {
     let by = sorted(c)!
-    let next = g.order == by ? `-${by}` : g.order == `-${by}` ? null : by
-    io.set(turned(id, { order: next, after: [] }))
+    let next = order == by ? `-${by}` : order == `-${by}` ? null : by
+    if (p.sorts) p.sorts.to(next ?? undefined)
+    else io.set(turned(id, { order: next, after: [] }))
   }
   if (!rows.length && !page) return none()
   return h(
@@ -312,7 +319,7 @@ export let Grid = (p: GridProps): JSX.Element => {
           Table.Row,
           {},
           columns.map((c) => {
-            let dir = way(g.order, c)
+            let dir = way(order, c)
             return h(
               Table.Heading,
               {

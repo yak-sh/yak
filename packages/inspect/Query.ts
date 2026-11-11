@@ -3,14 +3,23 @@
  * columns are the components the rows share, each cell what that component
  * holds, a page at a time (unless the line names its own window) with how
  * many there are in all; a press on a row picks it, and a press on a heading
- * has the graph run the rows by the property that column shows first. An aggregate shows as
- * what it counts: a number, or each value beside how many hold it.
+ * has the graph run the rows by the property that column shows first. The
+ * order is the line's own `.order=`, so the page's address keeps it through a
+ * reload or a shared link. An aggregate shows as what it counts: a number, or
+ * each value beside how many hold it.
  *
  * @module
  */
 
 import { h, type JSX } from 'preact'
-import { conjoin, orderOf, parse, type Query, windowOf } from '@yaks/query'
+import {
+  conjoin,
+  orderOf,
+  parse,
+  type Query,
+  tokens,
+  windowOf,
+} from '@yaks/query'
 import { Head, Rows, Value } from '@yaks/ui'
 import type { Bundle, Io } from './host.ts'
 import { Grid, paged, SIZE } from './grid.ts'
@@ -75,6 +84,22 @@ export let leads = (rows: Bundle[], name: string): string | undefined => {
   return prop && `${name}.${prop}`
 }
 
+/**
+ * A query line run by `order` in place of any order it names, or as it comes
+ * without one.
+ *
+ * ```ts
+ * import { runBy } from './Query.ts'
+ * runBy('.task .order=doc.title', '-task.status') // '.task&.order=-task.status'
+ * runBy('.a|.b&.order=x') // '.a | .b'
+ * ```
+ */
+export let runBy = (text: string, order?: string): string =>
+  conjoin(
+    tokens(text).filter((t) => !t.startsWith('.order=')).join(' '),
+    order ? `.order=${order}` : '',
+  )
+
 // What a component holds, in a cell: its first few values that are there,
 // each as a person reads it.
 let summed = (io: Io, b: Bundle, name: string) => {
@@ -133,11 +158,13 @@ let Tallied = ({ io, id, tally }: {
 /** The rows a query answers, a page at a time. */
 let Answered = ({ io, text, ast }: { io: Io; text: string; ast: Query }) => {
   let id = key('query', text)
-  let own = windowOf(ast).limit != null || !!orderOf(ast)
+  let own = windowOf(ast).limit != null
+  let order = orderOf(ast)
+  let base = runBy(text)
   let got = io.ask(
     own ? { rows: { query: whole(text), typed: true } } : {
-      rows: { query: whole(paged(io, id, text)), typed: true },
-      total: { query: conjoin(text, '.count'), once: true, typed: true },
+      rows: { query: whole(paged(io, id, base, { order })), typed: true },
+      total: { query: conjoin(base, '.count'), once: true, typed: true },
     },
   )
   let all = rows(got.rows)
@@ -145,12 +172,13 @@ let Answered = ({ io, text, ast }: { io: Io; text: string; ast: Query }) => {
   let cols = shared(all)
   useNamed(io, mentioned(all, cols))
   // A column the rows run by keeps its property, whichever rows came back.
-  let by = grid(io, id).order?.replace(/^-/, '')
+  let by = order?.replace(/^-/, '')
   return waiting(got.rows) ?? h(Grid, {
     io,
     id,
     rows: all,
     total: own ? all.length : got.total?.count,
+    sorts: { order, to: (o) => io.go(io.find(runBy(text, o))) },
     columns: [
       {
         name: 'id',

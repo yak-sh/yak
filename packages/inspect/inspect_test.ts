@@ -117,6 +117,7 @@ let host = (answers: Answers = {}, edits = true) => {
     : (l: string) => answers[l]
   let asked: string[] = []
   let applied: Bundle[][] = []
+  let went: string[] = []
   let held = new Map<string, Bundle>()
   let front = client(loadVocab([...docs, ...uxDocs]), [], { vault: false })
   let double: Host = {
@@ -146,7 +147,7 @@ let host = (answers: Answers = {}, edits = true) => {
     link: pagePath,
     past: (eid, tx) => `${pagePath(eid)}?at=${tx}`,
     find: (q) => `/${querySearch(q)}`,
-    go: (_href) => {},
+    go: (href) => void went.push(href),
     id: (b) => b.entity.eid.toUpperCase(),
     kind: (b) => b.task ? 'task' : 'entity',
     name: (eid) => `N-${eid}`,
@@ -169,6 +170,7 @@ let host = (answers: Answers = {}, edits = true) => {
   return {
     asked,
     applied,
+    went,
     front,
     fields,
     ...door,
@@ -460,7 +462,7 @@ let queryPage = (text: string, rows = [T1, T2]) => {
     text: p.root.textContent,
   }
 }
-let ownedQueries = ['.task&.limit=20', '.task&.order=doc.title'].map((
+let ownedQueries = ['.task&.limit=20'].map((
   text,
 ) => ({ text, page: queryPage(text) }))
 let unboundedQuery = queryPage(
@@ -489,25 +491,45 @@ test('a query without its own window keeps the count used by its pager', () => {
   assert(unboundedQuery.pager?.includes('1–50 of 120'))
 })
 
-test("a query's columns have the graph run its rows by the property each shows first", async () => {
-  using t = host((line) =>
-    line.endsWith('&.count') ? { count: 120 } : { rows: [T1, T2] }
+test("a query's heading sends its page to the line run by that column, the address keeping it", async () => {
+  let page = (query: string) => {
+    let t = host((line) =>
+      line.endsWith('&.count') ? { count: 120 } : { rows: [T1, T2] }
+    )
+    let p = mount(t.draw(h(t.Door, {
+      e: { entity: { eid: 'query' } },
+      view: 'Inspect.Query',
+      ctx: { query },
+    })))
+    let heading = (name: string) =>
+      [...p.root.querySelectorAll('[role=columnheader]')].find((h) =>
+        h.textContent?.startsWith(name)
+      )!
+    return { t, p, heading }
+  }
+  let press = async (query: string) => {
+    let { t, p, heading } = page(query)
+    using _ = p
+    await p.fire(heading('doc').querySelector('button')!, 'click')
+    return t.went.at(-1)
+  }
+  assertEquals(
+    await press('.task'),
+    `/${querySearch('.task&.order=doc.title')}`,
   )
-  using p = mount(t.draw(h(t.Door, {
-    e: { entity: { eid: 'query' } },
-    view: 'Inspect.Query',
-    ctx: { query: '.task' },
-  })))
-  let heading = (name: string) =>
-    [...p.root.querySelectorAll('[role=columnheader]')].find((h) =>
-      h.textContent?.startsWith(name)
-    )!
-  let last = () => t.asked.filter((l) => l.endsWith('&*')).at(-1)
-  await p.fire(heading('doc').querySelector('button')!, 'click')
-  assertEquals(last(), '.task&.order=doc.title&.limit=50&*')
-  await p.fire(heading('doc').querySelector('button')!, 'click')
-  assertEquals(last(), '.task&.order=-doc.title&.limit=50&*')
+  assertEquals(
+    await press('.task&.order=doc.title'),
+    `/${querySearch('.task&.order=-doc.title')}`,
+  )
+  assertEquals(
+    await press('.task&.order=-doc.title'),
+    `/${querySearch('.task')}`,
+  )
+  let { t, p, heading } = page('.task&.order=-doc.title')
+  using _ = p
   assertEquals(heading('doc').getAttribute('aria-sort'), 'descending')
+  assert(t.asked.includes('.task&.order=-doc.title&.limit=50&*'))
+  assert(t.asked.includes('.task&.count'))
 })
 
 test('a tally sorts by its values or its counts, an empty value last', async () => {
