@@ -1,6 +1,6 @@
 ---
 name: components
-description: "Components and vocab.json (yaks.app). Every built-in component an app already has (doc, task, filed, comment, alias, attachment, created and the rest), property by property, and vocab.json for declaring an app's own components: the property types, schema refusals, who may write a component and how often (floor, pace), rows kept to members (readers), private per-person rows (personal), full-text search on a property, what a later deploy may change, the reserved component names, when to use a property instead of doc.body, and edges."
+description: "Components and vocab.json (yaks.app). Every built-in component an app already has (doc, task, filed, comment, alias, attachment, created and the rest), property by property, and vocab.json for declaring an app's own components: the property types, schema refusals, who may write a component and how often (floor, pace), rows kept to members (readers), a component kept from readers below a level (shown), private per-person rows (personal), full-text search on a property, what a later deploy may change, the reserved component names, when to use a property instead of doc.body, and edges."
 ---
 
 # Components and vocab.json
@@ -611,6 +611,23 @@ in the same commit, through every read and every live subscription. Adding or
 changing a condition in `vocab.json` re-reckons every entity of the app in the
 background at the next deploy; until it finishes, viewers read none of the rows
 of a component whose conditions they might be kept from.
+
+**One part of a row kept back: `shown`.** `readers` keeps a whole entity from a
+reader. `shown`, with the same values as `floor`, keeps only its own component:
+a reader below that floor reads the entity without it, through every read, and
+finds nobody by querying it, while the entity's other components read as they
+would. A directory whose members read each other's entries, but whose sign-up
+forms record what each person asked for, keeps that list to its editors:
+
+    { "$defs": {
+        "interests": {
+          "shown": "editor",
+          "properties": {
+            "choices": { "type": "array", "items": { "type": "string" } } } } } }
+
+A form question whose `fills` is `interests.choices` adds what the person ticked
+to their own `interests`, which their entry shows to the app's editors and
+owners and to no viewer.
 
 ## Private per-person rows: `personal`
 

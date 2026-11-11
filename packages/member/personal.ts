@@ -17,7 +17,7 @@ import type {
 import type { Vocab } from '@yaks/vocab'
 import { Denied } from './deny.ts'
 import { asking, top } from './asking.ts'
-import { readersIn } from './keywords.ts'
+import { readersIn, shownIn } from './keywords.ts'
 import { type Declared, kept, privacy } from './privacy.ts'
 import { type Level, LEVELS, stands } from './words.ts'
 
@@ -142,6 +142,7 @@ export let personal = (
     }
   }
   let floors = Object.entries(readersIn(vocab))
+  let shown = Object.entries(shownIn(vocab))
   if (floors.some(([, asked]) => typeof asked != 'string') && !kept(vocab)) {
     // Conditions are matched where an entity's privacy is reckoned; a store
     // that keeps none could only read them by hiding the whole component.
@@ -163,6 +164,13 @@ export let personal = (
     asks.filter(({ top }) =>
       !stands(opts.person ?? null, vouched(opts.level), top)
     ).map(({ name }) => name)
+  // The components this reader reads entities without: those `shown` to a
+  // floor it does not stand on.
+  let withheld = (opts: ReadOpts) =>
+    shown.filter(([, f]) =>
+      !stands(opts.person ?? null, vouched(opts.level), f)
+    )
+      .map(([name]) => name)
   // Whether a row is kept from this reader: by a component asking a floor it
   // does not stand on, or by another person's private one.
   let foreign = (row: Bundle, opts: ReadOpts) =>
@@ -287,24 +295,27 @@ export let personal = (
     name: '@yaks/member/personal',
     admission: () => true,
     reads: (opts) =>
-      (entries.length > 0 || inherited.length > 0 || floors.length > 0) &&
+      (entries.length > 0 || inherited.length > 0 || floors.length > 0 ||
+        shown.length > 0) &&
       caller(opts),
     scope: ({ opts, tx }) => {
       if (!caller(opts)) return undefined
       let who = opts.person
-      let hidden = unseen(opts)
-      if (!entries.length && !inherited.length && !hidden.length) {
-        return undefined
-      }
+      let hidden = unseen(opts), aside = withheld(opts)
+      if (
+        !entries.length && !inherited.length && !hidden.length && !aside.length
+      ) return undefined
       return {
         entity: sight(opts, tx, hidden),
-        components: Object.fromEntries(
-          entries.filter(([, by]) => by == 'entity')
+        components: Object.fromEntries([
+          ...entries.filter(([, by]) => by == 'entity')
             .map(([name]) => [
               name,
               and(who ? eq('entity.eid', who) : absent('entity')),
             ]),
-        ),
+          // Every entity has an `entity`, so no row shows these.
+          ...aside.map((name) => [name, and(absent('entity'))]),
+        ]),
       }
     },
     wants: (
@@ -378,10 +389,10 @@ export let personal = (
     // Rows the store read under this scope are already what it allows.
     answer: ({ opts, tx, screened }, bundles) => {
       if (!caller(opts) || !bundles.length || screened) return bundles
-      let hidden = unseen(opts)
-      if (!entries.length && !inherited.length && !hidden.length) {
-        return bundles
-      }
+      let hidden = unseen(opts), aside = withheld(opts)
+      if (
+        !entries.length && !inherited.length && !hidden.length && !aside.length
+      ) return bundles
       return after(tx.get(bundles.map((b) => b.entity.eid), comps), (rows) => {
         let held = new Map(rows.map((b) => [b.entity.eid, b]))
         let targets = [
@@ -407,15 +418,17 @@ export let personal = (
               })
             ) return []
             let out = { ...b }
-            for (let [name, by] of entries) {
-              if (by == 'entity' && b.entity.eid != opts.person) {
-                delete out[name]
-                if (row?.[name] || b[name]) {
-                  out.entity = { ...out.entity }
-                  delete out.entity.archetype
-                }
+            let drop = (name: string) => {
+              delete out[name]
+              if (row?.[name] || b[name]) {
+                out.entity = { ...out.entity }
+                delete out.entity.archetype
               }
             }
+            for (let [name, by] of entries) {
+              if (by == 'entity' && b.entity.eid != opts.person) drop(name)
+            }
+            for (let name of aside) drop(name)
             return [out]
           })
           if (!entityOwned.length && !inherited.length && !hidden.length) {

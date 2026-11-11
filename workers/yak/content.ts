@@ -32,7 +32,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'components',
     'title': 'Components and vocab.json',
     'description':
-      "Every built-in component an app already has (doc, task, filed, comment, alias, attachment, created and the rest), property by property, and vocab.json for declaring an app's own components: the property types, schema refusals, who may write a component and how often (floor, pace), rows kept to members (readers), private per-person rows (personal), full-text search on a property, what a later deploy may change, the reserved component names, when to use a property instead of doc.body, and edges.",
+      "Every built-in component an app already has (doc, task, filed, comment, alias, attachment, created and the rest), property by property, and vocab.json for declaring an app's own components: the property types, schema refusals, who may write a component and how often (floor, pace), rows kept to members (readers), a component kept from readers below a level (shown), private per-person rows (personal), full-text search on a property, what a later deploy may change, the reserved component names, when to use a property instead of doc.body, and edges.",
     'brief':
       "the platform's built-in components, and declaring your own in vocab.json",
   },

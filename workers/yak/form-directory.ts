@@ -338,9 +338,16 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                 path: (string | number)[]
                 values: Record<string, unknown>
                 house: Record<string, unknown>
+                aspects: Record<string, Record<string, unknown>>
               }
               let groups = new Map<string, Group>()
-              groups.set('[]', { path: [], values: {}, house: {} })
+              let start = (path: (string | number)[]): Group => ({
+                path,
+                values: {},
+                house: {},
+                aspects: {},
+              })
+              groups.set('[]', start([]))
               let contacts = new Map<string, Record<string, unknown>>()
               for (let { question, path, value } of answered(form, answers)) {
                 let [comp, prop, ...more] =
@@ -351,12 +358,22 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                   contacts.set(key, { ...contacts.get(key), [kind]: value })
                 }
                 if (more.length) continue
-                let group = groups.get(key) ??
-                  { path: scope, values: {}, house: {} }
+                let group = groups.get(key) ?? start(scope)
                 if (comp == 'individual' && prop) group.values[prop] = value
                 else if (comp == 'household' && prop) group.house[prop] = value
                 else if (comp == 'household' && kind == 'address') {
                   Object.assign(group.house, address(value))
+                } else if (
+                  comp && prop && vocab.comp(comp) &&
+                  !vocab.identity(comp).length
+                ) {
+                  // Another component on the person, such as one kept from
+                  // the directory's members (`shown`). One identified by its
+                  // properties, as `sms_consent` is, stands on its own entity.
+                  group.aspects[comp] = {
+                    ...group.aspects[comp],
+                    [prop]: value,
+                  }
                 } else continue
                 groups.set(key, group)
               }
@@ -365,7 +382,7 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
               return each(
                 [...groups].sort((a, b) => a[1].path.length - b[1].path.length),
                 undefined as void,
-                (_, [key, { path, values, house }]) => {
+                (_, [key, { path, values, house, aspects }]) => {
                   let eid =
                     !path.length && typeof registration.person == 'string'
                       ? registration.person
@@ -484,6 +501,10 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                           }
                         if (!found) save(who)
                         save(fill(vocab, 'individual', who, values))
+                        for (let [comp, props] of Object.entries(aspects)) {
+                          let row = fill(vocab, comp, who, props)
+                          if (Object.keys(fields(row, comp)).length) save(row)
+                        }
                         parents.set(key, who.entity.eid)
                         taken.add(who.entity.eid)
                         return after(

@@ -50,8 +50,10 @@ marks. Add `doc{title, body}` to a form for its title and introduction.
 
 Question kinds are `line`, `lines`, `choose`, `choices`, `check`, `date`,
 `email`, `phone`, `address`, `file` and `repeat`. `fills` names a directory
-property, such as `individual.born` or `household.city`. A list property gains
-the choices it lacks, and `household` alone on an `address` question fills the
+property, such as `individual.born` or `household.city`, or a property of
+another component the person wears, such as `interests.choices` on a directory
+that keeps it to its editors (@yaks/member `shown`). A list property gains the
+choices it lacks, and `household` alone on an `address` question fills the
 street, city, region and postal code of the person's household. On a repeat,
 `relates` says what each entry is to the person it is listed under: `child`,
 `parent`, `spouse` or `sibling`, and absent when the entries are no relation.

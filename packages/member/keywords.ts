@@ -10,6 +10,9 @@
 // `readers` is the same ladder for whoever reads it: an entity wearing the
 // component is seen only by readers standing on that floor, whatever the mode;
 // an object of floors to queries asks a floor only of the entities it matches.
+// `shown` asks a floor of whoever reads the component alone: a reader below it
+// reads the entity without the component, as `personal: "entity"` keeps one
+// aspect of a person's entity.
 // `permit` lets the owner of a stored reference answer with a companion mark,
 // without gaining the declaring row or permission to change its request.
 // `personal` names the owner of a private entity or private person component.
@@ -30,7 +33,7 @@ export let MEMBER_URI = 'https://yak.sh/vocab/member'
  */
 export let memberKeywords: Keywords = {
   uri: MEMBER_URI,
-  comp: ['floor', 'readers', 'permit', 'personal'],
+  comp: ['floor', 'readers', 'shown', 'permit', 'personal'],
   doc,
 }
 
@@ -82,7 +85,26 @@ export let readersIn = (v: Vocab): Record<string, Asked> =>
   said(v, 'readers', askedOf)
 
 /**
- * Every `floor` or `readers` a document declares that is not a floor, or a
+ * The floor each component a loaded vocabulary declares `shown` asks of
+ * whoever reads it, component → floor.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { memberKeywords, shownIn } from '@yaks/member'
+ * let v = loadVocab({
+ *   $defs: {
+ *     interests: { component: true, type: 'object', shown: 'editor' },
+ *     note: { component: true, type: 'object' },
+ *   },
+ * }, [memberKeywords])
+ * assertEquals(shownIn(v), { interests: 'editor' })
+ * ```
+ */
+export let shownIn = (v: Vocab): Floors => said(v, 'shown', floor)
+
+/**
+ * Every `floor`, `readers` or `shown` a document declares that is not a floor, or a
  * `readers` condition that is no query of the component, as sentences, the way
  * @yaks/vocab's `storable` answers.
  *
@@ -102,6 +124,10 @@ export let floored = (d: VocabDoc): string[] =>
       'or owner',
     ],
     ...s?.readers === undefined ? [] : askedErrors(name, s.readers),
+    ...s?.shown === undefined || isFloor(s.shown) ? [] : [
+      `${name} is shown to "${s.shown}" — shown is person, viewer, editor ` +
+      'or owner',
+    ],
   ])
 
 /** The `readers` conditions that name a property the loaded vocabulary does

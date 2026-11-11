@@ -22,8 +22,11 @@ let vocab = loadVocab([kernelDoc, formsDoc, phoneDoc, {
         born: text,
         status: text,
         household: { ...text, ref: 'entity', death: 'detach' },
-        interests: { type: 'array', items: text },
       },
+    },
+    interests: {
+      component: true,
+      properties: { choices: { type: 'array', items: text } },
     },
     household: {
       component: true,
@@ -94,7 +97,7 @@ let setup = async (seed: Bundle[] = []) => {
         label: 'I want',
         kind: 'choices',
         choices: ['a mailbox', 'emails', 'texts'],
-        fills: 'individual.interests',
+        fills: 'interests.choices',
       },
     },
     {
@@ -470,15 +473,18 @@ test("a member's address fills only the blanks of the household they live in", a
 })
 
 test('choices add to the list on the person, keeping what it held', async () => {
-  let g = await setup([{
-    ...fixture,
-    individual: { ...fixture.individual, interests: ['emails'] },
-  }])
+  let g = await setup([{ ...fixture, interests: { choices: ['emails'] } }])
   await g.apply(sign({ phone: '+12695550142', wants: ['a mailbox', 'emails'] }))
   equal(
-    ((await g.get(['member']))[0].individual as Comp).interests,
+    ((await g.get(['member']))[0].interests as Comp).choices,
     ['emails', 'a mailbox'],
   )
+})
+
+test('a sign-up that chose nothing leaves the person without the list', async () => {
+  let g = await setup([fixture])
+  await g.apply(sign({ phone: '+12695550142' }))
+  equal((await g.get(['member']))[0].interests, undefined)
 })
 
 test('a provisional guest matched to a housed member leaves no household behind', async () => {
