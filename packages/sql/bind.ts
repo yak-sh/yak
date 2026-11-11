@@ -1463,6 +1463,12 @@ let MANY = 10_000
  * order reads before it reads them all (`inOrder`). */
 let FEW = 4
 
+/** The most newest entities a numbered component page reads as its prefix
+ * (`lower`). The prefix holds four pages, so a page past a quarter of this
+ * drives from its component instead: a listing of 20,000 read the directory's
+ * 80,000 newest entities to find its 76 emails. */
+let PREFIX = 1024
+
 // The owners of the rows whose reference properties point at `value`, as one
 // selection of ids, or none where the vocabulary has no reference property:
 // each term a table's reference columns combined with OR. An owner may come
@@ -4663,7 +4669,8 @@ let lower = (
   // the default order is the same page: newest number first, then the owner.
   let newest = order ? order.value == '-entity.num' : counts
   if (
-    limit && limit.n > 0 && Number.isSafeInteger(limit.n) &&
+    limit && Number.isSafeInteger(limit.n) && limit.n > 0 &&
+    limit.n * 4 <= PREFIX &&
     newest && numbered && !after && !fields &&
     !vocab.prop('entity', 'num')?.computed && !ctx.derived['entity.num'] &&
     !sort?.ranked &&
@@ -4720,7 +4727,7 @@ let lower = (
     }
     let prefix = fresh(ctx, [], '__number_prefix_')
     let hits = fresh(ctx, [], '__number_hits_')
-    let cap = Math.max(64, Math.min(Number.MAX_SAFE_INTEGER, limit.n * 4))
+    let cap = Math.max(64, limit.n * 4)
     let recent = rel(ctx.d.spine, {
       cols: ['"entity".*'],
       joins: [],

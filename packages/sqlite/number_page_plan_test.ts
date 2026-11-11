@@ -30,7 +30,7 @@ let vocab = loadVocab([edgeDoc, {
     tombstone: { component: true },
   },
 }])
-let fixture = (n: number, recent: boolean) => {
+let fixture = (n: number, recent: boolean, bare = 0) => {
   let db = new Database(':memory:'), d = driver(db)
   let store = storage(d, vocab)
   store.install()
@@ -62,21 +62,34 @@ let fixture = (n: number, recent: boolean) => {
       })),
     ))
   }
+  // Newer entities that are no doc at all, as most of a directory is not mail.
+  for (let i = 0; i < bare; i += 500) {
+    d.query(insert(
+      'entity',
+      ...Array.from({ length: Math.min(500, bare - i) }, (_, j) => ({
+        id: n + i + j + 101,
+        eid: `bare-${i + j}`,
+        num: 200_000 + i + j,
+      })),
+    ))
+  }
   d.query(insert('hidden', { entity: 1 }))
   d.query(insert('tombstone', { entity: 2 }))
   return { db, d, n, recent }
 }
 let dense = [fixture(100, true), fixture(10_000, true)]
 let sparse = fixture(1000, false)
+let listing = fixture(100, false, 20_000)
 let page = (
   f: ReturnType<typeof fixture>,
   hidden = false,
   hooks: Extension[] = [],
   order = ' .order=-entity.num',
+  limit = 13,
 ) => {
   let q = render(
     compile(
-      parse(`.doc${order} .limit=13`),
+      parse(`.doc${order} .limit=${limit}`),
       vocab,
       {
         extend: [traverse(vocab), ...hooks],
@@ -99,6 +112,7 @@ let page = (
 let observedDense = dense.map((f) => ({ n: f.n, got: page(f) }))
 let observedHidden = page(dense[1], true)
 let observedSparse = page(sparse)
+let observedListing = page(listing, false, [], '', 20_000)
 let observedIdleHook = page(dense[1], false, [{
   name: 'idle-ranker',
   compile: {},
@@ -144,6 +158,12 @@ test('a numbered page falls back when its recent prefix has too few matches', ()
     observedSparse.ids,
     Array.from({ length: 13 }, (_, i) => `old-${999 - i}`),
   )
+})
+
+test('a page far larger than its recent prefix reads the component, not the newest entities', () => {
+  equal(observedListing.ids.length, 100)
+  equal(observedListing.ids[0], 'old-99')
+  ok(observedListing.steps < 10_000, `${observedListing.steps} VM steps`)
 })
 
 test('unclaimed search order hooks keep a physical numbered page bounded', () => {
