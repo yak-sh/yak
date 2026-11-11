@@ -627,12 +627,12 @@ nothing else in the store:
 }
 ```
 
-A caller signed in as one of the app's own people (recognized.ts: a row wearing
-the number they signed in with, or an `individual` whose `email` lists their
-address) is also answered `answers`, the values their row holds for each
-question whose `fills` names it, and their submission is written with
-`registration.person` naming that row and `registration.submitter` naming them.
-Nobody else is answered any.
+A caller signed in as one of the app's own people (recognized.ts, by
+@yaks/people `whose`: a row wearing the number they signed in with, or a person
+whose address lists theirs) is also answered `answers`, the values their row
+holds for each question whose `fills` names it, and their submission is written
+with `registration.person` naming that row and `registration.submitter` naming
+them. Nobody else is answered any.
 
 A completed sign-up whose form says `shares{question, is}`, and whose answer to
 that question is `is`, also writes `shared{form, registration, answers, at}`

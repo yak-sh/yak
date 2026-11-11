@@ -971,6 +971,67 @@ test('the free tier: a warning once, then the refusals', async () => {
   }
 })
 
+// An app that means something else by a word @yaks/people keeps is told its
+// sign-ups leave those rows alone (@yaks/people `unlike`).
+test('a deploy says when its individual is not the people package’s', async () => {
+  let k = await kernel()
+  try {
+    let agent = connector(k, (await signIn(k)).cookie)
+    await agent.tool('app_new', { slug: 'scores', title: 'Scores' })
+    await agent.tool('app_files', {
+      app: 'scores',
+      op: 'write',
+      path: 'vocab.json',
+      content: vocabFile({ individual: { first: num } }),
+    })
+    assertStringIncludes(
+      await agent.tool('app_deploy', { app: 'scores' }),
+      "individual differs from @yaks/people's individual",
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
+// An app that names @yaks/people speaks its words without declaring them, and
+// its store runs the package's rule: a typed phone is matchable as E.164.
+test('an app naming @yaks/people keeps its people by its rule', async () => {
+  let k = await kernel()
+  try {
+    let agent = connector(k, (await signIn(k)).cookie)
+    await agent.tool('app_new', { slug: 'flock', title: 'Flock' })
+    await agent.tool('app_files', {
+      app: 'flock',
+      files: [
+        { path: 'vocab.json', content: vocabFile({ hymn: { title: txt } }) },
+        {
+          path: 'package.json',
+          content: JSON.stringify({
+            dependencies: { '@yaks/people': 'platform' },
+          }),
+        },
+      ],
+    })
+    await agent.tool('app_deploy', { app: 'flock' })
+    await agent.tool('graph_apply', {
+      app: 'flock',
+      entities: [{
+        entity: { eid: '$ann' },
+        individual: { first: 'Ann', phone: '(616) 555-0134' },
+      }],
+    })
+    assertStringIncludes(
+      await agent.tool('graph_query', {
+        app: 'flock',
+        q: '.individual&.fields=phone.number',
+      }),
+      '+16165550134',
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
 // One word, one home (T-32728): a second app in the space naming a word the
 // space already has uses it there — nothing is planted twice, the writes land
 // in the home store, a new property grows the home's table, and a shape

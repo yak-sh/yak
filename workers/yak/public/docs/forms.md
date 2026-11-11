@@ -214,6 +214,18 @@ its `phone` and the `relation` rows between them) wear
 editors. A person the app wrote itself, which the sign-up matched, stays as the
 app kept it.
 
+An app keeps its people in the words @yaks/people declares:
+`individual{first, last, born, email, phone, household, status, deceased, …}`,
+`household{street, street2, city, region, postal, …}` and
+`relation{kind, a,
+b}`. Name the package in package.json,
+`"@yaks/people": "platform"`, and the app's store speaks them without declaring
+them in vocab.json. A sign-up there is matched to the person whose phone or
+email it gives when their first names agree, a question's `fills` fills only
+that person's empty properties, and with no match it adds a guest. An app that
+declares these words itself the same way gets the same; one that means something
+else by `individual` is told so when it deploys, and its rows are left alone.
+
 Each letter counts toward the space's monthly email allowance.
 
 ## A sign-up taken for a bot's

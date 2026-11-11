@@ -6,8 +6,9 @@ import { formsDoc } from '@yaks/forms/vocab'
 import { phoneDoc } from '@yaks/phone'
 import { equal, test, throws } from '@yaks/testing'
 import { storage } from '@yaks/durable-object'
-import { durable } from '../../packages/durable-object/testing.ts'
-import { address, directoryForms, directoryPhone } from './form-directory.ts'
+import { durable } from '../durable-object/testing.ts'
+import { address, numbered } from './mod.ts'
+import { people } from './plugin.ts'
 
 let text = { type: 'string' }
 let vocab = loadVocab([kernelDoc, formsDoc, phoneDoc, {
@@ -51,7 +52,7 @@ let setup = async (seed: Bundle[] = []) => {
   let g = graph({
     vocab,
     storage: ram(vocab),
-    plugins: [directoryForms(vocab)],
+    plugins: [people(vocab)],
   })
   await g.apply([
     { entity: { eid: 'form' }, form: {} },
@@ -255,9 +256,9 @@ test('clearing a directory phone removes its matchable number', async () => {
 })
 
 test('the phone repair is idempotent and keeps the typed source intact', () => {
-  let patch = directoryPhone(fixture)
+  let patch = numbered(fixture)
   equal(patch.phone, { number: '+12695550142' })
-  equal(directoryPhone(patch), patch)
+  equal(numbered(patch), patch)
   equal(fixture.individual.phone, '(269) 555-0142')
 })
 
@@ -391,7 +392,7 @@ rollbackStore.install()
 let rollback = graph({
   vocab,
   storage: rollbackStore,
-  plugins: [directoryForms(vocab), {
+  plugins: [people(vocab), {
     name: 'failed-commit',
     hooks: {
       commit: hook(['registration'], () => {

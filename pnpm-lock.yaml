@@ -3479,6 +3479,37 @@ importers:
         specifier: 0.2.30
         version: link:../testing
 
+  packages/people:
+    dependencies:
+      '@yaks/forms':
+        specifier: 0.2.33
+        version: link:../forms
+      '@yaks/fp':
+        specifier: 0.2.23
+        version: link:../fp
+      '@yaks/graph':
+        specifier: 0.2.33
+        version: link:../graph
+      '@yaks/phone':
+        specifier: 0.2.30
+        version: link:../phone
+      '@yaks/vocab':
+        specifier: 0.2.32
+        version: link:../vocab
+    devDependencies:
+      '@yaks/durable-object':
+        specifier: 0.2.28
+        version: link:../durable-object
+      '@yaks/kernel':
+        specifier: 0.2.28
+        version: link:../kernel
+      '@yaks/ram':
+        specifier: 0.2.24
+        version: link:../ram
+      '@yaks/testing':
+        specifier: 0.2.30
+        version: link:../testing
+
   packages/persona:
     dependencies:
       '@yaks/doc':
@@ -5832,6 +5863,9 @@ importers:
       '@yaks/page':
         specifier: 0.2.30
         version: link:../../packages/page
+      '@yaks/people':
+        specifier: 0.2.33
+        version: link:../../packages/people
       '@yaks/persona':
         specifier: 0.2.23
         version: link:../../packages/persona

@@ -26,6 +26,7 @@ import { declarationOf } from './declaration.ts'
 import type { Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { e164 } from '@yaks/phone/mobile'
+import { addresses } from '@yaks/people'
 
 /** The `join` word of an app's vocab.json, as vocab.ts `appDoc` admits it. */
 export type Join = {
@@ -41,14 +42,6 @@ let RANK: (Role | null)[] = [null, 'viewer', 'editor', 'owner']
 
 // An address as it is compared: ' Ann@Example.org' is 'ann@example.org'.
 let plain = (s: string) => s.trim().toLowerCase()
-
-/** The addresses one value holds: a household's row may list two. */
-/// addresses('Ann@x.org, bo@x.org') -> ['ann@x.org', 'bo@x.org']
-/// addresses(3) -> []
-export let addresses = (value: unknown): string[] =>
-  typeof value == 'string'
-    ? value.split(/[\s,;]+/).map(plain).filter((a) => a.includes('@'))
-    : []
 
 /** Whether `email` is at the word's domain, or among the values its rows
  * hold. */

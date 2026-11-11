@@ -9,7 +9,7 @@
 // Its box is the churches page's, a first build with no sign-up from the web
 // address of the site they have now (newcomer.ts `worded`, `REBUILDING`).
 // Everything it promises is read from where it is done: the forms, directory
-// and calendar from forms.ts, form-directory.ts and calendar.ts; errors, the
+// and calendar from forms.ts, @yaks/people and calendar.ts; errors, the
 // kept versions and the restores from docs/errors.md; support from
 // support.ts; the numbers from meter.ts, versions.ts, recover.ts and directory.ts.
 import { Button, Card, Field, Form } from '@yaks/ui'

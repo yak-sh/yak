@@ -10,6 +10,7 @@ import {
 } from '@yaks/forms'
 import { type Bundle, type Comp, mint, signed } from '@yaks/graph'
 import { consentEid } from '@yaks/phone'
+import { withPhone } from '@yaks/people'
 import { Refused } from '@yaks/graph/errors'
 import type { Stored } from './graph.ts'
 import { texterEid } from './form-phone.ts'
@@ -85,14 +86,9 @@ let answering = (
 // The texting number is theirs: the platform received the text from it.
 let initial = async (at: Stored, form: Form, phone: string) => {
   let [person] = await at.graph.read(
-    `.phone.number=${quoted(phone)}${
-      at.graph.vocab.comp('individual') ? '&?individual' : ''
-    }&.limit=1`,
+    `.phone.number=${quoted(phone)}&*&.limit=1`,
   )
-  return prefilled(form, {
-    ...person,
-    individual: { ...comp(person, 'individual'), phone },
-  })
+  return prefilled(form, withPhone(person, phone))
 }
 
 export let signupIn = async (req: Request, at: Stored): Promise<Response> => {

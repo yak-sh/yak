@@ -55,8 +55,10 @@ import { TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
 import { appTools } from './tool-grammar.ts'
 import type { Actor, Bundle } from '@yaks/graph'
 import { VERSION } from './running.ts'
+import { unlike } from '@yaks/people'
 import {
   appDoc,
+  appWords,
   componentsOf,
   coreDocs,
   EXAMPLE,
@@ -1191,6 +1193,9 @@ let published = async (
   )
   let split = homed(manifest, homes)
   uses = split.uses
+  // A word @yaks/people keeps that this app means something else by: its
+  // sign-ups leave those rows alone, which the answer says (T-161957).
+  let apart = unlike(appWords(manifest).vocab)
   let peers: Promise<VocabDoc[]> | undefined
   let peerDocs = () =>
     peers ??= ctx.dir.apps(space).then((all) =>
@@ -1617,6 +1622,12 @@ let published = async (
       // A word another app in the space already homes: this app writes it,
       // and the answer says where its rows land (T-32728).
       livesIn(uses).map((one) => `\n${one}`).join('') +
+      apart.map((word) =>
+        `\n${word} differs from @yaks/people's ${word}, so a sign-up here ` +
+        'never matches or adds people in it: declare it as @yaks/people ' +
+        'does, or name the package in package.json and drop it from ' +
+        `${vocabFile}, or give this word another name`
+      ).join('') +
       (added.length ? `\nadded: ${added.join(', ')}` : '') +
       // What to DO about a property the manifest stopped naming, which the bare
       // list never said: the board that read "5.2 mi in null min" was a

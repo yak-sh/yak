@@ -1,0 +1,148 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "people",
+  "$defs": {
+    "individual": {
+      "component": true,
+      "type": "object",
+      "description": "a person an app keeps: a church's member, a guest a sign-up added, a relative listed with them",
+      "properties": {
+        "slug": {
+          "type": "string",
+          "description": "their part of an address in the app's pages"
+        },
+        "first": { "type": "string", "search": true },
+        "middle": { "type": "string" },
+        "last": { "type": "string", "search": true },
+        "maiden": {
+          "type": "string",
+          "search": true,
+          "description": "their family name before marriage"
+        },
+        "nickname": {
+          "type": "string",
+          "search": true,
+          "description": "what they go by"
+        },
+        "suffix": { "type": "string" },
+        "gender": { "type": "string" },
+        "born": {
+          "type": "string",
+          "description": "their birthday, YYYY-MM-DD"
+        },
+        "deceased": {
+          "type": "boolean",
+          "description": "they have died: nobody signs in or signs up as this row"
+        },
+        "died": {
+          "type": "string",
+          "description": "the day they died, YYYY-MM-DD"
+        },
+        "phone": {
+          "type": "string",
+          "description": "their phone as typed; phone{number} carries it in E.164 form"
+        },
+        "email": {
+          "type": "string",
+          "description": "their address, or two separated by commas"
+        },
+        "photo": { "type": "string" },
+        "status": {
+          "type": "string",
+          "description": "member, attender, guest, or the app's own word; a sign-up adds a guest"
+        },
+        "title": {
+          "type": "string",
+          "description": "a role they hold, such as Pastor"
+        },
+        "joined": {
+          "type": "string",
+          "description": "the day they joined, YYYY-MM-DD"
+        },
+        "household": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "the household they live in"
+        },
+        "position": {
+          "type": "number",
+          "description": "their place in their household's list"
+        },
+        "sample": {
+          "type": "boolean",
+          "description": "a row the app seeded to show itself, not a person"
+        }
+      }
+    },
+    "household": {
+      "component": true,
+      "type": "object",
+      "description": "the home one or more people live in, and its address",
+      "properties": {
+        "slug": {
+          "type": "string",
+          "description": "its part of an address in the app's pages"
+        },
+        "name": {
+          "type": "string",
+          "description": "what the household is called, such as The Parks"
+        },
+        "street": { "type": "string" },
+        "street2": { "type": "string" },
+        "city": { "type": "string" },
+        "region": {
+          "type": "string",
+          "description": "the state, as two letters"
+        },
+        "postal": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "photo": { "type": "string" },
+        "unlisted": {
+          "type": "boolean",
+          "description": "kept out of the listings the app prints and shares"
+        },
+        "sample": {
+          "type": "boolean",
+          "description": "a row the app seeded to show itself, not a home"
+        }
+      }
+    },
+    "relation": {
+      "component": true,
+      "type": "object",
+      "description": "what two people are to each other: parent (a is b's parent), spouse or sibling",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "parent, spouse or sibling"
+        },
+        "a": { "type": "string", "ref": "entity", "death": "cascade" },
+        "b": { "type": "string", "ref": "entity", "death": "cascade" },
+        "type": {
+          "type": "string",
+          "description": "the kind's own word, such as step or adopted"
+        },
+        "married": {
+          "type": "string",
+          "description": "the day a spouse relation began, YYYY-MM-DD"
+        },
+        "ended": {
+          "type": "string",
+          "description": "why it ended, such as divorced or widowed"
+        },
+        "ended_on": {
+          "type": "string",
+          "description": "the day it ended, YYYY-MM-DD"
+        },
+        "sample": {
+          "type": "boolean",
+          "description": "a row the app seeded to show itself"
+        }
+      }
+    }
+  }
+}

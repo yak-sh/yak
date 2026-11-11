@@ -70,6 +70,9 @@ export let appConfig: Config = {
     ...addressed,
     '@yaks/doc',
     '@yaks/forms',
+    // Only the rule a sign-up's people settle by: an app names @yaks/people
+    // for its words (vocab.ts `lent`), or declares them itself the same way.
+    { use: '@yaks/people', facets: ['graph'] },
     '@yaks/events',
     '@yaks/draft',
     { use: '@yaks/member', with: { through: { document_page: 'document' } } },

@@ -2,12 +2,13 @@
 import { answered, type Answers, type Form } from '@yaks/forms'
 import { type Bundle, type Comp, derivedEid, signed } from '@yaks/graph'
 import type { Handler } from '@yaks/effects'
+import { emailOf } from '@yaks/people'
 import type { Stored } from './graph.ts'
 
 let comp = (row: Bundle | undefined, name: string): Comp =>
   row?.[name] as Comp ?? {}
 let address = (row: Bundle | undefined) =>
-  comp(row, 'email').address ?? comp(row, 'individual').email
+  comp(row, 'email').address ?? emailOf(row)
 /** The purposes a form writes a sign-up's letters for: the thanks to the
  * person who signed up, and the word to each person the form notifies. */
 export let PURPOSES = ['confirm', 'notify'] as const
@@ -141,7 +142,7 @@ export let formPost =
     let email = answered(form, answers).find((a) =>
       a.path.length == 1 &&
       (a.question.question.kind == 'email' ||
-        a.question.question.fills == 'individual.email')
+        a.question.question.fills?.endsWith('.email'))
     )?.value ?? address(people.find((b) => b.entity.eid == person))
     // The page the form says shows a sign-up, if it says.
     let site = siteOf(at.mail()), page = form.form.seen

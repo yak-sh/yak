@@ -10,7 +10,7 @@ import { memberKeywords, personal } from '@yaks/member'
 import { equal, ok, test } from '@yaks/testing'
 import { signupIn } from './signup.ts'
 import { formRules } from './form-rules.ts'
-import { directoryForms } from './form-directory.ts'
+import { plugins as people } from '@yaks/people/graph'
 import type { Stored } from './graph.ts'
 
 let vocab = loadVocab([kernelDoc, formsDoc, eventsDoc, docDoc, phoneDoc, {
@@ -31,7 +31,7 @@ let fixture = async (questions: Bundle[], extras: Bundle[] = []) => {
     graph({
       vocab,
       storage,
-      plugins: [formRules(() => 1000), directoryForms(vocab), personal(vocab)],
+      plugins: [formRules(() => 1000), ...people({ vocab }), personal(vocab)],
     })
   let g = reopen()
   await g.apply([

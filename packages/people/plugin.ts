@@ -1,4 +1,8 @@
-// A registration and the directory changes it entails settle in one write.
+// A sign-up's people settle in the sign-up's own write: the person it names,
+// matched among the app's people or added as a guest, their empty properties
+// filled from the answers, their household and the relatives listed with
+// them. The form says which answer fills which property (`question.fills`)
+// and what a repeat's entries are to the person (`question.relates`).
 import { answered, type Answers, type Form, type Question } from '@yaks/forms'
 import { after, each, same } from '@yaks/fp'
 import {
@@ -11,85 +15,20 @@ import {
 } from '@yaks/graph'
 import { e164 } from '@yaks/phone/mobile'
 import type { Vocab } from '@yaks/vocab'
+import {
+  address,
+  filled as fill,
+  matching,
+  named,
+  numbered,
+  speaks,
+} from './mod.ts'
 
 let fields = (row: Bundle | undefined, name: string): Comp =>
   row?.[name] as Comp ?? {}
-let empty = (v: unknown) => v == null || typeof v == 'string' && !v.trim()
 let email = (v: unknown) => typeof v == 'string' ? v.trim().toLowerCase() : ''
 let number = (v: unknown) => typeof v == 'string' ? e164(v) : null
 let quoted = (v: string) => JSON.stringify(v)
-
-/** Mirror a directory phone without changing the person's typed value. */
-export let directoryPhone = (row: Bundle): Bundle => {
-  let individual = fields(row, 'individual')
-  return !dead(row) && Object.hasOwn(individual, 'phone')
-    ? {
-      ...row,
-      phone: { ...fields(row, 'phone'), number: number(individual.phone) },
-    }
-    : row
-}
-
-// What `values` adds to `row`'s `comp`: a property it has no value for, and
-// to a list, the items it lacks.
-let fill = (
-  vocab: Vocab,
-  comp: string,
-  row: Bundle,
-  values: Record<string, unknown>,
-): Bundle => {
-  let held = fields(row, comp)
-  let patch = Object.fromEntries(
-    Object.entries(values).flatMap(([k, v]): [string, unknown][] => {
-      if (!vocab.props(comp).includes(k) || empty(v)) return []
-      if (!vocab.prop(comp, k)?.types?.includes('array')) {
-        return empty(held[k]) ? [[k, v]] : []
-      }
-      let had = Array.isArray(held[k]) ? held[k] as unknown[] : []
-      let more = [v].flat().filter((x) =>
-        !empty(x) && !had.some((h) => same(h, x))
-      )
-      return more.length ? [[k, [...had, ...more]]] : []
-    }),
-  )
-  let out = { entity: row.entity, [comp]: patch }
-  return comp == 'individual' ? directoryPhone(out) : out
-}
-
-const tail = /^(.+?),?\s+([A-Za-z]{2})\.?\s+(\d{5}(?:-\d{4})?)$/
-const state = /^([A-Za-z]{2})\.?\s+(\d{5}(?:-\d{4})?)$/
-
-/** A typed postal address as a household's parts: its last line read as
- * "City, ST 12345" where it reads so, its first line as the street and any
- * between as the second. What does not read so stays in the street lines. */
-export let address = (text: unknown): Record<string, string> => {
-  let split = (s: string, by: string | RegExp) =>
-    s.split(by).map((l) => l.trim()).filter(Boolean)
-  let lines = split(typeof text == 'string' ? text : '', '\n')
-  if (lines.length == 1) lines = split(lines[0], ',')
-  let last = lines.at(-1) ?? '', end = last.match(tail)
-  let short = !end && lines.length > 2 ? last.match(state) : null
-  let place = end
-    ? { city: end[1], region: end[2], postal: end[3], rest: lines.slice(0, -1) }
-    : short
-    ? {
-      city: lines.at(-2)!,
-      region: short[1],
-      postal: short[2],
-      rest: lines.slice(0, -2),
-    }
-    : { rest: lines }
-  let { rest, ...where } = place
-  let [street, ...more] = rest
-  return Object.fromEntries(
-    Object.entries({
-      street,
-      street2: more.join(', '),
-      ...where,
-      region: where.region?.toUpperCase(),
-    }).filter(([, v]) => !empty(v)),
-  ) as Record<string, string>
-}
 
 // The path, including the repeat index, makes retries and partial answers find
 // the same guest again. It does not identify people across registrations.
@@ -99,26 +38,6 @@ let link = (registration: string, path: (string | number)[]) =>
   derivedEid(JSON.stringify(['registration-parent', registration, path]))
 let home = (registration: string, path: (string | number)[]) =>
   derivedEid(JSON.stringify(['registration-household', registration, path]))
-
-/** The eids of the people, households and relation rows a sign-up can have
- * created, each
- * derived from the sign-up and where in its answers the person stands. A row
- * the app wrote, or a person the sign-up matched, is at no such eid. */
-export let signedUp = (
-  registration: string,
-  form: Form,
-  answers: Answers,
-): string[] => {
-  let scopes = new Map<string, (string | number)[]>([['[]', []]])
-  for (let { path } of answered(form, answers)) {
-    scopes.set(JSON.stringify(path.slice(0, -1)), path.slice(0, -1))
-  }
-  return [...scopes.values()].flatMap((path) => [
-    guest(registration, path),
-    home(registration, path),
-    ...path.length ? [link(registration, path)] : [],
-  ])
-}
 
 // Only a guest entirely represented by these answers is disposable. An editor
 // may have added directory details or notes while the sign-up was unfinished.
@@ -160,41 +79,21 @@ let kin: Record<
 }
 type Kin = typeof kin[string]
 let other = (side: 'a' | 'b') => side == 'a' ? 'b' : 'a'
-let folded = (v: unknown) => typeof v == 'string' ? v.trim().toLowerCase() : ''
 
-// Two people may share a phone or an email (a couple, a household line), so a
-// contact alone does not make a sign-up someone's: the first names must not
-// disagree either, allowing for a short form of the name (Matt, Matthew).
-let alike = (row: Bundle, values: Record<string, unknown>) => {
-  let held = folded(fields(row, 'individual').first),
-    given = folded(values.first)
-  return !held || !given || held.startsWith(given) || given.startsWith(held)
-}
-
-// An entry is a relative already listed when the first name agrees, and the
-// last name and birthday agree wherever both sides have one.
-let named = (row: Bundle, values: Record<string, unknown>) => {
-  let held = fields(row, 'individual')
-  return !!folded(values.first) &&
-    ['first', 'last', 'born'].every((prop) =>
-      !folded(held[prop]) || !folded(values[prop]) ||
-      folded(held[prop]) == folded(values[prop])
-    )
-}
-
-// What a sign-up's directory work reads of it: a sign-up held for a bot's
+// What a sign-up's people work reads of it: a sign-up held for a bot's
 // fills nothing until it is accepted, which takes the mark away.
 let READ = ['registration', 'held']
 
-export let directoryForms = (vocab: Vocab): Plugin => ({
-  name: 'yak/form-directory',
+/** The rule a sign-up's people settle by, over the store's `vocab`. */
+export let people = (vocab: Vocab): Plugin => ({
+  name: '@yaks/people',
   admission: () => true,
   hooks: {
     rules: hook(['registration', 'individual', 'held'], (bundles, tx) => {
       let out = [...bundles]
       let written = new Map(
         bundles.filter((b) => b.individual && !dead(b))
-          .map((b) => [b.entity.eid, directoryPhone(b)]),
+          .map((b) => [b.entity.eid, numbered(b)]),
       )
       let person = (
         eid: string,
@@ -252,14 +151,7 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                 (rows, eid) =>
                   after(person(eid), (row) => row ? [...rows, row] : rows),
               ),
-              (candidates) => {
-                let fits = candidates.filter((b) => alike(b, values))
-                return fits.find((b) =>
-                  phone && number(fields(b, 'phone').number) == phone
-                ) ?? fits.find((b) =>
-                  address && email(fields(b, 'individual').email) == address
-                )
-              },
+              (candidates) => matching(candidates, values),
             )
           },
         )
@@ -299,7 +191,7 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
         registration: string,
         path: (string | number)[],
       ) =>
-        !vocab.comp('household') || !Object.keys(house).length
+        !speaks(vocab, 'household') || !Object.keys(house).length
           ? undefined
           : after(person(eid), (row) => {
             let held = fields(row, 'individual').household
@@ -407,13 +299,15 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                     : undefined
                   // A listed relative is found again rather than copied.
                   let relative = (held: Bundle | undefined) =>
-                    held || !rel ? undefined : after(
-                      relatives(rel, outer),
-                      (listed) =>
-                        listed.find((b) =>
-                          !taken.has(b.entity.eid) && named(b, values)
-                        ),
-                    )
+                    held || !rel || !speaks(vocab, 'relation')
+                      ? undefined
+                      : after(
+                        relatives(rel, outer),
+                        (listed) =>
+                          listed.find((b) =>
+                            !taken.has(b.entity.eid) && named(b, values)
+                          ),
+                      )
                   // What the sign-up's person, now `who`, entails: the
                   // sign-up names them, a provisional guest they turned out
                   // to be is folded into them, and a repeat entry is related
@@ -475,7 +369,7 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                           },
                         )
                       }
-                    } else if (rel && !matched) {
+                    } else if (rel && !matched && speaks(vocab, 'relation')) {
                       out.push({
                         entity: { eid: link(patch.entity.eid, path) },
                         relation: {
@@ -526,10 +420,10 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
       let registrations = vocab.comp('registration') && vocab.comp('question')
         ? bundles.filter((b) => (b.registration || b.held === null) && !dead(b))
         : []
-      if (!registrations.length) return out.map(directoryPhone)
+      if (!registrations.length) return out.map(numbered)
       return after(
         each(registrations, undefined as void, (_, b) => register(b)),
-        () => out.map(directoryPhone),
+        () => out.map(numbered),
       )
     }),
   },

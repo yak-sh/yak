@@ -1,0 +1,25 @@
+{
+  "name": "@yaks/people",
+  "version": "0.2.33",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./graph": "./graph.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "An app's own people as individual, household and relation rows: who a phone, an address and a name belong to, and the guests and relatives a sign-up adds.",
+  "dependencies": {
+    "@yaks/fp": "0.2.23",
+    "@yaks/forms": "0.2.33",
+    "@yaks/graph": "0.2.33",
+    "@yaks/phone": "0.2.30",
+    "@yaks/vocab": "0.2.32"
+  },
+  "devDependencies": {
+    "@yaks/durable-object": "0.2.28",
+    "@yaks/kernel": "0.2.28",
+    "@yaks/ram": "0.2.24",
+    "@yaks/testing": "0.2.30"
+  }
+}

@@ -54,6 +54,14 @@ grouped approximately by function, **not** by dependency order.
 
   Its `./fill` adapter supplies @yaks/ux `Submit` and `Fields` with question
   visibility, validation and form transport.
+- **[@yaks/people](./people)** — An app's own people as
+  `individual{first, last, born, email, phone, household, status, deceased, …}`,
+  `household{street, street2, city, region, postal, …}` and
+  `relation{kind, a,
+  b}`: pure functions for who a phone, an address and a
+  name belong to, what a person's empty properties take from answers and a typed
+  address's parts, and `./graph`'s rule that matches a sign-up to them or adds a
+  guest and their relatives.
 
 - **[@yaks/code-mode](./code-mode)** — Typed tool objects from a scoped registry
   and bounded short JS/TS executions through an isolated evaluator.
