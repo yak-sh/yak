@@ -202,6 +202,7 @@ let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/mail/effects': () => import('@yaks/mail/effects'),
   '@yaks/mail/tools': () => import('@yaks/mail/tools'),
   '@yaks/member/graph': () => import('@yaks/member/graph'),
+  '@yaks/memory/graph': () => import('@yaks/memory/graph'),
   '@yaks/memory/tools': () => import('@yaks/memory/tools'),
   '@yaks/model/graph': () => import('@yaks/model/graph'),
   '@yaks/phone/effects': () => import('@yaks/phone/effects'),
