@@ -224,6 +224,25 @@ readers unsure who the page was for; the same question as the label on a box,
 under a heading that says what they get, was answered with their own
 complaint.
 
+Readers who run an office or sit on a board (T-156917) stopped at more:
+
+- "Rebuilt": "does my current site get replaced?" A "preview" was no better
+  until the label said what one is: a copy of their site that only they can
+  open.
+- "We fix it": "who is we?" Name the company where "we" first appears.
+- "Organization": each asked whether theirs was meant, until the kicker named
+  churches, clubs, town offices and small businesses.
+- "AI use included" and "buy more": how much, and can the bill grow? Say what
+  happens when it runs out, and what more costs.
+- "Operator", every time, however it was introduced. Call it the assistant,
+  and name the Operator only where they will next meet the word.
+- "A record you add where it is registered" and "your dashboard": our words.
+- Whatever the page promises, a board asks what the page left out: who can
+  see members' details, who owns the site, and what happens when they stop
+  paying. A page that sells to an organization answers all three.
+- They asked for a named person, a phone number and how fast support
+  answers. Promise only what exists.
+
 **Plain beats clever.** Mannered prose (M-33081) is a heading or a line
 arranged for effect: a metaphor, a pun, a pair of short punchy fragments. On a
 marketing page it costs the most, because the visitor won't stay to decode it.

@@ -708,6 +708,53 @@
     min-height: 0;
   }
 
+  /* An exchange set beside a hero's words (site/organizations.tsx): what
+     somebody wrote, and what was written back, set in from the other side
+     and drawn in the accent. */
+  .Letters {
+    display: grid;
+    gap: var(--gap);
+    align-content: center;
+    max-width: 30rem;
+  }
+
+  .Letter {
+    margin-inline-end: 2rem;
+    text-align: start;
+  }
+
+  .Letter-back {
+    --pencil: var(--accent);
+    margin-inline: 2rem 0;
+  }
+
+  .Letter_By {
+    color: var(--accent);
+    font-size: var(--small);
+    font-weight: 700;
+  }
+
+  /* What a person pays now, typed beside a plan's price (saving.js): the
+     amounts side by side where they fit, and the sum said under them. It is
+     hidden until its script runs. */
+  .Saving[hidden] {
+    display: none;
+  }
+
+  .Saving_Fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+    gap: var(--gap);
+  }
+
+  .Saving_Said {
+    font-weight: 700;
+  }
+
+  .Saving_Said:empty {
+    display: none;
+  }
+
   .Demo {
     display: grid;
     gap: var(--gap);
@@ -1036,6 +1083,11 @@
     .Steps {
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 2rem;
+    }
+
+    /* Four of them sit two by two. */
+    .Home .Yours_List-pairs {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
 

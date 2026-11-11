@@ -398,31 +398,38 @@ test('a step added after the funnel began says when its own count began, and no 
 
 test('a landing page visited at its own address is a home page visit, and the build begun from its box counts under it', async () => {
   let k = await kernel()
-  let before = k.views.points.length
-  let seen = await k.at(k.host, '/churches', {
-    headers: { 'user-agent': BROWSER },
-  })
-  assertStringIncludes(await seen.text(), 'For church offices')
-  let cookie = seen.headers.getSetCookie().map((c) => c.split(';')[0])
-    .find((c) => c.startsWith('yak_home='))
-  assertEquals(cookie, 'yak_home=church')
-  let built = await k.at(k.host, START, {
-    method: 'POST',
-    redirect: 'manual',
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      'user-agent': BROWSER,
-      cookie: cookie!,
-    },
-    body: new URLSearchParams({ say: 'A sign-up form' }).toString(),
-  })
-  await built.body?.cancel()
-  assertEquals(
-    k.views.points.slice(before)
-      .filter((p) => p.indexes?.[0] == FUNNEL)
-      .map((p) => [p.blobs![1], p.blobs![8]]),
-    [['home', 'church'], ['started', 'church']],
-  )
+  for (
+    let [path, kicker, name] of [
+      ['/churches', 'For church offices', 'church'],
+      ['/organizations', 'For churches, clubs, town offices', 'organization'],
+    ]
+  ) {
+    let before = k.views.points.length
+    let seen = await k.at(k.host, path, {
+      headers: { 'user-agent': BROWSER },
+    })
+    assertStringIncludes(await seen.text(), kicker)
+    let cookie = seen.headers.getSetCookie().map((c) => c.split(';')[0])
+      .find((c) => c.startsWith('yak_home='))
+    assertEquals(cookie, `yak_home=${name}`)
+    let built = await k.at(k.host, START, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'user-agent': BROWSER,
+        cookie: cookie!,
+      },
+      body: new URLSearchParams({ say: 'A sign-up form' }).toString(),
+    })
+    await built.body?.cancel()
+    assertEquals(
+      k.views.points.slice(before)
+        .filter((p) => p.indexes?.[0] == FUNNEL)
+        .map((p) => [p.blobs![1], p.blobs![8]]),
+      [['home', name], ['started', name]],
+    )
+  }
 })
 
 test("a stranger's way is read stage by stage, a crawler's and Meta's reviewer's left out, and where they stop is the stage most go no further than", async () => {

@@ -198,7 +198,10 @@ export let Churches = () => (
         </Card>
       </div>
       <p class='Note Note-small'>
-        Tax is included. <a href='/pricing'>Compare plans and limits</a>.
+        Tax is included. <a href='/pricing'>Compare plans and limits</a>.{' '}
+        <a href='/organizations#behind'>
+          Who is behind yaks.app, and who fixes its mistakes
+        </a>.
       </p>
     </section>
     <Card class='Join' aria-labelledby='join'>

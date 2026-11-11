@@ -34,6 +34,7 @@ export let FILES = [
   'find.js',
   'modal.js',
   'cta.js',
+  'saving.js',
   'carousel.js',
   'wander.js',
   'favicon-32.png',

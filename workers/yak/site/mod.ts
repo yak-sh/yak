@@ -14,6 +14,7 @@ import { Cookies } from './cookies.tsx'
 import { Help } from './help.tsx'
 import { Home } from './home.tsx'
 import { Operator } from './operator.tsx'
+import { Organizations } from './organizations.tsx'
 import { Pricing } from './pricing.tsx'
 import { Privacy } from './privacy.tsx'
 import { StyleGuide } from './style-guide.tsx'
@@ -27,9 +28,10 @@ export let PAGES: Record<string, FunctionComponent> = {
   'operator.html': () => h(Operator, { by: 'text' }),
   'operator-email.html': () => h(Operator, { by: 'email' }),
   // The home page that leads with the app a visitor gets, and the landing
-  // page for a church office (variant.ts).
+  // pages for a church office and for any organization's (variant.ts).
   'build.html': Build,
   'churches.html': Churches,
+  'organizations.html': Organizations,
   'pricing.html': Pricing,
   'help.html': Help,
   'terms.html': Terms,

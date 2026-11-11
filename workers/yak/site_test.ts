@@ -88,6 +88,7 @@ let parsed = (name: string): Document => {
 let pages = [
   'index.html',
   'churches.html',
+  'organizations.html',
   'help.html',
   'pricing.html',
   'terms.html',
@@ -656,17 +657,19 @@ test('every public page hands a stranger sign-in, never /connect', () => {
 })
 
 // Each page that asks for an idea posts it to be built, under the button its
-// hero names. The churches page asks for the web address of the site a church
-// has now, in one line, and says whose site its box asks for.
+// hero names. The churches page and the organizations page ask for the web
+// address of the site they have now, in one line, and say whose site the box
+// asks for.
 test("a home page's box posts an idea to be built", () => {
   for (
     let [name, button, field, org] of [
       ['index.html', 'Build it', 'textarea'],
       ['build.html', 'Build it', 'textarea'],
       ['churches.html', 'Build my site free', 'input', 'church'],
+      ['organizations.html', 'Build a free preview', 'input', 'organization'],
     ]
   ) {
-    let box = parsed(name).querySelector('form.Hello_Ask')!
+    let box = parsed(name).querySelector('.Hello form')!
     assertEquals(
       [box.getAttribute('method'), box.getAttribute('action')],
       ['post', START],
@@ -708,6 +711,10 @@ test('the pages beside the home page say where they live and count their buttons
   assertEquals(at('churches.html'), {
     canonical: 'https://yaks.app/churches',
     ctas: ['start', 'examples', 'pro', 'join'],
+  })
+  assertEquals(at('organizations.html'), {
+    canonical: 'https://yaks.app/organizations',
+    ctas: ['start', 'examples', 'examples', 'pro', 'join'],
   })
 })
 
@@ -875,9 +882,18 @@ test('the home page describes itself at the prices the code charges', () => {
 
 test('the plan pages quote the prices the offers name, and no other', () => {
   let charged = new Set([...Object.values(PRICE), ...Object.values(YEARLY)])
-  for (let page of ['index.html', 'pricing.html']) {
+  for (
+    let page of [
+      'index.html',
+      'pricing.html',
+      'churches.html',
+      'organizations.html',
+    ]
+  ) {
     let html = flat(parseHTML(read(page)).document.body.textContent!)
-    assertStringIncludes(html, `$${PRICE.plus} a month`)
+    if (page != 'churches.html') {
+      assertStringIncludes(html, `$${PRICE.plus} a month`)
+    }
     assertStringIncludes(html, `$${PRICE.pro} a month`)
     assertStringIncludes(html, `$${YEARLY.pro} a year`)
     for (let [, n] of html.matchAll(/\$(\d+) a (?:month|year)/g)) {

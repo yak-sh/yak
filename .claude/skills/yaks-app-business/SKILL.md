@@ -176,8 +176,13 @@ assistants' connector directories for those who already use one.
   is one `/` is split with (today's page, and site/build.tsx, which leads with
   the app a visitor gets). A page with none is a landing page for one audience,
   shown only at its own address, where an ad for that audience points:
-  site/churches.tsx at /churches, and the Operator page at /operator. The box on
-  /churches asks for the web address of the site a church has now, and the
+  site/churches.tsx at /churches, site/organizations.tsx at /organizations, and
+  the Operator page at /operator. /organizations sells the Pro plan to any
+  organization's office as a web person on staff, and says who is behind
+  yaks.app and who fixes mistakes, each promise read from where it is done; it
+  never says "Operator" until the plans. /churches keeps the rebuild in a
+  church's words and links there for that answer. The box on both
+  asks for the web address of the site they have now, and the
   newcomer's Operator reads it and builds theirs from it (newcomer.ts `worded`,
   `REBUILDING`) as a private preview, published only once the person verifies
   that site's domain on their space (`previewing`); words typed there are built

@@ -80,6 +80,7 @@ export let CONNECTOR = connector()
 export let SITE = [
   '/',
   '/churches',
+  '/organizations',
   '/pricing',
   '/help',
   '/terms',
