@@ -12,7 +12,8 @@
  * A table paged by the graph asks for one page at a time (`paged`), and the
  * graph sorts it; one whose rows are all in hand (a tally, a component's
  * properties) pages them itself (`local`), and sorts them by a column's
- * `value` (`run`).
+ * `value` (`run`, @yaks/ux `sortRows`): numbers as numbers, an empty value
+ * last either way.
  *
  * A table whose rows hold rows is a tree (`holds`): a row holding some wears a
  * toggle, and once opened the rows it holds show under it, a step in, run by
@@ -25,6 +26,7 @@
 import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
 import { conjoin } from '@yaks/query'
 import { Pager, Table } from '@yaks/ui'
+import { sortRows, type SortValue } from '@yaks/ux'
 import type { Bundle, Io } from './host.ts'
 import { count } from './read.ts'
 import { none } from './rows.ts'
@@ -39,8 +41,8 @@ export type Column = {
   /** the property the graph runs its rows by when its heading is pressed */
   sort?: string
   /** what a table holding every row runs them by when its heading is
-   * pressed: a number, or text */
-  value?: (b: Bundle) => number | string
+   * pressed: a number, text, or null for none */
+  value?: (b: Bundle) => SortValue
   mod?: 'num' | 'key' | 'prose'
   cell: (b: Bundle) => ComponentChildren
 }
@@ -68,16 +70,12 @@ export let run = (
   columns: Column[],
   order?: string | null,
 ): Bundle[] => {
-  let down = !!order?.startsWith('-')
   let c = columns.find((c) => c.value && c.name == order?.replace(/^-/, ''))
   if (!c?.value) return rows
   let v = c.value
-  return rows.toSorted((a, b) => {
-    let [x, y] = [v(a), v(b)]
-    let d = typeof x == 'number' && typeof y == 'number'
-      ? x - y
-      : String(x).localeCompare(String(y))
-    return down ? -d : d
+  return sortRows(rows, (b) => [v(b)], {
+    column: 0,
+    direction: order!.startsWith('-') ? 'desc' : 'asc',
   })
 }
 
@@ -313,17 +311,30 @@ export let Grid = (p: GridProps): JSX.Element => {
         h(
           Table.Row,
           {},
-          columns.map((c) =>
-            h(Table.Heading, {
-              key: c.name,
-              mod: [
-                sorted(c) && 'sorts',
-                way(g.order, c),
-                c.mod == 'num' && 'num',
-              ],
-              onClick: sorted(c) ? () => sort(c) : undefined,
-            }, c.name)
-          ),
+          columns.map((c) => {
+            let dir = way(g.order, c)
+            return h(
+              Table.Heading,
+              {
+                key: c.name,
+                mod: [sorted(c) && 'sorts', dir, c.mod == 'num' && 'num'],
+                'aria-sort': sorted(c)
+                  ? dir == 'asc'
+                    ? 'ascending'
+                    : dir == 'desc'
+                    ? 'descending'
+                    : 'none'
+                  : undefined,
+              },
+              sorted(c)
+                ? h(
+                  Table.Sort,
+                  { type: 'button', onClick: () => sort(c) },
+                  c.name,
+                )
+                : c.name,
+            )
+          }),
         ),
       ),
       h(

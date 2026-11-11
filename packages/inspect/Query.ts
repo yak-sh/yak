@@ -2,7 +2,8 @@
  * A query's page: the line, run, and its answer. Rows show as a table whose
  * columns are the components the rows share, each cell what that component
  * holds, a page at a time (unless the line names its own window) with how
- * many there are in all; a press on a row picks it. An aggregate shows as
+ * many there are in all; a press on a row picks it, and a press on a heading
+ * has the graph run the rows by the property that column shows first. An aggregate shows as
  * what it counts: a number, or each value beside how many hold it.
  *
  * @module
@@ -55,12 +56,29 @@ export let shared = (rows: Bundle[]): string[] =>
     ? comps(rows[0]).map(([n]) => n).filter((n) => rows.every((b) => b[n]))
     : []
 
+// The values a component holds that are there, in the order it holds them.
+let held = (b: Bundle, name: string) =>
+  Object.entries(comp(b, name)).filter(([, v]) => v != null && v !== '')
+
+/**
+ * The property a component's column runs by: the first one the rows show.
+ *
+ * ```ts
+ * import { leads } from './Query.ts'
+ * leads([
+ *   { entity: { eid: 'a' }, created: { by: null, at: '2026-11-10' } },
+ * ], 'created') // 'created.at'
+ * ```
+ */
+export let leads = (rows: Bundle[], name: string): string | undefined => {
+  let prop = rows.map((b) => held(b, name)[0]?.[0]).find(Boolean)
+  return prop && `${name}.${prop}`
+}
+
 // What a component holds, in a cell: its first few values that are there,
 // each as a person reads it.
 let summed = (io: Io, b: Bundle, name: string) => {
-  let set = Object.entries(comp(b, name)).filter(([, v]) =>
-    v != null && v !== ''
-  )
+  let set = held(b, name)
   return set.length
     ? set.slice(0, 3).flatMap(([k, v], i) => [
       i ? ' ' : null,
@@ -96,6 +114,7 @@ let Tallied = ({ io, id, tally }: {
     columns: [
       {
         name: 'value',
+        value: (b) => b.entity.eid || null,
         cell: (b) =>
           named(b.entity.eid)
             ? mention(io, b.entity.eid)
@@ -104,6 +123,7 @@ let Tallied = ({ io, id, tally }: {
       {
         name: 'entities',
         mod: 'num',
+        value: (b) => tally[b.entity.eid] ?? 0,
         cell: (b) => count(tally[b.entity.eid] ?? 0),
       },
     ],
@@ -124,6 +144,8 @@ let Answered = ({ io, text, ast }: { io: Io; text: string; ast: Query }) => {
   useSets(io, all)
   let cols = shared(all)
   useNamed(io, mentioned(all, cols))
+  // A column the rows run by keeps its property, whichever rows came back.
+  let by = grid(io, id).order?.replace(/^-/, '')
   return waiting(got.rows) ?? h(Grid, {
     io,
     id,
@@ -136,6 +158,7 @@ let Answered = ({ io, text, ast }: { io: Io; text: string; ast: Query }) => {
       },
       ...cols.map((n) => ({
         name: n,
+        sort: by?.startsWith(`${n}.`) ? by : leads(all, n),
         cell: (b: Bundle) => summed(io, b, n),
       })),
     ],

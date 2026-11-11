@@ -45,6 +45,12 @@ editing; changes are emitted as bundles. Notes are comments and tasks about the
 entity and heading where they were left. Page-only table order, paging, editing
 and refusal state use the `/front` vocabulary.
 
+A table's sortable heading is a button: pressing it runs the rows by that
+column, again the other way, then as they came, and `aria-sort` and an arrow say
+which. A query's rows are run by the graph (`.order=`), each component's column
+by the first property it shows. A table holding every row sorts it through
+@yaks/ux `sortRows`: numbers as numbers, an empty value last.
+
 ## What an entity holds, in order
 
 `Held` draws what an entity holds by its links as an ordered list edited in

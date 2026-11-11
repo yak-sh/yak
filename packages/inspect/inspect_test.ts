@@ -426,13 +426,18 @@ test("a component's entities run by a pressed heading, a page at a time", async 
   let heading = () =>
     p.root.querySelectorAll('[data-section="Entities"] [role=columnheader]')[1]
   let last = () => t.asked.filter((l) => l.endsWith('&.limit=50')).at(-1)
+  let press = () => p.fire(heading().querySelector('button')!, 'click')
   assertEquals(heading().textContent, 'status')
-  await p.fire(heading(), 'click')
+  await press()
   assertEquals(last(), '.task&.order=task.status&.limit=50')
-  await p.fire(heading(), 'click')
+  assertEquals(heading().getAttribute('aria-sort'), 'ascending')
+  assertEquals(heading().textContent, 'status ↑')
+  await press()
   assertEquals(last(), '.task&.order=-task.status&.limit=50')
-  await p.fire(heading(), 'click')
+  assertEquals(heading().getAttribute('aria-sort'), 'descending')
+  await press()
   assertEquals(last(), '.task&.limit=50')
+  assertEquals(heading().getAttribute('aria-sort'), 'none')
   assert(p.text('[data-section="Entities"] .Pager').includes('1–50 of 120'))
   let [, next] = p.root.querySelectorAll(
     '[data-section="Entities"] .Pager_Step',
@@ -482,6 +487,51 @@ test('a query without its own window keeps the count used by its pager', () => {
   assert(unboundedQuery.asked.includes('.task&.limit=50&*'))
   assertEquals(unboundedQuery.rows, 50)
   assert(unboundedQuery.pager?.includes('1–50 of 120'))
+})
+
+test("a query's columns have the graph run its rows by the property each shows first", async () => {
+  using t = host((line) =>
+    line.endsWith('&.count') ? { count: 120 } : { rows: [T1, T2] }
+  )
+  using p = mount(t.draw(h(t.Door, {
+    e: { entity: { eid: 'query' } },
+    view: 'Inspect.Query',
+    ctx: { query: '.task' },
+  })))
+  let heading = (name: string) =>
+    [...p.root.querySelectorAll('[role=columnheader]')].find((h) =>
+      h.textContent?.startsWith(name)
+    )!
+  let last = () => t.asked.filter((l) => l.endsWith('&*')).at(-1)
+  await p.fire(heading('doc').querySelector('button')!, 'click')
+  assertEquals(last(), '.task&.order=doc.title&.limit=50&*')
+  await p.fire(heading('doc').querySelector('button')!, 'click')
+  assertEquals(last(), '.task&.order=-doc.title&.limit=50&*')
+  assertEquals(heading('doc').getAttribute('aria-sort'), 'descending')
+})
+
+test('a tally sorts by its values or its counts, an empty value last', async () => {
+  using t = host({
+    '.task&.tally=task.status': { tally: { b: 1, a: 3, '': 2 } },
+  })
+  using p = mount(t.draw(h(t.Door, {
+    e: { entity: { eid: 'query' } },
+    view: 'Inspect.Query',
+    ctx: { query: '.task&.tally=task.status' },
+  })))
+  let values = () =>
+    [...p.root.querySelectorAll('.Table_Body .Table_Row')].map((r) =>
+      r.querySelector('.Table_Cell')!.textContent
+    )
+  let press = (i: number) =>
+    p.fire(p.root.querySelectorAll('.Table_Sort')[i], 'click')
+  assertEquals(values(), ['a', '""', 'b'])
+  await press(0)
+  assertEquals(values(), ['a', 'b', '""'])
+  await press(0)
+  assertEquals(values(), ['b', 'a', '""'])
+  await press(1)
+  assertEquals(values(), ['b', '""', 'a'])
 })
 
 test('a query that counts shows the count through its view registration', () => {
