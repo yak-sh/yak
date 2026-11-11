@@ -176,10 +176,6 @@ ending:
 yak session spawn T-123 --provider standin --model limit --wait
 ```
 
-`refusal` and `crash` report a failure to the tracker, as a live run that ended
-so does. The two bugs they file are archived as the stand-in's own; a later run
-adds an occurrence to them and they stay archived.
-
 A run of it takes every step a live run does (the launch, the log, the reader,
 the ending) and spends nothing, so a change to how a run ends is seen live
 without waiting for a plan to run out. `recorded` marks the row as playing
