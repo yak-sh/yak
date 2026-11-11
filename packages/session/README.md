@@ -932,6 +932,16 @@ command it started, and everything behind it would wait. A helper's own ending
 knocks nobody (`reported`), and a run it started that ends after it knocks the
 operator, where it is routine again.
 
+A run's ending and a task's mark are routine to read, not to hear of. When a
+helper exits, each task it took a run's report or a mark for reaches the session
+that was knocked (else the operator) as one line: the task, its verdict as the
+helper leaves it, and the report's id, as in
+`T-12 done: Fix the gate (report #054d79a6d0)`. The verdict is `done` or
+`cancelled` from the task's status, `ended early` for a run that did not exit 0
+or was stopped, and otherwise `not ready`. A comment on a task is talk, not a
+change, and stays the helper's: its knock's `about` is the comment, a mark's the
+task.
+
 The helpers' trail is one query, newest first:
 
 ```sh

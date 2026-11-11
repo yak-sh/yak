@@ -23,6 +23,12 @@
 // that has said its last words can linger for good on a background command
 // it started, and everything behind it would wait.
 //
+// A run's ending and a task's mark are not routine to the session that
+// started the run or watches the task, only their reading is. When a helper
+// exits, each task it took one for reaches that session as one line: the
+// task, its verdict as the helper leaves it (done, cancelled, not ready, or
+// ended early for a run that did not end cleanly), and the report's id.
+//
 // The helpers' trail is `.helping.project=<project>`: each session, with what
 // it wrote under `.created.via=<session>` and the knocks it took under
 // `.notified.via=<session>`.
@@ -36,9 +42,12 @@ import { token } from '@yaks/graph/sha256'
 import { human } from '@yaks/id'
 import { absent, and, eq, every, fields, present } from '@yaks/query'
 import { SESSION } from './comp.ts'
-import { type Owed, owing } from './listen.ts'
+import { ended as over, type Owed, owing } from './listen.ts'
 import { HELPER, HELPING, ROUTINE } from './routine.ts'
 import { operatorOf } from './watch.ts'
+import { STOP_ENTRY } from './native.ts'
+import { cleanEnd } from './wake.ts'
+import { statusOf } from '@yaks/task'
 
 type G = Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>
 
@@ -57,6 +66,7 @@ let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 let s = (n: number) => n == 1 ? '' : 's'
+let unique = (ids: string[]): Eid[] => [...new Set(ids.filter(Boolean))]
 
 // A turn the model or a tool owes an answer: a helper not yet launched.
 let WORKING = ['pending', 'running']
@@ -71,9 +81,15 @@ export let waiting = (g: G, project: Eid): Promise<Bundle[]> =>
 
 // A knock at the operator written through `helper`, which makes it a hand-up
 // (./routine.ts). Named for what it tells, so a run again tells it once.
-let handUp = async (g: G, helper: Bundle, key: string, body: string) => {
+let handUp = async (
+  g: G,
+  helper: Bundle,
+  key: string,
+  body: string,
+  to?: Eid,
+) => {
   let project = str(comp(helper, HELPING).project)
-  let to = await operatorOf(g, project) ?? project
+  to ??= await operatorOf(g, project) ?? project
   try {
     await g.apply(
       signed([{
@@ -275,6 +291,66 @@ let ended = async (g: G, helper: Bundle): Promise<void> => {
   )
 }
 
+// Where a taken item's line goes: the session it knocked while that can still
+// hear, else the operator.
+let hearer = async (g: G, item: Bundle): Promise<Eid | undefined> => {
+  let to = str(comp(item, 'knock').target)
+  let [row] = to ? await g.get([to], [SESSION]) : []
+  return row?.[SESSION] && !(await over(g, [row])).has(to) ? to : undefined
+}
+
+// The verdict on a task as a helper leaves it: settled, or for a run that did
+// not end cleanly, ended early, and otherwise not ready.
+let verdict = (g: G, task: Bundle, run?: Bundle): string => {
+  let status = statusOf(g.vocab, task) ?? ''
+  if (status == 'done' || status == 'cancelled') return status
+  return run && !cleanEnd(run) ? 'ended early' : 'not ready'
+}
+
+// Each task a helper took a run's ending (its report, a comment on the task)
+// or a mark for, as one line to whoever it knocked. A comment anyone else
+// wrote stays the helper's.
+let verdicts = async (g: G, helper: Bundle): Promise<void> => {
+  let has = (name: string) => !!g.vocab.comp(name)
+  if (!has('task')) return
+  let held = await g.read(and(
+    present(ROUTINE),
+    present('knock'),
+    eq('notified.via', helper.entity.eid),
+    every(),
+  ))
+  let ran = (b: Bundle) => b.comment ? str(comp(b, 'comment').target) : ''
+  let marked = (b: Bundle) => b.comment ? '' : str(comp(b, 'knock').about)
+  let about = unique(held.map((b) => ran(b) || marked(b)))
+  if (!about.length) return
+  let tasks = new Map(
+    (await g.get(about)).filter((b) => b.task).map((b) => [b.entity.eid, b]),
+  )
+  let name = human(g.vocab)
+  let seen = new Set<Eid>()
+  // A run's report first: where a run and a mark tell of one task, the line
+  // names the report.
+  for (let item of [...held.filter(ran), ...held.filter((b) => !ran(b))]) {
+    let task = tasks.get(ran(item) || marked(item))
+    if (!task || seen.has(task.entity.eid)) continue
+    seen.add(task.entity.eid)
+    let via = ran(item) ? str(comp(item, 'created').via) : ''
+    let [run] = via
+      ? await g.get([via], ['process', 'exit', STOP_ENTRY].filter(has))
+      : []
+    let title = fold(str(comp(task, 'doc').title), 80)
+    await handUp(
+      g,
+      helper,
+      `told ${task.entity.eid}`,
+      `${name(task)} ${verdict(g, task, run?.process ? run : undefined)}` +
+        (title ? `: ${title}` : '') +
+        (ran(item) ? ` (report ${name(item)})` : ''),
+      await hearer(g, item),
+    )
+  }
+}
+
 /** The code behind `session_help`, for the entity a commit moved: a routine
  * knock, a helper that exited, or a project whose `helper` went. */
 export let help = async (g: G, eid: Eid, o: Opts = {}): Promise<void> => {
@@ -284,7 +360,10 @@ export let help = async (g: G, eid: Eid, o: Opts = {}): Promise<void> => {
     [ROUTINE, HELPING, 'project', 'exit', 'stop'].filter(has),
   )
   if (!row) return
-  if (row[HELPING] && row.exit) await ended(g, row)
+  if (row[HELPING] && row.exit) {
+    await ended(g, row)
+    await verdicts(g, row)
+  }
   let project = str(comp(row, ROUTINE).project) ||
     str(comp(row, HELPING).project) || (row.project ? eid : '')
   if (project) await take(g, project, o)

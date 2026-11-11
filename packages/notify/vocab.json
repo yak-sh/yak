@@ -50,7 +50,7 @@
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "description": "what it tells of, where that is one entity: the task a change happened to"
+          "description": "what it tells of, where that is one entity: the task a mark or an assignment moved, or the comment on it"
         }
       },
       "description": "a nudge aimed at an entity, with the message that came with it"

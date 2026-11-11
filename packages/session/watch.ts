@@ -527,7 +527,9 @@ export let knocks = async (
     entity: { eid: n.eid },
     knock: {
       target: n.target,
-      about: task.entity.eid,
+      // What it tells of: the comment, or the task a mark or an assignment
+      // moved, so a reader tells a task's change from talk about it.
+      about: row.comment ? eid : task.entity.eid,
       ...change.by ? { from: change.by } : {},
     },
     doc: { body },

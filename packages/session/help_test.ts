@@ -20,6 +20,7 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { personaDoc } from '@yaks/persona/vocab'
 import { projectDoc } from '@yaks/project/vocab'
 import { processDoc } from '@yaks/process/vocab'
+import { taskDoc } from '@yaks/task/vocab'
 import { equal, test } from '@yaks/testing'
 import { sessionDoc } from './comp.ts'
 import { statusComputed } from './state.ts'
@@ -41,6 +42,7 @@ let vocab = loadVocab([
   personaDoc,
   projectDoc,
   processDoc,
+  taskDoc,
 ], [kernelKeywords, idKeywords])
 
 let CLAUDE = identityEid('provider', ['claude'])
@@ -131,6 +133,7 @@ let office = async (helper: object | null = HELPER) => {
   return {
     g,
     write,
+    fx: () => fx.idle(),
     knock,
     letter,
     helpers,
@@ -332,4 +335,59 @@ test('taking `helper` off a project gives what waits back to its operator', asyn
   await o.knock('bug b')
   await o.write([{ entity: { eid: 'p' }, helper: null }])
   equal(await o.heard(), ['bug b'])
+})
+
+// A run the operator started on task `t` ended with `code`, its report a
+// comment on the task that knocks the operator; then the helper took it,
+// `finish` did what it did, and it exited.
+let ran = async (code: number, finish: Bundle[] = []) => {
+  let o = await office()
+  await o.write([
+    { entity: { eid: 't' }, task: {}, doc: { title: 'Fix the gate' } },
+    { entity: { eid: 'run' }, session: { id: 'run' }, process: { pid: 2 } },
+    { entity: { eid: 'run' }, exit: { code } },
+    {
+      entity: { eid: 'report' },
+      doc: { title: `run — exited ${code}`, body: 'Landed abc.' },
+      comment: { target: 't' },
+      knock: { target: 'operator' },
+      $actor: { via: 'run' },
+    },
+  ])
+  await o.fx()
+  let [h] = await o.helpers()
+  equal(await o.heard(), [])
+  await o.write(finish.map((b) => ({ ...b, $actor: { via: h.eid } })))
+  await o.exit(h.eid, 0)
+  return (await o.heard()).map((line) => line.replace(/#\w+|[A-Z]-\d+/g, '#'))
+}
+
+test('a run the operator started reaches it as one line once its helper ends', async () => {
+  let done = [{ entity: { eid: 't' }, completed: {} }]
+  equal(await ran(0, done), ['# done: Fix the gate (report #)'])
+  equal(await ran(0), ['# not ready: Fix the gate (report #)'])
+  equal(await ran(1), ['# ended early: Fix the gate (report #)'])
+})
+
+test('a mark on a task the operator watches reaches it as one line, and talk about it does not', async () => {
+  let o = await office()
+  await o.write([
+    { entity: { eid: 't' }, task: {}, doc: { title: 'Fix the gate' } },
+    { entity: { eid: 'c' }, comment: { target: 't' }, doc: { body: 'hm' } },
+  ])
+  await o.knock('C-1 on T-1 by Fixer: hm', {
+    knock: { target: 'operator', about: 'c' },
+  })
+  await o.write([{ entity: { eid: 't' }, completed: {} }])
+  await o.knock('T-1 completed by Fixer', {
+    knock: { target: 'operator', about: 't' },
+  })
+  let [h] = await o.helpers()
+  await o.exit(h.eid, 0)
+  let helpers = await o.helpers()
+  for (let more of helpers.slice(1)) await o.exit(more.eid, 0)
+  equal(
+    (await o.heard()).map((line) => line.replace(/#\w+|[A-Z]-\d+/g, '#')),
+    ['# done: Fix the gate'],
+  )
 })
