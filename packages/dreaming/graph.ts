@@ -11,17 +11,22 @@
 //
 // The expression reads one owner through one correlated subquery, so the row
 // being ordered and a `.after` cursor's anchor rank the same way. A component
-// the vocabulary lacks is read as absent.
+// the vocabulary lacks is read as absent. A page in this order is looked for
+// among the newest touches and the recalled first (`opening`), so it reads
+// about a page rather than ranking the whole graph.
 
 import {
   and,
+  as,
   col,
+  desc,
   eq,
   exists,
   type Expr,
   type Extension,
   FALSE,
   fn,
+  from,
   gt,
   iff,
   type Join,
@@ -31,9 +36,11 @@ import {
   notNull,
   op,
   or,
+  type Select,
   select,
   type Site,
   sub,
+  union,
 } from '@yaks/sql'
 
 /** The ranking `.order=` names. */
@@ -102,10 +109,69 @@ let warmth = (site: Site): Expr => {
   })))
 }
 
+// How many times a page's size of the newest touches it is looked for in.
+let DEPTH = 4
+
+// Where a page of the warmest lies (@yaks/sql `Lead`). A row never recalled
+// ranks by its last touch alone, at most `exp(-age)` whatever it is filed
+// under, and its touch is its `updated.at`, else its `created.at`. So a row
+// outside the newest `m` of each holds a touch no newer than the later of the
+// two cuts, and ranks no warmer than that touch would. The recalled rows can
+// rank warmer than their touch, and they are few, so each of them leads.
+let opening = (site: Site, n: number) => {
+  let v = site.vocab
+  let stamps = ['updated', 'created'].filter((c) => v.prop(c, 'at'))
+  if (!stamps.length) return null
+  let m = n * DEPTH
+  // The newest `m` of a stamp, or the one they end at.
+  let newest = (comp: string, cols: Expr[], end = false) =>
+    select({
+      cols,
+      from: site.from(comp, '__n'),
+      order: [desc(col('at', '__n'))],
+      limit: lit(end ? 1 : m),
+      ...end ? { offset: lit(m - 1) } : {},
+    })
+  let ids = (q: Select) => select({ cols: [col('id')], from: from(q) })
+  let rows = stamps.map((comp) =>
+    ids(newest(comp, [as(col('entity', '__n'), 'id')]))
+  )
+  if (v.comp('recall')) {
+    rows.push(select({
+      cols: [as(col('entity', '__n'), 'id')],
+      from: site.from('recall', '__n'),
+    }))
+  }
+  // The warmest a row past a cut can be; nothing is past a cut that falls
+  // beyond the component's last row.
+  let past = (comp: string) =>
+    fn(
+      'coalesce',
+      fn(
+        'exp',
+        neg(fn(
+          'max',
+          lit(0),
+          op(
+            '-',
+            lit(julian(site.now)),
+            fn('julianday', sub(newest(comp, [col('at', '__n')], true))),
+          ),
+        )),
+      ),
+      lit(0),
+    )
+  let warmest = stamps.length > 1
+    ? fn('max', ...stamps.map(past))
+    : past(stamps[0])
+  return { rows: union(...rows), floor: neg(warmest) }
+}
+
 /** The `.order=hot` compiler. It claims no clause: a ranking only orders what
  * the rest of the query selected. */
 export let extend = (): Extension[] => [{
   name: 'dreaming',
   compile: {},
   order: (value, site) => value == HOT ? warmth(site) : null,
+  lead: (value, site, n) => value == HOT ? opening(site, n) : null,
 }]

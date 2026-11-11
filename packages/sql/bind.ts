@@ -140,6 +140,7 @@ import {
   claimed,
   type Extension,
   type Found,
+  type Lead,
   type Screen,
   type Selection,
   type Site,
@@ -4107,27 +4108,8 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
       ? c.clauses.every(seeks)
       : c.kind == 'and' && c.clauses.some(seeks)
   if (filters.some(seeks)) return
-  let page = (
-    road: Partial<Ctx>,
-    has: Pred[],
-    n: Cond | number,
-  ): Query => {
-    let q = lower({ kind: 'and', clauses: [...filters, ...has, order] }, {
-      ...ctx,
-      ...road,
-      tables: new Set(),
-    }, [])
-    let arm = render({
-      ...q,
-      cols: [raw(`${ctx.d.ownerKey('entity')} as id`)],
-      limit: typeof n == 'number'
-        ? val(n)
-        : { t: 'case', arms: [[n, val(0)]], else: val(limit.n) },
-    })
-    return select({
-      from: from(raw(arm.sql, arm.params, arm.table, arm.origin)),
-    })
-  }
+  let page = (road: Partial<Ctx>, has: Pred[], n: Cond | number): Query =>
+    arm(ctx, [...filters, ...has, order], limit.n, road, n)
   // Beside a test, fewer than a page of the component that drives the read
   // may pass it, and the walk then reads the whole index to learn so: 6 s for
   // the box's live sessions, `.session !session.ended`, among 3.5 million
@@ -4170,37 +4152,16 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
       ...few,
       cols: [raw(`${ctx.d.ownerKey('entity')} as id`)],
     })
-    // Both are lowered before the newest are shared, so that only the
-    // statement's own WITH holds them, read once for the page and for whether
-    // it is full; a page that is stops the rest at LIMIT 0.
-    let first = page(
-      { bounded: true, candidates: { ...newest, test: TRUE } },
-      [],
+    return ahead(
+      ctx,
+      page(
+        { bounded: true, candidates: { ...newest, test: TRUE } },
+        [],
+        limit.n,
+      ),
+      page({ walk: null }, [], limit.n),
       limit.n,
     )
-    let rest = page({ walk: null }, [], limit.n)
-    let lead = share(ctx, first, true)
-    let full = exists(select({
-      cols: [lit(1)],
-      from: lead,
-      limit: lit(1),
-      offset: lit(limit.n - 1),
-    }))
-    return render(select({
-      from: from({
-        t: 'compound',
-        op: 'union',
-        parts: [
-          select({ cols: [col('id')], from: lead }),
-          select({
-            from: from(select({
-              from: from(rest),
-              limit: { t: 'case', arms: [[full, val(0)]], else: val(limit.n) },
-            })),
-          }),
-        ],
-      }),
-    }))
   }
   // A test requiring the ordered value excludes nulls already. One index
   // walk answers it, including empty text where that test admits it; there
@@ -4253,6 +4214,117 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
   }))
 }
 
+// One arm of a page read in parts: the ids of the rows `clauses` admit, in
+// their order, read along `road`. At most `n` of them, or where `n` is a
+// condition, none while it holds and `limit` otherwise.
+let arm = (
+  ctx: Ctx,
+  clauses: Clause[],
+  limit: number,
+  road: Partial<Ctx>,
+  n: Cond | number,
+): Query => {
+  let q = lower({ kind: 'and', clauses }, {
+    ...ctx,
+    ...road,
+    tables: new Set(),
+  }, [])
+  let read = render({
+    ...q,
+    cols: [raw(`${ctx.d.ownerKey('entity')} as id`)],
+    limit: typeof n == 'number'
+      ? val(n)
+      : { t: 'case', arms: [[n, val(0)]], else: val(limit) },
+  })
+  return select({
+    from: from(raw(read.sql, read.params, read.table, read.origin)),
+  })
+}
+
+// A page read from a few candidates first, and from every row only where they
+// do not make it. Both arms are lowered before the first is shared, so that
+// only the statement's own WITH holds it, read once for the page and for
+// whether it is made: `n` rows of it, which `made` (when given) also accepts.
+// A page that is made stops the rest at LIMIT 0.
+let ahead = (
+  ctx: Ctx,
+  first: Query,
+  rest: Query,
+  n: number,
+  made?: (lead: Source) => Cond,
+): Frag => {
+  let lead = share(ctx, first, true)
+  let full = exists(select({
+    cols: [lit(1)],
+    from: lead,
+    limit: lit(1),
+    offset: lit(n - 1),
+  }))
+  let stop = made ? and(full, made(lead)) : full
+  return render(select({
+    from: from({
+      t: 'compound',
+      op: 'union',
+      parts: [
+        select({ cols: [col('id')], from: lead }),
+        select({
+          from: from(select({
+            from: from(rest),
+            limit: { t: 'case', arms: [[stop, val(0)]], else: val(n) },
+          })),
+        }),
+      ],
+    }),
+  }))
+}
+
+// A page in the order of a ranking that says where its page lies (./extend.ts
+// `Lead`), `.order=hot&.limit=400`. Read as one statement it ranks every
+// entity the query admits to cut the page: 15.8 s over the box's 6.3 million.
+// The lead's rows are ranked first, as a finite root, and every row only when
+// fewer than a page of them pass the query, or the last of that page ranks no
+// better than the lead's floor, which no other row ranks above. Coldest first
+// (`.order=-hot`) has no lead.
+let led = (ast: And, ctx: Ctx): Frag | undefined => {
+  let limit = find<Limit>(ast.clauses, 'limit')
+  let order = find<Order>(ast.clauses, 'order')
+  if (
+    !limit || limit.n <= 0 || !Number.isSafeInteger(limit.n) || !order ||
+    order.value.startsWith('-') || ctx.walk !== undefined || ctx.half ||
+    ctx.unordered || ctx.storageOrder || ctx.spine || ctx.correlated ||
+    ctx.row || ctx.owner || ctx.eids || ctx.candidates || !ctx.d.owned ||
+    !(ctx.d.scoped || ctx.d.spine == '"entity"') ||
+    ast.clauses.some((c) =>
+      ['after', 'count', 'tally', 'distinct'].includes(c.kind)
+    )
+  ) return
+  let value = order.value, n = limit.n
+  // Only the extension ranking a value leads it, so the first lead answers.
+  let lead: ReturnType<Lead> = null
+  for (let e of ctx.ext) lead ??= e.lead?.(value, site(ctx), n) ?? null
+  if (!lead) return
+  let floor = lead.floor
+  let clauses = [...ast.clauses.filter((c) => !directive(c)), order]
+  let rows = render(lead.rows)
+  return ahead(
+    ctx,
+    arm(ctx, clauses, n, {
+      bounded: true,
+      candidates: { ...rows, test: TRUE },
+    }, n),
+    arm(ctx, clauses, n, { walk: null }, n),
+    n,
+    (head) =>
+      gt(
+        floor,
+        sub(select({
+          cols: [raw(`max(${ranked(ctx, value, '"__last"."id"')})`)],
+          from: from(select({ cols: [col('id')], from: head }), '__last'),
+        })),
+      ),
+  )
+}
+
 // The component a mandatory test of one of its stored properties needs, when
 // its rows can drive a statement.
 let spun = (ctx: Ctx, c: Pred): string | undefined => {
@@ -4289,7 +4361,8 @@ let lower = (
       }
       : s
   let cs = ast.clauses
-  let bounded = limited(ast, ctx) ?? halved(ast, ctx) ?? inOrder(ast, ctx)
+  let bounded = limited(ast, ctx) ?? halved(ast, ctx) ?? inOrder(ast, ctx) ??
+    led(ast, ctx)
   if (bounded) {
     // These ids passed the complete predicate inside this same statement.
     // Only shaping remains; repeating the filter adds joins and lowering

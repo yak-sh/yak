@@ -118,6 +118,22 @@ export type Compile = (clause: Clause, site: Site) => Expr | null
 // condition as well as the ordering.
 export type OrderBy = (value: string, site: Site) => Expr | null
 
+// Where the first page of a ranking lies, so that a page is read without
+// ranking every row. A ranking over the whole graph (`.order=hot`) would rank
+// each entity a query admits to cut one page. Given the page's size `n`, an
+// extension names the rows that can open it, `rows` (a relation of owner ids
+// as `id`, read whatever the query's filters), and `floor`: a rank in the
+// order expression's own ascending terms that no row outside `rows` ranks
+// above. The binder ranks the page among `rows` first, and ranks every row
+// only when that page is short or its last row does not rank above `floor`.
+// It answers only for a value its own `order` ranks; null declines, and the
+// page ranks every row.
+export type Lead = (
+  value: string,
+  site: Site,
+  n: number,
+) => { rows: Query; floor: Expr } | null
+
 // The order a window of a query that states none is answered in, as an
 // `.order=` value this extension ranks by, or null to leave it newest first. A
 // window of a search is its best rows, not its newest: @yaks/fts ranks a query
@@ -144,13 +160,15 @@ export type Contains = (
 export type Found = { owners?: Query; few: boolean }
 
 // A named contribution: which clause kinds it claims, how each of them
-// compiles, and optionally how it writes an ORDER BY, which order a window
-// that states none takes, and which owners a substring test can read. A kind
-// that is not in the map is left entirely to the binder.
+// compiles, and optionally how it writes an ORDER BY, where a page in that
+// order lies, which order a window that states none takes, and which owners a
+// substring test can read. A kind that is not in the map is left entirely to
+// the binder.
 export type Extension = {
   name: string
   compile: Partial<Record<Clause['kind'], Compile>>
   order?: OrderBy
+  lead?: Lead
   ranks?: Ranks
   begin?: Begin
   contains?: Contains

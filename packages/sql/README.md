@@ -72,7 +72,7 @@ All exports are available from `@yaks/sql`; the table groups them by purpose.
 | Drivers               | `Driver`, `Row`, `effect`, `scan`, `tally`, `revision`                                                                      |
 | Property reads        | `Tag`, `tagOf`, `held`, `field`, `Derived`, `DerivedProp`, `ladders`, `derivedOf`, `worn`, `pinned`                         |
 | Computed components   | `Backing`, `Backings`, `Held`, `eidOf`, `idOf`, `eidAt`, `visibleBacked`                                                    |
-| Clause compilation    | `Extension`, `Compile`, `Site`, `OrderBy`, `Begin`, `Screen`, `claimed`                                                     |
+| Clause compilation    | `Extension`, `Compile`, `Site`, `OrderBy`, `Lead`, `Begin`, `Screen`, `claimed`                                             |
 | Presence optimization | `ArchetypeSet`, `Matching`, `archetypeSet`                                                                                  |
 | Rule compilation      | `rule`, `Plan`, `On`, `At`, `Gone`                                                                                          |
 | Reference lookups     | `identity`, `Identity`, `walk`                                                                                              |
@@ -617,6 +617,13 @@ equal(compile(parse('poetry'), loadVocab({}), { extend: [labels] }).params, [
 `order(value, site)` optionally handles `.order=` values that name no property.
 It receives the value without a leading `-`. Its expression renders with
 literals, and the hook runs again for an `.after` anchor's owner.
+
+`lead(value, site, n)` optionally says where the first page of `n` in that order
+lies, for a ranking that would otherwise rank every row to cut it
+(`.order=hot`). It returns `rows`, a relation of the owner ids that can open the
+page, and `floor`, an ascending rank no other row ranks above. The page is
+ranked among `rows`, and among every row only when fewer than `n` of them pass
+the query or the last of them does not rank above `floor`.
 
 A **screen** (`Screen`) is a lazy statement selecting the integer `id` of each
 entity admitted by the other filters, without ordering, limits or projections.

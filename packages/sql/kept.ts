@@ -288,6 +288,11 @@ let view = (e: Extension, begins: boolean): Extension => {
           let order = e.order
           return order && ((value: string, s: Site) => mark(order(value, s)))
         },
+        get lead() {
+          let lead = e.lead
+          return lead &&
+            ((value: string, s: Site, n: number) => mark(lead(value, s, n)))
+        },
         get begin() {
           return begins ? e.begin : undefined
         },

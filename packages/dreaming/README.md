@@ -20,7 +20,9 @@ curve a recall decays along. Each recall earns a day of stability, spacing
 multiplies it (the mean interval, in weeks), and the score falls off
 exponentially past the last recall. An entity never recalled counts its own last
 touch as one recall. A retired project, and whatever is filed under one, ranks
-at a tenth.
+at a tenth. A page in this order (`.order=hot&.limit=400`) is looked for among
+the recalled and the newest touches, by the indexes on `created.at` and
+`updated.at`, and ranks every row only when those cannot make it.
 
 The memories themselves belong to [@yaks/memory](../memory). This package covers
 what happens to them between conversations.
