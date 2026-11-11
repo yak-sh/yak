@@ -120,6 +120,18 @@ export class Unsent extends Error {
   }
 }
 
+/** A rejection that knows the letter as written can never go: its provider
+ * refused an address on it, such as one at a domain that takes no mail. The
+ * letter bounces with this message as its reason, and that bounce is the
+ * letter's outcome, answered on the letter: the writer's input, not a failure
+ * of the sender. Any other rejection that is not {@link Unsent} is both. */
+export class Undeliverable extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'Undeliverable'
+  }
+}
+
 /** An incoming letter at the portable mail boundary. Authentication is a
  * provider's verdict, never inferred from a stranger's supplied headers. */
 export type Incoming = {

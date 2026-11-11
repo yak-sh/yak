@@ -26,7 +26,7 @@ equal(stopped(), true)
 | `@yaks/host`                                  | `assembly`, facet contracts, `Host`, `Config`, `Configured`, `Options`, `Plug`, `Role`, `Feed`, `MigrationMonitor`, `Message`, `Receipt`, `Sender`, `ROLES`, `every` |
 | `@yaks/host/assembly`                         | `assembly`, `prepare`, `assemble`, `Prepared`, `Assembly`, `AssemblyOpts`, `Binding`, `Meaning`                                                                      |
 | `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                                                                   |
-| `@yaks/host/senders`                          | `Message`, `Receipt`, `Sender`, `Built`, `afresh`, `Unsent`, `Notice`, `Notices`, `Unsigned`, `Arrival`, `Incoming`                                                  |
+| `@yaks/host/senders`                          | `Message`, `Receipt`, `Sender`, `Built`, `afresh`, `Unsent`, `Undeliverable`, `Notice`, `Notices`, `Unsigned`, `Arrival`, `Incoming`                                 |
 | `@yaks/host/lending`                          | `lending`, `Lends`: what plugins lend a host by name                                                                                                                 |
 | `@yaks/host/payments`                         | `Payments`, `Plans`, `Shops`, `Door`, `Heard`, `Subscription`, `Checkout`, `Sale`, `Paid`, …: a payment provider's contract                                          |
 | `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                                                               |
@@ -166,7 +166,9 @@ provider-neutral letter with headers, text and attachments; a provider supplies
 an authentication verdict separately from the author's headers. The assembly
 passes this capability to plugin factories through `Binding.host` or
 `Binding.ready`. A sender rejects with `Unsent` (`@yaks/host/senders`) when the
-message certainly never left, so mail tries it again instead of bouncing it.
+message certainly never left, so mail tries it again instead of bouncing it, and
+with `Undeliverable` when its provider refused an address on the letter, so mail
+bounces it as the letter's outcome rather than a failure of the sender.
 
 ```ts
 import type { Host, Message } from '@yaks/host'

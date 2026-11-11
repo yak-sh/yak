@@ -1,7 +1,7 @@
 // Resend at the same Sender boundary as the other transports. A sending-only
 // key suffices: no account management or read credential leaves with a letter.
 // The API's `id` is not the RFC Message-ID, so it never becomes a thread id.
-import { Unsent } from '@yaks/host/senders'
+import { Undeliverable, Unsent } from '@yaks/host/senders'
 type Fetch = (url: string, init: RequestInit) => Promise<Response>
 import type { Message, Sender } from '@yaks/host/senders'
 
@@ -34,8 +34,30 @@ let payload = (m: Message, tags: Record<string, string>) => ({
     : {}),
 })
 
+// Resend's error body, `{name, message}`, or empty strings where it has none.
+let error = (response: Response) =>
+  response.ok ? { name: '', message: '' } : response.json().then(
+    (body: unknown) => {
+      let { name, message } = (body ?? {}) as Record<string, unknown>
+      return {
+        name: typeof name == 'string' && /^[a-z_]+$/.test(name) ? name : '',
+        message: typeof message == 'string' ? message : '',
+      }
+    },
+    () => ({ name: '', message: '' }),
+  )
+
+// Whether Resend's message is about the letter's readers: it names the `to`
+// or `cc` field, or one of their addresses.
+let naming = (message: string, m: Message) =>
+  /`(to|cc)`/.test(message) ||
+  [m.to, m.cc ?? []].flat().some((a) =>
+    !!a && message.toLowerCase().includes(a.toLowerCase())
+  )
+
 /** Resend's sending API. Only a refusal known to precede acceptance retries
- * (a dropped connection, a 429, a refused key);
+ * (a dropped connection, a 429, a refused key), and a refusal of the letter's
+ * recipient is {@link Undeliverable};
  * an uncertain response never causes another send or another provider to send.
  * Resend exposes the RFC Message-ID through webhooks and retrieval, rather
  * than its send response. An accepted letter therefore has an empty receipt. */
@@ -64,27 +86,37 @@ export let resend = (
         seconds > 0 ? seconds * 1000 : 1000,
       )
     }
+    let said = await error(response)
     // A refused key (401, 403: unknown, revoked, or not allowed this from
     // domain) is refused before the letter is taken, and a repaired key
     // cures it, so the letter waits rather than bounces. Its answer speaks
     // of the key and the domain, never the letter.
     if (response.status == 401 || response.status == 403) {
-      let said = await response.json().then(
-        (body: unknown) => {
-          let message = (body as { message?: unknown } | null)?.message
-          return typeof message == 'string' ? message : ''
-        },
-        () => '',
-      )
       throw new Unsent(
         `Resend refused the key (HTTP ${response.status})` +
-          (said ? `: ${said.slice(0, 200)}` : ''),
+          (said.message ? `: ${said.message.slice(0, 200)}` : ''),
+      )
+    }
+    // A validation refusal that names a reader, such as one at example.com,
+    // which Resend never sends to, is the letter's own bounce. Its answer is
+    // about an address the letter already carries.
+    if (
+      (response.status == 400 || response.status == 422) &&
+      naming(said.message, m)
+    ) {
+      throw new Undeliverable(
+        `Resend refused the recipient (HTTP ${response.status}): ` +
+          said.message.slice(0, 200),
       )
     }
     if (!response.ok) {
       // Provider bodies can echo a private letter or credential. Keep neither
-      // in the failure that callers record in the graph.
-      throw new Error(`Resend send failed (HTTP ${response.status})`)
+      // in the failure that callers record in the graph; the error's name,
+      // Resend's code for it, is neither.
+      throw new Error(
+        `Resend send failed (HTTP ${response.status}` +
+          (said.name ? ` ${said.name}` : '') + ')',
+      )
     }
     let answer: unknown = await response.json()
     if (

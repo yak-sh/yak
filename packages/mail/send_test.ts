@@ -8,7 +8,7 @@ import { DELIVER, MAIL } from './comp.ts'
 import { type Mailbox, mailbox } from './plugin.ts'
 import { arrived } from './arrive.ts'
 import { stash } from './stash.ts'
-import { Unsent } from '@yaks/host/senders'
+import { Undeliverable, Unsent } from '@yaks/host/senders'
 
 let ana = 'p-ana'
 let letter = 'e-potluck'
@@ -146,6 +146,17 @@ test('a transport that refuses writes the reason it gave', async () => {
     comp(await read(g, letter), 'bounced')?.reason,
     'no route to host',
   )
+})
+
+// A refusal of an address on the letter bounces it, and the run, its whole
+// outcome written, ends without failing: nothing reports a failure.
+test('a refused recipient bounces the letter without failing the run', async () => {
+  let reason = 'Resend refused the recipient (HTTP 422): ana@books.example'
+  let { go, row } = posting({
+    sender: { send: () => Promise.reject(new Undeliverable(reason)) },
+  })
+  await go()
+  assertEquals(comp(await row(), 'bounced'), { at: noon(), reason })
 })
 
 // A letter whose transport drops the first `drops` sends before they leave: a

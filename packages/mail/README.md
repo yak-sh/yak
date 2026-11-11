@@ -125,8 +125,11 @@ sending.
 
 Success writes `delivered{at}`, and the Message-ID the receipt carries as
 `mail.message_id`, which is what a reply to the letter threads on. A rejected
-send writes `bounced{at, reason}`, unless it was `Unsent`. Missing recipient
-addresses and missing sender addresses also produce `bounced`.
+send writes `bounced{at, reason}`, unless it was `Unsent`. An `Undeliverable`
+rejection, a provider's refusal of an address on the letter, bounces it and ends
+the run; every other bounce also fails the run, so it reaches the host's
+reporter. Missing recipient addresses and missing sender addresses also produce
+`bounced`.
 
 ### The transport is supplied by the caller
 
@@ -544,7 +547,7 @@ The root import `@yaks/mail` provides:
 | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `mailDoc`, `MAIL`, `EMAIL`, `DELIVER`, `DELIVERED`, `BOUNCED`, `NOTIFIED`                            | Vocabulary and component names.                                            |
 | `mailbox`, `Mailbox`                                                                                 | Graph plugin and its options.                                              |
-| `sending`, `message`, `addressOf`, `Post`, `Sender`, `Message`, `Receipt`, `Unsent`                  | Sending handler, message composition, address lookup, and transport types. |
+| `sending`, `message`, `addressOf`, `Post`, `Sender`, `Message`, `Receipt`, `Unsent`, `Undeliverable` | Sending handler, message composition, address lookup, and transport types. |
 | `post`, `receipted`                                                                                  | Sender selection by name, and a provider's delivery receipt.               |
 | `stash`, `Stash`, `Kept`                                                                             | In-memory transport.                                                       |
 | `inbound`, `author`, `messageId`, `verdict`, `Received`, `Arrival`, `Head`                           | Incoming-message conversion and header interpretation.                     |

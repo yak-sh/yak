@@ -33,9 +33,9 @@ import { at } from './addr.ts'
 import { html, text } from './md.ts'
 import { BOUNCED, DELIVER, DELIVERED, EMAIL, MAIL } from './comp.ts'
 import type { Message, Sender } from '@yaks/host/senders'
-import { Unsent } from '@yaks/host/senders'
+import { Undeliverable, Unsent } from '@yaks/host/senders'
 export type { Message, Receipt, Sender } from '@yaks/host/senders'
-export { Unsent }
+export { Undeliverable, Unsent }
 
 /** How the effect is built. */
 export type Post = {
@@ -138,7 +138,9 @@ export let message = (
  * outcome leaves a letter that is never handed over twice. The one exception
  * is a sender's `Unsent` rejection, which knows the letter never left: the
  * claim is given back and the run fails to be tried again, so a dropped
- * connection is a wait, not a bounce.
+ * connection is a wait, not a bounce. A sender's `Undeliverable` rejection is
+ * a bounce and nothing more: the provider refused an address on the letter,
+ * so the run ends with the letter bounced rather than failing.
  *
  * The outcome is written back through @yaks/effects' write function — a new
  * transaction through the graph's own `apply()` — so "this letter left" is
@@ -251,10 +253,16 @@ export let sending =
                   [DELIVERED]: { at: now() },
                 }]),
               (err) =>
-                err instanceof Unsent ? unsent(err) : fail(
-                  String((err as Error)?.message ?? err).slice(0, 240),
-                  err,
-                ),
+                err instanceof Unsent
+                  ? unsent(err)
+                  // The provider refused an address the letter carries: the
+                  // bounce is its whole outcome, and nothing failed.
+                  : err instanceof Undeliverable
+                  ? settle({ reason: err.message.slice(0, 240) }, BOUNCED)
+                  : fail(
+                    String((err as Error)?.message ?? err).slice(0, 240),
+                    err,
+                  ),
             ),
         )
       })

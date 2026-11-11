@@ -1,6 +1,6 @@
 // Provider requests and the distinction between an API receipt and a thread id.
 import { equal, test, throws } from '@yaks/testing'
-import { type Message, Unsent } from '@yaks/host/senders'
+import { type Message, Undeliverable, Unsent } from '@yaks/host/senders'
 import { resend } from './sender.ts'
 import { senders } from './graph.ts'
 
@@ -102,6 +102,39 @@ test('only a definite nonacceptance permits a Resend retry', async () => {
     }).send(message).catch((e) => e)
     equal(error instanceof Unsent, reason.includes('(Connect)'))
   }
+})
+
+// What a 422 with Resend's error body rejects as.
+let refusing = (body: Record<string, string>) =>
+  resend({
+    token: 'sending-only',
+    fetch: () =>
+      Promise.resolve(Response.json({ statusCode: 422, ...body }, {
+        status: 422,
+      })),
+  }).send(message).catch((e) => e)
+
+test('a refusal that names a reader is the letter undeliverable', async () => {
+  for (
+    let said of [
+      'Invalid `to` field. The email address needs to follow the `email@example.com` or `Name <email@example.com>` format.',
+      'Ana@Example.com is not a deliverable address',
+    ]
+  ) {
+    let error = await refusing({ name: 'validation_error', message: said })
+    equal(error instanceof Undeliverable, true)
+    equal(
+      error.message,
+      `Resend refused the recipient (HTTP 422): ${said}`,
+    )
+  }
+  // Any other refusal is a failure that says Resend's code, never its body.
+  let error = await refusing({
+    name: 'invalid_from_address',
+    message: 'Invalid `from` field: Thursday at seven',
+  })
+  equal(error instanceof Undeliverable, false)
+  equal(error.message, 'Resend send failed (HTTP 422 invalid_from_address)')
 })
 
 test('an invalid acceptance is an ambiguous failure, never a retry', async () => {

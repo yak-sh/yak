@@ -9,8 +9,12 @@ mail boundary from `@yaks/host`. Letters and their delivery outcomes belong to
 none, so restrict it only for a service that sends from a single domain; the box
 sends from bot.yak.sh and yaks.app, and its key is unrestricted. A refused key
 (401, 403) rejects as `Unsent`, so its letters wait for a repaired key instead
-of bouncing. The envelope supplies the sender's address, including a customer's
-verified custom domain. There is no fixed platform domain.
+of bouncing. A validation refusal (400, 422) that names a reader, as Resend
+answers a letter to example.com, rejects as `Undeliverable`: the letter bounces
+with Resend's message as its reason. Any other refusal rejects with the status
+and Resend's error name, never its body. The envelope supplies the sender's
+address, including a customer's verified custom domain. There is no fixed
+platform domain.
 
 `Message.id` is the caller's letter UUID. It travels as the `yak_letter` tag;
 `event(request, webhookSecret)` verifies Resend's signed, fresh webhook, and
