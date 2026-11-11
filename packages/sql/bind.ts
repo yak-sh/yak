@@ -4060,13 +4060,18 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
   let index = indexFor(ctx, comp, prop, ast.clauses)?.name
   if (!index) return
   let filters = ast.clauses.filter((c) => !directive(c))
-  if (
-    filters.some((c) =>
-      c.kind == 'pred' && !c.not &&
-      (indexable(ctx, c) && c.path.join('.') != path.join('.') ||
-        !!gram(ctx, c))
-    )
-  ) return
+  // A disjunction bounds the sort when an index seeks every arm: comment
+  // routing's `.comment.target=A|.comment.target=B` is a few comments, where
+  // the walk read every moment for them (bug dc75b935, 10.4 s).
+  let seeks = (c: Clause): boolean =>
+    c.kind == 'pred'
+      ? !c.not &&
+        (indexable(ctx, c) && c.path.join('.') != path.join('.') ||
+          !!gram(ctx, c))
+      : c.kind == 'or'
+      ? c.clauses.every(seeks)
+      : c.kind == 'and' && c.clauses.some(seeks)
+  if (filters.some(seeks)) return
   let page = (
     road: Partial<Ctx>,
     has: Pred[],

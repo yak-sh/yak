@@ -196,6 +196,11 @@ let pages: [string, string, string[]][] = [
     'row-20',
     'row-1000',
   ]],
+  [
+    'what either of two points at',
+    '.link.to=row-1|.link.to=row-2 .order=-created.at .limit=3',
+    ['row-2001', 'row-20', 'row-1000'],
+  ],
 ]
 for (let [name, line, eids] of pages) {
   test(`a page in an indexed order: ${name}`, () =>
@@ -219,6 +224,10 @@ test('a page in an indexed order stops at the page', () => {
       '.entry|.comment .order=-created.at .limit=3',
       '!comment .order=-created.at .limit=3',
       '.refs=row-1 .order=-created.at .limit=3',
+      // Alternatives an index seeks each are few rows to sort, where the
+      // walk reads every moment for them (bug dc75b935: comment routing's
+      // `.comment.target=?|…`, 10.4 s on a CPU).
+      '.link.to=row-1|.link.to=row-2 .order=-created.at .limit=3',
     ]
   ) {
     let { steps } = read(line)
