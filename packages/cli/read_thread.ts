@@ -91,6 +91,11 @@ let asked = (call: Call): string =>
     : mask(typeof call.query == 'string' ? call.query : stringify(call.query))
       .slice(0, 512)
 
+// A read refused at shutdown says which read it was and who asked it, so the
+// reader that outlived its host is named in the report.
+let shut = (said: string, call: Call, by = asker()): Error =>
+  new Error(`${said}: ${asked(call)}${by ? ` (asked by ${by.door})` : ''}`)
+
 let blocked = (thread: string): string => {
   try {
     return `worker kernel wait: ${
@@ -303,7 +308,7 @@ export let readThread = (
     }
   }
   let ask = (call: Call): Promise<unknown> => {
-    if (closed) return Promise.reject(new Error('the reader is closed'))
+    if (closed) return Promise.reject(shut('the reader is closed', call))
     let { signal, ...opts } = ('opts' in call ? call.opts : undefined) ?? {}
     if (signal?.aborted) return Promise.reject(signal.reason)
     return new Promise((resolve, reject) => {
@@ -399,7 +404,7 @@ export let readThread = (
       for (let lane of lanes) stop(lane)
       for (let job of jobs) {
         job.off()
-        job.reject(new Error('the reader closed'))
+        job.reject(shut('the reader closed', job.call, job.asker))
       }
       return Promise.resolve()
     },

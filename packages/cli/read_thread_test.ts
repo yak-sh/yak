@@ -21,7 +21,14 @@ test('closing a busy web reader terminates it and rejects its waiting reads', as
   globalThis.Worker = Busy as unknown as typeof Worker
   try {
     let reader = readThread('unused.json')
-    let waiting = assertRejects(() => Promise.resolve(reader.read('.doc')))
+    let waiting = assertRejects(
+      () =>
+        Promise.resolve(
+          asking({ door: 'graph_query' }, () => reader.read('.doc')),
+        ),
+      Error,
+      'the reader closed: .doc (asked by graph_query)',
+    )
     let closed = false
     let closing = reader.close().then(() => {
       closed = true
@@ -33,7 +40,11 @@ test('closing a busy web reader terminates it and rejects its waiting reads', as
     await closing
     await reader.close()
     assertEquals(terminated, 1)
-    await assertRejects(() => Promise.resolve(reader.read('.doc')))
+    await assertRejects(
+      () => Promise.resolve(reader.read('.doc')),
+      Error,
+      'the reader is closed: .doc',
+    )
   } finally {
     globalThis.Worker = Original
   }
