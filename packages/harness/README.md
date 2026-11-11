@@ -183,14 +183,18 @@ already answers is answered with no tool call.
 What a session is offered is its work's to say: a persona that contains
 registered tools, itself or through a persona it includes (@yaks/persona
 `offer`), offers exactly those tools to every session wearing it, chosen or
-common, from whatever door opened it. The opening records them as the
-`sending.tools` of its last entry (an instruction file, else the first message,
-which the runner stamps before its first turn where a session was begun with
-none), so each turn is offered those and nothing else, and no skill catalogue
+common, from whatever door opened it, and to the helpers and forks it starts.
+The names are any the host can run: the runner's own (`shell`, `read`, `fork`)
+and the host's others (`task_new`, `decision_new`, `search`, `spend_show`,
+`session_new`). The runner reads them from the persona for each ask, with its
+text (`wear`, below), and the ask records them as its `sending.tools`: a tool
+the persona gains or loses reaches a session on its next ask, however long it
+has run. Each turn is offered those and nothing else, and no skill catalogue
 unless `skill_read` is among them. A persona containing no tool leaves the
-runner's own set. A tool is the `tool{name}` row its host registers
-(`.tool.name=topic_find`), and a persona offers it by a `contains` edge to that
-row.
+runner's own set, and a line that selected its own (`sending.tools` on an input,
+as a trial's or a builder's does) keeps them whatever the persona contains. A
+tool is the `tool{name}` row its host registers (`.tool.name=topic_find`), and a
+persona offers it by a `contains` edge to that row.
 
 The harness names no provider. A provider is a plugin that exports `./provider`
 (@yaks/model `ProviderFacet`): `@yaks/openai`, `@yaks/openrouter`,
@@ -643,14 +647,14 @@ is exactly the worn persona's projection is left out with them (@yaks/persona
 `unsaid`). A session any other door writes as data, wearing a persona and
 holding no instructions (browse's chat on a persona writes
 `session{operator, persona}`, `native{}` and its first entry; on a topic,
-`session{operator, persona, topic}`), has the tools that persona offers admitted
-by the runner before its first turn, on no machine unless its home names a
-workspace (./effects.ts). Starting one does not read the CLI host's instruction
-files. Reading a machine file through a tool does not make it instructions: the
-caller must explicitly admit it through the prompt channel. Existing
-`opts.instructions` and `sending.instructions` remain the base instruction
-channel; delegated `instructions` append local guidance rather than replacing
-that base.
+`session{operator, persona, topic}`), opens with nothing admitted, on no machine
+unless its home names a workspace, whose instruction files the runner then
+admits before its first turn (./effects.ts). Starting one does not read the CLI
+host's instruction files. Reading a machine file through a tool does not make it
+instructions: the caller must explicitly admit it through the prompt channel.
+Existing `opts.instructions` and `sending.instructions` remain the base
+instruction channel; delegated `instructions` append local guidance rather than
+replacing that base.
 
 A host whose transcripts run for weeks lends `wear` instead of opening them with
 a snapshot, as the box does (./local.ts `here`) and the yaks.app Operator does:
@@ -661,7 +665,9 @@ helper wears its parent's), said by @yaks/persona `voice`, and then whatever
 project or checkout is said with each common persona above it, as @yaks/persona
 `wearing` resolves it. `wear.topic` says the tree of the topic the transcript is
 opened on (`session.topic`, @yaks/topic `compile`) after the persona; the box
-sets it, and the Operator compiles its own. A transcript that wears nothing
+sets it, and the Operator compiles its own. `wear.tools` offers each ask exactly
+the tools that persona contains (./worn.ts `offeredTo`); the box sets it, and
+the Operator is lent its tools by its Worker. A transcript that wears nothing
 keeps the instructions its first line chose (a builder's contract). All of it is
 read again for an ask once the prefix the transcript's last ask cached has
 expired at the provider, so an edit to the persona, or to the base it is worn on

@@ -3,7 +3,7 @@
 // alone, so a host that runs no machine (the yaks.app Worker) loads nothing
 // of the instruction files beside it.
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { PART, type Reads, voice, wear, wearing } from '@yaks/persona'
+import { offer, PART, type Reads, voice, wear, wearing } from '@yaks/persona'
 import { compile, gather } from '@yaks/topic'
 
 // How far up its starters what a transcript is opened as is looked for: a
@@ -61,10 +61,11 @@ export let personaOf = async (
   session: Eid,
 ): Promise<Eid | undefined> => (await openedAs(g, session)).persona
 
-/** How a transcript's persona is said: where its bases (`persona.base`) are
- * kept when this graph does not keep them, and whether the tree of the topic
- * it is opened on follows the persona's text. */
-export type Wear = { bases?: Reads; topic?: boolean }
+/** How a transcript's persona is worn: where its bases (`persona.base`) are
+ * kept when this graph does not keep them, whether the tree of the topic it
+ * is opened on follows the persona's text, and whether the tools the persona
+ * contains are all the transcript is offered. */
+export type Wear = { bases?: Reads; topic?: boolean; tools?: boolean }
 
 // The persona as its session opened wearing it (@yaks/persona `wearing`): one
 // that is the common persona of the session's work or checkout is heard with
@@ -100,3 +101,16 @@ export let wornBy = async (
     topic && compile(g.vocab)(topic),
   ].filter(Boolean).join(PART) || undefined
 }
+
+/** The names of the tools a transcript is offered by the persona it wears
+ * ({@link openedAs}, @yaks/persona `offer`): the registered tools it contains,
+ * itself or through a persona it includes or is said with. Undefined where it
+ * wears none or its persona contains none, which leaves the runner's own set.
+ * Read on each call, so a tool the persona gains reaches a transcript on its
+ * next ask. */
+export let offeredTo = async (
+  g: Graph,
+  session: Eid,
+  how: Wear = {},
+): Promise<string[] | undefined> =>
+  offer(await worn(g, await openedAs(g, session), how.bases))

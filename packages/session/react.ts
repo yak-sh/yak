@@ -85,6 +85,7 @@ import {
   newestAsk,
   openCalls,
   sendingBefore,
+  sendingSelected,
   seqOf,
   statusOf,
   textOf,
@@ -308,6 +309,15 @@ export type Deps = {
     inherited: string | undefined,
     session: Eid,
   ) => string | undefined | Promise<string | undefined>
+  /** The names of the tools a transcript is offered where no line of it
+   * selected any (`sending.tools` on an input): its persona's, for a host
+   * that wears one. Read with the instructions, once the prefix its last ask
+   * cached has expired, and recorded on the ask as its `sending.tools`, so a
+   * tool the persona gains reaches a transcript that runs for weeks. Nothing
+   * leaves the runner's own set. */
+  resolveTools?: (
+    session: Eid,
+  ) => string[] | undefined | Promise<string[] | undefined>
   /** Host rendering of each input's prose in a transcript, resolved once per
    * step (it may read the graph, to name who sent each input); stored
    * content stays unchanged. */
@@ -1177,6 +1187,15 @@ export let react = async (
     )
     : undefined
   instructed?.catch(() => {})
+  // The tools are read with them wherever no line selected any: a list an
+  // input chose stands, and so does the one an ask resumed or still running
+  // its calls was sent.
+  const naming = !deps.runCall && !open.length && !(unfinished && executor) &&
+      cached == null && deps.resolveTools &&
+      !Array.isArray(sendingSelected(entries)?.tools)
+    ? Promise.resolve(session).then(deps.resolveTools)
+    : undefined
+  naming?.catch(() => {})
   // Tools a host cannot assemble end the step at once, as a defect preparing
   // its context does: asking again finds the same tools. A refusal of the
   // caller's own (no model chosen) is said; a defect (two tools of one name)
@@ -1193,6 +1212,15 @@ export let react = async (
         calls,
       )
       : deps.tools
+    if (naming) {
+      let { tools: _was, ...rest } = sending ?? {}
+      let names = await naming
+      sending = names
+        ? { ...rest, tools: names }
+        : Object.keys(rest).length
+        ? rest
+        : undefined
+    }
   } catch (error) {
     if (error instanceof Stale) throw error
     if (error instanceof Refused || error instanceof CallError) {

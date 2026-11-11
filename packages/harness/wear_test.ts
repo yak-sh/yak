@@ -1,10 +1,12 @@
 // A runner lent `wear` says each transcript's persona at the top of every ask,
 // its base read from where bases are kept, and what the host adds after it,
-// read again each ask (this provider names no cache expiry, so none is held),
-// so an edit reaches a transcript on its next turn.
+// and offers it the tools that persona contains, all read again each ask (this
+// provider names no cache expiry, so none is held), so an edit reaches a
+// transcript on its next turn.
 import { equal, test } from '@yaks/testing'
 import { link } from '@yaks/edge'
 import type { Request } from '@yaks/model'
+import { toolEid } from '@yaks/tools/result'
 import { agent, begin } from './agent.ts'
 import { harness } from './testing.ts'
 
@@ -49,12 +51,29 @@ let second = asked.at(-1)!.instructions
 
 await a.close()
 
-// A host that says topics too: a session opened on one, a helper it started,
-// a session wearing its project's common persona, and one wearing nothing
-// whose first line chose its own instructions.
+// A host that says topics and offers tools too: a session opened on a topic,
+// a helper it started, a session wearing its project's common persona, one
+// wearing nothing whose first line chose its own instructions, and one whose
+// persona contains tools, the runner's own and the host's others.
 let t = await harness()
+let tool = (name: string) => ({
+  name,
+  description: name,
+  parameters: {},
+  run: () => name,
+})
+let registered = (name: string) => ({
+  entity: { eid: toolEid(name) },
+  tool: { name },
+})
 await t.g.apply([
   persona('tender', 'Tend your topic.'),
+  persona('head', 'Attend to your topic.'),
+  persona('kit', 'What every head carries.'),
+  ...['read', 'task_new', 'search', 'spend_show'].map(registered),
+  link('head', 'contains', toolEid('task_new')),
+  link('head', 'contains', 'kit'),
+  link('kit', 'contains', toolEid('read')),
   {
     entity: { eid: 'yaks' },
     topic: { name: 'yaks' },
@@ -85,7 +104,9 @@ let topical = agent({
       items: [{ kind: 'assistant', text: 'ok' }],
     })
   },
-  wear: { topic: true },
+  tools: [tool('shell'), tool('read')],
+  named: () => ['task_new', 'search', 'spend_show'].map(tool),
+  wear: { topic: true, tools: true },
 })
 let told = async (o: Parameters<typeof begin>[2], parent?: string) => {
   let s = await begin(t.g, undefined, o)
@@ -96,7 +117,11 @@ let told = async (o: Parameters<typeof begin>[2], parent?: string) => {
   }
   await topical.send(s, 'hello')
   await topical.idle(s)
-  return { s, text: asked.at(-1)!.instructions }
+  return {
+    s,
+    text: asked.at(-1)!.instructions,
+    tools: asked.at(-1)!.tools?.map((t) => t.name),
+  }
 }
 let using = { model: topical.model }
 let oracle = await told({ persona: 'tender', topic: 'yaks', using })
@@ -121,6 +146,26 @@ let chosen = await t.g.apply([
 ])
 await topical.idle(chosen[0].entity.eid)
 let contract = asked.at(-1)!.instructions
+let names = () => asked.at(-1)!.tools?.map((t) => t.name)
+let head = await told({ persona: 'head', using })
+let offered = names()
+let helped = (await told({ using }, head.s), names())
+await t.g.apply([link('head', 'contains', toolEid('spend_show'))])
+await topical.send(head.s, 'again')
+await topical.idle(head.s)
+let gained = names()
+let [selected] = await t.g.apply([
+  { entity: { eid: '$s' }, session: { persona: 'head' }, native: {} },
+  {
+    entity: { eid: '$said' },
+    entry: { session: '$s' },
+    content: { body: 'hello' },
+    using,
+    sending: { tools: ['search'] },
+  },
+])
+await topical.idle(selected.entity.eid)
+let kept = names()
 await topical.close()
 
 // The lines with words in them: each heading and body, without the rules.
@@ -168,4 +213,21 @@ test("a session wearing its project's common persona hears each one above it", (
 
 test('a session wearing nothing keeps the instructions its first line chose', () => {
   equal(contract, 'Answer with JSON.')
+})
+
+test('a session is offered exactly the tools its persona and the personas it contains contain', () => {
+  equal(offered, ['task_new', 'read'])
+  equal(helped, offered)
+})
+
+test("a tool its persona gains is offered at the transcript's next ask", () => {
+  equal(gained, ['task_new', 'spend_show', 'read'])
+})
+
+test('a persona containing no tool leaves the runner its own', () => {
+  equal(oracle.tools?.slice(0, 2), ['shell', 'read'])
+})
+
+test('a line that selected its own tools keeps them', () => {
+  equal(kept, ['search'])
 })

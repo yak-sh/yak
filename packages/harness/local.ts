@@ -166,15 +166,17 @@ export let here = async (
       ],
     remote: mcp.snapshot,
     // The host's other tools, its plugins' own among them, adapted the first
-    // time a transcript names one: a builder's session offered memory_around
-    // and memory_save carries those and nothing else.
+    // time a transcript is offered one by name: a session whose persona
+    // contains task_new and search carries those and nothing else, as a
+    // builder's offered memory_around and memory_save does.
     named: () =>
       named ??= graphTools(h.g, { tools: h.hostTools?.(), reply: h.reply }),
     streaming: streamingEnabled(opts, env),
     // A session here may run for weeks, so no ask is told a snapshot from the
     // day it opened: each says the persona it wears and the topic it is
-    // opened on as they read now, once its cached prefix has expired.
-    wear: { topic: true },
+    // opened on, and is offered the tools that persona contains, as they read
+    // now, once its cached prefix has expired.
+    wear: { topic: true, tools: true },
     opening: async (persona) => {
       let home = opts.workspace
         ? { workspace: opts.workspace, ...opts.cwd ? { cwd: opts.cwd } : {} }

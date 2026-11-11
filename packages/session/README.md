@@ -113,15 +113,17 @@ duration, validated by the provider.
 
 `sending.tools` names the tools a turn is offered: exactly those, found among
 the runner's own and then among the ones it runs only for a turn that names them
-(`Deps.named`, `offered()`); without it a turn gets the runner's own.
-`sending.instructions` are the system instructions a turn is asked with (an ask
-keeps its predecessor's while the prefix that one cached is unexpired,
-`cachedInstructions`), and `sending.window` bounds what it sends: the newest
-that many lines, reaching back to the input that began the turn they cut into,
-so a long transcript costs a turn no more than a short one. A line is what a
-model is sent (an input, a reply, a call, a result); the asks and errors kept
-beside them are not lines, and neither are the typed questions other turns asked
-or their answers. Without an explicit window, a long native transcript is
+(`Deps.named`, `offered()`); without it a turn gets the runner's own. Where no
+input selected any, a host may name them for each ask (`Deps.resolveTools`: the
+tools the transcript's persona contains), read when the instructions are and
+recorded on the ask. `sending.instructions` are the system instructions a turn
+is asked with (an ask keeps its predecessor's while the prefix that one cached
+is unexpired, `cachedInstructions`), and `sending.window` bounds what it sends:
+the newest that many lines, reaching back to the input that began the turn they
+cut into, so a long transcript costs a turn no more than a short one. A line is
+what a model is sent (an input, a reply, a call, a result); the asks and errors
+kept beside them are not lines, and neither are the typed questions other turns
+asked or their answers. Without an explicit window, a long native transcript is
 summarized into a checkpoint once the next request would fill `Deps.compactAt`
 (half where absent, the same for every model) of its model's context window:
 `model.context` on the model's row, else `provider.context` on its provider's,

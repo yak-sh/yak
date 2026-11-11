@@ -331,6 +331,13 @@ let aspectBefore = (
     : latest)?.[name] as Comp | undefined
 }
 
+/** What a transcript's lines selected to send, apart from what its asks
+ * recorded as sent: the `sending` of its newest line that is no ask. */
+export let sendingSelected = (entries: Bundle[]): Comp | undefined =>
+  ordered(entries).findLast((b) => 'sending' in b && !b.ask)?.sending as
+    | Comp
+    | undefined
+
 /** The model selection in force at an entry. */
 export let usingBefore = (
   entries: Bundle[],

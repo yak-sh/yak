@@ -6,7 +6,7 @@ import type { Comp, Eid, Graph } from '@yaks/graph'
 import { type Snapshot, snapshot } from '@yaks/context'
 import type { Machine } from '@yaks/machine'
 import { personaOf } from './worn.ts'
-import { type As, offer, unsaid, wearing } from '@yaks/persona'
+import { type As, unsaid, wearing } from '@yaks/persona'
 import { gather } from '@yaks/topic'
 
 /** Each directory from the root down to `dir`, an absolute path. */
@@ -113,14 +113,13 @@ let starting = async (g: Graph, home: Comp, context: On): Promise<On> => {
 }
 
 /** What a session opening here begins with: the instruction files of its
- * machine, the persona it wears (@yaks/persona `wearing`, else its starter's)
- * and the names of the tools that persona offers (@yaks/persona `offer`),
- * which are then all a turn is offered. No `tools` where that persona offers
- * none, which leaves the runner's own set.
+ * machine and the persona it wears (@yaks/persona `wearing`, else its
+ * starter's).
  *
- * The persona's text and the topic's tree are not among the files: the runner
- * says both afresh on every ask (./worn.ts `wornBy`), so a file that only
- * projects the persona is left out too (@yaks/persona `unsaid`). A topic that
+ * The persona's text, the topic's tree and the tools the persona offers are
+ * not among them: the runner reads all three afresh for every ask (./worn.ts
+ * `wornBy`, `offeredTo`), so a file that only projects the persona is left
+ * out too (@yaks/persona `unsaid`). A topic that
  * is not there is refused, as a persona is, and so is a projection gone
  * missing where nothing is worn. */
 export let openingFor = async (
@@ -128,7 +127,7 @@ export let openingFor = async (
   home: Comp,
   workspaces?: Workspaces,
   context: On = {},
-): Promise<{ files: Snapshot[]; persona?: Eid; tools?: string[] }> => {
+): Promise<{ files: Snapshot[]; persona?: Eid }> => {
   let as = await starting(g, home, context)
   if (as.topic && !await gather(g)(as.topic)) {
     throw new Refused(`no topic called ${as.topic}`)
@@ -142,10 +141,5 @@ export let openingFor = async (
     let kept = await unsaid(g, cwd, files.map((f) => f.body), as)
     files = files.filter((f) => kept.includes(f.body))
   }
-  let tools = offer(worn)
-  return {
-    files,
-    ...worn ? { persona: worn.persona.entity.eid } : {},
-    ...tools ? { tools } : {},
-  }
+  return { files, ...worn ? { persona: worn.persona.entity.eid } : {} }
 }

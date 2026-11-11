@@ -73,7 +73,7 @@ import {
 } from './model_selection.ts'
 import { type EntrySource, entrySource, type SourceRequest } from './detail.ts'
 import { inheritedInstructions } from './legacy_instructions.ts'
-import { type Wear, wornBy } from './worn.ts'
+import { offeredTo, type Wear, wornBy } from './worn.ts'
 import { PART } from '@yaks/persona'
 import { type RuntimeAction, runtimeAction, runtimeRows } from './runtime.ts'
 
@@ -153,25 +153,14 @@ export type Where = { phase: string; session?: Eid }
 
 /** What a new session opens with: where it lives, the instruction files
  * found there, each snapshotted into the transcript ahead of the first
- * message, the topic it is opened on (@yaks/topic's `session.topic`), and the
- * names of the tools its persona offers, all a turn is then offered. */
+ * message, the persona it wears and the topic it is opened on (@yaks/topic's
+ * `session.topic`). */
 export type Opening = {
   home?: Comp
   files?: Snapshot[]
   persona?: Eid
   topic?: Eid
-  tools?: string[]
 }
-
-/** An opening's entries, the last carrying the tools its persona offers as
- * its `sending.tools`: what every turn after it is offered (@yaks/session). */
-export let offering = <B extends Bundle>(
-  entries: B[],
-  tools?: string[],
-): B[] =>
-  tools && entries.length
-    ? [...entries.slice(0, -1), { ...entries.at(-1)!, sending: { tools } }]
-    : entries
 
 /** How an agent is started: the graph it runs over, what serves it, what it
  * may do, and what its host lends it. */
@@ -209,7 +198,10 @@ export type Opts<H extends Host = Host> = ChildLimits & {
    * turn. `bases` is where a persona's base (`persona.base`) is kept when this
    * graph does not keep it, and `topic` says the tree of the topic the
    * transcript is opened on (`session.topic`) after the persona. A transcript
-   * that wears nothing keeps the instructions it was given. */
+   * that wears nothing keeps the instructions it was given. `tools` offers
+   * each ask exactly the registered tools that persona contains, as it
+   * contains them then, where no line of the transcript selected its own
+   * (`sending.tools`); a persona containing none leaves the runner's set. */
   wear?: Wear
   /** Maximum tool-result UTF-8 bytes before model-facing handle projection. */
   outputLimit?: number
@@ -358,22 +350,18 @@ export let begin = async (
     ...promptEntry(session, i + 1, f.body, f.source, 'shared', f.revision),
     $actor: through(session),
   }))
-  // The tools ride the opening's last entry: the message, where one is given.
-  let context = offering(
-    [
-      ...files,
-      ...prompt
-        ? [{
-          entity: { eid: crypto.randomUUID() as Eid },
-          [ENTRY]: { session, seq: files.length + 1 },
-          [CONTENT]: { body: prompt },
-          using: o.using,
-          $actor: through(session, o.by),
-        }]
-        : [],
-    ],
-    o.tools,
-  )
+  let context = [
+    ...files,
+    ...prompt
+      ? [{
+        entity: { eid: crypto.randomUUID() as Eid },
+        [ENTRY]: { session, seq: files.length + 1 },
+        [CONTENT]: { body: prompt },
+        using: o.using,
+        $actor: through(session, o.by),
+      }]
+      : [],
+  ]
   await g.apply([
     {
       entity: { eid: session },
@@ -578,6 +566,9 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       if (!worn && !reads) return inheritedInstructions(inherited, added)
       return [worn, added].filter(Boolean).join(PART) || undefined
     },
+    ...opts.wear?.tools
+      ? { resolveTools: (session) => offeredTo(h.g, session, opts.wear) }
+      : {},
     inputText: async (transcript) =>
       inputText(transcript, await senders(h.g, transcript), opts.inputSource),
     contextItems: opts.context,
