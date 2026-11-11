@@ -219,12 +219,12 @@ test('a run somebody stopped says how it ended, and is not told', async () => {
 // takes: the request names the provider row, whose command the launch plays.
 // Its last entry's failure and text, the failures told of it, and the
 // providers whose plans it left a reading of.
-let standin = async (ending: string) => {
+let standin = async (ending: string, recorded = false) => {
   let { g } = tracked()
   let dir = Deno.makeTempDirSync({ prefix: 'spawn-' })
   let told: string[] = []
   try {
-    await g.apply(standing('S1', 'E1', ending))
+    await g.apply(standing('S1', 'E1', ending, recorded))
     await start(g, 'S1', {
       cwd: dir,
       dir,
@@ -292,6 +292,16 @@ test('a crashed run names its signal and what it last said on stderr', async () 
     'Provider exited 137',
     ended,
     [`run ended: Error: a spawned run ended: ${ended}`],
+    [],
+  ])
+})
+
+test('a run that played a recording says how it ended, and is not told', async () => {
+  let ended = 'the provider exited 1: API Error: 500 overloaded'
+  assertEquals(await standin('refusal', true), [
+    'Provider exited 1',
+    ended,
+    [],
     [],
   ])
 })

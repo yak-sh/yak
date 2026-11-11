@@ -156,7 +156,8 @@ stream and exits as the recording ended. A provider row makes it a provider:
     "name": "standin",
     "transport": "process",
     "api": "claude",
-    "command": "/srv/repo/packages/spawn/standin.ts"
+    "command": "/srv/repo/packages/spawn/standin.ts",
+    "recorded": true
   }
 }
 ```
@@ -180,9 +181,12 @@ so does. The two bugs they file are archived as the stand-in's own; a later run
 adds an occurrence to them and they stay archived.
 
 A run of it takes every step a live run does (the launch, the log, the reader,
-the ending and its report) and spends nothing, so a change to how a run ends is
-seen live without waiting for a plan to run out. The package's tests ask for the
-same rows, over a launch that plays the program in place.
+the ending) and spends nothing, so a change to how a run ends is seen live
+without waiting for a plan to run out. `recorded` marks the row as playing
+recordings: its ending is written on the session as any run's is, and no failure
+is reported to the tracker, since the run ended as it was chosen to. The
+package's tests ask for the same rows, over a launch that plays the program in
+place, unmarked where a test checks what a claude run's ending tells.
 
 An adapter also names the instruction file its provider reads at the root of its
 checkout (`CLAUDE.md`, `AGENTS.md`). Before launching, `start` reads that file

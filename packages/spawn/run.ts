@@ -236,6 +236,9 @@ export type Asked = Job & {
   /** the program it is run as, where its row names one (`provider.command`)
    * in place of the adapter's own */
   command?: string
+  /** its runs play recordings (`provider.recorded`): how one ends is chosen,
+   * so no ending of one is a failure */
+  recorded?: true
   /** the ask a turn of this run answers (@yaks/session `ask`): the model
    * entity, and the request entry it was asked through */
   ask: Comp
@@ -320,6 +323,7 @@ export let asked = async (
     provider: name,
     speaks: String(row?.api ?? name),
     ...row?.command ? { command: String(row.command) } : {},
+    ...row?.recorded ? { recorded: true as const } : {},
     session,
     model: spelled,
     effort: effort || undefined,
@@ -937,8 +941,12 @@ let ended = async (
     }),
   }], { trusted: true })
   // A run nobody asked to stop that ended any way but cleanly is a failure,
-  // told where it is seen. One its plan's limit ended is the plan working.
-  if (code !== 0 && !row?.stop && !limit) {
+  // told where it is seen. One its plan's limit ended is the plan working, and
+  // one that played a recording ended as it was chosen to.
+  if (
+    code !== 0 && !row?.stop && !limit &&
+    !(await asked(g, session).catch(() => null))?.recorded
+  ) {
     failure(o, session, 'run ended', `a spawned run ended: ${why}`)
   }
 }

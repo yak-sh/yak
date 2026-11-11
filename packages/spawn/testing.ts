@@ -93,8 +93,15 @@ export let STANDIN = {
 }
 
 /** The rows of a request for the stand-in to end as `ending` names: the
- * provider, the model that is that recording, and the session that asks. */
-export let standing = (session: string, entry: string, ending: string) => {
+ * provider, the model that is that recording, and the session that asks.
+ * The row stands in for claude unless it is marked `recorded`, as the live
+ * row is. */
+export let standing = (
+  session: string,
+  entry: string,
+  ending: string,
+  recorded = false,
+) => {
   let model = identityEid('model', [ending])
   return [
     {
@@ -104,6 +111,7 @@ export let standing = (session: string, entry: string, ending: string) => {
         transport: 'process',
         api: 'claude',
         command: STANDIN.command,
+        ...recorded ? { recorded } : {},
       },
     },
     { entity: { eid: model }, model: { name: ending } },

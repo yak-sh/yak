@@ -66,6 +66,10 @@
           "type": "string",
           "description": "the program a `process` provider is run as, in place of its CLI's own: a name on the PATH or a path. It is given the command line of the CLI named in `api` and prints that CLI's stream"
         },
+        "recorded": {
+          "type": "boolean",
+          "description": "its runs play recordings (packages/spawn/standin.ts), so how one ends is chosen: an ending that is not clean is written on the session, and no failure is reported of it"
+        },
         "fallback": {
           "type": "boolean"
         },
