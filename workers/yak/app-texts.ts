@@ -108,7 +108,7 @@ export let appTexter = (
  */
 let contactOf = async (graph: Meta) => {
   try {
-    let [row] = await graph.query('.help&*')
+    let [row] = await graph.query('.help&*', { trusted: true })
     return String(
       (row?.help as { contact?: string } | undefined)?.contact ?? '',
     )
@@ -138,7 +138,7 @@ export let appArrived = async (
 ) => {
   let graph = metaOf(appStore(env.STORE, line.space, line.app, env), KERNEL)
   let from = JSON.stringify(arrival.from)
-  let people = await graph.query(`.phone.number=${from}`)
+  let people = await graph.query(`.phone.number=${from}`, { trusted: true })
   // What this number said before this text decides whether a YES opts it in.
   let before = (await graph.query(`.text.from=${from}&?doc`, { trusted: true }))
     .map((t) => ({

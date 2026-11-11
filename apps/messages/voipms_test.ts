@@ -152,6 +152,7 @@ test('Messages texts a list from the church’s voip.ms line, hears the replies,
       entities: [{
         entity: { eid: them.eids[`${space}/messages`] },
         phone: { number: LINE },
+        app: { access: 'private' },
       }],
     })
 
