@@ -174,7 +174,7 @@ test('hourly account alert is mailed once and kept on the wake row', async () =>
     await sweep(p.env, at(10))
     await sweep(p.env, at(10))
     assertEquals(sent.length, 1)
-    assertEquals(sent[0].to, ['hello@yaks.app'])
+    assertEquals(sent[0].to, ['hello@bot.yak.sh'])
     assertStringIncludes(sent[0].text, 'DO rows read')
     total = 25e9
     await sweep(p.env, at(11))

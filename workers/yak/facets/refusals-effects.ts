@@ -14,7 +14,7 @@ export let effects = (_host: unknown, options: Options): Handlers => {
       let [row] = await tx.get([event.entity.eid])
       let fired = (row?.fired as Comp | undefined)?.at
       if (!fired) return
-      await reported(at.graph, at.env, String(fired))
+      await reported(at.graph, String(fired))
       await forgotten(at.graph, String(fired))
     },
   }

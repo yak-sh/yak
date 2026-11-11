@@ -69,6 +69,7 @@ import type { Env } from './env.ts'
 import { type Standing } from './gallery-row.ts'
 import { configOf, keyed, prefixOf, rootOf } from './files.ts'
 import type { Letter } from './mail.ts'
+import { INTERNAL } from './mail-config.ts'
 import type { Actor, Bundle } from '@yaks/graph'
 import { type ComponentChildren, h } from 'preact'
 import { Button, Card, Notice } from '@yaks/ui/parts'
@@ -96,7 +97,7 @@ export let IMAGE = PICTURES
 // box (its project wears it), so the letter is filed as a priority-1 task on
 // that project's board (@yaks/mail `mail_task`), which an agent picks up. It
 // never reaches the platform's owner; his letter follows the review.
-export let CODE_REVIEW = 'hello@bot.yak.sh'
+export let CODE_REVIEW = INTERNAL
 
 // A week to get to it. Longer than the hour a space's death gets (erase.ts
 // LIFE), because nothing here is destroyed and nobody is waiting at a form:

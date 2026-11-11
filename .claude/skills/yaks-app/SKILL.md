@@ -560,6 +560,15 @@ tests runs in `jeff` or another person's space.
   `toPlatform`), sent by the pool and marked `delivered{at}`. The letter is kept
   as the record; the same firing deletes the occurrences a delivered one counted
   once they are 30 days old (`forgotten`).
+- hello@yaks.app is the public address: what people write to the platform, its
+  replies to them, and what a person said that the platform relays (the
+  feedback tool). Its owner gets a copy of every letter there. Internal mail
+  never goes there: whatever the platform writes for its agents, with no person
+  writing (the refusal report, the usage alert, the gallery's code review), goes
+  to mail-config.ts `INTERNAL`, hello@bot.yak.sh, the yaks.app project's own
+  address. Only the box pulls it (yak.sh's Email Routing catch-all to
+  holdco-inbox, no owner copy), and @yaks/mail `mail_task` files each letter on
+  the project's board.
 - `yak admin tail` follows live events. It streams local Wrangler stdout, not
   the MCP door; its account check runs once before the stream, so following logs
   is not app traffic.

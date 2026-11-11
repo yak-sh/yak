@@ -709,15 +709,16 @@ rates even if none of it had been included.
 
 **The alert.** Every hour the meter's sweep (usage.ts, usage-alert.ts) reads the
 account's Durable Object requests, rows read and written and duration, and every
-Worker's requests and CPU, and mails `hello@yaks.app` (Email Routing hands it to
-holdco-inbox) when one passes 80% and again 100% of what the plan includes, or
-when a settled hour's rate projects $25 a day or more at overage prices. The
-rate reads a separate, complete hour ending at least ten minutes before the
-sweep, names that interval in the letter, and counts incoming WebSocket messages
-at 20:1. Monthly totals determine allowance warnings, never the rate: revisions
-to older analytics are not current spending. Cloudflare's own Billing Budget
-Alerts (dashboard, Notifications) mail too, when the month's usage charges reach
-$0.01, $20 and $50; Cloudflare offers no spending cap to set beside them.
+Worker's requests and CPU, and mails `hello@bot.yak.sh` (mail-config.ts
+`INTERNAL`, filed on the yaks.app project's board) when one passes 80% and again
+100% of what the plan includes, or when a settled hour's rate projects $25 a day
+or more at overage prices. The rate reads a separate, complete hour ending at
+least ten minutes before the sweep, names that interval in the letter, and
+counts incoming WebSocket messages at 20:1. Monthly totals determine allowance
+warnings, never the rate: revisions to older analytics are not current spending.
+Cloudflare's own Billing Budget Alerts (dashboard, Notifications) mail too, when
+the month's usage charges reach $0.01, $20 and $50; Cloudflare offers no
+spending cap to set beside them.
 
 **The ceiling.** So the cap is kept where statements run. Every object's driver
 counts its statements against a minute and an hour of rows (@yaks/durable-object

@@ -7,31 +7,37 @@
 // its login will want its own pair; that is a later leaf's.
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { type Host, replyTo } from './host.ts'
+import { replyTo } from './host.ts'
 export let FROM = 'hello@bot.yak.sh'
 
-// REPLY_TO is also where the platform writes to its own people (the feedback
-// tool, the usage alert): the box's @yaks/mail pulls hello@yaks.app, whose
-// address is filed under the yaks.app project, so a letter there is held for
-// that project's sessions and filed as a task on its board (@yaks/mail
-// `mail_task`). One address, so the letter lands in one project.
+// REPLY_TO is the public address: what people write to the platform, and
+// what a person said that the platform relays to it (the feedback tool). The
+// box's @yaks/mail pulls it into the yaks.app project, and its owner gets a
+// copy of every letter (holdco services/inbox-worker `OWNER_COPY_DOMAINS`).
 export let REPLY_TO = replyTo()
 
+// INTERNAL is where the platform writes for its agents, with no person
+// writing (the refusal report, the usage alert, the gallery's code review):
+// the yaks.app project's own address, which only the box pulls (yak.sh's
+// Email Routing catch-all hands it to holdco-inbox, which keeps no owner
+// copy), so the letter is filed as a task on that project's board (@yaks/mail
+// `mail_task`). Internal mail never goes to REPLY_TO.
+export let INTERNAL = 'hello@bot.yak.sh'
+
 /**
- * A letter to REPLY_TO as the platform store's rows: the address as an
- * entity, and the letter delivered to it, `about` the entity it concerns
- * where it is not that entity itself (a refusal report is its own letter). The
- * store's pool sends it after the write commits, through the platform's own
- * sender (config.ts), and marks it delivered only once the sender took it, so
- * a mail outage leaves it waiting. `eid` is the letter's: one derived from
- * what it is about makes writing it again owe nothing new.
+ * A letter to `address` (REPLY_TO or INTERNAL) as the platform store's rows:
+ * the address as an entity, and the letter delivered to it, `about` the entity
+ * it concerns where it is not that entity itself (a refusal report is its own
+ * letter). The store's pool sends it after the write commits, through the
+ * platform's own sender (config.ts), and marks it delivered only once the
+ * sender took it, so a mail outage leaves it waiting. `eid` is the letter's:
+ * one derived from what it is about makes writing it again owe nothing new.
  */
 export let toPlatform = (
-  env: Host,
+  address: string,
   eid: string,
   letter: { subject: string; body: string; about?: string },
 ): Bundle[] => {
-  let address = replyTo(env)
   let to = derivedEid(JSON.stringify(['platform-address', address]))
   return [{ entity: { eid: to }, email: { address } }, {
     entity: { eid },

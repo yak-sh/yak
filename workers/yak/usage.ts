@@ -64,8 +64,8 @@ import {
   thisMonth,
   WARN,
 } from './meter.ts'
-import { mail } from './mail.ts'
-import { type Host, replyTo } from './host.ts'
+import { INTERNAL, mail } from './mail.ts'
+import type { Host } from './host.ts'
 import { KERNEL, meta } from './meta.ts'
 import { type Alerts, type Hour, type Usage, warning } from './usage-alert.ts'
 import { type Answer as Asked, ask, said } from '@yaks/cloudflare/analytics'
@@ -294,7 +294,8 @@ let accountAlert = async (env: Env, usage: Usage, hour: Hour | null) => {
   )
   if (body) {
     await mail(env)({
-      to: [replyTo(env)],
+      to: [INTERNAL],
+      replyTo: INTERNAL,
       subject: 'Cloudflare usage alert',
       body,
     })

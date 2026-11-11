@@ -7,7 +7,7 @@ import { FROM } from './mail-config.ts'
 import { type Delivery, sink, transport } from './post.ts'
 import { posts } from './config.ts'
 import { type Host, replyTo } from './host.ts'
-export { FROM, REPLY_TO } from './mail-config.ts'
+export { FROM, INTERNAL, REPLY_TO } from './mail-config.ts'
 
 export type Letter = {
   to: string | string[]

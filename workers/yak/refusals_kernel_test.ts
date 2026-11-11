@@ -2,7 +2,7 @@
 // hourly wake sends TaskMaster what it has not yet counted.
 import { equal, ok, test } from '@yaks/testing'
 import { connector, kernel, letter, meta, seed, unique } from './probe.ts'
-import { replyTo } from './host.ts'
+import { INTERNAL } from './mail-config.ts'
 import { countedIn, KEPT } from './refusals.ts'
 
 let k = await kernel()
@@ -56,7 +56,7 @@ test('the hourly wake sends TaskMaster what it counted', async () => {
     fired: { at: new Date().toISOString() },
   }])
   await k.settled()
-  let sent = await letter(k, replyTo(), nobody)
+  let sent = await letter(k, INTERNAL, nobody)
   ok(sent?.subject.startsWith('yaks.app tool refusals: '))
   let { report } = (await heard(nobody))[0].counted!
   ok(sent?.body.includes(countedIn(report)))

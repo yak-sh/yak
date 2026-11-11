@@ -33,7 +33,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { link as linked } from '@yaks/edge'
 import { KERNEL, type Meta } from './meta.ts'
 import { toPlatform } from './mail-config.ts'
-import { type Host, url as hostUrl } from './host.ts'
+import { type Host, replyTo, url as hostUrl } from './host.ts'
 import { isTestAddress } from '@yaks/platform/bots'
 import { REPO } from '@yaks/platform/names'
 import type { Directory } from './directory.ts'
@@ -152,7 +152,7 @@ let letterRows = (
     `thread ${thread}`,
     `answer: yak admin support ${thread} '<reply>' [--fix <id>] [--complete]`,
   ]
-  return toPlatform(env, derived('letter', about), {
+  return toPlatform(replyTo(env), derived('letter', about), {
     subject: letter.subject,
     body: `${words.trim()}\n\n—\n${lines.join('\n')}`,
     about,

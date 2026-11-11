@@ -34,8 +34,7 @@ import { identityEid } from '@yaks/graph/identity'
 import type { Refused } from '@yaks/tools'
 import { background, caught } from './defects.ts'
 import type { Env } from './env.ts'
-import type { Host } from './host.ts'
-import { toPlatform } from './mail-config.ts'
+import { INTERNAL, toPlatform } from './mail-config.ts'
 import { KERNEL, meta } from './meta.ts'
 import { VERSION } from './running.ts'
 import type { Ctx } from './tool.ts'
@@ -225,7 +224,6 @@ export let letter = (report: string, rows: Row[]) => {
  * Nothing to count writes nothing. */
 export let reported = async (
   g: Pick<Graph, 'read' | 'get' | 'apply'>,
-  env: Host,
   at: string,
   most = MOST,
 ): Promise<string | null> => {
@@ -237,7 +235,10 @@ export let reported = async (
   ) as Row[]
   if (!rows.length) return null
   let { title, body } = letter(report, rows)
-  let [address, mailed] = toPlatform(env, report, { subject: title, body })
+  let [address, mailed] = toPlatform(INTERNAL, report, {
+    subject: title,
+    body,
+  })
   await g.apply([
     address,
     { ...mailed, refusal_report: {} },

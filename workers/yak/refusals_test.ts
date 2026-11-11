@@ -10,7 +10,7 @@ import { docDoc } from '@yaks/doc'
 import { mailDoc } from '@yaks/mail'
 import { platformDoc } from '@yaks/platform/vocab'
 import { identityEid } from '@yaks/graph/identity'
-import { FROM } from './mail-config.ts'
+import { FROM, INTERNAL } from './mail-config.ts'
 import {
   cause,
   countedIn,
@@ -25,7 +25,6 @@ let vocab = loadVocab(
   [kernelKeywords],
 )
 let store = () => graph({ vocab, storage: ram(vocab) })
-let env = { APEX: 'yaks.test' }
 // Calls, sessions and spaces are entities elsewhere, named by eid.
 let [s1, s2, session, shared] = Array.from({ length: 4 }, () => mint())
 // A refusal heard at a boundary, as the platform store is sent it.
@@ -114,7 +113,7 @@ await grouped.apply([
     at: '2026-11-10T10:20:00.000Z',
   }),
 ], { trusted: true })
-let first = await reported(grouped, env, '2026-11-10T11:00:00.000Z')
+let first = await reported(grouped, '2026-11-10T11:00:00.000Z')
 
 test('a report groups by tool, code and cause, the most first', async () => {
   equal(first, reportOf('2026-11-10T11:00:00.000Z'))
@@ -135,7 +134,7 @@ test('a report groups by tool, code and cause, the most first', async () => {
 })
 
 test('the same firing again writes no second report', async () => {
-  equal(await reported(grouped, env, '2026-11-10T11:00:00.000Z'), first)
+  equal(await reported(grouped, '2026-11-10T11:00:00.000Z'), first)
   equal((await grouped.read('.refusal_report')).length, 1)
 })
 
@@ -145,7 +144,7 @@ test('a late arrival goes in the next report and nothing is counted twice', asyn
       at: '2026-11-10T10:59:00.000Z',
     }),
   ], { trusted: true })
-  let next = await reported(grouped, env, '2026-11-10T12:00:00.000Z')
+  let next = await reported(grouped, '2026-11-10T12:00:00.000Z')
   ok(next && next != first)
   equal(await counted(grouped, next!), 1)
   equal(await counted(grouped, first!), 4)
@@ -157,10 +156,10 @@ test('a late arrival goes in the next report and nothing is counted twice', asyn
 
 test('an hour with nothing to count writes and sends nothing', async () => {
   let g = store()
-  equal(await reported(g, env, '2026-11-10T11:00:00.000Z'), null)
+  equal(await reported(g, '2026-11-10T11:00:00.000Z'), null)
   await g.apply([heard('a', 'b', 'c')], { trusted: true })
-  await reported(g, env, '2026-11-10T11:00:00.000Z')
-  equal(await reported(g, env, '2026-11-10T12:00:00.000Z'), null)
+  await reported(g, '2026-11-10T11:00:00.000Z')
+  equal(await reported(g, '2026-11-10T12:00:00.000Z'), null)
   equal((await g.read('.refusal_report')).length, 1)
 })
 
@@ -171,8 +170,8 @@ await crowded.apply(
 )
 
 test('a report counts at most its most, and the rest wait', async () => {
-  let one = await reported(crowded, env, '2026-11-10T11:00:00.000Z', 3)
-  let two = await reported(crowded, env, '2026-11-10T12:00:00.000Z', 3)
+  let one = await reported(crowded, '2026-11-10T11:00:00.000Z', 3)
+  let two = await reported(crowded, '2026-11-10T12:00:00.000Z', 3)
   equal([await counted(crowded, one!), await counted(crowded, two!)], [3, 2])
 })
 
@@ -185,7 +184,7 @@ let aged = heard('a', 'b', 'c', old),
     at: '2026-11-05T10:00:00.000Z',
   })
 await kept.apply([aged, recent], { trusted: true })
-let left = await reported(kept, env, '2026-11-05T11:00:00.000Z')
+let left = await reported(kept, '2026-11-05T11:00:00.000Z')
 await kept.apply([{
   entity: { eid: left! },
   delivered: { at: '2026-11-05T11:01:00.000Z' },
@@ -194,7 +193,7 @@ await kept.apply([{
 })
 let waiting = heard('a', 'b', 'c', old), uncounted = heard('a', 'b', 'c', old)
 await kept.apply([waiting], { trusted: true })
-await reported(kept, env, '2026-11-05T12:00:00.000Z')
+await reported(kept, '2026-11-05T12:00:00.000Z')
 await kept.apply([uncounted], { trusted: true })
 let forgot = await forgotten(kept, '2026-11-10T12:00:00.000Z')
 
@@ -209,10 +208,10 @@ test('a month after it was refused, an occurrence a delivered letter counted is 
   equal((await doc(kept, left!)).title, 'yaks.app tool refusals: 2 in 1 group')
 })
 
-test('a report is its own letter to TaskMaster, for the pool to send', async () => {
+test('a report is its own letter to TaskMaster at the internal address, for the pool to send', async () => {
   let [row] = await grouped.get([first!])
   let to = (row.deliver as { to: string }).to
-  equal((await grouped.get([to]))[0].email, { address: 'hello@yaks.test' })
+  equal((await grouped.get([to]))[0].email, { address: INTERNAL })
   equal((row.mail as { from: string }).from, FROM)
   equal(
     (row.doc as { title: string }).title,
