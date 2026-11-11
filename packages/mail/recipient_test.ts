@@ -29,6 +29,13 @@ test('an address no letter is for is not marked', async () => {
   equal(await marked([address('a')]), [])
 })
 
+test('a write that names no address is applied and checked without waiting', () => {
+  let g = graph({ storage: ram(vocab), vocab, plugins: [recipients()] })
+  let note: Bundle = { entity: { eid: 'n' }, mail: {} }
+  equal(g.apply([note]) instanceof Promise, false)
+  equal(g.admit([note]) instanceof Promise, false)
+})
+
 test('an address the app also gave something of its own is not marked', async () => {
   let staff = { ...address('a'), individual: {} }
   equal(await marked([staff, letter]), [])

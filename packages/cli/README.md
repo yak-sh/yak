@@ -275,11 +275,13 @@ a letter that arrived means.
 import { docs } from '@yaks/mail/vocab'
 import { plugins } from '@yaks/mail/graph'
 import { runs } from '@yaks/mail/tools'
+import { loadVocab } from '@yaks/vocab'
 
 // Its options are its entry in yak.json.
 let options = { domain: 'books.example' }
 docs // [mailDoc]
-plugins({}, options) // [mailbox({ domain: 'books.example' })]
+// The host's vocab says whether the store speaks the letter's words.
+plugins({ vocab: loadVocab(docs) }, options) // [mailbox(...), recipients()]
 Object.keys(runs({}, options)) // the tools it runs, by name
 ```
 

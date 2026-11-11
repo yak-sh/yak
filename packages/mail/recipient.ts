@@ -9,6 +9,7 @@
 import { type Bundle, type Eid, hook, merged, type Plugin } from '@yaks/graph'
 import { comps } from '@yaks/graph/bundle'
 import type { Tx } from '@yaks/graph/storage'
+import { after, each } from '@yaks/fp'
 import { and, eq } from '@yaks/query'
 import { DELIVER, EMAIL, RECIPIENT } from './comp.ts'
 
@@ -28,8 +29,10 @@ let pointing = (tx: Tx, eid: Eid) =>
 
 // The `recipient` mark owed to the addresses this batch writes or names, as
 // they will stand once it is written: an address a letter in the batch is for,
-// or one in the batch that a stored letter is for.
-let marking = async (bundles: Bundle[], tx: Tx): Promise<Bundle[]> => {
+// or one in the batch that a stored letter is for. A store that answers
+// without waiting is not made to wait: a batch that names no address is
+// passed through as it came.
+let marking = (bundles: Bundle[], tx: Tx): Bundle[] | Promise<Bundle[]> => {
   let named = new Set<Eid>(), written = new Set<Eid>()
   for (let b of bundles) {
     let to = (b[DELIVER] as { to?: unknown } | null | undefined)?.to
@@ -38,17 +41,25 @@ let marking = async (bundles: Bundle[], tx: Tx): Promise<Bundle[]> => {
   }
   let eids = [...new Set([...named, ...written])]
   if (!eids.length) return bundles
-  let held = await tx.get(eids)
-  let marks = await Promise.all(eids.map(async (eid) => {
-    let row = bundles.filter((b) => b.entity.eid == eid).reduce(
-      merged,
-      held.find((h) => h.entity.eid == eid) ?? null,
-    )
-    if (!row || row[RECIPIENT] || !bare(row)) return []
-    let lettered = named.has(eid) || (await pointing(tx, eid)).length > 0
-    return lettered ? [{ entity: { eid }, [RECIPIENT]: {} }] : []
-  }))
-  return [...bundles, ...marks.flat()]
+  return after(
+    tx.get(eids),
+    (held) =>
+      after(
+        each(eids, [] as Bundle[], (marks, eid) => {
+          let row = bundles.filter((b) => b.entity.eid == eid).reduce(
+            merged,
+            held.find((h) => h.entity.eid == eid) ?? null,
+          )
+          if (!row || row[RECIPIENT] || !bare(row)) return marks
+          let mark = (lettered: boolean) =>
+            lettered ? [...marks, { entity: { eid }, [RECIPIENT]: {} }] : marks
+          return named.has(eid)
+            ? mark(true)
+            : after(pointing(tx, eid), (letters) => mark(letters.length > 0))
+        }),
+        (marks) => [...bundles, ...marks],
+      ),
+  )
 }
 
 /**
@@ -73,5 +84,8 @@ let marking = async (bundles: Bundle[], tx: Tx): Promise<Bundle[]> => {
  */
 export let recipients = (): Plugin => ({
   name: '@yaks/mail/recipients',
+  // It only adds a mark to the batch, so a check of a batch can run without it
+  // writing.
+  admission: () => true,
   hooks: { rules: hook([EMAIL, DELIVER], marking) },
 })
