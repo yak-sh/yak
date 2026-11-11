@@ -601,9 +601,7 @@ export class Builder {
       // The platform's admin's, through the kernel (sweep.ts): a read of the
       // file as it stands, made by no Operator, counted and never stopped.
       if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
-      return Response.json(
-        copying(freely(this.#ctx.storage), await request.json()),
-      )
+      return copying(freely(this.#ctx.storage), await request.json())
     }
     if (url.pathname.startsWith('/result/')) {
       if (

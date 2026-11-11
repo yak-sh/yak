@@ -18,12 +18,24 @@ export type Asked = { table?: string; after?: number }
  * once the table is read). */
 export type Copying = { plan: Plan } | { rows: Cell[][]; last: number | null }
 
-/** One answer to a copy of the object's file. */
-export let copying = (sql: Driver, asked: Asked): Copying => {
+// A page holds up to this many rows, or about this many bytes: each page is
+// one request through the kernel, whose gate asks the directory, so a copy
+// takes few large pages rather than the relocation protocol's small ones.
+let ROWS = 2000
+let BYTES = 1024 * 1024
+
+/** One answer to a copy of the object's file: its plan, a page of one of
+ * its tables, or a refusal of a table it does not hold, which a file nobody
+ * made holds none of. */
+export let copying = (sql: Driver, asked: Asked): Response => {
   let made = plan(sql)
-  if (asked.table == null) return { plan: made }
+  if (asked.table == null) return Response.json({ plan: made })
   let t = made.tables.find((t) => t.name == asked.table)
-  if (!t) throw new Error(`no table ${asked.table}`)
-  let { rows, last } = page(sql, t, asked.after ?? 0, raised())
-  return { rows, last }
+  if (!t) {
+    return Response.json({
+      error: { code: 'no_table', message: `no table ${asked.table}` },
+    }, { status: 404 })
+  }
+  let { rows, last } = page(sql, t, asked.after ?? 0, raised(), ROWS, BYTES)
+  return Response.json({ rows, last } satisfies Copying)
 }

@@ -4107,9 +4107,7 @@ export class Store {
     // out a page at a time as it stands (store-copy.ts), whether or not the
     // store is awake, made by no graph, counted and never stopped.
     if (kernel && path == READ_OUT && request.method == 'POST') {
-      return Response.json(
-        copying(freely(this.#ctx.storage), await request.json()),
-      )
+      return copying(freely(this.#ctx.storage), await request.json())
     }
     if (kernel && path == '/dormant' && request.method == 'POST') {
       await this.#sleep()

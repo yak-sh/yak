@@ -25,7 +25,11 @@
 // The gate is the one the fee answers to (sell.ts `fees`): an owner of the
 // platform's own space, read off a website session or an OAuth token. A store is named by the
 // kernel, never by a caller, so a name the listing does not hold is refused
-// rather than waking an object nobody made.
+// rather than waking an object nobody made. A copy asks its store's plan
+// first, and only that ask reads the listing: a copy takes a page per
+// request, and a listing per page read the whole directory each time. A table
+// page goes straight to the object, which answers only a
+// table its file holds.
 import * as dirPart from './directory.ts'
 import { directory, storeName } from './directory.ts'
 import { GIT_STORE, storeOf } from './door.ts'
@@ -38,7 +42,7 @@ import { vouched, type Who } from './session.ts'
 import { LEAVE, WHERE } from './relocate.ts'
 import { visits } from './visit.ts'
 import { builderOf } from './build-door.ts'
-import { COPY } from './store-copy.ts'
+import { type Asked, COPY } from './store-copy.ts'
 
 export let PATH = '/api/move'
 export let RELOCATE_PATH = '/api/relocate'
@@ -173,18 +177,24 @@ let relocating = async (
   return Response.json({ ...await r.json(), app: app.eid, forgot: true })
 }
 
+// Whether a copy's ask is its store's plan, the one ask that reads the
+// listing.
+let planned = (body: string) =>
+  (JSON.parse(body || '{}') as Asked).table == null
+
 // A space's Operator store read out (store-copy.ts), for a rehearsal on
 // a copy: GET lists every space, and a POST naming `space=<eid>` is that
-// space's Builder answering the asked page. A space the directory does not
-// hold wakes no object.
+// space's Builder answering the asked page. A plan asked of a space the
+// directory does not hold wakes no object.
 let copying = async (
   req: Request,
   env: Env,
   dir: ReturnType<typeof dirOf>,
 ): Promise<Response> => {
-  let spaces = await dir.all()
+  let listed = async () =>
+    (await dir.all()).map(({ eid, slug }) => ({ eid, slug }))
   if (req.method == 'GET') {
-    return Response.json(spaces.map(({ eid, slug }) => ({ eid, slug })), {
+    return Response.json(await listed(), {
       headers: { 'cache-control': 'private, no-store' },
     })
   }
@@ -192,10 +202,10 @@ let copying = async (
     return json(405, 'method_not_allowed', 'list the spaces, or post to one')
   }
   let space = new URL(req.url).searchParams.get('space') ?? ''
-  if (!spaces.some((s) => s.eid == space)) {
+  let body = await req.text()
+  if (planned(body) && !(await listed()).some((s) => s.eid == space)) {
     return json(404, 'no_space', `no space is ${space || '(nothing)'}`)
   }
-  let body = await req.text()
   return await builderOf(env, space)(() =>
     new Request(`https://builder${COPY}`, {
       method: 'POST',
@@ -218,13 +228,15 @@ let appAt = async (dir: ReturnType<typeof dirOf>, store: string) => {
 // An app's store read out the same way: GET lists every app's store, its
 // sample's and its visitors' (`stores`), and a POST naming `store=<name>` is
 // that store's object answering the asked page from its file as it stands.
-// A name the listing does not hold wakes no object.
+// A plan asked of a name the listing does not hold wakes no object, and
+// neither the git store nor the directory is an app's.
 let storeCopying = async (req: Request, env: Env): Promise<Response> => {
-  let all = (await stores(env)).filter((s) =>
-    s.store != GIT_STORE && s.store != PLATFORM_STORE
-  )
+  let listed = async () =>
+    (await stores(env)).filter((s) =>
+      s.store != GIT_STORE && s.store != PLATFORM_STORE
+    )
   if (req.method == 'GET') {
-    return Response.json(all, {
+    return Response.json(await listed(), {
       headers: { 'cache-control': 'private, no-store' },
     })
   }
@@ -232,13 +244,16 @@ let storeCopying = async (req: Request, env: Env): Promise<Response> => {
     return json(405, 'method_not_allowed', 'list the stores, or post to one')
   }
   let name = new URL(req.url).searchParams.get('store') ?? ''
-  if (!all.some((s) => s.store == name)) {
+  let body = await req.text()
+  let refused = name == GIT_STORE || name == PLATFORM_STORE ||
+    planned(body) && !(await listed()).some((s) => s.store == name)
+  if (refused) {
     return json(404, 'no_store', `no app's store is ${name || '(nothing)'}`)
   }
   return await storeOf(env.STORE, name)(COPY, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: await req.text(),
+    body,
   }, KERNEL)
 }
 

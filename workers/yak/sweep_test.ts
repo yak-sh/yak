@@ -167,10 +167,15 @@ test('the platform’s owner reads an app’s store out, a table at a time, and 
     read.rows.every((r: unknown[]) => r.length == entity.cols.length + 1),
     true,
   )
+  let refused = async (query: string, body: unknown) =>
+    (await ask(JEFF, query, body)).body.error.code
+  assertEquals(await refused('?store=ada/nothing', {}), 'no_store')
+  assertEquals(await refused('?store=yak/git', { table: 'entity' }), 'no_store')
   assertEquals(
-    (await ask(JEFF, '?store=ada/nothing', {})).body.error.code,
-    'no_store',
+    await refused('?store=ada/notes.abc123', { table: 'nothing' }),
+    'no_table',
   )
+  assertEquals(await refused('?store=ada/nothing', { table: 'x' }), 'no_table')
   assertEquals((await ask(ADA, '')).status, 403)
 })
 
