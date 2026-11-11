@@ -70,6 +70,13 @@ start plus the lifetime its provider row records, `provider{cache_retention}` in
 seconds ([@yaks/model](../model/README.md), "Cached-prefix expiry"). Where the
 row records none the expiry is null, which every reader takes as cold.
 
+Measured on 2026-11-11 with Claude Code 2.1.322 signed in to a subscription, on
+`fable` and `haiku`: a 35,000-token prefix nobody else had sent was written
+once, then sent again with one more block after its own gap. After 4, 6 and 55
+minutes all of it was read from the cache; after 65 minutes none was, and it was
+written again. Every write was reported as `ephemeral_1h_input_tokens`. So the
+`claude` provider row on this box records `cache_retention: 3600`.
+
 ## What is not graph-native
 
 `claude` owns subscription authentication, transport/init diagnostics, internal
