@@ -114,8 +114,7 @@ export let Organizations = () => (
           <p class='Letter_By'>The assistant writes back</p>
           <p>
             Done. The home page says the office is closed that Friday, and the
-            craft fair sign-up now says it is full. If either is wrong, tell me
-            and I'll change it back.
+            craft fair sign-up now says it is full.
           </p>
         </Card>
       </div>
