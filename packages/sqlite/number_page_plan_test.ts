@@ -10,6 +10,9 @@ import { semantic } from '../embedding/compile.ts'
 import { parse } from '@yaks/query'
 import { edgeDoc, traverse } from '@yaks/edge'
 import { storage } from './mod.ts'
+import { stepping } from './testing.ts'
+import { archetypeDoc, archetypes } from '@yaks/archetype'
+import { type Bundle, graph } from '@yaks/graph'
 import { driver } from './native.ts'
 import { sqlitePath } from './sqlitepath.ts'
 
@@ -155,4 +158,39 @@ test('an extension claiming number order retains its own ranking', () => {
     observedClaimedHook.steps > 6000,
     'claimed order must retain original path',
   )
+})
+
+// A component its store's newest entities do not wear, read where the
+// catalog names its shapes: on the platform, `__number_prefix` found none of
+// it and sorted its whole history, 735,051 rows for 12.
+test("a numbered page of a component no recent entity wears reads each shape's newest", () => {
+  let shaped = loadVocab([archetypeDoc, {
+    $defs: {
+      entity: {
+        component: true,
+        properties: { num: { type: 'number', stamped: true } },
+      },
+      doc: { component: true, properties: { title: { type: 'string' } } },
+      old: { component: true, properties: { x: { type: 'number' } } },
+      noise: { component: true, properties: { y: { type: 'number' } } },
+    },
+  }])
+  let { driver, steps } = stepping()
+  let s = storage(driver, shaped, { number: true })
+  s.install()
+  let g = graph({ storage: s, vocab: shaped, plugins: [archetypes()] })
+  let batch = (n: number, f: (i: number) => Bundle) =>
+    g.apply(Array.from({ length: n }, (_, i) => f(i)))
+  batch(600, (i) => ({
+    entity: { eid: `old-${i}` },
+    old: { x: i },
+    ...i % 2 ? { doc: {} } : {},
+  }))
+  batch(1200, (i) => ({ entity: { eid: `noise-${i}` }, noise: { y: i } }))
+  g.apply([{ entity: { eid: 'old-599' }, $delete: true }])
+  let before = steps()
+  let got = s.rows('.old .limit=12').map((r) => r.eid)
+  let spent = steps() - before
+  equal(got, Array.from({ length: 12 }, (_, i) => `old-${598 - i}`))
+  ok(spent < 5000, `${spent} VM steps`)
 })

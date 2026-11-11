@@ -2700,6 +2700,21 @@ let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>
 // starts; past this many, sorting their owners is the likelier cheaper read.
 let MERGED = 64
 
+// The archetypes wearing `comp`, where the catalog names them and a page may
+// read each one's owners from the entity table's number index: the unscoped
+// entity spine, no owner the open write moved off its stored shape, and no
+// more than MERGED of them. `undefined` where the page must be read otherwise.
+let shaped = (ctx: Ctx, comp: string): readonly number[] | undefined => {
+  let set = ctx.archetypes
+  if (
+    !set || set.pending || set.masked?.has(comp) || ctx.d.scoped ||
+    ctx.d.spine != '"entity"' || !ctx.d.archetypeSource || !ctx.d.archetype ||
+    !ctx.v.prop('entity', 'num')
+  ) return
+  let ids = set({ all: [comp] })
+  return ids?.length && ids.length <= MERGED ? ids : undefined
+}
+
 // Rows of every arm, each already in its owners' order `dir`, as one
 // relation in that order. SQLite merges the arms of an ordered compound
 // rather than sorting them. A compound carries at most ARMS terms, so wider
@@ -4659,6 +4674,50 @@ let lower = (
     !computed(vocab, ctx.present) && ctx.d.owned &&
     (ctx.d.scoped || ctx.d.spine == '"entity"')
   ) {
+    // Where the catalog names the shapes wearing the component, each shape's
+    // owners stand in its number index in the page's order: a page of each
+    // shape's newest live owners is read off that index, and the page is the
+    // newest of them, about a page a shape however far back the component's
+    // newest owners lie. The prefix below finds a page only among the newest
+    // entities: on the platform, a component none of them wore sorted its
+    // whole history, 735,051 rows for 12.
+    let shapes = shaped(ctx, ctx.present)
+    if (shapes) {
+      let key = ctx.d.archetype!()
+      let arm = (id: number): Query => {
+        let a = render({
+          ...rel(ctx.d.archetypeSource!(ctx.v), {
+            cols: [owner + ' as "id"', '"entity"."num" as "num"'],
+            joins: paged,
+            where: and(windowed, cond({ sql: `${key} = ?`, params: [id] })),
+            order: ordered,
+          }),
+          limit: val(limit.n),
+        })
+        return select({
+          cols: [raw('"id"'), raw('"num"')],
+          from: raw(`(${a.sql})`, a.params),
+        })
+      }
+      let all = render(unionAllWithin(shapes.map(arm)))
+      let page = render({
+        ...select({
+          cols: [raw('"id"')],
+          from: raw(`(${all.sql})`, all.params),
+        }),
+        order: [raw('"num" desc'), raw('"id" desc')],
+        limit: val(limit.n),
+      })
+      return finished({
+        ...rel(ctx.d.spine, { cols, joins: [], where: TRUE, order: ordered }),
+        from: raw(`(${page.sql}) as "__number_page"`, page.params),
+        joins: [{
+          how: 'cross',
+          src: raw(ctx.d.spine, [], 'entity'),
+          on: raw(`"__number_page"."id" = ${owner}`),
+        }],
+      })
+    }
     let prefix = fresh(ctx, [], '__number_prefix_')
     let hits = fresh(ctx, [], '__number_hits_')
     let cap = Math.max(64, Math.min(Number.MAX_SAFE_INTEGER, limit.n * 4))
