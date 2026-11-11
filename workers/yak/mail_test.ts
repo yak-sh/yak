@@ -195,10 +195,15 @@ let outbox = (refuse?: string) => {
   }
 }
 
-// A hibernatable socket, faked: what it was sent, in order.
-let wire = (received = (_frame: Frame) => {}) => {
+// A hibernatable socket, faked: what it was sent, in order. It was opened by
+// the caller `v` vouches for, and holds what the handshake attaches to a
+// page's socket (@yaks/durable-object `accept`): who reads, and who writes.
+let wire = (v: Vouch, received = (_frame: Frame) => {}) => {
   let sent: Frame[] = []
-  let held: unknown = null
+  let held: unknown = {
+    read: { person: v.person, level: v.role },
+    writer: { actor: { by: v.person } },
+  }
   return {
     sent,
     readyState: 1,
@@ -369,7 +374,7 @@ test('a page watching the letter is told it left', async () => {
   let bundles = (f: Frame) => (f.bundles ?? []) as Bundle[]
   let heard = new Set<string>()
   let left = Promise.withResolvers<void>()
-  let ws = wire((frame) => {
+  let ws = wire(owner, (frame) => {
     if (bundles(frame).some((b) => b.entity.eid == NOTE && b.delivered)) {
       heard.add(frame.id)
       if (heard.has('all') && heard.has('note')) left.resolve()
