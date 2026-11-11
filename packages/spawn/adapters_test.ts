@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import { parse } from 'smol-toml'
 import { claude, codex } from './adapters.ts'
 
@@ -91,4 +91,31 @@ test("a run goes without a server through its provider's own way of leaving one 
   // Nothing to go without, nothing said.
   assert(!claude.argv(job).includes('--settings'))
   assert(!codex.argv(job).some((a) => a.startsWith('mcp_servers.')))
+})
+
+test("a bare run is given none of its provider's tools, settings or servers", () => {
+  let said = claude.argv({
+    ...job,
+    bare: true,
+    persona: 'Keep the graph true.',
+    mcp: { tasks: 'http://localhost/mcp' },
+    without: ['railway'],
+  })
+  assertEquals(said[said.indexOf('--tools') + 1], '')
+  assertEquals(said[said.indexOf('--setting-sources') + 1], '')
+  for (let flag of ['--safe-mode', '--strict-mcp-config']) {
+    assert(said.includes(flag), flag)
+  }
+  // What it works with is left out whole: it has nothing to connect or permit.
+  for (let flag of ['--mcp-config', '--settings', '--permission-mode']) {
+    assert(!said.includes(flag), flag)
+  }
+  // Its persona and its instruction are all it carries.
+  assertEquals(
+    said[said.indexOf('--append-system-prompt') + 1],
+    'Keep the graph true.',
+  )
+  assertEquals(said.slice(-2), ['--', '-x fix it'])
+  // A provider that cannot go without its tools refuses, not runs with them.
+  assertThrows(() => codex.argv({ ...job, bare: true }), Error, 'bare')
 })

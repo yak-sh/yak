@@ -23,6 +23,7 @@ import { adopting } from './service.ts'
 import {
   asked as jobOf,
   carry,
+  emptyOf,
   finish,
   type Opts,
   start,
@@ -47,6 +48,14 @@ let comp = (b: Bundle | undefined, name: string) =>
 let proc = (b: Bundle | undefined) => comp(b, 'process') as Process | undefined
 
 let dir = () => Deno.makeTempDirSync({ prefix: 'yaks-spawn-' })
+let exists = (path: string) => {
+  try {
+    Deno.statSync(path)
+    return true
+  } catch {
+    return false
+  }
+}
 
 let launched: typeof launch = async (g, spec, options = {}) => {
   let eid = String(options.eid)
@@ -111,6 +120,54 @@ test('the chosen persona reaches a managed provider', async () => {
     session: { persona: 'N1' },
   })
   assert(given?.includes('Keep the graph true.'))
+})
+
+test('a request offered no tools starts bare, in an empty directory removed with the run', async () => {
+  let { g } = tracked()
+  let where = dir()
+  let seen: { bare?: boolean; persona?: string; cwd?: string; files?: number } =
+    {}
+  try {
+    await g.apply([
+      ...asking('S1', 'E1', 'write a pitch'),
+      voiced('N1', 'Keep the graph true.'),
+      { entity: { eid: 'S1' }, session: { persona: 'N1' } },
+      { entity: { eid: 'E1' }, sending: { tools: [] } },
+    ])
+    await start(g, 'S1', {
+      cwd: where,
+      worktrees: `${where}/runs`,
+      dir: where,
+      poll: 5,
+      launch: (store, spec, o) => {
+        seen.cwd = spec.cwd
+        seen.files = [...Deno.readDirSync(spec.cwd!)].length
+        return launched(store, spec, o)
+      },
+      adapters: {
+        fake: {
+          ...fake,
+          argv: (job) => {
+            seen.bare = job.bare
+            seen.persona = job.persona
+            return fake.argv(job)
+          },
+        },
+      },
+    })
+    await until(
+      async () => comp((await said(g)).at(-1), 'stop'),
+      'the bare run to end',
+    )
+    // No checkout was cut for it: it started where nothing is.
+    assertEquals(seen.cwd, emptyOf('S1', { dir: where }))
+    assertEquals([seen.bare, seen.files], [true, 0])
+    assert(seen.persona?.includes('Keep the graph true.'))
+    await until(() => !exists(seen.cwd!), 'its directory to be removed')
+    assert(!exists(`${where}/runs/S1`))
+  } finally {
+    Deno.removeSync(where, { recursive: true })
+  }
 })
 
 test("a run on a sub-project's task hears each common persona above it", async () => {

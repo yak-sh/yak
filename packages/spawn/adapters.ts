@@ -21,6 +21,10 @@
 // A provider's CLI also connects every server its own configuration and its
 // account name, and tells the model each one's tools on every turn. A run goes
 // `without` the ones it is told to, again through the provider's own way.
+//
+// A run offered no tools is `bare`: it can read and change nothing, so it is
+// started with nothing of this machine, and what it carries is its
+// instruction and its persona alone.
 
 import { type Reader, readers } from '@yaks/session'
 import { VIA } from '@yaks/session/graph'
@@ -49,6 +53,10 @@ export type Job = {
    * by the name the provider lists it under (`claude mcp list`, `codex mcp
    * list`) */
   without?: string[]
+  /** it is offered no tools (`sending{tools: []}` on its request): started
+   * with none of its provider's tools, settings, instruction files, skills,
+   * commands, hooks or MCP servers, and no thread kept to carry on */
+  bare?: boolean
 }
 
 /** A provider that is run as a command. */
@@ -97,6 +105,26 @@ let lacking = (j: Job): string[] =>
     ]
     : []
 
+// What a claude run works with: the servers it is connected to and goes
+// without, and leave to use its tools unasked, since it owns its worktree and
+// nobody is at the prompt. A bare run is given none of it: `--safe-mode` and
+// an empty `--setting-sources` leave out every CLAUDE.md, skill, plugin, hook
+// and settings file, `--strict-mcp-config` every MCP server, `--tools ''` the
+// built-in tools, and nothing of the conversation is saved.
+let working = (j: Job): string[] =>
+  j.bare
+    ? [
+      '--safe-mode',
+      '--setting-sources',
+      '',
+      '--strict-mcp-config',
+      '--tools',
+      '',
+      '--disable-slash-commands',
+      '--no-session-persistence',
+    ]
+    : [...connected(j), ...lacking(j), '--permission-mode', 'bypassPermissions']
+
 /** `claude -p --output-format stream-json`, carrying on its thread with
  * `--resume`. */
 export let claude: Adapter = {
@@ -110,10 +138,7 @@ export let claude: Adapter = {
     ...(j.model ? ['--model', j.model] : []),
     ...(j.effort ? ['--effort', j.effort] : []),
     ...(j.persona ? ['--append-system-prompt', j.persona] : []),
-    ...connected(j),
-    ...lacking(j),
-    '--permission-mode',
-    'bypassPermissions', // it owns its worktree; nobody is at the prompt
+    ...working(j),
     // -- ends the options: the instruction is a positional, so content that
     // opens with a dash parses as content and not as an unknown flag.
     '--',
@@ -158,24 +183,29 @@ let configured = (j: Job): string[] => [
 
 /** `codex exec --json`, carrying on its thread with `codex exec resume`. */
 export let codex: Adapter = {
-  argv: (j) => [
-    'codex',
-    'exec',
-    ...(j.thread ? ['resume'] : []),
-    '--json',
-    // No approvals and no sandbox: a headless exec has nobody to approve, and
-    // the run's worktree is its blast radius (the fleet's posture, 2026-07-17).
-    '--dangerously-bypass-approvals-and-sandbox',
-    ...(j.model ? ['-m', j.model] : []),
-    ...(j.effort ? ['-c', `model_reasoning_effort=${j.effort}`] : []),
-    '-c',
-    `project_doc_max_bytes=${WHOLE}`,
-    ...(j.persona ? ['-c', `developer_instructions=${toml(j.persona)}`] : []),
-    ...configured(j),
-    '--',
-    ...(j.thread ? [j.thread] : []),
-    j.instruction,
-  ],
+  argv: (j) => {
+    // Codex has no way to go without its tools and its own configuration, and
+    // one started anyway would carry what it was asked to go without.
+    if (j.bare) throw new Error('codex cannot run bare: it keeps its tools')
+    return [
+      'codex',
+      'exec',
+      ...(j.thread ? ['resume'] : []),
+      '--json',
+      // No approvals and no sandbox: a headless exec has nobody to approve, and
+      // the run's worktree is its blast radius (the fleet's posture, 2026-07-17).
+      '--dangerously-bypass-approvals-and-sandbox',
+      ...(j.model ? ['-m', j.model] : []),
+      ...(j.effort ? ['-c', `model_reasoning_effort=${j.effort}`] : []),
+      '-c',
+      `project_doc_max_bytes=${WHOLE}`,
+      ...(j.persona ? ['-c', `developer_instructions=${toml(j.persona)}`] : []),
+      ...configured(j),
+      '--',
+      ...(j.thread ? [j.thread] : []),
+      j.instruction,
+    ]
+  },
   read: readers.codex,
   file: 'AGENTS.md',
 }

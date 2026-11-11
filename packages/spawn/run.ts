@@ -303,11 +303,15 @@ export let asked = async (
   // entry of its own takes the transcript's first input instead.
   let said = comp(request, 'content') ??
     comp(await firstInput(g, session), 'content')
+  // `sending{tools}` names exactly the tools a turn is offered (@yaks/session),
+  // and a list naming none offers none.
+  let tools = comp(request, 'sending')?.tools
   return {
     provider: name,
     session,
     model: spelled,
     effort: effort || undefined,
+    ...Array.isArray(tools) && !tools.length ? { bare: true } : {},
     instruction: String(said?.body ?? ''),
     ask: {
       ...served ? { to: chosen } : {},
@@ -400,6 +404,24 @@ export type Attempt = {
 /** Where a run's own checkout is, under `worktrees`. */
 export let checkoutOf = (session: string, worktrees: string): string =>
   `${worktrees}/${session}`
+
+/** Where a bare run is started: an empty directory of its own beside its
+ * log, so no checkout's files or instruction files are near it. It is made
+ * for the run and removed with the run's files. */
+export let emptyOf = (session: string, o: Opts = {}): string =>
+  paths(session, o).out.replace(/\.out$/, '.bare')
+
+// A bare run's directory, made empty.
+let emptied = async (session: string, o: Opts): Promise<string> => {
+  let dir = emptyOf(session, o)
+  await disk.remove(dir, { recursive: true }).catch(absent)
+  await disk.mkdir(dir, { recursive: true })
+  return dir
+}
+
+let absent = (e: unknown) => {
+  if (!(e instanceof disk.errors.NotFound)) throw e
+}
 
 // A run's own checkout, cut from main on a branch named
 // after the session. Committed work only: what is uncommitted in the source
@@ -509,12 +531,22 @@ export let start = async (
     if (!carried) return null
     job = carried
   }
-  let home = o.worktrees ? checkoutOf(session, o.worktrees) : o.cwd
+  // A bare run has no tools to work in a checkout with, so none is cut for
+  // it: it starts in an empty directory of its own.
+  let home = job.bare
+    ? emptyOf(session, o)
+    : o.worktrees
+    ? checkoutOf(session, o.worktrees)
+    : o.cwd
   if (!await take(g, session, row, home ?? system.cwd())) return null
   let run: Run
   let t: Tail
   try {
-    let cwd = o.worktrees ? await cut(g, session, o) : o.cwd
+    let cwd = job.bare
+      ? await emptied(session, o)
+      : o.worktrees
+      ? await cut(g, session, o)
+      : o.cwd
     let persona = await given(g, session, cwd ?? system.cwd(), adapter)
     let argv = adapter.argv({
       ...job,
@@ -546,7 +578,7 @@ export let start = async (
   if ((await ran(g, session))?.stop) down(g, session, o).catch(told(o))
   // The next run's checkout is made from a spare in about a second, where one
   // cut whole takes several: one is cut once this run has launched.
-  if (o.worktrees) {
+  if (o.worktrees && !job.bare) {
     keepSpare(
       o.cwd ?? system.cwd(),
       checkoutOf(session, o.worktrees),
@@ -657,6 +689,7 @@ let onward = async (
 ): Promise<void> => {
   if (!well || !await parked(g, session)) {
     if (o.worktrees) await taken(g, checkoutOf(session, o.worktrees))
+    await disk.remove(emptyOf(session, o), { recursive: true }).catch(absent)
     clean(session, o)
   }
   if (well && await requested(g, session)) await start(g, session, o)
