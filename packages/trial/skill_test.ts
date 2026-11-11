@@ -3,6 +3,7 @@
 
 import { equal, ok, test } from '@yaks/testing'
 import { type Bundle, graph } from '@yaks/graph'
+import { signed } from '@yaks/graph/provenance'
 
 // deno-lint-ignore no-explicit-any
 type Any = any
@@ -350,6 +351,7 @@ let truth: Record<string, string> = { ...taste, 'found 1|weak 1': 'found 1' }
 test('every judge sits the known answers unmarked, and one that fails is shown apart', async () => {
   let g = await open()
   let { round } = await load(g, trial)
+  await g.apply([{ entity: { eid: 'tester' }, doc: { title: 'Tester' } }])
   let all = async (): Promise<Any[]> => await gather(g, round)
   let rows = await all()
   let headline = (eid: string): string =>
@@ -360,11 +362,14 @@ test('every judge sits the known answers unmarked, and one that fails is shown a
   let judge = async (key: string) =>
     (await g.address([`judge:copy:${key}`])).get(`judge:copy:${key}`)!
   let tool = async (name: string, args: Record<string, unknown>) => {
-    let [r]: Any[] = await runs()[name]!(
-      { entity: { eid: 'c' }, call: { args } },
+    // The runner applies what a tool answers, less its words.
+    let out: Any[] = await runs()[name]!(
+      { entity: { eid: 'c' }, call: { args }, $actor: { by: 'tester' } },
       g,
     )
-    return r.content.body
+    let rows = out.filter((b) => !b.output)
+    if (rows.length) await g.apply(signed(rows, { by: 'tester' }))
+    return out.find((b) => b.output).content.body
   }
   let said =
     (who: string, pick: (c: Sides) => string | undefined) =>
@@ -453,17 +458,11 @@ test('every judge sits the known answers unmarked, and one that fails is shown a
   ) await g.apply(await Promise.all(handed.cards.map(said(who, pick))))
 
   // The passing share is a person's to set, and setting it again replaces it.
-  await g.apply([{ entity: { eid: 'tester' }, doc: { title: 'Tester' } }])
+  await tool('trial_pass', { round: 'k1', share: 0.5 })
   equal(
-    await tool('trial_pass', { round: 'k1', share: 0.5 }),
-    'a judge of k1 now passes by agreeing on 50% of the known answers it sat',
+    await tool('trial_pass', { round: 'k1', share: 0.8 }),
+    'a judge of k1 now passes by agreeing on 80% of the known answers it sat',
   )
-  await g.apply([{ entity: { eid: round }, passing: null }])
-  await g.apply([{
-    entity: { eid: round },
-    passing: { share: 0.8 },
-    $actor: { by: 'tester', via: 'tester' },
-  }])
 
   let lines = tally(await all()).split('\n')
   equal(lines.slice(lines.findIndex((l) => l.startsWith('Known answers'))), [
