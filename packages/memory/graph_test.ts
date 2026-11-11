@@ -1,12 +1,12 @@
 // A write through the tools is answered with what the graph's person said
-// and decided before that bears on it: the host composes this plugin's reply
-// into its one runner (@yaks/cli `compose`), beside @yaks/embedding's.
+// and decided before that bears on it, once a floor lets anything near: the
+// host composes this plugin's reply into its one runner (@yaks/cli `compose`).
 
 import { equal, test } from '@yaks/testing'
 import { type Bundle, type Comp, mint } from '@yaks/graph'
 import { compose } from '@yaks/cli/host'
 import { fields, hashEmbedder, searched, sweep } from '@yaks/embedding'
-import { answerOf, toolEid, worded } from '@yaks/tools'
+import { answerOf, toolEid } from '@yaks/tools'
 
 let SAID = 'texts to the church landline forward to email'
 
@@ -89,26 +89,11 @@ let call = async (
 let said = (answer: Bundle[]) =>
   answer.filter((b) => (b.hit as Comp | undefined)?.said)
 
-test("a task an agent files is answered with the person's earlier words and the decision answered on it", async () => {
+// The door is off (SAID in ./earlier.ts) until a scored variant earns it.
+test('a task an agent files is answered with nothing the person said or decided', async () => {
   let yak = await open()
   try {
-    let answer = await call(yak, { by: 'bot', via: 'run' })
-    let made = answer.find((b) => b.created)!.entity.eid
-    equal(said(answer).map((b) => b.entity.eid), ['hers', 'settled'])
-    let lines = worded(answer).split('\n').filter((l) => l.includes('earlier'))
-    equal(lines.map((l) => l.replace(/\d{4}-\d\d-\d\d/, 'DATE')), [
-      `Ada earlier, on ${made}: hers · comment on line (meaning) — DATE "${SAID}"`,
-      `Ada earlier, on ${made}: settled Should ${SAID}? → yes · task done (meaning)`,
-    ])
-  } finally {
-    await yak.close()
-  }
-})
-
-test('what the person writes themselves is answered with nothing they said', async () => {
-  let yak = await open()
-  try {
-    equal(said(await call(yak, { by: 'ada' })), [])
+    equal(said(await call(yak, { by: 'bot', via: 'run' })), [])
   } finally {
     await yak.close()
   }

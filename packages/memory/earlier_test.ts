@@ -285,8 +285,13 @@ let ids = async (found: ReturnType<typeof bearing>) => {
   let { said, decided } = await found
   return [...said.map((q) => q.id), ...decided.map((b) => b.entity.eid)]
 }
+test('what an agent wrote is answered with nothing until a floor is given', async () => {
+  equal(await ids(bears({ own: .99, told: .99, input: .99, d: .99 })), [])
+})
 test("what an agent wrote is answered with the person's nearest words and answered decisions, nearest first", async () => {
-  let found = await bears({ own: .9, told: .85, input: .5, d: .8 })
+  let found = await bears({ own: .9, told: .85, input: .5, d: .8 }, {
+    floor: .8,
+  })
   equal(found.said.map((q) => [q.id, q.words]), [
     ['#own', 'test with the other number'],
     ['#told', 'forward texts to email'],
@@ -294,15 +299,20 @@ test("what an agent wrote is answered with the person's nearest words and answer
   equal(found.decided.map((b) => b.entity.eid), ['d'])
 })
 test('words and decisions that are not near what was written do not arrive', async () => {
-  equal(await ids(bears({ own: .7, told: .7, input: .7, d: .7 })), [])
+  let floor = { floor: .8 }
+  equal(await ids(bears({ own: .7, told: .7, input: .7, d: .7 }, floor)), [])
   equal(await ids(bears({ own: .7, d: .7 }, { floor: .6 })), ['#own'])
 })
 test('what the writing session was told since its compaction is left out', async () => {
   let sims = { own: .9, told: .9 }
-  equal(await ids(bears(sims, { held: { via: 'agent' } })), ['#own'])
+  let floor = .8
+  equal(await ids(bears(sims, { floor, held: { via: 'agent' } })), ['#own'])
   equal(
     await ids(
-      bears(sims, { held: { via: 'agent', since: '2026-01-05T00:00:00Z' } }),
+      bears(sims, {
+        floor,
+        held: { via: 'agent', since: '2026-01-05T00:00:00Z' },
+      }),
     ),
     ['#own', '#told'],
   )

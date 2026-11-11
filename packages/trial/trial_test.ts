@@ -257,6 +257,7 @@ test("trial: said is the person's earlier words near what the session wrote in t
   let keyed: string[] = []
   let [part] = await saidBefore(g, {
     person: 'jeff',
+    floor: .8,
     meaning: (words, opts) => {
       if (opts?.within?.includes('.decision')) return Promise.resolve([])
       keyed.push(words)

@@ -284,13 +284,14 @@ export let titleOf = (b: Bundle): string => {
  * floor from .55 to .70 put a case's needed fact in front. */
 export let FLOOR = .75
 
-/** How near in meaning one of the person's earlier words must be to what an
- * agent wrote to be set beside it. A whole task or comment sits nearer to
- * everything than a prompt does: over the 73 things the agents of T-155224's
- * cases wrote, the third-nearest of Jeff's words was at .74 in the median, so
- * the prompt's .65 would list three beside every write. The one needed row
- * the door reaches was second at .802 (T-161252). */
-export let SAID = .8
+/** How near in meaning one of the person's earlier words, or an answered
+ * decision, must be to what an agent wrote to be set beside it: nothing is,
+ * so the door brings nothing until a variant scored with `yak trial score
+ * --arrive said --floor` earns it. At .8, the third-nearest of Jeff's words
+ * to the 73 things T-155224's agents wrote was at .74 in the median, and the
+ * door reached the needed row in 1 of 17 cases (C-161507), not worth a list
+ * beside every write. */
+export let SAID = Infinity
 
 /** The memories and answered decisions nearest the words in meaning: what was
  * already kept or settled on the subject, at least `floor` similar. A
@@ -355,7 +356,7 @@ export let FEW = { said: 3, decided: 2 }
  * What a person said and decided before that bears on `words`, the text of
  * something an agent just wrote: their nearest earlier words at least `floor`
  * similar (default {@link SAID}), and the nearest answered decisions at least
- * {@link FLOOR} similar. What the writing session already `held` is left out.
+ * that and {@link FLOOR} similar. What the writing session already `held` is left out.
  * There is no ranking by words here: without a meaning index, or past `wait`
  * milliseconds, nothing bears.
  */
@@ -365,6 +366,7 @@ export function bearing(
 ): Promise<Bearing> {
   let none: Bearing = { said: [], decided: [] }
   let { person, words, before, meaning } = options
+  let floor = options.floor ?? SAID
   if (
     !person || !meaning || !words.trim() ||
     !Number.isFinite(Date.parse(before))
@@ -378,9 +380,9 @@ export function bearing(
         meaning,
         words,
         theirs(g, { person, name, before }),
-        options.floor ?? SAID,
+        floor,
       ),
-      decided(g, words, before, meaning, FLOOR, false),
+      decided(g, words, before, meaning, Math.max(floor, FLOOR), false),
     ])
     return {
       said: quotes(
