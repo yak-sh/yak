@@ -1543,6 +1543,14 @@ test(
         Error,
         `no app scratch in ${jeff54}`,
       )
+      // Any other door's refusal names the apps the space does hold.
+      assertMatch(
+        await agent.tool('app_files', { ...scratch, op: 'list' }).then(
+          () => '',
+          (e: Error) => e.message,
+        ),
+        new RegExp(`^no app scratch in ${jeff54} — its apps are \\w`),
+      )
       assertEquals(
         (await agent.tool('app_list', { space: jeff54 })).includes('scratch'),
         false,
@@ -1576,10 +1584,15 @@ test(
         title: 'Notes',
       })
       assertMatch(made, /^app [^/]+\/notes /)
-      await assertRejects(
-        () => stranger.tool('app_files', { ...app, op: 'list' }),
-        Error,
-        `not a member of ${jeff54}`,
+      // And names the spaces he can name instead: his own.
+      assertStringIncludes(
+        await stranger.tool('app_files', { ...app, op: 'list' }).then(
+          () => '',
+          (e: Error) => e.message,
+        ),
+        `not a member of ${jeff54} — your spaces are ${
+          made.match(/^app ([^/]+)\//)![1]
+        }`,
       )
       // And the generic tier is his reach and nobody else's: jeff's rows are
       // not in it, whatever he asks for.

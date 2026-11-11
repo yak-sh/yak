@@ -70,7 +70,7 @@ import {
   present,
 } from '@yaks/query/core'
 import type { Assoc, Hop, Presence, Vocab } from '@yaks/vocab/runtime'
-import { Unknown, valueless } from '@yaks/vocab/runtime'
+import { Unknown, unknownName, valueless } from '@yaks/vocab/runtime'
 import {
   among,
   and,
@@ -887,7 +887,9 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     // the component name is simply not in this vocabulary. The error is the
     // vocabulary's own, so the CLI, the HTTP endpoint and the MCP server all
     // report it identically.
-    if (!ctx.v.comp(hop.comp)) throw new Unknown(hop.comp)
+    if (!ctx.v.comp(hop.comp)) {
+      throw new Unknown(hop.comp, unknownName(hop.comp, ctx.v.all))
+    }
     // Nor can it wear one the file holds no table for (./absent.ts).
     if (!worn(ctx, hop.comp) || ctx.absent?.includes(hop.comp)) {
       return unworn(op, null, '')

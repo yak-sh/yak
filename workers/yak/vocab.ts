@@ -184,10 +184,22 @@ export let reserved = once((): string[] =>
 export let EXAMPLE =
   '{"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}}}'
 export let GUIDE = url({}, '/docs.md')
-export let teach = (env: Host = {}) =>
-  " — the app's vocab.json does not declare it. Declare it there, like " +
-  `${EXAMPLE}, and deploy the app with app_deploy to install it · how to ` +
-  `declare one: call guide with page components, or ${url(env, '/docs.md')}`
+// The most of an app's own components a refusal lists.
+let OWN = 12
+/** Where a word of the caller's own comes from, ending a refusal of one the
+ * app's store does not speak. `own` is what the app's vocab.json declares,
+ * said when there are few enough to read at a glance. */
+export let teach = (env: Host = {}, own?: string[]) =>
+  " — the app's vocab.json does not declare it" +
+  (own && own.length <= OWN
+    ? own.length
+      ? ` (it declares ${own.map((c) => `.${c}`).join(', ')})`
+      : ' (it declares no components yet)'
+    : '') +
+  `. Declare it there, like ${EXAMPLE}, and deploy the app with app_deploy ` +
+  `to install it · how to declare one: call guide with page components, or ${
+    url(env, '/docs.md')
+  }`
 
 // The words that name a property's type, and the JSON Schema each is. A
 // manifest writes the schema; these are for reading one back in a sentence — a

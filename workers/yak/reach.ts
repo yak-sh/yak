@@ -115,7 +115,8 @@ let fan = once(() =>
 // (C-32800 item 4). The question carries the same door's screen an app's page
 // asks with (listing.ts `asking`), because an app's store keeps person rows as
 // its own bookkeeping, and a person titled with what to call them matches
-// `.doc` like any row. A refusal is thrown as the store's own sentence.
+// `.doc` like any row. A refusal is thrown as the store's own sentence, after
+// the store's address.
 //
 // A write's `check` rehearses the batch: every phase runs and the transaction
 // is rolled back (@yaks/graph `check`). The access rule is the page's: an
@@ -136,7 +137,9 @@ let memberOf = (
     let bundles = await door.consume(
       `/query?q=${encodeURIComponent(asked)}${live ? '&live=1' : ''}&listing=1`,
       async (res) => {
-        if (!res.ok) throw rejected(res.status, await told(res))
+        // Said with the store's address, as a write's refusal is: in a read of
+        // several, it says whose words the sentence speaks of.
+        if (!res.ok) throw rejected(res.status, `${at(r)}: ${await told(res)}`)
         return await res.json()
       },
       {},

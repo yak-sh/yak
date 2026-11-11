@@ -5528,14 +5528,19 @@ export class Store {
 
   // The read door's half of the graph's `teach`: `unknown prop: .recipe` is true and
   // useless on its own, so the store that holds the vocabulary adds where a
-  // word of your own comes from. The directory says nothing of the kind — its
-  // callers are the kernel's own.
+  // word of your own comes from, and which words the app declares. The
+  // directory says nothing of the kind — its callers are the kernel's own —
+  // and nor does a word no vocab.json can declare (`.$was`).
   async #taught(answer: Response): Promise<Response> {
     if (answer.ok || this.#get('name') == PLATFORM_STORE) return answer
     let said = await answer.json() as { error?: string; message?: string }
-    return /^unknown (prop:|component)/.test(said.message ?? '') &&
+    let own = Object.keys(meant(this.#get('vocab')).$defs ?? {}).sort()
+    return /^unknown (prop: \.\w|component)/.test(said.message ?? '') &&
         !said.message!.includes(url(this.#bind, '/docs.md'))
-      ? Response.json({ ...said, message: said.message + teach(this.#bind) }, {
+      ? Response.json({
+        ...said,
+        message: said.message + teach(this.#bind, own),
+      }, {
         status: answer.status,
         headers: answer.headers,
       })

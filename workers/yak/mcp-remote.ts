@@ -38,6 +38,8 @@ type Host = Ctx & {
    * the space is theirs, and null to anyone else. A host without one reaches
    * no machine. */
   machine?: (space: string) => Promise<typeof fetch | null>
+  /** The spaces this person owns: the machines they can name. */
+  owned?: () => Promise<string[]>
 }
 type Settings = {
   name: string
@@ -439,9 +441,14 @@ export let remoteCommands = (
     if (!person) throw refuse('access', 'Sign in to connect an MCP server.')
     let { machine } = settings
     if (machine && !await host.machine?.(machine)) {
+      let owned = (await host.owned?.() ?? []).sort()
       throw refuse(
         'access',
-        'Only the owner of a space connects an MCP server on its machine.',
+        `Only the owner of a space connects an MCP server on its machine, and ${machine} is not a space you own${
+          owned.length
+            ? `: name one of ${owned.join(', ')}`
+            : '; you own no space'
+        }.`,
       )
     }
     let url = machine ? settings.url : https(settings.url)

@@ -58,7 +58,7 @@
 import { IdError } from './types.ts'
 import { anyRef, isRef, parseProp, type Prop, typed } from './props.ts'
 import { edges, kindOrder, kindWord, lazy, statusOf, vocab } from './types.ts'
-import { Unknown, valueless } from '@yaks/vocab'
+import { Unknown, unknownName, valueless } from '@yaks/vocab'
 import { term as ftsTerm } from '@yaks/fts'
 import { type Check, check } from '@yaks/match'
 import { literals, type Tag, tagOf } from '@yaks/sql'
@@ -763,7 +763,7 @@ let aimed = (c: Clause & { kind: 'pred' }): Hop[] => {
   let hops = vocab.aim(c.path.join('.'), bare(c))
   let leaf = hops[hops.length - 1]
   if (!leaf.prop && !vocab.comp(leaf.comp)) {
-    throw new Unknown(leaf.comp)
+    throw new Unknown(leaf.comp, unknownName(leaf.comp, vocab.all))
   }
   return hops
 }

@@ -25,6 +25,7 @@ import {
   type Args,
   type Ctx,
   inSpace,
+  noApp,
   owns,
   refuse,
   SPACE,
@@ -327,8 +328,9 @@ export let numberTools: Row[] = [
       let app = null
       if (args.app != null) {
         let slug = text(args.app, 'app')
-        app = (await ctx.dir.apps(space)).find((a) => a.slug == slug)
-        if (!app) throw refuse('missing', `${space.slug} has no app ${slug}`)
+        let apps = await ctx.dir.apps(space)
+        app = apps.find((a) => a.slug == slug)
+        if (!app) throw await noApp(ctx, space, slug, apps)
       }
       await unworn(ctx, line.number)
       await stamp(ctx.env, {

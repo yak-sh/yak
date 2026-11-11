@@ -22,6 +22,7 @@ import {
   type Ctx,
   inApp,
   inSpace,
+  noApp,
   refuse,
   rejected,
   SPACE,
@@ -168,9 +169,7 @@ export let invokePackage = async (
     if ('app' in (definition.inputSchema?.properties as object ?? {})) {
       let apps = await ctx.dir.apps(space)
       let app = apps.find((a) => a.eid == appArg || a.slug == appArg)
-      if (!app || app.trashed) {
-        throw refuse('missing', `no app ${appArg} in ${space.slug}`)
-      }
+      if (!app || app.trashed) throw await noApp(ctx, space, appArg, apps)
       input.app = app.eid
     }
   } else if (name == 'mail_send' && input.from == null && appTarget) {

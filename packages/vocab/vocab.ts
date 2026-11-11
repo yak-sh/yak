@@ -32,7 +32,7 @@ import { appended, ladderOf, statusProp } from './status.ts'
 
 /** A name this vocabulary does not know. One error for every caller, raised
  * here because the vocabulary is what decides: `aim()` raises it for a name no
- * component declares, for a property named without its component (saying
+ * component declares (naming the closest that are, {@link unknownName}), for a property named without its component (saying
  * which components declare it, {@link unqualified}), and for a component named
  * with a property it does not declare (saying which ones it does); the storage
  * binder (@yaks/sql) raises it when a presence test names a component it has
@@ -597,6 +597,88 @@ export let shapeOf = (v: Vocab, comp: string): string => {
   return `${comp} has ${said.join(', ')}`
 }
 
+// The edits that turn one word into another (Levenshtein): one row of the
+// table at a time.
+let edits = (a: string, b: string): number => {
+  let row = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    let diag = row[0]
+    row[0] = i
+    for (let j = 1; j <= b.length; j++) {
+      let up = row[j]
+      row[j] = Math.min(
+        row[j] + 1,
+        row[j - 1] + 1,
+        diag + (a[i - 1] == b[j - 1] ? 0 : 1),
+      )
+      diag = up
+    }
+  }
+  return row[b.length]
+}
+
+/**
+ * The names closest to a word nothing declares, best first and at most
+ * `most`: a slip (within a third of the word in edits) or a name that opens
+ * with the other. A name far from every one is no slip, and has none.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { nearest } from '@yaks/vocab'
+ * assertEquals(nearest('recipy', ['recipe', 'doc', 'recipes']), [
+ *   'recipe',
+ *   'recipes',
+ * ])
+ * assertEquals(nearest('individual', ['individuals', 'doc']), ['individuals'])
+ * assertEquals(nearest('sandwich', ['recipe', 'doc']), [])
+ * ```
+ */
+export let nearest = (word: string, names: string[], most = 3): string[] => {
+  let w = word.toLowerCase()
+  let opens = (a: string, b: string) => b.length >= 3 && a.startsWith(b)
+  return names.map((name) => {
+    let n = name.toLowerCase()
+    let d = edits(w, n)
+    let near = d <= Math.max(1, Math.floor(w.length / 3)) || opens(w, n) ||
+      opens(n, w)
+    return { name, d, near }
+  }).filter((c) => c.near && c.name != word)
+    .sort((a, b) => a.d - b.d || a.name.localeCompare(b.name))
+    .slice(0, most).map((c) => c.name)
+}
+
+// The words a write says beside its components, which a read never selects:
+// what each is, and what a query reads instead.
+let WRITTEN: Record<string, string> = {
+  $was:
+    "$was guards a write with the hash of a value as it was read, and no row holds one; a query reads a row's history as .updated.at and .created.at",
+}
+
+/**
+ * The refusal for a name nothing in this vocabulary declares, said where a
+ * query named it: the declared names it is closest to, so a slip is fixed in
+ * one more call, or what a write's own word is instead of a component.
+ *
+ * ```ts
+ * import { assertEquals, assertStringIncludes } from '@std/assert'
+ * import { unknownName } from '@yaks/vocab'
+ * assertEquals(
+ *   unknownName('recipy', ['recipe', 'doc']),
+ *   'unknown prop: .recipy (closest declared: .recipe)',
+ * )
+ * assertEquals(unknownName('sandwich', ['recipe']), 'unknown prop: .sandwich')
+ * assertStringIncludes(unknownName('$was', []), '.updated.at and .created.at')
+ * ```
+ */
+export let unknownName = (word: string, names: string[]): string => {
+  let said = `unknown prop: .${word}`
+  if (WRITTEN[word]) return `${said} — ${WRITTEN[word]}`
+  let near = nearest(word, names)
+  return near.length
+    ? `${said} (closest declared: ${near.map((n) => `.${n}`).join(', ')})`
+    : said
+}
+
 /** The refusal for properties a component does not declare: one wording,
  * whether a query or a write named them. */
 export let unknownProps = (v: Vocab, comp: string, props: string[]): string =>
@@ -987,7 +1069,7 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
         if (!own) {
           let at = homes(a)
           if (at.length) throw new Unknown(a, unqualified(a, at))
-          if (b != null || !facet) throw new Unknown(a)
+          if (b != null || !facet) throw new Unknown(a, unknownName(a, names))
           out.push({ comp: a, prop: '' })
           continue
         }

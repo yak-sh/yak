@@ -52,4 +52,9 @@ test('a refusal says where the current answer is', async () => {
   assert(out.isError)
   equal(said, 'graph_schema reports what this graph declares.')
   assert(text(out).endsWith(`. ${said}`), text(out))
+  // A name no component declares points there too, in the text of a tool
+  // whose own output schema leaves a refusal no structured content.
+  let read = text((await saidBy('graph_query', { q: '.bok.colour=red' })).out)
+  assertStringIncludes(read, '(closest declared: .book)')
+  assert(read.endsWith(`. ${said}`), read)
 })

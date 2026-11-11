@@ -487,6 +487,18 @@ test('a read with no app composes every app the caller can reach', async () => {
       Error,
       'unknown prop',
     )
+    // A slip names the word it is closest to, and the app's own words say
+    // what the app declares.
+    let refused = (args: Record<string, unknown>) =>
+      agent.tool('graph_query', args).then(() => '', (e: Error) => e.message)
+    assertStringIncludes(
+      await refused({ q: '.recipy' }),
+      '(closest declared: .recipe)',
+    )
+    assertStringIncludes(
+      await refused({ q: '.sandwich', app: 'lending' }),
+      "the app's vocab.json does not declare it (it declares .loan)",
+    )
     // Search with no app merges the ranked hits of every app.
     let found = JSON.parse(
       await agent.tool('search', { text: 'lemon' }),

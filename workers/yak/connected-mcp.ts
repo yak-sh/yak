@@ -19,6 +19,8 @@ let commands = (ctx: Ctx, asking?: Calling) =>
     signIn: url(ctx.env, '/manage/connections'),
     machine: async (space) =>
       (await import('./tunnel.ts')).machine(ctx.env, space, ctx.person, asking),
+    owned: async () =>
+      (await ctx.dir.seats(ctx.person, 'owner')).map((s) => s.space.slug),
   })
 
 export let listConnectedCommands = (ctx: Ctx, said = '', asking?: Calling) =>

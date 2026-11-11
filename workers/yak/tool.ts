@@ -182,6 +182,48 @@ export type Tool = {
  */
 export let refuse = (code: string, text: string) => new CallError(code, text)
 
+// A list a refusal names the caller's next choice from.
+let listed = (names: string[]) => [...names].sort().join(', ')
+
+/** The refusal of a space the caller holds no seat in, naming the spaces they
+ * do, so the next call names one of them. It says nothing of the space they
+ * named, so a stranger learns no more than before. */
+export let notMember = async (
+  ctx: Pick<Ctx, 'dir' | 'person'>,
+  space: Space,
+) => {
+  let mine = ctx.person ? await ctx.dir.seats(ctx.person) : []
+  return refuse(
+    'access',
+    `not a member of ${space.slug} — ${
+      mine.length
+        ? `your spaces are ${listed(mine.map((s) => s.space.slug))}`
+        : 'you are a member of no space yet'
+    }`,
+  )
+}
+
+/** The refusal of an app a space does not hold, naming the ones it does. Said
+ * only to a member: the caller's seat is admitted first. `apps` is the
+ * space's apps where the caller read them already. */
+export let noApp = async (
+  ctx: Pick<Ctx, 'dir'>,
+  space: Space,
+  slug: unknown,
+  apps?: App[],
+) => {
+  let held = (apps ?? await ctx.dir.apps(space))
+    .filter((a) => a.space == space.eid && !a.trashed).map((a) => a.slug)
+  return refuse(
+    'missing',
+    `no app ${slug} in ${space.slug} — ${
+      held.length
+        ? `its apps are ${listed(held)}`
+        : 'it has no apps yet; app_new makes one'
+    }`,
+  )
+}
+
 // The code a store's refusal carries, by its status; a 4xx not named here is
 // something malformed in what was asked.
 let STATUS: Record<number, string> = {
@@ -434,7 +476,7 @@ let callerIn = async (
       : seat ?? null,
   )
   if (administrative ?? (over && await admin(ctx))) who.administrative = true
-  if (!who.role) throw refuse('access', `not a member of ${space.slug}`)
+  if (!who.role) throw await notMember(ctx, space)
   if (write && !writes(who.role)) {
     throw refuse('access', `not a writer of ${space.slug}`)
   }
@@ -577,7 +619,7 @@ export let spaceBin = (ctx: Ctx, args: Args) =>
 export let seatIn = async (ctx: Ctx, slug: string) => {
   let space = await named(ctx, slug)
   let role = await ctx.dir.role(space, ctx.person)
-  if (!role) throw refuse('access', `not a member of ${space.slug}`)
+  if (!role) throw await notMember(ctx, space)
   return [{ space, role }]
 }
 
@@ -631,11 +673,12 @@ let reached = async (
         page?.administrative,
       )
       if (!app || app.space != space.eid) {
-        throw refuse(
-          'missing',
-          `no app ${slug} in ${space.slug}` +
-            (trash ? ' — use the app eid from app_list for a deleted app' : ''),
-        )
+        throw trash
+          ? refuse(
+            'missing',
+            `no app ${slug} in ${space.slug} — use the app eid from app_list for a deleted app`,
+          )
+          : await noApp(scope, space, slug)
       }
       awake(space, trash ? undefined : app)
       admitted(ctx, space, who, page?.roster)

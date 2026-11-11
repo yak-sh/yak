@@ -343,6 +343,7 @@ import {
   inApp,
   inBin,
   inSpace,
+  noApp,
   type Out,
   owner,
   owns,
@@ -5161,7 +5162,7 @@ let OURS: Row[] = [
       let whole = listing.apps.filter((a) => held.has(a.space))
       let every = named == null ? whole : whole.filter((a) => a.slug == named)
       if (named != null && !every.length) {
-        throw refuse('missing', `no app ${named} in ${seats[0]!.space.slug}`)
+        throw await noApp(ctx, seats[0]!.space, named, listing.apps)
       }
       let naming = named != null ||
         (args.people != null && flag(args.people, 'people'))
@@ -6284,9 +6285,7 @@ let OURS: Row[] = [
       let app = args.app == null
         ? null
         : await ctx.dir.app(space, text(args.app, 'app'))
-      if (args.app != null && !app) {
-        throw refuse('missing', `no app ${args.app} in ${space.slug}`)
-      }
+      if (args.app != null && !app) throw await noApp(ctx, space, args.app)
       let to = app ? app.eid : space.eid
       // Where they stand here, and whether one more letter may go, asked
       // together. Somebody the platform has never seen stands nowhere, so
@@ -6422,9 +6421,7 @@ let OURS: Row[] = [
       let app = args.app == null
         ? null
         : await ctx.dir.app(space, text(args.app, 'app'))
-      if (args.app != null && !app) {
-        throw refuse('missing', `no app ${args.app} in ${space.slug}`)
-      }
+      if (args.app != null && !app) throw await noApp(ctx, space, args.app)
       // An invitation not yet accepted is withdrawn the same way: the row
       // goes, and the letter's link opens onto nothing (invite.ts).
       let pending = person &&
