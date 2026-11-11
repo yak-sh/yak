@@ -137,6 +137,7 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.x<-1.5', and(lt('x', '-1.5'))],
   // rankings and directives
   ['.order=hot', and(order('hot'))],
+  ['.order[last]=-doc.title', and(order('-doc.title', true))],
   ['.near=T-3', and(near('T-3'))],
   ['.refs=T-3', and(refs('T-3'))],
   ['!refs', and(refs(''))],
@@ -384,7 +385,8 @@ test('list of ranges', () => {
 refused([
   ['.status[<=3]=open', 'no qualifier'],
   ['.doc[x]', 'no qualifier'],
-  ['.order[k=v]=hot', 'no qualifier'],
+  ['.order[k=v]=doc.title', 'the one qualifier .order takes is last'],
+  ['.order[last]=hot', 'a ranking has no empty values'],
   ['.requires[<=0]->X', 'at least one'],
   ['.requires[<=]->X', 'one depth cap'],
   ['.requires[3]->X', 'one depth cap'],

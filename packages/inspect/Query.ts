@@ -3,9 +3,11 @@
  * columns are the components the rows share, each cell what that component
  * holds, a page at a time (unless the line names its own window) with how
  * many there are in all; a press on a row picks it, and a press on a heading
- * has the graph run the rows by the property that column shows first. The
- * order is the line's own `.order=`, so the page's address keeps it through a
- * reload or a shared link. An aggregate shows as what it counts: a number, or
+ * has the graph run the rows by the property that column shows first, the
+ * rows with no value last either way. The order is the line's own
+ * `.order[last]=`, so the page's address keeps it through a reload or a
+ * shared link; a line typed with a plain `.order=` runs as it was written
+ * until a heading is pressed. An aggregate shows as what it counts: a number, or
  * each value beside how many hold it.
  *
  * @module
@@ -14,9 +16,11 @@
 import { h, type JSX } from 'preact'
 import {
   conjoin,
-  orderOf,
+  type Order,
+  order as ordered,
   parse,
   type Query,
+  stringify,
   tokens,
   windowOf,
 } from '@yaks/query'
@@ -85,19 +89,19 @@ export let leads = (rows: Bundle[], name: string): string | undefined => {
 }
 
 /**
- * A query line run by `order` in place of any order it names, or as it comes
- * without one.
+ * A query line run by `order` in place of any order it names, the rows with no
+ * value last, or as it comes without one.
  *
  * ```ts
  * import { runBy } from './Query.ts'
- * runBy('.task .order=doc.title', '-task.status') // '.task&.order=-task.status'
- * runBy('.a|.b&.order=x') // '.a | .b'
+ * runBy('.task .order=doc.title', '-task.status') // '.task&.order[last]=-task.status'
+ * runBy('.a|.b&.order[last]=x') // '.a | .b'
  * ```
  */
 export let runBy = (text: string, order?: string): string =>
   conjoin(
-    tokens(text).filter((t) => !t.startsWith('.order=')).join(' '),
-    order ? `.order=${order}` : '',
+    tokens(text).filter((t) => !/^\.order[=[]/.test(t)).join(' '),
+    order ? stringify(ordered(order, true)) : '',
   )
 
 // What a component holds, in a cell: its first few values that are there,
@@ -159,11 +163,15 @@ let Tallied = ({ io, id, tally }: {
 let Answered = ({ io, text, ast }: { io: Io; text: string; ast: Query }) => {
   let id = key('query', text)
   let own = windowOf(ast).limit != null
-  let order = orderOf(ast)
+  let run = ast.clauses.find((c): c is Order => c.kind == 'order')
+  let order = run?.value
   let base = runBy(text)
   let got = io.ask(
     own ? { rows: { query: whole(text), typed: true } } : {
-      rows: { query: whole(paged(io, id, base, { order })), typed: true },
+      rows: {
+        query: whole(paged(io, id, base, { order, last: run?.last })),
+        typed: true,
+      },
       total: { query: conjoin(base, '.count'), once: true, typed: true },
     },
   )

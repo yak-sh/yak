@@ -4058,8 +4058,8 @@ let halved = (ast: And, ctx: Ctx): Frag | undefined => {
 // (`.content.body~=`), run on each of them. Read as two halves, the rows
 // holding a value walk the property's index in its order, so SQLite sorts
 // only each run of equal values by the rest and stops at the page; the rows
-// without one, which sort first ascending and last descending, are read only
-// where the other half cannot fill the page. At most twice the page is then
+// without one, which sort first ascending and last descending or with
+// `[last]`, are read only where the other half cannot fill the page. At most twice the page is then
 // put in order. A filter another index seeks, or a needle few rows hold,
 // already bounds what is sorted. A bound on the ordered property instead
 // narrows the same walk, which still stops at the page.
@@ -4180,7 +4180,7 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
     op: '=',
     value: { kind: 'scalar', raw: '' },
   }
-  let [first, rest]: [Ctx['walk'], Pred[]][] = desc
+  let [first, rest]: [Ctx['walk'], Pred[]][] = desc || order.last
     ? [[{ comp, index }, [holding]], [null, [lacking]]]
     : [[null, [lacking]], [{ comp, index }, [holding]]]
   // A backlink page walks the index only for an entity with many referrers
@@ -4498,7 +4498,7 @@ let lower = (
   // ordering by a property no filter mentions is what pulls its table in, and a
   // join list taken any earlier would not have it.
   let order = find<Order>(cs, 'order')
-  let sort = order ? sortOf(ctx, order.value) : null
+  let sort = order ? sortOf(ctx, order) : null
   // Shape selection happens below, after ordinary sort hooks have resolved.
   // Registered rankers may decline number order; a claimed rank retains its
   // own path, without moving the hook before this query's clauses compile.
@@ -4528,7 +4528,13 @@ let lower = (
         : 'this store does not number its entities',
     )
   }
-  let ordered = sort ? [`${sort.row}${sort.desc ? ' desc' : ''}`] : []
+  // SQLite reads `nulls last` ascending from the same index in two passes,
+  // the valued rows and then the NULLs, so the order still stops at a page.
+  let ordered = sort
+    ? [
+      `${sort.row}${sort.desc ? ' desc' : sort.last ? ' nulls last' : ''}`,
+    ]
+    : []
   // A window is newest first, which is what makes taking a prefix meaningful
   // and lets a `.after` cursor continue it. A complete result is oldest first:
   // it is not a page of anything, and the order the rows were written in is the
@@ -5864,13 +5870,17 @@ let visible = (
 // the ranks can express it — and routes to a property when no extension claims
 // it. (An in-memory matcher would sort these in JavaScript; compiling them into
 // the statement is what this representation adds.)
+//
+// `last` (`.order[last]=`) puts the rows with no value after the rest either
+// way. Descending already does, so it changes only an ascending order.
 type Sort = {
   row: string
   at: (owner: string) => string
   desc: boolean
+  last: boolean
   ranked?: boolean
 }
-let sortOf = (ctx: Ctx, value: string): Sort => {
+let sortOf = (ctx: Ctx, { value, last }: Order): Sort => {
   let desc = value.startsWith('-')
   let field = desc ? value.slice(1) : value
   let rank = ranked(ctx, field)
@@ -5879,11 +5889,17 @@ let sortOf = (ctx: Ctx, value: string): Sort => {
       row: rank,
       at: (o) => ranked(ctx, field, o)!,
       desc,
+      last: desc,
       ranked: true,
     }
   }
   let row = resolveField(ctx, field).expr
-  return { row, at: (o) => resolveField(ctx, field, o).expr, desc }
+  return {
+    row,
+    at: (o) => resolveField(ctx, field, o).expr,
+    desc,
+    last: desc || !!last,
+  }
 }
 
 let ranked = (ctx: Ctx, field: string, owner?: string): string | null => {
@@ -5934,8 +5950,10 @@ let atAnchor = (sort: Sort, owner: Frag): Frag => {
 // past the anchor's own place in it, with the spine breaking ties
 // (descending, so that an unordered window still reads newest first). Absent
 // values sort first when ascending — SQLite puts NULLs first, and @yaks/match
-// does the same — and comparing anything to NULL yields NULL rather than a
-// boolean, so each null case is written out.
+// does the same — unless the order puts them last (`.order[last]=`, and every
+// descending order), where a row with no value is past any anchor with one.
+// Comparing anything to NULL yields NULL rather than a boolean, so each null
+// case is written out.
 //
 // The fallbacks follow from the keyset rather than being special cases: an
 // anchor that no longer matches the query still has an order value to page
@@ -5981,9 +5999,10 @@ let keyset = (
 // Past the anchor in an explicit order: its value first, the tie after.
 let past = (sort: Sort, a: Frag, exists: Frag, tie: Frag): Frag => {
   let v = sort.row
-  let beyond = sort.desc
-    ? spliced(`(${v} is null and `, a, ` is not null) or ${v} < `, a)
-    : spliced('(', a, ` is null and ${v} is not null) or ${v} > `, a)
+  let to = sort.desc ? '<' : '>'
+  let beyond = sort.last
+    ? spliced(`(${v} is null and `, a, ` is not null) or ${v} ${to} `, a)
+    : spliced('(', a, ` is null and ${v} is not null) or ${v} ${to} `, a)
   return spliced(
     '(not ',
     exists,

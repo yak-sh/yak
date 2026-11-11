@@ -128,9 +128,15 @@ let one = (c: Clause): string => {
       return pred(c)
     case 'text':
       return word(c.value)
-    case 'order':
+    case 'order': {
+      // The leading `-` is the order's own: descending, never part of a value.
+      let down = c.value.startsWith('-') ? '-' : ''
+      return `.order${c.last ? '[last]' : ''}=${down}${
+        plain(c.value.slice(down.length))
+      }`
+    }
     case 'near':
-      return `.${c.kind}=${plain(c.value)}`
+      return `.near=${plain(c.value)}`
     case 'refs':
       return c.op == '!'
         ? '.refs'

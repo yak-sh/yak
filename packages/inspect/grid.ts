@@ -26,7 +26,7 @@
  */
 
 import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
-import { conjoin } from '@yaks/query'
+import { conjoin, order as ordered, stringify } from '@yaks/query'
 import { Pager, Table } from '@yaks/ui'
 import { sortRows, type SortValue } from '@yaks/ux'
 import type { Bundle, Io } from './host.ts'
@@ -121,26 +121,32 @@ export let unfold = (
 
 /**
  * The line for the page of `base`'s rows the table `id` shows: run by its
- * order (or `order`, when the table names none), after the last row of the
- * page before, `size` of them.
+ * order (or `order`, when the table names none, with no value `last` when
+ * asked), after the last row of the page before, `size` of them.
  *
  * ```ts
  * import { paged } from './grid.ts'
  * let io = { state: () => ({ entity: { eid: 't' }, table: { order: '-task.status', after: ['e9'] } }) }
  * paged(io, 't', '.task') // '.task&.order=-task.status&.after=e9&.limit=50'
+ * paged({ state: () => undefined }, 't', '.task', { order: 'doc.title', last: true })
+ * // '.task&.order[last]=doc.title&.limit=50'
  * ```
  */
 export let paged = (
   io: Pick<Io, 'state'>,
   id: string,
   base: string,
-  { order, size = SIZE }: { order?: string; size?: number } = {},
+  { order, last, size = SIZE }: {
+    order?: string
+    last?: boolean
+    size?: number
+  } = {},
 ): string => {
   let g = grid(io, id)
   let by = g.order || order
   return conjoin(
     base,
-    by ? `.order=${by}` : '',
+    by ? stringify(ordered(by, !g.order && !!last)) : '',
     g.after?.length ? `.after=${g.after.at(-1)}` : '',
     `.limit=${size}`,
   )

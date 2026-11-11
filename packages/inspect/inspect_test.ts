@@ -513,23 +513,25 @@ test("a query's heading sends its page to the line run by that column, the addre
     await p.fire(heading('doc').querySelector('button')!, 'click')
     return t.went.at(-1)
   }
-  assertEquals(
-    await press('.task'),
-    `/${querySearch('.task&.order=doc.title')}`,
-  )
-  assertEquals(
-    await press('.task&.order=doc.title'),
-    `/${querySearch('.task&.order=-doc.title')}`,
-  )
-  assertEquals(
-    await press('.task&.order=-doc.title'),
-    `/${querySearch('.task')}`,
-  )
-  let { t, p, heading } = page('.task&.order=-doc.title')
-  using _ = p
-  assertEquals(heading('doc').getAttribute('aria-sort'), 'descending')
-  assert(t.asked.includes('.task&.order=-doc.title&.limit=50&*'))
-  assert(t.asked.includes('.task&.count'))
+  let presses = [
+    ['.task', '.task&.order[last]=doc.title'],
+    ['.task&.order[last]=doc.title', '.task&.order[last]=-doc.title'],
+    ['.task&.order[last]=-doc.title', '.task'],
+    // a line typed without the form runs as written, until a press
+    ['.task&.order=doc.title', '.task&.order[last]=-doc.title'],
+  ]
+  for (let [from, to] of presses) {
+    assertEquals(await press(from), `/${querySearch(to)}`, from)
+  }
+  for (
+    let line of ['.task&.order[last]=-doc.title', '.task&.order=-doc.title']
+  ) {
+    let { t, p, heading } = page(line)
+    using _ = p
+    assertEquals(heading('doc').getAttribute('aria-sort'), 'descending')
+    assert(t.asked.includes(`${line}&.limit=50&*`), line)
+    assert(t.asked.includes('.task&.count'))
+  }
 })
 
 test('a tally sorts by its values or its counts, an empty value last', async () => {

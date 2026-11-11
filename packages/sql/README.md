@@ -792,7 +792,9 @@ equal(
 ```
 
 `.after` reads the anchor's order value even if it no longer matches the
-filters. NULL sorts first ascending and last descending; ties include NULL
+filters. NULL sorts first ascending and last descending; `.order[last]=` asks
+for `nulls last` ascending too, which SQLite still reads from the property's
+index, and a page past the last valued row reaches the NULLs. Ties include NULL
 values. With explicit ordering, a missing anchor starts at the first page.
 Numeric cursors require a vocabulary declaring `entity.num`; an eid cursor also
 works without numbering.

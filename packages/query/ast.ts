@@ -59,7 +59,10 @@ export type Never = { kind: 'never' }
 // rank, project, aggregate or bound the answer rather than filter it. Each
 // carries only its raw tokens; a directive's path is raw segments, like a
 // predicate's.
-export type Order = { kind: 'order'; value: string }
+// `last` puts an entity with no value for the ordered property after every
+// one with a value, whichever way it is ordered (`.order[last]=doc.title`).
+// Without it an ascending order puts them first, as SQL does.
+export type Order = { kind: 'order'; value: string; last?: true }
 export type Near = { kind: 'near'; value: string }
 // `.refs=X` backlinks of X, `.refs` references anything, `!refs` references
 // nothing (op '=' with an empty value). A reserved name, but a filter.
@@ -293,7 +296,11 @@ export let compares = (p: Pred): boolean =>
 export let and = (...clauses: Clause[]): And => ({ kind: 'and', clauses })
 export let or = (...clauses: Clause[]): Or => ({ kind: 'or', clauses })
 
-export let order = (value: string): Order => ({ kind: 'order', value })
+export let order = (value: string, last = false): Order => ({
+  kind: 'order',
+  value,
+  ...last ? { last: true as const } : {},
+})
 export let near = (value: string): Near => ({ kind: 'near', value })
 export let refs = (value = ''): Refs => ({ kind: 'refs', op: '=', value })
 export let hasRefs = (): Refs => ({ kind: 'refs', op: '!', value: '' })

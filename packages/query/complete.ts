@@ -382,7 +382,11 @@ let value = (
 
 let SEG = '[A-Za-z_]+(?:-[A-Za-z_]+)*'
 let DOTTED = `${SEG}(?:\\.${SEG})*`
-let VALUE = new RegExp(`^\\.?(${DOTTED})(!=|~=|<=|>=|<|>|=)(.*)$`, 's')
+// A bracket on the path (`.order[last]=`) stays as typed before the value.
+let VALUE = new RegExp(
+  `^\\.?(${DOTTED})(?:\\[[^\\]]*\\])?(!=|~=|<=|>=|<|>|=)(.*)$`,
+  's',
+)
 let HALF = new RegExp(`^\\.${DOTTED}([!~])$`)
 let PATH = new RegExp(`^([.!?])((?:${SEG}\\.)*[A-Za-z_-]*)$`)
 

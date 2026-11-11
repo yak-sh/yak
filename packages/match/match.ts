@@ -287,8 +287,10 @@ let said = (f: Field) => (b: Bundle, among: Index): unknown => {
 // The sort a query asks for, or null to keep the order given. An explicit
 // `.order` survives a window — a window sets how much of a sequence to return,
 // never which sequence — and the entity number breaks its ties, so the order is
-// total and a page cut here holds the rows a page cut in SQL holds. A window
-// with no `.order` is that tiebreak alone: newest first.
+// total and a page cut here holds the rows a page cut in SQL holds.
+// `.order[last]=` puts an absent value last either way, as SQL's `nulls last`;
+// without it descending reverses the whole property order, absent first
+// ascending. A window with no `.order` is that tiebreak alone: newest first.
 let sorter = (
   ctx: Ctx,
   cs: Clause[],
@@ -301,6 +303,7 @@ let sorter = (
     return () => null
   }
   let desc = order?.value.startsWith('-') ?? false
+  let last = !!order?.last
   let read = order && field(ctx, desc ? order.value.slice(1) : order.value).read
   return (among) => {
     let place = new Map(among.list.map((b, i) => [b.entity.eid, i]))
@@ -310,13 +313,13 @@ let sorter = (
         : -compare(a.entity.num ?? null, b.entity.num ?? null)) ||
       (ctx.storageOrder && !order ? 1 : -1) *
         ((place.get(a.entity.eid) ?? 0) - (place.get(b.entity.eid) ?? 0))
-    return read
-      ? (a, b) =>
-        (desc ? -1 : 1) * compare(read(a, among), read(b, among)) ||
-        newest(a, b)
-      : windowed
-      ? newest
-      : null
+    let by = read && ((a: Bundle, b: Bundle) => {
+      let x = read(a, among), y = read(b, among)
+      return last && (x == null || y == null)
+        ? Number(x == null) - Number(y == null)
+        : (desc ? -1 : 1) * compare(x, y)
+    })
+    return by ? (a, b) => by(a, b) || newest(a, b) : windowed ? newest : null
   }
 }
 

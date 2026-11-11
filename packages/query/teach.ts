@@ -39,7 +39,9 @@ export let DIRECTIVES: Taught[] = [
     spell: '.order=',
     word: 'rank',
     means: 'the order the answer comes in: a property, - first for ' +
-      'descending (.order=-created.at), or a ranking (hot, search, similar)',
+      'descending (.order=-created.at), or a ranking (hot, search, similar); ' +
+      'ascending puts entities with no value first, and .order[last]= puts ' +
+      'them last either way',
   },
   { spell: '.near=', word: 'rank', means: 'the entity whose likeness ranks' },
   {

@@ -303,6 +303,7 @@ reserved name too, but it selects by references and is not a directive.
 | Written                        | Requested answer                                                                |
 | ------------------------------ | ------------------------------------------------------------------------------- |
 | `.order=hot`                   | order by a ranking or a property path (`-created.at` descends)                  |
+| `.order[last]=doc.title`       | order by a property, the entities with no value last either way                 |
 | `.near=42`                     | similarity ranking relative to one entity                                       |
 | `.refs=42` / `.refs` / `!refs` | references to 42 / any references / no references                               |
 | `.count`                       | number of matches                                                               |
@@ -320,6 +321,23 @@ and locates the entity named by `.after` in the requested order. `cursor()`
 recognizes entity numbers and human ids; other nonempty `.after` values become
 eids. An aggregate uses every match and ignores `.order`, `.limit`, and
 `.after`, which shape entity lists.
+
+An entity with no value for the ordered property sorts first ascending and last
+descending, as SQL's `ORDER BY` puts NULL. The `[last]` qualifier puts it last
+either way, so a column of titles ends with the entities that have none, and a
+`.after` page past the last titled one reaches them. A ranking leaves nothing
+without a value and refuses the qualifier.
+
+```ts
+import { order, parse, stringify } from '@yaks/query'
+import { equal } from '@yaks/testing'
+
+equal(parse('.order[last]=-doc.title').clauses, [order('-doc.title', true)])
+equal(
+  stringify(parse('.task .order[last]=-doc.title')),
+  '.task&.order[last]=-doc.title',
+)
+```
 
 A component with no properties is a **marker**. A direct marker selection such
 as `.fields=doc.title,native` carries `native{}` where present, while keeping

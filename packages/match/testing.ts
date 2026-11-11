@@ -307,6 +307,15 @@ export let QUERIES: string[] = [
   '.kind=book&.order=-book.released&.limit=2&.after=5',
   '.kind=review&.order=review.book.book.price&.limit=1&.after=r2',
   '.kind=book&.order=-book.author.doc.title&.limit=2&.after=3',
+  // `[last]`: the absent values come last either way, and a page past the
+  // last dated book (b1) reaches the undated one
+  '.kind=book&.order[last]=book.released',
+  '.kind=book&.order[last]=-book.released',
+  '.kind=book&.order[last]=book.released&.limit=2',
+  '.kind=book&.order[last]=book.released&.limit=2&.after=b1',
+  '.kind=book&.order[last]=book.released&.after=b4',
+  '.kind=book&.order[last]=-book.released&.limit=2&.after=b2',
+  '.order[last]=book.price&.limit=3&.after=2',
   // an anchor with no value for the ordered property pages by its num alone
   '.order=book.price&.limit=3&.after=2',
   // an anchor outside the selection still names a place in the order

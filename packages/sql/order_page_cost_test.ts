@@ -178,6 +178,21 @@ let pages: [string, string, string[]][] = [
     'row-3000',
     'row-50',
   ]],
+  [
+    '[last]: oldest first, an empty value before none',
+    '.entry .order[last]=created.at .limit=3',
+    ['row-3001', 'row-1', 'row-2'],
+  ],
+  [
+    '[last]: oldest first, without a value last',
+    '.comment .order[last]=created.at .limit=3',
+    ['row-50', 'row-3000'],
+  ],
+  [
+    '[last]: past the last value',
+    `.entry .created.at>${at(3995)}|!created .order[last]=created.at .limit=6`,
+    ['row-3996', 'row-3997', 'row-3998', 'row-3999', 'row-4000', 'row-3000'],
+  ],
   ['one rare match', '.entry .content.body~=rare .order=-created.at .limit=3', [
     'row-7',
   ]],
@@ -211,6 +226,7 @@ test('a page in an indexed order stops at the page', () => {
   for (
     let line of [
       '.entry ?created .order=-created.at .limit=3',
+      '.entry .order[last]=created.at .limit=3',
       '.entry .content.body~=common .order=-created.at .limit=3',
       '.entry .content.body~=common .created.at>2026-01-01T00:00:00Z .order=-created.at .limit=3',
       `.entry .content.body~=common .created.at>${

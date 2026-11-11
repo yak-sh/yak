@@ -420,7 +420,8 @@ and `rows()` projects `.fields=review.book.doc.title` the same way. Values sort
 absent first, then numbers, then text — the order SQLite's `ORDER BY` gives over
 the same values — and the entity number breaks ties, so ties are deterministic.
 Ascending property order puts missing values first; descending order reverses
-that property order.
+that property order. `.order[last]=` puts missing values last either way, as
+@yaks/sql's `nulls last`.
 
 `.limit=n` keeps the first n results, and `.limit=0` keeps none. An aggregate in
 `rows()` ignores `.order`, `.limit` and `.after` and counts every match, as

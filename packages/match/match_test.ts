@@ -261,6 +261,15 @@ test('an ordering sorts, with absent values first', () => {
   ])
 })
 
+test('.order[last] puts absent values last either way, and pages to them', () => {
+  let last = (q: string) => sel(`.kind=book&.order[last]=${q}`).join(' ')
+  assertEquals(last('book.released'), 'b2 b3 b1 b4')
+  assertEquals(last('-book.released'), 'b1 b3 b2 b4')
+  // past the last dated book (b1) is the undated one, and past it nothing
+  assertEquals(last('book.released&.after=b1'), 'b4')
+  assertEquals(last('book.released&.after=b4'), '')
+})
+
 test('a window with no order pages newest first', () => {
   assertEquals(sel('.kind=book&.limit=2'), ['b4', 'b3'])
   assertEquals(sel('.kind=book&.after=5'), ['b2', 'b1'])

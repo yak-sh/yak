@@ -235,6 +235,24 @@ let ORDER = '.order takes a property as comp.prop with no leading dot, ' +
   '- first for descending (.order=-created.at, .order=entity.num), ' +
   'or a ranking (hot; search with words; similar with .near)'
 
+// The order's one qualifier, `[last]`: an entity with no value for the
+// property comes after every one with a value, either way. A ranking leaves no
+// entity without a value, so it takes none.
+let LAST = '.order[last]=doc.title puts the entities with no title last'
+let last = (token: string, val: string, quals: Qual[]): { last?: true } => {
+  if (!quals.length) return {}
+  let [q, ...more] = quals
+  if (more.length || q.key || q.op || q.value != 'last') {
+    throw new SyntaxError(
+      `${token}: the one qualifier .order takes is last: ${LAST}`,
+    )
+  }
+  if (!val.includes('.')) {
+    throw new SyntaxError(`${token}: a ranking has no empty values; ${LAST}`)
+  }
+  return { last: true }
+}
+
 // The reserved names whose whole meaning is presence: `.count` counts, `.refs`
 // references anything.
 let PRESENCE: Record<string, Clause> = {
@@ -442,16 +460,16 @@ export let parseDot = (token: string): Clause[] | null => {
       target: val,
     }]
   }
-  // Nothing else takes a qualifier yet.
-  refuse(pathStr, quals, bracket)
-
   // Rankings and the reverse-union: a value or presence, never a filter.
   if (pathStr == 'order' && op == '=') {
     if (!whole(val.replace(/^-/, ''))) {
       throw new SyntaxError(`${token}: ${ORDER}`)
     }
-    return [{ kind: 'order', value: val }]
+    return [{ kind: 'order', value: val, ...last(token, val, quals) }]
   }
+  // Nothing else takes a qualifier yet.
+  refuse(pathStr, quals, bracket)
+
   if (pathStr == 'near' && op == '=') return [{ kind: 'near', value: val }]
   if (pathStr == 'refs') {
     if (op == '=' && !rawValue) throw spelled(token, '!refs')

@@ -51,6 +51,7 @@ roundTrips('walk query', [
 roundTrips('directive query', [
   '.task.status=open&.order=hot&.near=T-3&.limit=50&.after=900',
   '.after=0b5a3d6c-6f1e-4a43-9a5e-1c2d3e4f5a6b',
+  '.order[last]=-doc.title',
   '.distinct=filed.domain',
   '.tally=task.status',
   '.fields=pin.x,pin.z~',

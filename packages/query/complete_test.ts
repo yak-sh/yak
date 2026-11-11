@@ -199,6 +199,7 @@ let has: [string, string, string, string | undefined, Source<Cand[]>?][] = [
     people,
   ],
   ['descending', '.order=-pri', '.order=-task.priority', 'task'],
+  ['empty last', '.order[last]=-pri', '.order[last]=-task.priority', 'task'],
   ['a tally reads a property', '.tally=pin.', '.tally=pin.x', 'pin'],
   ['fields include stored markers', '.fields=pro', '.fields=proposed', 'comp'],
   [

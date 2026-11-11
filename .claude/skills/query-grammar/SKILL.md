@@ -172,7 +172,10 @@ A directive belongs to the whole line wherever it is written.
 | `.edges`            | `.edges[requires]`                          | a retired spelling: it answers as if absent; read edges as rows (`.requires&.edge.from=T-1`)                     |
 
 `.order`, `.limit` and `.after` shape rows, so an aggregate ignores them:
-`.count&.limit=20` counts every match. With no `.order`, a window (`.limit`,
+`.count&.limit=20` counts every match. An ascending `.order` puts the
+entities with no value first, and every app relies on that; `.order[last]=x`
+puts them last either way (the query page's sorted columns), and a `.after`
+page past the last valued row reaches them. With no `.order`, a window (`.limit`,
 `.after`) of a query with words is ranked by `search` (best match first, a
 title that is exactly the words before all); any other window is newest first,
 and a whole answer oldest first. `graph_query` gives a
