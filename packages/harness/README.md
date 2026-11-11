@@ -248,10 +248,11 @@ The default may be routed instead. Each `routes` edge from that row to an
 offering (the `serves` edge of a provider and a model) is one model the default
 may run on, and the router (@yaks/model `route`) chooses among them by the
 plans' newest readings
-(`rate_limit{provider, window, account, used, resets,
-at}`): the offering whose
-plan has the most of its week left. A provider that spends another's plan says
-so (`provider{plan}`): `openai`, signed in with a ChatGPT grant, spends the plan
+(`rate_limit{provider, window, account, model, used, resets,
+at}`): the offering
+whose plan has the most of its week left, or whose plan's limit on its model
+has, where that is less. A provider that spends another's plan says so
+(`provider{plan}`): `openai`, signed in with a ChatGPT grant, spends the plan
 `codex` reports. Every request a native session's provider answers renews the
 readings: Claude Code's stream and the Codex backend's headers say how much of
 the plan is used, and the step that records the reply keeps it. The session's

@@ -7,7 +7,7 @@
  */
 import type { Bundle, Eid } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
-import type { Spend } from './tally.ts'
+import type { Plan, Spend } from './tally.ts'
 
 /** A plan limit, as its `rate_limit` row reads, its provider named. */
 export type Limit = {
@@ -15,7 +15,12 @@ export type Limit = {
   /** the plan's: its account's eid, else, for a reading that named no
    * account, its provider's */
   of: Eid
-  /** what the plan is called: its account's name, else its provider's */
+  /** the model whose requests it meters, where it is a limit on one model
+   * and not on the whole plan */
+  model?: Eid
+  /** what the limit is called: its plan's name (its account's, else its
+   * provider's); a limit on one model, the model's, after its account's
+   * where the provider keeps several */
   name: string
   /** minutes: 10080 a week, 300 five hours */
   window: number
@@ -75,18 +80,37 @@ export let accountNames = (
   )
 }
 
-/** The limits `rate_limit` rows hold, each plan's longest window first, by
- * `names`: the providers' and the accounts'. */
+/**
+ * The limits `rate_limit` rows hold, each plan's longest window first, by
+ * `names`: the providers', the accounts' and the models'.
+ *
+ * ```ts
+ * import { limitsOf } from './window.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let row = (more: object) =>
+ *   ({ entity: { eid: 'r' }, rate_limit: { provider: 'p', account: 'a', window: 10080, ...more } })
+ * let names = new Map([['p', 'claude'], ['a', 'claude'], ['m', 'fable']])
+ * equal(limitsOf([row({ used: 6, model: 'm' }), row({ used: 43 })], names).map((l) => [l.name, l.used]),
+ *   [['claude', 43], ['fable', 6]])
+ * equal(limitsOf([row({ model: 'm' })], new Map([...names, ['a', '.claude-work']]))[0].name,
+ *   '.claude-work fable')
+ * ```
+ */
 export let limitsOf = (rows: Bundle[], names: Map<Eid, string>): Limit[] =>
   rows.flatMap((b): Limit[] => {
     let r = b.rate_limit as Record<string, unknown> | undefined
     if (!r) return []
     let provider = names.get(str(r.provider)) ?? str(r.provider)
     let of = str(r.account ?? r.provider)
+    let plan = names.get(of) ?? provider
+    let model = r.model ? str(r.model) : undefined
+    let called = model && (names.get(model) ?? model)
     return [{
       provider,
       of,
-      name: names.get(of) ?? provider,
+      ...model ? { model } : {},
+      name: !called ? plan : plan == provider ? called : `${plan} ${called}`,
       window: Number(r.window),
       used: Number(r.used ?? 0),
       ...r.resets ? { resets: str(r.resets) } : {},
@@ -173,13 +197,60 @@ export let span = (
   return [week ?? dayOf(Date.parse(`${to}T00:00:00Z`) - 6 * 864e5), to]
 }
 
+/** What a day's requests ran up on a limit, and each session's part of it:
+ * its plan's, or its model's on that plan where it meters one model. */
+export let billedOn = (
+  l: Limit,
+  d: Spend,
+): { dollars: number; sessions: Record<Eid, number> } => {
+  let plan: Plan | undefined = d.plans?.[l.of]
+  return l.model
+    ? {
+      dollars: plan?.models[l.model] ?? 0,
+      sessions: plan?.metered?.[l.model] ?? {},
+    }
+    : { dollars: plan?.dollars ?? 0, sessions: plan?.sessions ?? {} }
+}
+
 /**
- * What a dollar of each plan is worth in its weekly limit: the percent of
- * the week its latest reading says is used, over the dollars its requests
- * ran up at list price from the day the week began to the day of the
- * reading, by the plan's eid (its account's). An estimate: the days are whole UTC days,
- * and the dollars are what the tokens would cost bought one by one. A plan
- * with no reading of this week, or no dollars in it, has none.
+ * What a dollar is worth in each weekly limit: the percent of the week its
+ * latest reading says is used, over the dollars the requests it meters ran up
+ * at list price from the day the week began to the day of the reading. An
+ * estimate: the days are whole UTC days, and the dollars are what the tokens
+ * would cost bought one by one. A limit with no reading of this week, or no
+ * dollars in it, has none.
+ *
+ * ```ts
+ * import { limitRates } from './window.ts'
+ * import { empty } from './tally.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let week = { provider: 'claude', of: 'c', name: 'claude', window: 10080, used: 30,
+ *   resets: '2026-10-27T11:00:00Z', at: '2026-10-21T12:00:00Z' }
+ * let cap = { ...week, name: 'fable', model: 'f', used: 10 }
+ * let day = { ...empty('2026-10-21'), plans: { c: { dollars: 300, parts: {}, sessions: {}, tasks: {},
+ *   models: { f: 50, o: 250 }, entries: {} } } }
+ * let rate = limitRates([week, cap], [day], Date.parse('2026-10-21T13:00:00Z'))
+ * equal([rate.get(week), rate.get(cap)], [0.1, 0.2])
+ * ```
+ */
+export let limitRates = (
+  limits: Limit[],
+  days: Spend[],
+  now: number,
+): Map<Limit, number> =>
+  new Map(limits.flatMap((l): [Limit, number][] => {
+    let dollars = weekDays(l, days, now)?.reduce(
+      (n, d) => n + billedOn(l, d).dollars,
+      0,
+    )
+    return dollars ? [[l, l.used / dollars]] : []
+  }))
+
+/**
+ * What a dollar of each plan is worth in its weekly limit ({@link
+ * limitRates}), by the plan's eid (its account's): the limit on the whole
+ * plan, not one on a model.
  *
  * ```ts
  * import { rates } from './window.ts'
@@ -199,13 +270,10 @@ export let rates = (
   days: Spend[],
   now: number,
 ): Map<Eid, number> =>
-  new Map(limits.flatMap((l): [Eid, number][] => {
-    let dollars = weekDays(l, days, now)?.reduce(
-      (n, d) => n + (d.plans?.[l.of]?.dollars ?? 0),
-      0,
-    )
-    return dollars ? [[l.of, l.used / dollars]] : []
-  }))
+  new Map(
+    [...limitRates(limits.filter((l) => !l.model), days, now)]
+      .map(([l, rate]) => [l.of, rate]),
+  )
 
 // The days a plan's weekly reading counts, where it has a current one.
 let weekDays = (l: Limit, days: Spend[], now: number): Spend[] | undefined => {
@@ -237,11 +305,15 @@ export let unpricedRates = (
   days: Spend[],
   now: number,
 ): Map<Eid, Eid[]> =>
-  new Map(limits.flatMap((l): [Eid, Eid[]][] => {
-    let models = [
-      ...new Set(
-        weekDays(l, days, now)?.flatMap((d) => d.plans?.[l.of]?.unpriced ?? []),
-      ),
-    ]
-    return models.length ? [[l.of, models]] : []
-  }))
+  new Map(
+    limits.filter((l) => !l.model).flatMap((l): [Eid, Eid[]][] => {
+      let models = [
+        ...new Set(
+          weekDays(l, days, now)?.flatMap((d) =>
+            d.plans?.[l.of]?.unpriced ?? []
+          ),
+        ),
+      ]
+      return models.length ? [[l.of, models]] : []
+    }),
+  )

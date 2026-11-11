@@ -125,7 +125,13 @@ export type { CacheContext } from './cache.ts'
 import type { CacheContext } from './cache.ts'
 import type { Affordable } from './afford.ts'
 
-export { accountEid, accountHome, limitEid, limitRows } from './limits.ts'
+export {
+  accountEid,
+  accountHome,
+  limitEid,
+  limitRows,
+  metering,
+} from './limits.ts'
 export type { Limit } from './limits.ts'
 import type { Limit } from './limits.ts'
 export let TOOL = 'tool'

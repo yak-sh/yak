@@ -26,6 +26,8 @@ export type Reading = {
   provider: Eid
   /** minutes: 10080 a week, 300 five hours */
   window: number
+  /** the model whose requests it meters, where it is a limit on one model */
+  model?: Eid
   /** percent used */
   used: number
   resets?: string
@@ -47,20 +49,32 @@ type Rule = (routes: Weighed[], asked: Asked) => Weighed[]
 let span = (window: number) =>
   window == 10080 ? 'week' : window == 300 ? 'five hours' : `${window} min`
 
-// A plan's reading: its longest window's, the newest where accounts differ.
-let reading = (plan: Eid, readings: Reading[]): Reading | undefined =>
-  readings.filter((r) => r.provider == plan && r.window > 0).sort((a, b) =>
-    b.window - a.window || (b.at ?? '').localeCompare(a.at ?? '')
-  )[0]
+// A plan's reading, and its limit's on `model` where it has one: each one's
+// longest window's, the newest where accounts differ.
+let reading = (
+  plan: Eid,
+  readings: Reading[],
+  model?: Eid,
+): Reading | undefined =>
+  readings.filter((r) => r.provider == plan && r.window > 0 && r.model == model)
+    .sort((a, b) =>
+      b.window - a.window || (b.at ?? '').localeCompare(a.at ?? '')
+    )[0]
 
-// The offerings whose plan has a reading, the most usage left first. A window
-// that has reset since its reading is unused.
+// The offerings whose plan has a reading, the most usage left first: what is
+// left of the plan, or of its limit on the offering's model where that is
+// less. A window that has reset since its reading is unused.
 let roomiest: Rule = (routes, { readings, now }) =>
   routes.flatMap((route) => {
-    let r = reading(route.plan, readings)
+    let left = (r: Reading) =>
+      r.resets && Date.parse(r.resets) <= now ? 100 : 100 - r.used
+    let [r] = [
+      reading(route.plan, readings),
+      reading(route.plan, readings, route.model),
+    ].filter((r) => r != null).sort((a, b) => left(a) - left(b))
     if (!r) return []
-    let left = r.resets && Date.parse(r.resets) <= now ? 100 : 100 - r.used
-    return [{ left, route, note: `has ${left}% of its ${span(r.window)} left` }]
+    let note = `has ${left(r)}% of its ${span(r.window)} left`
+    return [{ left: left(r), route, note }]
   }).sort((a, b) => b.left - a.left)
     .map(({ route, note }) => ({ ...route, note }))
 
@@ -77,7 +91,7 @@ let rules: Rule[] = [pinned, roomiest]
  * pinned and no reading of any of their plans.
  *
  * ```ts
- * import { route } from './route.ts'
+ * import { type Reading, route } from './route.ts'
  * import { equal } from '@yaks/testing'
  *
  * let routes = [
@@ -87,7 +101,7 @@ let rules: Rule[] = [pinned, roomiest]
  * let week = (provider: string, used: number, resets = '2026-11-17T00:00:00Z') =>
  *   ({ provider, window: 10080, used, resets })
  * let now = Date.parse('2026-11-11T00:00:00Z')
- * let ask = (readings: ReturnType<typeof week>[]) =>
+ * let ask = (readings: Reading[]) =>
  *   route({ routes, readings, now })
  *
  * equal(ask([week('claude', 84), week('codex', 82)]), {
@@ -100,6 +114,8 @@ let rules: Rule[] = [pinned, roomiest]
  * // A plan nothing has read can't win, and with no reading nothing is chosen.
  * equal(ask([week('claude', 99)])?.why, 'opus has 1% of its week left')
  * equal(ask([]), undefined)
+ * // A limit on one model counts for that model where it leaves less.
+ * equal(ask([week('claude', 40), { ...week('claude', 95), model: 'opus' }, week('codex', 82)])?.model, 'sol')
  * // A pinned offering wins over usage, and needs no reading.
  * let pin = { ...routes[0], pinned: '2026-11-11T00:00:00Z' }
  * equal(route({ routes: [pin, routes[1]], readings: [week('codex', 0)], now }), {

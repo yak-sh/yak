@@ -78,7 +78,7 @@ let plans = async (g: Graph) => {
   let accounts = accountNames(await g.read('.account *'), providers)
   let limits = limitsOf(
     await g.read('.rate_limit *'),
-    new Map([...providers, ...accounts]),
+    new Map([...await names(g, 'model'), ...providers, ...accounts]),
   )
   return { limits, accounts }
 }

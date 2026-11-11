@@ -56,6 +56,7 @@ import {
   type Limit,
   limitRows,
   message,
+  metering,
   MODEL,
   type Model,
   ModelError,
@@ -503,12 +504,21 @@ let failing = (
   ...e.response && g.vocab.comp(RESPONSE) ? { [RESPONSE]: e.response } : {},
 })
 
-// The plan limits a provider answered with, as the rows that keep each
-// window's latest reading, read now, where this graph keeps them. A
-// provider's row is written only where it is missing.
-let readings = async (g: Graph, limits?: Limit[]): Promise<Bundle[]> => {
+// The plan limits a provider answered `ask` with, as the rows that keep each
+// window's latest reading, read now, where this graph keeps them: a limit on
+// one model is the model's the ask was sent to. A provider's row is written
+// only where it is missing.
+let readings = async (
+  g: Graph,
+  ask: Bundle,
+  limits?: Limit[],
+): Promise<Bundle[]> => {
   if (!limits?.length || !g.vocab.comp('rate_limit')) return []
-  let rows = limitRows(limits, new Date().toISOString())
+  let to = comp(ask, ASK)?.to
+  let rows = limitRows(
+    metering(limits, to ? String(to) : undefined),
+    new Date().toISOString(),
+  )
   let there = new Set(
     (await g.get(
       rows.filter((b) => b.provider).map((b) => b.entity.eid),
@@ -915,7 +925,7 @@ export let react = async (
       finalAsk,
       ...served,
       ...await carried(g, session, sent),
-      ...saved ? [] : await readings(g, reply.limits),
+      ...saved ? [] : await readings(g, ask, reply.limits),
     ]
     let partials = saved
       ? await g.read(`.output.source=${ask.entity.eid}&.stream_item&*`)
@@ -2135,7 +2145,11 @@ export let react = async (
             },
             'Response interrupted: ' + String(e),
           ),
-        ...await readings(g, e instanceof ModelError ? e.limits : undefined),
+        ...await readings(
+          g,
+          ask,
+          e instanceof ModelError ? e.limits : undefined,
+        ),
       ],
       (defect || transportFailure(e)) && !deferring(e)
         ? { error: e, phase }

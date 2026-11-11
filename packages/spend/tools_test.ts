@@ -30,8 +30,8 @@ test('the plans report is each limit against its pace, a line each', async () =>
   await graph.apply([
     { entity: { eid: '$p' }, provider: { name: 'claude' } },
     { entity: { eid: '$a' }, account: { home: '/h/.claude', provider: '$p' } },
-    limit('$week', 10080, 17.4, '2026-11-17T12:00:00Z'),
-    limit('$five', 300, 40, '2026-11-10T14:30:00Z'),
+    limit('week', 10080, 17.4, '2026-11-17T12:00:00Z'),
+    limit('five', 300, 40, '2026-11-10T14:30:00Z'),
   ])
   equal((await report(graph, { plans: true, now })).split('\n'), [
     'claude week: 17% used, 0% of it gone, resets 2026-11-17 12:00 UTC',
@@ -91,9 +91,9 @@ let box = async () => {
     { entity: { eid: '$p' }, provider: { name: 'claude' } },
     { entity: { eid: '$a' }, account: { home: '/h/.claude', provider: '$p' } },
     { entity: { eid: '$b' }, account: { home: '/h/.work', provider: '$p' } },
-    limit('$la', '$a', '2026-11-17T12:00:00Z'),
+    limit('la', '$a', '2026-11-17T12:00:00Z'),
     // read before its week turned: it says when the week began, not its use
-    limit('$lb', '$b', '2026-11-10T12:00:00Z'),
+    limit('lb', '$b', '2026-11-10T12:00:00Z'),
   ])
   let [a, b] = (await graph.read('.account .order=account.home')).map((r) =>
     r.entity.eid

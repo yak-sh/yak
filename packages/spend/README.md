@@ -117,10 +117,13 @@ Q-12 Funnel keeps 7.5% of each plan's week (its 10% less 2.5% given below): clau
   (`session.topic`), else to the topic the session that started it
   (`spawned.parent`) is charged to, up its line however long. A topic with no
   share passes them to the nearest topic above it that has one.
-- On each plan with a weekly limit, the dollars are those of the plan's running
-  week, turned into a part of that week by the plan's rate (`rates`), beside how
-  much of the week is gone (`paceOf`). A plan read before its week turned has no
-  rate, and says so.
+- On each weekly limit, the dollars are those of the limit's running week,
+  turned into a part of that week by the limit's rate (`limitRates`), beside how
+  much of the week is gone (`paceOf`). A limit read before its week turned has
+  no rate, and says so.
+- A plan's limit on one model (`rate_limit{model}`, Claude's weekly cap on
+  Fable) is a limit of its own, under the model's name: it counts that model's
+  requests alone (`billedOn`), at the rate its own reading gives.
 - The last row is the work no share covers, against the part of the week no
   topic was given.
 

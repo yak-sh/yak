@@ -20,6 +20,7 @@ import {
   after,
   current,
   type Limit,
+  limitRates,
   limitsOf,
   paceOf,
   rates,
@@ -54,11 +55,11 @@ let Unpriced = ({ io, models }: { io: Props['io']; models: string[] }) => {
 
 // A plan limit and its pace, on one line.
 let Limits = (
-  { io, limits, now, rate, unpriced }: {
+  { io, limits, now, worth, unpriced }: {
     io: Props['io']
     limits: Limit[]
     now: number
-    rate: Map<string, number>
+    worth: Map<Limit, number>
     unpriced: Map<string, string[]>
   },
 ) =>
@@ -81,7 +82,7 @@ let Limits = (
           let pace = paceOf(l, now)
           return h(
             Row,
-            { key: `${l.of} ${l.window}` },
+            { key: `${l.of} ${l.model ?? ''} ${l.window}` },
             h(
               Cell,
               { mod: 'key' },
@@ -98,16 +99,16 @@ let Limits = (
                   ? `, resets ${l.resets.slice(0, 16).replace('T', ' ')} UTC`
                   : ''
               }`,
-              l.window == 10080 && unpriced.has(l.of)
+              l.window == 10080 && !l.model && unpriced.has(l.of)
                 ? h(
                   Fragment,
                   {},
                   '; 1% of it is ',
                   h(Unpriced, { io, models: unpriced.get(l.of)! }),
                 )
-                : l.window == 10080 && rate.get(l.of)
+                : l.window == 10080 && worth.get(l)
                 ? `; 1% of it is about ${
-                  dollars(1 / rate.get(l.of)!)
+                  dollars(1 / worth.get(l)!)
                 } at list price`
                 : '',
             ),
@@ -401,6 +402,10 @@ export let Page = ({ io, got }: Props): JSX.Element => {
     ]),
   )
   let names = new Map([
+    ...(got.models?.rows ?? []).map((b): [string, string] => [
+      b.entity.eid,
+      String((b.model as { name?: unknown }).name ?? ''),
+    ]),
     ...providers,
     ...accountNames(got.accounts?.rows ?? [], providers),
   ])
@@ -412,6 +417,7 @@ export let Page = ({ io, got }: Props): JSX.Element => {
   let week = merged(within(from, to))
   let before = merged(within(after(from, -7), after(from, -1)))
   let rate = rates(limits, days, now)
+  let worth = limitRates(limits, days, now)
   let unpriced = unpricedRates(limits, days, now)
   return h(
     'article',
@@ -433,7 +439,7 @@ export let Page = ({ io, got }: Props): JSX.Element => {
       ),
     ),
     waiting(got.limits, 'the plan limits') ??
-      h(Limits, { io, limits, now, rate, unpriced }),
+      h(Limits, { io, limits, now, worth, unpriced }),
     waiting(got.days, 'the tallies') ??
       (Object.keys(week.plans).length
         ? h(Accounts, { io, s: week, before, rate, unpriced, names })
@@ -476,6 +482,7 @@ export let inspectViews: View[] = [
       limits: '.rate_limit *',
       providers: '.provider *',
       accounts: '.account *',
+      models: '.model *',
     }),
     Render: Page,
   },

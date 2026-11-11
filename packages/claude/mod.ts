@@ -160,7 +160,9 @@ export let read = async (
     if (frame.type == 'rate_limit_event') {
       let read = metered(frame.rate_limit_info ?? {})
       turn.limits = [
-        ...turn.limits.filter((l) => !read.some((r) => r.window == l.window)),
+        ...turn.limits.filter((l) =>
+          !read.some((r) => r.window == l.window && r.per == l.per)
+        ),
         ...read,
       ]
     }

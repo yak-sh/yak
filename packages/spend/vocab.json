@@ -86,6 +86,13 @@
             "properties": {
               "dollars": { "type": "number" },
               "unpriced": { "type": "array", "items": { "type": "string" } },
+              "metered": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": { "type": "number" }
+                }
+              },
               "parts": {
                 "type": "object",
                 "additionalProperties": { "type": "number" }
@@ -109,7 +116,7 @@
             }
           },
           "stamped": true,
-          "description": "by the account whose plan its requests billed against (a transcript's request the account whose directory keeps it, a native harness's the account its provider's CLI signs in with here; a request paid per token bills none): the dollars they ran up on it, in all and by part, session, task, model and entry. Against that account's weekly limit, its dollars say what share of the week each row used"
+          "description": "by the account whose plan its requests billed against (a transcript's request the account whose directory keeps it, a native harness's the account its provider's CLI signs in with here; a request paid per token bills none): the dollars they ran up on it, in all and by part, session, task, model, entry and (`metered`) each model's by session, which is what a limit on one model counts. Against that account's weekly limit, its dollars say what share of the week each row used"
         },
         "unpriced": {
           "type": "array",

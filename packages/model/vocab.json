@@ -302,7 +302,7 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "description": "how much of a plan limit is used: one row per provider, window and account, holding its latest reading",
+      "description": "how much of a plan limit is used: one row per provider, window, account and, for a limit on one model, model, holding its latest reading",
       "properties": {
         "provider": {
           "type": "string",
@@ -320,6 +320,13 @@
           "type": "string",
           "ref": "account",
           "description": "the account whose plan it is, where the reading came from one: a transcript or a run of that account, its status line, or a native session's request it answered",
+          "identity": true
+        },
+        "model": {
+          "type": "string",
+          "ref": "model",
+          "death": "cascade",
+          "description": "the model whose requests it meters, where it is a limit on one model and not on the whole plan: Claude's weekly cap on Fable",
           "identity": true
         },
         "used": {

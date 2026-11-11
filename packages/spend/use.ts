@@ -13,24 +13,28 @@
 import type { Eid } from '@yaks/graph'
 import { above, holder, kept, type Shares } from '@yaks/topic/share'
 import type { Spend } from './tally.ts'
-import { type Limit, paceOf, rates, weekOf } from './window.ts'
+import { billedOn, limitRates, paceOf, weekOf } from './window.ts'
+import type { Limit } from './window.ts'
 import { dollars, percent } from './words.ts'
 
 /** What says where a session's spend is charged: the topic it was opened
  * on, and the session that started it. */
 export type Line = { topic?: Eid; parent?: Eid }
 
-/** What some work ran up on one plan in the plan's running week. */
+/** What some work ran up against one weekly limit in its running week: a
+ * plan's, or a plan's limit on one model. */
 export type Billed = {
   plan: Eid
-  /** what the plan is called */
+  /** the model the limit meters, where it is a limit on one model */
+  model?: Eid
+  /** what the limit is called */
   name: string
   /** usage at list price, not cash: the plan is a subscription */
   dollars: number
-  /** those dollars as a part of the plan's week, 0 to 1, where the plan has
+  /** those dollars as a part of the limit's week, 0 to 1, where the limit has
    * a reading of this week */
   used?: number
-  /** how much of the plan's week is gone, 0 to 1 */
+  /** how much of the limit's week is gone, 0 to 1 */
   gone: number
 }
 
@@ -84,9 +88,10 @@ export let charged = (shares: Shares, lines: Map<Eid, Line>) =>
 }
 
 /**
- * Each topic's share against what was used of it on each plan with a week, a
- * topic before the topics below it, then the work no share covers. No share,
- * no rows.
+ * Each topic's share against what was used of it on each weekly limit, a
+ * topic before the topics below it, then the work no share covers. A limit
+ * on one model counts that model's requests alone, at its own rate. No
+ * share, no rows.
  *
  * ```ts
  * import { uses } from './use.ts'
@@ -96,19 +101,25 @@ export let charged = (shares: Shares, lines: Map<Eid, Line>) =>
  * let week = { provider: 'claude', of: 'c', name: 'claude', window: 10080, used: 30,
  *   resets: '2026-10-27T12:00:00Z', at: '2026-10-21T12:00:00Z' }
  * let sessions = { head: 100, helper: 50, other: 150 }
- * let day = { ...empty('2026-10-21'),
- *   plans: { c: { dollars: 300, parts: {}, sessions, tasks: {}, models: {}, entries: {} } } }
- * let rows = uses({
+ * let day = { ...empty('2026-10-21'), plans: { c: { dollars: 300, parts: {}, sessions, tasks: {},
+ *   models: { f: 50 }, metered: { f: { head: 10, other: 40 } }, entries: {} } } }
+ * let asked = (limits: typeof week[]) => uses({
  *   shares: { share: new Map([['funnel', 0.25]]), up: new Map() },
  *   lines: new Map([['head', { topic: 'funnel' }], ['helper', { parent: 'head' }]]),
- *   limits: [week],
+ *   limits,
  *   days: [day],
  *   now: Date.parse('2026-10-24T00:00:00Z'),
  * })
  * let plan = { plan: 'c', name: 'claude', gone: 0.5 }
- * equal(rows, [
+ * equal(asked([week]), [
  *   { topic: 'funnel', share: 0.25, keeps: 0.25, depth: 0, plans: [{ ...plan, dollars: 150, used: 0.15 }] },
  *   { share: 0.75, keeps: 0.75, depth: 0, plans: [{ ...plan, dollars: 150, used: 0.15 }] },
+ * ])
+ * // The plan's limit on one model is a limit of its own: that model's dollars, at its rate.
+ * let cap = { ...week, name: 'fable', model: 'f', used: 100 }
+ * equal(asked([week, cap])[0].plans, [
+ *   { ...plan, dollars: 150, used: 0.15 },
+ *   { ...plan, name: 'fable', model: 'f', dollars: 10, used: 0.2 },
  * ])
  * ```
  */
@@ -122,16 +133,15 @@ export let uses = (o: {
   let { shares, limits, days, now } = o
   if (!shares.share.size) return []
   let to = charged(shares, o.lines)
-  let rate = rates(limits, days, now)
-  // Each plan's week, with its dollars by the topic they are charged to.
+  let rate = limitRates(limits, days, now)
+  // Each limit's week, with its dollars by the topic they are charged to.
   let weeks = limits.flatMap((l) => {
     let from = weekOf(l, now)
     if (!from) return []
     let by = new Map<Eid | undefined, number>()
     for (let d of days) {
       if (d.day < from) continue
-      let sessions = d.plans?.[l.of]?.sessions ?? {}
-      for (let [session, n] of Object.entries(sessions)) {
+      for (let [session, n] of Object.entries(billedOn(l, d).sessions)) {
         by.set(to(session), (by.get(to(session)) ?? 0) + n)
       }
     }
@@ -142,9 +152,10 @@ export let uses = (o: {
       let n = by.get(topic) ?? 0
       return {
         plan: l.of,
+        ...l.model ? { model: l.model } : {},
         name: l.name,
         dollars: n,
-        ...rate.has(l.of) ? { used: n * rate.get(l.of)! / 100 } : {},
+        ...rate.has(l) ? { used: n * rate.get(l)! / 100 } : {},
         gone: paceOf(l, now),
       }
     })

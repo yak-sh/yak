@@ -141,7 +141,8 @@ An adapter contains a CLI's command line and the `@yaks/session` reader that
 says what each output line means. Providers and the models they serve remain
 graph entities, so adding a model does not require a package release. The plan
 limits a run's stream reports are kept as readings of the provider row that ran,
-whichever CLI it speaks.
+whichever CLI it speaks, and a limit on one model as the reading of the model
+the run asked.
 
 <a id="the-stand-in"></a>
 
@@ -180,9 +181,10 @@ A run of it takes every step a live run does (the launch, the log, the reader,
 the ending) and spends nothing, so a change to how a run ends is seen live
 without waiting for a plan to run out. `recorded` marks the row as playing
 recordings: its ending is written on the session as any run's is, and no failure
-is reported to the tracker, since the run ended as it was chosen to. The
-package's tests ask for the same rows, over a launch that plays the program in
-place, unmarked where a test checks what a claude run's ending tells.
+is reported to the tracker, since the run ended as it was chosen to; and the
+plan readings in its stream are kept of no plan, since a recording read none.
+The package's tests ask for the same rows, over a launch that plays the program
+in place, unmarked where a test checks what a claude run's ending tells.
 
 An adapter also names the instruction file its provider reads at the root of its
 checkout (`CLAUDE.md`, `AGENTS.md`). Before launching, `start` reads that file

@@ -20,9 +20,11 @@ export {
 } from './tally.ts'
 export {
   after,
+  billedOn,
   current,
   dayOf,
   type Limit,
+  limitRates,
   limitsOf,
   paceOf,
   rates,

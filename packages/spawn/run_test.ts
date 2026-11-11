@@ -306,6 +306,10 @@ test('a run that played a recording says how it ended, and is not told', async (
   ])
 })
 
+test("a recording's plan reading is kept of no plan", async () => {
+  assertEquals((await standin('limit', true))[3], [])
+})
+
 let said = [
   { type: 'assistant', message: { content: [{ type: 'text', text: 'hi' }] } },
   { type: 'result', usage: { output_tokens: 3 } },
@@ -436,7 +440,10 @@ test("the plan limits a run's log reports are kept as its provider's reading for
       type: 'rate_limit_event',
       rate_limit_info: {
         status: 'allowed',
-        unifiedWindows: { seven_day: week },
+        unifiedWindows: {
+          seven_day: week,
+          seven_day_overage_included: { ...week, utilization: 0.06 },
+        },
       },
     },
     said[1],
@@ -447,18 +454,28 @@ test("the plan limits a run's log reports are kept as its provider's reading for
       adapters: { fake: claude },
       env: { CLAUDE_CONFIG_DIR: '/u/.claude-work' },
     })
-    let row = await until(
-      async () => (await g.read('.rate_limit *') as Bundle[])[0],
-      'the reading',
+    let rows = await until(
+      async () => {
+        let rows = await g.read('.rate_limit *') as Bundle[]
+        return rows.length > 1 ? rows : undefined
+      },
+      'the readings',
     )
-    assertEquals(row?.rate_limit, {
+    let kept = {
       provider: FAKE.provider,
       account: accountEid('/u/.claude-work'),
       window: 10080,
-      used: 82,
       resets: '2026-11-17T11:00:00.000Z',
       at,
-    })
+    }
+    let model = (await asked(g, 'S1'))?.ask.to
+    // The plan's week, and beside it its limit on the model the run asked.
+    assertEquals(
+      rows!.map((r) => comp(r, 'rate_limit')).sort((a, b) =>
+        Number(b.used) - Number(a.used)
+      ),
+      [{ ...kept, used: 82 }, { ...kept, used: 6, model }],
+    )
   } finally {
     close()
   }

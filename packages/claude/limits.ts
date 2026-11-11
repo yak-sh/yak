@@ -4,8 +4,14 @@
 
 import type { Limit } from '@yaks/model'
 
-// Claude's plan windows a reading is kept of, in minutes.
-let WINDOWS: Record<string, number> = { five_hour: 300, seven_day: 10080 }
+// Claude's plan windows a reading is kept of, in minutes. The week has a
+// second limit, `seven_day_overage_included`, which only a Fable request's
+// stream reports: the plan's weekly cap on that model.
+let WINDOWS: Record<string, Pick<Limit, 'window' | 'per'>> = {
+  five_hour: { window: 300 },
+  seven_day: { window: 10080 },
+  seven_day_overage_included: { window: 10080, per: 'model' },
+}
 
 type Info = Record<string, unknown>
 let obj = (v: unknown): Info =>
@@ -34,6 +40,11 @@ let count = (v: unknown): number | undefined => {
  *   { provider: 'claude', window: 300, used: 90 },
  * ])
  * equal(metered({ status: 'allowed', rateLimitType: 'five_hour' }), [])
+ * // The model's own weekly cap is a second limit beside the week.
+ * let cap = { utilization: 0.06, resetsAt: 1794913200 }
+ * equal(metered({ unifiedWindows: { seven_day: week, seven_day_overage_included: cap } })[1], {
+ *   provider: 'claude', window: 10080, per: 'model', used: 6, resets: '2026-11-17T11:00:00.000Z',
+ * })
  * ```
  */
 export let metered = (info: Info): Limit[] => {
@@ -41,11 +52,11 @@ export let metered = (info: Info): Limit[] => {
   let windows = Object.keys(each).length
     ? each
     : { [String(info.rateLimitType ?? '')]: info }
-  return Object.entries(WINDOWS).flatMap(([name, window]) => {
+  return Object.entries(WINDOWS).flatMap(([name, limit]) => {
     let w = obj(windows[name])
     return count(w.utilization) == null ? [] : [{
       provider: 'claude',
-      window,
+      ...limit,
       used: Math.round(Number(w.utilization) * 100),
       ...count(w.resetsAt) == null
         ? {}

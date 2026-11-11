@@ -44,7 +44,12 @@ export type Rows = 'parts' | 'sessions' | 'tasks' | 'models' | 'entries'
 
 /** What one plan's requests ran up: their dollars, and each row's. */
 export type Plan =
-  & { dollars: number; unpriced?: Eid[] }
+  & {
+    dollars: number
+    unpriced?: Eid[]
+    /** by model, by session: what a limit on one model's requests counts */
+    metered?: Record<Eid, Record<Eid, number>>
+  }
   & Record<
     Rows,
     Record<string, number>
@@ -88,12 +93,20 @@ export let empty = (day: string): Spend => ({
 let unbilled = (): Plan => ({
   dollars: 0,
   unpriced: [],
+  metered: {},
   parts: {},
   sessions: {},
   tasks: {},
   models: {},
   entries: {},
 })
+
+// Add `n` to what a plan's `model` ran up in `session`.
+let meter = (plan: Plan | undefined, model: Eid, session: Eid, n: number) => {
+  if (!plan) return
+  let at = (plan.metered ??= {})[model] ??= {}
+  at[session] = (at[session] ?? 0) + n
+}
 
 // Name a model once in a list.
 let name = (to: Eid[] | undefined, model: Eid): Eid[] =>
@@ -165,6 +178,7 @@ let partsOf = (b: Bundle, known: Known): [string, Paid][] => {
  * })
  * equal(t.dollars, 4.2)
  * equal([t.plans.claude.dollars, t.plans.claude.tasks], [4.2, { 'T-1': 2.1, 'T-2': 2.1 }])
+ * equal(t.plans.claude.metered, { m: { s: 4.2 } })
  * equal(t.parts, {
  *   'tool Read': [750000, 0, 0, 0, 0.15],
  *   skills: [250000, 0, 0, 0, 0.05],
@@ -250,6 +264,7 @@ export let tally = (day: string, rows: Bundle[], known: Known): Spend => {
     }
     add(out.models, model, [...all, spent, 1])
     bill(plan, 'models', model, spent)
+    meter(plan, model, session, spent)
     if (plan) plan.dollars += spent
     out.tokens = out.tokens.map((n, i) => n + all[i])
     out.dollars += spent
@@ -277,6 +292,12 @@ export let settled = (s: Spend): Spend => {
   let plan = (p: Plan): Plan => ({
     dollars: cents(p.dollars),
     unpriced: p.unpriced ?? [],
+    metered: Object.fromEntries(
+      Object.entries(p.metered ?? {}).map(([model, by]) => [
+        model,
+        Object.fromEntries(Object.entries(by).map(([k, n]) => [k, cents(n)])),
+      ]),
+    ),
     ...Object.fromEntries(ROWS.map((row) => [
       row,
       Object.fromEntries(
@@ -328,6 +349,9 @@ export let merged = (days: Spend[]): Spend => {
       let plan = out.plans[at] ??= unbilled()
       plan.dollars += p.dollars
       for (let m of p.unpriced ?? []) plan.unpriced = name(plan.unpriced, m)
+      for (let [model, by] of Object.entries(p.metered ?? {})) {
+        for (let [k, n] of Object.entries(by)) meter(plan, model, k, n)
+      }
       for (let row of ROWS) {
         for (let [k, n] of Object.entries(p[row] ?? {})) bill(plan, row, k, n)
       }
