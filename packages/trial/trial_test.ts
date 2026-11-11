@@ -10,6 +10,8 @@ import { personaDoc } from '@yaks/persona'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { memoryDoc } from '@yaks/memory/vocab'
+import type { CliCommand, Host } from '@yaks/cli/host'
+import { commands } from './cli.ts'
 import { tally, trialDoc } from './mod.ts'
 import { type Arrival, asking, before, cases, run, WORDS } from './moment.ts'
 import {
@@ -452,3 +454,42 @@ test('trial: a window names a row by its eid, its number or its short handle', (
     [true, true, true, false],
   )
 })
+for (let person of ['9ea37f1a-1b2e-4cb4-848c-7c4b4510968f', 'owner']) {
+  let eid = '9ea37f1a-1b2e-4cb4-848c-7c4b4510968f'
+  let g = graph({
+    storage: ram(vocab),
+    vocab,
+    plugins: [{
+      name: 'owner',
+      address: (_tx, ids) =>
+        new Map(ids.includes('owner') ? [['owner', eid]] : []),
+    }],
+  })
+  await g.apply([
+    { entity: { eid: 'p' }, persona: {}, ...at(early) },
+    { entity: { eid: 's' }, session: { persona: 'p' }, ...at(early) },
+    said(1, 'what needs my attention'),
+    entry(7, 'wrong answer', { output: {} }),
+    doc('ask', early, { task: {}, filed: { assignee: eid } }),
+    { entity: { eid: 'c' }, miss: { entry: 'e7', needed: 'ask' } },
+  ])
+  test(`trial: score opens the configured person's asks (${person})`, async () => {
+    let output = ''
+    let host = {
+      graph: g,
+      storage: g.storage,
+      vocab,
+      config: { person },
+      search: () => Promise.resolve([]),
+    } as unknown as Host
+    let context = {
+      out: (text: string) => output = text,
+    } as unknown as Parameters<CliCommand['run']>[2]
+    let score = commands.find((c) => c.name == 'trial_score')!
+    assertEquals(
+      await score.run({ arrive: ['open'], under: 'p' }, host, context),
+      0,
+    )
+    assertEquals(JSON.parse(output).unasked, 1)
+  })
+}
