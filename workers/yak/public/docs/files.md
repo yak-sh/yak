@@ -229,6 +229,26 @@ When it is unset, the default above applies: the root's `404.html`, else
 `index.html` for a route. A missing file with an extension is a 404 in every
 mode.
 
+**Redirects.** A `_redirects` file beside `index.html`, in Cloudflare's own
+format, sends a page's old address to its new one: a rule a line,
+`source
+destination [status]`, the first that matches wins, `#` starts a
+comment.
+
+    /calendar        /happening       301
+    /sermons/*       /sermons/:splat
+    /?flow=abc       /signup          301
+
+A source is a path of the app, with `:name` for one segment and a final `*` for
+the rest; a trailing slash makes no difference. `?key=value` on it asks the
+query to hold that pair, and a bare `?key` asks it to hold the key, so an old
+printed link can be told apart by its query. A destination is a path of the app,
+which holds at whatever address the app is served, or an https address; `:name`
+and `:splat` in it are what the source caught. The status is 301, 302 (the
+default), 303, 307 or 308. A rule with no query on its source passes the
+visitor's query on; one that named a query takes it. Only a page's address is
+redirected, never a file's, and `_redirects` itself is not served.
+
 Each page resolves its relative URLs from its own folder, as anywhere on the
 web: `docs/index.html` names `../style.css`, and reaches the client at
 `../api/client.js`.

@@ -100,7 +100,7 @@ export let baseOf = (at: string, file: string, rooted: boolean) =>
 // place. Anything with an extension is a file, and a missing stylesheet must
 // never answer HTML.
 let pretty = (path: string) => !path.split('/').pop()!.includes('.')
-let page = (path: string) => pretty(path) || /\.html?$/i.test(path)
+export let page = (path: string) => pretty(path) || /\.html?$/i.test(path)
 
 // A release never gains a file after its source is selected. A later release
 // gets a different key, so its file can answer after this 404 was cached.
@@ -322,6 +322,8 @@ let MANIFEST = new Set([
   // standing.ts reaches this module through declared.ts, and a set built at
   // module top time cannot wait on a cycle.
   '/NOTES.md',
+  // The app's redirects (redirects.ts): rules for the gateway to follow.
+  '/_redirects',
 ])
 
 /** The bundle formats, for the file beside index.html. A `.csv` is not one:

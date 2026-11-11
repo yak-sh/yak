@@ -49,6 +49,7 @@ import {
   releaseId,
 } from './asset_url.ts'
 import * as files from './files.ts'
+import { parse as parseRedirects, sentOn } from './redirects.ts'
 import { inside, prefixOf, VERSION } from './files.ts'
 import { door as publicDoor, served as publicFile } from './public-files.ts'
 import { blobPrefix, servable, uploadPrefix } from './blob-key.ts'
@@ -959,6 +960,39 @@ export let folderMove = (to: string, search: string, cache: string) =>
     headers: { location: to + search, 'cache-control': cache },
   })
 
+// An app's `_redirects` (redirects.ts) answering a page's address: the visitor
+// is sent on, to a path of the app at whatever mount it has, or to an address
+// elsewhere. Read as any file is, through the cache, so an app with none costs
+// a cached miss; its file answers by its own name, or the app's 404 or index
+// did, which is no rules.
+let redirected = async (
+  req: Request,
+  env: Env,
+  app: App,
+  prefix: string,
+  path: string,
+  at: string,
+) => {
+  let got = await files.fileBytes(
+    env,
+    app.eid,
+    prefix,
+    '/_redirects',
+    app.source ?? '',
+  )
+  let rules = got.status == 200 && got.headers.get(files.FILE) == '_redirects'
+    ? parseRedirects(await got.text())
+    : (await got.body?.cancel(), [])
+  let to = sentOn(rules, path, new URL(req.url).search)
+  return to && new Response(null, {
+    status: to.status,
+    headers: {
+      location: to.to.startsWith('/') ? at + to.to.slice(1) : to.to,
+      'cache-control': keeping(app),
+    },
+  })
+}
+
 // What the badge on an app's page opens (public/badge.js, T-131901), or null
 // for no badge, which is the Plus plan's. A published app's badge opens its
 // own page on yaks.app (app-page.ts), where whoever followed it can open the
@@ -1082,6 +1116,9 @@ let asset = async (
   let prefix = prefixOf(space, app)
   let decoded = decodedPath(path)
   if (decoded == null || inside(decoded)) return nothingHere(env)
+  let gone = files.page(path) &&
+    await redirected(req, env, app, prefix, decoded, at)
+  if (gone) return gone
   let range = req.method == 'GET' ? req.headers.get('range') : null
   let got = await c.time(
     'bytes',

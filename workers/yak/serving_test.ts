@@ -659,6 +659,25 @@ test("an app's own colours, set through app_set, win over the platform's", async
   )
 })
 
+test("an app's _redirects send a page's address on, at the app's mount", async () => {
+  await using scenario = platform()
+  let { env, files } = scenario
+  await seeded(env, 'public', scenario.dir)
+  let put = (path: string, text: string) =>
+    files.held.set(`ada/cookbook/${path}`, new TextEncoder().encode(text))
+  put('index.html', '<!doctype html><head></head><body>hi</body>')
+  put('_redirects', '/old /new 301\n/away https://example.org/x\n')
+  let at = async (path: string) => {
+    let r = await apps.fetch(visit(path), env)
+    await r.body?.cancel()
+    return [r.status, r.headers.get('location')]
+  }
+  assertEquals(await at('/cookbook/old?q=1'), [301, '/cookbook/new?q=1'])
+  assertEquals(await at('/cookbook/away'), [302, 'https://example.org/x'])
+  assertEquals((await at('/cookbook/'))[0], 200)
+  assertEquals((await at('/cookbook/_redirects'))[0], 404)
+})
+
 test('a refresh after the page changes is sent the page, and one before is not', async () => {
   await using scenario = platform()
   let { env, files } = scenario
