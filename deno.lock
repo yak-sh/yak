@@ -4907,7 +4907,8 @@
             "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/tools@0.2.30",
-            "npm:@yaks/vocab@0.2.32"
+            "npm:@yaks/vocab@0.2.32",
+            "npm:linkedom@~0.18.12"
           ]
         }
       },

@@ -106,6 +106,30 @@ key, and one that restates it replaces its text. Give a changed variant a new
 key and say what it came `from`. Attempts, pairs and guesses are on eids derived
 from the round's key and their own.
 
+### The page
+
+`yak serve` answers `/trial/<round>` with the page a person taps through the
+round's pairs on, made for a phone. Several rounds are named with commas and
+shown one after another: `/trial/taste1,copy-r1`. It shows one pair at a time,
+shuffled, with nothing that says which variant, persona or model wrote a pitch,
+and no title where the case is a `riddle` or `found`. The first two parts of
+each pitch show and the rest fold behind "Read the rest".
+
+- A tap on a pitch, or on Neither, writes
+  `preference{first, second, chose,
+  why}` and moves on. The why is optional,
+  and typed before the tap.
+- "Grabs me" on a pitch writes `grabbed{attempt}`; a second tap deletes it.
+- "Add a pitch of my own" writes a `writing{round, case, output}` with no
+  variant, and the deck sets it against three of the round's attempts about the
+  same thing.
+
+Each is written the moment it is tapped, through `/web/apply`, so its
+`created.by` is the graph's configured person. A write that fails is kept in the
+browser and sent again. Opened again, the page starts at the first pair without
+a preference. The same address asked with `accept: application/json` answers the
+decks (`deck` in ./skill.ts).
+
 The tally counts, for each variant, persona arm and case: attempts, comparisons
 shown, preferred, neither, grabbed, the mean guesses until right (a miss counts
 as its cap plus one) and how often a pick among the group was right. It then

@@ -1,0 +1,15 @@
+{
+  "_": "Browser exports checked with web globals by deno task check:types. Resolution comes from the npm workspace.",
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "es2023"
+    ],
+    "strict": true
+  },
+  "entries": [
+    "./page",
+    "./main"
+  ]
+}

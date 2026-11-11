@@ -283,9 +283,14 @@ export type Card = {
   why?: string
 }
 
-/** What the page is handed: the round's cards in order, and the parts each
- * pitch has. */
-export type Deck = { title: string; parts: string[]; cards: Card[] }
+/** What the page is handed for a round: its cards in order, and the parts
+ * each pitch has. */
+export type Deck = {
+  round: Eid
+  title: string
+  parts: string[]
+  cards: Card[]
+}
 
 /** How many of the round's attempts a person's own attempt is set against. */
 export let AGAINST = 3
@@ -378,6 +383,7 @@ export let deck = (all: Bundle[], judge?: Eid): Deck => {
         .map((o): [Eid, Eid] => [a.entity.eid, o])
     )
   return {
+    round: round?.entity.eid ?? '',
     title: str(comp(round, 'doc').title),
     parts: (comp(round, 'round').parts ?? []) as string[],
     cards: [...planned, ...own].map(([a, b]) => card(a, b)),

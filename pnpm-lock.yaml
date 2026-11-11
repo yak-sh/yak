@@ -5086,6 +5086,9 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
+      linkedom:
+        specifier: ^0.18.12
+        version: 0.18.15
 
   packages/tui:
     dependencies:
