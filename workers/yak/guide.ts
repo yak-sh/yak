@@ -499,6 +499,7 @@ export let PAGES: Page[] = [
   'sharing',
   'home',
   'mail',
+  'forms',
   'selling',
   'domains',
   'errors',
@@ -515,6 +516,7 @@ export let PAGES: Page[] = [
 // truthful answer when no page says more than the vocabulary does.
 let COVERS: Record<string, string[]> = {
   mail: ['mail', 'email', 'deliver', 'delivered', 'bounced'],
+  forms: ['form', 'question', 'registration'],
   entities: ['edge'],
   errors: ['exception', 'failed', 'archived'],
   files: ['artifact', 'image', 'attachment'],

@@ -304,6 +304,17 @@ subscribe to.
 Deeper: <https://yaks.app/docs/mail.md> — the bundle that sends a letter, what
 comes back, how an arriving letter is stored, and the limits.
 
+## Forms and Sign-ups
+
+A form is a `form` row with a `question` row for each thing it asks, and every
+app takes its sign-ups at `./api/form/<name>` from anybody, whatever the app's
+access. A sign-up is kept where only the app's owners and editors read it, and
+it sends two letters with no code: one to the person who signed up, and one with
+their answers to each person the form names in `notify`.
+
+Deeper: <https://yaks.app/docs/forms.md> — the rows, the door, drawing a form on
+a page, opening dates and a capacity, and what a sign-up sets off.
+
 ## Payments
 
 A seller on Plus connects a Stripe account to their space once, and after that

@@ -65,6 +65,14 @@ export let PAGES: Record<string, Page> = {
     'brief':
       'private draft previews, files, releases, uploads, searchable PDFs and web pages, scanned documents, document questions and page citations',
   },
+  'forms': {
+    'slug': 'forms',
+    'title': 'Forms and Sign-ups',
+    'description':
+      "Forms and sign-up sheets as rows: a `form` with its `question` rows, the public door at ./api/form/<name> that shows one and takes its answers whatever the app's access, and what a sign-up sets off without any code: a `registration` only the app's owners and editors read, a letter to the person who signed up, and a letter with their answers to each person the form notifies. Opening and closing dates, a capacity, drawing a form on a page, and a plain HTML form that posts to the door.",
+    'brief':
+      "forms anyone can fill in, whose sign-ups email the person and the app's own people",
+  },
   'games': {
     'slug': 'games',
     'title': 'Multiplayer Games',

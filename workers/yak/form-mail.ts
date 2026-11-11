@@ -30,6 +30,45 @@ let letter = (
   }]
 }
 
+// An answer as a line of a letter: a list said as its items, a tick as yes
+// or no, and anything that is not words (a file) left out.
+let said = (value: unknown): string =>
+  Array.isArray(value)
+    ? value.map(said).filter(Boolean).join(', ')
+    : typeof value == 'boolean'
+    ? value ? 'Yes' : 'No'
+    : typeof value == 'string' || typeof value == 'number'
+    ? String(value).trim()
+    : ''
+
+/**
+ * What the people a form notifies are told of a sign-up: that there is one,
+ * then each question answered and its answer, so they need not open the app
+ * to learn who it was.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let ask = (eid: string, label: string, order: number) => ({
+ *   entity: { eid },
+ *   question: { form: 'f', label, kind: 'line' as const, order },
+ * })
+ * let form = { form: {}, questions: [ask('n', 'Your name', 1), ask('h', 'How can we help?', 2), ask('p', 'Phone', 3)] }
+ * assertEquals(
+ *   told(form, { n: 'Linda Park', h: 'A ride on Sunday' }, 'Visitor card'),
+ *   'A new sign-up for Visitor card.\n\n- Your name: Linda Park\n- How can we help? A ride on Sunday',
+ * )
+ * assertEquals(told(form, {}, 'Visitor card'), 'A new sign-up for Visitor card.')
+ * ```
+ */
+export let told = (form: Form, answers: Answers, title: string): string => {
+  let lines = answered(form, answers).flatMap(({ question, value }) => {
+    let label = String(question.question.label ?? '').trim(), is = said(value)
+    return is ? [`- ${label}${/[?:.!]$/.test(label) ? '' : ':'} ${is}`] : []
+  })
+  return [`A new sign-up for ${title}.`, ...lines.length ? ['', ...lines] : []]
+    .join('\n')
+}
+
 export let formPost =
   (at: Pick<Stored, 'app' | 'graph'>): Handler => async (event) => {
     let [row] = await at.graph.get([event.entity.eid])
@@ -48,12 +87,12 @@ export let formPost =
     let notify = [...(form.form.notify ?? [])]
     let people = await at.graph.get([...notify, ...person ? [person] : []])
     let title = String(comp(source, 'doc').title ?? 'Sign-up')
-    let email =
-      answered(form, registration.answers as Answers ?? {}).find((a) =>
-        a.path.length == 1 &&
-        (a.question.question.kind == 'email' ||
-          a.question.question.fills == 'individual.email')
-      )?.value ?? address(people.find((b) => b.entity.eid == person))
+    let answers = registration.answers as Answers ?? {}
+    let email = answered(form, answers).find((a) =>
+      a.path.length == 1 &&
+      (a.question.question.kind == 'email' ||
+        a.question.question.fills == 'individual.email')
+    )?.value ?? address(people.find((b) => b.entity.eid == person))
     let recipients: [unknown, string, string][] = [
       [
         email,
@@ -65,7 +104,7 @@ export let formPost =
       ): [unknown, string, string] => [
         address(b),
         'notify',
-        `A new sign-up for ${title}.`,
+        told(form, answers, title),
       ]),
     ]
     for (let [to, purpose, body] of recipients) {
