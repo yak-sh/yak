@@ -118,7 +118,7 @@ await shared.apply([{
 }])
 let partial = await setup([fixture])
 await partial.apply(
-  sign({ first: 'Different', children: [{ 'child-first': 'Bo' }] }),
+  sign({ first: 'Annie', children: [{ 'child-first': 'Bo' }] }),
 )
 let provisional =
   ((await partial.get(['signup']))[0].registration as Comp).person
@@ -126,7 +126,7 @@ let provisional =
 test('a phone match fills blanks and preserves differing answers on the registration', async () => {
   let answers = {
     phone: '+1 269 555 0142',
-    first: 'Different',
+    first: 'Annie',
     last: 'Smith',
     hidden: 'stale',
   }
@@ -150,6 +150,25 @@ test('email matching trims and folds case without a phone', async () => {
   )
 })
 
+test('a phone or email another person also holds is not enough to be them', async () => {
+  let g = await setup([fixture])
+  await g.apply(sign({ first: 'Sam', phone: '+12695550142' }))
+  await g.apply([{
+    entity: { eid: 'second' },
+    registration: {
+      form: 'form',
+      answers: { first: 'Sam', email: 'ann@example.org' },
+    },
+  }])
+  let person = async (eid: string) =>
+    ((await g.get([eid]))[0].registration as Comp).person
+  equal(
+    [await person('signup'), await person('second')].includes('member'),
+    false,
+  )
+  equal((await g.get(['member']))[0].individual, fixture.individual)
+})
+
 test('an unmatched sign-up creates guests and child-to-parent links', async () => {
   await guests.apply(
     sign({
@@ -168,7 +187,7 @@ test('an unmatched sign-up creates guests and child-to-parent links', async () =
 })
 
 test("a person the app wrote, which a sign-up matched, is not the sign-up's", async () => {
-  await phoned.apply(sign({ phone: '+1 269 555 0142', first: 'Different' }))
+  await phoned.apply(sign({ phone: '+1 269 555 0142', first: 'Annie' }))
   equal((await phoned.get(['member']))[0].form_guest, undefined)
 })
 
@@ -237,7 +256,7 @@ test('repeat children stay distinct even when they share the parent contact', as
 
 test('a partial guest resolves to a member when contact arrives and keeps its child', async () => {
   let answers = {
-    first: 'Different',
+    first: 'Annie',
     phone: '+12695550142',
     children: [{ 'child-first': 'Bo' }],
   }
@@ -257,11 +276,11 @@ for (
   ] as const
 ) {
   let g = await setup([fixture])
-  await g.apply(sign({ first: 'Different' }))
+  await g.apply(sign({ first: 'Annie' }))
   let guest = String(((await g.get(['signup']))[0].registration as Comp).person)
   await g.apply([{ entity: { eid: guest }, ...patch }])
   test(`a provisional guest keeps editor-added ${name} when matched`, async () => {
-    await g.apply(sign({ first: 'Different', phone: '+12695550142' }))
+    await g.apply(sign({ first: 'Annie', phone: '+12695550142' }))
     let [kept] = await g.get([guest])
     equal(!!kept?.individual, true)
     for (let [comp, value] of Object.entries(patch)) {

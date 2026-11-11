@@ -60,29 +60,51 @@ let said = (value: unknown): string =>
 /**
  * What the people a form notifies are told of a sign-up: that there is one,
  * then each question answered and its answer, so they need not open the app
- * to learn who it was.
+ * to learn who it was. The entries of a repeat are numbered and set apart, so
+ * each child or helper reads as one person.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * let ask = (eid: string, label: string, order: number) => ({
+ * let ask = (eid: string, label: string, order: number, within?: string, kind = 'line') => ({
  *   entity: { eid },
- *   question: { form: 'f', label, kind: 'line' as const, order },
+ *   question: { form: 'f', label, kind: kind as 'line', order, within },
  * })
- * let form = { form: {}, questions: [ask('n', 'Your name', 1), ask('h', 'How can we help?', 2), ask('p', 'Phone', 3)] }
+ * let form = { form: {}, questions: [ask('n', 'Your name', 1), ask('h', 'How can we help?', 2), ask('c', 'Child', 3, undefined, 'repeat'), ask('k', 'Name', 4, 'c')] }
  * assertEquals(
- *   told(form, { n: 'Linda Park', h: 'A ride on Sunday' }, 'Visitor card'),
- *   'A new sign-up for Visitor card.\n\n- Your name: Linda Park\n- How can we help? A ride on Sunday',
+ *   told(form, { n: 'Linda Park', h: 'A ride on Sunday', c: [{ k: 'Bo' }, { k: 'Cy' }] }, 'Visitor card'),
+ *   'A new sign-up for Visitor card.\n\n- Your name: Linda Park\n- How can we help? A ride on Sunday\n\nChild 1\n- Name: Bo\n\nChild 2\n- Name: Cy',
  * )
  * assertEquals(told(form, {}, 'Visitor card'), 'A new sign-up for Visitor card.')
  * ```
  */
 export let told = (form: Form, answers: Answers, title: string): string => {
-  let lines = answered(form, answers).flatMap(({ question, value }) => {
+  let heads = new Map(
+    form.questions.map((
+      q,
+    ) => [q.entity.eid, String(q.question.label ?? '').trim()]),
+  )
+  let scope = ''
+  let blocks: string[][] = [[]]
+  for (let { question, path, value } of answered(form, answers)) {
     let label = String(question.question.label ?? '').trim(), is = said(value)
-    return is ? [`- ${label}${/[?:.!]$/.test(label) ? '' : ':'} ${is}`] : []
-  })
-  return [`A new sign-up for ${title}.`, ...lines.length ? ['', ...lines] : []]
-    .join('\n')
+    if (!is) continue
+    let [repeat, index] = path.length > 1 ? path : []
+    let at = repeat == null ? '' : `${repeat} ${index}`
+    if (at != scope) {
+      scope = at
+      blocks.push(
+        repeat == null
+          ? []
+          : [`${heads.get(String(repeat))} ${Number(index) + 1}`],
+      )
+    }
+    blocks.at(-1)!.push(`- ${label}${/[?:.!]$/.test(label) ? '' : ':'} ${is}`)
+  }
+  return [
+    `A new sign-up for ${title}.`,
+    ...blocks.filter((b) => b.length).map((b) => b.join('\n')),
+  ]
+    .join('\n\n')
 }
 
 export let formPost =
@@ -125,7 +147,8 @@ export let formPost =
     ]
     for (let [to, purpose, body] of recipients) {
       if (typeof to != 'string' || !to.trim()) continue
-      let batch = letter(row.entity.eid, purpose, to.trim(), title, body)
+      let subject = purpose == 'notify' ? `New sign-up: ${title}` : title
+      let batch = letter(row.entity.eid, purpose, to.trim(), subject, body)
       if ((await at.graph.get([batch[1].entity.eid])).length) continue
       await at.graph.apply(signed(batch, { by: at.app }))
     }

@@ -77,3 +77,11 @@ test("a form's letters and the addresses they went to are kept to the app's edit
     'organizer@example.com',
   ])
 })
+
+test("the letter to a form's people is told apart from the thanks", async () => {
+  await retry()
+  let titles = (await g.read('.mail&?doc&?deliver')).map((row) =>
+    (row.doc as Comp).title
+  )
+  equal(titles.sort(), ['New sign-up: Sign-up', 'Sign-up'])
+})

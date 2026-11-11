@@ -97,6 +97,15 @@ type Kin = typeof kin[string]
 let other = (side: 'a' | 'b') => side == 'a' ? 'b' : 'a'
 let folded = (v: unknown) => typeof v == 'string' ? v.trim().toLowerCase() : ''
 
+// Two people may share a phone or an email (a couple, a household line), so a
+// contact alone does not make a sign-up someone's: the first names must not
+// disagree either, allowing for a short form of the name (Matt, Matthew).
+let alike = (row: Bundle, values: Record<string, unknown>) => {
+  let held = folded(fields(row, 'individual').first),
+    given = folded(values.first)
+  return !held || !given || held.startsWith(given) || given.startsWith(held)
+}
+
 // An entry is a relative already listed when the first name agrees, and the
 // last name and birthday agree wherever both sides have one.
 let named = (row: Bundle, values: Record<string, unknown>) => {
@@ -174,12 +183,14 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                 (rows, eid) =>
                   after(person(eid), (row) => row ? [...rows, row] : rows),
               ),
-              (candidates) =>
-                candidates.find((b) =>
+              (candidates) => {
+                let fits = candidates.filter((b) => alike(b, values))
+                return fits.find((b) =>
                   phone && number(fields(b, 'phone').number) == phone
-                ) ?? candidates.find((b) =>
+                ) ?? fits.find((b) =>
                   address && email(fields(b, 'individual').email) == address
-                ),
+                )
+              },
             )
           },
         )
