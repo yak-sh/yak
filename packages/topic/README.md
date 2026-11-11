@@ -196,6 +196,35 @@ The `Tree` tab draws what a topic contains all the way down, each subtopic's
 holdings nested under it. It walks only into topics, draws a topic met again on
 its own path without walking it, and links to the rest past `DEPTH` levels.
 
+## A topic's share of the week
+
+A topic can be given a share: `attended{share}`, the part, 0 to 1, of each
+plan's week (@yaks/model's `rate_limit`) that work for it may use. Work for a
+topic is the session opened on it and every session that one started. Any topic
+can have one, a project as much as a subject.
+
+A subtopic's share is part of its parent's, so what a topic keeps is its share
+less the shares of the nearest topics below it that have one. Work for a topic
+with no share is charged to the nearest topic above it that has one, and work
+with none above it was never allotted. Only the share is stored. What a topic
+keeps, and how much of it is used, are read each time: `yak spend show` prints a
+line for each topic with a share ([@yaks/spend](../spend)).
+
+A share refuses nothing. A session reads it beside how much of the week is gone
+and paces itself.
+
+```ts
+import { above, holder, kept } from '@yaks/topic/share'
+import { equal } from '@yaks/testing'
+
+let shares = {
+  share: new Map([['pilots', 0.5], ['grove', 0.25]]),
+  up: new Map([['grove', ['pilots']], ['site', ['grove']]]),
+}
+equal(kept(shares).get('pilots'), 0.25)
+equal([holder(shares, 'site'), above(shares, 'grove')], ['grove', 'pilots'])
+```
+
 ## Exports
 
 The root exports `topicDoc`, `named` (a title folded to a topic's name), `HOLDS`
@@ -210,7 +239,9 @@ at a paragraph), `ORACLE` (the persona a topic session wears), and the constants
 `@yaks/topic/vocab` exports `topicDoc` and `docs: [topicDoc]` for schema
 loaders. `@yaks/topic/graph` exports `plugins()`, whose `normalize` hook folds
 every `topic.name` a write carries with `named`, so a name typed in any case or
-spacing, through any door, is the one topic's. `@yaks/topic/views` exports
+spacing, through any door, is the one topic's. `@yaks/topic/share` exports
+`SHARE` (the component's name), `shares` (a graph's shares and how its topics
+nest), `above`, `holder` and `kept`. `@yaks/topic/views` exports
 `inspectViews()`, which loads the shelves, the page, the tree and the tile;
 `tabs`, the two tabs a topic wears; `destinations`, the Topics page the sidebar
 offers; and `icons`, the glyph it wears.

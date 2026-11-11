@@ -1,7 +1,8 @@
 /**
  * The tools: `spend_show` reports a span of days from their tallies, and
  * `spend_backfill` measures past requests (@yaks/session, @yaks/spawn
- * `recounted`) and tallies their days.
+ * `recounted`) and tallies their days. `shared` reads each topic's share of
+ * the week against what its sessions used (./use.ts).
  *
  * @module
  */
@@ -10,19 +11,25 @@ import { argsOf } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
-import { recompute } from './day.ts'
-import { after, dayOf } from './window.ts'
+import { shares } from '@yaks/topic/share'
+import { lineage, recompute } from './day.ts'
 import { merged, ranked, type Spend, spendOf } from './tally.ts'
+import { type Line, said, type Use, uses } from './use.ts'
 import {
   accountNames,
+  after,
   current,
+  dayOf,
   type Limit,
   limitsOf,
   paceOf,
   rates,
   span,
+  weekOf,
 } from './window.ts'
 import { dollars, label, percent, tokens } from './words.ts'
+
+export type { Billed, Use } from './use.ts'
 
 let answer = (call: Bundle, body: string): Bundle[] => [{
   entity: { eid: '$said' },
@@ -49,22 +56,11 @@ export let read = async (
     to: string
   }
 > => {
-  let providers = await names(g, 'provider')
-  let accounts = accountNames(await g.read('.account *'), providers)
-  let limits = limitsOf(
-    await g.read('.rate_limit *'),
-    new Map([...providers, ...accounts]),
-  )
+  let { limits, accounts } = await plans(g)
   let [from, to] = span(limits, now, since, until)
   // A week's rates are read from the days its week began, which can be
   // before the span.
-  let rows = await g.read(
-    `.spend .spend.day>=${JSON.stringify(after(from, -7))} .spend.day<=${
-      JSON.stringify(to)
-    } *`,
-  )
-  let all = rows.map(spendOf).filter((s): s is Spend => !!s)
-    .sort((a, b) => a.day < b.day ? -1 : 1)
+  let all = await tallies(g, after(from, -7), to)
   let days = all.filter((d) => d.day >= from)
   return {
     spend: merged(days),
@@ -74,6 +70,56 @@ export let read = async (
     from,
     to,
   }
+}
+
+// The plan limits, and what each account is called.
+let plans = async (g: Graph) => {
+  let providers = await names(g, 'provider')
+  let accounts = accountNames(await g.read('.account *'), providers)
+  let limits = limitsOf(
+    await g.read('.rate_limit *'),
+    new Map([...providers, ...accounts]),
+  )
+  return { limits, accounts }
+}
+
+// The tallies of the days from one to another, in order.
+let tallies = async (g: Graph, from: string, to: string): Promise<Spend[]> =>
+  (await g.read(
+    `.spend .spend.day>=${JSON.stringify(from)} .spend.day<=${
+      JSON.stringify(to)
+    } *`,
+  )).map(spendOf).filter((s): s is Spend => !!s)
+    .sort((a, b) => a.day < b.day ? -1 : 1)
+
+/** Each topic's share of the week against what its sessions, and every
+ * session they started, used of each plan's running week: a topic before the
+ * topics below it, then the work no share covers ({@link uses}). Read from
+ * the tallies at `now`; where no topic has a share, nothing is read. */
+export let shared = async (
+  g: Graph,
+  now: number = Date.now(),
+): Promise<Use[]> => {
+  let given = await shares(g)
+  if (!given.share.size) return []
+  let { limits } = await plans(g)
+  let from = limits.flatMap((l) => weekOf(l, now) ?? []).sort()[0]
+  let days = from ? await tallies(g, from, dayOf(now)) : []
+  let sessions = days.flatMap((d) =>
+    Object.values(d.plans).flatMap((p) => Object.keys(p.sessions))
+  )
+  let rows = await lineage(g, sessions, ['session'])
+  let ref = (b: Bundle, comp: string, prop: string): Eid | undefined => {
+    let v = (b[comp] as Record<string, unknown> | undefined)?.[prop]
+    return v ? String(v) : undefined
+  }
+  let lines = new Map<Eid, Line>(
+    [...rows].map(([eid, b]) => [eid, {
+      topic: ref(b, 'session', 'topic'),
+      parent: ref(b, 'spawned', 'parent'),
+    }]),
+  )
+  return uses({ shares: given, lines, limits, days, now })
 }
 
 // Each row of a kind, by eid, named.
@@ -121,6 +167,7 @@ export let report = async (
     }`
   })
   if (o.plans) return paced.join('\n') || 'No plan limit has been read.'
+  let given = await shared(g, now)
   let top = o.top ?? 10
   let pick = (m: Record<string, number[]>, at: number) =>
     ranked(m, at).slice(0, top)
@@ -133,7 +180,7 @@ export let report = async (
       ...tasks,
       ...models,
       ...entries,
-    ].map(([k]) => k),
+    ].map(([k]) => k).concat(given.flatMap((u) => u.topic ?? [])),
   )
   let line = (k: string, ns: number[], at: number, toks: number) =>
     `  ${dollars(ns[at]).padStart(10)}  ${tokens(toks).padStart(7)}  ${
@@ -149,6 +196,17 @@ export let report = async (
       tokens(s.tokens[3])
     } generated)`,
     ...paced,
+    ...given.length
+      ? [
+        '',
+        "Shares of each plan's week (a topic's sessions and all they started):",
+        ...given.map((u) =>
+          `${'  '.repeat(u.depth + 1)}${
+            said(u, name.get(u.topic ?? '') ?? u.topic)
+          }`
+        ),
+      ]
+      : [],
     ...Object.keys(s.plans).length
       ? [
         '',

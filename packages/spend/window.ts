@@ -126,6 +126,26 @@ export let current = (l: Limit, now: number): boolean =>
   !l.resets || Date.parse(l.resets) > now
 
 /**
+ * The UTC day a plan's running week began, for a weekly limit that says when
+ * it resets: a reading of a week gone by still says when this one began.
+ *
+ * ```ts
+ * import { weekOf } from './window.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let week = { provider: 'claude', of: 'c', name: 'claude', window: 10080, used: 25,
+ *   resets: '2026-10-27T11:00:00Z' }
+ * equal(weekOf(week, Date.parse('2026-10-21T12:00:00Z')), '2026-10-20')
+ * equal(weekOf(week, Date.parse('2026-10-29T12:00:00Z')), '2026-10-27')
+ * equal(weekOf({ ...week, window: 300 }, Date.parse('2026-10-21T12:00:00Z')), undefined)
+ * ```
+ */
+export let weekOf = (l: Limit, now: number): string | undefined =>
+  l.window == 10080 && l.resets
+    ? dayOf(next(Date.parse(l.resets), WEEK, now) - WEEK)
+    : undefined
+
+/**
  * The days a report covers: from `since`, else the UTC day the Claude plan's
  * week began, else six days before; to `until`, else today.
  *
@@ -148,13 +168,9 @@ export let span = (
 ): [string, string] => {
   let to = until ?? dayOf(now)
   if (since) return [since, to]
-  let week = limits.find((l) =>
-    l.provider == 'claude' && l.window == 10080 && l.resets
-  )
-  let start = week
-    ? next(Date.parse(week.resets!), WEEK, now) - WEEK
-    : Date.parse(`${to}T00:00:00Z`) - 6 * 864e5
-  return [dayOf(start), to]
+  let week = limits.filter((l) => l.provider == 'claude')
+    .flatMap((l) => weekOf(l, now) ?? [])[0]
+  return [week ?? dayOf(Date.parse(`${to}T00:00:00Z`) - 6 * 864e5), to]
 }
 
 /**
@@ -193,8 +209,8 @@ export let rates = (
 
 // The days a plan's weekly reading counts, where it has a current one.
 let weekDays = (l: Limit, days: Spend[], now: number): Spend[] | undefined => {
-  if (l.window != 10080 || !l.resets || !current(l, now)) return
-  let from = dayOf(Date.parse(l.resets) - WEEK)
+  let from = weekOf(l, now)
+  if (!from || !current(l, now)) return
   let to = l.at ? l.at.slice(0, 10) : dayOf(now)
   return days.filter((d) => d.day >= from && d.day <= to)
 }

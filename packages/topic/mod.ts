@@ -19,6 +19,9 @@
  * fits('data modeling', 'data model') // true
  * ```
  *
+ * A topic can be given a share of each plan's week, `attended{share}`; what
+ * it keeps of it under its subtopics' shares is `@yaks/topic/share`.
+ *
  * The tools, `topic_find`, `topic_new`, `topic_add` and `topic_read`, are
  * `@yaks/topic/tools`.
  *

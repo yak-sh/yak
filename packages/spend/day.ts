@@ -113,27 +113,43 @@ let every = async (g: Graph, q: string): Promise<Bundle[]> => {
   }
 }
 
+/** The row of each of these sessions and of every session above it by
+ * `spawned.parent`, however long its line, with `spawned` and these
+ * components. */
+export let lineage = async (
+  g: Graph,
+  sessions: Eid[],
+  comps: string[],
+): Promise<Map<Eid, Bundle>> => {
+  let rows = new Map<Eid, Bundle>()
+  for (let ask = [...new Set(sessions)]; ask.length;) {
+    let got = await g.get(ask, ['spawned', ...comps])
+    ask = []
+    for (let r of got) {
+      if (!r || rows.has(r.entity.eid)) continue
+      rows.set(r.entity.eid, r)
+      ask.push(str(comp(r, 'spawned').parent))
+    }
+    ask = [...new Set(ask)].filter((s) => s && !rows.has(s))
+  }
+  return rows
+}
+
 // Each session's root: the session that started it, and that one's, up.
 let roots = async (g: Graph, sessions: Eid[]) => {
   let parent = new Map<Eid, Eid>()
   let fixed = new Map<Eid, Record<string, number>>()
-  let ask = sessions
-  for (let depth = 0; ask.length && depth < 5; depth++) {
-    let rows = await g.get(ask, ['spawned', 'fixed'])
-    ask = []
-    for (let r of rows) {
-      if (!r) continue
-      let parts = comp(r, 'fixed').parts as Record<string, number> | undefined
-      if (parts) fixed.set(r.entity.eid, parts)
-      let up = str(comp(r, 'spawned').parent)
-      if (up && !parent.has(r.entity.eid)) {
-        parent.set(r.entity.eid, up)
-        ask.push(up)
-      }
-    }
+  for (let [eid, r] of await lineage(g, sessions, ['fixed'])) {
+    let parts = comp(r, 'fixed').parts as Record<string, number> | undefined
+    if (parts) fixed.set(eid, parts)
+    let up = str(comp(r, 'spawned').parent)
+    if (up) parent.set(eid, up)
   }
   let root = (s: Eid) => {
-    for (let i = 0; parent.has(s) && i < 5; i++) s = parent.get(s)!
+    for (let seen = new Set<Eid>(); parent.has(s) && !seen.has(s);) {
+      seen.add(s)
+      s = parent.get(s)!
+    }
     return s
   }
   return { root, parent, fixed }
@@ -233,8 +249,10 @@ export let known = async (
   // A subagent's tasks are its brief's, else the nearest brief up its line,
   // else what the session at its root worked on.
   let of = (s: Eid): Eid[] => {
-    for (let at: Eid | undefined = s, i = 0; at && i < 6; i++) {
+    let seen = new Set<Eid>()
+    for (let at: Eid | undefined = s; at && !seen.has(at);) {
       if (brief.get(at)?.length) return brief.get(at)!
+      seen.add(at)
       at = parent.get(at)
     }
     return byRoot.get(root(s)) ?? []

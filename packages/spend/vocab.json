@@ -150,7 +150,7 @@
       "noun": "spend",
       "verb": "show",
       "title": "Show where the tokens went",
-      "description": "Report where the model requests of a span of days went, from the tallies the duty keeps: each plan limit against its pace, then the parts of the context, sessions, tasks, models and large entries that cost most, by dollars. Reads tallies only; changes nothing.",
+      "description": "Report where the model requests of a span of days went, from the tallies the duty keeps: each plan limit against its pace, a line for each topic with a share of the week (attended.share) saying how much of it the topic's sessions used, then the parts of the context, sessions, tasks, models and large entries that cost most, by dollars. Reads tallies only; changes nothing.",
       "input": {
         "since": {
           "type": "string",

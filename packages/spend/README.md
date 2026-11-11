@@ -99,6 +99,31 @@ request arriving during the tally marks the day again.
   managed run and graph session written since a day (@yaks/session and
   @yaks/spawn `recounted`), then tallies each day.
 
+## A topic's share
+
+A topic can have a share of each plan's week (`attended{share}`,
+[@yaks/topic](../topic)). `shared(graph)` from `@yaks/spend/tools` reads how
+much of each share is used, and `yak spend show` prints its rows, a line each:
+
+```
+Q-12 Funnel keeps 7.5% of each plan's week (its 10% less 2.5% given below): claude 4.1% used ($118 of usage at list price), 30% of its week gone
+```
+
+- A session's dollars are charged to the topic it was opened on
+  (`session.topic`), else to the topic the session that started it
+  (`spawned.parent`) is charged to, up its line however long. A topic with no
+  share passes them to the nearest topic above it that has one.
+- On each plan with a weekly limit, the dollars are those of the plan's running
+  week, turned into a part of that week by the plan's rate (`rates`), beside how
+  much of the week is gone (`paceOf`). A plan read before its week turned has no
+  rate, and says so.
+- The last row is the work no share covers, against the part of the week no
+  topic was given.
+
+The dollars are usage at list price: a plan is a subscription, so they measure
+use and are not cash. Nothing here is stored. Where no topic has a share,
+nothing is read and nothing is printed.
+
 ## The page
 
 `./views` offers the browsing app a `Spend` page in its sidebar (`/?page=spend`,

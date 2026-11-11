@@ -24,6 +24,19 @@
         }
       }
     },
+    "attended": {
+      "component": true,
+      "type": "object",
+      "description": "on a topic: the part of each plan's week that work for it may use, which is the work of the session opened on it (session.topic) and of every session that one started. A subtopic's share is part of its parent's, so a topic keeps its share less the shares of the topics below it. A person sets it, and a topic's session divides its own among subtopics; nothing else changes one. How much is used is read from the day tallies (spend_show) and never stored, and it refuses nothing: a session reads it to pace itself",
+      "properties": {
+        "share": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "the share, 0 to 1: 0.1 is a tenth of each plan's week"
+        }
+      }
+    },
     "session": {
       "component": true,
       "extends": true,

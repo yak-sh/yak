@@ -27,5 +27,6 @@ export {
   paceOf,
   rates,
   span,
+  weekOf,
 } from './window.ts'
 export { dollars, label, percent, tokens } from './words.ts'
