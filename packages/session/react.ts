@@ -1,5 +1,6 @@
 import { compactAsk } from './compact_ask.ts'
 import { answered, checkpointOf, pruning, replied } from './pruning.ts'
+import { absent, and, eq, or, present } from '@yaks/query'
 import { entryStatus, reach } from './reach.ts'
 import { actionable, exceptionOf } from '@yaks/tools/fault'
 import { UnfinishedCall } from '@yaks/tools/errors'
@@ -660,9 +661,11 @@ let drop = async (
 ): Promise<number> => {
   let before = replied(entries, session)
   if (before == null || !await dropping(g, session)) return 0
-  let kinds = DROPPED.filter((n) => g.vocab.comp(n)).map((n) => '.' + n)
+  let kinds = DROPPED.filter((n) => g.vocab.comp(n)).map((n) => present(n))
   let gone = answered(
-    await g.read(`.entry.session=${session} !archived ${kinds.join('|')}`),
+    await g.read(
+      and(eq('entry.session', session), absent('archived'), or(...kinds)),
+    ),
     before,
   )
   if (gone.length) {
@@ -795,6 +798,8 @@ export let react = async (
   session: Eid,
   deps: Deps,
   read?: Reading,
+  // The step retaken after a drop: it drops nothing more.
+  dropped = false,
 ): Promise<Step> => {
   session = read?.session ?? session
   let stands = read &&
@@ -1625,9 +1630,9 @@ export let react = async (
   // has replied past at no cost in cache and with no model call. The step is
   // then taken again on what is left.
   if (
-    !(unfinished && executor) && cold(entries, session) &&
+    !dropped && !(unfinished && executor) && cold(entries, session) &&
     await drop(g, session, entries)
-  ) return react(g, session, deps)
+  ) return react(g, session, deps, undefined, true)
   let checkpoint = checkpointOf(entries)
   const sameModel = asked &&
     comp(asked, ASK)?.pruning === pruning(entries) &&
@@ -1818,8 +1823,8 @@ export let react = async (
   // Where a summary is due while the cache is warm, a session that drops
   // does that first and pays one cache write; the summary follows only if
   // what is left still fills the share.
-  if (summarizing && await drop(g, session, entries)) {
-    return react(g, session, deps)
+  if (summarizing && !dropped && await drop(g, session, entries)) {
+    return react(g, session, deps, undefined, true)
   }
   if (summarizing && !checkpoint) {
     held = await tasksOf(g, session)

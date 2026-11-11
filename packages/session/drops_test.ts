@@ -22,7 +22,7 @@ import { seedIdentities } from './testing.ts'
 import { settle } from './run.ts'
 import { transcript } from './transcript.ts'
 import { answered, replied } from './pruning.ts'
-import { kindOf } from './state.ts'
+import { type Kind, kindOf } from './state.ts'
 
 let line = (seq: number, comps: object): Bundle => ({
   entity: { eid: `l${seq}` },
@@ -125,6 +125,9 @@ let echo = {
     `echo: ${String(args.text)}` + ' and on'.repeat(200),
 }
 let COLD = '2026-01-01T00:00:00.000Z', WARM = '2999-01-01T00:00:00.000Z'
+// What the first turn leaves to drop: the worker's report, the call and its
+// result.
+let GONE: Kind[] = ['input', 'call', 'result']
 
 // A session whose first turn called a tool and replied, on a provider whose
 // cache expires at `expires`; then a second input, and what that turn sent.
@@ -148,11 +151,33 @@ let second = async (
     { entity: { eid: toolEid('echo') }, tool: { name: 'echo' } },
     { entity: { eid: 'persona' }, ...wears.persona },
     { entity: { eid: 's' }, session: { persona: 'persona' }, ...wears.session },
+    // What the bus said before the turn: a worker's report, and a person's
+    // comment.
+    {
+      entity: { eid: 'report' },
+      entry: { session: 's' },
+      attention: { worker: 'other' },
+      content: { body: 'knock from a worker: all green' },
+    },
+    {
+      entity: { eid: 'words' },
+      entry: { session: 's' },
+      attention: {},
+      content: { body: 'comment from Jeff: keep it short' },
+    },
     {
       entity: { eid: 'first' },
       entry: { session: 's' },
       content: { body: 'echo hi, then say done' },
       using: { model: m },
+    },
+    // Another session's call and result, which are not this one's to drop.
+    { entity: { eid: 'other' }, session: {} },
+    { entity: { eid: 'theirs' }, entry: { session: 'other' }, call: {} },
+    {
+      entity: { eid: 'answer' },
+      entry: { session: 'other' },
+      result: { call: 'theirs' },
     },
   ])
   let replies: Reply[] = [
@@ -186,7 +211,9 @@ let second = async (
   }])
   await run()
   let entries = await transcript(g, 's')
+  let others = await g.get(['theirs', 'answer'], ['archived'])
   return {
+    others: others.filter((b) => b.archived).length,
     sent: JSON.stringify(asked.at(-1)!.items),
     asks: asked.length,
     entries,
@@ -195,11 +222,12 @@ let second = async (
 }
 
 test('a request that starts after the cache has gone cold leaves out the earlier call and its result, and asks no model for it', async () => {
-  let { sent, asks, dropped, entries } = await second(COLD)
-  equal(dropped, ['call', 'result'])
-  equal(sent.includes('echo: hi'), false)
+  let { sent, asks, dropped, entries, others } = await second(COLD)
+  equal(dropped, GONE)
+  equal(others, 0)
+  equal(sent.includes('echo: hi') || sent.includes('all green'), false)
   equal(
-    ['echo hi, then say done', 'done', 'and once more']
+    ['keep it short', 'echo hi, then say done', 'done', 'and once more']
       .every((words) => sent.includes(words)),
     true,
   )
@@ -221,7 +249,7 @@ test('a session drops only where it or the persona it wears says so', async () =
   equal((await second(COLD, {})).dropped, [])
   equal(
     (await second(COLD, { persona: { drops: {} } })).dropped,
-    ['call', 'result'],
+    GONE,
   )
 })
 
@@ -243,6 +271,6 @@ test('where a summary is due while the cache is warm, a session that drops does 
   }
   equal((await due({})).summaries, 1)
   let { dropped, summaries, sent } = await due()
-  equal([dropped, summaries], [['call', 'result'], 0])
+  equal([dropped, summaries], [GONE, 0])
   equal(sent.includes('and once more'), true)
 })
