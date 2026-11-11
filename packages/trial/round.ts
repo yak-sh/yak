@@ -9,7 +9,7 @@ import type { Bundle, Eid, Graph } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { named, type RoundFile, rows } from './skill.ts'
 
-let attempt = (b: Bundle) => (b.attempt ?? {}) as Record<string, unknown>
+let attempt = (b: Bundle) => (b.writing ?? {}) as Record<string, unknown>
 
 /** The round a word names: the key it was loaded under (`copy-r1`), or any
  * id the graph resolves. */
@@ -34,15 +34,15 @@ export let find = async (g: Graph, word: string): Promise<Eid> => {
  * at one of its attempts. */
 export let gather = async (g: Graph, round: Eid): Promise<Bundle[]> => {
   let r = JSON.stringify(round)
-  let attempts = await g.read(`.attempt .attempt.round=${r} *`)
+  let attempts = await g.read(`.writing .writing.round=${r} *`)
   let of = (prop: string) =>
     attempts.map((a) => attempt(a)[prop]).filter((e) => e).map(String)
   let [head, ...rest] = await Promise.all([
     g.get([round, ...new Set([...of('variant'), ...of('case')])]),
     g.read(`.pair .pair.round=${r} *`),
-    g.read(`.preference .preference.first.attempt.round=${r} *`),
-    g.read(`.grabbed .grabbed.attempt.attempt.round=${r} *`),
-    g.read(`.guess .guess.attempt.attempt.round=${r} *`),
+    g.read(`.preference .preference.first.writing.round=${r} *`),
+    g.read(`.grabbed .grabbed.attempt.writing.round=${r} *`),
+    g.read(`.guess .guess.attempt.writing.round=${r} *`),
   ])
   return [...head.filter((b) => b), ...attempts, ...rest.flat()]
 }
@@ -89,7 +89,7 @@ export let load = async (
   let stale = (await gather(g, round)).filter((b) =>
     !now.has(b.entity.eid) && (b.pair || b.guess || attempt(b).variant)
   )
-  let gone = stale.filter((b) => !b.attempt)
+  let gone = stale.filter((b) => !b.writing)
   if (gone.length) {
     await g.apply(gone.map((b) => ({ entity: b.entity, $delete: true })))
   }
@@ -111,7 +111,7 @@ export let drop = async (g: Graph, round: Eid): Promise<number> => {
   for (let b of shared) {
     let prop = b.variant ? 'variant' : 'case'
     let n = await g.read(
-      `.attempt .attempt.${prop}=${JSON.stringify(b.entity.eid)} .limit=1`,
+      `.writing .writing.${prop}=${JSON.stringify(b.entity.eid)} .limit=1`,
     )
     if (!n.length) unused.push({ entity: b.entity, $delete: true })
   }

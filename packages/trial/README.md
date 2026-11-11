@@ -76,7 +76,7 @@ the writers writes a round file; everything after that is rows.
 | `case{body, base}` + `doc{title}`                                           | what a writer is handed; cases with one `base` are about one thing                                                |
 | `riddle{name, aliases, forbidden, forbidden_exact, group}`                  | on a case: a judge guesses what the attempt describes                                                             |
 | `found{name, source}`                                                       | on a case: something its maker published, kept to learn a judge's taste                                           |
-| `attempt{round, case, variant, persona, run, model, at, ms, reply, output}` | what one writer returned, beside @yaks/model's `usage{input_tokens, output_tokens}` and `cost{dollars, reported}` |
+| `writing{round, case, variant, persona, run, model, at, ms, reply, output}` | what one writer returned, beside @yaks/model's `usage{input_tokens, output_tokens}` and `cost{dollars, reported}` |
 | `pair{round, a, b, ord}`                                                    | two attempts planned for comparison                                                                               |
 | `preference{first, second, chose, why}`                                     | one comparison by its `created.by`; no `chose` is neither                                                         |
 | `grabbed{attempt}`                                                          | its `created.by` found the attempt appealing on its own                                                           |

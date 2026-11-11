@@ -10,7 +10,7 @@
  *   with `riddle{name, aliases, forbidden, forbidden_exact, group}` where a
  *   judge guesses what the attempt describes, or `found{name, source}` where
  *   the attempt is what somebody else published.
- * - An **attempt** is what one writer returned: `attempt{round, case, variant,
+ * - An **attempt** is what one writer returned: `writing{round, case, variant,
  *   persona, run, model, at, ms, reply, output}` beside @yaks/model's
  *   `usage{input_tokens, output_tokens}` and `cost{dollars, reported}`.
  * - A **pair** is two attempts to compare: `pair{round, a, b, ord}`.
@@ -134,7 +134,7 @@ export let rows = (file: RoundFile): Bundle[] => {
     cases.has(key) ? `$case:${key}` : named.case(file.skill, key)
   let attempt = (key: string) => {
     if (!attempts.has(key)) throw new Error(`no attempt in the file: ${key}`)
-    return loaded('attempt', file.key, key)
+    return loaded('writing', file.key, key)
   }
   let models = [
     ...new Set(
@@ -195,7 +195,7 @@ export let rows = (file: RoundFile): Bundle[] => {
       }
       return {
         entity: { eid: attempt(a.key) },
-        attempt: some({
+        writing: some({
           round: '$round',
           case: kase(a.case),
           variant: variant(a.variant),
@@ -303,7 +303,7 @@ let swapped = (a: Eid, b: Eid) =>
  */
 export let deck = (all: Bundle[], judge?: Eid): Deck => {
   let round = wearing(all, 'round')[0]
-  let attempts = byEid(wearing(all, 'attempt'))
+  let attempts = byEid(wearing(all, 'writing'))
   let cases = byEid(wearing(all, 'case'))
   let mine = (b: Bundle) => !judge || comp(b, 'created').by == judge
   let between = (a: Eid, b: Eid) => [a, b].sort().join('|')
@@ -323,15 +323,15 @@ export let deck = (all: Bundle[], judge?: Eid): Deck => {
     ]),
   )
   let about = (a: Eid) =>
-    root(cases, str(comp(attempts.get(a), 'attempt').case))
+    root(cases, str(comp(attempts.get(a), 'writing').case))
   // A case with a name to keep from the judge is shown untitled.
   let secret = (a: Eid) => {
-    let c = cases.get(str(comp(attempts.get(a), 'attempt').case))
+    let c = cases.get(str(comp(attempts.get(a), 'writing').case))
     return !!(c?.found || c?.riddle)
   }
   let pitch = (eid: Eid): Pitch => ({
     eid,
-    parts: (comp(attempts.get(eid), 'attempt').output ?? {}) as Record<
+    parts: (comp(attempts.get(eid), 'writing').output ?? {}) as Record<
       string,
       string
     >,
@@ -364,7 +364,7 @@ export let deck = (all: Bundle[], judge?: Eid): Deck => {
     .map((p): [Eid, Eid] => [str(p.a), str(p.b)])
   let inDeck = [...new Set(planned.flat())]
   let own = [...attempts.values()]
-    .filter((a) => !comp(a, 'attempt').variant)
+    .filter((a) => !comp(a, 'writing').variant)
     .sort((x, y) =>
       str(comp(x, 'created').at) < str(comp(y, 'created').at) ? -1 : 1
     )
@@ -453,12 +453,12 @@ export let tally = (
   label: (b: Bundle) => string = (b) => str(comp(b, 'doc').title),
 ): string => {
   let round = wearing(all, 'round')[0]
-  let attempts = byEid(wearing(all, 'attempt'))
+  let attempts = byEid(wearing(all, 'writing'))
   let named = byEid(all)
   let said = (eid: unknown) =>
     named.has(str(eid)) ? label(named.get(str(eid))!) : '(their own)'
   let keys = (a: Bundle): [string, string][] => {
-    let at = comp(a, 'attempt')
+    let at = comp(a, 'writing')
     return [
       ['variant', said(at.variant)],
       [
@@ -553,7 +553,7 @@ export let tally = (
   let line = (eid: unknown) => {
     let a = attempts.get(str(eid))
     let parts = Object.values(
-      (comp(a, 'attempt').output ?? {}) as Record<string, string>,
+      (comp(a, 'writing').output ?? {}) as Record<string, string>,
     )
     return a
       ? `"${str(parts[0])}" [${keys(a).map(([, v]) => v).join(' / ')}]`

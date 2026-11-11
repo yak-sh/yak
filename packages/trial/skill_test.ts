@@ -111,7 +111,7 @@ let file: RoundFile = {
 
 let kinds = (all: Bundle[]) =>
   Object.fromEntries(
-    ['round', 'variant', 'case', 'attempt', 'pair', 'guess'].map((
+    ['round', 'variant', 'case', 'writing', 'pair', 'guess'].map((
       k,
     ) => [k, all.filter((b) => b[k]).length]),
   )
@@ -127,12 +127,12 @@ test('a round loaded twice holds its rows once, and a dropped pair goes', async 
     round: 1,
     variant: 3,
     case: 3,
-    attempt: 6,
+    writing: 6,
     pair: 2,
     guess: 4,
   })
-  let b = all.find((x) => x.attempt?.output.headline == 'B')!
-  equal(b.attempt.persona, 'persona')
+  let b = all.find((x) => x.writing?.output.headline == 'B')!
+  equal(b.writing.persona, 'persona')
   equal(b.cost, { dollars: 0.01, reported: false })
   equal(b.usage, { input_tokens: 10, output_tokens: 5 })
   let c = all.find((x) => x.doc?.title == 'His words')!
@@ -144,7 +144,7 @@ test('a round loaded twice holds its rows once, and a dropped pair goes', async 
   equal(kinds(await gather(g, first.round)).pair, 1)
 
   await drop(g, first.round)
-  equal(await g.read('.attempt'), [])
+  equal(await g.read('.writing'), [])
   equal(await g.read('.variant'), [])
   equal(await g.read('.case'), [])
 })
@@ -188,7 +188,7 @@ test("the deck hides who wrote a pitch, keeps a judge's taps and sets their own 
     {
       entity: { eid: 'own' },
       created: { by: 'jeff', at: '4' },
-      attempt: { round, case: one.case, output: pitch('Mine') },
+      writing: { round, case: one.case, output: pitch('Mine') },
     },
     {
       entity: { eid: 'p3' },

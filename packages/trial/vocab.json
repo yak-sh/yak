@@ -157,7 +157,7 @@
         }
       }
     },
-    "attempt": {
+    "writing": {
       "component": true,
       "type": "object",
       "embed": false,
@@ -230,13 +230,13 @@
         },
         "a": {
           "type": "string",
-          "ref": "attempt",
+          "ref": "writing",
           "death": "cascade",
           "description": "one attempt"
         },
         "b": {
           "type": "string",
-          "ref": "attempt",
+          "ref": "writing",
           "death": "cascade",
           "description": "the other"
         },
@@ -254,19 +254,19 @@
       "properties": {
         "first": {
           "type": "string",
-          "ref": "attempt",
+          "ref": "writing",
           "death": "cascade",
           "description": "the attempt shown first"
         },
         "second": {
           "type": "string",
-          "ref": "attempt",
+          "ref": "writing",
           "death": "cascade",
           "description": "the attempt shown second"
         },
         "chose": {
           "type": "string",
-          "ref": "attempt",
+          "ref": "writing",
           "death": "cascade",
           "description": "the one preferred; absent when neither was"
         },
@@ -284,7 +284,7 @@
       "properties": {
         "attempt": {
           "type": "string",
-          "ref": "attempt",
+          "ref": "writing",
           "death": "cascade",
           "description": "the attempt that grabbed them"
         }
@@ -298,7 +298,7 @@
       "properties": {
         "attempt": {
           "type": "string",
-          "ref": "attempt",
+          "ref": "writing",
           "death": "cascade",
           "description": "the attempt guessed at"
         },
