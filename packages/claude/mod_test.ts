@@ -111,7 +111,8 @@ test('an already cancelled request never submits', async () => {
 })
 
 /** A model answered by cli_fixture.ts, and the pids of the processes it has
- * started, in the order they booted. */
+ * started, in the order they booted, which need not be the order they were
+ * started. */
 let faked = async () => {
   let log = await Deno.makeTempFile()
   let fixture = new URL('./cli_fixture.ts', import.meta.url).pathname
@@ -144,7 +145,8 @@ test('a step is answered by a process started before it, which saw only that ste
   await using cli = await faked()
   await using model = cli.model
   let first = seen(await model(asking('first')))
-  let [, held] = await cli.until(2)
+  // The process started for the next step, whichever of the two booted first.
+  let held = (await cli.until(2)).find((pid) => pid != first.pid)
   let second = seen(await model(asking('second')))
   assertEquals(second.pid, held)
   assertEquals(
