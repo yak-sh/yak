@@ -49,12 +49,33 @@ let fill = (
 // the same guest again. It does not identify people across registrations.
 let guest = (registration: string, path: (string | number)[]) =>
   derivedEid(JSON.stringify(['registration-person', registration, path]))
+let link = (registration: string, path: (string | number)[]) =>
+  derivedEid(JSON.stringify(['registration-parent', registration, path]))
+
+/** The eids of the people and relation rows a sign-up can have created, each
+ * derived from the sign-up and where in its answers the person stands. A row
+ * the app wrote, or a person the sign-up matched, is at no such eid. */
+export let signedUp = (
+  registration: string,
+  form: Form,
+  answers: Answers,
+): string[] => {
+  let scopes = new Map<string, (string | number)[]>([['[]', []]])
+  for (let { path } of answered(form, answers)) {
+    scopes.set(JSON.stringify(path.slice(0, -1)), path.slice(0, -1))
+  }
+  return [...scopes.values()].flatMap((path) => [
+    guest(registration, path),
+    ...path.length ? [link(registration, path)] : [],
+  ])
+}
 
 // Only a guest entirely represented by these answers is disposable. An editor
 // may have added directory details or notes while the sign-up was unfinished.
 let captured = (row: Bundle, values: Record<string, unknown>) =>
   Object.keys(row).every((name) =>
-    ['entity', 'individual', 'phone', 'created', 'updated'].includes(name)
+    ['entity', 'individual', 'phone', 'form_guest', 'created', 'updated']
+      .includes(name)
   ) && Object.entries(fields(row, 'individual')).every(([prop, value]) =>
     prop == 'status' ? value == 'guest' : same(value, values[prop])
   ) && Object.entries(fields(row, 'phone')).every(([prop, value]) =>
@@ -268,7 +289,11 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                       (matched) => {
                         let found = matched ?? held
                         let who = found ??
-                          { entity: { eid }, individual: { status: 'guest' } }
+                          {
+                            entity: { eid },
+                            individual: { status: 'guest' },
+                            form_guest: { registration: patch.entity.eid },
+                          }
                         if (!found) save(who)
                         save(fill(vocab, who, values))
                         parents.set(key, who.entity.eid)
@@ -308,20 +333,13 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
                           }
                         } else if (rel && !matched) {
                           out.push({
-                            entity: {
-                              eid: derivedEid(
-                                JSON.stringify([
-                                  'registration-parent',
-                                  patch.entity.eid,
-                                  path,
-                                ]),
-                              ),
-                            },
+                            entity: { eid: link(patch.entity.eid, path) },
                             relation: {
                               kind: rel.kind,
                               [rel.entry]: who.entity.eid,
                               [other(rel.entry)]: outer,
                             },
+                            form_guest: { registration: patch.entity.eid },
                           })
                         }
                         return undefined

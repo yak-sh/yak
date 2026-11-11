@@ -164,6 +164,12 @@ test('an unmatched sign-up creates guests and child-to-parent links', async () =
   equal(people.every((p) => (p.individual as Comp).status == 'guest'), true)
   equal(links.map((l) => (l.relation as Comp).a), [parent, parent])
   equal(links.every((l) => (l.relation as Comp).kind == 'parent'), true)
+  equal((await guests.read('.form_guest')).length, 5)
+})
+
+test("a person the app wrote, which a sign-up matched, is not the sign-up's", async () => {
+  await phoned.apply(sign({ phone: '+1 269 555 0142', first: 'Different' }))
+  equal((await phoned.get(['member']))[0].form_guest, undefined)
 })
 
 test('partial answers reuse a repeat child and fill only its empty fields', async () => {

@@ -269,6 +269,23 @@
         }
       }
     },
+    "form_guest": {
+      "component": true,
+      "type": "object",
+      "description": "a person, or the relation between two, that a sign-up created from its answers; read only by the app's owners and editors, as the sign-up is. A person the app wrote itself, which the sign-up matched, does not wear it",
+      "readers": "editor",
+      "required": [
+        "registration"
+      ],
+      "properties": {
+        "registration": {
+          "type": "string",
+          "ref": "registration",
+          "death": "keep",
+          "description": "the sign-up that created it"
+        }
+      }
+    },
     "waitlisted": {
       "component": true,
       "type": "object",

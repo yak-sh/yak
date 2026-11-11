@@ -183,7 +183,13 @@ The letters leave from the app's own address, moments after the sign-up, and
 each is a row like any other letter: `.mail&.delivered` lists what went out
 (<https://yaks.app/docs/mail.md>). The letters and the address rows written for
 them wear `form_mail{registration, purpose}`, so like the sign-up they are read
-only by the app's owners and editors, and deleting the sign-up deletes them.
+only by the app's owners and editors, and deleting the sign-up deletes them. The
+people a sign-up creates from its answers (the `individual` with status `guest`,
+its `phone` and the `relation` rows between them) wear
+`form_guest{registration}`, so they too are read only by the app's owners and
+editors. A person the app wrote itself, which the sign-up matched, stays as the
+app kept it.
+
 Each letter counts toward the space's monthly email allowance.
 
 What a form does _not_ do is anything later or anything that needs judgment: a
