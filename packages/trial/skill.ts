@@ -436,6 +436,10 @@ export let spearman = (xs: number[], ys: number[]): number | undefined => {
   return d ? dot(a, ma, b, mb) / d : undefined
 }
 
+// A count with its noun: `1 pair`, `2 guesses`.
+let many = (n: number, one: string, more = `${one}s`) =>
+  `${n} ${n == 1 ? one : more}`
+
 let table = (lines: string[][]): string[] => {
   let wide = lines[0].map((_, i) => Math.max(...lines.map((l) => l[i].length)))
   return lines.map((l) =>
@@ -546,7 +550,7 @@ export let tally = (
     )
     : undefined
   let agreement = rho == undefined
-    ? `Agreement: not enough to say (${both.length} variants have both a comparison and a guess; three that vary are needed).`
+    ? `Agreement: not enough to say (variants with both a comparison and a guess: ${both.length}; three that vary are needed).`
     : `Agreement: over ${both.length} variants, Spearman's rho between the share preferred and the mean guesses until right is ${
       rho.toFixed(2)
     }: ${
@@ -570,11 +574,14 @@ export let tally = (
     `${str(comp(round, 'doc').title)} (skill: ${
       str(comp(round, 'round').skill)
     })`,
-    `${attempts.size} attempts, ${
-      wearing(all, 'pair').length
-    } pairs, ${preferences.length} comparisons made, ${
-      preferences.filter((p) => !p.chose).length
-    } of them neither, ${grabbed.length} grabbed, ${guesses.length} guesses.`,
+    [
+      many(attempts.size, 'attempt'),
+      many(wearing(all, 'pair').length, 'pair'),
+      `${many(preferences.length, 'comparison')} made`,
+      `${preferences.filter((p) => !p.chose).length} of them neither`,
+      `${grabbed.length} grabbed`,
+      many(guesses.length, 'guess', 'guesses'),
+    ].join(', ') + '.',
     'guesses: mean guesses until right in the open form, a miss counted as its cap plus one. among: how often the pick among the group was right.',
     ...['variant', 'persona', 'case'].flatMap(section),
     '',
