@@ -12,7 +12,7 @@ import type { Bundle } from './bundle.ts'
 import type { Graph } from './graph.ts'
 import { toolRow } from '@yaks/tools'
 import { loadVocab } from '@yaks/vocab'
-import { validateToolInput } from '@yaks/vocab/tools'
+import { validateToolInput, validateToolOutput } from '@yaks/vocab/tools'
 
 type Answer = { $defs: Record<string, unknown> }
 
@@ -103,6 +103,25 @@ test('graph_schema reads several components however the names are sent', () => {
     Refused,
     "no component 'bok', 'shelv' — call graph_schema with no arguments",
   )
+})
+
+// The index is what every agent reads to learn the words, so its answer
+// meets the output schema it declares, an `entity` property among them.
+test('graph_schema answers what its output schema admits', () => {
+  let during = loadVocab({
+    $defs: {
+      during: {
+        component: true,
+        type: 'object',
+        properties: {
+          entity: { type: 'string', ref: 'entity', death: 'keep' },
+        },
+      },
+    },
+  })
+  let call = { entity: { eid: 'c' }, call: { args: {} } }
+  let [said] = schema.run(call, { vocab: during } as Graph) as Bundle[]
+  validateToolOutput(schema, (said.output as { value: unknown }).value)
 })
 
 test('generic declarations describe the search capability and reported keywords', () => {
