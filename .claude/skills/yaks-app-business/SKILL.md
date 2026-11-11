@@ -17,8 +17,10 @@ sentence a stranger reads. Every price, limit, upgrade prompt and example app
 says who yaks.app is for.
 
 The principles are `business-model`, and they hold for every venture; load it
-first. This skill is how they land here. Jeff's words are in M-131884, and the
-model in full, with the personas, the cycle, the plans and the site's
+first. This skill is how they land here. Jeff's words are in M-131884 and
+M-157410. The strategy is D-154810: who yaks.app goes to first, what the
+platform still lacks for them, what is measured and what is charged. The model
+for people who come alone, with their personas, the plans and the site's
 information architecture, is D-131886.
 
 A public page holds only what a visitor needs. No draft marker, task or memory
@@ -29,14 +31,49 @@ code that isn't served.
 
 ## Who it's for
 
-People with a specific problem, at work, at home or in something they run on the
-side, that no off-the-shelf app fits. yaks.app is its own agent product,
-designed for non-technical people with little jargon (M-140239): its pages are
-where they reach their apps, talk with their operators and read logs and
-sessions, and the old web UI is now its settings. Connecting Claude or ChatGPT
-stays for people who already know their assistant well, and is no longer the
-center. What the product gives an app that a chat can't: an address, data that
-stays, sign-in, the people it's for, on any phone (M-37845).
+Jeff set the direction on 2026-11-11, and M-157410 holds it whole; read it
+before any call about audience. The strategy built on it is D-154810.
+
+**First, the organizations near him.** "neighboring businesses, churches,
+schools, and other orgs that have similar use-cases", and "People and orgs that
+just wouldn't be interacting with this stuff at all otherwise." He wins them one
+at a time, in person: "almost every good business starts with the founders
+hand-holding every new customer. That's what makes the product so good and
+useful. It's built for real problems and not just internet randos." They stay
+for something no page can offer: "The *sell* for them is that they know me and
+can simply call me if they need something."
+
+So yaks.app is to be "a support + testimonial driven company". The first two
+organizations are a church and a township, pilots headed for the Pro plan by the
+year (T-153602, T-153603): "we'll do everything we can to make the experience
+A+", and their own words are what the next organization hears.
+
+**What the product is for, in that light.** "our role will basically be
+automating anything they ask me to do", and "My goal with yaks.app is to
+automate that as much as possible." His picture of where software is going is
+"something closer to a time-share programmer that is embedded in many local
+businesses and solves whatever problems for them that they can". He also means
+to use yaks.app himself "to rebuild other software that just isn't very good.
+Libraries, schools, churches, businesses, etc.", so what is built for one
+organization is published for the next to install. The features worth building
+first take something off his hands that an organization asked for, or let the
+next organization start from what the last one got.
+
+**Second, people who find it on their own.** "I'd love if people find it
+independently, and I think we should still try that. A random sign-up is very
+fun!" The home page is for them, and it describes the same product he would
+describe in person. Jeff, the same day, on its pitch: "connecting services and
+automating things. real work. not just these random sites that anyone could
+probably just install right now." /organizations and /churches are the pages he
+hands to an office.
+
+yaks.app is its own agent product, designed for non-technical people with
+little jargon (M-140239): its pages are where they reach their apps, talk with
+their operators and read logs and sessions, and the old web UI is now its
+settings. Connecting Claude or ChatGPT stays for people who already know their
+assistant well, and is not the center. What the product gives an app that a
+chat can't: an address, data that stays, sign-in, the people it's for, on any
+phone (M-37845).
 
 The site leads with the Operator. Jeff, 2026-11-08, verbatim: "i think for
 marketing, i'd like to move towards the "operator" pitch. yaks.app does
@@ -44,11 +81,11 @@ everything for you, including building". You get an Operator that does things
 for you: you chat with it, email it, text it or call it, and it builds the apps
 it needs along the way.
 
-The first personas are literal people who use yaks.app, and D-131886 has each in
-full:
+The individual people who use yaks.app today are literal too, and D-131886 has
+each in full:
 
-- **Jill** is the wedge. She builds tools for her work and for a hobby business,
-  in one free space. She gets value and says she'd pay, yet pays nothing because
+- **Jill** builds tools for her work and for a hobby business, in one free
+  space. She gets value and says she'd pay, yet pays nothing because
   she has hit no limit. Her next steps are what the Plus plan carries: her
   custom domain, payments to sell merch, coding taken off her own assistant's
   allowance, and a long list of features waiting in her app.
@@ -97,11 +134,20 @@ assistant or through yaks.app itself. "i'm not talking a salesman."
 
 ## The cycle, and the maker's path
 
-Someone asks for an app, in yaks.app or through their own assistant, and it's
-live at their address within minutes. They invite the people it's for. Some of
-those people have problems of their own and start a space. The spaces people
-rely on outgrow free and pay. The money makes the product better, and the first
-minute gets more magical.
+Today the cycle runs through Jeff. He visits an organization near him and asks
+about its problems. What it asks for is built in its space, mostly by its
+Operator, and its staff keep asking by email, chat or a call to him. What was
+built for it is published, so the next organization starts from it. Its own
+words, a number it gives us and its name, once it says we may use them, are
+what the next organization hears. Each pays for its space by the year, and
+whatever he did by hand for one is the next thing the platform learns to do.
+
+For people who come alone, the cycle is the older one. Someone asks for an app,
+in yaks.app or through their own assistant, and it's live at their address
+within minutes. They invite the people it's for. Some of those people have
+problems of their own and start a space. The spaces people rely on outgrow free
+and pay. The money makes the product better, and the first minute gets more
+magical.
 
 At its best, the cycle runs through a maker. She makes a tool for herself,
 shares it with her team, publishes it, and then sells it, and the people who buy
@@ -132,6 +178,11 @@ pricing page hold what each one carries:
   cap they set on the plan card: $0 until they choose one, and nothing is ever
   charged past it (meter.ts `creditOf`, billing.ts `buy`).
 
+Jeff expects the organizations to have "plenty of work for us aside from the
+platform at $490/yr". That work has no price yet and nothing bills it: a space
+pays for its plan and its AI credit, and that is all billing.ts charges. How it
+is charged is his to decide (T-157491, with the choices compared in D-154810).
+
 Copy is written for a stranger. "Each space is free or on a paid plan" passes;
 "Free allowances are yours, not each space's" doesn't. How a marketing page is
 written, for any venture, is `marketing-site`; what follows is how it lands on
@@ -156,8 +207,14 @@ invited, read-only, with `yak admin query`, as D-131886 did. Read what they sent
 through the connector's `feedback` tool. Count invitations accepted, copies
 installed and spaces upgraded, with what tipped each one.
 
-People find yaks.app through an app someone shared with them, and through the
-assistants' connector directories for those who already use one.
+An organization hears of yaks.app from Jeff, or from an organization he already
+serves. Its asks are evidence too: what each one was, who made it and how long
+it took to be done (the goals in D-154810). The record held none of the pilots'
+own words on 2026-11-11, so write theirs down verbatim when they come, the way
+Jeff's are (M-31946).
+
+Other people find yaks.app through an app someone shared with them, and through
+the assistants' connector directories for those who already use one.
 
 ## Where it lives
 
@@ -191,8 +248,9 @@ assistants' connector directories for those who already use one.
   a home page visit in the funnel under that page's name, and so are the click,
   the build begun and the sign-up that follow (`yak admin funnel`, "By home page
   variant"). A page names an audience only with what yaks.app has built for one,
-  and never names a customer. The home page is workers/yak/site/home.tsx (drawn
-  from the kit's parts into public/index.html at deploy), which carries a
+  and names or quotes a customer only once they have said we may, in their own
+  words (T-157489; nobody has yet). The home page is workers/yak/site/home.tsx
+  (drawn from the kit's parts into public/index.html at deploy), which carries a
   JSON-LD copy of the plans and a card for each of the three, as
   site/pricing.tsx has; a plan on sale is a card on both pages, never a note
   under them. Next to it are site/pricing.tsx, site/help.tsx and the Limits
@@ -201,7 +259,8 @@ assistants' connector directories for those who already use one.
   /connect and the dashboard offer it. The connector's skills in
   plugins/yaks.app mirror the guide. The plan card a signed-in person sees is
   /manage/billing, in workers/yak/pages.ts.
-- **The work.** T-131889 holds what's left to make yaks.app work as D-131886
-  describes.
+- **The work.** The two pilots' milestones are T-153602 and T-153603, and
+  D-154810's tasks hold what the platform lacks for organizations. T-131889
+  holds what's left to make yaks.app work as D-131886 describes.
 
 When this skill is wrong or missing something, fix it in the same change.
