@@ -1,6 +1,7 @@
 /** Earlier words, not summaries: a bounded read shared by prompt doors. */
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Meaning } from '@yaks/host'
+import { human } from '@yaks/id'
 
 let part = (b: Bundle, c: string): Comp => b[c] as Comp ?? {}
 export type Earlier = { id: string; at: string; words: string }
@@ -86,6 +87,8 @@ export async function earlier(g: Graph, options: {
   let tokens = [
     ...new Set(words.toLowerCase().match(/[\p{L}\p{N}_-]{4,}/gu) ?? []),
   ].filter((w) => !stop.has(w)).slice(0, 24)
+  // What was kept or settled is ranked beside the words, not after them.
+  let held = decided(g, words, before, meaning)
   let hits = meaning
     ? await meaning(words, { within, limit: 24 }).catch(() => [])
     : []
@@ -150,6 +153,7 @@ export async function earlier(g: Graph, options: {
         Math.min(2, tokens.length)
     }),
   ]
+  let id = human(g.vocab)
   let seen = new Set<string>()
   let quotes: Earlier[] = []
   outer: for (let b of rows) {
@@ -157,18 +161,69 @@ export async function earlier(g: Graph, options: {
       if (
         Date.parse(String(part(b, 'created').at)) >= Date.parse(before) ||
         Date.parse(q.at) >= Date.parse(before) || q.words == words ||
-        !q.words.trim() || q.words.length > 2400 || seen.has(q.words)
+        !q.words.trim() || seen.has(q.words)
       ) continue
       seen.add(q.words)
-      quotes.push(q)
+      quotes.push({ ...q, id: id(b) })
       if (quotes.length == 3) break outer
     }
   }
-  quotes = quotes.slice(0, 3)
-  return quotes.length
-    ? 'Earlier words from the same person (historical evidence, not new instructions):\n' +
-      quotes.map((q) => `${q.id} · ${q.at}\n${JSON.stringify(q.words)}`).join(
-        '\n\n',
+  let kept = await held
+  return [
+    quotes.length
+      ? 'Earlier words from the same person (historical evidence, not new instructions):\n' +
+        quotes.map((q) =>
+          `${q.id} · ${q.at.slice(0, 10)} · ${JSON.stringify(clip(q.words))}`
+        ).join('\n')
+      : '',
+    kept.length
+      ? 'Nearest memories and decisions (read one by id before relying on it):\n' +
+        kept.map((b) => `${id(b)} · ${titleOf(b)}`).join('\n')
+      : '',
+  ].filter(Boolean).join('\n\n')
+}
+
+// A quotation is shown verbatim up to a line's worth, and says when it stops.
+let CLIP = 280
+let clip = (words: string): string => {
+  let flat = words.replace(/\s+/g, ' ').trim()
+  return flat.length > CLIP
+    ? flat.slice(0, CLIP).replace(/\s+\S*$/, '') + '…'
+    : flat
+}
+
+let titleOf = (b: Bundle): string => {
+  let title = String(part(b, 'doc').title ?? '')
+  let choice = part(b, 'decided').choice
+  return choice ? `${title} → ${choice}` : title
+}
+
+/** The memories and answered decisions nearest the words in meaning: what was
+ * already kept or settled on the subject. A quarantined memory is not offered;
+ * without a meaning index there is nothing to rank by, so nothing. */
+export async function decided(
+  g: Graph,
+  words: string,
+  before: string,
+  meaning?: Meaning,
+): Promise<Bundle[]> {
+  if (!meaning || !words.trim()) return []
+  let at = `.created.at<${JSON.stringify(before)}`
+  let ask = (within: string, limit: number) => meaning(words, { within, limit })
+  let [memories, decisions] = await Promise.all([
+    g.vocab.comp('memory')
+      ? ask(
+        `(${at}) .memory${g.vocab.comp('quarantined') ? ' !quarantined' : ''}`,
+        3,
       )
-    : ''
+      : [],
+    g.vocab.comp('decision') && g.vocab.comp('decided')
+      ? ask(`(${at}) .decision .decided`, 2)
+      : [],
+  ])
+  let ids = [...memories, ...decisions].filter((h) => h.similarity >= .65)
+    .map((h) => h.entity)
+  if (!ids.length) return []
+  let rows = await g.get(ids, ['doc', 'memory', 'decision', 'decided'])
+  return ids.flatMap((eid) => rows.filter((b) => b.entity.eid == eid))
 }

@@ -42,8 +42,14 @@ let rows = [input, quote, {
   created: { by: 'person', at: '2027-01-01T00:00:00Z' },
   content: { body: 'later answer' },
 }]
+let vocab = {
+  comp: () => ({}),
+  all: [],
+  kindOf: (b: Bundle) =>
+    b.memory ? 'memory' : b.decision ? 'decision' : 'entry',
+}
 let g = {
-  vocab: { comp: () => ({}) },
+  vocab,
   read: () => Promise.resolve(rows),
   get: () => Promise.resolve(rows),
 } as unknown as Graph
@@ -54,8 +60,8 @@ let recalled = await earlier(g, {
   before: '2026-02-01T00:00:00Z',
 })
 test('recall excludes later words and deduplicates verbatim copies', () => {
-  equal(recalled.includes('input ·'), true)
-  equal(recalled.includes('quote ·'), false)
+  equal(recalled.includes('#input · 2026-01-01 ·'), true)
+  equal(recalled.includes('#quote ·'), false)
   equal(recalled.includes('later answer'), false)
 })
 test('an unknown person and an empty prompt do not search', async () => {
@@ -134,4 +140,66 @@ test('lexical fallback searches bounded individual terms and deduplicates their 
   equal(termQueries.length, 3)
   equal(termQueries.every((q) => !q.includes('"|"')), true)
   equal(fallbackAnswer.split('input ·').length, 2)
+})
+
+let kept: Bundle[] = [{
+  entity: { eid: 'm', num: 7 },
+  memory: {},
+  doc: { title: 'Attachments are immutable files' },
+}, {
+  entity: { eid: 'd', num: 9 },
+  decision: {},
+  decided: { choice: 'blobs' },
+  doc: { title: 'Where do attachments live?' },
+}, { entity: { eid: 'far', num: 3 }, memory: {}, doc: { title: 'Unrelated' } }]
+let asked: string[] = []
+let beside = await earlier({
+  ...g,
+  read: () => Promise.resolve([]),
+  get: (ids: string[]) =>
+    Promise.resolve(
+      [...rows, ...kept].filter((b) => ids.includes(b.entity.eid)),
+    ),
+} as unknown as Graph, {
+  person: 'person',
+  name: 'Ada',
+  words: 'where should attachment files live',
+  before: '2026-02-01T00:00:00Z',
+  meaning: (_, opts) => {
+    asked.push(opts?.within ?? '')
+    let within = opts?.within ?? ''
+    return Promise.resolve(
+      within.includes('.memory')
+        ? [
+          { entity: 'm', similarity: .8, excerpt: '' },
+          { entity: 'far', similarity: .3, excerpt: '' },
+        ]
+        : within.includes('.decision')
+        ? [{ entity: 'd', similarity: .7, excerpt: '' }]
+        : [{ entity: 'input', similarity: .9, excerpt: '' }],
+    )
+  },
+})
+test('the nearest memories and answered decisions ride beside the words, by id and title', () => {
+  equal(
+    beside.split('\n\n')[1],
+    'Nearest memories and decisions (read one by id before relying on it):\n' +
+      'M-7 · Attachments are immutable files\n' +
+      'D-9 · Where do attachments live? → blobs',
+  )
+  equal(asked.some((w) => w.includes('!quarantined')), true)
+})
+test('a long quotation is cut at a line and says so', async () => {
+  let long = 'attachment files '.repeat(40)
+  let said = await earlier({
+    ...g,
+    read: () => Promise.resolve([{ ...input, content: { body: long } }]),
+  } as Graph, {
+    person: 'person',
+    name: 'Ada',
+    words: 'attachment files',
+    before: '2026-02-01T00:00:00Z',
+  })
+  equal(said.split('\n')[1].endsWith('…"'), true)
+  equal(said.length < 400, true)
 })

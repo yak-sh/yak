@@ -1088,9 +1088,15 @@ the project's checkout, with the thread as its brief and the project's common
 persona, is where that will plug in (./listen.ts), once sessions may be started
 again (T-95308) and its provider, model and spend are chosen.
 
-### Prompt timing
+### Prompt context
 
-`yak session context --hook -` prints prompt timing from the local transcript.
+Each prompt the harness submits reaches `POST /session/hook`, which answers with
+the prompt's timing from the local transcript and, beside it,
+[what its person said before](../memory/README.md#earlier-words-beside-a-prompt)
+on the same subject: the configured `person`'s nearest earlier words, memories
+and answered decisions, a line each. The recall gets `wait` ms (700 by default,
+a plugin option); a slower one is left out of that prompt's context. With the
+server down, `yak session context --hook -` prints the timing alone.
 Session-start context is independent.
 
 ### Request context

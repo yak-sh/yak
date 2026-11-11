@@ -239,10 +239,12 @@ Apache-2.0
 
 `@yaks/memory/earlier` offers `earlier(graph, options)`: a bounded read of
 strictly earlier person-authored transcript inputs and comments explicitly
-attributing a verbatim quotation to that person. It returns at most three whole
-quotations, each with its source id and date. Agent prose outside a quotation is
-not returned. Duplicate quotations are shown once; quotations over 2,400
-characters are omitted rather than silently shortened.
+attributing a verbatim quotation to that person, and of the memories and
+answered decisions nearest the prompt in meaning. It returns at most three
+quotations, a line each with its source id and date, cut at 280 characters with
+a closing `…`, and at most five memories and decisions by id and title (a
+decision with its choice). A quarantined memory is not offered. Agent prose
+outside a quotation is not returned, and duplicate quotations are shown once.
 
 ```ts
 import { ownWords } from '@yaks/memory/earlier'
