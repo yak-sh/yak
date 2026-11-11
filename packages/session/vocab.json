@@ -727,6 +727,10 @@
         },
         "effort": {
           "type": "string"
+        },
+        "why": {
+          "type": "string",
+          "description": "where a router chose the model (@yaks/model `route`), one line saying why, as the plans read then"
         }
       }
     },

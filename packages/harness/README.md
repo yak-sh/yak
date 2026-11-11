@@ -240,13 +240,38 @@ write changes it:
 yak graph apply --bundles '[{"entity": {"eid": "8b429c76-beb1-8dcf-82fc-c68f7f0e5c73"}, "using": {"provider": "openrouter", "model": "z-ai/glm-5.3"}}]'
 ```
 
+The default may be routed instead. Each `routes` edge from that row to an
+offering (the `serves` edge of a provider and a model) is one model the default
+may run on, and the router (@yaks/model `route`) chooses among them by the
+plans' newest readings
+(`rate_limit{provider, window, account, used, resets,
+at}`): the offering whose
+plan has the most of its week left. A provider that spends another's plan says
+so (`provider{plan}`): `openai`, signed in with a ChatGPT grant, spends the plan
+`codex` reports. The session's first input records the choice and its reason,
+`using{provider, model, why}`, and keeps that model whatever the plans read
+later. The row's own `using` answers while no routed plan has a reading. This
+routes the default between GPT-6.1 Sol on the ChatGPT subscription and Opus 5.5
+on Claude's:
+
+```sh
+yak graph apply --bundles '[
+  {"entity": {"eid": "c7d76166-84c6-8e59-b1f0-ceedeb443c37"}, "provider": {"plan": "codex"}},
+  {"edge": {"from": "8b429c76-beb1-8dcf-82fc-c68f7f0e5c73", "to": "64bd2270-26c0-825a-88be-b318e14d600b"}, "routes": {}},
+  {"edge": {"from": "8b429c76-beb1-8dcf-82fc-c68f7f0e5c73", "to": "b032077b-4a75-83d0-8580-7a1782959d1a"}, "routes": {}}]'
+```
+
+Deleting a `routes` edge takes its model out, and with none left the row's
+`using` is the default again. A project routes its own work the same way, by
+`routes` edges from the project.
+
 A session started on a person's comment (@yaks/session
 [A comment starts a session](../session/README.md#a-comment-starts-a-session))
-asks what the task's project says its work runs on (`usingFor`): the
-`using{provider, model}` on the project, and the default where the project names
-none. A project whose `using` names the `claude` provider has such a session
-answered by the signed-in `claude -p` (@yaks/claude), on its owner's
-subscription.
+asks what the task's project says its work runs on (`usingFor`): the offering
+the project routes, else the `using{provider, model}` on the project, and the
+default where the project says neither. A project whose `using` names the
+`claude` provider has such a session answered by the signed-in `claude -p`
+(@yaks/claude), on its owner's subscription.
 
 Each provider signs in its own way (OpenAI: `$OPENAI_API_KEY` or the OpenAI
 connection), over the sign-ins this machine lends it. `yak auth` belongs to

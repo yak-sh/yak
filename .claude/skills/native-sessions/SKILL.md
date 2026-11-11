@@ -103,8 +103,12 @@ its ancestor instruction files through its own commands and reads. Graph-only mo
 workspace was selected, the first file or command call requires a configured
 default sandbox adapter and records its pending intention.
 
-Without model flags, selection comes from the provider's `using` row
-(packages/harness/model_selection.ts). `yak model list` is the configured
+Without model flags, the harness's default answers
+(packages/harness/default.ts): of the offerings its package row `routes`, the
+one whose plan has the most usage left (@yaks/model `route`, over the
+`rate_limit` readings), else that row's `using`. The session's first input
+records the choice and why as `using{provider, model, why}`, and a session that
+names a model keeps it. `yak model list` is the configured
 endpoint's catalogue; a one-line probe settles whether an unlisted name runs:
 `yak session new "Reply with only: ok" --provider openai --model <name> --effort low`.
 

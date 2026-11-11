@@ -8,7 +8,8 @@
     "./graph": "./graph.ts",
     "./sse": "./sse.ts",
     "./stall": "./stall.ts",
-    "./step": "./step.ts"
+    "./step": "./step.ts",
+    "./route": "./route.ts"
   },
   "license": "Apache-2.0",
   "description": "Defines provider-neutral model request and reply types, vocabulary for providers and models, and helpers for billing and recovering generated media. Implements no provider's transport, but decodes the server-sent events providers stream and carries one model step from one host to another's providers.",

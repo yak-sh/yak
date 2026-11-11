@@ -82,6 +82,12 @@
           "type": "integer",
           "minimum": 0,
           "description": "how long, in seconds, a stream from this provider may go without progress before its request fails as stalled; 0 for no limit. Missing means the default, five minutes"
+        },
+        "plan": {
+          "type": "string",
+          "ref": "provider",
+          "death": "keep",
+          "description": "the provider whose plan limits (`rate_limit`) its requests spend, where they are not its own: `openai` signed in with a ChatGPT grant spends the plan `codex` reports"
         }
       }
     },
@@ -165,6 +171,14 @@
           "description": "what the provider calls the model, sent as the model of every request it serves"
         }
       }
+    },
+    "routes": {
+      "component": true,
+      "type": "object",
+      "edge": "routes",
+      "reversed": "routed by",
+      "description": "an edge relation, from a row whose `using` is a default to an offering (a `serves` edge): the default is chosen among the offerings it routes, the one whose plan has the most usage left, and its own `using` answers only where no plan has a reading",
+      "properties": {}
     },
     "usage": {
       "component": true,

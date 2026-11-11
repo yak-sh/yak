@@ -78,9 +78,10 @@ tasks, and the first decision that needs fixer history reads it for every open
 bug. The home project and `nofix` are read once a pass, and the running fixers
 once until the pass requests a fixer. A bug whose work the pass writes reads its
 task and fixers again. The request is a `session{operator}` with `fixer{bug}`,
-an `entry{session}` with `content{body}` and `using{provider, model, effort}`,
-and a `claim{session}` on the task. The provider and model are the native
-harness's default (`defaultUsing` from `@yaks/harness/default`, the `using` on
+an `entry{session}` with `content{body}` and
+`using{provider, model, effort, why}`, and a `claim{session}` on the task. The
+provider and model are the native harness's default (`defaultUsing` from
+`@yaks/harness/default`: the offering its router chooses, else the `using` on
 the harness's package row), read when the request is written, so the graph write
 that changes every native session's model changes the fixers' too; the request
 fails while no default is set. No process starts inside the follower; the native

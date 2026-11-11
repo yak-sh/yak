@@ -213,7 +213,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
       if (!open && (history.length || task.claim)) return []
     }
     if (await blocked(work, continuing ? [] : history, pass)) return []
-    let { provider, model } = await defaultUsing(g)
+    let using = await defaultUsing(g)
     let session = continuing ? latest.entity.eid : uuid()
     let title = str(comp(task, 'doc')?.title)
     return [
@@ -237,8 +237,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
           ].filter(Boolean).join('\n\n'),
         },
         using: {
-          provider,
-          model,
+          ...using,
           ...(options.effort ? { effort: options.effort } : {}),
         },
       },

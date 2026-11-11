@@ -257,10 +257,10 @@ equal(model.anchor!({}), undefined)
 
 ## Providers and models in a graph
 
-`modelDoc` declares `provider`, `model`, `serves`, `usage`, `price`, `cost`,
-`response`, `questions`, `answer` and `submitted{at}`. `models()` supplies a
-graph [plugin](../graph/README.md#data-model) with that vocabulary, name
-addressing and the `requesting` normalization
+`modelDoc` declares `provider`, `model`, `serves`, `routes`, `usage`, `price`,
+`cost`, `response`, `questions`, `answer` and `submitted{at}`. `models()`
+supplies a graph [plugin](../graph/README.md#data-model) with that vocabulary,
+name addressing and the `requesting` normalization
 [hook](../graph/README.md#data-model). `@yaks/model/graph` exports the same
 plugin through `plugins()`.
 
@@ -363,6 +363,24 @@ is the dollars spent by one model request or tool call, with `reported` saying
 whether the provider supplied that amount. A **rate limit**
 (`rate_limit{provider, window, used, resets, at}`) is the latest reading of how
 much of a provider's plan a window has used.
+
+## Routing a default
+
+A **router** chooses which of several offerings a default runs on.
+`route({routes, readings, now})` (`@yaks/model/route`) is pure: `routes` are the
+offerings, each `{provider, model, name, plan}` with `plan` the provider whose
+limits meter it, and `readings` are `rate_limit` rows. It answers
+`{provider, model, why}`, or nothing where no rule can say. A rule narrows the
+offerings, best first, and the first one left is the answer; `why` says in one
+line what each rule learned. Today's one rule keeps the offerings whose plan has
+a reading, the one with the most of its longest window left first, and counts a
+window that has reset since its reading as unused. A parameter for a later rule
+(the work's kind, a pinned model) is another property of what is asked.
+
+In a graph the offerings are data: a **routes** edge from the row whose `using`
+is the default to a `serves` edge, and `provider{plan}` on a provider that
+spends another's plan. @yaks/harness reads them for what a native session asks
+by default ([harness](../harness/README.md)).
 
 A model a graph meets for the first time, by a request that names it or an
 imported transcript, is given its vendor's list price (`listPrice(name)`), so
