@@ -131,10 +131,7 @@ export let appWire = (vocab: Vocab, name: string, composition: Composition) => {
     read,
     own: false,
     spoke: () => {},
-    trusted: () => ({
-      ...g,
-      read: (line) => g.read(line, { administrative: true }),
-    }),
+    trusted: () => g,
     found: (text, opts, limit) => composition.found!(g, text, opts, limit),
     speak: (rows) => rows,
     taught: (answer) => Promise.resolve(answer),

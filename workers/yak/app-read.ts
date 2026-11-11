@@ -79,9 +79,13 @@ export let appRead = (options: Options): Handler => {
       if (request.headers.get('x-yak-kernel') != '1') {
         throw new Refused('trusted queries require the kernel')
       }
+      let opts = {
+        administrative: true,
+        graves: url.searchParams.get('graves') == '1',
+      }
       return agg
-        ? await counted(line, agg, { administrative: true })
-        : json(await options.trusted().read(line))
+        ? await counted(line, agg, opts)
+        : json(await options.trusted().read(line, opts))
     }
     let opts = read(request)
     if (agg && url.searchParams.get('live') != '1') {

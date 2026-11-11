@@ -1,8 +1,11 @@
 // A provider's signed delivery receipt updates the same neutral letter the
 // sender wrote. A missing letter is an error to retry: an Operator may still be
 // committing it when the provider calls back. The provider's plugin owns the
-// route that verifies a receipt (@yaks/resend `./routes`).
+// route that verifies a receipt (@yaks/resend `./routes`). A deleted letter
+// has nothing left to update: a late receipt acknowledges its tombstone.
 import type { Comp, Graph } from '@yaks/graph'
+import { dead } from '@yaks/graph/bundle'
+import { token } from '@yaks/graph/sha256'
 
 /** Apply a provider-neutral receipt to the same recorded letter. */
 export let receipted = async (
@@ -10,6 +13,7 @@ export let receipted = async (
   found: { letter: string; id: string },
 ): Promise<void> => {
   let [letter] = await graph.get([found.letter])
+  if (letter && dead(letter)) return
   if (!letter?.mail) {
     throw new Error('The delivery receipt awaits its recorded letter')
   }
@@ -21,6 +25,7 @@ export let receipted = async (
     await graph.apply([{
       entity: letter.entity,
       mail: { message_id: found.id },
+      $was: { entity: { eid: token(letter.entity.eid) } },
     }], { trusted: true })
   }
 }

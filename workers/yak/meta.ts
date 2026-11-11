@@ -42,6 +42,7 @@ export type Meta = {
       live?: boolean
       listing?: boolean
       trusted?: boolean
+      graves?: boolean
       names?: boolean
     },
   ) => Promise<Bundle[]>
@@ -134,7 +135,7 @@ export let metaOf = (
         opts?.live ? '&live=1' : ''
       }${opts?.listing ? '&listing=1' : ''}${
         opts?.trusted ? '&trusted=1' : ''
-      }`,
+      }${opts?.graves ? '&graves=1' : ''}`,
       async (r) => {
         if (!r.ok) throw await answered(r)
         return await r.json() as Bundle[]

@@ -11,6 +11,7 @@ import { lent } from './lent.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { storeOf } from './door.ts'
 import { builderOf, SPACE } from './build-door.ts'
+import { caught } from './defects.ts'
 
 export let receipts = async (
   request: Request,
@@ -49,13 +50,27 @@ export let receipts = async (
     let graph = metaOf(storeOf(env.STORE, name), KERNEL)
     // The letter is the platform's own bookkeeping, read whoever its readers
     // are: an app's letters are kept to its owners and editors (`mail`).
-    await receipted({
-      get: (eids) =>
-        graph.query(stringify(and(eq('entity.eid', list(...eids)), every())), {
-          trusted: true,
-        }),
-      apply: (bundles) => graph.apply(bundles, KERNEL),
-    }, found)
+    try {
+      await receipted({
+        get: (eids) =>
+          graph.query(
+            stringify(and(eq('entity.eid', list(...eids)), every())),
+            {
+              trusted: true,
+              graves: true,
+            },
+          ),
+        apply: (bundles) => graph.apply(bundles, KERNEL),
+      }, found)
+    } catch (error) {
+      caught(error, {
+        request: 'mail receipt',
+        provider: via,
+        store: name,
+        letter: found.letter,
+      })
+      throw error
+    }
   }
   return Response.json({ ok: true })
 }
