@@ -366,6 +366,9 @@ export let BOUNDARIES = [
   // Every letter a form wrote, and the address it went to, is kept to the
   // app's editors (form-mail-move.ts, T-157871).
   'yak/store/form-mail/1',
+  // Every phone row text sign-up created is kept to the app's editors
+  // (form-phone-move.ts, T-159292).
+  'yak/store/form-phone/1',
   // Every address only a letter names is kept to the app's editors, as the
   // letter is (recipient-move.ts, T-159245).
   'yak/store/recipient/1',

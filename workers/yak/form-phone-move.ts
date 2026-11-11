@@ -15,6 +15,7 @@ export let formPhoneMove = (
 export let formPhoneRule: Rule = {
   mark: 'yak/store/form-phone/1',
   stores: 'apps',
+  live: 'apps',
   core: ['registration', 'phone', 'form_phone'],
   find: '.registration.submitter',
   move: (row, read) => {
