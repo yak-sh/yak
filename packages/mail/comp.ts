@@ -55,6 +55,10 @@ export let MAIL = 'mail'
 /** The component naming an address as an entity of its own. */
 export let EMAIL = 'email'
 
+/** The component keeping an address only a letter names to those who may read
+ * the letters. */
+export let RECIPIENT = 'recipient'
+
 /** The component naming who a letter is for, as an entity. */
 export let DELIVER = 'deliver'
 

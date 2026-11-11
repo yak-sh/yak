@@ -103,6 +103,7 @@ export * from './inbound.ts'
 export * from './arrive.ts'
 export * from './invite.ts'
 export * from './plugin.ts'
+export * from './recipient.ts'
 export * from './options.ts'
 export * from './pull.ts'
 

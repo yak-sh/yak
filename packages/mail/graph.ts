@@ -9,10 +9,22 @@
 // The outbound half is `./effects`, which needs the sender the config names.
 
 import type { Plugin } from '@yaks/graph'
+import type { Vocab } from '@yaks/vocab'
 import { mailbox } from './plugin.ts'
+import { recipients } from './recipient.ts'
 import type { Options } from './options.ts'
 
-/** The letter components, and the address canonicalizer the domain implies. */
-export let plugins = (_host: unknown, options: Options = {}): Plugin[] => [
+/** The letter components, the address canonicalizer the domain implies, and
+ * the mark that keeps an address only a letter names with the letters, where
+ * the store speaks the words it is written in. */
+export let plugins = (
+  { vocab }: { vocab: Vocab },
+  options: Options = {},
+): Plugin[] => [
   mailbox({ domain: options.domain }),
+  ...['email', 'deliver', 'recipient'].every((n) =>
+      vocab.comp(n)?.package == '@yaks/mail'
+    )
+    ? [recipients()]
+    : [],
 ]

@@ -84,6 +84,12 @@
         }
       }
     },
+    "recipient": {
+      "component": true,
+      "type": "object",
+      "description": "this address is on file only because a letter is for it, and nothing else about it is; in an app, read only by its owners and editors, whatever the app's access — the platform writes it when a letter's `deliver.to` names such an address, as a letter is kept by `mail`",
+      "readers": "editor"
+    },
     "deliver": {
       "component": true,
       "type": "object",

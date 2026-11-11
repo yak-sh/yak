@@ -195,31 +195,39 @@ Only the app's owners and editors read it, whatever the app's `access`: a
 visitor or a viewer of a `public` or `open` app reads no email, sent or
 received, and the app's own worker and agents read every one.
 
-The recipient row an email names is an ordinary row, read by whoever can read
-the app: in a `public` or `open` app that is anybody with the link, signed in or
-not. That suits a contact the page shows on purpose, such as the office's
-address. When the recipient row says something about a person (who signed up, or
-where their letter went), keep it to the app's owners and editors too. Declare a
-component with `"readers": "editor"` in `vocab.json`
-(<https://yaks.app/docs/components.md>, "Rows kept to members: `readers`") and
-put it on the recipient row when you write it:
-
-    { "$defs": { "volunteer": { "readers": "editor", "floor": "editor",
-        "properties": { "shift": { "type": "string" } } } } }
+The recipient row an email names is kept for the app's owners and editors too,
+when it is only an address. The platform marks an `email{address}` row that an
+email's `deliver.to` names with `recipient{}`, which declares
+`"readers":
+"editor"`, so a visitor or a viewer of a `public` or `open` app does
+not list who was written to, and the email is sent as before:
 
     await apply([
-      { entity: { eid: '$ana' },
-        email: { address: 'ana@example.com' },
-        volunteer: { shift: 'Saturday' } },
+      { entity: { eid: '$ana' }, email: { address: 'ana@example.com' } },
       { entity: { eid: '$note' },
         doc: { title: 'A new volunteer', body: 'Ana Ruiz, 555-0142.' },
         mail: {},
         deliver: { to: '$ana' } },
     ])
 
-The row is then left out of every read by a visitor or a viewer, and the email
-is sent as before. The emails a form sends for a sign-up, and the addresses they
-go to, are kept this way by the platform (<https://yaks.app/docs/forms.md>).
+You write nothing for it. A row the app also gave something of its own, such as
+a staff row with `individual` or `doc`, is left as you wrote it: it is an
+ordinary row, read by whoever can read the app, which suits a contact the page
+shows on purpose, such as the office's address. When such a row says something
+about a person (who signed up, or where their letter went), keep it to the app's
+owners and editors yourself. Declare a component with `"readers": "editor"` in
+`vocab.json` (<https://yaks.app/docs/components.md>, "Rows kept to members:
+`readers`") and put it on the row when you write it:
+
+    { "$defs": { "volunteer": { "readers": "editor", "floor": "editor",
+        "properties": { "shift": { "type": "string" } } } } }
+
+    { entity: { eid: '$ana' },
+      email: { address: 'ana@example.com' },
+      volunteer: { shift: 'Saturday' } }
+
+The emails a form sends for a sign-up, and the addresses they go to, are kept by
+the platform too (<https://yaks.app/docs/forms.md>).
 
 ## Delivery status: `delivered` and `bounced`
 

@@ -484,6 +484,33 @@ test('a public app keeps its texts, sent or received, and who agreed to them fro
   ])
 })
 
+test('a public app keeps the address its own letter is for from visitors, and shows the staff it lists', async () => {
+  let staff = crypto.randomUUID()
+  await agent.tool('graph_apply', {
+    app: shown,
+    entities: [
+      {
+        entity: { eid: staff },
+        doc: { title: 'Pastor' },
+        email: { address: 'pastor@example.com' },
+      },
+      {
+        entity: { eid: crypto.randomUUID() },
+        mail: {},
+        deliver: { to: staff },
+      },
+    ],
+  })
+  for (let cookie of [undefined, stranger.cookie]) {
+    equal(await asked('.email.address=team@example.com', cookie), [200, '[]'])
+    equal(
+      (await asked('.email.address=pastor@example.com .count', cookie))[1],
+      '{"count":1}',
+    )
+  }
+  equal(await asked('.recipient .count', owner.cookie), [200, '{"count":1}'])
+})
+
 // A stranger at a private published app is served its sample (visit.ts), and
 // still meets the app's own forms at its form door.
 let gallery = `formsdemo${crypto.randomUUID().slice(0, 6)}`
