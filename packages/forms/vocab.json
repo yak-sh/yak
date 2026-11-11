@@ -167,6 +167,7 @@
       "readers": "editor",
       "status": {
         "cancelled": "cancelled",
+        "held": "held",
         "waitlisted": "waitlisted",
         "completed": "done",
         "default": "open"
@@ -288,6 +289,24 @@
           "ref": "registration",
           "death": "keep",
           "description": "the sign-up that created it"
+        }
+      }
+    },
+    "held": {
+      "component": true,
+      "type": "object",
+      "description": "a sign-up the form's door took for a bot's, kept for the app's owners and editors to look at: it sends no email, fills nothing in the directory and takes no place until one of them accepts it, by removing this mark and marking it completed",
+      "properties": {
+        "why": {
+          "type": "string",
+          "enum": ["trap", "quick"],
+          "description": "trap when the field people never see was filled in, quick when the form was sent sooner than a person could fill it in"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when the door held it"
         }
       }
     },

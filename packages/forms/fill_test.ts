@@ -7,7 +7,7 @@ import { client } from '@yaks/client'
 import { desk, draftDoc, type Drafts, drafts, type Stash } from '@yaks/draft'
 import { loadVocab } from '@yaks/vocab'
 import { type Host, Ux } from '@yaks/ux'
-import type { Answers, Question } from '@yaks/forms'
+import { type Answers, type Question, SIGNS, type Signs } from '@yaks/forms'
 import { type ComponentChildren, h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
@@ -140,7 +140,7 @@ let page = async (
   })
   let root = document.querySelector('main')!
   let e: Bundle = { entity: { eid: submitAt(at) } }
-  let sent: Answers[] = [], reads: string[] = []
+  let sent: Answers[] = [], signs: Signs[] = [], reads: string[] = []
   let draw = () =>
     render(
       h(
@@ -156,10 +156,12 @@ let page = async (
           },
           upload,
           read: (to) => (reads.push(to), Promise.resolve(door)),
-          send: (
-            to,
-            answers,
-          ) => (equal(to, at), sent.push(answers), Promise.resolve(refuse)),
+          send: (to, answers, said = {}) => (
+            equal(to, at),
+              sent.push(answers),
+              signs.push(said),
+              Promise.resolve(refuse)
+          ),
         }),
       ),
       root,
@@ -177,13 +179,16 @@ let page = async (
   return {
     root,
     sent,
+    signs,
     reads,
     $,
     $$,
     state: () => submitOf<Door>(e),
     url: () => url,
     text: () => words(root),
-    names: () => $$('[name]').map((el) => el.getAttribute('name')),
+    names: () =>
+      $$('[name]').filter((el) => !el.closest('.Form_Trap'))
+        .map((el) => el.getAttribute('name')),
     type: async (name: string, value: string) => {
       let el = $(`[name="${name}"]`)
       el.value = value
@@ -232,6 +237,22 @@ test('a standalone form recovers the draft kept by the previous component', asyn
   await p.submit()
   equal(p.sent, [{ name: 'Ruth', texts: true }])
   equal(typed.text(place), '')
+})
+
+test('a sending carries how long it took and the field people never see', async () => {
+  await using p = await page(card)
+  let trap = p.$(`[name="${SIGNS.trap}"]`)
+  equal(trap.closest('.Form_Trap')?.getAttribute('aria-hidden'), 'true')
+  equal(trap.getAttribute('tabindex'), '-1')
+  await p.type('name', 'Ruth')
+  await p.submit()
+  let [{ trap: left, took }] = p.signs
+  equal([left, typeof took == 'number' && took >= 0], ['', true])
+  await p.press('Fill it in again', 'section')
+  await p.type('name', 'Bot')
+  p.$(`[name="${SIGNS.trap}"]`).value = 'https://spam.example'
+  await p.submit()
+  equal(p.signs[1].trap, 'https://spam.example')
 })
 
 test('native return feedback shows thanks once, and preserves unrelated page state', async () => {

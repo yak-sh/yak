@@ -182,11 +182,15 @@ let named = (row: Bundle, values: Record<string, unknown>) => {
     )
 }
 
+// What a sign-up's directory work reads of it: a sign-up held for a bot's
+// fills nothing until it is accepted, which takes the mark away.
+let READ = ['registration', 'held']
+
 export let directoryForms = (vocab: Vocab): Plugin => ({
   name: 'yak/form-directory',
   admission: () => true,
   hooks: {
-    rules: hook(['registration', 'individual'], (bundles, tx) => {
+    rules: hook(['registration', 'individual', 'held'], (bundles, tx) => {
       let out = [...bundles]
       let written = new Map(
         bundles.filter((b) => b.individual && !dead(b))
@@ -321,12 +325,13 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
             })
           })
       let register = (patch: Bundle) =>
-        after(tx.get([patch.entity.eid], ['registration']), ([before]) => {
+        after(tx.get([patch.entity.eid], READ), ([before]) => {
           let registration = {
             ...fields(before, 'registration'),
             ...fields(patch, 'registration'),
           }
-          if (!registration.form) return
+          let held = patch.held === undefined ? before?.held : patch.held
+          if (!registration.form || held) return
           return after(
             tx.read(
               `.question.form=${quoted(String(registration.form))}`,
@@ -519,7 +524,7 @@ export let directoryForms = (vocab: Vocab): Plugin => ({
           )
         })
       let registrations = vocab.comp('registration') && vocab.comp('question')
-        ? bundles.filter((b) => b.registration && !dead(b))
+        ? bundles.filter((b) => (b.registration || b.held === null) && !dead(b))
         : []
       if (!registrations.length) return out.map(directoryPhone)
       return after(

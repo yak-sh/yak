@@ -17,8 +17,17 @@ export type SubmitState<T = unknown> = {
   sending?: boolean
   sent?: boolean
   said?: string
+  /** When the content arrived, in epoch milliseconds: how long a sending took
+   * is counted from it. */
+  shown?: number
 }
-export type Send = (at: string, values: Values) => Promise<string | undefined>
+/** Sends `values`, and `signs`, what the page saw of the sending beside them,
+ * such as how long it took; answers what refused it, if anything did. */
+export type Send = (
+  at: string,
+  values: Values,
+  signs?: Values,
+) => Promise<string | undefined>
 export type Read<T> = (at: string) => Promise<T | string>
 export type Upload = (
   at: string,
@@ -85,7 +94,11 @@ export let Submit = <T>(
   let load = async () => {
     emit({ unread: undefined })
     let content = await read(at)
-    emit(typeof content == 'string' ? { unread: content } : { content })
+    emit(
+      typeof content == 'string'
+        ? { unread: content }
+        : { content, shown: Date.now() },
+    )
   }
   let content = state.content
   useEffect(() => {
@@ -144,9 +157,9 @@ export let Submit = <T>(
       },
     )
   }
-  let sent: Send = async (at, values) => {
+  let sent: Send = async (at, values, signs) => {
     let before = drafts.text(place)
-    let said = await send(at, values)
+    let said = await send(at, values, signs)
     if (said == null && drafts.text(place) == before) drafts.spend(place)
     return said
   }

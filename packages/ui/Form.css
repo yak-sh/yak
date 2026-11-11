@@ -42,6 +42,15 @@
 .Form_Value-none {
   color: var(--dim);
 }
+/* A field people never see, which only a bot fills in: off the page and
+   taking no room in it. */
+.Form_Trap {
+  position: absolute;
+  left: -100vw;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
 .Form_Line,
 .Form_Actions {
   display: flex;

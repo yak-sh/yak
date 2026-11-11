@@ -5,7 +5,17 @@
 import { type Comp, mint, signed } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Refused } from '@yaks/graph/errors'
-import { type Form, open, posted, prefilled } from '@yaks/forms'
+import {
+  type Answers,
+  type Form,
+  missing,
+  open,
+  posted,
+  prefilled,
+  screened,
+  type Signs,
+  signsOf,
+} from '@yaks/forms'
 import { accepted } from './form-rules.ts'
 import type { Answer } from './apps.ts'
 import { type Door, IDEMPOTENCY } from './door.ts'
@@ -101,16 +111,21 @@ export let formIn = async (req: Request, at: Stored): Promise<Response> => {
   let person = req.headers.get('x-yak-person')
   if (req.method == 'GET') return shown(at, eid, row, person)
   if (req.method != 'POST') return reply('Use GET or POST.', 405)
-  let answers: unknown
+  let asked = async () =>
+    ({
+      form: row.form,
+      questions: await at.graph.read(`.question.form=${JSON.stringify(eid)}`),
+    }) as unknown as Form
+  let answers: unknown, signs: Signs = {}
   if (native(req)) {
-    let questions = await at.graph.read(`.question.form=${JSON.stringify(eid)}`)
-    answers = posted(
-      { form: row.form, questions } as unknown as Form,
-      new URLSearchParams(await req.text()),
-    )
+    let fields = new URLSearchParams(await req.text())
+    answers = posted(await asked(), fields)
+    signs = signsOf(fields)
   } else {
     try {
-      answers = (await req.json() as { answers?: unknown } | null)?.answers
+      let sent = await req.json() as { answers?: unknown; signs?: Signs } | null
+      answers = sent?.answers
+      if (sent?.signs && typeof sent.signs == 'object') signs = sent.signs
     } catch {
       return reply('Submit an answers object.', 400)
     }
@@ -126,6 +141,13 @@ export let formIn = async (req: Request, at: Stored): Promise<Response> => {
   if (key && (await at.graph.get([filed], ['registration']))[0]) {
     return new Response(null, { status: 204, headers: NO_STORE })
   }
+  // A sign-up the door takes for a bot's is kept, held and not completed, so
+  // it sends nothing and takes no place until the app's people accept it. A
+  // person the app knows is never screened: their form comes filled in.
+  let why = person ? undefined : screened(signs)
+  if (why && missing(await asked(), answers as Answers).length) {
+    return reply('Answer every required question.', 400)
+  }
   let me = await recognized(at, person)
   try {
     await at.graph.apply(signed([{
@@ -137,7 +159,7 @@ export let formIn = async (req: Request, at: Stored): Promise<Response> => {
         ...person ? { submitter: person } : {},
         ...me ? { person: me.entity.eid } : {},
       },
-      completed: {},
+      ...why ? { held: { why } } : { completed: {} },
     }], { by: at.app }))
   } catch (error) {
     if (error instanceof Refused) return reply(error.message, 400)

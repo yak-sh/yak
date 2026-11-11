@@ -344,12 +344,15 @@ supplied `drafts` desk, or the enclosing `Ux` host. Its caller chooses a stable
 validation and the form's labels. `initial(content)` supplies empty repeat
 values; `feedback()` optionally consumes native navigation feedback.
 
-State is `Submit{content, unread, values, tried, sending, sent, said}` on
-`submitAt(at)`, emitted through `onChange` and read with `submitOf(e)`. Values
-mirror the durable draft. A successful send spends that draft only if nobody
-edited it while the send waited; a refusal retains it. The supplied uploader
-returns `{value}` for a selected file, or a refusal string. The component has no
-endpoint or question vocabulary of its own.
+State is `Submit{content, unread, values, tried, sending, sent, said, shown}` on
+`submitAt(at)`, emitted through `onChange` and read with `submitOf(e)`. `shown`
+is when the content arrived, in epoch milliseconds. Values mirror the durable
+draft. `send(at, values, signs)` takes what the page saw of the sending beside
+its values, such as how long it took, and passes it to the caller's `send`. A
+successful send spends that draft only if nobody edited it while the send
+waited; a refusal retains it. The supplied uploader returns `{value}` for a
+selected file, or a refusal string. The component has no endpoint or question
+vocabulary of its own.
 
 [@yaks/forms/fill](../forms/README.md#filling-forms) supplies a complete adapter
 for form questions, including conditional fields, required answers, repeat

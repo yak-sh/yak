@@ -773,23 +773,23 @@ The complete list of reserved names:
     document_extract document_page document_text draft edge effect email
     entity entry error event exception execution failed favorite fee feed
     feedback file filed finding fired form form_guest form_mail form_phone
-    form_post former gallery gitobj grant grants_listed home hook hostname
-    image inference installed integration integration_install interrupted
-    invite inviting key last_deploy lease lines listed mail mail_answered
-    mail_dismissed mail_post mail_task mcp_list mcp_server member memory
-    mentions meter miss model model_reservation model_result newcomer
-    newcomer_builds notice notice_confirmed notice_letter notice_posted
-    notice_subscription notified notify_deaths notify_trash oauth_grant
-    occupancy offer openai opened openrouter operator operator_alerts
-    operator_reach order output output_of own_number parent pending person
-    persona phone phone_line plan preview price product project provider
-    provisional public_file published push_subscription quarantined question
-    questions reads recalled recipient ref referenced refund_failed
-    refund_request refund_retry refund_sale refund_sent refusal
-    refusal_report register_writes registration release_remake report
-    report_refusals repository representation requires restored result
-    retired revision rtc rtc_lapse sale_access sale_artifact satisfies
-    screen screenshot secret seeded seller sender sending serves
+    form_post former gallery gitobj grant grants_listed held home hook
+    hostname image inference installed integration integration_install
+    interrupted invite inviting key last_deploy lease lines listed mail
+    mail_answered mail_dismissed mail_post mail_task mcp_list mcp_server
+    member memory mentions meter miss model model_reservation model_result
+    newcomer newcomer_builds notice notice_confirmed notice_letter
+    notice_posted notice_subscription notified notify_deaths notify_trash
+    oauth_grant occupancy offer openai opened openrouter operator
+    operator_alerts operator_reach order output output_of own_number parent
+    pending person persona phone phone_line plan preview price product
+    project provider provisional public_file published push_subscription
+    quarantined question questions reads recalled recipient ref referenced
+    refund_failed refund_request refund_retry refund_sale refund_sent
+    refusal refusal_report register_writes registration release_remake
+    report report_refusals repository representation requires restored
+    result retired revision rtc rtc_lapse sale_access sale_artifact
+    satisfies screen screenshot secret seeded seller sender sending serves
     service_checkout service_quote session session_input session_result
     session_run sfu shared signed_in signin sms_consent space space_logo
     spend staged started starter stop stream_item submitted subscription

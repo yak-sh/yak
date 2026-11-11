@@ -7,7 +7,8 @@
  * button that sends it on one line while they fit. A value nobody may change
  * here (JSON Schema's `readOnly`) is `Form.Value`, its words where a control
  * would be, under a label that is no `label` for: `Form.Value-none` says
- * there is none. What sending does is the caller's.
+ * there is none. `Form.Trap` holds a field people never see, which only a
+ * bot fills in. What sending does is the caller's.
  *
  * @module
  */
@@ -23,7 +24,14 @@ import { Field } from './Field.ts'
 export let Form:
   & Part
   & Record<
-    'Field' | 'Label' | 'Optional' | 'Hint' | 'Value' | 'Line' | 'Actions',
+    | 'Field'
+    | 'Label'
+    | 'Optional'
+    | 'Hint'
+    | 'Value'
+    | 'Line'
+    | 'Actions'
+    | 'Trap',
     Part
   > = block('form', 'Form', {
     Field: 'div',
@@ -33,6 +41,7 @@ export let Form:
     Value: 'p',
     Line: 'div',
     Actions: 'div',
+    Trap: 'div',
   })
 
 /** What it is, in a line. */
@@ -50,6 +59,7 @@ export let sheet = (c: Colors): Sheet => ({
   'Form_Value-none': { fg: c.dim },
   Form_Line: { spaced: true },
   Form_Actions: { spaced: true },
+  Form_Trap: { hidden: true },
 })
 
 let { Label, Optional, Hint, Value, Line, Actions } = Form

@@ -282,3 +282,40 @@ export let prefilled = (
     let value = (row[comp] as Record<string, unknown> | undefined)?.[prop]
     return filled(value) ? [[entity.eid, value]] : []
   }))
+
+/** What a sending says of who sent it, beside its answers: `trap`, what was
+ * typed in the field people never see, and `took`, the milliseconds from the
+ * form being drawn to its sending. A plain HTML form may carry `trap` alone. */
+export type Signs = { trap?: unknown; took?: unknown }
+
+/** The names a native form post gives its signs. */
+export let SIGNS = { trap: 'yak-trap', took: 'yak-took' } as const
+
+/** The quickest a person fills in a form and sends it, in milliseconds. */
+export let QUICKEST = 2000
+
+/** Why a sending is taken for a bot's: `trap` when the field people never
+ * see holds words, `quick` when it was sent sooner than a person could.
+ * Undefined takes it for a person's; a sign that is absent says nothing. */
+/// screened({}) -> undefined
+/// screened({ trap: '', took: 9000 }) -> undefined
+/// screened({ trap: 'https://spam.example' }) -> 'trap'
+/// screened({ took: 400 }) -> 'quick'
+/// screened({ took: 'soon' }) -> undefined
+export let screened = (signs: Signs): 'trap' | 'quick' | undefined =>
+  typeof signs.trap == 'string' && signs.trap.trim()
+    ? 'trap'
+    : typeof signs.took == 'number' && signs.took < QUICKEST
+    ? 'quick'
+    : undefined
+
+/** The signs a native form post carries in its controls. */
+/// signsOf(new URLSearchParams('yak-trap=hi&yak-took=12')) -> { trap: 'hi', took: 12 }
+/// signsOf(new URLSearchParams('q=Sam')) -> {}
+export let signsOf = (fields: URLSearchParams): Signs => {
+  let trap = fields.get(SIGNS.trap), took = fields.get(SIGNS.took)
+  return {
+    ...trap == null ? {} : { trap },
+    ...took && Number.isFinite(Number(took)) ? { took: Number(took) } : {},
+  }
+}

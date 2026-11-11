@@ -19,6 +19,8 @@ import {
   missing,
   type Question,
   type Settings,
+  SIGNS,
+  type Signs,
 } from './mod.ts'
 export { blobAt, type Upload, upload } from './file.ts'
 
@@ -37,7 +39,13 @@ export type Door = {
 }
 
 export type Read = (at: string) => Promise<Door | string>
-export type Send = (at: string, answers: Answers) => Promise<string | undefined>
+/** Sends a form's answers, and the signs of who sent them, which the door
+ * screens bots by. */
+export type Send = (
+  at: string,
+  answers: Answers,
+  signs?: Signs,
+) => Promise<string | undefined>
 /** Feedback on the page after a native form post, scoped to this door. */
 export let returned = (
   at: string,
@@ -83,13 +91,13 @@ export let get: Read = async (at) => {
   }
 }
 
-/** The default send: the answers as JSON to the form door. */
-export let post: Send = async (at, answers) => {
+/** The default send: the answers and their signs as JSON to the form door. */
+export let post: Send = async (at, answers, signs) => {
   try {
     let r = await fetch(at, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ answers }),
+      body: JSON.stringify({ answers, ...signs ? { signs } : {} }),
     })
     if (r.ok) return undefined
     return (await r.text()).trim() || 'That did not send. Try again.'
@@ -244,8 +252,15 @@ let drawn = (
     if (state.sending) return
     let sending = kept(rows, answers)
     if (missing(rows, sending).length) return emit({ tried: true })
+    let trap = (ev.target as HTMLFormElement | null)?.querySelector?.(
+      `[name="${SIGNS.trap}"]`,
+    ) as HTMLInputElement | null
+    let signs: Signs = {
+      trap: trap?.value ?? '',
+      ...state.shown == null ? {} : { took: Date.now() - state.shown },
+    }
     emit({ values: answers, tried: true, sending: true, said: undefined })
-    let said = await send(at, sending)
+    let said = await send(at, sending, signs)
     emit(
       said == null ? { sending: false, sent: true } : { sending: false, said },
     )
@@ -269,6 +284,23 @@ let drawn = (
           emit({ values: put(answers, path, value), said: undefined }),
         onFile: file,
       }),
+      // What a person never sees and a bot fills in; the door holds a
+      // sign-up that comes with it filled.
+      h(
+        Form.Trap,
+        { 'aria-hidden': 'true' },
+        h(
+          'label',
+          {},
+          'Leave this empty ',
+          h('input', {
+            name: SIGNS.trap,
+            tabindex: '-1',
+            autocomplete: 'off',
+            disabled: state.sending,
+          }),
+        ),
+      ),
       h(
         Form.Actions,
         {},

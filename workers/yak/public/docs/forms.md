@@ -135,6 +135,11 @@ reached. It never includes `notify`.
 A sign-up that cannot be taken answers `400` with a sentence to show the person:
 `Answer every required question.` or `This form is closed or full.`
 
+Beside `answers`, a page sends `signs`, which the door screens bots by (see "A
+sign-up taken for a bot's"): `trap`, what was typed in a field people never see,
+and `took`, the milliseconds from drawing the form to sending it. The kit's form
+(@yaks/forms `fill`) sends both.
+
 A page draws a form from what `GET` answers, so adding a question later is a row
 and not a change to the page:
 
@@ -168,8 +173,15 @@ question's eid and post to the door:
 
     <form method="post" action="./api/form/pavilion">
       <label>Your name <input name="…the name question's eid…" required></label>
+      <div style="position:absolute;left:-100vw" aria-hidden="true">
+        <label>Leave this empty <input name="yak-trap" tabindex="-1"
+          autocomplete="off"></label>
+      </div>
       <button>Send</button>
     </form>
+
+The `yak-trap` field is one people never see. A bot fills it in, and the door
+holds what it sends.
 
 The door answers a form post by sending the browser back to the page it came
 from with `?yak-form=` in its address: a JSON object holding `at`, the door's
@@ -182,7 +194,8 @@ Each sign-up the door takes does these, with no code in the app:
 1. **A `registration` row** is written: `registration{form, answers, at}` with
    `completed`. `answers` is the object that was posted. Only the app's owners
    and editors can read it, so the page that lists sign-ups is one a member
-   opens: `subscribe('.registration&.completed', draw)`.
+   opens: `subscribe('.registration&.completed', draw)`. One the door took for a
+   bot's is held instead, and sends nothing (below).
 2. **The person gets a letter**, when the form has an `email` question and they
    answered it. Its subject is the form's title and its body is `form.thanks`,
    or "Thank you for signing up for …" without one.
@@ -202,6 +215,31 @@ editors. A person the app wrote itself, which the sign-up matched, stays as the
 app kept it.
 
 Each letter counts toward the space's monthly email allowance.
+
+## A sign-up taken for a bot's
+
+A public form is found by bots, and each sign-up sends email. The door takes a
+sign-up for a bot's when its `trap` holds words, or when it was sent in under
+two seconds. A sign-up from somebody signed in as one of the app's own people is
+never screened.
+
+A sign-up taken for a bot's is still kept: a person's answers are never lost to
+a wrong guess. It is a `registration` wearing `held{why, at}`, where `why` is
+`trap` or `quick`, and no `completed`; its status is `held`. It sends no letter,
+fills nothing in the directory and takes no place against `capacity`. The
+visitor is answered as anyone else is.
+
+The page that lists sign-ups shows the held ones under their own heading, read
+with `subscribe('.registration&.held', draw)`. An owner or editor accepts one by
+taking the mark away and completing it:
+
+    await apply({ entity: { eid: signup.entity.eid }, held: null, completed: {} })
+
+Accepting does everything a sign-up does: the letters go then, the directory is
+filled, and the form refuses it as it would anyone's when it has closed or is
+full. Deleting a held sign-up throws it away.
+
+Sign-ups by text are not screened: the platform had the text from the number.
 
 What a form does _not_ do is anything later or anything that needs judgment: a
 reminder two days on if nobody has answered, a reply that depends on what was

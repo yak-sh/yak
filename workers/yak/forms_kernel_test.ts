@@ -691,3 +691,115 @@ test('file submissions require uploaded references and uploads require the formâ
   equal(wrongQuestion.status, 400)
   equal(closedUpload.status, 400)
 })
+
+// A sign-up the door takes for a bot's: kept, held, and quiet until accepted.
+let visit = crypto.randomUUID(), visitMail = crypto.randomUUID()
+let visitName = crypto.randomUUID(), office = crypto.randomUUID()
+await agent.tool('graph_apply', {
+  app,
+  entities: [
+    { entity: { eid: office }, email: { address: 'office@example.com' } },
+    {
+      entity: { eid: visit },
+      alias: { name: 'visit' },
+      form: { capacity: 1, notify: [office] },
+      doc: { title: 'Visit' },
+    },
+    {
+      entity: { eid: visitName },
+      question: {
+        form: visit,
+        kind: 'line',
+        label: 'Name',
+        required: true,
+        fills: 'individual.first',
+      },
+    },
+    {
+      entity: { eid: visitMail },
+      question: {
+        form: visit,
+        kind: 'email',
+        label: 'Email',
+        fills: 'individual.email',
+      },
+    },
+  ],
+})
+let screen = (answers: object, signs: object) =>
+  k.at(host, `/${app}/api/form/visit`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ answers, signs }),
+  })
+let trapped = await screen(
+  { [visitName]: 'Spam', [visitMail]: 'trap@example.com' },
+  { trap: 'https://spam.example', took: 9000 },
+)
+let hasty = await screen(
+  { [visitName]: 'Hasty', [visitMail]: 'quick@example.com' },
+  { trap: '', took: 300 },
+)
+let unanswered = await screen({}, { trap: 'x' })
+let trappedNative = await k.at(host, `/${app}/api/form/visit`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/x-www-form-urlencoded' },
+  body: new URLSearchParams({ [visitName]: 'Plain', 'yak-trap': 'hi' }),
+})
+await k.settled()
+let heldRows = (await agent.answer('graph_query', {
+  app,
+  query: `.registration.form=${visit}&*`,
+})).rows
+let guestsHeld = (await agent.answer('graph_query', {
+  app,
+  query: '.individual.status=guest&.individual.first~=Hasty',
+})).rows
+let quiet = letters(k, 'office@example.com').length
+let hastyRow = heldRows.find((r) =>
+  ((r.registration as Comp).answers as Comp)[visitName] == 'Hasty'
+)!
+await agent.tool('graph_apply', {
+  app,
+  entities: [{
+    entity: { eid: hastyRow.entity.eid },
+    held: null,
+    completed: {},
+  }],
+})
+await k.settled()
+let guestsAccepted = (await agent.answer('graph_query', {
+  app,
+  query: '.individual.status=guest&.individual.first~=Hasty',
+})).rows
+
+test('a sign-up taken for a botâ€™s is kept and held, and sends nothing', () => {
+  equal(
+    [trapped, hasty, trappedNative].map((r) => r.status),
+    [204, 204, 303],
+  )
+  equal(unanswered.status, 400)
+  equal(
+    heldRows.map((r) => [
+      ((r.registration as Comp).answers as Comp)[visitName],
+      (r.registration as Comp).status,
+      (r.held as Comp)?.why,
+      !!r.completed,
+    ]).sort(),
+    [
+      ['Hasty', 'held', 'quick', false],
+      ['Plain', 'held', 'trap', false],
+      ['Spam', 'held', 'trap', false],
+    ],
+  )
+  equal(quiet, 0)
+  equal(letters(k, 'trap@example.com').length, 0)
+  equal(guestsHeld.length, 0)
+})
+
+test('accepting a held sign-up sends its letters and fills the directory', () => {
+  equal(letters(k, 'office@example.com').length, 1)
+  equal(letters(k, 'quick@example.com').length, 1)
+  equal(letters(k, 'trap@example.com').length, 0)
+  equal(guestsAccepted.length, 1)
+})

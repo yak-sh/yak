@@ -121,7 +121,8 @@ export let siteOf = (mail: string | null): string | undefined => {
 export let formPost =
   (at: Pick<Stored, 'app' | 'graph' | 'mail'>): Handler => async (event) => {
     let [row] = await at.graph.get([event.entity.eid])
-    if (!at.app || !row?.registration || !row.completed) return
+    // A sign-up still held for a bot's writes no letter until it is accepted.
+    if (!at.app || !row?.registration || !row.completed || row.held) return
     let registration = comp(row, 'registration'),
       formId = String(registration.form)
     let [source] = await at.graph.get([formId])

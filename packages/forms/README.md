@@ -47,6 +47,7 @@ marks. Add `doc{title, body}` to a form for its title and introduction.
 | `registration` | `form`, `person`, `answers`, `at`                                                                               |
 | `shared`       | `form`, `registration`, `answers`, `at`                                                                         |
 | `waitlisted`   | stamped `at`, `by`, `via`                                                                                       |
+| `held`         | `why` (`trap` or `quick`), stamped `at`                                                                         |
 
 Question kinds are `line`, `lines`, `choose`, `choices`, `check`, `date`,
 `email`, `phone`, `address`, `file` and `repeat`. `fills` names a directory
@@ -189,15 +190,37 @@ limit; zero capacity accepts nobody. Invalid dates or a non-finite instant
 return false. While `open` is false a page shows `form.closed`. The core
 implements no HTTP door, tools or registration side effects.
 
+## Screening bots
+
+A sending carries **signs** beside its answers: `trap`, what was typed in a
+field people never see, and `took`, the milliseconds from the form being drawn
+to its sending. `screened(signs)` says why a sending is taken for a bot's:
+`trap` when the field holds words, `quick` when it was sent in under `QUICKEST`
+(2 seconds). An absent sign says nothing. `signsOf(fields)` reads them from a
+native post, whose controls are named by `SIGNS` (`yak-trap`, `yak-took`).
+
+A door keeps a sign-up it takes for a bot's, wearing `held{why}` and no
+`completed`. Its status is `held`. Accepting it is removing `held` and marking
+it `completed`, which runs everything completion runs.
+
+```ts
+import { screened, signsOf } from '@yaks/forms'
+import { equal } from '@yaks/testing'
+
+equal(screened({ trap: '', took: 8000 }), undefined)
+equal(screened({ trap: 'https://spam.example' }), 'trap')
+equal(screened(signsOf(new URLSearchParams('yak-took=150'))), 'quick')
+```
+
 ## Filling forms
 
 `fill()` adapts form `question` rows to the kit's `Submit` and `Fields`,
 providing question interpretation and calls to the app's form door. `at` is the
 door's address: `./api/form/<alias>` in the page's own app, or another app's,
 such as `/directory/api/form/kids-club`. The adapter reads the form with
-`GET at`, which answers `{doc, form, open, questions}`, and posts `{answers}` to
-the same address. An app adds a form by writing rows; its page writes no form
-code.
+`GET at`, which answers `{doc, form, open, questions}`, and posts
+`{answers, signs}` to the same address. An app adds a form by writing rows; its
+page writes no form code.
 
 ```ts
 import { h } from 'preact'
@@ -286,6 +309,10 @@ What it draws:
   (or "This form is closed."). A sent one shows `form.thanks`, and a button to
   fill it in again. A JavaScript submission's refusal shows the door's own words
   and keeps every answer.
+- **A field people never see.** Each form holds one more field, named `yak-trap`
+  in a `Form.Trap` that is off the page, out of the tab order and hidden from
+  screen readers. A bot fills it in. A sending's `signs` carry what it holds and
+  how long the form was open (`Submit.shown` to the sending).
 - **Without JavaScript.** It is a native `<form method="post" action={at}>`,
   each control named by its answer's path (`children.0.born`), with `required`
   set. The door takes URL-encoded controls as well as JSON. A native post
@@ -298,7 +325,8 @@ What it draws:
   retain answers; a mounted Submit retains its draft across a refusal and spends
   it after a successful native return.
 
-Its page state is `Submit{content, unread, values, tried, sending, sent, said}`
-on `submitAt(at)`: the form as the door answered it, why it could not be read,
-the current draft snapshot, and how sending went. `read` and `send` replace the
-door calls (`get`, `post`).
+Its page state is
+`Submit{content, unread, values, tried, sending, sent, said, shown}` on
+`submitAt(at)`: the form as the door answered it, why it could not be read, the
+current draft snapshot, how sending went, and when the form arrived. `read` and
+`send` replace the door calls (`get`, `post`).
