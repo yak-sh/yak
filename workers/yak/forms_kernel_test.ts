@@ -1,4 +1,5 @@
 import type { Comp } from '@yaks/graph'
+import { consentEid } from '@yaks/phone'
 import { equal, ok, test } from '@yaks/testing'
 import { connector, kernel, letters, meta, signIn } from './probe.ts'
 
@@ -446,6 +447,41 @@ test('a public app keeps the letters it writes itself from visitors', async () =
     equal(await asked('.mail .count', cookie), [200, '{"count":0}'])
   }
   equal(await asked('.mail .count', owner.cookie), [200, '{"count":3}'])
+})
+
+test('a public app keeps its texts, sent or received, and who agreed to them from visitors', async () => {
+  let ana = crypto.randomUUID()
+  await agent.tool('graph_apply', {
+    app: shown,
+    entities: [
+      { entity: { eid: ana }, phone: { number: '+12695550142' } },
+      {
+        entity: { eid: consentEid(ana) },
+        sms_consent: { person: ana, consent: 'Text me about prayer.' },
+      },
+      {
+        entity: { eid: crypto.randomUUID() },
+        doc: { body: 'Ruth asked for prayer.' },
+        text: { from: '+12695550142', to: '+12695550100' },
+      },
+      {
+        entity: { eid: crypto.randomUUID() },
+        doc: { body: 'We are praying.' },
+        text: {},
+        deliver: { to: ana },
+      },
+    ],
+  })
+  for (let cookie of [undefined, stranger.cookie]) {
+    for (let q of ['.text', '.sms_consent']) {
+      equal(await asked(`${q} .count`, cookie), [200, '{"count":0}'], q)
+    }
+  }
+  equal(await asked('.text .count', owner.cookie), [200, '{"count":2}'])
+  equal(await asked('.sms_consent .count', owner.cookie), [
+    200,
+    '{"count":1}',
+  ])
 })
 
 // A stranger at a private published app is served its sample (visit.ts), and

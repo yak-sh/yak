@@ -58,7 +58,8 @@
     "sms_consent": {
       "component": true,
       "type": "object",
-      "description": "a person agreed to be texted at their `phone{number}`, in these words; removed when they stop texts",
+      "description": "a person agreed to be texted at their `phone{number}`, in these words; removed when they stop texts; in an app, read only by its owners and editors, whatever the app's access",
+      "readers": "editor",
       "properties": {
         "person": {
           "type": "string",
@@ -93,7 +94,8 @@
     "text": {
       "component": true,
       "type": "object",
-      "description": "one text message, sent or received; its words are `doc{body}`. One with @yaks/mail's `deliver{to}` asks to be sent to the `phone{number}` of `deliver.to`, and its outcome is `delivered` or `bounced`",
+      "description": "one text message, sent or received; its words are `doc{body}`. One with @yaks/mail's `deliver{to}` asks to be sent to the `phone{number}` of `deliver.to`, and its outcome is `delivered` or `bounced`; in an app, read only by its owners and editors, whatever the app's access",
+      "readers": "editor",
       "properties": {
         "from": {
           "type": "string",
