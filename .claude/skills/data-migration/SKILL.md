@@ -158,7 +158,13 @@ alarm once it serves, fifty rows to a transaction. workers/yak/README.md,
   sample's and its visitors' too) to `.scratch/stores/<space>--<app>.db`, read
   out of each Store object's file as it stands. A pass that changes what a
   read admits is proved on these before its rule goes live: the read before
-  and after the pass, compared for every reader, with the counts said.
+  and after the pass, compared for every reader, with the counts said. A
+  pass that adds a component makes archetype records (`.archetype`, the
+  component sets a store holds) that every reader sees; they are no one's,
+  so the comparison reads `.entity&!archetype`. Run the pass on a throwaway
+  file of each copy, so a second proof starts from the store as it stood.
+  A copy runs in the box's server and ends `Interrupted` when a restart
+  hands it over, so copy a space at a time and run an interrupted one again.
 
 The owner's standing word for these, on D-45640 and D-59037, verbatim on the
 latter: "and let's ensure that the migrations don't bring down yaks apps".
