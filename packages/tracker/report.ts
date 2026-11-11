@@ -162,6 +162,14 @@ let causes = (error: Error): string => {
   return out.join('\nCaused by: ')
 }
 
+// What an Error says about itself beyond its message: its own enumerable
+// properties, such as the statement SQLite would not compile (@yaks/sqlite
+// `prepared`). Its fault names its bug already.
+let detail = (error: Error): string => {
+  let own = Object.entries(error).filter(([k]) => k != 'fault')
+  return own.length ? `Details: ${json(Object.fromEntries(own))}` : ''
+}
+
 let json1 = (v: unknown): string =>
   typeof v == 'object' && v ? json(v) : String(v)
 
@@ -179,6 +187,8 @@ let json1 = (v: unknown): string =>
  * equal(described('broken'), undefined)
  * let wrapped = new Error('could not take', { cause: new Error('refused') })
  * ok(described(wrapped)?.cause?.startsWith('Error: refused'))
+ * let failed = Object.assign(new Error('no such table: t'), { statement: 'select 1 from t' })
+ * equal(described(failed)?.cause, 'Details: {"statement":"select 1 from t"}')
  * ```
  */
 export let described = (
@@ -187,7 +197,7 @@ export let described = (
   | { type: string; value: string; stack?: string; cause?: string }
   | undefined => {
   if (error instanceof Error) {
-    let cause = causes(error)
+    let cause = [causes(error), detail(error)].filter(Boolean).join('\n')
     return {
       type: error.name,
       value: error.message,
