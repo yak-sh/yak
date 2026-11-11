@@ -18,7 +18,7 @@ export { formatting } from './format.ts'
 //     nothing configured anywhere else), the branch is pushed to it first.
 //   - If the base moved (it is no longer an ancestor), or its upstream moved
 //     (the push was refused and a fetch shows commits the branch lacks, which
-//     the base then fast-forwards to), the fast-forward is refused: rebase
+//     the base then catches up to), the fast-forward is refused: rebase
 //     the branch onto the base and return without merging, printing what
 //     happened, a `git diff --stat` of what the base pulled in (so the caller
 //     can judge whether re-running its tests matters — docs-only versus code
@@ -42,9 +42,10 @@ export { formatting } from './format.ts'
 // locally. But the push runs under the same lock, before the fast-forward, so
 // the remote's own compare-and-swap serializes this checkout's landers with
 // anything else that moved the upstream: a base that took commits the
-// upstream refused would split the two, and every later push would be
-// refused the same way. Landing is the only path that writes the base or
-// pushes it.
+// upstream refused would split the two. A base holding unpublished commits
+// catches up by replaying them onto the fetched upstream under the lock;
+// conflicts abort that replay before releasing the checkout. Landing is the
+// only path that writes the base or pushes it.
 //
 // Running a test suite is the caller's job, not this operation's — before
 // landing, and again after a rebase if the incoming diff could affect it. Land
@@ -756,11 +757,10 @@ let transient = (r: Ran) =>
 let declined = (r: Ran) =>
   !transient(r) && /\[remote rejected\]/.test(r.err + r.out)
 
-// Bring the base up to `to`, where its upstream moved. Only a fast-forward:
-// every commit the base holds came through a landing that pushed it, so a base
-// the upstream does not contain was written some other way, and rewriting
-// landed commits is a repair for whoever reads the fault, not something a
-// landing does on its own.
+// Bring the base up to the fetched commit under its land lock. A failed push
+// can leave locally landed commits the upstream lacks; replay those rather
+// than treating the divergence as a fault. Unlike a caller's rebase, a shared
+// checkout's replay must be aborted on conflict before readers get it back.
 let catchUp = async (
   git: Git,
   write: (text: string, error?: boolean) => void,
@@ -775,14 +775,13 @@ let catchUp = async (
     ['merge-base', '--is-ancestor', base, to],
     false,
   )
-  if (contained.code == 1) {
-    throw new Error(
-      `land: ${base} and ${at} have diverged: ${base} holds commits ${at} ` +
-        `lacks, so neither can take the other. Rebase ${base} onto ${at} in ` +
-        `the shared checkout while holding its land lock.`,
-    )
+  if (contained.code != 0 && contained.code != 1) {
+    throw new Error(message('read upstream', contained))
   }
-  if (contained.code) throw new Error(message('read upstream', contained))
+  if (contained.code == 1) {
+    await replay(git, write, root, base, at, to)
+    return
+  }
   write(`land: ${at} moved — bringing ${base} up to it.`)
   let merged = await git(root, ['merge', '--ff-only', to])
   if (merged.code) {
@@ -790,4 +789,41 @@ let catchUp = async (
       message('land: shared checkout blocks catching up', merged),
     )
   }
+}
+
+let replay = async (
+  git: Git,
+  write: (text: string, error?: boolean) => void,
+  root: string,
+  base: string,
+  at: string,
+  to: string,
+) => {
+  let dirty = await git(
+    root,
+    ['status', '--porcelain=v1', '--untracked-files=no'],
+    false,
+  )
+  if (dirty.code) throw new Error(message('read shared checkout', dirty))
+  if (dirty.out.trim()) {
+    throw new LandError(
+      `land: shared checkout blocks catching up — commit or stash its edits:\n${dirty.out.trim()}`,
+    )
+  }
+  write(`land: ${at} moved — rebasing unpublished ${base} commits onto it.`)
+  // Ignore config that would stash shared edits or rewrite other branches.
+  let rebased = await git(root, [
+    '-c',
+    'rebase.autoStash=false',
+    'rebase',
+    '--no-update-refs',
+    to,
+  ])
+  if (!rebased.code) return
+  let aborted = await git(root, ['rebase', '--abort'])
+  let said = message('land: shared checkout blocks catching up', rebased)
+  if (aborted.code) {
+    throw new Error(`${said}\n${message('restore shared checkout', aborted)}`)
+  }
+  throw new LandError(`${said}\nland: restored ${base}; nothing landed.`)
 }

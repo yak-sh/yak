@@ -265,14 +265,55 @@ test('a push refused because the upstream moved brings the base up to it and reb
   assertEquals(f.reports, [])
 })
 
-test('a base the moved upstream does not contain is a fault, not a rewrite', async () => {
-  let f = refusal({
+let split = (answers: Record<string, Answer | Answer[]> = {}) =>
+  refusal({
     'merge-base --is-ancestor up work': { code: 1 },
     'merge-base --is-ancestor main up': { code: 1 },
+    ...answers,
   })
-  let error = await assertRejects(f.invoke, Error, 'have diverged')
+
+let replay = '-c rebase.autoStash=false rebase --no-update-refs up'
+
+test('unpublished base commits follow the moved upstream under the lock before the caller rebases', async () => {
+  let f = split()
+  assertEquals(await f.invoke(), { diverged: true, conflict: false })
+  let at = f.commands()
+  assert(at.indexOf('hold') < at.indexOf(replay))
+  assert(at.indexOf(replay) < at.indexOf('release'))
+  assert(at.indexOf('release') < at.indexOf('rebase main'))
+  assert(f.calls.some((c) => c.cwd == '/repo' && c.args.join(' ') == replay))
+  assert(!at.includes('merge --ff-only work'))
+  assertEquals(f.reports, [])
+})
+
+test('a conflicting base replay restores the shared checkout before releasing its lock', async () => {
+  let f = split({ [replay]: { code: 1, err: 'CONFLICT in base.txt' } })
+  await assertRejects(f.invoke, LandError, 'CONFLICT in base.txt')
+  let at = f.commands()
+  assert(at.indexOf(replay) < at.indexOf('rebase --abort'))
+  assert(at.indexOf('rebase --abort') < at.indexOf('release'))
+  assert(!at.includes('rebase main'))
+  assert(!at.includes('merge --ff-only work'))
+  assertEquals(f.commands().filter((c) => c == 'release').length, 1)
+})
+
+test('a failed restoration of the shared checkout is a fault with both Git errors', async () => {
+  let f = split({
+    [replay]: { code: 1, err: 'CONFLICT in base.txt' },
+    'rebase --abort': { code: 128, err: 'cannot restore base.txt' },
+  })
+  let error = await assertRejects(f.invoke, Error, 'cannot restore base.txt')
   assertEquals(error.name, 'Error')
-  assert(!f.calls.some((c) => ['merge', 'rebase'].includes(c.args[0])))
+  assert(error.message.includes('CONFLICT in base.txt'))
+  assertEquals(f.commands().filter((c) => c == 'release').length, 1)
+})
+
+test('catching up preserves tracked edits in the shared checkout', async () => {
+  let f = split({
+    'status --porcelain=v1 --untracked-files=no': { out: ' M base.txt' },
+  })
+  await assertRejects(f.invoke, LandError, 'base.txt')
+  assert(!f.commands().includes(replay))
   assertEquals(f.commands().filter((c) => c == 'release').length, 1)
 })
 
