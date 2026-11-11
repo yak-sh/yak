@@ -451,7 +451,7 @@ grouped approximately by function, **not** by dependency order.
   and the recurrence — a duration or a cron expression — that schedules the next
   one. It calls no handler: `tick` writes `fired` and advances the wake, and
   graph rules do the rest. The Cloudflare and Deno drivers share that same
-  write.
+  write. `wake_new` (`yak wake new`) schedules one aimed at something.
 - **[@yaks/mail](./mail)** — Store messages and delivery requests/outcomes. An
   effect on `created(mail)` sends messages that also have `deliver`, through a
   supplied transport. Incoming messages become bundles; subjects and bodies use

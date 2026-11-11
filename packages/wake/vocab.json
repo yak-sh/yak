@@ -50,6 +50,41 @@
         }
       }
     },
+    "wake_new": {
+      "tool": true,
+      "destructive": false,
+      "noun": "wake",
+      "verb": "new",
+      "title": "Schedule a wake",
+      "description": "Come back to something later: once at an instant, or on a cadence. Each firing knocks whoever attends the target with the note: a persona's operator, or the session opened on a topic (a goal or project that is its own topic). Returns the wake.",
+      "input": {
+        "target": {
+          "type": "string",
+          "ref": "entity",
+          "description": "What the wake is about: a persona, a topic, a goal or project id."
+        },
+        "every": {
+          "type": "string",
+          "description": "How it recurs: a duration (30m, 1d), five cron fields with an optional time zone (0 7 * * * America/Detroit), or @hourly/@daily/@weekly/@monthly."
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When it is next due; with every, the first firing. Without every, it fires once."
+        },
+        "note": {
+          "type": "string",
+          "description": "A line for whoever is woken: what to do."
+        }
+      },
+      "required": [
+        "target",
+        "note"
+      ],
+      "positional": [
+        "target"
+      ]
+    },
     "fired": {
       "component": true,
       "journal": false,

@@ -58,6 +58,7 @@
     "@yaks/context": "0.2.23",
     "@yaks/doc": "0.2.24",
     "@yaks/durable-object": "0.2.28",
+    "@yaks/goal": "0.2.28",
     "@yaks/kernel": "0.2.28",
     "@yaks/machine": "0.2.24",
     "@yaks/mail": "0.2.23",
@@ -68,6 +69,7 @@
     "@yaks/ram": "0.2.24",
     "@yaks/sqlite": "0.2.30",
     "@yaks/testing": "0.2.30",
+    "@yaks/topic": "0.2.23",
     "@yaks/wake": "0.2.24"
   }
 }

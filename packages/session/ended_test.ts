@@ -16,6 +16,8 @@ import { processDoc } from '@yaks/process/vocab'
 import { provenanceDoc } from '@yaks/provenance'
 import { taskDoc } from '@yaks/task'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
+import { topicDoc } from '@yaks/topic/vocab'
+import { wakeDoc } from '@yaks/wake'
 import { sessionDoc } from './comp.ts'
 import { attemptComputed } from './attempt.ts'
 import { statusComputed } from './state.ts'
@@ -49,6 +51,8 @@ let vocab = loadVocab([
   provenanceDoc,
   taskDoc,
   edgeDoc,
+  topicDoc,
+  wakeDoc,
   {
     $defs: {
       knock: {
@@ -283,6 +287,27 @@ test('a session with no process to ask about ends quiet, owing and holding nothi
   assertEquals(await status('failed'), 'failed')
   assertEquals(await ended(g, 'owes'), false)
   assertEquals(await endGone(g, later), [])
+})
+
+test('a session a wake still to fire reaches is not over, however quiet', async () => {
+  let s = store(), g = locked(s)
+  let on = (eid: string, topic: string) => ({
+    entity: { eid },
+    session: { id: eid, topic },
+  })
+  let coming = { at: new Date(Date.now() + 24 * HOUR).toISOString() }
+  await seed(
+    s,
+    { entity: { eid: 'funnel' }, topic: { name: 'funnel' } },
+    { entity: { eid: 'pilots' }, topic: { name: 'pilots' } },
+    on('stays', 'funnel'),
+    on('asked', 'pilots'),
+    { entity: { eid: 'daily' }, wake: { ...coming, target: 'funnel' } },
+  )
+  let later = { now: Date.now() + 3 * HOUR }
+  assertEquals(await endGone(g, later), ['asked'])
+  await seed(s, { entity: { eid: 'daily' }, wake: { at: null } })
+  assertEquals(await endGone(g, later), ['stays'])
 })
 
 test('a session with no transcript file lets go of a claim only once quiet and not parked there', async () => {

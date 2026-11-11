@@ -1099,7 +1099,7 @@
         "fired.at"
       ],
       "target": ".wake.target",
-      "description": "Knock the operator of the persona a wake is aimed at, once each time it fires, with the wake's note (woken.ts reads whether the target is a persona, since @yaks/persona may not be in the vocabulary): the session a person opened wearing it, else its project, where the knock waits for the next session at work. A persona's standing duty, such as a morning standup, is such a wake"
+      "description": "Knock whoever attends what a wake is aimed at, once each time it fires, with the wake's note (woken.ts reads what the target is, since @yaks/persona and @yaks/topic may not be in the vocabulary). Aimed at a persona: its operator, the session a person opened wearing it, else its project, where the knock waits for the next session at work. Aimed at a topic, such as a goal that is its own topic: the session opened on it (session.topic) that has not ended. A standing duty, such as a morning standup, is such a wake"
     },
     "session_help": {
       "effect": true,

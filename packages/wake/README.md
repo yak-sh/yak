@@ -20,6 +20,7 @@ Entry points:
 - `@yaks/wake/cloudflare`: Cron Trigger and Durable Object alarm helpers.
 - `@yaks/wake/graph`: the `plugins()` plugin list.
 - `@yaks/wake/service`: a Deno background service wrapper.
+- `@yaks/wake/tools`: the code behind the `wake_new` tool.
 - `@yaks/wake/vocab`: the vocabulary document without scheduler behavior.
 
 ## The rows
@@ -60,6 +61,22 @@ import { wakes } from '@yaks/wake'
 
 const g = graph({ storage, vocab, plugins: [wakes()] })
 ```
+
+## Scheduling one by hand
+
+`wake_new` is the tool that writes a wake aimed at something (`yak wake new` at
+a terminal). It takes a `target`, a `note` for whoever is woken, and a time:
+`every` to recur, `at` to fire once, or both, where `at` is the first firing. A
+cadence or an instant it cannot read is refused.
+
+```sh
+yak wake new V-12 --every '0 7 * * * America/Detroit' \
+  --note 'Weigh what was filed under this goal since yesterday.'
+```
+
+The tool writes the row and nothing more. Who hears a firing is a rule's answer:
+[@yaks/session](../session) knocks a persona's operator, or the session opened
+on a topic.
 
 ## Firing is a write
 

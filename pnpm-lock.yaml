@@ -4133,6 +4133,9 @@ importers:
       '@yaks/durable-object':
         specifier: 0.2.28
         version: link:../durable-object
+      '@yaks/goal':
+        specifier: 0.2.28
+        version: link:../goal
       '@yaks/kernel':
         specifier: 0.2.28
         version: link:../kernel
@@ -4163,6 +4166,9 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
+      '@yaks/topic':
+        specifier: 0.2.23
+        version: link:../topic
       '@yaks/wake':
         specifier: 0.2.24
         version: link:../wake

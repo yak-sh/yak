@@ -231,15 +231,17 @@ where a subagent runs in its root session's process and also ends once its log
 has been quiet for two hours, and Codex's by a fully imported log quiet for two
 hours. A session with no transcript file is over once it has been quiet for two
 hours, a day if its turn is unfinished; a claim keeps it while its turn is
-unfinished or it is parked there (see below). The mark leaves `updated` as it
-was. Input on the transcript, or a knock or letter addressed to the session,
-clears it in the same batch, whatever door it came through (`./reopen.ts`). What
-its entries leave unfinished then reads `stopped`; settled, failed and empty
-keep reading that way. `session_release` frees what a marked session held.
-`session_release` records work when a transcript ends or receives a claim after
-ending, so a later worker releases those claims through the ordinary queue. A
-managed run that ended cleanly keeps the claims it is parked on (see below), and
-lets each go once its task finishes or nothing is left to wait for.
+unfinished or it is parked there (see below), and so does a wake still to fire
+that reaches it (`awaited`, [Standing duties](#standing-duties)). The mark
+leaves `updated` as it was. Input on the transcript, or a knock or letter
+addressed to the session, clears it in the same batch, whatever door it came
+through (`./reopen.ts`). What its entries leave unfinished then reads `stopped`;
+settled, failed and empty keep reading that way. `session_release` frees what a
+marked session held. `session_release` records work when a transcript ends or
+receives a claim after ending, so a later worker releases those claims through
+the ordinary queue. A managed run that ended cleanly keeps the claims it is
+parked on (see below), and lets each go once its task finishes or nothing is
+left to wait for.
 
 ## Parking on a task
 
@@ -965,16 +967,29 @@ the entity wearing that `phone{number}`). `session_texted` knocks once per text
 ([`texted_test.ts`](./texted_test.ts)), and the knock names the entity wearing
 the sender's number in `knock.from`, so a person's text is never a helper's.
 
-## A persona's duties
+## Standing duties
 
-A persona's standing duty is a wake aimed at it (@yaks/wake's
-`wake{every, target, note}`): TaskMaster's morning standup is
-`wake{every: '0 7 * * * America/Detroit', target: <TaskMaster>, note}`, the
-owner's morning in his time zone. Each time the box's clock fires it,
-`session_woken` knocks the persona's operator once with the note, else its
-project, where the knock waits for the next session at work. Nothing starts a
-session, and the duty's work is the operator's to do
+A standing duty is a wake aimed at who is to do it (@yaks/wake's
+`wake{every, target, note}`, written by `wake_new`). Each time the box's clock
+fires it, `session_woken` knocks once with the note. Nothing starts a session,
+and the duty's work is the woken session's to do
 ([`woken_test.ts`](./woken_test.ts)).
+
+- **Aimed at a persona**, it knocks the persona's operator, else its project,
+  where the knock waits for the next session at work. TaskMaster's morning
+  standup is
+  `wake{every: '0 7 * * * America/Detroit', target: <TaskMaster>, note}`, the
+  owner's morning in his time zone.
+- **Aimed at a topic**, it knocks the session opened on that topic
+  (`session.topic`, [@yaks/topic](../topic)) that has not ended, the one opened
+  first where several have not (`attending`). A goal or a project that is its
+  own topic is aimed at directly. Such a session is opened by an agent, so it is
+  no operator, and with no session opened on the topic nobody is knocked.
+
+A wake still to fire keeps the session it reaches from being marked over
+(`awaited`, below), so a session that stays on a topic rests between daily turns
+and is still the one its wake finds, while a run that once answered a question
+about the topic ends after its two quiet hours.
 
 ## A comment starts a session
 

@@ -13,7 +13,9 @@
 // session with no transcript file has no process here to ask about, so it is
 // over once it has been quiet, a day if its turn is unfinished. A claim keeps
 // it only mid-turn or while it is parked there (./wake.ts); otherwise the claim
-// goes with the mark. Anything new said to it clears the mark (./reopen.ts).
+// goes with the mark. A wake still to fire that reaches it keeps it too
+// (./woken.ts `awaited`): a session that stays on a topic rests a day between
+// turns and is not over. Anything new said to it clears the mark (./reopen.ts).
 
 import * as fs from '@yaks/file/io'
 
@@ -25,6 +27,7 @@ import { CLAIM, SESSION } from './comp.ts'
 import { versionOf } from './files.ts'
 import { UNFINISHED } from './state.ts'
 import { parked } from './wake.ts'
+import { awaited } from './woken.ts'
 
 // A log this recent may belong to a process that has yet to list itself.
 let SETTLING = 5 * 60 * 1000
@@ -138,6 +141,7 @@ export let goneSessions = async (g: Graph, o: Sweep = {}): Promise<Eid[]> => {
     }
   }
   let holding = new Set(held.map((b) => String(comp(b, CLAIM).session)))
+  let coming = await awaited(g)
   await read([...new Set([...open.map((b) => b.entity.eid), ...holding])])
   // A subagent runs in the process of the session at the top of its line.
   let root = async (b: Bundle): Promise<Bundle> => {
@@ -164,10 +168,12 @@ export let goneSessions = async (g: Graph, o: Sweep = {}): Promise<Eid[]> => {
     }
     let [file] = s.transcript ? await g.get([String(s.transcript)]) : []
     let path = file && await absolute(g, file)
-    // No log to ask about: quiet says it. What it holds keeps it only while
-    // its turn is unfinished or it is parked there.
+    // No log to ask about: quiet says it. A wake coming to it keeps it, and
+    // what it holds does only while its turn is unfinished or it is parked
+    // there.
     if (!path) {
-      let keeps = holding.has(eid) && (owes || await parked(g, eid))
+      let keeps = coming.has(eid) ||
+        holding.has(eid) && (owes || await parked(g, eid))
       if (!keeps && await quiet(g, b, now - (owes ? STALLED : QUIET))) {
         gone.push(eid)
       }
