@@ -3,6 +3,8 @@ import { TOMBSTONE } from '@yaks/graph/bundle'
 
 /** A connection's ledger of archetype moves ({@link ledger}). */
 export type Ledger = {
+  /** A monotonic token for changes to this transaction's pending shapes. */
+  revision: () => number
   moved: (eid: string, table: string, held: boolean) => void
   born: (eid: string) => void
   removed: (eid: string) => void
@@ -27,6 +29,7 @@ type Entry = {
 // One connection's entries, and how to take back each change made to them
 // since a savepoint, newest last.
 type Book = {
+  revision: number
   entries: Map<string, Entry>
   undo: [string, Entry | undefined][]
   scopes: { name?: string; at: number }[]
@@ -42,6 +45,7 @@ let follow = (driver: Driver, book: Book) => {
   if (followed.has(driver)) return
   followed.add(driver)
   let back = (to: number) => {
+    if (book.undo.length > to) book.revision++
     while (book.undo.length > to) {
       let [eid, was] = book.undo.pop()!
       if (was) book.entries.set(eid, was)
@@ -49,6 +53,7 @@ let follow = (driver: Driver, book: Book) => {
     }
   }
   let ended = () => {
+    book.revision++
     book.entries.clear()
     book.undo = []
     book.scopes = []
@@ -136,11 +141,22 @@ let follow = (driver: Driver, book: Book) => {
 export let ledger = (driver: Driver): Ledger => {
   let at = driver.connection ?? driver
   let book = books.get(at)
-  if (!book) books.set(at, book = { entries: new Map(), undo: [], scopes: [] })
+  if (!book) {
+    books.set(
+      at,
+      book = {
+        revision: 0,
+        entries: new Map(),
+        undo: [],
+        scopes: [],
+      },
+    )
+  }
   follow(driver, book)
   let { entries } = book
   // An entry about to change, with how to take the change back.
   let change = (eid: string, fresh?: Entry): Entry => {
+    book.revision++
     let was = entries.get(eid)
     book.undo.push([eid, was && { ...was, rows: new Map(was.rows) }])
     let e = fresh ?? was ?? { rows: new Map(), born: false, dead: false }
@@ -150,6 +166,7 @@ export let ledger = (driver: Driver): Ledger => {
   let moving = (e: Entry) =>
     e.born || [...e.rows.values()].some(([was, now]) => was != now)
   return {
+    revision: () => book.revision,
     moved: (eid, table, held) => {
       // A row moving again (a revival, a patch after it) leaves the dead
       // holding more than their tombstone.
@@ -169,6 +186,7 @@ export let ledger = (driver: Driver): Ledger => {
     // A pointer says everything written before it.
     pointed: (eid) => {
       if (!entries.has(eid)) return
+      book.revision++
       book.undo.push([eid, entries.get(eid)])
       entries.delete(eid)
     },

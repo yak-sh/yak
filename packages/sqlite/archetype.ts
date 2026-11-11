@@ -684,14 +684,31 @@ let sorted = (
   return { born, put }
 }
 
-/** The table sets the open write knows instead of its stored pointers. */
+let pending = new WeakMap<Ledger, {
+  connection: object
+  data: number
+  revision: number
+  shapes: ReadonlyMap<number, readonly string[]>
+}>()
+
+/** The table sets the open write knows instead of its stored pointers,
+ * shared by its reads until either the rows or the ledger change. */
 export let pendingShapes = (
   driver: Driver,
   book: Ledger,
-): Map<number, readonly string[]> => {
+): ReadonlyMap<number, readonly string[]> => {
   let eids = book.owed()
-  if (!eids.length) return new Map()
-  return new Map(
+  if (!eids.length) {
+    pending.delete(book)
+    return new Map()
+  }
+  let connection = driver.connection ?? driver
+  let data = revision(driver, 'data'), at = book.revision()
+  let kept = pending.get(book)
+  if (
+    kept?.connection == connection && kept.data == data && kept.revision == at
+  ) return kept.shapes
+  let shapes = new Map(
     driver.query(owned(oneOf(col('eid', 'e'), eids))).map((r) => {
       let eid = String(r.eid)
       let pointed = r.pointed == null
@@ -702,4 +719,6 @@ export let pendingShapes = (
       return [Number(r.id), held]
     }),
   )
+  pending.set(book, { connection, data, revision: at, shapes })
+  return shapes
 }
