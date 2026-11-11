@@ -41,6 +41,12 @@ test('the default is the routed offering whose plan has the most usage left', as
     let s = await a.start('hello', o)
     await a.idle(s)
     let [input] = await h.g.read(`.entry.session=${s}&.using&!ask&*`)
+    let [ask] = await h.g.read(`.entry.session=${s}&.ask&*`)
+    // The ask records what was served, and the reason stays on the input.
+    equal(ask.using, {
+      provider: (input.using as Comp).provider,
+      model: (input.using as Comp).model,
+    })
     return (input.using as Comp).why
   }
   try {

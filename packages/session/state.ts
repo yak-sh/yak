@@ -338,11 +338,18 @@ export let sendingSelected = (entries: Bundle[]): Comp | undefined =>
     | Comp
     | undefined
 
-/** The model selection in force at an entry. */
+/** The model selection in force at an entry: provider, model and effort. Why
+ * a router chose it (`using.why`) stays on the input it answered, so no ask,
+ * later input or child repeats a reason the plans have since outgrown. */
 export let usingBefore = (
   entries: Bundle[],
   seq = Infinity,
-): Comp | undefined => aspectBefore(entries, USING, seq)
+): Comp | undefined => {
+  let using = aspectBefore(entries, USING, seq)
+  if (!using) return undefined
+  let { why: _, ...selection } = using
+  return selection
+}
 
 /** What is sent, selected independently of who answers. */
 export let sendingBefore = (

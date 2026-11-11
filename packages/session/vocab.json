@@ -730,7 +730,7 @@
         },
         "why": {
           "type": "string",
-          "description": "where a router chose the model (@yaks/model `route`), one line saying why, as the plans read then"
+          "description": "on the input a router answered (@yaks/model `route`), one line saying why it chose this model, as the plans read then; an ask and a later input record the selection without it"
         }
       }
     },
