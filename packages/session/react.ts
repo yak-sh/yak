@@ -507,7 +507,7 @@ let failing = (
 
 // The plan limits a provider answered `ask` with, as the rows that keep each
 // window's latest reading, read now, where this graph keeps them: a limit on
-// one model is the model's the ask was sent to. A provider's row is written
+// one model is on the model that answered, else the one asked. A provider's row is written
 // only where it is missing.
 let readings = async (
   g: Graph,
@@ -515,7 +515,7 @@ let readings = async (
   limits?: Limit[],
 ): Promise<Bundle[]> => {
   if (!limits?.length || !g.vocab.comp('rate_limit')) return []
-  let to = comp(ask, ASK)?.to
+  let to = comp(ask, ASK)?.served ?? comp(ask, ASK)?.to
   let rows = limitRows(
     metering(limits, to ? String(to) : undefined),
     new Date().toISOString(),
@@ -975,7 +975,7 @@ export let react = async (
       finalAsk,
       ...served,
       ...await carried(g, session, sent),
-      ...saved ? [] : await readings(g, ask, reply.limits),
+      ...saved ? [] : await readings(g, finalAsk, reply.limits),
     ]
     let partials = saved
       ? await g.read(`.output.source=${ask.entity.eid}&.stream_item&*`)

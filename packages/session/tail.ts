@@ -45,7 +45,7 @@ import { status } from '@yaks/graph/errors'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import { who } from '@yaks/graph/call'
 import { toolEid } from '@yaks/tools/result'
-import { limitRows } from '@yaks/model'
+import { limitRows, metering } from '@yaks/model'
 import type { Comps, Reader, Said } from './readers.ts'
 import { humanCaller } from './who.ts'
 import type { Chunks } from './archive.ts'
@@ -86,6 +86,8 @@ export type Tail = {
   at: number
   /** when the newest line that says so was written */
   time?: string
+  /** the model the newest line that says so named as answering */
+  model?: string
   rest: string
   dec: TextDecoder
   /** what the requests read so far carried (./parts.ts), followed from the
@@ -268,14 +270,20 @@ export let imported = (
 // One line's rows, and when the harness wrote it.
 type Line = { bundles: Bundle[]; at?: string }
 
-// What a line says, its plan-limit readings timed: a line that reports limits
-// and says no time of its own (Claude's `rate_limit_event`) was written after
-// the newest line that said one, which `last` keeps.
-let timed = (said: Said, last: { time?: string }): Said => {
+// What a line says, its plan-limit readings timed and placed: a line that
+// reports limits and says no time of its own (Claude's `rate_limit_event`)
+// was written after the newest line that said one, and a limit on one model
+// is on the model the log last said answers it. `last` keeps both.
+let timed = (said: Said, last: { time?: string; model?: string }): Said => {
   last.time = said.at ?? last.time
-  return said.limits && !said.at && last.time
-    ? { ...said, at: last.time }
-    : said
+  last.model = said.model ?? last.model
+  if (!said.limits) return said
+  let model = last.model && identityEid('model', [last.model])
+  return {
+    ...said,
+    ...!said.at && last.time ? { at: last.time } : {},
+    limits: metering(said.limits, model),
+  }
 }
 
 // How many lines one transaction writes at most, and how much text: a line
@@ -816,7 +824,7 @@ export let recount = async (
   let key = own ? o.session : `${o.session} ${path}`
   let w = walker()
   let line = 0, wrote = 0, placed = false
-  let last: { time?: string } = {}
+  let last: { time?: string; model?: string } = {}
   let run: (Line & { line: number; said: Said; made: Bundle[] })[] = []
   let size = 0
   let flush = async () => {

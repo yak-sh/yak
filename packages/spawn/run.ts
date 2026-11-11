@@ -73,7 +73,7 @@ import {
 } from '@yaks/session'
 import { pull, recount, type Tail, tail } from '@yaks/session/tail'
 import { home as signedIn } from '@yaks/session/files'
-import { accountEid, metering } from '@yaks/model'
+import { accountEid } from '@yaks/model'
 import { kept } from '@yaks/session/service'
 import {
   clean,
@@ -354,20 +354,15 @@ let answering = (read: Reader, ask: Comp): Reader => (e) => {
 let adapterOf = (job: Asked | null, o: Opts): Adapter | undefined =>
   job ? (o.adapters ?? known)[job.speaks] : undefined
 
-// A reader whose plan limits are the job's: a stream names its CLI's own
-// plan, and the plan a run spends is its provider row's, so a provider that
-// speaks another's CLI never moves that one's readings; a limit on one model
-// is the model's the job asked. A recording's readings (`provider.recorded`)
-// are of no plan, and none is kept.
+// A reader whose plan limits are the job's provider's: a stream names its
+// CLI's own plan, and the plan a run spends is its provider row's, so a
+// provider that speaks another's CLI never moves that one's readings. A
+// recording's readings (`provider.recorded`) are of no plan, and none is kept.
 let metered = (read: Reader, job: Asked): Reader => (e) => {
   let { limits, ...said } = read(e)
   if (!limits || job.recorded) return said
-  let { provider, ask } = job
-  return {
-    ...said,
-    limits: metering(limits, ask.to ? String(ask.to) : undefined)
-      .map((l) => ({ ...l, provider })),
-  }
+  let { provider } = job
+  return { ...said, limits: limits.map((l) => ({ ...l, provider })) }
 }
 
 // How a run's log reads: its usage answers `ask`, and the plan limits it

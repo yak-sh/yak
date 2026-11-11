@@ -2,6 +2,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
 import { accountEid } from '@yaks/model'
+import { identityEid } from '@yaks/graph/identity'
 import { processes } from '@yaks/process'
 import { onDisk } from '@yaks/file/local'
 import { sessionDerived, sessions } from '@yaks/session'
@@ -435,6 +436,7 @@ test("the plan limits a run's log reports are kept as its provider's reading for
   let at = '2026-11-11T20:00:19.278Z'
   let week = { utilization: 0.82, resetsAt: 1794913200, status: 'allowed' }
   let { g, dir, close } = await logged([
+    { type: 'system', subtype: 'init', model: 'claude-fable-5-2' },
     { ...said[0], timestamp: at },
     {
       type: 'rate_limit_event',
@@ -468,8 +470,9 @@ test("the plan limits a run's log reports are kept as its provider's reading for
       resets: '2026-11-17T11:00:00.000Z',
       at,
     }
-    let model = (await asked(g, 'S1'))?.ask.to
-    // The plan's week, and beside it its limit on the model the run asked.
+    // The plan's week, and beside it its limit on the model the log said
+    // answers it.
+    let model = identityEid('model', ['claude-fable-5-2'])
     assertEquals(
       rows!.map((r) => comp(r, 'rate_limit')).sort((a, b) =>
         Number(b.used) - Number(a.used)

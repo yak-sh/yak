@@ -142,7 +142,7 @@ says what each output line means. Providers and the models they serve remain
 graph entities, so adding a model does not require a package release. The plan
 limits a run's stream reports are kept as readings of the provider row that ran,
 whichever CLI it speaks, and a limit on one model as the reading of the model
-the run asked.
+the stream says answers it.
 
 <a id="the-stand-in"></a>
 

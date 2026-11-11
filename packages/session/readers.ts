@@ -53,6 +53,8 @@ export type Said = {
   fixed?: Fixed[]
   /** what it says about the provider's plan limits */
   limits?: Limit[]
+  /** the model it says answers the lines after it, by the model's own name */
+  model?: string
 }
 
 /** A harness's line format. */
@@ -362,6 +364,9 @@ let line: Reader = (e) => {
   let about = e.type == 'system' && e.subtype == 'init' && e.session_id
     ? { session: { id: String(e.session_id) } }
     : undefined
+  let model = e.type == 'system' && e.subtype == 'init' && e.model
+    ? String(e.model)
+    : undefined
   let fixed = fixedOf(e)
   let limits = e.type == 'rate_limit_event'
     ? metered(obj(e.rate_limit_info))
@@ -372,6 +377,7 @@ let line: Reader = (e) => {
     ...(at ? { at } : {}),
     ...(fixed.length ? { fixed } : {}),
     ...(limits.length ? { limits } : {}),
+    ...(model ? { model } : {}),
   }
 }
 
