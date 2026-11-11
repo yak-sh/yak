@@ -137,16 +137,19 @@ let decoder = (names: string[], compile: Statement['getRowObject']) => {
   return made
 }
 
-// A statement SQLite will not compile says which it was: the message names
-// the fault, and only the statement shows where it is, once the error has
-// crossed a worker and reached its caller (its enumerable properties do).
+// A statement SQLite will not compile or run says which it was: the message
+// names the fault, and only the statement shows where it is, once the error
+// has crossed a worker and reached its caller (its enumerable properties do).
+// A kept statement is compiled again when the schema moves under it, at its
+// step, so a fault of compiling can surface there too.
+let named = (error: unknown, sql: string) =>
+  error instanceof Error ? Object.assign(error, { statement: sql }) : error
+
 let compile = (db: Database, sql: string) => {
   try {
     return db.prepare(sql)
   } catch (error) {
-    throw error instanceof Error
-      ? Object.assign(error, { statement: sql })
-      : error
+    throw named(error, sql)
   }
 }
 
@@ -244,7 +247,7 @@ export let prepared = (db: Database) => {
       // again. Resetting reports the step's failure again, so the step's
       // error is the one thrown; nothing with possible side effects retries.
       reset(statement.unsafeHandle)
-      throw error
+      throw named(error, sql)
     }
   }
 }

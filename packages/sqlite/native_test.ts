@@ -426,3 +426,13 @@ test('a statement SQLite will not compile is named by its error', () => {
   assertEquals((error as { statement?: string }).statement, sql)
   db.close()
 })
+
+test('a kept statement that fails as it runs is named by its error', () => {
+  let db = new Database(':memory:')
+  let run = prepared(db), sql = 'insert into t values (1)'
+  run('create table t (x primary key)')
+  run(sql)
+  let error = assertThrows(() => run(sql))
+  assertEquals((error as { statement?: string }).statement, sql)
+  db.close()
+})
