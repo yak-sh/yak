@@ -343,8 +343,8 @@ export let Organizations = () => (
             <li class='Plan_Item'>The AI assistant's work is included</li>
             <li class='Plan_Item'>
               {LETTERS.pro.toLocaleString('en-US')}{' '}
-              emails a month sent or received by your site, such as sign-up
-              confirmations
+              emails a month sent or received by your site, such as the list
+              each Friday of who is coming to Saturday's food pantry shift
             </li>
             <li class='Plan_Item'>Support from us, by email</li>
           </ul>{' '}

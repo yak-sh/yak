@@ -50,12 +50,12 @@ editor, with `graph_apply` or from a page:
                     required: true, order: 3 } },
     ])
 
-The office is written first because `notify` is a list, and an alias such as
-`$office` is replaced only where a property holds one eid, never inside a list.
-The `alias` gives the form a name for its door's address; without one the door
-is addressed by the form's eid. In `seed.json` an alias is replaced wherever it
-appears, so there the rows are one list with `notify: ["$office"]`, and every
-installed copy has the form.
+The office is written first because `notify` is a list, and a page's `apply`
+replaces an alias such as `$office` only where a property holds one eid, never
+inside a list. The `alias` gives the form a name for its door's address; without
+one the door is addressed by the form's eid. In `seed.json` an alias is replaced
+wherever it appears, so there the rows are one list with `notify: ["$office"]`,
+and every installed copy has the form.
 
 **`form`** — all optional:
 

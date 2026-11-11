@@ -157,6 +157,16 @@ to show how wide the range is and to set off the visitor's own idea, not to
 offer a list to choose from. Show a few at a time, moving or rotating, rather
 than every one at once in a grid. The full list belongs in the gallery.
 
+**Show the product itself, never a drawing of it.** Jeff, 2026-11-11,
+verbatim: "btw, i think these abstract drawings of the conversations and stuff
+is a lot less compelling than actual screenshots". A conversation, a letter or
+a screen on the page is a capture of the live thing, or the live part itself
+filled from the venture's demo content. An email exchange is shown as mail and
+a chat as the chat's own screen, and each is an exchange that took place, not
+words written for the page. A capture holds demo content only, never a
+customer's, and is never committed to git: it is served from where the product
+keeps bytes, and the page's source says how it is taken again.
+
 **Say what it is first.** The hero's first sentence says what the product
 does, in the visitor's terms. Run Hale's copy-paste test and Seibel's
 smart-friend test on it before anything else on the page.
