@@ -202,18 +202,32 @@ export let mkdir = async (path: Path, o: MkdirOptions = {}): Promise<void> => {
 export let mkdirSync = (path: Path, o: MkdirOptions = {}): void => {
   fs.mkdirSync(path, o)
 }
+/** What `remove` takes: `recursive` removes a directory with its contents,
+ * and `force` lets a path that is already gone count as removed. */
+export type RemoveOptions = { recursive?: boolean; force?: boolean }
+let gone = (o: RemoveOptions) => (error: unknown) => {
+  if (!(o.force && isNotFound(error))) throw error
+}
 export let remove = async (
   path: Path,
-  o: { recursive?: boolean } = {},
+  o: RemoveOptions = {},
 ): Promise<void> => {
-  if (o.recursive) await fsp.rm(path, { recursive: true })
-  else if ((await fsp.lstat(path)).isDirectory()) await fsp.rmdir(path)
-  else await fsp.unlink(path)
+  try {
+    if (o.recursive) await fsp.rm(path, { recursive: true })
+    else if ((await fsp.lstat(path)).isDirectory()) await fsp.rmdir(path)
+    else await fsp.unlink(path)
+  } catch (error) {
+    gone(o)(error)
+  }
 }
-export let removeSync = (path: Path, o: { recursive?: boolean } = {}): void => {
-  if (o.recursive) fs.rmSync(path, { recursive: true })
-  else if (fs.lstatSync(path).isDirectory()) fs.rmdirSync(path)
-  else fs.unlinkSync(path)
+export let removeSync = (path: Path, o: RemoveOptions = {}): void => {
+  try {
+    if (o.recursive) fs.rmSync(path, { recursive: true })
+    else if (fs.lstatSync(path).isDirectory()) fs.rmdirSync(path)
+    else fs.unlinkSync(path)
+  } catch (error) {
+    gone(o)(error)
+  }
 }
 export let stat = async (path: Path): Promise<FileInfo> =>
   info(await fsp.stat(reading(path)))

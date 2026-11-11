@@ -5,6 +5,7 @@ import { insert, scan } from '@yaks/sql'
 import { copy, type Copying } from './copy.ts'
 import { copyFile } from './copy_file.ts'
 import { assertRejects } from '@std/assert'
+import { CallError } from '@yaks/tools/errors'
 
 let dir = Deno.makeTempDirSync()
 cleanup(() => Deno.removeSync(dir, { recursive: true }))
@@ -25,6 +26,14 @@ let options = (to: string) => ({
   stopping: new AbortController().signal,
   out: () => {},
 })
+let exists = (path: string) => {
+  try {
+    Deno.lstatSync(path)
+    return true
+  } catch {
+    return false
+  }
+}
 let read = (path: string) => {
   let sql = open(path, { readOnly: true })
   try {
@@ -87,4 +96,21 @@ test('a failed copy keeps the previous destination and removes its private file'
   )
   equal(read(`${to}/ada.db`), [{ body: 'kept' }])
   equal([...Deno.readDirSync(to)].map((f) => f.name), ['ada.db'])
+})
+
+test('removing the destination directory during a copy fails it as removed and leaves it gone', async () => {
+  let to = `${dir}/wiped`, o = options(to)
+  await assertRejects(
+    () =>
+      copy({
+        ...o,
+        page: (space, asked) => {
+          if (asked.table) Deno.removeSync(to, { recursive: true })
+          return asking(space, asked)
+        },
+      }),
+    CallError,
+    `${to} was removed while the copy ran`,
+  )
+  equal(exists(to), false)
 })

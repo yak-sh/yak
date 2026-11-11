@@ -65,3 +65,12 @@ test('shared readers exclude a writer across hardlink names', async () => {
   await b.unlock()
   ok(writer.tryLockSync(true))
 })
+
+test('a forced remove of a path already gone succeeds, and an unforced one throws', async () => {
+  let missing = `${root}/never`
+  throws(() => io.removeSync(missing, { recursive: true }))
+  io.removeSync(missing, { recursive: true, force: true })
+  io.removeSync(missing, { force: true })
+  await io.remove(missing, { recursive: true, force: true })
+  await io.remove(missing, { force: true })
+})
