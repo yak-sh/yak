@@ -37,7 +37,7 @@ import {
   stamped,
   type Via,
 } from '../signin.ts'
-import { newcomerIs, ownOf, type Row, seatsLine } from '../directory.ts'
+import { inside, newcomerIs, ownOf, type Row, seatsLine } from '../directory.ts'
 
 type Guess = {
   email?: string
@@ -67,6 +67,9 @@ let addressOf = (s: { email?: string; phone?: string }) =>
 // signed in at `at`, and the stamp says whether it is their first time, so
 // the write that signs them in answers the funnel's question too (T-149011).
 // The person comes first, under the request's `$alias`, then where they land.
+// Somebody wearing the address already, signing in on a newcomer's browser,
+// is handed what the newcomer built after this write (newcomer.ts `keep`),
+// so nothing is minted them here.
 let arrival = (
   tx: Tx,
   address: string,
@@ -76,9 +79,10 @@ let arrival = (
 ): Bundle[] | Promise<Bundle[]> =>
   after(tx.read(personLine(address)), ([found]) =>
     after(
-      found || !newcomer ? [] : tx.read(`.entity.eid=${newcomer}`),
+      newcomer ? tx.read(`.entity.eid=${newcomer}`) : [],
       ([row]) => {
-        let taken = newcomerIs(row as Row | undefined)
+        let fresh = newcomerIs(row as Row | undefined)
+        let taken = !found && fresh
         let who = (found ?? (taken ? row : undefined)) as Person | undefined
         let person = {
           ...arriving(
@@ -89,7 +93,15 @@ let arrival = (
           ),
           signed_in: stamped(who?.signed_in, at, via),
         }
-        return after(landing(tx, who?.entity.eid), (home) => [person, ...home])
+        let handed = !!found && fresh
+        return after(
+          landing(
+            tx,
+            person.entity.eid,
+            handed ? undefined : { ...who, ...person } as unknown as Row,
+          ),
+          (home) => [person, ...home],
+        )
       },
     ))
 
@@ -98,17 +110,22 @@ let arrival = (
 // one trip (T-150300). It is said back as it stands, its address and nothing
 // else, which writes nothing: a bundle holding what is stored leaves the
 // write and comes back in its answer (@yaks/graph unchanged.ts). Somebody
-// minted here, or with no space marked theirs yet, lands nowhere yet, and
-// directory.ts `own` finds or mints theirs.
-let landing = (tx: Tx, person?: string): Bundle[] | Promise<Bundle[]> =>
-  person
-    ? after(tx.read(seatsLine(person)), (rows) => {
-      let own = ownOf(rows as Row[], person)
-      return own
-        ? [{ entity: { eid: own.eid }, space: { slug: own.slug } }]
-        : []
-    })
-    : []
+// with no space at all is minted theirs in this write (directory.ts
+// `owning`), `as` the person it makes them, so a new person's code is one
+// trip too (T-151251) and their space stands for the first page it sends
+// them to. Somebody owning spaces none of which is marked theirs, or due a
+// newcomer's handover (no `as`), lands nowhere yet, and directory.ts `own`
+// finds, marks or mints theirs after it.
+let landing = (
+  tx: Tx,
+  person: string,
+  as?: Row,
+): Bundle[] | Promise<Bundle[]> =>
+  after(tx.read(seatsLine(person)), (rows) => {
+    let own = ownOf(rows as Row[], person)
+    if (own) return [{ entity: { eid: own.eid }, space: { slug: own.slug } }]
+    return as ? inside(tx).owning(person, undefined, as) : []
+  })
 
 // An ask is a new code: a `signin` carrying one.
 let asking = (b: Bundle) => !!(b.signin as { code?: string } | undefined)?.code

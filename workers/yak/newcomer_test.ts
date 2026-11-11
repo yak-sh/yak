@@ -219,6 +219,19 @@ let builds = await buildsAt('/admin/builds')
 let withTests = await buildsAt('/admin/builds?tests=1')
 let today = await opened(k.dir)
 
+// Ben has an account and no space yet, as somebody invited has: the
+// newcomer's is the one he keeps, his own.
+let bens = await build('A recipe box', { ip: '203.0.113.12' })
+let ben = await person('ben@example.com')
+await (await signIn('/login', { address: 'ben@example.com' }, cookieOf(bens)))
+  .body?.cancel()
+await (await signIn('/login/code', {
+  address: 'ben@example.com',
+  code: await mailed(k, 'ben@example.com'),
+}, cookieOf(bens))).body?.cancel()
+await k.settled()
+let benSeats = await k.dir.seats(ben, 'owner')
+
 // Thirty days on the trash erases the third space, and its newcomer with it;
 // their browser, still signed in as them, is a stranger at the box again.
 let leaverBefore = await row(leaver)
@@ -336,6 +349,13 @@ test('an address new here keeps the space as its own, at its plan', async () => 
   assert(limitOf(kept) > PER_BUILD)
   assertEquals(await k.dir.owners(kept), [dana])
   assertEquals((await k.dir.own(dana)).slug, space.slug)
+})
+
+test("somebody with no space keeps a newcomer's as their one own", () => {
+  assertEquals(benSeats.map((s) => [s.space.slug, s.own]), [[
+    spaceOf(bens),
+    true,
+  ]])
 })
 
 test("somebody with a space keeps a newcomer's beside it", async () => {

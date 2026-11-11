@@ -639,9 +639,14 @@ export let settle = async (
 }
 
 // The first person ever to arrive owns the platform: a seat in its own space.
+// A new platform holds none until it is seeded (directory.ts `seeding`),
+// which the code that signed them up and minted their space, no directory
+// write, did not do.
 let founding = async (env: Env, person: string) => {
   let dir = dirOf(env)
-  let space = await dir.space(META.space)
+  let platform = () => dir.space(META.space)
+  let space = await platform() ??
+    await dirPart.seeding(meta(env)).then(platform)
   if (space && await dir.memberless(space)) {
     await meta(env).apply([{
       entity: { eid: '$seat' },
@@ -818,10 +823,11 @@ let landed = async (
   // behind the answer (T-148852). One sent nowhere in particular lands
   // straight on their own (T-149706), where /manage was one more trip for the
   // browser that found it again: the one the code's own write found marked
-  // theirs (T-150300), which a newcomer's handover leaves theirs (newcomer.ts
-  // `keep` marks what it hands over theirs only for somebody with no space),
-  // else found or minted in one write (directory.ts `own`), once, here, after
-  // the handover, and the answer waits on it for nobody else.
+  // theirs (T-150300) or minted them, having none (T-151251), which a
+  // newcomer's handover leaves theirs (newcomer.ts `keep` marks what it hands
+  // over theirs only for somebody with no space), else found, marked or
+  // minted in one write (directory.ts `own`), once, here, after the handover:
+  // somebody owning spaces none marked theirs, or handed a newcomer's.
   let to = back && onZone(back, env)
   let own = home ? null : dir.own(person)
   background(

@@ -1536,9 +1536,10 @@ test("a new person's first page works right after the code", async () => {
   }
 })
 
-// Somebody back lands on their own space by the code's one trip: the write
-// that spends it says where (facets/signin-graph.ts `landing`), renamed or not.
-test('a code lands somebody back on their own space in one trip', async () => {
+// Somebody lands on their own space by the code's one trip: the write that
+// spends it says where (facets/signin-graph.ts `landing`), new, back, or
+// renamed, minting a new person theirs.
+test('a code lands somebody on their own space in one trip', async () => {
   let k = await kernel()
   let email = `${unique('back')}@yaks.app`
   let code = async () => {
@@ -1554,7 +1555,7 @@ test('a code lands somebody back on their own space in one trip', async () => {
       inn.headers.get('server-timing')!.match(/\bhops;dur=(\d+)/)?.[1],
     ]
   }
-  await code()
+  equal(await code(), [`https://yaks.app/manage/${email.split('@')[0]}`, '1'])
   let [them] = await meta(k).query(`.person&.email.address=${email}`)
   let [space] = await k.dir.spaces(them.entity.eid)
   let renamed = unique('renamed')

@@ -10,27 +10,13 @@
 //
 // The platform's alone: what it writes is the kernel's (a person's `started`,
 // a space's `starter`), so a request that is not trusted is refused.
-import type { Bundle, Plugin, Tx } from '@yaks/graph'
+import type { Bundle, Plugin } from '@yaks/graph'
 import { hook } from '@yaks/graph/plugin'
 import { Refused } from '@yaks/graph/errors'
 import { after, each } from '@yaks/fp'
-import { directoryRows, type Row } from '../directory.ts'
+import { inside } from '../directory.ts'
 
 type Own = { person: string; want?: string }
-
-// The directory's decisions over this transaction: its reads are the
-// write's own, and it writes nothing itself.
-let over = (tx: Tx) =>
-  directoryRows({
-    query: async (q) =>
-      (await tx.read(q) as Row[]).map((row) => ({
-        ...row,
-        policy: { revision: 0 },
-      })),
-    apply: () => {
-      throw new Error('a write decided inside another writes nothing itself')
-    },
-  })
 
 export let plugins = (): Plugin[] => [{
   name: 'yak/directory',
@@ -47,7 +33,7 @@ export let plugins = (): Plugin[] => [{
         if (!b.$own) return [...out, b]
         let { person, want } = b.$own as Own
         return after(
-          over(tx).owning(person, want),
+          inside(tx).owning(person, want),
           (wrote) => [...out, ...wrote],
         )
       },

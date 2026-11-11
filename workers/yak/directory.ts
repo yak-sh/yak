@@ -36,7 +36,7 @@ import { knownOptions } from '@yaks/graph/errors'
 import type { Reload } from '@yaks/platform'
 import type { Comp } from '@yaks/platform/comp'
 import { type Host as HostEnv, spaceHost } from './host.ts'
-import type { Actor, Bundle } from '@yaks/graph'
+import type { Actor, Bundle, Tx } from '@yaks/graph'
 import { type Listed, listing } from '@yaks/connections/integrations'
 import { identityEid, minted } from '@yaks/graph/identity'
 import type { Rec } from './domains.ts'
@@ -974,6 +974,16 @@ let cached = (store: Meta) => {
 // seeds its own.
 let seeded = new WeakMap<Meta, Promise<void>>()
 
+/** The platform's own rows in the meta store (`seed`), written once per
+ * store: before a directory write, and before the first-owner bootstrap
+ * reads the meta space (identity.ts `founding`), which on a new platform
+ * may follow a sign-in no directory write came before. */
+export let seeding = (store: Meta) => {
+  let first = seeded.get(store)
+  if (!first) seeded.set(store, first = seed(store))
+  return first
+}
+
 // What the platform is made of, row by row: the meta space and its app, the
 // admin person, and the admin's seat in that space. Each half is asked for on
 // its own, so a store that has one and not the other — production, seeded
@@ -1078,9 +1088,7 @@ export let part = (store: Meta) => ({
     return body
   },
   apply: async (bundles: Bundle[], headers: Record<string, string> = {}) => {
-    let first = seeded.get(store)
-    if (!first) seeded.set(store, first = seed(store))
-    await first
+    await seeding(store)
     let admitted = Object.fromEntries(
       [...VOUCH, 'x-yak-kernel']
         .filter((name) =>
@@ -2165,6 +2173,21 @@ let keep = (spaces: Iterable<string>, apps: App[], since?: number) => {
     })
   }
 }
+
+/** The directory's decisions over a write's own transaction, for a hook
+ * deciding inside it (facets/directory-graph.ts, facets/signin-graph.ts): its
+ * reads are the write's, and it writes nothing itself. */
+export let inside = (tx: Tx) =>
+  directoryRows({
+    query: async (q) =>
+      (await tx.read(q) as Row[]).map((row) => ({
+        ...row,
+        policy: { revision: 0 },
+      })),
+    apply: () => {
+      throw new Error('a write decided inside another writes nothing itself')
+    },
+  })
 
 /** Directory decisions over supplied reads and writes. The binding client
  * above owns revisions, request caching and transport recovery. */
@@ -3428,11 +3451,17 @@ export let directoryRows = (rows: {
     // the batch space_new writes (`minting`), at the address they chose if it
     // is still free and otherwise the next free one their address names. A
     // space nobody has named is known by the name it answers to, which is
-    // what `/connect` writes when one is chosen there too.
-    owning: async (person: string, want?: string): Promise<Bundle[]> => {
+    // what `/connect` writes when one is chosen there too. `as` is the
+    // person as the same write makes them, for a write that mints them too
+    // (facets/signin-graph.ts `landing`), whose row is not stored yet.
+    owning: async (
+      person: string,
+      want?: string,
+      as?: Row,
+    ): Promise<Bundle[]> => {
       let [mine, row] = await Promise.all([
         self.seats(person, 'owner'),
-        one(`.entity.eid=${person}`),
+        as ?? one(`.entity.eid=${person}`),
       ])
       if (mine.length || !row) return []
       let chosen = !!want && SLUG.test(want) && !RESERVED.has(want) &&
