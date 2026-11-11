@@ -93,17 +93,22 @@ export let items = (message: Record<string, unknown>, req: Request): Item[] => {
 // deno-lint-ignore no-explicit-any
 export type Frame = Record<string, any>
 
-/** A reply's usage from the API's usage fields. */
+/** A reply's usage from the API's usage fields, which count cache reads and
+ * writes beside `input_tokens`; here they are parts of it. A write kept an
+ * hour is priced apart from one kept five minutes, so it is counted apart. */
 let counted = (u: Frame): Usage => {
   let cached = u.cache_read_input_tokens ?? 0
-  let input = (u.input_tokens ?? 0) + cached +
-    (u.cache_creation_input_tokens ?? 0)
+  let wrote = u.cache_creation_input_tokens ?? 0
+  let hour = u.cache_creation?.ephemeral_1h_input_tokens
+  let input = (u.input_tokens ?? 0) + cached + wrote
   let output = u.output_tokens ?? 0
   return {
     input_tokens: input,
     output_tokens: output,
     total_tokens: input + output,
     cached_tokens: cached,
+    cache_write_tokens: wrote,
+    ...hour ? { cache_write_1h_tokens: hour } : {},
   }
 }
 

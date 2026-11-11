@@ -37,9 +37,13 @@ only what no piece carried. There are no retries within this adapter; durable
 submission/acknowledgement uses the same model callbacks as the HTTP providers.
 
 The graph records each ask, assistant text, requested call, harness result, CLI
-session/message ids and reported token usage. Claude's displayed dollar estimate
-is not a subscription charge and is not recorded as a paid API bill.
-Cancellation kills the child and removes its directory.
+session/message ids and reported token usage: input, output, what was read from
+the prompt cache and what was written to it, a write kept an hour counted apart
+since it lists at more. The reply names the release its alias resolved to, and
+the request is weighed at that release's price (@yaks/session `ask.served`).
+Claude's displayed dollar estimate is not a subscription charge and is not
+recorded as a paid API bill. Cancellation kills the child and removes its
+directory.
 
 ## A process started before its step
 

@@ -268,6 +268,11 @@ test('usage is the count the message ended with, for text and for a call', async
     let usage = {
       input_tokens: 5,
       cache_read_input_tokens: 2,
+      cache_creation_input_tokens: 4,
+      cache_creation: {
+        ephemeral_5m_input_tokens: 1,
+        ephemeral_1h_input_tokens: 3,
+      },
       output_tokens: 8,
     }
     let { reply } = await read(req, [
@@ -283,10 +288,12 @@ test('usage is the count the message ended with, for text and for a call', async
     return reply!.usage
   }
   let usage = {
-    input_tokens: 7,
+    input_tokens: 11,
     output_tokens: 63,
-    total_tokens: 70,
+    total_tokens: 74,
     cached_tokens: 2,
+    cache_write_tokens: 4,
+    cache_write_1h_tokens: 3,
   }
   assertEquals(await ended({ type: 'text', text: '1…30, done' }), usage)
   assertEquals(
