@@ -365,7 +365,7 @@
             "string",
             "null"
           ],
-          "description": "Cancellation reason."
+          "description": "Why the task is cancelled; pass it with status cancelled."
         },
         "edit": {
           "type": "object",

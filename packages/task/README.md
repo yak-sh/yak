@@ -258,10 +258,11 @@ aliases, ready for later calls.
 
 One `task_update` call can change `title`, `body`, `status`, filing fields,
 `accept` (completion conditions), `blocked` (an external obstacle), and `reason`
-(the cancellation reason). `requires` adds a link from the task to each
-prerequisite it waits for: `yak task update T-4 --requires T-3`. Text, filing
-fields and `reason` accept `null` to clear the supplied field; `accept: null`
-and `blocked: null` remove their components.
+(why the task is cancelled). `reason` is passed with `status: cancelled`; alone
+it is refused, since only a status moves a task. `requires` adds a link from the
+task to each prerequisite it waits for: `yak task update T-4 --requires T-3`.
+Text, filing fields and `reason` accept `null` to clear the supplied field;
+`accept: null` and `blocked: null` remove their components.
 
 `edit` changes part of `doc.body` without sending the rest of the body back:
 

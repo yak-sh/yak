@@ -2,6 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, type Graph, Stale, token } from '@yaks/graph'
 import { statusOf } from './words.ts'
+import { Refused } from '@yaks/graph/errors'
 import { store, teamGraph } from './testing.ts'
 import { listing, runs } from './tools.ts'
 
@@ -72,6 +73,21 @@ test('a status is the marks that mean it', async () => {
   for (let s of ['wip', 'done', 'cancelled', 'wip', 'open']) {
     assertEquals(await move(s), s)
   }
+})
+
+test('a reason alone is refused, so only a status cancels a task', async () => {
+  let { g } = teamGraph()
+  await g.apply([{ entity: { eid: 't' }, task: {} }])
+  let update = async (args: Record<string, unknown>) =>
+    g.apply(
+      await tools.task_update!(...asked({ task: 't', ...args })) as Bundle[],
+    )
+  await assertRejects(() => update({ reason: 'x' }), Refused)
+  assertEquals(statusOf(g.vocab, (await g.get(['t']))[0]), 'open')
+  await update({ status: 'cancelled', reason: 'called off' })
+  let [held] = await g.get(['t'])
+  assertEquals(statusOf(g.vocab, held), 'cancelled')
+  assertEquals(comp(held, 'cancelled').reason, 'called off')
 })
 
 test('what the line left out is left alone', async () => {

@@ -77,6 +77,23 @@ export let listing = (query?: unknown, limit?: unknown): string =>
 
 type Args = Record<string, unknown>
 
+// Why a task is cancelled, said with the status it explains. A reason written
+// alone would create the `cancelled` mark, and so cancel a task nobody asked
+// to cancel.
+let reasoned = (args: Args): Record<string, Comp> => {
+  if (!Object.hasOwn(args, 'reason')) return {}
+  if (!args.status) {
+    throw new Refused(
+      'A reason is why a task is cancelled: pass status cancelled with it',
+    )
+  }
+  return args.status == 'cancelled'
+    ? {
+      cancelled: { reason: args.reason == null ? null : String(args.reason) },
+    }
+    : {}
+}
+
 let conditions = (args: Args): Record<string, Comp | null> => ({
   ...(Object.hasOwn(args, 'accept')
     ? { accept: args.accept == null ? null : { body: String(args.accept) } }
@@ -84,12 +101,7 @@ let conditions = (args: Args): Record<string, Comp | null> => ({
   ...(Object.hasOwn(args, 'blocked')
     ? { blocked: args.blocked == null ? null : { on: String(args.blocked) } }
     : {}),
-  ...(Object.hasOwn(args, 'reason') &&
-      (!args.status || args.status == 'cancelled')
-    ? {
-      cancelled: { reason: args.reason == null ? null : String(args.reason) },
-    }
-    : {}),
+  ...reasoned(args),
 })
 
 let fields = (args: Args): Record<string, Comp | null> => {
