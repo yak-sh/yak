@@ -15,7 +15,11 @@ await g.apply([
   { entity: { eid: 'app' }, doc: { title: 'App' } },
   {
     entity: { eid: 'form' },
-    form: { thanks: 'Thank you.', notify: ['organizer'] },
+    form: {
+      thanks: 'Thank you.',
+      notify: ['organizer'],
+      seen: 'signups?id={id}',
+    },
   },
   {
     entity: { eid: 'email' },
@@ -114,4 +118,32 @@ test("an app's site is read from the address its letters leave under", () => {
   equal(siteOf('ward.app@yaks.app'), 'https://ward.yaks.app/app/')
   equal(siteOf('ward@yaks.app'), 'https://ward.yaks.app/')
   equal(siteOf(null), undefined)
+})
+
+test('a form that names no page for its sign-ups gets an alert without a link', async () => {
+  await g.apply([
+    { entity: { eid: 'plain' }, form: { notify: ['organizer'] } },
+    {
+      entity: { eid: 'plain-signup' },
+      registration: { form: 'plain', answers: {} },
+      completed: {},
+    },
+  ])
+  await send(
+    {
+      kind: 'created',
+      entity: { eid: 'plain-signup' },
+      name: 'completed',
+      comp: {},
+    },
+    g.storage,
+    (b) => g.apply(b),
+  )
+  let alerts = (await g.read('.mail&?doc')).filter((row) =>
+    (row.mail as Comp).target == 'plain-signup' &&
+    String((row.doc as Comp).title).startsWith('New sign-up')
+  )
+  equal(alerts.map((row) => (row.doc as Comp).body), [
+    'A new sign-up for Sign-up.',
+  ])
 })

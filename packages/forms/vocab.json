@@ -34,6 +34,11 @@
           "type": "string",
           "description": "what the form says while it takes no sign-ups: before it opens, after it closes, or once it is full"
         },
+        "seen": {
+          "type": "string",
+          "description": "the page of the app, relative to its address, where a sign-up is read, with {id} standing for the registration; the alert to the people the form notifies links to it when it is set",
+          "examples": ["signups?id={id}"]
+        },
         "notify": {
           "type": "array",
           "items": {

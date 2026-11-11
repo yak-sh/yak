@@ -42,7 +42,7 @@ marks. Add `doc{title, body}` to a form for its title and introduction.
 
 | Component      | Properties                                                                                                      |
 | -------------- | --------------------------------------------------------------------------------------------------------------- |
-| `form`         | `opens`, `closes`, `capacity`, `thanks`, `closed`, `notify`, `shares`                                           |
+| `form`         | `opens`, `closes`, `capacity`, `thanks`, `closed`, `notify`, `seen`, `shares`                                   |
 | `question`     | `form`, `label`, `kind`, `choices`, `required`, `hint`, `within`, `when`, `fills`, `relates`, `shared`, `order` |
 | `registration` | `form`, `person`, `answers`, `at`                                                                               |
 | `shared`       | `form`, `registration`, `answers`, `at`                                                                         |
@@ -54,6 +54,8 @@ property, such as `individual.born`. On a repeat, `relates` says what each entry
 is to the person it is listed under: `child`, `parent`, `spouse` or `sibling`,
 and absent when the entries are no relation. The core performs no directory
 writes. `notify` lists recipient entity ids; delivery belongs to the caller.
+`seen` is the app page that shows a sign-up (`signups?id={id}`), which the alert
+to those people links to.
 
 Registration state comes from marks. `registration.status` is `cancelled` when
 it carries `cancelled{at, by, via, reason}`, then `waitlisted` when it carries

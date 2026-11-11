@@ -25,6 +25,7 @@ export type Settings = {
   thanks?: string
   closed?: string
   notify?: readonly string[]
+  seen?: string
   shares?: { question: string; is: unknown }
 }
 

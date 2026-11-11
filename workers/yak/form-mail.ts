@@ -142,9 +142,11 @@ export let formPost =
       (a.question.question.kind == 'email' ||
         a.question.question.fills == 'individual.email')
     )?.value ?? address(people.find((b) => b.entity.eid == person))
-    // The app's Sign-ups page holds this sign-up (`signups?id=`).
-    let site = siteOf(at.mail())
-    let open = site ? `\n\nSee it: ${site}signups?id=${row.entity.eid}` : ''
+    // The page the form says shows a sign-up, if it says.
+    let site = siteOf(at.mail()), page = form.form.seen
+    let open = site && page
+      ? `\n\nSee it: ${site}${page.replaceAll('{id}', row.entity.eid)}`
+      : ''
     let replies = typeof email == 'string' && email.trim()
       ? { reply_address: email.trim() }
       : {}
