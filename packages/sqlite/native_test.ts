@@ -418,3 +418,11 @@ let indexChecks = (() => {
 test('native index creation does not inspect table columns separately', () => {
   assertEquals(indexChecks, 0)
 })
+
+test('a statement SQLite will not compile is named by its error', () => {
+  let db = new Database(':memory:')
+  let sql = 'select * from nowhere'
+  let error = assertThrows(() => prepared(db)(sql))
+  assertEquals((error as { statement?: string }).statement, sql)
+  db.close()
+})
