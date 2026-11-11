@@ -96,6 +96,9 @@ export type Options = {
   /** how often transcripts are looked at, in milliseconds (default one
    * second) */
   every?: number
+  /** how long what a native session is owed waits for more before it is
+   * given, in milliseconds (default ./listen.ts `QUIET`) */
+  quiet?: number
   /** more accounts to read, beside the ones found on their own: each a
    * Claude Code `CLAUDE_CONFIG_DIR` or a Codex `CODEX_HOME` (./files.ts
    * `homes`) */
@@ -637,7 +640,10 @@ export let service = async (
 ): Promise<void> => {
   await reapLeases(host.graph.storage)
   if (signal.aborted) return
-  let bus = follow(host, signal, { every: options.every })
+  let bus = follow(host, signal, {
+    every: options.every,
+    quiet: options.quiet,
+  })
   let said = host.config?.person
   let person = said && ((await host.graph.address([said])).get(said) ?? said)
   let seen: Seen = { tails: new Map(), done: new Set() }

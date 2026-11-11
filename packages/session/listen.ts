@@ -17,8 +17,8 @@
 // Person-written comments on records a session created follow it without a
 // claim; once it ends they are held for the project the record is filed under,
 // just like mail. On a record a session holds, an outside session hears every
-// comment but its own, and a native transcript only a person's: each input
-// wakes it for a model turn.
+// comment but its own, and a native transcript only a person's: its inputs
+// wake it for a model turn.
 //
 // A person's comment on an open task that is not blocked is for the session at
 // work on it, and for nobody else ({@link taken}): the holder hears it, and
@@ -802,34 +802,56 @@ export let owing = async (
   return out
 }
 
-/** Mark an item only if nobody has delivered it meanwhile, and with it the
- * knocks that say the `same` ({@link Owed}). What rides `together` lands in
- * that one committed batch or not at all: a native session's input, and for a
- * session started on the item, the session and its claim (./start.ts). A
- * guard among them that no longer holds leaves the item unmarked too. */
+/** An item to mark said: with it the knocks that say the `same`
+ * ({@link Owed}), and what lands `together` with its mark or not at all (a
+ * native session's input, and for a session started on the item, the session
+ * and its claim, ./start.ts). */
+export type Said = { item: Bundle; same?: Bundle[]; together?: Bundle[] }
+
+let marking = ({ item, same = [], together = [] }: Said): Bundle[] => [
+  ...together,
+  {
+    entity: { eid: item.entity.eid },
+    [NOTIFIED]: {},
+    $was: { [NOTIFIED]: { at: token(null) } },
+  },
+  ...same.map((b) => ({ entity: { eid: b.entity.eid }, [NOTIFIED]: {} })),
+]
+
+/** Mark these items said in one committed batch, each only if nobody has
+ * delivered it meanwhile. One somebody has, or whose guard `together` no
+ * longer holds, is left out with all that rode with it, and the rest land.
+ * Answers the ones that landed. */
+export let deliverAll = async (
+  graph: Pick<Graph, 'apply'>,
+  actor: Actor | null,
+  said: Said[],
+): Promise<Said[]> => {
+  while (said.length) {
+    try {
+      await graph.apply(signed(said.flatMap(marking), actor))
+      break
+    } catch (error) {
+      if (!(error instanceof Stale)) throw error
+      let { eid } = error
+      let rest = said.filter((s) =>
+        !marking(s).some((b) => b.entity.eid == eid)
+      )
+      said = rest.length < said.length ? rest : []
+    }
+  }
+  return said
+}
+
+/** Mark one item said ({@link deliverAll}); whether it landed. */
 export let deliver = async (
   graph: Pick<Graph, 'apply'>,
   actor: Actor | null,
   item: Bundle,
   together: Bundle[] = [],
   same: Bundle[] = [],
-): Promise<boolean> => {
-  try {
-    await graph.apply(signed([
-      ...together,
-      {
-        entity: { eid: item.entity.eid },
-        [NOTIFIED]: {},
-        $was: { [NOTIFIED]: { at: token(null) } },
-      },
-      ...same.map((b) => ({ entity: { eid: b.entity.eid }, [NOTIFIED]: {} })),
-    ], actor))
-    return true
-  } catch (error) {
-    if (error instanceof Stale) return false
-    throw error
-  }
-}
+): Promise<boolean> =>
+  (await deliverAll(graph, actor, [{ item, together, same }])).length > 0
 
 /** Take back the mark {@link deliver} set on items whose lines never reached
  * the session, so they are owed again. */
@@ -862,10 +884,15 @@ export let hear = async (
   return count
 }
 
-// How many quiet windows a `once` listener stays up at most after its first
-// line. Knocks that keep coming inside each window would otherwise hold what
-// was already said from the agent for as long as they came.
-let HOLD = 6
+/** How long what a session is owed waits for more before it wakes the
+ * session, in milliseconds: a wake costs a read of its whole context, so one
+ * wake carries all that is waiting. */
+export let QUIET = 5000
+
+/** How many quiet windows the first thing owed waits at most. Knocks that
+ * keep coming inside each window would otherwise hold it from the agent for
+ * as long as they came. */
+export let HOLD = 6
 
 /** Say everything addressed to the session as it arrives, until `stop`
  * aborts or, when `once`, until something was said and nothing new came for

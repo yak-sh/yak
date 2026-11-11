@@ -216,6 +216,33 @@ test('a later line inherits using and gets exactly one model turn', () => {
   ])
 })
 
+// What the bus writes a native session (./bus.ts `give`): every waiting line
+// in one batch, so one turn reads them all.
+let batched = await (async () => {
+  let { model, asked } = fake()
+  let p = proc(store(), 'w1', model)
+  await p.g.apply(ask('operator'))
+  await p.fx.work(p.g)
+  await p.fx.idle()
+  await p.g.apply(['a knock', 'a comment', 'a letter'].map((body, i) => ({
+    entity: { eid: `waiting-${i}` },
+    entry: { session: 'operator' },
+    content: { body },
+  })))
+  await p.fx.work(p.g)
+  await p.fx.idle()
+  return asked
+})()
+
+test('inputs written to a transcript in one batch get one model turn', () => {
+  assertEquals(batched.length, 2)
+  assertEquals(batched[1].items.slice(2).map((item) => item.kind), [
+    'user',
+    'user',
+    'user',
+  ])
+})
+
 // A step's own reply wakes its transcript as it lands, while that step's run
 // is still going. The step already taken answers that wake: the pool is owed
 // no further run until the background call's result lands.

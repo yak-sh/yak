@@ -1,7 +1,8 @@
 // The bus follows commits: a quiet graph costs it no read, and what is
-// written reaches its session at once, with no timer to wait for.
+// written reaches its session once its quiet window closes: at once where
+// there is none, with no timer to wait for.
 
-import { equal, test, tick, until } from '@yaks/testing'
+import { clock, equal, test, tick, until } from '@yaks/testing'
 import { type Bundle, graph, type News } from '@yaks/graph'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { provenanceDoc } from '@yaks/provenance'
@@ -35,9 +36,16 @@ let vocab = loadVocab([
   toolsDoc,
 ])
 
-// A graph the bus follows with a feed of its own, a clock that never comes
-// due, and every comment it reads counted.
-let followed = async (rows: Bundle[]) => {
+let never = (_: number, signal: AbortSignal) =>
+  new Promise((done) => signal.addEventListener('abort', done))
+
+// A graph the bus follows with a feed of its own, and every comment it reads
+// counted: with no quiet window and a clock that never comes due, unless
+// `options` say otherwise.
+let followed = async (
+  rows: Bundle[],
+  options: Parameters<typeof follow>[2] = { quiet: 0, wait: never },
+) => {
   let store = ram(vocab, { computed: statusComputed })
   let g = graph({ vocab, storage: store, plugins: [sessions()] })
   // One row a batch, so each row's `$actor` is its own.
@@ -55,15 +63,13 @@ let followed = async (rows: Bundle[]) => {
   }
   let others: ((news: News) => void | Promise<void>) | undefined
   let stop = new AbortController()
-  let never = (_: number, signal: AbortSignal) =>
-    new Promise((done) => signal.addEventListener('abort', done))
   let run = follow(
     {
       graph: watched,
       feed: (each) => (others = each, () => others = undefined),
     },
     stop.signal,
-    { wait: never },
+    options,
   )
   let said = async (eid: string) => !!(await g.get([eid]))[0]?.notified
   let settled = async () => {
@@ -189,6 +195,33 @@ test('a session coming to work hears what its project holds', async () => {
       content: { body: 'and this' },
     }], { trusted: true })
     await until(() => f.said('news'))
+  } finally {
+    await f.close()
+  }
+})
+
+test('knocks that come within the quiet window reach a native session together', async () => {
+  let time = clock(Date.UTC(2026, 0, 1))
+  let f = await followed(native, { quiet: 5000, clock: time })
+  let knock = (eid: string): Bundle => ({
+    entity: { eid },
+    knock: { target: 'native' },
+    doc: { body: eid },
+    created: { at: new Date(time.now()).toISOString() },
+  })
+  let inputs = async () =>
+    (await f.g.read('.entry.session=native&.attention')).length
+  try {
+    await f.settled()
+    await f.elsewhere([knock('first')])
+    await time.advance(3000)
+    await f.elsewhere([knock('second')])
+    await time.advance(4000)
+    await f.settled()
+    equal(await inputs(), 0)
+    await time.advance(1000)
+    await until(async () => await inputs() > 0)
+    equal(await inputs(), 2)
   } finally {
     await f.close()
   }

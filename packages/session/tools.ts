@@ -63,7 +63,7 @@ import { marksOf } from './state.ts'
 import { entryStatus, newestOf } from './reach.ts'
 import { promptContext, promptHook } from './prompt.ts'
 import type { Options as Reading } from './service.ts'
-import { listen } from './listen.ts'
+import { listen, QUIET } from './listen.ts'
 
 /** What a config file can set for this package: the checks' patience, and how
  * the duty reads transcripts (./service.ts). */
@@ -228,7 +228,7 @@ export let runs = (
       out: (line) => console.log(line),
       every: 1000 * (Number(args.every) || 2),
       once: args.once == true,
-      quiet: 1000 * (args.quiet == null ? 5 : Number(args.quiet) || 0),
+      quiet: args.quiet == null ? QUIET : 1000 * (Number(args.quiet) || 0),
       stop: host.stopping,
     })
     return []

@@ -4,6 +4,11 @@
 // context that harness adds after a call of its own (./routes.ts). The
 // listener for an outside harness uses listen.ts.
 //
+// A native transcript answers its inputs with a model turn that reads its
+// whole context, so all that is waiting for one is written in one batch and
+// taken in one turn: an item waits through a quiet window for more
+// ({@link ripe}), as it does for `yak session listen --once`.
+//
 // The native side follows the graph's commits ({@link follow}): its own
 // graph's, and through the host's feed every other process's. A pass looks at
 // what was written since the last one, so its cost follows what can be said,
@@ -17,7 +22,7 @@
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import type { Feed } from '@yaks/host'
-import { resolvers, sleep } from '@yaks/fp'
+import { type Clock, groupBy, resolvers, sleep, system } from '@yaks/fp'
 import { derivedEid } from '@yaks/graph/identity'
 import { who } from '@yaks/graph/call'
 import {
@@ -36,8 +41,10 @@ import {
   comments,
   creatorOf,
   deliver,
+  deliverAll,
   ended,
   heirs,
+  HOLD,
   knocked,
   natives,
   type News,
@@ -45,6 +52,7 @@ import {
   pending,
   type Projects,
   projects,
+  QUIET,
   replies as replyRoutes,
   type Routes,
   undeliver,
@@ -289,40 +297,93 @@ export let input = (session: Eid, item: Eid, body: string): Bundle => ({
   content: { body },
 })
 
-/** One pass over native sessions: each line {@link due} is appended as an
- * input, with what `beside` sets under it (./recall.ts). A failed append
- * leaves the item unmarked, so the next pass can retry it, and an item
- * another session was given first is not said twice. `attention` wakes the
- * effects role's runner. */
-export let feed = async (
-  g: Graph,
-  at?: Scope,
-  beside: Beside = (owed) => Promise.resolve(owed),
-): Promise<number> => {
+// When a line's item was written; one that says no time was never not there.
+let writtenAt = (d: Due): number => {
+  let at = Date.parse(String(comp(d.item, 'created').at))
+  return isNaN(at) ? -Infinity : at
+}
+
+/** The lines ready to be said at `now`, and those `held` for more with when
+ * the first of them is ready (`at`). A session's lines are said together,
+ * once nothing new was written for it in `quiet` ms, and no later than
+ * {@link HOLD} such windows after the oldest of them. An item that says no
+ * time is not waited on. */
+export let ripe = (
+  due: Due[],
+  now: number,
+  quiet: number,
+): { ready: Due[]; held: Due[]; at: number } => {
+  let ready: Due[] = [], held: Due[] = [], at = Infinity
+  for (let lines of groupBy(due, (d) => d.session).values()) {
+    let times = lines.map(writtenAt)
+    let when = Math.min(
+      Math.max(...times) + quiet,
+      Math.min(...times) + quiet * HOLD,
+    )
+    if (when <= now) ready.push(...lines)
+    else {
+      held.push(...lines)
+      at = Math.min(at, when)
+    }
+  }
+  return { ready, held, at }
+}
+
+/** Append these lines as inputs, each session's in one committed batch and
+ * in the order their items were written, so the session wakes once and one
+ * turn takes them all. A batch that fails leaves its items unmarked, so the
+ * next pass can retry them, and an item another session was given first is
+ * left out of it and not said twice. `attention` wakes the effects role's
+ * runner. Answers how many were said. */
+export let give = async (g: Graph, due: Due[]): Promise<number> => {
   let count = 0
-  for (let { session, item, line, same } of await beside(await due(g, at))) {
-    let entry = { ...input(session, item.entity.eid, line), attention: {} }
-    if (await deliver(g, null, item, [entry], same)) count++
+  for (let [session, lines] of groupBy(due, (d) => d.session)) {
+    let said = lines
+      .toSorted((a, b) => (writtenAt(a) - writtenAt(b)) || 0)
+      .map(({ item, line, same }) => ({
+        item,
+        same,
+        together: [{
+          ...input(session, item.entity.eid, line),
+          attention: {},
+        }],
+      }))
+    count += (await deliverAll(g, null, said)).length
   }
   return count
 }
 
+/** One pass over native sessions: each line {@link due} is given as an
+ * input ({@link give}), with what `beside` sets under it (./recall.ts). */
+export let feed = async (
+  g: Graph,
+  at?: Scope,
+  beside: Beside = (owed) => Promise.resolve(owed),
+): Promise<number> => give(g, await beside(await due(g, at)))
+
 /** Feed native sessions until `signal` aborts: a first pass over everything,
  * then a pass each time a commit gives one something to look at, at once. A
- * host with no feed cannot hear other processes' commits, so it asks about
- * everything every `every` ms. A pass that fails is reported and its scope
- * asked about again after `every` ms; `wait` is the clock that waits. */
+ * session's lines wait for more through a `quiet` window ({@link ripe}), and
+ * the pass that says them comes when it closes. A host with no feed cannot
+ * hear other processes' commits, so it asks about everything every `every`
+ * ms. A pass that fails is reported and its scope asked about again after
+ * `every` ms; `clock` is the time it keeps, and `wait` what waits on it. */
 export let follow = async (
   host: Recalling & { feed?: Feed },
   signal: AbortSignal,
   options: {
     every?: number
+    quiet?: number
+    clock?: Clock
     wait?: (ms: number, signal: AbortSignal) => Promise<unknown>
   } = {},
 ): Promise<void> => {
-  let { every = 1000, wait = sleep } = options
+  let { every = 1000, quiet = QUIET, clock = system } = options
+  let wait = options.wait ?? ((ms, signal) => sleep(ms, signal, clock))
   let { beside } = recall(host)
-  let next = scope(true)
+  // What a commit gave the next pass to look at, and the lines the last one
+  // held, with when the first of them is ready.
+  let next = scope(true), held = scope(), opens = Infinity
   let bell = resolvers<void>()
   let ring = () => bell.resolve()
   signal.addEventListener('abort', ring, { once: true })
@@ -333,12 +394,30 @@ export let follow = async (
       noted(next, bundles).all ||= missed
       if (!idle(next)) ring()
     })
+  // Until a commit rings, or the window on what is held closes.
+  let rest = async () => {
+    if (opens == Infinity) return await bell.promise
+    let woken = new AbortController()
+    await Promise.race([
+      bell.promise,
+      wait(opens - clock.now(), AbortSignal.any([signal, woken.signal])),
+    ])
+    woken.abort()
+  }
   try {
     while (true) {
-      let now = stop ? next : scope(true)
-      next = scope()
+      let now = stop ? merge(next, held) : scope(true)
+      next = scope(), held = scope(), opens = Infinity
       try {
-        if (!idle(now)) await feed(host.graph, now, beside)
+        if (!idle(now)) {
+          let found = ripe(await due(host.graph, now), clock.now(), quiet)
+          await give(host.graph, await beside(found.ready))
+          for (let { session, item } of found.held) {
+            held.sessions.add(session)
+            held.items.add(item.entity.eid)
+          }
+          opens = found.at
+        }
       } catch (error) {
         await (host.report?.(error) ?? console.error('session bus —', error))
         merge(next, now)
@@ -346,7 +425,7 @@ export let follow = async (
       }
       if (signal.aborted) return
       if (!stop) await wait(every, signal)
-      else if (idle(next)) await bell.promise
+      else if (idle(next)) await rest()
       bell = resolvers()
     }
   } finally {

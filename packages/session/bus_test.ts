@@ -23,7 +23,17 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { taskDoc } from '@yaks/task/vocab'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { test, until } from '@yaks/testing'
-import { due, feed, heard, noted, reply, scope } from './bus.ts'
+import {
+  type Due,
+  due,
+  feed,
+  give,
+  heard,
+  noted,
+  reply,
+  ripe,
+  scope,
+} from './bus.ts'
 import { PATH, routes } from './routes.ts'
 import { pending, pendingItems } from './listen.ts'
 import { statusOf } from './state.ts'
@@ -139,6 +149,77 @@ test('native bus delivery appends input and marks the item once', async () => {
   )
   assertEquals(await feed(g), 0)
   assertEquals((await g.read('.entry.session=native')).length, 3)
+})
+
+// How many inputs each committed batch wrote to a transcript from the bus.
+let batches = (g: Graph) => {
+  let seen: number[] = []
+  g.use({
+    name: 'batches',
+    hooks: {
+      effect: (bundles) => {
+        let inputs = bundles.filter((b) => b.attention).length
+        if (inputs) seen.push(inputs)
+        return bundles
+      },
+    },
+  })
+  return seen
+}
+
+let together = await scene(async () => {
+  let g = await fresh()
+  let seen = batches(g)
+  return { said: await feed(g), seen }
+})
+test('all that waits for a native transcript is written in one batch', () => {
+  assertEquals(together(), { said: 2, seen: [2] })
+})
+
+let taken = await scene(async () => {
+  let g = await fresh()
+  let owed = await due(g)
+  await g.apply([{ entity: { eid: 'note' }, notified: {} }])
+  let seen = batches(g)
+  let said = await give(g, owed)
+  let inputs = (await g.read('.entry.session=native&*')).slice(1)
+  return { said, seen, lines: inputs.map((e) => (e.content as Comp).body) }
+})
+test('an item given elsewhere first is left out of the batch, and the rest land', () => {
+  assertEquals(taken(), {
+    said: 1,
+    seen: [1],
+    lines: ['knock #knock at #native: child finished'],
+  })
+})
+
+// A line owed `session`, its item written `at` seconds.
+let line = (session: string, at?: number): Due => ({
+  session,
+  item: {
+    entity: { eid: `${session}${at}` },
+    ...at == null ? {} : { created: { at: new Date(at * 1000).toISOString() } },
+  },
+  line: '',
+  same: [],
+})
+let waits = (lines: Due[], now: number) => {
+  let { ready, held, at } = ripe(lines, now * 1000, 5000)
+  return [ready.length, held.length, at / 1000]
+}
+
+test('lines wait for more through a quiet window, each session on its own', () => {
+  let burst = [line('a', 0), line('a', 3)]
+  assertEquals(waits(burst, 7), [0, 2, 8])
+  assertEquals(waits(burst, 8), [2, 0, Infinity])
+  assertEquals(waits([...burst, line('b', 1)], 7), [1, 2, 8])
+  assertEquals(waits([line('a'), line('a', 3)], 4), [2, 0, Infinity])
+})
+
+test('lines that keep coming are said six windows after the first', () => {
+  let stream = Array.from({ length: 10 }, (_, i) => line('a', i * 4))
+  assertEquals(waits(stream.slice(0, 8), 29), [0, 8, 30])
+  assertEquals(waits(stream.slice(0, 8), 30), [8, 0, Infinity])
 })
 
 test('SQLite finds the same addressed comment and knock', async () => {
@@ -349,7 +430,7 @@ test('a line the harness gave up on at its hook stays owed for the next', () => 
 test('the session duty delivers without a Claude transcript directory', async () => {
   let g = await fresh()
   let stop = new AbortController()
-  let run = service({ graph: g }, { find: false }, stop.signal)
+  let run = service({ graph: g }, { find: false, quiet: 0 }, stop.signal)
   try {
     await until(async () =>
       (await g.get(['knock', 'note'])).every((b) => b.notified)

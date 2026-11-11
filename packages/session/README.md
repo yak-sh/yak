@@ -1018,9 +1018,8 @@ from `yak session listen`, at its hook door, or beside its next tool reply. A
 person's comment is one whose own `created.via` is not a session.
 
 An agent's comment on a claimed record reaches an outside session only, never a
-native transcript, which wakes for each input and spends a model turn on it. A
-comment at a session itself stays a message in its thread, and no bus delivers
-it.
+native transcript, which its inputs wake for a model turn. A comment at a
+session itself stays a message in its thread, and no bus delivers it.
 
 ```sh
 yak claim take <task> --session <outside-session>
@@ -1037,8 +1036,20 @@ through the host's feed, every other process's (`follow` in
 written item alone, and a transcript entry's own session, which may have come to
 work and so hear what its project holds. A claim, a session, a persona, a
 process or a filing written asks about everything again, as the first pass does.
-A quiet graph costs the bus no read, and what is written is said at once. A host
-with no feed asks about everything every second.
+A quiet graph costs the bus no read. A host with no feed asks about everything
+every second.
+
+A native transcript answers its inputs with a model turn that reads its whole
+context, so everything waiting for one is taken in one turn, as one wake of
+`yak session listen --once` carries all that is waiting. What a session is owed
+waits through the same quiet window (`QUIET` in [`listen.ts`](./listen.ts), 5
+seconds; the duty's `quiet` option): it is said once nothing new was written for
+that session in a window, at most six windows after the oldest of it, counted
+from when each item was written (`ripe` in [`bus.ts`](./bus.ts)). So an item
+that waited longer, held for a project or unheard through a restart, is said at
+once. A session's lines are written in one batch, in the order their items were
+written (`give`): one input for each item, one wake and one turn for them all.
+An item another session was given meanwhile is left out of the batch.
 
 The doors an outside session hears at (its hook and its tool replies) follow the
 same commits through a ledger (`ledger` in [`bus.ts`](./bus.ts)): the unsaid
