@@ -12,7 +12,8 @@ import * as io from '@yaks/file/io'
  * status line: a `claude -p` run reports its limits in its stream, read with
  * the run (@yaks/session's `claude` reader), and the newer of the two
  * readings is the one kept. Codex's arrive with its sessions, each account's
- * in its own (@yaks/session's importer).
+ * in its own (@yaks/session's importer). A native session's requests carry
+ * theirs on each reply (@yaks/model `Reply.limits`), kept as it is recorded.
  *
  * @module
  */

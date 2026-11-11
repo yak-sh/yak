@@ -327,3 +327,37 @@ test('a message with two calls is a reply holding both, in order', async () => {
     { kind: 'call', id: 'call-2', name: 'graph_query', args: '{"q":"beta"}' },
   ])
 })
+
+test('a turn keeps the newest reading of each plan window the stream gave, a failed one too', async () => {
+  let metered = (seven_day: number, five_hour?: number): Frame => ({
+    type: 'rate_limit_event',
+    rate_limit_info: {
+      status: 'allowed',
+      unifiedWindows: {
+        seven_day: { utilization: seven_day, resetsAt: 1794913200 },
+        ...five_hour == null ? {} : { five_hour: { utilization: five_hour } },
+      },
+    },
+  })
+  let week = (used: number) => ({
+    provider: 'claude',
+    window: 10080,
+    used,
+    resets: '2026-11-17T11:00:00.000Z',
+  })
+  let { limits } = await read(req, [
+    metered(0.84, 0.1),
+    said({ type: 'text', text: 'hi' }),
+    metered(0.85),
+    { type: 'result', subtype: 'success' },
+  ])
+  assertEquals(limits, [
+    { provider: 'claude', window: 300, used: 10 },
+    week(85),
+  ])
+  let e = await assertRejects(
+    () => read(req, [metered(1), { type: 'result', is_error: true }]),
+    ModelError,
+  )
+  assertEquals(e.limits, [week(100)])
+})

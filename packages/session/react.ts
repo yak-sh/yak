@@ -53,6 +53,8 @@ import {
   type Answer,
   type Executor,
   type Item,
+  type Limit,
+  limitRows,
   message,
   MODEL,
   type Model,
@@ -501,6 +503,21 @@ let failing = (
   ...e.response && g.vocab.comp(RESPONSE) ? { [RESPONSE]: e.response } : {},
 })
 
+// The plan limits a provider answered with, as the rows that keep each
+// window's latest reading, read now, where this graph keeps them. A
+// provider's row is written only where it is missing.
+let readings = async (g: Graph, limits?: Limit[]): Promise<Bundle[]> => {
+  if (!limits?.length || !g.vocab.comp('rate_limit')) return []
+  let rows = limitRows(limits, new Date().toISOString())
+  let there = new Set(
+    (await g.get(
+      rows.filter((b) => b.provider).map((b) => b.entity.eid),
+      ['provider'],
+    )).filter((b) => b?.provider).map((b) => b!.entity.eid),
+  )
+  return rows.filter((b) => b.rate_limit || !there.has(b.entity.eid))
+}
+
 // Exhausted transport/stall failures are operational incidents even when their
 // text says 'network' or 'timeout'. Intermediate attempts still retry quietly.
 let transportFailure = (e: unknown): e is ModelError =>
@@ -882,7 +899,13 @@ export let react = async (
     if (reply.cut && !reply.items.length) {
       finalAsk.interrupted = { code: 'cut' }
     }
-    let added: Bundle[] = [finalAsk, ...await carried(g, session, sent)]
+    // A saved reply's readings are as old as the reply: only a fresh one's
+    // are kept.
+    let added: Bundle[] = [
+      finalAsk,
+      ...await carried(g, session, sent),
+      ...saved ? [] : await readings(g, reply.limits),
+    ]
     let partials = saved
       ? await g.read(`.output.source=${ask.entity.eid}&.stream_item&*`)
       : []
@@ -2101,6 +2124,7 @@ export let react = async (
             },
             'Response interrupted: ' + String(e),
           ),
+        ...await readings(g, e instanceof ModelError ? e.limits : undefined),
       ],
       (defect || transportFailure(e)) && !deferring(e)
         ? { error: e, phase }

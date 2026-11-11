@@ -125,19 +125,9 @@ export type { CacheContext } from './cache.ts'
 import type { CacheContext } from './cache.ts'
 import type { Affordable } from './afford.ts'
 
-/** The row holding the latest reading of one plan-limit window
- * (`rate_limit`), named by its provider entity, the window in minutes and,
- * where the reading came from one, the account whose plan it is. */
-export let limitEid = (provider: Eid, window: number, account?: Eid): Eid =>
-  identityEid('rate_limit', [
-    provider,
-    String(window),
-    ...account ? [account] : [],
-  ])
-
-/** The row of an account a CLI keeps on this machine (`account`), named by
- * its directory. */
-export let accountEid = (home: string): Eid => identityEid('account', [home])
+export { accountEid, accountHome, limitEid, limitRows } from './limits.ts'
+export type { Limit } from './limits.ts'
+import type { Limit } from './limits.ts'
 export let TOOL = 'tool'
 export let QUESTIONS = 'questions'
 export let ANSWER = 'answer'
@@ -327,6 +317,8 @@ export type Reply = {
   /** The reply stopped at its output token limit (`Request.tokens`): what it
    * was writing last is unfinished, a tool call's arguments included. */
   cut?: boolean
+  /** the plan limits the provider answered with, where it meters a plan */
+  limits?: Limit[]
 }
 
 /** The components a provider writes on the entry that records a reply. */
@@ -406,6 +398,8 @@ export class ModelError extends Error {
   retry?: { after?: number; defer?: boolean }
   /** what the provider sent, where it sent anything */
   response?: Answered
+  /** the plan limits the provider answered with, where it meters a plan */
+  limits?: Limit[]
   constructor(
     code: string,
     message = code,

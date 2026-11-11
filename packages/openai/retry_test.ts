@@ -482,3 +482,36 @@ test('an outage is waited out while patience remains, then gives up', async () =
     }
   }
 })
+
+test('a reply through the Codex backend carries the plan readings its headers gave, a refusal too', async () => {
+  let headers = {
+    'x-codex-primary-window-minutes': '10080',
+    'x-codex-primary-used-percent': '21',
+    'x-codex-primary-reset-at': '1792967691',
+  }
+  let week = {
+    provider: 'codex',
+    account: 'acct',
+    window: 10080,
+    used: 21,
+    resets: '2026-10-25T22:34:51.000Z',
+  }
+  let answering = (body: string, status = 200) =>
+    responses({
+      credential: credentials.get,
+      retries: 0,
+      account: 'acct',
+      fetch: () => Promise.resolve(new Response(body, { status, headers })),
+    })({ model: 'm', items: [], tools: [] })
+  let completed = {
+    type: 'response.completed',
+    response: { id: 'r1', model: 'm', status: 'completed' },
+  }
+  let reply = await answering(`data: ${JSON.stringify(completed)}\n\n`)
+  assertEquals(reply.limits, [week])
+  let e = await assertRejects(
+    () => answering('{"error":{"code":"usage_limit_reached"}}', 429),
+    ModelError,
+  )
+  assertEquals(e.limits, [week])
+})

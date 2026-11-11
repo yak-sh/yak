@@ -18,6 +18,7 @@ import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
 import {
   type Item,
+  limitEid,
   type Model,
   modelDoc,
   ModelError,
@@ -2591,4 +2592,37 @@ test("a call's answer comes after its Pending, and never waits on one that does 
       'its answer (writing); the answer lands without it',
     ],
   })
+})
+
+test('the plan limits a provider answers with are kept as each window’s latest reading, a refusal’s too', async () => {
+  let g = world()
+  let codex = identityEid('provider', ['codex'])
+  let week = (used: number) => ({ provider: 'codex', window: 10080, used })
+  let kept = async () =>
+    (await g.read('.rate_limit')).map((b) => {
+      let { at, ...reading } = b.rate_limit as Comp
+      return [b.entity.eid, reading, typeof at]
+    })
+  let { model } = scripted([{ ...says('r1', 'done'), limits: [week(21)] }])
+  await rest(g, ids.s, { model, tools: [], mint })
+  let row = [limitEid(codex, 10080), {
+    provider: codex,
+    window: 10080,
+    used: 21,
+  }, 'string']
+  assertEquals(await kept(), [row])
+  assertEquals((await g.get([codex]))[0]?.provider, { name: 'codex' })
+  await appendEntry(g, ids.s, 'again')
+  let refusing: Model = () =>
+    Promise.reject(
+      Object.assign(new ModelError('usage_limit_reached'), {
+        limits: [week(100)],
+      }),
+    )
+  await rest(g, ids.s, { model: refusing, tools: [], mint })
+  assertEquals(await kept(), [[
+    row[0],
+    { ...row[1] as Comp, used: 100 },
+    'string',
+  ]])
 })

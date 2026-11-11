@@ -9,6 +9,8 @@
 
 import { Refused } from '@yaks/graph/errors'
 import {
+  accountEid,
+  accountHome,
   deferredModel,
   type Lent,
   type Model,
@@ -160,11 +162,15 @@ export let providers = (
     ...options.headers,
     ...token ? { 'cf-aig-authorization': `Bearer ${token}` } : {},
   }
+  // A ChatGPT grant spends the plan Codex reports, which this machine keeps
+  // under the account the Codex CLI signs in with.
+  let dir = accountHome('codex', lent.env)
   let text = deferredModel(
     () =>
       import('./responses.ts').then(({ responses }) =>
         responses({
           ...signing,
+          account: dir ? accountEid(dir) : undefined,
           headers,
           fetch: lent.fetch,
           redact: true,

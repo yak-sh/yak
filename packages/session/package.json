@@ -26,6 +26,7 @@
   "dependencies": {
     "@yaks/api": "0.2.29",
     "@yaks/blob": "0.2.30",
+    "@yaks/claude": "0.2.23",
     "@yaks/edge": "0.2.24",
     "@yaks/effects": "0.2.33",
     "@yaks/file": "0.2.28",

@@ -45,7 +45,7 @@ import { status } from '@yaks/graph/errors'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import { who } from '@yaks/graph/call'
 import { toolEid } from '@yaks/tools/result'
-import { limitEid } from '@yaks/model'
+import { limitRows } from '@yaks/model'
 import type { Comps, Reader, Said } from './readers.ts'
 import { humanCaller } from './who.ts'
 import type { Chunks } from './archive.ts'
@@ -261,21 +261,7 @@ export let imported = (
     if (answers && execution) put({ entity: { eid: answers }, execution })
   })
   if (said.about) put({ entity: { eid: session }, ...said.about })
-  for (let l of said.limits ?? []) {
-    let provider = identityEid('provider', [l.provider])
-    put({ entity: { eid: provider }, provider: { name: l.provider } })
-    put({
-      entity: { eid: limitEid(provider, l.window, l.account) },
-      rate_limit: {
-        provider,
-        window: l.window,
-        ...l.account ? { account: l.account } : {},
-        used: l.used,
-        ...l.resets ? { resets: l.resets } : {},
-        ...said.at ? { at: said.at } : {},
-      },
-    })
-  }
+  for (let b of limitRows(said.limits ?? [], said.at)) put(b)
   return [...out.values()]
 }
 

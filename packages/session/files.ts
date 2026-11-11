@@ -5,7 +5,7 @@ import * as fs from '@yaks/file/io'
 import * as systemProcess from '@yaks/process/system'
 import type { Bundle } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
-import { accountEid } from '@yaks/model'
+import { accountEid, accountHome } from '@yaks/model'
 
 /** An account a CLI keeps on this machine: its config directory, the one
  * `CLAUDE_CONFIG_DIR` or `CODEX_HOME` names, which holds its transcripts. */
@@ -19,11 +19,7 @@ type Env = Pick<systemProcess.Env, 'get'>
 export let home = (
   runner: Home['runner'],
   env: Env = systemProcess.env,
-): string | undefined => {
-  let named = env.get(runner == 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME')
-  let at = env.get('HOME')
-  return named || (at && `${at}/.${runner}`) || undefined
-}
+): string | undefined => accountHome(runner, (name) => env.get(name))
 
 /** Where an account keeps its transcripts: Claude Code's `projects`, Codex's
  * `sessions`. */

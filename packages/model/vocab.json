@@ -305,7 +305,7 @@
         "account": {
           "type": "string",
           "ref": "account",
-          "description": "the account whose plan it is, where the reading came from one: a transcript or a run of that account, or its status line",
+          "description": "the account whose plan it is, where the reading came from one: a transcript or a run of that account, its status line, or a native session's request it answered",
           "identity": true
         },
         "used": {

@@ -252,11 +252,13 @@ plans' newest readings
 at}`): the offering whose
 plan has the most of its week left. A provider that spends another's plan says
 so (`provider{plan}`): `openai`, signed in with a ChatGPT grant, spends the plan
-`codex` reports. The session's first input records the choice and its reason,
-`using{provider, model, why}`, and keeps that model whatever the plans read
-later. The row's own `using` answers while no routed plan has a reading. This
-routes the default between GPT-6.1 Sol on the ChatGPT subscription and Opus 5.5
-on Claude's:
+`codex` reports. Every request a native session's provider answers renews the
+readings: Claude Code's stream and the Codex backend's headers say how much of
+the plan is used, and the step that records the reply keeps it. The session's
+first input records the choice and its reason, `using{provider, model, why}`,
+and keeps that model whatever the plans read later. The row's own `using`
+answers while no routed plan has a reading. This routes the default between
+GPT-6.1 Sol on the ChatGPT subscription and Opus 5.5 on Claude's:
 
 ```sh
 yak graph apply --bundles '[

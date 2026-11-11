@@ -29,7 +29,10 @@
 // The event shapes are copied from live runs of both CLIs and from the files
 // they keep, not from their docs.
 
+import { metered } from '@yaks/claude/limits'
+import type { Limit } from '@yaks/model'
 import { claudeStops } from './claude-control.ts'
+export type { Limit }
 import { type Fixed, instructionParts, toolPart } from './parts.ts'
 
 /** One parsed line of a harness's log. */
@@ -50,16 +53,6 @@ export type Said = {
   fixed?: Fixed[]
   /** what it says about the provider's plan limits */
   limits?: Limit[]
-}
-
-/** A provider's plan limit, as a log reports it (@yaks/model `rate_limit`). */
-export type Limit = {
-  provider: string
-  /** the account whose plan it is, where the reader knows it */
-  account?: string
-  window: number
-  used: number
-  resets?: string
 }
 
 /** A harness's line format. */
@@ -380,31 +373,6 @@ let line: Reader = (e) => {
     ...(fixed.length ? { fixed } : {}),
     ...(limits.length ? { limits } : {}),
   }
-}
-
-// Claude's plan windows a reading is kept of, in minutes.
-let WINDOWS: Record<string, number> = { five_hour: 300, seven_day: 10080 }
-
-// Claude's plan limits, as a `rate_limit_event` of the stream reports them:
-// each window's fraction used and when it resets (`unifiedWindows`), whatever
-// the status; where an older CLI sends none, the one window the event is
-// about, which says how much is used only past a warning.
-let metered = (info: Event): Limit[] => {
-  let each = obj(info.unifiedWindows)
-  let windows = Object.keys(each).length
-    ? each
-    : { [str(info.rateLimitType)]: info }
-  return Object.entries(WINDOWS).flatMap(([name, window]) => {
-    let w = obj(windows[name])
-    return count(w.utilization) == null ? [] : [{
-      provider: 'claude',
-      window,
-      used: Math.round(Number(w.utilization) * 100),
-      ...count(w.resetsAt) == null
-        ? {}
-        : { resets: new Date(Number(w.resetsAt) * 1000).toISOString() },
-    }]
-  })
 }
 
 /**

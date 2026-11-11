@@ -26,6 +26,7 @@ import {
 } from '@yaks/model'
 import type { Credential } from './credential.ts'
 import { openaiDoc } from './vocab.ts'
+import { planLimits } from './limits.ts'
 import {
   request,
   ResponseError,
@@ -53,6 +54,9 @@ export type Options = Omit<ResponseOptions, 'credentials'> & RunOptions & {
   receipts?: MediaReceipts
   /** Offer provider-hosted web search, page opening, and find-in-page. */
   web?: boolean
+  /** The account whose ChatGPT plan the Codex backend's limit readings are
+   * of (@yaks/model `accountEid`). */
+  account?: string
 }
 
 type Frame = Record<string, unknown>
@@ -384,7 +388,8 @@ let ask = (opts: Options) => {
         selected,
       )
       if (receipt) await opts.receipts?.save({ ...receipt, reply })
-      return reply
+      let limits = planLimits(out.limits, opts.account)
+      return limits.length ? { ...reply, limits } : reply
     } catch (error) {
       // Invalid request history is a caller defect, not an operational refusal.
       // Keep the transport exception (including provider details) healable.
@@ -394,11 +399,15 @@ let ask = (opts: Options) => {
       ) throw error
       let { body, limits } = error
       let headers = limits && Object.keys(limits).length ? limits : undefined
-      throw new ModelError(
-        error.code ?? error.kind,
-        error.message,
-        error.retry,
-        body || headers ? { body, headers } : undefined,
+      let read = planLimits(limits ?? {}, opts.account)
+      throw Object.assign(
+        new ModelError(
+          error.code ?? error.kind,
+          error.message,
+          error.retry,
+          body || headers ? { body, headers } : undefined,
+        ),
+        read.length ? { limits: read } : {},
       )
     }
   }

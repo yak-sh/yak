@@ -5,6 +5,7 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
+    "./limits": "./limits.ts",
     "./provider": "./provider.ts"
   },
   "license": "Apache-2.0",

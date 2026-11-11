@@ -4474,6 +4474,7 @@
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/archetype@0.2.24",
             "npm:@yaks/blob@0.2.30",
+            "npm:@yaks/claude@0.2.23",
             "npm:@yaks/cli@0.2.33",
             "npm:@yaks/context@0.2.23",
             "npm:@yaks/doc@0.2.24",

@@ -361,8 +361,12 @@ dollars per million input, output and optional cached, cache-write and hour-long
 cache-write tokens, and dollars per web search (`web_search`). **Cost** (`cost`)
 is the dollars spent by one model request or tool call, with `reported` saying
 whether the provider supplied that amount. A **rate limit**
-(`rate_limit{provider, window, used, resets, at}`) is the latest reading of how
-much of a provider's plan a window has used.
+(`rate_limit{provider, window, account, used, resets, at}`) is the latest
+reading of how much of a provider's plan a window has used. Whoever hears a
+provider say so reports it as a `Limit{provider, account, window, used, resets}`
+(a model on its `Reply.limits`, or on the `ModelError.limits` of a refusal), and
+`limitRows(limits, at)` gives the rows that keep it. `accountHome(runner, env)`
+is the directory of the account a CLI signs in with, and `accountEid` its row.
 
 ## Routing a default
 

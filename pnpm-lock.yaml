@@ -4042,6 +4042,9 @@ importers:
       '@yaks/blob':
         specifier: 0.2.30
         version: link:../blob
+      '@yaks/claude':
+        specifier: 0.2.23
+        version: link:../claude
       '@yaks/edge':
         specifier: 0.2.24
         version: link:../edge

@@ -12,6 +12,7 @@ import {
   acknowledged,
   began,
   type Item,
+  type Limit,
   type Listed,
   type Model,
   ModelError,
@@ -20,10 +21,17 @@ import {
   submitted,
   type Usage,
 } from '@yaks/model'
+import { metered } from './limits.ts'
 import { offer } from './offer.ts'
 
 /** Host override, chiefly for deterministic CLI contract tests. */
-export type Options = { command?: string; args?: string[] }
+export type Options = {
+  command?: string
+  args?: string[]
+  /** the account the CLI signs in with (@yaks/model `accountEid`), whose
+   * plan the limits a reply carries are of */
+  account?: string
+}
 
 /** CLI aliases are resolved by the installed Claude Code, not pinned releases. */
 export let listing = (): Listed[] =>
@@ -101,7 +109,13 @@ let counted = (u: Frame): Usage => {
 
 /** What the frames of one turn came to. `terminal` says the CLI reported a
  * successful result, which a turn ended by a call never reaches. */
-export type Turn = { reply?: Reply; session: string; terminal: boolean }
+export type Turn = {
+  reply?: Reply
+  session: string
+  terminal: boolean
+  /** each plan window's newest reading the stream gave (`rate_limit_event`) */
+  limits: Limit[]
+}
 
 /**
  * Read one turn from the CLI's frames. Text reaches `onText` as its
@@ -112,13 +126,15 @@ export type Turn = { reply?: Reply; session: string; terminal: boolean }
  * `message_delta` carries; an `assistant` frame holds the count it started
  * with. A message that requests a call is read through its `message_delta`,
  * which the CLI writes before it dispatches the call, and reading stops there.
- * Otherwise it stops at the turn's `result`.
+ * Otherwise it stops at the turn's `result`. The plan limits the stream
+ * reports on the way are kept with the turn, and with the failure where the
+ * turn ends in one.
  */
 export let read = async (
   req: Request,
   frames: AsyncIterable<Frame> | Iterable<Frame>,
 ): Promise<Turn> => {
-  let turn: Turn = { session: '', terminal: false }
+  let turn: Turn = { session: '', terminal: false, limits: [] }
   let id = ''
   // Content block index to its place among the assistant items.
   let place = new Map<number, number>()
@@ -134,6 +150,13 @@ export let read = async (
     if (frame.session_id && !turn.session) {
       turn.session = frame.session_id
       await acknowledged(req, { claude: { session_id: turn.session } })
+    }
+    if (frame.type == 'rate_limit_event') {
+      let read = metered(frame.rate_limit_info ?? {})
+      turn.limits = [
+        ...turn.limits.filter((l) => !read.some((r) => r.window == l.window)),
+        ...read,
+      ]
     }
     if (frame.type == 'stream_event') {
       let e = frame.event ?? {}
@@ -181,7 +204,10 @@ export let read = async (
     if (frame.type == 'result') {
       turn.terminal = true
       if (frame.is_error || frame.subtype != 'success') {
-        throw new ModelError('claude', JSON.stringify(frame))
+        throw Object.assign(
+          new ModelError('claude', JSON.stringify(frame)),
+          turn.limits.length ? { limits: turn.limits } : {},
+        )
       }
       break
     }
@@ -315,6 +341,8 @@ export let claude = (opts: Options = {}): Model & AsyncDisposable => {
       start(opts, req.model, req.effort).catch(() => undefined),
     )
   }
+  let accounted = (limits: Limit[]): Limit[] =>
+    opts.account ? limits.map((l) => ({ ...l, account: opts.account })) : limits
   let take = async (req: Request) => {
     let held = spares.get(key(req))
     spares.delete(key(req))
@@ -403,7 +431,7 @@ export let claude = (opts: Options = {}): Model & AsyncDisposable => {
           reader.releaseLock()
         }
       }
-      let { reply, session, terminal } = await read(req, frames())
+      let { reply, session, terminal, limits } = await read(req, frames())
       kill()
       req.signal?.throwIfAborted()
       if (!reply || (!terminal && !reply.items.some((i) => i.kind == 'call'))) {
@@ -412,9 +440,15 @@ export let claude = (opts: Options = {}): Model & AsyncDisposable => {
           await stderr || 'Claude ended without a completed turn',
         )
       }
-      return Object.assign(reply, { claudeSession: session })
+      return Object.assign(reply, {
+        claudeSession: session,
+        ...limits.length ? { limits: accounted(limits) } : {},
+      })
     } catch (error) {
       kill()
+      if (error instanceof ModelError && error.limits) {
+        error.limits = accounted(error.limits)
+      }
       let failed = await proc?.child.status.then(() => {}, (e) => e)
       if (io.isNotFound(error) || io.isNotFound(failed)) {
         throw new ModelError(
