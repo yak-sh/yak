@@ -832,12 +832,13 @@ let ended = async (
   if (stop && seq(stop) > seq(request)) return
   let row = await ran(g, session)
   let code = comp(row, EXIT)?.code as number | null | undefined
-  let limit = code === 0 ? undefined : await limited(g, session, seq(request))
+  let said = code === 0 ? undefined : await refused(g, session, seq(request))
+  let limit = said?.code == 'rate_limit'
   let why = code === 0
     ? ''
     : limit
-    ? `the provider's plan limit ended the run: ${limit}`
-    : await cause(session, row, o)
+    ? `the provider's plan limit ended the run: ${said!.body}`
+    : await cause(session, row, o, said?.body)
   await g.apply([{
     entity: {
       eid: (o.mint ?? (() =>
@@ -865,18 +866,23 @@ let ended = async (
   }
 }
 
-// What the provider said of the plan limit that refused this turn (a
-// `refusal{code: rate_limit}` after the request), if one did.
-let limited = async (
+// What the provider said refused this turn, if it did: a `refusal` after the
+// request, a plan limit's (`rate_limit`) first, else the newest.
+let refused = async (
   g: Graph,
   session: string,
   after: number,
-): Promise<string | undefined> => {
-  let [hit] = await g.read(
-    `.entry.session=${session}&.refusal.code=rate_limit&.entry.seq>${after}` +
-      `&.order=-entry.seq&.limit=1&*`,
+): Promise<{ code: string; body: string } | undefined> => {
+  let rows = await g.read(
+    `.entry.session=${session}&.refusal&.entry.seq>${after}` +
+      `&.order=-entry.seq&.limit=8&*`,
   )
-  return hit && String(comp(hit, 'content')?.body || 'the plan limit')
+  let hit = rows.find((r) => comp(r, 'refusal')?.code == 'rate_limit') ??
+    rows[0]
+  return hit && {
+    code: String(comp(hit, 'refusal')?.code),
+    body: String(comp(hit, 'content')?.body || 'the turn failed'),
+  }
 }
 
 // The signals a provider is commonly ended by, by number: a wrapper's `wait`
@@ -894,11 +900,13 @@ let SIGNALS: Record<number, string> = {
 
 // How a run ended, as its row and its files show it: the code its wrapper
 // wrote, the signal that code names, or why there is none; then the last line
-// it printed on stderr, which is where a provider says what went wrong.
+// it printed on stderr, which is where a provider says what went wrong, unless
+// it said why in its transcript (`said`, a refusal's text), which comes first.
 let cause = async (
   session: string,
   row: Bundle | undefined,
   o: Opts,
+  said?: string,
 ): Promise<string> => {
   let code = comp(row, EXIT)?.code as number | null | undefined
   let signal = code != null && code > 128 ? SIGNALS[code - 128] : undefined
@@ -912,7 +920,7 @@ let cause = async (
     : reported
     ? 'the provider and its wrapper were killed, so no exit code was written'
     : 'the provider never started: its wrapper reported no pid'
-  let last = (await text(f.err).catch(() => undefined))
+  let last = said ?? (await text(f.err).catch(() => undefined))
     ?.split('\n').map((l) => l.trim()).filter(Boolean).at(-1)
   return last ? `${how}: ${last.slice(0, 300)}` : how
 }

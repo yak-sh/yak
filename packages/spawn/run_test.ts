@@ -207,7 +207,7 @@ test('a run that ends badly says how in its last line, and is told unless asked'
   ])
 })
 
-test("a run its plan's limit ends says so, and is no failure", async () => {
+test("a run its plan's limit ends says so and is no failure; another refusal names its own text", async () => {
   let limit = "You've reached your Fable limit."
   assertEquals(
     await ending(1, 'Warning: claude.ai MCP servers blocked by policy', false, [
@@ -219,6 +219,14 @@ test("a run its plan's limit ends says so, and is no failure", async () => {
       { type: 'result', subtype: 'success', is_error: true, result: limit },
     ]),
     [`the provider's plan limit ended the run: ${limit}`, []],
+  )
+  let refused = 'API Error: 500 overloaded'
+  let ended = `the provider exited 1: ${refused}`
+  assertEquals(
+    await ending(1, 'Warning: claude.ai MCP servers blocked by policy', false, [
+      { type: 'result', subtype: 'success', is_error: true, result: refused },
+    ]),
+    [ended, [`run ended: Error: a spawned run ended: ${ended}`]],
   )
 })
 
