@@ -227,7 +227,7 @@
       "input": {
         "where": {
           "type": "string",
-          "description": "only this space, or space/app"
+          "description": "only this space, or space/app; several comma apart (a stopped sweep names the stores it never asked this way)"
         },
         "rehearse": {
           "type": "boolean",
@@ -235,7 +235,7 @@
         },
         "pace": {
           "type": "string",
-          "description": "stores a minute, 0 for each as soon as the last answers (5 for a wake, 0 for a rehearsal)"
+          "description": "stores a minute, 0 for each as soon as the last answers (30 for a wake, 0 for a rehearsal)"
         },
         "as": {
           "type": "string",
@@ -256,7 +256,7 @@
       "input": {
         "where": {
           "type": "string",
-          "description": "only this space, or space/app"
+          "description": "only this space, or space/app; several comma apart (a stopped sweep names the stores it never asked this way)"
         },
         "move": {
           "type": "boolean",

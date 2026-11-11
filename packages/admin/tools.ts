@@ -585,7 +585,7 @@ export let runs = (
     admin_move: verb(async (call) => {
       let a = argsOf(call)
       let rehearse = a.rehearse === true
-      let pace = Number(word(a, 'pace') ?? (rehearse ? 0 : 5))
+      let pace = Number(word(a, 'pace') ?? (rehearse ? 0 : 30))
       if (!Number.isFinite(pace) || pace < 0) {
         throw new CallError('pace', `not a number of stores a minute: ${pace}`)
       }

@@ -6,6 +6,7 @@
 // wake is paced, a few stores a minute, so the platform is never woken all at
 // once; a rehearsal holds one store at a time and needs no pace. A store that
 // fails is said and the sweep goes on: the report is the point.
+import { Interrupted } from '@yaks/tools/errors'
 import type { Rehearsal, Standing, Swept } from '@yaks/platform/mover'
 
 /** What one store answers the sweep: woken, also the alarm it then holds. */
@@ -15,14 +16,20 @@ export type Asked = {
   alarm?: string | null
 }
 
-/** A display address or its immutable physical handle selects the same store. */
-export let select = (stores: Swept[], where?: string): Swept[] =>
-  stores.filter((store) =>
-    !where ||
-    [store.at, store.store].some((name) =>
-      name == where || name.startsWith(`${where}/`)
+/** A display address or its immutable physical handle selects the same store;
+ * several, comma apart, select the stores of each (a stopped sweep names what
+ * is left that way). */
+export let select = (stores: Swept[], where?: string): Swept[] => {
+  let names = where?.split(',').filter(Boolean) ?? []
+  return stores.filter((store) =>
+    !names.length ||
+    names.some((where) =>
+      [store.at, store.store].some((name) =>
+        name == where || name.startsWith(`${where}/`)
+      )
     )
   )
+}
 
 let ms = (n: number) =>
   n < 1000 ? `${Math.round(n)}ms` : `${(n / 1000).toFixed(1)}s`
@@ -64,6 +71,7 @@ let lines = (at: string, a: Asked, took: number) =>
 
 let wait = (ms: number, stopping: AbortSignal) =>
   new Promise<void>((go) => {
+    if (stopping.aborted) return go()
     let t = setTimeout(go, ms)
     stopping.addEventListener('abort', () => (clearTimeout(t), go()), {
       once: true,
@@ -72,7 +80,8 @@ let wait = (ms: number, stopping: AbortSignal) =>
 
 /** Every store asked in turn, each line said as it comes; answers the
  * summary. `pace` is stores a minute, 0 for each as soon as the last one
- * answers. */
+ * answers. A sweep that `stopping` cuts short is not a summary but an
+ * Interrupted naming the stores never asked, as a `where` to ask them. */
 export let sweep = async (o: {
   stores: Swept[]
   ask: (store: string) => Promise<Asked>
@@ -104,6 +113,15 @@ export let sweep = async (o: {
       failed.push(s.at)
       o.out(`${s.at}  failed: ${e instanceof Error ? e.message : e}`)
     }
+  }
+  let left = o.stores.slice(asked)
+  if (left.length) {
+    let names = left.map((s) => s.at)
+    throw new Interrupted(
+      `the sweep stopped: ${asked} of ${o.stores.length} stores asked, ` +
+        `${failed.length} failed, ${names.length} never asked. ` +
+        `Ask them with --where ${names.join(',')}`,
+    )
   }
   return [
     `${asked} of ${o.stores.length} stores asked, ${failed.length} failed` +

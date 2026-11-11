@@ -1,5 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
+import { Interrupted } from '@yaks/tools/errors'
 import { line, select, sweep } from './move.ts'
 
 test('a store that fails is said, and the sweep goes on', async () => {
@@ -88,4 +89,27 @@ test('mover selection keeps a physical handle reachable after display deduplicat
   }
   assertEquals(select(stores), stores)
   assertEquals(select(stores, 'absent'), [])
+})
+
+test('a sweep that stops says so, and names the stores never asked', async () => {
+  let stores = ['a', 'b', 'c', 'd'].map((at) => ({ store: at, at }))
+  let stop = new AbortController()
+  let sweeping = sweep({
+    stores,
+    ask: (store) => {
+      if (store == 'b') stop.abort()
+      return Promise.resolve({ store, rules: [] })
+    },
+    pace: 0,
+    out: () => {},
+    stopping: stop.signal,
+  })
+  let e = await sweeping.then(() => null, (e) => e)
+  assertEquals(e instanceof Interrupted, true)
+  assertEquals(
+    e.message,
+    'the sweep stopped: 2 of 4 stores asked, 0 failed, 2 never asked. ' +
+      'Ask them with --where c,d',
+  )
+  assertEquals(select(stores, 'c,d').map((s) => s.at), ['c', 'd'])
 })
