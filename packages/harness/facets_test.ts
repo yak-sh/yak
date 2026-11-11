@@ -23,6 +23,7 @@ import { connect } from '../mcp/testing.ts'
 import { answers, textOf, transcript } from '@yaks/session'
 import { changes } from '@yaks/session/wait'
 import { selectedUsing } from './model_selection.ts'
+import { local } from './local.ts'
 import { runs } from './runs.ts'
 import { HARNESS } from './default.ts'
 import { docs } from './vocab.ts'
@@ -399,8 +400,27 @@ let settledReply = await (async () => {
 test('session new returns the reply its session settles on, past its tool calls', () =>
   assertEquals(settledReply, 'done'))
 
-test('session new accepts a graph persona and snapshots its instructions', async () => {
+test('session new wears its chosen graph persona on each ask', async () => {
   let h = await harness()
+  let instructions: string[] = []
+  let a = await local({
+    h,
+    providers: {
+      openai: (req) => {
+        instructions.push(req.instructions ?? '')
+        return Promise.resolve({
+          id: mint(),
+          model: req.model,
+          items: [{ kind: 'assistant', text: 'ok' }],
+        })
+      },
+    },
+  })
+  let ask = async (session: Bundle) => {
+    await a.send(session.entity.eid, 'go')
+    await a.idle(session.entity.eid)
+    return instructions.at(-1)!
+  }
   let persona = crypto.randomUUID()
   await h.g.apply([{
     entity: { eid: persona },
@@ -414,15 +434,14 @@ test('session new accepts a graph persona and snapshots its instructions', async
       call: { args: { tui: true, persona: 'operator-persona' } },
     }, h.g)
     assertEquals((session.session as Record<string, unknown>).persona, persona)
-    let entries = await transcript(h.g, session.entity.eid)
-    assert(
-      entries.some((e) =>
-        e.prompt &&
-        String((e.content as Record<string, unknown>)?.body).includes(
-          'Guide this work.',
-        )
-      ),
-    )
+    assert((await ask(session)).includes('Guide this work.'))
+    await h.g.apply([{
+      entity: { eid: persona },
+      doc: { body: 'Attend to new work.' },
+    }])
+    let next = await ask(session)
+    assert(next.includes('Attend to new work.'))
+    assert(!next.includes('Guide this work.'))
     let project = crypto.randomUUID()
     let task = crypto.randomUUID()
     await h.g.apply([
@@ -441,15 +460,10 @@ test('session new accepts a graph persona and snapshots its instructions', async
     }, h.g)
     assertEquals(working.filed, { project })
     assertEquals(working.home, {})
-    let instructions = await transcript(h.g, working.entity.eid)
-    assert(instructions.some((e) =>
-      e.prompt &&
-      String((e.content as Record<string, unknown>)?.body).includes(
-        'Guide this work.',
-      )
-    ))
+    assertEquals((working.session as Comp).persona, persona)
+    assert((await ask(working)).includes('Attend to new work.'))
   } finally {
-    await h.close()
+    await a.close()
   }
 })
 
