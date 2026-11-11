@@ -9,6 +9,12 @@ let agent = connector(k, owner.cookie)
 let space = owner.email.split('@')[0]
 let host = `${space}.${k.host}`
 let app = `notices${crypto.randomUUID().slice(0, 6)}`
+let plain = `plain${crypto.randomUUID().slice(0, 6)}`
+await agent.tool('app_new', {
+  slug: plain,
+  title: 'Ordinary app',
+  access: 'open',
+})
 let made = await agent.answer('app_new', {
   slug: app,
   title: 'Town notices',
@@ -84,6 +90,24 @@ await agent.tool('app_files', {
   content: vocabulary(true),
 })
 await agent.tool('app_deploy', { app })
+
+test('an app without email notices accepts writes and queries, and offers no subscriptions', async () => {
+  let eid = crypto.randomUUID()
+  await agent.tool('graph_apply', {
+    app: plain,
+    entities: [{ entity: { eid }, doc: { title: 'An ordinary document' } }],
+  })
+  let response = await k.at(host, `/${plain}/api/query?.doc&.entity.eid=${eid}`)
+  equal(response.status, 200)
+  let rows = await response.json()
+  equal(rows[0].doc.title, 'An ordinary document')
+  let subscription = await k.at(host, `/${plain}/api/notices/subscribe`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: `unused-${plain}@example.com` }),
+  })
+  equal(subscription.status, 404)
+})
 
 test('a posted notice reaches only confirmed subscribers, and every letter unsubscribes in one click', async () => {
   await apply([{

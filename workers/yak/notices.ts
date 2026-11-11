@@ -12,7 +12,7 @@ import type { Answer } from './apps.ts'
 import { appStore, url } from './directory.ts'
 import { KERNEL } from './meta.ts'
 import { opened, seal } from './lib/token.ts'
-import { noticeComponents } from './notices-vocab.ts'
+import { noticeEnabled } from './notices-vocab.ts'
 import { source, tooMany, within } from './rate.ts'
 
 type Subscription = Bundle & {
@@ -198,7 +198,7 @@ export let subscription = async (
     return accept(at, action, u.searchParams.get('t') ?? '')
   }
   if (req.method != 'POST') return reply('Use POST to subscribe.', 405)
-  if (!at.graph.vocab.docs.some((d) => noticeComponents(d).length)) {
+  if (!noticeEnabled(at.graph.vocab)) {
     return reply('This app has no notices.', 404)
   }
   let body = await req.json() as { email?: unknown; root: string }
