@@ -752,728 +752,848 @@
   }
 
   .Saving_Said:empty {
-    display: none;
-  }
+    /* The home page's hero: a working example to type in, then the box that
+       builds the visitor's own. The example is first in the page, so it is
+       above the box on a phone and before it on a wide screen. */
+    .Sheet {
+      display: grid;
+      gap: var(--gap);
+      min-width: 0;
+      margin: 0;
+    }
 
-  .Demo {
-    display: grid;
-    gap: var(--gap);
-    min-width: 0;
-  }
+    /* What the example is, said before it, the yak beside the words at the
+       size he is on a phone. */
+    .Sheet_Said {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: var(--half-gap);
+      font-size: var(--lead);
+      font-weight: 700;
+      line-height: 1.4;
+      text-wrap: pretty;
+    }
 
-  .Demo_Title {
-    font-size: var(--size);
-    font-weight: 700;
-  }
+    .Sheet_Said .Hello_Yak {
+      width: 4.5rem;
+      margin-left: -0.85rem;
+    }
 
-  /* The examples, one card at a time: a row that scrolls sideways and stops
-     on each card, by swipe, by keys or by itself (carousel.js). The room
-     around it keeps the cards' pencil lines and focus rings inside the
-     scroll box, which clips them. */
-  .Demo_Slides {
-    --room-around: 4px;
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 100%;
-    gap: var(--gap);
-    margin: calc(-1 * var(--room-around));
-    padding: var(--room-around);
-    list-style: none;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    scroll-padding-inline: var(--room-around);
-    scrollbar-width: none;
-  }
+    /* The example's window: a card whose whole inside is the example's page,
+       which scrolls in it. On a phone it is as tall as leaves the heading
+       over the box on the first screen. */
+    .Sheet_Frame {
+      --pad-block: 0.25rem;
+      --pad-inline: 0.25rem;
+      grid-template-rows: minmax(0, 1fr);
+      align-content: stretch;
+      height: clamp(17rem, 46svh, 24rem);
+    }
 
-  .Demo_Slides::-webkit-scrollbar {
-    display: none;
-  }
+    .Sheet_Page {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      border-radius: calc(var(--radius) - 0.25rem);
+      background: var(--card);
+    }
 
-  .Demo_Slides > .Make_Card {
-    scroll-snap-align: start;
-  }
+    @media (min-width: 60rem) {
+      .Home .Hello-demo {
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      }
 
-  @media (prefers-reduced-motion: no-preference) {
+      .Sheet_Frame {
+        height: clamp(24rem, 64svh, 38rem);
+      }
+    }
+
+    /* A phone's first screen is the example's: the header is the name and the
+       way in, and the other places are in the page and at its foot. */
+    @media (max-width: 40rem) {
+      body:has(.Hello-demo) .Top {
+        justify-content: space-between;
+        padding-block: 0.75rem;
+      }
+
+      body:has(.Hello-demo) .Nav_Link:not(.Nav_SignIn, .Nav_Open) {
+        display: none;
+      }
+
+      body:has(.Hello-demo) .Page {
+        padding-block-start: var(--half-gap);
+      }
+    }
+
+    /* Who the page is for, beside more examples of what they make. */
+    .For {
+      display: grid;
+      gap: 1.5rem;
+      align-items: center;
+    }
+
+    .For_Copy {
+      display: grid;
+      gap: var(--gap);
+    }
+
+    @media (min-width: 60rem) {
+      .For {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: clamp(2rem, 5vw, 4rem);
+      }
+    }
+
+    /* Who makes the product: a few lines, centred like the card under them. */
+    .Made {
+      display: grid;
+      gap: var(--half-gap);
+      width: min(100%, 40rem);
+      justify-self: center;
+      text-align: center;
+    }
+
+    /* The button that stays on screen (stay.js): along the foot of the window
+       while the box and the closing card are both out of sight, over the page's
+       own paper so what scrolls under it does not show through. */
+    .Stay {
+      position: fixed;
+      inset: auto 0 0;
+      z-index: var(--float);
+      display: flex;
+      justify-content: center;
+      padding: var(--half-gap) var(--gap)
+        calc(var(--half-gap) + env(safe-area-inset-bottom, 0px));
+      border-top: var(--stroke) solid var(--graphite);
+      background: var(--bg);
+    }
+
+    .Stay[hidden] {
+      display: none;
+    }
+
+    .Demo {
+      display: grid;
+      gap: var(--gap);
+      min-width: 0;
+    }
+
+    .Demo_Title {
+      font-size: var(--size);
+      font-weight: 700;
+    }
+
+    /* The examples, one card at a time: a row that scrolls sideways and stops
+       on each card, by swipe, by keys or by itself (carousel.js). The room
+       around it keeps the cards' pencil lines and focus rings inside the
+       scroll box, which clips them. */
     .Demo_Slides {
-      scroll-behavior: smooth;
-    }
-  }
-
-  .Demo_Controls {
-    --control-height: 2rem;
-    --control-pad-inline: .7rem;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--half-gap);
-  }
-
-  .Demo_Controls[hidden] {
-    display: none;
-  }
-
-  .Demo_Pause {
-    margin-inline-start: auto;
-    font-size: var(--fine);
-  }
-
-  .Demo_Dots {
-    display: flex;
-    flex-wrap: wrap;
-  }
-
-  /* A dot is small, but the button around it is nearly a fingertip wide, and
-     the row of them leaves room for Pause on a phone's line. */
-  .Demo_Dot {
-    display: grid;
-    place-items: center;
-    width: 1.375rem;
-    height: 2rem;
-    padding: 0;
-    border: 0;
-    background: none;
-    cursor: pointer;
-  }
-
-  .Demo_Dot::before {
-    content: '';
-    width: .55rem;
-    height: .55rem;
-    border: var(--stroke) solid var(--graphite);
-    border-radius: 50%;
-  }
-
-  .Demo_Dot[aria-current='true']::before {
-    border-color: var(--accent);
-    background: var(--accent);
-  }
-
-  @media (min-width: 60rem) {
-    .Home .Hello {
-      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-      gap: clamp(2rem, 5vw, 4rem);
+      --room-around: 4px;
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 100%;
+      gap: var(--gap);
+      margin: calc(-1 * var(--room-around));
+      padding: var(--room-around);
+      list-style: none;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      scroll-padding-inline: var(--room-around);
+      scrollbar-width: none;
     }
 
-    .Hello_Copy {
+    .Demo_Slides::-webkit-scrollbar {
+      display: none;
+    }
+
+    .Demo_Slides > .Make_Card {
+      scroll-snap-align: start;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .Demo_Slides {
+        scroll-behavior: smooth;
+      }
+    }
+
+    .Demo_Controls {
+      --control-height: 2rem;
+      --control-pad-inline: .7rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--half-gap);
+    }
+
+    .Demo_Controls[hidden] {
+      display: none;
+    }
+
+    .Demo_Pause {
+      margin-inline-start: auto;
+      font-size: var(--fine);
+    }
+
+    .Demo_Dots {
+      display: flex;
+      flex-wrap: wrap;
+    }
+
+    /* A dot is small, but the button around it is nearly a fingertip wide, and
+       the row of them leaves room for Pause on a phone's line. */
+    .Demo_Dot {
+      display: grid;
+      place-items: center;
+      width: 1.375rem;
+      height: 2rem;
+      padding: 0;
+      border: 0;
+      background: none;
+      cursor: pointer;
+    }
+
+    .Demo_Dot::before {
+      content: '';
+      width: .55rem;
+      height: .55rem;
+      border: var(--stroke) solid var(--graphite);
+      border-radius: 50%;
+    }
+
+    .Demo_Dot[aria-current='true']::before {
+      border-color: var(--accent);
+      background: var(--accent);
+    }
+
+    @media (min-width: 60rem) {
+      .Home .Hello {
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+        gap: clamp(2rem, 5vw, 4rem);
+      }
+
+      .Hello_Copy {
+        gap: 1.25rem;
+      }
+
+      .Hello_Yak {
+        width: 8rem;
+        margin-left: -1.5rem;
+      }
+
+      .Hello .Title-hero {
+        --title-size: 3rem;
+      }
+    }
+
+    .How {
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    .Step_Name {
+      color: var(--accent);
+      font-size: var(--lead);
+      font-weight: 700;
+    }
+
+    /* Keep setup order in an ordered list, including without styles. */
+    .Steps {
+      display: grid;
+      gap: var(--wide-gap);
+      margin: 0;
+      padding: 0;
+      counter-reset: step;
+    }
+
+    .Steps_Item {
+      position: relative;
+      display: grid;
+      grid-template-columns: 2rem 1fr;
+      align-content: start;
+      gap: var(--quarter-gap) 0.875rem;
+      counter-increment: step;
+    }
+
+    /* Each step's number, circled by hand. */
+    .Steps_Item::before {
+      content: counter(step);
+      grid-row: span 2;
+      display: grid;
+      place-items: center;
+      width: 2rem;
+      height: 2rem;
+      color: var(--accent);
+      font-size: var(--lead);
+      font-weight: 800;
+    }
+
+    .Steps_Item::after {
+      content: '';
+      position: absolute;
+      inset: -0.35rem auto auto -0.4rem;
+      width: 2.8rem;
+      height: 2.7rem;
+      background: var(--accent);
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 42'%3E%3Cpath d='M29.5 6.5C20 3 7.5 7.5 5.2 19.5 3.2 30 11.5 37.5 22 37 32.5 36.4 39.5 28.5 38.6 18.8 37.8 10.5 30 4.8 20.5 5.2 16.5 5.4 13.2 6.6 10.8 8.6' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E")
+        0 0 / 100% 100% no-repeat;
+    }
+
+    /* The plans, on the home page and the pricing page: narrower than the
+       examples, since there are only three. */
+    .Cost {
+      display: grid;
+      gap: 1.25rem;
+      width: min(100%, 52rem);
+      justify-self: center;
+    }
+
+    /* The gallery (gallery.ts), a page kind on its <body>: a grid of cards
+       as wide as the home page's, so as many columns fit as the screen has
+       room for. */
+    .Gallery {
+      --measure: var(--wide-measure);
+    }
+
+    .Make {
+      display: grid;
       gap: 1.25rem;
     }
 
-    .Hello_Yak {
-      width: 8rem;
-      margin-left: -1.5rem;
+    .Make_Intro {
+      display: grid;
+      gap: var(--half-gap);
     }
 
-    .Hello .Title-hero {
-      --title-size: 3rem;
-    }
-  }
-
-  .How {
-    display: grid;
-    gap: 1.5rem;
-  }
-
-  .Step_Name {
-    color: var(--accent);
-    font-size: var(--lead);
-    font-weight: 700;
-  }
-
-  /* Keep setup order in an ordered list, including without styles. */
-  .Steps {
-    display: grid;
-    gap: var(--wide-gap);
-    margin: 0;
-    padding: 0;
-    counter-reset: step;
-  }
-
-  .Steps_Item {
-    position: relative;
-    display: grid;
-    grid-template-columns: 2rem 1fr;
-    align-content: start;
-    gap: var(--quarter-gap) 0.875rem;
-    counter-increment: step;
-  }
-
-  /* Each step's number, circled by hand. */
-  .Steps_Item::before {
-    content: counter(step);
-    grid-row: span 2;
-    display: grid;
-    place-items: center;
-    width: 2rem;
-    height: 2rem;
-    color: var(--accent);
-    font-size: var(--lead);
-    font-weight: 800;
-  }
-
-  .Steps_Item::after {
-    content: '';
-    position: absolute;
-    inset: -0.35rem auto auto -0.4rem;
-    width: 2.8rem;
-    height: 2.7rem;
-    background: var(--accent);
-    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 42'%3E%3Cpath d='M29.5 6.5C20 3 7.5 7.5 5.2 19.5 3.2 30 11.5 37.5 22 37 32.5 36.4 39.5 28.5 38.6 18.8 37.8 10.5 30 4.8 20.5 5.2 16.5 5.4 13.2 6.6 10.8 8.6' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E")
-      0 0 / 100% 100% no-repeat;
-  }
-
-  /* The plans, on the home page and the pricing page: narrower than the
-     examples, since there are only three. */
-  .Cost {
-    display: grid;
-    gap: 1.25rem;
-    width: min(100%, 52rem);
-    justify-self: center;
-  }
-
-  /* The gallery (gallery.ts), a page kind on its <body>: a grid of cards
-     as wide as the home page's, so as many columns fit as the screen has
-     room for. */
-  .Gallery {
-    --measure: var(--wide-measure);
-  }
-
-  .Make {
-    display: grid;
-    gap: 1.25rem;
-  }
-
-  .Make_Intro {
-    display: grid;
-    gap: var(--half-gap);
-  }
-
-  .Make_List {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
-    gap: var(--gap);
-  }
-
-  /* A gallery entry (gallery.ts) is a card: its head the app's name and the
-     copy it offers, then its picture. The app's own share card where it has
-     one, and the platform tile where it does not; a picture from somebody
-     else's app is any shape it likes, so the box is what fixes the row:
-     cropped to fill, never stretched. */
-  .Make_Shot {
-    display: block;
-    aspect-ratio: 1200 / 630;
-    overflow: hidden;
-    background: var(--bg);
-  }
-
-  /* On a card, the picture runs to the card's edges, so it is as large as
-     the card is wide; last on the card, it closes the card's foot too. */
-  .Card > .Make_Shot {
-    margin-inline: calc(-1 * var(--pad-inline));
-  }
-
-  .Card > .Make_Shot:last-child {
-    margin-bottom: calc(-1 * var(--pad-block));
-    border-radius: 0 0 var(--radius) var(--radius);
-  }
-
-  .Make_Image {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .Make_Shot .Make_Shot-none {
-    object-fit: contain;
-    padding: var(--half-gap);
-  }
-
-  /* A published app's own page (app-page.ts): its name, what it is and
-     where it was made, its picture, then its two doors, opening it first. */
-  .Listing {
-    display: grid;
-    gap: var(--gap);
-    width: min(100%, 44rem);
-  }
-
-  .Listing_Head {
-    display: grid;
-    gap: var(--half-gap);
-  }
-
-  .Listing_Doors {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--gap);
-  }
-
-  .Listing_Form {
-    display: contents;
-  }
-
-  .Listing_Made {
-    margin-top: var(--gap);
-  }
-
-  /* The integration directory (integrations.ts): a card a service, its head
-     the service and the way to add it, then what it is, where its key goes
-     and how to get one. */
-  .Services {
-    display: grid;
-    gap: 1.25rem;
-  }
-
-  .Services_Intro {
-    display: grid;
-    gap: var(--half-gap);
-    max-width: 40rem;
-  }
-
-  .Services_List {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
-    gap: var(--gap);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  /* Ruled off above and below in pencil. */
-  .Yours {
-    position: relative;
-    display: grid;
-    gap: 1.5rem;
-    padding-block: 2rem;
-  }
-
-  .Yours::before,
-  .Yours::after {
-    content: '';
-    position: absolute;
-    inset: calc(-1 * var(--room)) 0 auto;
-    height: calc(var(--stroke) + 2 * var(--room));
-    background: var(--rule);
-    filter: var(--drawn);
-  }
-
-  .Yours::after {
-    inset: auto 0 calc(-1 * var(--room));
-  }
-
-  .Yours_List {
-    display: grid;
-    gap: var(--wide-gap);
-    margin: 0;
-  }
-
-  .Yours_Term {
-    color: var(--accent);
-    font-weight: 700;
-  }
-
-  .Yours_Detail {
-    margin: var(--quarter-gap) 0 0;
-    color: var(--muted);
-    text-wrap: pretty;
-  }
-
-  @media (min-width: 48rem) {
-    .Home .Yours_List,
-    .Steps {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 2rem;
+    .Make_List {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+      gap: var(--gap);
     }
 
-    /* Four of them sit two by two. */
-    .Home .Yours_List-pairs {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* A gallery entry (gallery.ts) is a card: its head the app's name and the
+       copy it offers, then its picture. The app's own share card where it has
+       one, and the platform tile where it does not; a picture from somebody
+       else's app is any shape it likes, so the box is what fixes the row:
+       cropped to fill, never stretched. */
+    .Make_Shot {
+      display: block;
+      aspect-ratio: 1200 / 630;
+      overflow: hidden;
+      background: var(--bg);
     }
-  }
 
-  .Join {
-    display: grid;
-    gap: var(--gap);
-    text-align: center;
-    width: min(100%, 52rem);
-    justify-self: center;
-    justify-items: center;
-  }
+    /* On a card, the picture runs to the card's edges, so it is as large as
+       the card is wide; last on the card, it closes the card's foot too. */
+    .Card > .Make_Shot {
+      margin-inline: calc(-1 * var(--pad-inline));
+    }
 
-  .Join > .Note {
-    max-width: 40rem;
-  }
+    .Card > .Make_Shot:last-child {
+      margin-bottom: calc(-1 * var(--pad-block));
+      border-radius: 0 0 var(--radius) var(--radius);
+    }
 
-  .Join_Doors {
-    margin-top: var(--quarter-gap);
-  }
+    .Make_Image {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
 
-  /* The pricing page (pricing.html): three plans side by side on a
-     laptop, stacked on a phone. A wider column than a letter, because
-     columns of numbers are the one thing here that is not prose — and no
-     wider than three of them need. */
-  .Pricing {
-    --measure: 52rem;
-    --rhythm: 3rem;
-  }
+    .Make_Shot .Make_Shot-none {
+      object-fit: contain;
+      padding: var(--half-gap);
+    }
 
-  /* Plans set side by side, on the home page and the pricing page. A card's
-     four parts, its price, note, list and button, sit on four rows the
-     cards share, so every plan's list starts on one line and every button
-     sits on one line, however long each list runs. */
-  .Plans {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
-    grid-auto-rows: auto auto 1fr auto;
-    gap: var(--gap);
-  }
+    /* A published app's own page (app-page.ts): its name, what it is and
+       where it was made, its picture, then its two doors, opening it first. */
+    .Listing {
+      display: grid;
+      gap: var(--gap);
+      width: min(100%, 44rem);
+    }
 
-  /* The paid one is drawn in the accent. It is a variant of a section,
-     not of the Card component: what is emphasised on this page is this
-     page's business. */
-  .Plan {
-    grid-row: span 4;
-    grid-template-rows: subgrid;
-    text-align: left;
-  }
+    .Listing_Head {
+      display: grid;
+      gap: var(--half-gap);
+    }
 
-  .Plan-plus,
-  .Plan-pro {
-    --pencil: var(--accent);
-  }
+    .Listing_Doors {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--gap);
+    }
 
-  .Plan_Price {
-    color: var(--text);
-    font-size: 2rem;
-    font-weight: 800;
-    line-height: 1.1;
-  }
+    .Listing_Form {
+      display: contents;
+    }
 
-  .Plan_Per {
-    color: var(--muted);
-    font-size: var(--size);
-    font-weight: 400;
-  }
+    .Listing_Made {
+      margin-top: var(--gap);
+    }
 
-  .Plan_List {
-    display: grid;
-    gap: 0.5rem;
-    margin: 0;
-    padding-inline-start: 1.25rem;
-    color: var(--muted);
-    list-style: '–  ';
-    text-wrap: pretty;
-  }
+    /* The integration directory (integrations.ts): a card a service, its head
+       the service and the way to add it, then what it is, where its key goes
+       and how to get one. */
+    .Services {
+      display: grid;
+      gap: 1.25rem;
+    }
 
-  .Plan_Item::marker {
-    color: var(--accent);
-  }
+    .Services_Intro {
+      display: grid;
+      gap: var(--half-gap);
+      max-width: 40rem;
+    }
 
-  /* Every limit, a row each and a plan a column. Each row's name says what
-     it counts underneath it, so the numbers stay one short column apiece;
-     on a phone the table scrolls sideways rather than squeezing them. */
-  .Limits {
-    display: grid;
-    gap: var(--wide-gap);
-  }
+    .Services_List {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+      gap: var(--gap);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
 
-  .Limits_Table {
-    overflow-x: auto;
-  }
+    /* Ruled off above and below in pencil. */
+    .Yours {
+      position: relative;
+      display: grid;
+      gap: 1.5rem;
+      padding-block: 2rem;
+    }
 
-  .Limits_Grid {
-    width: 100%;
-    min-width: 32rem;
-    border-collapse: collapse;
-  }
+    .Yours::before,
+    .Yours::after {
+      content: '';
+      position: absolute;
+      inset: calc(-1 * var(--room)) 0 auto;
+      height: calc(var(--stroke) + 2 * var(--room));
+      background: var(--rule);
+      filter: var(--drawn);
+    }
 
-  .Limits_Cell {
-    padding: var(--half-gap);
-    border-bottom: 1px solid var(--border);
-    text-align: left;
-    vertical-align: top;
-  }
+    .Yours::after {
+      inset: auto 0 calc(-1 * var(--room));
+    }
 
-  .Limits_Plan {
-    color: var(--accent);
-  }
+    .Yours_List {
+      display: grid;
+      gap: var(--wide-gap);
+      margin: 0;
+    }
 
-  .Limits_Name {
-    width: 50%;
-  }
+    .Yours_Term {
+      color: var(--accent);
+      font-weight: 700;
+    }
 
-  .Limits_Note {
-    display: block;
-    margin-top: var(--quarter-gap);
-    color: var(--muted);
-    font-size: var(--fine);
-    font-weight: 400;
-    text-wrap: pretty;
-  }
+    .Yours_Detail {
+      margin: var(--quarter-gap) 0 0;
+      color: var(--muted);
+      text-wrap: pretty;
+    }
 
-  .Limits_Value {
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
+    @media (min-width: 48rem) {
+      .Home .Yours_List,
+      .Steps {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 2rem;
+      }
 
-  .Foot {
-    display: grid;
-    gap: 0.75rem;
-    padding-block: var(--wide-gap) 3rem;
-    color: var(--muted);
-    font-size: var(--small);
-    text-align: center;
-    text-wrap: pretty;
-  }
+      /* Four of them sit two by two. */
+      .Home .Yours_List-pairs {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
 
-  .Foot_Links {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: var(--half-gap) 1.25rem;
-  }
+    .Join {
+      display: grid;
+      gap: var(--gap);
+      text-align: center;
+      width: min(100%, 52rem);
+      justify-self: center;
+      justify-items: center;
+    }
 
-  .Foot_Link {
-    color: var(--muted);
-  }
+    .Join > .Note {
+      max-width: 40rem;
+    }
 
-  /* The documentation (docs.ts): the guide's markdown drawn as a page. Its
-     renderer names the prose and documentation parts on each element. Each
-     rendered block is its own grid so paragraphs sit closer together than
-     sections do.
+    .Join_Doors {
+      margin-top: var(--quarter-gap);
+    }
 
-     It is the first page kind to use both .Page slots: the list of pages in
-     the sidebar, what is on this page in the gutter, and the document itself
-     at the reading width in between. Both are asked for on the <body>, so
-     the header above the document spans the same frame it does. */
-  .Docs {
-    --side: 13rem;
-    --aside: 14rem;
-  }
+    /* The pricing page (pricing.html): three plans side by side on a
+       laptop, stacked on a phone. A wider column than a letter, because
+       columns of numbers are the one thing here that is not prose — and no
+       wider than three of them need. */
+    .Pricing {
+      --measure: 52rem;
+      --rhythm: 3rem;
+    }
 
-  /* The sidebar leans against nothing here — the document beside it is not a
-     panel — so it has no edge, and its current row is a closed pencil box. */
-  .Docs_Nav {
-    --nav-panel: transparent;
-    --nav-edge: transparent;
-    --nav-shut: var(--stroke);
-    --nav-tip: var(--radius);
-  }
+    /* Plans set side by side, on the home page and the pricing page. A card's
+       four parts, its price, note, list and button, sit on four rows the
+       cards share, so every plan's list starts on one line and every button
+       sits on one line, however long each list runs. */
+    .Plans {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+      grid-auto-rows: auto auto 1fr auto;
+      gap: var(--gap);
+    }
 
-  .Docs_Contents {
-    display: grid;
-    gap: var(--half-gap);
-    position: sticky;
-    top: var(--gap);
-  }
+    /* The paid one is drawn in the accent. It is a variant of a section,
+       not of the Card component: what is emphasised on this page is this
+       page's business. */
+    .Plan {
+      grid-row: span 4;
+      grid-template-rows: subgrid;
+      text-align: left;
+    }
 
-  .Docs_Label {
-    color: var(--text);
-    font-weight: 800;
-  }
+    .Plan-plus,
+    .Plan-pro {
+      --pencil: var(--accent);
+    }
 
-  .Docs_ContentsList {
-    display: grid;
-    gap: 0.35rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
+    .Plan_Price {
+      color: var(--text);
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1.1;
+    }
 
-  .Docs_JumpLink {
-    color: var(--muted);
-    text-decoration: none;
-  }
+    .Plan_Per {
+      color: var(--muted);
+      font-size: var(--size);
+      font-weight: 400;
+    }
 
-  .Docs_JumpLink:hover {
-    color: var(--text);
-    text-decoration: underline;
-  }
+    .Plan_List {
+      display: grid;
+      gap: 0.5rem;
+      margin: 0;
+      padding-inline-start: 1.25rem;
+      color: var(--muted);
+      list-style: '–  ';
+      text-wrap: pretty;
+    }
 
-  .Docs_Jump-sub {
-    padding-inline-start: var(--half-gap);
-  }
+    .Plan_Item::marker {
+      color: var(--accent);
+    }
 
-  @media (max-width: 1000px) {
-    /* Above the document, a contents list reads as a row of places. */
+    /* Every limit, a row each and a plan a column. Each row's name says what
+       it counts underneath it, so the numbers stay one short column apiece;
+       on a phone the table scrolls sideways rather than squeezing them. */
+    .Limits {
+      display: grid;
+      gap: var(--wide-gap);
+    }
+
+    .Limits_Table {
+      overflow-x: auto;
+    }
+
+    .Limits_Grid {
+      width: 100%;
+      min-width: 32rem;
+      border-collapse: collapse;
+    }
+
+    .Limits_Cell {
+      padding: var(--half-gap);
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .Limits_Plan {
+      color: var(--accent);
+    }
+
+    .Limits_Name {
+      width: 50%;
+    }
+
+    .Limits_Note {
+      display: block;
+      margin-top: var(--quarter-gap);
+      color: var(--muted);
+      font-size: var(--fine);
+      font-weight: 400;
+      text-wrap: pretty;
+    }
+
+    .Limits_Value {
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .Foot {
+      display: grid;
+      gap: 0.75rem;
+      padding-block: var(--wide-gap) 3rem;
+      color: var(--muted);
+      font-size: var(--small);
+      text-align: center;
+      text-wrap: pretty;
+    }
+
+    .Foot_Links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: var(--half-gap) 1.25rem;
+    }
+
+    .Foot_Link {
+      color: var(--muted);
+    }
+
+    /* The documentation (docs.ts): the guide's markdown drawn as a page. Its
+       renderer names the prose and documentation parts on each element. Each
+       rendered block is its own grid so paragraphs sit closer together than
+       sections do.
+
+       It is the first page kind to use both .Page slots: the list of pages in
+       the sidebar, what is on this page in the gutter, and the document itself
+       at the reading width in between. Both are asked for on the <body>, so
+       the header above the document spans the same frame it does. */
+    .Docs {
+      --side: 13rem;
+      --aside: 14rem;
+    }
+
+    /* The sidebar leans against nothing here — the document beside it is not a
+       panel — so it has no edge, and its current row is a closed pencil box. */
+    .Docs_Nav {
+      --nav-panel: transparent;
+      --nav-edge: transparent;
+      --nav-shut: var(--stroke);
+      --nav-tip: var(--radius);
+    }
+
     .Docs_Contents {
-      position: static;
+      display: grid;
+      gap: var(--half-gap);
+      position: sticky;
+      top: var(--gap);
+    }
+
+    .Docs_Label {
+      color: var(--text);
+      font-weight: 800;
     }
 
     .Docs_ContentsList {
-      grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+      display: grid;
+      gap: 0.35rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
     }
-  }
 
-  .Docs .Body {
-    display: grid;
-    gap: 0.75rem;
-  }
+    .Docs_JumpLink {
+      color: var(--muted);
+      text-decoration: none;
+    }
 
-  .Docs_Subheading {
-    margin-top: 0.75rem;
-    font-size: 1.05rem;
-    font-weight: 800;
-  }
+    .Docs_JumpLink:hover {
+      color: var(--text);
+      text-decoration: underline;
+    }
 
-  .Docs_List {
-    display: grid;
-    gap: var(--half-gap);
-    padding-inline-start: 1.4rem;
-    list-style: decimal;
-  }
+    .Docs_Jump-sub {
+      padding-inline-start: var(--half-gap);
+    }
 
-  /* Code blocks are the one thing wider than the column, and they scroll
-     rather than push the page sideways. */
-  .Docs_Pre {
-    margin: 0;
-    padding: var(--half-gap) 0.75rem;
-    background: var(--card);
-    overflow-x: auto;
-  }
+    @media (max-width: 1000px) {
+      /* Above the document, a contents list reads as a row of places. */
+      .Docs_Contents {
+        position: static;
+      }
 
-  .Docs_Pre .Body_Code {
-    padding: 0;
-    background: none;
-    font-size: var(--small);
-  }
+      .Docs_ContentsList {
+        grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+      }
+    }
 
-  .Docs_Quote {
-    margin: 0;
-    padding-inline-start: 0.75rem;
-    border-inline-start: 2px solid var(--border);
-    color: var(--muted);
-  }
+    .Docs .Body {
+      display: grid;
+      gap: 0.75rem;
+    }
 
-  .Docs_Pages {
-    display: grid;
-    gap: 0.75rem;
-    padding: var(--gap);
-    background: var(--card);
-  }
+    .Docs_Subheading {
+      margin-top: 0.75rem;
+      font-size: 1.05rem;
+      font-weight: 800;
+    }
 
-  .Docs_PagesList {
-    display: grid;
-    gap: var(--half-gap);
-    margin: 0;
-    padding-inline-start: 1.25rem;
-    list-style: disc;
-  }
+    .Docs_List {
+      display: grid;
+      gap: var(--half-gap);
+      padding-inline-start: 1.4rem;
+      list-style: decimal;
+    }
 
-  .Docs_PagesItem {
-    color: var(--muted);
-  }
+    /* Code blocks are the one thing wider than the column, and they scroll
+       rather than push the page sideways. */
+    .Docs_Pre {
+      margin: 0;
+      padding: var(--half-gap) 0.75rem;
+      background: var(--card);
+      overflow-x: auto;
+    }
 
-  .Docs_Back {
-    color: var(--muted);
-    font-size: var(--small);
-  }
+    .Docs_Pre .Body_Code {
+      padding: 0;
+      background: none;
+      font-size: var(--small);
+    }
 
-  /* The style guide itself (style-guide.html): a wider column, because a
-     row of swatches is the one thing here that is not a letter. */
-  .Guide {
-    --measure: 52rem;
-    --rhythm: 3rem;
-  }
+    .Docs_Quote {
+      margin: 0;
+      padding-inline-start: 0.75rem;
+      border-inline-start: 2px solid var(--border);
+      color: var(--muted);
+    }
 
-  .Guide_Part {
-    display: grid;
-    gap: var(--gap);
-  }
+    .Docs_Pages {
+      display: grid;
+      gap: 0.75rem;
+      padding: var(--gap);
+      background: var(--card);
+    }
 
-  .Guide_Rules {
-    display: grid;
-    gap: 0.75rem;
-    padding-inline-start: 1.25rem;
-    color: var(--muted);
-    list-style: disc;
-    text-wrap: pretty;
-  }
+    .Docs_PagesList {
+      display: grid;
+      gap: var(--half-gap);
+      margin: 0;
+      padding-inline-start: 1.25rem;
+      list-style: disc;
+    }
 
-  .Guide_SideNav {
-    display: grid;
-    grid-template-columns: 10rem minmax(0, 1fr);
-    background: var(--card);
-  }
-  .Guide_SideNav .SideNav {
-    align-self: start;
-  }
-  .Guide_SidePanel {
-    padding: 1rem;
-  }
-  .Guide_Choices {
-    display: grid;
-    gap: .25rem;
-    margin: .75rem 0;
-    padding: .75rem;
-  }
-  @media (max-width: 700px) {
+    .Docs_PagesItem {
+      color: var(--muted);
+    }
+
+    .Docs_Back {
+      color: var(--muted);
+      font-size: var(--small);
+    }
+
+    /* The style guide itself (style-guide.html): a wider column, because a
+       row of swatches is the one thing here that is not a letter. */
+    .Guide {
+      --measure: 52rem;
+      --rhythm: 3rem;
+    }
+
+    .Guide_Part {
+      display: grid;
+      gap: var(--gap);
+    }
+
+    .Guide_Rules {
+      display: grid;
+      gap: 0.75rem;
+      padding-inline-start: 1.25rem;
+      color: var(--muted);
+      list-style: disc;
+      text-wrap: pretty;
+    }
+
     .Guide_SideNav {
-      display: block;
+      display: grid;
+      grid-template-columns: 10rem minmax(0, 1fr);
+      background: var(--card);
+    }
+    .Guide_SideNav .SideNav {
+      align-self: start;
+    }
+    .Guide_SidePanel {
+      padding: 1rem;
+    }
+    .Guide_Choices {
+      display: grid;
+      gap: .25rem;
+      margin: .75rem 0;
+      padding: .75rem;
+    }
+    @media (max-width: 700px) {
+      .Guide_SideNav {
+        display: block;
+      }
+    }
+
+    /* A specimen's frame: a card in a light dashed line, so what it holds
+       reads as the thing shown. */
+    .Guide_Demo {
+      --pencil: var(--border);
+      --pencil-style: dashed;
+      display: grid;
+      gap: 0.75rem;
+      padding: 1.25rem;
+      background: none;
+    }
+
+    .Guide_Name {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: var(--small);
+      font-weight: 400;
+    }
+
+    .Guide_Swatches {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+      gap: 0.75rem;
+    }
+
+    .Guide_Swatch {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 0 0.75rem;
+    }
+
+    .Guide_Chip {
+      grid-row: span 2;
+      width: 2.5rem;
+      height: 2.5rem;
+      border: 1px solid var(--border);
+      background: var(--swatch);
+    }
+
+    .Guide_Value {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 0.8125rem;
+    }
+
+    .Guide_Sizes {
+      display: grid;
+      gap: 0.5rem;
+      overflow-x: auto; /* --measure is wider than a phone, on purpose */
+    }
+
+    .Guide_Size {
+      display: grid;
+      grid-template-columns: 12rem auto;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .Guide_Bar {
+      height: 0.75rem;
+      width: var(--bar);
+      background: var(--accent);
     }
   }
 
-  /* A specimen's frame: a card in a light dashed line, so what it holds
-     reads as the thing shown. */
-  .Guide_Demo {
-    --pencil: var(--border);
-    --pencil-style: dashed;
-    display: grid;
-    gap: 0.75rem;
-    padding: 1.25rem;
-    background: none;
-  }
-
-  .Guide_Name {
-    color: var(--muted);
-    font-family: var(--mono);
-    font-size: var(--small);
-    font-weight: 400;
-  }
-
-  .Guide_Swatches {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-    gap: 0.75rem;
-  }
-
-  .Guide_Swatch {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    align-items: center;
-    gap: 0 0.75rem;
-  }
-
-  .Guide_Chip {
-    grid-row: span 2;
-    width: 2.5rem;
-    height: 2.5rem;
-    border: 1px solid var(--border);
-    background: var(--swatch);
-  }
-
-  .Guide_Value {
-    color: var(--muted);
-    font-family: var(--mono);
-    font-size: 0.8125rem;
-  }
-
-  .Guide_Sizes {
-    display: grid;
-    gap: 0.5rem;
-    overflow-x: auto; /* --measure is wider than a phone, on purpose */
-  }
-
-  .Guide_Size {
-    display: grid;
-    grid-template-columns: 12rem auto;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .Guide_Bar {
-    height: 0.75rem;
-    width: var(--bar);
-    background: var(--accent);
-  }
-}

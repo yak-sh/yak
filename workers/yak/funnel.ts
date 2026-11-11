@@ -114,6 +114,7 @@ export let CTAS = [
   { name: 'plus', say: "The Plus plan's Get Started" },
   { name: 'pro', say: "The Pro plan's Get Started" },
   { name: 'join', say: 'Start, in the closing card' },
+  { name: 'stay', say: 'Build yours, the button that stays on screen' },
 ] as const
 
 /** Whom a step is for: a person's address, or the addresses of the owners

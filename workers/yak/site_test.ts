@@ -653,6 +653,7 @@ test('every public page hands a stranger sign-in, never /connect', () => {
     GET_PLAN,
     GET_PLAN,
     '#say',
+    '#say',
   ], 'a home-page door misses sign-in')
 })
 
@@ -664,7 +665,6 @@ test("a home page's box posts an idea to be built", () => {
   for (
     let [name, button, field, org] of [
       ['index.html', 'Build it', 'textarea'],
-      ['build.html', 'Build it', 'textarea'],
       ['churches.html', 'Build my site free', 'input', 'church'],
       ['organizations.html', 'Build a free preview', 'input', 'organization'],
     ]
@@ -695,18 +695,14 @@ test("a home page's box posts an idea to be built", () => {
   }
 })
 
-// A home page `/` is split with is indexed as the home page; a landing page
-// is its own address. Both count their calls to action as the home page does.
+// A landing page is indexed at its own address, and counts its calls to
+// action as the home page does.
 test('the pages beside the home page say where they live and count their buttons', () => {
   let at = (name: string) => ({
     canonical: parsed(name).querySelector('link[rel="canonical"]')
       ?.getAttribute('href'),
     ctas: [...parsed(name).querySelectorAll('[data-cta]')]
       .map((b) => b.getAttribute('data-cta')),
-  })
-  assertEquals(at('build.html'), {
-    canonical: 'https://yaks.app/',
-    ctas: ['start', 'examples', 'plus', 'pro', 'join'],
   })
   assertEquals(at('churches.html'), {
     canonical: 'https://yaks.app/churches',
@@ -724,7 +720,6 @@ test("each home page's heading asks for what its box takes", () => {
   for (
     let name of [
       'index.html',
-      'build.html',
       'churches.html',
       'operator.html',
       'operator-email.html',
@@ -736,6 +731,53 @@ test("each home page's heading asks for what its box takes", () => {
     assertEquals(box.closest('.Hello') != null, true, name)
     assertEquals(box.hasAttribute('required'), true, name)
   }
+})
+
+// The home page's button that stays on screen (public/stay.js) shows only
+// while the box, the closing card and the footer are all out of sight, and
+// pressing it puts the cursor in the box.
+test("the home page's Build yours shows while its box is out of sight, and goes to it", async () => {
+  let { document } = parseHTML(read('index.html'))
+  let bar = document.querySelector('[data-stay]') as HTMLElement
+  assertEquals(bar.hidden, true)
+  let places: Element[] = []
+  let sees: (entries: unknown[]) => void = () => {}
+  class Observer {
+    constructor(fn: typeof sees) {
+      sees = fn
+    }
+    observe(el: Element) {
+      places.push(el)
+    }
+  }
+  let code = await Deno.readTextFile(
+    new URL('./public/stay.js', import.meta.url),
+  )
+  new Function('document', 'IntersectionObserver', code)(document, Observer)
+  let WATCHED = ['Hello_Ask', 'Join', 'Foot']
+  assertEquals(
+    places.map((el) => WATCHED.find((name) => el.classList.contains(name))),
+    WATCHED,
+  )
+  let [box, join] = places
+  let see = (target: Element, isIntersecting: boolean) =>
+    sees([{ target, isIntersecting }])
+  see(box, true)
+  assertEquals(bar.hidden, true)
+  see(box, false)
+  assertEquals(bar.hidden, false)
+  see(join, true)
+  assertEquals(bar.hidden, true)
+  see(join, false)
+  assertEquals(bar.hidden, false)
+  let say = document.getElementById('say') as HTMLElement
+  let did: string[] = []
+  say.scrollIntoView = () => did.push('scrolled')
+  say.focus = () => did.push('focused')
+  let press = new (document.defaultView as unknown as typeof globalThis)
+    .Event('click', { bubbles: true, cancelable: true })
+  bar.querySelector('a')!.dispatchEvent(press)
+  assertEquals([did, press.defaultPrevented], [['scrolled', 'focused'], true])
 })
 
 test('an assistant name is escaped on the sign-in page', async () => {

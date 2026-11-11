@@ -67,9 +67,12 @@ a:focus-visible { outline: 2px solid #4c773e; outline-offset: 2px }
   more.textContent = 'Another browser, or clearing this one, starts over.'
   let keep = document.createElement('a')
   keep.href = data.yakKeep
+  // Keeping is a page of yaks.app's own, never the app's: where the app is
+  // shown in a frame, as the home page shows one, it takes the whole window.
+  keep.target = '_top'
   keep.textContent = data.yakKeepSays || 'Keep it'
   line.append(
-    'Try it. What you change stays in this browser for 90 days, and only you can see it. ',
+    "Try it. Only you can see what you change, and it's kept for 90 days. ",
     more,
     keep,
   )

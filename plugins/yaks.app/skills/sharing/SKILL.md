@@ -343,10 +343,10 @@ apart from the app's. They still cannot write `deliver` (send email), `using` or
 `"models": "open"`), and a component with `"floor": "person"` needs them signed
 in.
 
-**The bar.** Every page served to a stranger wears a one-line bar: "Try it. What
-you change stays in this browser for 90 days, and only you can see it. Another
-browser, or clearing this one, starts over." Its button says "Sign up to keep
-it" (signed out) or "Keep it" (signed in), and leads to
+**The bar.** Every page served to a stranger wears a one-line bar: "Try it. Only
+you can see what you change, and it's kept for 90 days. Another browser, or
+clearing this one, starts over." Its button says "Sign up to keep it" (signed
+out) or "Keep it" (signed in), and leads to
 `https://yaks.app/install?name=<name>`. `me()` returns `visit: {kept}` to a
 stranger and `visit: null` to anyone else, so a page can word its own prompts
 (<https://yaks.app/docs/store.md>).

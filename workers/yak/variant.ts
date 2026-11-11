@@ -1,8 +1,9 @@
 // Which home page a visitor to yaks.app is shown, and which one every step
 // they take counts under (funnel.ts). A home page is data: a name, the page
 // Site keeps it at, and its share of the visitors `/` draws. A page with a
-// share is one `/` is split between. A page with none is a landing page: only
-// its own address shows it, which is where an ad for one audience points.
+// share is one `/` shows, and several with one are a split of `/`, each drawn
+// by its share. A page with none is a landing page: only its own address
+// shows it, which is where an ad for one audience points.
 //
 // A visit to `/` shows the page its visitor holds, when that page has a
 // share, else one drawn by the shares; a visit to a page's own address shows
@@ -28,10 +29,10 @@ export type Variant = { name: string; path: string; share: number }
 /** The page that pitches the Operator (site/operator.tsx). */
 export let OPERATOR = '/operator'
 
-/** The home pages: the two `/` is split between, and the landing pages. */
+/** The home pages: the one `/` shows, which leads with a working sign-up
+ * sheet (site/home.tsx), and the landing pages. */
 export let VARIANTS: Variant[] = [
-  { name: 'ask', path: '/', share: 1 },
-  { name: 'describe', path: '/build', share: 1 },
+  { name: 'demo', path: '/', share: 1 },
   { name: 'operator', path: OPERATOR, share: 0 },
   { name: 'church', path: '/churches', share: 0 },
   { name: 'organization', path: '/organizations', share: 0 },
