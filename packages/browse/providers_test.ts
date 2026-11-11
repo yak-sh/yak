@@ -18,13 +18,13 @@ import {
 // fallback shares its models but offers no label of its own.
 let codex: Provider = {
   name: 'codex',
-  models: ['gpt-5.6-sol', 'gpt-5.6-terra'],
-  efforts: { 'gpt-5.6-sol': ['low', 'high'], 'gpt-5.6-terra': ['low', 'high'] },
-  labels: { 'gpt-5.6-sol': 'GPT-5.6 Sol', 'gpt-5.6-terra': 'GPT-5.6 Terra' },
+  models: ['gpt-6.1-sol', 'gpt-5.6-terra'],
+  efforts: { 'gpt-6.1-sol': ['low', 'high'], 'gpt-5.6-terra': ['low', 'high'] },
+  labels: { 'gpt-6.1-sol': 'GPT-6.1 Sol', 'gpt-5.6-terra': 'GPT-5.6 Terra' },
 }
 let codexCli: Provider = {
   name: 'codex-cli',
-  models: ['gpt-5.6-sol', 'gpt-5.6-terra'],
+  models: ['gpt-6.1-sol', 'gpt-5.6-terra'],
   labels: {},
   fallback: true,
 }
@@ -38,7 +38,7 @@ test('catalog offers each model once, Sol first, fallback as a transport', () =>
   let cat = catalog([codex, codexCli, claude])
   // Two Codex models + two Claude models, never the fallback's clone.
   assertEquals(cat.map((c) => c.label), [
-    'GPT-5.6 Sol',
+    'GPT-6.1 Sol',
     'GPT-5.6 Terra',
     'Opus',
     'Sonnet',
@@ -58,11 +58,11 @@ test('catalog ranks the graph-native transport first regardless of table order',
 
 test('offer resolves explicit model and transport combinations', () => {
   let picks = catalog([codex, codexCli, claude])
-  assertEquals(offer(picks)?.model, 'gpt-5.6-sol')
+  assertEquals(offer(picks)?.model, 'gpt-6.1-sol')
   assertEquals(offer(picks, { provider: 'claude' })?.model, 'claude-opus-4-8')
   assertEquals(offer(picks, { model: 'gpt-5.6-terra' })?.model, 'gpt-5.6-terra')
   assertEquals(
-    offer(picks, { provider: 'claude', model: 'gpt-5.6-sol' }),
+    offer(picks, { provider: 'claude', model: 'gpt-6.1-sol' }),
     undefined,
   )
 })
@@ -82,9 +82,9 @@ test('spawnDefault promotes Sol and degrades to the first provider', () => {
   assertEquals(
     spawnDefault([
       { name: 'claude', models: ['opus'] },
-      { name: 'codex', models: ['gpt-5.6-sol', 'terra'] },
+      { name: 'codex', models: ['gpt-6.1-sol', 'terra'] },
     ]),
-    { provider: 'codex', model: 'gpt-5.6-sol' },
+    { provider: 'codex', model: 'gpt-6.1-sol' },
   )
   assertEquals(spawnDefault([{ name: 'one', models: ['a', 'b'] }]), {
     provider: 'one',
@@ -93,7 +93,7 @@ test('spawnDefault promotes Sol and degrades to the first provider', () => {
   assertEquals(
     spawnDefault([
       { name: 'claude', models: ['opus'] },
-      { name: 'codex', models: ['gpt-5.6-sol'] },
+      { name: 'codex', models: ['gpt-6.1-sol'] },
     ], { provider: 'claude' }),
     { provider: 'claude', model: 'opus' },
   )
@@ -104,12 +104,12 @@ test('spawnDefault routes the default model by readiness', () => {
   // Signed in: the default Sol runs graph-native.
   assertEquals(
     spawnDefault([codex, codexCli], {}, () => false),
-    { provider: 'codex', model: 'gpt-5.6-sol' },
+    { provider: 'codex', model: 'gpt-6.1-sol' },
   )
   // Not signed in: the same model routes to the CLI fallback, never a husk.
   assertEquals(
     spawnDefault([codex, codexCli], {}, (name) => name == 'codex'),
-    { provider: 'codex-cli', model: 'gpt-5.6-sol' },
+    { provider: 'codex-cli', model: 'gpt-6.1-sol' },
   )
 })
 
@@ -127,8 +127,8 @@ let rows = [
   row('p3', { provider: { name: 'fake', offered: false } }),
   row('m1', {
     model: {
-      name: 'gpt-5.6-sol',
-      label: 'GPT-5.6 Sol',
+      name: 'gpt-6.1-sol',
+      label: 'GPT-6.1 Sol',
       offered: true,
       efforts: 'low high',
       effort: 'high',
@@ -148,22 +148,22 @@ test('tableOf reads the offered providers and the models they serve', () => {
   assertEquals(t[0], {
     name: 'codex',
     eid: 'p1',
-    eids: { 'gpt-5.6-sol': 'm1', old: 'm3' },
-    models: ['gpt-5.6-sol', 'old'],
-    labels: { 'gpt-5.6-sol': 'GPT-5.6 Sol' },
-    efforts: { 'gpt-5.6-sol': ['low', 'high'] },
-    defaults: { 'gpt-5.6-sol': 'high' },
+    eids: { 'gpt-6.1-sol': 'm1', old: 'm3' },
+    models: ['gpt-6.1-sol', 'old'],
+    labels: { 'gpt-6.1-sol': 'GPT-6.1 Sol' },
+    efforts: { 'gpt-6.1-sol': ['low', 'high'] },
+    defaults: { 'gpt-6.1-sol': 'high' },
   })
   assertEquals(t[1].fallback, true)
   assertEquals(catalog(t).map((c) => [c.model, c.transports]), [
-    ['gpt-5.6-sol', ['codex', 'codex-cli']],
+    ['gpt-6.1-sol', ['codex', 'codex-cli']],
   ])
 })
 
 test('usingOf names the provider and model entities, or refuses', () => {
   let t = tableOf(rows)
   assertEquals(
-    usingOf(t, { provider: 'codex', model: 'gpt-5.6-sol', effort: 'low' }),
+    usingOf(t, { provider: 'codex', model: 'gpt-6.1-sol', effort: 'low' }),
     { provider: 'p1', model: 'm1', effort: 'low' },
   )
   assertEquals(usingOf(t, { provider: 'codex-cli' }), { provider: 'p2' })

@@ -525,7 +525,7 @@ export let commands: Record<string, Command> = {
     args: [
       a(
         'prompt',
-        '.session.provider=codex .session.model=gpt-5.6-sol prompt…',
+        '.session.provider=codex .session.model=gpt-6.1-sol prompt…',
         {
           rest: true,
           need: false,

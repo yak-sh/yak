@@ -106,7 +106,7 @@ export type Pick = {
   transports: string[]
 }
 
-let first = 'gpt-5.6-sol'
+let first = 'gpt-6.1-sol'
 
 // Sol leads the menu; everything else keeps its table order.
 export let modelOrder = (a: string, b: string) =>
