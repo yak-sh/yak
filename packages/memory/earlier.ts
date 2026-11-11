@@ -203,7 +203,7 @@ let titleOf = (b: Bundle): string => {
     part(b, 'doc').title || clip(String(part(b, 'content').body ?? '')),
   )
   let choice = part(b, 'decided').choice
-  return choice ? `${title} → ${choice}` : title
+  return clip(choice ? `${title} → ${choice}` : title)
 }
 
 /** The memories and answered decisions nearest the words in meaning: what was
