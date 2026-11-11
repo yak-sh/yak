@@ -372,6 +372,9 @@ export let BOUNDARIES = [
   // Every address only a letter names is kept to the app's editors, as the
   // letter is (recipient-move.ts, T-159245).
   'yak/store/recipient/1',
+  // Every person and relation a sign-up created is kept to the app's editors
+  // (form-guest-move.ts, T-159339).
+  'yak/store/form-guest/1',
 ]
 
 /** A column dropped from a table. */

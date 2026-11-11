@@ -36,6 +36,7 @@ export let formGuestMove = (
 export let formGuestRule: Rule = {
   mark: 'yak/store/form-guest/1',
   stores: 'apps',
+  live: 'apps',
   core: ['registration', 'form_guest'],
   find: '.registration.form',
   move: (row, read) => {
