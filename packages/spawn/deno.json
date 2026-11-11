@@ -2,8 +2,7 @@
   "publish": {
     "exclude": [
       "**/*_test.ts",
-      "./testing.ts",
-      "./fake.ts"
+      "./testing.ts"
     ]
   }
 }

@@ -1,8 +1,11 @@
-// What a managed session runs: a provider's argv, and the reader that makes its
+// What a managed session runs: a CLI's argv, and the reader that makes its
 // JSON-lines output a transcript (@yaks/session's `claude` and `codex`) — code,
 // and only code. Which providers exist and which models each one serves is
 // graph data (@yaks/model's `provider` and `model` entities), so adding a model
-// means inserting a row, not cutting a release.
+// means inserting a row, not cutting a release. So is the CLI a provider
+// speaks (`provider.api`, else its name) and the program it is run as
+// (`provider.command`, else the CLI's own): a row that speaks `claude` and
+// names ./standin.ts is a stand-in that ends a run any way claude does.
 //
 // Every provider prints one JSON object per event, so ./run.ts never learns a
 // vendor's format: @yaks/session's importer asks the reader what a line means
@@ -62,7 +65,8 @@ export type Job = {
 
 /** A provider that is run as a command. */
 export type Adapter = {
-  /** the command line to run it with, the program name first */
+  /** the command line to run it with, the CLI's own program first; a provider
+   * whose row names a `command` is run as that program instead */
   argv: (job: Job) => string[]
   /** what each line of its output means (@yaks/session) */
   read: Reader
@@ -217,8 +221,8 @@ export let codex: Adapter = {
 }
 
 /**
- * The providers run as commands, keyed by the `name` on their `provider`
- * entity. A server with a provider of its own builds its own table
+ * The CLIs run as commands, keyed by the name a `provider` entity speaks: its
+ * `api`, else its own `name`. A server with a CLI of its own builds its own table
  * ({@link https://jsr.io/@yaks/spawn/doc/effects/~/spawning | spawning}). A
  * provider missing from this table is one this package does not launch, which
  * is how an `http` provider is left to the in-process daemon.

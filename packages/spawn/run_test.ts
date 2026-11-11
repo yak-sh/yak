@@ -1,7 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
-import { identityEid } from '@yaks/graph/identity'
 import { accountEid } from '@yaks/model'
 import { processes } from '@yaks/process'
 import { onDisk } from '@yaks/file/local'
@@ -10,7 +9,18 @@ import { storage } from '@yaks/sqlite'
 import { stepping } from '../sqlite/testing.ts'
 import { claude } from './adapters.ts'
 import { asked, down, finish, follow, resume, start } from './run.ts'
-import { asking, FAKE, host, launching, tracked, until } from './testing.ts'
+import { LIMIT } from './standin.ts'
+import {
+  asking,
+  FAKE,
+  host,
+  launching,
+  playing,
+  STANDIN,
+  standing,
+  tracked,
+  until,
+} from './testing.ts'
 
 // A log file and the run that wrote it, both already over: `follow` then does
 // one pass and returns, which is the whole importer without a process.
@@ -41,6 +51,7 @@ test('a request is the using on the transcript, read back as a job', async () =>
   await g.apply(asking('S1', 'E1', 'fix it', { effort: 'high' }))
   assertEquals(await asked(g, 'S1'), {
     provider: 'fake',
+    speaks: 'fake',
     session: 'S1',
     model: 'fake-1',
     effort: 'high',
@@ -197,39 +208,92 @@ let ending = async (
   }
 }
 
-test('a run that ends badly says how in its last line, and is told unless asked', async () => {
-  let ended = 'the provider was ended by SIGKILL (exit 137): out of memory'
-  assertEquals(await ending(137, 'starting\nout of memory\n'), [
-    ended,
-    [`run ended: Error: a spawned run ended: ${ended}`],
-  ])
+test('a run somebody stopped says how it ended, and is not told', async () => {
   assertEquals(await ending(143, '', true), [
     'the provider was ended by SIGTERM (exit 143)',
     [],
   ])
 })
 
-test("a run its plan's limit ends says so and is no failure; another refusal names its own text", async () => {
-  let limit = "You've reached your Fable limit."
-  assertEquals(
-    await ending(1, 'Warning: claude.ai MCP servers blocked by policy', false, [
-      {
-        type: 'assistant',
-        error: 'rate_limit',
-        message: { content: [{ type: 'text', text: limit }] },
-      },
-      { type: 'result', subtype: 'success', is_error: true, result: limit },
-    ]),
-    [`the provider's plan limit ended the run: ${limit}`, []],
-  )
-  let refused = 'API Error: 500 overloaded'
-  let ended = `the provider exited 1: ${refused}`
-  assertEquals(
-    await ending(1, 'Warning: claude.ai MCP servers blocked by policy', false, [
-      { type: 'result', subtype: 'success', is_error: true, result: refused },
-    ]),
-    [ended, [`run ended: Error: a spawned run ended: ${ended}`]],
-  )
+// How a run of the stand-in provider ends, through the door a live run
+// takes: the request names the provider row, whose command the launch plays.
+// Its last entry's failure and text, the failures told of it, and the
+// providers whose plans it left a reading of.
+let standin = async (ending: string) => {
+  let { g } = tracked()
+  let dir = Deno.makeTempDirSync({ prefix: 'spawn-' })
+  let told: string[] = []
+  try {
+    await g.apply(standing('S1', 'E1', ending))
+    await start(g, 'S1', {
+      cwd: dir,
+      dir,
+      poll: 5,
+      launch: playing,
+      report: (e, c) => void told.push(`${c?.tags?.step}: ${e}`),
+    })
+    // A finished run's log is cleaned last, after its ending is written.
+    await until(
+      () => Deno.stat(`${dir}/S1.out`).then(() => false, () => true),
+      'the run to finish',
+    )
+    let last = (await entries(g)).at(-1)
+    let read = (await g.read('.rate_limit *') as Bundle[])
+      .map((r) => comp(r, 'rate_limit').provider)
+    return [
+      comp(last, 'failed')?.reason,
+      comp(last, 'content')?.body,
+      told,
+      read,
+    ]
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+}
+
+test('a provider row names its command, and the CLI it speaks names its adapter', async () => {
+  let { g } = tracked()
+  await g.apply(standing('S1', 'E1', 'clean'))
+  let job = await asked(g, 'S1')
+  assertEquals([job?.provider, job?.speaks, job?.command, job?.model], [
+    'standin',
+    'claude',
+    STANDIN.command,
+    'clean',
+  ])
+})
+
+test('a clean run ends with no failure', async () => {
+  assertEquals(await standin('clean'), [undefined, undefined, [], []])
+})
+
+test("a run its plan's limit ends says so, is no failure, and its reading is its own provider's", async () => {
+  assertEquals(await standin('limit'), [
+    'Plan limit reached',
+    `the provider's plan limit ended the run: ${LIMIT}`,
+    [],
+    [STANDIN.provider],
+  ])
+})
+
+test('a refused run names the refusal, not the last line of stderr', async () => {
+  let ended = 'the provider exited 1: API Error: 500 overloaded'
+  assertEquals(await standin('refusal'), [
+    'Provider exited 1',
+    ended,
+    [`run ended: Error: a spawned run ended: ${ended}`],
+    [],
+  ])
+})
+
+test('a crashed run names its signal and what it last said on stderr', async () => {
+  let ended = 'the provider was ended by SIGKILL (exit 137): out of memory'
+  assertEquals(await standin('crash'), [
+    'Provider exited 137',
+    ended,
+    [`run ended: Error: a spawned run ended: ${ended}`],
+    [],
+  ])
 })
 
 let said = [
@@ -353,7 +417,7 @@ test('a run that ended while nobody read its log is read to its end on start-up'
   }
 })
 
-test("the plan limits a run's log reports are kept as its account's reading, taken when the line before was written", async () => {
+test("the plan limits a run's log reports are kept as its provider's reading for its account, taken when the line before was written", async () => {
   let at = '2026-11-11T20:00:19.278Z'
   let week = { utilization: 0.82, resetsAt: 1794913200, status: 'allowed' }
   let { g, dir, close } = await logged([
@@ -378,7 +442,7 @@ test("the plan limits a run's log reports are kept as its account's reading, tak
       'the reading',
     )
     assertEquals(row?.rate_limit, {
-      provider: identityEid('provider', ['claude']),
+      provider: FAKE.provider,
       account: accountEid('/u/.claude-work'),
       window: 10080,
       used: 82,

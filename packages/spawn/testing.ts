@@ -23,6 +23,7 @@ import { fileDoc } from '@yaks/file/vocab'
 import { machineDoc } from '@yaks/machine/vocab'
 import { type launch, processDoc, processes } from '@yaks/process'
 import { claude } from './adapters.ts'
+import { played } from './standin.ts'
 import { spawnDoc } from './vocab.ts'
 import type { Adapter } from './adapters.ts'
 
@@ -82,6 +83,57 @@ export let fake: Adapter = {
     j.model ?? '',
     JSON.stringify(j.instruction).slice(1, -1),
   ],
+}
+
+/** The stand-in provider (./standin.ts): a row that speaks claude's CLI and
+ * names its own command. */
+export let STANDIN = {
+  provider: identityEid('provider', ['standin']),
+  command: '/srv/repo/packages/spawn/standin.ts',
+}
+
+/** The rows of a request for the stand-in to end as `ending` names: the
+ * provider, the model that is that recording, and the session that asks. */
+export let standing = (session: string, entry: string, ending: string) => {
+  let model = identityEid('model', [ending])
+  return [
+    {
+      entity: { eid: STANDIN.provider },
+      provider: {
+        name: 'standin',
+        transport: 'process',
+        api: 'claude',
+        command: STANDIN.command,
+      },
+    },
+    { entity: { eid: model }, model: { name: ending } },
+    { ...link(STANDIN.provider, 'serves', model), serves: { name: ending } },
+    { entity: { eid: session }, session: {} },
+    {
+      entity: { eid: entry },
+      entry: { session },
+      content: { body: 'go' },
+      using: { provider: STANDIN.provider, model },
+    },
+  ]
+}
+
+/** A `launch` that plays the stand-in where a machine would run it: what the
+ * program prints for the command line it was given is left in the files a
+ * wrapper keeps, and the row says it exited with its code. Another command is
+ * refused, as a machine without it would. */
+export let playing: typeof launch = async (store, spec, o = {}) => {
+  if (spec.command != STANDIN.command) throw new Error(`no ${spec.command}`)
+  let eid = String(o.eid)
+  let run = played(spec.args ?? [])
+  await Deno.writeTextFile(`${o.dir}/${eid}.out`, run.out)
+  await Deno.writeTextFile(`${o.dir}/${eid}.err`, run.err)
+  await store.apply([{
+    entity: { eid },
+    process: { pid: 1, command: spec.command },
+    exit: { code: run.code },
+  }])
+  return { eid, pid: 1, done: Promise.resolve(run.code), elapsed: () => 0 }
 }
 
 /** The rows that make up a request: a session, and the entry that asks. */

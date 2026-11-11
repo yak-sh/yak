@@ -55,13 +55,15 @@ applied in one transaction.
 ```
 
 The `@yaks/spawn/effects` handlers run after the batch commits. They read the
-provider's `name`, select the matching `claude` or `codex` adapter, validate the
-requested effort against the model, and start the command. A request that names
-a provider alone runs the model in the provider's own `using{model}`, so the
-command is told its model and the run's asks name it; Codex's JSON output never
-says which model answered, so a run left to its CLI's default could not be
-priced. Providers handled over HTTP have no command adapter and remain the
-responsibility of the in-process `@yaks/session` daemon.
+CLI the provider speaks (`provider.api`, else its `name`), select the matching
+`claude` or `codex` adapter, validate the requested effort against the model,
+and start the command: the adapter's own program, or the one the row names in
+`provider.command`. A request that names a provider alone runs the model in the
+provider's own `using{model}`, so the command is told its model and the run's
+asks name it; Codex's JSON output never says which model answered, so a run left
+to its CLI's default could not be priced. Providers handled over HTTP have no
+command adapter and remain the responsibility of the in-process `@yaks/session`
+daemon.
 
 The process is stored on the session entity. It runs through `@yaks/process` in
 a detached systemd user scope, so it can outlive the process that opened the
@@ -135,9 +137,48 @@ somebody else holds alone.
 
 <a id="what-an-adapter-is"></a>
 
-An adapter contains a provider command line and the `@yaks/session` reader that
+An adapter contains a CLI's command line and the `@yaks/session` reader that
 says what each output line means. Providers and the models they serve remain
-graph entities, so adding a model does not require a package release.
+graph entities, so adding a model does not require a package release. The plan
+limits a run's stream reports are kept as readings of the provider row that ran,
+whichever CLI it speaks.
+
+<a id="the-stand-in"></a>
+
+## The stand-in provider
+
+`standin.ts` is a program that takes claude's command line, prints a recorded
+stream and exits as the recording ended. A provider row makes it a provider:
+
+```jsonc
+{
+  "provider": {
+    "name": "standin",
+    "transport": "process",
+    "api": "claude",
+    "command": "/srv/repo/packages/spawn/standin.ts"
+  }
+}
+```
+
+The model a run asks for names the recording, so the row serves one model per
+ending:
+
+| model     | the run                                       | exit |
+| --------- | --------------------------------------------- | ---- |
+| `clean`   | answers and ends                              | 0    |
+| `limit`   | is refused by its plan's limit (`rate_limit`) | 1    |
+| `refusal` | is refused by the API for another reason      | 1    |
+| `crash`   | is killed mid-turn, saying why on stderr      | 137  |
+
+```sh
+yak session spawn T-123 --provider standin --model limit --wait
+```
+
+A run of it takes every step a live run does (the launch, the log, the reader,
+the ending and its report) and spends nothing, so a change to how a run ends is
+seen live without waiting for a plan to run out. The package's tests ask for the
+same rows, over a launch that plays the program in place.
 
 An adapter also names the instruction file its provider reads at the root of its
 checkout (`CLAUDE.md`, `AGENTS.md`). Before launching, `start` reads that file

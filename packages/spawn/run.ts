@@ -228,8 +228,14 @@ export let watcherOf = async (
 
 /** What a session was asked for, as the graph holds it. */
 export type Asked = Job & {
-  /** the provider's name, which is what names an adapter */
+  /** the provider's name */
   provider: string
+  /** the CLI it speaks, which is what names an adapter: its `provider.api`,
+   * else its own name */
+  speaks: string
+  /** the program it is run as, where its row names one (`provider.command`)
+   * in place of the adapter's own */
+  command?: string
   /** the ask a turn of this run answers (@yaks/session `ask`): the model
    * entity, and the request entry it was asked through */
   ask: Comp
@@ -284,7 +290,8 @@ export let asked = async (
   let using = comp(request, 'using')!
   if (!using.provider) return null
   let [provider] = await g.get([String(using.provider)])
-  let name = String(comp(provider, 'provider')?.name ?? '')
+  let row = comp(provider, 'provider')
+  let name = String(row?.name ?? '')
   if (!name) return null
   let chosen = String(using.model ?? comp(provider, 'using')?.model ?? '')
   let [model] = chosen ? await g.get([chosen]) : []
@@ -311,6 +318,8 @@ export let asked = async (
   let tools = comp(request, 'sending')?.tools
   return {
     provider: name,
+    speaks: String(row?.api ?? name),
+    ...row?.command ? { command: String(row.command) } : {},
     session,
     model: spelled,
     effort: effort || undefined,
@@ -337,14 +346,34 @@ let answering = (read: Reader, ask: Comp): Reader => (e) => {
   }
 }
 
+// The adapter a request is run and read by: the one its provider speaks.
+let adapterOf = (job: Asked | null, o: Opts): Adapter | undefined =>
+  job ? (o.adapters ?? known)[job.speaks] : undefined
+
+// A reader whose plan limits are `provider`'s: a stream names its CLI's own
+// plan, and the plan a run spends is its provider row's, so a provider that
+// speaks another's CLI never moves that one's readings.
+let metering = (read: Reader, provider: string): Reader => (e) => {
+  let said = read(e)
+  return said.limits
+    ? { ...said, limits: said.limits.map((l) => ({ ...l, provider })) }
+    : said
+}
+
 // How a run's log reads: its usage answers `ask`, and the plan limits it
-// reports are of the account its CLI signs in with in the run's environment.
-let reading = (adapter: Adapter, ask: Comp, o: Opts): Reader => {
+// reports are its provider's, of the account its CLI signs in with in the
+// run's environment.
+let reading = (
+  adapter: Adapter,
+  job: Asked,
+  o: Opts,
+  ask: Comp = job.ask,
+): Reader => {
   let env = { ...o.env ?? system.env.toObject(), ...adapter.env }
   let dir = adapter.account &&
     signedIn(adapter.account, { get: (name) => env[name] })
   return accounted(
-    answering(adapter.read, ask),
+    metering(answering(adapter.read, ask), job.provider),
     dir ? accountEid(dir) : undefined,
   )
 }
@@ -531,7 +560,7 @@ export let start = async (
   if (row?.stop || going(row)) return null
   let job = await asked(g, session)
   if (!job) return null
-  let adapter = (o.adapters ?? known)[job.provider]
+  let adapter = adapterOf(job, o)
   if (!adapter) return null
   if (row?.[PROCESS]) {
     // A session that ran before carries on its provider's thread, given what
@@ -563,7 +592,7 @@ export let start = async (
       ? await cut(g, session, o)
       : o.cwd
     let persona = await given(g, session, cwd ?? system.cwd(), adapter)
-    let argv = adapter.argv({
+    let [program, ...args] = adapter.argv({
       ...job,
       persona,
       mcp: o.mcp,
@@ -573,8 +602,8 @@ export let start = async (
     // is new, and its lines are numbered on from where the transcript stands.
     t = await tail(g, paths(session, o).out, { session })
     run = await (o.launch ?? launch)(store(g), {
-      command: argv[0],
-      args: argv.slice(1),
+      command: job.command ?? program,
+      args,
       cwd,
       env: sessionEnv(session, {
         ...o.env ?? system.env.toObject(),
@@ -602,7 +631,7 @@ export let start = async (
       .catch(told(o))
   }
   let through = String(job.ask.through)
-  follow(g, session, reading(adapter, job.ask, o), o, { through, tail: t })
+  follow(g, session, reading(adapter, job, o), o, { through, tail: t })
     .catch(told(o))
   return run
 }
@@ -714,11 +743,11 @@ let onward = async (
 // in force: the newest, which is what the run being read answers.
 let readOn = async (g: Graph, session: string, o: Opts): Promise<void> => {
   let job = await asked(g, session).catch(() => null)
-  let adapter = job && (o.adapters ?? known)[job.provider]
+  let adapter = adapterOf(job, o)
   let request = await latestRequest(g, session)
   if (job && adapter) {
     let ask = { ...job.ask, through: request?.entity.eid ?? job.ask.through }
-    follow(g, session, reading(adapter, ask, o), o, {
+    follow(g, session, reading(adapter, job, o, ask), o, {
       through: String(ask.through),
     }).catch(told(o))
   }
@@ -1077,6 +1106,6 @@ let own = async (g: Graph, session: string, o: Opts) => {
   let path = paths(session, o).out
   if (mtime(path) == null) return null
   let job = await asked(g, session).catch(() => null)
-  let adapter = job && (o.adapters ?? known)[job.provider]
+  let adapter = adapterOf(job, o)
   return adapter ? { path, read: adapter.read } : null
 }

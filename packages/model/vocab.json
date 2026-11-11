@@ -60,7 +60,11 @@
         },
         "api": {
           "type": "string",
-          "description": "the HTTP API it speaks, which names the code that reaches it: `ollama`, or `openai` for an OpenAI-compatible one"
+          "description": "the API it speaks, which names the code that reaches it: over HTTP, `ollama`, or `openai` for an OpenAI-compatible one; for a `process`, the CLI whose command line it takes and whose stream it prints (`claude`, `codex`), its own name where it names none"
+        },
+        "command": {
+          "type": "string",
+          "description": "the program a `process` provider is run as, in place of its CLI's own: a name on the PATH or a path. It is given the command line of the CLI named in `api` and prints that CLI's stream"
         },
         "fallback": {
           "type": "boolean"

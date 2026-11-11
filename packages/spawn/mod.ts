@@ -10,8 +10,10 @@
  * This package connects the three:
  *
  * - **the command** — a `provider` entity whose transport is a command line,
- *   identified by name (`claude`, `codex`), plus the @yaks/session reader that
- *   says what each line of its output means ({@link adapters}).
+ *   the CLI it speaks (its `api`, else its name: `claude`, `codex`) and the
+ *   program it is run as (its `command`, else the CLI's own), plus the
+ *   @yaks/session reader that says what each line of its output means
+ *   ({@link adapters}).
  * - **the run** — {@link start} launches it through @yaks/process (a launcher
  *   that exits immediately, a wrapper in a session of its own),
  *   so the agent outlives the server that started it; {@link follow} reads its
