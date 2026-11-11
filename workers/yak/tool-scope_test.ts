@@ -128,6 +128,7 @@ let fixture = () => {
           : null,
       app: appIn,
       binned: appIn,
+      seats: () => Promise.resolve([]),
       // One snapshot, as directory.ts `page` reads it.
       page: async (
         slug: string,

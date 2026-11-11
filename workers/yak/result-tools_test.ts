@@ -87,6 +87,7 @@ let outsider = {
     ...directory,
     page: () => Promise.resolve({ space, role: null }),
     role: () => Promise.resolve(null),
+    seats: () => Promise.resolve([]),
   },
 } as unknown as Ctx
 let outsiderStore = resultStore(outsider, { space: space.slug, app: app.slug })
