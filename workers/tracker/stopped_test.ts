@@ -257,7 +257,7 @@ let [waitingProbe] = await paced.object.tracker!.graph.get([
 // of the backlog to leave it there.
 let pacing = paced.object.tracker!, asks = 0, ask = pacing.next
 pacing.next = (now) => (asks++, ask(now))
-for (let i = 0; i < 3; i++) await paced.object.ingest(report())
+await paced.deliver(report(), report(), report())
 let pacedAsks = asks, intakeAlarm = await paced.db.getAlarm()
 pacing.next = ask
 paced.at.t = MINUTE
@@ -316,4 +316,43 @@ test("a stopped tracker takes a fixer's marks on its known bugs, and still sets 
   flooded.queued.length = 0
   equal(await flooded.deliver(report()), ['ack'])
   equal(flooded.queued.map((q) => q.delaySeconds), [60])
+})
+
+// A sustained intake flood leaves admitted reports room to group before the
+// window ends. Deferred messages retain their capture and own no new error.
+let intake = await held()
+let admitted = report(), deferred = [report(), report()]
+await intake.deliver(admitted)
+let beforeFlood = await intake.db.getAlarm()
+bounded(intake.db).count({
+  shape: () => 'foreground writes',
+  rowsRead: 0,
+  rowsWritten: 300,
+  returned: 0,
+})
+let floodSaid = await intake.deliver(...deferred)
+let floodQueued = intake.queued.splice(0)
+let afterFlood = await intake.db.getAlarm()
+let pending = await Promise.all(
+  deferred.map((rows) => intake.kept(rows[0].entity.eid)),
+)
+await intake.db.deleteAlarm()
+await intake.object.alarm()
+let [groupedReport] = await intake.object.tracker!.graph.get([
+  admitted[0].entity.eid,
+])
+intake.at.t = MINUTE
+let recovered = await intake.deliver(...floodQueued.map((q) => q.body))
+let retained = await Promise.all(
+  deferred.map((rows) => intake.kept(rows[0].entity.eid)),
+)
+
+test('intake under flood preserves its queued reports and lets admitted errors group', () => {
+  equal(floodSaid, ['ack', 'ack'])
+  equal(floodQueued, deferred.map((body) => ({ body, delaySeconds: 60 })))
+  equal(pending, [false, false])
+  equal(afterFlood, beforeFlood)
+  ok((groupedReport.error as { bug?: string }).bug)
+  equal(recovered, ['ack', 'ack'])
+  equal(retained, [true, true])
 })

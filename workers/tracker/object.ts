@@ -12,6 +12,7 @@ import {
   reserved,
   type Sockets,
   sockets,
+  Stopped,
   stopped,
   storage,
   type Window,
@@ -325,6 +326,15 @@ export class Tracker {
     }
     if (batch(rows).scope != this.scope) {
       throw Error('tracker intake scope mismatch')
+    }
+    // Intake leaves the next quarter for grouping and the second half for
+    // foreground work. A paused delivery keeps grouping's earlier alarm;
+    // only a hard stop moves it to the window's end.
+    let wait = this.#ceiling.under(0.25)
+    if (wait) {
+      let hard = this.#ceiling.refusal(true)
+      if (hard) await this.#soon()
+      throw hard ?? new Stopped(wait, 'written')
     }
     try {
       let tracker = await this.boot()
