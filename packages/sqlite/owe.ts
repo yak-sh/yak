@@ -227,12 +227,15 @@ export let build = (
   driver: Driver,
   stmts: readonly Stmt[],
   sizes: Sizes = SIZES,
+  deferred = false,
 ): Error[] => {
   let names = new Set(catalogue(driver).map((o) => o.name))
-  let owing = !!driver.file && names.has(META)
+  let owing = (!!driver.file || deferred) && names.has(META)
   let now = stmts.filter((s) => {
     if (!owing || s.t != 'create index' || names.has(s.name)) return true
-    if (!names.has(s.on) || !holds(driver, s.on, sizes.big)) return true
+    if (!names.has(s.on) || !holds(driver, s.on, deferred ? 1 : sizes.big)) {
+      return true
+    }
     owe(driver, { kind: 'index', name: s.name, stmt: s })
     return false
   })

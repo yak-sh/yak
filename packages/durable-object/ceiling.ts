@@ -169,8 +169,9 @@ export type Ceiling = {
   /** How long until the object has spent under `share` of every window's
    * rows, read and written, in ms: 0 when it has now. Work that can wait (a
    * store's mover) asks it before it spends more, and leaves the rest of each
-   * window to the object's requests. */
-  under: (share: number) => number
+   * window to the object's requests. `written` reserves a prospective unit;
+   * Infinity means it cannot fit even in an empty window at that share. */
+  under: (share: number, written?: number) => number
   /** Run statements a stopped object must still take: `body`'s own, and
    * those of the work it awaits until it settles. What they cost is told,
    * and stops nothing. */
@@ -304,11 +305,18 @@ export let ceiling = (
     }
     return { wait: Math.max(0, until - at), kind }
   }
-  let under = (share: number) => {
+  let under = (share: number, written = 0) => {
     let at = now(), until = at
     for (let s of live()) {
+      if (written > share * s.written) return Infinity
       if (at - s.since >= s.ms) continue
-      if (KINDS.some((k) => spent(s, k) >= share * s[k])) {
+      if (
+        KINDS.some((k) =>
+          k == 'written' && written
+            ? spent(s, k) + written > share * s[k]
+            : spent(s, k) >= share * s[k]
+        )
+      ) {
         until = Math.max(until, s.since + s.ms)
       }
     }

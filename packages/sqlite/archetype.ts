@@ -86,7 +86,7 @@ let facets = (driver: Driver): string[] => {
 }
 
 /** Which of `tables` each owner in `where` has a row in, in table order. */
-let presence = (
+export let presence = (
   run: Run,
   tables: string[],
   owners: Map<number, string[]>,
@@ -245,13 +245,18 @@ export let reclassifyAll = (driver: Driver, number = false): Backfill =>
  * their owners, plus null assignments, in table-sized scans. No per-owner
  * component census.
  */
-export function backfill(driver: Driver, number = false): Backfill {
+export function backfill(
+  driver: Driver,
+  number = false,
+  assignments = true,
+): Backfill {
   let run: Run = (s) => driver.query(s)
   let counts: Backfill = { entities: 0, archetypes: 0, retired: 0 }
   return unit(driver, () => {
     // The catalog's missing-pointer lookup must seek even while a new store
     // is being classified. This index is part of classification's repair.
     if (
+      assignments &&
       !catalogue(driver).some((o) =>
         o.name == pointerIndex.name || o.name == `${pointerIndex.name}_num`
       )
@@ -345,6 +350,29 @@ export function backfill(driver: Driver, number = false): Backfill {
         run(point(null, byId(id)))
         counts.retired++
       }
+    }
+    if (!assignments) {
+      let owners = new Map<number, string[]>(
+        run(select({
+          cols: [col('id', 'e')],
+          from: table('archetype', 'a'),
+          joins: [cross(table('entity', 'e'))],
+          where: and(
+            eq(col('id', 'e'), col('entity', 'a')),
+            isNull(col('archetype', 'e')),
+          ),
+        })).map((r) => [Number(r.id), []]),
+      )
+      if (owners.size) {
+        presence(
+          run,
+          tables(),
+          owners,
+          (c) => ({ where: oneOf(c, [...owners.keys()]) }),
+        )
+        minter(run, driver, cache, ids, number, counts).assign(owners)
+      }
+      return counts
     }
     // Spelled out a list at a time, each member a seek on the pointer index.
     for (let i = 0; i < stale.length; i += 512) {

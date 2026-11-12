@@ -119,6 +119,7 @@ import {
 } from './archetype.ts'
 import { componentTables, objects, shape } from './physical.ts'
 import { analyze, build, forgo, reshape, type Sizes } from './owe.ts'
+import { maintenance } from './maintenance.ts'
 import { plan } from './plan.ts'
 import { births, patch, prune, remove, revive, spines } from './write.ts'
 import { burying } from './buried.ts'
@@ -358,6 +359,8 @@ export type Store = {
    * also reported: a table whose rows do not fit its new shape, and a unique
    * index those rows break (./owe.ts `build`) */
   install: (beside?: Stmt[]) => Error[]
+  /** Advance one deferred schema window admitted by its estimated writes. */
+  maintain: (admit: (written: number) => boolean) => boolean
   /** make the tables of `comps` (every component of the vocabulary, left
    * out), with all that rests on them, as a first write naming them would
    * (./raise.ts): for a writer that fills a table in raw SQL rather than
@@ -415,6 +418,8 @@ export type Opts = BindOpts & {
    * Stores that need counts immediately may seed them during installation;
    * other stores never pay for upkeep until a count actually asks for it. */
   counts?: 'lazy' | 'eager'
+  /** Leave row-dependent work for maintain(), while reads serve the standing rows. */
+  deferred?: boolean
 
   /** How big a table is before a file owes its schema work, and the rows a
    * window does of it (./owe.ts `SIZES`): what a test shrinks. */
@@ -556,9 +561,15 @@ export let storage = (
   let owing = () => book?.owed() ?? []
   // All handles on this connection see the open writer's rows, including a
   // graph's scope reads through the outer store rather than its tx handle.
+  let upkeep = maintenance(driver, () => numbered)
+  let migrating = () => !!base.deferred && upkeep.pending()
+  let unindexed = Object.assign(() => undefined, {
+    pending: { ids: [], matching: () => [] },
+  })
   let opts = () => ({
     ...effective(),
-    ...book?.owed().length
+    ...migrating() ? { archetypes: unindexed } : {},
+    ...!migrating() && book?.owed().length
       ? { archetypes: catalog(driver, () => pendingShapes(driver, book)) }
       : {},
   })
@@ -567,11 +578,21 @@ export let storage = (
   let unsettled: Unsettled | undefined = book
     ? {
       wrote: book.wrote,
-      held: (rows) =>
-        new Map(rows.flatMap(({ eid, id, pointed }) => {
+      held: (rows) => {
+        let known = new Map(rows.flatMap(({ eid, id, pointed }) => {
           let tables = book.held(eid, pointed)
-          return tables ? [[id, tables]] : []
-        })),
+          return tables ? [[id, tables] as const] : []
+        }))
+        let missing = rows.filter((r) => !known.has(r.id)).map((r) => r.id)
+        if (missing.length && migrating()) {
+          for (let [id, tables] of upkeep.held(missing)) {
+            known.set(id, [
+              ...tables,
+            ])
+          }
+        }
+        return known
+      },
     }
     : base.held && {
       // No pointer says what an entity held then.
@@ -1063,7 +1084,7 @@ export let storage = (
       { name: 'Unpointed', eids: eids.slice(0, 8) },
     ))
   let mend = (eids: string[]) => {
-    lost(eids)
+    if (!migrating()) lost(eids)
     memo.writes(
       () => unit(driver, () => classify(driver, eids, numbered)),
       () => eids,
@@ -1165,7 +1186,7 @@ export let storage = (
         // entity the write does not name; one a store shows no reader of.
         (minted) => classified && minted,
       )
-      if (unknown.length) lost(unknown)
+      if (unknown.length && !migrating()) lost(unknown)
       for (let eid of [...dead, ...owed]) l.pointed(eid)
     }
     return {
@@ -1179,7 +1200,9 @@ export let storage = (
             return mending(() => tx.read(query, signalled, comps))
           }
           let o = asking(signalled)
-          let archetypes = catalog(driver, pendingShapes(driver, book))
+          let archetypes = migrating()
+            ? unindexed
+            : catalog(driver, pendingShapes(driver, book))
           let bound = { ...opts(), ...o, archetypes }
           return metered(
             () =>
@@ -1250,6 +1273,8 @@ export let storage = (
   // (./follow.ts), never by an operation.
   // In-memory stores are private scratch values and may prepare themselves.
   let ready = false
+  let prepare = () =>
+    base.deferred ? upkeep.prepare() : backfill(driver, numbered)
   let install = (beside: Stmt[] = []): Error[] => {
     let left: Error[] = []
     let mark = marked
@@ -1273,7 +1298,7 @@ export let storage = (
       let seal = () => {
         epoch(driver)
         recorded(driver)
-        if (keeping) backfill(driver, numbered)
+        if (keeping) prepare()
         receipt = {
           schema: mark(
             componentTables(
@@ -1316,6 +1341,7 @@ export let storage = (
               driver,
               holds(driver, vocab, indexed(vocab, true)),
               base.sizes,
+              base.deferred,
             ),
             ...besides.length ? versioned(driver, vocab) : [],
           ]
@@ -1344,7 +1370,7 @@ export let storage = (
         unit(driver, () => {
           epoch(driver)
           recorded(driver)
-          if (keeping) backfill(driver, numbered)
+          if (keeping) prepare()
           if (fresh || clean) {
             receipt = {
               schema: mark(
@@ -1403,6 +1429,7 @@ export let storage = (
       : statements(driver),
     checks: diagnostics(driver),
     migrations: migrations(driver),
+    maintain: upkeep.work,
     revision: () => revision(driver, 'data'),
     ...driver.watch
       ? {

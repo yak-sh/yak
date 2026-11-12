@@ -7,6 +7,7 @@
 
 import type { Opts, Store } from '@yaks/sqlite'
 import { storage as bind } from '@yaks/sqlite'
+import { bounded } from './ceiling.ts'
 import type { Vocab } from '@yaks/vocab'
 import {
   driver,
@@ -40,4 +41,22 @@ export let storage = (
   base: Opts = {},
   observe?: Observe,
   measure?: Measure,
-): Store => bind(driver(durable, observe, measure), vocab, base)
+): Store & { upkeep: () => number | null } => {
+  let store = bind(driver(durable, observe, measure), vocab, {
+    deferred: true,
+    ...base,
+  })
+  let bound = bounded(durable)
+  return {
+    ...store,
+    upkeep: () => {
+      let wait = Infinity
+      let worked = store.maintain((written) => {
+        let next = bound.under(written > 10_000 ? 0.9 : 0.5, written)
+        wait = Math.min(wait, next)
+        return next == 0
+      })
+      return worked ? 0 : Number.isFinite(wait) ? wait : null
+    },
+  }
+}

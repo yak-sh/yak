@@ -170,6 +170,7 @@ export let operatorStore = (
       ...options,
     }),
     marks: meta(sql),
+    upkeep: store.upkeep,
   }
 }
 
@@ -178,6 +179,7 @@ export let operatorStore = (
  * to keep. */
 export type OperatorStore = ReturnType<typeof operatorGraph> & {
   marks?: Meta
+  upkeep?: () => number | null
 }
 
 /** The Operator's work graph, independent of its durable storage boundary. */
@@ -328,9 +330,16 @@ export let SLICE = 10_000
  * or null when neither is.
  */
 export let drain = async (
-  { g, fx, marks }: Pick<OperatorStore, 'g' | 'fx' | 'marks'>,
+  { g, fx, marks, upkeep }: Pick<
+    OperatorStore,
+    'g' | 'fx' | 'marks' | 'upkeep'
+  >,
   until = Date.now() + SLICE,
 ): Promise<number | null> => {
+  let upkeepWait = upkeep?.()
+  let upkeepAt = upkeepWait == null
+    ? null
+    : Date.now() + Math.max(1000, upkeepWait)
   await phoneTexts(g)
   await channeled(g, marks)
   // A firing is the store's own write, as every other write the Operator
@@ -355,7 +364,12 @@ export let drain = async (
   let wake = (await due(g, now)).length
     ? now + (refused.length ? RETRY : 1000)
     : await soonest(g, now)
-  return run == null ? wake : wake == null ? run : Math.min(run, wake)
+  let next = run == null ? wake : wake == null ? run : Math.min(run, wake)
+  return upkeepAt == null
+    ? next
+    : next == null
+    ? upkeepAt
+    : Math.min(upkeepAt, next)
 }
 
 /** This process, as the retention pass's lease names its holder: minted at
