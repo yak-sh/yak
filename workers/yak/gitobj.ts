@@ -141,6 +141,7 @@ type Deploy = {
   files: Record<string, string>
   at: string
   by: Eid | null
+  message: string
 }
 
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
@@ -168,6 +169,7 @@ let deployOf = (b: Bundle): Deploy | null => {
       files: JSON.parse(str(d.files) || '{}') as Record<string, string>,
       at: str(made?.at),
       by: (id(made?.by) || null) as Eid | null,
+      message: str(d.message).trim(),
     }
   } catch {
     return null
@@ -227,7 +229,9 @@ let landing = async (
   let at = await placed(dir, env, deploy.app)
   if (!at) return null
   let recorded = repository(at.repo)
-  let message = `deploy ${deploy.version}\n`
+  // What the deployer wrote of the release is its commit message, whole; a
+  // release that said nothing is named by its number.
+  let message = `${deploy.message || `deploy ${deploy.version}`}\n`
   let repo: Repo = {
     refs: writes(dir),
     objects: graphOf(env.STORE),

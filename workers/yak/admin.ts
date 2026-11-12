@@ -705,6 +705,8 @@ export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
     ctx.home = home ? refOf(d, home) : undefined
     ctx.from = from ? refOf(d, from) : undefined
     ctx.deploys = deploys.length
+    ctx.message = deploys.find((v) => v.version == r.app!.version)?.message ??
+      undefined
     ctx.visits = visits?.total ?? null
     ctx.visiting = visits?.daily.length
       ? { from: visits.daily[0].day, values: visits.daily.map((d) => d.views) }

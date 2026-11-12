@@ -123,6 +123,10 @@
           "type": "string",
           "description": "the source release this installed copy came from"
         },
+        "message": {
+          "type": "string",
+          "description": "everything this release changed and why, as whoever released it wrote it, the way a commit message says it; agents working the app read it before changing it"
+        },
         "reload": {
           "type": "string",
           "enum": [

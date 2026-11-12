@@ -280,11 +280,14 @@ error was fixed.
 
     app_versions(app, space?)
 
-Lists every deploy, newest first, with when it went out and what changed in it.
-An app keeps its last **20**.
+Lists the deploys, newest first, with when each went out, which files it
+changed, and under it the `message` its deployer wrote of what it changed and
+why. An app keeps every deploy; the list shows the newest **20**.
 
     yourname/recipes: 3 versions
     - v3 (live) 2026-08-14T10:01:00.000Z — changed index.html
+      Sorts recipes by the date they were added, newest first, because the
+      person kept scrolling to find this week's.
     - v2 2026-08-13T18:40:12.000Z — restored v1, changed index.html, style.css
     - v1 2026-08-13T09:12:44.000Z — 4 files
 

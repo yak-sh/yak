@@ -303,14 +303,19 @@ import { aloud, peopleOwned, shown } from './people.ts'
 import {
   addressed,
   BUILT,
+  crossed,
   deployedOver,
   fenced,
   type Files,
+  indented,
   KEEP,
+  noted,
   own,
   pins,
+  recent,
   record,
   releaseOf,
+  releases,
   same,
   sha256,
   unfenced,
@@ -1026,6 +1031,7 @@ let published = async (
   preserve = false,
   accepted: string[] = [],
   recompile = false,
+  message?: string,
 ) => {
   let c = ctx.clock ?? clock()
   let blobs = files.files
@@ -1500,19 +1506,22 @@ let published = async (
         version,
         pinned,
         worker,
-        staged,
-        standing.source,
-        standing.draft,
-        fence,
-        sowed.length > 0,
-        reload,
-        target,
-        pointer,
-        ownSpeaks(
-          dirPart.storeName(space, app),
-          appDoc(source ?? {}, vocabFile),
-        ),
-        recompile ? standing.draft ?? null : null,
+        {
+          homes: staged,
+          sourceWas: standing.source,
+          draftWas: standing.draft,
+          fenceWas: fence,
+          seeded: sowed.length > 0,
+          reload,
+          target,
+          declaration: pointer,
+          speaks: ownSpeaks(
+            dirPart.storeName(space, app),
+            appDoc(source ?? {}, vocabFile),
+          ),
+          draft: recompile ? standing.draft ?? null : null,
+          message,
+        },
       ),
   )
   // Recording the release changed the directory epoch. Replace the app,
@@ -1673,6 +1682,7 @@ let released = async (
     expectedVersion,
     recompile = false,
     fence: drew,
+    message,
   }: {
     target?: Version
     reload?: Reload
@@ -1687,6 +1697,8 @@ let released = async (
     /** The fence to take, drawn and kept by a caller that can die holding
      * it (versions.ts `drawn`). */
     fence?: string
+    /** What the release changed and why (app_deploy `message`). */
+    message?: string
   } = {},
 ): Promise<
   { version: number; said: string; serves?: string; review?: DeployReview }
@@ -1804,6 +1816,7 @@ let released = async (
       preserve,
       accepted,
       recompile,
+      message,
     )
     released = true
     await c.time('purge', () => purged)
@@ -3558,6 +3571,7 @@ let OURS: Row[] = [
           p in files ? d.view.read(at(d, p)) : Promise.resolve(null)
         )
         let { dir, source } = sourceOnly(config, paths)
+        let said = noted(all)
         // Every fact in the value said in the words too: claude.ai's model
         // reads only the words, and app_deploy's base is this version.
         return {
@@ -3577,6 +3591,7 @@ let OURS: Row[] = [
               ? `The draft differs from live v${version}; ` +
                 `app_deploy(base: ${version}) releases it.`
               : `These are live v${version}, with nothing unreleased.`,
+            ...said.length ? ['', recent(said)] : [],
           ].join('\n'),
           space,
           value: {
@@ -3584,6 +3599,7 @@ let OURS: Row[] = [
             unreleased,
             version,
             ...dir && { serves: dir, sourceOnly: source },
+            releases: releases(said),
           },
         }
       }
@@ -3600,15 +3616,19 @@ let OURS: Row[] = [
           value: { version: app.version ?? 0 },
         }
       }
+      // The releases' own words come with it: what the agents before this one
+      // changed and why, so it builds on them rather than over them.
       if (op == 'read') {
-        let d = await draft()
+        let [d, all] = await Promise.all([draft(), versions(ctx.dir, app)])
         let asked = [...list(args.path, 'path'), ...list(args.paths, 'paths')]
           .map(named)
         let paths = asked.length ? asked : own(Object.keys(d.files)).sort()
         let read = await peruse(paths, (path) => d.view.open(at(d, path)))
         let version = app.version ?? 0
+        let said = noted(all)
         return {
-          text: perusal(read, version),
+          text: [perusal(read, version), recent(said)].filter(Boolean)
+            .join('\n\n'),
           space,
           value: {
             files: read.files.map(({ path, sha, size }) => ({
@@ -3618,6 +3638,7 @@ let OURS: Row[] = [
             })),
             unread: read.unread,
             version,
+            releases: releases(said),
           },
         }
       }
@@ -4063,6 +4084,12 @@ let OURS: Row[] = [
           description:
             'release from a stale base after reviewing what it would remove or replace',
         },
+        message: {
+          type: 'string',
+          description:
+            'everything this release changes and why, in full, as a commit ' +
+            'message says it: every agent that works on the app next reads it',
+        },
       },
       required: ['app'],
     },
@@ -4086,6 +4113,9 @@ let OURS: Row[] = [
       if (args.confirm != null && typeof args.confirm != 'boolean') {
         throw refuse('invalid', 'confirm must be a boolean')
       }
+      if (args.message != null && typeof args.message != 'string') {
+        throw refuse('invalid', 'message must be text')
+      }
       let { version, said, serves, review } = await released(
         ctx,
         space,
@@ -4096,6 +4126,7 @@ let OURS: Row[] = [
           reload,
           base: base as number | undefined,
           confirm: args.confirm as boolean | undefined,
+          message: (args.message as string | undefined)?.trim() || undefined,
         },
       )
       if (review) {
@@ -4274,7 +4305,7 @@ let OURS: Row[] = [
               v.at ? ` ${v.at}` : ''
             } — ${whatChanged(base?.files ?? null, v.files)}${
               over && over != all[i + 1] ? ` (over v${over.version})` : ''
-            }`
+            }${v.message ? `\n${indented(v.message)}` : ''}`
           }),
           ...moves.sort((a, b) =>
             String(b.switched?.at).localeCompare(String(a.switched?.at))
@@ -6124,14 +6155,20 @@ let OURS: Row[] = [
       }
       // A release of the copy, in the installer's own space: the components
       // its vocab.json declares planted in its store, its tools listed under
-      // its slug, its worker.js uploaded as its own script.
+      // its slug, its worker.js uploaded as its own script. It says what the
+      // publisher's release said.
+      let theirs = await ctx.dir.deploys(offer.app)
       let out = await released(
         ctx,
         space,
         app,
         who,
         appStore(ctx.env.STORE, space, app, ctx.env),
-        { preserve: true, accepted },
+        {
+          preserve: true,
+          accepted,
+          message: crossed(theirs, version - 1, version) || undefined,
+        },
       )
       return {
         text:
@@ -6199,9 +6236,9 @@ let OURS: Row[] = [
       if (said.source != null) {
         await fits(ctx, space, app, store, said.source, said.file, accepted)
       }
-      let crossed = await ctx.dir.deploys(from.app)
+      let theirs = await ctx.dir.deploys(from.app)
       let reload: Reload | undefined = to < was ||
-          crossed.some((v) =>
+          theirs.some((v) =>
             v.version > was && v.version <= to && v.reload == 'required'
           )
         ? 'required'
@@ -6219,7 +6256,14 @@ let OURS: Row[] = [
         app,
         who,
         store,
-        { reload, preserve: true, accepted },
+        // What the copy gained is what the publisher's releases it crossed
+        // said they changed.
+        {
+          reload,
+          preserve: true,
+          accepted,
+          message: crossed(theirs, was, to) || undefined,
+        },
       )
       await ctx.dir.apply({
         entities: [{ entity: { eid: app.eid }, installed: { version: to } }],

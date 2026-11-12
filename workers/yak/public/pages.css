@@ -614,6 +614,11 @@
   .Directory_Facts > .Fields_Row {
     grid-template-columns: 10rem minmax(0, 1fr);
   }
+  /* A release's message keeps the lines its deployer wrote. */
+  .Directory_Said {
+    margin: 0;
+    white-space: pre-wrap;
+  }
   .Directory_Facts .Fields_Label {
     font-weight: 700;
     color: var(--muted);

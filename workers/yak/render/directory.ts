@@ -439,6 +439,8 @@ let appPage: Renderer = {
     let address = str(ctx.address)
     let from = ctx.from as Ref | undefined
     let deploys = ctx.deploys as number | undefined
+    // The live release's message, as whoever released it wrote it.
+    let message = ctx.message as string | undefined
     let visits = ctx.visits as number | null | undefined
     return facts(h, [
       ['Address', h('a', { href: `https://${address}/` }, address)],
@@ -453,6 +455,10 @@ let appPage: Renderer = {
             u.deployed ? [', the last ', stamped(h, ctx, u.deployed)] : null,
           ]
           : '',
+      ],
+      [
+        'What it changed',
+        message ? h('p', { class: 'Directory_Said' }, message) : '',
       ],
       [
         'Published',

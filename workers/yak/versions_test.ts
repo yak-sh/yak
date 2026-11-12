@@ -381,8 +381,7 @@ test('a deploy never changes the stored release it replaces', async () => {
     2,
     {},
     '',
-    [],
-    old,
+    { sourceWas: old },
   )
   assertEquals(rows().find((v) => v.version == 1)?.source, null)
   assertEquals(rows().find((v) => v.version == 2)?.source, next)

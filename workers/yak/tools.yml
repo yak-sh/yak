@@ -211,7 +211,11 @@ app_files:
     several files, or with neither every text file in the app, in one call:
     each under its path and SHA-256, up to 64 KB in all, naming each file
     left out and why (as data too: files: [{path, sha, size}], unread:
-    [{path, why}] and version). delete confirms the path. Replaced or
+    [{path, why}] and version). list and a read of several files or all of
+    them end with the messages of the newest releases, whole: what each
+    changed and why, as whoever deployed it wrote it (as data too:
+    releases: [{version, at, message}]). Read them before changing the app.
+    delete confirms the path. Replaced or
     deleted bytes are kept for 30 days.
     To undo any write, patch, fetch or delete: op: history with path lists
     them newest first (sha256, size, when, by whom), and op: restore puts
@@ -387,7 +391,12 @@ app_deploy:
   description: >-
     Release the app's staged files as a version: files, vocabulary and
     worker begin serving together, and error reports name this version.
-    Before releasing, check the private draft with app_preview at widths
+    Always send message: everything this release changes and why, in full,
+    written from the change you just made, as a commit message says it. It
+    is kept with the version, and every agent or Operator working on the app
+    next reads it before changing anything (app_files op: list and read show
+    the newest releases' messages; app_versions lists them), so agents on one
+    app build on each other's changes rather than over them. Before releasing, check the private draft with app_preview at widths
     390 and 1280; inspect the returned screenshots, accessibility problems, console messages and
     page errors and fix the files. No local computer or browser is needed.
     Send base as the live version the files were made on (app_files op: list
@@ -465,7 +474,7 @@ app_versions:
     done: 'Listed the versions of %{app}'
   description: >-
     List the newest 20 kept deploys, newest first, their dates and file changes,
-    which version is live, and recorded pointer moves (from, to, when, by whom
+    each release's message (what it changed and why), which version is live, and recorded pointer moves (from, to, when, by whom
     and through which session). All deploys are kept; the total is reported,
     and any kept version can be selected by app_rollback. Documentation:
     https://yaks.app/docs/errors.

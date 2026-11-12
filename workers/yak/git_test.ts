@@ -81,6 +81,7 @@ let deploy = async (
   app: App,
   version: number,
   files: Record<string, string>,
+  message?: string,
 ) => {
   let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
   let blobs = r2Objects(env.BLOBS)
@@ -94,7 +95,7 @@ let deploy = async (
   // Each deploy is a new request; record guards the snapshot it was given.
   let space = (await dir.space('ada'))!
   let current = (await dir.app(space, app.slug))!
-  await record(dir, WHO, current, version, manifest, '')
+  await record(dir, WHO, current, version, manifest, '', { message })
   await settled()
   return manifest
 }
@@ -187,6 +188,16 @@ test('a deploy mints one commit whose tree is the manifest', async () => {
     `.entity.eid=${page.oid}`,
   )
   assertEquals((blob.blob as { sha: string }).sha, manifest['index.html'])
+})
+
+test('a release that says what it changed commits with those words', async () => {
+  let p = platform('a probe secret')
+  let { app, git } = await standing(p.env)
+  let said = 'Sorts recipes newest first\n\nThe person kept scrolling to ' +
+    "find this week's."
+  await deploy(p, app, 1, { 'index.html': '<h1>hi</h1>\n' }, said)
+  let { body } = await bodyOf(p.env, git, (await headOf(p.env, app))!)
+  assert(body.endsWith(`\n\n${said}\n`), body)
 })
 
 // Every store notes its own breaks where it notes an app's (graph.ts

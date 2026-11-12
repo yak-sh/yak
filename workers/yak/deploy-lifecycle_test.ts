@@ -68,12 +68,12 @@ let fixture = async (env: Env, dir: Directory) => {
       version,
       files,
       '',
-      [],
-      app.source,
-      app.draft,
-      app.fence,
-      false,
-      reload,
+      {
+        sourceWas: app.source,
+        draftWas: app.draft,
+        fenceWas: app.fence,
+        reload,
+      },
     )
   }
   return { ctx, dir, args, write, history, kept }

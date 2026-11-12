@@ -58,6 +58,9 @@ export type Version = {
   script?: string
   source?: string | null
   reload?: Reload | null
+  // Everything the release changed and why, as whoever released it wrote it
+  // (app_deploy `message`): what the next agent at the app reads first.
+  message?: string | null
 }
 
 // How many versions a list shows at once, and the floor under a path's history
@@ -249,6 +252,50 @@ export let whatChanged = (before: Files | null, after: Files) => {
   return before ? 'no files changed' : `${n} ${n == 1 ? 'file' : 'files'}`
 }
 
+/** A message set under the line that names its version, each line indented
+ * so a list keeps its shape. */
+export let indented = (message: string) =>
+  message.split('\n').map((line) => line ? `  ${line}` : line).join('\n')
+
+/** How many of the newest releases' messages an agent reading the app is
+ * shown, whole: the changes it most likely has to build on. */
+export let RECENT = 3
+
+/** The newest releases that say what they changed, newest first: the
+ * changes an agent about to change the app most likely builds on. */
+export let noted = (all: Version[], n = RECENT) =>
+  all.slice(0, n).filter((v) => v.message)
+
+/** Those releases' messages, whole, in the words an agent reads: what each
+ * changed and why, so agents working one app stay in step. Empty where none
+ * says anything. */
+export let recent = (said: Version[]) =>
+  said.length
+    ? [
+      'What the latest releases changed, as their deployers wrote it:',
+      ...said.map((v) =>
+        `v${v.version}${v.at ? ` ${v.at}` : ''}:\n${v.message}`
+      ),
+    ].join('\n\n')
+    : ''
+
+/** The same releases as a tool's value carries them. */
+export let releases = (said: Version[]) =>
+  said.map(({ version, at, message }) => ({ version, at, message }))
+
+/** What a copy's release says when it goes out from its publisher's: the
+ * messages of the publisher's versions it crossed, after `was` up to `to`,
+ * oldest first, each under its version where there are several (app_install,
+ * app_update). */
+export let crossed = (theirs: Version[], was: number, to: number) => {
+  let said = theirs
+    .filter((v) => v.message && v.version > was && v.version <= to)
+    .sort((a, b) => a.version - b.version)
+  return said.length == 1
+    ? said[0].message!
+    : said.map((v) => `v${v.version}:\n${v.message}`).join('\n\n')
+}
+
 // Two versions with the same files are the same release: the manifest is the
 // whole of what a version IS.
 export let same = (a: Files, b: Files) => {
@@ -313,19 +360,36 @@ export let record = async (
   version: number,
   files: Files,
   worker: string,
-  homes: { app: App; release: string }[] = [],
-  sourceWas = app.source,
-  draftWas = app.draft,
-  fenceWas = app.fence,
-  seeded = false,
-  reload?: Reload,
-  target?: Version,
-  declaration = String(version),
-  speaks?: Record<string, number>,
-  // The draft a release leaves: none, its edits released, except where the
-  // release is the live version made again (tools.ts `recompileRelease`),
-  // whose files are the ones the draft was laid over.
-  draft: string | null = null,
+  {
+    homes = [],
+    sourceWas = app.source,
+    draftWas = app.draft,
+    fenceWas = app.fence,
+    seeded = false,
+    reload,
+    target,
+    declaration = String(version),
+    speaks,
+    draft = null,
+    message,
+  }: {
+    homes?: { app: App; release: string }[]
+    sourceWas?: string | null
+    draftWas?: string | null
+    fenceWas?: string | null
+    seeded?: boolean
+    reload?: Reload
+    target?: Version
+    declaration?: string
+    speaks?: Record<string, number>
+    /** The draft a release leaves: none, its edits released, except where
+     * the release is the live version made again (tools.ts
+     * `recompileRelease`), whose files are the ones the draft was laid
+     * over. */
+    draft?: string | null
+    /** Everything the release changed and why, as its deployer wrote it. */
+    message?: string
+  } = {},
 ) => {
   let all = await dir.deploys(app)
   let prior = all.find((v) => v.version == app.version)
@@ -384,6 +448,7 @@ export let record = async (
           source: app.source,
           // Optional is derived; the stored mark can only raise severity.
           ...reload == 'required' ? { reload } : {},
+          ...message ? { message } : {},
         },
       }],
       {

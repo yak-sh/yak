@@ -142,6 +142,11 @@ those files. The answer names each file it left out and why: not text, no such
 file, or past the 64 KB. `paths` reads those in another call, and `path` reads
 one whole, as its text alone.
 
+Both `list` and a read of several files end with **what the newest releases
+changed and why**: the `message` of each of the last three releases that wrote
+one, whole. Read it before changing the app: it is how the agent or Operator
+that released before you tells you what it did and what it was for.
+
 **Every write reports what was stored**, so a file you wrote out by hand is
 checked in the same call, before the app serves it:
 
@@ -262,14 +267,28 @@ it.
 
 ## Releases and reload notices for open pages
 
-`app_deploy` makes the draft a new release. An already-open page keeps its
-release's file URLs, but its data is live: a newer release may change the
-contract that page uses. The platform checks for a new release when one is
-pushed through the app's own socket, when that socket opens or reconnects, when
-the page becomes visible again, and on a persisted `pageshow` (returning from
-the browser's back-forward cache). The return checks run at most once a minute.
-A page with no socket that never hides does not learn of a release until one of
-those moments.
+`app_deploy` makes the draft a new release. **Always send `message`**:
+everything the release changes and why, in full, written from the change you
+just made, as a commit message says it. Other agents and the space's Operator
+work on the same app, and the message is how they learn what you changed:
+`app_files` shows the newest messages to whoever reads the app next,
+`app_versions` lists them, and the app's git history uses each as its commit
+message.
+
+    app_deploy(app: 'church', base: 19, message: `Adds a Christmas services
+    page and links it from the home page's menu.
+
+    The church asked for one page listing the Christmas Eve and Christmas Day
+    services; it reads the service rows, so new ones show up without a deploy.
+    The menu now has five entries, so it wraps to two lines on a phone.`)
+
+An already-open page keeps its release's file URLs, but its data is live: a
+newer release may change the contract that page uses. The platform checks for a
+new release when one is pushed through the app's own socket, when that socket
+opens or reconnects, when the page becomes visible again, and on a persisted
+`pageshow` (returning from the browser's back-forward cache). The return checks
+run at most once a minute. A page with no socket that never hides does not learn
+of a release until one of those moments.
 
 The reload level is derived by **comparing the page's version with the newest
 version**, not just from the last deploy:

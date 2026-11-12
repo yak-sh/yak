@@ -769,6 +769,7 @@ export type Row = {
     reload?: Reload | null
     lenses?: Record<string, number>
     speaks?: Record<string, number>
+    message?: string | null
   }
   restored?: {
     app: Id
@@ -1584,6 +1585,7 @@ export let deployOf = (r: Row) => ({
   script: r.deploy!.script ?? '',
   source: r.deploy!.source ?? null,
   reload: r.deploy!.reload ?? null,
+  message: r.deploy!.message ?? null,
   lenses: r.deploy!.lenses as Record<string, number> | undefined,
   speaks: r.deploy!.speaks as Record<string, number> | undefined,
 })
