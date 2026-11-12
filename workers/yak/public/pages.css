@@ -766,20 +766,6 @@
   .Talk_Main {
     container: workspace / inline-size;
   }
-  /* A new chat (operator-page.ts `chatPage`): the greeting, the box and the
-     ways to start, held together in the middle of the window. */
-  .Talk_Main-new .Talk_Column {
-    flex: none;
-    margin-top: auto;
-    padding-bottom: 1rem;
-  }
-  .Talk_Main-new .Talk_Hello {
-    padding-top: 0;
-  }
-  .Talk_Main-new .Talk_Box {
-    position: static;
-    padding-bottom: .75rem;
-  }
   /* A newcomer's address, asked for over the chat (newcomer.ts). */
   .Talk_Keep {
     display: grid;
@@ -898,13 +884,14 @@
   .Support_Input {
     width: 100%;
   }
+  /* A new chat's ways to start (operator-page.ts `chatPage`), just over the
+     box, which sits at the foot as in any chat. */
   .Talk_Starts {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
     gap: .5rem;
-    margin-bottom: auto;
-    padding-bottom: 2rem;
+    padding-bottom: .5rem;
   }
   /* An app open beside the chat (operator-page.ts `canvas`): a third column
      the height of the window, held in place while the chat scrolls, the app

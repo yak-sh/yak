@@ -1716,8 +1716,6 @@ let talkPage = (
     waiting: number
     current: string[]
     main: Node
-    // the main's own modifier, beside `Talk_Main`
-    kind?: string
     // where the skip link goes, and what it says
     skip: [string, string]
     script?: string
@@ -1749,7 +1747,7 @@ let talkPage = (
         h(
           'div',
           {
-            class: page.kind ? `Talk_Main ${page.kind}` : 'Talk_Main',
+            class: 'Talk_Main',
             id: 'content',
           },
           h(
@@ -1887,8 +1885,8 @@ let later = (at: string, here: string, waits: boolean): List => ({
  * what it is doing now under it; the box to write in at the foot, with Stop
  * while it works; and beside it what needs the person (talk-beside.ts),
  * whichever conversation is open. `open` is a task, a request no task has
- * taken yet, or `new`, which greets the person by name and under the box
- * offers a few ways to start.
+ * taken yet, or `new`, which greets the person by name and over the box
+ * offers a few ways to start, the box where it always sits.
  *
  * Beside it, the app the address names (`chosen`, the side's `aboutPath`),
  * of those the person may open, and no other. With none named, the app the
@@ -1966,7 +1964,6 @@ export let chatPage = async (
     status: fresh || talked.title ? 200 : 404,
     waiting: news.waiting,
     current: [open, talked.task],
-    kind: fresh ? 'Talk_Main-new' : '',
     lists,
     skip: fresh || talked.title
       ? ['#ask', 'Skip to the message box']
@@ -1977,17 +1974,6 @@ export let chatPage = async (
       newcomer ? keepCard(here) : null,
       talked.helper ? helperCard(talked.helper, operator) : null,
       talked.html ? column(talked.html) : column('', greeting),
-      fresh || talked.title
-        ? alertsOffer(
-          at,
-          who.person ? pushKey(env) : null,
-          alerting == 'push',
-          counted(lists),
-        )
-        : null,
-      fresh || talked.title
-        ? composer(env, at, here, operator, app, !!talked.helper, fresh)
-        : null,
       fresh && !app
         ? h(
           'div',
@@ -1998,6 +1984,17 @@ export let chatPage = async (
           },
           starts(operator, beside.apps),
         )
+        : null,
+      fresh || talked.title
+        ? alertsOffer(
+          at,
+          who.person ? pushKey(env) : null,
+          alerting == 'push',
+          counted(lists),
+        )
+        : null,
+      fresh || talked.title
+        ? composer(env, at, here, operator, app, !!talked.helper, fresh)
         : null,
     ],
     // What it is doing now and the helpers it set going, in the bar

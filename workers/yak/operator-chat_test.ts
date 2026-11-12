@@ -352,8 +352,15 @@ test('the side holds the space, the Operator, Updates, a few apps and Manage', (
   assertEquals(admin.to.Admin, '/admin')
 })
 
-test('a new chat greets the person by name, with ways to start that fill the box', () => {
+test('a new chat greets the person by name, with ways to start over the box', () => {
   let { document } = greeted
+  // The ways to start come before the box, which keeps its place at the foot.
+  assertEquals(
+    [...document.querySelectorAll('.Talk_Starts, .Talk_Box')].map((n) =>
+      n.matches('.Talk_Box')
+    ),
+    [false, true],
+  )
   assertEquals(
     document.querySelector('.Talk_Hello h2')?.textContent,
     'What can I do for you, Ada?',
