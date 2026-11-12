@@ -1625,8 +1625,9 @@ let published = async (
       (declared.length ? `\ncommands: ${declared.join(', ')}` : '') +
       (planted.length ? `\ncomponents: ${planted.join(', ')}` : '') +
       // The documentation an agent will not find: each component says what
-      // it is and where a person sees it, or only its name (D-162751).
-      unwritten(manifest, vocabFile).map((one) => `\n${one}`).join('') +
+      // it is and where a person sees it, or only its name (D-162751). A word
+      // another app homes is documented there, so only this app's own count.
+      unwritten(split.mine, vocabFile).map((one) => `\n${one}`).join('') +
       // The data the app came with, said once — the deploy after this one
       // finds the mark and seeds nothing.
       (sowed.length

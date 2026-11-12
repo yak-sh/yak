@@ -1074,6 +1074,8 @@ test('a word the space already has is used where it lives', async () => {
     )
     assertStringIncludes(second, 'components: loan')
     assertEquals(second.includes('components: book'), false)
+    // The reading list documents `book`; the lending app owes only `loan`.
+    assertStringIncludes(second, 'no description yet: loan — ')
 
     // A book written through the lending app lands in the reading list's
     // store, because that is where the word lives.
