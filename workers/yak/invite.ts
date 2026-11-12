@@ -6,12 +6,19 @@
 // into a stranger's agent by naming the stranger's address.
 //
 // The letter carries a link sealed under the session secret (lib/token.ts)
-// naming the invitation, and the click is accepted only from a browser signed
-// in as the person it names. Both halves matter: the seal keeps the link out of
-// the inviter's hands, since only the letter ever holds it, so a page of theirs
-// cannot accept on the invitee's behalf; the session keeps a forwarded letter
-// from seating whoever opened it. Somebody not signed in is asked to sign in
-// with the invited address, and the code letter brings them back here.
+// naming the invitation. The seal keeps the link out of the inviter's hands,
+// since only the letter ever holds it, so a page of theirs cannot accept on
+// the invitee's behalf. And only the invited address receives the letter, so
+// following its link proves that address the way a sign-in letter's link does
+// (link.ts, T-162634): for `DAYS` after it went, the link signs its holder in
+// as the person it names, creating their account if they are new, and accepts.
+// A browser already signed in as them accepts on opening it; anybody else is
+// shown one button, and the press does both (identity.ts `POST /invite`), so
+// a mail scanner fetching every link accepts nothing. A browser signed in as
+// somebody else is asked which account, never switched on opening. Past its
+// days, or from a letter sealed before they existed, the link only accepts,
+// and someone not signed in as the invited address is asked to sign in with
+// it by code, which brings them back here.
 //
 // Owner, 2026-09-22: "oh yes, one-click to accept invite is good".
 import type { Bundle } from '@yaks/graph'
@@ -49,6 +56,13 @@ export let CAP = 50
  * is what a stranger reads before deciding anything, and a name or a title in
  * it would be the inviter's words in the platform's voice. */
 export let SUBJECT = 'You have an invitation on yaks.app'
+
+/** Days a letter's link signs its person in for. A sign-in letter's lasts ten
+ * minutes because it was asked for that minute; an invitation arrives
+ * unasked and is read when its person gets to it. Past them, the link still
+ * accepts for a browser signed in as them, and another letter starts the days
+ * again. */
+export let DAYS = 7
 
 /// hourOf(new Date('2026-09-22T15:04:05Z')) -> '2026-09-22T15'
 export let hourOf = (at: Date) => at.toISOString().slice(0, 13)
@@ -115,7 +129,7 @@ export let invitedWords = (o: {
     ` — ${o.standing ? 'another letter' : 'the invitation'}${
       o.note ? ' and your note are' : ' is'
     } on its way to them. It is theirs once they accept it from ` +
-    `the letter, signed in with that address; until then nothing ` +
+    `the letter, whose link also signs them in; until then nothing ` +
     `of ${space.slug} is in their reach, and member_remove withdraws it`
 }
 
@@ -174,10 +188,10 @@ export let send = async (
       `${o.role == 'viewer' ? 'see' : 'use'} ${what}. ` +
       `Accept with one click:\n\n` +
       `${accept}\n\n` +
-      `Sign in with this address (${o.email}) if you are asked to. There ` +
-      'is nothing to install and no account to make first. Until you ' +
-      'accept, nothing of theirs is shared with you, and if you did not ' +
-      'expect this you can ignore it.',
+      `The link signs you in as ${o.email} for the next ${DAYS} days. ` +
+      'There is nothing to install and no account to make first. Until ' +
+      'you accept, nothing of theirs is shared with you, and if you did ' +
+      'not expect this you can ignore it.',
   }).then(() => true).catch((e) => {
     caught(e, { invite: o.invite, space: space.slug })
     return false
@@ -196,7 +210,10 @@ export let send = async (
   return true
 }
 
-type Sealed = { invite: string; to: string }
+/** What the link seals: the invitation, where it is to, and the unix second
+ * it stops signing anyone in. A letter sealed before T-162634 has no `exp`
+ * and only accepts. */
+type Sealed = { invite: string; to: string; exp?: number }
 
 /** The letter's one click. `to` rides in the seal beside the invitation, so
  * a second click after accepting still knows where to send them. */
@@ -204,13 +221,22 @@ export let acceptLink = async (
   secret: string | undefined,
   sealed: Sealed,
   env: Host,
+  now = Date.now(),
 ) => {
   if (!secret) throw new Error('SESSION_SECRET is not set')
+  let exp = sealed.exp ?? Math.floor(now / 1000) + DAYS * 86_400
   return hostUrl(env, INVITE) + '?t=' +
-    encodeURIComponent(await seal('invite', { sealed }, secret))
+    encodeURIComponent(
+      await seal('invite', { sealed: { ...sealed, exp } }, secret),
+    )
 }
 
-let unsealed = async (t: string, secret: string): Promise<Sealed | null> => {
+/** What a letter's link says, or null for anything but one sealed under this
+ * secret. */
+export let unsealed = async (
+  t: string,
+  secret: string,
+): Promise<Sealed | null> => {
   let v = t
     ? await opened<{ sealed?: Partial<Sealed> }>(
       'invite',
@@ -220,9 +246,16 @@ let unsealed = async (t: string, secret: string): Promise<Sealed | null> => {
     : null
   let s = v?.sealed
   return typeof s?.invite == 'string' && typeof s.to == 'string'
-    ? { invite: s.invite, to: s.to }
+    ? {
+      invite: s.invite,
+      to: s.to,
+      ...typeof s.exp == 'number' ? { exp: s.exp } : {},
+    }
     : null
 }
+
+// Whether a link still signs its person in at `now`.
+let signs = (s: Sealed, now = Date.now()) => !!s.exp && s.exp * 1000 > now
 
 /** What an invitation is to: one app of a space, or the space. */
 export type Place = { space: Space; app: App | null }
@@ -327,68 +360,16 @@ export let accept = async (
   }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
 }
 
-/**
- * The click (`GET /invite?t=`), for whoever is signed in on this browser, or
- * nobody. A mail scanner that fetches every link in a letter has no session,
- * so it is shown the sign-in page and accepts nothing.
- *
- * That page says what the letter said and nothing more, since only the letter
- * carries the link and whoever holds it has read the letter, or a forward of
- * it: who invited them, by name, to see or use which app (or space) at which
- * address, and the address it went to. The note stays in the letter, and
- * nothing inside the app or the space (its own icon when it is private, its
- * other apps, who else is in it) reaches anyone before they are in.
- */
-export let door = async (
-  req: Request,
+// Taking it, and what follows: the invitation accepted, its people told who
+// joined, and a seat's views put in reach.
+let seated = async (
   env: Env,
   dir: Directory,
-  person: string | null,
-  secret: string,
-  notify = tell,
-): Promise<Response> => {
-  let t = new URL(req.url).searchParams.get('t') ?? ''
-  let sealed = await unsealed(t, secret)
-  if (!sealed) return lost(env)
-  let [invite, place] = await Promise.all([
-    dir.invitation(sealed.invite),
-    placeOf(dir, sealed.to),
-  ])
-  if (!place || (invite && invite.to != sealed.to)) return closed(env)
-  let link = linkOf(place, env)
-  let there = () => Response.redirect(link, 303)
-  if (!invite) {
-    // Accepted already, or withdrawn. Whoever holds it now is sent there, so
-    // the letter's link keeps working after its first click.
-    let holds = person &&
-      (place.app
-        ? await dir.grant(place.app, person)
-        : await dir.member(place.space, person))
-    return holds ? there() : closed(env)
-  }
-  if (person != invite.person) {
-    let [email, by] = await Promise.all([
-      dir.emailAt(invite.person),
-      invite.by ? dir.nameAt(invite.by) : null,
-    ])
-    if (!email) return closed(env)
-    let { space, app } = place
-    return invited({
-      email,
-      back: `${hostUrl(env, INVITE)}?t=${encodeURIComponent(t)}`,
-      by,
-      see: invite.role == 'viewer',
-      space: { slug: space.slug, title: space.title },
-      app: app && {
-        eid: app.eid,
-        slug: app.slug,
-        title: app.title,
-        // Its own picture only where a visitor may already see it: the page
-        // is for somebody not yet in.
-        open: reads(mode(app.access), null),
-      },
-    }, env)
-  }
+  invite: { eid: string; person: string; role: Role },
+  place: Place,
+  notify: typeof tell,
+) => {
+  let { person } = invite
   await accept(dir, invite, place)
   // Its people hear who joined, in their Updates; the joiner knows.
   let { space, app } = place
@@ -407,5 +388,106 @@ export let door = async (
   if (!place.app && (await dir.apps(place.space)).length) {
     await reachChanged(env, person)
   }
-  return there()
+}
+
+/**
+ * The click (`GET /invite?t=`), for whoever is signed in on this browser, or
+ * nobody. A browser signed in as the invited person accepts and goes there.
+ * Anybody else is shown what the letter said and nothing more, since only
+ * the letter carries the link and whoever holds it has read the letter, or a
+ * forward of it: who invited them, by name, to see or use which app (or
+ * space) at which address, and the address it went to. The note stays in the
+ * letter, and nothing inside the app or the space (its own icon when it is
+ * private, its other apps, who else is in it) reaches anyone before they are
+ * in. With it comes the one button that signs in as that address and
+ * accepts (`taken`), or, past the link's days, the way to sign in by code.
+ * A mail scanner that fetches every link in a letter has no session, so it
+ * is shown that page and accepts nothing.
+ */
+export let door = async (
+  t: string,
+  env: Env,
+  dir: Directory,
+  person: string | null,
+  secret: string,
+  notify = tell,
+): Promise<Response> => {
+  let sealed = await unsealed(t, secret)
+  if (!sealed) return lost(env)
+  let [invite, place] = await Promise.all([
+    dir.invitation(sealed.invite),
+    placeOf(dir, sealed.to),
+  ])
+  if (!place || (invite && invite.to != sealed.to)) return closed(env)
+  let link = linkOf(place, env)
+  let there = () => Response.redirect(link, 303)
+  if (!invite) {
+    // Accepted already, or withdrawn. Whoever holds it now is sent there, so
+    // the letter's link keeps working after its first click.
+    let holds = person &&
+      (place.app
+        ? await dir.grant(place.app, person)
+        : await dir.member(place.space, person))
+    return holds ? there() : closed(env)
+  }
+  if (person == invite.person) {
+    await seated(env, dir, invite, place, notify)
+    return there()
+  }
+  let [email, by, as] = await Promise.all([
+    dir.emailAt(invite.person),
+    invite.by ? dir.nameAt(invite.by) : null,
+    person ? addressOf(dir, person) : null,
+  ])
+  if (!email) return closed(env)
+  let { space, app } = place
+  return invited({
+    email,
+    t,
+    signs: signs(sealed),
+    as,
+    back: `${hostUrl(env, INVITE)}?t=${encodeURIComponent(t)}`,
+    by,
+    see: invite.role == 'viewer',
+    space: { slug: space.slug, title: space.title },
+    app: app && {
+      eid: app.eid,
+      slug: app.slug,
+      title: app.title,
+      // Its own picture only where a visitor may already see it: the page
+      // is for somebody not yet in.
+      open: reads(mode(app.access), null),
+    },
+  }, env)
+}
+
+// The address a signed-in person goes by, to say whom the browser is signed
+// in as; nothing for a newcomer, who has none and is nobody else.
+let addressOf = async (dir: Directory, person: string) =>
+  await dir.emailAt(person) ?? await dir.phoneAt(person)
+
+/**
+ * The press (`POST /invite`): the invitation accepted for the person it
+ * names, who the letter's link proved, and that person and where to land
+ * them, for the sign-in door to sign them in and send them there
+ * (identity.ts). Null when the link no longer signs anyone in: past its
+ * days, sealed before it could, or for an invitation accepted or withdrawn
+ * since, which is what makes it work once.
+ */
+export let taken = async (
+  t: string,
+  env: Env,
+  dir: Directory,
+  secret: string,
+  notify = tell,
+): Promise<{ person: string; link: string } | null> => {
+  let sealed = await unsealed(t, secret)
+  if (!sealed || !signs(sealed)) return null
+  let [invite, place] = await Promise.all([
+    dir.invitation(sealed.invite),
+    placeOf(dir, sealed.to),
+  ])
+  if (!invite || !place || invite.to != sealed.to) return null
+  await seated(env, dir, invite, place, notify)
+  return { person: invite.person, link: linkOf(place, env) }
 }

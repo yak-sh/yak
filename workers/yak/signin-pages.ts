@@ -26,7 +26,7 @@ import { CONNECTOR } from './seo.ts'
 import { AGENT } from './docs.ts'
 import { destination, type Preview } from './link-preview.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
-import { REPO as PUBLIC } from '@yaks/platform/names'
+import { INVITE, REPO as PUBLIC } from '@yaks/platform/names'
 
 import {
   about,
@@ -382,10 +382,33 @@ export let deleted = (said: string, forever = true, env: Host = {}) =>
     home(env),
   )
 
+// The one press that signs in as the invited address and accepts (invite.ts
+// `taken`). A browser signed in as somebody else is asked which account: the
+// press switches it, or they stay who they are and accept nothing.
+let pressed = (o: Offer, env: Host) =>
+  h(
+    'form',
+    { class: 'Page_Form', method: 'post', action: INVITE },
+    held('t', o.t ?? ''),
+    h(
+      'p',
+      null,
+      o.as
+        ? `It was sent to ${o.email}, and you are signed in as ${o.as}. ` +
+          `Accepting signs you in as ${o.email} instead.`
+        : `It was sent to ${o.email}. Accepting signs you in with that address.`,
+    ),
+    send(o.as ? `Accept as ${o.email}` : 'Accept'),
+    o.as
+      ? h('p', null, h('a', { href: url(env, MANAGE) }, `Stay as ${o.as}`))
+      : null,
+  )
+
 // An invitation opened by somebody who is not signed in as the person it is
 // for (invite.ts): who invited them to what, the app drawn as the dashboard
-// draws it, the address it went to, and the one button that mails that
-// address a code and brings them back to accept it.
+// draws it, the address it went to, and the press that signs in as that
+// address and accepts, or, once the link no longer signs anyone in, the one
+// button that mails that address a code and brings them back to accept it.
 export let invited = (o: Offer, env: Host = {}) => {
   let host = spaceHost(env, o.space.slug)
   let what = o.app ? o.app.title || o.app.slug : `${o.space.title} at ${host}`
@@ -396,6 +419,11 @@ export let invited = (o: Offer, env: Host = {}) => {
       lead: `${o.by || 'Someone'} invited you to ${
         o.see ? 'see' : 'use'
       } ${what}.`,
+      // The address carries the letter's link, which signs its holder in.
+      headers: {
+        'cache-control': 'private, no-store',
+        'referrer-policy': 'no-referrer',
+      },
     },
     o.app
       ? h(
@@ -408,7 +436,7 @@ export let invited = (o: Offer, env: Host = {}) => {
         }),
       )
       : null,
-    h(
+    o.signs ? pressed(o, env) : h(
       'form',
       { class: 'Page_Form', method: 'post', action: '/login' },
       held('address', o.email),

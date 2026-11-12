@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { acceptLink, again, SUBJECT } from './invite.ts'
+import { again, SUBJECT, unsealed } from './invite.ts'
 import type { Directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Letter } from './mail.ts'
@@ -58,12 +58,13 @@ let resent = resending()
 let marked = resending()
 let goneSince = resending()
 let elsewhere = resending()
-let mailedLink = await acceptLink(SECRET, { invite: 'inv-cy', to: 'sp' }, {})
 test('Send again mails a standing invitation again', async () => {
   let { press, sent } = resent
   assertEquals(await press('inv-cy'), null)
   assertEquals(sent.map((l) => [l.to, l.subject]), [[cy, SUBJECT]])
-  assertStringIncludes(sent[0].body, mailedLink)
+  let t = /\/invite\?t=(\S+)/.exec(sent[0].body)![1]
+  let sealed = await unsealed(decodeURIComponent(t), SECRET)
+  assertEquals([sealed?.invite, sealed?.to], ['inv-cy', 'sp'])
 })
 
 test('Send again records that the standing invitation was mailed', async () => {

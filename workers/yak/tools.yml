@@ -1013,7 +1013,8 @@ member_add:
     they get, its page and its data (how a player joins one game, or a
     household one list); leave it out and they join the space, reaching
     every app in it. They are mailed an invitation, and nothing is theirs
-    until they accept with its one click, signed in with that address. note
+    until they accept with its one click, which also signs them in with
+    that address, no code needed. note
     puts the person's own line or two at the top of that email, quoted as
     theirs ("the potluck list for Saturday"), which is what gets an
     invitation opened. name, whenever you know it, is what their apps show

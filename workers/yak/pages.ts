@@ -1465,6 +1465,12 @@ export let pairing = (
 export type Offer = {
   /** the address it went to */
   email: string
+  /** the letter's sealed link, which the press posts back */
+  t?: string
+  /** whether the link still signs its person in (invite.ts `DAYS`) */
+  signs?: boolean
+  /** the address the browser is signed in as instead, when it is */
+  as?: string | null
   /** the letter's link, which signing in comes back to */
   back: string
   /** who sent its latest letter, by name */

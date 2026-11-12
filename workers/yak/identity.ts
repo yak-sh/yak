@@ -144,7 +144,7 @@ import {
 } from './link.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { door } from './invite.ts'
+import { door, taken } from './invite.ts'
 import { mail, mailable } from './mail.ts'
 import { fault } from './unseen.ts'
 import { type Clock, clock, timed } from './timing.ts'
@@ -978,11 +978,16 @@ let proving = (arrived: Arrived, address: string): Landing => ({
 })
 
 // A standing link spends no code, so no guess stamps its person: they are
-// read and stamped here, the stamp after the answer, which says nothing that
-// depends on it (T-34158).
+// read and stamped here (`vouched`).
 let stood = async (env: Env, standing: Standing) => {
   let person = await whose(standing, links(env.OAUTH_KV))
-  if (!person) return null
+  return person ? await vouched(env, person) : null
+}
+
+// A person a link proved without a code (a standing link, an invitation's),
+// read and stamped as signed in by link, the stamp after the answer, which
+// says nothing that depends on it (T-34158).
+let vouched = async (env: Env, person: string): Promise<Landing> => {
   let store = meta(env)
   let [row] = await store.query(`.entity.eid=${person} ?signed_in ?email`)
   let before = (row as Person | undefined)?.signed_in
@@ -992,8 +997,7 @@ let stood = async (env: Env, standing: Standing) => {
       signed_in: stamped(before, new Date().toISOString(), 'link'),
     }], KERNEL).then(() => {}, (e) => fault(env, 'signed_in', e)),
   )
-  let proved: Proved = { first: !before, who: addressIn(row) }
-  return { person, proved }
+  return { person, proved: { first: !before, who: addressIn(row) } }
 }
 
 // The number a person wears, for one with no address.
@@ -1217,9 +1221,21 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   }
 
   // An invitation's one click (invite.ts, T-37880): accepted for the person
-  // it names, signed in on this browser, and nobody else.
+  // it names, signed in on this browser, and anybody else shown the press.
   if (path == INVITE && req.method == 'GET') {
-    return door(req, env, dirOf(env), await browser(env, req), secret(env))
+    let t = url.searchParams.get('t') ?? ''
+    return door(t, env, dirOf(env), await browser(env, req), secret(env))
+  }
+  // The press: the letter's link proved its address, as a sign-in letter's
+  // does (T-162634), so its person is signed in where they land, the app or
+  // space it was to. One the link no longer signs in is the click again.
+  if (path == INVITE && req.method == 'POST') {
+    let t = field('t'), dir = dirOf(env)
+    let took = await taken(t, env, dir, secret(env))
+    if (!took) return door(t, env, dir, await browser(env, req), secret(env))
+    return quiet(
+      await landed(req, env, await vouched(env, took.person), '', took.link),
+    )
   }
 
   // The custom-domain end of cross-domain sign-in (`handoff`). index.ts sends

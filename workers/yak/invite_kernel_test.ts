@@ -12,6 +12,7 @@ import {
   type Kernel,
   kernel,
   letter,
+  letters,
   meta,
   signIn,
 } from './probe.ts'
@@ -65,10 +66,10 @@ test('an invitation reaches nobody until its person accepts it', async () => {
     assertEquals(before.init.includes(mine), false)
     assertEquals(before.files.includes('index.html'), false)
 
-    // A browser signed in as nobody, or as somebody else, accepts nothing:
-    // it is asked to sign in as the address the letter went to, and told what
-    // the letter told, who invited them to what, and no more: the note stays
-    // in the letter.
+    // A browser signed in as nobody, or as somebody else, accepts nothing on
+    // opening the link: it is shown the press that signs in as the address
+    // the letter went to, and told what the letter told, who invited them to
+    // what, and no more: the note stays in the letter.
     for (let cookie of [undefined, jeff.cookie]) {
       let page = await clickInvite(k, ana.email, cookie)
       assertEquals(page.status, 200)
@@ -77,7 +78,13 @@ test('an invitation reaches nobody until its person accepts it', async () => {
       assertStringIncludes(said, `${mine} invited you to use`)
       assertStringIncludes(said, `${mine}.yaks.app`)
       assert(!said.includes('please look'))
+      assertStringIncludes(said, 'action="/invite"')
     }
+    // Signed in as somebody else, they are asked which account.
+    assertStringIncludes(
+      await (await clickInvite(k, ana.email, jeff.cookie)).text(),
+      `Stay as ${jeff.email}`,
+    )
     assertEquals((await reach()).listed.includes(`${mine}.yaks.app`), false)
 
     // Her click, signed in as her: accepted, and she lands on the space.
@@ -201,6 +208,59 @@ test('the People page invites and takes people off the way member_add and member
     assertStringIncludes(said, `${jeff.email} is you`)
     assertStringIncludes(said, `value="${jeff.email}"`)
     assertStringIncludes(said, 'me again</textarea>')
+  } finally {
+    await k.stop()
+  }
+})
+
+// The letter's link proves its address, as a sign-in letter's does
+// (T-162634): one press signs a newcomer to yaks.app in and opens what was
+// shared, with no code, and the link does it once.
+test('pressing accept on the letter signs its person in and opens the app', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let his = connector(k, jeff.cookie)
+    let mine = jeff.email.split('@')[0]
+    await his.tool('app_new', { slug: 'notes', title: 'Notes' })
+    let cara = `cara-${crypto.randomUUID().slice(0, 8)}@${k.host}`
+    await his.tool('member_add', { email: cara, app: 'notes' })
+    let l = await letter(k, cara, '/invite?t=')
+    assertStringIncludes(l.body, `signs you in as ${cara}`)
+    let t = new URL(/https:\/\/\S+\/invite\?t=\S+/.exec(l.body)![0])
+      .searchParams.get('t')!
+    let press = () =>
+      k.at(k.host, '/invite', {
+        method: 'POST',
+        redirect: 'manual',
+        body: new URLSearchParams({ t }),
+      })
+
+    let pressed = await press()
+    await pressed.body?.cancel()
+    assertEquals(pressed.status, 303)
+    assertEquals(
+      pressed.headers.get('location'),
+      `https://${mine}.yaks.app/notes/`,
+    )
+    let cookie = (pressed.headers.get('set-cookie') ?? '').split(';')[0]
+    assert(cookie, 'the press set a session')
+    await k.deliveries?.()
+    assertStringIncludes(
+      await sharedPage(k, cookie),
+      `href="https://${mine}.yaks.app/notes/"`,
+    )
+    // No code letter went: the invitation is the only letter she has.
+    assertEquals(
+      (await letters(k, cara)).filter((x) => /\d{6}/.test(x.subject)),
+      [],
+    )
+
+    // Pressed again, signed out, it signs nobody in.
+    let again = await press()
+    await again.body?.cancel()
+    assertEquals(again.status, 410)
+    assertEquals(again.headers.get('set-cookie'), null)
   } finally {
     await k.stop()
   }

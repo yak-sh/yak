@@ -174,9 +174,12 @@ it, because it is sent in their name.
 The email's subject is always "You have an invitation on yaks.app". The body
 names who invited them and to what, and carries the accept link. Clicking it
 while signed in with that address accepts the invitation and opens the page it
-names; anyone else is asked to sign in with that address first, and the sign-in
-returns them to accept. There is nothing to install and no account to create
-first.
+names. Anyone else gets one Accept button, which signs them in with that address
+(making their account if they are new) and opens the page, with no sign-in code:
+the letter only reaches that address, so its link proves it. Somebody signed in
+as another account is asked which to use. The link signs in once, for seven
+days; after that it asks for a sign-in code, and calling `member_add` again
+sends a fresh one. There is nothing to install and no account to create first.
 
 The accept link is sent only to the invited address, so the tool's answer never
 includes it. If the email cannot be sent, the invitation still stands, and

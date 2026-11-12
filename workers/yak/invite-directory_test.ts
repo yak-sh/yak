@@ -7,7 +7,15 @@ import {
 } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { accept, acceptLink, door, invitedWords, placeOf } from './invite.ts'
+import {
+  accept,
+  acceptLink,
+  DAYS,
+  door,
+  invitedWords,
+  placeOf,
+  taken,
+} from './invite.ts'
 import { invitedHere, refusedSaid, shut, waiting } from './apps.ts'
 import { shared } from './manage.ts'
 import { markup } from './html.ts'
@@ -44,6 +52,7 @@ let emailOf = (person: string) => `${person}@x.test`
 
 // Her letter's link, sealed once.
 let link = await acceptLink(SECRET, { invite: 'inv', to: 'ap' }, {})
+let sealedIn = new URL(link).searchParams.get('t')!
 let env = {} as Env
 
 // ana is invited to the diary and has not accepted; bo was never invited.
@@ -141,7 +150,6 @@ test('her click, signed in as her, takes the invitation and writes her grant', a
   assertMatch(JSON.stringify(applied), /"tombstone".*"grant".*"person":"ana"/)
 })
 
-let acceptedRequest = new Request(link)
 let alreadyAccepted = {
   ...acceptedBy.dir,
   invitation: () => Promise.resolve(null),
@@ -149,7 +157,7 @@ let alreadyAccepted = {
 } as unknown as Directory
 test('an accepted invitation redirects its person to the app', async () => {
   let response = await door(
-    acceptedRequest,
+    sealedIn,
     env,
     alreadyAccepted,
     'ana',
@@ -160,11 +168,10 @@ test('an accepted invitation redirects its person to the app', async () => {
 })
 
 let pending = invited()
-let pendingRequest = new Request(link)
 let announcements: unknown[] = []
 test('a pending invitation is accepted by its person before redirecting to the app', async () => {
   let response = await door(
-    pendingRequest,
+    sealedIn,
     env,
     pending.dir,
     'ana',
@@ -178,6 +185,35 @@ test('a pending invitation is accepted by its person before redirecting to the a
     /"tombstone".*"grant".*"person":"ana"/,
   )
   assertEquals(announcements.length, 1)
+})
+
+// Within its days the link offers the press that signs her in; past them, or
+// sealed before they existed, it offers a code and its press signs nobody in.
+let tOf = async (exp?: number) =>
+  new URL(
+    await acceptLink(SECRET, { invite: 'inv', to: 'ap', exp }, {}),
+  ).searchParams.get('t')!
+let past = Math.floor(Date.now() / 1000) - 60
+let opening = invited(), pressing = invited()
+test("an invitation's link signs its person in for its days and no longer", async () => {
+  let page = async (t: string) =>
+    await (await door(t, env, opening.dir, null, SECRET)).text()
+  assertStringIncludes(await page(sealedIn), 'action="/invite"')
+  assertStringIncludes(await page(await tOf(past)), 'Email me a sign-in code')
+  let quiet = () => Promise.resolve()
+  assertEquals(
+    await taken(await tOf(past), env, pressing.dir, SECRET, quiet),
+    null,
+  )
+  assertEquals(pressing.applied, [])
+  let inDays = Math.floor(Date.now() / 1000) + DAYS * 86_400 - 60
+  assertEquals(
+    await taken(await tOf(inDays), env, pressing.dir, SECRET, quiet),
+    {
+      person: 'ana',
+      link: 'https://jeff.yaks.app/diary/',
+    },
+  )
 })
 
 // The space's roster as the directory holds it: jeff owns it, bo is a member,
