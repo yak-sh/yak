@@ -7,6 +7,8 @@ import { platform } from './directory-rows-probe.ts'
 import { declared } from './directory-fixture.ts'
 import { call, type Ctx } from './tools.ts'
 import { commandLine } from './standing.ts'
+import { withKinds } from './kinds.ts'
+import { appDoc } from './vocab.ts'
 import { staged } from './release.ts'
 import { r2RawObjects } from './lib/objects.ts'
 
@@ -51,7 +53,7 @@ let vocab = {
     },
   },
 }
-let make = async (slug: string, words: VocabDoc = vocab) => {
+let make = async (slug: string, words: VocabDoc = vocab, kinds = false) => {
   let eid = crypto.randomUUID()
   let source = `kitchen/.releases/${eid}/${crypto.randomUUID()}`
   let staging = staged(r2RawObjects(env.BLOBS), {}, source)
@@ -77,29 +79,31 @@ let make = async (slug: string, words: VocabDoc = vocab) => {
         ),
       ),
     },
-    tools: parseTools(words, ['recipe', 'meal']),
+    tools: kinds
+      ? withKinds({}, appDoc(words), `kitchen/${slug}`)
+      : parseTools(words, ['recipe', 'meal']),
   })
   return app
 }
 await make('recipes')
 await make('empty', { $defs: { recipe: vocab.$defs.recipe } })
-await make('quiet', {
-  $defs: {
-    shift: {
-      component: true,
-      properties: {
-        who: { type: 'string', ref: 'entity' },
-        swapped: { type: 'boolean' },
-        hours: { type: 'number' },
-      },
-    },
-  },
-})
 let ctx: Ctx = { env, dir, person }
 let named = await call(ctx, 'commands', { app: 'recipes' })
 let qualified = await call(ctx, 'commands', { app: 'kitchen/recipes' })
 let withoutCommands = await call(ctx, 'commands', { app: 'empty' })
 let unnamed = await call(ctx, 'commands', {})
+await make('quiet', {
+  $defs: {
+    shift: {
+      component: true,
+      properties: {
+        who: { type: 'string', ref: 'entity', death: 'detach' },
+        swapped: { type: 'boolean' },
+        hours: { type: 'number' },
+      },
+    },
+  },
+}, true)
 let quiet = await call(ctx, 'commands', { app: 'quiet' })
 let editor = crypto.randomUUID()
 await dir.apply({
@@ -172,4 +176,14 @@ test('what an app leaves undescribed is a warning wherever an agent looks', () =
   )
   // Written, there is nothing to warn of.
   ok(!named.text!.includes('### Warnings'), named.text)
+})
+
+test('the commands a component is given are named once, not each spelled out', () => {
+  ok(
+    quiet.text!.includes(
+      '\n### Commands\nadd_shift, find_shift — each add_ writes one row',
+    ),
+    quiet.text,
+  )
+  ok(!quiet.text!.includes('add_shift('), quiet.text)
 })

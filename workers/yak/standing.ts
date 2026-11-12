@@ -339,6 +339,12 @@ export let commandLine = (one: Command): string =>
     one.readOnly ? 'reads' : 'writes'
   } — ${one.description}`
 
+// The commands each component is given, said once for all of them.
+let given = (made: Command[]) =>
+  `${made.map((one) => one.name).join(', ')} — each add_ writes one row of ` +
+  "its component (title, body?, alias? and the component's properties); " +
+  'each find_ reads them (words?, any of its properties, limit?)'
+
 /** One app in full: its address, components, commands and released notes. */
 export let appEntry = async (
   ctx: Ctx,
@@ -355,6 +361,10 @@ export let appEntry = async (
     .filter(([, schema]) => schema.component)
   // What its vocabulary leaves to guess, said until it is written (D-162751).
   let warned = unwritten({ $defs: Object.fromEntries(components) })
+  // The add_ and find_ each component is given take its properties, which
+  // the components above already say, so they are named and not repeated.
+  let made = all.filter((one) => generated(one.name, one))
+  let own = all.filter((one) => !made.includes(one))
   return [
     `## ${commandAt(space, app)}`,
     `${url(space, app, ctx.env)} — ${app.title || app.slug}`,
@@ -368,7 +378,13 @@ export let appEntry = async (
         ),
       ]
       : [],
-    ...all.length ? ['\n### Commands', ...all.map(commandLine)] : [],
+    ...all.length
+      ? [
+        '\n### Commands',
+        ...own.map(commandLine),
+        ...made.length ? [given(made)] : [],
+      ]
+      : [],
     ...notes ? [`\n### ${NOTES}\n\n${notes}`] : [],
     ...warned.length ? ['\n### Warnings', ...warned] : [],
   ].join('\n')

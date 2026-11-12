@@ -133,7 +133,10 @@ let find = (kind: string, at: string, schema: PropSchema): ToolDef => {
  * a hand-written `add_recipe` says in its own words. The Operator's map names
  * only the declared ones, since what an app holds already says it has these.
  */
-export let generated = (name: string, tool: ToolDef): boolean => {
+export let generated = (
+  name: string,
+  tool: Pick<ToolDef, 'description'>,
+): boolean => {
   let [, verb, kind] = /^(add|find)_([a-z0-9_]+)$/.exec(name) ?? []
   // "an?": a release kept from before the article was right says "Add a".
   let made = verb == 'add' ? `Add an? ${kind} to ` : `Find ${plural(kind)} in `
