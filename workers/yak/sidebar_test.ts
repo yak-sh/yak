@@ -15,7 +15,7 @@ let drawn = (selected: string, collapsed = false) =>
     base: 'https://yaks.app',
     home: '/',
     label: 'Menu',
-    fold: { collapsed, back: selected, rail: 'page-rail' },
+    fold: { collapsed, back: selected },
     sections: [{
       id: 'places',
       label: 'Places',

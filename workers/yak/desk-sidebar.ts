@@ -51,7 +51,6 @@ export let deskSide = (at: DeskPage, view: ManageView, env: Host) => {
     fold: {
       collapsed: !!at.collapsed,
       back: managePath(view, at.space),
-      rail: 'Desk-rail',
     },
     picker: [
       here,

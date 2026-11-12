@@ -800,7 +800,7 @@ test('a chat in which the Operator changed an app opens with no app beside it', 
 // Whichever conversation is open, what needs the person stays beside it,
 // each answered where it is, and its count is on the bar's way to it; the
 // spaces, apps and settings are behind the bar's menu (D-153799, The chair).
-test('what needs the person is beside every conversation, counted, with the menu behind the bar', async () => {
+test('what needs the person is beside every conversation, counted, beside the side the settings pages share', async () => {
   let needs = {
     eid: crypto.randomUUID(),
     needs: true,
@@ -885,7 +885,13 @@ test('what needs the person is beside every conversation, counted, with the menu
       document.querySelector('#menu.Sidebar .Sidebar_Close'),
       'the menu closes',
     )
-    assertEquals(document.querySelector('#menu .Sidebar_Fold'), null)
+    // the side folds as on the settings pages, back to this page, the
+    // person's one conversation being the space's own address
+    assertEquals(
+      document.querySelector('#menu .Sidebar_Fold [name=back]')
+        ?.getAttribute('value'),
+      app ? aboutPath(space.slug, app) : chatPath(space.slug),
+    )
     // The Updates count in the menu is what needs them and what is unread.
     assertEquals(
       document.querySelector('#menu .Sidebar_Count')?.textContent,

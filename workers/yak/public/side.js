@@ -14,7 +14,6 @@ addEventListener('submit', async (e) => {
   }
   let collapsed = field.value == 'collapsed'
   let said = collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'
-  document.body.classList.toggle(form.dataset.side, collapsed)
   document.getElementById('menu').classList.toggle('Sidebar-rail', collapsed)
   for (let nav of document.querySelectorAll('#menu .SideNav')) {
     nav.classList.toggle('SideNav-rail', collapsed)

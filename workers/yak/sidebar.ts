@@ -36,7 +36,7 @@ export type Sidebar = {
   picker?: Parameters<typeof choice>
   sections: Section[]
   footer?: Section[]
-  fold?: { collapsed: boolean; back: string; rail: string }
+  fold?: { collapsed: boolean; back: string }
 }
 
 let worded = (words: string) => h('span', { class: 'Sidebar_Label' }, words)
@@ -50,7 +50,7 @@ let fold = (at: NonNullable<Sidebar['fold']>) => {
       class: 'Sidebar_Fold Page_Form',
       method: 'post',
       action: managePath('profile'),
-      'data-side': at.rail,
+      'data-side': '',
     },
     h('input', {
       type: 'hidden',

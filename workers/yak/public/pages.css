@@ -374,7 +374,7 @@
   }
   .Desk_Main {
     display: grid;
-    grid-template-columns: 15rem minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: start;
     max-width: none;
     min-height: 100vh;
@@ -646,12 +646,12 @@
       grid-template-columns: 8rem minmax(0, 1fr);
     }
   }
-  /* The Operator's chat app (operator-page.ts `chatPage`): one conversation
-     filling the page, read down a column with the box to write in held at
-     the foot of the window, and at its right what waits on the person
-     (talk-beside.ts). The menu (talk-sidebar.ts) opens over them from the
-     bar's button. Each pane scrolls within the window; the whole menu
-     scrolls together (`.Sidebar_Scroll`). */
+  /* The Operator's chat app (operator-page.ts `chatPage`): the side
+     (talk-sidebar.ts), one conversation filling the page, read down a column
+     with the box to write in held at the foot of the window, and at its
+     right what waits on the person (talk-beside.ts). Each pane scrolls
+     within the window; the whole side scrolls together (`.Sidebar_Scroll`).
+     On a phone the side opens over the page from the bar's Menu. */
   .Talk_Page {
     display: block;
     min-height: 0;
@@ -668,33 +668,19 @@
     padding: 0;
     text-align: left;
   }
+  /* The side (sidebar.ts) takes the room it is drawn at, folded or not, as
+     on the settings pages. */
   .Talk {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr);
     height: 100dvh;
     overflow: hidden;
   }
   .Talk-beside {
-    grid-template-columns: minmax(0, 1fr) 22rem;
-  }
-  /* The menu, on every width: closed until the bar's button opens it, then
-     over the page's left edge. */
-  .Talk > .Sidebar {
-    display: none;
-  }
-  .Talk > .Sidebar:target {
-    position: fixed;
-    inset: 0 auto 0 0;
-    z-index: 3;
-    display: flex;
-    width: min(19rem, 100vw);
-    height: auto;
-    box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--text) 18%, transparent);
-  }
-  .Talk > .Sidebar .Sidebar_Close {
-    display: inline-flex;
+    grid-template-columns: auto minmax(0, 1fr) 22rem;
   }
 
+  .Talk_Menu,
   .Talk_Back,
   .Talk_Show,
   .Talk_Waits,
@@ -959,13 +945,13 @@
      the height of the window, held in place while the chat scrolls, the app
      itself filling it under its name. */
   .Talk-app {
-    grid-template-columns: minmax(20rem, 1fr) minmax(0, 1.4fr);
+    grid-template-columns: auto minmax(20rem, 1fr) minmax(0, 1.4fr);
   }
   /* Beside an app, what waits keeps its column where the window holds all
      three; narrower, it is behind the bar's button, as on a phone. */
   @media (min-width: 1400px) {
     .Talk-app.Talk-beside {
-      grid-template-columns: minmax(20rem, 1fr) 20rem minmax(0, 1.4fr);
+      grid-template-columns: auto minmax(20rem, 1fr) 20rem minmax(0, 1.4fr);
     }
   }
   .Talk_App {
@@ -1076,9 +1062,9 @@
       display: inline-flex;
     }
   }
-  @media (max-width: 899px) {
-    .Talk-beside {
-      grid-template-columns: minmax(0, 1fr);
+  @media (max-width: 1099px) {
+    .Talk-beside:not(.Talk-app) {
+      grid-template-columns: auto minmax(0, 1fr);
     }
     .Talk-beside .Talk_Waits {
       display: inline-flex;
@@ -1105,6 +1091,9 @@
   @media (max-width: 700px) {
     .Talk {
       display: block;
+    }
+    .Talk_Menu {
+      display: inline-flex;
     }
 
     .Talk_Column,
@@ -1139,11 +1128,6 @@
     }
     .Talk_Stage {
       padding: 0 .5rem .5rem;
-    }
-  }
-  @media (min-width: 701px) {
-    .Desk-rail .Desk_Main {
-      grid-template-columns: 4.5rem minmax(0, 1fr);
     }
   }
 }
@@ -1292,8 +1276,12 @@
     white-space: nowrap;
   }
   @media (min-width: 701px) {
+    .Sidebar {
+      width: 15rem;
+    }
     .Sidebar-rail {
       --sidebar-padding: .5rem;
+      width: 4.5rem;
     }
     .Sidebar-rail .Sidebar_Top {
       flex-direction: column;

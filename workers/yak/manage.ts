@@ -489,16 +489,18 @@ let beside = async (
   space: Space,
   who: Owner,
 ): Promise<Beside> => {
-  let [spaces, { mine }, name] = await Promise.all([
+  let [spaces, { mine }, name, collapsed] = await Promise.all([
     dir.seats(who.person).then((seats) => pickable(dir, seats)),
     dir.apps(space).then((apps) => shelf(apps, space, who)),
     dir.nameAt(who.person),
+    dir.collapsed(who.person),
   ])
   return {
     spaces,
     apps: mine.map((a) => ({ eid: a.eid, slug: a.slug, title: a.title })),
     name,
     admin: !!who.administrative,
+    collapsed,
   }
 }
 

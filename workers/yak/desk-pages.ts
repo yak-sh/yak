@@ -2011,7 +2011,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
         'cache-control': 'private, no-store',
         'x-robots-tag': 'noindex',
       },
-      layout: at.collapsed ? 'Desk Desk-rail' : 'Desk',
+      layout: 'Desk',
     },
     deskFrame({
       sidebar: deskSide(at, view, env),

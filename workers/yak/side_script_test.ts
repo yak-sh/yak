@@ -35,10 +35,8 @@ let page = async (answers = true) => {
     sent,
     submitted: () => submitted,
     press: () => on.submit({ target: button, preventDefault() {} }),
-    rail: () => [
-      document.body.classList.contains('Desk-rail'),
+    rail: () =>
       document.getElementById('menu')!.classList.contains('Sidebar-rail'),
-    ],
     navs: () =>
       [...document.querySelectorAll('#menu .SideNav')].map((n) =>
         n.classList.contains('SideNav-rail')
@@ -54,14 +52,14 @@ test('the page with a fold loads its script', async () => {
 
 test('the fold collapses the side to its icons, then opens it', async () => {
   let p = await page()
-  assertEquals([p.rail(), p.expanded()], [[false, false], 'true'])
+  assertEquals([p.rail(), p.expanded()], [false, 'true'])
   await p.press()
-  assertEquals(p.rail(), [true, true])
+  assertEquals(p.rail(), true)
   assert(p.navs().every(Boolean))
   assertEquals(p.expanded(), 'false')
   assertEquals(p.said(), ['Expand the sidebar', 'Expand the sidebar'])
   await p.press()
-  assertEquals(p.rail(), [false, false])
+  assertEquals(p.rail(), false)
   assert(!p.navs().some(Boolean))
   assertEquals(p.said(), ['Collapse the sidebar', 'Collapse the sidebar'])
   assertEquals(p.sent, ['collapsed', 'open'])

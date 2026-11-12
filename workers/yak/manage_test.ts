@@ -204,8 +204,8 @@ test('the name is the person’s, saved on their Profile', async () => {
 
 // The side collapses to a rail of its icons (T-151458): the choice is the
 // person's, kept on their row, so every settings page of theirs draws it;
-// each icon keeps its name as its title and its words. The chat's menu is
-// behind its bar's button, so it has no rail.
+// each icon keeps its name as its title and its words. The Operator's page
+// draws the same side, folded the same.
 test('the side collapses to its icons on every settings page, and opens again', async () => {
   let fold = (sidebar: string, back: string, accept = 'text/html') =>
     k.at('yaks.app', profile, {
@@ -225,14 +225,9 @@ test('the side collapses to its icons on every settings page, and opens again', 
   let folded = await fold('collapsed', people)
   assertEquals(folded.status, 303)
   assertEquals(folded.headers.get('location'), to(people))
-  for (
-    let [path, rail] of [
-      [people, 'Desk-rail'],
-      [profile, 'Desk-rail'],
-    ]
-  ) {
+  for (let path of [people, profile, chatPath(slug)]) {
     let page = await drawn(path)
-    assert(page.body.classList.contains(rail), path)
+    assert(page.querySelector('#menu.Sidebar-rail'), path)
     let links = [...page.querySelectorAll('#menu .SideNav_Link')]
     assert(links.length > 3, path)
     for (let a of links) {
@@ -249,7 +244,7 @@ test('the side collapses to its icons on every settings page, and opens again', 
   let opened = await fold('open', people, '*/*')
   assertEquals(opened.status, 204)
   let page = await drawn(people)
-  assert(!page.body.classList.contains('Desk-rail'))
+  assertEquals(page.querySelector('#menu.Sidebar-rail'), null)
   assertEquals(page.querySelector('#menu .SideNav-rail'), null)
   // A form never sends the person off these pages.
   for (let back of ['https://elsewhere.test/manage', '/help']) {

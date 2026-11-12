@@ -1344,6 +1344,9 @@ export type Beside = {
   apps?: { eid: string; slug: string; title: string }[]
   name?: string | null
   admin?: boolean
+  /** whether the person keeps the side folded to its icons
+   * (`desk_sidebar{collapsed}`) */
+  collapsed?: boolean
 }
 
 export { aboutPath }
@@ -1700,8 +1703,8 @@ export let installing = (space: Space) => {
   })
 }
 
-// A page of the chat app: the bar naming the page and whose Operator it is,
-// over `main`; the menu (talk-sidebar.ts) behind the bar's button; the lists
+// A page of the chat app: the side (talk-sidebar.ts), and beside it the bar
+// naming the page and whose Operator it is, over `main`; the lists
 // of what waits on the person beside it where the page has them
 // (talk-beside.ts); and the app open beside them all.
 let talkPage = (
@@ -1715,6 +1718,8 @@ let talkPage = (
     // how many Updates wait on the person (updates.ts `updatesOf`)
     waiting: number
     current: string[]
+    // this page's address, where the side's fold draws it again
+    here: string
     main: Node
     // where the skip link goes, and what it says
     skip: [string, string]
@@ -1750,6 +1755,7 @@ let talkPage = (
           waiting: page.waiting,
           current: page.current,
           app: page.app?.slug,
+          here: page.here,
         }),
         h(
           'div',
@@ -1967,6 +1973,7 @@ export let chatPage = async (
     status: fresh || talked.title ? 200 : 404,
     waiting: news.waiting,
     current: [open, talked.task],
+    here,
     lists,
     skip: fresh || talked.title
       ? ['#ask', 'Skip to the message box']
@@ -2046,6 +2053,7 @@ export let updatesPage = async (
     status: 200,
     waiting: news.updates.filter((u) => u.needs).length,
     current: ['updates'],
+    here: managePath('updates', space.slug),
     skip: ['#content', 'Skip to content'],
     main: h(
       'div',
