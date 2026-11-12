@@ -42,10 +42,7 @@ export let storage = (
   observe?: Observe,
   measure?: Measure,
 ): Store & { upkeep: () => number | null } => {
-  let store = bind(driver(durable, observe, measure), vocab, {
-    deferred: true,
-    ...base,
-  })
+  let store = bind(driver(durable, observe, measure), vocab, base)
   let bound = bounded(durable)
   return Object.assign(store, {
     upkeep: () => {

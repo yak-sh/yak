@@ -68,7 +68,7 @@ for (let from = 1; from <= 12_000; from += 500) {
 f.file.sql.exec('drop index entity_archetype_num')
 f.file.sql.exec("delete from server_meta where k='schema'")
 let before = f.written()
-let opened = storage(f.file, shop)
+let opened = storage(f.file, shop, { deferred: true })
 opened.install()
 let openingWrites = f.written() - before
 
@@ -91,7 +91,7 @@ test('classification and indexes resume after reopening and leave ordinary write
       windows++
     }
     if (pass == 5) {
-      store = storage(f.file, shop)
+      store = storage(f.file, shop, { deferred: true })
       store.install()
       await store.tx((tx) => {
         tx.patch([{ entity: { eid: 'new' }, doc: { title: 'new' } }])
@@ -134,7 +134,7 @@ retired.sql.exec(
 )
 retired.sql.exec('drop table product')
 retired.sql.exec("delete from server_meta where k='schema'")
-let recovering = storage(retired, shop)
+let recovering = storage(retired, shop, { deferred: true })
 recovering.install()
 
 test('deferred classification preserves legacy descriptor identities and retires missing component sets', () => {
@@ -161,4 +161,28 @@ test('deferred classification preserves legacy descriptor identities and retires
     0,
   )
   equal(recovering.read('.entity.eid=former')[0].product, undefined)
+})
+
+let ordinary = durable()
+let ordinaryStore = storage(ordinary, shop)
+ordinaryStore.install()
+ordinary.beneath(insert('entity', { id: 1, eid: 'legacy' }))
+ordinary.sql.exec("delete from server_meta where k='schema'")
+let reopenedOrdinary = storage(ordinary, shop)
+reopenedOrdinary.install()
+
+test('a host without a maintenance lifecycle completes its ordinary installation', () => {
+  equal(
+    ordinary.sql.exec(
+      'select count(*) as n from entity where archetype is null',
+    ).toArray()[0].n,
+    0,
+  )
+  equal(
+    ordinary.sql.exec(
+      "select v from server_meta where k='archetype:pending' or k like 'owed:index:%'",
+    ).toArray(),
+    [],
+  )
+  equal(reopenedOrdinary.upkeep(), null)
 })

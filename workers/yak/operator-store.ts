@@ -142,6 +142,7 @@ export let operatorStore = (
   let kept = sqliteBlobs(statements(sql))
   let stood = false
   let store = storage(durable, vocab, {
+    deferred: true,
     derived,
     extend: [search(text, sql)],
     over: () => searching,
