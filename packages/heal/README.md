@@ -163,8 +163,11 @@ tracker answer, without advancing a checkpoint. A failure reports at once,
 tagged with the step that caught it (`open`, `owed read`, `read by id`, `mark`,
 `reconcile`); the same failure at that step again, a blip the next passes ride
 out or one 503 across every bug's mark, is not reported again, and the step's
-next success logs how long it failed. Shutdown closes subscriptions and stops
-the pause between passes.
+next success logs how long it failed. A platform tracker that could not answer
+for now (`Unavailable`, a 503 or a timeout) is a log line instead, as it is to
+the tracker's own poll: only one that has not answered that step for five
+minutes (`OUTAGE`, @yaks/tracker) is reported, once. Shutdown closes
+subscriptions and stops the pause between passes.
 
 ## Config
 

@@ -32,6 +32,7 @@ import { and, every, present } from '@yaks/query'
 import { type Fake, pair } from '../sync/testing.ts'
 import { group } from '@yaks/tracker'
 import { computed, trackerDoc } from '@yaks/tracker/vocab'
+import { Unavailable } from '@yaks/tracker/remote'
 import { HARNESS } from '@yaks/harness/default'
 import { healDoc } from './vocab.ts'
 import { fixing } from './fix.ts'
@@ -523,15 +524,17 @@ test('the service resumes when a tracker is available again', async () => {
   outage.close()
 })
 
-// The service over `f`'s tracker, whose `door` fails on the passes in `down`
-// (the first is 1), `passes` passes a minute apart on a test clock, `between`
-// run after the first: what it reported, as `step: error`, and logged.
+// The service over `f`'s tracker, whose `door` fails by `failure` on the
+// passes in `down` (the first is 1), `passes` passes a minute apart on a test
+// clock, `between` run after the first: what it reported, as `step: error`,
+// and logged.
 let blips = async (
   f: Awaited<ReturnType<typeof fixture>>,
   door: 'get' | 'mutate',
   down: number[],
   passes: number,
   between: () => unknown = () => {},
+  failure = () => Error('the tracker answered 503'),
 ) => {
   let time = clock(), pass = 1, reports: string[] = [], logs: string[] = []
   let stop = new AbortController()
@@ -547,9 +550,7 @@ let blips = async (
       let watch = f.config.open!(at)
       let through = watch[door] as (...args: unknown[]) => Promise<Bundle[]>
       watch[door] = (...args: unknown[]) =>
-        down.includes(pass)
-          ? Promise.reject(Error('the tracker answered 503'))
-          : through(...args)
+        down.includes(pass) ? Promise.reject(failure()) : through(...args)
       return watch
     },
     wait: async () => {
@@ -582,6 +583,36 @@ test('a blip in a mark or a read by id reports at once, once, and recovers', asy
   ok(comp((await marking.tracker.get([bug]))[0], 'taken'))
   equal(readBlip, once('read by id', 120_000))
   ok((await reading.g.get([taskEid(bug)]))[0].completed)
+})
+
+// A tracker that could not answer for now is a line until it has not
+// answered for OUTAGE (five passes here), then reported once.
+let unanswered = async (down: number[]) => {
+  let f = await off()
+  return await blips(
+    f,
+    'get',
+    down,
+    down.length + 2,
+    () => put(f.tracker, [{ entity: { eid: bug }, resolved: {} }]),
+    () => new Unavailable('Remote tracker did not answer in time'),
+  )
+}
+let late = 'Error: Remote tracker did not answer in time'
+let lines = (ms: number) => [
+  `@yaks/heal — read by id of ${url}: ${late}; the next pass asks again`,
+  `@yaks/heal — read by id of ${url} succeeds again after ${ms} ms of ${late}`,
+]
+let brief = await unanswered([2, 3, 4])
+let long = await unanswered([2, 3, 4, 5, 6, 7])
+test('a read by id the tracker could not answer is logged, and reported once it lasts OUTAGE', () => {
+  equal(brief, { reports: [], logs: lines(180_000) })
+  equal(long, {
+    reports: [
+      `read by id: Error: ${url} has not answered read by id for 300000 ms`,
+    ],
+    logs: lines(360_000),
+  })
 })
 
 let migrated = await fixture()

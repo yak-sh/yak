@@ -25,6 +25,7 @@ import { type Clock, system } from '@yaks/fp'
 import { outage } from './outage.ts'
 import { pollThread } from './poll_thread.ts'
 
+export { OUTAGE } from './outage.ts'
 export { pollThread }
 
 /** A polled answer of the platform tracker, with its mark door. */

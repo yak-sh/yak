@@ -7,6 +7,9 @@
 // bug's reconcile. The same failure at the same step again, pass after pass
 // or bug after bug, is the same bug and is not reported again; the first time
 // the step succeeds, a line says so, and a failure after that reports anew.
+// A platform tracker that could not answer for now (`Unavailable`) is a line
+// instead, as it is to the tracker's own poll (@yaks/tracker/poll): only one
+// still not answering that step after OUTAGE is reported, once.
 
 import {
   type Client,
@@ -24,8 +27,12 @@ import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { trackerDoc } from '@yaks/tracker/vocab'
-import { type Doors, poll, pollThread } from '@yaks/tracker/poll'
-import { type Remote, spaces as listed } from '@yaks/tracker/remote'
+import { type Doors, OUTAGE, poll, pollThread } from '@yaks/tracker/poll'
+import {
+  type Remote,
+  spaces as listed,
+  Unavailable,
+} from '@yaks/tracker/remote'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { follow, owed } from './follow.ts'
 import type { Options as FixOptions } from './fix.ts'
@@ -223,11 +230,26 @@ export let service = async (
     if (told.has(Object(error))) return
     if (Object(error) === error) told.add(error as object)
     let key = `${step} ${about}`
-    let { outage, fresh } = failing(failures.get(key), now(), {
+    let down = error instanceof Unavailable
+    let { outage, fresh, stayed } = failing(failures.get(key), now(), {
       cause: String(error),
+      limit: down ? OUTAGE : undefined,
     })
     failures.set(key, outage)
-    if (fresh) await report(error, step)
+    if (!down) {
+      if (fresh) await report(error, step)
+    } else if (stayed != null) {
+      await report(
+        Error(`${about} has not answered ${step} for ${stayed} ms`, {
+          cause: error,
+        }),
+        step,
+      )
+    } else if (fresh) {
+      log(
+        `@yaks/heal — ${step} of ${about}: ${error}; the next pass asks again`,
+      )
+    }
   }
   let fine = (step: string, about: string) => {
     let key = `${step} ${about}`, was = failures.get(key)
