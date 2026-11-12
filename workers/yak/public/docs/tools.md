@@ -36,9 +36,31 @@ To store a new kind of data, declare a new component, not a new command.
 `graph_apply` already writes any component the vocabulary declares, so data an
 app needs to keep, such as a `rating`, a `loan` or a `shift`, is one entry in
 its `vocab.json`, and `graph_schema` lists it for everyone as soon as the app
-deploys. Declare a command only when the app needs an action that another
-person's agent can call. Each command adds one more name to the `commands`
-listing that a model has to choose between.
+deploys.
+
+**Declare a command for each task the app's person does again and again**, when
+the task is more than adding one row of one component. Name it as the person
+would say it: `add_agenda`, `schedule_meeting`, `record_marriage`. Adding a
+sermon is one row of `sermon`, and the generated `add_sermon` does it. Putting
+an agenda on a town's website is a `document` whose `kind` is always `agenda`,
+on a named meeting, so the town site declares it:
+
+    "add_agenda": {
+      "tool": true,
+      "description": "Put a meeting's agenda on the site, from a file someone sent: it shows beside that meeting on the Meetings page",
+      "input": { "meeting": { "type": "string", "description": "The meeting it is for, by eid, from find_meeting" },
+                 "blob":    { "type": "string" },
+                 "title":   { "type": "string" } },
+      "required": ["meeting", "blob", "title"],
+      "apply": { "entity": { "eid": "$agenda" }, "doc": { "title": "$title" },
+                 "document": { "kind": "agenda", "meeting": "$meeting", "blob": "$blob" } } }
+
+An agent that has never seen the app then finds the task by its name in the
+Operator's map and in `commands`, and does it in one call instead of working out
+the rows from the pages. A published app carries its commands in its
+`vocab.json`, so every copy installed from it has them. Each command is one more
+name a model chooses between, so declare the regular tasks and leave one-off
+changes to the graph tools.
 
 ## Generated `add_` and `find_` commands
 

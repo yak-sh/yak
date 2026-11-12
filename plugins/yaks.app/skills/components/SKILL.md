@@ -398,6 +398,31 @@ a `readOnly` value without a control to change it:
     "street2": { "type": "string", "title": "Address line 2" },
     "slug":    { "type": "string", "readOnly": true }
 
+### Descriptions are the app's documentation
+
+A `description` on a component says what it is and where a person sees it. On a
+property, it says what the property takes, wherever its name does not already
+say so. Together they are the app's documentation. Every agent that works in the
+app reads them first, because `commands` naming the app answers with each
+component, its properties and their descriptions. They also finish the sentences
+of the generated `add_` and `find_` commands, and an installed copy carries
+them, so they cannot drift from what they describe. A component of a town's
+website:
+
+    "meeting": {
+      "description": "One meeting of a board, listed on the Meetings page and the calendar with its agenda and minutes beside it; anything but a regular meeting is also posted on the home page as a public notice",
+      "properties": {
+        "board":  { "type": "string", "ref": "board", "description": "The board that meets" },
+        "starts": { "type": "string", "format": "date-time" },
+        "kind":   { "type": "string", "description": "regular, special, emergency or hearing" },
+        "place":  { "type": "string", "description": "Leave empty for the Township Hall" } } }
+
+`starts` needs no description, since its name and format say it all.
+`app_deploy` names every component that still has no description. Nothing is
+refused for one, but an agent that meets the component knows only its name. How
+the app is built belongs here, not in `NOTES.md`, which holds the person's rules
+for their copy ([App Notes](./notes.md)).
+
 You can write it as `vocab.yml` instead, if you find YAML easier to read: it is
 the same manifest with fewer braces and quotes. An app that has both is deployed
 from the `.yml`:

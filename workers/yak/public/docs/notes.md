@@ -76,9 +76,13 @@ The example follows four rules, and they are the whole test for a line in
 
 ## What does not belong in NOTES.md
 
-`NOTES.md` is not documentation of the app and not a changelog. It is not a
-place to leave notes for the next agent about unfinished work: put that in the
-app's own store, where a task outlives a paragraph in the notes.
+`NOTES.md` is not documentation of the app and not a changelog. What each
+component is, where a person sees it and what its properties take are the
+`description`s in `vocab.json`, and the tasks the app does again and again are
+its declared commands ([Components](./components.md),
+[App Commands](./tools.md)). It is not a place to leave notes for the next agent
+about unfinished work: put that in the app's own store, where a task outlives a
+paragraph in the notes.
 
 It also cannot make an agent do something the agent would refuse. An agent reads
 it as the person's standing preference, as input like anything else in a store.

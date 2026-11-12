@@ -100,9 +100,15 @@ A component is a named set of properties an entity carries. The platform's own,
 rest, are shared by every app. An app declares components of its own in a
 `vocab.json` at its root, and `app_deploy` installs them in that app's store:
 
-    { "$defs": { "recipe": { "properties": {
-        "serves":  { "type": "number" },
-        "minutes": { "type": "number" } } } } }
+    { "$defs": { "recipe": {
+        "description": "A dish someone cooks, shown as a card on the box's front page",
+        "properties": {
+          "serves":  { "type": "number" },
+          "minutes": { "type": "number", "description": "Time from start to table" } } } } }
+
+Give every component a `description` saying what it is and where a person sees
+it, and each property one where its name doesn't say what it takes. They are the
+app's documentation: every agent that works in the app reads them first.
 
 A later deploy may add a property; one that already has rows is never dropped or
 retyped. A new capability is a new component, not a new tool.
@@ -152,7 +158,10 @@ open: a `$defs` entry of `vocab.json` marked `"tool": true`, the way a yaks
 package declares its tools, with a description, an argument schema, and one
 action, an `apply` template or a `query`. They are listed by `commands` and run
 by `command`; they never join the connector's own tool list, which is fixed and
-the same for everyone.
+the same for everyone. Declare one for each task the app's person does again and
+again when it is more than adding one row of one component, named as they would
+say it (`add_agenda`, `schedule_meeting`); each component already has an `add_`
+and a `find_`.
 
     "log_run": {
       "tool": true,

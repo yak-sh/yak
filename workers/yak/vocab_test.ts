@@ -30,6 +30,7 @@ import {
   platformVocab,
   reserved,
   stated,
+  undescribed,
   unlent,
   unsaid,
 } from './vocab.ts'
@@ -708,4 +709,17 @@ test('a rollback that names fewer packages keeps those whose words hold rows', (
   let empty = grew(was, {}, () => 0)
   assertEquals(empty.doc.packages, undefined)
   assertEquals(empty.dropped, [lends])
+})
+
+test('the components a manifest leaves undescribed are named', () => {
+  assertEquals(
+    undescribed({
+      $defs: {
+        meeting: { description: 'One meeting of a board', properties: {} },
+        posting: { description: '  ', properties: {} },
+        moved: { properties: {} },
+      },
+    }),
+    ['posting', 'moved'],
+  )
 })

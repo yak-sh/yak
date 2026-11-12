@@ -70,6 +70,7 @@ import {
   meant,
   stated,
   teach,
+  undescribed,
   unsaid,
   VOCABS,
   wordsOf,
@@ -1612,6 +1613,7 @@ let published = async (
       'installing it gets that code — app_publish again to offer this one'
     : ''
   let serves = parsed.config.assets?.directory
+  let quiet = undescribed(manifest)
   return {
     version,
     serves,
@@ -1623,6 +1625,12 @@ let published = async (
       // spliced into it (declared.ts, T-34541).
       (declared.length ? `\ncommands: ${declared.join(', ')}` : '') +
       (planted.length ? `\ncomponents: ${planted.join(', ')}` : '') +
+      // The documentation an agent will not find: each component says what
+      // it is and where a person sees it, or only its name (D-162751).
+      (quiet.length
+        ? `\nno description yet: ${quiet.join(', ')} — say in ${vocabFile} ` +
+          'what each is and where a person sees it'
+        : '') +
       // The data the app came with, said once — the deploy after this one
       // finds the mark and seeds nothing.
       (sowed.length

@@ -716,6 +716,16 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
 }
 
 /**
+ * The components a manifest declares with no `description`. An agent that
+ * meets one knows only its name, since the descriptions are the app's
+ * documentation (D-162751). Nothing is refused for it.
+ */
+export let undescribed = (doc: VocabDoc): string[] =>
+  Object.entries(doc.$defs ?? {})
+    .filter(([, s]) => !s.description?.trim())
+    .map(([name]) => name)
+
+/**
  * A new manifest, refused if it declares a component the platform already declares
  * ({@link reserved}) — all of them at once, before anything is planted: a
  * manifest refused one name at a time is probed one deploy at a time, and every

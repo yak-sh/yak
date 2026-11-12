@@ -74,6 +74,8 @@ test('an app declares its own commands, and command runs them', async () => {
     let deployed = await agent.tool('app_deploy', app)
     assertStringIncludes(deployed, 'commands: log_run, leaderboard')
     assertStringIncludes(deployed, 'components: jog')
+    // A component that says nothing of itself is named, and nothing refused.
+    assertStringIncludes(deployed, 'no description yet: jog')
 
     // What the app can be asked to do, said by the one fixed tool (T-34541):
     // the commands, the app each belongs to, and the arguments each takes.
