@@ -29,6 +29,9 @@ let page = (hash = '') => {
         at = h ? '#' + h.replace(/^#/, '') : ''
         if (!at) w.scrollY = 0
       },
+      replace(h: string) {
+        w.location.hash = h
+      },
     },
     scrollTo: (_x: number, y: number) =>
       void (w.scrollY = Math.max(0, Math.min(y, w.height - w.innerHeight))),

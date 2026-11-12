@@ -1216,10 +1216,12 @@
   .Sidebar_Unshut {
     display: none;
   }
+  /* In the side's scrolling column at the kit's height, never shrunk to its
+     line where the column is full; as wide as its words, up to the column. */
   .Sidebar_Back {
-    flex: 0 1 auto;
+    flex: none;
     gap: .4rem;
-    min-width: 0;
+    max-width: 100%;
     align-self: start;
   }
   .Sidebar_Way {

@@ -216,7 +216,7 @@ export let deskFrame = (
   h(
     Toolbar,
     { class: 'Desk_Bar', mod: 'narrow' },
-    h(Button, { href: '#menu' }, '☰ Menu'),
+    h(Button, { href: '#menu', 'data-pane': '' }, '☰ Menu'),
     h(Toolbar.Text, { as: 'span' }, at.where),
   ),
   h(Skip, { href: '#content' }, 'Skip to content'),

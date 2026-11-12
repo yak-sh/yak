@@ -28,6 +28,7 @@ export let waitsButton = (n: number) => {
     {
       href: `#${NEEDS}`,
       class: 'Talk_Waits',
+      'data-pane': '',
       title: said,
       'aria-label': said,
       'data-count': n,
@@ -57,7 +58,7 @@ export let talkBeside = (lists: List[]) => {
     h(
       Toolbar,
       { class: 'Talk_BesideBar' },
-      h(Button, { href: '#', class: 'Talk_Close' }, '✕ Close'),
+      h(Button, { href: '#', class: 'Talk_Close', 'data-pane': '' }, '✕ Close'),
     ),
     h(
       'div',

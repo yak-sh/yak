@@ -871,6 +871,14 @@ test('what needs the person is beside every conversation, counted, with the menu
       document.querySelector('.Talk_Bar .Talk_Menu')?.getAttribute('href'),
       '#menu',
     )
+    // each layer opens and closes without a history entry (public/pane.js)
+    for (let sel of ['.Talk_Menu', '.Talk_Waits', '#menu .Sidebar_Close']) {
+      assert(document.querySelector(sel)?.hasAttribute('data-pane'), sel)
+    }
+    assert(
+      document.querySelector('script[src*="pane.js"]'),
+      'the page loads pane.js',
+    )
     assert(
       document.querySelector('#menu.Sidebar .Sidebar_Close'),
       'the menu closes',

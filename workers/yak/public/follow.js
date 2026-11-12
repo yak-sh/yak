@@ -84,7 +84,7 @@ export function follow(win, conversation, jump, pane) {
     let link = /** @type {Element} */ (e.target).closest?.('a[href="#"]')
     if (!link || !over()) return
     e.preventDefault()
-    win.location.hash = ''
+    win.location.replace('#')
     back()
   })
   let toNewest = () => {

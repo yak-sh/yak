@@ -31,6 +31,7 @@ export let FILES = [
   'chart.js',
   'menu.js',
   'side.js',
+  'pane.js',
   'find.js',
   'modal.js',
   'cta.js',

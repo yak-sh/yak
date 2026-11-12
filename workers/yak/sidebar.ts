@@ -149,7 +149,11 @@ export let Sidebar = (at: Sidebar) =>
           worded('yaks.app'),
         ),
         at.fold ? fold(at.fold) : null,
-        h(Button, { class: 'Sidebar_Close', href: '#' }, '✕ Close'),
+        h(
+          Button,
+          { class: 'Sidebar_Close', href: '#', 'data-pane': '' },
+          '✕ Close',
+        ),
       ),
       at.back
         ? h(

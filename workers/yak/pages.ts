@@ -234,6 +234,10 @@ ${links(env, 'pages.css', undefined, assets)}${
       ? `<script src="${file('side.js')}" defer></script>`
       : ''
   }${
+    main.includes('data-pane')
+      ? `<script src="${file('pane.js')}" defer></script>`
+      : ''
+  }${
     main.includes('data-modal-close')
       ? `<script src="${file('modal.js')}" defer></script>`
       : ''

@@ -1559,7 +1559,7 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
     h(
       Toolbar,
       { mod: 'compact', 'data-part': 'head' },
-      h(Button, { href: '#', class: 'Talk_Back' }, '← Chat'),
+      h(Button, { href: '#', class: 'Talk_Back', 'data-pane': '' }, '← Chat'),
       h(Identity.Image, {
         src: `https://${host}/icon.png`,
         width: 24,
@@ -1631,7 +1631,7 @@ let ours = (space: Space, worked: Changed | null) =>
 let showing = (app: Shown) =>
   h(
     Button,
-    { href: '#app', class: 'Talk_Show' },
+    { href: '#app', class: 'Talk_Show', 'data-pane': '' },
     h(Toolbar.Label, {}, app.title || app.slug),
   )
 
@@ -1756,6 +1756,7 @@ let talkPage = (
             h(Button, {
               href: '#menu',
               class: 'Talk_Menu',
+              'data-pane': '',
               'aria-label': 'Menu',
             }, '☰'),
             h(
