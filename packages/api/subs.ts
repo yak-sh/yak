@@ -203,6 +203,15 @@ export type Subs = {
   relayed: (sink: Sink, keys: string[]) => void | Promise<void>
 }
 
+type Joint<T> = {
+  value: T | Promise<T>
+  /** Aborted once every owner let go: an owner arriving after must start the
+   * work again. */
+  cancelled: AbortSignal
+  /** Make the signal's owner one of the work's owners. */
+  share: (signal?: AbortSignal) => void
+}
+
 type Sub = {
   loading?: boolean
   dirty?: boolean
@@ -300,6 +309,38 @@ let answered = (found: Bundle[]): Projected => ({
 })
 
 let whole = (b: Bundle) => b
+
+// Work several owners share, cancelled only once every owner has let go:
+// one owner cancelling ends no answer another still waits on. An owner
+// without a signal never lets go.
+let jointly = <T>(
+  work: (signal: AbortSignal) => T | Promise<T>,
+): Joint<T> => {
+  let joint = new AbortController()
+  let owners = 0, held = false
+  let offs: (() => void)[] = []
+  let value = work(joint.signal)
+  let settled = !isPromise(value)
+  let settle = () => {
+    settled = true
+    for (let off of offs.splice(0)) off()
+  }
+  if (isPromise(value)) value.then(settle, settle)
+  return {
+    value,
+    cancelled: joint.signal,
+    share: (signal) => {
+      if (settled || signal?.aborted) return
+      if (!signal) return void (held = true)
+      owners++
+      let leave = () => {
+        if (!--owners && !held) joint.abort(signal.reason)
+      }
+      signal.addEventListener('abort', leave, { once: true })
+      offs.push(() => signal.removeEventListener('abort', leave))
+    },
+  }
+}
 
 let covering = (
   bundles: Bundle[],
@@ -1006,26 +1047,30 @@ export let subscriptions = (graph: Graph, opts: {
     sub.members.has(f.entity) &&
     sub.fields.get(f.entity)?.has(f.component + '.' + f.property)
 
-  let reading = (sub: Sub) => ({ ...sub.opts, signal: sub.abort?.signal })
+  let reading = (sub: Sub, signal = sub.abort?.signal) => ({
+    ...sub.opts,
+    signal,
+  })
 
   // What a subscription's query answers now. A projection whose paths reach
   // other entities is read as its rows (@yaks/graph `project`), which tell the
   // entities it selects from the ones they reach; any other query is the
   // graph's read, the same answer `/query` gives.
-  let ask = (sub: Sub, q: string): Answer =>
-    asking(sub.asker, () => asked(sub, q))
-  let asked = (sub: Sub, q: string): Answer =>
+  // Under the subscription's own signal, or one it shares with others.
+  let ask = (sub: Sub, q: string, signal?: AbortSignal): Answer =>
+    asking(sub.asker, () => asked(sub, q, signal))
+  let asked = (sub: Sub, q: string, signal?: AbortSignal): Answer =>
     sub.view
-      ? viewed(sub.view, reading(sub))
+      ? viewed(sub.view, reading(sub, signal))
       : sub.plan?.reaches.length
       ? project(graph, sub.plan, {
-        ...reading(sub),
+        ...reading(sub, signal),
         durable: true,
         native: true,
       })
       : after(
         graph.read(queryOf(sub, q), {
-          ...reading(sub),
+          ...reading(sub, signal),
           durable: true,
           native: !!sub.ast || graph.rewrites(sub.opts) || sub.opts?.native,
         }),
@@ -1593,12 +1638,18 @@ export let subscriptions = (graph: Graph, opts: {
       ),
     ]
     if (!relevant.size && !touched.length) return
-    let reads = new Map<string, Answer>()
+    // One read for every subscription asking the same thing in this pass,
+    // owned by all of them: a socket that drops mid-pass cancels no answer
+    // another page is waiting on.
+    let reads = new Map<string, Joint<Projected>>()
     let load = (s: Sub, q: string) => {
       let key = s.opts ? JSON.stringify([q, s.opts]) : q
       let got = reads.get(key)
-      if (!got) reads.set(key, got = ask(s, q))
-      return got
+      if (!got || got.cancelled.aborted) {
+        reads.set(key, got = jointly((signal) => ask(s, q, signal)))
+      }
+      got.share(s.abort?.signal)
+      return got.value
     }
     let names = touched.some((eid) => peerRows.has(eid))
       ? undefined

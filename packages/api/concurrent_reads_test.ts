@@ -6,6 +6,7 @@ import { type Graph } from '@yaks/graph'
 import { type Frame, subscriptions } from './subs.ts'
 import { shopGraph } from './testing.ts'
 import { api } from './route.ts'
+import { faults as faults_ } from './refuse.ts'
 
 let fixture = () => {
   let g = shopGraph()
@@ -162,4 +163,62 @@ test('an abandoned POST query is cancelled without reporting a server failure', 
   abort.abort()
   equal((await posted).status, 400)
   equal(reports, [])
+})
+
+// Two pages watching the same query share one read when a write moves it.
+let pass = (() => {
+  let g = shopGraph()
+  g.apply([{ entity: { eid: 'one' }, book: { price: 1 } }])
+  let gate: Promise<void> | undefined
+  let release = () => {}
+  let signals: AbortSignal[] = []
+  let subs = subscriptions({
+    ...g,
+    read: (q, opts) => {
+      let rows = g.read(q, opts)
+      if (!gate || q != '.book') return rows
+      let signal = opts!.signal!
+      signals.push(signal)
+      return new Promise<Awaited<typeof rows>>((resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason))
+        gate!.then(() => resolve(rows))
+      })
+    },
+  }, { invalidate: () => true })
+  let hold = () => gate = new Promise<void>((done) => release = done)
+  let page = () => {
+    let frames: Frame[] = []
+    let sink = (frame: Frame) => void frames.push(frame)
+    subs.open(sink, 'books', '.book')
+    return { frames, sink }
+  }
+  return { g, subs, signals, hold, release: () => release(), page }
+})()
+test('a page that leaves mid-pass cancels no read another page shares', async () => {
+  let f = pass
+  let faults: unknown[] = []
+  let unhook = faults_((err) => faults.push(err))
+  let [gone, stays] = [f.page(), f.page()]
+  try {
+    f.hold()
+    let writing = f.g.apply([{ entity: { eid: 'one' }, book: { price: 2 } }])
+    // Not awaited: a drop waits for the pass it interrupts.
+    let dropped = f.subs.drop(gone.sink)
+    f.release()
+    await Promise.all([writing, dropped, f.subs.check()])
+    equal(stays.frames.map((f) => f.refused ?? f.bundles?.[0].book), [
+      { price: 1 },
+      { price: 2 },
+    ])
+    equal(faults, [])
+    f.hold()
+    writing = f.g.apply([{ entity: { eid: 'one' }, book: { price: 3 } }])
+    dropped = f.subs.drop(stays.sink)
+    equal(f.signals.at(-1)!.aborted, true)
+    f.release()
+    await Promise.all([writing, dropped])
+  } finally {
+    unhook()
+    f.release()
+  }
 })
