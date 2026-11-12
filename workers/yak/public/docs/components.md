@@ -428,11 +428,13 @@ website:
         "kind":   { "type": "string", "description": "regular, special, emergency or hearing" },
         "place":  { "type": "string", "description": "Leave empty for the Township Hall" } } }
 
-`starts` needs no description, since its name and format say it all.
-`app_deploy` names every component that still has no description. Nothing is
-refused for one, but an agent that meets the component knows only its name. How
-the app is built belongs here, not in `NOTES.md`, which holds the person's rules
-for their copy ([App Notes](./notes.md)).
+`starts` needs no description, since its name and format say it all. A component
+with no description, and a reference or a flag with none, is a warning on the
+app: `app_deploy` says it, and `app_errors` and `commands` naming the app go on
+saying it until the description is written and deployed. Nothing is refused for
+one, but an agent that meets it knows only its name. How the app is built
+belongs here, not in `NOTES.md`, which holds the person's rules for their copy
+([App Notes](./notes.md)).
 
 You can write it as `vocab.yml` instead, if you find YAML easier to read: it is
 the same manifest with fewer braces and quotes. An app that has both is deployed
