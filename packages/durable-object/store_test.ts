@@ -17,6 +17,14 @@ import { kitchen, PROJECTED, PROJECTED_ROW, RECIPE } from '../sqlite/testing.ts'
 
 let comp = (b: Bundle, name: string) => b[name] as Record<string, unknown>
 
+test('an object binds without looking for a host database file', () => {
+  using db = durable()
+  let s = storage(db, shop)
+  assertEquals(s.file, undefined)
+  s.install()
+  assertEquals(s.read('.doc'), [])
+})
+
 test('install is idempotent, and a bundle survives the round trip', async () => {
   using db = durable()
   // The runtime supplies size without a SQL scan. Drive that boundary to

@@ -386,6 +386,8 @@ export type Store = {
    * that nothing in the file names (./buried.ts), a page of them from `after`,
    * read as one snapshot */
   buried: (before: string, page: { after?: string; limit: number }) => Graves
+  /** The host database's absolute path, absent for memory and hosted stores. */
+  readonly file?: string
   /** what the file keeps, measured off the caller's thread (./measure.ts) */
   measure: (signal?: AbortSignal) => Promise<Measure | undefined>
   /** a query → a statement selecting the ids of the entities it admits, as

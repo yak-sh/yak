@@ -47,7 +47,8 @@ export { shop }
 let REFUSED =
   /^\s*(begin|commit|end|rollback|savepoint|release|attach|detach|vacuum)\b/i
 
-// Schema cookies, connection filenames and the analysis sampling limit are private to the runtime.
+// Schema cookies, database paths and the analysis sampling limit are private
+// to the runtime.
 let SCHEMA =
   /^\s*pragma\s+(?:["\w]+\.)?["']?(?:schema_version|analysis_limit|database_list)\b/i
 
