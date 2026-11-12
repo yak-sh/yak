@@ -18,6 +18,7 @@ import { and, distinct, eq, fields, list, present } from '@yaks/query'
 import { refEid } from './comp.ts'
 import { localFilesystem } from './placement.ts'
 import { checkoutBase } from './checkout.ts'
+import { spares } from './spare.ts'
 export { filesystemEid, localFilesystem } from './placement.ts'
 
 export { checkoutDoc } from './checkout_vocab.ts'
@@ -87,7 +88,7 @@ let locked = async <T>(
       { create: true, write: true },
     )
     try {
-      await file.lock()
+      await file.lock(true)
       return await change()
     } finally {
       file.close()
@@ -493,49 +494,30 @@ let commonOf = async (source: string): Promise<string> =>
     ]))!,
   )
 
-// The spare beside the checkouts in `path`'s directory.
-let spareBeside = (path: string) =>
-  path.slice(0, path.lastIndexOf('/')) + '/.spare'
-
-// Put a worktree at `path`, as `git worktree add` with these flags (`-b X`,
-// `--detach`, or neither for a branch that stands) and target would: with
-// `spare`, by renaming the spare beside it there and checking it out to the
-// target, which rewrites only the files that differ and, through the
-// repository's post-checkout hook, installs only what its lockfile changed.
-// The rename takes it, so of two requests one has it; with none there, the
-// worktree is cut whole.
-let add = async (
-  source: string,
-  path: string,
-  flags: string[],
-  target: string,
-  spare?: boolean,
-): Promise<void> => {
-  let taken = spare &&
-    await io.rename(spareBeside(path), path).then(() => true, (e) => {
-      if (io.isNotFound(e)) return false
-      throw e
-    })
-  if (!taken) {
-    await git(source, ['worktree', 'add', ...flags, path, target])
-    return
-  }
-  try {
-    await git(source, ['worktree', 'repair', path])
-    await git(path, ['checkout', '--quiet', ...flags, target])
-  } catch (failure) {
-    await quiet(source, ['worktree', 'remove', '--force', path])
-    throw failure
-  }
-}
+let { add, keep } = spares({
+  git,
+  exists: (path) =>
+    io.stat(path).then(() => true, (error) => {
+      if (io.isNotFound(error)) return false
+      throw error
+    }),
+  entries: io.readDir,
+  remove: (path) =>
+    io.remove(path, { recursive: true }).catch((error) => {
+      if (!io.isNotFound(error)) throw error
+    }),
+  lock: async (source, path, change) =>
+    locked(await commonOf(source), path, change),
+})
 
 /**
  * Cut the spare checkout beside `path` from `base` (a commit or ref of the
  * repository `source` is a checkout of), unless one is there: a checkout
  * created in that directory with `spare` is made from it in about a second,
  * where one cut whole writes every file and installs its dependencies. It is
- * cut under a name of its own and renamed once whole, so nothing takes it half
- * made; what a cut that never finished left there is removed first.
+ * cut under a name of its own and moved once whole, so nothing takes it half
+ * made. Its Git registration stays locked through publication and claim; a
+ * concurrent prune cannot remove it. Unfinished cuts are removed first.
  *
  * ```ts ignore
  * import { createWorktree, keepSpare } from '@yaks/git/host'
@@ -550,28 +532,7 @@ export let keepSpare = async (
   path: string,
   base = 'HEAD',
 ): Promise<void> => {
-  let common = await commonOf(source)
-  let at = spareBeside(await canonical(path))
-  await locked(common, at, async () => {
-    if (await io.stat(at).then(() => true, () => false)) return
-    let dir = at.slice(0, at.lastIndexOf('/'))
-    for await (let e of io.readDir(dir)) {
-      if (!e.name.startsWith('.spare-')) continue
-      let left = `${dir}/${e.name}`
-      // Git deletes a cut it registered; one it never knew is deleted here,
-      // and one already gone is the outcome either way.
-      await quiet(source, ['worktree', 'remove', '--force', left])
-      await io.remove(left, { recursive: true }).catch((e) => {
-        if (!io.isNotFound(e)) throw e
-      })
-    }
-    let cut = `${at}-${crypto.randomUUID()}`
-    await git(source, ['worktree', 'add', '--detach', cut, base])
-    await io.rename(cut, at)
-    // A request may take it the moment it is renamed; its repair is then the
-    // one that tells Git where it went.
-    await quiet(source, ['worktree', 'repair', at])
-  })
+  await keep(source, await canonical(path), base)
 }
 
 /** Why a worktree was kept: uncommitted files, commits that exist nowhere

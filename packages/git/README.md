@@ -566,12 +566,14 @@ uncommitted in it.
 A checkout cut whole writes every file, and the repository's post-checkout hook
 then installs its dependencies: several seconds in a large repository. A request
 with `spare: true` is made from the spare checkout beside its path instead, when
-there is one: the spare is renamed to the path, which takes it, and checked out
+there is one: Git moves the spare to the path, which takes it, and checks it out
 to the requested branch and commit, which rewrites only the files that differ,
 in about a second. `keepSpare(source, path, base)` cuts that spare, at `.spare`
 in the directory of `path`, unless one is there; it is cut under a name of its
-own and renamed once whole, so nothing takes it half made. @yaks/spawn keeps one
-beside its runs' checkouts.
+own and moved once whole, so nothing takes it half made. Its Git registration
+stays locked through both moves, until the claimed checkout is registered at its
+final path, so concurrent pruning cannot remove it. Publication and claims share
+an exclusive lock. @yaks/spawn keeps one beside its runs' checkouts.
 
 Taking a worktree back is a separate, explicit step. `holds(path)` says what a
 worktree still holds: `dirty` for uncommitted files, `unlanded` when its HEAD is
