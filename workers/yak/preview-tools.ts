@@ -39,7 +39,12 @@ export let tools = [worded(
         screenshot: {
           type: 'boolean',
           description:
-            'default true; false returns the private preview address without running a browser',
+            'default true; false returns the address without running a browser',
+        },
+        released: {
+          type: 'boolean',
+          description:
+            'true opens the released app at its own address with its live data, as a visitor sees a public app and as you see a private one, instead of the draft; check a page with it after app_deploy or after writing rows',
         },
       },
       required: ['app'],

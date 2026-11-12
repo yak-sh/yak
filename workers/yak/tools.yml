@@ -363,10 +363,13 @@ sandbox_ship:
     Cloudflare and returns the screenshot, console messages and page errors.
     Documentation: https://yaks.app/docs/sandbox.
 app_preview:
-  title: Preview an app draft
+  title: Preview an app
   description: >-
-    Build and open the staged app privately before app_deploy. Returns a
-    private preview URL, a PNG screenshot the client displays, and console
+    Open a page of the app in a browser on Cloudflare: the staged draft,
+    built privately, before app_deploy, or with released: true the released
+    app at its own address with its live data, to check what people see after
+    app_deploy or after rows were written. Returns the address, a PNG
+    screenshot the client displays, the page's visible text, and console
     messages, JavaScript errors, the page's HTTP status and an axe-core WCAG
     2.1 AA accessibility report (rule, element and one-line fix per problem,
     plus elements needing manual review). Fix the reported problems before

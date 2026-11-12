@@ -1,10 +1,10 @@
-// A draft rendered for app_preview. The rendering is yak-browser's (browser/),
+// A page rendered for app_preview: a draft, or the released app. The rendering is yak-browser's (browser/),
 // the Worker behind the BROWSER binding, so puppeteer and axe-core are never
 // in this Worker's script: every isolate compiles that, a page view's included.
 import { system } from '@yaks/fp'
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
-import type { Failed, Rendered, View } from './browser/capture.ts'
+import type { Failed, Rendered, Visit } from './browser/capture.ts'
 
 // A failure yak-browser answered, raised here with the stack it had there.
 let relayed = ({ failed, stack }: Failed) =>
@@ -18,15 +18,14 @@ let answered = async (r: Response) => {
 }
 
 /**
- * What yak-browser rendered of `url`, charged through `used` the browser time
+ * What yak-browser rendered of a visit, charged through `used` the browser time
  * it held, failing or not; the time this waited when it could not say. A check
  * that failed stays the preview's own result and is reported here, for the
  * tracker to hear, tagged with `where` the preview was of.
  */
 export let render = async (
   env: Pick<Env, 'BROWSER' | 'CLOCK'>,
-  url: string,
-  view: View,
+  visit: Visit,
   used: (duration: number) => Promise<void> = () => Promise.resolve(),
   where: Record<string, string> = {},
 ): Promise<Rendered> => {
@@ -41,7 +40,7 @@ export let render = async (
       await env.BROWSER.fetch(
         new Request('https://browser.invalid/', {
           method: 'POST',
-          body: JSON.stringify({ url, view }),
+          body: JSON.stringify(visit),
         }),
       ),
     )

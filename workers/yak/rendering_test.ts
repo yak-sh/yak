@@ -7,6 +7,7 @@ import {
   type Browsing,
   capture,
   CHECK,
+  type Cookie,
   type Message,
   type Page,
   RENDER,
@@ -55,7 +56,9 @@ let devtools = (
   return cdp
 }
 let axe = (expression: string) =>
-  expression.includes('axe.run(document')
+  expression.includes('innerText')
+    ? 'Meetings\nAgenda'
+    : expression.includes('axe.run(document')
     ? {
       violations: [{
         id: 'image-alt',
@@ -77,6 +80,8 @@ let page = (
   let cdp = devtools(options.main ?? axe, options.world ?? axe)
   let hear = new Map<string, (value: unknown) => void>()
   let viewport: unknown
+  let cookies: Cookie[] = []
+  let opened: Cookie[] | undefined
   let closed = false
   let p: Page = {
     on: (event: string, fn: (value: never) => void) => {
@@ -86,7 +91,12 @@ let page = (
       viewport = v
       return Promise.resolve()
     },
+    setCookie: (...c) => {
+      cookies.push(...c)
+      return Promise.resolve()
+    },
     goto: () => {
+      opened = [...cookies]
       hear.get('console')?.(
         { type: () => 'log', text: () => 'page ready' } satisfies Message,
       )
@@ -119,6 +129,7 @@ let page = (
     browsing,
     hear,
     viewport: () => viewport,
+    opened: () => opened,
     closed: () => closed,
   }
 }
@@ -141,8 +152,7 @@ test('draft rendering captures loading diagnostics at the requested viewport and
   let p = page()
   let result = await capture(
     p.browsing,
-    'https://private.invalid/',
-    view,
+    { url: 'https://private.invalid/', view },
   )
   assertEquals(p.viewport(), { width: 390, height: 844 })
   assertEquals(result.image, 'png-bytes')
@@ -151,6 +161,25 @@ test('draft rendering captures loading diagnostics at the requested viewport and
   assertStringIncludes(result.errors[0], 'page exception')
   assertEquals(result.status, 200)
   assertEquals(p.closed(), true)
+})
+
+test('a page opens with the cookies it was sent and answers its visible text', async () => {
+  let p = page()
+  let signIn: Cookie = {
+    name: 'yak_session',
+    value: 'sealed',
+    domain: 'town.yaks.app',
+    path: '/',
+    secure: true,
+    httpOnly: true,
+  }
+  let result = await capture(p.browsing, {
+    url: 'https://town.yaks.app/',
+    view,
+    cookies: [signIn],
+  })
+  assertEquals(p.opened(), [signIn])
+  assertEquals(result.text, 'Meetings\nAgenda')
 })
 
 test('a page that extends Object.prototype still gets its accessibility audit', async () => {
@@ -163,8 +192,7 @@ test('a page that extends Object.prototype still gets its accessibility audit', 
   })
   let result = await capture(
     p.browsing,
-    'https://private.invalid/',
-    view,
+    { url: 'https://private.invalid/', view },
   )
   assertEquals(result.image, 'png-bytes')
   assertEquals((result.accessibility as Audit).problems[0].rule, 'image-alt')
@@ -177,7 +205,7 @@ test('a check that throws keeps the preview and the kernel reports its failure',
     },
   })
   let { result, reports } = await reported(() =>
-    render(bound(p.browsing), 'https://x.invalid/', view)
+    render(bound(p.browsing), { url: 'https://x.invalid/', view })
   )
   assertEquals(result.image, 'png-bytes')
   assertEquals(result.console, [{ type: 'log', text: 'page ready' }])
@@ -189,7 +217,7 @@ test('a check that throws keeps the preview and the kernel reports its failure',
 
 test('a check that passes reports nothing', async () => {
   let { result, reports } = await reported(() =>
-    render(bound(page().browsing), 'https://x.invalid/', view)
+    render(bound(page().browsing), { url: 'https://x.invalid/', view })
   )
   assertEquals((result.accessibility as Audit).problems[0].rule, 'image-alt')
   assertEquals(reports, '[]')
@@ -205,8 +233,7 @@ test('the audit runs the script it is given in its own world', async () => {
       ...p.browsing,
       axe: { source: 'S', version: '9' },
     },
-    'https://x.invalid/',
-    view,
+    { url: 'https://x.invalid/', view },
   )
   assertEquals(ran[0], 'S')
   assertEquals((result.accessibility as Audit).engine, 'axe-core 9')
@@ -218,8 +245,7 @@ test('a check that stalls keeps the preview and fails at its own deadline', asyn
   p.p.createCDPSession = () => new Promise(() => {})
   let running = capture(
     p.browsing,
-    'https://x.invalid/',
-    view,
+    { url: 'https://x.invalid/', view },
     undefined,
     time,
   )
@@ -241,7 +267,12 @@ test('a slow load leaves the check its own time', async () => {
   let { goto, createCDPSession } = p.p
   p.p.goto = (...args) => after(RENDER - 1000, () => goto(...args))
   p.p.createCDPSession = () => after(CHECK - 1000, createCDPSession)
-  let running = capture(p.browsing, 'https://x.invalid/', view, undefined, time)
+  let running = capture(
+    p.browsing,
+    { url: 'https://x.invalid/', view },
+    undefined,
+    time,
+  )
   await time.advance(RENDER - 1000)
   await time.advance(CHECK - 1000)
   let result = await running
@@ -256,7 +287,7 @@ test('a failed check is reported with the space and app it previewed', async () 
     },
   })
   let { reports } = await reported(() =>
-    render(bound(p.browsing), 'https://x.invalid/', view, undefined, {
+    render(bound(p.browsing), { url: 'https://x.invalid/', view }, undefined, {
       space: 'jeff',
       app: 'jolly-wedding',
     })
@@ -268,8 +299,7 @@ test('a failed page load still returns the screenshot and its error', async () =
   let p = page({ loading: new Error('net::ERR_NAME_NOT_RESOLVED') })
   let result = await capture(
     p.browsing,
-    'https://private.invalid/',
-    view,
+    { url: 'https://private.invalid/', view },
   )
   assertEquals(result.image, 'png-bytes')
   assertEquals((result.accessibility as Audit).problems[0].rule, 'image-alt')
@@ -294,10 +324,14 @@ test('a screenshot failure closes its browser and the kernel charges its time', 
   }
   await assertRejects(
     () =>
-      render(bound(browsing, time), 'https://private.invalid/', view, (ms) => {
-        duration = ms
-        return Promise.resolve()
-      }),
+      render(
+        bound(browsing, time),
+        { url: 'https://private.invalid/', view },
+        (ms) => {
+          duration = ms
+          return Promise.resolve()
+        },
+      ),
     Error,
     'browser unavailable',
   )
@@ -329,7 +363,12 @@ let paused = async (time: ReturnType<typeof clock>) => {
 test('a session not ready yet is connected to again', async () => {
   let { p, browsing, sessions } = flaky(2)
   let time = clock()
-  let rendering = capture(browsing, 'https://x.invalid/', view, undefined, time)
+  let rendering = capture(
+    browsing,
+    { url: 'https://x.invalid/', view },
+    undefined,
+    time,
+  )
   await paused(time)
   assertEquals((await rendering).image, 'png-bytes')
   assertEquals(sessions, ['session 0', 'session 0', 'session 0'])
@@ -339,7 +378,12 @@ test('a session not ready yet is connected to again', async () => {
 test('a session that never takes a connection fails the preview', async () => {
   let { browsing, sessions } = flaky(Infinity)
   let time = clock()
-  let rendering = capture(browsing, 'https://x.invalid/', view, undefined, time)
+  let rendering = capture(
+    browsing,
+    { url: 'https://x.invalid/', view },
+    undefined,
+    time,
+  )
   rendering.catch(() => {})
   await paused(time)
   await assertRejects(() => rendering, Error, "reading 'accept' of null")
@@ -357,10 +401,14 @@ test('a yak-browser that cannot say is charged the time the kernel waited', asyn
   }
   await assertRejects(
     () =>
-      render({ BROWSER, CLOCK: time }, 'https://x.invalid/', view, (ms) => {
-        duration = ms
-        return Promise.resolve()
-      }),
+      render(
+        { BROWSER, CLOCK: time },
+        { url: 'https://x.invalid/', view },
+        (ms) => {
+          duration = ms
+          return Promise.resolve()
+        },
+      ),
     Error,
     'yak-browser 503',
   )
@@ -381,8 +429,7 @@ test('draft diagnostics are bounded while collecting messages during load', asyn
   }
   let result = await capture(
     p.browsing,
-    'https://private.invalid/',
-    view,
+    { url: 'https://private.invalid/', view },
   )
   assertEquals(result.console.length, 100)
   assertEquals(result.console[0].text.length, 2000)
@@ -397,8 +444,7 @@ test('a stalled screenshot releases its browser and accounts for elapsed time', 
   p.p.screenshot = () => new Promise(() => {})
   let running = capture(
     p.browsing,
-    'https://private.invalid/',
-    view,
+    { url: 'https://private.invalid/', view },
     (ms) => {
       used = ms
       return Promise.resolve()

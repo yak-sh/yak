@@ -1,12 +1,23 @@
-// What yak-browser does with a request: a draft's address and viewport posted
-// in, its screenshot, console, errors, status and accessibility check out, with
-// the browser time it held. Browser control runs on Cloudflare; the small
+// What yak-browser does with a request: a page's address, viewport and the
+// cookies it is opened with posted in, its screenshot, text, console, errors,
+// status and accessibility check out, with the browser time it held. Browser control runs on Cloudflare; the small
 // session interface lets the load, diagnostics and cleanup run in process
 // without a local browser.
 import { type Clock, sleep, system } from '@yaks/fp'
 import { audit, type Axe, type Checked } from '../accessibility.ts'
 
 export type View = { width: number; height: number; wait: number }
+/** A cookie the page is opened with: a private app's sign-in. */
+export type Cookie = {
+  name: string
+  value: string
+  domain: string
+  path: string
+  secure: boolean
+  httpOnly: boolean
+}
+/** What yak-browser is asked to open. */
+export type Visit = { url: string; view: View; cookies?: Cookie[] }
 export type Message = { type(): string; text(): string }
 type Events = { console: Message; pageerror: unknown; error: Error }
 export type Page = {
@@ -15,6 +26,7 @@ export type Page = {
     hear: (value: Events[Event]) => void,
   ): unknown
   setViewport(view: { width: number; height: number }): Promise<void>
+  setCookie(...cookies: Cookie[]): Promise<void>
   goto(url: string, options: {
     waitUntil: 'domcontentloaded'
     timeout: number
@@ -40,9 +52,11 @@ export type Browser = {
   close(): Promise<void>
 }
 
-/** A rendered draft, and the browser time it took. */
+/** A rendered page, and the browser time it took. */
 export type Rendered = {
   image: string
+  /** The page's visible text, as far as `TEXT` characters. */
+  text: string
   console: { type: string; text: string }[]
   errors: string[]
   status: number
@@ -122,18 +136,37 @@ let deadline = (time: Clock, ms: number, said: string) => {
 export let RENDER = 15_000
 export let CHECK = 10_000
 
+/** How much of a page's visible text a render carries. */
+export let TEXT = 6000
+
 // A check that fails is its own result: the preview keeps its screenshot,
-// console and errors, and the kernel reports the failure (../browser.ts).
-let checked = async (page: Page, axe: Axe, time: Clock): Promise<Checked> => {
+// console and errors, and the kernel reports the failure (../browser.ts). The
+// page's visible text is read in the same world after the audit, so nothing
+// the page adds to its globals changes how it is read; a check that failed
+// read none.
+let checked = async (
+  page: Page,
+  axe: Axe,
+  time: Clock,
+): Promise<{ accessibility: Checked; text: string }> => {
   let { bounded, cancel } = deadline(
     time,
     CHECK,
     `Accessibility check timed out after ${CHECK / 1000} seconds`,
   )
   try {
-    return await bounded(isolated(page).then((world) => audit(world, axe)))
+    return await bounded(
+      isolated(page).then(async (world) => ({
+        accessibility: await audit(world, axe),
+        text: String(
+          await world.evaluate(
+            `(document.body?.innerText ?? '').slice(0, ${TEXT})`,
+          ),
+        ),
+      })),
+    )
   } catch (e) {
-    return { failed: message(e) }
+    return { accessibility: { failed: message(e) }, text: '' }
   } finally {
     cancel()
   }
@@ -141,8 +174,7 @@ let checked = async (page: Page, axe: Axe, time: Clock): Promise<Checked> => {
 
 export let capture = async (
   browsing: Browsing,
-  url: string,
-  view: View,
+  { url, view, cookies = [] }: Visit,
   used: (duration: number) => Promise<void> = () => Promise.resolve(),
   time: Clock = system,
 ): Promise<Rendered> => {
@@ -167,6 +199,7 @@ export let capture = async (
       page.on('pageerror', error)
       page.on('error', error)
       await page.setViewport({ width: view.width, height: view.height })
+      if (cookies.length) await page.setCookie(...cookies)
       let status = 0
       try {
         status = (await page.goto(url, {
@@ -182,7 +215,7 @@ export let capture = async (
     })())
     cancel()
     let { page, ...rest } = loaded
-    result = { ...rest, accessibility: await checked(page, browsing.axe, time) }
+    result = { ...rest, ...await checked(page, browsing.axe, time) }
   } finally {
     cancel()
     try {
@@ -196,7 +229,7 @@ export let capture = async (
 }
 
 /**
- * yak-browser's answer to a posted `{ url, view }`: what `capture` rendered,
+ * yak-browser's answer to a posted `Visit`: what `capture` rendered,
  * or the reason it could not, as a 500. Both carry the browser time held, so
  * the kernel charges it either way.
  */
@@ -205,9 +238,9 @@ export let answer =
   async (req: Request): Promise<Response> => {
     let duration = 0
     try {
-      let { url, view } = await req.json() as { url: string; view: View }
+      let visit = await req.json() as Visit
       return Response.json(
-        await capture(browsing, url, view, (ms) => {
+        await capture(browsing, visit, (ms) => {
           duration = ms
           return Promise.resolve()
         }, time),

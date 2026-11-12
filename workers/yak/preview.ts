@@ -24,6 +24,7 @@ import {
   directory,
   type Space,
   storeName,
+  url as appUrl,
 } from './directory.ts'
 import * as directoryPart from './directory.ts'
 import { copyOf } from './directory-copy.ts'
@@ -43,7 +44,7 @@ import { configured } from './deploy_worker.ts'
 import { baseOf, fileBytes, inside, prefixOf } from './files.ts'
 import { spaceHost } from './host.ts'
 import { r2RawObjects } from './lib/objects.ts'
-import { opened, seal } from './lib/token.ts'
+import { COOKIE, opened, seal, sign } from './lib/token.ts'
 import { onHold } from './model-spend.ts'
 import { ModelError } from '@yaks/model'
 import { filesIn, staged } from './release.ts'
@@ -66,6 +67,7 @@ import {
   type Tell,
 } from './written.ts'
 import type { Objects } from '@yaks/blob'
+import type { Cookie, View, Visit } from './browser/capture.ts'
 import { sourceOf } from './wrangler_app.ts'
 import { decodedPath } from './request-path.ts'
 import { walled } from './installed.ts'
@@ -489,23 +491,140 @@ export let linkOf = async (
   }
 }
 
+// A page as yak-browser rendered it, held on the space's budget for the most
+// browser time a render can take, its load's and its check's (browser/
+// capture.ts), refused there in the directory's own transaction, and charged
+// the time it took, failing or not (model-spend.ts `onHold`).
+let rendering = async (ctx: Ctx, space: Space, app: App, visit: Visit) => {
+  let { render } = await import('./browser.ts')
+  let { RENDER, CHECK } = await import('./browser/capture.ts')
+  let rendered = await onHold(
+    ctx.env,
+    space,
+    (RENDER + CHECK) / 1000 * RATE,
+    'models',
+    (spent) =>
+      render(ctx.env, visit, (duration) => {
+        spent(duration / 1000 * RATE)
+        return Promise.resolve()
+      }, { space: space.slug, app: app.slug }),
+    'browser',
+  ).catch((e) => {
+    throw e instanceof ModelError && e.code == 'limit'
+      ? refuse('limit', e.message)
+      : e
+  })
+  let { image, text, ...diagnostics } = rendered
+  return {
+    cost: rendered.duration / 1000 * RATE,
+    diagnostics,
+    images: [{ data: image, mime_type: 'image/png' }],
+    said: (where: string) =>
+      `${where}\n${visit.view.width} × ${visit.view.height}; HTTP ${rendered.status}.\nText: ${
+        JSON.stringify(text)
+      }\nConsole: ${JSON.stringify(rendered.console)}\nErrors: ${
+        JSON.stringify(rendered.errors)
+      }\n${report(rendered.accessibility)}`,
+  }
+}
+
+// How long the sign-in a private app is opened with lasts, in seconds: past
+// the longest render, and no longer.
+let SIGNED = 120
+
+// The sign-in a render of a private app carries: the caller's own, narrowed
+// to the app's space, on the app's host alone and gone after the render.
+let signedIn = async (
+  env: Env,
+  person: string,
+  space: Space,
+  host: string,
+): Promise<Cookie> => ({
+  name: COOKIE,
+  value: await sign({
+    person,
+    space: space.eid,
+    exp: Math.floor(Date.now() / 1000) + SIGNED,
+  }, env.SESSION_SECRET!),
+  domain: host,
+  path: '/',
+  secure: true,
+  httpOnly: true,
+})
+
+// The released app at the address everyone is handed (directory.ts `url`),
+// over its live store: a public app as a visitor sees it, a private one as
+// the caller does.
+let released = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  who: Who,
+  path: string,
+  view: View,
+  screenshot: boolean,
+) => {
+  if (!app.version) {
+    throw refuse(
+      'missing',
+      `${space.slug}/${app.slug} has no release yet; app_deploy releases it`,
+    )
+  }
+  let at = appUrl(space, app, ctx.env) + path
+  let value: Record<string, unknown> = {
+    url: at,
+    version: app.version,
+    ...view,
+    cost: 0,
+  }
+  let where = `Released ${space.slug}/${app.slug} v${app.version}: ${at}`
+  if (!screenshot) {
+    return {
+      text:
+        `${where}\napp_preview with released: true and screenshot: true opens it in a browser.`,
+      space,
+      value,
+    }
+  }
+  let signed = app.access == 'private' && who.person
+  let cookies = signed
+    ? [await signedIn(ctx.env, who.person!, space, new URL(at).host)]
+    : []
+  let shot = await rendering(ctx, space, app, { url: at, view, cookies })
+  Object.assign(value, shot.diagnostics, { cost: shot.cost })
+  return {
+    text: shot.said(
+      `${where}, with its live data, as ${
+        signed ? 'you see it signed in' : 'a visitor sees it'
+      }.`,
+    ),
+    space,
+    value,
+    images: shot.images,
+  }
+}
+
 export let preview = async (ctx: Ctx, args: Args) => {
   let view = viewport(args)
   let path = page(args.path)
-  if (args.screenshot != null && typeof args.screenshot != 'boolean') {
-    throw refuse('arguments', 'screenshot: true or false')
+  for (let flag of ['screenshot', 'released']) {
+    if (args[flag] != null && typeof args[flag] != 'boolean') {
+      throw refuse('arguments', `${flag}: true or false`)
+    }
   }
   let screenshot = args.screenshot !== false
   if (!ctx.env.SESSION_SECRET) {
     throw refuse('unavailable', 'Draft previews are not configured')
   }
-  let { space, app, who } = await inApp(ctx, args, true)
+  let live = args.released === true
+  let { space, app, who } = await inApp(ctx, args, !live)
   if (screenshot && !ctx.env.BROWSER) {
     throw refuse(
       'unavailable',
       'Cloudflare Browser Rendering is not configured',
     )
   }
+  if (live) return released(ctx, space, app, who, path, view, screenshot)
   let { open, mount, at } = await linkOf(ctx, space, app, who)
   await following(ctx, space, open, open.followed!, mount, who)
   let url = at + path
@@ -526,41 +645,15 @@ export let preview = async (ctx: Ctx, args: Args) => {
       value,
     }
   }
-  let { render } = await import('./browser.ts')
-  let { RENDER, CHECK } = await import('./browser/capture.ts')
-  // The most browser time a preview can take, its load's and its check's
-  // (browser/capture.ts), held on the space's budget, refused there in the
-  // directory's own transaction, and charged the time it took, failing or not
-  // (model-spend.ts `onHold`).
-  let rendered = await onHold(
-    ctx.env,
-    space,
-    (RENDER + CHECK) / 1000 * RATE,
-    'models',
-    (spent) =>
-      render(ctx.env, url, view, (duration) => {
-        spent(duration / 1000 * RATE)
-        return Promise.resolve()
-      }, { space: space.slug, app: app.slug }),
-    'browser',
-  ).catch((e) => {
-    throw e instanceof ModelError && e.code == 'limit'
-      ? refuse('limit', e.message)
-      : e
-  })
-  let cost = rendered.duration / 1000 * RATE
-  let { image, ...diagnostics } = rendered
-  Object.assign(value, diagnostics, { cost })
+  let shot = await rendering(ctx, space, app, { url, view })
+  Object.assign(value, shot.diagnostics, { cost: shot.cost })
   return {
-    text:
-      `Private draft preview: ${url}\n${view.width} × ${view.height}; HTTP ${rendered.status}. ${follows} Test data is isolated; worker calls to external services still reach those services.\nConsole: ${
-        JSON.stringify(rendered.console)
-      }\nErrors: ${JSON.stringify(rendered.errors)}\n${
-        report(rendered.accessibility)
-      }`,
+    text: shot.said(
+      `Private draft preview: ${url}\n${follows} Test data is isolated; worker calls to external services still reach those services. app_preview with released: true opens the released app with its live data.`,
+    ),
     space,
     value,
-    images: [{ data: image, mime_type: 'image/png' }],
+    images: shot.images,
   }
 }
 
