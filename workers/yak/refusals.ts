@@ -208,7 +208,13 @@ export let letter = (report: string, rows: Row[]) => {
     body: [
       `${rows.length} tool refusals since the last report, grouped by tool, ` +
       'code and cause, the most first. None of them is a bug; each is a ' +
-      'place a tool, its schema or its description failed its caller.',
+      'place a tool, its schema or its description failed its caller. ' +
+      "Each cause is the refusal's words with its values taken out: " +
+      `${
+        VALUES.map(([, as]) => as).filter((as) => as.startsWith('<'))
+          .join(', ')
+      } stand for what the caller sent, and its refusal ` +
+      'named them; nothing kept here holds them.',
       ...said,
       ...rest > 0 ? [`and ${rest} more groups`] : [],
       `Every occurrence, for ${KEPT / DAY} days: ` +

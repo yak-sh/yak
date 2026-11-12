@@ -130,6 +130,7 @@ test('a report groups by tool, code and cause, the most first', async () => {
   ])
   equal(rest.filter((group) => group.includes(' × ')).length, 2)
   ok(body.includes(countedIn(first!)))
+  ok(body.includes('<id>, <token>, <n> stand for what the caller sent'))
   equal(await counted(grouped, first!), 4)
 })
 

@@ -244,6 +244,19 @@ test('graph_show answers the ids that name something and says which do not', asy
   await assertRejects(
     () => shown('gone'),
     Refused,
-    'gone names nothing: no entity has that id',
+    'gone names nothing: no entity has that id; graph_query by what it holds',
+  )
+  let searching = tier({ search: () => [] }).find((t) =>
+    t.name == 'graph_show'
+  )!
+  await assertRejects(
+    async () =>
+      await searching.run(
+        { entity: { eid: 'c' }, call: { args: { id: 'gone' } } },
+        books,
+      ),
+    Refused,
+    'gone names nothing: no entity has that id; search finds an entity by ' +
+      'its words, and graph_query by what it holds',
   )
 })
