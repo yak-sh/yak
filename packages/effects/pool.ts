@@ -301,6 +301,8 @@ export type Ctx = {
 export type WorkOpts = {
   /** Maximum discovery passes; omitted, drain until nothing is left to start. */
   passes?: number
+  /** A drain starts another bounded pass only while the host has capacity. */
+  while?: () => boolean
   /** The instant (ms, the pool's clock) a drain stops starting runs: what it
    * started goes on, and what is owed waits for the host's next call. */
   until?: number
@@ -1206,8 +1208,13 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           if (requested.startup) await startup(g)
           return
         }
+        if (requested.while?.() === false) return
         let opening = await join(g, requested.startup, passes > 0)
-        for (let n = 0; n < passes && clock() < until; n++) {
+        for (
+          let n = 0;
+          n < passes && clock() < until && requested.while?.() !== false;
+          n++
+        ) {
           let { started, more } = await pass(
             g,
             n ? page : page - opening.length,

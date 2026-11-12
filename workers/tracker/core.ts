@@ -285,9 +285,10 @@ export let store = (storage: Storage, config: Config) => {
     // a backlog off: at four passes a wake the object grouped five
     // occurrences a second, and new failures waited behind an outage's tens
     // of thousands (2026-11-10).
-    drain: async (now = Date.now()) => {
+    drain: async (now = Date.now(), capacity = () => true) => {
+      if (!capacity()) return
       await tick(g, now)
-      await fx.work(g, AbortSignal.abort(), 32)
+      await fx.work(g, undefined, { passes: 32, while: capacity })
     },
     // Published app_errors archives occurrences and stamps agent delivery,
     // separately from a bug's mail notification and resolution.

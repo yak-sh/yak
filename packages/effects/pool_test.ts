@@ -1049,3 +1049,22 @@ test('a worker starting clears the rows of workers killed before they took them'
     await fx.stop()
   }
 })
+
+let capacity = true
+let paced = proc(store(), { singleOwner: true, max: 1, defer: true })
+paced.fx.handle({
+  post_note: async (e) => {
+    paced.ran.push(e.entity.eid)
+    if (e.entity.eid == 'first') await paced.g.apply([post('second')])
+    capacity = false
+  },
+})
+await paced.g.apply([post('first')])
+
+test('a host can pause between effect passes and resume newly owed work', async () => {
+  await paced.fx.work(paced.g, undefined, { while: () => capacity })
+  assertEquals(paced.ran, ['first'])
+  capacity = true
+  await paced.fx.work(paced.g, undefined, { while: () => capacity })
+  assertEquals(paced.ran, ['first', 'second'])
+})

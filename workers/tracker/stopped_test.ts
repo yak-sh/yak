@@ -236,3 +236,32 @@ test('signed recovery opens fresh windows without losing reports or disabling th
   fourth.spend('read')
   equal((await recover('bugs')).status, 429)
 })
+
+let paced = await held()
+let { canary } = await import('./worker.ts')
+let queuedProbe = canary('c'.repeat(64))
+await paced.object.ingest(queuedProbe)
+bounded(paced.db).count({
+  shape: () => 'foreground writes',
+  rowsRead: 0,
+  rowsWritten: 750,
+  returned: 0,
+})
+await paced.db.setAlarm(paced.at.t + 1000)
+await paced.object.alarm()
+let pacedAlarm = await paced.db.getAlarm()
+let [waitingProbe] = await paced.object.tracker!.graph.get([
+  queuedProbe[0].entity.eid,
+])
+paced.at.t = MINUTE
+await paced.db.deleteAlarm()
+await paced.object.alarm()
+let [finishedProbe] = await paced.object.tracker!.graph.get([
+  queuedProbe[0].entity.eid,
+])
+
+test('alarm backlog keeps request capacity and resumes at the write window instead of polling', () => {
+  equal(pacedAlarm, MINUTE)
+  equal((waitingProbe.probe as { grouped?: boolean }).grouped, undefined)
+  ok((finishedProbe.probe as { grouped?: string }).grouped)
+})

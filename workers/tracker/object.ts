@@ -598,7 +598,7 @@ export class Tracker {
       let tracker = await this.boot()
       await this.live?.wake()
       this.#upkeep?.()
-      await tracker.drain(this.now())
+      await tracker.drain(this.now(), () => this.#ceiling.under(0.5) == 0)
       await this.#arm()
     } catch (error) {
       await this.recover(error, 'Tracker.alarm')
@@ -613,15 +613,22 @@ export class Tracker {
     // bring forward and the read is spared: behind a backlog it is every
     // intake's, and it reads the backlog.
     let alarm = await this.ctx.storage.getAlarm()
-    if (alarm != null && alarm <= this.now() + 1000) return
+    let capacity = this.#ceiling.under(0.5)
+    if (!capacity && alarm != null && alarm <= this.now() + 1000) return
     let next = await this.tracker!.next(this.now())
+    if (next != null) next = Math.max(next, this.now() + capacity)
     let maintenance = this.#upkeep?.(false)
     if (maintenance != null) {
       let at = this.now() + Math.max(1000, maintenance)
       next = next == null ? at : Math.min(next, at)
     }
     if (next == null) return
-    if (alarm == null || next < alarm) await this.ctx.storage.setAlarm(next)
+    if (
+      alarm == null || next < alarm ||
+      capacity && alarm < this.now() + capacity && alarm != next
+    ) {
+      await this.ctx.storage.setAlarm(next)
+    }
   }
   webSocketMessage = (ws: Wire, data: string | ArrayBuffer) =>
     this.#run('socket', () => this.#message(ws, data))
