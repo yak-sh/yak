@@ -89,6 +89,17 @@
 .Composer_Status:empty {
   display: none;
 }
+/* Who the words go to, where it isn't the conversation shown, along the
+   field's top. */
+.Composer_To {
+  margin: 0;
+  padding-inline: .25rem;
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+}
+.Composer_To:empty {
+  display: none;
+}
 
 .Composer[data-busy] .Composer_Stop {
   display: inline-flex;

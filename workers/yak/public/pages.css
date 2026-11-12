@@ -736,14 +736,18 @@
     overflow: hidden auto;
     overscroll-behavior: contain;
   }
-  .Talk_Bar {
+  /* The bar, and under it on a zoomed page its band, held at the top as
+     the conversation scrolls. */
+  .Talk_Top {
     position: sticky;
     top: 0;
     z-index: 2;
   }
+  .Talk_Bar {
+    position: relative;
+  }
   /* The conversation, at a reading width in the middle of the page. */
   .Talk_Column,
-  .Talk_Helper,
   .Talk_Keep,
   .Talk_Box,
   .Talk_Starts,
@@ -793,13 +797,51 @@
     border-radius: var(--radius);
     scroll-margin-block: 4rem;
   }
-  /* Over a helper's conversation, what it is and where words go
-     (operator-page.ts `helperCard`). */
+  /* A helper's page, zoomed in from the conversation that started it
+     (operator-page.ts `helperBand`): the page takes on the accent, a band
+     under the bar in it says it is a helper with the way back out, its
+     words lined up with the conversation's, and the conversation grows
+     into place as it opens. */
+  .Talk-zoomed .Talk_Main {
+    background: color-mix(in srgb, var(--bg), var(--accent) 7%);
+  }
   .Talk_Helper {
-    padding-top: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem .75rem;
+    padding: .5rem max(1.25rem, 50% - 23rem + 1.25rem);
+    background: color-mix(in srgb, var(--bg), var(--accent) 16%);
+    border-bottom: 2px solid var(--accent);
+  }
+  /* A button is one line tall, so a long name is cut short on a phone. */
+  .Talk_Out {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .Talk_Helper [data-stop-helper] {
+    margin-left: auto;
+  }
+  .Talk_Helper [data-helper-said] {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--fine, var(--small));
   }
   .Talk_Helper [data-helper-said]:empty {
     display: none;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .Talk-zoomed .Talk_Column {
+      transform-origin: 50% 0;
+      animation: Talk_ZoomIn .22s ease-out;
+    }
+  }
+  @keyframes Talk_ZoomIn {
+    from {
+      opacity: 0;
+      scale: .96;
+    }
   }
   /* What the conversation is doing now and the helpers it set going
      (operator-aside.ts), in the bar: a summary at its right end, a dot for
@@ -1061,7 +1103,8 @@
     }
 
     .Talk_Column,
-    .Talk_Box {
+    .Talk_Box,
+    .Talk_Helper {
       padding-inline: 1rem;
     }
     .Talk_Hello {

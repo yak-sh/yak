@@ -25,7 +25,8 @@ export let Composer:
     | 'Stop'
     | 'Send'
     | 'Voice'
-    | 'Status',
+    | 'Status'
+    | 'To',
     Part
   > = block(Gather, 'Composer', {
     Form,
@@ -38,6 +39,7 @@ export let Composer:
     Send: Send,
     Voice: Button,
     Status: Notice,
+    To: 'p',
   })
 /** What this part presents. */
 export let description =
@@ -48,6 +50,7 @@ export let sheet = (c: Colors): Sheet => ({
   Composer_Tools: { row: true, spaced: true },
   Composer_Figure: { hidden: true },
   Composer_Status: { fg: c.muted },
+  Composer_To: { fg: c.muted },
 })
 /** A complete example. */
 export let specimens = (): Specimen[] => [
@@ -59,6 +62,7 @@ export let specimens = (): Specimen[] => [
       h(
         Composer,
         { 'data-busy': '' },
+        h(Composer.To, {}, 'To your conversation, not this one'),
         h(Composer.Figure, {
           alt: '',
           src:

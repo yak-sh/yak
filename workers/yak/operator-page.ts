@@ -35,7 +35,7 @@ import {
 } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
-import { esc, heading, type Picked, script, shell } from './pages.ts'
+import { esc, type Picked, script, shell } from './pages.ts'
 import { aboutPath, talkSide } from './talk-sidebar.ts'
 import { spaceHost, url } from './host.ts'
 import {
@@ -1724,6 +1724,9 @@ let talkPage = (
     aside?: Node
     // what waits on the person, beside the conversation
     lists?: List[]
+    // under the bar, held with it: what part of a conversation this page
+    // is zoomed in on, and the way back out
+    band?: Node
   },
 ) =>
   shell(
@@ -1736,8 +1739,12 @@ let talkPage = (
       h(
         'div',
         {
-          class: ['Talk', page.app && 'Talk-app', page.lists && 'Talk-beside']
-            .filter(Boolean).join(' '),
+          class: [
+            'Talk',
+            page.app && 'Talk-app',
+            page.lists && 'Talk-beside',
+            page.band && 'Talk-zoomed',
+          ].filter(Boolean).join(' '),
         },
         talkSide(env, space, who, beside, {
           waiting: page.waiting,
@@ -1751,23 +1758,28 @@ let talkPage = (
             id: 'content',
           },
           h(
-            Toolbar,
-            { class: 'Talk_Bar' },
-            h(Button, {
-              href: '#menu',
-              class: 'Talk_Menu',
-              'data-pane': '',
-              'aria-label': 'Menu',
-            }, '☰'),
+            'div',
+            { class: 'Talk_Top' },
             h(
-              Toolbar.Text,
-              {},
-              h(Toolbar.Title, { 'data-title': '' }, page.title),
-              h(Toolbar.Sub, {}, whoseOf(space)),
+              Toolbar,
+              { class: 'Talk_Bar' },
+              h(Button, {
+                href: '#menu',
+                class: 'Talk_Menu',
+                'data-pane': '',
+                'aria-label': 'Menu',
+              }, '☰'),
+              h(
+                Toolbar.Text,
+                {},
+                h(Toolbar.Title, { 'data-title': '' }, page.title),
+                h(Toolbar.Sub, {}, whoseOf(space)),
+              ),
+              page.app ? showing(page.app) : null,
+              page.aside,
+              page.lists ? waitsButton(counted(page.lists)) : null,
             ),
-            page.app ? showing(page.app) : null,
-            page.aside,
-            page.lists ? waitsButton(counted(page.lists)) : null,
+            page.band,
           ),
           page.main,
         ),
@@ -1794,46 +1806,35 @@ let starts = (operator: string, apps: Beside['apps'] = []) =>
     [`What can ${operator} do?`, 'What can you do for me?'],
   ].map(([label, say]) => h(Button, { type: 'button', 'data-say': say }, label))
 
-// Over a helper's conversation, what it is: a helper, what it was asked and
-// how it stands, the conversation that started it, where words written
-// below go (the person's conversation, never the helper), and, while it
-// works, Stop, which that conversation hears as the person's own
-// (operator.ts `stop`).
-let helperCard = ({ parent, line }: HelperPage, operator: string) =>
+// A helper's page is zoomed in from the conversation that started it: held
+// under the bar as the conversation scrolls, the way back out to that
+// conversation, that it is a helper and how it stands, and, while it works,
+// Stop, which that conversation hears as the person's own (operator.ts
+// `stop`).
+let helperBand = ({ parent, line }: HelperPage) =>
   h(
     'div',
     { class: 'Talk_Helper', 'data-helper': line?.session ?? '' },
     h(
-      Card,
-      null,
-      heading(
-        line?.title ?? 'A piece of work',
-        {
-          mark: h(Chip, null, 'Helper'),
-          status: line ? h(Stands, { standing: line.standing }) : null,
-          actions: line && going(line)
-            ? h(
-              Button,
-              { type: 'button', 'data-stop-helper': '' },
-              'Stop this helper',
-            )
-            : null,
-        },
-      ),
-      h(
-        'p',
-        null,
-        'Started by ',
-        h(
-          'a',
-          { href: parent.href },
-          parent.asked ? `the helper “${parent.asked}”` : 'your conversation',
-        ),
-        `. What you write below goes to your conversation with ${operator}, not to this helper.`,
-      ),
-      h('p', { role: 'status', 'data-helper-said': '' }),
+      Button,
+      { href: parent.href, class: 'Talk_Out', mod: 'quiet' },
+      h(Toolbar.Label, {}, `← ${parentName(parent)}`),
     ),
+    h(Chip, null, 'Helper'),
+    line ? h(Stands, { standing: line.standing }) : null,
+    line && going(line)
+      ? h(
+        Button,
+        { type: 'button', 'data-stop-helper': '' },
+        'Stop this helper',
+      )
+      : null,
+    h('p', { role: 'status', 'data-helper-said': '' }),
   )
+
+// The conversation a helper's page zooms out to.
+let parentName = (parent: HelperPage['parent']) =>
+  parent.asked ? `The helper “${parent.asked}”` : 'Your conversation'
 
 // What a chat says before anything is in it: what it is for, in a heading
 // and a line.
@@ -1962,6 +1963,7 @@ export let chatPage = async (
     title: fresh
       ? app ? app.title || app.slug : `Message ${operator}`
       : talked.title || 'Not here',
+    band: talked.helper ? helperBand(talked.helper) : undefined,
     status: fresh || talked.title ? 200 : 404,
     waiting: news.waiting,
     current: [open, talked.task],
@@ -1973,7 +1975,6 @@ export let chatPage = async (
       // The conversation is drawn by the Builder object (operator-view.ts
       // `talk`).
       newcomer ? keepCard(here) : null,
-      talked.helper ? helperCard(talked.helper, operator) : null,
       talked.html ? column(talked.html) : column('', greeting),
       fresh && !app
         ? h(
@@ -1995,7 +1996,15 @@ export let chatPage = async (
         )
         : null,
       fresh || talked.title
-        ? composer(env, at, here, operator, app, !!talked.helper, fresh)
+        ? composer(
+          env,
+          at,
+          here,
+          operator,
+          app,
+          talked.helper && `${at}/${root}`,
+          fresh,
+        )
         : null,
     ],
     // What it is doing now and the helpers it set going, in the bar
@@ -2061,12 +2070,13 @@ let composer = (
   here: string,
   operator: string,
   app?: Shown,
-  helper = false,
+  // on a helper's page, the person's conversation, where the words go
+  to?: string,
   inline = false,
 ) => {
   // On a helper's page the words still go to the person's conversation,
-  // never the helper, and the box says so.
-  let asked = helper
+  // never the helper, and the box says so along its top.
+  let asked = to
     ? `Message ${operator} in your conversation`
     : app
     ? `What should change in ${app.title || app.slug}?`
@@ -2095,6 +2105,15 @@ let composer = (
     h(
       Composer,
       {},
+      to
+        ? h(
+          Composer.To,
+          null,
+          'To ',
+          h('a', { href: to }, `your conversation with ${operator}`),
+          ', not this helper',
+        )
+        : null,
       h(Composer.Figure, { as: Idle, base: url(env) }),
       h(Drop.Chosen, { 'aria-label': 'Files to send', 'aria-live': 'polite' }),
       h(Composer.Field, {

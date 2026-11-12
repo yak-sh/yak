@@ -735,7 +735,7 @@ test('the Voice card shows back the voice, speed and model each save picked', as
   })
 })
 
-test('a helper’s page says it is a helper, whose, where words go, and offers Stop while it works', async () => {
+test('a helper’s page is zoomed in: held under the bar, the way back out, where words go, and Stop while it works', async () => {
   let helper = crypto.randomUUID()
   await service.store.g.apply([
     {
@@ -751,30 +751,32 @@ test('a helper’s page says it is a helper, whose, where words go, and offers S
     },
   ], { trusted: true })
   let { document } = await sided('owner', helper)
-  let card = document.querySelector('[data-helper]')!
-  assertEquals(card.getAttribute('data-helper'), helper)
-  assertStringIncludes(
-    card.querySelector('.Card_Head')!.textContent!,
-    'HelperImport the CSV',
-  )
+  let theirs = `${managePath('operator', space.slug)}/${task}`
+  assert(document.querySelector('.Talk')!.classList.contains('Talk-zoomed'))
+  let band = document.querySelector('.Talk_Top > [data-helper]')!
+  assertEquals(band.getAttribute('data-helper'), helper)
+  let out = band.querySelector('.Talk_Out')!
   assertEquals(
-    card.querySelector('a')!.getAttribute('href'),
-    `${managePath('operator', space.slug)}/${task}`,
+    [out.getAttribute('href'), out.textContent],
+    [theirs, '← Your conversation'],
   )
-  assertStringIncludes(card.textContent!, 'goes to your conversation with')
+  assertStringIncludes(band.textContent!, 'Helper')
   assertEquals(
-    card.querySelector('[data-stop-helper]')?.textContent,
+    band.querySelector('[data-stop-helper]')?.textContent,
     'Stop this helper',
   )
+  let to = document.querySelector('#ask .Composer_To')!
+  assertStringIncludes(to.textContent!, 'To your conversation with')
+  assertStringIncludes(to.textContent!, 'not this helper')
+  assertEquals(to.querySelector('a')!.getAttribute('href'), theirs)
   assertStringIncludes(
     document.querySelector('#ask [name=say]')!.getAttribute('placeholder')!,
     'in your conversation',
   )
-  // Their conversation draws no such card.
-  assertEquals(
-    (await sided('owner')).document.querySelector('[data-helper]'),
-    null,
-  )
+  // Their conversation is not zoomed and says nothing of where words go.
+  let root = (await sided('owner')).document
+  assertEquals(root.querySelector('[data-helper], .Composer_To'), null)
+  assert(!root.querySelector('.Talk')!.classList.contains('Talk-zoomed'))
 })
 
 // Last, since it adds to the conversation every test above reads.
