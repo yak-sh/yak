@@ -746,7 +746,8 @@
   .Talk_Helper,
   .Talk_Keep,
   .Talk_Box,
-  .Talk_Starts {
+  .Talk_Starts,
+  .Talk_Alerts {
     width: 100%;
     max-width: 46rem;
     margin: 0 auto;
@@ -892,6 +893,20 @@
     justify-content: center;
     gap: .5rem;
     padding-bottom: .5rem;
+  }
+  /* The offer of alerts over the box (operator-page.ts `alertsOffer`). Once
+     taken, its word that alerts are on stands in the offer's place a few
+     seconds, then fades and gives the room back (alerts-browser.ts). */
+  .Talk_Alerts > [data-shows=on] {
+    margin: 0 0 .5rem;
+    color: var(--muted);
+    text-align: center;
+    animation: Talk_Fade .6s ease 4s forwards;
+  }
+  @keyframes Talk_Fade {
+    to {
+      opacity: 0;
+    }
   }
   /* An app open beside the chat (operator-page.ts `canvas`): a third column
      the height of the window, held in place while the chat scrolls, the app

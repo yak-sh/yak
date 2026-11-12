@@ -116,6 +116,7 @@ export let offer = async (root: Document = document) => {
       }
       part('offer').hidden = true
       show('on')
+      part('on').addEventListener('animationend', () => box.remove())
     } catch (error) {
       if (!(error instanceof CallError)) report(error)
       said.textContent = error instanceof CallError
