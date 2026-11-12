@@ -614,27 +614,32 @@ export class Tracker {
   // no storage writes; future wakes and retry backoff do not poll each second.
   #arm = async () => {
     // Intake may owe the same work again. Keep its earlier return instead of
-    // moving grouping a second away on every delivery. A second from now is
-    // the soonest next() answers, so an alarm due by then has nothing to
-    // bring forward and the read is spared: behind a backlog it is every
-    // intake's, and it reads the backlog.
-    let alarm = await this.ctx.storage.getAlarm()
+    // moving grouping a second away on every delivery.
+    let now = this.now(), alarm = await this.ctx.storage.getAlarm()
+    // Past half a window, grouping waits for the window's end (`#alarm`);
+    // the maintenance it owes does not.
     let capacity = this.#ceiling.under(0.5)
-    if (!capacity && alarm != null && alarm <= this.now() + 1000) return
-    let next = await this.tracker!.next(this.now())
-    if (next != null) next = Math.max(next, this.now() + capacity)
     let maintenance = this.#upkeep?.(false)
-    if (maintenance != null) {
-      let at = this.now() + Math.max(1000, maintenance)
-      next = next == null ? at : Math.min(next, at)
+    let upkeep = maintenance == null
+      ? Infinity
+      : now + Math.max(1000, maintenance)
+    // The soonest the alarm can be wanted: a second from now, and while
+    // paced, the window's end. An alarm due by then has nothing to bring
+    // forward, so the read of what is owed is spared. Behind a backlog that
+    // read is every intake's: paced, each one read it again to set the alarm
+    // where it already stood, eight a second, until the reads stopped the
+    // tracker (2026-11-12).
+    let soonest = Math.min(now + Math.max(1000, capacity), upkeep)
+    if (alarm != null && alarm <= soonest) {
+      // Paced, an alarm due sooner would only wake to pause again.
+      if (capacity && alarm < soonest) await this.ctx.storage.setAlarm(soonest)
+      return
     }
-    if (next == null) return
-    if (
-      alarm == null || next < alarm ||
-      capacity && alarm < this.now() + capacity && alarm != next
-    ) {
-      await this.ctx.storage.setAlarm(next)
-    }
+    let next = await this.tracker!.next(now)
+    if (next != null) next = Math.max(next, now + capacity)
+    next = Math.min(next ?? Infinity, upkeep)
+    if (!Number.isFinite(next)) return
+    if (alarm == null || next < alarm) await this.ctx.storage.setAlarm(next)
   }
   webSocketMessage = (ws: Wire, data: string | ArrayBuffer) =>
     this.#run('socket', () => this.#message(ws, data))

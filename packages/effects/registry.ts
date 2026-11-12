@@ -242,6 +242,10 @@ export type Effects = Plugin & {
   /** The runs going in this process, oldest first: what a process winding
    * down is waiting on. */
   running: () => Run[]
+  /** When the soonest run this process can take falls due, in ms: `now` when
+   * one is due already, null when none is owed or there is no pool
+   * (./pool.ts `next`). */
+  next: (g: Access, now?: number) => Promise<number | null>
 }
 
 let warn: Report = (err, { handler }) =>
@@ -978,6 +982,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     idle: () => pooled?.idle() ?? Promise.resolve(),
     stop: () => pooled?.stop() ?? Promise.resolve(),
     running: () => pooled?.running() ?? [],
+    next: (g, now) => pooled?.next(g, now) ?? Promise.resolve(null),
   }
   return fx
 }

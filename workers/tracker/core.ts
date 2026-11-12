@@ -30,7 +30,6 @@ import {
   conjoin,
   eq,
   every,
-  fields,
   limit,
   order,
   parse,
@@ -342,39 +341,18 @@ export let store = (storage: Storage, config: Config) => {
       }
       return found.length
     },
-    // Only composed handlers can make progress. Unknown or disabled errands
-    // must not keep an otherwise idle object awake.
+    // Only composed handlers can make progress (@yaks/effects `next`), so an
+    // unknown or disabled errand keeps no otherwise idle object awake. Behind
+    // a backlog it is one read that stops at its first run.
     next: async (now = Date.now()): Promise<number | null> => {
-      let names = [
-        ...new Set(
-          fx.slots().filter((s) => s.effect && s.run).map((s) => s.id),
-        ),
-      ]
-      // One read a handler: the index holds a handler's pending runs in the
-      // order they are due, so each read takes its first row. Asked for every
-      // handler at once, the engine sorts every pending run to find the
-      // first: 98,000 rows a call behind an outage's backlog, after every
-      // intake, which is what kept the object from answering (2026-11-10).
-      let pending: Bundle[] = []
-      for (let name of names) {
-        pending.push(
-          ...await g.read(and(
-            eq('effect.state', 'pending'),
-            eq('effect.handler', name),
-            order('effect.next'),
-            limit(1),
-            fields('effect.next'),
-          )),
-        )
-      }
+      let run = await fx.next(g, now)
       let [wake] = await g.read(
         '.wake.at>=1970-01-01T00:00:00Z .order=wake.at .limit=1 .fields=wake.at',
       )
-      let at = (value: unknown) => Date.parse(String(value)) || now + 1000
-      let next = Math.min(
-        ...pending.map((run) => at((run.effect as Comp | undefined)?.next)),
-        wake ? at((wake.wake as Comp | undefined)?.at) : Infinity,
-      )
+      let at = wake
+        ? Date.parse(String((wake.wake as Comp | undefined)?.at)) || now
+        : Infinity
+      let next = Math.min(run ?? Infinity, at)
       return Number.isFinite(next) ? Math.max(now + 1000, next) : null
     },
     // Trace reads are bounded separately from intake; a large capture is read

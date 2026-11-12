@@ -253,6 +253,13 @@ let pacedAlarm = await paced.db.getAlarm()
 let [waitingProbe] = await paced.object.tracker!.graph.get([
   queuedProbe[0].entity.eid,
 ])
+// Intake while paced finds the alarm where it must stand, and asks nothing
+// of the backlog to leave it there.
+let pacing = paced.object.tracker!, asks = 0, ask = pacing.next
+pacing.next = (now) => (asks++, ask(now))
+for (let i = 0; i < 3; i++) await paced.object.ingest(report())
+let pacedAsks = asks, intakeAlarm = await paced.db.getAlarm()
+pacing.next = ask
 paced.at.t = MINUTE
 await paced.db.deleteAlarm()
 await paced.object.alarm()
@@ -262,6 +269,7 @@ let [finishedProbe] = await paced.object.tracker!.graph.get([
 
 test('alarm backlog keeps request capacity and resumes at the write window instead of polling', () => {
   equal(pacedAlarm, MINUTE)
+  equal([pacedAsks, intakeAlarm], [0, MINUTE])
   equal((waitingProbe.probe as { grouped?: boolean }).grouped, undefined)
   ok((finishedProbe.probe as { grouped?: string }).grouped)
 })

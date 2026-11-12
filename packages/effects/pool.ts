@@ -116,7 +116,17 @@ import {
 import { comps } from '@yaks/graph/bundle'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
-import { type And, and, limit as window, list, ne } from '@yaks/query'
+import {
+  type And,
+  and,
+  eq,
+  fields,
+  limit as window,
+  list,
+  ne,
+  order,
+  present,
+} from '@yaks/query'
 import type { Report, Slot } from './registry.ts'
 import type { Event, Kind } from './trace.ts'
 import type { Write } from './write.ts'
@@ -347,6 +357,10 @@ export type Pool = {
   stop: () => Promise<void>
   /** The runs going in this process, oldest first. */
   running: () => Run[]
+  /** When the soonest run this process can take falls due (ms, the pool's
+   * clock): `now` when one is due already, null when none is owed. What a
+   * host that sleeps between passes sets its wake by. */
+  next: (g: Access, now?: number) => Promise<number | null>
 }
 
 /** A run going in this process: its row, what it is, and when it started
@@ -1154,7 +1168,44 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     }
   }
 
+  // A freshly owed run has no `next`, so a backlog is one long tie, and a
+  // read of the soonest in `next` order reads every run tied with it: 53,697
+  // rows each time the platform tracker asked behind its backlog (2026-11-12).
+  // So the question is asked first as a pass asks it, `ready`, which stops at
+  // the first run it finds. Only when none is due is each handler's soonest
+  // `next` read, along the index that holds its runs in that order.
+  let soonest = async (g: Access, now = clock()): Promise<number | null> => {
+    let names = [
+      ...new Set(
+        ctx.slots().filter((s) => s.effect && s.run && !disabled.has(s.id))
+          .map((s) => s.id),
+      ),
+    ]
+    if (!names.length) return null
+    let owed = ready(names, { singleOwner: opts.singleOwner, owner: me })
+    let [due] = await g.read(and(...owed.clauses, window(1)), {
+      unordered: true,
+      now,
+    })
+    if (due) return now
+    let at = Infinity
+    for (let name of names) {
+      let [run] = await g.read(and(
+        eq(`${EFFECT}.state`, 'pending'),
+        eq(`${EFFECT}.handler`, name),
+        present(`${EFFECT}.next`),
+        order(`${EFFECT}.next`),
+        window(1),
+        fields(`${EFFECT}.next`),
+      ))
+      let next = Date.parse(String((run?.[EFFECT] as Comp | undefined)?.next))
+      if (next < at) at = next
+    }
+    return Number.isFinite(at) ? Math.max(now, at) : null
+  }
+
   return {
+    next: soonest,
     owe: (tx, found, gen) => {
       let at = stamp(clock())
       let seen = new Set<string>()
