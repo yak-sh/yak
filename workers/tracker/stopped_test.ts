@@ -265,3 +265,47 @@ test('alarm backlog keeps request capacity and resumes at the write window inste
   equal((waitingProbe.probe as { grouped?: boolean }).grouped, undefined)
   ok((finishedProbe.probe as { grouped?: string }).grouped)
 })
+
+// A flood's grouping stopped the tracker past its rows (2026-11-12): a fixer's
+// mark on the bug behind it is still taken, and intake still waits.
+let flooded = await held()
+await flooded.object.ingest(report())
+await flooded.object.tracker!.drain(flooded.at.t)
+let [known] = await flooded.object.tracker!.bugs()
+let mark = async (path: string, body: unknown) =>
+  flooded.w.fetch(
+    new Request(`https://tracker.test${path}?scope=platform`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${await sign({
+          scope: platform,
+          person: platform,
+          admin: true,
+          mark: true,
+          exp: Date.now() / 1000 + 300,
+        }, SECRET)}`,
+      },
+      body: JSON.stringify(body),
+    }),
+  )
+let fixed = { bug: known.entity.eid, cause: 'a race', recur: 'no' }
+let marked: number[] = []
+flooded.spend('written')
+marked.push((await mark('/resolve', fixed)).status)
+marked.push((await mark('/reopen', { bug: known.entity.eid })).status)
+flooded.spend('read')
+marked.push((await mark('/resolve', fixed)).status)
+marked.push(
+  (await mark('/resolve', { ...fixed, bug: crypto.randomUUID() })).status,
+)
+
+test("a stopped tracker takes a fixer's marks on its known bugs, and still sets intake back", async () => {
+  equal(marked, [200, 200, 200, 404])
+  let [after] = await bounded(flooded.db).free(() =>
+    flooded.object.tracker!.graph.get([known.entity.eid])
+  )
+  equal((after.bug as { status?: string }).status, 'resolved')
+  flooded.queued.length = 0
+  equal(await flooded.deliver(report()), ['ack'])
+  equal(flooded.queued.map((q) => q.delaySeconds), [60])
+})

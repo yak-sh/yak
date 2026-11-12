@@ -29,7 +29,7 @@ import {
 } from './core.ts'
 import { batch } from './queue.ts'
 import { billing } from './bill.ts'
-import { door, json } from './door.ts'
+import { door, json, marking } from './door.ts'
 import { authorize } from './auth.ts'
 import { recovery } from './recovery.ts'
 import { monitor } from './monitor.ts'
@@ -536,19 +536,25 @@ export class Tracker {
         }
         return json(this.traceBudget())
       }
-      let tracker = await this.boot()
-      await this.live?.wake()
-      let answer = await door(
-        tracker,
-        this.scope,
-        this.env.TRACKER_SECRET,
-        (request) => this.live!.accept(request),
-        this.ingest,
-      )(request)
-      // A mark or a retry owes runs the pool works on its alarm, not a
-      // minute later on the monitor's.
-      if (request.method == 'POST' && answer.ok) await this.#arm()
-      return answer
+      let serve = async () => {
+        let tracker = await this.boot()
+        await this.live?.wake()
+        let answer = await door(
+          tracker,
+          this.scope,
+          this.env.TRACKER_SECRET,
+          (request) => this.live!.accept(request),
+          this.ingest,
+        )(request)
+        // A mark or a retry owes runs the pool works on its alarm, not a
+        // minute later on the monitor's.
+        if (request.method == 'POST' && answer.ok) await this.#arm()
+        return answer
+      }
+      // A fixer's mark on a known bug is a few rows, told and never refused:
+      // on 2026-11-12 a flood's grouping stopped the platform's tracker for
+      // its hour, and every resolution of the bug behind the flood with it.
+      return await (marking(request) ? this.#ceiling.free(serve) : serve())
     } catch (error) {
       // A stopped tracker's answer says how long to wait.
       if (stopped(error)) return refuse(error)

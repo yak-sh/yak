@@ -22,6 +22,19 @@ let named = (bug: string) => minted(bug) || BARE.test(bug)
 
 export let json = (value: unknown, status = 200) =>
   Response.json(value, { status })
+
+// The marks a fixer sets on a known bug, by their door.
+let marks = {
+  '/resolve': 'resolved',
+  '/archive': 'archived',
+  '/take': 'taken',
+  '/reopen': 'reopened',
+} as const
+
+/** Whether a request sets a bug's mark: a few rows a fixer writes, which a
+ * stopped tracker still takes (./object.ts). */
+export let marking = (request: Request) =>
+  request.method == 'POST' && new URL(request.url).pathname in marks
 export let door = (
   tracker: TrackerStore,
   scope: string,
@@ -257,13 +270,7 @@ async (request: Request): Promise<Response> => {
     }
     return json({ settled: await tracker.settle(eids, reason) })
   }
-  let marks = {
-    '/resolve': 'resolved',
-    '/archive': 'archived',
-    '/take': 'taken',
-    '/reopen': 'reopened',
-  } as const
-  if (request.method == 'POST' && path in marks) {
+  if (marking(request)) {
     let name = marks[path as keyof typeof marks]
     if (access.mark !== true) {
       return json({ error: 'tracker bug marks denied' }, 403)

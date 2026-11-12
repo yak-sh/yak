@@ -171,7 +171,12 @@ failure: nothing reports it, and nothing spends an attempt on it.
 - A report the consumer tells the platform's object (above) that meets a stop is
   put on `yak-errors` delayed until the window ends, one message, and is taken
   then. The object's own runaway report travels the queue the same way.
-- A door answers 429 with `retry-after` and
+- A fixer's mark on a known bug (`/resolve`, `/archive`, `/take`, `/reopen`) is
+  taken while stopped: it runs in the ceiling's `free`, told and never refused,
+  so a flood that stops the tracker never holds back the fix that answers it
+  (2026-11-12: the hour's 500,000 rows written stopped every resolution for 18
+  minutes).
+- Any other door answers 429 with `retry-after` and
   `{error: 'Stopped', message,
   retry}`; a box reporter's outbox keeps its
   captures until intake admits them.
