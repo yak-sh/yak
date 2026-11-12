@@ -47,8 +47,7 @@ export let storage = (
     ...base,
   })
   let bound = bounded(durable)
-  return {
-    ...store,
+  return Object.assign(store, {
     upkeep: () => {
       let wait = Infinity
       let worked = store.maintain((written) => {
@@ -58,5 +57,5 @@ export let storage = (
       })
       return worked ? 0 : Number.isFinite(wait) ? wait : null
     },
-  }
+  })
 }
