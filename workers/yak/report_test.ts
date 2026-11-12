@@ -26,7 +26,6 @@ import {
   seed,
   txt,
   unique,
-  vocabFile,
 } from './probe.ts'
 
 let jeff59 = unique('jeff59')
@@ -720,7 +719,10 @@ let platformBreak = await (async () => {
       ...app,
       files: [{
         path: 'vocab.json',
-        content: vocabFile({ note: { body: txt } }),
+        // Described, so app_errors answers its breaks and no warning.
+        content: JSON.stringify({
+          $defs: { note: { description: 'A note', properties: { body: txt } } },
+        }),
       }, { path: 'NOTES.md', content: 'A shop.' }],
     })
     await agent.tool('app_deploy', app)
