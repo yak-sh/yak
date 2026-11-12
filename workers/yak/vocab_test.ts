@@ -719,8 +719,11 @@ test('the components a manifest leaves undescribed are named', () => {
         meeting: { description: 'One meeting of a board', properties: {} },
         posting: { description: '  ', properties: {} },
         moved: { properties: {} },
+        // A lens step and a command are not components.
+        seen_was: { lens: true, step: 1, ops: [] },
+        add_meeting: { tool: true, description: 'Add one' },
       },
-    }),
+    } as VocabDoc),
     ['posting', 'moved'],
   )
 })

@@ -170,11 +170,15 @@ export let appDerived = (vocab: Vocab, reading: Derived = {}): Derived => ({
   ...builds(vocab),
 })
 
+// A manifest's components: its $defs, save its commands and its lens steps.
+let components = (doc: VocabDoc) =>
+  Object.entries(doc.$defs ?? {}).filter(([, e]) =>
+    e?.tool !== true && e?.lens !== true
+  )
+
 export let componentsOf = (docs: VocabDoc[]): string[] =>
   docs.filter((d) => d.reserved !== false).flatMap((d) =>
-    Object.entries(d.$defs ?? {}).filter(([, e]) =>
-      e?.tool !== true && e?.lens !== true
-    ).map(([name]) => name)
+    components(d).map(([name]) => name)
   )
 /** Every word the platform says, sorted: a new manifest declares none. */
 export let reserved = once((): string[] =>
@@ -721,7 +725,7 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
  * documentation (D-162751). Nothing is refused for it.
  */
 export let undescribed = (doc: VocabDoc): string[] =>
-  Object.entries(doc.$defs ?? {})
+  components(doc)
     .filter(([, s]) => !s.description?.trim())
     .map(([name]) => name)
 
@@ -740,7 +744,7 @@ let mute = (s: PropSchema) =>
  */
 export let unwritten = (doc: VocabDoc, file = 'vocab.json'): string[] => {
   let quiet = undescribed(doc)
-  let props = Object.entries(doc.$defs ?? {}).flatMap(([name, s]) =>
+  let props = components(doc).flatMap(([name, s]) =>
     Object.entries(s.properties ?? {})
       .filter(([, p]) => mute(p))
       .map(([prop]) => `${name}.${prop}`)
