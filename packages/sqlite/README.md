@@ -210,7 +210,7 @@ minute, so a file is measured in a Worker over a read-only connection of its own
 (./measure_worker.ts) and the caller's thread never waits on it; a database in
 memory is walked a b-tree at a time, each in a read unit. `store.file` is where
 the file is, as SQLite opened it (`PRAGMA database_list`), and absent for one in
-memory.
+memory and for a driver that owns no file, such as a Durable Object's.
 
 `store.buried(before, { after, limit })` offers the graves a retention sweep may
 prune (./buried.ts): tombstones laid before `before` that no column in the file

@@ -51,7 +51,8 @@ let pragma = (driver: Driver, name: string) =>
 
 /**
  * Where the file is: the absolute path SQLite opened as the main database, or
- * undefined for one kept in memory.
+ * undefined for one kept in memory and for a driver that owns no file (a
+ * Durable Object's, whose runtime refuses `pragma database_list`).
  *
  * ```ts
  * import { mem } from './testing.ts'
@@ -62,6 +63,7 @@ let pragma = (driver: Driver, name: string) =>
  * ```
  */
 export let located = (driver: Driver): string | undefined => {
+  if (!driver.file) return undefined
   let main = driver.query({ t: 'pragma', name: 'database_list' })
     .find((r) => r.name == 'main')
   return typeof main?.file == 'string' && main.file ? main.file : undefined
