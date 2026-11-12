@@ -265,7 +265,12 @@ test('a deploy is a version, and one word puts it back', async () => {
       { path: 'broken.js', sha: await digest('throw new Error("no")') },
       { path: 'index.html', sha: await digest('<h1>OOPS</h1>') },
     ]
-    assertEquals(listing.value, { files, unreleased: false, version: 2 })
+    assertEquals(listing.value, {
+      files,
+      releases: [],
+      unreleased: false,
+      version: 2,
+    })
     // Every fact of the value is in the words a model reads.
     for (let { path, sha } of files) {
       assertStringIncludes(listing.text, `${path} — sha256 ${sha}`)
