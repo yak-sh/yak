@@ -94,10 +94,6 @@ export let missing = (
     fault: `tracker-deploy|${hash}`,
   })
 }
-// How long an admitted canary's grouping may wait for its run. Intake arms the
-// object's alarm a second out, so a longer wait means the effect queue that
-// alarm drives is not running under this bundle: a failure, not a delay.
-export let STALL = 120_000
 /** Where a deploy's canary stands: arrived, or why not, and whether that is a
  * failure of the deployed build or a wait still under way. */
 export type Standing =
@@ -127,7 +123,6 @@ let standing = async (
   ask: Ask,
   hash: string,
   eid: string,
-  now: number,
 ): Promise<Standing | undefined> => {
   let waiting = (why: string): Standing => ({
     arrived: false,
@@ -158,15 +153,12 @@ let standing = async (
   if (!canary) return waiting('its canary never reached the object')
   if (canary.grouped) return { arrived: true }
   if (!run) return waiting('its canary is ungrouped and owes no grouping run')
-  if (run.error) return failed(`its grouping threw: ${run.error}`)
-  let waited = now - Date.parse(String(run.next ?? run.at))
-  return waited > STALL
-    ? failed(
-      `its grouping run waited ${
-        Math.round(waited / 1000)
-      } s for the object's effect queue`,
-    )
-    : waiting('its grouping run is due')
+  if (run.state == 'failed') {
+    return failed(`its grouping failed${run.error ? `: ${run.error}` : ''}`)
+  }
+  // A pending run can wait behind a moving backlog. The deploy's deadline
+  // reports one that never finishes; its age alone says nothing failed.
+  return waiting('its grouping run is due')
 }
 export let scopeOf = (url: URL) => {
   let scope = url.searchParams.get('scope')
@@ -315,7 +307,7 @@ export let worker = (
   // Where a receipt stands.
   let stand = async (hash: string, eid: string) => {
     let ask = await asking()
-    return ask && standing(ask, hash, eid, now())
+    return ask && standing(ask, hash, eid)
   }
   return {
     fetch: async (request: Request): Promise<Response> => {

@@ -2,7 +2,7 @@
 // credentials, paid resources, or waiting for deployment propagation.
 import { clock, equal, ok, test, throws } from '@yaks/testing'
 import { canary, deploy, Failed, fingerprint, type Hooks } from './deploy.ts'
-import { canary as receipt, STALL, worker } from './worker.ts'
+import { canary as receipt, worker } from './worker.ts'
 import { grouped } from '@yaks/tracker'
 import { json } from './door.ts'
 import { matcher } from '@yaks/match'
@@ -448,8 +448,23 @@ let { eid: stalledEid } = await (await stalledWorker.fetch(
 )).json()
 await stalled.ingest(reports[0])
 let standing = [await read(stalledWorker, `${canaryUrl}&eid=${stalledEid}`)]
-later += STALL + 1000
+later += 180_000
 standing.push(await read(stalledWorker, `${canaryUrl}&eid=${stalledEid}`))
+let [groupingRun] = await stalled.tracker!.graph.read(
+  `.effect.handler=error_group .effect.target=${stalledEid}`,
+)
+let state = (effect: Comp) =>
+  stalled.tracker!.graph.apply([{ entity: groupingRun.entity, effect }], {
+    trusted: true,
+  })
+await state({
+  error: 'temporary failure',
+  next: new Date(later + 1000).toISOString(),
+})
+let retrying = await read(stalledWorker, `${canaryUrl}&eid=${stalledEid}`)
+await state({ state: 'failed', error: 'grouping failed' })
+let failedGrouping = await read(stalledWorker, `${canaryUrl}&eid=${stalledEid}`)
+await state({ state: 'pending', error: null, next: null })
 let missed = await stalledWorker.fetch(
   new Request(missingUrl, { method: 'POST' }),
 )
@@ -466,17 +481,25 @@ let late = await stalledWorker.fetch(
   new Request(missingUrl, { method: 'POST' }),
 )
 
-test('a stalled effect queue reads as a failed canary, not silence', () => {
+test('pending grouping waits for the deploy deadline regardless of its age', () => {
   equal(standing, [
     { arrived: false },
-    { arrived: false, failed: true },
+    { arrived: false },
     { arrived: true },
   ])
+  equal(retrying, { arrived: false })
+})
+test('a failed grouping run fails its canary immediately', () => {
+  equal(failedGrouping, { arrived: false, failed: true })
 })
 test('a missing canary is reported to the tracker with why, read there', () => {
   equal(missed.status, 200)
   equal((report.error as Comp).fault, `tracker-deploy|${hash}`)
-  ok(String((report.exception as Comp).value).includes('effect queue'))
+  ok(
+    String((report.exception as Comp).value).includes(
+      'its grouping run is due',
+    ),
+  )
   ok(opened && !opened.archived)
 })
 test('an arrived canary is not reported missing', () => {

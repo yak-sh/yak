@@ -318,10 +318,11 @@ once the platform Tracker object reports the same `BUNDLE_HASH` (its admin-only
 `{arrived: boolean, failed?: true}`. It is true once that exact probe has its
 receipt in an object running this bundle. Grouping is the object's alarm-driven
 effect queue, so the answer reads the probe and its grouping run from the graph
-rather than waiting for them: a run that threw, or one due for over two minutes,
-is `failed`. A stalled queue is a failed canary, never silence. A probe moves no
-bug, so a reader polling the bugs is told nothing moved, and each probe's
-grouping deletes the probes grouped over an hour before.
+rather than waiting for them. A grouping run left failed is `failed`; pending
+work, including a retry or a wait behind a backlog, stays pending until the
+deploy's ten-minute deadline reports it missing. A probe moves no bug, so a
+reader polling the bugs is told nothing moved, and each probe's grouping deletes
+the probes grouped over an hour before.
 
 `POST /canary/missing?scope=platform&hash=<bundle-hash>&nonce=<uuid>` needs no
 ticket. Unless that canary arrived (409), it reports the deploy unconfirmed,
