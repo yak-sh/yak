@@ -207,6 +207,7 @@ export class Tracker {
         : {},
     }
   }
+  #upkeep?: (run?: boolean) => number | null
   #mailReady = false
   #traceStorage = () => {
     let sql = this.#sql(), kept = meta(sql)
@@ -223,6 +224,7 @@ export class Tracker {
     }
     let saved = storage(this.ctx.storage, vocab, {
       ...options,
+      deferred: true,
       report: this.#stored,
       schemaReady: () => true,
     }, this.#rows.observe)
@@ -243,6 +245,7 @@ export class Tracker {
     let saved = install
       ? storage(this.ctx.storage, vocab, {
         ...options,
+        deferred: true,
         report: this.#stored,
         schemaReady: () => printed(sql, PRINT),
       }, this.#rows.observe)
@@ -270,7 +273,9 @@ export class Tracker {
     let tracker = store(saved, this.#config)
     this.live = sockets(subscriptions(tracker.graph), this.ctx)
     this.tracker = tracker
+    this.#upkeep = saved.upkeep
     if (install) await this.#mail()
+    if (this.#upkeep(false) != null) await this.#arm()
     return tracker
   }
   #mail = async () => {
@@ -592,6 +597,7 @@ export class Tracker {
       if (this.#ceiling.stopped(true)) return await this.#soon()
       let tracker = await this.boot()
       await this.live?.wake()
+      this.#upkeep?.()
       await tracker.drain(this.now())
       await this.#arm()
     } catch (error) {
@@ -609,6 +615,11 @@ export class Tracker {
     let alarm = await this.ctx.storage.getAlarm()
     if (alarm != null && alarm <= this.now() + 1000) return
     let next = await this.tracker!.next(this.now())
+    let maintenance = this.#upkeep?.(false)
+    if (maintenance != null) {
+      let at = this.now() + Math.max(1000, maintenance)
+      next = next == null ? at : Math.min(next, at)
+    }
     if (next == null) return
     if (alarm == null || next < alarm) await this.ctx.storage.setAlarm(next)
   }

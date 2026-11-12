@@ -41,16 +41,17 @@ export let storage = (
   base: Opts = {},
   observe?: Observe,
   measure?: Measure,
-): Store & { upkeep: () => number | null } => {
+): Store & { upkeep: (run?: boolean) => number | null } => {
   let store = bind(driver(durable, observe, measure), vocab, base)
   let bound = bounded(durable)
   return Object.assign(store, {
-    upkeep: () => {
+    // Previewing a unit arms a host without running maintenance at boot.
+    upkeep: (run = true) => {
       let wait = Infinity
       let worked = store.maintain((written) => {
         let next = bound.under(written > 10_000 ? 0.9 : 0.5, written)
         wait = Math.min(wait, next)
-        return next == 0
+        return run && next == 0
       })
       return worked ? 0 : Number.isFinite(wait) ? wait : null
     },
