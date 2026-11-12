@@ -259,7 +259,7 @@ let many = (word: string) =>
 // What an app holds, in words. An app that declares nothing of its own still
 // holds the platform's `doc` — a title and a body — which is what most first
 // apps are made of.
-let holds = (kinds: string[]) =>
+export let holds = (kinds: string[]) =>
   `holds ${(kinds.length ? kinds : ['doc']).map(many).join(', ')}`
 
 /** The line an app with notes gets on the roster, in place of them. */

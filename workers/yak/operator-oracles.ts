@@ -12,14 +12,14 @@ import { type App, type Space, url } from './directory.ts'
 import { instructions } from './guide.ts'
 import { told } from './memory.ts'
 import { type Declared, moved } from './operator-persona.ts'
-import { entries, listed, passage } from './standing.ts'
+import { entries, holds, listed, passage } from './standing.ts'
 import { type Ctx, refuse } from './tool.ts'
 
 export let oracular: Declared = {
   key: 'platform',
   title: 'yaks.app',
   body:
-    "yaks.app builds, hosts and shares web apps. Each space and app is a topic with an oracle. The map below names the topics you can reach. In the person's conversation, fork for work and let the fork consult the oracles it needs; never consult one yourself. In a work fork or helper, ask an oracle with spawn({topic: '<#id from the map>', prompt: '<question>'}); its answer comes back to you automatically. Consult the space for its preferences and the app for its notes before working there. An oracle wears its own persona and opens on that topic's context, using @yaks/topic. Report the result to the conversation in a few lines.",
+    "yaks.app builds, hosts and shares web apps. Each space and app is a topic with an oracle. The map below names the topics you can reach. In the person's conversation, fork for work and let the fork consult the oracles it needs; never consult one yourself. In a work fork or helper, read an app's notes before working there, and ask an oracle with spawn({topic: '<#id from the map>', prompt: '<question>'}) for what they don't answer, such as the space's preferences or how the app has been kept; its answer comes back to you automatically. An oracle wears its own persona and opens on that topic's context, using @yaks/topic. Report the result to the conversation in a few lines.",
 }
 
 let ORACULAR =
@@ -73,19 +73,24 @@ let topics = ({ spaces, apps }: Subjects): Bundle[] => [
   ]),
 ]
 
-/** The short map shared by a conversation and its work forks. No app notes,
- * memories, vocabularies or connector guide are read for it. */
+/** The short map shared by a conversation and its work forks: each app with
+ * what it holds, so a file or a fact that belongs in one is known to have a
+ * home there (T-162679). The lines come from the caller's roster (standing.ts
+ * `listed`), so no app's notes, memories or connector guide are read for it. */
 export let oracleMap = async (ctx: Ctx, g: Graph): Promise<string> => {
   let all = await subjects(ctx)
-  await keep(g, topics(all))
+  let [, lines] = await Promise.all([
+    keep(g, topics(all)),
+    listed(ctx, all.apps),
+  ])
   return [
     '## Oracles',
     ...all.spaces.flatMap((s) => [
       `- ${short(s.eid)} space ${safe(s.slug)}: ${safe(s.title)}`,
-      ...all.apps.filter((a) => a.space.eid == s.eid).map(({ app }) =>
-        `  - ${short(app.eid)} app ${safe(s.slug + '/' + app.slug)}: ${
-          safe(app.title)
-        }`
+      ...lines.filter((l) => l.space.eid == s.eid).map((l) =>
+        `  - ${short(l.app.eid)} app ${safe(s.slug + '/' + l.app.slug)}: ${
+          safe(l.app.title)
+        }, ${safe(holds(l.kinds))}${l.noted ? '; its notes say how' : ''}`
       ),
     ]),
   ].join('\n')

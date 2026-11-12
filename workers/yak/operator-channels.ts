@@ -718,7 +718,7 @@ export let attachmentTools = (env: Env) => (ctx: Ctx, files: File[]): Tool[] =>
         done: 'Copied an attachment into %{app}',
       },
       description:
-        'Copy an original request attachment into an app. Returns its attachment eid and URL so app rows can reference the original. Read the app schema first.',
+        "Copy a file the person sent (by its index in the request) into an app, where its text is extracted for the app's search. Answers blob, the id a row's file property takes (an app's `blob`, served at ./api/blob/<blob>), with the attachment eid, the url it is served at, its name, mime and bytes. The app's notes say which row it belongs on.",
       parameters: {
         type: 'object',
         properties: { index: { type: 'integer' }, app: { type: 'string' } },
@@ -752,9 +752,12 @@ export let attachmentTools = (env: Env) => (ctx: Ctx, files: File[]): Tool[] =>
         )
         await graph.apply(saved.bundles, KERNEL)
         return JSON.stringify({
+          blob: saved.sha,
           attachment: saved.use,
           url: saved.url,
           name: file.name,
+          mime: saved.mime,
+          bytes: file.size,
         })
       },
     }]

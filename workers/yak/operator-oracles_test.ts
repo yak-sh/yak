@@ -156,7 +156,9 @@ let drawn = await conversationOf(store, '/at', started.session)
 test('a conversation stays small while its fork obtains an answer from the app oracle', () => {
   assertStringIncludes(
     String(rootAsk.instructions),
-    `${short(app.eid)} app home/recipes: Recipe box`,
+    `${
+      short(app.eid)
+    } app home/recipes: Recipe box, holds docs; its notes say how`,
   )
   assertEquals(String(rootAsk.instructions).includes('Use grams.'), false)
   assertEquals(rootAsk.instructions, forkAsk.instructions)
