@@ -122,7 +122,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'notes',
     'title': 'App Notes (NOTES.md)',
     'description':
-      'NOTES.md beside index.html: what the person wants written down about how the app is kept, in prose, given to every agent that works on the app — where the file goes and who can read it, what belongs in it and what does not, the 4096-byte size limit, how about and an MCP prompt named after the app give it to an agent, and how a published or installed copy carries it.',
+      'NOTES.md beside index.html: what the person wants written down about how the app is kept, in prose, given to every agent that works on the app — where the file goes and who can read it, what belongs in it and what does not, the 4096-byte size limit, how commands, about and an MCP prompt named after the app give it to an agent, and how a published or installed copy carries it.',
     'brief': 'NOTES.md, the notes an app keeps for the agents that work on it',
   },
   'querying': {

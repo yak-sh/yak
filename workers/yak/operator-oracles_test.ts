@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import type { Comp } from '@yaks/graph'
+import { parseTools } from '@yaks/tools/declared'
 import type { Item, Request } from '@yaks/model'
 import { ORACLE } from '@yaks/topic'
 import { human, short } from '@yaks/id'
@@ -37,6 +38,21 @@ await dir.apply({
 // A deployed app's notes are its release's (standing.ts): a deploy stages
 // them with the release, then names the release on the app.
 let eid = (await dir.app(space, 'recipes'))!.eid
+let vocab = {
+  $defs: {
+    recipe: {
+      component: true,
+      description: 'A dish and its ingredients',
+      properties: { serves: { type: 'number', description: 'People fed' } },
+    },
+    recipes: {
+      tool: true,
+      description: 'Find recipes by servings',
+      input: { serves: { type: 'number' } },
+      query: '.recipe.serves=$serves',
+    },
+  },
+}
 let release = async (notes: string) => {
   let source = `home/.releases/${eid}/${crypto.randomUUID()}`
   let staging = staged(r2RawObjects(env.BLOBS), {}, source)
@@ -44,7 +60,10 @@ let release = async (notes: string) => {
   await staging.finish()
   await stamp(env, { entities: [{ entity: { eid }, app: { source } }] })
   let app = (await dir.app(space, 'recipes'))!
-  await declared(env, space, app)
+  await declared(env, space, app, {
+    vocab: { $defs: { recipe: vocab.$defs.recipe } },
+    tools: parseTools(vocab, ['recipe']),
+  })
   return app
 }
 let app = await release(
@@ -158,7 +177,7 @@ test('a conversation stays small while its fork obtains an answer from the app o
     String(rootAsk.instructions),
     `${
       short(app.eid)
-    } app home/recipes: Recipe box, holds docs; its notes say how`,
+    } app home/recipes: Recipe box, holds recipes; its notes say how`,
   )
   assertEquals(String(rootAsk.instructions).includes('Use grams.'), false)
   assertEquals(rootAsk.instructions, forkAsk.instructions)
@@ -169,6 +188,14 @@ test('a conversation stays small while its fork obtains an answer from the app o
   assertEquals((oracle.session as Comp).persona, ORACLE)
   assertEquals((oracle.session as Comp).topic, app.eid)
   assertStringIncludes(String(oracleAsk.instructions), 'Use grams.')
+  assertStringIncludes(
+    String(oracleAsk.instructions),
+    'recipe{serves?: number (People fed)} — A dish and its ingredients',
+  )
+  assertStringIncludes(
+    String(oracleAsk.instructions),
+    'recipes(serves?: number) reads — Find recipes by servings',
+  )
   assertEquals(
     drawn.html.includes('Your recipes use grams, with amounts repeated'),
     true,

@@ -127,6 +127,8 @@ import { demonstrate, ours } from './gallery-demo.ts'
 import { appFolder, landed, listing, sandboxPath } from './ship.ts'
 import {
   listCommands,
+  picked,
+  reachable as reachableApps,
   reachChanged,
   runCommand,
   toolsOf,
@@ -143,10 +145,10 @@ import {
 } from './write-log.ts'
 import { KERNEL } from './meta.ts'
 import { inspect as inspectStore } from './store-inspect.ts'
-// Only the ceiling, and only ever called: tools.ts and standing.ts are a
+// Only functions, and only ever called: tools.ts and standing.ts are a
 // cycle through declared.ts, so nothing from there may be read while this
 // module's own body runs.
-import { tooLong } from './standing.ts'
+import { appEntry, commandLine, tooLong } from './standing.ts'
 import { listable } from './shelf.ts'
 import { meta } from './meta.ts'
 import {
@@ -2796,44 +2798,6 @@ export let uiMeta = (domain: string, csp: Csp = {}) => ({
   },
 })
 
-// A command's arguments as JSON Schema, as far as its signature reads them.
-type Schema = {
-  type?: unknown
-  format?: unknown
-  enum?: unknown[]
-  items?: Schema
-  properties?: Record<string, Schema>
-  required?: string[]
-  description?: unknown
-}
-
-// One command's arguments, as a signature a model reads: each in the order
-// declared, `?` on one it may leave out, what it holds and, where the app
-// said, what it is for. It is the JSON Schema `command` takes in `args`
-// (@yaks/tools/declared `schemaOf`) said the short way, every fact of it,
-// since some hosts show their model only the words; the schema rides in the
-// answer's data too.
-let argsOf = (input: unknown): string => {
-  let s = (input ?? {}) as Schema
-  let need = new Set(s.required ?? [])
-  return Object.entries(s.properties ?? {}).map(([arg, a]) => {
-    let what = holds(a)
-    return `${arg}${need.has(arg) ? '' : '?'}${what && `: ${what}`}${
-      a.description ? ` (${a.description})` : ''
-    }`
-  }).join(', ')
-}
-
-// What one argument holds: the values it may take, or its type with its
-// format, what an array holds and an object's own fields.
-let holds = (a: Schema): string =>
-  a.enum ? a.enum.map((v) => JSON.stringify(v)).join(' | ') : [
-    ...a.type == null ? [] : [[a.type].flat().join(' | ')],
-    ...a.format == null ? [] : [String(a.format)],
-    ...a.items ? [`of ${holds(a.items) || 'anything'}`] : [],
-    ...a.properties ? [`{${argsOf(a)}}`] : [],
-  ].join(' ')
-
 /** Refused where the caller already owns as many free spaces as one person
  * gets (meter.ts `SPACES`, T-131887). A space in the trash is on its way out,
  * so it does not count; one somebody else made and invited them into is not
@@ -5381,6 +5345,13 @@ let OURS: Row[] = [
       // Each command whole, for a program: the words below are the same list
       // said for a model, grouped and shortened.
       let value = { commands: all }
+      if (said && !/^(mcp|service):/.test(said)) {
+        let apps = picked(await reachableApps(ctx), said)
+        if (apps.length == 1) {
+          let { space, app } = apps[0]
+          return { value, text: await appEntry(ctx, space, app, all) }
+        }
+      }
       if (!all.length) {
         if (/^(mcp|service):/.test(said)) {
           return {
@@ -5412,14 +5383,7 @@ let OURS: Row[] = [
           seen.add(one.at)
           lines.push(`${lines.length ? '\n' : ''}## ${one.at}`)
         }
-        // Whether it reads or writes, in the line: half of these commands
-        // mutate and half do not, and a model choosing between them is owed
-        // that before it picks.
-        lines.push(
-          `${one.name}(${argsOf(one.input)}) ${
-            one.readOnly ? 'reads' : 'writes'
-          } — ${one.description}`,
-        )
+        lines.push(commandLine(one))
       }
       return {
         value,

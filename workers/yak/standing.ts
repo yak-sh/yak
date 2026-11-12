@@ -49,7 +49,13 @@ import {
 } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Host } from './host.ts'
-import { reachable, toolsOf } from './declared.ts'
+import {
+  at as commandAt,
+  type Command,
+  listCommands,
+  reachable,
+  toolsOf,
+} from './declared.ts'
 import { at, vocabAt } from './reach.ts'
 import { told } from './memory.ts'
 import { background, caught } from './defects.ts'
@@ -275,6 +281,82 @@ let entry = (e: Listed & { said?: string }, notes: boolean, env: Host) =>
   }.` +
   `${e.commands.length ? ` Commands: ${e.commands.join(', ')}.` : ''}` +
   `${notes ? e.said ? `\n\n${e.said}` : '' : e.noted ? ` ${HAS_NOTES}` : ''}`
+
+// A command's arguments as JSON Schema, as far as its signature reads them.
+type Schema = {
+  type?: unknown
+  format?: unknown
+  enum?: unknown[]
+  items?: Schema
+  properties?: Record<string, Schema>
+  required?: string[]
+  description?: unknown
+}
+
+// One command's arguments, as a signature a model reads: each in the order
+// declared, `?` on one it may leave out, what it holds and, where the app
+// said, what it is for. It is the JSON Schema `command` takes in `args`
+// (@yaks/tools/declared `schemaOf`) said the short way, every fact of it,
+// since some hosts show their model only the words; the schema rides in the
+// answer's data too.
+let argsOf = (input: unknown): string => {
+  let s = (input ?? {}) as Schema
+  let need = new Set(s.required ?? [])
+  return Object.entries(s.properties ?? {}).map(([arg, a]) => {
+    let what = shape(a)
+    return `${arg}${need.has(arg) ? '' : '?'}${what && `: ${what}`}${
+      a.description ? ` (${a.description})` : ''
+    }`
+  }).join(', ')
+}
+
+// What one argument holds: the values it may take, or its type with its
+// format, what an array holds and an object's own fields.
+let shape = (a: Schema): string =>
+  a.enum ? a.enum.map((v) => JSON.stringify(v)).join(' | ') : [
+    ...a.type == null ? [] : [[a.type].flat().join(' | ')],
+    ...a.format == null ? [] : [String(a.format)],
+    ...a.items ? [`of ${shape(a.items) || 'anything'}`] : [],
+    ...a.properties ? [`{${argsOf(a)}}`] : [],
+  ].join(' ')
+
+/** A command's signature, effect and description, as a model reads it. */
+export let commandLine = (one: Command): string =>
+  `${one.name}(${argsOf(one.input)}) ${
+    one.readOnly ? 'reads' : 'writes'
+  } — ${one.description}`
+
+/** One app in full: its address, components, commands and released notes. */
+export let appEntry = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  commands?: Command[],
+): Promise<string> => {
+  let [vocab, all, notes] = await Promise.all([
+    vocabAt(ctx.env, space, app),
+    commands ?? listCommands(ctx, commandAt(space, app)),
+    notesOf(ctx.env, app),
+  ])
+  let components = Object.entries(vocab.$defs ?? {})
+    .filter(([, schema]) => schema.component)
+  return [
+    `## ${commandAt(space, app)}`,
+    `${url(space, app, ctx.env)} — ${app.title || app.slug}`,
+    ...components.length
+      ? [
+        '\n### Components',
+        ...components.map(([name, schema]) =>
+          `${name}{${argsOf(schema)}}${
+            schema.description ? ` — ${schema.description}` : ''
+          }`
+        ),
+      ]
+      : [],
+    ...all.length ? ['\n### Commands', ...all.map(commandLine)] : [],
+    ...notes ? [`\n### ${NOTES}\n\n${notes}`] : [],
+  ].join('\n')
+}
 
 let OPENING = `# The apps here
 

@@ -161,7 +161,10 @@ parentheses, where it has one) and a `?` on an optional argument, then `reads`
 or `writes`, then the command's description with the app's title and address
 appended. A `query` command reads; an `apply` command writes. Its `app` argument
 — a slug, or `<space>/<app>` where two spaces both have an app of that name —
-narrows it to a single app; leave it out to list every app you can reach. For
+asks for that app in full: its title and address, each component with its
+properties and description, every available command with its arguments, and its
+[NOTES.md](/docs/notes). An app with no commands still returns its components
+and notes. Leave `app` out to list commands across every app you can reach. For
 the run club app's whole `vocab.json` (the last section of this page) and the
 recipe app above, the listing is (each line wrapped here; `commands` prints it
 on one):

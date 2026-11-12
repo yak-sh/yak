@@ -8,7 +8,7 @@ guide:
     NOTES.md beside index.html: what the person wants written down about how
     the app is kept, in prose, given to every agent that works on the app — where the file goes and who can read
     it, what belongs in it and what does not, the 4096-byte size limit, how
-    about and an MCP prompt named after the app give it to an agent, and how a
+    commands, about and an MCP prompt named after the app give it to an agent, and how a
     published or installed copy carries it.
 ---
 
@@ -23,7 +23,7 @@ is prose, it belongs to the app, and every agent that can reach the app can be
 given it.
 
 This page covers where the file goes, what belongs in it and what does not, its
-size limit, and the three places an agent is given it.
+size limit, and how an agent is given it.
 
 The map is at <https://yaks.app/docs.md>.
 
@@ -99,8 +99,8 @@ there is a rule the store itself enforces, so no agent can forget it.
 
 ## How agents are given the notes
 
-Agents are given the same text in three places: `about`, an MCP prompt named
-after the app, and the platform's builder.
+Agents are given the same text by `commands` naming the app, `about`, an MCP
+prompt named after the app, and the platform's builder.
 
 When an agent connects, `initialize` gives the model a passage naming every app
 the person can reach, one heading each, with what the app holds and its own
@@ -122,18 +122,23 @@ already a recipe app to add it to, and does not make a second one. The passage
 is generated at every connection. It names the apps but never quotes what their
 people wrote.
 
-First, `about` returns the notes themselves: the same list of apps with each
-app's own notes under it, and anything the person has said in the space along
-with them. Call it before you build on an app or add to one. It is also how a
-long conversation learns about apps that changed after it started: an app made
-this morning appears in what `about` returns, not in the tool list.
+`commands { app: 'recipes' }` returns the app's title and address, each
+component with its properties and description, every available command with its
+arguments, then its `NOTES.md`. The notes appear in the answer, never in the
+tool's description or the `initialize` instructions.
 
-Second, a person can request the notes by name. Each app's notes are offered as
-an MCP prompt named after the app — `recipes`, or `recipes__notes` where that
-name is already taken — titled "Recipes: notes", so somebody picking from a menu
-can add the app's rules to a conversation deliberately.
+`about` returns the notes themselves: the same list of apps with each app's own
+notes under it, and anything the person has said in the space along with them.
+Call it before you build on an app or add to one. It is also how a long
+conversation learns about apps that changed after it started: an app made this
+morning appears in what `about` returns, not in the tool list.
 
-Third, the platform's builder reads an app's notes before it builds on that app.
+A person can also request the notes by name. Each app's notes are offered as an
+MCP prompt named after the app — `recipes`, or `recipes__notes` where that name
+is already taken — titled "Recipes: notes", so somebody picking from a menu can
+add the app's rules to a conversation deliberately.
+
+The platform's builder reads an app's notes before it builds on that app.
 
 ## Publishing and installing
 

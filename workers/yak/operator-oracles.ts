@@ -12,7 +12,7 @@ import { type App, type Space, url } from './directory.ts'
 import { instructions } from './guide.ts'
 import { told } from './memory.ts'
 import { type Declared, moved } from './operator-persona.ts'
-import { entries, holds, listed, passage } from './standing.ts'
+import { appEntry, holds, listed } from './standing.ts'
 import { type Ctx, refuse } from './tool.ts'
 
 export let oracular: Declared = {
@@ -141,7 +141,7 @@ export let oracleContext = async (ctx: Ctx, g: Graph, eid: string) => {
           eid,
           'app',
           `${space.slug}/${app.app.slug}: notes and commands`,
-          passage(await entries(ctx, listed(ctx, [app])), true, ctx.env),
+          await appEntry(ctx, space, app.app),
         ),
         link(eid, 'contains', memories[0].entity.eid),
       ]
