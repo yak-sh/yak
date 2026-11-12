@@ -93,7 +93,7 @@ test('a space’s own address is its apps’, all of it', async () => {
   )
 })
 
-test('the apex opens a chat with the space’s Operator, its settings behind Manage', async () => {
+test('the apex opens a chat with the space’s Operator, whose Manage opens its settings', async () => {
   let first = await get(MANAGE)
   assertEquals(first.status, 302)
   assertEquals(first.headers.get('location'), to(home))
@@ -108,7 +108,7 @@ test('the apex opens a chat with the space’s Operator, its settings behind Man
     assertEquals(
       [...document.querySelectorAll('a')].find((a) => a.textContent == 'Manage')
         ?.getAttribute('href'),
-      apps,
+      managePath('operator', slug),
     )
   }
   assertStringIncludes(

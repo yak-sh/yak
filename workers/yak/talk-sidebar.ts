@@ -95,7 +95,7 @@ export let talkSide = (
       label: 'Settings',
       items: [
         {
-          href: managePath(owner ? 'apps' : 'operator', space.slug),
+          href: managePath('operator', space.slug),
           icon: 'sliders-horizontal',
           label: 'Manage',
         },

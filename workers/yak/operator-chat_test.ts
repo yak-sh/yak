@@ -337,7 +337,7 @@ test('the side holds the space, the Operator, Updates, a few apps and Manage', (
     'Book club': aboutPath('clerk', 'app2', task),
     Chores: aboutPath('clerk', 'app3', task),
     'All 6 apps': managePath('apps', 'clerk'),
-    Manage: managePath('apps', 'clerk'),
+    Manage: managePath('operator', 'clerk'),
   })
   // The conversation on screen is the side's current tab.
   assertEquals(
