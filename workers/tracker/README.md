@@ -115,6 +115,12 @@ reads only those again, a page of ids at a time
 the moves reach, is answered `{"moved": null}`, and the reader reads whole. So a
 change to one bug costs each reader that bug, not every bug.
 
+`GET /ceiling` with an admin ticket reads the scope's row counters and remaining
+wait without booting its graph. After repairing a runaway, `POST /resume` with
+admin and `mark: true` and `{reason}` starts fresh windows at the same limits
+and arms the alarm. It preserves every report and queued run, and keeps each
+recovery's previous counters, caller and reason in object storage.
+
 `POST /regroup` requires an admin ticket with `mark: true`. It repairs existing
 bundle-hash fault keys in that scope, merging equivalent groups atomically. The
 survivor keeps its lifecycle and notification; duplicate addresses still resolve

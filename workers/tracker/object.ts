@@ -31,6 +31,7 @@ import { batch } from './queue.ts'
 import { billing } from './bill.ts'
 import { door, json } from './door.ts'
 import { authorize } from './auth.ts'
+import { recovery } from './recovery.ts'
 import { monitor } from './monitor.ts'
 import { activate, type Mailbox, sender } from './mail.ts'
 import type { Bundle } from '@yaks/graph'
@@ -485,6 +486,16 @@ export class Tracker {
         this.scope,
       )
       if (!access) return json({ error: 'tracker scope denied' }, 403)
+      let recovered = await recovery(
+        request,
+        access,
+        this.#ceiling,
+        (key, value) => this.ctx.storage.put(key, value),
+      )
+      if (recovered) {
+        if (request.method == 'POST' && recovered.ok) await this.#soon()
+        return recovered
+      }
       if (
         new URL(request.url).pathname == '/heartbeat' &&
         request.method == 'POST'

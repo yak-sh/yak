@@ -188,6 +188,7 @@ export let reporting = (
   request?: Request,
   eid?: string,
 ) => {
+  console.error(entrypoint, error)
   let context = origin(
     'yak-tracker',
     env.CF_VERSION_METADATA?.id,

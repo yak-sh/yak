@@ -179,6 +179,10 @@ export type Ceiling = {
   /** Refuse nothing from now on, and go on telling: for an object whose
    * stopping costs more than its rows. */
   spare: () => void
+  /** Current window counters, including those kept by an earlier instance. */
+  spent: () => Spent[]
+  /** Start fresh windows after an operator repairs a runaway; return the old counters. */
+  resume: () => Spent[]
 }
 
 // An amount of rows as a person reads it: 264.5M, 480,000.
@@ -436,6 +440,13 @@ export let ceiling = (
     let { wait, kind } = held(writing)
     return wait && !freed() ? new Stopped(wait, kind) : null
   }
+  let snapshot = () =>
+    live().map((s) => ({
+      ms: s.ms,
+      since: s.since,
+      read: s.all.total.rowsRead,
+      written: s.all.total.rowsWritten,
+    }))
   return {
     admit: (writing) => {
       let no = refusal(writing)
@@ -464,6 +475,13 @@ export let ceiling = (
     },
     spare: () => {
       refuse = false
+    },
+    spent: snapshot,
+    resume: () => {
+      let before = snapshot()
+      spans = windows.map((w) => turned(w, now()))
+      keep?.(snapshot())
+      return before
     },
   }
 }

@@ -192,3 +192,47 @@ test("a stopped tracker's alarm comes back when its window ends, and nothing is 
   equal(await third.db.getAlarm(), MINUTE)
   equal(third.queued, [])
 })
+
+let fourth = await held()
+let preserved = report()
+await fourth.object.ingest(preserved)
+fourth.spend('read')
+let recover = async (path: string, mark = false, reason = '') => {
+  let ticket = await sign({
+    scope: platform,
+    person: platform,
+    admin: true,
+    mark,
+    exp: Date.now() / 1000 + 300,
+  }, SECRET)
+  return fourth.w.fetch(
+    new Request(`https://tracker.test/${path}?scope=platform`, {
+      method: path == 'resume' ? 'POST' : 'GET',
+      headers: { authorization: `Bearer ${ticket}` },
+      ...path == 'resume' ? { body: JSON.stringify({ reason }) } : {},
+    }),
+  )
+}
+let inspection = await (await recover('ceiling')).json()
+let denied = await recover('resume')
+let unexplained = await recover('resume', true)
+let resumed = await recover('resume', true, 'The boot fault is repaired')
+let receipt = await resumed.json()
+let restored = await recover('bugs')
+
+test('signed recovery opens fresh windows without losing reports or disabling the ceiling', async () => {
+  equal(inspection.wait, MINUTE)
+  equal(denied.status, 403)
+  equal(unexplained.status, 400)
+  equal(resumed.status, 200)
+  equal(receipt.spent, inspection.spent)
+  equal(
+    (await fourth.db.get<{ reason: string }>(`ceiling:resumed:${receipt.eid}`))
+      ?.reason,
+    'The boot fault is repaired',
+  )
+  equal(restored.status, 200)
+  ok(await fourth.kept(preserved[0].entity.eid))
+  fourth.spend('read')
+  equal((await recover('bugs')).status, 429)
+})
