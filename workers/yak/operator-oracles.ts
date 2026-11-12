@@ -74,9 +74,11 @@ let topics = ({ spaces, apps }: Subjects): Bundle[] => [
 ]
 
 /** The short map shared by a conversation and its work forks: each app with
- * what it holds, so a file or a fact that belongs in one is known to have a
- * home there (T-162679). The lines come from the caller's roster (standing.ts
- * `listed`), so no app's notes, memories or connector guide are read for it. */
+ * what it holds and the commands it declares for its regular tasks, so a file
+ * or a fact that belongs in one is known to have a home there, and a task a
+ * command (T-162679, D-162751). The lines come from the caller's roster
+ * (standing.ts `listed`), so no app's notes, memories or connector guide are
+ * read for it. */
 export let oracleMap = async (ctx: Ctx, g: Graph): Promise<string> => {
   let all = await subjects(ctx)
   let [, lines] = await Promise.all([
@@ -90,7 +92,9 @@ export let oracleMap = async (ctx: Ctx, g: Graph): Promise<string> => {
       ...lines.filter((l) => l.space.eid == s.eid).map((l) =>
         `  - ${short(l.app.eid)} app ${safe(s.slug + '/' + l.app.slug)}: ${
           safe(l.app.title)
-        }, ${safe(holds(l.kinds))}${l.noted ? '; its notes say how' : ''}`
+        }, ${safe(holds(l.kinds))}${
+          l.does.length ? `; does ${safe(l.does.join(', '))}` : ''
+        }${l.noted ? '; its notes say how' : ''}`
       ),
     ]),
   ].join('\n')

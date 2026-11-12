@@ -177,7 +177,7 @@ test('a conversation stays small while its fork obtains an answer from the app o
     String(rootAsk.instructions),
     `${
       short(app.eid)
-    } app home/recipes: Recipe box, holds recipes; its notes say how`,
+    } app home/recipes: Recipe box, holds recipes; does recipes; its notes say how`,
   )
   assertEquals(String(rootAsk.instructions).includes('Use grams.'), false)
   assertEquals(rootAsk.instructions, forkAsk.instructions)

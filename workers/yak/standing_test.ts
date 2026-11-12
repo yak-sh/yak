@@ -49,6 +49,7 @@ let entry = (slug: string, over: Partial<Entry> = {}): Entry => ({
   said: '',
   kinds: [],
   commands: [],
+  does: [],
   ...over,
   noted: !!over.said,
 })

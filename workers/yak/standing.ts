@@ -58,6 +58,7 @@ import {
 } from './declared.ts'
 import { at, vocabAt } from './reach.ts'
 import { told } from './memory.ts'
+import { generated } from './kinds.ts'
 import { background, caught } from './defects.ts'
 import type { Ctx } from './tools.ts'
 
@@ -97,6 +98,9 @@ export type Listed = {
   kinds: string[]
   /** the commands it declares, as `command` takes them (declared.ts) */
   commands: string[]
+  /** of those, the ones its vocab.json wrote rather than the add_ and find_
+   * each kind is given (kinds.ts): what the app does beyond holding rows */
+  does: string[]
   /** whether it keeps a NOTES.md */
   noted: boolean
 }
@@ -108,7 +112,7 @@ export type Entry = Listed & {
 }
 
 // What a line says beyond the rows naming it.
-type Line = Pick<Listed, 'kinds' | 'commands' | 'noted'>
+type Line = Pick<Listed, 'kinds' | 'commands' | 'does' | 'noted'>
 
 // Each app's notes this isolate has read, by the release holding them: a
 // release's files never change under its name (release.ts), so the notes read
@@ -163,12 +167,14 @@ let kindsOf = async (ctx: Ctx, space: Space, app: App): Promise<string[]> =>
 // One app's line, read from its release and its declaration, the three reads
 // at once (T-34986).
 let lineOf = async (ctx: Ctx, space: Space, app: App): Promise<Line> => {
-  let [said, kinds, commands] = await Promise.all([
+  let [said, kinds, tools] = await Promise.all([
     notesOf(ctx.env, app),
     kindsOf(ctx, space, app),
-    toolsOf(ctx.env, space, app).then(Object.keys),
+    toolsOf(ctx.env, space, app),
   ])
-  return { kinds, commands, noted: !!said }
+  let commands = Object.keys(tools)
+  let does = commands.filter((name) => !generated(name, tools[name]))
+  return { kinds, commands, does, noted: !!said }
 }
 
 // What a line is read from: the release holding the notes and the declaration
@@ -216,10 +222,15 @@ export let listed = async (
   let names = all.map(({ space, app }) => named(space, app))
   let missed = names.some((n) => n && !heldLines.has(n))
   let roster = missed && ctx.person ? await kept(ctx.env, ctx.person) : {}
+  // A line kept before lines said what an app does is read again, once.
+  let read = new Set<number>()
   let lines = await Promise.all(
-    all.map(({ space, app }, i) =>
-      heldLines.get(names[i]) ?? roster[names[i]] ?? lineOf(ctx, space, app)
-    ),
+    all.map(({ space, app }, i) => {
+      let held = heldLines.get(names[i]) ?? roster[names[i]]
+      if (held?.does) return held
+      read.add(i)
+      return lineOf(ctx, space, app)
+    }),
   )
   let now: Record<string, Line> = {}
   for (let [i, name] of names.entries()) {
@@ -228,7 +239,8 @@ export let listed = async (
   let was = Object.keys(roster)
   if (
     missed && ctx.person &&
-    (was.length != Object.keys(now).length || was.some((n) => !now[n]))
+    (was.length != Object.keys(now).length || was.some((n) => !now[n]) ||
+      names.some((n, i) => n && read.has(i)))
   ) {
     background(
       r2RawObjects(ctx.env.BLOBS).put(

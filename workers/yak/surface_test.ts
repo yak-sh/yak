@@ -136,6 +136,7 @@ test('what an app wrote stays off the surface a host reads', () => {
     noted: true,
     kinds: ['recipe'],
     commands: [],
+    does: [],
   }
   // The roster is what rides on the instructions, so it is scanned like one.
   let roster = passage([one])

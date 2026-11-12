@@ -57,6 +57,9 @@ let plural = (word: string) =>
 // rather than inventing a meaning the app never claimed. No full stop: the door
 // appends the app's title and address to every declared tool's sentence
 // (declared.ts), and that reads as one line.
+// "a recipe", "an official": the article a kind's name takes.
+let article = (word: string) => /^[aeiou]/.test(word) ? 'an' : 'a'
+
 let means = (schema: PropSchema) =>
   schema.description ? `: ${schema.description.replace(/\.$/, '')}` : ''
 
@@ -75,7 +78,7 @@ let bound = (props: Record<string, Arg>) =>
 let add = (kind: string, at: string, schema: PropSchema): ToolDef => {
   let props = propsOf(schema)
   return {
-    description: `Add a ${kind} to ${at}${means(schema)}`,
+    description: `Add ${article(kind)} ${kind} to ${at}${means(schema)}`,
     input: { title: TEXT, body: TEXT, alias: TEXT, ...props },
     required: ['title'],
     // The kind's own component stays even when nobody named a property —
@@ -124,6 +127,19 @@ let find = (kind: string, at: string, schema: PropSchema): ToolDef => {
  * names — a tool of its own named `add_recipe` is the `add_recipe` this app
  * has.
  */
+/**
+ * Whether a command is one {@link withKinds} made rather than one the app
+ * declared: its name is a kind's, and so is the start of its sentence, which
+ * a hand-written `add_recipe` says in its own words. The Operator's map names
+ * only the declared ones, since what an app holds already says it has these.
+ */
+export let generated = (name: string, tool: ToolDef): boolean => {
+  let [, verb, kind] = /^(add|find)_([a-z0-9_]+)$/.exec(name) ?? []
+  // "an?": a release kept from before the article was right says "Add a".
+  let made = verb == 'add' ? `Add an? ${kind} to ` : `Find ${plural(kind)} in `
+  return !!kind && new RegExp(`^${made}`).test(tool.description)
+}
+
 export let withKinds = (tools: Tools, doc: VocabDoc, at: string): Tools => {
   if (doc.tools === false) return tools
   let out: Tools = { ...tools }

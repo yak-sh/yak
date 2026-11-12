@@ -3,7 +3,7 @@
 // manifest through app_deploy and a call at the MCP door — is in mcp_test.ts.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { withKinds } from './kinds.ts'
+import { generated, withKinds } from './kinds.ts'
 import { appDoc } from './vocab.ts'
 import { filled, schemaOf } from '@yaks/tools/declared'
 
@@ -164,4 +164,33 @@ test('an app declines them, or declares one itself', () => {
   let both = withKinds(own, appDoc(box), 'jeff/recipes')
   assertEquals(Object.keys(both), ['add_recipe', 'find_recipe'])
   assertEquals(both.add_recipe, own.add_recipe)
+})
+
+test('a kind starting with a vowel takes an', () => {
+  let made = tools({
+    $defs: { official: { component: true, properties: {} } },
+  })
+  assertEquals(made.add_official.description, 'Add an official to jeff/recipes')
+})
+
+test('the commands a kind made are told from the ones an app wrote', () => {
+  let made = tools()
+  let wrote = (description: string) => ({ description, input: {} })
+  assertEquals(
+    Object.entries(made).map(([name, tool]) => generated(name, tool)),
+    [true, true],
+  )
+  assertEquals(
+    generated('add_recipe', wrote('Save a recipe somebody sent')),
+    false,
+  )
+  assertEquals(
+    generated('add_agenda', wrote("Put a meeting's agenda on the site")),
+    false,
+  )
+  // A release kept from before the article was right is still the kind's.
+  assertEquals(
+    generated('add_official', wrote('Add a official to town/site')),
+    true,
+  )
 })
