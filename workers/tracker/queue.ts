@@ -25,7 +25,31 @@ export let wait = (attempts = 1) => Math.min(2 ** attempts, 300)
 export type Destination = { ingest: (rows: Bundle[]) => Promise<void> }
 /** Puts a message's body back on its queue, to arrive `seconds` from now as a
  * new message. */
-export type Later = (body: unknown, seconds: number) => Promise<void>
+type Deferred = { body: unknown; seconds: number }
+export type Later = ((body: unknown, seconds: number) => Promise<void>) & {
+  batch?: (messages: Deferred[]) => Promise<void>
+}
+// RPC intake keeps the same bundle bound as a single message. Queue batches
+// also stay below the provider's byte bound, including room for its envelope.
+let packs = <T>(
+  items: T[],
+  weight: (item: T) => number,
+  bound: number,
+): T[][] => {
+  let out: T[][] = [], held: T[] = [], size = 0
+  for (let item of items) {
+    let n = weight(item)
+    if (held.length && size + n > bound) {
+      out.push(held)
+      held = []
+      size = 0
+    }
+    held.push(item)
+    size += n
+  }
+  if (held.length) out.push(held)
+  return out
+}
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export let batch = (body: unknown): { scope: string; rows: Bundle[] } => {
   if (!Array.isArray(body) || !body.length || body.length > 100) {
@@ -96,67 +120,124 @@ export let consume = async (
   // next failure's wait or makes it a dead letter. Nothing is told of it, and
   // the rest of the batch for that object waits as long without asking it.
   let stops = new Map<string, number>()
-  let defer = async (message: Message, seconds: number) => {
+  let deferred: { message: Message; seconds: number }[] = []
+  let defer = (message: Message, seconds: number) =>
+    deferred.push({ message, seconds })
+  type Accepted = { message: Message; rows: Bundle[] }
+  let scopes = new Map<string, Accepted[]>()
+  let tell = async (error: unknown) => {
+    if (told) return
+    told = true
     try {
-      if (later) {
-        await later(message.body, seconds)
-        return message.ack()
-      }
-    } catch { /* the queue holds it that long instead */ }
-    message.retry({ delaySeconds: seconds })
+      await report(error)
+    } catch { /* intake still retries */ }
+  }
+  let failed = async (message: Message, error: unknown, tracing = false) => {
+    message.retry({ delaySeconds: wait(message.attempts) })
+    if (!tracing) await tell(error)
   }
   for (let message of messages.slice(0, 100)) {
     let tracing = Array.isArray(message.body) &&
       message.body.some((row) => row?.trace || row?.span)
-    let accepted: ReturnType<typeof batch> | undefined
-    if (!tracing) {
+    if (tracing) {
       try {
-        accepted = batch(message.body)
+        let capture = traceBatch(message.body)
+        await trace?.(capture?.scope ?? '', message.body as Bundle[])
+        message.ack()
       } catch (error) {
-        // Admission cannot improve on retry. Preserve the original message
-        // before acknowledging; only failed preservation owes another try.
-        try {
-          await reject(message, error)
-          message.ack()
-        } catch {
-          message.retry({ delaySeconds: wait(message.attempts) })
-        }
-        continue
+        await failed(message, error, true)
       }
-    }
-    let held = accepted && stops.get(accepted.scope)
-    if (held) {
-      await defer(message, held)
       continue
     }
     try {
-      if (
-        tracing
-      ) {
-        // Invalid, incomplete and oversized traces are drops, not retries or
-        // tracker errors that could snowball. The authority counts every drop.
-        let capture = traceBatch(message.body)
-        await trace?.(capture?.scope ?? '', message.body as Bundle[])
-      } else {
-        let { scope, rows } = accepted!
-        await destination(scope).ingest(rows)
-      }
-      message.ack()
+      let { scope, rows } = batch(message.body)
+      let held = scopes.get(scope) ?? []
+      held.push({ message, rows })
+      scopes.set(scope, held)
     } catch (error) {
-      if (accepted && stopped(error)) {
-        let seconds = waits(error) ?? 1
-        stops.set(accepted.scope, seconds)
-        await defer(message, seconds)
-        continue
-      }
-      message.retry({ delaySeconds: wait(message.attempts) })
-      // An unavailable authority may retry transport, but its failure is not
-      // told as an error of the tracker's.
-      if (tracing || told) continue
-      told = true
+      // Preserve an invalid message before acknowledging it, independently
+      // of the valid captures beside it.
       try {
-        await report(error)
-      } catch { /* intake still retries */ }
+        await reject(message, error)
+        message.ack()
+      } catch {
+        message.retry({ delaySeconds: wait(message.attempts) })
+      }
+    }
+  }
+  let deliver = async (scope: string, items: Accepted[]): Promise<void> => {
+    let held = stops.get(scope)
+    if (held) {
+      for (let { message } of items) defer(message, held)
+      return
+    }
+    try {
+      let rows = new Map<string, Bundle>()
+      for (let item of items) {
+        // Intake chooses the last bundle within one capture, and the first
+        // delivered capture wins across messages, as separate RPCs did.
+        let unique = new Map(item.rows.map((row) => [row.entity.eid, row]))
+        for (let [eid, row] of unique) {
+          let held = rows.get(eid)
+          if (!held || Object.keys(held).every((name) => name == 'entity')) {
+            rows.set(eid, row)
+          }
+        }
+      }
+      await destination(scope).ingest([...rows.values()])
+      for (let { message } of items) message.ack()
+    } catch (error) {
+      if (stopped(error)) {
+        let seconds = waits(error) ?? 1
+        stops.set(scope, seconds)
+        for (let { message } of items) defer(message, seconds)
+      } else if (items.length > 1) {
+        await tell(error)
+        // Immutable intake makes a resend safe even if its answer was lost.
+        // Isolate a bad capture so it cannot hold its neighbors on the queue.
+        for (let item of items) await deliver(scope, [item])
+      } else await failed(items[0].message, error)
+    }
+  }
+  for (let [scope, items] of scopes) {
+    for (let group of packs(items, ({ rows }) => rows.length, 100)) {
+      await deliver(scope, group)
+    }
+  }
+  let encoder = new TextEncoder()
+  for (
+    let group of packs(
+      deferred,
+      ({ message }) => encoder.encode(JSON.stringify(message.body)).length,
+      240_000,
+    )
+  ) {
+    if (later?.batch) {
+      try {
+        await later.batch(
+          group.map(({ message, seconds }) => ({
+            body: message.body,
+            seconds,
+          })),
+        )
+        for (let { message } of group) message.ack()
+      } catch (error) {
+        await tell(error)
+        for (let { message, seconds } of group) {
+          message.retry({ delaySeconds: seconds })
+        }
+      }
+    } else {
+      for (let { message, seconds } of group) {
+        try {
+          if (!later) throw Error('queue republication unavailable')
+          await later(message.body, seconds)
+          message.ack()
+        } catch (error) {
+          if (later) await tell(error)
+          message.retry({ delaySeconds: seconds })
+        }
+      }
     }
   }
   for (let message of messages.slice(100)) message.retry()

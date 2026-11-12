@@ -17,7 +17,7 @@ import {
 import { waits } from '@yaks/api'
 import { type Clock, system } from '@yaks/fp'
 import { platform } from './core.ts'
-import { consume, type Message } from './queue.ts'
+import { consume, type Later, type Message } from './queue.ts'
 import { json } from './door.ts'
 import { lent } from './mail.ts'
 import type { Settings } from './object.ts'
@@ -232,9 +232,19 @@ export let worker = (
     )
   // A message's body back on the queue, to arrive once a stopped object's
   // window ends.
-  let later = env.ERRORS &&
-    ((body: unknown, delaySeconds: number) =>
-      env.ERRORS!.send(body as Bundle[], { delaySeconds }))
+  let later: Later | undefined = env.ERRORS && Object.assign(
+    (body: unknown, delaySeconds: number) =>
+      env.ERRORS!.send(body as Bundle[], { delaySeconds }),
+    env.ERRORS.sendBatch
+      ? {
+        batch: (messages: { body: unknown; seconds: number }[]) =>
+          env.ERRORS!.sendBatch!(messages.map(({ body, seconds }) => ({
+            body: body as Bundle[],
+            delaySeconds: seconds,
+          }))),
+      }
+      : {},
+  )
   // What the queue's consumer could not take is told to the platform's object
   // itself, never through the queue it came from: sent back through intake it
   // is one more message for a refusing object to fail. A platform object

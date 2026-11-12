@@ -90,6 +90,9 @@ export type Settings = {
   TRACKER_SECRET?: string
   ERRORS?: {
     send: (rows: Bundle[], options?: { delaySeconds?: number }) => Promise<void>
+    sendBatch?: (
+      messages: { body: Bundle[]; delaySeconds?: number }[],
+    ) => Promise<void>
   }
 } & Mailbox
 

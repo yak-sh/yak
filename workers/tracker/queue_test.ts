@@ -133,6 +133,6 @@ test('a failed intake waits longer each delivery and sends nothing back through 
     retry: (options) => waits.push(options?.delaySeconds),
   })))
   equal(waits, [2, 8, 300])
-  // Three intakes and the one report of the batch, told to the object itself.
-  equal([asked, queued.length], [4, 0])
+  // One combined intake, three individual intakes and the one report of the batch, told to the object itself.
+  equal([asked, queued.length], [5, 0])
 })
