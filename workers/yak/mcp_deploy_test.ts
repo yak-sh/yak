@@ -665,9 +665,18 @@ test('deploy keeps every break open until explicitly fixed', async () => {
     await (await report('failed to load script /weather/w.css')).body?.cancel()
 
     // Deploying a change cannot establish that either cause was fixed.
+    let words = (description?: string) =>
+      JSON.stringify({
+        $defs: {
+          reading: { description, properties: { at: { type: 'string' } } },
+        },
+      })
     await agent.tool('app_files', {
       ...app,
-      files: [{ path: 'app.js', content: 'document.title = "W"' }],
+      files: [
+        { path: 'app.js', content: 'document.title = "W"' },
+        { path: 'vocab.json', content: words() },
+      ],
     })
     let out = await agent.tool('app_deploy', app)
     assertMatch(out, /v2/)
@@ -675,6 +684,8 @@ test('deploy keeps every break open until explicitly fixed', async () => {
     let stillOpen = await agent.tool('app_errors', app)
     assertStringIncludes(stillOpen, 'failed to load script /weather/app.js')
     assertStringIncludes(stillOpen, 'failed to load script /weather/w.css')
+    // Beside what broke, what the vocabulary leaves unsaid, until it is said.
+    assertStringIncludes(stillOpen, 'warning: no description yet: reading')
     assertStringIncludes(
       await agent.tool('app_list', { space }),
       '2 open errors',
@@ -686,6 +697,15 @@ test('deploy keeps every break open until explicitly fixed', async () => {
       await agent.tool('app_errors', app),
       'weather v2: page /weather/ — boom is not a function',
     )
+
+    await agent.tool('app_files', {
+      ...app,
+      path: 'vocab.json',
+      content: words('A temperature taken, on the forecast page'),
+    })
+    await agent.tool('app_deploy', app)
+    let said = await agent.tool('app_errors', app)
+    assert(!said.includes('warning:'), said)
   } finally {
     await k.stop()
   }

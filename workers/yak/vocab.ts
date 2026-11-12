@@ -725,6 +725,42 @@ export let undescribed = (doc: VocabDoc): string[] =>
     .filter(([, s]) => !s.description?.trim())
     .map(([name]) => name)
 
+// A property whose name cannot say what it takes: a reference, which names
+// no kind of thing it points at, and a flag, which names no meaning for true.
+let mute = (s: PropSchema) =>
+  !s.description?.trim() && !s.stamped && s.computed !== true &&
+  (!!s.ref || s.type == 'boolean')
+
+/**
+ * What an app's vocabulary leaves an agent to guess, as warnings it is shown
+ * until each is written (D-162751, C-162917): the components with no
+ * `description`, then the references and flags with none. They stand on the
+ * app, said by the deploy, `commands` naming it and `app_errors`, and they go
+ * when the descriptions are written and deployed. Nothing is refused.
+ */
+export let unwritten = (doc: VocabDoc, file = 'vocab.json'): string[] => {
+  let quiet = undescribed(doc)
+  let props = Object.entries(doc.$defs ?? {}).flatMap(([name, s]) =>
+    Object.entries(s.properties ?? {})
+      .filter(([, p]) => mute(p))
+      .map(([prop]) => `${name}.${prop}`)
+  )
+  return [
+    ...quiet.length
+      ? [
+        `no description yet: ${quiet.join(', ')} — say in ${file} what ` +
+        'each is and where a person sees it',
+      ]
+      : [],
+    ...props.length
+      ? [
+        `no description yet: ${props.join(', ')} — say what each reference ` +
+        'points at and what each flag means',
+      ]
+      : [],
+  ]
+}
+
 /**
  * A new manifest, refused if it declares a component the platform already declares
  * ({@link reserved}) — all of them at once, before anything is planted: a

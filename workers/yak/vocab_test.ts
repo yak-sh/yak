@@ -33,6 +33,7 @@ import {
   undescribed,
   unlent,
   unsaid,
+  unwritten,
 } from './vocab.ts'
 import { effectsIn, type PropSchema, type VocabDoc } from '@yaks/vocab'
 import { parseTools } from '@yaks/tools/declared'
@@ -721,5 +722,26 @@ test('the components a manifest leaves undescribed are named', () => {
       },
     }),
     ['posting', 'moved'],
+  )
+})
+
+test('a reference or a flag with no description is warned of, a plain value not', () => {
+  equal(
+    unwritten({
+      $defs: {
+        posting: {
+          description: 'A notice on the home page',
+          properties: {
+            document: { type: 'string', ref: 'document' },
+            urgent: { type: 'boolean', description: 'Show it first' },
+            until: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    }),
+    [
+      'no description yet: posting.document — say what each reference ' +
+      'points at and what each flag means',
+    ],
   )
 })

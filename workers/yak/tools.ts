@@ -70,8 +70,8 @@ import {
   meant,
   stated,
   teach,
-  undescribed,
   unsaid,
+  unwritten,
   VOCABS,
   wordsOf,
 } from './vocab.ts'
@@ -1613,7 +1613,6 @@ let published = async (
       'installing it gets that code — app_publish again to offer this one'
     : ''
   let serves = parsed.config.assets?.directory
-  let quiet = undescribed(manifest)
   return {
     version,
     serves,
@@ -1627,10 +1626,7 @@ let published = async (
       (planted.length ? `\ncomponents: ${planted.join(', ')}` : '') +
       // The documentation an agent will not find: each component says what
       // it is and where a person sees it, or only its name (D-162751).
-      (quiet.length
-        ? `\nno description yet: ${quiet.join(', ')} — say in ${vocabFile} ` +
-          'what each is and where a person sees it'
-        : '') +
+      unwritten(manifest, vocabFile).map((one) => `\n${one}`).join('') +
       // The data the app came with, said once — the deploy after this one
       // finds the mark and seeds nothing.
       (sowed.length
@@ -5116,12 +5112,21 @@ let OURS: Row[] = [
       // not, and a viewer of the space still gets to see what is broken.
       let { space, app, who } = await inApp(ctx, args, !!done.length)
       let gone = done.length ? await archive(ctx.env, space, app, who, done) : 0
-      let seen = await serve(ctx.env, space, who, app, true)
+      let [seen, words] = await Promise.all([
+        serve(ctx.env, space, who, app, true),
+        vocabAt(ctx.env, space, app),
+      ])
       let said = [
         ...(gone ? [`archived ${gone}`] : []),
         ...folds(seen).map(line),
       ]
-      return { text: said.join('\n') || 'no open errors', space }
+      // Beside what broke, what the app's vocabulary leaves unsaid: an
+      // agent sees it here every time it looks, until it is written.
+      let warned = unwritten(words).map((one) => `warning: ${one}`)
+      return {
+        text: [said.join('\n') || 'no open errors', ...warned].join('\n'),
+        space,
+      }
     },
   },
   {

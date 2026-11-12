@@ -83,11 +83,24 @@ let make = async (slug: string, words: VocabDoc = vocab) => {
 }
 await make('recipes')
 await make('empty', { $defs: { recipe: vocab.$defs.recipe } })
+await make('quiet', {
+  $defs: {
+    shift: {
+      component: true,
+      properties: {
+        who: { type: 'string', ref: 'entity' },
+        swapped: { type: 'boolean' },
+        hours: { type: 'number' },
+      },
+    },
+  },
+})
 let ctx: Ctx = { env, dir, person }
 let named = await call(ctx, 'commands', { app: 'recipes' })
 let qualified = await call(ctx, 'commands', { app: 'kitchen/recipes' })
 let withoutCommands = await call(ctx, 'commands', { app: 'empty' })
 let unnamed = await call(ctx, 'commands', {})
+let quiet = await call(ctx, 'commands', { app: 'quiet' })
 let editor = crypto.randomUUID()
 await dir.apply({
   entities: [{
@@ -144,4 +157,19 @@ test('omitting the app preserves the command-only listing and structured answer'
   )
   ok(!unnamed.text!.includes('Weights in grams.'))
   ok(!unnamed.text!.includes('A dish to cook'))
+})
+
+test('what an app leaves undescribed is a warning wherever an agent looks', () => {
+  let warned = [
+    'no description yet: shift — say in vocab.json what each is and where ' +
+    'a person sees it',
+    'no description yet: shift.who, shift.swapped — say what each ' +
+    'reference points at and what each flag means',
+  ]
+  ok(
+    quiet.text!.endsWith(`### Warnings\n${warned.join('\n')}`),
+    quiet.text,
+  )
+  // Written, there is nothing to warn of.
+  ok(!named.text!.includes('### Warnings'), named.text)
 })

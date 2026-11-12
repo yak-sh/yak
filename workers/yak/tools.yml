@@ -755,7 +755,9 @@ app_errors:
     `fixed` archives the ids it names, which removes them from this list and
     from replies; `seen` archives without listing every id: `all`, `v3` for
     everything up to and including that deploy, or a date. Returns any
-    archive count followed by the remaining reports, or “no open errors”.
+    archive count followed by the remaining reports, or “no open errors”,
+    then the app's warnings: the components, references and flags its
+    vocab.json gives no description, which stay until one is written.
     Archiving a report does not fix the underlying problem. Documentation:
     https://yaks.app/docs/errors.
 app_list:

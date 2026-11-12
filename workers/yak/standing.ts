@@ -59,6 +59,7 @@ import {
 import { at, vocabAt } from './reach.ts'
 import { told } from './memory.ts'
 import { generated } from './kinds.ts'
+import { unwritten } from './vocab.ts'
 import { background, caught } from './defects.ts'
 import type { Ctx } from './tools.ts'
 
@@ -352,6 +353,8 @@ export let appEntry = async (
   ])
   let components = Object.entries(vocab.$defs ?? {})
     .filter(([, schema]) => schema.component)
+  // What its vocabulary leaves to guess, said until it is written (D-162751).
+  let warned = unwritten({ $defs: Object.fromEntries(components) })
   return [
     `## ${commandAt(space, app)}`,
     `${url(space, app, ctx.env)} — ${app.title || app.slug}`,
@@ -367,6 +370,7 @@ export let appEntry = async (
       : [],
     ...all.length ? ['\n### Commands', ...all.map(commandLine)] : [],
     ...notes ? [`\n### ${NOTES}\n\n${notes}`] : [],
+    ...warned.length ? ['\n### Warnings', ...warned] : [],
   ].join('\n')
 }
 
