@@ -9,9 +9,11 @@
 // colos, and the path to some of them loses packets for minutes at a time (a
 // TLS handshake of ten seconds, an answer that never comes). The tracker's
 // Durable Object can also stop answering for half a minute while the runtime
-// stalls or moves it. So a request is short attempts for up to a minute, each
-// on a connection of its own, with a ticket a minute from expiry, and taking
-// its whole answer, never one long wait on a connection gone bad.
+// stalls or moves it. A request starts with a short attempt, then gives later
+// attempts longer within one minute: even unchanged reads can take over five
+// seconds in the runtime. Each attempt has its own connection and takes the
+// whole answer, with a ticket a minute from expiry.
+import { type Clock, system } from '@yaks/fp'
 import type { Bundle } from '@yaks/graph'
 import { platform } from './reading.ts'
 import { sign } from './ticket.ts'
@@ -24,9 +26,9 @@ export type Remote = { url?: string; secret?: string }
  * read why it failed. */
 export type Delivery = (rows: Bundle[]) => Promise<void>
 
-/** How long one attempt may take to its whole answer, and how many attempts a
- * request makes: a minute in all. */
-let WAIT = 5_000, TRIES = 12
+/** The first attempt's wait, the whole request's budget, and the most tries
+ * even when connections fail immediately. */
+let WAIT = 5_000, BUDGET = 60_000, TRIES = 12
 
 /** A failure a timeout caused. It is named as one; any other failure names no
  * cause, since a cause can carry the address or the upstream's body. */
@@ -87,6 +89,7 @@ export let request = async (
   params: URLSearchParams,
   init: RequestInit = {},
   go: typeof fetch = fetch,
+  clock: Clock = system,
 ): Promise<Response> => {
   if (!remote.url) throw new Misconfigured('Remote tracker is not configured')
   if (!remote.secret) {
@@ -117,13 +120,12 @@ export let request = async (
       ? { mark: true }
       : {},
   }
-  let last: unknown
+  let last: unknown, until = clock.now() + BUDGET
   // Signing is deterministic: attempts within one second carry the same
   // ticket, so it is signed and set once a second, not once an attempt.
   let exp = 0, headers = new Headers()
-  for (let i = 0; i < TRIES; i++) {
-    let wait = AbortSignal.timeout(WAIT)
-    let now = Math.floor(Date.now() / 1000) + 60
+  for (let i = 0; i < TRIES && clock.now() < until; i++) {
+    let now = Math.floor(clock.now() / 1000) + 60
     if (now != exp) {
       exp = now
       headers = new Headers(init.headers)
@@ -132,12 +134,24 @@ export let request = async (
         `Bearer ${await sign({ ...claims, exp }, remote.secret)}`,
       )
     }
+    let left = until - clock.now()
+    if (left <= 0) {
+      last = new DOMException('Signal timed out.', 'TimeoutError')
+      break
+    }
+    let wait = new AbortController()
+    let cancel = clock.after(
+      Math.min(WAIT * 2 ** i, left),
+      () => wait.abort(new DOMException('Signal timed out.', 'TimeoutError')),
+    )
     try {
       return await attempt(go, url, {
         ...init,
         headers,
         redirect: 'manual',
-        signal: init.signal ? AbortSignal.any([init.signal, wait]) : wait,
+        signal: init.signal
+          ? AbortSignal.any([init.signal, wait.signal])
+          : wait.signal,
       })
     } catch (error) {
       last = error
@@ -147,6 +161,8 @@ export let request = async (
         if (!late(init.signal.reason)) init.signal.throwIfAborted()
         break
       }
+    } finally {
+      cancel()
     }
   }
   throw late(last)
