@@ -15,7 +15,7 @@ import { ram } from '@yaks/ram'
 import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
-import { gather, keyed, load } from './round.ts'
+import { compare, find, gather, keyed, load } from './round.ts'
 import { run } from './run.ts'
 import { type RoundFile, tally } from './skill.ts'
 import { trialDoc } from './vocab.ts'
@@ -147,4 +147,15 @@ test('a judge that picked the published pitch in both orders agrees, one that le
 
 test('a second run asks nothing', async () => {
   equal((await run(g, round, { cap: 1, pause: answer })).asked, 0)
+})
+
+test('a judge is planned over every pair of a round it has not compared, once', async () => {
+  let before = (await gather(g, round, true)).filter((b) => b.preference).length
+  equal(before, 6)
+  // `leans` compared one pair; the command plans the other, in both orders.
+  let did = await compare(g, round, 'leans')
+  equal(did.planned, 2)
+  equal((await compare(g, round, 'leans')).planned, 0)
+  equal((await run(g, round, { cap: 1, pause: answer })).asked, 2)
+  equal(await find(g, 'known'), round)
 })

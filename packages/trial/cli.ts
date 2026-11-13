@@ -209,6 +209,34 @@ export let commands: CliCommand[] = [{
     return ran.failed ? 1 : 0
   },
 }, {
+  name: 'trial_compare',
+  noun: 'trial',
+  verb: 'compare',
+  description:
+    "Plan a judge that compares two pitches (form `pair`) over each pair of a round it has not compared, each in both orders; `yak trial run` then asks them. The judge is named by its key in the round's skill, or by its id.",
+  inputSchema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['round', 'judge'],
+    properties: {
+      round,
+      judge: {
+        type: 'string',
+        description: "the judge: its key in the round's skill, or its id",
+      },
+    },
+  },
+  positional: ['round', 'judge'],
+  run: async (args, host, context) => {
+    let { compare, find } = await import('./round.ts')
+    let eid = await find(host.graph, String(args.round))
+    let did = await compare(host.graph, eid, String(args.judge))
+    context.out(
+      `${did.planned} comparisons planned for ${did.judge}\nrun: yak trial run ${args.round} --cap <dollars>`,
+    )
+    return 0
+  },
+}, {
   name: 'trial_drop',
   noun: 'trial',
   verb: 'drop',

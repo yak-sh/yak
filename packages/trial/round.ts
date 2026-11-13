@@ -6,11 +6,15 @@
  * @module
  */
 import type { Actor, Bundle, Eid, Graph } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { signed } from '@yaks/graph/provenance'
 import { Refused } from '@yaks/graph/errors'
 import { named, type RoundFile, rows } from './skill.ts'
 
-let attempt = (b: Bundle) => (b.writing ?? {}) as Record<string, unknown>
+let comps = (b: Bundle | undefined, name: string) =>
+  (b?.[name] ?? {}) as Record<string, unknown>
+let attempt = (b: Bundle) => comps(b, 'writing')
+let ends = (p: Record<string, unknown>) => [p.first, p.second].sort().join('|')
 
 /** The round a word names: the key it was loaded under (`copy-r1`), or any
  * id the graph resolves. */
@@ -160,6 +164,45 @@ export let load = async (
     removed: gone.length,
     left: stale.length - gone.length,
   }
+}
+
+/** Plans a judge's comparison of each pair of a round it has not compared,
+ * each in both orders, for `yak trial run` to ask. The judge is named by its
+ * key in the round's skill (`taught`), or by its id. How many comparisons were
+ * planned, and by which judge. */
+export let compare = async (
+  g: Graph,
+  round: Eid,
+  word: string,
+): Promise<{ judge: Eid; planned: number }> => {
+  let [head] = await g.get([round], ['round'])
+  let [skill] = await g.get([String(comps(head, 'round').skill)], ['doc'])
+  let title = String(comps(skill, 'doc').title)
+  let judge = await address(g, named.judge(title, word)) ??
+    await address(g, word) ?? word
+  let [kept] = await g.get([judge], ['judge'])
+  if (!kept?.judge) throw new Refused(`no judge is named ${word}`)
+  let r = JSON.stringify(round), j = JSON.stringify(judge)
+  let [pairs, done] = await Promise.all([
+    g.read(`.pair .pair.round=${r} *`),
+    g.read(`.preference .preference.judge=${j} *`),
+  ])
+  let seen = new Set(
+    done.map((b) => ends(comps(b, 'preference'))),
+  )
+  let made = pairs.flatMap((p) => {
+    let { a, b } = comps(p, 'pair') as { a: Eid; b: Eid }
+    return seen.has(ends({ first: a, second: b })) ? [] : [[a, b], [b, a]].map((
+      [first, second],
+    ): Bundle => ({
+      entity: {
+        eid: derivedEid(['preference', judge, first, second].join('|')),
+      },
+      preference: { first, second, judge },
+    }))
+  })
+  if (made.length) await g.apply(made)
+  return { judge, planned: made.length }
 }
 
 /** Deletes a round and what hangs from it (attempts, pairs, taps, guesses),

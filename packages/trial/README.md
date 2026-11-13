@@ -131,6 +131,7 @@ row always names one.
 yak trial load rounds/r1/round.json  # rows; loading again replaces them
 yak trial run copy-r2 --cap 20       # ask the writers and judges it still owes
 yak trial adopt copy-r2 plain        # the variant becomes the skill's text
+yak trial compare copy-r1 taught     # plan a pair judge over a round's pairs, both orders
 yak trial tally copy-r1              # what the round's rows say, as text
 yak trial pass copy-r1 0.8           # what a judge must get right; a person's to set
 yak trial hold copy-r1 0.25          # keep a quarter of the pairs from selectors
