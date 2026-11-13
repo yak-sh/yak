@@ -52,9 +52,15 @@ export type Asked = { path: string; init: RequestInit }
 /** A provider's HTTP API, its base and key already given. */
 export type Ask = (path: string, init?: RequestInit) => Promise<Response>
 
+/** A turn heard: what one speaker said, and when. `speaker` numbers the
+ * voices a provider tells apart from 0, and is 0 throughout where it tells
+ * none apart (its `speakers`); `from` and `to` are seconds into the audio,
+ * where the provider says. */
+export type Turn = { speaker: number; text: string; from?: number; to?: number }
+
 /** What one message on a turns stream means: the speaker started a turn, or
- * ended one saying `end`, or the stream failed. */
-export type Turn = { start?: true; end?: string; error?: string }
+ * ended one (`end`), or the stream failed. */
+export type Cue = { start?: true; end?: Turn; error?: string }
 
 /** What one message on a talk stream means. */
 export type Said = {
@@ -144,20 +150,25 @@ export type Provider = {
   hear: {
     model: string
     perMinute: number
+    /** whether it tells one speaker from another */
+    speakers: boolean
     request: (audio: BodyInit, type: string, model: string) => Asked
-    /** the words in its answer, and the seconds heard if it says */
-    read: (said: unknown) => { text: string; seconds?: number }
+    /** the words in its answer, the seconds heard and its turns, where it
+     * says */
+    read: (said: unknown) => { text: string; seconds?: number; turns?: Turn[] }
   }
   /** audio heard as it streams, told back a turn at a time */
   turns: {
     model: string
     perMinute: number
+    /** whether it tells one speaker from another */
+    speakers: boolean
     path: (format: Raw, model: string) => string
     /** what is sent once the stream opens, before any audio */
     opening: (format: Raw, model: string) => string[]
     /** raw samples as the stream carries them */
     audio: (bytes: Uint8Array) => string | Uint8Array
-    read: (data: unknown) => Turn
+    read: (data: unknown) => Cue
     /** what ends the stream before it closes */
     closing?: string
   }
@@ -301,8 +312,13 @@ export type Spoken = {
   dollars: number
 }
 
-/** A recording heard: its words, its length, and its cost. */
-export type Heard = { text: string; seconds: number; dollars: number }
+/** A recording heard: its words, its turns, its length, and its cost. */
+export type Heard = {
+  text: string
+  turns: Turn[]
+  seconds: number
+  dollars: number
+}
 
 /** A stream being heard. */
 export type Turns = {
@@ -406,27 +422,29 @@ export let speak = async (
   }
 }
 
+// What a provider that tells no speakers apart heard: one speaker's turn.
+let alone = (text: string): Turn[] => text ? [{ speaker: 0, text }] : []
+
 /**
- * A recording heard whole: its words, how long it was, and what hearing it
- * cost.
+ * A recording heard whole: its words, its turns, how long it was, and what
+ * hearing it cost. A provider that tells speakers apart (`speakers`) answers
+ * a turn each time one of them speaks; one that cannot, the words as one
+ * speaker's.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
- * import { DEEPGRAM, hear } from '@yaks/speech'
+ * import { hear, OPENAI } from '@yaks/speech'
  * let fetch = () =>
- *   Promise.resolve(Response.json({
- *     metadata: { duration: 30 },
- *     results: { channels: [{ alternatives: [{ transcript: 'Hi there' }] }] },
- *   }))
+ *   Promise.resolve(Response.json({ text: 'Hi there', usage: { seconds: 30 } }))
  * let got = await hear({
- *   provider: DEEPGRAM,
+ *   provider: OPENAI,
  *   key: 'k',
  *   audio: new Uint8Array([1]),
  *   type: 'audio/wav',
  *   fetch: fetch as typeof globalThis.fetch,
  * })
- * equal(got.text, 'Hi there')
- * equal(got.dollars, 0.00215)
+ * equal(got.turns, [{ speaker: 0, text: 'Hi there' }])
+ * equal(got.dollars, 0.00225)
  * ```
  */
 export let hear = async (
@@ -436,7 +454,12 @@ export let hear = async (
   let { path, init } = hear.request(o.audio, o.type, hear.model)
   let said = hear.read(await (await asking(o)(path, init)).json())
   let seconds = said.seconds ?? 0
-  return { text: said.text, seconds, dollars: heard(o.provider, seconds) }
+  return {
+    text: said.text,
+    turns: said.turns ?? alone(said.text),
+    seconds,
+    dollars: heard(o.provider, seconds),
+  }
 }
 
 /** The account's credit left, in dollars, or undefined where the provider
@@ -514,8 +537,8 @@ let stream = (
 export type Told = {
   /** they started talking: whatever is playing to them should stop */
   start?: () => void
-  /** they finished a turn, saying `text` */
-  end: (text: string) => void
+  /** they finished a turn: what they said, who said it and when */
+  end: (turn: Turn) => void
   /** the stream failed or closed before `close` was asked */
   lost?: (reason: string) => void
 }
@@ -542,10 +565,10 @@ export let turns = (
     live + t.path(o.format, t.model),
     t.opening(o.format, t.model),
     (data) => {
-      let turn = t.read(data)
-      if (turn.start) o.told.start?.()
-      if (turn.end) o.told.end(turn.end)
-      if (turn.error) o.told.lost?.(turn.error)
+      let cue = t.read(data)
+      if (cue.start) o.told.start?.()
+      if (cue.end?.text) o.told.end(cue.end)
+      if (cue.error) o.told.lost?.(cue.error)
     },
     (reason) => o.told.lost?.(reason),
   )

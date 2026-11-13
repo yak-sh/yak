@@ -1,11 +1,15 @@
-// Deepgram: Nova-3 hears a recording, Flux hears a call and knows when a
-// speaker's turn ends, Aura-2 speaks. It has no model that talks, so a call
-// runs on it as hearing and speaking around another model. Prices are its
-// pay-as-you-go list, 2026-11-05.
+// Deepgram: Nova-3 hears a recording and tells its speakers apart, Flux
+// hears a call and knows when a speaker's turn ends, Aura-2 speaks. It has no
+// model that talks, so a call runs on it as hearing and speaking around
+// another model. Flux tells no speakers apart. Prices are its pay-as-you-go
+// list, 2026-11-05; telling a recording's speakers apart is in its price.
 // https://developers.deepgram.com/reference/speech-to-text/listen-pre-recorded
+// https://developers.deepgram.com/docs/diarization
+// https://developers.deepgram.com/docs/utterances
 // https://developers.deepgram.com/reference/text-to-speech/speak-request
 // https://developers.deepgram.com/docs/flux/quickstart
-import type { Format, Provider, Turn } from './mod.ts'
+// https://developers.deepgram.com/reference/speech-to-text/listen-flux
+import type { Cue, Format, Provider } from './mod.ts'
 import { query } from './query.ts'
 
 let encoded = (format: Format) =>
@@ -15,7 +19,15 @@ let encoded = (format: Format) =>
 
 type Listened = {
   metadata?: { duration?: number }
-  results?: { channels?: { alternatives?: { transcript?: string }[] }[] }
+  results?: {
+    channels?: { alternatives?: { transcript?: string }[] }[]
+    utterances?: {
+      speaker?: number
+      transcript?: string
+      start: number
+      end: number
+    }[]
+  }
 }
 
 type Info = {
@@ -23,24 +35,33 @@ type Info = {
   event?: string
   transcript?: string
   description?: string
+  audio_window_start?: number | string
+  audio_window_end?: number | string
 }
 
 /**
  * What one message from Flux means: a turn starting, a turn ended with its
- * words, or nothing to act on.
+ * words and the stretch of the stream it took, or nothing to act on.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
  * import { DEEPGRAM } from '@yaks/speech'
  * let read = DEEPGRAM.turns.read
- * equal(read('{"type":"TurnInfo","event":"EndOfTurn","transcript":"Hi"}'), {
- *   end: 'Hi',
- * })
+ * equal(
+ *   read(JSON.stringify({
+ *     type: 'TurnInfo',
+ *     event: 'EndOfTurn',
+ *     transcript: 'Hi',
+ *     audio_window_start: '1.5',
+ *     audio_window_end: '2.25',
+ *   })),
+ *   { end: { speaker: 0, text: 'Hi', from: 1.5, to: 2.25 } },
+ * )
  * equal(read('{"type":"TurnInfo","event":"StartOfTurn"}'), { start: true })
  * equal(read('{"type":"TurnInfo","event":"Update"}'), {})
  * ```
  */
-let turnOf = (data: unknown): Turn => {
+let cueOf = (data: unknown): Cue => {
   let info: Info
   try {
     info = JSON.parse(String(data))
@@ -50,8 +71,11 @@ let turnOf = (data: unknown): Turn => {
   if (info.type == 'Error') return { error: String(info.description) }
   if (info.type != 'TurnInfo') return {}
   if (info.event == 'StartOfTurn') return { start: true }
-  if (info.event == 'EndOfTurn') return { end: info.transcript?.trim() ?? '' }
-  return {}
+  if (info.event != 'EndOfTurn') return {}
+  // Flux words the seconds of the stream a turn took as strings.
+  let from = Number(info.audio_window_start), to = Number(info.audio_window_end)
+  let end = { speaker: 0, text: info.transcript?.trim() ?? '' }
+  return { end: isNaN(from + to) ? end : { ...end, from, to } }
 }
 
 export let DEEPGRAM: Provider = {
@@ -64,8 +88,17 @@ export let DEEPGRAM: Provider = {
   hear: {
     model: 'nova-3',
     perMinute: 0.0043,
+    speakers: true,
+    // Each of its utterances is one speaker's words up to a pause.
     request: (audio, type, model) => ({
-      path: `/v1/listen?${query({ model, smart_format: 'true' })}`,
+      path: `/v1/listen?${
+        query({
+          model,
+          smart_format: 'true',
+          diarize_model: 'latest',
+          utterances: 'true',
+        })
+      }`,
       init: { method: 'POST', headers: { 'content-type': type }, body: audio },
     }),
     read: (said) => {
@@ -73,12 +106,19 @@ export let DEEPGRAM: Provider = {
       return {
         text: results?.channels?.[0]?.alternatives?.[0]?.transcript ?? '',
         seconds: metadata?.duration ?? 0,
+        turns: results?.utterances?.map((u) => ({
+          speaker: u.speaker ?? 0,
+          text: u.transcript?.trim() ?? '',
+          from: u.start,
+          to: u.end,
+        })).filter((turn) => turn.text),
       }
     },
   },
   turns: {
     model: 'flux-general-en',
     perMinute: 0.0077,
+    speakers: false,
     // Flux's lowest end-of-turn confidence, 0.5 against its default 0.7:
     // measured on spoken questions in a call's μ-law, the turn ended a median
     // 0.22 s after the last word instead of 1.0 s, none of 12 cut short.
@@ -86,7 +126,7 @@ export let DEEPGRAM: Provider = {
       `/v2/listen?${query({ model, ...encoded(format), eot_threshold: 0.5 })}`,
     opening: () => [],
     audio: (bytes) => bytes,
-    read: turnOf,
+    read: cueOf,
     closing: JSON.stringify({ type: 'CloseStream' }),
   },
   speak: {

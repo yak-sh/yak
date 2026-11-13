@@ -654,7 +654,7 @@ export let converse = (o: Talk): Call => {
       generation++
       c.clear()
     },
-    end: (text) => {
+    end: ({ text }) => {
       if (!text || c.over()) return
       c.stopped()
       asked = true

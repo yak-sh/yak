@@ -3,12 +3,14 @@
 // answering as it goes, and gpt-live-1 hears and speaks at once, taking its
 // own turns. Its TTS speaks 24 kHz PCM, made μ-law for a call here; the
 // talking models take and speak a telephone's μ-law themselves. Prices are
-// its list, 2026-11-05.
+// its list, 2026-11-05. Its transcription tells no speakers apart: only
+// gpt-4o-transcribe-diarize does, deprecated and never on a stream.
 // https://developers.openai.com/api/docs/pricing
+// https://developers.openai.com/api/docs/guides/speech-to-text
 // https://developers.openai.com/api/docs/guides/realtime-conversations
 // https://developers.openai.com/api/reference/resources/realtime/server-events
 // https://developers.openai.com/api/reference/resources/live/primary-websocket
-import type { Provider, Raw, Said, Setup, Turn, Voice } from './mod.ts'
+import type { Cue, Provider, Raw, Said, Setup, Voice } from './mod.ts'
 import { base64, mulawed, unbase64 } from './audio.ts'
 
 // The realtime model's voices; its TTS model speaks in the same ones.
@@ -120,15 +122,15 @@ let parsed = (data: unknown): Event => {
  *     type: 'conversation.item.input_audio_transcription.completed',
  *     transcript: ' Book it ',
  *   })),
- *   { end: 'Book it' },
+ *   { end: { speaker: 0, text: 'Book it' } },
  * )
  * ```
  */
-let turnOf = (data: unknown): Turn => {
+let cueOf = (data: unknown): Cue => {
   let e = parsed(data)
   if (e.type == 'input_audio_buffer.speech_started') return { start: true }
   if (e.type == 'conversation.item.input_audio_transcription.completed') {
-    return { end: e.transcript?.trim() ?? '' }
+    return { end: { speaker: 0, text: e.transcript?.trim() ?? '' } }
   }
   if (e.type == 'error') return { error: String(e.error?.message) }
   return {}
@@ -152,6 +154,7 @@ export let OPENAI: Provider = {
   hear: {
     model: 'gpt-transcribe',
     perMinute: 0.0045,
+    speakers: false,
     request: (audio, type, model) => {
       let form = new FormData()
       form.set('model', model)
@@ -174,6 +177,7 @@ export let OPENAI: Provider = {
     // it cannot say when a caller's turn ends.
     model: 'gpt-transcribe',
     perMinute: 0.0045,
+    speakers: false,
     path: () => '/v1/realtime?intent=transcription',
     opening: (format, model) => [JSON.stringify({
       type: 'session.update',
@@ -193,7 +197,7 @@ export let OPENAI: Provider = {
         type: 'input_audio_buffer.append',
         audio: base64(bytes),
       }),
-    read: turnOf,
+    read: cueOf,
   },
   speak: {
     voice: 'cedar',

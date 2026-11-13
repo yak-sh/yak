@@ -6,8 +6,9 @@ what each costs, and how its requests and streams are worded, all in its own
 entry; one implementation calls any provider described that way. The key is an
 argument; nothing here reads the environment.
 
-- `DEEPGRAM`: Nova-3 hears a recording, Flux hears a call and says when a
-  speaker's turn ends, and Aura-2 speaks. It has no model that talks.
+- `DEEPGRAM`: Nova-3 hears a recording and tells its speakers apart, Flux hears
+  a call and says when a speaker's turn ends, and Aura-2 speaks. It has no model
+  that talks.
 - `OPENAI`: gpt-transcribe hears a recording and a call's turns, gpt-4o-mini-tts
   speaks (its 24 kHz PCM made μ-law for a call), gpt-realtime-2.1 and its mini
   hear and speak in one stream (`talk`), and gpt-live-1 hears and speaks at
@@ -26,11 +27,18 @@ argument; nothing here reads the environment.
   the `speeds` each provider declares for speaking and for talking
   (`paced(speeds, speed)`): Aura-2 0.7 to 1.5, gpt-4o-mini-tts 0.25 to 4, the
   realtime models 0.25 to 1.5; gpt-live-1 has only its own.
-- `hear({provider, key, audio, type})` answers a recording's `text`, its length
-  in `seconds`, and `dollars`.
+- `hear({provider, key, audio, type})` answers a recording's `text`, its
+  `turns`, its length in `seconds`, and `dollars`.
+- A turn is what one speaker said up to a pause or another's voice:
+  `{speaker, text, from?, to?}`, `from` and `to` the seconds into the audio it
+  took, where the provider says. `speaker` numbers the voices a provider tells
+  apart from 0; `provider.hear.speakers` and `provider.turns.speakers` say
+  whether it tells them apart, and one that does not answers every turn as
+  speaker 0 (a recording's words as one turn). Nova-3 tells a recording's
+  speakers apart; Flux and OpenAI's models tell none apart.
 - `turns({provider, key, format, told})` hears audio as it streams. `send` takes
   raw samples; `told.start()` fires when the speaker starts a turn (stop
-  whatever is playing to them), `told.end(text)` when they finish one, and
+  whatever is playing to them), `told.end(turn)` when they finish one, and
   `told.lost(reason)` when the stream drops. `spent()` answers the seconds heard
   so far and their cost, and `close()` ends the stream answering the same.
 - `talk({provider, key, format, instructions, tools?, model?, voice?, speed?, opens?, told})`

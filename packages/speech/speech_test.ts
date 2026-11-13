@@ -94,15 +94,32 @@ test('the balance adds up every project’s', async () => {
   equal(await balance(o), 199.75)
 })
 
+// What Deepgram answers a recording, its utterances each `[speaker, text,
+// from, to]`.
+let listened = (
+  duration: number,
+  ...said: [number, string, number, number][]
+) =>
+  Response.json({
+    metadata: { duration },
+    results: {
+      channels: [{
+        alternatives: [{ transcript: said.map(([, text]) => text).join(' ') }],
+      }],
+      utterances: said.map(([speaker, transcript, start, end]) => ({
+        speaker,
+        transcript,
+        start,
+        end,
+      })),
+    },
+  })
+
 test('a recording is heard with its type, priced by its minutes', async () => {
-  let o = answering(() =>
-    Response.json({
-      metadata: { duration: 60 },
-      results: { channels: [{ alternatives: [{ transcript: 'Call me' }] }] },
-    })
-  )
+  let o = answering(() => listened(60, [0, 'Call me', 0.5, 1.25]))
   equal(await hear({ ...o, audio: new Uint8Array([1]), type: 'audio/webm' }), {
     text: 'Call me',
+    turns: [{ speaker: 0, text: 'Call me', from: 0.5, to: 1.25 }],
     seconds: 60,
     dollars: 0.0043,
   })
@@ -110,6 +127,29 @@ test('a recording is heard with its type, priced by its minutes', async () => {
     (o.asked[0].init.headers as Record<string, string>)['content-type'],
     'audio/webm',
   )
+})
+
+test('a recording of two voices is heard as turns, each with its speaker', async () => {
+  let o = answering(() =>
+    listened(
+      9,
+      [0, 'I move we adopt the budget.', 0.3, 2.1],
+      [1, 'Second.', 2.6, 3.0],
+      [0, 'All in favor?', 3.4, 4.2],
+    )
+  )
+  let got = await hear({ ...o, audio: new Uint8Array([1]), type: 'audio/wav' })
+  equal(got.turns, [
+    { speaker: 0, text: 'I move we adopt the budget.', from: 0.3, to: 2.1 },
+    { speaker: 1, text: 'Second.', from: 2.6, to: 3.0 },
+    { speaker: 0, text: 'All in favor?', from: 3.4, to: 4.2 },
+  ])
+  equal(got.text, 'I move we adopt the budget. Second. All in favor?')
+  let asked = new URL(o.asked[0].url).searchParams
+  equal([asked.get('diarize_model'), asked.get('utterances')], [
+    'latest',
+    'true',
+  ])
 })
 
 // A socket that keeps what it was sent and lets a test say what it hears.
@@ -140,7 +180,7 @@ let socket = () => {
 
 test('a stream sends what it heard once open, tells turns, and prices its seconds', () => {
   let s = socket()
-  let told: string[] = []
+  let told: unknown[] = []
   let stream = turns({
     provider: DEEPGRAM,
     key: 'k1',
@@ -148,7 +188,7 @@ test('a stream sends what it heard once open, tells turns, and prices its second
     open: s.open,
     told: {
       start: () => told.push('start'),
-      end: (text) => told.push(text),
+      end: (turn) => told.push(turn),
       lost: (why) => told.push('lost: ' + why),
     },
   })
@@ -166,12 +206,19 @@ test('a stream sends what it heard once open, tells turns, and prices its second
   s.fire('message', '{"type":"TurnInfo","event":"Update","transcript":"Bo"}')
   s.fire(
     'message',
-    '{"type":"TurnInfo","event":"EndOfTurn","transcript":"Book it "}',
+    JSON.stringify({
+      type: 'TurnInfo',
+      event: 'EndOfTurn',
+      transcript: 'Book it ',
+      audio_window_start: '0.25',
+      audio_window_end: '1.0',
+    }),
   )
+  s.fire('message', '{"type":"TurnInfo","event":"EndOfTurn","transcript":""}')
   equal(stream.close(), { seconds: 1, dollars: 0.0077 / 60 })
   equal(s.sent.at(-1), '{"type":"CloseStream"}')
   s.fire('close')
-  equal(told, ['start', 'Book it'])
+  equal(told, ['start', { speaker: 0, text: 'Book it', from: 0.25, to: 1 }])
 })
 
 test('a stream that drops says so once', () => {

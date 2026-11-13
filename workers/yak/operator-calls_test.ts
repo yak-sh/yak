@@ -442,6 +442,8 @@ let calling = (
   return {
     call,
     told: () => told,
+    /** the caller's turn ended, saying `text` */
+    end: (text: string) => told.end({ speaker: 0, text }),
     heard,
     asked,
     said,
@@ -488,7 +490,7 @@ test('a voice the Operator sets on its persona during a call is heard on its nex
     say: saying(p.env, space, store.g, line.format, setupOf(p.env, space)),
   })
   await until(() => c.played() == 1)
-  c.told().end('Please speak in Pandora.')
+  c.end('Please speak in Pandora.')
   // What the Operator writes, asked: the same write as its settings page's.
   await store.g.apply([{
     entity: { eid: personaFor(space.eid) },
@@ -496,7 +498,7 @@ test('a voice the Operator sets on its persona during a call is heard on its nex
   }], { trusted: true })
   c.call.answered('This is Pandora.')
   await until(() => c.played() == 2)
-  c.told().end('What is on my calendar?')
+  c.end('What is on my calendar?')
   await time.advance(20)
   await until(() => c.played() == 3)
   equal(voices, ['aura-2-draco-en', PANDORA, PANDORA])
@@ -529,7 +531,7 @@ test('a call says hello, hears a turn, and speaks the reply a sentence at a time
   ])
   // Words before a question are not the caller's reply.
   c.call.typed('Stray words. ')
-  c.told().end('Book the hall for Friday')
+  c.end('Book the hall for Friday')
   equal(c.asked, ['Book the hall for Friday'])
   equal(c.call.waiting(), true)
   c.call.typed('Done, **booked** for Fri')
@@ -560,8 +562,8 @@ test('a turn the Operator could not take is reported, and said plainly, differen
     ask: () => Promise.reject(new Error('refused')),
     report: (e) => void reported.push(e),
   })
-  c.told().end('Add a recipe to my recipe box')
-  c.told().end('Add a recipe to my recipe box')
+  c.end('Add a recipe to my recipe box')
+  c.end('Add a recipe to my recipe box')
   await until(() => c.said.length == 3)
   equal(reported.length, 2)
   equal(c.call.waiting(), false)
@@ -590,14 +592,14 @@ test('a caller who starts talking stops what is playing, and a turn is acknowled
   c.told().start!()
   equal(JSON.parse(c.sent.at(-1)!), { event: 'clear' })
   // A quick answer comes with no acknowledgement.
-  c.told().end('Thanks')
+  c.end('Thanks')
   c.call.answered('You are welcome.')
   await until(() => c.played() == 2)
   await time.advance(20)
   await time.advance(0)
   equal(c.played(), 2)
   // A slow one is acknowledged, and the next slow one in other words.
-  c.told().end('What is on my calendar?')
+  c.end('What is on my calendar?')
   await time.advance(20)
   await until(() => c.played() == 3)
   // What the model wrote before its tool is said before the tool runs.
@@ -607,7 +609,7 @@ test('a caller who starts talking stops what is playing, and a turn is acknowled
   await until(() => spoken.length == 4)
   equal(spoken[3], 'Let me look')
   c.call.answered('Let me look. You have choir at 7.')
-  c.told().end('And tomorrow?')
+  c.end('And tomorrow?')
   await time.advance(20)
   await until(() => c.played() == 5)
   equal(
@@ -1196,8 +1198,8 @@ test("a call's turns answered together, and the helper they start, are each said
       return Promise.resolve({})
     },
   })
-  c.told().end('Can you add a random recipe to my recipe box?')
-  c.told().end('I.')
+  c.end('Can you add a random recipe to my recipe box?')
+  c.end('I.')
   await Promise.all(received)
   // Accept both inputs before running the model: retaining their original
   // text is asynchronous, so intake can otherwise finish on separate turns.
