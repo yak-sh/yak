@@ -75,7 +75,8 @@
         "body": {
           "type": "string",
           "store": "blob",
-          "contains": true
+          "contains": true,
+          "prose": true
         }
       }
     },

@@ -477,6 +477,7 @@ export let tool = async (
   // `--json` prints the answer as data, the same object an MCP client
   // reads as `structuredContent` (@yaks/tools `structured`).
   let answer = answerOf(landed, id)
+  if (host.readable) answer = await host.readable(answer)
   if (c.json) {
     c.out(JSON.stringify(structured(declared, answer), null, 2))
   } else if (!c.tui && !c.tty && host.text) {

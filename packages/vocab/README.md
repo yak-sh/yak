@@ -141,6 +141,7 @@ Use a JSON Schema validator with it for full document validation.
 | `kind`, `before`                      | component             | Display kind and the kinds it sorts before                                                                     |
 | `search`                              | property or component | Stored text to index, or another component's text property names                                               |
 | `contains`                            | property              | Stored text a substring index answers `~=` on                                                                  |
+| `prose`                               | property              | Stored text a person reads as Markdown; its eids are drawn as ids or short handles for the reader              |
 | `embed`                               | component             | `false` excludes entities carrying it from embedding                                                           |
 | `found`                               | component             | `false` keeps entities carrying it out of every search, by words and by meaning                                |
 | `journal`                             | component             | `false` keeps its writes, and deletions of entities holding nothing else, out of the journal's history         |

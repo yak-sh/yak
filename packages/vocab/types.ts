@@ -73,6 +73,10 @@ export type Prop = {
   /** this text property keeps a substring index, so a `~=` contains-test on
    * it is answered from the index (@yaks/fts builds it) */
   contains: boolean
+  /** this text property is prose a person reads, as Markdown: an eid it holds
+   * is drawn for its reader as the entity's id or short handle
+   * (@yaks/markdown `drawn`), never as a whole uuid */
+  prose: boolean
   /** derived, never stored: no column holds it and nobody writes it, but a
    * reader still sees it (a query-only rank, an aggregate, a derived status) */
   computed: boolean
@@ -298,6 +302,8 @@ export type PropSchema = {
   search?: boolean | string[]
   // On a property, true = a substring index answers `~=` on it (@yaks/fts).
   contains?: boolean
+  // On a property, true = its text is prose a person reads, as Markdown.
+  prose?: boolean
   kind?: boolean
   before?: string[]
   // On a component reported out of a vocabulary of several packages: the one

@@ -333,6 +333,44 @@ test('a config may keep a component off the human number line', async () => {
   host.close()
 })
 
+test('a numbered host reads an eid in prose as the id it holds', async () => {
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'], numbers: true },
+    only({
+      shop: {
+        graph: { plugins: (host) => [ids(host.vocab)] },
+        vocab: {
+          docs: [{
+            ...doc,
+            $defs: {
+              ...doc.$defs,
+              project: { component: true, kind: true, prefix: 'P' },
+              note: {
+                component: true,
+                type: 'object',
+                properties: { body: { type: 'string', prose: true } },
+              },
+            },
+          }],
+          keywords: [idKeywords],
+        },
+      },
+    }),
+  )
+  try {
+    let project = 'a3f19c02-4b00-4000-8000-000000000001'
+    let other = 'a3f19c02-4b00-4000-8000-000000000002'
+    let [, note] = await host.graph.apply([
+      { entity: { eid: project }, project: {} },
+      { entity: { eid: 'n1' }, note: { body: `${project} and ${other}` } },
+    ])
+    let [read] = await host.readable!([note])
+    assertEquals(read.note, { body: 'P-1 and #a3f19c024b' })
+  } finally {
+    host.close()
+  }
+})
+
 // The policy fixture exercises the original mixed batch. Host composition and
 // the write prepare the records whose numbering and address we inspect.
 {

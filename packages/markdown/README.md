@@ -48,9 +48,19 @@ whole SHA parses as a `ref` token, and `[words](T-123)` is a link to one. The
 host says where each leads through `Refs`, `(id) => href | undefined`, passed as
 `{ refs }` to `render`/`blocks` or, for `Markdown`, given by the `Host` context.
 An id the host can open is an `a.Body_Ref` carrying `data-ref`; one it cannot
-open stays its words, and with no host every id is words. A code span holding a
-hex word (`` `1a2b3c4` ``) is asked about too, the way a commit is quoted. Code
-stays literal. `mentions(tokens)` lists what a document points at, entities and
+open stays its words, and with no host every id is words.
+
+An eid (a UUID) in prose is never drawn whole. The host's `Ids`,
+`(eid) => id | undefined`, passed as `{ ids }`, names it: the entity's id
+(`P-1`) where the host already holds the entity or keeps its series in memory.
+Otherwise it is drawn as its short handle from @yaks/id (`#a3f19c024b`). `Refs`
+is asked about the drawn form, so a link never carries a whole uuid, and
+`data-ref` keeps the eid. `drawn(source, ids)` does the same to the text itself,
+for a reader of text such as a model or a printout: each eid written bare or as
+a link's target becomes its drawn form, and code keeps its eids.
+`shown(id, ids)` is the form one id is drawn as. A code span holding a hex word
+(`` `1a2b3c4` ``) is asked about too, the way a commit is quoted. Code stays
+literal. `mentions(tokens)` lists what a document points at, entities and
 addresses, read as it is drawn. `flat` draws links, images and ids as words, for
 a title (`MarkdownInline` takes it too). The same options take
 `code(text, language)`, which colours a fenced block as runs of

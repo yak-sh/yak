@@ -2,18 +2,26 @@
  * Uses the same GFM parser/version as the older canvas markdown renderer.
  */
 import { Marked, type Token, type Tokens } from 'marked'
+import { HUMAN, short, WRITTEN } from '@yaks/id'
 import type { Child, H } from '@yaks/render'
-import { HUMAN, WRITTEN } from '@yaks/id'
 
 export { type Token } from 'marked'
 
 /** Where an entity id named in prose leads: an href for a reader who can open
  * the entity, or nothing, and then the id stays words. The host gives it, since
  * only the host knows its routes and its reader. It is asked for an id written
- * bare (T-123, #a1b2c3, a UUID, a 40- or 64-hex SHA), for a link written to one
+ * bare (T-123, #a1b2c3, a 40- or 64-hex SHA), for a link written to one
  * ([the plan](T-123)), and for a code span holding a hex word, the way a commit
- * is quoted (`1a2b3c4`), where a bare word like "decafed" never is. */
+ * is quoted (`1a2b3c4`), where a bare word like "decafed" never is. An eid
+ * (a UUID) is asked about as it is drawn ({@link Ids}), so a link never
+ * carries a whole uuid. */
 export type Refs = (id: string) => string | undefined
+
+/** What an entity is called where prose holds its eid: its id (`P-1`) when
+ * the host has it at hand, from an entity it has already read or a series it
+ * keeps in memory, or nothing, and then the eid is drawn as its short handle
+ * (`#a3f19c024b`). The host never reads an entity only to answer this. */
+export type Ids = (eid: string) => string | undefined
 
 // An id is a word of its own: a T-123 at a boundary, whatever its letter (the
 // number names the entity), a #hex short id, a UUID or a whole SHA. UTF-8 and
@@ -26,10 +34,17 @@ let NAMED = new RegExp(
   `^(?:#[0-9a-fA-F]{6,64}|${UUID}|[0-9a-f]{40}|[0-9a-f]{64})$`,
 )
 let HEX = /^[0-9a-f]{7,64}$/i
+let EID = new RegExp(`^${UUID}$`, 'i')
+let EIDS = new RegExp(UUID, 'i')
 
 /** Whether a link's target is an entity id rather than an address. */
 export let named = (href: string): boolean =>
   HUMAN.test(href) || NAMED.test(href)
+
+/** An id as prose draws it: an eid as the host calls it ({@link Ids}), or its
+ * short handle; any other id as written. */
+export let shown = (id: string, ids?: Ids): string =>
+  EID.test(id) ? ids?.(id.toLowerCase()) ?? short(id) : id
 
 let lexer = new Marked({
   gfm: true,
@@ -37,7 +52,11 @@ let lexer = new Marked({
     name: 'ref',
     level: 'inline',
     start: (src: string) => src.match(START)?.index,
-    tokenizer: (src: string) => {
+    // `start` is asked about the text after a line's first character, so it
+    // cannot see that character: the token before says what the id follows,
+    // and one glued to a word (`xT-12`) is no id.
+    tokenizer: (src: string, before: Token[]) => {
+      if (/[\w#-]$/.test(before.at(-1)?.raw ?? '')) return undefined
       let m = REF.exec(src)
       return m ? { type: 'ref', raw: m[0], text: m[0], id: m[0] } : undefined
     },
@@ -86,6 +105,46 @@ export let mentions = (tokens: Token[]): Mention[] => {
     }
   })
   return out
+}
+
+/** Prose as its reader reads it, still as text: each eid it holds, written
+ * bare or as a link's target, drawn as {@link shown} draws it, so a model or a
+ * printout never reads a whole uuid. Code keeps its ids literal, and a link
+ * keeps its own words. What the renderer does to the same text, for a reader
+ * of text rather than nodes. */
+export let drawn = (source: string, ids?: Ids): string => {
+  if (!EIDS.test(source)) return source
+  // Marked keeps no offsets, but every leaf's raw text stands in the source
+  // in reading order, so each is found from where the last one ended.
+  let edits: [number, number, string][] = []
+  let at = 0
+  let found = (raw: string) => {
+    let i = source.indexOf(raw, at)
+    return i < 0 ? undefined : i
+  }
+  lexer.walkTokens(parse(source, { breaks: false }), (t) => {
+    if (t.type == 'code' || t.type == 'codespan') {
+      let i = found(t.raw)
+      if (i != null) at = i + t.raw.length
+    } else if (t.type == 'ref' && EID.test(t.raw)) {
+      let i = found(t.raw)
+      if (i == null) return
+      edits.push([i, i + t.raw.length, shown(t.raw, ids)])
+      at = i + t.raw.length
+    } else if (t.type == 'link' && EID.test((t as Tokens.Link).href)) {
+      let { href } = t as Tokens.Link
+      let i = found(t.raw)
+      if (i == null) return
+      let j = i + t.raw.lastIndexOf(href)
+      edits.push([j, j + href.length, shown(href, ids)])
+      // The link's words come next, and may hold ids of their own.
+      at = i + 1
+    }
+  })
+  return edits.sort((a, b) => b[0] - a[0]).reduce(
+    (text, [from, to, word]) => text.slice(0, from) + word + text.slice(to),
+    source,
+  )
 }
 
 /** The words a heading is made of, with the markup dropped: a reader sees
@@ -175,10 +234,12 @@ let bodyClass = (tag: string) =>
   `Body_${parts[tag]}` +
   (/^h[1-6]$/.test(tag) ? ` Body_Heading-${tag.slice(1)}` : '')
 
-/** What a host gives the renderer: where an entity id leads (`Refs`), and how
- * a fenced block's code is coloured, as runs of text each with its classes. */
+/** What a host gives the renderer: where an entity id leads (`Refs`), what an
+ * eid is called (`Ids`), and how a fenced block's code is coloured, as runs of
+ * text each with its classes. */
 export type Options = {
   refs?: Refs
+  ids?: Ids
   code?: (text: string, language?: string) => Run[]
   /** Links, images and ids drawn as their words, for a line that is itself
    * the thing pressed, such as a title. */
@@ -196,13 +257,14 @@ export type Run = { text: string; classes: string[] }
 export let blocks = <Node>(
   tokens: Token[],
   host: H<Node>,
-  { refs, code, flat }: Options = {},
+  { refs, ids, code, flat }: Options = {},
 ): Child<Node>[] => {
   let name = slugs()
   // An id the host can open is an anchor carrying the id, so a host can give
-  // it its own click; one it cannot open is the words it was written as.
+  // it its own click; one it cannot open is the words it was written as. An
+  // eid is drawn short, and leads where its short form does.
   let ref = (id: string, ...words: Child<Node>[]): Child<Node>[] => {
-    let href = flat ? undefined : refs?.(id)
+    let href = flat ? undefined : refs?.(shown(id, ids))
     let link = href == null ? undefined : safeHref(href)
     return link == null ? words : [
       element(
@@ -254,8 +316,8 @@ export let blocks = <Node>(
         return HEX.test(text) ? ref(text, quoted) : [quoted]
       }
       case 'ref': {
-        let { id } = t as Tokens.Generic
-        return ref(String(id), String(id))
+        let id = String((t as Tokens.Generic).id)
+        return ref(id, shown(id, ids))
       }
       case 'code': {
         let v = t as Tokens.Code

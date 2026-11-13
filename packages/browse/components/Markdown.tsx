@@ -2,7 +2,8 @@
 // Markdown in browse is @yaks/markdown, drawn as nodes in the face its caller
 // chooses, so it keeps that face's layout, gestures and CSS, in the browser
 // and the terminal alike. Markup a body wrote stays words; what browse adds is
-// where an id leads (`refs`) and how code is coloured (`code`).
+// where an id leads (`refs`), what an eid is called (`ids`: the id of an
+// entity the page already holds) and how code is coloured (`code`).
 //
 // An id leads to its page here, its anchor carrying data-ref so nav.tsx's
 // delegated listeners give it the in-app open and entity menu. A hex word
@@ -27,6 +28,7 @@ import {
 import { highlight } from '../highlight.ts'
 import { EID } from '../types.ts'
 import { entityPath } from '../url.ts'
+import { heldId } from '../live.ts'
 
 let SHA = /^[0-9a-f]{7,40}$/i
 
@@ -53,13 +55,13 @@ export let code = (text: string, language?: string): Run[] =>
   )
 
 /** What browse gives every Markdown beneath it, inspect pages included. */
-export let host: Options = { refs: refs(), code }
+export let host: Options = { refs: refs(), ids: heldId, code }
 
 let hosts = new Map<string, Options>()
 let hosted = (repo?: string | null) => {
   let key = repo ?? ''
   let found = hosts.get(key)
-  if (!found) hosts.set(key, found = { refs: refs(repo), code })
+  if (!found) hosts.set(key, found = { refs: refs(repo), ids: heldId, code })
   return found
 }
 

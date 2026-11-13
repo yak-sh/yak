@@ -937,6 +937,21 @@ let composed = async (
       worded ??= (await import('./text.ts')).text(host)
       return worded(answer, tool)
     }
+    // A numbered graph draws each eid in an answer's prose as the entity's
+    // id, from the small series it holds in memory. A read of them that
+    // failed is reported, and the answer drawn with what the answer holds.
+    if (config.numbers) {
+      let small: import('@yaks/id/graph').Held | undefined
+      host.readable = async (answer) => {
+        let [{ held }, { readable }] = await Promise.all([
+          import('@yaks/id/graph'),
+          import('@yaks/tools/readable'),
+        ])
+        small ??= held(vocab, host.graph)
+        let ids = await small().catch((error) => void report(error))
+        return readable(vocab, ids ?? undefined)(answer)
+      }
+    }
     let fx = host.fx
     let effecting = roles.includes('effects')
     // Whoever works the effects also works off the schema work a pass owed

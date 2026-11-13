@@ -359,6 +359,22 @@ test('graph_show answers the entities asked for and nothing else', async () => {
   await client.close()
 })
 
+test('a host that draws prose sends no whole uuid in a body', async () => {
+  let graph = shopGraph()
+  let eid = '0e513227-de00-4000-8000-000000000001'
+  await graph.apply([{ entity: { eid: 'n1' }, doc: { body: `See ${eid}.` } }])
+  let readable = (answer: Bundle[]) =>
+    Promise.resolve(answer.map((b) => ({
+      ...b,
+      doc: { body: String(comp(b, 'doc').body).replace(eid, 'B-1') },
+    })))
+  let client = await connect({ graph, readable })
+  let out = await called(client, 'graph_show', { ids: ['n1'] })
+  assertEquals(comp(bundles(result(out))[0], 'doc').body, 'See B-1.')
+  assert(!text(out).includes(eid), text(out))
+  await client.close()
+})
+
 test('graph_show reads an entity by whatever names it', async () => {
   let g = graph({
     storage: ram(shop, { number: true }),

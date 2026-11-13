@@ -4880,6 +4880,9 @@ importers:
       '@yaks/graph':
         specifier: 0.2.33
         version: link:../graph
+      '@yaks/id':
+        specifier: 0.2.23
+        version: link:../id
       '@yaks/markdown':
         specifier: 0.2.30
         version: link:../markdown
@@ -4914,9 +4917,6 @@ importers:
       '@yaks/effects':
         specifier: 0.2.33
         version: link:../effects
-      '@yaks/id':
-        specifier: 0.2.23
-        version: link:../id
       '@yaks/kernel':
         specifier: 0.2.28
         version: link:../kernel

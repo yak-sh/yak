@@ -2296,6 +2296,15 @@ probe.__probe = {
 let UNLISTED = 'referenced'
 let listed = (d: Dep) => d.type != UNLISTED
 
+// What the page calls an entity its prose names by eid (@yaks/markdown `Ids`):
+// its id, where the page already holds it numbered. The page never reads an
+// entity only to draw its id; one it does not hold draws as its handle.
+export let heldId = (eid: string): string | undefined => {
+  let held = cache.peek()[eid] as Comps | undefined
+  let num = (held?.entity as { num?: number } | undefined)?.num
+  return held && num ? idOf({ eid, kind: kindOf(held), num }) : undefined
+}
+
 // The whole entity, assembled for a renderer: spine, components present,
 // outgoing edge sentences, contained children (recursive — graphs stay
 // small; a view reads as deep as it wants).

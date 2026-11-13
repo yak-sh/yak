@@ -147,6 +147,7 @@ is assigned a fresh eid first.
 | `@yaks/tools/routes`   | `routes`                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `@yaks/tools/vocab`    | `toolsDoc`, `callDoc`, `toolDoc`, `docs`, `description`, `derived`                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `@yaks/tools/value`    | `valueIn`                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `@yaks/tools/readable` | `readable`, `Ids`                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `@yaks/tools/views`    | `views`                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ## Stored data
@@ -293,6 +294,14 @@ blocks: the data as JSON first, then its prose, then the lines beside it. It
 limits text to `WORDS` characters by default and counts the bundles left unsaid.
 `most` in runner options limits the answer's JSON size to `MOST` characters by
 default; larger answers are refused with `too_large`.
+
+`readable(vocab, ids)(answer)` from `@yaks/tools/readable` is the answer as its
+reader reads it. Each `prose` property (@yaks/vocab) is drawn by
+[@yaks/markdown](../markdown/README.md)'s `drawn`. An eid in it reads as the id
+the answer itself gives that entity, whatever its kind, or as the id `ids` gives
+(@yaks/id/graph `held`), else as its short handle. A host applies it before an
+answer is sent as data, printed or drawn (@yaks/host `Host.readable`). The
+stored text is unchanged.
 
 `structured(tool, answer)` returns `{ result: answer }`, or `output.value` for a
 tool declaring `outputSchema`. `valueIn(answer)` reads that data directly.

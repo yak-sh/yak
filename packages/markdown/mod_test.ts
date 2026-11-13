@@ -4,11 +4,13 @@ import { mount } from '../preact/testing.ts'
 import { assert, assertEquals } from '@std/assert'
 import {
   blocks,
+  drawn,
   headings,
   Host,
   Markdown,
   MarkdownInline,
   mentions,
+  type Options,
   parse,
   render,
   safeHref,
@@ -102,7 +104,7 @@ test('Preact component produces ordinary web-compatible elements', () => {
 let opens = (id: string) => id.startsWith('X-') ? undefined : '/' + id
 let seen = (
   source: string,
-  host: { refs?: typeof opens } = { refs: opens },
+  host: Options = { refs: opens },
 ) => {
   let ui = mount(h(Host.Provider, { value: host }, h(Markdown, { source })))
   try {
@@ -127,12 +129,14 @@ test('an entity id in prose links where the host can open it', () => {
     let [source, want] of [
       ['see T-123 and D-4.', 'see [T-123](/T-123) and [D-4](/D-4).'],
       ['short #18bc9a78d1 here', 'short [#18bc9a78d1](/#18bc9a78d1) here'],
-      [`full ${uuid}`, `full [${uuid}](/${uuid})`],
+      [`full ${uuid}`, 'full [#352e992008](/#352e992008)'],
+      [`[it](${uuid})`, '[it](/#352e992008)'],
       [`commit ${sha}`, `commit [${sha}](/${sha})`],
       ['[the plan](M-31946)', '[the plan](/M-31946)'],
       ['quoted `83f7b74`', 'quoted [83f7b74](/83f7b74)'],
       ['**C-9** in bold', '[C-9](/C-9) in bold'],
       ['not X-1 for you', 'not X-1 for you'],
+      ['xT-1 is a word', 'xT-1 is a word'],
       ['UTF-8, SHA-256, AT-1x, `T-5`', 'UTF-8, SHA-256, AT-1x, T-5'],
       ['`decafed` and decafbad', '[decafed](/decafed) and decafbad'],
       ['[out](https://a.b/T-1)', '[out](https://a.b/T-1 unnamed)'],
@@ -140,6 +144,44 @@ test('an entity id in prose links where the host can open it', () => {
   ) assertEquals(seen(source), want, source)
   // A host that gives no way to open entities leaves every id as its words.
   assertEquals(seen('T-1 and [it](T-2)', {}), 'T-1 and it')
+  assertEquals(seen(`one ${uuid}`, {}), 'one #352e992008')
+})
+
+let PROJECT = '352e9920-08ae-436c-94e2-14bd02a37b2d'
+let TASK = '0e513227-de00-4000-8000-000000000001'
+let ids = (eid: string) => eid == PROJECT ? 'P-1' : undefined
+
+test('an eid in prose is drawn as the id its host has at hand, or its handle', () => {
+  for (
+    let [source, want] of [
+      [`see ${PROJECT}.`, 'see [P-1](/P-1).'],
+      [`and ${TASK}`, 'and [#0e513227de](/#0e513227de)'],
+      [`[the plan](${PROJECT})`, '[the plan](/P-1)'],
+    ]
+  ) assertEquals(seen(source, { refs: opens, ids }), want, source)
+})
+
+test('prose drawn as text holds no whole uuid outside code', () => {
+  for (
+    let [source, want] of [
+      ['no ids, T-12 as typed', 'no ids, T-12 as typed'],
+      [`${PROJECT} and ${TASK}`, 'P-1 and #0e513227de'],
+      [
+        `[the plan](${PROJECT}) [${TASK}](${TASK})`,
+        '[the plan](P-1) [#0e513227de](#0e513227de)',
+      ],
+      [
+        `\`${TASK}\` keeps, ${TASK} draws`,
+        `\`${TASK}\` keeps, #0e513227de draws`,
+      ],
+      [
+        `\`\`\`\n${PROJECT}\n\`\`\`\n\n- ${PROJECT}`,
+        `\`\`\`\n${PROJECT}\n\`\`\`\n\n- P-1`,
+      ],
+      [`> **${PROJECT}**, | ${TASK} |`, '> **P-1**, | #0e513227de |'],
+      [`x${PROJECT} ${PROJECT}y`, `x${PROJECT} ${PROJECT}y`],
+    ]
+  ) assertEquals(drawn(source, ids), want, source)
 })
 
 test('what a document points at is read the way it is drawn', () => {

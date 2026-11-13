@@ -118,15 +118,21 @@ let storableDefault = (comp: string, prop: string, s: PropSchema): string[] => {
 // is rejected anywhere but a stored text property, where it would otherwise
 // declare an index over nothing.
 let WORDLESS = ['date-time', 'uri', 'query', 'json']
-// `contains` declares a substring index, which reads the same stored text.
+// `contains` declares a substring index, which reads the same stored text, and
+// `prose` says that text is Markdown a person reads.
 let searched = (comp: string, prop: string, s: PropSchema): string[] => {
   let prose = s.computed !== true && s.ref == null && s.enum == null &&
     s.type == 'string' && !isBinary(s) && !WORDLESS.includes(s.format ?? '')
-  return prose ? [] : (['search', 'contains'] as const)
+  let said = {
+    search: 'searched',
+    contains: 'substring-indexed',
+    prose: 'prose',
+  }
+  return prose ? [] : (['search', 'contains', 'prose'] as const)
     .filter((k) => s[k] === true)
     .map((k) =>
       `${comp}.${prop} is ${
-        k == 'search' ? 'searched' : 'substring-indexed'
+        said[k]
       } but holds no prose — "${k}": true is for a stored text property`
     )
 }

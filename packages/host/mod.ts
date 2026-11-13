@@ -211,6 +211,12 @@ export interface Host {
     answer: Bundle[],
     tool?: { readOnly?: boolean; page?: boolean },
   ) => Promise<string>
+  /** A tool answer as its reader reads it, sent as data, printed or drawn:
+   * each eid in its prose drawn as the entity's id, where the answer or the
+   * small series this host holds in memory has it, else as its short handle
+   * (@yaks/tools/readable, @yaks/id/graph `held`). Absent, an answer is read
+   * as the tool gave it. */
+  readable?: (answer: Bundle[]) => Promise<Bundle[]>
   /** The work this process does that nobody asked for: the effect pool where
    * it serves `effects` (@yaks/effects `work` — any number of processes work
    * it at once), and each plugin's `./service` where it serves that plugin.

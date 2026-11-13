@@ -49,6 +49,8 @@ export type Hosting = {
     answer: Bundle[],
     tool: { readOnly?: boolean; page?: boolean },
   ) => Promise<string>
+  /** a tool's answer with its prose drawn for its reader */
+  readable?: (answer: Bundle[]) => Promise<Bundle[]>
 }
 
 // The handler, made by the first request to `/mcp`: a server listens before
@@ -71,6 +73,7 @@ let mounted = async (host: Hosting): Promise<Handler> => {
     search: host.search,
     reply: host.reply,
     text: host.text,
+    readable: host.readable,
     readFile: (path) => io.readTextFile(path),
     name: host.config.name ?? 'yak',
     skills: (built, exchange) =>

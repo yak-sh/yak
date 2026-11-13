@@ -624,6 +624,9 @@
         "contains": {
           "type": "boolean"
         },
+        "prose": {
+          "type": "boolean"
+        },
         "unique": {
           "type": "boolean"
         },
@@ -721,6 +724,9 @@
           "type": "boolean"
         },
         "contains": {
+          "type": "boolean"
+        },
+        "prose": {
           "type": "boolean"
         },
         "unique": {

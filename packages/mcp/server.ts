@@ -116,6 +116,11 @@ export type Options = {
    * for a request that asks (./mount.ts), so every other client reads the
    * reply it always did. */
   text?: (answer: Bundle[], tool: Tool) => Promise<string>
+  /** a tool's answer as its reader reads it, before it is sent as data or
+   * drawn as text: the host's, which draws each eid in its prose as an id or
+   * a short handle (@yaks/tools/readable). Absent, the answer is sent as the
+   * tool gave it. */
+  readable?: (answer: Bundle[]) => Promise<Bundle[]>
   /** Optional local file input: callers opt in with `_files: true`. Hosted
    * servers without a reader keep literal inputs and their exact schemas. */
   readFile?: ReadFile
@@ -616,6 +621,7 @@ export let server = (
       if (!t.readOnly) await admitted.ensure()
       let landed = await (t.readOnly ? admitted.read() : admitted.call())
       let answer = answerOf(landed, id)
+      if (opts.readable) answer = await opts.readable(answer)
       let isError = faulted(landed, id)
       out = said(t, answer, isError)
       if (isError) out = { ...out, isError: true }
