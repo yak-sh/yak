@@ -252,14 +252,17 @@ export let walks = (
  * count foretells. The owners are read where the most that road can lose to
  * the walk, owners² / (page × entities), is less than the most the walk can
  * lose to it, entities / owners: the box's 21,606 sessions, under a test that
- * leaves 35 of them, walked 3.5 million moments for 5.7 s. Without a count,
- * the walk.
+ * leaves 35 of them, walked 3.5 million moments for 5.7 s. A component no
+ * entity holds is read from its owners, who are none: the walk read the box's
+ * 3.8 million moments for `.bug.status=open`, with no bug stored, for 3.6 s.
+ * Without a count, the walk.
  *
  * ```ts
  * import { sorts } from '@yaks/sql'
  * import { equal } from '@yaks/testing'
  * let census = (held?: number) => ({ held: () => held, largest: () => 1.4e7 })
  * equal(sorts(census(21_606), 'session', 51), true)
+ * equal(sorts(census(0), 'bug', 10), true)
  * equal(sorts(census(450_000), 'entry', 51), false)
  * equal(sorts(census(), 'session', 51), false)
  * ```
@@ -271,7 +274,7 @@ export let sorts = (
   page: number,
 ): boolean => {
   let held = census?.held(comp)
-  return !!held && held ** 3 < page * census!.largest() ** 2
+  return held != null && held ** 3 < page * census!.largest() ** 2
 }
 
 /** Whether more than `n` rows of `comp` are stored, as `census` tells it:
@@ -2031,7 +2034,10 @@ let facetOf = (
   c: Clause,
 ): { comp: string; present: boolean } | null => {
   if (c.kind != 'pred' || c.path.length != 1) return null
-  if (c.not || c.where || claims(ctx, 'pred')) return null
+  // A value compared with a component is no presence test: `.task=T-1` read
+  // as `!task` answered every session beside `.session` (bug 51cb9ceb), where
+  // compiled alone it is refused (`valueless`).
+  if (c.not || c.where || compares(c) || claims(ctx, 'pred')) return null
   let name = c.path[0]
   if (name == 'kind' || name == 'entity' || ctx.v.assoc(name)) return null
   let op = opOf(c)

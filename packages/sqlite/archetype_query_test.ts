@@ -1,5 +1,6 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
+import { Unknown } from '@yaks/vocab'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { type Bundle, graph } from '@yaks/graph'
 import {
@@ -106,6 +107,19 @@ test('archetype query golden: presence/kind, value joins, boolean, paths, revers
   let bool = and(or(present('doc'), present('product')), absent('marker'))
   let old = compile(bool, vocab)
   assertEquals(rows(driver, vocab, bool), driver.query(old))
+})
+
+// A value compared with a component is refused beside one that drives the read,
+// as it is alone: folded into the shape as an absence, `.session .task=T-1`
+// answered every session (bug 51cb9ceb).
+test('a value compared with a component is refused beside another component', () => {
+  let s = storage(mem(), vocab)
+  s.install()
+  let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+  g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
+  for (let q of ['.product=a', '.doc .product=a', '.doc .product~=a']) {
+    assertThrows(() => s.rows(q), Unknown, 'names a component', q)
+  }
 })
 
 // A tally groups by the archetype each entity stores, and still answers with
