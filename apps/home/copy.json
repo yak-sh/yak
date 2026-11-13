@@ -378,7 +378,121 @@
   "help": {
     "name": "Help: building, sharing and exporting your apps",
     "title": "Help: building, sharing and exporting your apps · yaks.app",
-    "description": "Answers about building apps, connecting an assistant, sharing, access, exports, and support."
+    "description": "Answers about building apps, connecting an assistant, sharing, access, exports, and support.",
+    "head": {
+      "title": "Help",
+      "intro": "Build, host and share web apps: say what you need, and yaks.app builds it. You can also build apps by asking Claude or ChatGPT. This page covers setup, sharing, exports, and support. For anything else, email %{email}."
+    },
+    "jump": {
+      "make": "What can I make?",
+      "start": "How do I start?",
+      "ask": "How do I request changes?",
+      "where": "Where are my apps and data?",
+      "who": "Who can see them?",
+      "invite": "Inviting people",
+      "broken": "Something's broken",
+      "out": "Exporting and deleting",
+      "people": "Contact support"
+    },
+    "make": {
+      "title": "What can I make?",
+      "lead": "yaks.app supports personal and shared web apps: a recipe box, garden diary, book club schedule, potluck signup sheet, running log, or birthday guestbook.",
+      "basic": "Start with one or two sentences. Ask for a basic version first, then request changes as you use it.",
+      "installed": "You can also ask %{said} If someone has published a suitable app, your assistant can install a copy in your space. That copy has its own URL and data store; installing it does not give the publisher access to your space.",
+      "says": {
+        "made": "has somebody already made one of these?"
+      }
+    },
+    "start": {
+      "title": "How do I start?",
+      "lead": "%{sign-in} with your email. We send a six-digit code; yaks.app does not use passwords. You land on your own space, and the steps for Claude or ChatGPT are there. After connecting, ask your assistant to build an app.",
+      "sign-in": "Sign in"
+    },
+    "ask": {
+      "title": "How do I request an app or a change?",
+      "lead": "Describe what you want in your own words: %{said} Your assistant builds the app and gives you its link.",
+      "changes": "Request changes the same way. %{newest} %{note} %{photos} You do not need to specify every detail before the first version is built.",
+      "undo": "To undo a change, ask to restore an earlier version. The last twenty versions are kept. Restoring one changes the app's files, not its saved data.",
+      "says": {
+        "app": "Could you make me a recipe box? Something I can share with my sister.",
+        "newest": "Put the newest ones first.",
+        "note": "Let Ana leave a note on each one.",
+        "photos": "Make the photos bigger."
+      }
+    },
+    "where": {
+      "title": "Where are my apps and data?",
+      "lead": "Your apps are hosted under a name you choose. For example, a recipe box can use %{recipes}. Ask your assistant to choose which app opens at %{yours}. Visitors open the URL in a browser and do not need to install anything.",
+      "name": "Your space starts with a name from your email address. Change it at any time in your space settings, or ask your assistant to move your space. Every app moves with it, and old links keep working until someone else takes the old name.",
+      "data": "Each app stores its own recipes, notes, photos, and other data. Changes are available on any device. Ask your assistant %{said} to list your apps and their links.",
+      "says": {
+        "apps": "what apps have I made?"
+      }
+    },
+    "who": {
+      "title": "Who can see them?",
+      "lead": "Set access separately for each app. You can change it later. There are three options:",
+      "read": {
+        "option": "Anyone with the link can read it.",
+        "detail": "%{option} This is the default. Only you and invited members can make changes."
+      },
+      "write": {
+        "option": "Anyone with the link can write in it too.",
+        "detail": "%{option} For a vote, a signup sheet, or guestbook. Visitors can contribute without signing in."
+      },
+      "invited": {
+        "option": "Only you and the people you invite.",
+        "detail": "%{option} Other visitors cannot open the app."
+      },
+      "tell": "Tell your assistant which option to use: %{signup}, %{private}.",
+      "says": {
+        "signup": "let anyone sign up on the potluck list",
+        "private": "keep the diary private"
+      }
+    },
+    "invite": {
+      "title": "How do invitations work?",
+      "lead": "Tell your assistant who, and why: %{said} Ana receives an email with your note and a link to accept. Nothing is shared with them until they click it, signed in with the same email address. No prior account or installation is required.",
+      "roles": "Choose whether the person can edit, only view, or invite other people. Membership applies to every app under %{yours}, not to a single app. Invite only people who should have access to the whole space.",
+      "remove": "To remove access, ask %{said} They can still sign in to yaks.app, but they lose access to your space. Their previous contributions are not deleted.",
+      "says": {
+        "invite": "invite ana@example.com to the recipe box, and say it's for Saturday.",
+        "remove": "remove Ana from my space."
+      }
+    },
+    "broken": {
+      "title": "What should I do when an app breaks?",
+      "lead": "Tell your assistant what you saw: %{said} You do not need to diagnose the problem first.",
+      "errors": "Apps record errors automatically. Your assistant receives those errors the next time you use it. You can also ask %{said} and ask it to make a fix.",
+      "restore": "If a recent change caused the problem, ask to restore an earlier version. Restoring app files does not change saved data.",
+      "says": {
+        "photo": "the photo on the pancakes won't load.",
+        "errors": "are there any errors in the recipe box?"
+      }
+    },
+    "out": {
+      "title": "How do I export or delete an app?",
+      "lead": "Ask your assistant to export the app: %{said} It can return the app's data as a list or spreadsheet and provide the app files.",
+      "delete": "To delete it, ask %{said} Deleted apps stay in the trash for 30 days. You can restore them during that time; after 30 days, they are permanently erased.",
+      "account": "To ask for a copy of everything we hold about you, or for your account to be closed, write to %{email}. The %{privacy} says what we keep and for how long.",
+      "privacy": "privacy page",
+      "says": {
+        "export": "give me everything in the recipe box as a file.",
+        "delete": "delete the recipe box."
+      }
+    },
+    "people": {
+      "title": "How do I contact support?",
+      "lead": "Email %{email} for help from a person.",
+      "report": "You can also ask your assistant to report a problem for you.",
+      "security": "Found a security problem? Email %{email}."
+    },
+    "under": {
+      "title": "Where are the technical details?",
+      "lead": "The %{docs} covers app data, files, sharing, invitations, errors, and the tools available to an assistant. Its %{technical} page covers hosting, data storage, limits, and current limitations.",
+      "docs": "documentation",
+      "technical": "technical details"
+    }
   },
   "terms": {
     "name": "Terms of service",

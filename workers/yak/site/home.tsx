@@ -68,7 +68,7 @@ export let data = () => ({
       'description': said('home.data.app'),
       'featureList': keys(COPY)
         .filter((key) => key.startsWith('home.data.features.'))
-        .map(said),
+        .map((key) => said(key)),
       'publisher': {
         '@id': 'https://yaks.app/#organization',
       },

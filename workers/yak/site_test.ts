@@ -9,7 +9,8 @@
 // line, the prices in apps/home/copy.json and the Stripe price id in
 // wrangler.toml. It says no
 // `sameAs` because yaks.app has no profile elsewhere to name. Each FAQ answer in
-// help.html's JSON-LD is the first paragraph of the section it names, verbatim.
+// help.html's JSON-LD is the first paragraph of the section it names, verbatim,
+// with the list that paragraph opens.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -1064,21 +1065,37 @@ test('the help page says where to report a security problem', () => {
   assertStringIncludes(security(new Date()), `Contact: mailto:${REPLY_TO}`)
 })
 
+// A section's question and answer as a browser shows them: its heading, and
+// its first paragraph with the list after it, each quote in its marks.
+let asked = (section: Element) => {
+  let words = (el: Element | null) =>
+    el?.textContent?.replace(/\s+/g, ' ').trim()
+  for (let q of section.querySelectorAll('q')) {
+    q.textContent = `“${q.textContent}”`
+  }
+  let lead = section.querySelector('p')
+  let list = lead?.nextElementSibling?.matches('ul')
+    ? [...lead.nextElementSibling.children]
+    : []
+  return [
+    words(section.querySelector('h2')),
+    [lead, ...list].map(words).join(' '),
+  ]
+}
+
 test('the help page answers its own questions in JSON-LD', () => {
   let html = read('help.html')
   let [faq] = ld(html)
   assertEquals(faq['@type'], 'FAQPage')
-  let headings = [...html.matchAll(/<h2\b[^>]*>([^<]+)<\/h2>/g)].map((m) =>
-    m[1].trim()
-  )
-  assert(headings.length > 0)
+  let sections = [...parseHTML(html).document.querySelectorAll('section')]
+  assert(sections.length > 0)
   // deno-lint-ignore no-explicit-any
-  let asked = faq.mainEntity.map((q: any) => {
+  let answered = faq.mainEntity.map((q: any) => {
     assertEquals(q['@type'], 'Question')
     assertEquals(q.acceptedAnswer['@type'], 'Answer')
-    return q.name
+    return [q.name, q.acceptedAnswer.text]
   })
-  assertEquals(asked, headings)
+  assertEquals(answered, sections.map(asked))
 })
 
 // The connect instructions, as they are served, one tab per app.

@@ -18,8 +18,9 @@ let snippet = (key: string) => {
 }
 
 /** The snippet at `key` as text, for an attribute, a title or structured
- * data. */
-export let said = (key: string): string => fill(snippet(key)).join('')
+ * data, each slot the words given for it. */
+export let said = (key: string, slots: Record<string, string> = {}): string =>
+  fill(snippet(key), slots).join('')
 
 /** The element filling each slot of a snippet, by the slot's name. */
 export type Slots = Record<string, VNode>
