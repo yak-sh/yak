@@ -171,24 +171,34 @@ let toml = (s: string): string =>
 // instruction file a person keeps comes near a mebibyte.
 let WHOLE = 1 << 20
 
-// Codex's `-c` sets a key of its TOML config, over the person's own. A server
-// it goes without is one its config has, set not `enabled`: codex refuses to
-// start over a server that has that key and no transport.
-let configured = (j: Job): string[] => [
-  ...servers(j).flatMap(([name, url]) => {
-    let key = `mcp_servers.${toml(name)}`
-    return [
-      '-c',
-      `${key}.url=${toml(url)}`,
-      '-c',
-      `${key}.http_headers={${toml(VIA)}=${toml(j.session)}}`,
-    ]
-  }),
-  ...(j.without ?? []).flatMap((name) => [
-    '-c',
-    `mcp_servers.${toml(name)}.enabled=false`,
-  ]),
-]
+// A TOML inline table, of strings, booleans and tables, its keys quoted.
+type Table = { [key: string]: string | boolean | Table }
+let inline = (t: Table): string =>
+  `{${
+    Object.entries(t).map(([k, v]) =>
+      `${toml(k)}=${
+        typeof v == 'string' ? toml(v) : typeof v == 'boolean' ? v : inline(v)
+      }`
+    ).join(',')
+  }}`
+
+// Codex's `-c` sets a key of its TOML config, over the person's own, a table
+// merged into the one it has. Its key is split at each dot and never read as
+// TOML, so a quoted server name names a server of its own, quotes and all,
+// and a dotted one cannot be named at all: every server is said in one table
+// at `mcp_servers`, whose keys are TOML. A server it goes without is one its
+// config has, set not `enabled`: codex refuses to start over a server that has
+// that key and no transport.
+let configured = (j: Job): string[] => {
+  let table: Table = Object.fromEntries([
+    ...(j.without ?? []).map((name) => [name, { enabled: false }]),
+    ...servers(j).map(([name, url]) => [name, {
+      url,
+      http_headers: { [VIA]: j.session },
+    }]),
+  ])
+  return Object.keys(table).length ? ['-c', `mcp_servers=${inline(table)}`] : []
+}
 
 /** `codex exec --json`, carrying on its thread with `codex exec resume`. */
 export let codex: Adapter = {

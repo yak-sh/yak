@@ -10,7 +10,8 @@ let job = {
   instruction: '-x fix it',
 }
 
-// The value of a codex `-c key=value` setting, read the way codex reads it: as
+// The value of a codex `-c key=value` setting, read the way codex reads it:
+// the key as written, split at its dots and never as TOML, and the value as
 // TOML, or as the raw string where that does not parse.
 let setting = (argv: string[], key: string): unknown => {
   let said = argv.find((a, i) => argv[i - 1] == '-c' && a.startsWith(`${key}=`))
@@ -80,17 +81,43 @@ test("a run goes without a server through its provider's own way of leaving one 
     ],
   })
   assertEquals(said.slice(-2), ['--', '-x fix it'])
-  // Codex reads each as a key of its config, the server's name quoted.
-  let keys = codex.argv({ ...job, without })
-    .filter((a, i, all) => all[i - 1] == '-c' && a.startsWith('mcp_servers.'))
-  assertEquals(parse(keys.join('\n')).mcp_servers, {
+  // Codex reads them as one table of its config, each name a key of it, a
+  // dotted name too.
+  assertEquals(setting(codex.argv({ ...job, without }), 'mcp_servers'), {
     'claude.ai Google Drive': { enabled: false },
     'plugin:stripe:stripe': { enabled: false },
     'yaks.app': { enabled: false },
   })
   // Nothing to go without, nothing said.
   assert(!claude.argv(job).includes('--settings'))
-  assert(!codex.argv(job).some((a) => a.startsWith('mcp_servers.')))
+  assertEquals(setting(codex.argv(job), 'mcp_servers'), undefined)
+})
+
+test('a run names its session to each server it is connected to', () => {
+  let mcp = {
+    tasks: 'http://localhost/mcp',
+    'yaks.app': 'https://yaks.app/mcp',
+  }
+  let said = claude.argv({ ...job, mcp })
+  assertEquals(JSON.parse(said[said.indexOf('--mcp-config') + 1]), {
+    mcpServers: {
+      tasks: { type: 'http', url: mcp.tasks, headers: { 'x-via': 'S1' } },
+      'yaks.app': {
+        type: 'http',
+        url: mcp['yaks.app'],
+        headers: { 'x-via': 'S1' },
+      },
+    },
+  })
+  // Codex is told the server under the name its own config has, so the
+  // header reaches the connection its tools are called through.
+  let told = codex.argv({ ...job, mcp, without: ['railway'] })
+  assertEquals(setting(told, 'mcp_servers'), {
+    railway: { enabled: false },
+    tasks: { url: mcp.tasks, http_headers: { 'x-via': 'S1' } },
+    'yaks.app': { url: mcp['yaks.app'], http_headers: { 'x-via': 'S1' } },
+  })
+  assert(!told.some((a) => a.startsWith('mcp_servers.')))
 })
 
 test("a bare run is given none of its provider's tools, settings or servers", () => {

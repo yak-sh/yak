@@ -248,11 +248,11 @@ checkout.
 
 `mcp` names the MCP servers each run is connected to, by name to URL. The launch
 configures each one through the provider's own flags (claude's `--mcp-config`,
-codex's `-c mcp_servers.<name>`), replacing a server of that name in the
-person's own config, and with an `x-via` header naming the run's session. The
-door resolves that header (@yaks/session `authenticate`), so what the agent
-writes is stamped `by` its actor and `via` its session from its first call, with
-nothing asked of the agent.
+codex's `-c mcp_servers={…}`), replacing a server of that name in the person's
+own config, and with an `x-via` header naming the run's session. The door
+resolves that header (@yaks/session `authenticate`), so what the agent writes is
+stamped `by` its actor and `via` its session from its first call, with nothing
+asked of the agent.
 
 `without` names the MCP servers of a provider's own configuration its runs go
 without, by the provider's name and then the names that provider lists them
@@ -260,9 +260,12 @@ under (`claude mcp list`, `codex mcp list`). A provider's CLI connects every
 server its configuration and its account name, and each one's tools cost every
 run context whether it calls them or not. Claude is given the names as settings
 for the run (`--settings` with `deniedMcpServers`) and never connects them, so
-neither their tools nor their instructions reach the model. Codex is given
-`-c mcp_servers.<name>.enabled=false`, which must name a server its config has.
-The person's own sessions and configuration are untouched.
+neither their tools nor their instructions reach the model. Codex is given each
+as `enabled = false` in the same `-c mcp_servers={…}` table, which must name a
+server its config has. Codex splits a `-c` key at its dots and never reads it as
+TOML, so a server is always named as a key of that one inline table: a quoted
+name in the key path would configure a separate server, quotes and all. The
+person's own sessions and configuration are untouched.
 
 Effects also accept process-file `dir`, polling interval `poll`, and kill
 `grace`. Tools accept `poll`, a human-readable default `timeout` such as `45m`,

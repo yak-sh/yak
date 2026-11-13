@@ -270,8 +270,16 @@ let opened = async (
         subagent?: { thread_spawn?: { parent_thread_id?: string } }
       } | undefined
       f.parent = source?.subagent?.thread_spawn?.parent_thread_id
-      let eid = sessionEid(f.id)
-      let parent = f.parent && sessionEid(f.parent)
+      // A thread is the session that already holds its id, a managed run's
+      // above all, whose eid is its own and not the thread's; only one the
+      // graph has not met takes its eid from the id. A subagent's parent is
+      // found the same way, so it is spawned by the run that started it and
+      // works as that run's persona.
+      let eid = s?.entity.eid ?? sessionEid(f.id)
+      let up = f.parent
+        ? (await sessionFor(g, f.parent, ['session.id']))?.entity.eid
+        : undefined
+      let parent = f.parent && (up ?? sessionEid(f.parent))
       // `codex exec` is a program's run, so its first words are a brief, not a
       // person's. A session wears what its checkout carries, as a hook says it
       // does for Claude Code (./tools.ts); Codex has no hook to say it.
@@ -282,7 +290,7 @@ let opened = async (
         ? await (await import('@yaks/persona')).carried(g, meta.cwd)
         : undefined
       await correct(g, [
-        ...(parent
+        ...(parent && !up
           ? [{ entity: { eid: parent }, session: { id: f.parent } }]
           : []),
         {
