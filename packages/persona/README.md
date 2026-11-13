@@ -164,7 +164,7 @@ repository change lands. An unlinked skill remains readable in the graph but
 cannot be exported into a repository.
 
 ```ts ignore
-import { loadSkill, skillsAt } from '@yaks/persona/skills'
+import { loadSkill, skillsAt } from '@yaks/persona/skill-checkout'
 import { syncSkills } from '@yaks/persona/skill-mirror'
 
 let catalogue = await skillsAt(graph, sessionCheckout)
@@ -185,11 +185,13 @@ locators on each selected skill. `skillScope(graph, repository)` returns those
 `skillLocation` follows one locator and `skillLocations(graph, skills)` resolves
 a batch of locators together. `skillFiles(graph, repository)` renders
 repository-relative text; `renderFiles(skills, locations, files)` renders an
-already-read snapshot without further graph reads. `skillsAt` and `loadSkill`
-overlay a session checkout's actual files read-only: local edits, additions and
-deletions are visible without importing them. A missing or ambiguous title is
-refused. Instructions are loaded by title only when needed; discovery needs just
-titles and descriptions.
+already-read snapshot without further graph reads. Everything in
+`@yaks/persona/skills` reads only the graph, so a host without a filesystem (a
+yaks.app space's Operator) loads its skills the same way. `skillsAt` and
+`loadSkill` (`@yaks/persona/skill-checkout`) overlay a session checkout's files
+read-only: local edits, additions and deletions are visible without importing
+them. A missing or ambiguous title is refused. Instructions are loaded by title
+only when needed; discovery needs just titles and descriptions.
 
 `syncSkills` uses [@yaks/mirror](../mirror) to reconcile tracked text files in
 the primary checkout with graph values, on whichever branch it has checked out.

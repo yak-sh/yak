@@ -1622,6 +1622,13 @@ export let operatorRequest = async (
         : row
     }))
   }
+  // The skills the space keeps, as the person reads them, for their
+  // connected Claude (operator-skills.ts).
+  if (path == '/operator/skills') {
+    let { kept } = await import('./operator-skills.ts')
+    let { seenBy } = await import('./operator-access.ts')
+    return Response.json({ files: await kept(seenBy(store, person)) })
+  }
   if (path == '/operator/work') {
     return Response.json(await workOf(store, spaceId, person, everyone))
   }

@@ -9,6 +9,7 @@
     "./tools": "./tools.ts",
     "./effects": "./effects.ts",
     "./skills": "./skills.ts",
+    "./skill-checkout": "./skill-checkout.ts",
     "./skill-mirror": "./skill-mirror.ts",
     "./skill-text": "./skill-text.ts",
     "./views": "./views.ts"

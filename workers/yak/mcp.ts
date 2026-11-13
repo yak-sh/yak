@@ -446,6 +446,13 @@ let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
     security: SIGNIN,
     extend: (server: Server, exchange?: Exchange) =>
       c.time('extend', () => extend(ctx, stood)(server, exchange)),
+    // The skills each space the person writes in keeps (operator-skills.ts),
+    // listed beside the guide's pages.
+    skills: async (server: Server, exchange?: Exchange) => {
+      let { attachSkills } = await import('@yaks/mcp/skills')
+      let { spaceSkills } = await import('./operator-skills.ts')
+      await attachSkills(server, () => spaceSkills(ctx), exchange)
+    },
   }
   let shared = coded(opts, ctx, undefined, () => connectedTools(ctx))
   // What this connector lists right now, and the version naming that list.

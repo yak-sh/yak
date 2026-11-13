@@ -5,6 +5,7 @@ import { answerOf, faultOf, toolEid, worded } from '@yaks/tools/result'
 import { Interrupted } from '@yaks/tools/errors'
 import { runner } from '@yaks/tools'
 import { artifactTools } from './artifact_tools.ts'
+import { skillRead } from './skills.ts'
 
 import { type Blobs, valueTools } from '@yaks/blob'
 // What the agent can do here: run a program, and read and write its own graph.
@@ -131,6 +132,11 @@ export let graphTools = (
     },
   }))
 }
+
+/** The skill loader (./skills.ts `skillRead`) through the graph runner, so
+ * each load is attributed to the session that asked. */
+export let skillTools = (g: Graph, reply?: Reply): Tool[] =>
+  graphTools(g, { reply, tools: [skillRead] })
 
 /** The machine, delegation, and the graph, with one wait for all three targets.
  * react records every tool's wall-clock and projects it after output bounding;

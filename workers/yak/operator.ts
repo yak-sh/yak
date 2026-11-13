@@ -12,6 +12,7 @@ import {
   namedTool,
 } from '@yaks/graph'
 import { begin, lend, seed } from '@yaks/harness'
+import { skillItems, skillRead } from '@yaks/harness/skills'
 import {
   kindOf,
   ordered,
@@ -300,7 +301,14 @@ let SELF = {
   description:
     'Use your own store instead of the apps: your conversations and every entry in them, your forks and helpers, your memories, your persona, your app and space topics, and your tasks and requests.',
 }
-let mine = new Set(['memory_save', 'memory_recall', 'memory_around'])
+// Its memories, and the skills the space keeps beside them, are its own
+// store's alone (@yaks/harness `skillRead`).
+let mine = new Set([
+  'memory_save',
+  'memory_recall',
+  'memory_around',
+  skillRead.name,
+])
 // The connector's tools the Operator holds as its own: memory_save and
 // memory_recall are its own memories (the space's are store_memory_save and
 // store_memory_recall), the tasks and goals are its own store's
@@ -376,6 +384,7 @@ export let operatorRoster = async (
         ...listing({ graph: self, search: textSearch(self) }),
         ...loadTools([memoryDoc], memoryRuns()),
         ...held(),
+        skillRead,
       ].map(namedTool).map((t) => [t.name, t])
       : [],
   )
@@ -1798,6 +1807,9 @@ export let operating = (
     // Each ask wears the space's persona on the platform's base, read from
     // the directory (operator-persona.ts).
     wear: { bases: bases(env) },
+    // The skills the space keeps, by title and description, for a session
+    // offered skill_read: the same rule as the box's (@yaks/harness).
+    requestItems: (_, __, current) => skillItems(g, current),
     // A child works for the same space and person as the session that
     // started it, and is charged to that space.
     prepareChild: async ({ parent, args }) => {

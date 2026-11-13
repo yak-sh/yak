@@ -4,7 +4,8 @@ import { assert, assertEquals, assertInstanceOf } from '@std/assert'
 import { type Bundle, type Comp, derivedEid, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { ToolError, wordsOf } from '@yaks/session'
-import { skillItems, skillTools } from './skills.ts'
+import { skillItems } from './skills.ts'
+import { skillTools } from './tools.ts'
 import { harness } from './testing.ts'
 
 let schema = await harness()

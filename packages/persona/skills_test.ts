@@ -19,15 +19,14 @@ import { personaDoc } from './comp.ts'
 import { parseSkill } from './skill-text.ts'
 import {
   graphSkill,
-  loadSkill,
   repoSkills,
   skillCatalog,
   skillFiles,
   skillLocation,
   skillLocations,
-  skillsAt,
   skillScope,
 } from './skills.ts'
+import { loadSkill, skillsAt } from './skill-checkout.ts'
 
 let repo = repositoryEid('/repo/.git', 'test-filesystem')
 let elsewhere = repositoryEid('/elsewhere/.git', 'test-filesystem')

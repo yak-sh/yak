@@ -5,7 +5,8 @@
  */
 import { agent } from '@yaks/harness'
 import { harnessTools } from '../packages/harness/tools.ts'
-import { skillItems, skillTools } from '../packages/harness/skills.ts'
+import { skillItems } from '../packages/harness/skills.ts'
+import { skillTools } from '../packages/harness/tools.ts'
 import { machines } from '../packages/harness/session_machines.ts'
 import type { Tool } from '@yaks/session'
 import { compose } from '@yaks/cli/host'

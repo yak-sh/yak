@@ -102,10 +102,14 @@ deno task bench harness-steps
 deno task bench:check harness-steps
 ```
 
-## Repository skills
+## Skills
 
-A local native session receives repository skill titles and descriptions before
-each model ask, only when its exact tool offer includes `skill_read`. The single
+A native session receives skill titles and descriptions before each model ask,
+only when its exact tool offer includes `skill_read`. A session working in a
+repository is offered that repository's skills; one with none, as every session
+on yaks.app, is offered every skill its store keeps. `@yaks/harness/skills`
+reads only the graph, so a space's Operator takes the same `skillItems` and
+`skillRead` as the box, which adapts the loader through `skillTools`. The single
 read-only loader accepts `{skill: '<title>'}` and returns the exact instructions
 plus the supporting-file base path through the attributed graph runner. It does
 not execute scripts or start a fork from metadata.
