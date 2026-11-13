@@ -186,7 +186,194 @@
   "pricing": {
     "name": "Pricing: your first space is free, and the Plus plan is $9 a month",
     "title": "Pricing: your first space is free, and the Plus plan is $9 a month · yaks.app",
-    "description": "You pay for a space, not for people, and invite as many as you like on any plan. Your first space is free. The Plus plan is $9 a month for a space, and the Pro plan $49."
+    "description": "You pay for a space, not for people, and invite as many as you like on any plan. Your first space is free. The Plus plan is $9 a month for a space, and the Pro plan $49.",
+    "hello": {
+      "title": "Pricing",
+      "lead": "You pay for a space, not for people. Invite as many as you like on any plan.",
+      "note": "A space is your own address, like %{yours}, with the apps there, their data and the people you invite."
+    },
+    "plans": {
+      "title": "Each space is free or on a paid plan",
+      "free": {
+        "note": "Your first space.",
+        "apps": "5 apps",
+        "visitors": "Unlimited visitors",
+        "data": "1 GB of app data",
+        "files": "1 GB of photos and files",
+        "emails": "100 emails a month",
+        "domain": "No custom domain",
+        "payments": "No payments",
+        "badge": "A small “Made with yaks.app” badge",
+        "ai": "AI use included",
+        "change": "Your Operator, or your own assistant, makes the changes"
+      },
+      "plus": {
+        "note": "The Plus plan, for any space.",
+        "apps": "Unlimited apps",
+        "visitors": "Unlimited visitors",
+        "data": "10 GB of app data",
+        "files": "50 GB of photos and files",
+        "emails": "2,500 emails a month",
+        "domain": "A custom domain, like %{domain}",
+        "payments": "Take payments with Stripe",
+        "badge": "No yaks.app badge",
+        "ai": "AI use included",
+        "change": "Your Operator, or your own assistant, makes the changes"
+      },
+      "pro": {
+        "note": "The Pro plan. Or $490 a year.",
+        "apps": "Unlimited apps",
+        "visitors": "Unlimited visitors",
+        "data": "10 GB of app data",
+        "files": "50 GB of photos and files",
+        "emails": "2,500 emails a month",
+        "domain": "A custom domain, like %{domain}",
+        "payments": "Take payments with Stripe",
+        "badge": "No yaks.app badge",
+        "ai": "AI use included",
+        "change": "Your staff ask the Operator by email or chat, and it makes the change"
+      }
+    },
+    "always": {
+      "title": "Free on every plan",
+      "members": "Members and invitations, as many as you like",
+      "visitors": "Visitors to your apps",
+      "joining": "Joining other people's spaces",
+      "publishing": "Publishing your apps to the gallery",
+      "installing": "Installing a copy of someone's published app",
+      "exporting": "Exporting your data, and deleting it"
+    },
+    "paying": {
+      "title": "How paying works",
+      "space": {
+        "term": "A space is one address and everything in it.",
+        "detail": "That's its apps, their data and its people. Each space has its own plan and its own limits, and what one space uses never counts against another."
+      },
+      "first": {
+        "term": "Your first space is free, and you can join as many as you like.",
+        "detail": "You can own one free space. Every other space you make is on the Plus plan or the Pro plan. Spaces other people invite you into never count toward yours. If you already own more than one free space, they all stay free."
+      },
+      "owner": {
+        "term": "A space's owner pays for it, and members never do.",
+        "detail": "Only an owner can upgrade a space, change its plan or cancel it, from that space's settings. Editors and viewers never pay, and there's no charge for each person."
+      },
+      "limit": {
+        "term": "At a limit, nothing is deleted.",
+        "detail": "Adding stops: a new app, more data or another email waits until the space has room or moves to a paid plan. The owner is told which limit the space reached and how to upgrade, and your assistant hears when a space nears one. Members keep using everything, and visitors are always served."
+      },
+      "stop": {
+        "term": "If you stop paying, the space goes back to free.",
+        "detail": "A paid plan runs to the end of the month you paid for. Then the space has the free plan's limits again and stops taking payments. Its apps and data stay."
+      },
+      "assistant": {
+        "term": "Your Claude or ChatGPT plan pays for your assistant, and yaks.app keeps what it makes online.",
+        "detail": "Your assistant builds and changes your apps on your own subscription, and that never spends a space's AI use. A space's AI use is for the AI its apps use themselves, such as reading a photo or speaking, and for yaks.app's built-in builder."
+      },
+      "tax": {
+        "term": "Prices include tax.",
+        "detail": "Any sales tax or VAT is in the price. Nothing is added at checkout."
+      },
+      "fee": {
+        "term": "We take %{fee} of each sale.",
+        "detail": "Stripe charges its own processing fees. How selling works is below."
+      }
+    },
+    "limits": {
+      "title": "Every limit, plan by plan",
+      "plans": {
+        "free": "Free",
+        "plus": "Plus",
+        "pro": "Pro"
+      },
+      "apps": {
+        "name": "Apps",
+        "free": "5",
+        "plus": "Unlimited",
+        "pro": "Unlimited"
+      },
+      "data": {
+        "name": "App data %{note}",
+        "note": "What your apps save, like entries, lists and settings.",
+        "free": "1 GB",
+        "plus": "10 GB",
+        "pro": "10 GB"
+      },
+      "files": {
+        "name": "Photos and files %{note}",
+        "note": "Pictures and documents your apps keep.",
+        "free": "1 GB",
+        "plus": "50 GB",
+        "pro": "50 GB"
+      },
+      "visits": {
+        "name": "Visits a month %{note}",
+        "note": "Counted in request units: each request for a page or its data is one, and 20 live updates are one. Past it, visitors are still served and the owner is told.",
+        "free": "50,000",
+        "plus": "1,000,000",
+        "pro": "1,000,000"
+      },
+      "emails": {
+        "name": "Emails a month %{note}",
+        "note": "Sent or received by your apps. Invitations don't count.",
+        "free": "100",
+        "plus": "2,500",
+        "pro": "2,500"
+      },
+      "ai": {
+        "name": "AI use %{note}",
+        "note": "What models and voice cost, in your apps and in the built-in builder.",
+        "free": "Included",
+        "plus": "Included",
+        "pro": "Included"
+      },
+      "builds": {
+        "name": "Builds a month %{note}",
+        "note": "With yaks.app's built-in builder, for people without an assistant of their own. A build counts when it puts an app online.",
+        "free": "5",
+        "plus": "100",
+        "pro": "100"
+      },
+      "compute": {
+        "name": "Compute time a month %{note}",
+        "note": "Time your sandbox runs commands, and compiling code at deploy.",
+        "free": "1 hour",
+        "plus": "10 hours",
+        "pro": "10 hours"
+      },
+      "sandboxes": {
+        "name": "Sandboxes at once %{note}",
+        "note": "Each sandbox is a computer of its own.",
+        "free": "1",
+        "plus": "2",
+        "pro": "2"
+      },
+      "mail": {
+        "term": "Mail to your apps always arrives.",
+        "detail": "At the email limit, only sending stops. The count starts again on the first day of each month."
+      },
+      "invitations": {
+        "term": "Invitations are free, up to 50 an hour.",
+        "detail": "Invite as many people as you like, on any plan. Invitations never count toward the month's emails, and one person may send 50 an hour."
+      },
+      "guests": {
+        "term": "Visitors who aren't signed in have a per-minute pace.",
+        "detail": "Anyone not signed in can make up to 300 requests a minute for an app's data from one place, and past that is asked to wait a minute. You and the people in your space aren't counted."
+      },
+      "open": {
+        "term": "Visitors to an open app keep a visitor's pace.",
+        "detail": "On an app anyone with the link can add to, each visitor may send 30 changes a minute, 16 KB at a time, and upload files of up to 2 MB. A visitor changes only what they added. You and your editors aren't held to these limits."
+      }
+    },
+    "selling": {
+      "title": "Sell from your apps on a paid plan",
+      "note": "Take payments on the Plus plan or the Pro plan. Connect your Stripe account to receive payments, and handle refunds and disputes there. %{terms}.",
+      "terms": "Selling terms"
+    },
+    "start": {
+      "title": "Start with a free space",
+      "note": "You can move a space to a paid plan later, from that space.",
+      "go": "Start free"
+    }
   },
   "help": {
     "name": "Help: building, sharing and exporting your apps",
@@ -206,12 +393,74 @@
   "cookies": {
     "name": "Cookies",
     "title": "Cookies · yaks.app",
-    "description": "yaks.app sets a cookie so you stay signed in, and one more when a campaign link brought you."
+    "description": "yaks.app sets a cookie so you stay signed in, and one more when a campaign link brought you.",
+    "head": {
+      "title": "Cookies",
+      "updated": "Last updated %{date}",
+      "lead": "yaks.app sets one cookie, a second one when an ad or a campaign link brought you, and a third when you open our home page. This page explains what they do."
+    },
+    "privacy": "privacy policy",
+    "session": {
+      "title": "The session cookie",
+      "use": "We set %{cookie} when you use an app, on yaks.app and its subdomains. Before you sign in, it holds a signed identifier for the browser that writes, so you can keep editing what you wrote without signing in (guest entries). Signing in adds your identity and puts your name on those entries across the apps you wrote to. It expires after ninety days of inactivity, and using it renews it. We don't use it for visitor counts or advertising.",
+      "clear": "If you clear it, you're signed out, and the browser loses access to any guest entries you haven't claimed by signing in. If you refuse it, you can't stay signed in or keep your guest identity between requests."
+    },
+    "campaign": {
+      "title": "The campaign cookie",
+      "text": "We set %{cookie} on yaks.app only when the link you followed carries campaign tags (%{tags} and the like) or an ad's click id (such as Meta's %{click}). It holds those tags, that id and when you arrived, and nothing else: no name, address or session. It lets us count which campaigns bring people who sign up, and tell the ad network whose ad you clicked that its click led to a visit or a sign-up (the %{privacy} says exactly what). It expires after ninety days, and a later campaign link replaces it. Clearing or refusing it changes nothing you can see."
+    },
+    "home": {
+      "title": "The home page cookie",
+      "text": "We sometimes show different visitors different versions of our home page, to learn which one explains yaks.app best. When you open one, we set %{cookie} on yaks.app. It holds the name of the version you saw, and nothing else: no name, address or session. It lets us show you the same version next time, and count how many visitors to each version went on to sign up. It expires after ninety days. Clearing or refusing it changes only which version of the home page you see."
+    },
+    "other": {
+      "title": "Other cookies",
+      "text": "We don't set third-party cookies, and no ad network's code runs on our pages. Cloudflare, which hosts yaks.app, may set its own cookie to tell people from bots. That cookie is a security measure and isn't used to build a profile of you. Our %{privacy} has more about what we collect."
+    },
+    "apps": {
+      "title": "Apps on yaks.app",
+      "text": "Apps in a yaks.app space use the session cookie, and we set no other cookie for them."
+    },
+    "contact": {
+      "title": "Contact",
+      "text": "Questions about cookies go to %{email}."
+    }
   },
   "acceptable-use": {
     "name": "Acceptable use policy",
     "title": "Acceptable use policy · yaks.app",
-    "description": "What you may not do on yaks.app."
+    "description": "What you may not do on yaks.app.",
+    "head": {
+      "title": "Acceptable use policy",
+      "updated": "Last updated %{date}",
+      "lead": "This policy lists what you may not do on yaks.app."
+    },
+    "prohibited": {
+      "title": "Prohibited uses",
+      "lead": "You may not:",
+      "law": "Break the law, or use a yaks app to harm anyone.",
+      "children": "Post anything that sexualizes a child. We remove it, close the account and report it, without exception.",
+      "harassment": "Harass, threaten or campaign against people, including through an open app that anyone can write in.",
+      "work": "Post other people's work, writing or pictures without the right to do so.",
+      "malware": "Host malware, phishing pages, or anything impersonating a bank, a company or a person.",
+      "bulk": "Use invitations to send bulk email to people who didn't ask for it.",
+      "probing": "Try to access someone else's space, or probe the separation between spaces.",
+      "abuse": "Mine cryptocurrency, run a proxy or a botnet, or use yaks.app as storage for files no app serves.",
+      "traffic": "Send so much traffic that other people can't use the service."
+    },
+    "enforcement": {
+      "title": "Enforcement",
+      "text": "We usually contact you first and ask about the problem. We remove clearly harmful content immediately and close the account. Where we can tell you why, we will."
+    },
+    "reporting": {
+      "title": "Reporting violations",
+      "text": "Email %{email} and tell us where the content is and what's wrong. We'll look at it the same day where we can."
+    },
+    "terms": {
+      "title": "Terms of service",
+      "text": "This policy is part of our %{terms}.",
+      "link": "terms of service"
+    }
   },
   "style-guide": {
     "name": "Style guide",

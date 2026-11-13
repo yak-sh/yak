@@ -94,6 +94,11 @@ test('the pricing page is quoted the rate that is set', () => {
   let page = `<p>We take <span class="Fee">0%</span> of each sale.</p>`
   assertStringIncludes(quoted(page, 250), 'We take <span class="Fee">2.5%<')
   assertEquals(quoted(page, 0), page)
+  // The mark is the span's class, whatever else the span carries.
+  assertStringIncludes(
+    quoted(`<span class="Fee" data-copy-slot="fee">0%</span>`, 250),
+    `data-copy-slot="fee">2.5%</span>`,
+  )
   // A page that lost its mark is served as it is, never mangled.
   assertEquals(
     quoted('<p>We take nothing.</p>', 250),

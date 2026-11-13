@@ -957,16 +957,15 @@ test('the plan pages quote the prices the offers name, and no other', () => {
 // the owner sets, the sentence a reader gets says that. The file's own copy is
 // the fallback, and the splice is what makes it current.
 test('the pages quote the selling fee the code charges', () => {
-  let bps = 250
-  assertStringIncludes(
-    flat(quoted(read('pricing.html'), bps)),
-    `We take <span class="Fee">${rate(bps)}</span> of each`,
-  )
+  // The sentence a reader gets at a rate, and the marked element in it.
+  let says = (bps: number) => {
+    let fee = parseHTML(quoted(read('pricing.html'), bps)).document
+      .querySelector('.Fee')!
+    return [fee.textContent, flat(fee.parentElement!.textContent!)]
+  }
+  assertEquals(says(250), [rate(250), `We take ${rate(250)} of each sale.`])
   // Nothing set is nothing taken, and the page says so in the same sentence.
-  assertStringIncludes(
-    flat(quoted(read('pricing.html'), 0)),
-    `We take <span class="Fee">0%</span> of each`,
-  )
+  assertEquals(says(0), ['0%', 'We take 0% of each sale.'])
   // The terms name the fee too — a seller has to read what it costs them where
   // they read what they are responsible for — and they name it as a rate, so
   // the "no price on this page" rule above (which is about dollars) still
