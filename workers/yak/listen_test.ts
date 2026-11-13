@@ -27,8 +27,8 @@ let socket = () => {
     },
     addEventListener: (type, f) => void (on[type] ??= []).push(f),
   }
-  let fire = (type: string, data?: unknown) =>
-    on[type]?.forEach((f) => f({ data }))
+  let fire = (type: string, data?: unknown, code?: number) =>
+    on[type]?.forEach((f) => f({ data, code }))
   let json = () =>
     sent.filter((m) => typeof m == 'string').map((m) => JSON.parse(m))
   return { s, sent, closed, fire, json }
@@ -138,6 +138,13 @@ test('a page streams a meeting and reads each turn back as it ends, its minutes 
   equal(page.closed, [[1000, 'done']])
   // A minute and a half at Nova-3's $0.0097 a minute with its speakers.
   equal(budget(await space()).spent.toFixed(5), (1.5 * 0.0097).toFixed(5))
+})
+
+test('a page that closes its socket is answered with a close, and the stream ended', async () => {
+  let { page, deepgram } = await listening('')
+  await until(() => page.json().length)
+  page.fire('close', undefined, 1000)
+  equal([page.closed, deepgram.closed.length], [[[1000, 'closed']], 1])
 })
 
 test('a stream opened again at a second tells its turns from there, and where to resume once lost', async () => {

@@ -135,6 +135,15 @@ let bytesOf = (data: unknown) =>
     ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
     : null
 
+/// sendable(1000) -> true
+/// sendable(4000) -> true
+/// sendable(1005) -> false
+/// sendable(undefined) -> false
+/** Whether a close code may be sent in a close frame, not only received:
+ * 1005 and 1006 say there was none. */
+export let sendable = (code?: number): code is number =>
+  code == 1000 || !!code && code >= 3000 && code <= 4999
+
 // What the page asked in a text message.
 let typeOf = (data: unknown) => {
   try {
@@ -229,11 +238,19 @@ export let listen = async (
       else held.push(audio)
     } else if (!audio && typeOf(data) == 'end') end()
   })
-  // A page gone is told nothing more; what was heard is charged.
-  page.addEventListener('close', () => {
+  // A page that closes is answered with its close, which the runtime sends
+  // for us only from a later compatibility date than ours, and is told
+  // nothing more; the provider's stream is closed and what was heard is
+  // charged.
+  page.addEventListener('close', ({ code }) => {
     if (over) return
     over = true
     finished()
+    try {
+      page.close(sendable(code) ? code : 1000, 'closed')
+    } catch {
+      // Already closed.
+    }
   })
   let format = formatOf(o.query)
   if (!format || !Number.isFinite(at) || at < 0) {
