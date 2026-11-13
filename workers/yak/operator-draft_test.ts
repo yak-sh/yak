@@ -1005,7 +1005,10 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
     'its tool, not thinking',
   )
   assertStringIncludes(running[1], 'Running · ')
-  assertEquals(ended, ['Nothing running', 'Import the people CSVDone · Ns'])
+  assertEquals(ended, [
+    'Nothing running',
+    'Import the people CSVDone · just now',
+  ])
   assertEquals(
     theirs.document.querySelector(`${row} a`)?.getAttribute('href'),
     link,
