@@ -149,7 +149,7 @@ wrote about the tea.
 
 So each venture keeps the people it is for as a design: who each is, their
 problem, what they use today, how the work fits their week and one use-case,
-every sentence with where it was read. yaks.app's is D-158979. Open it before
+every sentence with where it was read. yaks.app's is D-452. Open it before
 writing a line, choose one person, and put that person and the use-case at the
 top of your draft, in their words where any are recorded. When you hand the
 writing to another agent, the brief carries the person and the use-case in
@@ -276,7 +276,7 @@ Each venture's voice (yaks.app's is "soft and friendly", in
 
 ## Where to look
 
-- **Who it's for:** the venture's design of its people (yaks.app: D-158979).
+- **Who it's for:** the venture's design of its people (yaks.app: D-452).
 - **The one-liner:** the venture's own (yaks.app: M-37845's "The pitch
   today"), used as it stands until a better line replaces every copy.
 - **What the product does:** the guide pages and the code. For yaks.app that's

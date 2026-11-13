@@ -67,7 +67,7 @@ its own output is what stops it matching (`+!shelf` above).
   add or refuse, and whether it holds on the page's partial data is its
   author's call. The server's answer replaces what it added; a server refusal
   undoes the write with everything its rules added. UX components declare no
-  rules (D-58967).
+  rules (D-336).
 
 ## Effects
 

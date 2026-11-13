@@ -18,11 +18,11 @@ says who yaks.app is for.
 
 The principles are `business-model`, and they hold for every venture; load it
 first. This skill is how they land here. Jeff's words are in M-131884 and
-M-157410. The strategy is D-154810: who yaks.app goes to first, what the
+M-157410. The strategy is D-448: who yaks.app goes to first, what the
 platform still lacks for them, what is measured and what is charged. The people
 themselves, organizations first, each with a problem, a week and a use-case, are
-D-158979. The model for people who come alone, the plans and the site's
-information architecture, is D-131886.
+D-452. The model for people who come alone, the plans and the site's
+information architecture, is D-398.
 
 A public page holds only what a visitor needs. No draft marker, task or memory
 id, decision date, or note about the owner, agents or our process, in its text
@@ -33,7 +33,7 @@ code that isn't served.
 ## Who it's for
 
 Jeff set the direction on 2026-11-11, and M-157410 holds it whole; read it
-before any call about audience. The strategy built on it is D-154810.
+before any call about audience. The strategy built on it is D-448.
 
 **First, the organizations near him.** "neighboring businesses, churches,
 schools, and other orgs that have similar use-cases", and "People and orgs that
@@ -82,8 +82,8 @@ verbatim: "please fix the homepage copy to not be about the Operator and go
 back to our normal pitch". The Operator is named on it as how changes get
 made, and /operator is the page that pitches it.
 
-The individual people who use yaks.app today are literal too. D-158979 has
-each as a person to write for, and D-131886 has the model built on them:
+The individual people who use yaks.app today are literal too. D-452 has
+each as a person to write for, and D-398 has the model built on them:
 
 - **Jill** builds tools for her work and for a hobby business, in one free
   space. She gets value and says she'd pay, yet pays nothing because
@@ -95,7 +95,7 @@ each as a person to write for, and D-131886 has the model built on them:
   served by an operator that takes the idea and builds it. Behind him is the
   startup idea person who wants an MVP, then help to make money from it.
 
-The rest in D-131886 are guesses, marked as such. A persona nobody on yaks.app
+The rest in D-398 are guesses, marked as such. A persona nobody on yaks.app
 resembles stays a guess until someone who came on their own fits it.
 
 ## The space is the unit
@@ -130,7 +130,7 @@ a plan, budget or allowance is a person's or an account's.
 Jill may never hit a limit, so the Plus plan carries what a maker wants next,
 and yaks.app helps them get there: "let's get your recipe site set up with your
 custom domain and here are some features i tihnk we could work on." That's the
-operator in D-131886, an agent that works for the maker, often through their own
+operator in D-398, an agent that works for the maker, often through their own
 assistant or through yaks.app itself. "i'm not talking a salesman."
 
 ## The cycle, and the maker's path
@@ -156,7 +156,7 @@ it become yaks.app's people too. Jeff: "if we could organically grow her little
 tools for herself into a business where she makes money from sharing them with
 others, that'd be amazing for her and us." Each step should be a small, obvious
 move from the one before. What yaks.app gives at each step, and what's still
-missing, is in D-131886.
+missing, is in D-398.
 
 ## Price and copy
 
@@ -172,7 +172,7 @@ pricing page hold what each one carries:
   2,500 emails a month, a custom domain, payments with Stripe and no badge.
   Whether a Plus space can pay for model use past its budget is T-131904.
 - **The Pro plan** is $49 a month or $490 a year, since an organization budgets
-  by the year (D-134567, T-135234). It carries the Plus plan's allowances and
+  by the year (D-412, T-135234). It carries the Plus plan's allowances and
   adds the Operator built in, so staff ask by email or chat and yaks.app makes
   the change, a larger model budget and support. Past that budget it spends AI
   credit its owner buys in $10 blocks, paid before it is spent, up to a monthly
@@ -182,7 +182,7 @@ pricing page hold what each one carries:
 Jeff expects the organizations to have "plenty of work for us aside from the
 platform at $490/yr". That work has no price yet and nothing bills it: a space
 pays for its plan and its AI credit, and that is all billing.ts charges. How it
-is charged is his to decide (T-157491, with the choices compared in D-154810).
+is charged is his to decide (T-157491, with the choices compared in D-448).
 
 Copy is written for a stranger. "Each space is free or on a paid plan" passes;
 "Free allowances are yours, not each space's" doesn't. How a marketing page is
@@ -204,13 +204,13 @@ place for explicitness and technicality!" (`writing-documentation`).
 ## The evidence, and where it's found
 
 Before you invent a persona, read what people on yaks.app built and whom they
-invited, read-only, with `yak admin query`, as D-131886 did. Read what they sent
+invited, read-only, with `yak admin query`, as D-398 did. Read what they sent
 through the connector's `feedback` tool. Count invitations accepted, copies
 installed and spaces upgraded, with what tipped each one.
 
 An organization hears of yaks.app from Jeff, or from an organization he already
 serves. Its asks are evidence too: what each one was, who made it and how long
-it took to be done (the goals in D-154810). The record held none of the pilots'
+it took to be done (the goals in D-448). The record held none of the pilots'
 own words on 2026-11-11, so write theirs down verbatim when they come, the way
 Jeff's are (M-31946).
 
@@ -268,7 +268,7 @@ the assistants' connector directories for those who already use one.
   plugins/yaks.app mirror the guide. The plan card a signed-in person sees is
   /manage/billing, in workers/yak/pages.ts.
 - **The work.** The two pilots' milestones are T-153602 and T-153603, and
-  D-154810's tasks hold what the platform lacks for organizations. T-131889
-  holds what's left to make yaks.app work as D-131886 describes.
+  D-448's tasks hold what the platform lacks for organizations. T-131889
+  holds what's left to make yaks.app work as D-398 describes.
 
 When this skill is wrong or missing something, fix it in the same change.

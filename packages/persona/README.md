@@ -264,7 +264,7 @@ asks what it is owed:
 import { owed } from '@yaks/persona'
 
 let owes = await owed(graph, checkout, [agentsMdText])
-// owes: { source: 'N-4053', text: '# N-4053 …' } | undefined
+// owes: { source: 'N-1', text: '# N-1 …' } | undefined
 ```
 
 `owed(graph, path, files)` finds the project whose repository has a checkout

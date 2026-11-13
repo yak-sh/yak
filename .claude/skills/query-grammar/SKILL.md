@@ -126,7 +126,7 @@ The parser emits plain scalars; the compiler reads them by the property's type.
 - **Times:** `YYYY-MM-DD`, `today`, `yesterday`, `'1 hour ago'`, `'in 5m'`, or an ISO
   instant. A bare ISO day spans that local day. `.task .created.at=today` is today's tasks; `>` and `<` compare
   against the span (packages/query/time.ts).
-- **References:** a human id or eid, `.filed.project=P-19`.
+- **References:** a human id or eid, `.filed.project=P-1`.
 - **Computed properties** filter like stored ones: `.task.status=wip`, from the
   `status` keyword; a status filter binds as presence
   (`graph-reads-and-writes`).
@@ -168,7 +168,7 @@ A directive belongs to the whole line wherever it is written.
 | `*` / `?*`          | `.task *`                                   | every component of each row                                                                                      |
 | `.order=`           | `.order=-created.at`                        | `-` is descending; `similar` (with `.near`), `search` (with words) and `hot` are rankings                        |
 | `.limit=` `.after=` | `.limit=50&.after=T-13882`                  | a window; `.after` continues past an entity in any order                                                         |
-| `.refs=`            | `.refs=D-45640 .count`                      | what references it; `.refs` / `!refs` alone                                                                      |
+| `.refs=`            | `.refs=D-334 .count`                      | what references it; `.refs` / `!refs` alone                                                                      |
 | `.near=`            | `.task .near=T-6461 .limit=3`               | ranked by meaning (`search-and-embeddings`)                                                                      |
 | `.edges`            | `.edges[requires]`                          | a retired spelling: it answers as if absent; read edges as rows (`.requires&.edge.from=T-1`)                     |
 

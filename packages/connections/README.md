@@ -99,10 +99,10 @@ and sends its token to `www.googleapis.com` alone. It is `testing: true` while
 Google's app is in testing mode, where only the people Google lists may sign in,
 so yaks.app offers it only on a connections page opened with
 `?enable=google-calendar`. `gmail` is brokered by Nango's CASA-verified Google
-app (`broker: {name: 'nango', integration: 'google-mail'}`, D-151626), whose
-grant reads and sends mail, and it sends its token to `gmail.googleapis.com`
-alone. A gmail connection made earlier, directly as the `google` client asking
-for `gmail.send`, keeps signing in that way. `openai` is built for the native
+app (`broker: {name: 'nango', integration: 'google-mail'}`, D-439), whose grant
+reads and sends mail, and it sends its token to `gmail.googleapis.com` alone. A
+gmail connection made earlier, directly as the `google` client asking for
+`gmail.send`, keeps signing in that way. `openai` is built for the native
 harness's ChatGPT sign-in; it uses a public OAuth client, asks for a refreshable
 grant, and sends its bearer to `chatgpt.com`.
 

@@ -113,8 +113,8 @@ records stay available; metadata refresh while paused is allowed. Resume uses
 The page's `gap` indicator counts **episodes**, not omitted records. A
 disconnect alone does not prove that any records were lost. Other remaining
 subscribers may still observe the host, but they do not backfill this page's
-pause. Subscribers such as D-61711 consume this same measured stream; they do
-not introduce a competing timing system or persist these records by default.
+pause. Subscribers such as D-344 consume this same measured stream; they do not
+introduce a competing timing system or persist these records by default.
 
 ## Humans and agents
 
@@ -178,4 +178,4 @@ Inactive observation is not zero-cost: repeated runtime benchmarks measured
 roughly 128–214 ns/query (5.5–9.2%) for the inactive channel branch. Idle-path
 interface tests observed no telemetry begin/instant calls, clock reads or UUID
 creation during apply/read/get. This is not a heap-allocation profiling claim.
-D-61711 consumes the same stream, not another measurement system.
+D-344 consumes the same stream, not another measurement system.

@@ -169,7 +169,7 @@ it `skill:<title>` rather than making another.
   "title": "Round two",
   "skill": "copywriting",
   "output": ["headline", "brief", "description"],
-  "persona": "N-4053",
+  "persona": "N-1",
   "using": { "provider": "claude", "model": "sonnet" },
   "writers": {
     "task": "Write a pitch … as JSON in a ```json block with the keys \"headline\", \"brief\" and \"description\".$rule\n\n-----\n$case\n-----\n",

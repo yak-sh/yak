@@ -60,7 +60,7 @@ does (`overlaps` in packages/topic/topic.ts).
 
 A word also has a meaning outside this repo, and the field's meaning wins.
 "Exception" names the throw-and-catch mechanism and "error" names the mistake;
-the vocabulary had them the other way round until D-45640 swapped them. Now
+the vocabulary had them the other way round until D-334 swapped them. Now
 `error{at, level, message, fault, bug, …}` (@yaks/tracker) is one occurrence
 of a tracked mistake, `exception{type, value, stack, …}` (@yaks/tools) is only
 what was thrown in it, and a failure the code expected is a `refusal{code}`
@@ -204,7 +204,7 @@ ordered map from a component to the status it gives, plus `default`
 in-memory readers both build from the declaration, and a filter on it uses the
 archetype index. Another package adds a rung through `extends` (@yaks/session
 adds `claim` → `wip` to `task`). Mark names the shape; `status` names the
-keyword. D-59037 is converting the stored states that remain.
+keyword. D-337 is converting the stored states that remain.
 
 ## A missing value fails closed
 
@@ -289,14 +289,14 @@ Platform words and app words share one namespace today, and they collide: the
 platform taking `cost` broke an app that already declared its own
 `cost{euros, who, paid}`. An app's own word now wins in its own store
 (730cddb55), and `deno task app-grep` shows whether any app holds a word before
-the platform takes it. Namespacing (D-59567) is designed, not built: every
+the platform takes it. Namespacing (D-338) is designed, not built: every
 vocabulary gets a namespace, names become changeable labels, and identity is a
 UUID.
 
 ## UX state and events
 
 CamelCase is a UX component's own state or event, declared by @yaks/ux,
-page-only (`sync: none`), on an entity the consumer names (D-58967):
+page-only (`sync: none`), on an entity the consumer names (D-336):
 `Edit{open, query}`, `Disclosure{open}`. An event is a component with
 `durable: "0s"`: applied and handed on, never stored or journaled
 (`Refused{said}`). A UX component declares no rules; data names and front-end

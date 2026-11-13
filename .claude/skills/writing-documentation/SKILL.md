@@ -179,7 +179,7 @@ it says why, and doesn't retell what the code already makes plain.
 
 - **What is.** A document stands on its own, so it carries no history: no "used
   to", "new" or "now", no dates (M-4404). Git has the history. What's designed
-  but not built carries its id: "Namespacing (D-59567) is designed, not built".
+  but not built carries its id: "Namespacing (D-338) is designed, not built".
 - **Only what you checked.** A document is trusted more than a guess, so a
   claim in it is one you ran or read in the code (M-37958).
 - **A README faces outward.** jsr publishes it to people outside this repo, so

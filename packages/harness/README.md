@@ -150,8 +150,8 @@ work (`@yaks/doc`, `@yaks/edge`, `@yaks/task`, `@yaks/project`). `PLUGINS` in
 
 ```sh
 yak session new 'reply with the word pong'
-yak session new 'inspect the task graph' --persona N-4568
-yak session new 'what is an entity?' --topic Q-59416
+yak session new 'inspect the task graph' --persona N-15
+yak session new 'what is an entity?' --topic Q-9
 yak session tui
 yak session send <session> 'and again'
 yak session send <session> 'continue here' --provider openai --model gpt-6-sol
@@ -633,7 +633,7 @@ The native runner renders each timed input as
 its unchanged prose, so a session knows who it is talking to. The sender comes
 from the input's `created{by, via}`: the session it came through when that is
 another session (`S-12 wearing Oracle of topics (N-8)`), else its writer, a
-person or a persona by title and id (`Jeff (U-3709)`). A transcript's own inputs
+person or a persona by title and id (`Jeff (U-1)`). A transcript's own inputs
 come through itself, so they are named by their writer. An input whose writer is
 none of those starts `[Sent …`. The second time is the completion of the model
 reply to an earlier input, not its streaming start: a sent time before that end

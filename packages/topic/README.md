@@ -87,12 +87,12 @@ equal(said.split('\n\n---\n\n').slice(0, 2), [
 equal(cut('one two\n\nthree four', 12), { text: 'one two', left: 12 })
 ```
 
-Over a graph, `await gather(g)('Q-59416')` reads the tree, or `undefined` where
-the id names no topic.
+Over a graph, `await gather(g)('Q-9')` reads the tree, or `undefined` where the
+id names no topic.
 
-Doors that open one: `yak session new --topic Q-59416 "…"` and `session_new`
-with `topic` ([@yaks/harness](../harness)); in a browser, the Ask part of a
-topic's page; and `yak topic read Q-59416` prints what such a session is given.
+Doors that open one: `yak session new --topic Q-9 "…"` and `session_new` with
+`topic` ([@yaks/harness](../harness)); in a browser, the Ask part of a topic's
+page; and `yak topic read Q-9` prints what such a session is given.
 
 ## Install
 
@@ -127,10 +127,10 @@ testing.
 yak topic find model
 yak topic find --near '#c625160bfa'
 yak topic new testing --body 'what a test checks, and how fast a suite runs'
-yak topic add Q-59416 M-14942 M-59035
-yak topic add 'Task Graph' D-130781
-yak topic add Q-59416 M-59035 --drop
-yak topic read Q-59416
+yak topic add Q-9 M-14942 M-59035
+yak topic add 'Task Graph' D-391
+yak topic add Q-9 M-59035 --drop
+yak topic read Q-9
 ```
 
 `topic read` answers the topic tree compiled from one topic, the context a

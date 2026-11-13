@@ -153,7 +153,7 @@ factory that implements them (`yak memory save`, `yak memory recall`, and the
 rest the same way, and each over `/mcp`):
 
 ```sh
-yak memory save 'always commit your changes' --scope P-19 --feedback jeff
+yak memory save 'always commit your changes' --scope P-1 --feedback jeff
 yak memory save --on C-38041 --context 'on the persona gates'
 yak memory recall 'commit'
 yak memory recall --near T-37666

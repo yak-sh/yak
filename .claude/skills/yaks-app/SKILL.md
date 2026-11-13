@@ -68,7 +68,7 @@ and setup; this is the map and the feel.
   keys in the bucket) and `app.store` (`ada/cookbook.385dac`, its Durable Object
   and script), never by its address. A rename is a directory write (directory.ts
   `rename`); the address left behind redirects until another space takes it,
-  which anyone may (D-131924).
+  which anyone may (D-399).
 - **The serving copy**: a copy of the directory's answers (`directory-copy.ts`,
   `serving-copy.ts`) that stands in when the directory stalls. The directory's
   own answer stands as read and is copied behind it, off the request's path; a
@@ -109,7 +109,7 @@ and setup; this is the map and the feel.
 - **The connector**: `mcp.ts` and `tools.ts`, the tools Claude and ChatGPT call;
   `prompts/` and `public/docs/` are what those assistants read.
 - **Spending**: `models.ts` and `meter.ts`, one model and voice budget per space
-  (D-131886). A spend names its source (a provider, `voice`, `texts`, `browser`;
+  (D-398). A spend names its source (a provider, `voice`, `texts`, `browser`;
   meter.ts `SOURCES`), which the space's `trend` keeps by the day beside what a
   paying plan covered; /admin/spending (admin-spending.ts) reads those and each
   Operator's ask rows (operator-spending.ts). A new thing that costs money names
@@ -438,7 +438,7 @@ an app never leaves that app's space (`routed`).
 So the platform taking a word reaches into everyone's apps, and a collision
 breaks that app's store and every door that reads it. `deno task app-grep`
 searches every app's live files and kept versions; it is how you find out
-whether a word is free before you take it. Namespacing (D-59567) is designed,
+whether a word is free before you take it. Namespacing (D-338) is designed,
 not built. Shaping the word is `vocabulary`'s ground.
 
 An app's `"platform"` dependencies (its package.json) add their packages' words
@@ -496,7 +496,7 @@ from that:
 - **Input is precious** (M-59093). The owner, verbatim: "everything they input
   into a computer is precious and should be preserved". A draft, an unsent
   message or a form gets no short lifetime.
-- **Money spends from one budget per space** (D-131886), whatever the source.
+- **Money spends from one budget per space** (D-398), whatever the source.
   Something new that costs money spends from it rather than growing an allowance
   of its own; embedding calls don't count yet (T-59279).
 

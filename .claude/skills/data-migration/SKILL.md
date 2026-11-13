@@ -179,7 +179,7 @@ alarm once it serves, fifty rows to a transaction. workers/yak/README.md,
   A copy runs in the box's server and ends `Interrupted` when a restart
   hands it over, so copy a space at a time and run an interrupted one again.
 
-The owner's standing word for these, on D-45640 and D-59037, verbatim on the
+The owner's standing word for these, on D-334 and D-337, verbatim on the
 latter: "and let's ensure that the migrations don't bring down yaks apps".
 
 A live Worker can still call an object running its previous code for minutes,

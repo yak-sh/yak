@@ -411,17 +411,17 @@ lease instead.
    the `clock` option (an @yaks/fp `Clock`, the runtime's by default), which the
    host's graph and tool runner keep too.
 
-**The schema follows the vocabulary** (D-121389). Everything a graph's file
-needs is one composed schema: migration control, blob storage, the store's
-component tables and archetypes, each graph facet's `schema(host, options)`
-statements and the full-text indexes. It has one print, and every host that may
-write compares it with the prints the file has recorded (@yaks/sqlite `follow`).
-A recorded print opens with no DDL and no write lock. A missing one adds what is
-missing (tables, the columns a standing table lacks, indexes, full-text tables,
-filled), records the print, and goes on. There is no installing step: a landing
-that grows the vocabulary is on the file the first time a writer with the new
-code opens it, `yak init`'s included. A pass only adds, so a process still
-running the older code keeps its own print and finds nothing to change.
+**The schema follows the vocabulary** (D-366). Everything a graph's file needs
+is one composed schema: migration control, blob storage, the store's component
+tables and archetypes, each graph facet's `schema(host, options)` statements and
+the full-text indexes. It has one print, and every host that may write compares
+it with the prints the file has recorded (@yaks/sqlite `follow`). A recorded
+print opens with no DDL and no write lock. A missing one adds what is missing
+(tables, the columns a standing table lacks, indexes, full-text tables, filled),
+records the print, and goes on. There is no installing step: a landing that
+grows the vocabulary is on the file the first time a writer with the new code
+opens it, `yak init`'s included. A pass only adds, so a process still running
+the older code keeps its own print and finds nothing to change.
 
 A local read-only command opens SQLite with `readOnly: true`, records no
 process, tool, call, claim or result, and invokes no write reply. Failed reads

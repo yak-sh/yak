@@ -842,9 +842,9 @@ equal(compile(parse('.entity.num=3,4'), vocab, { stable: true }).params, [
 ```
 
 A reference equality drives the statement from its column's index. So does an
-equality at the end of a reference path, `.session.persona.persona.home=P-19`,
+equality at the end of a reference path, `.session.persona.persona.home=P-1`,
 when indexes can answer every hop: it is read from the far end (the personas
-homed at P-19, then the sessions wearing one), as one set the root reference is
+homed at P-1, then the sessions wearing one), as one set the root reference is
 sought in, whatever tests stand beside it. Any other path is read forward, one
 correlated lookup per row.
 

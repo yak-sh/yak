@@ -15,7 +15,7 @@ body}` + `proposed{}`), filed before the work. The repo documents what is; the
 design holds what's proposed. It is true enough to trust and short enough for
 the owner to read in a couple of minutes.
 
-He told us, about D-124238: "that design is too long for me to read". Designs
+He told us, about D-375: "that design is too long for me to read". Designs
 written for him had grown to 10,000 to 15,000 characters. So the body is what
 he reads: the problem, how things work now, the new design, and his questions
 at the end, each with your recommendation (see the shape of the body below).
@@ -77,7 +77,7 @@ design drifts unless it's held against the code. The pulls to feel for:
 
 ## The shape of the body
 
-He read D-148821 and wrote:
+He read D-435 and wrote:
 
 > i can't even tell if the language here is describing what is already or what
 > will be after this design. this doc is incomprehensible to me, because it's
@@ -111,13 +111,13 @@ commits and the quotes.
 `design_new` files the title, body and project together:
 
 ```json
-{"title":"<what it proposes, in one line>","project":"P-19","body":"<the proposal>"}
+{"title":"<what it proposes, in one line>","project":"P-1","body":"<the proposal>"}
 ```
 
 The CLI mirror also reads a drafted body from a scratch file:
 
 ```sh
-yak design new "<what it proposes, in one line>" @/path/to/body.md --project P-19
+yak design new "<what it proposes, in one line>" @/path/to/body.md --project P-1
 ```
 
 Any argument starting with `@` is read as a file path (the @file door), so
@@ -161,7 +161,7 @@ the tool stamps the caller as the decider, which is the agent's decision
 recorded as the agent's (M-31958). When he approves in conversation, put his
 approval verbatim in a comment beside it. `design_decide` accepts `by` to record
 his explicit verdict on that design (`yak design decide D-… approved --by
-U-3709`); the session stays in `via`. The task tree and follow-ups are yours too.
+U-1`); the session stays in `via`. The task tree and follow-ups are yours too.
 
 A design's verdict and the owner's comments on it outrank its body. A body is
 what was proposed; it reads as settled whether or not he agreed, and his later
@@ -180,7 +180,7 @@ the same call:
 
 ```json
 {
-  "project": "P-19",
+  "project": "P-1",
   "tasks": [
     {"id":"$plan","title":"…","body":"D-…, task tree."},
     {"id":"$t1","parent":"$plan","title":"…","body":"D-…, task tree item 1."},
@@ -195,12 +195,12 @@ designs' trees depend on each other. `check: true` previews the whole plan.
 The CLI takes the same task rows as an array argument, from a file if useful:
 
 ```sh
-yak task new --project P-19 --tasks @tasks.json --check
-yak task new --project P-19 --tasks @tasks.json
+yak task new --project P-1 --tasks @tasks.json --check
+yak task new --project P-1 --tasks @tasks.json
 ```
 
 The result names each filed task beside its local alias. A question only the
-owner can answer (irreversible, spends money, or a preference only he holds) is its own task with `assignee: "U-3709"`.
+owner can answer (irreversible, spends money, or a preference only he holds) is its own task with `assignee: "U-1"`.
 
 ## When an agent drafts it
 

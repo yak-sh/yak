@@ -58,7 +58,7 @@ READMEs hold the full examples: packages/task/README.md ("Create a task plan",
 - `task_new` takes `tasks` to file a plan in one transaction, with shared filing
   defaults, local `$ids`, `parent` and `requires`. The CLI is
   `yak task
-  new --project P-19 --tasks @tasks.json`.
+  new --project P-1 --tasks @tasks.json`.
 - `task_update` changes several fields in one call and takes `updates` for
   several tasks. `accept`, `blocked` and cancellation `reason` are ordinary
   arguments too. `edit` changes only the body text you name:

@@ -187,7 +187,7 @@ service.
       "secret": { "secret": "TRACKER_SECRET" }
     },
     "effort": "high",
-    "project": "P-19",
+    "project": "P-1",
     "cap": 2,
     "cooldown": 1800000,
     "cli": "yak --config /home/me/.yak/tracker.json"

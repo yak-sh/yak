@@ -215,7 +215,7 @@ signal to give it a row instead.
   and secret are `op://` references read by that interactive command and never
   printed. Servers do not run this command.
 - **A broker** holds the grant for us where we have no client of our own
-  (Nango, for Gmail's restricted scopes: D-151626). The integration names it
+  (Nango, for Gmail's restricted scopes: D-439). The integration names it
   as data (`integration.broker`), each connection remembers it
   (`connection.broker`), and the token it hands back still goes only to the
   integration's `hosts`. Its key is the secret `broker <name>`, kept on yaks.app

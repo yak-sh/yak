@@ -11,12 +11,12 @@ description: >
 # Builders and builds
 
 You want a model, or a piece of code, to make something for each of many things:
-a sound for each `sfx`, a creature for each `/spawn` (D-61621), a spell for each
-spellbook (D-61649). Here that's a builder: a standing instruction that, for
+a sound for each `sfx`, a creature for each `/spawn` (D-341), a spell for each
+spellbook (D-342). Here that's a builder: a standing instruction that, for
 every match of a query, asks a tool for named outputs and keeps them as
 entities. The graph says what exists; the builder says what should be made of
 it, and keeps that true as the graph changes. It's how this system invents
-things at run time. The owner, verbatim, on D-61621: "builders are super
+things at run time. The owner, verbatim, on D-341: "builders are super
 important and we should rely on them more and more as the package stabilizes".
 
 It works like `make`, with one twist. Inputs are hashed, and a target is rebuilt

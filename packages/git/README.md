@@ -212,10 +212,10 @@ the command runs in:
 
 ```sh
 yak cites check                  # every citation that moved or was never checked
-yak cites check D-37775          # …only the ones that record makes
+yak cites check D-295          # …only the ones that record makes
 yak cites check --path=src/db.ts # …only citations of one file, its lines or symbols
 yak cites verify <citation>      # checked and it holds: mark it, at this commit
-yak cites verify --of=D-37775    # …every citation that record makes
+yak cites verify --of=D-295    # …every citation that record makes
 ```
 
 `--path` names a file of the repository the command runs in, so the same path in

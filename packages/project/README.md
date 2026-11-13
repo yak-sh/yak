@@ -44,11 +44,11 @@ A project filed under another project is its sub-project: its parent is its own
 value, so a project has at most one parent. Everything under a project, at any
 depth, is one walk in the query grammar:
 
-- `.filed.project->P-19` — what is filed under P-19, its sub-projects, what is
+- `.filed.project->P-1` — what is filed under P-1, its sub-projects, what is
   filed under those, and so on down;
-- `.task .filed.project->P-19` — the tasks among them, which is what a board
+- `.task .filed.project->P-1` — the tasks among them, which is what a board
   rolling up a project's work says;
-- `.filed.project=P-19` — only what is filed directly under it.
+- `.filed.project=P-1` — only what is filed directly under it.
 
 `lineage(g, eid)` reads the other way: the projects an entity is under, nearest
 first — the entity itself when it is a project, then each `filed.project` above

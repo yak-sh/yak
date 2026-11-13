@@ -214,8 +214,8 @@ declarations in `taskDoc`. A server that loads these tools exposes them through
 CLI or MCP:
 
 ```sh
-yak task new 'Buy the cake' --project P-19 --priority 1
-yak task list '.filed.project=P-19&.filed.priority<3'
+yak task new 'Buy the cake' --project P-1 --priority 1
+yak task list '.filed.project=P-1&.filed.priority<3'
 yak task update T-42 done
 ```
 
@@ -239,7 +239,7 @@ provide defaults that each row can override:
 
 ```json
 {
-  "project": "P-19",
+  "project": "P-1",
   "tasks": [
     { "id": "$event", "title": "Organize the event" },
     { "id": "$date", "title": "Choose the date", "parent": "$event" },
@@ -249,7 +249,7 @@ provide defaults that each row can override:
 ```
 
 The CLI takes the same array with
-`yak task new --project P-19 --tasks
+`yak task new --project P-1 --tasks
 @tasks.json`. `check: true` (CLI `--check`)
 previews the whole plan. The result includes resolved ids beside the local
 aliases, ready for later calls.

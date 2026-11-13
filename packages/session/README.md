@@ -996,7 +996,7 @@ and stays the helper's: its knock's `about` is the comment, a mark's the task.
 The helpers' trail is one query, newest first:
 
 ```sh
-yak graph query '.helping.project=P-19&.order=-created.at&.limit=20&.fields=created.at,session.status,exit.code,brief.text'
+yak graph query '.helping.project=P-1&.order=-created.at&.limit=20&.fields=created.at,session.status,exit.code,brief.text'
 ```
 
 `yak session peek <helper>` reads one, `.created.via=<helper>` lists what it

@@ -12,7 +12,7 @@ description: >
 
 Everything a person sees here is drawn twice: once in a browser, once in a
 terminal, from the same Preact tree. That only works because interface is three
-kinds of component, each owning one thing (M-39550, D-58967):
+kinds of component, each owning one thing (M-39550, D-336):
 
 - **UI components** are how it looks: display-only parts in a kit. @yaks/ui
   holds the base kit.

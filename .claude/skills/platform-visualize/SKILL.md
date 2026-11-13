@@ -151,7 +151,7 @@ live service. Changing the page itself is `ui-building` too.
 
 There is one measured stream. New observation extends @yaks/trace
 (packages/trace/mod.ts), and other consumers such as the tracker's timing
-(D-61711) read that same stream rather than timing things again. A label names
+(D-344) read that same stream rather than timing things again. A label names
 code, never a query, URL, entity, credential or payload, and counts are finite
 numbers. The inactive path stays free of events, ids and clocks, observers
 release on cancellation, abort and close, and spans are not persistent history.
