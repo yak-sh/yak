@@ -1,8 +1,14 @@
 // Every tool returns the same named-output value. Validate it once, then write
 // retained output takes and their citations in one guarded graph batch. Each
-// call has its own entity per slot, and replay keeps it: its `output_of` key finds it again (build.ts). A reference in
-// one output may name a sibling of the same answer as `$<slot>`. Definition
-// wiring fills reference properties even when the tool omits them.
+// call has its own entity per slot, and replay keeps it: its `output_of` key
+// finds it again (build.ts). A reference in one output may name a sibling of
+// the same answer as `$<slot>`. Definition wiring fills reference properties
+// even when the tool omits them.
+//
+// An answer that breaks this contract is `Malformed`, a refusal: the build
+// records it as its failure, and no door asks again until its inputs change.
+// A model gets the contract wrong now and then, so its malformed answer is
+// only that; a code tool's is a bug in its code and is reported.
 //
 // An output wearing `edge` is a link, and a link is identified by its ends and
 // its relation (@yaks/edge): it lands on that derived eid, which finds it again
@@ -21,6 +27,14 @@ import { verify } from '@yaks/kernel'
 import { BUILD, BUILT, ids, OUTPUT_OF, outputOf } from './build.ts'
 import { inputKey } from './key.ts'
 import { step, steps } from './steps.ts'
+
+/** An answer that breaks the output contract, refused. */
+export class Malformed extends Refused {
+  constructor(message: string) {
+    super(message)
+    this.name = 'Malformed'
+  }
+}
 
 export type Spec = {
   /** where it lands: its slot's entity, or a link's ends and relation */
@@ -76,10 +90,10 @@ export let parse = (
   wiring: Wiring = {},
 ): Spec[] => {
   if (!object(value) || !Array.isArray(value.outputs)) {
-    throw new Error('builder tool answer needs an outputs array')
+    throw new Malformed('builder tool answer needs an outputs array')
   }
   if (value.cost != null && dollars(value) == null) {
-    throw new Error('builder tool answer cost must be dollars')
+    throw new Malformed('builder tool answer cost must be dollars')
   }
   let allowed = new Set(selected)
   let slots = new Set<string>()
@@ -90,7 +104,9 @@ export let parse = (
       !object(item.components) || typeof item.slot != 'string' ||
       !item.slot || slots.has(item.slot)
     ) {
-      throw new Error('each output needs inputs, components and a unique slot')
+      throw new Malformed(
+        'each output needs inputs, components and a unique slot',
+      )
     }
     let linked = item.components[EDGE] != null
     let named = item.slot
@@ -98,7 +114,7 @@ export let parse = (
     let inputs: Eid[] = []
     for (let eid of item.inputs) {
       if (typeof eid != 'string' || !allowed.has(eid)) {
-        throw new Error(`${named} cites an input its build did not select`)
+        throw new Malformed(`${named} cites an input its build did not select`)
       }
       if (!inputs.includes(eid)) inputs.push(eid)
     }
@@ -108,18 +124,18 @@ export let parse = (
       if (
         !info ||
         (value != null && !object(value))
-      ) throw new Error(`${named} has no writable ${name} component`)
+      ) throw new Malformed(`${named} has no writable ${name} component`)
       if (value != null) {
         for (let prop of Object.keys(value)) {
           if (!info.writable.includes(prop)) {
-            throw new Error(`${named} cannot write ${name}.${prop}`)
+            throw new Malformed(`${named} cannot write ${name}.${prop}`)
           }
         }
       }
       components[name] = value == null ? null : { ...value as Comp }
     }
     if (item.artifact != null && typeof item.artifact != 'string') {
-      throw new Error(`${named} has no artifact id`)
+      throw new Malformed(`${named} has no artifact id`)
     }
     out.push({
       slot: named,
@@ -132,7 +148,7 @@ export let parse = (
   let bySlot = new Map(out.map((spec) => [spec.slot, spec]))
   for (let [slot, refs] of Object.entries(wiring)) {
     let spec = bySlot.get(slot)
-    if (!spec) throw new Error(`wiring names no output ${slot}`)
+    if (!spec) throw new Malformed(`wiring names no output ${slot}`)
     for (let [path, target] of Object.entries(refs)) {
       let [name, prop, ...rest] = path.split('.')
       let info = writable(vocab, name)
@@ -141,12 +157,12 @@ export let parse = (
         !info.writable.includes(prop) ||
         vocab.prop(name, prop)?.category != 'ref'
       ) {
-        throw new Error(
+        throw new Malformed(
           `${slot} cannot wire ${path}: needs a writable reference`,
         )
       }
       if (!bySlot.has(target)) {
-        throw new Error(`${slot} wiring names no sibling output ${target}`)
+        throw new Malformed(`${slot} wiring names no sibling output ${target}`)
       }
       spec.components[name] = {
         ...spec.components[name],
@@ -160,7 +176,7 @@ export let parse = (
   for (let [slot, refs] of Object.entries(wiring)) {
     for (let target of Object.values(refs)) {
       if (!made.has(target)) {
-        throw new Error(`${slot} wiring cannot name edge output ${target}`)
+        throw new Malformed(`${slot} wiring cannot name edge output ${target}`)
       }
     }
   }
@@ -170,7 +186,7 @@ export let parse = (
         let slot = sibling(vocab, name, prop, v)
         if (slot == null) continue
         if (!made.has(slot)) {
-          throw new Error(`${spec.slot} names no sibling output ${v}`)
+          throw new Malformed(`${spec.slot} names no sibling output ${v}`)
         }
         c![prop] = place(slot)
       }
@@ -183,7 +199,7 @@ export let parse = (
     eid: spec.link ? linkOf(spec.components, tags, ours) : place(spec.slot),
   }))
   let twice = specs.find((s, i) => specs.findIndex((t) => t.eid == s.eid) < i)
-  if (twice) throw new Error(`an answer states ${twice.eid} twice`)
+  if (twice) throw new Malformed(`an answer states ${twice.eid} twice`)
   return specs
 }
 
@@ -197,13 +213,15 @@ let linkOf = (
   let { from, to } = components[EDGE] ?? {}
   let [relation, ...more] = Object.keys(components).filter((n) => tags.has(n))
   if (!relation || more.length) {
-    throw new Error('an edge output carries one relation beside its edge')
+    throw new Malformed('an edge output carries one relation beside its edge')
   }
   if (typeof from != 'string' || typeof to != 'string' || !from || !to) {
-    throw new Error(`a ${relation} edge output needs both ends`)
+    throw new Malformed(`a ${relation} edge output needs both ends`)
   }
   if (!ours.has(from) && !ours.has(to)) {
-    throw new Error(`a ${relation} edge output joins nothing its answer made`)
+    throw new Malformed(
+      `a ${relation} edge output joins nothing its answer made`,
+    )
   }
   return edgeEid(from, relation, to)
 }
@@ -334,7 +352,7 @@ export let outputs = (
       let named = spec.slot
       let before = comp(have.get(eid), BUILT)
       if (spec.artifact && !comp(found.get(spec.artifact), 'artifact')) {
-        throw new Error(`${named} names a missing artifact`)
+        throw new Malformed(`${named} names a missing artifact`)
       }
       writes.push({
         entity: { eid },
@@ -382,7 +400,7 @@ export let outputs = (
       }
       for (let to of spec.inputs) {
         let target = found.get(to)
-        if (!target) throw new Error(`${named} cites missing input ${to}`)
+        if (!target) throw new Malformed(`${named} cites missing input ${to}`)
         let cite = link(eid, 'cites', to)
         writes.push({ ...cite, ...verify(cite, target, vocab) })
       }

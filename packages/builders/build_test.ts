@@ -430,8 +430,13 @@ test('an output names a sibling output of its answer by $slot', async () => {
   ])
   let lost = await shop({}, [notes], [astray])
   await lost.g.apply([source('a'), builder()])
-  await drive(lost.g, lost.runner, await runOf(lost.g, ['a']))
+  let astrayBuild = await runOf(lost.g, ['a'])
+  await drive(lost.g, lost.runner, astrayBuild)
   assertEquals((await rows(lost.g, '.built')).length, 0)
+  assertEquals(
+    comp(await one(lost.g, astrayBuild), 'failed')?.reason,
+    'cry names no sibling output $nowhere',
+  )
   assert(String(lost.failed[0]).includes('names no sibling output $nowhere'))
 })
 
@@ -757,26 +762,47 @@ test('a malformed output fails without spending automatically again', async () =
   }
 })
 
-test('a model reply cut short fails without spending automatically again', async () => {
-  let { g, runner, failed } = await shop()
-  await g.apply([source('a'), {
-    ...builder('$s .doc.title=Source', toolEid('builder_model')),
-    using: { model: ids.model },
-  }])
-  let build = await runOf(g, ['a'])
-  await drive(g, runner, build)
-  let [session] = await rows(g, '.session')
-  let s = session.entity.eid
-  await g.apply([
-    asked(s, 2, 'ask-1', 'completed'),
-    replied(s, 3, 'ask-1', '{"outputs": [{"slot": "main", "inputs": ["a"]'),
-  ])
-  assertEquals((await rows(g, '.built')).length, 0)
-  assert(comp(await one(g, build), 'build')?.key)
-  assert(failed.length > 0)
-  await asking(g, g.vocab)()
-  assertEquals((await calls(g, build)).length, 1)
-})
+// A model's malformed answer is its build's failure, never a bug.
+for (
+  let [name, reply] of [
+    ['cut short', '{"outputs": [{"slot": "main", "inputs": ["a"]'],
+    [
+      'naming no sibling',
+      JSON.stringify({
+        outputs: [
+          { slot: 'motion 1', inputs: [], components: {} },
+          {
+            slot: 'vote 1',
+            inputs: [],
+            components: { note: { parent: '$part 1' } },
+          },
+        ],
+      }),
+    ],
+  ]
+) {
+  test(`a model reply ${name} fails without spending automatically again`, async () => {
+    let { g, runner, failed } = await shop({}, [notes])
+    await g.apply([source('a'), {
+      ...builder('$s .doc.title=Source', toolEid('builder_model')),
+      using: { model: ids.model },
+    }])
+    let build = await runOf(g, ['a'])
+    await drive(g, runner, build)
+    let [session] = await rows(g, '.session')
+    let s = session.entity.eid
+    await g.apply([
+      asked(s, 2, 'ask-1', 'completed'),
+      replied(s, 3, 'ask-1', reply),
+    ])
+    assertEquals((await rows(g, '.built')).length, 0)
+    assert(comp(await one(g, build), 'build')?.key)
+    assert(comp(await one(g, build), 'failed')?.reason)
+    assertEquals(failed, [])
+    await asking(g, g.vocab)()
+    assertEquals((await calls(g, build)).length, 1)
+  })
+}
 
 test('a model ask that completes saying nothing fails its build', async () => {
   let { g, runner } = await shop()

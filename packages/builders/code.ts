@@ -12,7 +12,7 @@ import { argsOf } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import { after } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
-import { outputs, spent, type Wiring } from './answer.ts'
+import { Malformed, outputs, spent, type Wiring } from './answer.ts'
 import { step, steps } from './steps.ts'
 
 /** What a builder's call asks its tool. */
@@ -85,8 +85,8 @@ export let code = (tool: Omit<Tool, 'run'> & { answer: Answer }): Code => ({
  * The call keeps every argument but the binding, which is the build's own
  * inputs, and is written taken (`execution`), so no runner runs it again. An answer that throws or breaks the contract is the build's
  * `failed{reason}`, kept under its attempt key like a refused answer, so no
- * door asks again until its inputs change; `report` hears all but a
- * refusal. */
+ * door asks again until its inputs change; `report` hears all but the tool's
+ * own refusal. */
 export let answered = (
   tx: ReadTx,
   [run, asked, key]: Bundle[],
@@ -106,7 +106,7 @@ export let answered = (
       let made = yield* step(outputs(tx, run, asked, value, vocab))
       return [run, { ...call, ...spent(call, value)[0] }, key, ...made]
     } catch (err) {
-      if (!(err instanceof Refused)) report?.(err)
+      if (!(err instanceof Refused) || err instanceof Malformed) report?.(err)
       let reason = err instanceof Error ? err.message : String(err)
       return [{ ...run, failed: { reason } }, call, key]
     }

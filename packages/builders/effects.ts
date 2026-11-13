@@ -15,8 +15,8 @@ import type { Handler, Handlers } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
 import { next, WAKE } from '@yaks/wake'
 import { BUILD, clock, due, type Options, reconcile } from './build.ts'
-import { answer, spent } from './answer.ts'
-import { adapted } from './model.ts'
+import { answer, Malformed, spent } from './answer.ts'
+import { adapted, modelToolEid } from './model.ts'
 import { preserve } from './preserve.ts'
 
 let str = (c: Comp | undefined, prop: string): string =>
@@ -177,7 +177,10 @@ export let answering = (vocab: Vocab): Handler => async (event, tx, write) => {
         }]
         : [],
     ])
-    if (err instanceof Refused) return
+    // A model's malformed answer is the model's mistake; a code tool's is a
+    // bug in its code.
+    let model = str(comp(call, 'call'), 'to') == modelToolEid()
+    if (err instanceof Malformed ? model : err instanceof Refused) return
     throw err
   }
 }
