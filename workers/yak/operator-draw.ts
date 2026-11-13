@@ -824,17 +824,17 @@ let Called = ({ said, nodes }: Fold) =>
     More.Branch,
     {},
     h(
-      More.Mark,
+      Transcript.Bubble,
       {},
       h(
-        Transcript.Bubble,
+        Transcript.Via,
         {},
-        h(Transcript.Via, {
+        h(More.Mark, {
           title: 'By phone: what the Operator did with it',
           'aria-label': 'By phone: what the Operator did with it',
         }, h(Icon, { of: icons.phone })),
-        said,
       ),
+      said,
     ),
     h(More.Children, {}, ...nodes),
   )

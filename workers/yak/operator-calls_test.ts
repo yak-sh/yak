@@ -1023,7 +1023,7 @@ test("a recorded call is the caller's conversation: their words theirs, its voic
     'Hi Ellihu, how are you this evening?',
     'Hi, Ellahu, do any of my apps have errors right now?',
   ])
-  equal(texts('.More_Branch > .More_Mark'), [
+  equal(texts('.More_Branch > .Transcript_Bubble'), [
     'Hi, Ellahu, do any of my apps have errors right now?',
   ])
   equal(texts(`.Transcript_Reply${open}`), [

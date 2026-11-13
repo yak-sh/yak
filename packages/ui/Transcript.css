@@ -27,23 +27,9 @@
   height: .95em;
   vertical-align: -.1em;
 }
-.Transcript_Entry:has(> .Transcript_Bubble) {
+.Transcript_Entry:has(> .Transcript_Bubble),
+.More_Branch:has(> .Transcript_Bubble) {
   display: grid;
-}
-/* Words that open what came of them (More.Branch): drawn as themselves, and
-   only their Via mark pressed to open it. */
-.More_Mark:has(> .Transcript_Bubble) {
-  display: grid;
-  color: inherit;
-  cursor: auto;
-  pointer-events: none;
-}
-.More_Mark > .Transcript_Bubble > .Transcript_Via {
-  pointer-events: auto;
-  cursor: pointer;
-}
-.More_Branch[open] > .More_Mark > .Transcript_Bubble > .Transcript_Via {
-  color: var(--accent);
 }
 .Transcript_Meta {
   display: flex;
@@ -53,7 +39,7 @@
   color: var(--muted);
   font-size: var(--fine, var(--small));
 }
-.Transcript_Entry:has(> .Transcript_Bubble, > .Attachments, > .More_Branch > .More_Mark > .Transcript_Bubble) > .Transcript_Meta {
+.Transcript_Entry:has(> .Transcript_Bubble, > .Attachments, > .More_Branch > .Transcript_Bubble) > .Transcript_Meta {
   justify-content: end;
 }
 .Transcript_Entry-hidden {

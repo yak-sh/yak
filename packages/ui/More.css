@@ -94,7 +94,23 @@
   cursor: pointer;
   list-style: none;
 }
-.More_Mark::-webkit-details-marker {
+/* The box a mark flips is out of sight; the mark shows its focus and, open,
+   the accent. A branch whose own mark is not checked hides its children. */
+.More_Open {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.More_Mark:has(> .More_Open:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.More_Mark:has(> .More_Open:checked) {
+  color: var(--accent);
+}
+.More_Branch:not(:has(> .More_Mark > .More_Open:checked, > :not(.More_Children) .More_Mark > .More_Open:checked)) > .More_Children {
   display: none;
 }
 .More_Mark .Icon {

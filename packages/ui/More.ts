@@ -3,14 +3,28 @@
  * `details` whose `summary` is that line, pressed to open it, and its
  * `More.Body` what it holds. Whether it starts open is the caller's.
  *
+ * A `More.Branch` opens from its `More.Mark` alone, wherever in the branch
+ * that mark is drawn: a mark inside a message's words leaves the words
+ * ordinary text, to select and copy, and only the mark is pressed.
+ *
  * @module
  */
 
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
-import { block, type Part } from './el.ts'
+import { block, type Part, type Props } from './el.ts'
 import type { Colors, Native, Specimen } from './theme.ts'
 import { Field } from './Field.ts'
+
+// A branch's mark: a label pressed to flip the box beside it, whose state
+// opens the branch's children (More.css). `open` starts it open.
+let Mark = ({ open, children, ...props }: Props) =>
+  h(
+    'label',
+    props,
+    h('input', { type: 'checkbox', class: 'More_Open', checked: !!open }),
+    children,
+  )
 
 /** A fold and what it holds. */
 export let More:
@@ -46,8 +60,8 @@ export let More:
       Legend: 'summary',
       Text: 'div',
       Source: 'pre',
-      Branch: 'details',
-      Mark: 'summary',
+      Branch: 'div',
+      Mark: Mark as Part,
       Children: 'div',
     },
   )
@@ -104,8 +118,8 @@ export let specimens = (): Specimen[] => [
     'More, branch',
     h(
       More.Branch,
-      { open: true },
-      h(More.Mark, {}, 'Earlier exchange'),
+      {},
+      h(More.Mark, { open: true }, 'Earlier exchange'),
       h(More.Children, {}, 'The earlier messages.'),
     ),
   ],

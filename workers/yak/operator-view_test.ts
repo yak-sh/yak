@@ -259,8 +259,18 @@ test("a call's turn draws the caller's words, whose phone mark opens the Operato
   }
   let texts = drawn(turn)
   assertEquals(texts('.Transcript_Bubble'), ['Any errors?', 'Thanks'])
-  assertEquals(texts('.More_Branch > .More_Mark .Transcript_Via[title]'), [''])
-  assertEquals(texts('.More_Branch > .More_Mark'), ['Any errors?'])
+  // The words are plain text, to select and copy: only their phone mark, a
+  // box's label holding nothing else, is pressed to open the turn.
+  assertEquals(texts('.More_Branch > .Transcript_Bubble'), ['Any errors?'])
+  assertEquals(
+    texts('summary .Transcript_Bubble, label .Transcript_Bubble'),
+    [],
+  )
+  assertEquals(
+    texts('.Transcript_Bubble > .Transcript_Via > label.More_Mark[title]'),
+    [''],
+  )
+  assertEquals(texts('.More_Mark > input[type=checkbox]:not([checked])'), [''])
   assertEquals(texts('.More_Children .Transcript_Reply'), ['None.'])
   assertEquals(texts('.More_Children .More_Inline > summary'), ['Did tool'])
   assertEquals(
@@ -270,7 +280,7 @@ test("a call's turn draws the caller's words, whose phone mark opens the Operato
   // The answer coming back redraws the caller's words and what is under them.
   assertEquals(touched(turn, names, 5).map((r) => r.id), ['h', 's', 'next'])
   // A request with no words of the caller's before it stands for them.
-  assertEquals(drawn(turn.slice(1))('.More_Branch > .More_Mark'), [
+  assertEquals(drawn(turn.slice(1))('.More_Branch > .Transcript_Bubble'), [
     'User asks: any errors?',
   ])
 })
