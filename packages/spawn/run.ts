@@ -883,12 +883,15 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
     if (!(error instanceof disk.errors.NotFound)) throw error
   }
   let read = new Set(runs.map((r) => r.eid))
-  let unread = (await g.read(`.${SESSION}&.${PROCESS}&.${EXIT}`))
-    .map((b) => b.entity.eid)
-    .filter((eid) =>
-      !read.has(eid) &&
-      ((asks.get(eid) ?? 0) > (over.get(eid) ?? 0) || logs.has(eid))
-    )
+  // Only their eids: every ended run's whole row is megabytes read cold at
+  // each start-up.
+  let unread =
+    (await g.read(`.${SESSION}&.${PROCESS}&.${EXIT}&.fields=entity.eid`))
+      .map((b) => b.entity.eid)
+      .filter((eid) =>
+        !read.has(eid) &&
+        ((asks.get(eid) ?? 0) > (over.get(eid) ?? 0) || logs.has(eid))
+      )
   for (let eid of unread) await readOn(g, eid, o)
   return runs
 }
