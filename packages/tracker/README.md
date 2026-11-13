@@ -14,6 +14,7 @@ references may name entities in other stores.
 | `.`            | Fault keys, grouping patches, regression and retention                              |
 | `./vocab`      | Tracker words, RAM computations and SQL-derived expressions                         |
 | `./report`     | Capture, transport, `coalesce` and a page's reports                                 |
+| `./instrument` | A class whose construction and every method run inside a given reporting boundary   |
 | `./page`       | Classic browser capture script and twenty breadcrumbs                               |
 | `./effects`    | `error_group`, `bug_notify`, `bug_follow`, `error_trim`                             |
 | `./views`      | Bug pages, list rows, error frames and the Bugs destination                         |

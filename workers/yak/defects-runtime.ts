@@ -2,6 +2,7 @@
 import { waitUntil } from 'cloudflare:workers'
 import { faults } from '@yaks/api'
 import { caught, defect, watched, within } from './defects.ts'
+import { instrument as tracked } from '@yaks/tracker/instrument'
 import { origin } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
 import { learn, restarting } from './running.ts'
@@ -92,51 +93,20 @@ let costly = (kind: string, id?: { name?: string }): Report =>
   })
 }
 
-/** Construction, lifecycle callbacks and RPC methods share the same reporting
- * boundary. A callback installed by construction retains its invocation scope. */
-export let instrument = <C>(Original: C): C => {
-  let Base = Original as unknown as new (...args: unknown[]) => object
-  // Each object's own constructor arguments: its state and its env.
-  let made = new WeakMap<object, { state: unknown; env: Partial<Env> }>()
-  class Tracked extends Base {}
-  for (let method of Object.getOwnPropertyNames(Base.prototype)) {
-    if (method == 'constructor') continue
-    let run = Object.getOwnPropertyDescriptor(Base.prototype, method)?.value
-    if (typeof run != 'function') continue
-    Object.defineProperty(Tracked.prototype, method, {
-      value(this: object, ...args: unknown[]) {
-        return entry(
-          made.get(this)?.env ?? {},
-          `${Base.name} ${method}`,
-          () => Reflect.apply(run, this, args),
-          args.find((arg): arg is Request => arg instanceof Request),
-          made.get(this)?.state,
-        )
-      },
-    })
-  }
-  return new Proxy(Tracked, {
-    construct(target, args, newTarget) {
-      let [state, env = {}] = args as [unknown, Partial<Env>?]
-      // Every object refuses past its windows (@yaks/durable-object
-      // `bounded`), so a runaway costs at most its window's rows. The
-      // platform's directory is spared by its Store once it knows its name
-      // (graph.ts `#start`): no id says it before then.
-      if (own(state)) {
-        let { id } = state as { id?: { name?: string } }
-        bounded(state.storage, { report: costly(Base.name, id), refuse: true })
-      }
-      return entry(
-        env,
-        `${Base.name} constructor`,
-        () => {
-          let object = Reflect.construct(target, args, newTarget)
-          made.set(object, { state, env })
-          return object
-        },
-        undefined,
-        state,
-      )
+/** Construction, lifecycle callbacks and RPC methods enter {@link entry}
+ * (@yaks/tracker/instrument), given the object's state and env. Every object
+ * refuses past its windows (@yaks/durable-object `bounded`), so a runaway
+ * costs at most its window's rows. The platform's directory is spared by its
+ * Store once it knows its name (graph.ts `#start`): no id says it before
+ * then. */
+export let instrument = <C>(Original: C): C =>
+  tracked(
+    Original,
+    ([state, env], name, run, http) =>
+      entry((env ?? {}) as Partial<Env>, name, run, http, state),
+    ([state], name) => {
+      if (!own(state)) return
+      let { id } = state as { id?: { name?: string } }
+      bounded(state.storage, { report: costly(name, id), refuse: true })
     },
-  }) as unknown as C
-}
+  )

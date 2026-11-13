@@ -54,7 +54,7 @@ type Class = new (...args: never[]) => object
 let made = (C: Class) => (...args: never[]) => new C(...args)
 
 // What each deferred object answers: its class's own methods, every one of
-// which the tracker wraps (defects-runtime.ts `instrument`). index_test.ts
+// which the tracker wraps (defects-runtime.ts `instrument`, @yaks/tracker/instrument). index_test.ts
 // holds each list to its class.
 export let STORE = [
   'tick',

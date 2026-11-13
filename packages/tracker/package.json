@@ -24,7 +24,8 @@
     "./brief": "./brief.ts",
     "./errors": "./errors.ts",
     "./everywhere": "./everywhere.ts",
-    "./merge": "./merge.ts"
+    "./merge": "./merge.ts",
+    "./instrument": "./instrument.ts"
   },
   "license": "Apache-2.0",
   "description": "Groups tracked errors into bugs, reports without interrupting callers, and retains and notifies their occurrences.",

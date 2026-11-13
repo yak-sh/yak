@@ -1,0 +1,36 @@
+import { equal, test, throws } from '@yaks/testing'
+import { type Enter, instrument } from './instrument.ts'
+
+class Subject {
+  constructor(readonly state: unknown, readonly env: unknown) {}
+  fetch(_req: Request) {
+    return this.inner()
+  }
+  inner() {
+    return 'answered'
+  }
+  fail() {
+    throw Error('RPC failure')
+  }
+}
+
+test('every call enters the boundary with its object and its request', async () => {
+  let entered: [string, unknown[], string | undefined][] = []
+  let enter: Enter = (args, name, run, request) => {
+    entered.push([name, args, request?.url])
+    return run()
+  }
+  let made: string[] = []
+  let Tracked = instrument(Subject, enter, (_args, name) => made.push(name))
+  let object = new Tracked('state', 'env')
+  equal(object.fetch(new Request('https://x.test/')), 'answered')
+  await throws(() => object.fail(), 'RPC failure')
+  equal(made, ['Subject'])
+  equal(entered, [
+    ['Subject constructor', ['state', 'env'], undefined],
+    ['Subject fetch', ['state', 'env'], 'https://x.test/'],
+    ['Subject inner', ['state', 'env'], undefined],
+    ['Subject fail', ['state', 'env'], undefined],
+  ])
+  equal(object instanceof Subject, true)
+})
