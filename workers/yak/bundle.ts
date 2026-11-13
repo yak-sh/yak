@@ -5,7 +5,7 @@
 // woken for (T-148770).
 import * as io from '@yaks/file/io'
 import * as system from '@yaks/process/system'
-import { build, type Metafile, stop } from 'esbuild'
+import { build, type BuildOptions, type Metafile, stop } from 'esbuild'
 import { rollup } from 'rollup'
 import { dirname, join, resolve } from 'node:path'
 import { isBuiltin } from 'node:module'
@@ -29,6 +29,48 @@ export let closure = (meta: Metafile, entry: string): Set<string> => {
 let native = (name: string) =>
   name.startsWith('node:') || name.startsWith('cloudflare:')
 
+/** How esbuild reads the kernel's source: `named` is the byte name of each
+ * asset its modules point at (sheet-assets.ts). */
+export let options = (
+  root: string,
+  named: Record<string, string> = {},
+): BuildOptions => ({
+  absWorkingDir: root,
+  entryPoints: ['index.ts'],
+  bundle: true,
+  splitting: true,
+  format: 'esm',
+  platform: 'browser',
+  target: 'es2022',
+  jsx: 'automatic',
+  jsxImportSource: 'preact',
+  conditions: ['workerd', 'worker', 'browser'],
+  external: ['node:*', 'cloudflare:*'],
+  plugins: [{
+    name: 'builtins',
+    setup(build) {
+      build.onResolve(
+        { filter: /.*/ },
+        ({ path }) =>
+          isBuiltin(path)
+            ? {
+              path: path.startsWith('node:') ? path : `node:${path}`,
+              external: true,
+            }
+            : undefined,
+      )
+    },
+  }],
+  minify: true,
+  keepNames: true,
+  sourcemap: true,
+  metafile: true,
+  define: {
+    'process.env.NODE_ENV': '"production"',
+    YAK_NAMED: JSON.stringify(named),
+  },
+})
+
 /** Build the source once, then group its eager closure without duplicating
  * the modules shared with a deferred door. Both passes compose source maps. */
 export let bundle = async (root: string, output: string, meta: string) => {
@@ -38,43 +80,7 @@ export let bundle = async (root: string, output: string, meta: string) => {
   })
   try {
     let names = plan(await from(join(root, 'public'))).names
-    let built = await build({
-      absWorkingDir: root,
-      entryPoints: ['index.ts'],
-      outdir: scratch,
-      bundle: true,
-      splitting: true,
-      format: 'esm',
-      platform: 'browser',
-      target: 'es2022',
-      jsx: 'automatic',
-      jsxImportSource: 'preact',
-      conditions: ['workerd', 'worker', 'browser'],
-      external: ['node:*', 'cloudflare:*'],
-      plugins: [{
-        name: 'builtins',
-        setup(build) {
-          build.onResolve(
-            { filter: /.*/ },
-            ({ path }) =>
-              isBuiltin(path)
-                ? {
-                  path: path.startsWith('node:') ? path : `node:${path}`,
-                  external: true,
-                }
-                : undefined,
-          )
-        },
-      }],
-      minify: true,
-      keepNames: true,
-      sourcemap: true,
-      metafile: true,
-      define: {
-        'process.env.NODE_ENV': '"production"',
-        YAK_NAMED: JSON.stringify(names),
-      },
-    })
+    let built = await build({ ...options(root, names), outdir: scratch })
     let source = built.metafile!
     let entry = Object.keys(source.outputs).find((file) =>
       source.outputs[file].entryPoint == 'index.ts'
