@@ -300,17 +300,19 @@ test('sqlite: a series index owed over a spine keeping its number unique on its 
   }
 })
 
-// How many times a patch updates the spine.
+// The columns each update of the spine sets, as a patch makes them.
 let counted = (s: ReturnType<typeof lone>) => {
-  let query = s.d.query, n = 0
+  let query = s.d.query, sets: string[] = []
   s.d.query = (q) => {
-    if (q.t == 'update' && q.table == 'entity') n++
+    if (q.t == 'update' && q.table == 'entity') {
+      sets.push(Object.keys(q.set).join(' '))
+    }
     return query(q)
   }
-  return () => n
+  return () => sets.splice(0)
 }
 
-test('sqlite: a number taking its letter is one update, and pairs trading places still trade', () => {
+test('sqlite: a number taking its letter is one update of its letter, and pairs trading places still trade', () => {
   let rows = [mk('a'), mk('b'), mk('c', { memory: {} })]
   let s = lone({ file: true, rows, number: true })
   let updates = counted(s)
@@ -321,13 +323,14 @@ test('sqlite: a number taking its letter is one update, and pairs trading places
     tx.patch([stated('a', 'T', 1), stated('b', 'T', 2), stated('c', 'M', 3)])
     assertEquals(idOf(tx, ['a', 'b', 'c']), ['T-1', 'T-2', 'M-3'])
   })
-  assertEquals(updates(), 3)
+  // The number each keeps, and its index entries and count, are not touched.
+  assertEquals(updates(), ['prefix', 'prefix', 'prefix'])
   s.s.tx((tx) => {
     tx.patch([stated('a', 'T', 2), stated('b', 'T', 1)])
     assertEquals(idOf(tx, ['a', 'b']), ['T-2', 'T-1'])
   })
   // Each lets go of the number the other takes, then takes its own.
-  assertEquals(updates(), 7)
+  assertEquals(updates(), Array(4).fill('num prefix'))
 })
 
 test('sqlite: a fresh spine builds the series index', () => {

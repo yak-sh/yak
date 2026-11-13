@@ -317,29 +317,34 @@ let holders = (
     )
     : new Map()
 
-// An entity's pair set to another, or to none, and the store's memory of its
-// spine with it. The counts follow a number set past them
-// (`entity_number_update`, `entity_series_update`).
+// An entity's pair set from the one its row holds (`from`) to another, or to
+// none, and the store's memory of its spine with it. Only a column that
+// changes is set, so a letter given to the number an entity keeps leaves that
+// number's index entries and its count as they are. The counts follow a
+// number set past them (`entity_number_update`, `entity_series_update`).
 let renumber = (
   driver: Driver,
   eid: string,
   spine: Spine,
+  from: Pair | null,
   pair: Pair | null,
 ) => {
+  let num = pair?.num ?? null, prefix = pair?.prefix ?? null
+  let set = {
+    ...num != (from?.num ?? null)
+      ? { num: num == null ? lit(null) : val(num) }
+      : {},
+    ...prefix != (from?.prefix ?? null)
+      ? { prefix: prefix == null ? lit(null) : val(prefix) }
+      : {},
+  }
   effect(driver, {
     t: 'update',
     table: 'entity',
-    set: {
-      num: pair == null ? lit(null) : val(pair.num),
-      prefix: pair?.prefix == null ? lit(null) : val(pair.prefix),
-    },
+    set,
     where: eq(col('eid'), val(eid)),
   })
-  spined(driver).learn(eid, {
-    ...spine,
-    num: pair?.num ?? null,
-    prefix: pair?.prefix ?? null,
-  })
+  spined(driver).learn(eid, { ...spine, num, prefix })
 }
 
 /** The identity a {@link mintSql} statement reported — the rows it returned —
@@ -1006,7 +1011,7 @@ export let patch = (
   for (let [eid, pair] of renumbered) {
     if (pair) taking.set(pair.num, [...taking.get(pair.num) ?? [], [eid, pair]])
   }
-  let moving = [...renumbered.keys()].filter((eid) => {
+  let moving = new Set([...renumbered.keys()].filter((eid) => {
     let held = known.get(eid)
     if (held?.num == null) return false
     if (renumbered.get(eid) == null) return true
@@ -1014,8 +1019,10 @@ export let patch = (
     return (taking.get(was.num) ?? []).some(([other, pair]) =>
       other != eid && meets(pair, was)
     )
-  })
-  for (let eid of moving) renumber(driver, eid, known.get(eid)!, null)
+  }))
+  for (let eid of moving) {
+    renumber(driver, eid, known.get(eid)!, pairOf(eid) ?? null, null)
+  }
   // The eids a bundle of their own arrives for: one giving a component, or
   // one stating the number.
   let own = new Set([
@@ -1148,7 +1155,8 @@ export let patch = (
   // it; one born here took it as it was minted.
   for (let [eid, pair] of renumbered) {
     let k = known.get(eid)
-    if (k && pair != null) renumber(driver, eid, k, pair)
+    let from = moving.has(eid) ? null : pairOf(eid) ?? null
+    if (k && pair != null) renumber(driver, eid, k, from, pair)
   }
 
   // The physical table is the last word on required columns: an older store
