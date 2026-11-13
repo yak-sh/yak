@@ -3,7 +3,15 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, Refused, type Tx } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
-import { col, compile, type Driver, eq, lit, val } from '@yaks/sql'
+import {
+  type BindOpts,
+  col,
+  compile,
+  type Driver,
+  eq,
+  lit,
+  val,
+} from '@yaks/sql'
 import { parse } from '@yaks/query'
 import { entity, mem, stepping } from './testing.ts'
 import { mintSql, objects, respine, storage } from './mod.ts'
@@ -494,13 +502,29 @@ for (let backend of ['sqlite', 'ram']) {
 
 // A page in the default order, newest number first and then the owner, reads
 // an index in that order on a spine numbered by series: sorting the spine for
-// `.limit=1` took 11 s on the box.
-test('sqlite: a page in the default order sorts nothing on a spine numbered by series', () => {
+// `.limit=1` took 11 s on the box, and so did a reader's `.person&*&.limit=2`,
+// whose page first takes the newest numbers its visibility admits.
+let spineSorted = (q: string, opts: BindOpts = {}) => {
   let d = mem()
-  open('sqlite', { number: SERIES }, d)
-  let plan = d.query({
+  open('sqlite', { number: SERIES }, d).tx((tx) =>
+    tx.patch([mk('t1'), mk('m1', { memory: {} })])
+  )
+  let rows = d.query({
     t: 'explain query plan',
-    of: compile(parse('.limit=1'), vocab),
-  }).map((r) => String(r.detail)).join('\n')
-  assert(!/TEMP B-TREE/.test(plan), plan)
+    of: compile(parse(q), vocab, opts),
+  }) as { id: number; parent: number; detail: string }[]
+  // What reads the spine in number order: the newest numbers a page takes
+  // first where it takes them, else the whole statement.
+  let top = rows.find((r) => r.detail.startsWith('MATERIALIZE __number_prefix'))
+  let under = new Set(top ? [top.id] : [0])
+  let walked = rows.filter((r) =>
+    under.has(r.parent) ? (under.add(r.id), true) : false
+  )
+  return walked.some((r) => r.detail.includes('TEMP B-TREE'))
+}
+test('sqlite: a page in the default order sorts nothing on a spine numbered by series', () => {
+  assert(!spineSorted('.limit=1'))
+  assert(
+    !spineSorted('.task&*&.limit=2', { visibility: { entity: '!memory' } }),
+  )
 })
