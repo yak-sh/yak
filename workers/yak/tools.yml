@@ -1269,6 +1269,10 @@ operator_chat:
     operator_read with task for its eventual answer. Cost is recorded use so far. Pass task
     to continue an earlier request; operator_read reads its work. Ships changes
     live; app_rollback can undo a deployment. Only members who write may ask.
+    Each chat is a fork of the person's own conversation with their operator,
+    and once it settles it leaves a notice there that they see, so a test or a
+    timing check of the operator runs in a space kept for testing, never
+    through a person's conversation.
 operator_run:
   title: Ask your space's operator (alias)
   description: >-
