@@ -28,7 +28,9 @@
 // and `<space>.yaks.app` is our name, not the space's. A customer's own
 // domain is their name, so there the prefix is the app's, all of it:
 //   yaks.app (and any dev host)
-//     /                       the home page, from ./public
+//     /                       the home page and its variants, pricing, help
+//                             and the legal pages: the home app's (site.ts
+//                             `HOME`), else ./public
 //     /login, /login/code     identity.ts: the email-code sign-in
 //     /manage, /manage/*      apps.ts: the dashboard, one space's at a time
 //     /admin, /admin/*        admin.ts: the directory, for the platform admin

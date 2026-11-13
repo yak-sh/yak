@@ -16,11 +16,15 @@ import {
   listing,
   listingAt,
   LOGIN,
+  NOW,
   personal,
+  SEEN,
   shareable,
+  STATICS,
   visitor,
 } from './kept-page.ts'
 import { kept, passed } from './page-cache.ts'
+import { caught } from './defects.ts'
 import { aim, foreign, handedOff, hostOf, ready } from '@yaks/platform/routes'
 import { r2Objects } from './lib/objects.ts'
 import { directory } from './directory.ts'
@@ -41,8 +45,12 @@ import { COUNTED, counted } from './views.ts'
 import { textable } from './phones.ts'
 import { OPERATOR, PATHS } from './variant.ts'
 
+// Said between the gateway's serving and Site (`fromHome`), never a browser's.
+let COPIED = 'x-yak-directory-copy'
+
 let uncached = (page: Response) => {
   let headers = new Headers(page.headers)
+  for (let name of [KEEP, SEEN, COPIED]) headers.delete(name)
   headers.set('cache-control', 'private, no-store')
   return new Response(page.body, { status: page.status, headers })
 }
@@ -96,6 +104,59 @@ let atDomain = async (asked: Request, env: Env, host: string) => {
   return page
 }
 
+/** yaks.app's own pages (site/mod.ts): the app `home` in the platform's own
+ * space, answering at the apex the way an app answers at a custom domain's
+ * root, carried to its own address and mounted at `/` (@yaks/platform/routes
+ * `aim`). So its page wears the platform's scripts, whose doors are the
+ * apex's own (its reporter's `/api/report` is page-report.ts), and the copy
+ * its release holds. */
+export let HOME = { space: { slug: 'yak' }, app: { slug: 'home' } }
+
+// The home app's page at `path` as anyone is served it, with the tags a
+// release of it purges (`KEEP`), or none where it has none to give: the
+// platform's own space holds no `home` yet (a 404 that names no app, as on
+// a box or staging with no such app), a release of it is under way (a pass
+// for now, `NOW`), or anything else, which is a failure.
+let fromHome = async (env: Env, path: string, dir: dirPart.Directory) => {
+  let page = await edged(
+    aim(new Request(url(env, path)), apex(env), HOME, env),
+    env,
+    dir,
+  )
+  let seen = JSON.parse(page.headers.get(SEEN) ?? '{}') as { app?: string }
+  if (page.status == 200 && page.headers.has(KEEP)) {
+    // The browser's own reports are an app's door's (apps.ts `reporting`);
+    // the apex's takes the reporter's alone (page-report.ts).
+    for (let name of [SEEN, 'nel', 'reporting-endpoints']) {
+      page.headers.delete(name)
+    }
+    return { page }
+  }
+  await page.body?.cancel()
+  let absent = page.status == 404 && !seen.app
+  if (!absent && !page.headers.has(NOW)) {
+    caught(new Error(`the home app answered ${page.status} for ${path}`), {
+      request: 'home page',
+    })
+  }
+  return { page: null, kept: absent }
+}
+
+/** A page of the site: the home app's, else this deploy's own file
+ * (site/mod.ts `deployed`), which answers until the app does and whenever it
+ * can't, kept only where the app has none. */
+let sitePage = async (
+  env: Env,
+  path: string,
+  req: Request,
+  dir: dirPart.Directory,
+) => {
+  let home = await fromHome(env, path, dir)
+  if (home.page) return home.page
+  let file = await env.ASSETS.fetch(req)
+  return home.kept ? file : uncached(file)
+}
+
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let asked = req.method == 'GET' ? visitor(req.url, req) : null
   if (asked) {
@@ -103,8 +164,8 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     let page = foreign(host, env)
       ? await atDomain(asked, env, host)
       : await edged(asked, env)
-    let copied = page.headers.has('x-yak-directory-copy')
-    page.headers.delete('x-yak-directory-copy')
+    let copied = page.headers.has(COPIED)
+    page.headers.delete(COPIED)
     let answer = await kept(page, personal(req.url))
     return copied ? uncached(answer) : answer
   }
@@ -150,9 +211,9 @@ export let statics = async (
   if (read) return read
   // A page's bytes are this file's with the head's links swapped (sheets.ts), so
   // the file's etag says nothing about them: `worn` below answers for a page.
-  let page = await env.ASSETS.fetch(
-    /\.\w+$/.test(path) ? req : unconditional(req),
-  )
+  let page = STATICS.includes(path)
+    ? await sitePage(env, path, unconditional(req), dir)
+    : await env.ASSETS.fetch(/\.\w+$/.test(path) ? req : unconditional(req))
   if (page.status == 404) {
     // A page held from before a deploy names the sheet that deploy replaced.
     let was = named(path)
@@ -227,11 +288,10 @@ let rendered = async (
     )
   } else {
     // A home page variant (variant.ts): its own file, with the showcase.
-    let file = await c.time(
-      'assets',
-      async () =>
-        env.ASSETS.fetch(new Request(url(env, await drawn(env, path)))),
-    )
+    let file = await c.time('page', async () => {
+      let at = await drawn(env, path)
+      return sitePage(env, at, new Request(url(env, at)), dir)
+    })
     page = file.status == 404
       ? lost(env)
       : await c.time('showcase', () => gallery.made(env, dir, file))
@@ -243,7 +303,7 @@ let rendered = async (
   ) {
     return timed(uncached(page), c, 'site_')
   }
-  if (dir.stale) {
+  if (dir.stale || page.headers.has(COPIED)) {
     c.include('copied;dur=1')
     return timed(uncached(page), c, 'site_')
   }
@@ -298,7 +358,12 @@ export let validated = async (
   // edge answers from the page it holds and renders the next behind them. A
   // listing change purges these pages through the directory's usual hook.
   headers.set('cache-control', KEPT)
-  headers.set('cache-tag', SITE_TAG)
+  // A page the home app served is purged by its releases too (`fromHome`).
+  headers.set(
+    'cache-tag',
+    [SITE_TAG, ...headers.get(KEEP)?.split(',') ?? []].join(','),
+  )
+  headers.delete(KEEP)
   if (PATHS.includes(path) && env.CF_VERSION_METADATA) {
     headers.set('x-yak-version', env.CF_VERSION_METADATA.id)
   }

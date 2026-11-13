@@ -437,15 +437,16 @@ export let ready = (at: Domain | null): boolean =>
   at?.host.stage == 'active' &&
   (!!at.host.verified || at.host.verification == null)
 
-/** A request to a custom domain, carried to the address its place already
- * has on our own zone (`aimedAt`), naming the address the browser asked
- * (`ADDRESS`) and, for an app's domain, the mount it answers at (`MOUNT`).
+/** A request to a hostname that is a place of ours, a custom domain or the
+ * apex's own pages (workers/yak site.ts `HOME`), carried to the address that
+ * place already has on our own zone (`aimedAt`), naming the address the
+ * browser asked (`ADDRESS`) and, for an app, the mount it answers at
+ * (`MOUNT`).
  *
  * ```ts
  * import { ADDRESS, aim, MOUNT } from '@yaks/platform/routes'
  * import { assertEquals } from '@std/assert'
- * let host = { eid: 'h', stage: 'active', verified: null, verification: null, to: null }
- * let at = { space: { slug: 'ada' }, app: { slug: 'menu' }, host }
+ * let at = { space: { slug: 'ada' }, app: { slug: 'menu' } }
  * let req = aim(new Request('http://her.com/soup?x=1'), 'her.com', at)
  * assertEquals(req.url, 'https://ada.yaks.app/menu/soup?x=1')
  * assertEquals(req.headers.get(ADDRESS), 'https://her.com/soup?x=1')
@@ -455,7 +456,7 @@ export let ready = (at: Domain | null): boolean =>
 export let aim = (
   req: Request,
   host: string,
-  at: Domain,
+  at: Pick<Domain, 'space' | 'app'>,
   env: Host = {},
 ): Request => {
   let url = new URL(req.url)

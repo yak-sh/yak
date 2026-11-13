@@ -27,7 +27,8 @@
 // literal facet imports that esbuild can bundle without runtime discovery,
 // and every package's `./vocab`, which an app may name as a dependency. And it
 // prints the reserved words (vocab.ts `reserved`) into the components page,
-// which a manifest is refused against.
+// which a manifest is refused against, and draws yaks.app's own pages into
+// the home app's directory (site/mod.ts).
 import * as io from '@yaks/file/io'
 import * as system from '@yaks/process/system'
 import { command as spawnCommand } from '@yaks/process/command'
@@ -251,9 +252,9 @@ let body = () =>
 // so the stale check compares like with like. It formats through stdin from
 // inside the project, where it resolves this repo's config, and so never
 // writes a file into the tree another check may be reading.
-let formatted = async (text: string) => {
+let formatted = async (text: string, ext = 'ts') => {
   let child = spawnCommand('deno', {
-    args: ['fmt', '-q', '--ext=ts', '-'],
+    args: ['fmt', '-q', `--ext=${ext}`, '-'],
     cwd: HERE,
     stdin: 'piped',
     stdout: 'piped',
@@ -474,6 +475,32 @@ for (
       } is stale — run \`deno task content\` and commit it`,
     )
   }
+}
+
+// ---- the home app's pages ------------------------------------------------
+//
+// yaks.app's own pages are the files of the home app (site/mod.ts), drawn from
+// site/*.tsx and kept in apps/home beside its copy.json, which `yak admin
+// push` releases. Formatted as committed, as content.ts is.
+let site = await import('./site/mod.ts')
+let homePages = await Promise.all(
+  Object.entries(site.drawn()).map(async ([name, text]) =>
+    [new URL(name, site.HOME), await formatted(text, 'html')] as const
+  ),
+)
+let stalePages: string[] = []
+for (let [at, text] of homePages) {
+  if (!checking) await io.writeTextFile(at, text)
+  else if (await io.readTextFile(at).catch(() => '') != text) {
+    stalePages.push(at.pathname.split('/').pop()!)
+  }
+}
+if (stalePages.length) {
+  refuse(
+    `apps/home/${
+      stalePages.join(', ')
+    } stale — run \`deno task content\` and commit it`,
+  )
 }
 
 // ---- the reserved words ---------------------------------------------------

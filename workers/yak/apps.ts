@@ -59,6 +59,7 @@ import {
   type App,
   appStore,
   daysLeft,
+  type Directory,
   directory,
   META,
   offered,
@@ -1350,8 +1351,9 @@ let versionedAsset = async (
 }
 
 // Where the browser sends what it notices on its own: the app's own report
-// door, named as an endpoint group, with nel asking for the failures that
-// never reached us at all.
+// door at the address the browser asked (a custom domain's, carried here),
+// named as an endpoint group, with nel asking for the failures that never
+// reached us at all.
 // A site's preview (newcomer.ts `previewing`) asks too that no search engine
 // index or follow any of it.
 let reporting = (
@@ -1367,7 +1369,9 @@ let reporting = (
   if (app?.preview) headers.set('x-robots-tag', 'noindex, nofollow')
   headers.set(
     'reporting-endpoints',
-    `yak="${new URL(`${at}api/report`, req.url).href}"`,
+    `yak="${
+      new URL(`${at}api/report`, req.headers.get(ADDRESS) ?? req.url).href
+    }"`,
   )
   headers.set(
     'nel',
@@ -2649,15 +2653,25 @@ let firstly = async (
   return page && { page, app: home }
 }
 
-/** An address as Site keeps it (page-cache.ts): served to nobody, fresh. */
-export let edged = async (req: Request, env: Env) => {
+/** An address as Site keeps it (page-cache.ts): served to nobody, fresh.
+ * A page Site draws around it reads the directory through its own `view`,
+ * so the two share one trip and one stall's deadline, and its staleness. */
+export let edged = async (req: Request, env: Env, view?: Directory) => {
   let copied = false
   let c = clock()
   let answer = await c.counting(async () =>
     timed(
-      await served(req, env, c, true, () => {
-        copied = true
-      }),
+      await served(
+        req,
+        env,
+        c,
+        true,
+        () => {
+          copied = true
+        },
+        req,
+        view,
+      ),
       c,
       'site_',
     )
@@ -2747,6 +2761,7 @@ let served = async (
   edge = false,
   copied: () => void = () => {},
   visitor = req,
+  view?: Directory,
 ): Promise<Response> => {
   let url = new URL(req.url)
   let r = route(hostOf(req, env), url.pathname, env)
@@ -2759,7 +2774,7 @@ let served = async (
   // wait on the directory. Only a pass needs a directory read here: Site
   // already resolved the address of every page it answers, including a 404.
   let direct = bound(env.DIRECTORY, dirPart.fetch, env)
-  let dir = directory(direct, {
+  let dir = view ?? directory(direct, {
     copy: copyOf(env),
     time: env.CLOCK,
     public: edge,

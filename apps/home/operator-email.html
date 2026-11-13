@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title
+      data-copy="operator.title">yaks.app — get an Operator that builds apps for you</title>
+    <meta name="color-scheme" content="light dark" />
+    <link rel="canonical" href="https://yaks.app/" />
+    <meta name="description"
+      content="Get an Operator that builds apps for you. Tell it what you need, and it builds the app and puts it online at your own address."
+      data-copy-content="operator.description" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="yaks.app" />
+    <meta property="og:url" content="https://yaks.app/" />
+    <meta property="og:title"
+      content="yaks.app — get an Operator that builds apps for you"
+      data-copy-content="operator.name" />
+    <meta property="og:description"
+      content="Get an Operator that builds apps for you. Tell it what you need, and it builds the app and puts it online at your own address."
+      data-copy-content="operator.description" />
+    <meta property="og:image" content="https://yaks.app/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title"
+      content="yaks.app — get an Operator that builds apps for you"
+      data-copy-content="operator.name" />
+    <meta name="twitter:description"
+      content="Get an Operator that builds apps for you. Tell it what you need, and it builds the app and puts it online at your own address."
+      data-copy-content="operator.description" />
+    <meta name="twitter:image" content="https://yaks.app/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt"
+      content="yaks.app: build, host and share web apps"
+      data-copy-content="frame.alt" />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:image:alt"
+      content="yaks.app: build, host and share web apps"
+      data-copy-content="frame.alt" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="idle.js" defer></script>
+    <script src="cta.js" defer></script>
+    <script src="carousel.js" defer></script>
+    <script src="wander.js" defer></script>
+  </head>
+  <body class="Home">
+    <header
+      class="Top"><a class="Top_Name" href="/" aria-current="page" aria-label="yaks.app, home" data-copy-aria-label="frame.top.home"><span data-copy="frame.top.name">yaks.app</span></a><nav class="Nav" aria-label="Site" data-copy-aria-label="frame.nav.label"><a class="Nav_Link" href="/#how" data-copy="frame.nav.how-home">How yaks.app works</a><a class="Nav_Link" href="/gallery" data-copy="frame.nav.gallery">Gallery</a><a class="Nav_Link" href="/pricing" data-copy="frame.nav.pricing">Pricing</a><a class="Nav_Link" href="/docs" data-copy="frame.nav.docs">Documentation</a><a class="Nav_SignIn Nav_Link" href="/login" data-copy="frame.nav.sign-in">Sign in</a></nav></header>
+    <main class="Page">
+      <section class="Hello" aria-labelledby="hello">
+        <div class="Hello_Copy">
+          <div class="Hello_Yak"
+            data-wander><img class="Wander_Image" src="./mascot/idle-rest-128.webp" srcset="./mascot/idle-rest-128-1x.webp 1x, ./mascot/idle-rest-128.webp 2x, ./mascot/idle-rest-128-3x.webp 3x" width="128" height="128" alt data-idle="glance:3370 ears:2070 tail:2380 stretch:2250 lick:2070 doze:3550"/></div>
+          <p class="Hello_Kicker"
+            data-copy="operator.hello.kicker">An Operator that does things for you</p>
+          <h1 class="Title Title-hero"
+            id="hello"><label for="address" data-copy="operator.email.label">Enter your email to get an Operator that builds apps for you.</label></h1>
+          <form method="post" action="/login" id="start" class="Form">
+            <div class="Form_Field">
+              <div
+                class="Form_Line"><input id="address" name="address" type="email" required autocomplete="email" placeholder="you@example.com" data-copy-placeholder="operator.email.placeholder" aria-describedby="by" class="Surface_Well Field"/><button type="submit" data-cta="start" data-copy="operator.email.send" class="Surface_Press Button Button-go">Email me a code</button></div>
+              <p id="by" data-copy="operator.email.hint"
+                class="Form_Hint">We email you a six-digit code. There is no password to make.</p>
+            </div>
+          </form>
+          <p class="Note Note-small"
+            data-copy="operator.hello.note">Tell it what you need, and it builds the app and puts it online at your own address. Free to start, or <a href="#cost" data-copy="operator.hello.price" data-copy-slot="price">$9 a month</a> for more.</p>
+        </div>
+        <section class="Demo" aria-labelledby="examples"
+          aria-roledescription="carousel" data-carousel>
+          <h2 class="Demo_Title" id="examples"
+            data-copy="home.examples.title">Apps made with yaks.app</h2>
+          <ul class="Demo_Slides">
+            <li data-demo="garden" class="Surface Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/garden/" class="Card_Link">Garden Diary <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p class="Card_Sub">Note what you planted and how it grew.</p>
+            </li>
+            <li data-demo="bookclub" class="Surface Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/bookclub/" class="Card_Link">Book Club <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p class="Card_Sub">Choose books and plan your next meeting.</p>
+            </li>
+            <li data-demo="trip" class="Surface Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/trip/" class="Card_Link">Travel Planner <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p
+                class="Card_Sub">Plan the days, who's coming and what to pack.</p>
+            </li>
+            <li data-demo="recipes" class="Surface Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/recipes/" class="Card_Link">Recipe Box <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p class="Card_Sub">Save recipes and share them with family.</p>
+            </li>
+            <li data-demo="guestbook" class="Surface Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/guestbook/" class="Card_Link">Birthday Guestbook <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p class="Card_Sub">Collect birthday messages from friends.</p>
+            </li>
+            <li data-demo="chores" class="Surface Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/chores/" class="Card_Link">Chore Chart <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p class="Card_Sub">Keep track of whose turn it is.</p>
+            </li>
+            <li data-demo="housebook" class="Surface Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/housebook/" class="Card_Link">Housebook <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p
+                class="Card_Sub">Your home’s manual: appliances, upkeep, paint colors and papers.</p>
+            </li>
+            <li data-demo="sound-lab" class="Surface Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/sound-lab/" class="Card_Link">Sound Lab <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p
+                class="Card_Sub">Build beats, shape sounds and export your music.</p>
+            </li>
+            <li data-demo="vale" class="Surface Card Make_Card">
+              <header class="Card_Head">
+                <h3
+                  class="Card_Title"><a href="https://yourname.yaks.app/vale/" class="Card_Link">Mossvale <span aria-hidden="true">↗</span></a></h3>
+              </header>
+              <p
+                class="Card_Sub">A fantasy world to play in the browser, with quests and crafting.</p>
+            </li>
+          </ul>
+          <div class="Demo_Controls"
+            hidden><button type="button" data-step="-1" aria-label="Previous app" data-copy-aria-label="home.examples.previous" class="Surface_Press Button Demo_Step">‹</button> <div class="Demo_Dots"></div> <button type="button" data-step="1" aria-label="Next app" data-copy-aria-label="home.examples.next" class="Surface_Press Button Demo_Step">›</button> <button type="button" data-copy="home.examples.pause" class="Surface_Press Button Demo_Pause">Pause</button></div>
+          <p class="Note Note-small"
+            data-copy="operator.examples.note">Your Operator can make apps like these. Open one to try it. <a href="/gallery" data-copy="home.examples.gallery" data-copy-slot="gallery">See more in the gallery</a>.</p>
+        </section>
+      </section>
+      <section class="How" aria-labelledby="how">
+        <h2 class="Title" id="how"
+          data-copy="operator.how.title">From your first step to your first app</h2>
+        <ol class="Steps">
+          <li class="Steps_Item">
+            <h3 class="Step_Name"
+              data-copy="operator.email.first.name">We email you a code</h3>
+            <p class="Note"
+              data-copy="operator.email.first.detail">Type its six digits on the next page, or press the link in the email. There is no password to make and nothing to install.</p>
+          </li>
+          <li class="Steps_Item">
+            <h3 class="Step_Name"
+              data-copy="operator.how.meet.name">You meet your Operator</h3>
+            <p class="Note"
+              data-copy="operator.how.meet.detail">You land in your own space, an address like <span data-copy-slot="yours" class="Address"><strong class="Address_Name">yourname</strong>.yaks.app</span> where your apps live, in a chat with your Operator.</p>
+          </li>
+          <li class="Steps_Item">
+            <h3 class="Step_Name"
+              data-copy="operator.how.ask.name">Ask for the app you want</h3>
+            <p class="Note"
+              data-copy="operator.how.ask.detail">Like a chore chart for your household. Your Operator builds it and puts it online. Open it on any phone or computer, or send its link to the people it's for.</p>
+          </li>
+        </ol>
+      </section>
+      <section class="Yours" aria-labelledby="does">
+        <h2 class="Title" id="does"
+          data-copy="operator.does.title">What your Operator does for you</h2>
+        <dl class="Yours_List">
+          <div>
+            <dt class="Yours_Term"
+              data-copy="operator.does.changes.term">It changes and fixes your apps</dt>
+            <dd class="Yours_Detail"
+              data-copy="operator.does.changes.detail">Ask for a new feature or a fix any time, and your Operator makes the change.</dd>
+          </div>
+          <div>
+            <dt class="Yours_Term"
+              data-copy="operator.does.calls.term">You can text it or call it</dt>
+            <dd class="Yours_Detail"
+              data-copy="operator.does.calls.detail">Agree to texts in its settings, then text or call your Operator from your phone. It texts you when it finishes a change or needs an answer from you.</dd>
+          </div>
+          <div>
+            <dt class="Yours_Term"
+              data-copy="operator.does.share.term">Share anything it does or builds</dt>
+            <dd class="Yours_Detail"
+              data-copy="operator.does.share.detail">Keep an app to yourself, share it with a link, or invite people to view or edit it, free.</dd>
+          </div>
+        </dl>
+      </section>
+      <section class="Cost" aria-labelledby="cost">
+        <h2 class="Title" id="cost"
+          data-copy="operator.cost.title">Free to start, $9 a month for more</h2>
+        <p class="Note"
+          data-copy="operator.cost.note">Your first space is free, with 5 apps and your Operator. The Plus plan is $9 a month for each space, with unlimited apps and your own domain. <a href="/pricing" data-copy="home.cost.plans" data-copy-slot="plans">Compare plans and limits</a>.</p>
+      </section>
+      <section aria-labelledby="join" class="Surface Card Join">
+        <h2 class="Title" id="join"
+          data-copy="operator.join.title">What would you like your Operator to make?</h2>
+        <p
+          class="Join_Doors"><a data-cta="join" data-copy="operator.email.again" href="#start" class="Surface_Press Button Button-go">Start with your email</a></p>
+        <p class="Note Note-small" data-copy="home.join.note">Free to start.</p>
+      </section>
+    </main>
+    <footer
+      class="Foot"><img class="Yak Yak-small" src="./mascot/idle-rest-128.webp" srcset="./mascot/idle-rest-128-1x.webp 1x, ./mascot/idle-rest-128.webp 2x, ./mascot/idle-rest-128-3x.webp 3x" width="128" height="128" alt data-idle="glance:3370 ears:2070 tail:2380 stretch:2250 lick:2070 doze:3550"/><p data-copy="frame.foot.by">yaks.app · Yak Shaving LLC</p><ul class="Foot_Links"><li><a class="Foot_Link" href="/help" data-copy="frame.foot.help">Help</a></li><li><a class="Foot_Link" href="/docs" data-copy="frame.foot.docs">Documentation</a></li><li><a class="Foot_Link" href="/pricing" data-copy="frame.foot.pricing">Pricing</a></li><li><a class="Foot_Link" href="/terms" data-copy="frame.foot.terms">Terms</a></li><li><a class="Foot_Link" href="/privacy" data-copy="frame.foot.privacy">Privacy</a></li><li><a class="Foot_Link" href="/acceptable-use" data-copy="frame.foot.acceptable-use">Acceptable use</a></li><li><a class="Foot_Link" href="/cookies" data-copy="frame.foot.cookies">Cookies</a></li></ul></footer>
+    <script type="module" src="_dates.js"></script>
+  </body>
+</html>

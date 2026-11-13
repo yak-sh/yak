@@ -98,6 +98,14 @@ and setup; this is the map and the feel.
   snippet from the copy.json of the release it came from, or a preview's
   draft, and an app with none is served as written. A platform page's parts
   are `ui-building`'s.
+- **yaks.app's own pages**: the home page, its variants, pricing, help and the
+  legal pages are the `home` app in the `yak` space (apps/home), drawn from
+  `site/*.tsx` by `deno task content` and released with `yak admin push`. Site
+  asks that app for each page as a custom domain's root is asked (site.ts
+  `HOME`, `aim` with the mount `/`), keeps it tagged with the app so a release
+  purges it, and answers the Worker's own copy in `public/` where the app has
+  none to give. The variant split, the funnel and the front run before Site
+  and are unchanged by it.
 - **The connector**: `mcp.ts` and `tools.ts`, the tools Claude and ChatGPT call;
   `prompts/` and `public/docs/` are what those assistants read.
 - **Spending**: `models.ts` and `meter.ts`, one model and voice budget per space

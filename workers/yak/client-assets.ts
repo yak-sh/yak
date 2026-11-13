@@ -9,7 +9,7 @@
 import * as io from '@yaks/file/io'
 import { bundle } from '@yaks/cli/page'
 import { written } from './sheet-assets.ts'
-import { written as pages } from './site/mod.ts'
+import { deployed as pages } from './site/mod.ts'
 
 export let parts = {
   'chart.js': './chart.js',

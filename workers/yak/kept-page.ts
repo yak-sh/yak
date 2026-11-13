@@ -282,9 +282,10 @@ export let asked = async (
  * (variant.ts); the review and identity doors stay uncached. */
 export let LISTINGS = [...new Set([...PATHS, '/gallery', '/integrations'])]
 
-/** The apex's own pages that are the same for every visitor of a deploy: the
- * site's files (site/mod.ts `PAGES`) and the guide's pages (docs.ts). Site
- * keeps them too, so a visit never waits on the kernel's placement. */
+/** The apex's own pages that are the same for every visitor of a release: the
+ * site's files (site/mod.ts `PAGES`), the manifest its pages link (the home
+ * app's, apps/home), and the guide's pages (docs.ts). Site keeps them too, so
+ * a visit never waits on the kernel's placement. */
 export let STATICS = [
   '/pricing',
   '/help',
@@ -292,6 +293,7 @@ export let STATICS = [
   '/privacy',
   '/cookies',
   '/acceptable-use',
+  '/manifest.webmanifest',
 ]
 let GUIDE = /^\/docs(?:\/[\w-]+)?$/
 
