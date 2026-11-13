@@ -2,7 +2,8 @@
 // wait a token out when it is empty, and carry every tag owed meanwhile.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { purger, SPREAD, Unpurged } from './purge.ts'
+import { Purger, purger, SPREAD, Unpurged } from './purge.ts'
+import { durable } from '../../packages/durable-object/testing.ts'
 
 // A Site that refuses the purges `refuses` names (by count) for rate, on a
 // clock that moves only when the purger waits and as each purge is
@@ -82,4 +83,29 @@ test('a purge asked to spread resolves SPREAD past the send it shares, its ackno
     at(purge(['app:b'], true)),
   ])
   assertEquals([sent.length, plain, spread], [1, 300, SPREAD])
+})
+
+test('the Purger object purges through Site, and throws a refusal on to its caller', async () => {
+  let sent: string[][] = [], ok = true
+  let ctx = {
+    storage: durable(),
+    acceptWebSocket() {},
+    getWebSockets: () => [],
+  }
+  let made = new Purger(ctx, {
+    SITE: {
+      purge: (tags) => {
+        sent.push(tags)
+        return Promise.resolve(
+          ok
+            ? { success: true, errors: [] }
+            : { success: false, errors: [{ code: 7, message: 'no' }] },
+        )
+      },
+    },
+  })
+  await made.purge(['app:a'])
+  ok = false
+  await assertRejects(() => made.purge(['app:b']), Unpurged)
+  assertEquals(sent, [['app:a'], ['app:b']])
 })

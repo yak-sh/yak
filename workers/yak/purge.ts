@@ -27,6 +27,8 @@
 // (T-124694). Any other purge's page keeps its short lifetime (page-cache.ts
 // `KEPT`) as the bound.
 
+import { Durable, type State } from '@yaks/durable-object/object'
+
 /** What Cloudflare answers a purge with. */
 export type Purged = {
   success: boolean
@@ -182,6 +184,24 @@ export let purger = (site: Purges, wait = sleep, now = Date.now) => {
     return spread
       ? r.done.promise.then(() => wait(Math.max(0, r.sent + SPREAD - now())))
       : r.done.promise
+  }
+}
+
+/**
+ * The one Durable Object every purge goes through (index.ts `Purger`): it
+ * holds no graph and no storage, only the account's bucket in memory, which
+ * a new instance starts full. `purge` is its entry, held open while it waits
+ * for a token. A purge refused is its caller's to hear and report; the object
+ * says it on the console.
+ */
+export class Purger extends Durable {
+  #purge: ReturnType<typeof purger>
+  constructor(ctx: State, env: { SITE?: Partial<Purges> }) {
+    super(ctx, { report: (e, entry) => console.error('Purger', entry, e) })
+    this.#purge = purger({ purge: (tags) => env.SITE!.purge!(tags) })
+  }
+  purge(tags: string[], spread = false): Promise<void> {
+    return this.enter('purge', () => this.#purge(tags, spread))
   }
 }
 

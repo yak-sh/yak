@@ -7,6 +7,7 @@ import yak, * as entry from './index.ts'
 import {
   BUILDER,
   PUBLIC_DIRECTORY,
+  PURGER,
   STORE,
   WIRE,
   WORKSPACES,
@@ -16,6 +17,7 @@ import { Wire } from './stream.ts'
 import { Builder } from './build.ts'
 import { WorkspaceStore } from './workspaces.ts'
 import { PublicDirectoryStore } from './public-directory.ts'
+import { Purger } from './purge.ts'
 
 // Every method the tracker's wrap gives the class, inherited ones too.
 let methods = (C: { prototype: object }) =>
@@ -23,10 +25,12 @@ let methods = (C: { prototype: object }) =>
 
 test('each deferred object answers every method its class has', () => {
   equal(
-    [STORE, WIRE, BUILDER, WORKSPACES, PUBLIC_DIRECTORY].map((m) =>
+    [STORE, WIRE, BUILDER, WORKSPACES, PUBLIC_DIRECTORY, PURGER].map((m) =>
       [...m].sort()
     ),
-    [Store, Wire, Builder, WorkspaceStore, PublicDirectoryStore].map(methods),
+    [Store, Wire, Builder, WorkspaceStore, PublicDirectoryStore, Purger].map(
+      methods,
+    ),
   )
 })
 

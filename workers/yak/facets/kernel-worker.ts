@@ -54,6 +54,20 @@ let instrumented = async <C>(load: Promise<C>) =>
 type Class = new (...args: never[]) => object
 let made = (C: Class) => (...args: never[]) => new C(...args)
 
+// @yaks/durable-object `Durable`'s own, which every object on it answers.
+let DURABLE = [
+  'fetch',
+  'alarm',
+  'webSocketMessage',
+  'webSocketClose',
+  'webSocketError',
+  'specify',
+  'open',
+  'accept',
+  'enter',
+  'behind',
+] as const
+
 // What each deferred object answers: its class's own methods, every one of
 // which the tracker wraps (defects-runtime.ts `instrument`, @yaks/tracker/instrument). index_test.ts
 // holds each list to its class.
@@ -85,17 +99,7 @@ export let WIRE = [
   'keep',
   'attach',
   'tell',
-  'fetch',
-  // @yaks/durable-object `Durable`'s own.
-  'alarm',
-  'webSocketMessage',
-  'webSocketClose',
-  'webSocketError',
-  'specify',
-  'open',
-  'accept',
-  'enter',
-  'behind',
+  ...DURABLE,
 ] as const
 export let BUILDER = [
   'said',
@@ -118,17 +122,7 @@ export let WORKSPACES = [
   'fork',
   'retire',
   'destroy',
-  // @yaks/durable-object `Durable`'s own.
-  'fetch',
-  'alarm',
-  'webSocketMessage',
-  'webSocketClose',
-  'webSocketError',
-  'specify',
-  'open',
-  'accept',
-  'enter',
-  'behind',
+  ...DURABLE,
 ] as const
 export let PUBLIC_DIRECTORY = [
   'valid',
@@ -141,18 +135,9 @@ export let PUBLIC_DIRECTORY = [
   'settle',
   'put',
   'get',
-  // @yaks/durable-object `Durable`'s own.
-  'fetch',
-  'alarm',
-  'webSocketMessage',
-  'webSocketClose',
-  'webSocketError',
-  'specify',
-  'open',
-  'accept',
-  'enter',
-  'behind',
+  ...DURABLE,
 ] as const
+export let PURGER = ['purge', ...DURABLE] as const
 
 // An entrypoint or object whose every call enters the tracker's boundary as
 // `<Name> <method>`, answered by what `make` returns from its context and env.
@@ -232,16 +217,8 @@ export let classes: Record<string, Deferred> = {
   // side.
   Purger: {
     base: DurableObject,
-    methods: ['purge'],
-    load: async () => {
-      let { purger } = await import('../purge.ts')
-      return (_ctx: unknown, env: Env) => {
-        let purge = purger({ purge: (tags) => env.SITE!.purge!(tags) })
-        return {
-          purge: (tags: string[], spread = false) => purge(tags, spread),
-        }
-      }
-    },
+    methods: PURGER,
+    load: async () => made((await import('../purge.ts')).Purger),
   },
   // A call that outlasts its caller (outlast.ts, outlast-object.ts): one
   // object per caller, tool and target, which finishes the call after the
