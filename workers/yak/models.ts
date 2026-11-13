@@ -47,7 +47,7 @@ import { modelInputs } from './model-inputs.ts'
 import { bare, connection, names, served } from './providers.ts'
 import { serving } from './config.ts'
 import { grantEid } from './app-writes.ts'
-import { visitorKey } from './rate.ts'
+import { visitorKey } from '@yaks/workerd/rate'
 
 export let guess = (sent: unknown) =>
   Math.ceil(JSON.stringify(sent ?? '').length / 4)

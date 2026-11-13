@@ -16,7 +16,7 @@ import { batch as trackerBatch } from '../tracker/queue.ts'
 import { scopeOf } from '../tracker/worker.ts'
 import type { Env, Inbound, Vars } from './env.ts'
 import { Wire as Wired } from './stream.ts'
-import type { Limiter } from './rate.ts'
+import type { Limiter } from '@yaks/workerd/rate'
 import { sha256 } from './versions.ts'
 import { workspaces } from './workspace-probe.ts'
 
@@ -361,7 +361,7 @@ export let emailed = async (
 }
 
 /**
- * A rate limiting binding (rate.ts `Limiter`): `limit` calls per key in each
+ * A rate limiting binding (@yaks/workerd/rate `Limiter`): `limit` calls per key in each
  * `period` seconds, each key's windows fixed and counted from its first call.
  * Miniflare counts them from the epoch; counted from a key's first call, a
  * burst sent from a key of its own lands in one window whenever it is sent,

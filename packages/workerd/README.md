@@ -35,13 +35,14 @@ All exports are available from `@yaks/workerd`:
 | `workerUpgrade`, `Accepting`                    | Accept a Workers WebSocket and return the upgrade response  |
 | `forward`, `Namespace`, `Stub`                  | Forward a request to a named Durable Object                 |
 
-Three subpaths serve a Worker made from a config:
+Four subpaths serve a Worker made from a config:
 
-| Subpath                 | Purpose                                                                  |
-| ----------------------- | ------------------------------------------------------------------------ |
-| `@yaks/workerd/compose` | `compose` alone, importing nothing of `@yaks/api` but its route matching |
-| `@yaks/workerd/worker`  | this package's own `./worker` facet: the deploy's version route          |
-| `@yaks/workerd/gen`     | `written`, the module of a config and its plugins' facets                |
+| Subpath                 | Purpose                                                                             |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| `@yaks/workerd/compose` | `compose` alone, importing nothing of `@yaks/api` but its route matching            |
+| `@yaks/workerd/worker`  | this package's own `./worker` facet: the deploy's version route                     |
+| `@yaks/workerd/gen`     | `written`, the module of a config and its plugins' facets                           |
+| `@yaks/workerd/rate`    | `within`, `source`, `tooMany`: a door's per-source ceiling, a Rate Limiting binding |
 
 ## A Worker from a config
 

@@ -42,7 +42,7 @@ export let WEBHOOK_SECRET = 'probe-webhook-secret'
 export let CHALLENGE = 'probe-openai-apps-challenge'
 
 // Every probe request arrives from a place of its own, since the kernel holds
-// strangers to a rate per source (rate.ts) and a suite's dozen sign-ins are
+// strangers to a rate per source (@yaks/workerd/rate) and a suite's dozen sign-ins are
 // not one loop. A test about a rate names its source in the headers, which
 // win, and an anonymous `client` keeps one for its life.
 let byte = () => crypto.getRandomValues(new Uint8Array(1))[0]

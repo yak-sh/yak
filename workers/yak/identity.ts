@@ -155,7 +155,7 @@ import { apart, elapsed, recall, writing } from './lib/hops.ts'
 // with their address.
 export let NO_MAIL = 'Sign-in mail is not switched on here yet: this deploy ' +
   'has no MAIL_TOKEN (README, Configuration).'
-// Too many codes asked for from one place (rate.ts): about the source, never
+// Too many codes asked for from one place (@yaks/workerd/rate): about the source, never
 // the address, so saying it tells nobody anything about an inbox.
 export let TOO_MANY = 'Too many codes have been asked for from here just ' +
   'now. Try again in a minute.'
@@ -215,11 +215,11 @@ import {
 import { nameOf } from './names.ts'
 import { system } from '@yaks/fp'
 import { textable } from './phones.ts'
-import { RETRY, source, within } from './rate.ts'
+import { RETRY, source, within } from '@yaks/workerd/rate'
 import { type Caller, minted, sessionAt, signedOut } from './session.ts'
 import { WHO } from './signed.ts'
 import { versionOf } from './running.ts'
-import { background, caught, refusing } from './defects.ts'
+import { background, caught, failing, refusing } from './defects.ts'
 import { step } from './funnel.ts'
 import * as ads from './ads.ts'
 import { Blocked, consentEid, shown } from '@yaks/phone'
@@ -1403,7 +1403,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
           'rate',
           async () =>
             (await Promise.all([
-              within(env.SIGNIN_RATE, source(req)),
+              within(env.SIGNIN_RATE, source(req), failing('rate limit')),
               mayText(meta(env), from),
             ])).every(Boolean),
         )
@@ -1700,11 +1700,11 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     req = new Request(hostUrl(env, at.pathname + at.search), req)
   }
   // Registering a client is the one provider door that writes on a stranger's
-  // say-so (a KV row per client), so it is the one held to a rate (rate.ts).
+  // say-so (a KV row per client), so it is the one held to a rate (@yaks/workerd/rate).
   // The refusal is the RFC 6749 error shape a client already parses.
   if (
     req.method == 'POST' && new URL(req.url).pathname == OAUTH.register &&
-    !await within(env.REGISTER_RATE, source(req))
+    !await within(env.REGISTER_RATE, source(req), failing('rate limit'))
   ) {
     return Response.json({
       error: 'too_many_requests',

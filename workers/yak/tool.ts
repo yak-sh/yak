@@ -51,7 +51,7 @@ export type Ctx = {
   // grant from a grant. Absent where nobody asked — the builder's own loop
   // runs these tools for a person it already knows (builder.ts).
   who?: Caller
-  // Where a caller who has not signed in is calling from (rate.ts `source`),
+  // Where a caller who has not signed in is calling from (@yaks/workerd/rate `source`),
   // set by the anonymous door (mcp.ts `stranger`) so a tool that holds
   // strangers to a rate has a key to hold them by.
   source?: string

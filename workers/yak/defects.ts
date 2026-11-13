@@ -138,6 +138,11 @@ export let caught = (error: unknown, tags: Tags) => {
   if (!refused(error)) defect(error, tags)
 }
 
+/** {@link caught} as a callback, for a package that hears a failure it
+ * answers anyway: a rate limiter that threw (@yaks/workerd/rate `within`). */
+export let failing = (request: string) => (error: unknown): void =>
+  caught(error, { request })
+
 // The status of another door's answer, carried by the error that relays it
 // (meta.ts `answered`).
 let carried = (error: unknown) => {

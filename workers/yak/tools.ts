@@ -342,7 +342,7 @@ import {
 } from './written.ts'
 import { appTag, purge, spaceTag } from './purge.ts'
 import { keepable } from './page-cache.ts'
-import { within } from './rate.ts'
+import { within } from '@yaks/workerd/rate'
 import {
   admin,
   APP,
@@ -376,7 +376,7 @@ import { read } from '@yaks/yaml'
 import { viewsTools } from './views-tools.ts'
 import { carried, rebind } from './connections.ts'
 import { connectionTools } from './connection-tools.ts'
-import { background, caught } from './defects.ts'
+import { background, caught, failing } from './defects.ts'
 import { step } from './funnel.ts'
 import { adopt, unadopt, type Visit, visitOf } from './visit.ts'
 import { Stale } from '@yaks/graph/errors'
@@ -2763,7 +2763,7 @@ let noteOf = (v: unknown) => {
 let HOURLY = 3
 
 // A caller who has not signed in has no identity to hand an allowance to, so
-// theirs is per source instead (rate.ts `FEEDBACK_RATE`, one a minute): a
+// theirs is per source instead (@yaks/workerd/rate `FEEDBACK_RATE`, one a minute): a
 // stranger's report is wanted, a loop's is a mailbox full, and one stranger's
 // loop must not silence every other stranger, which a shared count did.
 
@@ -6849,7 +6849,13 @@ let OURS: Row[] = [
         ? await ctx.dir.app(space, text(args.app, 'app'))
         : null
       if (!ctx.person) {
-        if (!await within(ctx.env.FEEDBACK_RATE, ctx.source ?? '')) {
+        if (
+          !await within(
+            ctx.env.FEEDBACK_RATE,
+            ctx.source ?? '',
+            failing('rate limit'),
+          )
+        ) {
           throw refuse(
             'limit',
             `That is one already this minute from here, and ${pause} ` +

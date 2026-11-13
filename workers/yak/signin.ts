@@ -51,7 +51,7 @@ let counted = (tries: number | null | undefined) =>
 // never arrived — whose mail is broken, which a fourth code does not fix —
 // while a loop pointed at a stranger gets three letters an hour instead of as
 // many as it can ask for. The per-source ceiling is the door's, not this
-// file's (identity.ts, rate.ts `SIGNIN_RATE`): the address is what an email
+// file's (identity.ts, @yaks/workerd/rate `SIGNIN_RATE`): the address is what an email
 // bomb is aimed at, and where the asking comes from is a fact about the
 // request, which `mint` never sees.
 export let SENDS = 3
@@ -60,7 +60,7 @@ export let WINDOW = 60 * 60_000
 // Five texted codes an hour from any one visitor. A text costs us and lands on
 // a stranger's phone, and the form texts whatever number is typed into it, so
 // a loop walking numbers (SMS pumping) is held per number by SENDS and per
-// visitor here. The door's per-minute ceiling (rate.ts `SIGNIN_RATE`) would
+// visitor here. The door's per-minute ceiling (@yaks/workerd/rate `SIGNIN_RATE`) would
 // still let one visitor text thousands of numbers a day. Mail has no such
 // count: a letter costs nothing that matters.
 export let VISITS = 5
@@ -273,7 +273,7 @@ export let guessed = (rows: Signin[], want: string, now: number): Bundle[] => {
 }
 
 /**
- * Who is asking, as a row may keep it: the address a request came from (rate.ts
+ * Who is asking, as a row may keep it: the address a request came from (@yaks/workerd/rate
  * `source`), under the session secret so a row read out of the store names no
  * one. An IPv6 address counts by its /64, which one subscriber holds whole and
  * can walk. Empty for a request from inside, which is never counted.

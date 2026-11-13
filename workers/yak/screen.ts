@@ -30,7 +30,8 @@ import { bound, type Env } from './env.ts'
 import { linkOf } from './preview.ts'
 import { opened, seal } from './lib/token.ts'
 import { sessionAt } from './session.ts'
-import { source, within } from './rate.ts'
+import { source, within } from '@yaks/workerd/rate'
+import { failing } from './defects.ts'
 import { LIFE } from './signin.ts'
 import { pairing, screenCode, watching } from './pages.ts'
 
@@ -351,7 +352,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     let said = String(
       (await req.formData().catch(() => null))?.get('code') ?? '',
     )
-    let no = await within(env.SIGNIN_RATE, source(req))
+    let no = await within(env.SIGNIN_RATE, source(req), failing('rate limit'))
       ? await pair(dir, secret, person, said, now)
       : 'Too many codes have been tried from here just now. Wait a minute ' +
         'and try again.'

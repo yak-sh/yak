@@ -174,7 +174,14 @@ import { broken } from '@yaks/tracker/report'
 import { flood } from './lib/flood.ts'
 import { isVerifiedBot } from '@yaks/platform/bots'
 import { ADDRESS } from '@yaks/platform/routes'
-import { background, caught, defect, refusing, stopped } from './defects.ts'
+import {
+  background,
+  caught,
+  defect,
+  failing,
+  refusing,
+  stopped,
+} from './defects.ts'
 import {
   barOf,
   born,
@@ -200,7 +207,7 @@ import { seen } from './views.ts'
 import { refuse } from './tool.ts'
 import { routes as commandRoutes } from '@yaks/tools/routes'
 import { commandIn, commandsIn } from './app-command.ts'
-import { type Limiter, source, tooMany, within } from './rate.ts'
+import { type Limiter, source, tooMany, within } from '@yaks/workerd/rate'
 import {
   bearerOf,
   lasting,
@@ -1577,7 +1584,7 @@ export let apiAllowed = (
 ): Promise<boolean> =>
   itself || person || fileRead(req, path)
     ? Promise.resolve(true)
-    : within(limit, source(req))
+    : within(limit, source(req), failing('rate limit'))
 
 // The bare hash is the current attachment; the second path segment names an
 // immutable representation. Only the bare address reads mutable metadata.
@@ -3262,7 +3269,7 @@ let served = async (
         ),
       )
     }
-    // A stranger's reads are held to a rate per source (rate.ts), here and
+    // A stranger's reads are held to a rate per source (@yaks/workerd/rate), here and
     // before the store, so a refused one is never a store request the space's
     // meter counts. Not the space's people, and not the app's own worker,
     // which is already somebody's request.
@@ -3285,7 +3292,7 @@ let served = async (
       // A store costs the platform until it is installed, so a source makes
       // only so many a minute, and an app's strangers hold only so many.
       if (
-        !await within(env.BIRTH_RATE, source(req)) ||
+        !await within(env.BIRTH_RATE, source(req), failing('rate limit')) ||
         await crowded(env, stranger.app.eid)
       ) {
         await req.body?.cancel()

@@ -7,7 +7,7 @@
 // Who may: whoever may write the app's rows (@yaks/member `edits`) and is one
 // of its members, or anyone who may write it where its manifest says
 // `"rtc": "open"` (vocab.ts `OPENS`), the way `"models": "open"` opens its
-// models. A visitor is held per app to RTC_RATE (rate.ts).
+// models. A visitor is held per app to RTC_RATE (@yaks/workerd/rate).
 //
 // What it costs: Realtime charges $0.05 a GB leaving Cloudflare, after the
 // account's free 1,000 GB a month, and nothing going in. A session is weighed
@@ -26,8 +26,8 @@ import { KERNEL, metaOf } from './meta.ts'
 import { refusedSpend } from './meter.ts'
 import { reserved } from './model-spend.ts'
 import type { Answer } from './apps.ts'
-import { source, visitorKey, within } from './rate.ts'
-import { defect } from './defects.ts'
+import { source, visitorKey, within } from '@yaks/workerd/rate'
+import { defect, failing } from './defects.ts'
 
 /** Realtime's egress price, in dollars a byte. */
 let BYTE = 0.05 / 1e9
@@ -90,7 +90,7 @@ export let voice: Answer = async (asked) => {
         : refuse()
     }
     let key = `${app.eid} ${who.person ?? source(req)}`
-    if (!await within(env.RTC_RATE, key)) {
+    if (!await within(env.RTC_RATE, key, failing('rate limit'))) {
       return json(
         429,
         'too_many_requests',

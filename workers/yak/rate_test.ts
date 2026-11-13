@@ -1,4 +1,4 @@
-// The per-source ceilings on the anonymous doors (rate.ts, T-37884), held by
+// The per-source ceilings on the anonymous doors (@yaks/workerd/rate, T-37884), held by
 // the Workers Rate Limiting bindings wrangler.toml declares. The kernel in
 // memory counts each address's minutes from its first request (testing.ts
 // `limiter`), so each door gets one burst sent at once from an address of its

@@ -95,13 +95,13 @@ import { prompted, type Standing, standing } from './standing.ts'
 import { type Ctx, VIEW_MIME } from './tools.ts'
 import { type Asked, listen, rostered, said } from './stream.ts'
 import { type Clock, clock, timed } from './timing.ts'
-import { background, caught, reporter } from './defects.ts'
+import { background, caught, failing, reporter } from './defects.ts'
 import { admitted, hearing } from './refusals.ts'
 import { isTestAddress } from '@yaks/platform/bots'
 import { refuse } from './tool.ts'
 import { inApp } from './attachment-core.ts'
 import { url as hostUrl } from '@yaks/platform/host'
-import { source, within } from './rate.ts'
+import { source, within } from '@yaks/workerd/rate'
 import * as appAddress from './app-address.ts'
 import { opened as unseal, seal } from './lib/token.ts'
 import { foresee } from './unseen.ts'
@@ -773,12 +773,12 @@ let answered = async (
   // it does not answer goes to the anonymous server (`stranger`), which serves
   // the tools a stranger may call and challenges everything else.
   if (!auth) {
-    // Per source (rate.ts): a stranger's calls cost us store reads and, for
+    // Per source (@yaks/workerd/rate): a stranger's calls cost us store reads and, for
     // feedback, a letter, and there is no person to hold to an allowance.
     // Listing the tools and the handshake are not counted, only calls.
     if (
       rpc.method == 'tools/call' &&
-      !await within(env.TOOL_RATE, source(req))
+      !await within(env.TOOL_RATE, source(req), failing('rate limit'))
     ) {
       return erred(
         rpc.id,

@@ -18,7 +18,7 @@ import type { Meta } from './meta.ts'
 import type { Purgers, Purges } from './purge.ts'
 import type { Outlasts } from './outlast.ts'
 import type { Lexicons } from './lexicon.ts'
-import type { Limiter } from './rate.ts'
+import type { Limiter } from '@yaks/workerd/rate'
 import type { Sandboxes } from '@yaks/sandbox/cloudflare'
 import type { Workspaces } from './workspaces.ts'
 import type { Inference } from '@yaks/model'
@@ -177,7 +177,7 @@ export type Env = {
       doubles?: number[]
     }): void
   }
-  // The per-source ceilings on the doors a stranger can knock on (rate.ts,
+  // The per-source ceilings on the doors a stranger can knock on (@yaks/workerd/rate,
   // wrangler.toml `[[ratelimits]]`): sign-in code requests, OAuth client
   // registration, anonymous connector calls, anonymous feedback, and anonymous
   // requests for an app's data (its `/api/` doors), and a visitor's knocks on

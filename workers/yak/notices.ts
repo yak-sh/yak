@@ -13,7 +13,8 @@ import { appStore, url } from './directory.ts'
 import { KERNEL } from './meta.ts'
 import { opened, seal } from './lib/token.ts'
 import { noticeEnabled } from './notices-vocab.ts'
-import { source, tooMany, within } from './rate.ts'
+import { source, tooMany, within } from '@yaks/workerd/rate'
+import { failing } from './defects.ts'
 
 type Subscription = Bundle & {
   notice_subscription: {
@@ -220,7 +221,10 @@ export let notices: Answer = async (
   if (
     !(req.method == 'POST' || (action != 'subscribe' && req.method == 'GET'))
   ) return reply('Method not allowed.', 405)
-  if (action == 'subscribe' && !await within(env.SIGNIN_RATE, source(req))) {
+  if (
+    action == 'subscribe' &&
+    !await within(env.SIGNIN_RATE, source(req), failing('rate limit'))
+  ) {
     return tooMany()
   }
   let init: RequestInit = { method: req.method }

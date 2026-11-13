@@ -6,7 +6,8 @@
     ".": "./mod.ts",
     "./compose": "./compose.ts",
     "./worker": "./plugin.ts",
-    "./gen": "./gen.ts"
+    "./gen": "./gen.ts",
+    "./rate": "./rate.ts"
   },
   "license": "Apache-2.0",
   "description": "Makes a Cloudflare Worker from a plugin config, and serves the graph API from one with WebSocket upgrades, request authentication, and forwarding to Durable Objects.",
