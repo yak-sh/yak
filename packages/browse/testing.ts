@@ -160,27 +160,4 @@ export let test: typeof declareTest = (name, body, options) =>
     }
   }, options)
 
-/** One macrotask yield. */
-export let tick = () => new Promise<void>((go) => setTimeout(go, 0))
-
-/** Wait for a fact to become true, polling; the budget only exists to fail
- * rather than hang. */
-export let until = async <T>(
-  fact: () => T | Promise<T>,
-  { timeout = 2000, poll = 5, label = 'it' }: {
-    timeout?: number
-    poll?: number
-    label?: string | (() => string)
-  } = {},
-): Promise<T> => {
-  let deadline = Date.now() + timeout
-  while (true) {
-    let v = await fact()
-    if (v) return v
-    if (Date.now() >= deadline) break
-    await new Promise((go) => setTimeout(go, poll))
-  }
-  throw new Error(
-    `until: ${typeof label == 'function' ? label() : label} never held`,
-  )
-}
+export { tick, until } from '@yaks/testing'
