@@ -159,3 +159,15 @@ test('a judge is planned over every pair of a round it has not compared, once', 
   equal((await run(g, round, { cap: 1, pause: answer })).asked, 2)
   equal(await find(g, 'known'), round)
 })
+
+test('a call that names no model stops the run instead of waiting on a session that never starts', async () => {
+  let bare = (await load(g, { ...file, key: 'bare', using: undefined })).round
+  let lines: string[] = []
+  let ran = await run(g, bare, {
+    cap: 1,
+    pause: answer,
+    out: (l) => lines.push(l),
+  })
+  equal([ran.asked, ran.left], [0, 12])
+  ok(ran.stopped?.includes('names no model'), ran.stopped)
+})

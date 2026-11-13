@@ -831,6 +831,11 @@ export let run = async (g: Graph, round: Eid, o: Opts): Promise<Ran> => {
     let fresh = calls.filter((c) => !earlier.includes(c))
     await work([...fresh, ...again], async (c) => {
       let est = each.get(c) ?? 0
+      if (!c.using.model && !ran.stopped) {
+        // No session starts without a model, and a run would wait on it for good.
+        ran.stopped =
+          `${c.label} names no model: give its round or judge a using`
+      }
       if (ran.stopped || ran.spent + held + est > o.cap || ran.spent >= o.cap) {
         ran.stopped ??= 'the cap'
         ran.left++
