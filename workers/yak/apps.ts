@@ -2151,19 +2151,20 @@ export let api = async (
   }
   if (path == '/query') {
     if (!mayRead) return refused('not_a_reader')
-    // The page writes its filter as the query string itself and the Store takes
-    // the whole line as one parameter (wire.ts `lined`). The ask then carries
-    // the listing's own screen (listing.ts `asking`), so what a count counts is
+    // The page writes its filter as the query string itself, or escaped once
+    // as `?q=`, and either way in the page's grammar (`id=`, `limit=`), which
+    // wire.ts `lined` turns into the Store's line. The ask then carries the
+    // listing's own screen (listing.ts `asking`), so what a count counts is
     // what a list lists.
     try {
       let url = new URL(req.url)
       let live = url.searchParams.get('live') == '1'
       let line = live || url.searchParams.has('q')
         ? url.searchParams.get('q')
-        : lined(url.search.slice(1))
+        : url.search.slice(1)
       if (line == null) throw new Refused('/query needs a query: ?q=…')
       return Response.json(
-        await queried(env, space, app, who, line, live, headers),
+        await queried(env, space, app, who, lined(line), live, headers),
       )
     } catch (e) {
       // A page's query is app code, even when the store answers its invalid

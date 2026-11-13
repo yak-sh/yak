@@ -13,6 +13,26 @@ test('kernel reads app and connector data through the Store door', async () => {
   assertEquals(query.status, 200)
   assertEquals(Array.isArray(await query.json()), true)
 
+  // The page's grammar reads the same as the query string or escaped as `q=`,
+  // which is how a worker reads through `env.STORE` and `env.APP`.
+  let eid = crypto.randomUUID()
+  let wrote = await k.at('doorbodyprobe.yaks.app', '/recipes/api/apply', {
+    method: 'POST',
+    headers: { cookie },
+    body: JSON.stringify([{ entity: { eid }, doc: { title: 'Cake' } }]),
+  })
+  assertEquals(wrote.status, 200, await wrote.text())
+  for (
+    let path of [
+      `?id=${eid}&?doc`,
+      `?q=${encodeURIComponent(`id=${eid}&?doc`)}`,
+    ]
+  ) {
+    let read = await k.at('doorbodyprobe.yaks.app', `/recipes/api/query${path}`)
+    assertEquals(read.status, 200, path)
+    assertEquals((await read.json())[0]?.doc?.title, 'Cake', path)
+  }
+
   let vocab = await k.at(
     'doorbodyprobe.yaks.app',
     '/recipes/api/vocab.json',
