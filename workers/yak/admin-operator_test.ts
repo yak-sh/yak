@@ -252,7 +252,7 @@ test('operator_read given any line of a conversation reads that conversation', (
 // A long conversation reads back a page at a time from its newest 64, each
 // answer naming the before that reads the page preceding it.
 let long = rootOf(eid, jeff)
-let said = Array.from({ length: 150 }, (_, i) => `said-${i}`)
+let said = Array.from({ length: 150 }, () => crypto.randomUUID())
 let eids = (page: { entries: { entity: { eid: string } }[] }) =>
   page.entries.map((b) => b.entity.eid)
 let first = eids(talked.value)

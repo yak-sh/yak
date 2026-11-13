@@ -98,7 +98,7 @@ test('a composed host finds exactly the two states we broke', async () => {
     )
 
     let claim = await ask(h, 'claim_check')
-    assert(claim.includes('is locked by #s1'), claim)
+    assert(claim.includes('T-1 is locked by S-1'), claim)
     assert(claim.includes('whose transcript stopped'), claim)
 
     let board = await ask(h, 'board_check')

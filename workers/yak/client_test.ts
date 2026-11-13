@@ -316,6 +316,7 @@ test('the client at a pretty path, and a sibling app by path', async () => {
         .text()
     Deno.writeTextFileSync(`${dir}/client.js`, source)
     let mod = await import(`file://${dir}/client.js`)
+    let held = Object.getOwnPropertyDescriptor(globalThis, 'location')
     Object.defineProperty(globalThis, 'location', {
       value: { origin: mine.origin, href: `${mine.origin}/reading/loans/1` },
       configurable: true,
@@ -337,6 +338,7 @@ test('the client at a pretty path, and a sibling app by path', async () => {
       assertEquals(await mod.store('/reading/api/').query('.doc'), [])
     } finally {
       Reflect.deleteProperty(globalThis, 'location')
+      if (held) Object.defineProperty(globalThis, 'location', held)
     }
   } finally {
     await mine.stop()

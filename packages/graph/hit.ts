@@ -34,7 +34,7 @@ let kindOf = (vocab: Vocab, b: Bundle): string => vocab.kindOf(b) || 'entity'
  *
  * let project = { component: true, kind: true, properties: {} }
  * let say = called(loadVocab({ $defs: { project } }))
- * equal(say({ entity: { eid: 'e1', num: 45602 }, project: {} }), 'P-45602')
+ * equal(say({ entity: { eid: 'e1', num: 45602, prefix: 'P' }, project: {} }), 'P-45602')
  * equal(say({ entity: { eid: 'e1' }, project: {} }), 'e1')
  * ```
  */

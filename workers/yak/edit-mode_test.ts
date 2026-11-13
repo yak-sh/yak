@@ -18,8 +18,13 @@ let load = async (body = BODY) => {
     `<html><head></head><body>${body}</body></html>`,
   ) as unknown as Window & typeof globalThis
   let doc = win.document
-  Object.defineProperty(win, 'location', {
-    value: new URL('https://ada.yaks.app/cookbook/about'),
+  // linkedom's window is a Proxy over globalThis, so the page's address is
+  // given on a window of this document's own, never on the process's global.
+  let at = new URL('https://ada.yaks.app/cookbook/about')
+  Object.defineProperty(doc, 'defaultView', {
+    value: new Proxy(win, {
+      get: (w, name) => name == 'location' ? at : Reflect.get(w, name),
+    }),
   })
   let applied: Bundle[] = []
   let hear: (rows: Bundle[]) => void = () => {}
