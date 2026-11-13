@@ -282,7 +282,7 @@ test('an unknown --as account is a refusal, not an exception', async () => {
   try {
     await assertRejects(
       () => ask('admin_fee', { as: ADMIN }),
-      Refused,
+      CallError,
       `no yaks.app account is named ${ADMIN}`,
     )
   } finally {
