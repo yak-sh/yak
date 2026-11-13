@@ -211,14 +211,93 @@ export let typed = (source: string): string[] => {
 /** Prose as a store keeps it: each id {@link typed} lists that `eids` names
  * replaced by that eid, bare or as a link's target, so the text names the
  * entity in any store and under any number. An id it does not name stays as
- * typed, and so does everything in code and a link's own words. */
+ * typed, and so does everything in code and a link's own words.
+ *
+ * Given the text it replaces (`was`), only the ids the new text adds are
+ * swapped: one standing where `was` kept the same id as typed stays typed, so
+ * words left alone (`P-1 is very useful`) are never bound to whatever entity
+ * comes to hold that id later. One standing where `was` held the eid it names
+ * (a body written back as its reader saw it drawn) takes that eid again. */
 export let stored = (
   source: string,
   eids: (id: string) => string | undefined,
-): string =>
-  TYPES.test(source)
-    ? rewritten(source, (id) => TYPED.test(id) ? eids(id) : undefined)
-    : source
+  was?: string,
+): string => {
+  if (!TYPES.test(source)) return source
+  let kept = was == null ? undefined : untouched(said(source), said(was), eids)
+  let n = 0
+  return rewritten(
+    source,
+    (id) => kept?.has(n++) || !TYPED.test(id) ? undefined : eids(id),
+  )
+}
+
+// Every id a text holds bare or as a link's target, in reading order: what
+// `rewritten` hands its function, one per place the id stands.
+let said = (source: string): string[] => {
+  let out: string[] = []
+  rewritten(source, (id) => {
+    out.push(id)
+    return undefined
+  })
+  return out
+}
+
+// Which of the new text's ids stand where the old text kept the same id as
+// typed: the places of the longest run the two share in order, where an old
+// id matches a new one written the same, or an old eid matches the new id
+// that names it. Only a typed match is kept; the rest are the new text's own.
+let untouched = (
+  now: string[],
+  was: string[],
+  eids: (id: string) => string | undefined,
+): Set<number> => {
+  let same = (a: string, b: string) =>
+    a == b || EID.test(b) && TYPED.test(a) && eids(a) == b
+  let head = 0
+  while (head < now.length && head < was.length && same(now[head], was[head])) {
+    head++
+  }
+  let tail = 0
+  while (
+    tail < now.length - head && tail < was.length - head &&
+    same(now[now.length - 1 - tail], was[was.length - 1 - tail])
+  ) tail++
+  let pairs: [number, number][] = []
+  for (let i = 0; i < head; i++) pairs.push([i, i])
+  for (let k = 1; k <= tail; k++) pairs.push([now.length - k, was.length - k])
+  let a = now.slice(head, now.length - tail)
+  let b = was.slice(head, was.length - tail)
+  if (a.length * b.length > 4e6) {
+    // Too many ids changed between the ends for a table: matched in order.
+    for (let i = 0, j = 0; i < a.length && j < b.length; i++) {
+      let k = b.indexOf(a[i], j)
+      if (k < 0) continue
+      pairs.push([head + i, head + k])
+      j = k + 1
+    }
+  } else if (a.length && b.length) {
+    // The longest common subsequence of what is left, table by table.
+    let w = b.length + 1
+    let t = new Uint32Array((a.length + 1) * w)
+    for (let i = a.length - 1; i >= 0; i--) {
+      for (let j = b.length - 1; j >= 0; j--) {
+        t[i * w + j] = same(a[i], b[j])
+          ? t[(i + 1) * w + j + 1] + 1
+          : Math.max(t[(i + 1) * w + j], t[i * w + j + 1])
+      }
+    }
+    for (let i = 0, j = 0; i < a.length && j < b.length;) {
+      if (same(a[i], b[j])) pairs.push([head + i++, head + j++])
+      else if (t[(i + 1) * w + j] >= t[i * w + j + 1]) i++
+      else j++
+    }
+  }
+  return new Set(
+    pairs.filter(([i, j]) => now[i] == was[j] && TYPED.test(was[j]))
+      .map(([i]) => i),
+  )
+}
 
 /** The words a heading is made of, with the markup dropped: a reader sees
  * these words, so the anchor is named after them. */

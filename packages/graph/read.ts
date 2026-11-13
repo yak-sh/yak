@@ -268,13 +268,16 @@ export let reader = (opts: {
   // Texts as prose is stored (Graph.prose): the ids the store's Prose finds
   // in them asked in one loose read, and the texts handed back with those it
   // is sure of swapped for their eids.
-  let prose = (texts: string[]): string[] | Promise<string[]> => {
+  let prose = (
+    texts: string[],
+    was?: (string | undefined)[],
+  ): string[] | Promise<string[]> => {
     let p = plugins.find((p) => p.prose)?.prose
     let ids = p ? [...new Set(texts.flatMap(p.typed))] : []
     if (!p || !ids.length) return texts
     return continuing(
       address(ids, undefined, undefined, true),
-      (at) => at.size ? p.stored(texts, at, outsideRead()) : texts,
+      (at) => at.size ? p.stored(texts, at, outsideRead(), was) : texts,
     )
   }
 

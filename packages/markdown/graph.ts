@@ -57,7 +57,12 @@ export let prose = (vocab: Vocab): Prose => {
   let answers = letters(vocab)
   return {
     typed,
-    stored: (texts: string[], at: Map<string, Eid>, tx: ReadTx) => {
+    stored: (
+      texts: string[],
+      at: Map<string, Eid>,
+      tx: ReadTx,
+      was?: (string | undefined)[],
+    ) => {
       let lettered = [...at].filter(([id]) => parse(id)?.prefix)
       let eids = [...new Set(lettered.map(([, eid]) => eid))]
       return after(eids.length ? tx.get(eids) : [], (rows: Bundle[]) => {
@@ -71,7 +76,7 @@ export let prose = (vocab: Vocab): Prose => {
           let b = live.get(eid)
           return b && answers(b).has(letter) ? eid : undefined
         }
-        return texts.map((text) => stored(text, meant))
+        return texts.map((text, i) => stored(text, meant, was?.[i]))
       })
     },
   }

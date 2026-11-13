@@ -70,6 +70,10 @@ The other way round, `typed(source)` lists the ids typed in prose that a store
 would name an entity by, outside code: a human id (`T-12`) or a short handle of
 ten or more hex characters, bare or as a link's target. `stored(source, eids)`
 replaces each one `eids` answers with that eid, and leaves the rest as typed.
+Given the text it replaces, `stored(source, eids, was)` swaps only the ids the
+new text adds: one standing where `was` kept the same id as typed stays typed,
+so `P-1 is very useful` is never bound to whatever later holds P-1, and one
+standing where `was` held the eid it names takes that eid again.
 
 `@yaks/markdown/graph` is the graph plugin built on them (@yaks/graph `Prose`):
 a store composing it keeps each id typed in a property declaring `prose`

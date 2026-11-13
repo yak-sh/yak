@@ -456,11 +456,14 @@ export type Prose = {
   typed: (text: string) => string[]
   /** the texts with each id that `at` resolved replaced by its eid, where the
    * plugin is sure the id was meant: `tx` reads what it must see to be sure
-   * (an id's letter is one the entity it names prints with) */
+   * (an id's letter is one the entity it names prints with). Given the text
+   * each replaces (`was`), only the ids it adds are swapped, so words the
+   * writer left alone keep what they were stored as. */
   stored: (
     texts: string[],
     at: Map<string, Eid>,
     tx: ReadTx,
+    was?: (string | undefined)[],
   ) => string[] | Promise<string[]>
 }
 

@@ -698,9 +698,10 @@ such as [@yaks/markdown](../markdown/README.md)'s) finds the ids typed in text
 and swaps those it is sure of for their eids, and `g.prose(texts)` runs it. A
 write runs it over every property declaring `prose`
 ([@yaks/vocab](../vocab/README.md)) on an entity it is prose for, except a
-replica's copy. An edit's `find` is swapped first, so `find: 'T-12'` matches the
-eid stored, and a search's words that type an id find it either way, as stored
-and as typed.
+replica's copy, and swaps only the ids the write adds to the text it replaces:
+words left as they were stay as typed. An edit's `find` is swapped first, so
+`find: 'T-12'` matches the eid stored, and a search's words that type an id find
+it either way, as stored and as typed.
 
 ```ts
 import { graph } from '@yaks/graph'

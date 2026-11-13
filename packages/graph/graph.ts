@@ -411,8 +411,12 @@ export type Graph = {
    * composed plugins' {@link Plugin.prose}: each id typed in them that names
    * an entity replaced by its eid. With no plugin, the texts as they are. A
    * caller matching text against stored prose (an edit's `find`, a search's
-   * words) asks this first, so the id it types matches the eid stored. */
-  prose: (texts: string[]) => string[] | Promise<string[]>
+   * words) asks this first, so the id it types matches the eid stored. Given
+   * the text each replaces (`was`), only the ids it adds are swapped. */
+  prose: (
+    texts: string[],
+    was?: (string | undefined)[],
+  ) => string[] | Promise<string[]>
   /** apply bundles in one transaction → the bundles as applied, one per
    * entity, plus everything the pipeline generated */
   apply: (bundles: Bundle[], opts?: ApplyOpts) => Bundle[] | Promise<Bundle[]>
@@ -1627,30 +1631,39 @@ export let graph = (opts: Options): Graph => {
       }
     })
     if (!said.length) return bundles
-    let eids = [...asks.keys()]
-    return after(
-      eids.length ? tx.get(eids, [...new Set([...asks.values()].flat())]) : [],
-      (rows) => {
-        let carrying = new Map(rows.map((b) => [b.entity.eid, b]))
-        let mine = said.filter(({ i }) => {
-          let on = asks.get(bundles[i].entity.eid)
-          let held = carrying.get(bundles[i].entity.eid)
-          return !on || !!held && !dead(held) && on.some((c) => held[c] != null)
+    // One read of the entities as stored: whether each is what its prose is
+    // prose for, and the text each write replaces, so only the ids it adds
+    // are swapped.
+    let eids = [...new Set(said.map(({ i }) => bundles[i].entity.eid))]
+    let read = [
+      ...new Set([...said.map((s) => s.comp), ...asks.values()].flat()),
+    ]
+    return after(tx.get(eids, read), (rows) => {
+      let stored = new Map(
+        rows.filter((b) => !dead(b)).map((b) => [b.entity.eid, b]),
+      )
+      let mine = said.filter(({ i }) => {
+        let on = asks.get(bundles[i].entity.eid)
+        let held = stored.get(bundles[i].entity.eid)
+        return !on || !!held && on.some((c) => held[c] != null)
+      })
+      if (!mine.length) return bundles
+      let was = mine.map(({ i, comp, prop }) => {
+        let old = (stored.get(bundles[i].entity.eid)?.[comp] as Comp)?.[prop]
+        return typeof old == 'string' ? old : undefined
+      })
+      return after(reads.prose(mine.map((s) => s.text), was), (texts) => {
+        let out = [...bundles]
+        mine.forEach(({ i, comp, prop, text }, n) => {
+          if (texts[n] == text) return
+          out[i] = {
+            ...out[i],
+            [comp]: { ...out[i][comp] as Comp, [prop]: texts[n] },
+          }
         })
-        if (!mine.length) return bundles
-        return after(reads.prose(mine.map((s) => s.text)), (texts) => {
-          let out = [...bundles]
-          mine.forEach(({ i, comp, prop, text }, n) => {
-            if (texts[n] == text) return
-            out[i] = {
-              ...out[i],
-              [comp]: { ...out[i][comp] as Comp, [prop]: texts[n] },
-            }
-          })
-          return out
-        })
-      },
-    )
+        return out
+      })
+    })
   }
 
   let g: Graph = {
@@ -1686,7 +1699,7 @@ export let graph = (opts: Options): Graph => {
     plugins,
     address: (ids, kind, o) => address(ids, kind, o),
     named: (ids) => reads.named(ids),
-    prose: (texts) => reads.prose(texts),
+    prose: (texts, was) => reads.prose(texts, was),
     rewrites: (o) => rewrites(o),
     scope: (o) => reads.scope(o),
     ask: (q, o) => ask(q, o),

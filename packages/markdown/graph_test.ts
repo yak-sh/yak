@@ -119,3 +119,35 @@ test('a replica keeps the prose its server stored', async () => {
   await g.apply([copy], { replica: true })
   assertEquals(await body(g, 'n'), 'P-1')
 })
+
+// A body stored before its ids were swapped, as a replica copies it: its
+// words stay as typed until a write adds them.
+let kept = async (text: string) => {
+  let g = store()
+  await g.apply([{ entity: { eid: 'n' }, doc: { body: text } }], {
+    replica: true,
+  })
+  return g
+}
+
+test('a write swaps only the ids it adds, never words left as they were', async () => {
+  let g = await kept('P-1 is very useful.')
+  await g.apply(
+    await edited(g, [{
+      id: 'n',
+      text: [{ path: 'doc.body', append: ' T-2' }],
+    }]),
+  )
+  assertEquals(await body(g, 'n'), `P-1 is very useful. ${TASK}`)
+  await g.apply([{ entity: { eid: 'n' }, doc: { body: 'P-1 is useful. P-1' } }])
+  assertEquals(await body(g, 'n'), `P-1 is useful. ${PROJECT}`)
+})
+
+test('a body written back as it was drawn keeps each eid where it stood', async () => {
+  let g = await kept(`${PROJECT} beside a typed P-1`)
+  await g.apply([{
+    entity: { eid: 'n' },
+    doc: { body: 'P-1 beside a typed P-1, and T-2' },
+  }])
+  assertEquals(await body(g, 'n'), `${PROJECT} beside a typed P-1, and ${TASK}`)
+})
