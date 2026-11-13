@@ -68,13 +68,14 @@ test('the number is the identity, whatever letter it was printed with', async ()
     'D-7': 'a',
   })
   // An id printed while entity 9 wore a component it no longer wears still
-  // names it, as does one printed for entity 11 before it had a kind.
+  // names it, as does one printed for entity 11, which declares no letter and
+  // so now shows its handle.
   assertEquals(await at('R-9', 'T-9', 'E-11'), {
     'R-9': 'b',
     'T-9': 'b',
     'E-11': 'bare',
   })
-  assertEquals(human(vocab)(rows[2]), 'E-11')
+  assertEquals(human(vocab)(rows[2]), '#bare')
   assertEquals(await at('T-12', '12'), { 'T-12': null, '12': null })
 })
 

@@ -611,7 +611,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     })
 
   // The series an entity is numbered in, where this store numbers by series
-  // (@yaks/graph `seriesOf`).
+  // (@yaks/id `seriesOf`).
   let series = typeof base.number == 'object'
     ? seriesOf(vocab, base.number)
     : undefined

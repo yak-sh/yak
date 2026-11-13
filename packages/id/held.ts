@@ -15,8 +15,7 @@
 
 import type { Eid, Tx } from './types.ts'
 import type { Vocab } from '@yaks/vocab'
-import { groupBy } from '@yaks/fp'
-import { idOf, prefixes } from './id.ts'
+import { format, prefixes } from './id.ts'
 
 /** A series with fewer entities than this is held whole. */
 export let SMALL = 1000
@@ -31,60 +30,45 @@ export type Held = () => Promise<Known>
 /**
  * The small series over a store, held: each component that declares a
  * `prefix` and that fewer than `small` ({@link SMALL}) entities wear, each
- * entity called by the id it prints with (@yaks/id `idOf`). Nothing is read
- * until the first door asks.
+ * entity called by the id it prints with. Nothing is read until the first
+ * door asks.
  */
 export let held = (
   vocab: Vocab,
-  tx: Pick<Tx, 'read' | 'get'>,
+  tx: Pick<Tx, 'read'>,
   { fresh = 60_000, now = Date.now, small = SMALL }: {
     fresh?: number
     now?: () => number
     small?: number
   } = {},
 ): Held => {
-  let id = idOf(vocab)
+  let table = prefixes(vocab)
   let order = new Map(vocab.kinds.map((kind, at) => [kind, at]))
   let known = new Map<Eid, string>()
   let at = -Infinity
   let loading: Promise<void> | undefined
   let load = async () => {
-    let names = Object.keys(prefixes(vocab))
+    let names = Object.keys(table)
     let series = await Promise.all(
       names.map((comp) =>
-        tx.read(`.${comp}&.fields=entity.num&.limit=${small}`)
+        tx.read(
+          `.${comp}&.fields=entity.num,entity.prefix&.limit=${small}`,
+        )
       ),
     )
-    // Each numbered entity by the place in kind order of the first series it
-    // is found in: its kind is that one, or one ordered before it.
-    let first = new Map<Eid, number>()
+    // Each numbered entity by the series it is found in that comes first in
+    // kind order, the one it is numbered in (@yaks/id `seriesOf`), unless it
+    // stored its letter when it was numbered.
+    let first = new Map<Eid, { place: number; id: string }>()
     series.forEach((rows, i) => {
       if (rows.length >= small) return
       let place = order.get(names[i]) ?? vocab.kinds.length
-      for (let { entity: { eid, num } } of rows) {
-        if (num) first.set(eid, Math.min(first.get(eid) ?? place, place))
+      for (let { entity: { eid, num, prefix } } of rows) {
+        if (!num || (first.get(eid)?.place ?? Infinity) <= place) continue
+        first.set(eid, { place, id: format(prefix || table[names[i]], num) })
       }
     })
-    let by = groupBy(first, ([, place]) => place)
-    let named = await Promise.all(
-      [...by].map(async ([place, held]) => {
-        let eids = held.map(([eid]) => eid)
-        let rows = await tx.get(eids, vocab.kinds.slice(0, place))
-        return rows.map((b) => {
-          let kind = vocab.kindOf(b)
-          return [
-            b.entity.eid,
-            id({
-              eid: b.entity.eid,
-              kind: kind == 'entity' ? vocab.kinds[place] ?? kind : kind,
-              num: b.entity.num,
-              prefix: b.entity.prefix,
-            }),
-          ] as const
-        })
-      }),
-    )
-    known = new Map(named.flat())
+    known = new Map([...first].map(([eid, { id }]) => [eid, id]))
     at = now()
   }
   return async () => {

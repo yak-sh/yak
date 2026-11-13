@@ -65,13 +65,11 @@ export type Config = {
   /** which interface it binds (default @yaks/api's `HOSTNAME`, this machine
    * alone; `0.0.0.0` offers it to every network the machine is on) */
   hostname?: string
-  /** whether the store gives entities a human id such as `T-7`, in the series
-   * of the letter a component declares (@yaks/id). Opt-IN: left out, no entity
-   * gets one, because a number exists for a person to type and most hosts have
-   * nobody typing. `{ except: [comp, …] }` numbers in every series but those
-   * components': an entity carrying one is numbered only by another lettered
-   * component it carries ({@link numbering}). */
-  numbers?: boolean | { except: string[] }
+  /** whether the store mints a short human-readable number beside each entity
+   * id, in the series of the letter its component declares (@yaks/id). Opt-in:
+   * left out, no entity gets one, because a number exists for a person to type
+   * and most hosts have nobody typing. */
+  numbers?: boolean
   /** what the MCP server calls itself (default `yak`) */
   name?: string
   /** the person who works at this machine, as any id the graph resolves (an
@@ -99,9 +97,7 @@ export type Config = {
 }
 
 /** How a config's store numbers its entities (@yaks/sqlite `Numbering`):
- * not at all, or in the series of each letter a component declares (@yaks/id),
- * less the config's `except` and the components a host keeps off the human
- * line on its own (`unnumbered`).
+ * not at all, or in the series of each letter a component declares (@yaks/id).
  *
  * ```ts
  * import { numbering } from '@yaks/host/config'
@@ -112,25 +108,17 @@ export type Config = {
  * const vocab = loadVocab({
  *   $defs: {
  *     task: { component: true, prefix: 'T', properties: {} },
- *     mail: { component: true, prefix: 'E', properties: {} },
- *     person: { component: true, prefix: 'U', properties: {} },
+ *     edge: { component: true, properties: {} },
  *   },
  * }, [idKeywords])
  * equal(numbering(vocab, undefined), false)
- * equal(numbering(vocab, { except: ['mail'] }, ['person']), { task: 'T' })
+ * equal(numbering(vocab, true), { task: 'T' })
  * ```
  */
 export let numbering = (
   vocab: Vocab,
   numbers: Config['numbers'],
-  unnumbered: readonly string[] = [],
-): false | Record<string, string> => {
-  if (!numbers) return false
-  let except = [...unnumbered, ...numbers === true ? [] : numbers.except]
-  return Object.fromEntries(
-    Object.entries(prefixes(vocab)).filter(([c]) => !except.includes(c)),
-  )
-}
+): false | Record<string, string> => numbers ? prefixes(vocab) : false
 
 /** The package a plugin entry names. */
 export let used = (plug: Plug): string =>

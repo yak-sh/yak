@@ -33,13 +33,13 @@
  * let eid = 'a3f19c02-4b00-4000-8000-000000000001'
  * assertEquals(id({ eid, kind: 'book' }), '#a3f19c024b')
  * assertEquals(parse('B-7'), { prefix: 'B', num: 7 })
- * // the number is the identity
+ * // a bare number parses, and names an entity while only one holds it
  * assertEquals(parse('7'), { prefix: '', num: 7 })
  * ```
  *
- * The letter is for display, the number is the identity: `B-7` and `7` name the
- * same book, so an id typed from memory still resolves. A component that
- * declares no prefix uses its own initial, so every entity has an id to show.
+ * The letter and the number together name an entity: `B-7` and `A-7` are two.
+ * A bare `7` names one while only one holds that number. An entity whose
+ * components declare no prefix is not numbered, and shows its short handle.
  *
  * ## Numbers are opt in A graph has numbers because it loaded this package's
  * plugin, and not otherwise. `@yaks/id/vocab` adds the `num` property to the

@@ -32,7 +32,7 @@ test('a project that carries a board is shown as the project', () => {
 })
 
 test('so is one that also has an address and a role', () => {
-  let vocab = loadVocab([...team.docs, aspects])
+  let vocab = loadVocab([...team.docs, aspects], [...team.keywords])
   assertEquals(vocab.kindOf(p19), 'project')
   assertEquals(human(vocab)(p19), 'P-19')
 })

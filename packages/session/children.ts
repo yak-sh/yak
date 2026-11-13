@@ -11,7 +11,7 @@ import { aside, dispatchStatus, tail } from './admission.ts'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
-import { format, parse, prefixOf } from '@yaks/id'
+import { human, parse } from '@yaks/id'
 import { done, statusComps, statusOf as taskStatus } from '@yaks/task'
 import {
   type Tool,
@@ -612,9 +612,7 @@ export let deliverChild = async (
   if (await row(g, eid)) return
   let message = announceTask
     ? `task ${
-      task!.entity.num != null
-        ? format(prefixOf(g.vocab)('task'), task!.entity.num)
-        : task!.entity.eid
+      task!.entity.num != null ? human(g.vocab)(task!) : task!.entity.eid
     } ${taskStatus(g.vocab, task!)}`
     : `child ${child} ${status}`
   let notice = await row(g, derivedEid('notice:' + child))

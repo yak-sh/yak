@@ -30,6 +30,9 @@ export { idOf }
 export type Row = {
   eid: string
   num: number
+  /** the letter of the series `num` is in, absent on a row numbered before
+   * series had letters (@yaks/id) */
+  prefix?: string
   kind: string
   comps: Record<string, Record<string, unknown>>
 }
@@ -81,6 +84,7 @@ export let rowOf = (r: Record<string, unknown>): Row => {
   return {
     eid: String(entity.eid),
     num: Number(entity.num ?? 0),
+    ...entity.prefix ? { prefix: String(entity.prefix) } : {},
     kind: kind ? String(kind) : kindOf(comps),
     comps: comps as Row['comps'],
   }
@@ -99,6 +103,7 @@ export let rows = ({ changes }: { changes: Change[] }, quarantined = false) => {
     }
     if (name == 'entity') {
       if ('num' in comp) row.num = Number(comp.num ?? 0)
+      if (comp.prefix) row.prefix = String(comp.prefix)
       // A presence transition echoes only the derived archetype pointer.
       // Keep the identity stamped earlier in the same batch.
       row.comps.entity = { ...row.comps.entity, ...comp }

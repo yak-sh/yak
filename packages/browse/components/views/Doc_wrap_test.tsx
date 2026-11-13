@@ -20,7 +20,7 @@ test('configured doc Body wraps while the Markdown source tab remains preformatt
   let drop = extend(await contributedViews([{ views }]))
   cache.value = {
     [eid]: {
-      entity: { eid, num: 1 },
+      entity: { eid, num: 1, prefix: 'D' },
       doc: {
         eid,
         title: 'Wrapping',

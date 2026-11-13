@@ -5,9 +5,11 @@
 //
 // The pair is stored, `entity{prefix, num}`: the letter is fixed when the
 // entity is first numbered, from the component that declared it, and never
-// follows the entity's components afterwards. A row numbered before series had
-// letters stores no prefix; its letter is still worked out from its components
-// when it is printed, and it answers to its number under any letter.
+// follows the entity's components afterwards. Only a declared prefix numbers
+// an entity; one whose components declare none shows its short handle. A row
+// numbered before series had letters stores no prefix; it prints with the
+// letter its components declare, and it answers to its number under any
+// letter.
 
 import type { Vocab } from '@yaks/vocab'
 
@@ -31,7 +33,7 @@ export let BARE: RegExp = /^[0-9a-f]{8,64}$/i
 
 /** What an id is built from: the entity's eid, the number the store assigned
  * (absent until the entity is numbered) and the prefix stored with it, and the
- * kind whose letter a row stored without a prefix prints with. */
+ * kind whose declared letter a row stored without a prefix prints with. */
 export type Named = {
   eid: string
   kind: string
@@ -42,16 +44,6 @@ export type Named = {
 /** A human id, taken apart: the series letter (uppercased, `''` when the id was
  * typed as a bare number) and the number within that series. */
 export type Parsed = { prefix: string; num: number }
-
-// A component that declares no prefix still needs a letter, so it uses the
-// first letter of its name: `_effect`, a description component (@yaks/vocab),
-// reads `E`, since `parse` reads a prefix of letters and an `_` would make an
-// id nothing resolves. Two components sharing an initial share a series —
-// harmless, since the number is what identifies an entity.
-/** The letter a component that declares no prefix prints its ids with: its
- * name's first letter, uppercased. */
-export let initial = (kind: string): string =>
-  (kind.match(/[a-z]/i)?.[0] ?? '').toUpperCase()
 
 /**
  * Every prefix the vocabulary declares, as component name → letter. Reads the
@@ -69,20 +61,54 @@ export let prefixes = (v: Vocab): Record<string, string> => {
 
 // A loaded vocabulary is immutable; every display can reuse its compiled
 // letters without sharing the caller-owned table returned by prefixes().
-let letters = new WeakMap<Vocab, (kind: string) => string>()
+let letters = new WeakMap<Vocab, Readonly<Record<string, string>>>()
+let declared = (v: Vocab) => {
+  let table = letters.get(v)
+  if (!table) letters.set(v, table = prefixes(v))
+  return table
+}
 
 /**
- * The letter a component's ids use: the one it declared, otherwise its own
- * initial. Config-first — call `let letter = prefixOf(v)` once, then call the
- * result per component.
+ * The letter a component's ids use, the one it declared; undefined for a
+ * component that declares none, whose entities are not numbered.
+ * Config-first — call `let letter = prefixOf(v)` once, then call the result
+ * per component.
  */
-export let prefixOf = (v: Vocab): (kind: string) => string => {
-  let letter = letters.get(v)
-  if (!letter) {
-    let table = prefixes(v)
-    letters.set(v, letter = (kind) => table[kind] ?? initial(kind))
-  }
-  return letter
+export let prefixOf = (v: Vocab): (kind: string) => string | undefined => {
+  let table = declared(v)
+  return (kind) => Object.hasOwn(table, kind) ? table[kind] : undefined
+}
+
+/**
+ * The letter an entity holding these components is numbered with, from a
+ * table of component → letter (by default the vocabulary's declared
+ * prefixes): the one of the kind the vocabulary names among the components in
+ * the table (`kindOf`), else the first of them; undefined where it holds none.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { seriesOf } from '@yaks/id'
+ * let kind = (before: string[] = []) => ({ component: true, kind: true, before })
+ * let v = loadVocab({ $defs: { memory: kind(['comment']), comment: kind(), doc: kind() } })
+ * let series = seriesOf(v, { memory: 'M', comment: 'C' })
+ * equal(series(['comment', 'memory', 'doc']), 'M')
+ * equal(series(['comment', 'doc']), 'C')
+ * equal(series(['doc']), undefined)
+ * ```
+ */
+export let seriesOf = (
+  v: Vocab,
+  table: Readonly<Record<string, string>> = declared(v),
+): (held: Iterable<string>) => string | undefined =>
+(held) => {
+  let has = Object.fromEntries(
+    [...held].filter((c) => Object.hasOwn(table, c)).map((c) => [c, true]),
+  )
+  let kind = v.kindOf(has)
+  return Object.hasOwn(has, kind)
+    ? table[kind]
+    : Object.keys(has).map((c) => table[c])[0]
 }
 
 /** A letter and a number, joined into one id: `format('B', 7)` → `'B-7'`. */
@@ -106,13 +132,17 @@ export let parse = (id: string): Parsed | undefined => {
 
 /**
  * An entity's id as everything should display it: `B-7` once the store has
- * numbered it, and the short eid handle until then. The letter is the stored
- * prefix; a row stored without one prints with its kind's. Config-first over a
- * loaded vocabulary — `let id = idOf(v)`, then `id(book)`.
+ * numbered it, and the short eid handle otherwise. The letter is the stored
+ * prefix; a row stored without one prints with its kind's declared letter, and
+ * shows its handle where the kind declares none. Config-first over a loaded
+ * vocabulary — `let id = idOf(v)`, then `id(book)`.
  */
 export let idOf = (v: Vocab): (e: Named) => string => {
   let letter = prefixOf(v)
-  return (e) => e.num ? format(e.prefix || letter(e.kind), e.num) : short(e.eid)
+  return (e) => {
+    let prefix = e.num ? e.prefix || letter(e.kind) : undefined
+    return prefix ? format(prefix, e.num!) : short(e.eid)
+  }
 }
 
 /** A bundle, as this file reads one: the `entity` row, and the components
@@ -126,19 +156,17 @@ export type Wearing = {
 /**
  * The id of an entity read as a bundle: its `entity` row carries the eid, the
  * number and its prefix, and its components the letter of a row stored
- * without one. Use this to display a row just read from the store —
- * `let id = human(vocab)`, then `id(row)` — so that no caller has to assemble
- * a {@link Named} by hand.
+ * without one, the one {@link seriesOf} picks. Use this to display a row just
+ * read from the store — `let id = human(vocab)`, then `id(row)` — so that no
+ * caller has to assemble a {@link Named} by hand.
  */
 export let human = (v: Vocab): (b: Wearing) => string => {
-  let id = idOf(v)
-  return (b) =>
-    id({
-      eid: b.entity.eid,
-      kind: v.kindOf(b),
-      num: b.entity.num,
-      prefix: b.entity.prefix,
-    })
+  let series = seriesOf(v)
+  return (b) => {
+    let { eid, num, prefix } = b.entity
+    let letter = num ? prefix || series(Object.keys(b)) : undefined
+    return letter ? format(letter, num!) : short(eid)
+  }
 }
 
 /** A human id as typed, with its letter: `B-7`, `b-7`. A bare number parses

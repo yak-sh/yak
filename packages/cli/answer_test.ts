@@ -468,12 +468,12 @@ test('a contributed drawing batches its used and declared references, including 
   let b = '44444444-4444-4444-8444-444444444444'
   let missing = '55555555-5555-4555-8555-555555555555'
   let first = {
-    entity: { eid: a, num: 20 },
+    entity: { eid: a, num: 20, prefix: 'D' },
     doc: { title: 'Alpha' },
     peer: { target: b },
   }
   let second = {
-    entity: { eid: b, num: 21 },
+    entity: { eid: b, num: 21, prefix: 'D' },
     doc: { title: 'Beta' },
     peer: { target: a },
   }

@@ -99,7 +99,7 @@ import { Refused } from '@yaks/graph/errors'
 // a plugin's comp reaches the cache as `unknown` (D-18663 seam 2, T-12765).
 export type Comps =
   & { entity?: Entity }
-  & Omit<EntCore, 'eid' | 'num' | 'kind' | 'refs' | 'kids'>
+  & Omit<EntCore, 'eid' | 'num' | 'prefix' | 'kind' | 'refs' | 'kids'>
   & { [comp: string]: Record<string, unknown> | undefined }
 
 // THE client cache — and it is PARTIAL (T-21491, step 4 of D-21486): the
@@ -2318,6 +2318,7 @@ export let ent = (eid: string): Ent => {
     eid,
     entity,
     num: entity?.num ?? 0,
+    ...entity?.prefix ? { prefix: String(entity.prefix) } : {},
     kind: kindOf(comps), // derived — the display convention, not data
     refs: mine
       .filter((d) => d.type != 'contains')
@@ -2638,6 +2639,7 @@ export let rows = (): Row[] =>
   ) => ({
     eid,
     num: r.entity?.num ?? 0,
+    ...r.entity?.prefix ? { prefix: String(r.entity.prefix) } : {},
     kind: kindOf(r),
     comps: r as Record<string, Record<string, unknown>>,
   }))

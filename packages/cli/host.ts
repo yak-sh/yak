@@ -58,7 +58,6 @@ import { sandboxCapabilities } from './sandboxes.ts'
  * @module
  */
 
-import { UNNUMBERED } from './init.ts'
 import type {
   Actor,
   Bundle,
@@ -754,7 +753,7 @@ let composed = async (
           derived,
           backed,
           extend,
-          number: numbering(vocab, config.numbers, UNNUMBERED),
+          number: numbering(vocab, config.numbers),
           history,
           // A model turn reads its window again each step, a thousand lines
           // of a long transcript: more than a Durable Object's 4 MiB keeps.

@@ -30,6 +30,22 @@ test('named: an id, either form, by its number whatever its letter', () => {
   // A uuid is not a moment, and neither is a human id: the shapes cannot
   // collide, so a stale id is refused rather than closing the whole app.
   assert(!named('E-84-ish', hit))
+  // and by the handle it prints with, since its facets declare no prefix
+  assert(named('#e000000000', hit))
+})
+
+test('line: a break numbered without a letter prints its short handle', () => {
+  let said = line([{ app: { eid: 'a1', slug: 'recipes' } as never, hit }])
+  assert(said.startsWith('- #e000000000 '), said)
+})
+
+test('line: a break numbered under a letter prints its human id', () => {
+  let lettered = { ...hit, entity: { eid: E, num: 84, prefix: 'E' } }
+  let said = line([{
+    app: { eid: 'a1', slug: 'recipes' } as never,
+    hit: lettered,
+  }])
+  assert(said.startsWith('- E-84 '), said)
 })
 
 // The same break as an app's store holds it: no number, because an app's store

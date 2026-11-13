@@ -1,5 +1,5 @@
 // The human id over a small bookstore vocabulary: a book is B, an author is A,
-// a review declares nothing and borrows its initial.
+// a review declares nothing and so is never numbered.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
@@ -8,6 +8,7 @@ import { ID_URI, idKeywords } from './keywords.ts'
 import {
   format,
   HUMAN,
+  human,
   idOf,
   idsIn,
   key,
@@ -18,6 +19,7 @@ import {
   prefixes,
   prefixOf,
   replaceIds,
+  seriesOf,
   SHORT,
   short,
 } from './id.ts'
@@ -67,8 +69,8 @@ let eid = '9f1c8d2a-0b44-4e51-9f77-6a0c1e2d3b45'
 
 test('the prefix table comes from the vocabulary', () => {
   assertEquals(prefixes(v), { book: 'B', author: 'A' })
-  // a component declaring none borrows its initial, so every entity has an id
-  assertEquals(prefixOf(v)('review'), 'R')
+  // a component declaring none has no letter
+  assertEquals(prefixOf(v)('review'), undefined)
 })
 
 test('id prefixes stay with their vocabulary and ignore edits to copied tables', () => {
@@ -83,11 +85,23 @@ test('id prefixes stay with their vocabulary and ignore edits to copied tables',
 test('a numbered entity wears its human id', () => {
   assertEquals(id({ eid, kind: 'book', num: 7 }), 'B-7')
   assertEquals(id({ eid, kind: 'author', num: 12 }), 'A-12')
-  assertEquals(id({ eid, kind: 'review', num: 3 }), 'R-3')
+})
+
+test('a row stored without a prefix prints with the letter its components declare', () => {
+  let row = { entity: { eid, num: 3 }, review: {}, book: {} }
+  assertEquals(human(v)(row), 'B-3')
+  assertEquals(
+    human(v)({ entity: { eid, num: 3, prefix: 'A' }, book: {} }),
+    'A-3',
+  )
+  // and one whose components declare none shows its handle
+  assertEquals(human(v)({ entity: { eid, num: 3 }, review: {} }), '#9f1c8d2a0b')
+  assertEquals(id({ eid, kind: 'review', num: 3 }), '#9f1c8d2a0b')
+  assertEquals(seriesOf(v)(['review', 'author']), 'A')
 })
 
 test('every id a numbered entity wears parses back to its number', () => {
-  for (let kind of ['book', 'review', '_effect']) {
+  for (let kind of ['book', 'author']) {
     assertEquals(parse(id({ eid, kind, num: 7 }))?.num, 7, kind)
   }
 })

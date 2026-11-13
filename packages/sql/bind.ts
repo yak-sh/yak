@@ -4594,7 +4594,7 @@ let lower = (
   //
   // Where no entity a window can hold has a number, the number is the same
   // NULL in every row, and the id alone is its order. The box numbers no edge,
-  // effect or file (its config's `numbers.except`), and sorted by a number
+  // effect or file (none declares a prefix, @yaks/id), and sorted by a number
   // they lack, a page of `.edge.to=<eid>` read every edge to the entity (up
   // to 3,156 there), and a page of `.edge` every one of 984,053. Ordered by
   // the id, which the index the filter seeks keeps, a page reads its rows and

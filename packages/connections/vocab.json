@@ -233,7 +233,6 @@
       "before": [
         "secret"
       ],
-      "prefix": "C",
       "description": "one link between a space or a person and an outside service, through an integration. The entity is also the secret its credential is kept as: the graph holds the handle, the vault the key or the tokens",
       "properties": {
         "integration": {

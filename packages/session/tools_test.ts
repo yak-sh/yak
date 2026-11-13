@@ -214,7 +214,7 @@ let headed = (body: string) =>
 test('a session is told the rows of the saved queries its persona contains', async () => {
   assertEquals(headed(await told('plain')), [
     ['## claimed', 'nothing'],
-    ['## open', '- D-8 — one'],
+    ['## open', '- #m1 — one'],
   ])
   assertEquals(headed(await told('coder')), [['## claimed', 'nothing']])
 })
@@ -222,8 +222,8 @@ test('a session is told the rows of the saved queries its persona contains', asy
 test("an operator is told its operator persona's queries too", async () => {
   assertEquals(headed(await told('op')).slice(0, 3), [
     ['## claimed', 'nothing'],
-    ['## open', '- D-8 — one'],
-    ['## answered', '- D-9 — two'],
+    ['## open', '- #m1 — one'],
+    ['## answered', '- #m2 — two'],
   ])
 })
 

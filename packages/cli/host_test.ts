@@ -66,7 +66,10 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       wire: false,
-      properties: { num: { type: 'number', stamped: true } },
+      properties: {
+        num: { type: 'number', stamped: true },
+        prefix: { type: 'string', stamped: true },
+      },
     },
     // Provenance, so a write shows whose it was: the stamp phase fills what
     // the vocabulary declares.
@@ -301,38 +304,6 @@ test('compose takes each facet from its own subpath, and mounts the doors', asyn
   }
 })
 
-test('a config may keep a component off the human number line', async () => {
-  // What `numbers` says is what the store's own `number` says, so a host
-  // composing a component whose entities nobody ever types the number of —
-  // a classifier's descriptors, a log's rows — can say so in its config.
-  let host = await compose(
-    { db: ':memory:', plugins: ['shop'], numbers: { except: ['note'] } },
-    only({
-      shop: {
-        // A numbered graph reads its numbers back (@yaks/id's resolver).
-        graph: { plugins: (host) => [ids(host.vocab)] },
-        vocab: {
-          docs: [{
-            ...doc,
-            $defs: {
-              ...doc.$defs,
-              note: { component: true, type: 'object', kind: true },
-            },
-          }],
-        },
-        tools: shop.tools,
-      },
-    }),
-  )
-  let [book] = await host.graph.apply([
-    { entity: { eid: 'b1' }, book: { title: 'Dune' } },
-  ])
-  let [note] = await host.graph.apply([{ entity: { eid: 'n1' }, note: {} }])
-  assertEquals(book.entity.num, 1)
-  assertEquals(note.entity.num, null)
-  host.close()
-})
-
 test('a numbered host reads an eid in prose as the id it holds', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop'], numbers: true },
@@ -371,8 +342,9 @@ test('a numbered host reads an eid in prose as the id it holds', async () => {
   }
 })
 
-// The policy fixture exercises the original mixed batch. Host composition and
-// the write prepare the records whose numbering and address we inspect.
+// A numbered host numbers what declares a prefix, each letter its own series,
+// and nothing else. The write prepares the records whose numbering and address
+// we inspect.
 {
   let host = await compose(
     { db: ':memory:', plugins: ['shop'], numbers: true },
@@ -386,10 +358,7 @@ test('a numbered host reads an eid in prose as the id it holds', async () => {
               ...doc.$defs,
               session: { component: true, kind: true, prefix: 'S' },
               mail: { component: true, kind: true, prefix: 'E' },
-              knock: { component: true, kind: true, prefix: 'K' },
               context_output: { component: true },
-              subscription: { component: true },
-              build: { component: true },
               gitobj: { component: true },
             },
           }],
@@ -398,39 +367,34 @@ test('a numbered host reads an eid in prose as the id it holds', async () => {
       },
     }),
   )
-  let session = 'a3f19c02-4b00-4000-8000-000000000001'
+  let snapshot = 'a3f19c02-4b00-4000-8000-000000000001'
   let made = await host.graph.apply([
-    { entity: { eid: session }, session: {} },
+    { entity: { eid: 'session' }, session: {} },
     { entity: { eid: 'letter' }, mail: {} },
-    { entity: { eid: 'knock' }, knock: {} },
-    { entity: { eid: 'snapshot' }, context_output: {} },
-    { entity: { eid: 'watch' }, subscription: {} },
-    { entity: { eid: 'binding' }, build: {} },
+    { entity: { eid: snapshot }, context_output: {} },
     { entity: { eid: 'blob' }, gitobj: {} },
     { entity: { eid: 'book' }, book: { title: 'Dune' } },
   ])
-  test('sessions, letters and internal records spend no task numbers', () => {
-    for (
-      let eid of [
-        session,
-        'letter',
-        'knock',
-        'snapshot',
-        'watch',
-        'binding',
-        'blob',
-      ]
-    ) {
-      assertEquals(made.find((b) => b.entity.eid == eid)?.entity.num, null)
-    }
-    assertEquals(made.find((b) => b.entity.eid == 'book')?.entity.num, 1)
+  let held = await host.graph.read(
+    `.entity.eid=${made.map((b) => b.entity.eid).join(',')}`,
+  )
+  let pair = (eid: string) => {
+    let { prefix, num } = held.find((b) => b.entity.eid == eid)!.entity
+    return [prefix ?? null, num ?? null]
+  }
+  test('each declared prefix numbers its own series, and nothing else is numbered', () => {
+    assertEquals(pair('session'), ['S', 1])
+    assertEquals(pair('letter'), ['E', 1])
+    assertEquals(pair('book'), ['K', 1])
+    assertEquals(pair(snapshot), [null, null])
+    assertEquals(pair('blob'), [null, null])
   })
   // Resolution is the behavior; closing the fixture also drains host effects
   // and cannot be charged to reading one short address.
   let addressed = (await host.graph.address(['#a3f19c024b'])).get('#a3f19c024b')
   await host.close()
-  test('an unnumbered session retains its short address', () => {
-    assertEquals(addressed, session)
+  test('an unnumbered entity retains its short address', () => {
+    assertEquals(addressed, snapshot)
   })
 }
 

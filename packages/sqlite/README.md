@@ -1145,7 +1145,7 @@ entity by one count, with no letters. A table of letters, component → letter
 entity is numbered once, on the write that first gives it a component in the
 table, and holds `entity{prefix, num}`, so `D-1` and `M-1` are two entities.
 With two such components, the kind the vocabulary names picks the series
-(@yaks/graph `seriesOf`). An entity given none is unnumbered and shows its short
+(@yaks/id `seriesOf`). An entity given none is unnumbered and shows its short
 handle. Omitting `number` or setting it to false leaves new entities unnumbered.
 `@yaks/ram` accepts the same option.
 

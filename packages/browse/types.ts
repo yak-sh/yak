@@ -1165,6 +1165,8 @@ export type Ref = { type: Edge; child: string }
 export type EntCore = {
   eid: string
   num: number
+  /** the letter of the series `num` is in (@yaks/id) */
+  prefix?: string
   kind: string
   doc?: Doc
   design?: { eid: string }

@@ -367,36 +367,10 @@ export type Series = Readonly<Record<string, string>>
  * on a row numbered before series had letters, and the number in it. */
 export type Pair = { prefix: string | null; num: number }
 
-/**
- * The letter an entity holding these components is numbered with: the one
- * the kind the vocabulary names (`kindOf`) numbers with, among the components
- * in the table; undefined where it holds none of them.
- *
- * ```ts
- * import { equal } from '@yaks/testing'
- * import { loadVocab } from '@yaks/vocab'
- * import { seriesOf } from '@yaks/graph/storage'
- * let kind = (before: string[] = []) => ({ component: true, kind: true, before })
- * let v = loadVocab({ $defs: { memory: kind(['comment']), comment: kind(), doc: kind() } })
- * let series = seriesOf(v, { memory: 'M', comment: 'C' })
- * equal(series(['comment', 'memory', 'doc']), 'M')
- * equal(series(['comment', 'doc']), 'C')
- * equal(series(['doc']), undefined)
- * ```
- */
-export let seriesOf = (
-  vocab: Vocab,
-  table: Series,
-): (held: Iterable<string>) => string | undefined =>
-(held) => {
-  let has = Object.fromEntries(
-    [...held].filter((c) => Object.hasOwn(table, c)).map((c) => [c, true]),
-  )
-  let kind = vocab.kindOf(has)
-  return Object.hasOwn(has, kind)
-    ? table[kind]
-    : Object.keys(has).map((c) => table[c])[0]
-}
+/** The letter an entity holding these components is numbered with
+ * (@yaks/id `seriesOf`), given to the storage adapters here so that none of
+ * them imports @yaks/id. */
+export { seriesOf } from '@yaks/id'
 
 /** Whether two pairs name one id: the same number, and the same letter where
  * both carry one. A row stored without a letter holds its number in every

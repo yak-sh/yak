@@ -44,11 +44,7 @@
     "@yaks/browse",
     "@yaks/inspect"
   ],
-  "numbers": {
-    "except": [
-      "archetype"
-    ]
-  },
+  "numbers": true,
   "port": 5175,
   "name": "tracker",
   "hostname": "0.0.0.0"

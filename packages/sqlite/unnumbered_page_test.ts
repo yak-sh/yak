@@ -1,6 +1,6 @@
 // A page of entities none of which has a number is newest by id, and reads
-// its page: an edge or an effect is never numbered (@yaks/id's
-// `numbers.except`), so sorting by the number read every match to order them
+// its page: an edge or an effect is never numbered (neither declares a
+// prefix, @yaks/id), so sorting by the number read every match to order them
 // by the same NULL.
 import { equal, ok, test } from '@yaks/testing'
 import './sqlitepath.ts'

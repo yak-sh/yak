@@ -5,6 +5,7 @@
 // in. Storage is @yaks/ram, so a test builds exactly what a browser page
 // would.
 
+import { idKeywords } from '@yaks/id'
 import { loadVocab, pick, type Vocab } from '@yaks/vocab'
 import { type Graph, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -38,7 +39,8 @@ let doc = {
 /** The team's vocabulary: the portfolio, the tasks in it, the kernel's
  * completion and cancellation marks, `doc` and edges. The kernel keywords are registered too,
  * because a task declares `governed` — the keyword meaning a project answers
- * for it. */
+ * for it — and @yaks/id's, because each declares the prefix it is numbered
+ * with. */
 export let team: Vocab = loadVocab(
   [
     docDoc,
@@ -48,7 +50,7 @@ export let team: Vocab = loadVocab(
     projectDoc,
     doc,
   ],
-  [edgeKeywords, kernelKeywords],
+  [edgeKeywords, kernelKeywords, idKeywords],
 )
 
 /** A fresh in-memory storage over that vocabulary. */

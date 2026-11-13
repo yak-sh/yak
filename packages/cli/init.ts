@@ -47,69 +47,12 @@ export let STARTER = [
   '@yaks/spend',
 ]
 
-/** What nobody needs a new number for: people, integrations and connections,
- * sessions, letters, knocks and internal records, the vocabulary's description
- * among them (@yaks/vocab), and the rows a server writes on its own, the
- * machine it runs on and the store's daily measure. A person, an integration and a connection are
- * called by name; content-addressed artifacts and Git objects already have
- * addresses. Numbered, these would spend the numbers a person reads: a first
- * task would be T-27, or T-2 after the person `yak init` makes. A name here no
- * plugin declares excepts nothing. Existing numbers remain addresses; this
- * policy only governs allocation. */
-export let UNNUMBERED = [
-  '_comp',
-  '_effect',
-  '_extends',
-  '_package',
-  '_prop',
-  '_vocab',
-  'account',
-  'archetype',
-  'artifact',
-  'build',
-  'call',
-  'chat',
-  'connection',
-  'context_output',
-  'edge',
-  'effect',
-  'entry',
-  'execution',
-  'file',
-  'gitobj',
-  'integration',
-  'kept',
-  'key',
-  'knock',
-  'lease',
-  'machine',
-  'mail',
-  'model',
-  'module',
-  'output',
-  'package',
-  'person',
-  'process',
-  'provider',
-  'rate_limit',
-  'ref',
-  'result',
-  'secret',
-  'session',
-  'spend',
-  'subscription',
-  'symbol',
-  'tool',
-  'untallied',
-  'volume',
-]
-
 /** The config a new graph starts from, its database beside it on disk, and
  * `person` the one who works in it. */
 export let starter = (person: string): Config => ({
   db: 'yak.db',
   plugins: [...STARTER],
-  numbers: { except: [...UNNUMBERED] },
+  numbers: true,
   person,
 })
 

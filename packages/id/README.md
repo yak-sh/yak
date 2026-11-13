@@ -13,12 +13,14 @@ A **human id** is a prefix and a number joined by a hyphen, such as `B-7`. A
 `prefix: 'B'`, and names a **series**: each prefix counts its own numbers in a
 store, so `B-7` and `A-7` are two entities. The store keeps the pair as
 `entity{prefix, num}`, fixed when the entity is first numbered. A row numbered
-before series had letters keeps only `num`; it prints with the prefix of its
-kind, or the kind's uppercase initial where the kind declares none.
+before series had letters keeps only `num`; it prints with the prefix its
+components declare (`seriesOf`). Only a declared prefix numbers an entity: one
+whose components declare none is not numbered.
 
 A **short handle** is `#` followed by the first ten characters of the eid, with
 dashes removed and letters lowercased, such as `#a3f19c024b`. It is what
-`idOf()` and `human()` display until the entity has a nonzero number.
+`idOf()` and `human()` display for an entity without a nonzero number and a
+letter.
 
 ## Format and parse
 
@@ -63,16 +65,18 @@ deno add jsr:@yaks/id
 
 ## Exports
 
-| Import           | Exports                                                                                                                                                                                                                                           |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/id`       | `idKeywords`, `ID_URI`, `short`, `SHORT`, `BARE`, `HUMAN`, `LETTERED`, `WRITTEN`, `prefixes`, `prefixOf`, `initial`, `format`, `parse`, `idOf`, `human`, `idsIn`, `replaceIds`, `mentions`, `key`, `names`; `Named`, `Parsed`, `Wearing`; `idDoc` |
-| `@yaks/id/vocab` | `idDoc`, `docs`, `idKeywords`, `keywords`, `description`                                                                                                                                                                                          |
-| `@yaks/id/graph` | `numbers`, `ids`, `starting`, `plugins`; `held`, `Held`, `Known`, `SMALL`                                                                                                                                                                         |
+| Import           | Exports                                                                                                                                                                                                                                            |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/id`       | `idKeywords`, `ID_URI`, `short`, `SHORT`, `BARE`, `HUMAN`, `LETTERED`, `WRITTEN`, `prefixes`, `prefixOf`, `seriesOf`, `format`, `parse`, `idOf`, `human`, `idsIn`, `replaceIds`, `mentions`, `key`, `names`; `Named`, `Parsed`, `Wearing`; `idDoc` |
+| `@yaks/id/vocab` | `idDoc`, `docs`, `idKeywords`, `keywords`, `description`                                                                                                                                                                                           |
+| `@yaks/id/graph` | `numbers`, `ids`, `starting`, `plugins`; `held`, `Held`, `Known`, `SMALL`                                                                                                                                                                          |
 
 ## Prefixes and short handles
 
-`prefixes()` returns only declared prefixes; `prefixOf()` also supplies the
-initial for a component without one. `SHORT` recognizes typed short handles with
+`prefixes()` returns the declared prefixes; `prefixOf()` answers one
+component's, and undefined for a component without one. `seriesOf()` picks the
+letter an entity holding several components is numbered with: the kind's
+(`kindOf`), else the first declared. `SHORT` recognizes typed short handles with
 6–64 hex characters. `BARE` recognizes a short handle copied without its `#`, as
 a shell or a sentence leaves it: hex at least as long as a handle is shown, so a
 word somebody chose (`facade`) is not taken for one. `short()` formats the eid
@@ -98,7 +102,7 @@ const vocab = loadVocab({
   },
 }, [idKeywords])
 equal(prefixes(vocab), { book: 'B' })
-equal(prefixOf(vocab)('author'), 'A')
+equal(prefixOf(vocab)('author'), undefined)
 equal(format('B', 7), 'B-7')
 equal(short('ABCDEF01-2345-4000-8000-000000000001'), '#abcdef0123')
 equal(SHORT.test('#abcdef'), true)

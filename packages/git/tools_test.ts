@@ -16,6 +16,7 @@ import { content, kernel, kernelDoc } from '@yaks/kernel'
 import { keyDoc, keyKeywords } from '@yaks/key'
 import { machineDoc } from '@yaks/machine/vocab'
 import { loadVocab } from '@yaks/vocab'
+import { idKeywords } from '@yaks/id'
 import { provenanceDoc } from '@yaks/provenance'
 import { gitDoc } from './comp.ts'
 import { landing, runs } from './tools.ts'
@@ -335,7 +336,12 @@ test('a landing records each commit it landed, on the task its first line names,
       })
     ),
   })
-  let words = loadVocab([kernelDoc, provenanceDoc, docDoc, toolsDoc, gitDoc])
+  // The series a task is numbered in, which the first line's id is read by.
+  let tasks = { $defs: { task: { component: true, kind: true, prefix: 'T' } } }
+  let words = loadVocab(
+    [kernelDoc, provenanceDoc, docDoc, toolsDoc, gitDoc, tasks],
+    [idKeywords],
+  )
   let g = graph({
     vocab: words,
     storage: ram(words),

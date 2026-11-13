@@ -11,7 +11,6 @@
 // the snapshot. Neither configuration credentials nor its database are printed.
 import { configPath, read as readConfig } from '../packages/cli/config.ts'
 import { words } from '../packages/cli/host.ts'
-import { UNNUMBERED } from '../packages/cli/init.ts'
 import { numbering } from '@yaks/host/config'
 import { graph } from '@yaks/graph'
 import { archetypes } from '@yaks/archetype'
@@ -297,7 +296,7 @@ let run = async () => {
     let store = storage(db, vocab, {
       derived: loaded.derived,
       backed: loaded.backed,
-      number: numbering(vocab, readConfig(config!).numbers, UNNUMBERED),
+      number: numbering(vocab, readConfig(config!).numbers),
     })
     let g = graph({
       storage: store,

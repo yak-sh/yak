@@ -155,11 +155,11 @@ test('lexical fallback searches bounded individual terms and deduplicates their 
 })
 
 let kept: Bundle[] = [{
-  entity: { eid: 'm', num: 7 },
+  entity: { eid: 'm', num: 7, prefix: 'M' },
   memory: {},
   doc: { title: 'Attachments are immutable files' },
 }, {
-  entity: { eid: 'd', num: 9 },
+  entity: { eid: 'd', num: 9, prefix: 'T' },
   decision: {},
   decided: { choice: 'blobs' },
   doc: { title: 'Where do attachments live?' },
@@ -201,7 +201,7 @@ test('the nearest memories and answered decisions ride beside the words, by id a
     beside.split('\n\n')[1],
     'Nearest memories and decisions (read one by id before relying on it):\n' +
       'M-7 · Attachments are immutable files\n' +
-      'D-9 · Where do attachments live? → blobs',
+      'T-9 · Where do attachments live? → blobs',
   )
   equal(asked.some((w) => w.includes('!quarantined')), true)
 })

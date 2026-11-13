@@ -23,7 +23,7 @@ import { compute, taskDoc, tasks } from '@yaks/task'
 import { runs } from '@yaks/task/tools'
 import { views as taskViews } from '@yaks/task/views'
 import { projectDoc } from '@yaks/project'
-import { human, idKeywords, short } from '@yaks/id'
+import { human, idKeywords, prefixes, short } from '@yaks/id'
 import { idDoc } from '@yaks/id/vocab'
 import { ids } from '@yaks/id/graph'
 import { modelDoc } from '@yaks/model'
@@ -72,11 +72,10 @@ let seen = {
   },
 }
 
-// Numbered the way a config's `"numbers": { "except": [...] }` numbers them:
-// the tool rows, and the call and result each line writes, keep their eids, so
-// the first task here is T-1.
+// Numbered the way a config's `"numbers": true` numbers them: by the prefix
+// each component declares, so the first task here is T-1.
 export let storage = ram(vocab, {
-  number: { except: ['tool', 'call', 'result', 'error', 'exception'] },
+  number: prefixes(vocab),
   computed: compute(),
 })
 export let g = graph({

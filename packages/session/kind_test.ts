@@ -3,12 +3,12 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { human } from '@yaks/id'
+import { human, idKeywords } from '@yaks/id'
 import { processDoc } from '@yaks/process'
 import { loadVocab } from '@yaks/vocab'
 import { sessionDoc } from './comp.ts'
 
-let vocab = loadVocab([sessionDoc, processDoc])
+let vocab = loadVocab([sessionDoc, processDoc], [idKeywords])
 
 test('a session that carries its process is shown as the session', () => {
   let row = {

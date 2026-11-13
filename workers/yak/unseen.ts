@@ -11,7 +11,7 @@
 // rows are the `app_errors` answer, one line each.
 import type { Bundle } from '@yaks/graph'
 import { cmp } from '@yaks/fp'
-import { addressId, format, initial, names as numbered, short } from '@yaks/id'
+import { addressId, format, names as numbered, short } from '@yaks/id'
 import { derivedEid } from '@yaks/graph/identity'
 import * as dirPart from './directory.ts'
 import {
@@ -364,33 +364,30 @@ type Broke = {
 type Hit = {
   kind: string
   tracked?: boolean
-  // No number: an app's store does not load @yaks/id (vocab.ts), so a break
-  // noted there is named by its eid, and `idOf` writes the short handle. The
-  // directory numbers its own, and the same line reads both.
-  entity: { eid: string; num?: number | null }
+  // No number: an app's store does not load @yaks/id (vocab.ts). The
+  // directory numbered its own, which still answer to the number.
+  entity: { eid: string; num?: number | null; prefix?: string | null }
   doc?: { title?: string }
   content?: { body?: string }
   exception?: Broke
   error?: Broke
 }
-// The handle a person reads a break by: `E-12` where the directory numbered
-// it, and @yaks/id's short handle (`#` and the eid's first ten hex digits)
-// where an app's store did not. The letter is the facet's own first one
-// (exception, error).
+// The id a person reads a break by: its human id where its store numbered it
+// under a letter (`E-12`), and @yaks/id's short handle (`#` and the eid's
+// first ten hex digits) otherwise.
 let idOf = (h: Hit) =>
-  h.entity.num && !h.tracked
-    ? format(initial(h.kind), h.entity.num)
+  h.entity.num && h.entity.prefix && !h.tracked
+    ? format(h.entity.prefix, h.entity.num)
     : short(h.entity.eid)
 
-// Whether a word names a break: its eid, or the handle it is read by. A
-// numbered break is its number, whatever letter it is written with (`E-12`,
-// `X-12`, `12`); the letter is only how it was printed. A handle is itself
-// with or without its `#` (`b2f4065d90`), as an agent copies it off a line.
+// Whether a word names a break: its eid, or its handle with or without its `#`
+// (`b2f4065d90`), as an agent copies it off a line. A break the directory
+// numbered was once printed by its number (`E-12`), and still answers to it,
+// whatever letter it is written with (`E-12`, `X-12`, `12`).
 let names = (word: string, h: Hit) =>
   word == h.entity.eid ||
-  (h.entity.num && !h.tracked
-    ? numbered(word, h.entity)
-    : addressId(word) == short(h.entity.eid))
+  addressId(word) == short(h.entity.eid) ||
+  (!!h.entity.num && !h.tracked && numbered(word, h.entity))
 
 // One open item and the app it broke in — what serve() hands back, so a
 // caller can write the line or archive by id from the one read.
