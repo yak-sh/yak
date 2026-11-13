@@ -5,7 +5,8 @@ import { cookieValue } from './lib/token.ts'
 // copy holds its revision current. Directory mutations fence that revision
 // before committing, not through cache purge. Cold/fenced copies still wait
 // for the directory; no TTL grants standing.
-import { type Fetcher, reset } from './door.ts'
+import { type Fetcher } from './door.ts'
+import { reset } from '@yaks/durable-object/door'
 import type { Env } from './env.ts'
 import { background, defect } from './defects.ts'
 import { apart, elapsed, spanned } from './lib/hops.ts'

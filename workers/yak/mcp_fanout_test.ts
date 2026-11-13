@@ -8,7 +8,8 @@ import {
   txt,
   vocabFile,
 } from './probe.ts'
-import { type Namespace, PLATFORM_OBJECT } from './door.ts'
+import { PLATFORM_OBJECT } from './door.ts'
+import { type Namespace } from '@yaks/durable-object/door'
 
 let watched = async () => {
   let fetched: { store: string; path: string }[] = []

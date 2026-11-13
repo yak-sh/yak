@@ -3,7 +3,8 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { App, Space } from './directory.ts'
-import { type Door, USES } from './door.ts'
+import { USES } from './door.ts'
+import { type Door } from '@yaks/durable-object/door'
 import { queryFrom, vocabularyAnswer } from './page-graph.ts'
 
 let space = { slug: 'page-words' } as Space

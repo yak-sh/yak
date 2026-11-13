@@ -286,3 +286,30 @@ export let crossed = (error: Error): Error => {
     { name: error.name },
   )
 }
+
+/** What a stand-in object answers one send with: an `Error` it throws, a body
+ * it answers 200 with, or a `Response` as it is. */
+export type Answer = Error | string | Response
+
+/** A stand-in Durable Object namespace whose objects answer each send with
+ * the next of `answers` (an empty 200 once they run out). It keeps every
+ * request it was sent, its body read, in `sent`, and every `get`'s arguments
+ * in `gets`; an object's id is its name. */
+export let namespace = (answers: Answer[] = []) => {
+  let sent: { body: string; headers: Headers }[] = []
+  let gets: unknown[][] = []
+  let stub = {
+    fetch: async (req: Request) => {
+      sent.push({ body: await req.text(), headers: req.headers })
+      let next = answers.shift()
+      if (next instanceof Error) throw next
+      return next instanceof Response ? next : new Response(next ?? '')
+    },
+  }
+  return {
+    sent,
+    gets,
+    idFromName: (name: string): unknown => name,
+    get: (...args: unknown[]) => (gets.push(args), stub),
+  }
+}

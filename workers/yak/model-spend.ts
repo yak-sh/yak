@@ -6,7 +6,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { ModelError } from '@yaks/model'
 import { left, monthOf, tooManyCalls, unaffordable } from './meter.ts'
 import { type Row, type Space, spaceOf, stamp } from './directory.ts'
-import type { Namespace } from './door.ts'
+import type { Namespace } from '@yaks/durable-object/door'
 import { meta } from './meta.ts'
 
 type Env = { STORE: Namespace }

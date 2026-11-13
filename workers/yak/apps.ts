@@ -156,7 +156,8 @@ import { Refused, Stale } from '@yaks/graph/errors'
 import { mistaken } from './mistake.ts'
 import { token } from '@yaks/graph/sha256'
 import { edits, mode, reads, writes } from '@yaks/member'
-import { type Door, USES } from './door.ts'
+import { USES } from './door.ts'
+import { type Door } from '@yaks/durable-object/door'
 import { type Clock, clock, timed } from './timing.ts'
 import {
   asked,

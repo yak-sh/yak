@@ -29,7 +29,7 @@ import { bareLine, tokens } from '@yaks/query'
 import { joined } from './query-line.ts'
 import { minted } from './meta.ts'
 import { refuse } from './tool.ts'
-import { IDEMPOTENCY } from './door.ts'
+import { IDEMPOTENCY } from '@yaks/durable-object/door'
 
 /** Forward a page's resend identity; an unnamed write lets the store door
  * mint its own identity for that attempt. */

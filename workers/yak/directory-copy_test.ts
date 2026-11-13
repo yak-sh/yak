@@ -15,7 +15,8 @@ import {
 } from './directory-copy.ts'
 import { RETIRED, ServingCopy } from './serving-copy.ts'
 import { directory } from './directory.ts'
-import { type Namespace, storeOf } from './door.ts'
+import { storeOf } from './door.ts'
+import { type Namespace } from '@yaks/durable-object/door'
 
 let fixture = () => {
   let state = new ServingCopy({

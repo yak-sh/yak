@@ -1,7 +1,7 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { test, until } from '@yaks/testing'
 import { appStore, type Directory, storeName } from './directory.ts'
-import { type Door, type Namespace } from './door.ts'
+import { type Door, type Namespace } from '@yaks/durable-object/door'
 import type { Env } from './env.ts'
 import { ran, workerBreak } from './dispatch.ts'
 import { declared, owned } from './directory-fixture.ts'

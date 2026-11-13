@@ -3,7 +3,7 @@ import type { ReadTx } from '@yaks/graph'
 import { storeOf } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { appAbout, spaceOf, storeName } from './directory.ts'
-import type { Namespace } from './door.ts'
+import type { Namespace } from '@yaks/durable-object/door'
 
 /** The trash's calendar cadence; Cron Triggers only supply its heartbeat. */
 export let DAILY = '20 4 * * *'

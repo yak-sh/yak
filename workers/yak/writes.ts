@@ -45,7 +45,7 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { IDEMPOTENCY } from './door.ts'
+import { IDEMPOTENCY } from '@yaks/durable-object/door'
 import { opened } from './binary.ts'
 
 let LOG = 'yak_writes'

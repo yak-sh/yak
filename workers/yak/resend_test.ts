@@ -3,7 +3,7 @@
 // decision timed without signing in or booting the whole kernel for it.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { IDEMPOTENCY } from './door.ts'
+import { IDEMPOTENCY } from '@yaks/durable-object/door'
 import { resend } from './wire.ts'
 
 let request = (key?: string) =>

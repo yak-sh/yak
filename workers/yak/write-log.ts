@@ -1,7 +1,7 @@
 // The kernel-only doors onto a Store's kept writes and its effect runs. A
 // reset can leave an interrupted write to inspect and explicitly retry after
 // its cause is fixed, and a run can be left failed the same way.
-import type { Door } from './door.ts'
+import type { Door } from '@yaks/durable-object/door'
 import { KERNEL } from './meta.ts'
 import { rejected } from './tool.ts'
 

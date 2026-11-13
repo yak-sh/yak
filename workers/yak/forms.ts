@@ -18,7 +18,7 @@ import {
   signsOf,
 } from '@yaks/forms'
 import type { Answer } from './apps.ts'
-import { type Door, IDEMPOTENCY } from './door.ts'
+import { type Door, IDEMPOTENCY } from '@yaks/durable-object/door'
 import type { Stored } from './graph.ts'
 import { appStore } from './directory.ts'
 import { KERNEL } from './meta.ts'

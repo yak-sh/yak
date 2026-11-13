@@ -1,7 +1,7 @@
 // A seed follows the same component homes as an ordinary write. Each part
 // waits with its candidate declaration until the directory records the release.
 import { type App, draftStore } from './directory.ts'
-import type { Door } from './door.ts'
+import type { Door } from '@yaks/durable-object/door'
 import type { Env } from './env.ts'
 import type { Reach } from './reach.ts'
 import type { Applying } from './seed.ts'

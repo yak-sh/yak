@@ -6,12 +6,8 @@ import { loadVocab } from '@yaks/vocab'
 import { useDoc } from './facets/directory-vocab.ts'
 import { recordUse, scheduleBy, scheduleUse, using } from './used.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
-import {
-  IDEMPOTENCY,
-  type Namespace,
-  PLATFORM_OBJECT,
-  storeOf,
-} from './door.ts'
+import { PLATFORM_OBJECT, storeOf } from './door.ts'
+import { IDEMPOTENCY, type Namespace } from '@yaks/durable-object/door'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { KERNEL, meta } from './meta.ts'
 import { platform } from './testing.ts'

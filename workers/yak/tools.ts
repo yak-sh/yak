@@ -277,7 +277,8 @@ import { acting, titling, vouched, type Who } from './session.ts'
 import { type Clock, clock } from './timing.ts'
 import { addressee, canon } from './signin.ts'
 import { nameOf } from './names.ts'
-import { ACCEPTED, type Door } from './door.ts'
+import { ACCEPTED } from './door.ts'
+import { type Door } from '@yaks/durable-object/door'
 import {
   asked,
   loaded,

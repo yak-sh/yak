@@ -1,7 +1,7 @@
 // Cold Store incarnations share in-memory storage and an accepted socket.
 import { Store } from './graph.ts'
 import type { State } from './graph.ts'
-import type { Namespace } from './door.ts'
+import type { Namespace } from '@yaks/durable-object/door'
 import { useUntil } from './used.ts'
 
 export let reconnect = async (storage: State['storage']) => {

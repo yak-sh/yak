@@ -8,7 +8,7 @@ import type {
   StoreSize,
 } from '@yaks/sqlite'
 import type { Event } from '@yaks/trace'
-import type { Door } from './door.ts'
+import type { Door } from '@yaks/durable-object/door'
 import type { Version } from './running.ts'
 import { KERNEL } from './meta.ts'
 import { rejected } from './tool.ts'

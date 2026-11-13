@@ -355,14 +355,13 @@ import { ledger } from './ledger.ts'
 import {
   doorOf,
   GIT_STORE,
-  IDEMPOTENCY,
-  type Namespace,
   placed,
   STATIC_QUERY,
   USES,
   WAKE,
   WARM,
 } from './door.ts'
+import { IDEMPOTENCY, type Namespace } from '@yaks/durable-object/door'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { type Mark, type Stamp, type Standing } from '@yaks/platform/mover'
 import { borrows } from '@yaks/reach'

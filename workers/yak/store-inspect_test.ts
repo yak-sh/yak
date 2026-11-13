@@ -1,7 +1,8 @@
 import { equal, test } from '@yaks/testing'
 import type { Event } from '@yaks/trace'
 import { inspect, phases } from './store-inspect.ts'
-import { type Namespace, storeOf } from './door.ts'
+import { storeOf } from './door.ts'
+import { type Namespace } from '@yaks/durable-object/door'
 
 let span = (
   name: string,

@@ -31,7 +31,7 @@ import {
 import type { Answer } from './apps.ts'
 import { bound, caught } from './defects.ts'
 import type { Space } from './directory.ts'
-import type { Namespace } from './door.ts'
+import type { Namespace } from '@yaks/durable-object/door'
 import type { Env } from './env.ts'
 import { onHold } from './model-spend.ts'
 import { size } from './meter.ts'

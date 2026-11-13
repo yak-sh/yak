@@ -8,7 +8,8 @@ import { Refused, Stale } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
 import { caught, defect, reporter, within } from './defects.ts'
 import type { Ctx } from './tools.ts'
-import { type Namespace, storeOf } from './door.ts'
+import { storeOf } from './door.ts'
+import { type Namespace } from '@yaks/durable-object/door'
 
 let tagsOf = (row: Bundle) =>
   (row.error as { tags?: Record<string, string> }).tags

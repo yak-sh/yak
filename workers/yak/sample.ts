@@ -23,7 +23,8 @@ import {
   storeName,
 } from './directory.ts'
 import { type Declaration, declarationOf } from './declaration.ts'
-import { ACCEPTED, type Door, storeOf } from './door.ts'
+import { ACCEPTED, storeOf } from './door.ts'
+import { type Door } from '@yaks/durable-object/door'
 import type { Env } from './env.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { KERNEL } from './meta.ts'

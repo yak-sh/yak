@@ -11,7 +11,7 @@ import { listed, names, type Row, STAMPS } from './listing.ts'
 import type { Bundle } from '@yaks/graph'
 import { requested } from '@yaks/graph/bundle'
 import { sha256 } from '@yaks/graph'
-import { IDEMPOTENCY } from './door.ts'
+import { IDEMPOTENCY } from '@yaks/durable-object/door'
 import { durable, INTENT } from './writes.ts'
 import { misfit } from '@yaks/graph/errors'
 import {

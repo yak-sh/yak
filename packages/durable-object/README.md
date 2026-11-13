@@ -334,12 +334,70 @@ let reset = {
 assertEquals(moved(error) && replaced(reset), true)
 ```
 
+## The door to an object
+
+A caller reaches an object only by fetch, through a stub its namespace hands out
+by name. `stubOf(ns, name, hint?)` is that stub, created where the location hint
+says (`'enam'`, say): the runtime reads a hint only at an object's first get and
+never moves an object. A stub is bound to the request that took it, so take one
+per call; getting one costs nothing.
+
+`doorOf(send, scrub?)` is a `Door`: a path, an init and the call's headers in,
+the object's answer out (`consume(path, read, …)` reads it). It builds every
+request from scratch, drops the init's headers named in `scrub` before setting
+the call's own, and hands the request to `send`, which has the last word on its
+headers. An init that is a `Request` carries its method, body and headers
+across, which is how a socket upgrade reaches the object.
+
+`resending(door, { report?, wait? })` sends a call again, as `retried` paces it,
+when the runtime reset the object or lost the call: thrown, or answered as a
+500's refusal body (`reset(response)`, `thrown(response)`). A call is sent again
+only while that is safe: its request can be built again (no streamed body, and
+not `replayable: false`), and every send carries one `IDEMPOTENCY` key, which a
+caller may name, so an object that applied it before its answer was lost answers
+the next send as it answered the first (@yaks/api receipts). An answer is read
+whole inside the retry, so a restart that cuts off its body is sent again too; a
+stream is handed on as it comes. A read that fails in the runtime's opaque words
+is sent again, a write is not, and a kill for the object's limits or a refusal
+for memory goes to `report` before anything else sees it.
+
+```ts
+import { assertEquals } from '@std/assert'
+import { doorOf, resending, stubOf } from '@yaks/durable-object/door'
+
+let sends = 0
+let ns = {
+  idFromName: (name: string) => name,
+  get: () => ({
+    fetch: () =>
+      Promise.resolve(
+        ++sends == 1
+          ? Response.json({ message: 'Network connection lost.' }, {
+            status: 500,
+          })
+          : new Response('ok'),
+      ),
+  }),
+}
+let door = resending(
+  doorOf((req) => stubOf(ns, 'ada', 'enam').fetch(req), ['x-who']),
+  { wait: () => Promise.resolve() },
+)
+assertEquals(await (await door('/query')).text(), 'ok')
+assertEquals(sends, 2)
+```
+
+What a call says beyond that is the caller's: yaks.app's kernel names the
+headers only it may set as `scrub`, and its `send` stamps its deploy and the app
+on every request (workers/yak/door.ts).
+
 ## API
 
 `@yaks/durable-object` exports everything below. A reader of the object's
 storage that holds no socket imports `@yaks/durable-object/sql` (`driver`),
-`/store` (`storage`), `/resets` (the reset helpers), `/ceiling` or `/alarm`
-alone, without `sockets` and the `@yaks/api` dispatch it brings:
+`/store` (`storage`), `/resets` (the reset helpers), `/door` (the door to an
+object), `/ceiling` or `/alarm` alone, without `sockets` and the `@yaks/api`
+dispatch it brings:
 
 | Export                                                  | Purpose                                             |
 | ------------------------------------------------------- | --------------------------------------------------- |
@@ -352,6 +410,10 @@ alone, without `sockets` and the `@yaks/api` dispatch it brings:
 | `Durable`, `Spec`, `Opened`, `State`                    | The object class and what makes one kind of object  |
 | `clock(ctx.storage, works, options?)`, `Work`           | The one alarm loop, in slices                       |
 | `sockets(subs, ctx)`                                    | Returns `accept`, `message`, `close`, and `wake`    |
+| `stubOf(ns, name, hint?)`, `Namespace`, `Stub`          | An object's stub by name, placed by a hint          |
+| `doorOf(send, scrub?)`, `Door`, `Send`, `Call`          | A request built from scratch for every call         |
+| `resending(door, { report?, wait? })`, `IDEMPOTENCY`    | A door that sends a call again across a reset       |
+| `reset(response)`, `thrown(response)`                   | A reset an object answered, read or thrown          |
 | `prohibited`, `reserved`                                | Identify internal runtime tables                    |
 | `moved`, `replaced`, `evicted`, `killed`, `opaque`      | Tell a reset of this instance from a failure        |
 | `vacating(run, ctx.storage, clock?, every?)`, `LOOK`    | Fail a request whose instance was replaced          |

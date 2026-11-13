@@ -41,6 +41,12 @@
  * the platform's requirement: a spec opens its graph, door and sockets, and
  * {@link clock} works everything it does on its own time from its one alarm.
  *
+ * And from the caller's side, the door to an object: {@link stubOf} takes a
+ * namespace's stub by name, placed where a hint says; {@link doorOf} builds
+ * every request through it from scratch; and {@link resending} sends a call
+ * again when the runtime reset the object or lost the call, while that is
+ * safe.
+ *
  * @module
  */
 
@@ -85,6 +91,20 @@ export {
   type Work,
 } from './alarm.ts'
 export { Durable, type Opened, type Spec, type State } from './object.ts'
+export {
+  type Call,
+  type Door,
+  doorOf,
+  IDEMPOTENCY,
+  type Namespace,
+  type Resend,
+  resending,
+  reset,
+  type Send,
+  type Stub,
+  stubOf,
+  thrown,
+} from './door.ts'
 export {
   backoff,
   evicted,

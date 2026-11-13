@@ -17,7 +17,7 @@ import {
   stamp,
   type Tier,
 } from './directory.ts'
-import type { Namespace } from './door.ts'
+import type { Namespace } from '@yaks/durable-object/door'
 import type { Env } from './env.ts'
 import type { Held, Holding } from './held.ts'
 import { mailedTo } from './post.ts'

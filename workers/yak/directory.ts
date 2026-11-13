@@ -42,13 +42,8 @@ import { type Listed, listing } from '@yaks/connections/integrations'
 import { integrationEid } from '@yaks/connections/identity'
 import { identityEid, minted } from '@yaks/graph/identity'
 import type { Rec } from './domains.ts'
-import {
-  type Door,
-  type Fetcher,
-  type Namespace,
-  STATIC_QUERY,
-  storeOf,
-} from './door.ts'
+import { type Fetcher, STATIC_QUERY, storeOf } from './door.ts'
+import { type Door, type Namespace } from '@yaks/durable-object/door'
 import { PLATFORM_STORE, SLUG } from '@yaks/platform/names'
 import { ADMIN } from '@yaks/platform/bots'
 import {

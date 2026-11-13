@@ -1,5 +1,8 @@
-// The kernel's door onto one store: the Durable Object namespace as a slice,
-// and `storeOf`, which builds every request the kernel makes to an object.
+// The kernel's door onto one store: where its object stands, what the kernel
+// alone may say to it, and `storeOf`, which builds every request the kernel
+// makes to an object. The door itself — a stub by name, a request built from
+// scratch, a call sent again across a reset — is @yaks/durable-object's
+// (`stubOf`, `doorOf`, `resending`); this module says what yaks.app puts on it.
 //
 // It is its own module because two kinds of caller reach a store and only one
 // of them may carry the kernel with it. The Worker's parts (apps.ts, tools.ts,
@@ -15,13 +18,16 @@ import { apart, elapsed, heard, hop, WAITS, writing } from './lib/hops.ts'
 import { background, caught, defect } from './defects.ts'
 import { stamp } from './running.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
+import { retried } from '@yaks/durable-object/resets'
 import {
-  evicted,
-  killed,
-  opaque,
-  retried,
-  starved,
-} from '@yaks/durable-object/resets'
+  type Door,
+  doorOf as opened,
+  IDEMPOTENCY,
+  type Namespace,
+  resending,
+  type Stub,
+  stubOf,
+} from '@yaks/durable-object/door'
 
 // A store reports the statements it ran for this fetch, including any store
 // it asked in turn, how long it waited to start when this fetch woke it, and
@@ -109,12 +115,6 @@ export let objectOf = (name: string): string =>
  * an app is decided there — so this object holds objects and nothing else. */
 export let GIT_STORE = 'yak/git'
 
-export type Stub = { fetch(req: Request): Promise<Response> }
-export type Namespace = {
-  idFromName(name: string): unknown
-  get(id: unknown, options?: { locationHint: string }): Stub
-}
-
 /** Where an object is created: beside the kernel, whose fetch handler runs in
  * aws:us-east-2 (wrangler.toml `[placement]`) and makes every call a store
  * answers, and beside the directory in ORD. Cloudflare uses a hint only at an
@@ -130,42 +130,8 @@ export let STORES_AT = 'enam'
 
 /** The object a store's name stands in, created where `STORES_AT` says. */
 export let placed = (ns: Namespace, name: string): Stub =>
-  ns.get(ns.idFromName(objectOf(name)), { locationHint: STORES_AT })
+  stubOf(ns, objectOf(name), STORES_AT)
 
-// The kernel's door to one store: a caller on the object named for the app
-// (directory.ts storeName — the address it was born at, which a rename never
-// moves), told its name on every call (the object keeps the first). The
-// kernel builds the name; a client never names a store. An incoming Request
-// may be the init: that is how a socket upgrade reaches the object with its
-// `Upgrade` header on it, since the header a route adds rides beside it.
-export type Door = {
-  (
-    path: string,
-    init?: RequestInit | Request,
-    headers?: Record<string, string>,
-    options?: { replayable?: boolean },
-  ): Promise<Response>
-  consume<T>(
-    path: string,
-    read: (response: Response) => T | Promise<T>,
-    init?: RequestInit | Request,
-    headers?: Record<string, string>,
-    options?: { replayable?: boolean },
-  ): Promise<T>
-}
-
-// The statement only the kernel may make, and therefore the set every request
-// to a store is scrubbed of before the kernel makes it. An init that is a
-// Request carries its headers across — that is how a socket upgrade reaches
-// the object with its `Upgrade` header on it — so a visitor's own
-// `x-yak-person` would ride along with it and the object would believe it
-// (graph.ts `vouchOf`). Stripped here, at the one door onto a store, "the
-// kernel builds every request from scratch" is a fact about this function
-// rather than a hope about its callers.
-//
-// The idempotency key is among them because the store answers a key it has
-// seen with the answer it gave (writes.ts): only the kernel mints one.
-export let IDEMPOTENCY = 'idempotency-key'
 /** Word names vouched for by a previously accepted immutable release. */
 export let ACCEPTED = 'x-yak-accepted'
 /** The words an app uses from other homes (its `/uses`), said beside the
@@ -187,6 +153,17 @@ export let WAKE = '/wake'
 /** Typed directory reads depend on stored data, never the clock or caller code. */
 export let STATIC_QUERY = 'x-yak-static-query'
 
+// The statement only the kernel may make, and therefore the set every request
+// to a store is scrubbed of before the kernel makes it. An init that is a
+// Request carries its headers across — that is how a socket upgrade reaches
+// the object with its `Upgrade` header on it — so a visitor's own
+// `x-yak-person` would ride along with it and the object would believe it
+// (graph.ts `vouchOf`). Stripped here, at the one door onto a store, "the
+// kernel builds every request from scratch" is a fact about this function
+// rather than a hope about its callers.
+//
+// The idempotency key is among them because the store answers a key it has
+// seen with the answer it gave (writes.ts): only the kernel mints one.
 let VOUCH = [
   IDEMPOTENCY,
   ACCEPTED,
@@ -237,92 +214,54 @@ export type Served = {
   base?: string
 }
 
-/** The door as a request builder over whatever answers it: the stub, or the
- * object itself when the caller is that object (graph.ts). Either way the
- * request is the kernel's, built from scratch here and nowhere else.
+// What the kernel says on every request to a store, whatever the caller set:
+// the deploy it runs, so a store still on older code restarts onto this one
+// rather than answering for it (running.ts), the store's name, and the app.
+let vouched = (req: Request, name: string, app?: Served) => {
+  stamp(req.headers)
+  req.headers.set('x-store', name)
+  if (!app) return
+  req.headers.set('x-yak-app', app.eid)
+  if (app.space) req.headers.set('x-yak-space', app.space)
+  req.headers.set('x-yak-access', app.access)
+  if (app.policy != null) req.headers.set('x-yak-policy', String(app.policy))
+  if (app.mail) req.headers.set('x-yak-mail', app.mail)
+  // Said even when empty, so a number taken away is heard.
+  if (app.phone != null) req.headers.set('x-yak-phone', app.phone)
+  if (app.release != null) req.headers.set('x-yak-release', app.release)
+  if (app.base != null) req.headers.set('x-yak-base-release', app.base)
+}
+
+/** The kernel's door to one store (@yaks/durable-object `doorOf`), over
+ * whatever answers it: the stub, or the object itself when the caller is that
+ * object (graph.ts). It is on the object named for the app (directory.ts
+ * storeName — the address it was born at, which a rename never moves), told
+ * its name on every call (the object keeps the first). The kernel builds the
+ * name; a client never names a store. Either way the request is the kernel's,
+ * scrubbed of `VOUCH` and built here and nowhere else.
  *
  * And therefore the one place a hop to a store is counted (hops.ts): every
  * caller reaches an object through here — `storeOf` below is this function
  * with a stub behind it, and the store's own door onto the directory is this
  * function with the object behind it — so `hops;dur=<n>` on a request is
  * exact rather than a sample. A retry (`storeOf`) is two hops, which is what
- * it cost. */
+ * it cost. It is also the one place a write to a store is seen, whichever
+ * door made it: a read this request remembers is never answered from before
+ * it (hops.ts `writing`, directory.ts `directory`). */
 export let doorOf = (
   send: (req: Request) => Promise<Response>,
   name: string,
   app?: Served,
-): Door => {
-  let ask = (
-    path: string,
-    init: RequestInit | Request = {},
-    headers: Record<string, string> = {},
-  ) => {
-    let req = new Request(`http://store${path}`, init)
-    for (let h of VOUCH) req.headers.delete(h)
-    for (let [k, v] of Object.entries(headers)) req.headers.set(k, v)
-    // The deploy this caller runs, so a store still on older code restarts
-    // onto this one rather than answering for it (running.ts).
-    stamp(req.headers)
-    req.headers.set('x-store', name)
-    if (app) {
-      req.headers.set('x-yak-app', app.eid)
-      if (app.space) req.headers.set('x-yak-space', app.space)
-      req.headers.set('x-yak-access', app.access)
-      if (app.policy != null) {
-        req.headers.set('x-yak-policy', String(app.policy))
-      }
-      if (app.mail) req.headers.set('x-yak-mail', app.mail)
-      // Said even when empty, so a number taken away is heard.
-      if (app.phone != null) req.headers.set('x-yak-phone', app.phone)
-      if (app.release != null) {
-        req.headers.set('x-yak-release', String(app.release))
-      }
-      if (app.base != null) {
-        req.headers.set('x-yak-base-release', String(app.base))
-      }
-    }
-    // And the one place a write to a store is seen, whichever door made it: a
-    // read this request remembers is never answered from before it (hops.ts
-    // `writing`, directory.ts `directory`).
+): Door =>
+  opened((req) => {
+    vouched(req, name, app)
     let read = req.method == 'GET' || req.method == 'HEAD'
     return metered(
       name == PLATFORM_STORE ? 'directory_wait' : 'store_wait',
       () => read ? send(req) : writing(name, () => send(req)),
       asked(req),
     )
-  }
-  return Object.assign(ask, {
-    consume: <T>(
-      path: string,
-      read: (response: Response) => T | Promise<T>,
-      init: RequestInit | Request = {},
-      headers: Record<string, string> = {},
-    ) => ask(path, init, headers).then(read),
-  })
-}
-
-/** An answer, with an eviction in it thrown as the runtime throws one. A store
- * the runtime resets mid-request can still answer, and it answers the reset as
- * it answers any error, in a 500's refusal body (@yaks/api `refuse`), so the
- * words the runtime meant as "fetch again" would reach the caller as a failure
- * (T-40726). A store whose own storage was lost as a deploy moved it answers
- * that loss the same way. */
-export let thrown = async (r: Response): Promise<Response> => {
-  let e = await reset(r)
-  if (e) throw e
-  return r
-}
-
-/** The eviction an answer carries, as the runtime throws it, or null. */
-export let reset = async (r: Response): Promise<Error | null> => {
-  if (r.status < 500) return null
-  let said: { message?: unknown; retryable?: unknown } | null = await r
-    .clone().text().then((t) => JSON.parse(t)).catch(() => null)
-  let e = typeof said?.message == 'string'
-    ? Object.assign(new Error(said.message), { retryable: said.retryable })
-    : null
-  return evicted(e) || starved(e) ? e : null
-}
+  }, VOUCH)
 
 /** A request factory, not a spent Request: every send gets its own body.
  * Each carries the caller's deploy, so an object still on older code restarts
@@ -338,7 +277,7 @@ export let fetchOf = (
 (make: () => Request): Promise<Response> => {
   let send = () =>
     retried(
-      () => ns.get(ns.idFromName(objectOf(name))).fetch(stamped(make())),
+      () => stubOf(ns, objectOf(name)).fetch(stamped(make())),
       true,
       undefined,
       wait,
@@ -369,96 +308,27 @@ export let ahead = (
     ),
   )
 
-// An answer a resend could replace, read whole inside the replay that sent it:
-// a restart that cuts off its body is sent again instead of reaching whoever
-// reads it later. A stream (an ndjson pour, a socket) is handed on as it comes,
-// since its reader is the one reading it live.
-let held = async (r: Response): Promise<Response> =>
-  !r.body || r.status == 101 ||
-    /ndjson|event-stream/.test(r.headers.get('content-type') ?? '')
-    ? r
-    : new Response(await r.arrayBuffer(), r)
-
 let stamped = (req: Request) => (stamp(req.headers), req)
 
-// A request can be built twice from its init only while the body is a value:
-// a stream, or a Request whose body the first build took, is spent.
-let rebuildable = (init: RequestInit | Request) =>
-  init instanceof Request ? !init.body : !(init.body instanceof ReadableStream)
-
+/** The kernel's door to one store, sent again when the runtime resets it or
+ * loses the call (@yaks/durable-object `resending`). Every call to a store
+ * comes through here, so this is the one place a deploy's restart is
+ * answered: no caller handles a reset, and none can miss one. The stub is
+ * taken per call (`placed`), since a door memoized for the isolate (meta.ts
+ * `doors`) is reused on later requests and a stub is bound to the request
+ * that took it ("cannot perform I/O on behalf of a different request"). A
+ * kill for the store's limits or a refusal for memory is a defect, reported
+ * before anything retries. A caller that will send a write again itself (a
+ * page resending after a 202) names the idempotency key, and the door keeps
+ * it. `wait` waits out each pause before a resend. */
 export let storeOf = (
   ns: Namespace,
   name: string,
   app?: Served,
   wait?: (ms: number) => Promise<void>,
-): Door => {
-  // The stub is taken per call. It is an I/O object, and the runtime binds
-  // one to the request that created it: a door memoized for the isolate
-  // (meta.ts `doors`) and reused on the next request throws "cannot perform
-  // I/O on behalf of a different request". Getting one costs nothing, so an
-  // eviction, thrown or answered, is answered by taking another and building
-  // the request again from the same init. Only a streamed body cannot be sent
-  // again; that one error passes through. A send may have committed before
-  // its answer was lost, so every send carries one idempotency key, and a
-  // store that applied one answers the next as it answered the first
-  // (writes.ts) rather than applying it again. A caller that will send the
-  // write again itself (a page resending after a 202) names the key, and this
-  // door keeps it rather than minting one per call. `wait` waits out each
-  // pause before a resend (@yaks/durable-object `retried`).
-  //
-  // Every call to a store comes through here, so this is the one place a
-  // deploy's restart is answered: no caller handles a reset, and none can miss
-  // one. A call is sent again when it is safe to repeat: its request can be
-  // built again (no streamed body), and a write carries the idempotency key the
-  // store answers a second time as it answered the first.
-  let door = doorOf(
-    (req) => placed(ns, name).fetch(req),
-    name,
-    app,
-  )
-  // `read` is a consumer's; a call that hands its answer on names none.
-  let ask = <T>(
-    path: string,
-    read: ((response: Response) => T | Promise<T>) | null,
-    init: RequestInit | Request = {},
-    headers: Record<string, string> = {},
-    options: { replayable?: boolean } = {},
-  ) => {
-    let once = { [IDEMPOTENCY]: crypto.randomUUID(), ...headers }
-    let method = init instanceof Request ? init.method : init.method ?? 'GET'
-    let safe = method == 'GET' || method == 'HEAD'
-    let request = `store ${path.split('?')[0]}`
-    let replayable = rebuildable(init) && options.replayable !== false
-    let take = read ??
-      ((r: Response) => (replayable ? held(r) : r) as T | Promise<T>)
-    return retried(
-      async () => {
-        try {
-          return await take(await thrown(await door(path, init, once)))
-        } catch (e) {
-          if (killed(e) || starved(e)) defect(e, { request, store: name })
-          throw e
-        }
-      },
-      replayable,
-      (e) => evicted(e) || (!!read && safe && opaque(e)),
-      wait,
-    )
-  }
-  let send = (
-    path: string,
-    init: RequestInit | Request = {},
-    headers: Record<string, string> = {},
-    options: { replayable?: boolean } = {},
-  ) => ask<Response>(path, null, init, headers, options)
-  // A caller that reads the answer reads it inside the same replay, so a read
-  // that fails in the runtime's opaque words is sent again too.
-  let consume = <T>(
-    path: string,
-    read: (response: Response) => T | Promise<T>,
-    init: RequestInit | Request = {},
-    headers: Record<string, string> = {},
-    options: { replayable?: boolean } = {},
-  ) => ask(path, read, init, headers, options)
-  return Object.assign(send, { consume })
-}
+): Door =>
+  resending(doorOf((req) => placed(ns, name).fetch(req), name, app), {
+    report: (e, path) =>
+      defect(e, { request: `store ${path.split('?')[0]}`, store: name }),
+    wait,
+  })

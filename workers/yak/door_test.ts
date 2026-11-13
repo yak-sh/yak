@@ -1,26 +1,28 @@
-// storeOf answers an eviction by taking a fresh stub and sending once more;
-// anything else it throws through untouched.
+// The kernel's door to a store: where its object stands, what it says on
+// every request, and what it counts. Its resends are @yaks/durable-object's
+// (packages/durable-object/door_test.ts).
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import {
   ACCEPTED,
   doorOf,
-  type Namespace,
   PLATFORM_OBJECT,
   storeOf as door,
   STORES_AT,
 } from './door.ts'
+import {
+  type Answer,
+  namespace,
+} from '../../packages/durable-object/testing.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
-import { backoff } from '@yaks/durable-object'
 import { retry as retryWrite } from './write-log.ts'
 import { counts, tallying } from './lib/hops.ts'
-import { metaOf } from './meta.ts'
 
-// Every store door here records the pauses between a call's sends, never
-// sleeps them.
-let paused: number[] = []
-let storeOf = (n: Namespace, name: string) =>
-  door(n, name, undefined, (ms) => Promise.resolve(void paused.push(ms)))
+// Every store door here sends again without pausing.
+let storeOf = (answers: Answer[], name = 'jeff') => {
+  let ns = namespace(answers)
+  return { ns, store: door(ns, name, undefined, () => Promise.resolve()) }
+}
 
 test('a request sums statement counts from each store response', async () => {
   let tally = new Map<string, number>()
@@ -41,221 +43,33 @@ test('a request sums statement counts from each store response', async () => {
   assertEquals(counts(tally).hops, 4)
 })
 
-test('every object is created beside the kernel, whoever asks first', async () => {
-  let got: [unknown, unknown][] = []
-  let n: Namespace = {
-    idFromName: (name) => name,
-    get: (id, options) => {
-      got.push([id, options])
-      return { fetch: () => Promise.resolve(new Response('ok')) }
-    },
-  }
-  await storeOf(n, 'ada/cookbook.1f7c3e')('/query')
-  await storeOf(n, PLATFORM_STORE)('/query')
+test('every object is created beside the kernel, on a fresh stub per send', async () => {
+  let gone = new Error('Durable Object reset because its code was updated.')
+  let app = storeOf([gone, 'ok'], 'ada/cookbook.1f7c3e')
+  assertEquals(await (await app.store('/query')).text(), 'ok')
+  let directory = storeOf([], PLATFORM_STORE)
+  await directory.store('/query')
   let hint = { locationHint: STORES_AT }
-  assertEquals(got, [['ada/cookbook.1f7c3e', hint], [PLATFORM_OBJECT, hint]])
-})
-
-let ns = (
-  answers: Array<Error | string | Response>,
-): Namespace & { seen: string[] } => {
-  let seen: string[] = []
-  return {
-    seen,
-    idFromName: (name) => name,
-    get: () => ({
-      fetch: async (req: Request) => {
-        seen.push(await req.text())
-        let next = answers.shift()
-        if (next instanceof Error) throw next
-        return next instanceof Response ? next : new Response(next ?? '')
-      },
-    }),
-  }
-}
-
-let gone = () =>
-  Object.assign(
-    new Error(
-      'Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.',
-    ),
-  )
-let flagged = () => Object.assign(new Error('reset'), { retryable: true })
-let dropped = () => new Error('Network connection lost.')
-let storageTimeout = () =>
-  new Error(
-    'Durable Object storage operation exceeded timeout which caused object to be reset.',
-  )
-
-test('an evicted POST is sent again with its body intact', async () => {
-  for (let reset of [gone(), storageTimeout(), dropped()]) {
-    let n = ns([reset, 'ok'])
-    let res = await storeOf(n, 'jeff')('/apply', {
-      method: 'POST',
-      body: '[1]',
-    })
-    assertEquals(await res.text(), 'ok')
-    assertEquals(n.seen, ['[1]', '[1]'])
-  }
+  assertEquals([...app.ns.gets, ...directory.ns.gets], [
+    ['ada/cookbook.1f7c3e', hint],
+    ['ada/cookbook.1f7c3e', hint],
+    [PLATFORM_OBJECT, hint],
+  ])
 })
 
 test('an interrupted recovery command is not silently sent again', async () => {
-  let n = ns([storageTimeout(), Response.json({ writes: [] })])
+  let { ns, store } = storeOf([
+    new Error(
+      'Durable Object storage operation exceeded timeout which caused object to be reset.',
+    ),
+    Response.json({ writes: [] }),
+  ])
   await assertRejects(
-    () => retryWrite(storeOf(n, 'jeff'), 1),
+    () => retryWrite(store, 1),
     Error,
     'storage operation exceeded timeout',
   )
-  assertEquals(n.seen.length, 1)
-})
-
-test('a bodiless GET is sent again once per pause at most; other errors throw', async () => {
-  let n = ns([flagged(), gone(), 'ok'])
-  assertEquals(await (await storeOf(n, 'jeff')('/query')).text(), 'ok')
-  assertEquals(n.seen.length, 3)
-  let sends = backoff.pauses.length + 1
-  let evicting = ns([
-    ...Array.from({ length: sends }, gone),
-    'unexpected retry',
-  ])
-  await assertRejects(() => storeOf(evicting, 'jeff')('/query'))
-  assertEquals(evicting.seen.length, sends)
-  let other = ns([new Error('boot failed')])
-  await assertRejects(() => storeOf(other, 'jeff')('/query'), Error, 'boot')
-  assertEquals(other.seen.length, 1)
-})
-
-test('Store does not retry a streamed init or a Request with a body', async () => {
-  for (let request of [false, true]) {
-    let init = { method: 'POST', body: new Blob(['body']).stream() }
-    let n = ns([flagged(), 'unexpected retry'])
-    await assertRejects(() =>
-      storeOf(n, 'jeff')(
-        '/apply',
-        request ? new Request('http://store/apply', init) : init,
-      )
-    )
-    assertEquals(n.seen, ['body'])
-  }
-})
-
-// A store the runtime resets mid-request can still answer, and says the reset
-// as a refusal; that is the same eviction, and any other 500 is not.
-test('an eviction a store answers is sent again; another 500 is its answer', async () => {
-  let said = (message: string) =>
-    Response.json({ error: 'Error', message }, { status: 500 })
-  for (let reset of [gone(), storageTimeout(), dropped()]) {
-    let n = ns([said(reset.message), 'ok'])
-    let res = await storeOf(n, 'jeff')('/apply', {
-      method: 'POST',
-      body: '[1]',
-    })
-    assertEquals(await res.text(), 'ok')
-    assertEquals(n.seen, ['[1]', '[1]'])
-  }
-  let broke = ns([said('boot failed'), 'unexpected retry'])
-  let no = await storeOf(broke, 'jeff')('/query')
-  assertEquals([no.status, (await no.json()).message], [500, 'boot failed'])
-  assertEquals(broke.seen.length, 1)
-})
-
-let brokenBody = (error: Error) => {
-  let sent = false
-  return new Response(
-    new ReadableStream({
-      pull(controller) {
-        if (sent) controller.error(error)
-        else {
-          sent = true
-          controller.enqueue(new TextEncoder().encode('{"partial":'))
-        }
-      },
-    }),
-  )
-}
-
-test('a Store read retries a failed body, even after receiving bytes', async () => {
-  let attempts = 0
-  paused.length = 0
-  let store = storeOf({
-    idFromName: (name) => name,
-    get: () => ({
-      fetch: () =>
-        Promise.resolve(
-          ++attempts == 1
-            ? brokenBody(new Error('internal error; reference = abc123'))
-            : Response.json([{ entity: { eid: 'kept' }, recipe: {} }]),
-        ),
-    }),
-  }, 'recipes')
-  assertEquals(await metaOf(store).query('.recipe'), [{
-    entity: { eid: 'kept' },
-    recipe: {},
-  }])
-  assertEquals([attempts, paused], [2, backoff.pauses.slice(0, 1)])
-})
-
-test('a Store write retries a failed body with the same key and body', async () => {
-  let seen: [string, string | null][] = []
-  let store = storeOf({
-    idFromName: (name) => name,
-    get: () => ({
-      fetch: async (req) => {
-        seen.push([await req.text(), req.headers.get('idempotency-key')])
-        return seen.length == 1
-          ? brokenBody(flagged())
-          : Response.json({ saved: true })
-      },
-    }),
-  }, 'recipes')
-  assertEquals(
-    await store.consume('/apply', (r) => r.json(), {
-      method: 'POST',
-      body: '[1]',
-    }),
-    { saved: true },
-  )
-  assertEquals(seen.length, 2)
-  assertEquals(seen[0], seen[1])
-})
-
-test('an opaque body failure does not replay a Store write', async () => {
-  let attempts = 0
-  let store = storeOf({
-    idFromName: (name) => name,
-    get: () => ({
-      fetch: () => {
-        attempts++
-        return Promise.resolve(
-          brokenBody(new Error('internal error; reference = abc123')),
-        )
-      },
-    }),
-  }, 'recipes')
-  await assertRejects(() =>
-    store.consume('/apply', (r) => r.json(), {
-      method: 'POST',
-      body: '[1]',
-    })
-  )
-  assertEquals(attempts, 1)
-})
-
-test('a Store read answered out of memory is refused once, not asked again', async () => {
-  let attempts = 0
-  let store = storeOf({
-    idFromName: (name) => name,
-    get: () => ({
-      fetch: () => {
-        attempts++
-        return Promise.resolve(Response.json({
-          message: 'out of memory: SQLITE_NOMEM',
-        }, { status: 500 }))
-      },
-    }),
-  }, 'recipes')
-  await assertRejects(() => store.consume('/query', (r) => r.json()))
-  assertEquals(attempts, 1)
+  assertEquals(ns.sent.length, 1)
 })
 
 test('the store door strips a visitor administrative claim and carries only its own vouch', async () => {
@@ -294,64 +108,4 @@ test('Store policy is carried only from Served, never visitor headers', async ()
     incoming(),
   )
   assertEquals(seen, [null, '12'])
-})
-
-// Each send answers the next of `answers`; `cut` is a 200 a restart cuts off.
-let cut = () =>
-  new Response(
-    new ReadableStream({
-      pull: (c) =>
-        c.error(
-          Error('Durable Object reset because a newer deploy reached it: b'),
-        ),
-    }),
-  )
-let answering = (answers: (() => Response)[]) => {
-  let sent = { n: 0 }
-  let store = storeOf({
-    idFromName: (name: string) => name,
-    get: () => ({ fetch: () => Promise.resolve(answers[sent.n++]()) }),
-  } as unknown as Namespace, 'ada')
-  return { store, sent }
-}
-
-test('an answer a restart cuts off is sent again, read or handed on', async () => {
-  let kept = () =>
-    new Response('kept', { status: 201, headers: { 'x-said': 'yes' } })
-  for (
-    let init of [{}, { method: 'POST', body: '[]' }] as RequestInit[]
-  ) {
-    let { store, sent } = answering([cut, kept])
-    let r = await store('/query', init)
-    assertEquals(
-      [r.status, r.headers.get('x-said'), await r.text(), sent.n],
-      [201, 'yes', 'kept', 2],
-    )
-  }
-  let { store } = answering([() => new Response(null, { status: 204 })])
-  assertEquals((await store('/storage')).status, 204)
-})
-
-test('a stream, or a call that cannot be sent again, is handed on as it comes', async () => {
-  let pour = () =>
-    new Response(cut().body, {
-      headers: { 'content-type': 'application/x-ndjson' },
-    })
-  let { store, sent } = answering([pour])
-  let streamed = await store('/apply', {
-    method: 'POST',
-    body: new ReadableStream(),
-  })
-  await assertRejects(() => streamed.text(), Error, 'newer deploy')
-  let once = answering([cut])
-  let r = await once.store('/query', {}, {}, { replayable: false })
-  await assertRejects(() => r.text(), Error, 'newer deploy')
-  assertEquals([sent.n, once.sent.n], [1, 1])
-  let live = answering([pour])
-  await assertRejects(
-    async () => await (await live.store('/query')).text(),
-    Error,
-    'newer deploy',
-  )
-  assertEquals(live.sent.n, 1)
 })

@@ -9,7 +9,8 @@
     "./resets": "./resets.ts",
     "./ceiling": "./ceiling.ts",
     "./alarm": "./alarm.ts",
-    "./object": "./object.ts"
+    "./object": "./object.ts",
+    "./door": "./door.ts"
   },
   "license": "Apache-2.0",
   "description": "Provides graph storage on a Cloudflare Durable Object's embedded SQLite and connects hibernatable WebSockets to query subscriptions.",

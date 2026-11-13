@@ -15,7 +15,7 @@
 // written since the moment asked for is what it costs, and the trail is how
 // that is bought back.
 import type { Bundle } from '@yaks/graph'
-import type { Door } from './door.ts'
+import type { Door } from '@yaks/durable-object/door'
 import { KERNEL } from './meta.ts'
 import { refuse, rejected } from './tool.ts'
 
