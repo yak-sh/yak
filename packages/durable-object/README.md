@@ -61,8 +61,14 @@ for later or an effect pool's word on how a run ended, run inside the ceiling's
 settles and not for the timers it leaves; work that must not stop half way runs
 on `freely(ctx.storage)`, a driver that counts and never refuses. What runs free
 counts against windows of its own: it is told past them and stops nothing, so a
-relocation's new object takes writes once it serves. An object whose stopping
-costs more than its rows is `spare()`d: told, never refused.
+relocation's new object takes writes once it serves. Work that can wait asks
+`under(share, written?, lane?)` how long until the object has spent under that
+share of every window. Run as a lane's work (`lane(name, body)`, across awaits
+like `free`), the share is of that lane's own rows, so two kinds of background
+work each keep an allowance the other's backlog cannot spend; their rows still
+count toward the object's windows and its stop. Lane tallies are the instance's:
+a new instance starts them at nothing, its totals where they stood. An object
+whose stopping costs more than its rows is `spare()`d: told, never refused.
 
 The tallies outlive the instance, so an object evicted or restarted mid-window
 goes on where it stood. `bounded` keeps them in one row of the object's

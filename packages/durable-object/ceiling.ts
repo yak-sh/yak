@@ -41,7 +41,14 @@ export type Window = { ms: number; read: number; written: number }
 
 /** What a window spent since it began, as an object keeps it past its
  * instance. */
-export type Spent = { ms: number; since: number; read: number; written: number }
+export type Spent = {
+  ms: number
+  since: number
+  read: number
+  written: number
+  /** What each lane's work spent of it ({@link Ceiling.lane}). */
+  lanes?: Record<string, { read: number; written: number }>
+}
 
 /** A minute and an hour. At Cloudflare's prices ($0.001 a million rows read,
  * $1.00 a million written,
@@ -69,10 +76,12 @@ type Kind = 'read' | 'written'
 let KINDS: Kind[] = ['read', 'written']
 
 // A window as it is counted: since when, what it spent and by which
-// statements, whether it is past its rows, and at which rows it is kept next.
+// statements, what each lane spent of it, whether it is past its rows, and at
+// which rows it is kept next.
 type Span = Window & {
   since: number
   all: Group
+  lanes: Map<string, Record<Kind, number>>
   past: Record<Kind, boolean>
   mark: Record<Kind, number>
 }
@@ -170,8 +179,14 @@ export type Ceiling = {
    * rows, read and written, in ms: 0 when it has now. Work that can wait (a
    * store's mover) asks it before it spends more, and leaves the rest of each
    * window to the object's requests. `written` reserves a prospective unit;
-   * Infinity means it cannot fit even in an empty window at that share. */
-  under: (share: number, written?: number) => number
+   * Infinity means it cannot fit even in an empty window at that share. With
+   * a `lane`, the share is of what that lane's own work spent ({@link lane}),
+   * so one lane's backlog never spends another's allowance. */
+  under: (share: number, written?: number, lane?: string) => number
+  /** Run `body` as a lane's work: its statements, across the awaits of an
+   * asynchronous body until it settles, count toward the lane's spend as
+   * well as the object's. */
+  lane: <T>(name: string, body: () => T) => T
   /** Run statements a stopped object must still take: `body`'s own, and
    * those of the work it awaits until it settles. What they cost is told,
    * and stops nothing. */
@@ -251,6 +266,7 @@ export let ceiling = (
       ...w,
       since,
       all: group(),
+      lanes: new Map(),
       past: { read: false, written: false },
       mark: { read: 0, written: 0 },
     }
@@ -258,6 +274,9 @@ export let ceiling = (
       for (let to of [s.all.total, s.all.other]) {
         to.rowsRead = was.read
         to.rowsWritten = was.written
+      }
+      for (let [name, of] of Object.entries(was.lanes ?? {})) {
+        s.lanes.set(name, { read: of.read, written: of.written })
       }
     }
     for (let k of KINDS) marked(s, k)
@@ -285,6 +304,28 @@ export let ceiling = (
   let freeing = new AsyncLocalStorage<{ open: boolean }>()
   let open = 0
   let freed = () => open > 0 && freeing.getStore()?.open == true
+  // The lane whose work is running, as `free` knows its own.
+  let laning = new AsyncLocalStorage<{ name: string; open: boolean }>()
+  // Runs `run` and closes `work` once it settles, across its awaits.
+  let settled = <T>(
+    work: { open: boolean },
+    run: () => T,
+    close = () => {},
+  ): T => {
+    let end = () => {
+      work.open = false
+      close()
+    }
+    let out
+    try {
+      out = run()
+    } catch (e) {
+      end()
+      throw e
+    }
+    if (!(out instanceof Promise)) return end(), out
+    return out.finally(end) as T
+  }
   let broken = false
   let say = (error: Scan | Runaway, told: Told) => {
     console.error('storage', told.fault, error.message, JSON.stringify(told))
@@ -309,16 +350,18 @@ export let ceiling = (
     }
     return { wait: Math.max(0, until - at), kind }
   }
-  let under = (share: number, written = 0) => {
+  let under = (share: number, written = 0, lane?: string) => {
     let at = now(), until = at
     for (let s of live()) {
       if (written > share * s.written) return Infinity
       if (at - s.since >= s.ms) continue
+      let of = (k: Kind) =>
+        lane == null ? spent(s, k) : s.lanes.get(lane)?.[k] ?? 0
       if (
         KINDS.some((k) =>
           k == 'written' && written
-            ? spent(s, k) + written > share * s[k]
-            : spent(s, k) >= share * s[k]
+            ? of(k) + written > share * s[k]
+            : of(k) >= share * s[k]
         )
       ) {
         until = Math.max(until, s.since + s.ms)
@@ -334,9 +377,16 @@ export let ceiling = (
     let cost: Cost = { calls: 1, rowsRead, rowsWritten }
     let tell: [Scan | Runaway, Told][] = []
     let charged = !freed(), list = charged ? live() : loose, moved = false
+    let lane = charged ? laning.getStore() : undefined
     for (let i = 0; i < list.length; i++) {
       let s = list[i]
       if (at - s.since >= s.ms) s = list[i] = turned(s, at)
+      if (lane?.open) {
+        let of = s.lanes.get(lane.name) ?? { read: 0, written: 0 }
+        of.read += rowsRead
+        of.written += rowsWritten
+        s.lanes.set(lane.name, of)
+      }
       if (named) tally(s.all, { shape: named, rowsRead, rowsWritten }, 16)
       else {
         for (let to of [s.all.total, s.all.other]) {
@@ -418,14 +468,7 @@ export let ceiling = (
     }
     if (charged && moved) {
       try {
-        keep?.(
-          live().map((s) => ({
-            ms: s.ms,
-            since: s.since,
-            read: s.all.total.rowsRead,
-            written: s.all.total.rowsWritten,
-          })),
-        )
+        keep?.(snapshot())
       } catch (e) {
         // Keeping fails as reporting does: the windows still stand here.
         if (!broken) console.error('storage ceiling keep failed', e)
@@ -440,12 +483,19 @@ export let ceiling = (
     let { wait, kind } = held(writing)
     return wait && !freed() ? new Stopped(wait, kind) : null
   }
-  let snapshot = () =>
+  let snapshot = (): Spent[] =>
     live().map((s) => ({
       ms: s.ms,
       since: s.since,
       read: s.all.total.rowsRead,
       written: s.all.total.rowsWritten,
+      ...s.lanes.size
+        ? {
+          lanes: Object.fromEntries(
+            [...s.lanes].map(([name, of]) => [name, { ...of }]),
+          ),
+        }
+        : {},
     }))
   return {
     admit: (writing) => {
@@ -459,19 +509,11 @@ export let ceiling = (
     free: (body) => {
       let work = { open: true }
       open++
-      let end = () => {
-        work.open = false
-        open--
-      }
-      let out
-      try {
-        out = freeing.run(work, body)
-      } catch (e) {
-        end()
-        throw e
-      }
-      if (!(out instanceof Promise)) return end(), out
-      return out.finally(end) as typeof out
+      return settled(work, () => freeing.run(work, body), () => open--)
+    },
+    lane: (name, body) => {
+      let work = { name, open: true }
+      return settled(work, () => laning.run(work, body))
     },
     spare: () => {
       refuse = false

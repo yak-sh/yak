@@ -261,6 +261,14 @@ test('an object stopped before its instance ended is stopped after it', async ()
   equal(told, ['Runaway runaway|written'])
 })
 
+test("a restarted object's lanes go on where they stood", async () => {
+  let { instance } = lasting()
+  let { c, ran } = instance()
+  c.lane('drain', () => ran(0, 6))
+  await null
+  equal(instance().c.under(0.5, 0, 'drain'), 60_000)
+})
+
 test('an object restarted half way through a window spends only the rest of it', async () => {
   let { instance } = lasting()
   instance().ran(600)
@@ -281,6 +289,25 @@ test('an object keeps its windows only as they pass half, and all, of what they 
   clock.at = 60_000
   let { c } = instance()
   equal(c.stopped(), 0)
+})
+
+test("a lane's share is of its own rows, and its rows still count toward the object's", async () => {
+  let { c, ran } = bound()
+  c.lane('drain', () => ran(0, 0, 400))
+  equal(c.under(0.25, 0, 'intake'), 0)
+  equal(c.under(0.25), 60_000)
+  equal(c.under(0.25, 0, 'drain'), 60_000)
+  // Across awaits, until the work settles.
+  await c.lane('intake', async () => {
+    await Promise.resolve()
+    ran(0, 0, 250)
+  })
+  ran(0, 0, 100)
+  equal(c.under(0.25, 0, 'intake'), 60_000)
+  equal(c.under(0.5, 0, 'drain'), 0)
+  ran(0, 0, 250)
+  equal(c.stopped(), 0)
+  equal(c.spent()[0].written, 1_000)
 })
 
 test('work that can wait is told how long until every window is under its share', () => {

@@ -11,7 +11,7 @@ import type { Bundle } from '@yaks/graph'
 import { capture } from '@yaks/tracker/report'
 import { type Clock, system } from '@yaks/fp'
 import { crossed, durable } from '../../packages/durable-object/testing.ts'
-import { type State, Tracker } from './object.ts'
+import { DRAIN, INTAKE, type State, Tracker } from './object.ts'
 import { type Stub, worker } from './worker.ts'
 import type { Message } from './queue.ts'
 import { platform } from './core.ts'
@@ -237,16 +237,23 @@ test('signed recovery opens fresh windows without losing reports or disabling th
   equal((await recover('bugs')).status, 429)
 })
 
+// Rows spent as a lane's work, as intake's deliveries or the alarm's drain.
+let spent = (db: object, lane: string, rowsWritten: number) => {
+  let ceiling = bounded(db)
+  ceiling.lane(lane, () =>
+    ceiling.count({
+      shape: () => `${lane} writes`,
+      rowsRead: 0,
+      rowsWritten,
+      returned: 0,
+    }))
+}
+
 let paced = await held()
 let { canary } = await import('./worker.ts')
 let queuedProbe = canary('c'.repeat(64))
 await paced.object.ingest(queuedProbe)
-bounded(paced.db).count({
-  shape: () => 'foreground writes',
-  rowsRead: 0,
-  rowsWritten: 750,
-  returned: 0,
-})
+spent(paced.db, DRAIN, 750)
 await paced.db.setAlarm(paced.at.t + 1000)
 await paced.object.alarm()
 let pacedAlarm = await paced.db.getAlarm()
@@ -324,12 +331,7 @@ let intake = await held()
 let admitted = report(), deferred = [report(), report()]
 await intake.deliver(admitted)
 let beforeFlood = await intake.db.getAlarm()
-bounded(intake.db).count({
-  shape: () => 'foreground writes',
-  rowsRead: 0,
-  rowsWritten: 300,
-  returned: 0,
-})
+spent(intake.db, INTAKE, 300)
 let floodSaid = await intake.deliver(...deferred)
 let floodQueued = intake.queued.splice(0)
 let afterFlood = await intake.db.getAlarm()
@@ -355,4 +357,16 @@ test('intake under flood preserves its queued reports and lets admitted errors g
   ok((groupedReport.error as { bug?: string }).bug)
   equal(recovered, ['ack', 'ack'])
   equal(retained, [true, true])
+})
+
+// A grouping backlog spends the drain's own share, never intake's: past a
+// quarter of the window, a report is still taken at once (2026-11-12, a
+// deploy's canary waited two windows behind the drain).
+let backlog = await held()
+spent(backlog.db, DRAIN, 300)
+let behindDrain = await backlog.deliver(report())
+
+test('a grouping backlog past a quarter of the window leaves intake its own share', () => {
+  equal(behindDrain, ['ack'])
+  equal(backlog.queued, [])
 })

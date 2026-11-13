@@ -131,6 +131,9 @@ export let settling =
     }
   }
 let BEHIND = 60_000
+// The ceiling's lanes (@yaks/durable-object `lane`): intake's deliveries and
+// the alarm's drain each spend a share of every window of their own.
+export let INTAKE = 'intake', DRAIN = 'drain'
 
 export class Tracker {
   tracker?: TrackerStore
@@ -322,7 +325,10 @@ export class Tracker {
     } catch { /* next queue delivery retries */ }
   }
   ingest = (rows: Bundle[]): Promise<void> =>
-    this.#run('ingest', () => this.#ingest(rows))
+    this.#run(
+      'ingest',
+      () => this.#ceiling.lane(INTAKE, () => this.#ingest(rows)),
+    )
   #ingest = async (rows: Bundle[]): Promise<void> => {
     if (rows.some((row) => row.trace || row.span)) {
       throw Error('trace intake requires platform admission')
@@ -330,10 +336,13 @@ export class Tracker {
     if (batch(rows).scope != this.scope) {
       throw Error('tracker intake scope mismatch')
     }
-    // Intake leaves the next quarter for grouping and the second half for
-    // foreground work. A paused delivery keeps grouping's earlier alarm;
-    // only a hard stop moves it to the window's end.
-    let wait = this.#ceiling.under(0.25)
+    // Intake spends a quarter of each window, of its own: grouping's backlog
+    // spends its own half (`#alarm`), so neither waits out the window behind
+    // the other's rows. On 2026-11-12 the drain passed a quarter of the whole
+    // within minutes of each window, and a deploy's canary waited behind it
+    // for two windows. A paused delivery keeps grouping's earlier alarm; only
+    // a hard stop moves it to the window's end.
+    let wait = this.#ceiling.under(0.25, 0, INTAKE)
     if (wait) {
       let hard = this.#ceiling.refusal(true)
       if (hard) await this.#soon()
@@ -617,7 +626,14 @@ export class Tracker {
       let tracker = await this.boot()
       await this.live?.wake()
       this.#upkeep?.()
-      await tracker.drain(this.now(), () => this.#ceiling.under(0.5) == 0)
+      await this.#ceiling.lane(
+        DRAIN,
+        () =>
+          tracker.drain(
+            this.now(),
+            () => this.#ceiling.under(0.5, 0, DRAIN) == 0,
+          ),
+      )
       await this.#arm()
     } catch (error) {
       await this.recover(error, 'Tracker.alarm')
@@ -629,9 +645,9 @@ export class Tracker {
     // Intake may owe the same work again. Keep its earlier return instead of
     // moving grouping a second away on every delivery.
     let now = this.now(), alarm = await this.ctx.storage.getAlarm()
-    // Past half a window, grouping waits for the window's end (`#alarm`);
-    // the maintenance it owes does not.
-    let capacity = this.#ceiling.under(0.5)
+    // Past half a window of its own, grouping waits for the window's end
+    // (`#alarm`); the maintenance it owes does not.
+    let capacity = this.#ceiling.under(0.5, 0, DRAIN)
     let maintenance = this.#upkeep?.(false)
     let upkeep = maintenance == null
       ? Infinity

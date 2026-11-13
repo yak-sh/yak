@@ -162,9 +162,13 @@ million or 500,000 in an hour. A stopped object takes no statement until the
 window ends (past its written rows only, it still reads), and a stop is no
 failure: nothing reports it, and nothing spends an attempt on it.
 
-- Intake pauses after the first quarter of a row window, leaving the next
-  quarter for grouping and the second half for foreground work. A paused
-  delivery preserves grouping's earlier alarm.
+- Intake and the alarm's drain each spend a share of every row window of their
+  own (the ceiling's `lane`): intake pauses once its deliveries have written a
+  quarter of a window, grouping once its drain has written half, and the rest is
+  foreground work. One lane's backlog never spends the other's share, so a
+  grouping backlog cannot hold new reports, a deploy's canary among them, on the
+  queue until the window ends. A paused delivery preserves grouping's earlier
+  alarm.
 - Intake that meets a stop is put back on `yak-errors` as a new message, delayed
   until the window ends (queue.ts `consume`, `later`), and the message is
   acknowledged. So a stop spends none of a message's hundred deliveries, never
