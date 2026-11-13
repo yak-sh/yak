@@ -34,3 +34,29 @@ test('every call enters the boundary with its object and its request', async () 
   ])
   equal(object instanceof Subject, true)
 })
+
+// A class an object's runtime constructs may inherit its lifecycle callbacks
+// (@yaks/durable-object `Durable`'s `alarm`): they enter the boundary too,
+// under the class's own name, by the nearest definition.
+class Inheriting extends Subject {
+  override inner() {
+    return 'nearer'
+  }
+}
+
+test('inherited methods enter the boundary as the class’s own', () => {
+  let entered: string[] = []
+  let Tracked = instrument(Inheriting, (_args, name, run) => {
+    entered.push(name)
+    return run()
+  })
+  equal(
+    new Tracked('state', 'env').fetch(new Request('https://x.test/')),
+    'nearer',
+  )
+  equal(entered, [
+    'Inheriting constructor',
+    'Inheriting fetch',
+    'Inheriting inner',
+  ])
+})

@@ -14,11 +14,11 @@ import { durable } from './testing.ts'
 let object = (spec: Partial<Spec> & Pick<Spec, 'open'>) => {
   let storage = durable(), reported: string[] = []
   let ctx = { storage, acceptWebSocket() {}, getWebSockets: () => [] }
-  let made = new Durable(ctx, () => ({
+  let made = new Durable(ctx, {
     report: (_e, entry) => void reported.push(entry),
     ...spec,
     alarm: { now: () => 1000, ...spec.alarm },
-  }))
+  })
   return { made, storage, reported }
 }
 let ok: Opened = { serve: () => new Response('ok') }
@@ -74,12 +74,12 @@ test('an alarm whose open failed is reported and rings again a minute on', async
 test('the first entry on a new deploy arms the alarm, once', async () => {
   let deploy = (version: string, storage = durable()) => {
     let ctx = { storage, acceptWebSocket() {}, getWebSockets: () => [] }
-    return new Durable(ctx, () => ({
+    return new Durable(ctx, {
       open: () => Promise.resolve(ok),
       report: () => {},
       version,
       alarm: { now: () => 1000 },
-    }))
+    })
   }
   let storage = durable()
   await get(deploy('a', storage))

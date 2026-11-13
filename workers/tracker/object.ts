@@ -163,7 +163,8 @@ export class Tracker extends Durable {
     // no statement until the window ends: a door answers how long to wait,
     // intake is delivered again then (./queue.ts), and the alarm comes back
     // then for the work it owes.
-    super(ctx, (self) => (self as Tracker).#spec(windows))
+    super(ctx)
+    this.#windows = windows
     this.scope = ctx.id.name ?? platform
     this.sink = env.ERRORS
       ? queue(env.ERRORS)
@@ -202,7 +203,8 @@ export class Tracker extends Durable {
   // What the package's object opens: the tracker's door, its subscriptions,
   // and the works of its alarm, each entry measured by what it read and
   // wrote (./bill.ts).
-  #spec = (windows?: Window[]): Spec => ({
+  #windows?: Window[]
+  protected override specify = (): Spec => ({
     open: async () => {
       let tracker = await this.boot()
       return {
@@ -237,7 +239,7 @@ export class Tracker extends Durable {
     report: (error, entry) => this.recover(error, `Tracker.${entry}`),
     ceiling: {
       now: this.now,
-      windows,
+      windows: this.#windows,
       report: (error, { fault, tags }) => {
         let from = this.#origin('Tracker.sql')
         void report(error, {

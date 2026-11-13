@@ -37,6 +37,26 @@ export type Enter = <T>(
   request?: Request,
 ) => T
 
+type Method = (...args: unknown[]) => unknown
+
+/** Each method an object of a class answers, its own and those it inherits,
+ * by the nearest definition: everything short of `Object`'s own. */
+export let methods = (prototype: object): [string, Method][] => {
+  let found = new Map<string, Method>()
+  for (
+    let at = prototype;
+    at && at != Object.prototype;
+    at = Object.getPrototypeOf(at)
+  ) {
+    for (let name of Object.getOwnPropertyNames(at)) {
+      let value = Object.getOwnPropertyDescriptor(at, name)?.value
+      if (name == 'constructor' || found.has(name)) continue
+      if (typeof value == 'function') found.set(name, value)
+    }
+  }
+  return [...found]
+}
+
 /** `Original`, with its construction and each of its prototype's methods run
  * inside `enter`. `making`, when given, is told each construction's
  * arguments and the class's name before the object is made. */
@@ -48,10 +68,7 @@ export let instrument = <C>(
   let Base = Original as unknown as new (...args: unknown[]) => object
   let made = new WeakMap<object, unknown[]>()
   class Tracked extends Base {}
-  for (let method of Object.getOwnPropertyNames(Base.prototype)) {
-    if (method == 'constructor') continue
-    let run = Object.getOwnPropertyDescriptor(Base.prototype, method)?.value
-    if (typeof run != 'function') continue
+  for (let [method, run] of methods(Base.prototype)) {
     Object.defineProperty(Tracked.prototype, method, {
       value(this: object, ...args: unknown[]) {
         return enter(

@@ -91,6 +91,10 @@ export let BUILDER = [
   'alarm',
   'webSocketMessage',
   'webSocketClose',
+  // @yaks/durable-object `Durable`'s own.
+  'specify',
+  'open',
+  'accept',
 ] as const
 export let WORKSPACES = ['fork', 'retire', 'destroy'] as const
 export let PUBLIC_DIRECTORY = [

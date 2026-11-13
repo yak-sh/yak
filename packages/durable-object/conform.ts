@@ -40,4 +40,4 @@ let _store = (vocab: Vocab) => storage(state.storage, vocab)
 let _live = (subs: Subs): Sockets => sockets(subs, state)
 
 // The object class takes the runtime's own state.
-let _object = (spec: Spec) => new Durable(state, () => spec)
+let _object = (spec: Spec) => new Durable(state, spec)

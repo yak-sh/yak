@@ -214,7 +214,8 @@ application schema migrations still require coordination.
 ## One class, one alarm
 
 `Durable` is the object as a class, for every kind of object a Worker serves.
-What differs between kinds is its spec, which a subclass hands to `super`:
+What differs between kinds is its spec, which a subclass hands to `super`, or
+answers from `specify()` where the spec names the subclass's own members:
 
 - `open()` composes what the object holds, once an instance: its door (`serve`),
   the subscriptions its sockets serve (`subs`), and the works its alarm runs
@@ -242,13 +243,13 @@ import { Durable, type State } from '@yaks/durable-object'
 
 class Counter extends Durable {
   constructor(ctx: State) {
-    super(ctx, () => ({
+    super(ctx, {
       open: async () => ({
         serve: () => new Response('ok'),
         works: { sweep: async (until) => null },
       }),
       report: (error, entry) => console.error(entry, error),
-    }))
+    })
   }
 }
 ```

@@ -21,7 +21,8 @@ import { channeled } from './channel-move.ts'
 import { operatorDoc } from './operator-vocab.ts'
 import { OWNERS } from './operator-owner.ts'
 import { due, soonest, tick } from '@yaks/wake'
-import { caught, stopped } from './defects.ts'
+import { caught } from './defects.ts'
+import { RETRY, SLICE } from '@yaks/durable-object/alarm'
 import { adopt, indexed, schema as ftsSchema, search } from '@yaks/fts'
 import { installed, type Meta, meta, printOf } from '@yaks/sqlite'
 import { schema as logSchema } from './writes.ts'
@@ -231,85 +232,6 @@ export let owing = (fx: Effects, made: () => Promise<unknown>) => {
   })))
 }
 
-/** An object's alarm, as its storage keeps it. */
-export type Alarms = {
-  setAlarm(at: number): Promise<void>
-  getAlarm(): Promise<number | null>
-  deleteAlarm(): Promise<void>
-}
-
-/** The alarm at `at`, unless one stands sooner that is not `mine`: whichever
- * comes first. What an alarm is armed for (a wake's backstop, its next run, a
- * kept line's retry, build.ts `#rest`) never pushes back another's sooner
- * need, and an alarm `mine` names is replaced. */
-export let sooner = async (storage: Alarms, at: number, mine?: number) => {
-  let set = await storage.getAlarm()
-  if (set == null || set == mine || at < set) await storage.setAlarm(at)
-}
-
-/** How long an object's wake may go unheard before it wakes again. */
-export let BACKSTOP = 15_000
-
-/**
- * The object's alarm: `work` (a `drain`) under an alarm armed BACKSTOP from
- * now, so a wake the object dies under (a deploy's reset under a step in
- * flight) wakes its replacement, which takes the step up again; then armed
- * for the next run due, or cleared when none is and nothing armed it since.
- *
- * The alarm answers once its work is under way, and one that rings while the
- * work goes arms the backstop again and starts no second: an alarm still
- * open when its object is reset holds back every alarm after it until
- * Cloudflare gives up on it, fourteen minutes for Jeff's (T-145428), the
- * backstop that would take the step up included. Work that fails is
- * reported, and the backstop it leaves armed tries it again; work its object
- * stopped (@yaks/durable-object `Stopped`) comes back when the object's
- * window ends, and is no failure. Each is armed for whichever comes first,
- * it or an alarm armed since for another's need (`sooner`). The work, going
- * on after the alarm answers, is handed to `keep` (the object's `waitUntil`).
- */
-export let waking = (
-  storage: Alarms,
-  report: (e: unknown) => void,
-  keep: (work: Promise<void>) => void = () => {},
-) => {
-  let armed = 0, going: Promise<void> | undefined
-  return async (work: () => Promise<number | null>) => {
-    let was = armed
-    armed = Date.now() + BACKSTOP
-    await sooner(storage, armed, was)
-    if (going) return
-    keep(
-      going = (async () => {
-        try {
-          let next = await work()
-          if (next) await sooner(storage, next, armed)
-          else if (await storage.getAlarm() == armed) {
-            await storage.deleteAlarm()
-          }
-        } catch (e) {
-          if (stopped(e)) {
-            await sooner(storage, Date.now() + e.retry.after, armed)
-          } else report(e)
-        } finally {
-          going = undefined
-        }
-      })(),
-    )
-  }
-}
-
-/** How long a wake-up a tick refused waits before it is tried again. */
-export let RETRY = 60_000
-
-/**
- * How long one wake starts runs for. An alarm is one invocation, whose CPU
- * the runtime caps (wrangler.toml `[limits]`, five minutes): a store whose
- * sessions keep owing steps (forks forking) would otherwise work them all in
- * one alarm until it is killed.
- * What a slice leaves waits for the next alarm, armed at once.
- */
-export let SLICE = 10_000
-
 /**
  * Work the store's pool until nothing is due or `until` passes, as the
  * object's alarm does: first each wake-up due fires (@yaks/wake `tick`), then
@@ -323,6 +245,9 @@ export let drain = async (
     OperatorStore,
     'g' | 'fx' | 'marks' | 'upkeep'
   >,
+  // An alarm is one invocation, whose CPU the runtime caps (wrangler.toml
+  // `[limits]`, five minutes): a store whose sessions keep owing steps
+  // (forks forking) is worked a slice an alarm.
   until = Date.now() + SLICE,
 ): Promise<number | null> => {
   let upkeepWait = upkeep?.()

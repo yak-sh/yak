@@ -65,12 +65,9 @@
 // it.
 import type { Hibernation, Wire } from '@yaks/durable-object'
 import { driver, type DurableStorage, freely } from '@yaks/durable-object/sql'
-import {
-  bounded,
-  type Ceiling,
-  type Stopped,
-} from '@yaks/durable-object/ceiling'
-import type { Alarms } from './operator-store.ts'
+import type { Stopped } from '@yaks/durable-object/ceiling'
+import type { Alarms } from '@yaks/durable-object/alarm'
+import { Durable, type Spec } from '@yaks/durable-object/object'
 import { level, writes } from '@yaks/member'
 import {
   col,
@@ -221,7 +218,7 @@ let SAID: CreateTable = {
   ],
 }
 
-export class Builder {
+export class Builder extends Durable {
   #ctx: State
   #sql: Driver
   #env: Env
@@ -236,10 +233,6 @@ export class Builder {
   // purpose: an object that was evicted has no build running, and a flag in
   // storage would outlive the loop it stands for and lock the space forever.
   #building?: Promise<unknown>
-  // What this object's statements may cost before it stops until a window
-  // ends (@yaks/durable-object `bounded`): a line said meanwhile is kept
-  // (`#hold`), and taken up once the window ends (`#replay`).
-  #ceiling: Ceiling
   // The kept lines being taken up, one turn at a time, and whether a line
   // was kept while a build ran, for its end to take up.
   #replaying?: Promise<void>
@@ -247,9 +240,7 @@ export class Builder {
   #arming?: Promise<void>
   // The Operator's pool, once this incarnation has made it (`#work`).
   #fx?: { running(): unknown[] }
-  // The alarm's work (operator-store.ts `waking`), one at a time.
-  #wake?: (work: () => Promise<number | null>) => Promise<void>
-  // When the Operator's work stops starting runs (operator-store.ts `SLICE`),
+  // When the Operator's work stops starting runs (the alarm's slice),
   // and whether the alarm's drain is working it: beside a drain a write's
   // work starts only within the drain's slice, so the drain ends; otherwise
   // it opens a slice of its own, and the alarm it arms takes up what that
@@ -272,8 +263,13 @@ export class Builder {
   #lent: Browsers
 
   constructor(ctx: State, env: Env) {
+    // What it opens is the Operator, whose works its alarm runs; what its
+    // statements may cost before it stops until a window ends is its
+    // storage's ceiling: a line said meanwhile is kept (`#hold`), and taken
+    // up once the window ends (`#replay`).
+    super(ctx)
     this.#ctx = ctx
-    this.#ceiling = bounded(ctx.storage)
+    this.ceiling
     this.#sql = driver(ctx.storage)
     this.#env = env
     this.#lent = browsers(() => ctx.getWebSockets(), env.CLOCK)
@@ -385,7 +381,7 @@ export class Builder {
    * to one that is not pays a look in memory for that.
    */
   async say(held: Held, text: string): Promise<Frame[]> {
-    let stop = this.#ceiling.refusal(true)
+    let stop = this.ceiling.refusal(true)
     if (stop || this.#building) return await this.#hold(held, text, stop)
     return await this.#turn(held, text)
   }
@@ -441,7 +437,7 @@ export class Builder {
       // Kept as the line was, through a window the loop's work passed: the
       // answer to what a person said is theirs too (M-59093).
       let reply = out.lines.slice(was.length + 1)
-      this.#ceiling.free(() => this.#keep(reply))
+      this.ceiling.free(() => this.#keep(reply))
       return [end]
     } catch (e) {
       // Stopped before the conversation took the line, it is kept, or a kept
@@ -476,7 +472,7 @@ export class Builder {
     text: string,
     stop: Stopped | null,
   ): Promise<Frame[]> {
-    this.#ceiling.free(() => {
+    this.ceiling.free(() => {
       for (let stmt of log.schema()) this.#sql.query(stmt)
       log.keep(this.#sql, saying(held, text), JSON.stringify({ say: text }))
     })
@@ -490,10 +486,7 @@ export class Builder {
   }
 
   // The alarm, `ms` from now, or sooner where another need armed it so.
-  #rest = async (ms: number) => {
-    let { sooner } = await import('./operator-store.ts')
-    await sooner(this.#ctx.storage, Date.now() + ms)
-  }
+  #rest = (ms: number) => this.clock.arm(Date.now() + ms)
 
   // The lines kept (`#hold`), taken up behind the alarm or the build that
   // ended, since a build takes minutes. A stopped object's wait for them is
@@ -501,7 +494,7 @@ export class Builder {
   // (writes.ts `next`), and stands from the store's fitting
   // (operator-store.ts), so the look runs no DDL.
   #replay() {
-    if (this.#replaying || this.#ceiling.stopped(true)) return
+    if (this.#replaying || this.ceiling.stopped(true)) return
     this.#queued = false
     let going = this.#replaying = (async () => {
       if (log.waiting(this.#sql)) await this.#replays()
@@ -522,10 +515,10 @@ export class Builder {
       let asked = log.replayed(k, 'http://builder/say')
       let { say } = await asked.json() as { say: string }
       while (this.#building) await this.#building.catch(() => {})
-      if (!this.#ceiling.stopped(true)) {
+      if (!this.ceiling.stopped(true)) {
         await this.#turn(sayer(asked.headers), say, k.seq)
       }
-      let wait = this.#ceiling.stopped(true)
+      let wait = this.ceiling.stopped(true)
       if (wait) return await this.#rest(wait)
     }
   }
@@ -539,7 +532,7 @@ export class Builder {
   /** An answer, with what its work cost the caller's Server-Timing: the
    * round trips and waits behind it, as a store's carries them (hops.ts
    * `reported`, door.ts `metered`). */
-  async fetch(request: Request): Promise<Response> {
+  override async fetch(request: Request): Promise<Response> {
     let tally: Tally = new Map()
     this.#asked++
     let answer
@@ -846,9 +839,8 @@ export class Builder {
     return this.#store ??= unstopped(
       () => this.#store = undefined,
       async () => {
-        let { operatorStore, owing, SLICE } = await import(
-          './operator-store.ts'
-        )
+        let { operatorStore, owing } = await import('./operator-store.ts')
+        let { SLICE } = await import('@yaks/durable-object/alarm')
         let { operatorFrames } = await import('./operator-host.ts')
         // A write that owes work starts it now, beside a step in flight, so a
         // person's words reach the session they are for at once, within a
@@ -856,7 +848,7 @@ export class Builder {
         // after the write answers, held by the object (`waitUntil`), once the
         // Operator whose handlers do it is made.
         let nudge = () => {
-          this.#arming = this.#ctx.storage.setAlarm(Date.now())
+          this.#arming = this.clock.arm(Date.now())
           if (!this.#draining && Date.now() >= this.#until) {
             this.#until = Date.now() + SLICE
           }
@@ -971,63 +963,53 @@ export class Builder {
     }
   }
 
-  // A stopped object's alarm does nothing but come back when its window ends
-  // (@yaks/durable-object `bounded`), and one stopped as it starts comes back
-  // then too; one stopped as its work goes is `waking`'s.
-  async alarm() {
-    try {
-      let wait = this.#ceiling.stopped(true)
-      if (wait) await this.#rest(wait)
-      else await this.#ring()
-    } catch (e) {
-      if (!stopped(e)) throw e
-      await this.#rest(e.retry.after)
-    }
-  }
-
-  async #ring() {
-    let { drain, SLICE, waking } = await import('./operator-store.ts')
-    let { store } = await this.#work()
-    this.#resume()
-    this.#replay()
-    this.#wake ??= waking(
-      this.#ctx.storage,
-      (e) => caught(e, { request: 'operator alarm' }),
-      (work) => this.#ctx.waitUntil?.(work),
-    )
-    await this.#wake(async () => {
-      this.#draining = true
-      try {
-        let { attachmentBackfill } = await import('./attachment-move.ts')
-        let { ownerBackfill } = await import('./owner-move.ts')
-        let more = false
-        let retry: number | undefined
-        try {
-          more = await attachmentBackfill(store, this.#env)
-        } catch (e) {
-          if (stopped(e)) throw e
-          caught(e, { request: 'operator attachment backfill' })
-          retry = Date.now() + 60_000
-        }
-        try {
-          more = await ownerBackfill(store) || more
-        } catch (e) {
-          if (stopped(e)) throw e
-          caught(e, { request: 'operator owner backfill' })
-          retry = Date.now() + 60_000
-        }
-        let next = await drain(store, this.#until = Date.now() + SLICE)
-        let due = [
-          next,
-          retry,
-          more ? Date.now() + (store.waiting?.() ?? 0) : null,
-        ].filter((at): at is number => at != null)
-        return due.length ? Math.min(...due) : null
-      } finally {
-        this.#draining = false
+  // What the package's object opens: the Operator, and what its alarm works
+  // (@yaks/durable-object `clock`). The alarm answers once its slice is
+  // under way, held by the object (`waitUntil`): one still open when its
+  // object is reset holds back every alarm after it until Cloudflare gives
+  // up on it, fourteen minutes for Jeff's (T-145428). A stopped object's
+  // alarm comes back when its window ends.
+  protected override specify = (): Spec => ({
+    open: async () => {
+      let { store } = await this.#work()
+      let waiting = () => Date.now() + (store.waiting?.() ?? 0)
+      let backfill = async (more: Promise<boolean>) =>
+        await more ? waiting() : null
+      return {
+        serve: (request) => this.fetch(request),
+        works: {
+          // What the incarnation owes, and the lines kept while it could not
+          // answer.
+          owed: () => {
+            this.#resume()
+            this.#replay()
+            return null
+          },
+          attachments: async () => {
+            let { attachmentBackfill } = await import('./attachment-move.ts')
+            return backfill(attachmentBackfill(store, this.#env))
+          },
+          owners: async () => {
+            let { ownerBackfill } = await import('./owner-move.ts')
+            return backfill(ownerBackfill(store))
+          },
+          drain: async (until) => {
+            let { drain } = await import('./operator-store.ts')
+            this.#draining = true
+            try {
+              return await drain(store, this.#until = until)
+            } finally {
+              this.#draining = false
+            }
+          },
+        },
       }
-    })
-  }
+    },
+    report: (e, entry) => caught(e, { request: `operator ${entry}` }),
+    alarm: {
+      keep: this.#ctx.waitUntil && ((work) => this.#ctx.waitUntil!(work)),
+    },
+  })
 
   /**
    * A line from a browser with no socket: the round waited for, and the whole
@@ -1042,7 +1024,7 @@ export class Builder {
     let text = typeof asked.say == 'string' ? asked.say.trim() : ''
     if (!text) return no(400, 'say what you want built')
     let end = await this.say(held, text)
-    let before = this.#ceiling.stopped(false) ? [] : frames(this.said())
+    let before = this.ceiling.stopped(false) ? [] : frames(this.said())
     return Response.json({ frames: [...before, ...end] })
   }
 
@@ -1089,7 +1071,7 @@ export class Builder {
   }
 
   /** A frame from a page. The only one it may send is `{say}`. */
-  webSocketMessage(ws: Wire, data: string | ArrayBuffer): void {
+  override webSocketMessage(ws: Wire, data: string | ArrayBuffer): void {
     let held = ws.deserializeAttachment() as Socket | null
     // A lent browser answers the calls asked of it (operator-browser.ts).
     if (held && 'browser' in held) return this.#lent.heard(held, data)
@@ -1108,7 +1090,7 @@ export class Builder {
 
   /** A socket closed. A lent browser's calls fail at once, rather than
    * waiting out the person. */
-  webSocketClose(ws: Wire): void {
+  override webSocketClose(ws: Wire): void {
     let held = ws.deserializeAttachment() as Socket | null
     if (held && 'browser' in held) this.#lent.gone(ws)
   }

@@ -2,6 +2,7 @@ import { equal, test } from '@yaks/testing'
 import * as io from '@yaks/file/io'
 import { parse } from 'smol-toml'
 import { VERSION } from '@yaks/workerd'
+import { methods as answered } from '@yaks/tracker/instrument'
 import yak, * as entry from './index.ts'
 import {
   BUILDER,
@@ -16,16 +17,15 @@ import { Builder } from './build.ts'
 import { WorkspaceStore } from './workspaces.ts'
 import { PublicDirectoryStore } from './public-directory.ts'
 
+// Every method the tracker's wrap gives the class, inherited ones too.
 let methods = (C: { prototype: object }) =>
-  Object.getOwnPropertyNames(C.prototype).filter((name) =>
-    name != 'constructor' &&
-    typeof Object.getOwnPropertyDescriptor(C.prototype, name)?.value ==
-      'function'
-  )
+  answered(C.prototype).map(([name]) => name).sort()
 
 test('each deferred object answers every method its class has', () => {
   equal(
-    [STORE, WIRE, BUILDER, WORKSPACES, PUBLIC_DIRECTORY].map((m) => [...m]),
+    [STORE, WIRE, BUILDER, WORKSPACES, PUBLIC_DIRECTORY].map((m) =>
+      [...m].sort()
+    ),
     [Store, Wire, Builder, WorkspaceStore, PublicDirectoryStore].map(methods),
   )
 })

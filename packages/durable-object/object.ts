@@ -4,7 +4,8 @@
  * worked on its own time by one alarm (`./alarm.ts`).
  *
  * The platform requires a class, so this is one; what differs between kinds
- * of object is data, the spec, which a subclass hands to `super`:
+ * of object is data, the spec. A subclass hands it to `super`, or answers
+ * it from `specify()` where it names the subclass's own members:
  *
  * - `open` composes what the object holds, once an instance: its door, the
  *   subscriptions its sockets serve, and the works its alarm runs. One that
@@ -25,10 +26,10 @@
  *
  * class Hello extends Durable {
  *   constructor(ctx: State) {
- *     super(ctx, () => ({
+ *     super(ctx, {
  *       open: () => Promise.resolve({ serve: () => new Response('hello') }),
  *       report: (e) => console.error(e),
- *     }))
+ *     })
  *   }
  * }
  * // The runtime's own state; a door that reads nothing needs none of it.
@@ -41,7 +42,8 @@
  * @module
  */
 
-import { refuse, type Subs } from '@yaks/api'
+import { refuse } from '@yaks/api/refuse'
+import type { Subs } from '@yaks/api'
 import {
   type Alarms,
   type Clock,
@@ -56,12 +58,7 @@ import {
   type Options as Limits,
   stopped,
 } from './ceiling.ts'
-import {
-  type Hibernation,
-  type Sockets,
-  sockets,
-  type Wire,
-} from './sockets.ts'
+import type { Hibernation, Sockets, Wire } from './sockets.ts'
 import type { DurableStorage } from './sql.ts'
 
 /** The slice of `DurableObjectState` the class uses. */
@@ -91,7 +88,9 @@ export type Spec = {
   open(): Promise<Opened>
   /** A failure the object caught, by the entry it was caught in. */
   report(error: unknown, entry: string): unknown
-  /** The row ceiling's options; refusing by default. */
+  /** The row ceiling's options, refusing by default. Without them the
+   * object counts against the ceiling its storage already has: the one named
+   * first, or one that reports and refuses nothing. */
   ceiling?: Limits
   /** The alarm's timing (`./alarm.ts`). */
   alarm?: Pick<Timing, 'slice' | 'backstop' | 'retry' | 'keep' | 'now'>
@@ -108,7 +107,6 @@ let VERSION = '@yaks/durable-object:version'
 export class Durable {
   /** The object's own state: its storage and its sockets. */
   readonly ctx: State
-  #made: (object: Durable) => Spec
   #spec?: Spec
   #ceiling?: Ceiling
   #clock?: Clock
@@ -117,16 +115,22 @@ export class Durable {
   #live?: Sockets
   #restarted = false
 
-  /** `spec` is asked for once, at the object's first entry, so a subclass's
-   * spec may name the subclass's own members. */
-  constructor(ctx: State, spec: (object: Durable) => Spec) {
+  /** Without a `spec`, the object asks its `specify()` for one. */
+  constructor(ctx: State, spec?: Spec) {
     this.ctx = ctx
-    this.#made = spec
+    this.#spec = spec
+  }
+
+  /** What makes this kind of object, asked once, at the object's first
+   * entry or its ceiling: a subclass whose spec names its own members
+   * answers it here. */
+  protected specify(): Spec {
+    throw new Error(`${this.constructor.name} has no spec`)
   }
 
   /** What makes this object. */
   get spec(): Spec {
-    return this.#spec ??= this.#made(this)
+    return this.#spec ??= this.specify()
   }
 
   /** The object's row ceiling, made at its first statement through the
@@ -134,10 +138,10 @@ export class Durable {
    * object's) names its ceiling first, with `this.ceiling` at the end of its
    * constructor: every driver counts against the ceiling made first. */
   get ceiling(): Ceiling {
-    return this.#ceiling ??= bounded(this.ctx.storage, {
-      refuse: true,
-      ...this.spec.ceiling,
-    })
+    let named = this.spec.ceiling
+    return this.#ceiling ??= named
+      ? bounded(this.ctx.storage, { refuse: true, ...named })
+      : bounded(this.ctx.storage)
   }
 
   /** The object's alarm: a write that owes work arms it. */
@@ -160,9 +164,13 @@ export class Durable {
 
   /** What the object holds, opened once an instance; its sockets woken. */
   async open(): Promise<Opened> {
-    this.#opened ??= this.spec.open().then((opened) => {
+    this.#opened ??= this.spec.open().then(async (opened) => {
       this.ceiling
-      if (opened.subs) this.#live = sockets(opened.subs, this.ctx)
+      // The sockets' plumbing is loaded only by an object that has some.
+      if (opened.subs) {
+        let { sockets } = await import('./sockets.ts')
+        this.#live = sockets(opened.subs, this.ctx)
+      }
       return this.#held = opened
     }, (e) => {
       this.#opened = undefined
@@ -237,7 +245,7 @@ export class Durable {
   }
 
   /** A frame from one of the object's sockets. */
-  webSocketMessage(ws: Wire, data: string | ArrayBuffer): Promise<void> {
+  webSocketMessage(ws: Wire, data: string | ArrayBuffer): void | Promise<void> {
     return this.#around('socket', async () => {
       try {
         let opened = await this.open()
