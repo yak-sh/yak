@@ -191,9 +191,11 @@ let deadly = (v: Vocab): Set<string> =>
 
 /** What a D1 store is bound with: @yaks/sql's read options, plus whether new
  * spines get a human-readable number. A number is opt-IN, under the same option
- * name @yaks/sqlite uses: left unset, an entity is its eid and nothing else. */
+ * name @yaks/sqlite uses: left unset, an entity is its eid and nothing else.
+ * Numbers are one count here, with no letters: a series' next number is a
+ * read before its write, which a batch sent at once has no room for. */
 export type Opts = BindOpts & {
-  number?: boolean | { except: readonly string[] }
+  number?: boolean
   /** Where a failure the store outlives is told, as @yaks/sqlite's `report`:
    * one line on the console, by default. */
   report?: (error: Error) => void
@@ -493,17 +495,7 @@ export let storage = <S extends Prepared<S>>(
         moved ||= bs.some((b) => comps(b).some(([name]) => bears.has(name)))
         await learn(touched(vocab, bs))
         let born: Entity[] = []
-        // Which of these entities the host keeps off the human line: one
-        // wearing an excepted component, in this batch or already in the
-        // store. What the store knows is already learned, above.
-        let excluded = new Set<Eid>()
-        if (typeof base.number == 'object') {
-          for (let name of base.number.except) {
-            for (let b of bs) if (b[name] != null) excluded.add(b.entity.eid)
-            for (let [eid, b] of held) if (b[name] != null) excluded.add(eid)
-          }
-        }
-        let numbered = (e: Eid) => !!base.number && !excluded.has(e)
+        let numbered = !!base.number
         // An eid a reference only names gets a spine to hold the pointer and
         // no number, until a bundle of its own arrives (@yaks/sqlite `patch`).
         let own = new Set(
@@ -516,7 +508,7 @@ export let storage = <S extends Prepared<S>>(
         for (let b of bs) {
           if (buried(b.entity.eid)) continue
           for (let e of touched(vocab, [b])) {
-            let spine = birth(e, own.has(e) && numbered(e))
+            let spine = birth(e, own.has(e) && numbered)
             if (spine) born.push(spine)
           }
         }
@@ -528,7 +520,7 @@ export let storage = <S extends Prepared<S>>(
           let k = known.get(e)
           let b = at(e)
           if (
-            made.has(e) || !k || k.dead || k.num != null || !numbered(e) ||
+            made.has(e) || !k || k.dead || k.num != null || !numbered ||
             !b || comps(b).length
           ) continue
           born.push(number(e))

@@ -250,16 +250,14 @@ test('a transaction rolls back on a throw, and nests', async () => {
   assertEquals((await rollback.tx((tx) => tx.get(['p1']))).length, 1)
 })
 
-test('numbering exceptions ask once across tables and entities', async () => {
+test('numbering by series reads nothing more across tables and entities', async () => {
   let selects = 0
   let driver = spy(mem(), (sql, params) => {
     if (/^select .* from "entity"/.test(sql.trimStart())) selects++
     assert(params.length <= 100)
   })
   let open = () =>
-    storage(driver, shop, {
-      number: { except: ['shelf', 'bookmark', 'review', 'undeclared'] },
-    })
+    storage(driver, shop, { number: { product: 'P', undeclared: 'U' } })
   let s = open()
   s.install()
   let products = Array.from({ length: 150 }, (_, i) => ({
@@ -283,19 +281,19 @@ test('numbering exceptions ask once across tables and entities', async () => {
     { entity: { eid: 's' }, doc: { title: 'Shelf' } },
     { entity: { eid: 'r' }, doc: { title: 'Review' } },
   ])
-  // Exception presence, for the batch, and the pointers of the two whose
-  // shape moved; identity held.
-  assertEquals(selects, 2)
+  // The pointers of the two whose shape moved; identity held, and nothing
+  // given a component in a series.
+  assertEquals(selects, 1)
   let rows = await s.tx((tx) => tx.get(['p0', 'p149', 's', 'r']))
   assertEquals(rows.map((b) => b.entity.num ?? null), [1, 150, null, null])
 })
 
-test('a patch asks about numbering exceptions only where they decide a number', async () => {
+test('a patch asks about numbering only where it gives a number', async () => {
   let asked = 0
   let driver = spy(mem(), (sql) => {
     if (/^(select|update "entity")/.test(sql.trimStart())) asked++
   })
-  let s = storage(driver, shop, { number: { except: ['shelf'] } })
+  let s = storage(driver, shop, { number: { product: 'P' } })
   s.install()
   s.raise()
   await write(s, [
@@ -308,18 +306,22 @@ test('a patch asks about numbering exceptions only where they decide a number', 
     await write(s, bundles)
     return asked
   }
-  // Nothing is read: the bundle names the exception, or gives nothing, and
-  // the identity is held.
+  // Nothing is read: the bundle gives no component in a series, or gives
+  // nothing, and the identity is held.
   assertEquals(await cost([{ entity: { eid: 's' }, shelf: { slot: 2 } }]), 0)
   assertEquals(await cost([{ entity: { eid: 's' }, doc: null }]), 0)
   // Memory knows what an entity it wrote wholly wears: all that is asked is
   // its pointer, read and moved to the shape it takes.
   assertEquals(await cost([{ entity: { eid: 'p' }, doc: { title: 'Mug' } }]), 2)
-  // A numbered entity given the exception keeps its existing address.
-  await write(s, [{ entity: { eid: 'p' }, shelf: { aisle: 'B', slot: 1 } }])
+  // An entity is numbered by the first write that gives it a component in a
+  // series, and a numbered one keeps its number.
+  await write(s, [
+    { entity: { eid: 's' }, product: { price: 2 } },
+    { entity: { eid: 'p' }, shelf: { aisle: 'B', slot: 1 } },
+  ])
   assertEquals(
     (await s.tx((tx) => tx.get(['s', 'p']))).map((b) => b.entity.num ?? null),
-    [null, 1],
+    [3, 1],
   )
 })
 

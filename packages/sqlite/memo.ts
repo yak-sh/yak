@@ -1068,7 +1068,11 @@ export let memoized = (
       : null
     if (!out) return comps(b).length || b.entity.archetype ? LOST : null
     if (mint && numbered && mint.num != null) {
-      out.entity = { ...out.entity, num: mint.num }
+      out.entity = {
+        ...out.entity,
+        num: mint.num,
+        ...mint.prefix == null ? {} : { prefix: mint.prefix },
+      }
     }
     if (b.entity.archetype !== undefined) {
       let { archetype: _, ...entity } = out.entity

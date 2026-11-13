@@ -48,7 +48,13 @@ import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps, TOMBSTONE } from '@yaks/graph/bundle'
 import { stood } from './raise.ts'
 import { Refused } from '@yaks/graph/errors'
-import { renumbering } from '@yaks/graph/storage'
+import {
+  type Pair,
+  renumbering,
+  type Series,
+  seriesOf,
+  stating,
+} from '@yaks/graph/storage'
 import {
   among,
   and,
@@ -67,11 +73,14 @@ import {
   type Expr,
   fn,
   from,
+  gt,
   type Insert,
   isNull,
   jsonable,
+  le,
   lit,
   not,
+  notNull,
   oneOf,
   op,
   or,
@@ -142,9 +151,15 @@ let slot = (
     ? jsonb(val(jsonIn(raw)))
     : val(scalar(raw))
 
-/** What the store already knows about an eid: its number, and whether that
- * identity is tombstoned. An eid with no entry has no entity yet. */
-export type Spine = { id: number; num: number | null; dead: boolean }
+/** What the store already knows about an eid: its number and the prefix of
+ * its series, and whether that identity is tombstoned. An eid with no entry
+ * has no entity yet. */
+export type Spine = {
+  id: number
+  num: number | null
+  prefix?: string | null
+  dead: boolean
+}
 
 /** What the store knows about these eids — one statement and one bound
  * parameter, whatever the batch's size (a Durable Object binds at most 100).
@@ -166,6 +181,7 @@ let stored = (driver: Driver, eids: string[]): Map<string, Spine> =>
         col('id', 'e'),
         col('eid', 'e'),
         col('num', 'e'),
+        col('prefix', 'e'),
         as(grave(col('id', 'e')), 'dead'),
       ],
       ...(eids.length == 1
@@ -181,6 +197,7 @@ let stored = (driver: Driver, eids: string[]): Map<string, Spine> =>
     })).map((r) => [String(r.eid), {
       id: Number(r.id),
       num: r.num == null ? null : Number(r.num),
+      prefix: r.prefix == null ? null : String(r.prefix),
       dead: r.dead != null,
     }]),
   )
@@ -194,7 +211,7 @@ export let buried = (driver: Driver, eids: string[]): Set<string> =>
   )
 
 // What a mint or a numbering reports: the identity it wrote.
-let IDENTITY = [col('eid'), col('num')]
+let IDENTITY = [col('eid'), col('num'), col('prefix')]
 
 /**
  * The statement that mints an identity, and returns what it minted. SQLite
@@ -212,18 +229,22 @@ let IDENTITY = [col('eid'), col('num')]
  * already carries, because an entity read as `T-37574` somewhere is `T-37574`
  * everywhere. The sequence follows — `entity_number_insert` raises its high
  * water mark — so the next minted number is still past every given one.
+ * `prefix` is the letter of the series the number is in, none for a number
+ * the store counts without letters.
  */
 export let mintSql = (
   eid: string,
   number: boolean | number = false,
   archetype?: number,
+  prefix: string | null = null,
 ): Insert => ({
   t: 'insert',
   into: 'entity',
-  cols: ['eid', 'num', ...archetype == null ? [] : ['archetype']],
+  cols: ['eid', 'num', 'prefix', ...archetype == null ? [] : ['archetype']],
   rows: [[
     val(eid),
     typeof number == 'number' ? val(number) : number ? next : lit(null),
+    number === false || prefix == null ? lit(null) : val(prefix),
     ...archetype == null ? [] : [val(archetype)],
   ]],
   upsert: [{ on: [col('eid')] }],
@@ -231,19 +252,21 @@ export let mintSql = (
 })
 
 /** The statement that mints identities, from one of @yaks/sql's `parts`:
- * each row an eid and the archetype's integer id it is minted in, or null.
- * `numbered`, each takes a number past the sequence's high-water mark as the
- * statement found it, in the order the part gives them; otherwise none. It
- * returns what it minted, as {@link mintSql} does, with the id: nothing for an
- * eid that already had one. */
-export let mintsSql = (part: string, numbered = false): Insert => ({
+ * each row an eid, the archetype's integer id it is minted in or null, and
+ * the number and prefix it is given or nulls. `next`, each takes a number
+ * past the store's one count as the statement found it, in the order the part
+ * gives them, in place of its own. It returns what it minted, as
+ * {@link mintSql} does, with the id: nothing for an eid that already had
+ * one. */
+export let mintsSql = (part: string, next = false): Insert => ({
   t: 'insert',
   into: 'entity',
-  cols: ['eid', 'num', 'archetype'],
+  cols: ['eid', 'num', 'prefix', 'archetype'],
   q: select({
     cols: [
       cell(0),
-      numbered ? op('+', high, op('+', col('key'), lit(1))) : lit(null),
+      next ? op('+', high, op('+', col('key'), lit(1))) : cell(2),
+      cell(3),
       cell(1),
     ],
     from: call('json_each', [val(part)]),
@@ -254,48 +277,68 @@ export let mintsSql = (part: string, numbered = false): Insert => ({
 })
 
 /** The statement that numbers a spine a reference minted, once a bundle of its
- * own arrives: the next number, or the one stated. It returns what
- * {@link mintSql} does, and nothing where the spine already has a number. */
-export let numberSql = (eid: string, number: true | number): Update => ({
+ * own arrives: the next number, or the one stated, in the series of `prefix`.
+ * It returns what {@link mintSql} does, and nothing where the spine already
+ * has a number. */
+export let numberSql = (
+  eid: string,
+  number: true | number,
+  prefix: string | null = null,
+): Update => ({
   t: 'update',
   table: 'entity',
-  set: { num: number === true ? next : val(number) },
+  set: {
+    num: number === true ? next : val(number),
+    prefix: prefix == null ? lit(null) : val(prefix),
+  },
   where: and(eq(col('eid'), val(eid)), isNull(col('num'))),
   returning: IDENTITY,
 })
 
-// The entity holding each of these numbers, where one does, a tombstone
+// The entities holding each of these numbers, any letter, a tombstone
 // included: its number is still its address.
 let holders = (
   driver: Driver,
   nums: number[],
-): Map<number, string> =>
+): Map<number, ({ eid: string } & Pair)[]> =>
   nums.length
-    ? new Map(
+    ? Map.groupBy(
       driver.query(select({
-        cols: [col('num'), col('eid')],
+        cols: [col('num'), col('prefix'), col('eid')],
         from: table('entity'),
         where: oneOf(col('num'), nums),
-      })).map((r) => [Number(r.num), String(r.eid)]),
+      })).map((r) => ({
+        eid: String(r.eid),
+        num: Number(r.num),
+        prefix: r.prefix == null ? null : String(r.prefix),
+      })),
+      (h) => h.num,
     )
     : new Map()
 
-// An entity's number set to another, or to none, and the store's memory of
-// its spine with it. The sequence follows a number set past it
-// (`entity_number_update`).
+// An entity's pair set to another, or to none, and the store's memory of its
+// spine with it. The counts follow a number set past them
+// (`entity_number_update`, `entity_series_update`).
 let renumber = (
   driver: Driver,
   eid: string,
   spine: Spine,
-  num: number | null,
+  pair: Pair | null,
 ) => {
   effect(driver, {
     t: 'update',
     table: 'entity',
-    set: { num: num == null ? lit(null) : val(num) },
+    set: {
+      num: pair == null ? lit(null) : val(pair.num),
+      prefix: pair?.prefix == null ? lit(null) : val(pair.prefix),
+    },
     where: eq(col('eid'), val(eid)),
   })
-  spined(driver).learn(eid, { ...spine, num })
+  spined(driver).learn(eid, {
+    ...spine,
+    num: pair?.num ?? null,
+    prefix: pair?.prefix ?? null,
+  })
 }
 
 /** The identity a {@link mintSql} statement reported — the rows it returned —
@@ -305,8 +348,75 @@ export let minted = (rows: Row[]): Entity | undefined =>
     ? {
       eid: String(rows[0].eid),
       num: rows[0].num == null ? null : Number(rows[0].num),
+      ...rows[0].prefix == null ? {} : { prefix: String(rows[0].prefix) },
     }
     : undefined
+
+// Whether this store still holds a number given before series had letters:
+// until its rows are moved, each one given takes the store's one count, so
+// it is past every number those rows hold, whatever series it is in.
+let counting = new WeakMap<Driver, boolean>()
+let unmoved = (driver: Driver): boolean => {
+  let held = counting.get(driver)
+  if (held == null) {
+    held = !!driver.query(select({
+      cols: [lit(1)],
+      from: table('entity'),
+      where: and(notNull(col('num')), isNull(col('prefix'))),
+      limit: lit(1),
+    })).length
+    counting.set(driver, held)
+  }
+  return held
+}
+
+// The last number a series gave: this write's, or the store's.
+let lastIn = (
+  driver: Driver,
+  prefix: string,
+  given: Map<string, number>,
+): number =>
+  given.get(prefix) ?? Number(
+    driver.query(select({
+      cols: [col('high')],
+      from: table('entity_series'),
+      where: eq(col('prefix'), val(prefix)),
+    }))[0]?.high ?? 0,
+  )
+
+/**
+ * The next number in a series, past the last it gave, stepping over one an
+ * entity holds: in the series, or without a letter, which holds its number in
+ * every series. `given` keeps what this write has given so far, by letter, so
+ * the next asked is past it. Read a window of numbers at a time: a store
+ * whose old rows hold most of the low ones steps over them in few reads.
+ */
+let nextIn = (
+  driver: Driver,
+  prefix: string,
+  given: Map<string, number>,
+): number => {
+  let n = lastIn(driver, prefix, given)
+  for (let width = 64;; n += width) {
+    let held = new Set(
+      driver.query(select({
+        cols: [col('num')],
+        from: table('entity'),
+        where: and(
+          gt(col('num'), val(n)),
+          le(col('num'), val(n + width)),
+          or(eq(col('prefix'), val(prefix)), isNull(col('prefix'))),
+        ),
+      })).map((r) => Number(r.num)),
+    )
+    for (let k = n + 1; k <= n + width; k++) {
+      if (!held.has(k)) {
+        given.set(prefix, k)
+        return k
+      }
+    }
+  }
+}
 
 // Whether the entity `e` has no row in `comp` yet.
 let lacks = (comp: string): Expr =>
@@ -630,28 +740,6 @@ export let touched = (v: Vocab, bundles: Bundle[]): string[] =>
     ),
   ])
 
-// Which entities wear any of these components. One statement answers the
-// whole batch, with indexed presence probes and one bound eid list.
-let wears = (driver: Driver, tables: string[], eids: string[]): Set<string> => {
-  if (!tables.length || !eids.length) return new Set()
-  return new Set(
-    driver.query(select({
-      cols: [col('eid', 'e')],
-      from: table('entity', 'e'),
-      where: and(
-        oneOf(col('eid', 'e'), eids),
-        or(...tables.map((comp) =>
-          exists(select({
-            cols: [lit(1)],
-            from: table(comp, 'c'),
-            where: eq(col('entity', 'c'), col('id', 'e')),
-          }))
-        )),
-      ),
-    })).map((r) => String(r.eid)),
-  )
-}
-
 /**
  * The classes a unit's births are minted in. An entity is first written in a
  * shape (the tables its first patch gives it) and its unit points it at the
@@ -809,16 +897,34 @@ let wholes = (
 }
 
 /**
+ * How a store numbers its entities: not at all, with one count for every
+ * entity and no letters (`true`), or by series, given which letter each
+ * component numbers with ({@link Series}, @yaks/graph). By series, an entity
+ * is numbered on the write that first gives it a component in the table, in
+ * the series `seriesOf` picks, and its letter never changes afterwards.
+ */
+export type Numbering = boolean | Series
+
+// The number an entity is minted with: none, the store's next count, or its
+// own, with the letter of its series.
+type Take = false | { num: 'next' | number; prefix: string | null }
+
+/**
  * Patch a batch of bundles in, in order, and return the spines this patch
- * minted or numbered — each with the `num` it was given, as the statement
- * itself reported it. A bundle for a tombstoned entity is skipped: bringing
- * one back is `revive`'s, which @yaks/graph asks for first.
+ * minted or numbered — each with the `num` and `prefix` it was given, as the
+ * statement itself reported it. A bundle for a tombstoned entity is skipped:
+ * bringing one back is `revive`'s, which @yaks/graph asks for first.
  *
  * An eid a reference only names still gets a spine, because a reference column
  * holds its target's id, but that spine takes no number: it is a pointer to
  * nothing, which a yaks app pointing into another app's store makes on
  * purpose, and @yaks/graph brings no entity into being for it. It is numbered
  * when a bundle of its own arrives, in this batch or a later one.
+ *
+ * Numbered by series, a number is the one after the last its series gave
+ * (`entity_series`), stepping over one an entity holds. A store still holding
+ * numbers given before series had letters gives each the store's one count,
+ * so it is past all of them, with its letter.
  *
  * `moved` hears each component row this patch brought or took away, as the
  * table and whether the entity holds one now: what may have moved its
@@ -838,7 +944,7 @@ export let patch = (
   driver: Driver,
   vocab: Vocab,
   bundles: Bundle[],
-  number: boolean | { except: readonly string[] } = false,
+  number: Numbering = false,
   moved?: Moved,
   had?: Known,
   born?: Births,
@@ -858,23 +964,31 @@ export let patch = (
   let alive = bundles.filter((b) => !known.get(b.entity.eid)?.dead)
   let ids = new Map([...known].map(([eid, row]) => [eid, row.id]))
   let resolve: Resolve = (eid) => ids.has(eid) ? val(ids.get(eid)!) : owner(eid)
+  let pairOf = (eid: string): Pair | null | undefined => {
+    let k = known.get(eid)
+    return !k ? undefined : k.num == null ? null : {
+      num: k.num,
+      prefix: k.prefix ?? null,
+    }
+  }
 
-  // What each bundle states its entity's number to be: a number to take, or
-  // `null` for none, born or not, checked against the numbers every other
-  // entity holds, a tombstone's included (@yaks/graph `renumbering`). A
-  // vocabulary that declares no number (@yaks/id) reads none back, and a
-  // stated one says nothing to it.
-  let stated = new Map<string, number | null>()
+  // What each bundle states its entity's pair to be: one to take, or `null`
+  // for none, born or not, checked against the pairs every other entity
+  // holds, a tombstone's included (@yaks/graph `renumbering`). A vocabulary
+  // that declares no number (@yaks/id) reads none back, and a stated one says
+  // nothing to it.
+  let stated = new Map<string, Pair | null>()
   for (let b of vocab.prop('entity', 'num') ? alive : []) {
-    if (b.entity.num !== undefined) stated.set(b.entity.eid, b.entity.num)
+    let pair = stating(b.entity, pairOf(b.entity.eid))
+    if (pair !== undefined) stated.set(b.entity.eid, pair)
   }
   let renumbered = stated.size
     ? renumbering(
       stated,
-      (eid) => known.get(eid)?.num,
-      holders(driver, [...stated.values()].filter((n) => n != null)),
+      pairOf,
+      holders(driver, [...stated.values()].flatMap((p) => p ? [p.num] : [])),
     )
-    : new Map<string, number | null>()
+    : new Map<string, Pair | null>()
   // An entity moving off its number lets go of it before any is given, so a
   // number another entity of the batch leaves is free for this one.
   let moving = [...renumbered.keys()].filter((eid) => known.get(eid)?.num)
@@ -887,49 +1001,6 @@ export let patch = (
     ...stated.keys(),
   ])
 
-  // Mint a spine for every eid the live bundles touch or point at, so a
-  // reference can name a target created in the same batch, in any order. An
-  // eid the store already knows is skipped here and would be a no-op anyway.
-  // Classification sees the whole admitted batch, including targets referenced
-  // before their own bundle. Entities that already carry an excluded component
-  // remain unnumbered.
-  let excluded = new Set<string>()
-  if (typeof number == 'object') {
-    // A component no plugin here declares is worn by nothing: a config names
-    // its exceptions once, for every graph it opens.
-    let tables = [...new Set(number.except.filter((n) => vocab.comp(n)))]
-    let standing = new Set(stood(driver, vocab))
-    for (let name of tables) {
-      for (let b of alive) if (b[name] != null) excluded.add(b.entity.eid)
-    }
-    // What a known entity already wears is asked only where it decides
-    // whether a bundle of its own would give it a number.
-    let asked = [...new Set(alive.map((b) => b.entity.eid))].filter((eid) => {
-      let k = known.get(eid)
-      if (!k || k.num != null || excluded.has(eid) || !own.has(eid)) {
-        return false
-      }
-      // Memory answers for an entity it knows wholly: one it knows wears an
-      // exception, or one it knows wears none of them, is not asked about.
-      let held = tables.map((name) => had?.(eid, name))
-      let wears = held.some((h) => h != null)
-      if (wears) excluded.add(eid)
-      return !wears && held.some((h) => h === undefined)
-    })
-    let worn = tables.filter((name) => standing.has(name))
-    for (let eid of wears(driver, worn, asked)) excluded.add(eid)
-    // Exclusions govern allocation, not addresses already given out. A number
-    // in a comment, transcript or URL keeps resolving after policy changes.
-  }
-  // The number an entity is born with: the one its bundle states, else none
-  // where the store numbers nothing or the entity wears an excepted
-  // component, else the next.
-  let take = (eid: string): boolean | number =>
-    stated.has(eid)
-      ? stated.get(eid) ?? false
-      : number === false || excluded.has(eid)
-      ? false
-      : true
   // What the live bundles give each entity, and the pointer they name for
   // it: what a mint is told it opens holding, and the class it may take.
   let opening = new Map<string, string[]>()
@@ -940,6 +1011,27 @@ export let patch = (
     opening.set(eid, held)
     for (let [name, comp] of comps(b)) if (comp != null) held.push(name)
     if (b.entity.archetype) named.set(eid, b.entity.archetype)
+  }
+  // The number an entity takes: the pair its bundle states; else none where
+  // the store numbers nothing; else the store's one count, with no letter
+  // where it numbers without them, and in the series its components pick
+  // where it numbers by series. `held` is what it holds besides this batch.
+  let series = typeof number == 'object' ? seriesOf(vocab, number) : undefined
+  let counted = series ? unmoved(driver) : true
+  let given = new Map<string, number>()
+  let take = (eid: string, held: string[] = []): Take => {
+    let pair = stated.get(eid)
+    if (pair?.prefix) {
+      let last = lastIn(driver, pair.prefix, given)
+      given.set(pair.prefix, Math.max(last, pair.num))
+    }
+    if (stated.has(eid)) return pair ?? false
+    if (!number) return false
+    let prefix = series?.([...held, ...opening.get(eid) ?? []])
+    if (series && !prefix) return false
+    return counted
+      ? { num: 'next', prefix: prefix ?? null }
+      : { num: nextIn(driver, prefix!, given), prefix: prefix! }
   }
   // The pointer each mint wrote, so the bundle naming it writes it once.
   let pointers = new Map<string, number>()
@@ -952,6 +1044,7 @@ export let patch = (
     spined(driver).learn(String(row.eid), {
       id,
       num: row.num == null ? null : Number(row.num),
+      prefix: row.prefix == null ? null : String(row.prefix),
       dead: false,
     })
     if (pointer != null) pointers.set(String(row.eid), pointer)
@@ -959,16 +1052,22 @@ export let patch = (
     made.push(minted([row])!)
   }
   // The eids minted wait to be minted together, a statement a part
-  // ({@link mintsSql}), while each takes the next number or each takes none.
-  // One that changes which, or states its number, sends those before it
-  // first, so ids and numbers follow the batch's order.
-  let waiting = new Map<string, { tables: string[]; pointer?: number }>()
-  let numbering = false
+  // ({@link mintsSql}), while each takes the store's next count or each
+  // takes its own. One that changes which sends those before it first, so
+  // ids and numbers follow the batch's order.
+  type Waiting = { tables: string[]; pointer?: number; take: Take }
+  let waiting = new Map<string, Waiting>()
+  let counting = false
   let mint = () => {
     let rows = new Map<string, Row>()
-    let list = [...waiting].map(([eid, w]) => [eid, w.pointer ?? null])
+    let list = [...waiting].map(([eid, w]) => [
+      eid,
+      w.pointer ?? null,
+      w.take && w.take.num != 'next' ? w.take.num : null,
+      w.take ? w.take.prefix : null,
+    ])
     for (let part of parts(list)) {
-      for (let r of driver.query(mintsSql(part, numbering))) {
+      for (let r of driver.query(mintsSql(part, counting))) {
         rows.set(String(r.eid), r)
       }
     }
@@ -978,6 +1077,9 @@ export let patch = (
     }
     waiting.clear()
   }
+  // Mint a spine for every eid the live bundles touch or point at, so a
+  // reference can name a target created in the same batch, in any order. An
+  // eid the store already knows is skipped here and would be a no-op anyway.
   for (let eid of touched(vocab, alive)) {
     if (seen.has(eid)) continue
     seen.add(eid)
@@ -989,42 +1091,41 @@ export let patch = (
       : to == eid
       ? undefined
       : ids.get(to)
-    let number = own.has(eid) && take(eid)
-    if (typeof number == 'boolean') {
-      if (number != numbering) mint()
-      numbering = number
-      waiting.set(eid, { tables, pointer })
-      continue
-    }
-    mint()
-    let [row] = driver.query({
-      ...mintSql(eid, number, pointer),
-      returning: [...IDENTITY, col('id')],
-    })
-    if (row) took(row, tables, pointer)
+    let t = own.has(eid) ? take(eid) : false
+    let next = !!t && t.num == 'next'
+    if (next != counting) mint()
+    counting = next
+    waiting.set(eid, { tables, pointer, take: t })
   }
   mint()
-  // A spine an earlier reference minted is numbered now, if it still carries
-  // nothing: an unnumbered entity that carries something was left unnumbered
-  // on purpose, and keeps it that way.
+  // A spine an earlier reference minted, or an entity numbered nothing so
+  // far, is numbered now if its own bundle gives what numbers it: by one
+  // count, only a spine that carries nothing, since an unnumbered entity
+  // that carries something was left so on purpose; by series, the first
+  // component in its series.
+  let lettered = typeof number == 'object' ? Object.keys(number) : []
   let pointed = [...own].filter((eid) => {
     let k = known.get(eid)
-    return k && !k.dead && k.num == null && !stated.has(eid) &&
-      take(eid) !== false
+    return k && !k.dead && k.num == null && !stated.has(eid) && !!number &&
+      (!series || (opening.get(eid) ?? []).some((c) => lettered.includes(c)))
   })
   if (pointed.length) {
     for (let b of get(driver, vocab, pointed, {}, undefined, unsettled)) {
-      let n = take(b.entity.eid)
-      if (n === false || comps(b).length) continue
-      let e = minted(driver.query(numberSql(b.entity.eid, n)))
+      let held = comps(b).map(([name]) => name)
+      if (!series && held.length) continue
+      let t = take(b.entity.eid, held)
+      if (!t) continue
+      let e = minted(driver.query(
+        numberSql(b.entity.eid, t.num == 'next' ? true : t.num, t.prefix),
+      ))
       if (e) made.push(e)
     }
   }
-  // Every entity the store held before the batch takes the number stated for
+  // Every entity the store held before the batch takes the pair stated for
   // it; one born here took it as it was minted.
-  for (let [eid, num] of renumbered) {
+  for (let [eid, pair] of renumbered) {
     let k = known.get(eid)
-    if (k && num != null) renumber(driver, eid, k, num)
+    if (k && pair != null) renumber(driver, eid, k, pair)
   }
 
   // The physical table is the last word on required columns: an older store

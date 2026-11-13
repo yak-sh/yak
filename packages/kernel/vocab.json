@@ -1,6 +1,7 @@
 {
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/id": true,
     "https://yak.sh/vocab/edge": true
   },
   "title": "kernel",
@@ -75,6 +76,7 @@
       "component": true,
       "type": "object",
       "kind": true,
+      "prefix": "C",
       "properties": {
         "target": {
           "type": "string",

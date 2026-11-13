@@ -69,5 +69,5 @@ test('a graph without the plugin refuses the request', () => {
 
 test('a graph without the plugin has no num property at all', () => {
   assertEquals(loadVocab([shop]).props('entity'), [])
-  assertEquals(vocab.props('entity'), ['num'])
+  assertEquals(vocab.props('entity'), ['num', 'prefix'])
 })

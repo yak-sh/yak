@@ -44,6 +44,8 @@ export type Saved = {
   eid: Eid
   /** the number storage gave it, so a reload keeps the ids a page shows */
   num?: number | null
+  /** the letter of the series that number is in */
+  prefix?: string | null
   /** its browser-owned components, by name */
   comps: Record<string, Comp>
 }
@@ -166,6 +168,7 @@ export let keep = (graph: Graph, vault: Vault): Kept => {
           save.push({
             eid: b.entity.eid,
             num: b.entity.num,
+            prefix: b.entity.prefix,
             comps: held,
           })
         } else gone.push(b.entity.eid)
@@ -209,7 +212,7 @@ export let keep = (graph: Graph, vault: Vault): Kept => {
   let ready = vault.load().then((recs) => {
     hydrated = true
     let bundles = recs.filter((r) => !loading.has(r.eid)).map((r): Bundle => ({
-      entity: { eid: r.eid, num: r.num },
+      entity: { eid: r.eid, num: r.num, prefix: r.prefix },
       ...r.comps,
       [KEPT]: true,
     }))

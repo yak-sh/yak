@@ -4,7 +4,7 @@
 // of those, and passes wherever one is asked for.
 //
 // The dependency between the two packages runs one direction, and this is the
-// leaf end of it: @yaks/sql reads a human id (`B-7` is the entity numbered 7)
+// leaf end of it: @yaks/sql reads a human id (`B-7` is the book numbered 7)
 // with this package's `parse`, and @yaks/graph is built over @yaks/sql, so
 // @yaks/graph sits above this package. @yaks/match states the same thing about
 // a bundle for the same reason.
@@ -15,8 +15,12 @@ import type { VocabDoc } from '@yaks/vocab'
 export type Eid = string
 
 /** An entity's identity: the eid, and the number this package's plugin gives
- * it. */
-export type Entity = { eid: Eid; num?: number | null }
+ * it in the series of its prefix. */
+export type Entity = {
+  eid: Eid
+  num?: number | null
+  prefix?: string | null
+}
 
 /** A bundle: the identity under `entity`, every component under its own name,
  * properties inside, plus the `$`-prefixed requests that ride beside them. */

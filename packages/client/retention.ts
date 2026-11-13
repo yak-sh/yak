@@ -417,6 +417,7 @@ export let retention = (
         pending.saved.set(eid, {
           eid,
           num: b!.entity.num,
+          prefix: b!.entity.prefix,
           comps: wire as Saved['comps'],
         })
       } else {
@@ -737,7 +738,10 @@ export let retention = (
       let bundles = rows.filter((r) =>
         !touched.has(r.eid) && !pins.has(r.eid) && !known.has(r.eid)
       )
-        .map((r) => ({ entity: { eid: r.eid, num: r.num }, ...r.comps }))
+        .map((r) => ({
+          entity: { eid: r.eid, num: r.num, prefix: r.prefix },
+          ...r.comps,
+        }))
       for (let answer of saved) {
         if (!answers.get(answer.key)) answers.put(answer)
       }

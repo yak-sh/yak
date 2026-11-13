@@ -44,7 +44,14 @@ import type {
 import { isPromise, same } from '@yaks/fp'
 import { comps, dead, TOMBSTONE, tombstoned } from '@yaks/graph/bundle'
 import { only } from '@yaks/graph/read'
-import { renumbering } from '@yaks/graph/storage'
+import {
+  clash,
+  type Pair,
+  renumbering,
+  type Series,
+  seriesOf,
+  stating,
+} from '@yaks/graph/storage'
 import {
   type Computed,
   type Index,
@@ -59,6 +66,9 @@ import { extendsVocab, type Vocab } from '@yaks/vocab'
 import { bindings } from './rules.ts'
 
 export type { Query }
+
+// What a rollback puts the numbering back to.
+type Counted = { next: number; highs: Map<string, number> }
 
 /** Passed to every read of a store: the moment relative time phrases in a query
  * (`.released=today`) resolve against. A per-call `opts` overrides it. */
@@ -76,9 +86,10 @@ export type RamOpts = {
   adopt?: boolean
   /** Give new entities a human-readable number. Opt-IN, with the same option
    * name @yaks/sqlite uses: left out, an entity has its eid and nothing else.
-   * `{ except: [comp, …] }` turns numbering on while leaving the entities of
-   * the named components unnumbered. */
-  number?: boolean | { except: readonly string[] }
+   * `true` numbers every entity by one count; a table of letters (component →
+   * letter) numbers each entity in the series of the components it is given,
+   * once, on the write that first gives it one. */
+  number?: boolean | Series
   /** `comp.prop` → the value for one bundle, for each property the vocabulary
    * declares computed and never stores: what `.task.status=open` is answered
    * with here, the way @yaks/sql answers it with a `derived` expression. A
@@ -275,17 +286,26 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       ? undefined
       : JSON.stringify(values)
   }
+  // The store's one count, and each series' last number, by letter.
   let next = 1
-  // The entity each number was last given to, a tombstone's and an evicted
-  // payload's included. Never pruned: an entry is checked against the
-  // entity's own number when asked (`holder`), so one given away since says
+  let highs = new Map<string, number>()
+  // The entities each number was given to, any letter, a tombstone's and an
+  // evicted payload's included. Never pruned: an entry is checked against the
+  // entity's own pair when asked (`holders`), so one given away since says
   // nothing.
-  let given = new Map<number, Eid>()
-  let numOf = (eid: Eid) => (rows.get(eid)?.entity ?? cold.get(eid))?.num
-  let holder = (num: number) => {
-    let eid = given.get(num)
-    return eid && numOf(eid) === num ? eid : undefined
+  let given = new Map<number, Set<Eid>>()
+  let pairOf = (eid: Eid): Pair | null | undefined => {
+    let e = rows.get(eid)?.entity ?? cold.get(eid)
+    return !e ? undefined : e.num == null ? null : {
+      num: e.num,
+      prefix: e.prefix ?? null,
+    }
   }
+  let holders = (num: number): ({ eid: Eid } & Pair)[] =>
+    [...given.get(num) ?? []].flatMap((eid) => {
+      let pair = pairOf(eid)
+      return pair?.num === num ? [{ eid, ...pair }] : []
+    })
   // When each tombstone was laid, keyed by the record itself, so a rollback
   // that puts an earlier record back takes the time with it.
   let laid = new WeakMap<Bundle, string>()
@@ -295,15 +315,17 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let depth = 0
   let save = (eid: Eid) => log.push([eid, rows.get(eid), cold.get(eid)])
   // Back to where the log stood at `mark`, and the numbering with it.
-  let rewind = (mark: number, minted: number) => {
+  let rewind = (mark: number, minted: Counted) => {
     while (log.length > mark) {
       let [eid, rec, identity] = log.pop()!
       if (identity) cold.set(eid, identity)
       else cold.delete(eid)
       put(eid, rec)
     }
-    next = minted
+    next = minted.next
+    highs = minted.highs
   }
+  let counted = (): Counted => ({ next, highs: new Map(highs) })
 
   // One entity's record replaced, or dropped, and every index moved with it.
   // Every write goes through here, a rollback's included, so an index never
@@ -331,7 +353,8 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     }
     if (b) rows.set(eid, b)
     else rows.delete(eid)
-    if (b?.entity.num != null) given.set(b.entity.num, eid)
+    let num = b?.entity.num
+    if (num != null) given.set(num, (given.get(num) ?? new Set()).add(eid))
     for (let { comp, index, held } of checks) {
       let from = uniqueKey(was, comp, index.props, index.present)
       let to = uniqueKey(b, comp, index.props, index.present)
@@ -587,10 +610,30 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       )
     })
 
+  // The series an entity is numbered in, where this store numbers by series
+  // (@yaks/graph `seriesOf`).
+  let series = typeof base.number == 'object'
+    ? seriesOf(vocab, base.number)
+    : undefined
+  let lettered = typeof base.number == 'object' ? Object.keys(base.number) : []
+  // The next number in a series, past the last it gave, stepping over one an
+  // entity holds in it or without a letter.
+  let nextIn = (prefix: string): number => {
+    let n = (highs.get(prefix) ?? 0) + 1
+    while (holders(n).some((h) => clash(h, { prefix, num: n }))) n++
+    highs.set(prefix, n)
+    return n
+  }
   // The number an identity gets when no bundle states one: the next this
-  // store has to give, or none in a store mirroring another graph, which waits
-  // to be told.
-  let numbered = (): { num?: number } => base.adopt ? {} : { num: next++ }
+  // store has to give, in the series its components pick where it numbers by
+  // series, or none in a store mirroring another graph, which waits to be
+  // told.
+  let numbered = (held: string[]): Partial<Pair> => {
+    if (base.adopt) return {}
+    if (!series) return { num: next++ }
+    let prefix = series(held)
+    return prefix ? { num: nextIn(prefix), prefix } : {}
+  }
 
   let patch = (bundles: Bundle[]): Entity[] => {
     let born: Entity[] = []
@@ -598,47 +641,43 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     let reserved = new Map<Eid, Bundle>()
     let keep = (eid: Eid, b: Bundle) =>
       reserved.has(eid) ? reserved.set(eid, b) : put(eid, b)
-    let excluded = new Set<string>()
-    if (typeof base.number == 'object') {
-      for (let name of base.number.except) {
-        for (let b of bundles) {
-          if (rows.get(b.entity.eid)?.[name] != null) {
-            excluded.add(b.entity.eid)
-          }
-        }
-        for (let b of bundles) if (b[name] != null) excluded.add(b.entity.eid)
-      }
-      // Exclusions stop new allocations; an existing number is an address
-      // somebody may already hold, so it stays with its entity.
-    }
-    // The number each bundle states for its entity: one to take, or `null`
-    // for none. A mirror is told it, whatever its vocabulary says; any other
-    // store takes one where its vocabulary declares numbers (@yaks/id), and
-    // checks it first, against every number its entities hold.
-    let stated = new Map<Eid, number | null>()
+    // The pair each bundle states for its entity: one to take, or `null` for
+    // none. A mirror is told it, whatever its vocabulary says; any other store
+    // takes one where its vocabulary declares numbers (@yaks/id), and checks
+    // it first, against every pair its entities hold.
+    let stated = new Map<Eid, Pair | null>()
     let told = base.adopt || !!vocab.prop('entity', 'num')
     for (let b of told ? bundles : []) {
-      if (b.entity.num !== undefined && !buried(rows.get(b.entity.eid))) {
-        stated.set(b.entity.eid, b.entity.num)
-      }
+      if (buried(rows.get(b.entity.eid))) continue
+      let pair = stating(b.entity, pairOf(b.entity.eid))
+      if (pair !== undefined) stated.set(b.entity.eid, pair)
     }
     if (!base.adopt && stated.size) {
-      let held = new Map<number, Eid>()
-      for (let num of stated.values()) {
-        let eid = num == null ? undefined : holder(num)
-        if (eid) held.set(num!, eid)
+      let held = new Map<number, ({ eid: Eid } & Pair)[]>()
+      for (let pair of stated.values()) {
+        if (pair) held.set(pair.num, holders(pair.num))
       }
-      renumbering(stated, numOf, held)
+      renumbering(stated, pairOf, held)
     }
-    // A stated number, as an identity carries it; the next number this store
+    // A stated pair, as an identity carries it; the next number this store
     // gives stays past every one it holds.
-    let take = (eid: Eid): { num?: number } => {
-      let num = stated.get(eid)
-      if (num == null) return {}
-      next = Math.max(next, num + 1)
-      return { num }
+    let take = (eid: Eid): Partial<Pair> => {
+      let pair = stated.get(eid)
+      if (pair == null) return {}
+      if (pair.prefix) {
+        highs.set(pair.prefix, Math.max(highs.get(pair.prefix) ?? 0, pair.num))
+      } else next = Math.max(next, pair.num + 1)
+      return pair.prefix ? pair : { num: pair.num }
     }
-    let unnumbered = ({ num: _, ...entity }: Entity): Entity => entity
+    let unnumbered = ({ num: _, prefix: __, ...entity }: Entity): Entity =>
+      entity
+    // What each entity is given by this write.
+    let giving = new Map<Eid, string[]>()
+    for (let b of bundles) {
+      let held = giving.get(b.entity.eid) ?? []
+      giving.set(b.entity.eid, held)
+      for (let [name, comp] of comps(b)) if (comp != null) held.push(name)
+    }
     // An eid a reference only names gets a record to hold the pointer and no
     // number, until a bundle of its own arrives (@yaks/sqlite `patch`): one
     // giving it a component, or one stating its number.
@@ -648,28 +687,44 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         (comps(b).some(([, c]) => c != null) || stated.has(b.entity.eid))
       ).map((b) => b.entity.eid),
     )
-    let counts = (eid: Eid) => !!base.number && !excluded.has(eid)
     // Create a record for every eid this write touches or points at, so that a
     // reference may name a target created by the same write, in any order.
     let birth = (eid: Eid) => {
       let rec = reserved.get(eid) ?? rows.get(eid)
       let told = stated.has(eid)
       if (rec) {
-        if (told && (rec.entity.num ?? null) !== stated.get(eid)) {
-          // A number stated for an entity holding another: changed, or
-          // cleared by `null`.
+        let was = pairOf(eid) ?? null
+        let now = stated.get(eid) ?? null
+        if (
+          told &&
+          (was?.num !== now?.num || (was?.prefix ?? null) !== now?.prefix)
+        ) {
+          // A pair stated for an entity holding another: changed, or cleared
+          // by `null`.
           save(eid)
           let entity = { ...unnumbered(rec.entity), ...take(eid) }
           keep(eid, { ...rec, entity })
         } else if (
-          // A record an earlier reference made is numbered when a bundle of
-          // its own arrives, if it still carries nothing: an unnumbered entity
-          // that carries something was left unnumbered on purpose.
-          !told && !base.adopt && own.has(eid) && counts(eid) &&
-          !buried(rec) && rec.entity.num == null && empty(rec)
+          // A record numbered nothing so far is numbered when a bundle of its
+          // own gives what numbers it: by one count, only one an earlier
+          // reference made that still carries nothing, since an unnumbered
+          // entity that carries something was left so on purpose; by series,
+          // the first component in its series.
+          !told && !base.adopt && own.has(eid) && !!base.number &&
+          !buried(rec) && rec.entity.num == null &&
+          (series
+            ? (giving.get(eid) ?? []).some((c) => lettered.includes(c))
+            : empty(rec))
         ) {
+          let entity = {
+            ...rec.entity,
+            ...numbered([
+              ...comps(rec).map(([name]) => name),
+              ...giving.get(eid) ?? [],
+            ]),
+          }
+          if (entity.num == null) return
           save(eid)
-          let entity = { ...rec.entity, ...numbered() }
           keep(eid, { ...rec, entity })
           born.push(entity)
         }
@@ -682,7 +737,11 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         ? told ? { ...unnumbered(identity), ...take(eid) } : identity
         : {
           eid,
-          ...told ? take(eid) : own.has(eid) && counts(eid) ? numbered() : {},
+          ...told
+            ? take(eid)
+            : own.has(eid) && base.number
+            ? numbered(giving.get(eid) ?? [])
+            : {},
         }
       reserved.set(eid, { entity })
       if (!identity) born.push(entity)
@@ -790,7 +849,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let ask = (matches: Match[], bundles: Bundle[]): Binding[][] => {
     if (!matches.length) return []
     let mark = log.length
-    let minted = next
+    let minted = counted()
     try {
       tx.remove(bundles.filter(dead).map((b) => b.entity))
       patch(bundles.filter((b) => !dead(b)))
@@ -960,7 +1019,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       // A nested transaction is a savepoint: it rolls back to where it opened,
       // and its entries stay in the log for the outer one to undo in its turn.
       let mark = log.length
-      let minted = next
+      let minted = counted()
       depth++
       let undo = (e: unknown): never => {
         rewind(mark, minted)

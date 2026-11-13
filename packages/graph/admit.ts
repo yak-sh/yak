@@ -187,8 +187,8 @@ export let admit = (
   if (!trusted) unstamped(bundles, vocab)
   return bundles.flatMap((b) => {
     // The identity's stamps are the store's (entity.archetype), and arrive
-    // only with an identity copied from a read. @yaks/id's entity.num is no
-    // stamp: a write may state it (./storage.ts `renumbering`).
+    // only with an identity copied from a read. @yaks/id's entity{prefix,
+    // num} is no stamp: a write may state it (./storage.ts `renumbering`).
     if (!trusted) {
       for (let k of Object.keys(b.entity)) {
         if (!vocab.prop('entity', k)?.stamped) continue

@@ -277,17 +277,18 @@ equal(store.read('.book').length, 1)
 
 Numbers are off by default. With `number: true`, entities receiving their own
 components receive sequential numbers starting at 1; reference-only identities
-remain unnumbered until their own components arrive. Rollback restores the
-counter. `number: { except: ['componentName'] }` leaves entities carrying those
-components unnumbered at allocation. Existing numbers remain valid addresses,
-even after adding an excluded component.
+remain unnumbered until their own components arrive. A table of letters,
+component → letter, numbers by series instead, as @yaks/sqlite does: an entity
+is numbered once, on the patch that first gives it a component in the table, and
+holds `entity{prefix, num}`; each series counts on from its last number,
+stepping over one an entity holds. Rollback restores the counters.
 
-Where the vocabulary declares numbers (@yaks/id's `entity.num`), a patch stating
-`entity.num` gives its entity that number, born or not, or none for `null`. A
-number another entity holds is refused, unless that entity moves off it in the
-same patch (@yaks/graph `renumbering`). `adopt: true` is for a mirror: it never
-generates numbers, takes every stated one unchecked whatever its vocabulary
-says, and stores incoming computed values.
+Where the vocabulary declares numbers (@yaks/id's `entity{prefix, num}`), a
+patch stating them gives its entity that id, born or not, or none for
+`num: null`. An id another entity holds is refused, unless that entity moves off
+it in the same patch (@yaks/graph `renumbering`). `adopt: true` is for a mirror:
+it never generates numbers, takes every stated one unchecked whatever its
+vocabulary says, and stores incoming computed values.
 
 ```ts
 import { ram } from '@yaks/ram'
@@ -300,7 +301,7 @@ const vocab = loadVocab({
     cache: { type: 'object', component: true, properties: {} },
   },
 })
-const store = ram(vocab, { number: { except: ['cache'] } })
+const store = ram(vocab, { number: { book: 'B' } })
 store.tx((tx) =>
   tx.patch([
     { entity: { eid: 'b1' }, book: {} },
@@ -308,6 +309,7 @@ store.tx((tx) =>
   ])
 )
 equal(store.get(['b1', 'c1']).map((b) => b.entity.num), [1, undefined])
+equal(store.get(['b1'])[0].entity.prefix, 'B')
 store.tx((tx) => tx.patch([{ entity: { eid: 'b1' }, cache: {} }]))
 equal(store.get(['b1'])[0].entity.num, 1)
 const copy = ram(vocab, { number: true, adopt: true })

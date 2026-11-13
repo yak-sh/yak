@@ -11,6 +11,7 @@ import {
   idOf,
   idsIn,
   key,
+  keys,
   mentions,
   names,
   parse,
@@ -138,11 +139,16 @@ test('ids are found in prose only as words of their own', () => {
   assert(HUMAN.test('b-7') && !HUMAN.test('7') && !HUMAN.test('#a3f19c'))
 })
 
-test('every spelling of an id keys and names the same entity', () => {
-  for (let typed of ['B-7', 'a-7', '7']) {
-    assertEquals(key(typed), '7')
+test('an id keys by its pair, and names the entity holding it', () => {
+  assertEquals(['B-7', 'b-7', '7'].map((id) => key(id)), ['B-7', 'B-7', '7'])
+  assertEquals([key({ num: 7, prefix: 'B' }), key({ num: 7 })], ['B-7', '7'])
+  assertEquals([keys('b-7'), keys('7')], [['B-7', '7'], ['7']])
+  for (let typed of ['B-7', 'b-7', '7']) {
+    assert(names(typed, { num: 7, prefix: 'B' }))
+    // A row stored without a prefix answers under any letter.
     assert(names(typed, { num: 7 }))
   }
+  assert(!names('A-7', { num: 7, prefix: 'B' }))
   assertEquals([key('#a3f19c'), key({ num: null }), key({})], [
     undefined,
     undefined,

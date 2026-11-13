@@ -759,12 +759,13 @@ test('archetype: a delete touches only the tables its entities hold', () => {
   assertEquals([...new Set(cleared)].sort(), ['doc', 'link', 'task'])
 })
 
-test('archetype: boot respects number exclusions and the persistent high-water mark', () => {
+// By one count a descriptor is numbered like any other entity, past the
+// persistent high-water mark; by series it is never, since no component of
+// its declares a letter.
+test('archetype: boot numbers descriptors past the persistent high-water mark', () => {
   for (let numbered of [true, false]) {
     let d = mem()
-    let s = storage(d, vocab, {
-      number: { except: numbered ? ['task'] : ['archetype'] },
-    })
+    let s = storage(d, vocab, { number: numbered ? true : { task: 'T' } })
     // A file an older install wrote, holding an owner nothing classified.
     for (let stmt of s.ddl()) d.query(stmt)
     d.query(insert('entity', { eid: 'owner' }))

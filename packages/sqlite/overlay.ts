@@ -112,7 +112,7 @@ let stored = (v: Vocab, comp: string): string[] =>
 
 // The spine's own columns. Fixed, because the identity table is fixed (ddl.ts
 // SPINE); `archetype` rides with it where the vocabulary knows one.
-let SPINE = ['id', 'eid', 'num', 'archetype']
+let SPINE = ['id', 'eid', 'num', 'prefix', 'archetype']
 
 // What a property stores, the way ./write.ts lowers it: a boolean is 0/1, a
 // reference is its target's integer id, a JSON value is its JSON text (which
@@ -294,7 +294,7 @@ export let overlay = (
   // The spine, where the batch moved it: a batch that patches entities that
   // all exist already leaves the identity table alone.
   if (fresh.length || killed.size) {
-    let cols = (vocab.comp('archetype') ? SPINE : SPINE.slice(0, 3)).slice(1)
+    let cols = (vocab.comp('archetype') ? SPINE : SPINE.slice(0, 4)).slice(1)
     arm(
       'entity',
       cols,

@@ -779,7 +779,9 @@ records the next survey.
 - `doc_value`: a read view when the vocabulary declares `doc`.
 - `server_meta`: database metadata, separate from graph entities, among it
   `tables`, the component tables the file holds.
-- `entity_sequence` and triggers: the human-number high-water mark.
+- `entity_series` and triggers: each series' human-number high-water mark, by
+  its letter; `entity_sequence`, the one count of a store numbering without
+  letters.
 - `entity_written` and triggers, in a file: which entity each write named, in
   commit order, for the other connections' memory (under Read).
 
@@ -1114,26 +1116,28 @@ try {
 }
 ```
 
-### Selective human numbering
+### Human numbering by series
 
-[Human numbering](../id/README.md) is opt-in: use `{ number: true }`, or
-`{ number: { except: ['entry'] } }` to exclude entities with certain components.
-Omitting `number` or setting it to false leaves new entities unnumbered.
-Exclusions inspect all patches in the admitted write, including a reference
-whose target appears later, and override other components on the same entity.
-`@yaks/ram` accepts the same policy.
+[Human numbering](../id/README.md) is opt-in. `{ number: true }` numbers every
+entity by one count, with no letters. A table of letters, component → letter
+(`{ number: { doc: 'D' } }`, @yaks/id `prefixes(vocab)`), numbers by series: an
+entity is numbered once, on the write that first gives it a component in the
+table, and holds `entity{prefix, num}`, so `D-1` and `M-1` are two entities.
+With two such components, the kind the vocabulary names picks the series
+(@yaks/graph `seriesOf`). An entity given none is unnumbered and shows its short
+handle. Omitting `number` or setting it to false leaves new entities unnumbered.
+`@yaks/ram` accepts the same option.
 
-Exclusions govern allocation, not existing addresses. An entity that already has
-a number keeps it, even when an excluded component arrives or the store reopens
-with a new exclusion policy. References in comments, transcripts and URLs
-therefore keep resolving; new excluded entities consume no numbers.
-
-The transactional `entity_sequence` high-water mark is initialized from existing
-numbers and advanced by insert/update triggers. Clearing a number does not
-recycle it, including after reopening the database. A patch stating `entity.num`
-gives its entity that number, born or not, or none for `null`; a number another
-entity holds, a tombstone's included, is refused, since it is that entity's
-address (@yaks/graph `renumbering`).
+Each series keeps its last number in `entity_series`, raised by insert/update
+triggers, and the next is the one after it, stepping over a number an entity
+already holds in the series, or holds without a letter. A store that still holds
+numbers given without letters gives each new one the store's one count
+(`entity_sequence`) instead, with its letter, so it is past all of them.
+Clearing a number does not recycle it. A patch stating `entity{prefix, num}`
+gives its entity that id, born or not, or none for `num: null`; a `num` stated
+alone keeps the entity's prefix; an id another entity holds, a tombstone's
+included, is refused, since it is that entity's address (@yaks/graph
+`renumbering`).
 
 ```ts
 import { open } from '@yaks/sqlite/db'
@@ -1151,25 +1155,23 @@ try {
       entry: { component: true, type: 'object', properties: {} },
     },
   }])
-  let store = storage(sql, vocab, { number: { except: ['entry'] } })
+  let store = storage(sql, vocab, { number: { doc: 'D', entry: 'E' } })
+  let ids = (...eids: string[]) =>
+    store.get(eids).map(({ entity: e }) => e.num && `${e.prefix}-${e.num}`)
   store.tx((tx) =>
     tx.patch([
-      { entity: { eid: 'a', num: 40 }, doc: { title: 'Stated' } },
+      { entity: { eid: 'a', prefix: 'D', num: 40 }, doc: { title: 'Stated' } },
       { entity: { eid: 'b' }, entry: {} },
       { entity: { eid: 'c' }, doc: { title: 'Allocated' } },
     ])
   )
-  equal(store.get(['a', 'b', 'c']).map((b) => b.entity.num), [
-    40,
-    undefined,
-    41,
-  ])
+  equal(ids('a', 'b', 'c'), ['D-40', 'E-1', 'D-41'])
   store.tx((tx) =>
     tx.patch([{ entity: { eid: 'a', num: null } }, {
       entity: { eid: 'c', num: 7 },
     }])
   )
-  equal(store.get(['a', 'c']).map((b) => b.entity.num), [undefined, 7])
+  equal(ids('a', 'c'), [undefined, 'D-7'])
 } finally {
   sql.close()
 }

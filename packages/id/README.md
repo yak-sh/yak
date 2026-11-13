@@ -7,11 +7,14 @@ durable identity.
 
 ## Human ids
 
-A **human id** is a prefix and a number joined by a hyphen, such as `B-7`. The
-**number** is the store-local integer kept in `entity.num`; it identifies an
-entity within that store. A **prefix** is the letter declared by a
+A **human id** is a prefix and a number joined by a hyphen, such as `B-7`. A
+**prefix** is the letter declared by a
 [component](../graph/README.md#data-model)'s `prefix` keyword, such as
-`prefix: 'B'`. A component without a declared prefix uses its uppercase initial.
+`prefix: 'B'`, and names a **series**: each prefix counts its own numbers in a
+store, so `B-7` and `A-7` are two entities. The store keeps the pair as
+`entity{prefix, num}`, fixed when the entity is first numbered. A row numbered
+before series had letters keeps only `num`; it prints with the prefix of its
+kind, or the kind's uppercase initial where the kind declares none.
 
 A **short handle** is `#` followed by the first ten characters of the eid, with
 dashes removed and letters lowercased, such as `#a3f19c024b`. It is what
@@ -22,9 +25,10 @@ dashes removed and letters lowercased, such as `#a3f19c024b`. It is what
 Register `idKeywords` when loading the
 [vocabulary](../vocab/README.md#vocabulary) so the loader keeps the `prefix`
 keyword. `idOf(vocab)` accepts an eid, a [kind](../vocab/README.md#vocabulary),
-and an optional number; `human(vocab)` accepts a
-[bundle](../graph/README.md#data-model) and obtains the kind from its
-components.
+and an optional number and prefix; `human(vocab)` accepts a
+[bundle](../graph/README.md#data-model) and reads the pair from its `entity`
+row. Either prints the stored prefix, and the kind's letter for a row stored
+without one.
 
 ```ts
 import { human, idKeywords, idOf, parse } from '@yaks/id'
@@ -37,7 +41,8 @@ const vocab = loadVocab({
   },
 }, [idKeywords])
 const eid = 'a3f19c02-4b00-4000-8000-000000000001'
-equal(idOf(vocab)({ eid, kind: 'book', num: 7 }), 'B-7')
+equal(idOf(vocab)({ eid, kind: 'book', num: 7, prefix: 'B' }), 'B-7')
+equal(human(vocab)({ entity: { eid, num: 7, prefix: 'B' }, book: {} }), 'B-7')
 equal(human(vocab)({ entity: { eid, num: 7 }, book: {} }), 'B-7')
 equal(idOf(vocab)({ eid, kind: 'book' }), '#a3f19c024b')
 equal(parse('b-7'), { prefix: 'B', num: 7 })
@@ -114,43 +119,52 @@ letter, a hyphen and digits, for a grammar that composes it with other patterns
 (@yaks/markdown). `idsIn()` lists the ids written in a text, each a word of its
 own, so neither `COVID-19` nor the `T-14429` inside `T-144294` is one;
 `replaceIds()` rewrites them; `mentions()` asks whether a text names one id
-whole. `key()` is what a map of ids is kept by, the same for every spelling that
-names one entity, and `names()` asks whether a typed id names an entity.
+whole. `key()` is what a map of ids is kept by: the pair in capitals, from an id
+as typed or from an entity's row, or the bare number for a number typed alone
+and for a row stored without a prefix. `keys()` lists both keys a typed id may
+be filed under. `names()` asks whether a typed id names an entity: the same
+number, and the same letter where both carry one.
 
 ```ts
-import { idsIn, key, mentions, names, replaceIds } from '@yaks/id'
+import { idsIn, key, keys, mentions, names, replaceIds } from '@yaks/id'
 import { equal } from '@yaks/testing'
 
 equal(idsIn('T-12 needs M-3, not COVID-19'), ['T-12', 'M-3'])
 equal(replaceIds('T-12 failed', () => '#'), '# failed')
 equal(mentions('see T-144294', 'T-14429'), false)
-equal([key('B-7'), key('7'), key({ num: 7 })], ['7', '7', '7'])
+equal([key('b-7'), key({ num: 7, prefix: 'B' }), key('7')], ['B-7', 'B-7', '7'])
+equal(keys('B-7'), ['B-7', '7'])
+equal(names('A-7', { num: 7, prefix: 'B' }), false)
 equal(names('A-7', { num: 7 }), true)
 ```
 
 ## Allocate numbers and resolve ids
 
 `idDoc` [extends](../vocab/README.md#composition) the `entity` component with
-`num`, which a write may set, change or clear like any other property:
-`{ entity: { eid, num: 40 } }` gives the entity number 40, and
-`{ entity: { eid, num: null } }` leaves it none. A number another entity holds
-is refused, since it names that entity; two entities may swap numbers in one
+`num` and `prefix`, which a write may set, change or clear like any other
+property: `{ entity: { eid, prefix: 'B', num: 40 } }` makes the entity B-40, a
+`num` stated alone keeps the prefix the entity has, and
+`{ entity: { eid, num: null } }` leaves it none. A pair another entity holds is
+refused, since it names that entity, and so is a number a row stored without a
+prefix holds, which it holds in every series; two entities may swap ids in one
 write. `numbers(allocate)` contributes that document and answers the
 [request](../graph/README.md#data-model) `$num: true` for a live entity. The
 allocator runs inside the write transaction and must return the same number
 whenever it is asked for the same eid.
 
 `ids(vocab)` is a [plugin](../graph/README.md#data-model) whose `address`
-resolves human ids and short handles. The number is the identity: a human id
-names the entity carrying its number, whatever letter it is written with, and a
-bare number does too. An entity's letter follows its components, so an id
-printed before a component came or went keeps naming it. A deleted entity keeps
-its number, so its id names it still (read with `graves`, @yaks/graph
-`ReadOpts`) for a reader who could see it alive: its page and its history
-answer, and a write to it brings it back. To anyone else its number names
-nothing, as a number no entity carries, which is refused. A short handle several
-entities share is answered with all of them, and the graph refuses it, naming
-them. Eids and other strings are left to the graph's other addressing.
+resolves human ids and short handles. A human id names the entity holding its
+pair. A row stored without a prefix printed with a letter that followed its
+components, so it answers to its number under any letter, and an id printed
+before a component came or went keeps naming it; an entity holding the pair
+itself comes first. A bare number names the entity holding it while one does;
+several, and the graph refuses it, naming them. A deleted entity keeps its
+number, so its id names it still (read with `graves`, @yaks/graph `ReadOpts`)
+for a reader who could see it alive: its page and its history answer, and a
+write to it brings it back. To anyone else its number names nothing, as a number
+no entity carries, which is refused. A short handle several entities share is
+answered with all of them, and the graph refuses it, naming them. Eids and other
+strings are left to the graph's other addressing.
 
 A handle copied without its `#` is the graph's to resolve
 ([@yaks/graph](../graph/README.md) `address`): it is asked after every plugin,
@@ -172,8 +186,9 @@ const vocab = loadVocab([idDoc, {
     book: { component: true, kind: true, prefix: 'B', properties: {} },
   },
 }], [idKeywords])
-// This store numbers on write; the allocator returns the number it keeps.
-const storage = ram(vocab, { number: true })
+// This store numbers on write, books in the B series; the allocator returns
+// the number it keeps.
+const storage = ram(vocab, { number: { book: 'B' } })
 const allocate = (eid: string) => storage.get([eid])[0].entity
 const allocator = numbers(allocate)
 const g = graph({ storage, vocab, plugins: [allocator] })
@@ -206,13 +221,16 @@ const vocab = loadVocab([idDoc, {
   },
 }], [idKeywords])
 const eid = 'a3f19c02-4b00-4000-8000-000000000001'
-const storage = ram(vocab, { number: true })
+const storage = ram(vocab, { number: { book: 'B' } })
 storage.tx((tx) => tx.patch([{ entity: { eid }, book: {} }]))
 const resolver = ids(vocab)
-const resolved = await resolver.address!(storage, ['B-1', '1', '#a3f19c024b'])
+const said = ['B-1', 'b-1', '1', 'A-1', '#a3f19c024b']
+const resolved = await resolver.address!(storage, said)
 equal(Object.fromEntries(resolved), {
   'B-1': eid,
+  'b-1': eid,
   '1': eid,
+  'A-1': null,
   '#a3f19c024b': eid,
 })
 ```
@@ -226,8 +244,12 @@ unnumbered entities use the short handles above, including in
 in place of `#`.
 
 Numbers are opt in. Without `numbers()`, a graph refuses `$num` unless another
-plugin declares it. A storage adapter can instead number every entity when
-writing it, as [@yaks/sqlite](../sqlite/README.md) does with `number: true`. The
+plugin declares it. A storage adapter can instead number entities as it writes
+them, as [@yaks/sqlite](../sqlite/README.md) does, given a table of letters
+(component → letter, `prefixes(vocab)`): an entity is numbered once, on the
+write that first gives it a component in the table, in that component's series.
+With two, the kind the vocabulary names (`kindOf`) picks. Each series counts on
+from the last number it gave, stepping over one an entity holds. The
 `plugins(host)` factory installs `ids(host.vocab)`; it does not install an
 allocator. A host using [@yaks/cli](../cli/README.md) loads the vocabulary and
 that factory when its config names `@yaks/id`.

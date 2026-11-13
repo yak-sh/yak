@@ -358,57 +358,140 @@ export let detached = (storage: Storage): Tx => ({
   revive: (eids) => storage.tx((tx) => tx.revive(eids)),
 })
 
+/** Which letter each component numbers its entities with, component →
+ * letter, as a store that numbers by series is given it (@yaks/id declares
+ * the letters; a storage adapter takes them as data). */
+export type Series = Readonly<Record<string, string>>
+
+/** A human id's two halves as a store holds them: the series letter, `null`
+ * on a row numbered before series had letters, and the number in it. */
+export type Pair = { prefix: string | null; num: number }
+
 /**
- * The numbers a batch states for its entities (`entity.num`), checked before a
- * store writes any of them: each a whole number from 1, or `null` for none; no
- * two entities given one number; and none given a number another entity
- * holds, since a number is an address and names one entity. An entity moving
- * off a number in the same batch frees it, so two entities may swap. `now`
- * says an entity's number before the batch (`undefined` where it has no
- * entity yet), and `holders` the entity holding each number stated, where one
- * does. Answers the stated numbers that change something; a number that
+ * The letter an entity holding these components is numbered with: the one
+ * the kind the vocabulary names (`kindOf`) numbers with, among the components
+ * in the table; undefined where it holds none of them.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { seriesOf } from '@yaks/graph/storage'
+ * let kind = (before: string[] = []) => ({ component: true, kind: true, before })
+ * let v = loadVocab({ $defs: { memory: kind(['comment']), comment: kind(), doc: kind() } })
+ * let series = seriesOf(v, { memory: 'M', comment: 'C' })
+ * equal(series(['comment', 'memory', 'doc']), 'M')
+ * equal(series(['comment', 'doc']), 'C')
+ * equal(series(['doc']), undefined)
+ * ```
+ */
+export let seriesOf = (
+  vocab: Vocab,
+  table: Series,
+): (held: Iterable<string>) => string | undefined =>
+(held) => {
+  let has = Object.fromEntries(
+    [...held].filter((c) => Object.hasOwn(table, c)).map((c) => [c, true]),
+  )
+  let kind = vocab.kindOf(has)
+  return Object.hasOwn(has, kind)
+    ? table[kind]
+    : Object.keys(has).map((c) => table[c])[0]
+}
+
+/** Whether two pairs name one id: the same number, and the same letter where
+ * both carry one. A row stored without a letter holds its number in every
+ * series. */
+export let clash = (a: Pair, b: Pair): boolean =>
+  a.num == b.num && (!a.prefix || !b.prefix || a.prefix == b.prefix)
+
+/**
+ * The pair a bundle states for its entity, from what it held before (`now`):
+ * `entity.num` and `entity.prefix`, either left out to keep what it had.
+ * `null` states none, and `undefined` that the bundle states nothing.
+ */
+export let stating = (
+  entity: Entity,
+  now: Pair | null | undefined,
+): Pair | null | undefined => {
+  let { num, prefix } = entity
+  if (num === undefined && prefix === undefined) return undefined
+  if (num === null) return null
+  let n = num ?? now?.num
+  if (n == null) {
+    throw new Misfit('entity.prefix is given with a number', {
+      eid: entity.eid,
+      comp: 'entity',
+      prop: 'prefix',
+    })
+  }
+  return { prefix: prefix === undefined ? now?.prefix ?? null : prefix, num: n }
+}
+
+/**
+ * The pairs a batch states for its entities (`entity{prefix, num}`, see
+ * {@link stating}), checked before a store writes any of them: each number a
+ * whole number from 1, or `null` for none; no two entities given one id; and
+ * none given an id another entity holds, since an id is an address and names
+ * one entity. An entity moving off its pair in the same batch frees it, so two
+ * entities may swap. `now` says an entity's pair before the batch (`undefined`
+ * where it has no entity yet), and `holders` the entities holding each number
+ * stated, any letter. Answers the stated pairs that change something; one that
  * cannot be given is refused as the caller's own error.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
- * import { renumbering } from '@yaks/graph/storage'
- * let now = new Map<string, number | null>([['a', 1], ['b', 2]])
- * let changes = (stated: [string, number | null][], holders: [number, string][]) =>
- *   renumbering(new Map(stated), (e) => now.get(e), new Map(holders))
- * equal(changes([['a', 1], ['b', null]], [[1, 'a']]), new Map([['b', null]]))
- * equal(changes([['a', 2], ['b', 1]], [[1, 'a'], [2, 'b']]).size, 2)
+ * import { renumbering, type Pair } from '@yaks/graph/storage'
+ * let t = (num: number): Pair => ({ prefix: 'T', num })
+ * let now = new Map<string, Pair | null>([['a', t(1)], ['b', t(2)]])
+ * let changes = (stated: [string, Pair | null][], held: [number, string[]][]) =>
+ *   renumbering(new Map(stated), (e) => now.get(e), new Map(held.map(([n, eids]) =>
+ *     [n, eids.map((eid) => ({ eid, ...now.get(eid)! }))])))
+ * equal(changes([['a', t(1)], ['b', null]], [[1, ['a']]]), new Map([['b', null]]))
+ * equal(changes([['a', t(2)], ['b', t(1)]], [[1, ['a']], [2, ['b']]]).size, 2)
+ * equal(changes([['c', { prefix: 'M', num: 1 }]], [[1, ['a']]]).size, 1)
  * let no = (f: () => unknown) => { try { f() } catch (e) { return (e as Error).message } }
- * equal(no(() => changes([['a', 2]], [[2, 'b']])), 'number 2 is b\'s: two entities cannot share a number')
- * equal(no(() => changes([['a', 1.5]], [])), 'entity.num is a whole number from 1, or null for none')
+ * equal(no(() => changes([['a', t(2)]], [[2, ['b']]])), 'T-2 is b\'s: two entities cannot share an id')
+ * equal(no(() => changes([['a', t(1.5)]], [])), 'entity.num is a whole number from 1, or null for none')
  * ```
  */
 export let renumbering = (
-  stated: ReadonlyMap<Eid, number | null>,
-  now: (eid: Eid) => number | null | undefined,
-  holders: ReadonlyMap<number, Eid>,
-): Map<Eid, number | null> => {
+  stated: ReadonlyMap<Eid, Pair | null>,
+  now: (eid: Eid) => Pair | null | undefined,
+  holders: ReadonlyMap<number, readonly ({ eid: Eid } & Pair)[]>,
+): Map<Eid, Pair | null> => {
+  let same = (a: Pair | null, b: Pair | null) =>
+    a == b || (!!a && !!b && a.num == b.num && a.prefix == b.prefix)
   let changes = new Map(
-    [...stated].filter(([eid, num]) => (now(eid) ?? null) !== num),
+    [...stated].filter(([eid, pair]) => !same(now(eid) ?? null, pair)),
   )
-  let given = new Map<number, Eid>()
-  for (let [eid, num] of changes) {
-    if (num === null) continue
+  let given: ({ eid: Eid } & Pair)[] = []
+  for (let [eid, pair] of changes) {
+    if (pair === null) continue
     let at = { eid, comp: 'entity', prop: 'num' }
-    if (!Number.isSafeInteger(num) || num < 1) {
+    if (!Number.isSafeInteger(pair.num) || pair.num < 1) {
       throw new Misfit(
         'entity.num is a whole number from 1, or null for none',
         at,
       )
     }
-    let twin = given.get(num)
-    if (twin) {
-      throw new Refused(`${twin} and ${eid} are both given number ${num}`, at)
+    if (pair.prefix != null && !/^[A-Z]$/.test(pair.prefix)) {
+      throw new Misfit('entity.prefix is one capital letter', {
+        ...at,
+        prop: 'prefix',
+      })
     }
-    given.set(num, eid)
-    let holder = holders.get(num)
-    if (holder && holder != eid && !changes.has(holder)) {
+    let id = pair.prefix ? `${pair.prefix}-${pair.num}` : `number ${pair.num}`
+    let twin = given.find((g) => clash(g, pair))
+    if (twin) {
+      throw new Refused(`${twin.eid} and ${eid} are both given ${id}`, at)
+    }
+    given.push({ eid, ...pair })
+    let holder = (holders.get(pair.num) ?? []).find((h) =>
+      h.eid != eid && !changes.has(h.eid) && clash(h, pair)
+    )
+    if (holder) {
       throw new Refused(
-        `number ${num} is ${holder}'s: two entities cannot share a number`,
+        `${id} is ${holder.eid}'s: two entities cannot share an id`,
         at,
       )
     }

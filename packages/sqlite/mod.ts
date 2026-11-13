@@ -121,7 +121,15 @@ import { componentTables, objects, shape } from './physical.ts'
 import { analyze, build, forgo, reshape, type Sizes } from './owe.ts'
 import { maintenance } from './maintenance.ts'
 import { plan } from './plan.ts'
-import { births, patch, prune, remove, revive, spines } from './write.ts'
+import {
+  births,
+  type Numbering,
+  patch,
+  prune,
+  remove,
+  revive,
+  spines,
+} from './write.ts'
 import { burying } from './buried.ts'
 import { located, measure } from './measure.ts'
 import { bindings } from './rules.ts'
@@ -259,6 +267,7 @@ export {
   dropSql,
   minted,
   mintSql,
+  type Numbering,
   numberSql,
   patch,
   patchSql,
@@ -439,9 +448,11 @@ export type Opts = BindOpts & {
   partial?: boolean
   /** Give new spines a human-readable number. Opt-IN: left out, an entity is
    * its eid and nothing else, which is what a store whose entities nobody ever
-   * types the number of wants. Identity, and reporting which entities were
-   * created, still belong to storage either way. */
-  number?: boolean | { except: readonly string[] }
+   * types the number of wants. `true` numbers every entity by one count; a
+   * table of letters numbers each entity in the series of the components it
+   * is given (./write.ts `Numbering`). Identity, and reporting which entities
+   * were created, still belong to storage either way. */
+  number?: Numbering
   /** Where a failure the store outlives is told: a table that stood and could
    * not be fitted to the vocabulary, left as it was (ddl.ts `fit`). One
    * line on the console, by default (ddl.ts `logged`). */
@@ -672,12 +683,10 @@ export let storage = (
   let report = base.report ?? logged
   // Whether this store's vocabulary declares archetypes, so its queries are
   // planned by them and its reads show them, and whether their descriptors
-  // are numbered like any other entity.
+  // are numbered: by a store's one count, as any other entity is; by series,
+  // never, since no component of theirs declares a letter.
   let classified = !!vocab.comp('archetype') && keeping
-  let numbered = !!vocab.comp('archetype') &&
-    (typeof base.number == 'object'
-      ? !base.number.except.includes('archetype')
-      : !!base.number)
+  let numbered = !!vocab.comp('archetype') && base.number === true
   let memo = memoized(driver, vocab, base.derived, base.memory)
   // A query's rows, from memory while the tables its answer stands on are
   // unwritten (./memo.ts `answer`), in the one snapshot that decides both. A

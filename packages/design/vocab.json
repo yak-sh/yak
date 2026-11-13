@@ -1,6 +1,7 @@
 {
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/id": true,
     "https://yak.sh/vocab/kernel": true
   },
   "title": "design",
@@ -19,6 +20,7 @@
       "before": [
         "alias"
       ],
+      "prefix": "D",
       "properties": {},
       "description": "a change being proposed; what it is, is written in the doc beside it. `proposed` and `decided` carry its lifecycle"
     },

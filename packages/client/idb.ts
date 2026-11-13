@@ -204,7 +204,7 @@ export let wireIdb = (
           return
         }
         let r = cursor.value
-        saved.push({ eid: r.eid, num: r.num, comps: r.comps })
+        saved.push({ eid: r.eid, num: r.num, prefix: r.prefix, comps: r.comps })
         if (saved.length === limit) {
           ok(saved.reverse())
           return

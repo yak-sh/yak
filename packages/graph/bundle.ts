@@ -36,6 +36,9 @@ export type Eid = string
 export type Entity = {
   eid: Eid
   num?: number | null
+  /** The letter of the series `num` is counted in (@yaks/id): `T` and `12`
+   * are T-12. Absent on a row numbered before series had letters. */
+  prefix?: string | null
   /** Portable archetype eid; the SQLite adapter stores its integer identity
    * row id. Derived, not caller-owned. Absent when archetype tracking is not
    * composed in. */

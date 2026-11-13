@@ -11,7 +11,12 @@
       "properties": {
         "num": {
           "type": "number",
-          "description": "the number this graph gave it, counting up — what a human id such as B-7 is built from. A write may set it, change it, or clear it with null; a number another entity holds is refused"
+          "description": "the number this store gave it in its prefix's series, counting up: with the prefix, what a human id such as B-7 is built from. A write may set it, change it, or clear it with null; a pair another entity holds is refused"
+        },
+        "prefix": {
+          "type": "string",
+          "pattern": "^[A-Z]$",
+          "description": "the letter of the series its number belongs to, fixed when it is first numbered: B-7 and A-7 are two entities. Absent on a row numbered before series had letters, which answers to its number under any letter"
         }
       }
     }

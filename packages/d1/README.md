@@ -104,7 +104,8 @@ The package has one import path, `@yaks/d1`. `storage` returns a `Store` with:
 
 Read options are `@yaks/sql`'s bind options, such as `derived`, `extend`, and
 `now`; per-call options override `base`. Human numbering is opt-in through
-`base.number: true`, or `{ except: ['entry'] }` for component exclusions.
+`base.number: true`: one count, with no letters, since a series' next number is
+a read before its write and a batch is sent whole.
 
 The root also exports `D1Like`, `Stmt`, `D1Stmt`, `D1Result`, value/row types,
 `bind`/`unbind`, query/gather helpers, shared SQL write builders, graph

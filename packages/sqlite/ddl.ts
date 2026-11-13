@@ -84,13 +84,25 @@ export { META, tables } from './layout.ts'
 // A column that holds an entity's integer id, keyed to the spine.
 let ENTITY = { table: 'entity', cols: ['id'] }
 
-// The high-water mark a new number is taken past, raised by whatever wrote one.
+// The high-water mark a new number is taken past, raised by whatever wrote one:
+// the store's one count, and the count of the series a lettered number is in.
 let raise: Stmt = {
   t: 'update',
   table: 'entity_sequence',
   set: { high: fn('max', col('high'), col('num', 'new')) },
   where: eq(col('singleton'), lit(1)),
 }
+let raiseSeries: Stmt = {
+  t: 'insert',
+  into: 'entity_series',
+  cols: ['prefix', 'high'],
+  rows: [[col('prefix', 'new'), col('num', 'new')]],
+  upsert: [{
+    on: [col('prefix')],
+    set: { high: fn('max', col('high'), col('high', 'excluded')) },
+  }],
+}
+let lettered = and(notNull(col('num', 'new')), notNull(col('prefix', 'new')))
 
 // The identity table, the tombstones, and the store's own key/value. Fixed
 // shape — every layout has exactly this spine, whatever components sit on
@@ -103,8 +115,20 @@ let SPINE: Stmt[] = [
     cols: [
       { name: 'id', type: 'integer', pk: true },
       { name: 'eid', type: 'text', notNull: true, unique: true },
-      { name: 'num', type: 'integer', unique: true },
+      { name: 'num', type: 'integer' },
       { name: 'archetype', type: 'integer', ref: ENTITY },
+      { name: 'prefix', type: 'text' },
+    ],
+  },
+  // Each series' high-water mark, by its letter: what the next number in it
+  // is taken past (./write.ts `series`).
+  {
+    t: 'create table',
+    name: 'entity_series',
+    ifNot: true,
+    cols: [
+      { name: 'prefix', type: 'text', pk: true },
+      { name: 'high', type: 'integer', notNull: true },
     ],
   },
   {
@@ -154,6 +178,27 @@ let SPINE: Stmt[] = [
     on: 'entity',
     when: notNull(col('num', 'new')),
     body: [raise],
+  },
+  {
+    t: 'create trigger',
+    name: 'entity_series_insert',
+    ifNot: true,
+    timing: 'after',
+    event: 'insert',
+    on: 'entity',
+    when: lettered,
+    body: [raiseSeries],
+  },
+  {
+    t: 'create trigger',
+    name: 'entity_series_update',
+    ifNot: true,
+    timing: 'after',
+    event: 'update',
+    of: ['num', 'prefix'],
+    on: 'entity',
+    when: lettered,
+    body: [raiseSeries],
   },
   {
     t: 'create table',
@@ -419,9 +464,21 @@ export let indexed = (
 ): readonly CreateIndex[] => {
   let held = indexes.get(vocab)
   if (!held) indexes.set(vocab, held = indexing(vocab))
-  return storage && !vocab.comp('archetype')
-    ? [pointedIndex(vocab), ...held]
+  return storage
+    ? [SERIES, ...vocab.comp('archetype') ? [] : [pointedIndex(vocab)], ...held]
     : held
+}
+// One entity to a number in each series, and the number's own lookup: a
+// number is read without its letter (@yaks/id `ids`). A storage install
+// makes it after `grown()`, which gives a standing spine its prefix; a bare
+// schema may stand over a spine that has none.
+let SERIES: CreateIndex = {
+  t: 'create index',
+  name: 'entity_num_prefix',
+  on: 'entity',
+  cols: [col('num'), col('prefix')],
+  unique: true,
+  ifNot: true,
 }
 let indexing = (vocab: Vocab): CreateIndex[] => [
   // Bare schema adapters can still hold the legacy spine. A storage install
@@ -500,7 +557,7 @@ export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
  * fingerprint instead, and moving it fits every store once more: move it when
  * fitting learns to see something it did not.
  */
-export let FIT = 9
+export let FIT = 10
 
 /**
  * What fitting reads off a file before an install creates anything: each
@@ -776,13 +833,11 @@ export let refit = (
 // because rows are already written under the columns the table has. A column
 // is emitted in the form SQLite accepts in an `add column` (grownColumn above).
 export let grown = (vocab: Vocab, was: Standing): Stmt[] => [
-  ...(!was.entity || was.entity.cols.some((r) => r.name == 'archetype')
-    ? []
-    : [{
-      t: 'alter table' as const,
-      table: 'entity',
-      add: { name: 'archetype', type: 'integer', ref: ENTITY },
-    }]),
+  ...[
+    { name: 'archetype', type: 'integer', ref: ENTITY },
+    { name: 'prefix', type: 'text' },
+  ].filter((c) => was.entity && !was.entity.cols.some((r) => r.name == c.name))
+    .map((add) => ({ t: 'alter table' as const, table: 'entity', add })),
   ...comps(vocab, was).flatMap((comp) => {
     let has = new Set(was[comp].cols.map((r) => String(r.name)))
     return stored(vocab, comp)

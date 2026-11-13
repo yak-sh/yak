@@ -1,14 +1,15 @@
-// The id a person types, resolved to the eid it names. `T-37580` is stored
-// nowhere: what is stored is the number beside the entity, and the letter is
-// derived from the components the entity has (./id.ts). So resolving one is a
-// read: find the entity carrying that number.
+// The id a person types, resolved to the eid it names. `T-37580` is the
+// entity holding that pair, `entity{prefix: 'T', num: 37580}` (./id.ts), so
+// resolving one is a read: find the entities carrying that number, and keep
+// the one in its series.
 //
-// The number is the identity, and the letter is how the id was printed. An
-// entity's components change, and its letter with them: a persona that wore a
-// component with its own prefix printed as `R-131280` and prints as
-// `N-131280` once that component is gone. The ids people hold in links,
-// comments and tasks keep the letter they were printed with, so any letter
-// names the entity carrying the number, and a bare number (`37580`) does too.
+// A row numbered before series had letters stores no prefix. Its letter was
+// derived from its components, which change: a persona that wore a component
+// with its own prefix printed as `R-131280` and prints as `N-131280` once that
+// component is gone. The ids people hold keep the letter they were printed
+// with, so such a row answers to its number under any letter, after an entity
+// holding the pair itself. A bare number (`37580`) names the entity holding it
+// while there is one; several, and the graph refuses it, naming them.
 //
 // This is a graph plugin's `address`, which @yaks/graph calls before a caller's
 // ids are used, so every entry point accepts the ids people type: the MCP
@@ -37,7 +38,7 @@
 // ./number.ts.
 
 import type { Bundle, Eid, Plugin, Tx } from './types.ts'
-import { LETTERED, parse, SHORT } from './id.ts'
+import { LETTERED, parse, type Parsed, SHORT } from './id.ts'
 import type { Vocab } from '@yaks/vocab'
 
 /** A handle's hex with a uuid's dashes put back where they fall. */
@@ -72,20 +73,35 @@ export let starting = (
     : held(reads as Bundle[][])
 }
 
+/** Of the entities holding one number, the eids an id of that number with
+ * this letter names: the one holding the pair, else one stored without a
+ * prefix, which answers under any letter; for a bare number (`''`), every
+ * holder. The living, where any are. */
+let holding = (found: Bundle[], prefix: string): Eid[] => {
+  let fit = !prefix ? found : [
+    found.filter((b) => b.entity.prefix == prefix),
+    found.filter((b) => !b.entity.prefix),
+  ].find((l) => l.length) ?? []
+  let live = fit.filter((b) => !b.tombstone)
+  return (live.length ? live : fit).map((b) => b.entity.eid)
+}
+
 /** Resolves human ids to eids, for a graph that numbers its entities. */
 export let ids = (vocab: Vocab): Plugin => ({
   name: 'ids',
   address: (tx, said) => {
     // One read for every number asked for, as a single any-of filter, and
     // one per handle.
-    let want = new Map<number, string[]>()
+    let want = new Map<number, Parsed[]>()
+    let typed = new Map<Parsed, string>()
     let handles: string[] = []
     let lettered: string[] = []
     for (let id of said) {
       let p = parse(id)
       if (p) {
         if (vocab.prop('entity', 'num')) {
-          want.set(p.num, [...want.get(p.num) ?? [], id])
+          want.set(p.num, [...want.get(p.num) ?? [], p])
+          typed.set(p, id)
         }
       } else if (SHORT.test(id)) handles.push(id)
       else if (LETTERED.test(id)) lettered.push(id)
@@ -93,16 +109,20 @@ export let ids = (vocab: Vocab): Plugin => ({
     let at = new Map<string, Eid | Eid[] | null>()
     for (let id of lettered) at.set(id, null)
     if (!want.size && !handles.length) return at
-    for (let id of [...want.values()].flat()) at.set(id, null)
+    for (let id of typed.values()) at.set(id, null)
     // A deleted entity keeps its number, so the number still names it.
     let numbered = want.size
       ? tx.read(`.entity.num=${[...want.keys()].join(',')}`, { graves: true })
       : []
     let held = handles.map((id) => starting(tx, id.slice(1).toLowerCase()))
     let done = (found: Bundle[], starts: Eid[][]) => {
-      for (let b of found) {
-        for (let id of want.get(Number(b.entity.num)) ?? []) {
-          at.set(id, b.entity.eid)
+      let by = Map.groupBy(found, (b) => Number(b.entity.num))
+      for (let [num, asked] of want) {
+        for (let p of asked) {
+          let eids = holding(by.get(num) ?? [], p.prefix)
+          if (eids.length) {
+            at.set(typed.get(p)!, eids.length == 1 ? eids[0] : eids)
+          }
         }
       }
       handles.forEach((id, i) => {

@@ -25,7 +25,7 @@ let vocab = loadVocab([archetypeDoc, {
   $defs: {
     entity: {
       component: true,
-      properties: { num: { type: 'number', stamped: true } },
+      properties: { num: { type: 'number' } },
     },
     link: {
       component: true,
@@ -35,12 +35,12 @@ let vocab = loadVocab([archetypeDoc, {
   },
 }])
 
-// `n` is a note, numbered; `m` a note made with a link, so unnumbered, as are
+// `n` is a note, numbered; `m` a note made with a link and no number, as are
 // the N links to `t` after it.
 let N = 3000
 let db = new Database(':memory:'), d = driver(db)
 let store = storage(d, vocab, {
-  number: { except: ['link'] },
+  number: { note: 'N' },
   counts: 'eager',
 })
 store.install()
@@ -48,7 +48,7 @@ let g = graph({ storage: store, vocab, plugins: [archetypes()] })
 await g.apply([
   { entity: { eid: 't' }, note: {} },
   { entity: { eid: 'n' }, note: {} },
-  { entity: { eid: 'm' }, note: {}, link: { to: 'n' } },
+  { entity: { eid: 'm', num: null }, note: {}, link: { to: 'n' } },
   ...Array.from({ length: N }, (_, i) => ({
     entity: { eid: `l${i}` },
     link: { to: 't' },

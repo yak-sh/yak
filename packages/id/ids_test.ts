@@ -24,6 +24,12 @@ let rows: Bundle[] = [
   { entity: { eid: 'a', num: 7 }, task: {}, doc: {} },
   { entity: { eid: 'b', num: 9 }, memory: {} },
   { entity: { eid: 'bare', num: 11 } },
+  // Numbered by series: T-20 and M-20 are two entities, and T-21 shares its
+  // number with a row stored before series had letters.
+  { entity: { eid: 't20', num: 20, prefix: 'T' }, task: {} },
+  { entity: { eid: 'm20', num: 20, prefix: 'M' }, memory: {} },
+  { entity: { eid: 't21', num: 21, prefix: 'T' }, task: {} },
+  { entity: { eid: 'old21', num: 21 }, memory: {} },
   // Not numbered yet: known by their short handles. The two uuids share their
   // first ten hex characters; the last eid is content-addressed, no dashes.
   { entity: { eid: '47e9678b-df12-4000-8000-000000000001' }, task: {} },
@@ -70,6 +76,27 @@ test('the number is the identity, whatever letter it was printed with', async ()
   })
   assertEquals(human(vocab)(rows[2]), 'E-11')
   assertEquals(await at('T-12', '12'), { 'T-12': null, '12': null })
+})
+
+test('a lettered id names the entity holding its pair', async () => {
+  assertEquals(await at('T-20', 'm-20', 'V-20'), {
+    'T-20': 't20',
+    'm-20': 'm20',
+    'V-20': null,
+  })
+  assertEquals(human(vocab)(rows[3]), 'T-20')
+})
+
+test('a row stored without a letter answers under any other', async () => {
+  assertEquals(await at('T-21', 'M-21', 'V-21'), {
+    'T-21': 't21',
+    'M-21': 'old21',
+    'V-21': 'old21',
+  })
+})
+
+test('a bare number several entities hold names them all', async () => {
+  assertEquals(await at('20'), { '20': ['t20', 'm20'] })
 })
 
 test("an eid and a name are not this plugin's to answer", async () => {

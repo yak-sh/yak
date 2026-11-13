@@ -469,6 +469,17 @@ export let grave = (id: Expr): Expr =>
  * (`@kind`), which every file this package installs keeps, for a reader that
  * knows the descriptors already (`kinded`).
  */
+/** A spine row's number and the letter of its series, as an `entity` row
+ * carries them: nothing where it has no number, and no prefix on a row
+ * numbered before series had letters. */
+export let numberOf = (
+  row: Row,
+): { num?: number; prefix?: string } =>
+  row.num == null ? {} : {
+    num: Number(row.num),
+    ...row.prefix == null ? {} : { prefix: String(row.prefix) },
+  }
+
 export let spine = (vocab: Vocab, which: Expr, kind = false): Select => {
   let typed = !!vocab.comp('archetype')
   return select({
@@ -476,6 +487,7 @@ export let spine = (vocab: Vocab, which: Expr, kind = false): Select => {
       col('id', 'e'),
       col('eid', 'e'),
       col('num', 'e'),
+      col('prefix', 'e'),
       as(grave(col('id', 'e')), 'dead'),
       ...(kind ? [as(col('archetype', 'e'), '@kind')] : !typed ? [] : [
         as(col('eid', 'a'), 'archetype'),
@@ -791,7 +803,7 @@ let joinedGet = (
   for (let row of rows) {
     let entity = {
       eid: String(row.eid),
-      ...!numbered || row.num == null ? {} : { num: Number(row.num) },
+      ...numbered ? numberOf(row) : {},
       ...!typed || row.archetype == null
         ? {}
         : { archetype: String(row.archetype) },
@@ -1163,7 +1175,7 @@ export let get = (
       let eid = String(row.eid)
       let entity = {
         eid,
-        ...!numbered || row.num == null ? {} : { num: Number(row.num) },
+        ...numbered ? numberOf(row) : {},
         ...(!typed || row.archetype == null
           ? {}
           : { archetype: String(row.archetype) }),

@@ -10,7 +10,7 @@
 // with complete snapshot vocabulary documents when the host words cannot prove
 // the snapshot. Neither configuration credentials nor its database are printed.
 import { configPath, read as readConfig } from '../packages/cli/config.ts'
-import { words } from '../packages/cli/host.ts'
+import { numbering, words } from '../packages/cli/host.ts'
 import { graph } from '@yaks/graph'
 import { archetypes } from '@yaks/archetype'
 import { ddl as journalDdl, journal, log } from '@yaks/journal'
@@ -295,7 +295,7 @@ let run = async () => {
     let store = storage(db, vocab, {
       derived: loaded.derived,
       backed: loaded.backed,
-      number: readConfig(config!).numbers,
+      number: numbering(vocab, readConfig(config!).numbers),
     })
     let g = graph({
       storage: store,
