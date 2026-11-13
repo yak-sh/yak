@@ -2,14 +2,17 @@
 // behind an asynchronous RPC-shaped door. No Store state is shared with it.
 import { backoff } from '@yaks/durable-object'
 import { enqueue } from '@yaks/effects'
+import { type Bundle, graph } from '@yaks/graph'
+import { storage as sqliteStorage } from '@yaks/sqlite'
 import { select, table } from '@yaks/sql'
 import { type Clock, clock, equal, ok, test } from '@yaks/testing'
+import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { doorOf, IDEMPOTENCY } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Rehearsal } from '@yaks/platform/mover'
 import { EPOCH, type ServingCopyDoor } from './directory-copy.ts'
 import type { Env } from './env.ts'
-import { Store } from './graph.ts'
+import { shapeOf, Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import type { Rule } from './mover.ts'
 import {
@@ -19,6 +22,7 @@ import {
 } from './serving-copy.ts'
 import { db, slot, state } from './testing.ts'
 import { mint, spend } from './signin.ts'
+import { metaKeywords } from './vocab.ts'
 
 let fixture = async (rules: Rule[] = [], time?: Clock) => {
   let saved: ServingCopyState | undefined
@@ -160,6 +164,14 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
         }),
       ),
     move: () => store.alarm(),
+    source: (source: VocabDoc, rows: Bundle[]) => {
+      let vocab = loadVocab([
+        ...shapeOf(PLATFORM_STORE, null).vocab.docs,
+        source,
+      ], metaKeywords)
+      return graph({ vocab, storage: sqliteStorage(db(ctx), vocab) })
+        .apply(rows, { trusted: true, stamp: false })
+    },
     // The fenced graph itself, for writes no door serializes.
     graph: async () => (await store.door).graph,
     offer: (fn: typeof offered) => {
@@ -691,6 +703,74 @@ let rule: Rule = {
   find: '.doc.title=Before&*',
   move: (row) => [{ entity: row.entity, doc: { title: 'Moved' } }],
 }
+let retired: Rule = {
+  ...rule,
+  source: {
+    $defs: {
+      doc: {
+        component: true,
+        extends: true,
+        properties: { former: { type: 'string' } },
+      },
+    },
+  },
+  find: '.doc.former&*',
+  move: (row) => [{
+    entity: row.entity,
+    doc: { title: (row.doc as { former: string }).former, former: null },
+  }],
+  drop: ['doc.former'],
+}
+let sourced = async (live = false) => {
+  let f = await fixture([{
+    ...retired,
+    ...live ? { live: 'all' as const } : {},
+  }])
+  await f.source(retired.source!, [{
+    entity: { eid: 'app' },
+    doc: { former: 'Moved' },
+  }])
+  return f
+}
+await proof(
+  'a retired-vocabulary rehearsal rolls back without a fence',
+  async () => {
+    let f = await sourced()
+    let answer = await f.ask('/move?rehearse=1')
+    let result = await answer.json() as { rules: Rehearsal[] }
+    let rows = await f.at.query('.entity.eid=app&.doc')
+    return () => {
+      equal(result.rules, [{
+        mark: retired.mark,
+        rows: 1,
+        moved: 1,
+        batches: 1,
+      }])
+      equal((rows[0].doc as { title: string }).title, 'Before')
+      equal(f.begins, [])
+      equal(f.core().get('.app'), f.body)
+      equal(f.committed().epoch, String(f.initial))
+    }
+  },
+)
+await proof(
+  'a retired-vocabulary move commits under its batch fence',
+  async () => {
+    let f = await sourced(true)
+    await f.move()
+    let rows = await f.at.query('.entity.eid=app&.doc')
+    let answer = await f.ask('/move')
+    let result = await answer.json() as { rules: { done?: string }[] }
+    return () => {
+      equal((rows[0].doc as { title: string }).title, 'Moved')
+      ok(result.rules[0].done)
+      equal(f.begins, [f.initial + 1])
+      equal(f.finishes, f.begins)
+      equal(f.committed().epoch, String(f.initial + 1))
+      equal(f.fence().blocked, false)
+    }
+  },
+)
 await proof(
   'mover rehearsal is synchronous, rollback-only and never opens a fence',
   async () => {

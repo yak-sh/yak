@@ -1683,7 +1683,10 @@ export class Store {
                     _err: unknown,
                     context?: HookContext,
                   ) => {
-                    let revision = this.#copyWrite.getStore()
+                    // A mover's retired vocabulary has its own graph, sharing
+                    // these hooks and the synchronous batch's serving fence.
+                    let revision = this.#copyBatch.getStore() ??
+                      this.#copyWrite.getStore()
                     if (revision === -1) return bundles
                     if (revision === HOLD && unfenced(bundles, HOLDING)) {
                       return bundles
