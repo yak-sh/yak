@@ -96,6 +96,30 @@ test('a collection keeps every correlated member under one outer binding', () =>
   ])
 })
 
+test('a variable binds through references to what they reach', () => {
+  let { driver } = floor()
+  // The review's product's maker, and its price: each read where the path
+  // ends, on the product, never as a component of the review.
+  let found = matched(
+    driver,
+    match(
+      '$m .doc.title=Herbert; [$r .review, review.product.product.maker=$m, review.product.product.price=$price]',
+    ),
+    shop,
+  )
+  assertEquals(
+    found.map((
+      row,
+    ) => [row.entities, row.collections?.[0].members.map((m) => m.vars)]),
+    [[['m1'], [{ m: 'm1', r: 'r1', price: 9 }]]],
+  )
+  assertEquals(
+    matched(driver, match('.review, review.product.doc.title=$title'), shop)
+      .map((row) => row.vars),
+    [{ title: 'Dune' }],
+  )
+})
+
 test('a top-level collection has one outer binding, even when empty', () => {
   let { driver } = floor()
   assertEquals(matched(driver, match('[.review.stars>10]'), shop), [{

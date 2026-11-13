@@ -192,10 +192,12 @@ export let rule = (
     let pre = `p${i}_`
     let d = prefixed(pre, at)
     // A bound column has to be joined, and a bind implies the component is
-    // there — so a presence clause is added, and the binder makes the join it
-    // always would. A component the filter already named is joined once: the
-    // binder keeps its tables in a set.
-    let needs = p.binds.map((b) => vocab.aim(b.path.join('.'))).flat()
+    // there — so a presence clause is added for the component the path starts
+    // on, and the binder makes the join it always would. A component the
+    // filter already named is joined once: the binder keeps its tables in a
+    // set. The hops past the first are the referenced entities' own (below).
+    let needs = p.binds.map((b) => vocab.aim(b.path.join('.'))[0])
+      .filter((hop) => hop?.prop)
     let filter = {
       ...p.filter,
       clauses: [
@@ -203,17 +205,12 @@ export let rule = (
         ...needs.map((hop) => present(hop.comp)),
       ],
     }
-    // TODO: a multi-hop variable bind still reads its terminal component as
-    // though it belonged to the root entity. Route it through the binder's
-    // path projection when that interface supports bound paths.
     let r = bound(
       filter,
       vocab,
       { ...opts, extend, archetypes: undefined },
       d,
-      p.binds.flatMap((b) =>
-        vocab.aim(b.path.join('.')).length == 1 ? [b.path.join('.')] : []
-      ),
+      needs.map((hop) => `${hop.comp}.${hop.prop}`),
     )
     ctes.push(...r.with ?? [])
     froms.push(...[r.from ?? []].flat())
@@ -240,7 +237,7 @@ export let rule = (
         read: `${q(pre + 'entity')}."eid"`,
       })
     }
-    for (let b of p.binds) {
+    p.binds.forEach((b, k) => {
       let hops = vocab.aim(b.path.join('.'))
       let hop = hops[hops.length - 1]
       if (!hop?.prop) {
@@ -250,23 +247,36 @@ export let rule = (
       if (!c) {
         throw new Error(`no property ${hop.comp}.${hop.prop} for $${b.name}`)
       }
+      // A path through references reads its last property on the entity it
+      // reaches: each hop past the first joins the component it names on the
+      // entity the hop before points at, under names of this bind's own.
+      let end = hops.slice(1).reduce((on, next, i) => {
+        let via = on.refCol!(hops[i].comp, hops[i].prop!)
+        let there = prefixed(`${pre}b${k}h${i + 1}_`, at)
+        joins.push({
+          how: 'join',
+          src: raw(there.table(next.comp)),
+          on: raw(`${there.ownerKey(next.comp)} = ${via}`),
+        })
+        return there
+      }, d)
       let read = readAt(
         vocab,
-        d,
+        end,
         derivedOf(vocab, opts.derived),
         hop.comp,
         hop.prop,
-        d.ownerKey(hop.comp),
+        end.ownerKey(hop.comp),
       )
       if (!read) {
         throw new Error(`no read for ${hop.comp}.${hop.prop} in $${b.name}`)
       }
       slot(b.name, {
         kind: c.category == 'ref' ? 'id' : 'value',
-        sql: c.category == 'ref' ? d.refCol!(hop.comp, hop.prop) : read.expr,
+        sql: c.category == 'ref' ? end.refCol!(hop.comp, hop.prop) : read.expr,
         read: read.expr,
       })
-    }
+    })
   })
 
   // The anchor. A rule is about a batch, not about the whole database: without
