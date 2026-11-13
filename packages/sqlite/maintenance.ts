@@ -4,8 +4,8 @@
 import {
   as,
   col,
-  count,
   type Driver,
+  fn,
   gt,
   lit,
   oneOf,
@@ -21,6 +21,17 @@ import { unit } from './unit.ts'
 
 export let CLASSIFYING = 'archetype:pending'
 let PAGE = 512
+
+// How many rows a table holds at most: its last rowid, one row read. A
+// Durable Object bills `count(*)` every row it counts, so a look at an owed
+// index on a 940,000-row spine read the spine whole, twice an alarm, and
+// 221 million rows in 13 minutes (2026-11-13).
+let most = (driver: Driver, name: string) =>
+  Number(
+    driver.query(
+      select({ cols: [as(fn('max', col('rowid')), 'n')], from: table(name) }),
+    )[0]?.n ?? 0,
+  )
 
 export let maintenance = (driver: Driver, number: () => boolean) => {
   let marks = meta(driver)
@@ -55,11 +66,7 @@ export let maintenance = (driver: Driver, number: () => boolean) => {
       let indexes =
         objects(driver, { type: 'index', tbl_name: 'entity' }).length
       if (at == 'metadata') {
-        let n = Number(
-          driver.query(
-            select({ cols: [as(count(), 'n')], from: table('archetype') }),
-          )[0].n,
-        )
+        let n = most(driver, 'archetype')
         if (!admit((n + 2) * (indexes * 3 + 8))) return false
         unit(driver, () => {
           backfill(driver, number(), false)
@@ -87,13 +94,7 @@ export let maintenance = (driver: Driver, number: () => boolean) => {
     }
     for (let w of owed(driver)) {
       if (w.kind != 'index') continue
-      // COUNT(*) reads SQLite's btree size without projecting every owner.
-      let n = Number(
-        driver.query(
-          select({ cols: [as(count(), 'n')], from: table(w.stmt.on) }),
-        )[0].n,
-      )
-      if (!admit(n + 4)) continue
+      if (!admit(most(driver, w.stmt.on) + 4)) continue
       unit(driver, () => {
         driver.query(w.stmt)
         marks.del(`${OWED}${w.kind}:${w.name}`)

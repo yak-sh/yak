@@ -4,13 +4,15 @@ import { bounded } from './ceiling.ts'
 import { storage } from './store.ts'
 import { durable, shop } from './testing.ts'
 
-// Workerd counts index writes too. Stock SQLite's changes() does not, so this
-// boundary supplies that amplification while keeping the queries in process.
+// Workerd counts index writes too, and bills a count(*) every row it counts.
+// Stock SQLite's changes() and rows returned say neither, so this boundary
+// supplies them while keeping the queries in process.
 let metered = () => {
   let file = durable(), exec = file.sql.exec
   let rows = (q: string) => exec(q).toArray()
-  let written = 0
+  let written = 0, read = 0
   file.sql.exec = (q, ...bindings) => {
+    let counted = /^select count\(\*\) as "n" from "(\w+)"$/i.exec(q)
     let cursor = exec(q, ...bindings)
     let cost = 0
     let index = /^create (?:unique )?index .* on "?([\w]+)"?/i.exec(q)
@@ -27,10 +29,14 @@ let metered = () => {
         : 0
       cost = Number(rows('select changes() as n')[0].n) * (1 + indexes)
     }
+    let rowsRead = counted
+      ? Number(rows(`select count(*) as n from "${counted[1]}"`)[0].n)
+      : cursor.toArray().length
     written += cost
-    return { ...cursor, rowsRead: cursor.toArray().length, rowsWritten: cost }
+    read += rowsRead
+    return { ...cursor, rowsRead, rowsWritten: cost }
   }
-  return { file, written: () => written }
+  return { file, written: () => written, read: () => read }
 }
 
 let f = metered()
@@ -206,4 +212,45 @@ test('a read does not force a reference index the object still owes, and uses it
   equal(made(), ['made'])
   while (owing.upkeep() != null) { /* build what is owed */ }
   equal(made(), ['made'])
+})
+
+// A spine past what any window may write: its owed index can never be paced
+// in, so it runs free (told, never refused), and no look at it reads the
+// spine whole.
+let big = metered(), bigNow = 1_000, stops: Error[] = []
+let grown = storage(big.file, shop, { deferred: false })
+grown.install()
+await grown.tx((tx) =>
+  tx.patch(Array.from({ length: 500 }, (_, i) => ({
+    entity: { eid: `big-${i}` },
+    doc: { title: `big-${i}` },
+  })))
+)
+big.file.sql.exec('drop index entity_archetype_num')
+big.file.sql.exec("delete from server_meta where k='schema'")
+bounded(big.file, {
+  now: () => bigNow,
+  windows: [{ ms: 60_000, read: 50e6, written: 100 }],
+  report: (e) => {
+    stops.push(e)
+  },
+})
+let spine = storage(big.file, shop, { deferred: true })
+spine.install()
+// Its rows are classified already: only the index is owed.
+big.file.sql.exec("delete from server_meta where k='archetype:pending'")
+
+test('an index no window can hold is built free, and looking at it reads a row, not the spine', () => {
+  let before = big.read()
+  for (let n = 0; n < 10 && spine.upkeep(false) != null; n++) spine.upkeep()
+  equal(spine.upkeep(false), null)
+  equal(big.read() - before < 100, true)
+  equal(
+    big.file.sql.exec(
+      "select name from sqlite_schema where name='entity_archetype_num'",
+    ).toArray().length,
+    1,
+  )
+  equal(spine.read('.doc.title=big-499')[0].doc, { title: 'big-499' })
+  equal(stops.every((e) => /never stops/.test(e.message)), true)
 })

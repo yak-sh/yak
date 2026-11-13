@@ -35,6 +35,10 @@ export type { Opts, Store }
  * // let g = graph({ storage: store, vocab })
  * ```
  */
+// The share of each window a maintenance unit may spend: most of it for a
+// large unit, which could otherwise never fit beside the object's own work.
+let share = (written: number) => written > 10_000 ? 0.9 : 0.5
+
 export let storage = (
   durable: DurableStorage,
   vocab: Vocab,
@@ -46,13 +50,29 @@ export let storage = (
   let bound = bounded(durable)
   return Object.assign(store, {
     // Previewing a unit arms a host without running maintenance at boot.
+    // A unit no window can hold (an index over a spine past its writes in a
+    // minute) runs free, told and never refused, as a deploy's install does:
+    // paced, it would wait for a window that never comes, and the object
+    // would serve without it for good.
     upkeep: (run = true) => {
-      let wait = Infinity
+      let wait = Infinity, huge = false
       let worked = store.maintain((written) => {
-        let next = bound.under(written > 10_000 ? 0.9 : 0.5, written)
+        let next = bound.under(share(written), written)
+        if (next == Infinity) {
+          huge = true
+          wait = 0
+          return false
+        }
         wait = Math.min(wait, next)
         return run && next == 0
       })
+      if (!worked && huge && run) {
+        worked = bound.free(() =>
+          store.maintain((written) =>
+            bound.under(share(written), written) == Infinity
+          )
+        )
+      }
       return worked ? 0 : Number.isFinite(wait) ? wait : null
     },
   })
