@@ -193,24 +193,23 @@ export let admitted = member
  * scanning the whole corpus. */
 export let FEW = 5000
 
-// Whether a bounded screen is small absolutely or relative to the corpus.
-let few = (db: Statements, within: Raw): boolean => {
-  // A sparse screen stays cheaper than reading unrelated vector payloads,
-  // even when the matching set has outgrown the small-corpus threshold.
-  let limit = Math.max(FEW, Math.floor(tally(db, TABLE) / 8))
-  return Number(
-    db.query(select({
-      cols: [as(count(), 'n')],
-      from: from(
-        select({
-          cols: [lit(1)],
-          from: from(within, 's'),
-          limit: lit(limit + 1),
-        }),
-        'f',
-      ),
-    }))[0].n,
-  ) <= limit
+/** The ids a screen admits, where they are few absolutely ({@link FEW}) or
+ * relative to a corpus of `corpus` vectors (an eighth of it); null for a
+ * broader screen. Reading a sparse screen whole is one statement on its own
+ * indexes, cheaper than reading unrelated vector payloads or asking it of
+ * each candidate, even when it has outgrown {@link FEW}. */
+export let few = (
+  db: Statements,
+  within: Raw,
+  corpus: number,
+): Set<number> | null => {
+  let limit = Math.max(FEW, Math.floor(corpus / 8))
+  let ids = db.query(select({
+    cols: [col('id', 's')],
+    from: from(within, 's'),
+    limit: lit(limit + 1),
+  }))
+  return ids.length > limit ? null : new Set(ids.map((r) => Number(r.id)))
 }
 
 /** How many more of the nearest a native search draws when a screen is asked
@@ -229,7 +228,7 @@ export let candidates = (
   if (!c) return null
   if (only(db) != opts.model || !init(db, c, query.length)) return null
   let codes = complete(db) && initCodes(db, c, query.length)
-  if (opts.within && few(db, opts.within)) {
+  if (opts.within && few(db, opts.within, tally(db, TABLE))) {
     return codes ? sparse(db, query, opts.within, pool(opts.need)) : null
   }
   // The codes, where every vector has them: a fifth of the bytes to read.

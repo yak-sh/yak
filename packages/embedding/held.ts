@@ -72,7 +72,7 @@ import {
   val,
 } from '@yaks/sql'
 import { BUILD, CODE, DIRTY, JOURNAL, TABLE } from './ddl.ts'
-import { admitted, current, only } from './native.ts'
+import { admitted, current, few, only } from './native.ts'
 import { complete } from './coded.ts'
 import type { Near } from './near.ts'
 import { code, cosine, floats } from './vector.ts'
@@ -665,9 +665,29 @@ export let ranked = (
   }
   owners = owners.subarray(0, count)
   sims = sims.subarray(0, count)
+  // The ranking narrowed to what a screen admits, less what was tested.
+  let narrow = (admits: Set<number>, tested = new Set<number>()) => {
+    let rest = [...owners.keys()].filter((k) =>
+      !tested.has(k) && admits.has(owners[k])
+    )
+    ;[owners, sims] = [
+      Int32Array.from(rest, (k) => owners[k]),
+      Float64Array.from(rest, (k) => sims[k]),
+    ]
+  }
   let want = Math.max(RESCORE, opts.limit)
   let found: Near[] = []
   let within = opts.within
+  // A screen that admits few is read whole first, and the ranking is only
+  // what it admits: asked of each candidate instead, it reads every row the
+  // candidate's test touches. A person's 7,228 earlier words among 316k
+  // vectors read whole in 87 ms, and asked of the 1,600 nearest took 0.6 s
+  // with the pages in memory and 7.9 s with them on disk.
+  let admits = within && few(db, within, owners.length)
+  if (admits) {
+    narrow(admits)
+    within = undefined
+  }
   for (let seen = 0, reach = want; found.length < want;) {
     let best = top(owners, sims, Math.min(reach, owners.length))
     if (best.length == seen) break
@@ -681,24 +701,19 @@ export let ranked = (
     }
     seen = best.length
     reach *= 4
-    // A screen that admits few costs a walk through most of the ranking. Once
-    // the rate so far says the walk would test more than half of it, the
-    // screen is read whole, and the rest of the ranking is what it admits,
-    // all of it below everything already tested.
+    // A broad screen that admits few of the nearest costs a walk through most
+    // of the ranking. Once the rate so far says the walk would test more than
+    // half of it, the screen is read whole, and the rest of the ranking is
+    // what it admits, all of it below everything already tested.
     let rate = Math.max(found.length, 1) / seen
     if (within && found.length < want && want / rate > owners.length / 2) {
-      let admits = new Set(
-        db.query(select({ cols: [col('id', 's')], from: from(within, 's') }))
-          .map((r) => Number(r.id)),
+      narrow(
+        new Set(
+          db.query(select({ cols: [col('id', 's')], from: from(within, 's') }))
+            .map((r) => Number(r.id)),
+        ),
+        new Set(best),
       )
-      let tested = new Set(best)
-      let rest = [...owners.keys()].filter((k) =>
-        !tested.has(k) && admits.has(owners[k])
-      )
-      ;[owners, sims] = [
-        Int32Array.from(rest, (k) => owners[k]),
-        Float64Array.from(rest, (k) => sims[k]),
-      ]
       within = undefined
       seen = 0
       reach = want - found.length
