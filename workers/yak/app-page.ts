@@ -96,7 +96,7 @@ export let page = (a: Shown, env: Host = {}) => {
       h(
         'p',
         { class: 'Note Listing_Made' },
-        'Made with yaks.app, where an Operator builds the apps you need. ',
+        'Made with yaks.app, where you build, host and share web apps. ',
         h('a', { href: '/' }, 'See how it works'),
       ),
     ),

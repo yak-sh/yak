@@ -156,7 +156,7 @@ export let CLOSED = ['/login', '/connect', '/mcp', '/api/', '/gallery/review']
 
 export let robots = (env: Host = {}) =>
   [
-    '# yaks.app — an Operator that does things for you.',
+    '# yaks.app — build, host and share web apps.',
     '# Crawling and reading here is welcome; the guide is at',
     `# ${whole(env)}, and ${at('/llms.txt', env)} is the short index of it.`,
     '',
@@ -253,9 +253,9 @@ export let llms = (
   [
     '# yaks.app',
     '',
-    '> An Operator that does things for you, and builds the apps it needs.',
-    '> Chat with it, email it, text it or call it, or ask Claude or ChatGPT,',
-    '> and yaks.app keeps the apps online.',
+    '> Build, host and share web apps.',
+    '> Say what you need, or ask Claude or ChatGPT, and yaks.app builds the app',
+    '> and keeps it online. Your Operator makes changes whenever you ask.',
     `> Your app lives at ${
       spaceHost(env, 'yourname')
     }, saves your data, and works in a browser.`,

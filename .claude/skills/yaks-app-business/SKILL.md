@@ -76,11 +76,11 @@ assistant well, and is not the center. What the product gives an app that a
 chat can't: an address, data that stays, sign-in, the people it's for, on any
 phone (M-37845).
 
-The site leads with the Operator. Jeff, 2026-11-08, verbatim: "i think for
-marketing, i'd like to move towards the "operator" pitch. yaks.app does
-everything for you, including building". You get an Operator that does things
-for you: you chat with it, email it, text it or call it, and it builds the apps
-it needs along the way.
+The home page leads with the pitch, "Build, host and share web apps"
+(M-37845). It led with the Operator from 2026-11-08 until Jeff, 2026-11-13,
+verbatim: "please fix the homepage copy to not be about the Operator and go
+back to our normal pitch". The Operator is named on it as how changes get
+made, and /operator is the page that pitches it.
 
 The individual people who use yaks.app today are literal too. D-158979 has
 each as a person to write for, and D-131886 has the model built on them:

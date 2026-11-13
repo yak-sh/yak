@@ -94,7 +94,7 @@ let welcome = (back: string | null, env: Host) => {
   let to = back && URL.canParse(back) ? new URL(back) : null
   return to?.hostname.endsWith(`.${apex(env)}`)
     ? `Sign in to continue to ${to.hostname + to.pathname.replace(/\/$/, '')}.`
-    : 'Get an Operator that does things for you.'
+    : 'Build, host and share web apps.'
 }
 
 // Ask for an address. `who` names the app asking, when one is (the OAuth

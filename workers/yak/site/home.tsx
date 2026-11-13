@@ -17,8 +17,7 @@ let data = {
       'url': 'https://yaks.app/',
       'name': 'yaks.app',
       'alternateName': 'Yak Shaving',
-      'description':
-        'An Operator that does things for you, and builds the apps it needs.',
+      'description': 'Build, host and share web apps.',
       'inLanguage': 'en-US',
       'publisher': {
         '@id': 'https://yaks.app/#organization',
@@ -40,10 +39,10 @@ let data = {
       'applicationCategory': 'DeveloperApplication',
       'operatingSystem': 'Web browser',
       'description':
-        'Get an Operator that does things for you. Chat with it, email it, text it or call it, and it builds the apps it needs, from a menu for your side business to a recipe box for your family, and puts them online at yourname.yaks.app, with their own data, file uploads, email address and optional custom domain.',
+        'Build, host and share web apps. Say what you need, from a menu for your side business to a recipe box for your family, and yaks.app builds the app and puts it online at yourname.yaks.app, with its own data, file uploads, email address and optional custom domain. Share it with the people it is for.',
       'featureList': [
-        'An Operator you chat with, email, text or call',
-        'Apps your Operator builds for you',
+        'Apps built from what you say you need',
+        'Changes and fixes made by your Operator',
         'Apps built by your own AI assistant over MCP',
         'A graph data store per app, shared across devices',
         'File and photo uploads',
@@ -257,9 +256,9 @@ export let Cost = () => (
 
 export let Home = () => (
   <Page
-    name='yaks.app — an Operator that does things for you'
-    title='yaks.app — an Operator that does things for you'
-    description='Get an Operator that does things for you. Chat with it, email it, text it or call it, and it builds the apps it needs and puts them online at your own address.'
+    name='yaks.app — build, host and share web apps'
+    title='yaks.app — build, host and share web apps'
+    description='Build, host and share web apps. Say what you need, and yaks.app builds the app, puts it online at your own address and shares it with the people it is for.'
     path='/'
     kind='Home'
     head={
@@ -276,10 +275,10 @@ export let Home = () => (
         <div class='Hello_Yak' data-wander=''>
           <Idle class='Wander_Image' base='.' />
         </div>
-        <p class='Hello_Kicker'>An Operator that does things for you</p>
+        <p class='Hello_Kicker'>Build, host and share web apps</p>
         <h1 class='Title Title-hero' id='hello'>
           <label for='say'>
-            Tell your Operator what you need done.
+            Say what you need an app for, and watch it being built.
           </label>
         </h1>
         <form class='Hello_Ask' method='post' action={START}>
@@ -290,15 +289,17 @@ export let Home = () => (
             name='say'
             required
             maxLength={4000}
-            placeholder='What do you need, and who is it for?'
+            placeholder='What should it do, and who is it for?'
           />
           <Button mod='go' type='submit' data-cta='start'>
             Build it
           </Button>
         </form>
         <p class='Note Note-small'>
-          Free, with no sign-up to start. <a href='#cost'>$9 a month</a>{' '}
-          for more.{' '}
+          Free, with no sign-up to start. Your app goes online at your own
+          address, for any phone or computer. <a href='#cost'>$9 a month</a>
+          {' '}
+          for unlimited apps.{' '}
           <a href='#examples' data-cta='examples'>
             See examples <span aria-hidden='true'>↓</span>
           </a>
@@ -306,32 +307,35 @@ export let Home = () => (
       </div>
       <Examples>
         Each of these apps runs on yaks.app. Open one to try it, or get a copy
-        of your own and ask your Operator to change it.{' '}
+        of your own and ask for the changes you want.{' '}
         <a href='/gallery'>See more in the gallery</a>.
       </Examples>
     </section>
     <section class='Yours' aria-labelledby='does'>
-      <h2 class='Title' id='does'>What your Operator does for you</h2>
+      <h2 class='Title' id='does'>Build it, host it and share it here</h2>
       <dl class='Yours_List'>
         <div>
-          <dt class='Yours_Term'>It builds apps</dt>
+          <dt class='Yours_Term'>Build an app by saying what you need</dt>
           <dd class='Yours_Detail'>
-            Ask for an app, a new feature or a fix, and your Operator does the
-            work. Your apps save what people add, on every phone and computer.
+            Describe it in plain words, and yaks.app builds it. For a new
+            feature or a fix, ask your Operator, the AI assistant that comes
+            with your apps, and it makes the change.
           </dd>
         </div>
         <div>
-          <dt class='Yours_Term'>Chat, email, text or call</dt>
+          <dt class='Yours_Term'>It stays online and saves what people add</dt>
           <dd class='Yours_Detail'>
-            Chat with it on yaks.app or email it. Give it your mobile number,
-            and you can text it or call it.
+            Your app lives at your own address, like{' '}
+            <Yours />, on any phone or computer. Sign-ups, recipes, photos and
+            files are saved for everyone you share with.
           </dd>
         </div>
         <div>
-          <dt class='Yours_Term'>Share anything it does or builds</dt>
+          <dt class='Yours_Term'>Share it with the people it's for</dt>
           <dd class='Yours_Detail'>
-            Keep an app to yourself, share it with a link, or invite as many
-            people as you like to view or edit it, free.
+            Keep an app to yourself, send its link, or invite as many people as
+            you like to view or edit it, free. Publish it, and others can get a
+            copy of their own.
           </dd>
         </div>
       </dl>
@@ -340,7 +344,7 @@ export let Home = () => (
       <h2 class='Title' id='how'>How yaks.app works</h2>
       <ol class='Steps'>
         <li class='Steps_Item'>
-          <h3 class='Step_Name'>Tell your Operator what you need</h3>
+          <h3 class='Step_Name'>Say what you need</h3>
           <p class='Note'>
             Type it in the box above, like a chore chart for your household.
             There is nothing to install.
@@ -349,7 +353,7 @@ export let Home = () => (
         <li class='Steps_Item'>
           <h3 class='Step_Name'>Open it anywhere</h3>
           <p class='Note'>
-            Your Operator builds it and puts it online. Open it on your phone or
+            yaks.app builds it and puts it online. Open it on your phone or
             computer, or send its link to the people it's for.
           </p>
         </li>
@@ -370,9 +374,9 @@ export let Home = () => (
     </section>
     <Cost />
     <Card class='Join' aria-labelledby='join'>
-      <h2 class='Title' id='join'>What would you like your Operator to do?</h2>
+      <h2 class='Title' id='join'>What app would you like to build?</h2>
       <p class='Join_Doors'>
-        <Button mod='go' href='#say' data-cta='join'>Tell it</Button>
+        <Button mod='go' href='#say' data-cta='join'>Build it</Button>
       </p>
       <p class='Note Note-small'>Free to start.</p>
     </Card>

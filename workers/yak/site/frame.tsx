@@ -15,7 +15,7 @@ import { Idle } from '../mascot.ts'
 import { fields, meta } from '../link-preview.ts'
 
 let SITE = 'https://yaks.app'
-let ALT = 'yaks.app: an Operator that does things for you'
+let ALT = 'yaks.app: build, host and share web apps'
 
 /** A space's address, the name in it a person's own:
  * <Yours /> is yourname.yaks.app. */

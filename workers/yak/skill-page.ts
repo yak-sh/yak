@@ -264,7 +264,7 @@ export let page = (
       h(
         'p',
         { class: 'Note Listing_Made' },
-        'Shared on yaks.app, where an Operator builds the apps you need. ',
+        'Shared on yaks.app, where you build, host and share web apps. ',
         h('a', { href: '/' }, 'See how it works'),
       ),
     ),

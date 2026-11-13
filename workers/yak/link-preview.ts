@@ -14,8 +14,7 @@ export type Preview = {
 
 export let DEFAULT: Preview = {
   title: 'yaks.app',
-  description:
-    'An Operator that does things for you. Build, host and share web apps.',
+  description: 'Build, host and share web apps.',
 }
 
 export let fields = (env: Host, of: Preview) => {

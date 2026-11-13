@@ -111,10 +111,10 @@ export let Help = () => (
     <div class='Prose_Head'>
       <h1 class='Title Title-page'>Help</h1>
       <p class='Prose_Text'>
-        yaks.app gives you an Operator that does things for you and builds the
-        apps it needs. You can also build apps by asking Claude or ChatGPT. This
-        page covers setup, sharing, exports, and support. For anything else,
-        email{' '}
+        Build, host and share web apps: say what you need, and yaks.app builds
+        it. You can also build apps by asking Claude or ChatGPT. This page
+        covers setup, sharing, exports, and support. For anything else, email
+        {' '}
         <a class='Prose_Link' href='mailto:hello@yaks.app'>hello@yaks.app</a>.
       </p>
       <Chips as='ul'>
