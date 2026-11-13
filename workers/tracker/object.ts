@@ -2,16 +2,14 @@
 // failed installation never leaves a permanently rejected constructor promise.
 
 import {
-  bounded,
-  type Ceiling,
   driver,
-  type DurableStorage,
+  Durable,
   type Hibernation,
   moved,
   replaced,
   reserved,
-  type Sockets,
-  sockets,
+  type Spec,
+  type State as Durables,
   Stopped,
   stopped,
   storage,
@@ -59,9 +57,7 @@ import {
 
 export type State = Hibernation & {
   id: { name?: string }
-  storage: DurableStorage & {
-    getAlarm: () => Promise<number | null>
-    setAlarm: (at: number) => Promise<void>
+  storage: Durables['storage'] & {
     get: <T>(key: string) => Promise<T | undefined>
     put: (key: string, value: unknown) => Promise<void>
   }
@@ -135,9 +131,9 @@ let BEHIND = 60_000
 // the alarm's drain each spend a share of every window of their own.
 export let INTAKE = 'intake', DRAIN = 'drain'
 
-export class Tracker {
+export class Tracker extends Durable {
+  declare ctx: State
   tracker?: TrackerStore
-  live?: Sockets
   scope: string
   sink: Sink
   #config: Config
@@ -155,43 +151,29 @@ export class Tracker {
     this.#rows.run(kind, work)
   #sql = () => this.#driver ??= driver(this.ctx.storage, this.#rows.observe)
   #traceMeta = () => meta(this.#sql())
-  #ceiling: Ceiling
   constructor(
-    public ctx: State,
+    ctx: State,
     public env: Settings = {},
     private now: () => number = Date.now,
     windows?: Window[],
   ) {
-    this.scope = ctx.id.name ?? platform
-    this.sink = env.ERRORS
-      ? queue(env.ERRORS)
-      : (rows) => console.error(JSON.stringify(rows))
     // A statement of this tracker's that scans, and the tracker past the rows
     // it may read or write, told where the statement ran: a scan is one bug
     // for its statement, a runaway one for its scope. Past a window it takes
     // no statement until the window ends: a door answers how long to wait,
     // intake is delivered again then (./queue.ts), and the alarm comes back
     // then for the work it owes.
-    this.#ceiling = bounded(ctx.storage, {
-      now: this.now,
-      windows,
-      refuse: true,
-      report: (error, { fault, tags }) => {
-        let from = this.#origin('Tracker.sql')
-        void report(error, {
-          ...from,
-          sink: this.sink,
-          fault: fault.startsWith('scan|') ? fault : `${fault}|${this.scope}`,
-          tags: { ...from.tags, ...tags, scope: this.scope },
-        })
-      },
-    })
+    super(ctx, (self) => (self as Tracker).#spec(windows))
+    this.scope = ctx.id.name ?? platform
+    this.sink = env.ERRORS
+      ? queue(env.ERRORS)
+      : (rows) => console.error(JSON.stringify(rows))
     this.#config = {
       sink: this.sink,
       report: (error) => this.#report(error, 'Tracker.effect'),
       // How a run ended is written while this object is stopped too, so a
       // run that finished never runs again.
-      free: (write) => this.#ceiling.free(write),
+      free: (write) => this.ceiling.free(write),
       store: this.scope,
       // The box's tracker web reads platform bugs through. The box tracker
       // writes the letters for the box's own bugs, and a space's tracker for
@@ -213,6 +195,68 @@ export class Tracker {
         ? { settle: settling(env.TRACKERS) }
         : {},
     }
+    // Its ceiling is named before any driver: trace intake opens storage
+    // without opening the object.
+    this.ceiling
+  }
+  // What the package's object opens: the tracker's door, its subscriptions,
+  // and the works of its alarm, each entry measured by what it read and
+  // wrote (./bill.ts).
+  #spec = (windows?: Window[]): Spec => ({
+    open: async () => {
+      let tracker = await this.boot()
+      return {
+        serve: door(
+          tracker,
+          this.scope,
+          this.env.TRACKER_SECRET,
+          (request) => this.accept(request),
+          this.ingest,
+        ),
+        subs: subscriptions(tracker.graph),
+        frame: this.#message,
+        works: {
+          // The schema's upkeep, a unit a ring while it is under its share.
+          upkeep: () => {
+            this.#upkeep?.()
+            return this.#upkept()
+          },
+          // Grouping and the pool, in half of every window of their own:
+          // past it, the drain waits for the window's end.
+          drain: async () => {
+            await this.ceiling.lane(
+              DRAIN,
+              () => tracker.drain(this.now(), () => this.#paced() == 0),
+            )
+            let now = this.now(), next = await tracker.next(now)
+            return next == null ? null : Math.max(next, now + this.#paced())
+          },
+        },
+      }
+    },
+    report: (error, entry) => this.recover(error, `Tracker.${entry}`),
+    ceiling: {
+      now: this.now,
+      windows,
+      report: (error, { fault, tags }) => {
+        let from = this.#origin('Tracker.sql')
+        void report(error, {
+          ...from,
+          sink: this.sink,
+          fault: fault.startsWith('scan|') ? fault : `${fault}|${this.scope}`,
+          tags: { ...from.tags, ...tags, scope: this.scope },
+        })
+      },
+    },
+    alarm: { now: this.now },
+    around: this.#run,
+    version: this.env.CF_VERSION_METADATA?.id,
+  })
+  #paced = () => this.ceiling.under(0.5, 0, DRAIN)
+  // When the schema's upkeep is next owed, at most once a second.
+  #upkept = () => {
+    let wait = this.#upkeep?.(false)
+    return wait == null ? null : this.now() + Math.max(1000, wait)
   }
   #upkeep?: (run?: boolean) => number | null
   #mailReady = false
@@ -278,7 +322,6 @@ export class Tracker {
       if (ran) await this.ctx.storage.put('schema', SCHEMA_READY)
     }
     let tracker = store(saved, this.#config)
-    this.live = sockets(subscriptions(tracker.graph), this.ctx)
     this.tracker = tracker
     this.#upkeep = saved.upkeep
     if (install) await this.#mail()
@@ -319,15 +362,30 @@ export class Tracker {
   // A second from now, or once a stopped tracker's window ends.
   #soon = async () => {
     try {
-      await this.ctx.storage.setAlarm(
-        this.now() + Math.max(1000, this.#ceiling.stopped(true)),
+      await this.clock.arm(
+        this.now() + Math.max(1000, this.ceiling.stopped(true)),
       )
     } catch { /* next queue delivery retries */ }
+  }
+  // Grouping owed by a write: a second from now, or at the end of a window
+  // whose share the drain has spent. An alarm set sooner stands, so a
+  // backlog's deliveries read nothing to arm it.
+  #owe = () => this.clock.arm(this.now() + Math.max(1000, this.#paced()))
+  // What the tracker owes, read off its rows: the soonest of its upkeep and
+  // its next run or wake. A healthy monitor and an empty tracker set no
+  // alarm.
+  #arm = async () => {
+    let now = this.now(), next = await this.tracker!.next(now)
+    let at = Math.min(
+      next == null ? Infinity : Math.max(next, now + this.#paced()),
+      this.#upkept() ?? Infinity,
+    )
+    if (Number.isFinite(at)) await this.clock.arm(at)
   }
   ingest = (rows: Bundle[]): Promise<void> =>
     this.#run(
       'ingest',
-      () => this.#ceiling.lane(INTAKE, () => this.#ingest(rows)),
+      () => this.ceiling.lane(INTAKE, () => this.#ingest(rows)),
     )
   #ingest = async (rows: Bundle[]): Promise<void> => {
     if (rows.some((row) => row.trace || row.span)) {
@@ -342,17 +400,16 @@ export class Tracker {
     // within minutes of each window, and a deploy's canary waited behind it
     // for two windows. A paused delivery keeps grouping's earlier alarm; only
     // a hard stop moves it to the window's end.
-    let wait = this.#ceiling.under(0.25, 0, INTAKE)
+    let wait = this.ceiling.under(0.25, 0, INTAKE)
     if (wait) {
-      let hard = this.#ceiling.refusal(true)
+      let hard = this.ceiling.refusal(true)
       if (hard) await this.#soon()
       throw hard ?? new Stopped(wait, 'written')
     }
     try {
-      let tracker = await this.boot()
-      await this.live?.wake()
-      await tracker.ingest(rows)
-      await this.#arm()
+      await this.open()
+      await this.tracker!.ingest(rows)
+      await this.#owe()
     } catch (error) {
       // The caller hears this failure and reports it: the queue's consumer
       // once a batch, the door for its request. Reported here as well, every
@@ -380,9 +437,8 @@ export class Tracker {
   ): Promise<number> =>
     this.#run('settle', async () => {
       try {
-        let tracker = await this.boot()
-        await this.live?.wake()
-        return await tracker.settle(eids, reason, said)
+        await this.open()
+        return await this.tracker!.settle(eids, reason, said)
       } catch (error) {
         await this.recover(error, 'Tracker.settle')
         throw error
@@ -500,7 +556,10 @@ export class Tracker {
     this.#traceTail = ran.then(() => {}, () => {})
     return ran
   }
-  fetch = (request: Request): Promise<Response> =>
+  // The door checks a caller's scope and answers the platform's own paths
+  // before the tracker opens: a stopped tracker an administrator resumes, or
+  // one whose boot fails, still answers them.
+  override fetch = (request: Request): Promise<Response> =>
     this.#run(
       `${request.method} ${new URL(request.url).pathname}`,
       () => this.#fetch(request),
@@ -516,7 +575,7 @@ export class Tracker {
       let recovered = await recovery(
         request,
         access,
-        this.#ceiling,
+        this.ceiling,
         (key, value) => this.ctx.storage.put(key, value),
       )
       if (recovered) {
@@ -559,24 +618,16 @@ export class Tracker {
         return json(this.traceBudget())
       }
       let serve = async () => {
-        let tracker = await this.boot()
-        await this.live?.wake()
-        let answer = await door(
-          tracker,
-          this.scope,
-          this.env.TRACKER_SECRET,
-          (request) => this.live!.accept(request),
-          this.ingest,
-        )(request)
+        let answer = await (await this.open()).serve(request)
         // A mark or a retry owes runs the pool works on its alarm, not a
         // minute later on the monitor's.
-        if (request.method == 'POST' && answer.ok) await this.#arm()
+        if (request.method == 'POST' && answer.ok) await this.#owe()
         return answer
       }
       // A fixer's mark on a known bug is a few rows, told and never refused:
       // on 2026-11-12 a flood's grouping stopped the platform's tracker for
       // its hour, and every resolution of the bug behind the flood with it.
-      return await (marking(request) ? this.#ceiling.free(serve) : serve())
+      return await (marking(request) ? this.ceiling.free(serve) : serve())
     } catch (error) {
       // A stopped tracker's answer says how long to wait.
       if (stopped(error)) return refuse(error)
@@ -618,85 +669,26 @@ export class Tracker {
       await this.recover(error, 'Tracker.monitor')
     }
   }
-  alarm = () => this.#run('alarm', this.#alarm)
-  #alarm = async () => {
-    try {
-      // A stopped tracker's alarm owes nothing until its window ends.
-      if (this.#ceiling.stopped(true)) return await this.#soon()
-      let tracker = await this.boot()
-      await this.live?.wake()
-      this.#upkeep?.()
-      await this.#ceiling.lane(
-        DRAIN,
-        () =>
-          tracker.drain(
-            this.now(),
-            () => this.#ceiling.under(0.5, 0, DRAIN) == 0,
-          ),
+  // A frame from a socket: the box subscribes here, and arbitrary graph
+  // writes are not a tracker RPC.
+  #message = async (ws: Wire, data: string | ArrayBuffer) => {
+    let frame = JSON.parse(
+      typeof data == 'string' ? data : new TextDecoder().decode(data),
+    )
+    if (
+      !frame || typeof frame != 'object' ||
+      Object.keys(frame).some((key) =>
+        !['subscribe', 'unsubscribe', 'ack', 'id'].includes(key)
       )
-      await this.#arm()
-    } catch (error) {
-      await this.recover(error, 'Tracker.alarm')
-    }
-  }
-  // Sleep until durable work is due. A healthy monitor and an empty alarm owe
-  // no storage writes; future wakes and retry backoff do not poll each second.
-  #arm = async () => {
-    // Intake may owe the same work again. Keep its earlier return instead of
-    // moving grouping a second away on every delivery.
-    let now = this.now(), alarm = await this.ctx.storage.getAlarm()
-    // Past half a window of its own, grouping waits for the window's end
-    // (`#alarm`); the maintenance it owes does not.
-    let capacity = this.#ceiling.under(0.5, 0, DRAIN)
-    let maintenance = this.#upkeep?.(false)
-    let upkeep = maintenance == null
-      ? Infinity
-      : now + Math.max(1000, maintenance)
-    // The soonest the alarm can be wanted: a second from now, and while
-    // paced, the window's end. An alarm due by then has nothing to bring
-    // forward, so the read of what is owed is spared. Behind a backlog that
-    // read is every intake's: paced, each one read it again to set the alarm
-    // where it already stood, eight a second, until the reads stopped the
-    // tracker (2026-11-12).
-    let soonest = Math.min(now + Math.max(1000, capacity), upkeep)
-    if (alarm != null && alarm <= soonest) {
-      // Paced, an alarm due sooner would only wake to pause again.
-      if (capacity && alarm < soonest) await this.ctx.storage.setAlarm(soonest)
+    ) {
+      ws.send(
+        JSON.stringify({
+          id: frame.id,
+          error: 'tracker sockets are read only',
+        }),
+      )
       return
     }
-    let next = await this.tracker!.next(now)
-    if (next != null) next = Math.max(next, now + capacity)
-    next = Math.min(next ?? Infinity, upkeep)
-    if (!Number.isFinite(next)) return
-    if (alarm == null || next < alarm) await this.ctx.storage.setAlarm(next)
+    await this.live?.message(ws, data)
   }
-  webSocketMessage = (ws: Wire, data: string | ArrayBuffer) =>
-    this.#run('socket', () => this.#message(ws, data))
-  #message = async (ws: Wire, data: string | ArrayBuffer) => {
-    try {
-      await this.boot()
-      let frame = JSON.parse(
-        typeof data == 'string' ? data : new TextDecoder().decode(data),
-      )
-      // The box subscribes here; arbitrary graph writes are not a tracker RPC.
-      if (
-        !frame || typeof frame != 'object' ||
-        Object.keys(frame).some((key) =>
-          !['subscribe', 'unsubscribe', 'ack', 'id'].includes(key)
-        )
-      ) {
-        ws.send(
-          JSON.stringify({
-            id: frame.id,
-            error: 'tracker sockets are read only',
-          }),
-        )
-        return
-      }
-      await this.live?.message(ws, data)
-    } catch (error) {
-      await this.recover(error, 'Tracker.webSocketMessage')
-    }
-  }
-  webSocketClose = (ws: Wire) => this.live?.close(ws)
 }

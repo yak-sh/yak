@@ -211,6 +211,48 @@ requires the corresponding blob storage and graph plugin setup; this adapter
 does not provide that automatically. Schema installation is repeatable, but
 application schema migrations still require coordination.
 
+## One class, one alarm
+
+`Durable` is the object as a class, for every kind of object a Worker serves.
+What differs between kinds is its spec, which a subclass hands to `super`:
+
+- `open()` composes what the object holds, once an instance: its door (`serve`),
+  the subscriptions its sockets serve (`subs`), and the works its alarm runs
+  (`works`). An open that fails is tried again by the next entry.
+- `report(error, entry)` takes every failure the object catches.
+- `ceiling` is the row ceiling's options, refusing by default; `version` is the
+  deploy the object runs.
+
+Every entry opens first and wakes the sockets the object inherited. A door's
+statement past the ceiling is answered `Stopped`, with how long to wait. A
+socket is the door's to accept, through `accept(request)`, after whatever the
+door checks. The first entry on a new `version` arms the alarm, which takes up
+what the object owes: a deploy restarts it idle.
+
+`clock(ctx.storage, works, options?)` is the alarm loop the class runs. Each
+ring gives every work one slice (`SLICE`, ten seconds), and each answers when it
+is next owed; the alarm is set for the soonest. While a slice runs the alarm
+stands at `BACKSTOP`, so an instance cut off mid-slice is rung again. A work
+that fails is reported and tried again `RETRY` (a minute) on; one the ceiling
+stopped waits for its window. A write that owes work calls `clock.arm(at)`,
+which keeps an alarm already set sooner.
+
+```ts
+import { Durable, type State } from '@yaks/durable-object'
+
+class Counter extends Durable {
+  constructor(ctx: State) {
+    super(ctx, () => ({
+      open: async () => ({
+        serve: () => new Response('ok'),
+        works: { sweep: async (until) => null },
+      }),
+      report: (error, entry) => console.error(entry, error),
+    }))
+  }
+}
+```
+
 ## Hibernation, and why `wake()`
 
 A socket accepted with `ctx.acceptWebSocket` can remain connected while the
@@ -295,8 +337,8 @@ assertEquals(moved(error) && replaced(reset), true)
 
 `@yaks/durable-object` exports everything below. A reader of the object's
 storage that holds no socket imports `@yaks/durable-object/sql` (`driver`),
-`/store` (`storage`), `/resets` (the reset helpers) or `/ceiling` alone, without
-`sockets` and the `@yaks/api` dispatch it brings:
+`/store` (`storage`), `/resets` (the reset helpers), `/ceiling` or `/alarm`
+alone, without `sockets` and the `@yaks/api` dispatch it brings:
 
 | Export                                                  | Purpose                                             |
 | ------------------------------------------------------- | --------------------------------------------------- |
@@ -306,6 +348,8 @@ storage that holds no socket imports `@yaks/durable-object/sql` (`driver`),
 | `profile(emit)`                                         | Aggregates cursor costs into bounded summaries      |
 | `bounded(ctx.storage, options?)`, `ceiling(options?)`   | Report a scan or a runaway, and stop the object     |
 | `stopped(error)`                                        | Whether a failure is a stop, here or across a stub  |
+| `Durable`, `Spec`, `Opened`, `State`                    | The object class and what makes one kind of object  |
+| `clock(ctx.storage, works, options?)`, `Work`           | The one alarm loop, in slices                       |
 | `sockets(subs, ctx)`                                    | Returns `accept`, `message`, `close`, and `wake`    |
 | `prohibited`, `reserved`                                | Identify internal runtime tables                    |
 | `moved`, `replaced`, `evicted`, `killed`, `opaque`      | Tell a reset of this instance from a failure        |

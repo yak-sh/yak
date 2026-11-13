@@ -3369,6 +3369,7 @@
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/trace@0.2.23",
             "npm:@yaks/vocab@0.2.32",
+            "npm:@yaks/wake@0.2.24",
             "npm:fflate@0.8.3"
           ]
         }

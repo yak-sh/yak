@@ -37,9 +37,9 @@
  * // let handler = api({ graph: g, subs })
  * ```
  *
- * See the README for the whole object as a class — `fetch`,
- * `webSocketMessage`, `webSocketClose` — which is the one place a class is the
- * platform's requirement.
+ * {@link Durable} is the whole object as a class, the one place a class is
+ * the platform's requirement: a spec opens its graph, door and sockets, and
+ * {@link clock} works everything it does on its own time from its one alarm.
  *
  * @module
  */
@@ -75,6 +75,16 @@ export {
   tallied,
 } from './copy.ts'
 export { storage, type Store } from './store.ts'
+export {
+  type Alarms,
+  BACKSTOP,
+  type Clock,
+  clock,
+  RETRY,
+  SLICE,
+  type Work,
+} from './alarm.ts'
+export { Durable, type Opened, type Spec, type State } from './object.ts'
 export {
   backoff,
   evicted,

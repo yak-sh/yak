@@ -7,7 +7,9 @@
     "./sql": "./sql.ts",
     "./store": "./store.ts",
     "./resets": "./resets.ts",
-    "./ceiling": "./ceiling.ts"
+    "./ceiling": "./ceiling.ts",
+    "./alarm": "./alarm.ts",
+    "./object": "./object.ts"
   },
   "license": "Apache-2.0",
   "description": "Provides graph storage on a Cloudflare Durable Object's embedded SQLite and connects hibernatable WebSockets to query subscriptions.",
@@ -19,6 +21,7 @@
     "@yaks/sqlite": "0.2.30",
     "@yaks/trace": "0.2.23",
     "@yaks/vocab": "0.2.32",
+    "@yaks/wake": "0.2.24",
     "fflate": "0.8.3"
   },
   "devDependencies": {

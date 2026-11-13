@@ -1615,6 +1615,9 @@ importers:
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab
+      '@yaks/wake':
+        specifier: 0.2.24
+        version: link:../wake
       fflate:
         specifier: 0.8.3
         version: 0.8.3

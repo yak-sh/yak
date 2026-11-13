@@ -15,7 +15,7 @@
 import type { DurableSql, DurableStorage, SqlCursor, SqlValue } from './sql.ts'
 import type { Hibernation, Wire } from './sockets.ts'
 import type { Sockets } from './sockets.ts'
-import { sockets, storage } from './mod.ts'
+import { Durable, sockets, type Spec, storage } from './mod.ts'
 import type { Vocab } from '@yaks/vocab'
 import type { Subs } from '@yaks/api'
 
@@ -38,3 +38,6 @@ let _wire: Wire = state.getWebSockets()[0]
 // And the two entry points, called the way a Durable Object calls them.
 let _store = (vocab: Vocab) => storage(state.storage, vocab)
 let _live = (subs: Subs): Sockets => sockets(subs, state)
+
+// The object class takes the runtime's own state.
+let _object = (spec: Spec) => new Durable(state, () => spec)
