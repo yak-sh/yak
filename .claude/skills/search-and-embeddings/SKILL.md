@@ -94,10 +94,11 @@ these are the words for it:
 - **The sweep:** triggers queue every written entity in `embedding_owed`, and
   the plugin's service drains it in batches (packages/embedding/README.md,
   "The sweep"). Writes never wait on embedding.
-- **The index:** sqlite-vector scans every stored float vector exactly
-  (`vector_full_scan`, packages/embedding/native.ts); a screen admitting at
-  most an eighth of them is scored directly instead. At 276k vectors the full
-  scan is about 0.3 s of every unscreened search.
+- **The index:** sqlite-vector ranks compact int8 codes when every vector has
+  them, then re-scores the best candidates from floats
+  (packages/embedding/native.ts). A selective screen reads only admitted codes
+  (packages/embedding/sparse.ts). Incomplete codes or mixed models retain the
+  float fallback.
 - **The search tool's halves:** words (@yaks/fts) and meaning each read the
   store alone, so `yak serve` runs them on its two read lanes at once and
   says the hit lines in a worker (packages/cli/searching.ts).

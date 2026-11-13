@@ -1,7 +1,7 @@
 // Exact cosine ordering over vectors, independent of their storage.
 import { cosine } from './vector.ts'
 
-export type Vector = { owner: number; vector: Float32Array }
+export type Vector = { owner: number; vector: Float32Array | Int8Array }
 export type Scored = { owner: number; similarity: number }
 
 // Keep only the best `limit` scores. The root is the worst retained score;

@@ -52,7 +52,7 @@ export let unit = (v: Float32Array): Float32Array => {
  * of different lengths are from different spaces and score 0 — a model change
  * makes every old vector unrelated rather than subtly wrong.
  */
-export let cosine = (a: Float32Array, b: Float32Array): number => {
+export let cosine = (a: Float32Array, b: Float32Array | Int8Array): number => {
   if (a.length != b.length) return 0
   let dot = 0, la = 0, lb = 0
   for (let i = 0; i < a.length; i++) {

@@ -25,6 +25,7 @@ import {
 import { BUILD, CODE, DIRTY, TABLE } from './ddl.ts'
 import { coded, pack } from './vector.ts'
 import { complete } from './coded.ts'
+import { sparse } from './sparse.ts'
 
 /** Explicit one-time installation: back up the database before calling this
  * on shared storage. The adapter loads its vector facility, which adds the
@@ -187,8 +188,8 @@ export let prepare = (db: Statements, dim?: number): boolean => {
 /** Whether this owner is admitted by the selection's keyed predicate. */
 export let admitted = member
 
-/** How many entities a screen may admit and still be read whole: its vectors
- * cost less to score directly than to scan the whole corpus. */
+/** How many entities a screen may admit and still be read whole, rather than
+ * scanning the whole corpus. */
 export let FEW = 5000
 
 // Whether a bounded screen is small absolutely or relative to the corpus.
@@ -216,18 +217,22 @@ let few = (db: Statements, within: Raw): boolean => {
 export let WIDEN = 8
 
 /** Native candidates: the nearest pool the screen admits, by the floats or by
- * the codes, which the floats then rank. Small screens use the ordinary vector
- * reader to avoid scanning the whole corpus. */
+ * the codes, which the floats then rank. Small screens rank only admitted
+ * codes, or read their floats when the codes are incomplete. */
 export let candidates = (
   db: Statements,
   query: Float32Array,
   opts: { model: string; need: number; within?: Raw },
 ): number[] | null => {
   let c = conn(db)
-  if (!c || (opts.within && few(db, opts.within))) return null
+  if (!c) return null
   if (only(db) != opts.model || !init(db, c, query.length)) return null
+  let codes = complete(db) && initCodes(db, c, query.length)
+  if (opts.within && few(db, opts.within)) {
+    return codes ? sparse(db, query, opts.within, pool(opts.need)) : null
+  }
   // The codes, where every vector has them: a fifth of the bytes to read.
-  let [name, column, probe] = complete(db) && initCodes(db, c, query.length)
+  let [name, column, probe] = codes
     ? [CODE, 'code', coded(query)]
     : [TABLE, 'vec', pack(query)]
   let v = (name: string) => col(name, 'v')

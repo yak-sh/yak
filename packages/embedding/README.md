@@ -392,10 +392,12 @@ results before reusing the same extension for another query.
 
 `nearest()` ranks by cosine similarity over current stored vectors, among the
 entities a screen admits, excluding tombstones immediately. A screen admitting
-at most 5000 entities reads its vectors directly. Broader local SQLite searches
-use sqlite-vector's exact native scan; an exclusive database can hold int8
-vectors in memory (below). Candidates are rescored from their current float
-vectors before the final cut.
+at most 5000 entities, or an eighth of the corpus, reads only its admitted int8
+codes on shared storage. Broader local SQLite searches scan the corpus with
+sqlite-vector; an exclusive database can hold int8 vectors in memory (below).
+Candidates are rescored from their current float vectors before the final cut.
+Missing codes or mixed models use the ordinary float reader for a selective
+screen.
 
 Supply `semantic(db, space, { rank })` with a `Rank` implementation to use
 another ranking; it receives the same screen.
@@ -426,7 +428,8 @@ a warm broad top-eight search over the floats and 592 ms with a task filter.
 Cold calls under concurrent migration and database load took up to 13.4 s, and a
 search by meaning on the box once took 11 s waiting on disk. A full index
 rebuild held the live worker for 27.9 s. Exact scans trade broad-search latency
-for predictable writes. Narrow screens keep the direct vector reader.
+for predictable writes. Narrow screens rank their admitted codes directly, then
+read only the best candidates' float vectors.
 
 `installNative(db)` loads the storage adapter's vector facility once on a
 writable database. `prepare(db)` registers its vector shape before read-only
