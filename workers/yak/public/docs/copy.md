@@ -14,7 +14,7 @@ guide:
     key the file lacks leaves the element's own content. Text a script draws,
     read from ./copy.json and marked the same way. Editing the copy on the
     page: the pencil a member who writes the app sees, drafts kept as they
-    type, and Save, which releases only copy.json. Moving an existing app's
+    type, and discarding them. Moving an existing app's
     text into copy.json when its owner asks.
 ---
 
@@ -153,13 +153,11 @@ sent it: not a visitor, not a guest.
 1. Press the pencil to enter edit mode. Every marked element is outlined.
 2. Click one and type over its text where it stands. Links and buttons do not
    act while editing, and a slot's own element is edited on its own.
-3. Each change is kept as a draft as it is typed: it is there after a reload and
-   on the person's other devices. The pencil counts them, "3 changes", with Save
-   and Discard.
-4. Save writes the changed snippets into `copy.json` and releases the app. It is
-   a release like any other: `app_versions` lists it and `app_rollback` takes it
-   back. It releases only `copy.json`; other unreleased changes in the app's
-   draft stay unreleased.
+3. Each change is kept as the person's draft of that snippet, `copy:<key>`, as
+   it is typed: it is there after a reload and on their other devices. The
+   pencil's panel counts the changes, "3 changes", and Discard empties them.
+   Typing a snippet back to its original words removes that change. Edit mode
+   stays on across a reload until Done.
 
 A page with nothing marked says so, and offers to ask the Operator to move its
 copy into `copy.json`.

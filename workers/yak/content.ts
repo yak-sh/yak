@@ -41,7 +41,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'copy',
     'title': 'Copy and On-Page Editing',
     'description':
-      "An app's copy, the words its pages show, kept in one file, copy.json, a key per snippet: nested objects and dotted keys, plain-text values, and named slots (%{name}) for a link or a bold word inside a sentence. Marking an element with data-copy, data-copy-<attr> for alt, placeholder, title, aria-label or a meta tag's content, and data-copy-slot; the platform fills each marked element as it serves the page, in previews too, and a key the file lacks leaves the element's own content. Text a script draws, read from ./copy.json and marked the same way. Editing the copy on the page: the pencil a member who writes the app sees, drafts kept as they type, and Save, which releases only copy.json. Moving an existing app's text into copy.json when its owner asks.",
+      "An app's copy, the words its pages show, kept in one file, copy.json, a key per snippet: nested objects and dotted keys, plain-text values, and named slots (%{name}) for a link or a bold word inside a sentence. Marking an element with data-copy, data-copy-<attr> for alt, placeholder, title, aria-label or a meta tag's content, and data-copy-slot; the platform fills each marked element as it serves the page, in previews too, and a key the file lacks leaves the element's own content. Text a script draws, read from ./copy.json and marked the same way. Editing the copy on the page: the pencil a member who writes the app sees, drafts kept as they type, and discarding them. Moving an existing app's text into copy.json when its owner asks.",
     'brief': "an app's words in copy.json, data-copy, editing text on the page",
   },
   'domains': {

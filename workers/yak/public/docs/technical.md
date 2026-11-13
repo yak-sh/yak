@@ -147,13 +147,9 @@ removes it.
 
 A member who may change an app's files (an owner or editor of its space) also
 sees a small pencil in the bottom-right corner of its pages, above the badge
-where both show. It turns on edit mode: every element marked `data-copy` is
-outlined, and pressing one lets you type over its words where they stand. What
-you type is kept as your draft of that snippet, `copy:<key>`, there after a
-reload and on your other devices, and the pencil's panel counts your changes and
-discards them. While editing, links and buttons do not act. A page with nothing
-marked says so and offers to ask the Operator to mark it. Visitors and guests
-are sent none of it.
+where both show, for editing the words of every element marked `data-copy` where
+they stand (<https://yaks.app/docs/copy.md>). Visitors and guests are sent none
+of it.
 
 The email limit counts incoming and outgoing messages, and only sending stops
 when the limit is reached. Incoming messages are still delivered. The count
