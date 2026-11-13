@@ -881,11 +881,13 @@ let ON_SPINE = SPINE.filter((s) => s.t == 'create trigger' && s.on == 'entity')
  * own (./physical.ts `sole`), as every spine made before series had letters
  * is, and nothing elsewhere: there T-5 and M-5 cannot both stand, so a store
  * that numbers by series counts once until it is rebuilt. Its rows set aside,
- * the table
- * made again, every row put back under its own `id`, so each reference to it
- * still names the entity it named, and its triggers raised again. Indexes on
- * it are the install's to raise after. Run with foreign keys off, as every
- * rebuild is, and in one unit: the table is dropped and made again.
+ * the table made again, every row put back under its own `id`, so each
+ * reference to it still names the entity it named, and its triggers raised
+ * again. Indexes on it are the install's to raise after. In one unit, with
+ * its references checked at the unit's end: a Durable Object keeps foreign
+ * keys on through the install's `foreign_keys = off`, so dropping the table
+ * would be refused for every row that names it, and putting the rows back
+ * answers each of them again.
  */
 export let respined = (driver: Driver): Stmt[] => {
   if (!sole(driver)) return []
@@ -894,6 +896,7 @@ export let respined = (driver: Driver): Stmt[] => {
   let all = (from: string) =>
     select({ cols: cols.map((c) => col(c)), from: table(from) })
   return [
+    { t: 'pragma', name: 'defer_foreign_keys', value: 'on' },
     { t: 'create table', name: aside, cols: cols.map((name) => ({ name })) },
     { t: 'insert', into: aside, cols, q: all('entity') },
     { t: 'drop', kind: 'table', name: 'entity' },

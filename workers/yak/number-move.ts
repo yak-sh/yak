@@ -25,10 +25,14 @@ export let numberBackfill = async (
     g: Graph
     marks?: Pick<Meta, 'get' | 'set'>
     waiting?: () => number
+    lettered?: () => boolean
   },
 ): Promise<boolean> => {
   let { g, marks } = store
   if (!marks || marks.get(NUMBERED) == 'done') return false
+  // A spine still counting once across its series (its rebuild refused) takes
+  // no stated pair of a series' own; the pass waits for one that is rebuilt.
+  if (store.lettered && !store.lettered()) return false
   if (store.waiting?.()) return true
   let page = await g.read(
     `(${wearing})&!entity.num&.order=created.at&.limit=${BATCH}&.fields=entity.eid`,

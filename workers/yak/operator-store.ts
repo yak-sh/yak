@@ -28,7 +28,7 @@ import { due, soonest, tick } from '@yaks/wake'
 import { caught } from './defects.ts'
 import { RETRY, SLICE } from '@yaks/durable-object/alarm'
 import { adopt, indexed, schema as ftsSchema, search } from '@yaks/fts'
-import { installed, type Meta, meta, printOf } from '@yaks/sqlite'
+import { installed, type Meta, meta, printOf, sole } from '@yaks/sqlite'
 import { schema as logSchema } from './writes.ts'
 import { operatorConfig } from './config.ts'
 import { load, vocabFacets } from './operator-load.ts'
@@ -157,6 +157,7 @@ export let operatorStore = async (
     ...graphed,
     marks,
     upkeep: store.upkeep,
+    lettered: () => !sole(sql),
     waiting: () => bounded(durable).under(0.5),
   }
 }
@@ -167,6 +168,9 @@ export let operatorStore = async (
 export type OperatorStore = ReturnType<typeof operatorGraph> & {
   marks?: Meta
   upkeep?: () => number | null
+  /** Whether its spine holds a number in each series, not one across them
+   * all (@yaks/sqlite `sole`), which a stated pair needs. */
+  lettered?: () => boolean
   /** Background passes share half the object's windows with schema upkeep. */
   waiting?: () => number
 }

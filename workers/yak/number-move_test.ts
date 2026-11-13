@@ -56,3 +56,11 @@ test('a second run changes nothing', async () => {
   equal(await numberBackfill(store), false)
   equal(await ids(['t1', 't3', 'g1', 'new']), numbered)
 })
+
+test('a spine still counting once across its series is left for its rebuild', async () => {
+  receipts.delete(NUMBERED)
+  await kept([['t9', 'task', 9]])
+  equal(await numberBackfill({ ...store, lettered: () => false }), false)
+  equal(await ids(['t9']), [null])
+  equal(receipts.get(NUMBERED), undefined)
+})

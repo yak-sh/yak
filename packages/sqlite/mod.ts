@@ -214,6 +214,7 @@ export {
   defined,
   heard,
   objects,
+  sole,
   type Stood,
 } from './physical.ts'
 export { GONE, OVER, type Overlay, overlay } from './overlay.ts'

@@ -147,10 +147,11 @@ test('sqlite: a store still holding unlettered numbers counts on past them', () 
 })
 
 // A store kept with a spine made before series had letters, whose number is
-// unique on its own: `file` says whether the driver is a file's, and `rows`
-// what it held before it numbered by series.
+// unique on its own: `file` says whether the driver is a file's, `rows` what
+// it held before it numbered by series, and `keyed` whether its foreign keys
+// stay on through an install, as a Durable Object's do.
 let lone = (
-  { file = false, rows = [] as Bundle[], sizes = SIZES } = {},
+  { file = false, rows = [] as Bundle[], sizes = SIZES, keyed = false } = {},
 ) => {
   let d = mem()
   d.query({
@@ -165,27 +166,39 @@ let lone = (
   if (rows.length) {
     open('sqlite', { number: false }, d).tx((tx) => tx.patch(rows))
   }
-  let driver = file ? { ...d, file } : d
+  let query = d.query
+  let driver = {
+    ...d,
+    ...file && { file },
+    ...keyed && {
+      query: (q: Parameters<typeof query>[0]) =>
+        q.t == 'pragma' && q.name == 'foreign_keys' ? [] : query(q),
+    },
+  }
+  if (keyed) query({ t: 'pragma', name: 'foreign_keys', value: 'on' })
   return { d: driver, s: open('sqlite', { number: SERIES, sizes }, driver) }
 }
 let paired = (d: ReturnType<typeof mem>) =>
   d.query({ t: 'pragma', name: 'index_list', arg: 'entity' })
     .map((i) => String(i.name)).includes('entity_num_prefix')
 
-test('sqlite: a spine keeping its number unique on its own is rebuilt, and each series counts on its own', () => {
-  let { d, s } = lone({ rows: [mk('old', { task: { target: 'kept' } })] })
-  s.tx((tx) => {
-    tx.patch([mk('t'), mk('m', { memory: {} })])
-    assertEquals(idOf(tx, ['old', 'kept', 't', 'm']), [
-      null,
-      null,
-      'T-1',
-      'M-1',
-    ])
-    assertEquals(tx.get(['old'])[0].task, { target: 'kept' })
+for (let keyed of [false, true]) {
+  test(`sqlite: a spine keeping its number unique on its own is rebuilt, and each series counts on its own${keyed ? ', its foreign keys on' : ''}`, () => {
+    let rows = [mk('old', { task: { target: 'kept' } })]
+    let { d, s } = lone({ rows, keyed })
+    s.tx((tx) => {
+      tx.patch([mk('t'), mk('m', { memory: {} })])
+      assertEquals(idOf(tx, ['old', 'kept', 't', 'm']), [
+        null,
+        null,
+        'T-1',
+        'M-1',
+      ])
+      assertEquals(tx.get(['old'])[0].task, { target: 'kept' })
+    })
+    assertEquals(paired(d), true)
   })
-  assertEquals(paired(d), true)
-})
+}
 
 test("sqlite: a file's spine, or one past a window's copy, is left as it stood, counts once, and builds no series index", () => {
   let big = { rows: [mk('a'), mk('b')], sizes: { ...SIZES, copy: 2 } }
