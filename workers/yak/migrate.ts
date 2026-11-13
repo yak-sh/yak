@@ -353,7 +353,7 @@ export let BOUNDARIES = [
   'yak/store/integration-featured/1',
   'yak/store/demo-featured/1',
   // The directory's and the git store's numbers hold their letters
-  // (letter-move.ts, T-164365).
+  // (T-164365).
   'yak/store/number-letter/1',
   // Every keyed write a store's log holds is kept under its writer's name for
   // its key (@yaks/api/log `rekey`, at a store's wake, T-166122).

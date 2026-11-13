@@ -42,7 +42,7 @@ import type { Bundle, Comp, Row } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { isPromise } from '@yaks/fp'
 import { and, conjoin, parse, type Query } from '@yaks/query'
-import { Unknown, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { Unknown, type VocabDoc } from '@yaks/vocab'
 import { GIT_STORE } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Mark, Rehearsal, Stamp } from '@yaks/platform/mover'
@@ -64,7 +64,6 @@ import { describedRule } from './described-move.ts'
 import { proRule } from './pro-move.ts'
 import { recipientRule } from './recipient-move.ts'
 import { demoFeaturedRule, integrationFeaturedRule } from './featured-move.ts'
-import { letterRule } from './letter-move.ts'
 export type MoveContext = { store: string; app?: string; space?: string }
 
 export type Rule = {
@@ -77,13 +76,8 @@ export type Rule = {
   /** The rows still in the old shape, naming what `move` reads. */
   find: string | Query
   /** One candidate's patch. `read` looks up evidence synchronously without
-   * adding reached rows to the candidate page or cursor; `words` are the
-   * words the store reads its rows in. */
-  move: (
-    row: Bundle,
-    read?: (line: string) => Bundle[],
-    words?: Vocab,
-  ) => Bundle[]
+   * adding reached rows to the candidate page or cursor. */
+  move: (row: Bundle, read?: (line: string) => Bundle[]) => Bundle[]
   /** Retired declarations, visible only while reading/applying this move. */
   source?: VocabDoc
   /** Durable records delivered before the guarded source patches commit.
@@ -205,7 +199,6 @@ export let RULES: Rule[] = [
   recipientRule,
   integrationFeaturedRule,
   demoFeaturedRule,
-  letterRule,
 ]
 
 /** The store as the mover reaches it, all of it synchronous: a batch is one
@@ -220,8 +213,6 @@ export type Moving = {
   drop?: (paths: string[]) => void
   /** Whether the store's words declare this component, or its property. */
   speaks: (comp: string, prop?: string) => boolean
-  /** The words themselves, for a rule whose patch reads a row's kind. */
-  words?: Vocab
 }
 
 // The paths a line names, wherever they stand in it.
@@ -310,7 +301,7 @@ export let batch = (
   let read = (line: string) => sync(m.read(line))
   return {
     rows,
-    patch: rows.flatMap((row) => rule.move(row, read, m.words)),
+    patch: rows.flatMap((row) => rule.move(row, read)),
     forward: rows.flatMap((row) => rule.forward?.(row, read, m.context) ?? []),
   }
 }
