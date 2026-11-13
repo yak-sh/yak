@@ -176,3 +176,13 @@ test('a page of a search is the start of its whole ranking', () => {
   }
   assertEquals(read('lore wyvern .book.price=1 .limit=2'), whole.slice(0, 2))
 })
+
+test('a CPU sort finds the hits and snippets index-order pages do', () => {
+  let db = shelf()
+  for (let words of ['dragon', 'drag', 'burglar chapters', 'dragon lore']) {
+    assertEquals(
+      find(db, text, words, { plan: 'sort' }),
+      find(db, text, words, { plan: 'index' }),
+    )
+  }
+})

@@ -152,6 +152,16 @@ export let hits = (
   // terms unmarked, so FTS5 does less work cutting large matching texts.
   let marked = excerpt(text)
   let ids = (rows: Candidate[]) => rows.map((r) => lit(r.owner))
+  // FTS5 takes a rowid list beside a match as one seek an id, and each seek
+  // merges again every token a prefix term begins: the forty hits of
+  // `yaks.app test space probe live operator our own space` in the box's
+  // transcripts merged `test*`, `own*` and the rest forty times, 14.6 s where
+  // one pass takes 0.4 s. A CPU sort has already read every match to rank it,
+  // so it reads them once more and keeps the ranked ones: `rowid + 0` is no
+  // constraint FTS5 is offered. Index-order pages seek, for billed rows.
+  let kept = opts.plan == 'sort'
+    ? (fts: string) => op('+', col('rowid', fts), lit(0))
+    : (fts: string) => col('rowid', fts)
   // Each eid is read by id, a seek a row: asked as a set, SQLite may walk
   // `entity` whole however few the ids, whatever its statistics say.
   let o = at('__owner'), e = at('entity')
@@ -187,7 +197,7 @@ export let hits = (
       from: table(fts),
       where: and(
         op('match', col(fts), val(marked)),
-        among(col('rowid', fts), ids(mine)),
+        among(kept(fts), ids(mine)),
       ),
     }))
     for (let r of cuts) snippets.set(`${i} ${r.owner}`, String(r.snippet ?? ''))
