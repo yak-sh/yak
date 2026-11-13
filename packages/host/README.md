@@ -30,7 +30,7 @@ equal(stopped(), true)
 | `@yaks/host/lending`                          | `lending`, `Lends`: what plugins lend a host by name                                                                                                                 |
 | `@yaks/host/payments`                         | `Payments`, `Plans`, `Shops`, `Door`, `Heard`, `Subscription`, `Checkout`, `Sale`, `Paid`, …: a payment provider's contract                                          |
 | `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                                                               |
-| `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`, `configured`, `revealed`, `holding`, `Reveal`, `meet`, `Unmet`                                                       |
+| `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`, `configured`, `revealed`, `holding`, `Reveal`, `meet`, `Unmet`, `numbering`                                          |
 | `@yaks/host/documents`, `@yaks/host/keywords` | Shared intrinsic declarations and vocabulary keywords                                                                                                                |
 | `@yaks/host/anatomy`                          | Composition evidence, projected when read                                                                                                                            |
 

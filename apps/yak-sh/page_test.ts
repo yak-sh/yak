@@ -465,7 +465,7 @@ test('the apply() band sends its letter as the source of its bundle, beside the 
   let source = stack.querySelector('.Source')!.textContent!
   match(source, /title: "Can you sign up for payments\?"/)
   match(source, /from: "hello@example.com"/)
-  match(source, /message_id: "<1@outbox.yak.sh>"/)
+  match(source, /message_id: "1@outbox\.yak\.sh"/)
   match(stack.querySelector('.Call')!.textContent!, /agent → graph_apply/)
   equal(
     [...stack.querySelectorAll('.Outbox li')].map((l) =>

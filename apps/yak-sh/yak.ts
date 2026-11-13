@@ -6,6 +6,7 @@ import { type Bundle, type Comp, graph, mint, type Plugin } from '@yaks/graph'
 import { type Phase, PHASES } from '@yaks/graph/plugin'
 import { assembly } from '@yaks/host/assembly'
 import type { Config, Load } from '@yaks/host'
+import { numbering } from '@yaks/host/config'
 import { memoryBlobs } from '@yaks/blob/store'
 import { ramVault } from '@yaks/secrets/vault'
 import { ram } from '@yaks/ram'
@@ -21,7 +22,7 @@ import {
 } from '@yaks/cli/grammar'
 import { registry } from '@yaks/cli/answer'
 import { show } from '@yaks/cli/terminal'
-import { human, prefixes } from '@yaks/id'
+import { human } from '@yaks/id'
 import * as kernelVocab from '@yaks/kernel/vocab'
 import * as kernelGraph from '@yaks/kernel/graph'
 import * as kernelTools from '@yaks/kernel/tools'
@@ -101,19 +102,22 @@ let load =
   ((plugin: string, facet: string) =>
     Promise.resolve(PACKAGES[plugin]?.[facet] ?? null)) as Load
 
+// What `yak init` leaves unnumbered (@yaks/cli init.ts): letters and the
+// page's own rows, which nobody types back. A person and a persona keep their
+// numbers, so you are U-1 and your agent N-1.
+let UNNUMBERED = ['call', 'edge', 'effect', 'execution', 'lease', 'mail']
+  .concat(['output', 'process', 'result', 'tool', 'file', 'pane', 'layout'])
+  .concat(['draft', 'signin_request'])
+
 // The mail effect hands a letter to the page's outbox, never to a mail
-// service: the outbox is the sender this host lends.
+// service: the outbox is the sender this host lends. Each letter a component
+// declares counts its own series (@yaks/id), so a page's first task is T-1.
 let CONFIG: Config = {
   plugins: Object.keys(PACKAGES).map((use) =>
     use == '@yaks/mail' ? { use, with: { sender: { via: 'outbox' } } } : use
   ),
+  numbers: { except: UNNUMBERED },
 }
-
-// What `yak init` leaves unnumbered (@yaks/cli init.ts), so a page's first
-// task is T-1.
-let UNNUMBERED = ['call', 'edge', 'effect', 'execution', 'lease', 'mail']
-  .concat(['output', 'process', 'result', 'tool', 'file', 'pane', 'layout'])
-  .concat(['draft', 'signin_request'])
 
 // The graph in a tab starts over on a reload; what the person typed does not
 // (M-59093). Their drafts are kept in the stash under the person they typed
@@ -231,12 +235,7 @@ export let yak = async (
     },
     actor: { by: you },
     storage: (host) =>
-      ram(host.vocab, {
-        number: Object.fromEntries(
-          Object.entries(prefixes(host.vocab))
-            .filter(([c]) => !UNNUMBERED.includes(c)),
-        ),
-      }),
+      ram(host.vocab, { number: numbering(host.vocab, host.config.numbers) }),
     effects: (host, disabled) =>
       effects(host.vocab, {
         disabled,

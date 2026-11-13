@@ -1,6 +1,8 @@
 // Composition configuration. A concrete host interprets its storage locator.
 import type { FacetName } from './facets.ts'
 import { CallError } from '@yaks/tools/errors'
+import { prefixes } from '@yaks/id'
+import type { Vocab } from '@yaks/vocab'
 /** The options a config passes to one plugin, given to each of that plugin's
  * exported factories as the second argument, after the host. A value written
  * `{"secret": "NAME"}` is that secret's value, read every time it is accessed
@@ -63,12 +65,12 @@ export type Config = {
   /** which interface it binds (default @yaks/api's `HOSTNAME`, this machine
    * alone; `0.0.0.0` offers it to every network the machine is on) */
   hostname?: string
-  /** whether the store mints a short human-readable number beside each entity
-   * id. Opt-IN: left out, no entity gets one, because a number exists for a
-   * person to type and most hosts have nobody typing. `{ except: [comp, …] }`
-   * turns them on for everything except entities carrying those components —
-   * what a host using @yaks/archetype wants, since a descriptor is bookkeeping
-   * nobody refers to by number. */
+  /** whether the store gives entities a human id such as `T-7`, in the series
+   * of the letter a component declares (@yaks/id). Opt-IN: left out, no entity
+   * gets one, because a number exists for a person to type and most hosts have
+   * nobody typing. `{ except: [comp, …] }` numbers in every series but those
+   * components': an entity carrying one is numbered only by another lettered
+   * component it carries ({@link numbering}). */
   numbers?: boolean | { except: string[] }
   /** what the MCP server calls itself (default `yak`) */
   name?: string
@@ -94,6 +96,40 @@ export type Config = {
    * owe is left written down for a process that does — what `yak --no-duties`
    * sets. */
   duties?: boolean
+}
+
+/** How a config's store numbers its entities (@yaks/sqlite `Numbering`):
+ * not at all, or in the series of each letter a component declares (@yaks/id),
+ * less the config's `except` and the components a host keeps off the human
+ * line on its own (`unnumbered`).
+ *
+ * ```ts
+ * import { numbering } from '@yaks/host/config'
+ * import { idKeywords } from '@yaks/id'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { equal } from '@yaks/testing'
+ *
+ * const vocab = loadVocab({
+ *   $defs: {
+ *     task: { component: true, prefix: 'T', properties: {} },
+ *     mail: { component: true, prefix: 'E', properties: {} },
+ *     person: { component: true, prefix: 'U', properties: {} },
+ *   },
+ * }, [idKeywords])
+ * equal(numbering(vocab, undefined), false)
+ * equal(numbering(vocab, { except: ['mail'] }, ['person']), { task: 'T' })
+ * ```
+ */
+export let numbering = (
+  vocab: Vocab,
+  numbers: Config['numbers'],
+  unnumbered: readonly string[] = [],
+): false | Record<string, string> => {
+  if (!numbers) return false
+  let except = [...unnumbered, ...numbers === true ? [] : numbers.except]
+  return Object.fromEntries(
+    Object.entries(prefixes(vocab)).filter(([c]) => !except.includes(c)),
+  )
 }
 
 /** The package a plugin entry names. */

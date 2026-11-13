@@ -108,6 +108,6 @@ test('each phase does its own work on the letter, and its effect delivers it aft
   equal(seen(stages, -1, y.vocab).rows[0].props, [['eid', '$letter']])
   equal(
     y.outbox.tries().map((x) => [x.to, x.id]),
-    [[YOURS, undefined], [YOURS, '<1@outbox.yak.sh>']],
+    [[YOURS, undefined], [YOURS, '1@outbox.yak.sh']],
   )
 })

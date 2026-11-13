@@ -10,7 +10,9 @@
 // with complete snapshot vocabulary documents when the host words cannot prove
 // the snapshot. Neither configuration credentials nor its database are printed.
 import { configPath, read as readConfig } from '../packages/cli/config.ts'
-import { numbering, words } from '../packages/cli/host.ts'
+import { words } from '../packages/cli/host.ts'
+import { UNNUMBERED } from '../packages/cli/init.ts'
+import { numbering } from '@yaks/host/config'
 import { graph } from '@yaks/graph'
 import { archetypes } from '@yaks/archetype'
 import { ddl as journalDdl, journal, log } from '@yaks/journal'
@@ -295,7 +297,7 @@ let run = async () => {
     let store = storage(db, vocab, {
       derived: loaded.derived,
       backed: loaded.backed,
-      number: numbering(vocab, readConfig(config!).numbers),
+      number: numbering(vocab, readConfig(config!).numbers, UNNUMBERED),
     })
     let g = graph({
       storage: store,
@@ -386,8 +388,9 @@ let run = async () => {
         Boolean(row.waiting) == (state == 'waiting'),
         'waiting mark differs',
       )
-      if (state == 'settled') assert(!row.dispatch, 'settled envelope retained')
-      else {
+      if (state == 'settled') {
+        assert(!row.dispatch, 'settled envelope retained')
+      } else {
         let now = row.dispatch as Record<string, unknown>
         assert(
           now && now.state === undefined && now.args == prior.args &&
@@ -431,7 +434,10 @@ let run = async () => {
     ])
     for (let [name, n] of Object.entries(baseline)) {
       if (!mutable.has(name)) {
-        assert(finalCounts[name] == n, `Unrelated table count changed: ${name}`)
+        assert(
+          finalCounts[name] == n,
+          `Unrelated table count changed: ${name}`,
+        )
       }
     }
     assert(

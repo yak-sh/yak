@@ -69,7 +69,7 @@ export let outbox = (wait = 1500) => {
     send: (m: Message): Promise<Receipt> => {
       let to = [m.to].flat().join(', ')
       let first = !tries.some((t) => t.subject == m.subject && t.to == to)
-      let id = first ? undefined : `<${kept.length + 1}@outbox.yak.sh>`
+      let id = first ? undefined : `${kept.length + 1}@outbox.yak.sh`
       let { subject, from } = m
       tries.push({
         at: Date.now(),

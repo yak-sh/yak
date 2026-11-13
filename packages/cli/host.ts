@@ -71,7 +71,6 @@ import type {
 import { Stale } from '@yaks/graph/errors'
 import { hit } from '@yaks/graph/hit'
 import type { Vocab } from '@yaks/vocab'
-import { prefixes } from '@yaks/id'
 import { EXIT, PROCESS } from '@yaks/process/vocab'
 import { ended, selfEid, started } from '@yaks/process/self'
 import type { History, Store } from '@yaks/sqlite'
@@ -104,7 +103,13 @@ import { artifactsAt, type Backend, backend } from '@yaks/blob/backend'
 import { blobSchema, sqliteBlobs } from '@yaks/blob/sqlite'
 import type { Blobs } from '@yaks/blob'
 import { type Config, dbOf, given, used } from './config.ts'
-import { configured, facetsOf, meet, type Reveal } from '@yaks/host/config'
+import {
+  configured,
+  facetsOf,
+  meet,
+  numbering,
+  type Reveal,
+} from '@yaks/host/config'
 import { facet } from './words.ts'
 import {
   assembly,
@@ -362,21 +367,6 @@ let revealing = (vault?: Local): Reveal =>
  */
 export let writer = (vocab: Vocab): Actor | null =>
   vocab.comp(PROCESS) ? { via: selfEid() } : null
-
-/** How a config's store numbers its entities (@yaks/sqlite `Numbering`):
- * not at all, or in the series of each letter a component declares (@yaks/id),
- * less the components kept off the human line, `UNNUMBERED` and the config's
- * own `except`. */
-export let numbering = (
-  vocab: Vocab,
-  numbers: Config['numbers'],
-): false | Record<string, string> => {
-  if (!numbers) return false
-  let except = [...UNNUMBERED, ...numbers === true ? [] : numbers.except]
-  return Object.fromEntries(
-    Object.entries(prefixes(vocab)).filter(([c]) => !except.includes(c)),
-  )
-}
 
 /**
  * Open the graph a config names, for the roles this process serves: import
@@ -764,7 +754,7 @@ let composed = async (
           derived,
           backed,
           extend,
-          number: numbering(vocab, config.numbers),
+          number: numbering(vocab, config.numbers, UNNUMBERED),
           history,
           // A model turn reads its window again each step, a thousand lines
           // of a long transcript: more than a Durable Object's 4 MiB keeps.

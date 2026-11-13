@@ -184,19 +184,20 @@ config file.
 | `plugins`  | Package specifiers, optionally paired with plugin-specific options.                               |
 | `port`     | Port the `serve` tool listens on; defaults to `@yaks/api`'s `PORT`.                               |
 | `hostname` | Network interface used by `serve`; defaults to `@yaks/api`'s `HOSTNAME`, `127.0.0.1`.             |
-| `numbers`  | Enables short entity numbers. `{ "except": [...] }` excludes entities carrying named components.  |
+| `numbers`  | Enables human ids, one series per declared prefix. `{ "except": [...] }` drops those series.      |
 | `name`     | MCP server name; defaults to `yak`.                                                               |
 | `person`   | Who works at this machine, as any id the graph resolves; a command typed at a terminal is theirs. |
 | `lease`    | Duty lease and effect-run claim duration in milliseconds; defaults to `30000` and `60000`.        |
 | `duties`   | Whether this process runs its duties; defaults to `true`.                                         |
 
-The CLI never allocates new numbers to people, sessions, letters, knocks or
+The CLI never numbers in the series of people, sessions, letters, knocks or
 internal records (including archetype descriptors), even in an existing config
-using `numbers: true`; a person is called by name, so the person `yak init`
-makes leaves its first task, confirming their name, T-1. `except` adds to these
-exclusions. Existing numbers stay valid addresses; new unnumbered entities use
-@yaks/id's short handles (`#` plus ten eid characters), accepted by
-`graph show`, `session peek` and the web view.
+using `numbers: true`, so a letter that is also a comment is numbered as a
+comment; a person is called by name, so the person `yak init` makes leaves its
+first task, confirming their name, T-1. `except` adds to these exclusions.
+Existing numbers stay valid addresses; new unnumbered entities use @yaks/id's
+short handles (`#` plus ten eid characters), accepted by `graph show`,
+`session peek` and the web view.
 
 There is no default database path. `compose` throws unless `db` or `$DB_PATH` is
 present.
