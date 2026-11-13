@@ -28,6 +28,7 @@ import {
   type Authenticate,
   type Handler,
   json,
+  reads,
   refuse,
   type Told,
 } from '@yaks/api'
@@ -665,6 +666,7 @@ export let mcp = (opts: MountOptions): Handler => {
         only: opts.offers?.(request),
         runner: running(),
         text: drawing(request),
+        reading: () => reads(request),
       }),
       opts,
       exchange,

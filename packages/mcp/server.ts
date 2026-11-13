@@ -121,6 +121,10 @@ export type Options = {
    * a short handle (@yaks/tools/readable). Absent, the answer is sent as the
    * tool gave it. */
   readable?: (answer: Bundle[]) => Promise<Bundle[]>
+  /** told when the request turns out only to read, a call to a read-only
+   * tool: the HTTP door's, so a stopping server lets it go with its reads
+   * (@yaks/api `reads`) */
+  reading?: () => void
   /** Optional local file input: callers opt in with `_files: true`. Hosted
    * servers without a reader keep literal inputs and their exact schemas. */
   readFile?: ReadFile
@@ -618,7 +622,8 @@ export let server = (
         to: toolEid(name),
         args: await fileArgs(input, inputSchemaOf(t), opts.readFile),
       }
-      if (!t.readOnly) await admitted.ensure()
+      if (t.readOnly) opts.reading?.()
+      else await admitted.ensure()
       let landed = await (t.readOnly ? admitted.read() : admitted.call())
       let answer = answerOf(landed, id)
       if (opts.readable) answer = await opts.readable(answer)

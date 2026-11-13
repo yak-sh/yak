@@ -2,7 +2,7 @@
 // Request owners end before their reader closes; admitted writes keep going.
 import { equal, test } from '@yaks/testing'
 import { served } from './request.ts'
-import { requests } from './requests.ts'
+import { reads, requests } from './requests.ts'
 import { faults, refuse } from './refuse.ts'
 
 let read = (() => {
@@ -104,6 +104,31 @@ test('shutdown waits for an admitted write even after its client disconnects', a
   equal((await response).status, 200)
   equal(write.saved(), 'precious draft')
   equal(write.errors, [])
+})
+
+// A POST that only reads, such as an MCP call to a read-only tool, is let go
+// at the cut like a GET; one that never said so is a write and is waited for.
+let stuck = (said: boolean) => {
+  let active = requests((request) => {
+    if (said) reads(request)
+    return new Promise<Response>(() => {})
+  })
+  let answer = active.handle(
+    new Request('http://test/mcp', { method: 'POST', body: '{}' }),
+  )
+  active.cancel()
+  let drained = false
+  let ending = active.drain().then(() => drained = true)
+  return { answer, ending, drained: () => drained }
+}
+
+test('a POST said to only read is answered 499 at the cut and not drained', async () => {
+  let read = stuck(true)
+  await read.ending
+  equal((await read.answer).status, 499)
+  let write = stuck(false)
+  await new Promise((done) => setTimeout(done, 0))
+  equal(write.drained(), false)
 })
 
 test('shutdown surfaces an unexpected response cancellation failure', async () => {

@@ -59,6 +59,29 @@ test('each refusal of a tool call is heard once, with its code and tool', async 
   }
 })
 
+test('a call to a read-only tool tells the door it only reads', async () => {
+  let told = 0
+  let tools: Tool[] = [echo, { ...echo, name: 'save', readOnly: false }]
+  let door = server({
+    graph: shopGraph(),
+    tools,
+    core: false,
+    reading: () => told++,
+  })
+  let said = []
+  for (let name of ['echo', 'save']) {
+    told = 0
+    await door.answer({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name, arguments: { body: 'hi' } },
+    } as never, 'legacy')
+    said.push(told)
+  }
+  equal(said, [1, 0])
+})
+
 test('an answered call is heard by nobody', async () => {
   equal(await asked({ name: 'echo', arguments: { body: 'hi' } }), [])
 })

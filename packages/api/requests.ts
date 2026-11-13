@@ -17,6 +17,13 @@ export let admit = <T>(request: Request, work: Promise<T>): Promise<T> => {
 export let reading = (request: Request) =>
   ['GET', 'HEAD', 'OPTIONS'].includes(request.method)
 
+let readers = new WeakMap<Request, () => void>()
+
+/** A request whose method is a write's but whose work only reads, such as an
+ * MCP call to a read-only tool: the cut at the end of a grace answers it 499,
+ * as it does a GET, and the drain no longer waits for it. */
+export let reads = (request: Request): void => readers.get(request)?.()
+
 /** A cancelled read has no caller waiting for its answer. A write remains
  * admitted even if its connection goes away after the body was received. */
 export let receive = async <T>(
@@ -177,8 +184,31 @@ export let requests = (handler: Handler) => {
         )
       }
       let done = Promise.resolve().then(() => handler(request))
-      keep(done)
-      return done.then((answer) => {
+      // A write's request said to only read is let go at the cut, once
+      // both have happened, whichever comes first; an answer it gives after
+      // is nobody's.
+      let read = false, left = false
+      let gone = Promise.withResolvers<Response>()
+      let leave = () => {
+        if (left || !read || !cut.signal.aborted) return
+        left = true
+        ended()
+        gone.resolve(new Response(null, { status: 499 }))
+      }
+      readers.set(request, () => {
+        read = true
+        leave()
+      })
+      cut.signal.addEventListener('abort', leave, { once: true })
+      let held = done.finally(() =>
+        cut.signal.removeEventListener('abort', leave)
+      )
+      keep(Promise.race([held, gone.promise]))
+      let answered = held.then((answer) => {
+        if (left) {
+          void answer.body?.cancel().catch(() => {})
+          return gone.promise
+        }
         // An answer its admitted work is still producing ends with that work.
         // Any other still streaming at the cut is only output, like an MCP
         // call's event stream, and would hold the listener open past any
@@ -188,9 +218,11 @@ export let requests = (handler: Handler) => {
         outputs.set(request, quiet)
         return response(answer, quiet.signal)
       }, (error) => {
+        if (left) return gone.promise
         ended()
         throw error
       })
+      return Promise.race([answered, gone.promise])
     },
     cancel: () => {
       cut.abort()
