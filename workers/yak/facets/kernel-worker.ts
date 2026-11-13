@@ -64,6 +64,10 @@ export let STORE = [
   'webSocketMessage',
   'webSocketClose',
   'webSocketError',
+  // @yaks/durable-object `Durable`'s own.
+  'specify',
+  'open',
+  'accept',
 ] as const
 export let WIRE = [
   'log',

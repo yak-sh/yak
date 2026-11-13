@@ -111,8 +111,10 @@ export let clock = (
   let report = opts.report ?? ((e) => console.error(e))
   // The alarm a ring took over: the one standing when it began, which the
   // works' answer supersedes even when it is later, or the backstop it set.
-  // One armed since, by a write during the slice, stands where it is sooner.
+  // One armed since, by a write during the slice, stands where it is sooner,
+  // and one later than the alarm taken over is owed with the works' answer.
   let standing: number | null = null
+  let asked = Infinity
   let going: Promise<void> | undefined
   // The runtime gives an object one alarm, and two handlers' read, compare
   // and write would race, so every change to it waits on the one before.
@@ -127,6 +129,7 @@ export let clock = (
   }
   let arm = (at: number) =>
     change(async (held) => {
+      if (held != null && held == standing) asked = Math.min(asked, at)
       if (held == null || at < held) await storage.setAlarm(at)
     })
 
@@ -148,9 +151,11 @@ export let clock = (
         next = Math.min(next, now() + retry)
       }
     }
-    let mine = standing
-    standing = null
     await change(async (held) => {
+      let mine = standing
+      next = Math.min(next, asked)
+      standing = null
+      asked = Infinity
       if (Number.isFinite(next)) {
         if (held == null || held == mine || next < held) {
           await storage.setAlarm(next)

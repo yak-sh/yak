@@ -205,18 +205,21 @@ import {
   storage as sqliteStorage,
 } from '@yaks/sqlite'
 import {
-  bounded,
-  type Ceiling,
   driver,
   type DurableSql,
   type DurableStorage,
-  type Hibernation,
   opaque,
   profile,
   type Sockets,
   sockets,
   type Wire,
 } from '@yaks/durable-object'
+import type { Work } from '@yaks/durable-object/alarm'
+import {
+  Durable,
+  type Spec,
+  type State as Held,
+} from '@yaks/durable-object/object'
 import { type Effects, effects } from '@yaks/effects'
 import { settling } from '@yaks/effects/tools'
 import { type Field, fields, find, search, sources, worded } from '@yaks/fts'
@@ -321,7 +324,6 @@ import { runner } from '@yaks/tools'
 import { commands, type Tools } from '@yaks/tools/declared'
 import { readTools } from './tool-grammar.ts'
 import { soonest, tick, type Ticked } from '@yaks/wake'
-import { type Alarm, arm } from '@yaks/wake/cloudflare'
 import {
   asking,
   mentions,
@@ -538,7 +540,7 @@ let preparing = (kind: keyof typeof worker.stores): Promise<Prepared> => {
  * `#tell`). `deleteAll` is the one way to empty an object: dropping the tables
  * leaves metadata behind, and an object whose storage is empty ceases to exist.
  */
-export type State = Hibernation & {
+export type State = Held & {
   id?: { toString(): string }
   // Detached work belongs to this incarnation's runtime context, which keeps
   // its storage alive until that work has finished.
@@ -555,19 +557,16 @@ export type State = Hibernation & {
     getCurrentBookmark?(): Promise<string>
     getBookmarkForTime?(at: number | Date): Promise<string>
     onNextSessionRestoreBookmark?(bookmark: string): Promise<string>
-    // The object's one alarm, which is this store's whole clock (D-37562):
-    // every wake row it holds is owed at an instant, and the earliest of them
-    // is what the runtime is asked to come back for. Optional like the
-    // bookmarks — a stand-in that schedules nothing need not offer them, and a
-    // store without them simply never wakes itself.
+    // The object's key-value memory: what it knows before it opens its SQL,
+    // whether it is dormant or when it expires. Its alarm (`Held`) is this
+    // store's whole clock (D-37562): every wake row it holds is owed at an
+    // instant, and the earliest of them is what the runtime is asked to come
+    // back for.
     get?<T>(key: string): Promise<T | undefined>
     put?(key: string, value: unknown): Promise<void>
     // Whatever was written, made durable before the object restarts itself
     // (running.ts `behind`): a restart drops writes still in flight.
     sync?(): Promise<void>
-    deleteAlarm?(): Promise<void>
-    getAlarm?(): Promise<number | null>
-    setAlarm?(at: number): Promise<void>
   }
   // Restarting the object on the spot, which is how a recovery takes effect
   // now rather than at the next wake (`#recovery`). Optional for the same
@@ -715,6 +714,14 @@ export let due = (pending: Bundle[], now: number): number | null =>
       })),
     )
     : null
+
+/// earliest(5, null, 3) -> 3
+/// earliest(null, undefined) -> null
+/** The soonest of the instants given, or null for none. */
+export let earliest = (...at: (number | null | undefined)[]): number | null => {
+  let first = Math.min(...at.map((a) => a ?? Infinity))
+  return Number.isFinite(first) ? first : null
+}
 
 // A hibernatable socket the runtime will also close for us.
 type Closable = Wire & { close?(code: number, reason: string): void }
@@ -902,7 +909,7 @@ let hold = (bundles: Bundle[]): boolean =>
     )
   )
 
-export class Store {
+export class Store extends Durable {
   #load: Load
   #ctx: State
   #vocab!: Vocab
@@ -955,11 +962,6 @@ export class Store {
   // serves the one before, and tries one again only as fixed code, which
   // arrives as the next incarnation.
   #unselectable = new Set<string>()
-  // This object's one alarm (D-37562), or null where the runtime under it has
-  // none. One adapter for the incarnation: `arm` serializes its read-compare-
-  // write per storage object, so two wakes arriving together cannot leave the
-  // later one holding the alarm.
-  #alarm: Alarm | null = null
   #effects!: Effects
   #effectsReady = false
   #effectWork: Promise<void> | null = null
@@ -1079,27 +1081,22 @@ export class Store {
     time: Time = timeOf(bind.CLOCK),
     facetLoad: Load = load,
   ) {
+    super(ctx)
     this.#load = facetLoad
     this.#time = time
     this.#born = this.#now()
     this.#ctx = ctx
     this.#bind = bind
     this.#rules = rules
-    this.#ceiling = bounded(ctx.storage)
-    let { getAlarm, setAlarm } = ctx.storage
-    if (getAlarm && setAlarm) {
-      this.#alarm = {
-        getAlarm: () => getAlarm.call(ctx.storage),
-        setAlarm: (at) => setAlarm.call(ctx.storage, at),
-      }
-    }
+    // What this object's statements may cost before it stops until a window
+    // ends (@yaks/durable-object `bounded`, refusing as defects-runtime.ts
+    // `instrument` made it): its doors ask it first, so a stopped store
+    // answers there (`#door`, `#write`), and a stopped alarm comes back when
+    // the window ends. Named before the store's own driver, which counts
+    // against it.
+    this.ceiling
   }
 
-  // What this object's statements may cost before it stops until a window
-  // ends (@yaks/durable-object `bounded`, refusing as defects-runtime.ts
-  // `instrument` made it): its doors ask it first, so a stopped store answers
-  // there (`#door`, `#write`, `#alarmRequest`).
-  #ceiling: Ceiling
   #started = once()
   #startedDormant = false
   #facets = new Map<string, Prepared>()
@@ -1218,7 +1215,7 @@ export class Store {
     // stopping it would stop the whole platform, which costs more than its
     // rows. Its name is first known here, after a handful of statements a new
     // instance's empty windows always take.
-    if (name == PLATFORM_STORE) this.#ceiling.spare()
+    if (name == PLATFORM_STORE) this.ceiling.spare()
     await this.#prepare(name)
     this.#atomic(() => {
       // The waking request supplies the capabilities the first binding needs.
@@ -1242,13 +1239,15 @@ export class Store {
       // its own (T-148354).
       setTimeout(
         () =>
-          this.#maintenance(() => this.#owed(this.#now())).catch((e) =>
+          this.#maintenance(async () =>
+            this.#arm(await this.#owed(this.#now()))
+          ).catch((e) =>
             defect(e, { request: 'owed alarm', store: this.#name() })
           ),
         0,
       )
       // A lexicon not yet read is the alarm's to read, never this request's.
-      if (this.#unread()) await this.#arming(this.#soon(), 'lexicon')
+      if (this.#unread()) await this.#arm(this.#soon(), 'lexicon')
     }
   }
 
@@ -1448,7 +1447,7 @@ export class Store {
       startup: 'manual',
       // How a run ended is written while this object is stopped too, so a
       // run that finished never runs again (`#ceiling`).
-      free: (write) => this.#ceiling.free(write),
+      free: (write) => this.ceiling.free(write),
       // A write owes its runs and the alarm starts them (`#owedEffects`):
       // none starts in the request that wrote it.
       defer: true,
@@ -1864,8 +1863,8 @@ export class Store {
     let wakeRegistered = observed.registration('worker/store', fx)
     fx.on('wake', {
       doc: 'arm this object for the wake a write just moved',
-      created: (e) => this.#arming(e.comp?.at as string),
-      changed: { at: (e) => this.#arming(e.comp?.at as string) },
+      created: (e) => this.#armAt(e.comp?.at),
+      changed: { at: (e) => this.#armAt(e.comp?.at) },
     })
     wakeRegistered()
     // The app's own commands, run here (T-37605, D-37562). @yaks/tools
@@ -2792,40 +2791,44 @@ export class Store {
   // same floor @yaks/wake's Deno loop caps its sleep at.
   static RETRY = 60_000
 
-  // Point the alarm at the instant a wake names. `arm` keeps an alarm already
-  // set for something sooner, since the object has one alarm and may hold many
-  // wakes, and it serializes the read-compare-write per storage it is handed —
-  // so the adapter below is built once and kept.
-  #arming = async (
-    at: string | null | undefined,
+  // Point the alarm at an instant, in ms since the epoch: the object's clock
+  // (@yaks/durable-object `clock`) keeps an alarm already set sooner, since
+  // the object has one alarm and owes many things, and serializes the
+  // read-compare-write. A dormant store arms nothing but the mover it was let
+  // in for (`#moveOnly`): the directory wakes it.
+  #arm = async (
+    at: number | null | undefined,
     reason = 'wake',
-  ): Promise<unknown> => {
+  ): Promise<void> => {
     if (
       (this.#dormant && !(this.#moveOnly && reason == 'mover')) ||
-      !this.#alarm || !at
+      at == null || !Number.isFinite(at)
     ) return
-    let result = await arm(this.#alarm, { at }, Infinity, this.#now())
+    await this.clock.arm(at)
     if (this.#profile) {
-      let held = await this.#alarm.getAlarm()
+      let held = await this.#ctx.storage.getAlarm()
       console.log(
         'yak store alarm',
         JSON.stringify({
           store: this.#name(),
           reason,
-          requested: at,
+          requested: new Date(at).toISOString(),
           held: held == null ? null : new Date(held).toISOString(),
         }),
       )
     }
-    return result
   }
+
+  // The alarm for the instant a wake row names.
+  #armAt = (at: unknown) =>
+    typeof at == 'string' ? this.#arm(Date.parse(at)) : undefined
 
   // The graph as the clock writes it. A firing is the server's write, not a
   // person's: a wake is the object's own business, and @yaks/member's guard
   // asks which person may write an app's data. So it goes through the same
   // door the kernel writes through, carrying the tick's instant, which is the
   // `#Now` its rules read.
-  #clock: Pick<Graph, 'read' | 'apply'> = {
+  #firing: Pick<Graph, 'read' | 'apply'> = {
     read: (q, o) => (this.#subs ?? this.#graph).read(q, o),
     apply: async (b, o) => {
       let applied = await this.#trust(b as Bundle[], null, o)
@@ -2844,7 +2847,7 @@ export class Store {
   // and a write asks again.
   #conditionalWakes: ReturnType<typeof conditionalWakes> | undefined
   #rouse = async (bundles: Bundle[]): Promise<Bundle[]> => {
-    this.#conditionalWakes ??= conditionalWakes(this.#clock)
+    this.#conditionalWakes ??= conditionalWakes(this.#firing)
     let { refused } = await this.#conditionalWakes(bundles, this.#now())
     for (let { wake, error } of refused) {
       defect(error, {
@@ -2855,17 +2858,16 @@ export class Store {
     return bundles
   }
 
-  // The next instant this object owes, off its own rows: what a tick arms
-  // after it has fired, and what a new incarnation re-arms when the runtime
-  // lost the alarm. `soonest` reads the earliest wake still ahead, and
-  // `#effectsDue` the earliest pending run; a planting is recovered from
-  // recorded rows, never re-derived on an incarnation.
-  #owed = async (now: number, floor = Infinity): Promise<void> => {
-    let next = await soonest(this.#graph, now)
-    let run = due(await this.#pendingEffects(), now)
-    let at = Math.min(next ?? Infinity, run ?? Infinity, floor)
-    if (Number.isFinite(at)) await this.#arming(new Date(at).toISOString())
-  }
+  // The next instant this object's rows owe: what a tick arms after it has
+  // fired, and what a new incarnation re-arms when the runtime lost the
+  // alarm. `soonest` reads the earliest wake still ahead, and `due` the
+  // earliest pending run; a planting is recovered from recorded rows, never
+  // re-derived on an incarnation.
+  #owed = async (now: number): Promise<number | null> =>
+    earliest(
+      await soonest(this.#graph, now),
+      due(await this.#pendingEffects(), now),
+    )
 
   // The pending runs this object has the code for.
   #pendingEffects = async (): Promise<Bundle[]> => {
@@ -2890,11 +2892,7 @@ export class Store {
   // an alarm a minute out, which every firing moves on: an instance a deploy
   // or eviction cuts off mid-run is woken again for the runs it lost, which
   // nothing else would do until somebody wrote here.
-  #holding = (): Promise<unknown> =>
-    this.#arming(
-      new Date(this.#now() + Store.RETRY).toISOString(),
-      'effects running',
-    )
+  #holding = () => this.#arm(this.#now() + Store.RETRY, 'effects running')
 
   // Only completed, selected requests leave the object. Queue delivery is
   // deliberately outside the recording and its SQL counts. No routing lookup
@@ -2991,8 +2989,8 @@ export class Store {
 
   /**
    * Fire the wakes due at `now`, then come back for the next one. The
-   * runtime's own `alarm()` is this at the present instant; a caller naming
-   * the instant is how a test reads a schedule without waiting for one.
+   * alarm's `wakes` is this at the present instant; a caller naming the
+   * instant is how a test reads a schedule without waiting for one.
    *
    * A refused occurrence stays due and its reason goes to this store's break
    * log — the directory's for the platform's sweeps, the app's for an app's —
@@ -3007,7 +3005,7 @@ export class Store {
   async tick(now = this.#now()): Promise<Ticked> {
     if (!await this.#awake()) return { fired: [], refused: [] }
     // A stopped object's wakes fire once its window ends, from the alarm.
-    let wait = this.#ceiling.stopped(true)
+    let wait = this.ceiling.stopped(true)
     if (wait) {
       await this.#later(wait)
       return { fired: [], refused: [] }
@@ -3016,7 +3014,11 @@ export class Store {
     let run = async () => {
       let leave = await this.#enter(false)
       try {
-        return await this.#tick(now)
+        let fired = await this.#fire(now)
+        await this.#arm(
+          earliest(await this.#owed(now), this.#again(fired, now)),
+        )
+        return fired
       } finally {
         this.#profile?.flush()
         leave()
@@ -3025,114 +3027,140 @@ export class Store {
     return this.#profile ? this.#profile.run('tick', run) : run()
   }
 
-  async #tick(now: number): Promise<Ticked> {
-    let result = await tick(this.#clock, now)
-    for (let { wake, error } of result.refused) {
+  #fire = async (now: number): Promise<Ticked> => {
+    let fired = await tick(this.#firing, now)
+    for (let { wake, error } of fired.refused) {
       await this.#broke(`wake ${wake.entity.eid}`, error)
     }
-    await this.#owed(now, result.refused.length ? now + Store.RETRY : Infinity)
-    return result
+    return fired
   }
+
+  // A tick that refused an occurrence comes back for it a minute on.
+  #again = (fired: Ticked, now: number) =>
+    fired.refused.length ? now + Store.RETRY : null
 
   // When this incarnation began: a platform job marked begun before it was
   // begun by an instance that is gone (wake.ts `resumed`).
   #born: number
 
-  /** The runtime's clock going off: whatever this object armed itself for.
-   * A run the runtime cut off is retried, on whatever instance holds the
-   * object then; one it killed for its limits ran none of our code and is
-   * reported from Cloudflare's own record of it (kills.ts). */
-  alarm(): Promise<void> {
-    return this.#traced('alarm', () => this.#alarmRequest())
-  }
-
-  // A stopped object's alarm does nothing but come back when the window
-  // ends (`#ceiling`), and one stopped as it ran comes back then too: its
-  // replays, wakes, effects, embedding, moves, lexicon and statistics stand
-  // as they were, owed and unmarked.
-  async #alarmRequest(): Promise<void> {
-    try {
-      let wait = this.#ceiling.stopped(true)
-      if (wait) await this.#later(wait)
-      else await this.#ring()
-    } catch (e) {
-      if (!stopped(e)) throw e
-      await this.#later(e.retry.after)
-    }
-  }
-
-  async #ring(): Promise<void> {
-    let expires = await this.#ctx.storage.get<Expiry>?.('expires')
-    if (expires && expires.at <= this.#now()) {
-      await this.#expiring(expires)
-      return
-    }
-    if (expires && this.#alarm) {
-      await arm(
-        this.#alarm,
-        {
-          at: new Date(expires.at).toISOString(),
-        },
-        Infinity,
-        this.#now(),
-      )
-    }
-    if (!await this.#awake() && !this.#moveOnly) return
-    await this.#ensureStarted()
-    let run = async () => {
-      let leave = await this.#enter(false)
-      try {
-        if (this.#dormant) {
-          await this.#moving()
-          return
-        }
-        // Writes the log still holds are replayed first, which is what makes
-        // the replay need nobody after a deploy.
-        let kept = waiting(this.#sql)
-        if (this.#refused) {
-          if (kept) await this.#retry()
-          return
-        }
-        if (kept) {
-          this.#stuck = false
-          await this.#drain()
-        }
-        // A pass that fails is reported and tried again a minute on, and the
-        // platform's own jobs below still run meanwhile.
-        if (this.#deploying()) {
+  // What makes this object (@yaks/durable-object `Durable`): the runtime's
+  // clock going off is one slice of each of `#works`, which answer when they
+  // are next owed, and the alarm is set for the soonest. A stopped object's
+  // alarm does nothing but come back when the window ends, and one stopped
+  // as it ran comes back then too: what it owes stands as it was, owed and
+  // unmarked. A work that fails is reported and tried again a minute on, and
+  // the works after it still run. A run the runtime cut off is retried, on
+  // whatever instance holds the object then; one it killed for its limits
+  // ran none of our code and is reported from Cloudflare's own record of it
+  // (kills.ts).
+  protected override specify = (): Spec => ({
+    open: () =>
+      Promise.resolve({
+        serve: (request: Request) => this.fetch(request),
+        works: this.#works,
+      }),
+    report: (error, entry) =>
+      defect(error, { request: entry, store: this.#name() }),
+    alarm: { now: this.#now, retry: Store.RETRY },
+    around: (entry, work) =>
+      entry == 'alarm'
+        ? this.#traced('alarm', async () => {
           try {
-            await this.#maintenance(() => this.#installDeployment())
-          } catch (e) {
-            defect(e, { request: 'deployment pass', store: this.#name() })
-            await this.#retry()
+            return await (this.#profile
+              ? this.#profile.run('alarm', work)
+              : work())
+          } finally {
+            this.#profile?.flush()
           }
-        }
-        // A platform job an instance died in the middle of fires again in
-        // this tick: @yaks/wake spent its occurrence, so nothing else runs it
-        // before the next one (wake.ts `resumed`).
-        if (this.#get('name') == PLATFORM_STORE) {
-          await resumed(
-            this.#clock,
-            this.#born,
-            (job, e) => this.#broke(`wake ${job}`, e),
-            this.#versionAt(),
-          )
-        }
-        await this.#tick(this.#now())
-        this.#workingEffects()
-        if (this.#effectsReady && this.#effects.running().length) {
-          await this.#holding()
-        }
-        this.#embedding()
-        await this.#moving()
-        await this.#lexing()
-        await this.#analyzing()
-      } finally {
-        this.#profile?.flush()
-        leave()
-      }
+        })
+        : work(),
+  })
+
+  // A work of the store's own: worked once it is awake and started, inside
+  // the draft gate (`#enter`), and only while `may` holds. A dormant store
+  // opens nothing but for the mover it was let in for (`#moveOnly`).
+  #own = (
+    run: (until: number) => Promise<number | null> | number | null,
+    may = () => !this.#dormant && !this.#refused,
+  ): Work =>
+  async (until) => {
+    if (!await this.#awake() && !this.#moveOnly) return null
+    await this.#ensureStarted()
+    if (!may()) return null
+    let leave = await this.#enter(false)
+    try {
+      return await run(until)
+    } finally {
+      leave()
     }
-    return this.#profile ? this.#profile.run('alarm', run) : run()
+  }
+
+  // What the alarm works, in this order.
+  #works: Record<string, Work> = {
+    // A temporary store (`/expires`) is emptied at its instant, and sleeps:
+    // every work after this one finds it dormant.
+    expiry: async () => {
+      let expires = await this.#ctx.storage.get<Expiry>?.('expires')
+      if (!expires) return null
+      if (expires.at > this.#now()) return expires.at
+      await this.#expiring(expires)
+      return null
+    },
+    // Writes the log still holds are replayed first, which is what makes the
+    // replay need nobody after a deploy. A refused store only comes back for
+    // them.
+    replay: this.#own(async () => {
+      let kept = waiting(this.#sql)
+      if (this.#refused) return kept ? this.#now() + Store.RETRY : null
+      if (kept) {
+        this.#stuck = false
+        await this.#drain()
+      }
+      return null
+    }, () => !this.#dormant),
+    deploy: this.#own(async () => {
+      if (this.#deploying()) {
+        await this.#maintenance(() => this.#installDeployment())
+      }
+      return null
+    }),
+    // A platform job an instance died in the middle of fires again in this
+    // ring: @yaks/wake spent its occurrence, so nothing else runs it before
+    // the next one (wake.ts `resumed`).
+    resumed: this.#own(async () => {
+      if (this.#get('name') != PLATFORM_STORE) return null
+      await resumed(
+        this.#firing,
+        this.#born,
+        (job, e) => this.#broke(`wake ${job}`, e),
+        this.#versionAt(),
+      )
+      return null
+    }),
+    wakes: this.#own(async () => {
+      let now = this.#now()
+      let fired = await this.#fire(now)
+      return earliest(await soonest(this.#graph, now), this.#again(fired, now))
+    }),
+    // The runs pending as the pool takes its batch, and the minute a run in
+    // flight holds (`#holding`).
+    effects: this.#own(async () => {
+      let now = this.#now(), pending = due(await this.#pendingEffects(), now)
+      this.#workingEffects()
+      let running = this.#effectsReady && this.#effects.running().length
+      return earliest(pending, running ? now + Store.RETRY : null)
+    }),
+    // An alarm sooner than a failed drain's retry leaves it armed.
+    vectors: this.#own(() => {
+      this.#embedding()
+      return this.#vectorRetry > this.#now() ? this.#vectorRetry : null
+    }),
+    moves: this.#own(() => this.#moving(), () => true),
+    lexicon: this.#own(async () => {
+      await this.#lexing()
+      return null
+    }),
+    statistics: this.#own(() => this.#analyzing()),
   }
 
   // One packet to every socket, subscribed or not: a page decides what to do
@@ -3143,22 +3171,19 @@ export class Store {
     })
   }
 
+  // Emptied, once it sleeps: one that fails is the alarm's to report and
+  // try again, still asleep.
   async #expiring(expires: Expiry) {
+    await this.#sleep()
+    await Promise.all([this.#effectWork, this.#vectorWork])
+    let leave = await this.#enter(true)
     try {
-      await this.#sleep()
-      await Promise.all([this.#effectWork, this.#vectorWork])
-      let leave = await this.#enter(true)
-      try {
-        await expired(this.#bind, expires)
-        await this.#ctx.storage.deleteAll()
-        this.#kv.clear()
-        await this.#ctx.storage.put?.('dormant', true)
-      } finally {
-        leave()
-      }
-    } catch (e) {
-      defect(e, { request: 'expire store', store: this.#name() })
-      await this.#ctx.storage.setAlarm?.(this.#now() + Store.RETRY)
+      await expired(this.#bind, expires)
+      await this.#ctx.storage.deleteAll()
+      this.#kv.clear()
+      await this.#ctx.storage.put?.('dormant', true)
+    } finally {
+      leave()
     }
   }
 
@@ -3183,8 +3208,8 @@ export class Store {
   // never a waking request's to pay. Whether any are owed is read once an
   // incarnation, then known. A table whose analysis fails stays owed and is
   // reported, and the next alarm tries it again.
-  #analyzing = async (): Promise<void> => {
-    if (this.#unanalyzed === false) return
+  #analyzing = async (): Promise<number | null> => {
+    if (this.#unanalyzed === false) return null
     let left = this.#analyze(0)
     try {
       for (let n = 0; n < ANALYSES && left; n++) {
@@ -3193,13 +3218,13 @@ export class Store {
       }
     } catch (e) {
       this.#unanalyzed = null
-      // A stopped object's alarm comes back for the rest (`#alarmRequest`).
+      // A stopped object's alarm comes back for the rest.
       if (stopped(e)) throw e
       defect(e, { request: 'planner statistics', store: this.#name() })
-      return
+      return null
     }
     this.#unanalyzed = left > 0
-    if (left) await this.#arming(this.#soon(), 'statistics')
+    return left ? this.#soon() : null
   }
 
   // Deployment materializes descriptions and shipped rows. Loading an
@@ -3209,9 +3234,9 @@ export class Store {
   // that runs the pass goes on to both itself.
   #deployed = async (): Promise<void> => {
     await this.#maintenance(() => this.#installDeployment())
-    if (this.#owing().length) await this.#arming(this.#soon(), 'mover')
-    if (this.#unread()) await this.#arming(this.#soon(), 'lexicon')
-    if (this.#analyze(0)) await this.#arming(this.#soon(), 'statistics')
+    if (this.#owing().length) await this.#arm(this.#soon(), 'mover')
+    if (this.#unread()) await this.#arm(this.#soon(), 'lexicon')
+    if (this.#analyze(0)) await this.#arm(this.#soon(), 'statistics')
   }
 
   #installDeployment = async (): Promise<void> => {
@@ -3308,7 +3333,7 @@ export class Store {
   // while the store serves the shape it holds.
 
   // A moment from now: the wake that armed it answers first.
-  #soon = () => new Date(this.#now() + PAUSE).toISOString()
+  #soon = () => this.#now() + PAUSE
 
   #stamp = (rule: Rule): Stamp | null => {
     let held = this.#get(rule.mark)
@@ -3486,10 +3511,11 @@ export class Store {
 
   // A few batches, yielding the object between them, then the alarm again for
   // whatever is left.
-  #moving = (): Promise<void> => this.#maintenance(() => this.#moveRows())
+  #moving = (): Promise<number | null> =>
+    this.#maintenance(() => this.#moveRows())
 
-  #moveRows = async (): Promise<void> => {
-    if (this.#dormant && !this.#moveOnly) return
+  #moveRows = async (): Promise<number | null> => {
+    if (this.#dormant && !this.#moveOnly) return null
     // The bound is in batches that found rows: a rule with none left to move
     // is one read, and finishes without spending one.
     let left = BATCHES
@@ -3499,7 +3525,7 @@ export class Store {
     for (let rule of this.#owing()) {
       while (
         left > 0 && !this.#refused && (!this.#dormant || this.#moveOnly) &&
-        !(wait = this.#ceiling.under(SHARE))
+        !(wait = this.ceiling.under(SHARE))
       ) {
         let held: (() => void | Promise<void>)[] = []
         let was = this.#stamp(rule)
@@ -3538,7 +3564,7 @@ export class Store {
         } catch (e) {
           this.#kv.clear()
           // Stopped, the batch unwound and the rule is no failure: the alarm
-          // moves it on once the window ends (`#alarmRequest`).
+          // moves it on once the window ends.
           if (stopped(e)) throw e
           this.#halted.add(rule.mark)
           defect(e, { request: `move ${rule.mark}`, store: name })
@@ -3569,18 +3595,14 @@ export class Store {
         await new Promise((r) => setTimeout(r, 0))
       }
     }
-    if (this.#owing().length) {
-      await this.#arming(
-        wait ? new Date(this.#now() + wait).toISOString() : this.#soon(),
-        'mover',
-      )
-    } else if (this.#dormant && this.#moveOnly) {
+    if (this.#owing().length) return wait ? this.#now() + wait : this.#soon()
+    // A dormant store let in to move is let out once it has, and the alarm
+    // it rang on goes with nothing owed.
+    if (this.#dormant && this.#moveOnly) {
       this.#moveOnly = false
       await this.#ctx.storage.put?.('moving', false)
-      if (this.#dormant && !this.#moveOnly) {
-        await this.#ctx.storage.deleteAlarm?.()
-      }
     }
+    return null
   }
 
   // Effects owed by a write run in the next alarm batch. The pool never works inside the request
@@ -3596,7 +3618,7 @@ export class Store {
       return
     }
     this.#ctx.waitUntil?.(
-      this.#arming(new Date(this.#now()).toISOString(), 'effects')
+      this.#arm(this.#now(), 'effects')
         .catch((e) =>
           defect(e, { request: 'effect arming', store: this.#name() })
         ),
@@ -3618,7 +3640,7 @@ export class Store {
         JSON.stringify({ store: this.#name(), handlers }),
       )
     }
-    await this.#arming(new Date(due(pending, now)!).toISOString(), 'effects')
+    await this.#arm(due(pending, now), 'effects')
   }
 
   // The pool at work, started only from the alarm (`#owedEffects`).
@@ -3644,8 +3666,8 @@ export class Store {
       if (!this.#dormant) await this.#armPending()
     }).catch(async (error) => {
       defect(error, { request: 'effect pool', store: this.#name() })
-      await this.#arming(
-        new Date(this.#now() + resting(error, Store.RETRY)).toISOString(),
+      await this.#arm(
+        this.#now() + resting(error, Store.RETRY),
         'effects retry',
       )
         .catch((e) =>
@@ -3720,16 +3742,9 @@ export class Store {
     if (this.#dormant) return
     let model = this.#embedder()
     if (this.#refused || !this.#texts || !this.#get('schema') || !model) return
-    if (this.#now() < this.#vectorRetry) {
-      // An alarm sooner than the retry spends the one the failure armed.
-      let name = this.#name()
-      void this.#arming(
-        new Date(this.#vectorRetry).toISOString(),
-        'embedding retry',
-      )
-        .catch((e) => defect(e, { request: 'embedding retry', store: name }))
-      return
-    }
+    // Until a failed drain's retry, the alarm the failure armed stands
+    // (`#works`).
+    if (this.#now() < this.#vectorRetry) return
     if (this.#vectorWork) {
       if (this.#owes()) this.#vectorAgain = true
       return
@@ -3772,15 +3787,12 @@ export class Store {
       } while (this.#vectorAgain)
       this.#ride(name, drained)
       if (this.#owes()) {
-        await this.#arming(this.#soon(), 'embedding continuation')
+        await this.#arm(this.#soon(), 'embedding continuation')
       }
     })().catch(async (error) => {
       this.#ride(name, failed(error))
       this.#vectorRetry = this.#now() + resting(error, Store.RETRY)
-      await this.#arming(
-        new Date(this.#vectorRetry).toISOString(),
-        'embedding retry',
-      )
+      await this.#arm(this.#vectorRetry, 'embedding retry')
         .catch((e) => defect(e, { request: 'embedding retry', store: name }))
     }).finally(() => {
       this.#vectorWork = null
@@ -3805,7 +3817,7 @@ export class Store {
   // The whole is owed again, and the alarm reads it.
   #reread = async (store: string | null) => {
     this.#put('lexicon', '')
-    await this.#arming(this.#soon(), 'lexicon').catch((e) =>
+    await this.#arm(this.#soon(), 'lexicon').catch((e) =>
       defect(e, { request: 'lexicon arm', store })
     )
   }
@@ -4010,7 +4022,7 @@ export class Store {
    * a batch applied by the request that woke this object still reaches the
    * sockets it inherited.
    */
-  fetch(request: Request): Promise<Response> {
+  override fetch(request: Request): Promise<Response> {
     return this.#useScope.run(
       {
         kernel: request.headers.get('x-yak-kernel') == '1',
@@ -4141,7 +4153,7 @@ export class Store {
           await this.#ensureStarted()
           return this.#refused ? this.#stalled() : undefined
         },
-        arm: () => this.#arming(new Date(this.#now()).toISOString()),
+        arm: () => this.#arm(this.#now()),
       })
     }
 
@@ -4166,7 +4178,7 @@ export class Store {
     // wait, and keeps a person's write for the window's end (`#write`), which
     // needs nothing of the start but its log.
     let writing = logged(request)
-    let stop = this.#ceiling.refusal(writing)
+    let stop = this.ceiling.refusal(writing)
     if (stop && (!writing || !this.#sql)) return refuse(stop)
     if (!stop) await this.#ensureStarted(request)
     let tally = this.#pending
@@ -4269,7 +4281,7 @@ export class Store {
     // served at an ordinary wake's cost.
     if (this.#deployArmed != this.#version() && this.#deploying()) {
       this.#deployArmed = this.#version()
-      await this.#arming(this.#soon(), 'deploy')
+      await this.#arm(this.#soon(), 'deploy')
     }
     for (let run of selected.effects) await run()
 
@@ -4312,7 +4324,7 @@ export class Store {
       return unkept()
     }
     // Authority is the replay's to check (`#commit`), as for every kept write.
-    let stop = this.#ceiling.refusal(true)
+    let stop = this.ceiling.refusal(true)
     if (stop) return this.#kept(fingerprinted(request, body), body, stop)
     if (durable(key)) {
       try {
@@ -4336,7 +4348,7 @@ export class Store {
         ) {
           let r = await this.#commit(sent(), { request })
           // Its transaction unwound when the ceiling refused it mid-way.
-          let stop = r.status == 429 ? this.#ceiling.refusal(true) : null
+          let stop = r.status == 429 ? this.ceiling.refusal(true) : null
           if (stop) return this.#kept(request, body, stop)
           if (r.status < 500) return this.#callerResponse(request, r)
           // An error after the transaction must not enqueue its mutation again.
@@ -4420,7 +4432,7 @@ export class Store {
     body: string,
     stop: Error & { retry: { after: number } },
   ): Response {
-    let { free } = this.#ceiling, sql = this.#sql
+    let { free } = this.ceiling, sql = this.#sql
     let key = request.headers.get(IDEMPOTENCY)
     let was = free(() => key ? first(sql, key, request) : null)
     if (was && was.state != 'pending' && was.state != 'running') {
@@ -4444,8 +4456,7 @@ export class Store {
   }
 
   // The alarm, `wait` ms from now: when this object's window ends.
-  #later = (wait: number) =>
-    this.#arming(new Date(this.#now() + wait).toISOString(), 'stopped')
+  #later = (wait: number) => this.#arm(this.#now() + wait, 'stopped')
 
   /** The log from its oldest waiting write to its newest, one at a time. A
    * write that fails is set aside (`#land`) and the ones behind it go on;
@@ -4468,9 +4479,9 @@ export class Store {
           let r = await this.#land(k, live)
           // Stopped before it applied (`#ceiling`): it waits again as it was,
           // and every write behind it with it, until the window ends.
-          let wait = r.status == 429 ? this.#ceiling.stopped(true) : 0
+          let wait = r.status == 429 ? this.ceiling.stopped(true) : 0
           if (wait) {
-            this.#ceiling.free(() => unstarted(sql, k.seq))
+            this.ceiling.free(() => unstarted(sql, k.seq))
             let caller = this.#callers.get(k.seq)
             this.#callers.delete(k.seq)
             caller?.(this.#waiting(k.seq, wait))
@@ -4488,7 +4499,7 @@ export class Store {
       } catch (e) {
         if (stopped(e)) {
           let seq = at?.seq
-          if (seq != null) this.#ceiling.free(() => unstarted(sql, seq))
+          if (seq != null) this.ceiling.free(() => unstarted(sql, seq))
         } else {
           this.#stuck = true
           defect(e, { request: 'write replay', store: this.#name() })
@@ -4497,7 +4508,7 @@ export class Store {
       // Synchronously after the last look at the log: nothing can be kept
       // between that look and this line without finding the loop gone.
       this.#draining = null
-      let wait = this.#ceiling.stopped(true)
+      let wait = this.ceiling.stopped(true)
       for (let [seq, caller] of this.#callers) {
         caller(
           wait
@@ -4521,7 +4532,7 @@ export class Store {
     try {
       let r = await this.#commit(replayed(k), k.seq)
       // The ceiling's to wait out (`#drain`), never the write's refusal.
-      if (r.status == 429 && this.#ceiling.stopped(true)) return r
+      if (r.status == 429 && this.ceiling.stopped(true)) return r
       if (r.status < 300) done(sql, k.seq)
       else if (r.status >= 500) aside(sql, k.seq, await said(r.clone()))
       else if (live) done(sql, k.seq)
@@ -4548,7 +4559,7 @@ export class Store {
     let draining = this.#draining
     if (draining) return this.#stage('settle', () => draining, false)
     // While stopped, what the log holds waits for the alarm (`#kept`).
-    if (this.#ceiling.stopped(true)) return
+    if (this.ceiling.stopped(true)) return
     if (!this.#stuck && waiting(this.#sql)) return this.#drain()
   }
 
@@ -4559,7 +4570,7 @@ export class Store {
     return parked(seq, why)
   }
 
-  #retry = () => this.#arming(new Date(this.#now() + Store.RETRY).toISOString())
+  #retry = () => this.#arm(this.#now() + Store.RETRY)
 
   // A word, for a report from an object that may be too broken to say it.
   #said(k: Word): string | null {
@@ -5153,14 +5164,14 @@ export class Store {
     // nothing while it sat there. Kernel only, like the erase.
     if (path == '/alarm' && request.method == 'POST') {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
-      await this.#arming(new Date(this.#now()).toISOString())
+      await this.#arm(this.#now())
       return Response.json({ ok: true })
     }
     if (path == '/expires' && request.method == 'POST') {
       if (!kernel || !this.#name()?.startsWith('preview/')) {
         return json({ error: 'NotFound', message: 'no route' }, 404)
       }
-      if (!this.#ctx.storage.put || !this.#alarm) {
+      if (!this.#ctx.storage.put) {
         throw new Refused('temporary stores need durable alarms')
       }
       let expires: Expiry
@@ -5171,14 +5182,7 @@ export class Store {
       }
       await this.#ctx.storage.put('expires', expires)
       this.#expires = expires
-      await arm(
-        this.#alarm,
-        {
-          at: new Date(expires.at).toISOString(),
-        },
-        Infinity,
-        this.#now(),
-      )
+      await this.clock.arm(expires.at)
       return Response.json({ ok: true })
     }
     // The mover's door (mover.ts), a sweep's one question of each store:
@@ -5204,7 +5208,7 @@ export class Store {
           this.#moveOnly = true
           await this.#ctx.storage.put?.('moving', true)
         }
-        await this.#arming(new Date(this.#now()).toISOString(), 'mover')
+        await this.#arm(this.#now(), 'mover')
       }
       let rules: Standing[] = this.#moves().map((r) => ({
         mark: r.mark,
@@ -5213,7 +5217,7 @@ export class Store {
       }))
       // The alarm the object holds once woken, so a sweep sees one that is
       // due and never comes: the mover only moves from it.
-      let held = await this.#alarm?.getAlarm()
+      let held = await this.#ctx.storage.getAlarm()
       let alarm = held == null ? null : new Date(held).toISOString()
       let mourned = await this.#ctx.storage.get<string>?.(MOURNED) ?? null
       return Response.json({ store, rules, alarm, mourned })
@@ -5942,7 +5946,10 @@ export class Store {
   }
 
   /** A frame from a client: a subscription opened or closed. */
-  webSocketMessage(ws: Wire, data: string | ArrayBuffer): Promise<void> {
+  override webSocketMessage(
+    ws: Wire,
+    data: string | ArrayBuffer,
+  ): Promise<void> {
     let received = this.#now()
     return this.#traced(
       'ws message',
@@ -5998,7 +6005,7 @@ export class Store {
   }
 
   /** That client went away. */
-  webSocketClose(ws: Wire): void | Promise<void> {
+  override webSocketClose(ws: Wire): void | Promise<void> {
     let run = async (): Promise<void> => {
       await this.#ensureStarted()
       if (this.#draft) return this.#draft.then(() => this.webSocketClose(ws))

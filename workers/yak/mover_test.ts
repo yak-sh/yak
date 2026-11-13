@@ -198,8 +198,12 @@ test('builder take rehearsal preserves a store, then conversion moves with no ca
   let [report] = await s.rehearse()
   assertEquals([report.rows, report.moved, report.failed], [2, 2, undefined])
   assertEquals(await s.query('*&!effect&!archetype'), before)
+  // Not yet live, the rule moves nothing from the alarm.
   await s.alarm()
-  assertEquals(await s.query('*&!effect&!archetype'), before)
+  assertEquals(
+    (await s.moves()).find((r) => r.mark == takeRule.mark),
+    { mark: takeRule.mark, live: false },
+  )
   s.wake({ ...takeRule, live: 'apps' })
   await s.alarm()
   let [take] = await s.query('.entity.eid=take&*')

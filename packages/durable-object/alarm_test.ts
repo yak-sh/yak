@@ -91,6 +91,15 @@ test('the alarm a ring answers is superseded by its works, even later', async ()
   assertEquals(await idle.storage.getAlarm(), null)
 })
 
+test('an alarm armed during a slice outlives the one the ring took over, even later', async () => {
+  for (let answer of [null, 9000]) {
+    let armed = loop({ a: () => (void armed.time.arm(5000), answer) })
+    await armed.storage.setAlarm(2000)
+    await armed.time.ring()
+    assertEquals(await armed.storage.getAlarm(), 5000)
+  }
+})
+
 test('a failed work is reported and tried again a minute on, and the rest still run', async () => {
   let { storage, given, failed, time } = loop({
     a: () => {
