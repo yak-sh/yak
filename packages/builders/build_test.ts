@@ -26,7 +26,7 @@ import {
 } from './build.ts'
 import { answer as answerWrites } from './answer.ts'
 import { key } from './key.ts'
-import { adapted, modelTool, render } from './model.ts'
+import { adapted, lengthened, modelTool, render, shortened } from './model.ts'
 import { build, runs } from './tools.ts'
 import { builderDoc } from './vocab.ts'
 import { code as coded } from './code.ts'
@@ -777,6 +777,72 @@ test('a model reply cut short fails without spending automatically again', async
   assertEquals((await calls(g, build)).length, 1)
 })
 
+test('a model reads ids as short handles and answers through them', async () => {
+  let { g, runner, failed } = await shop()
+  await g.apply([source('a'), {
+    ...builder('$s .doc.title=Source', toolEid('builder_model')),
+    content: { body: 'Name $s' },
+    using: { model: ids.model },
+  }])
+  let build = await runOf(g, ['a'])
+  await drive(g, runner, build)
+  let [session] = await rows(g, '.session')
+  let [prompt] = await rows(g, `.entry.session=${session.entity.eid}`)
+  assertEquals(comp(prompt, 'content')?.body, 'Name @1\n\nInputs: @1\n')
+  await g.apply([
+    asked(session.entity.eid, 2, 'ask-1', 'completed'),
+    replied(
+      session.entity.eid,
+      3,
+      'ask-1',
+      JSON.stringify({
+        outputs: [{
+          slot: 'main',
+          inputs: ['@1'],
+          components: { doc: { title: '@1', body: 'about @1' } },
+        }],
+      }),
+    ),
+  ])
+  assertEquals(failed, [])
+  let out = await one(g, await outOf(g, build))
+  assertEquals(
+    [comp(out, 'doc')?.title, comp(out, 'doc')?.body],
+    ['a', 'about @1'],
+  )
+  assert(await one(g, edgeEid(out.entity.eid, 'cites', 'a')))
+})
+
+test('a handle stands for each id a binding holds, a reference it reads too', () => {
+  let speaker = '8b0f1a52-3c1e-4d7a-9f00-1d2c3b4a5e6f'
+  let binding = {
+    entities: ['m'],
+    vars: { m: 'm', title: 'Minutes' },
+    collections: [{
+      vars: ['t', 'voice', 'said'],
+      entityVars: ['t'],
+      members: [
+        { entities: ['t1'], vars: { t: 't1', voice: speaker, said: 'aye' } },
+        { entities: ['t2'], vars: { t: 't2', voice: speaker, said: 'm' } },
+      ],
+    }],
+  }
+  let short = shortened(binding)
+  assertEquals(
+    render('$m $title $t', short),
+    [
+      '@1 Minutes [',
+      '{"t":"@2","voice":"@3","said":"aye"},',
+      '{"t":"@4","voice":"@3","said":"@1"}',
+      ']',
+    ].join('\n'),
+  )
+  assertEquals(
+    lengthened({ inputs: ['@2', 'x'], voice: '@3', n: 4 }, binding),
+    { inputs: ['t1', 'x'], voice: speaker, n: 4 },
+  )
+})
+
 test('shadow builds have distinct ids and cannot feed another builder', async () => {
   let { g, runner, vocab } = await shop({}, [], [code()])
   await g.apply([source('a'), builder()])
@@ -945,7 +1011,7 @@ test('model tool opens a session using content.body, then adapts its reply', asy
   let [session] = await rows(g, '.session')
   let [entry] = await rows(g, `.entry.session=${session.entity.eid}`)
   let prompt = String(comp(entry, 'content')?.body)
-  assert(prompt.includes('Build a: first'))
+  assert(prompt.includes('Build @1: first'))
   assert(!prompt.includes('Documentation'))
   assertEquals(comp(entry, 'using')?.effort, 'low')
   let answer = JSON.stringify({
@@ -1146,7 +1212,7 @@ test('a model builder renders an empty selected collection in its prompt', async
   let [entry] = await rows(g, `.entry.session=${session.entity.eid}`)
   assert(
     String(comp(entry, 'content')?.body).startsWith(
-      'Subject a:\n[]\nBodies []\n\nInputs: a\n',
+      'Subject @1:\n[]\nBodies []\n\nInputs: @1\n',
     ),
   )
 })
@@ -1286,8 +1352,8 @@ test('model builder instruction prefix is shared across bindings and appended on
   assert(fixed.startsWith('Base instruction\n\n'))
   assert(fixed.includes('Answer with JSON:'))
   assert(fixed.includes('Cite only selected input ids.'))
-  assertEquals(comp(a, 'content')?.body, 'Summarize a\n\nInputs: a\n')
-  assertEquals(comp(b, 'content')?.body, 'Summarize b\n\nInputs: b\n')
+  assertEquals(comp(a, 'content')?.body, 'Summarize @1\n\nInputs: @1\n')
+  assertEquals(comp(b, 'content')?.body, 'Summarize @1\n\nInputs: @1\n')
   assertEquals(comp(await invoke('c', comp(a, 'using')!), 'using'), a.using)
   let none = await invoke('d', { model: ids.model })
   assert(

@@ -9,6 +9,9 @@ import { toolEid } from '@yaks/tools/result'
 import { toolsSaid } from '@yaks/vocab/tools'
 import doc from './vocab.json' with { type: 'json' }
 import { ids } from './build.ts'
+import { lengthened, shortened } from './handles.ts'
+
+export { handles, lengthened, shortened } from './handles.ts'
 
 export let MODEL = 'builder_model'
 let definition = toolsSaid(doc).find((tool) => tool.name == MODEL)!
@@ -77,15 +80,19 @@ let members = (binding: Binding): Map<string, Record<string, unknown>[]> => {
 
 /** Fill $var from the frozen binding tree; $$ is a literal dollar sign. A
  * variable naming a bracket's members says them as a JSON list, each member
- * the variables it binds: `[$p .note, doc.body=$body]` makes `$p`
- * `[{"p": "n1", "body": "…"}, …]`. */
+ * on a line of its own as the variables it binds: `[$p .note,
+ * doc.body=$body]` makes `$p` `[{"p":"n1","body":"…"}, …]`. */
 export let render = (template: string, binding: Binding): string => {
   let vars = values(binding)
   let rows = members(binding)
   return template.replace(/\$\$|\$([a-zA-Z_][\w]*)/g, (_part, name) => {
     if (!name) return '$'
     let listed = rows.get(name)
-    if (listed) return JSON.stringify(listed, null, 1)
+    if (listed) {
+      return listed.length
+        ? `[\n${listed.map((row) => JSON.stringify(row)).join(',\n')}\n]`
+        : '[]'
+    }
     let held = vars.get(name)
     if (!held) throw new Error(`builder template has no $${name} binding`)
     let value = held.length == 1 ? held[0] : held
@@ -134,7 +141,9 @@ export let modelTool = (desk: Desk = {}): Tool => ({
       return []
     }
     let session: Eid = derivedEid(`builder_session|${call.entity.eid}`)
-    let prompt = request(args.template ?? '', args.binding)
+    // The model reads every id the binding holds as a short handle, and
+    // `adapted` reads its answer back through the same binding.
+    let prompt = request(args.template ?? '', shortened(args.binding))
     return [
       {
         entity: { eid: session },
@@ -174,11 +183,11 @@ export let adapted = async (
   let [transcript] = await tx.get([session])
   let call = str(comp(transcript, 'session')?.source)
   if (!call) return
+  let [asked] = await tx.get([call])
+  let binding = (comp(asked, 'call')?.args as { binding?: Binding })?.binding
   let value: unknown
   if (said.attachment) {
     let artifact = str(comp(said, 'attachment')?.artifact)
-    let [asked] = await tx.get([call])
-    let binding = (comp(asked, 'call')?.args as { binding?: Binding })?.binding
     if (!artifact || !binding) {
       throw new Error('model builder attachment has no binding')
     }
@@ -201,7 +210,9 @@ export let adapted = async (
     try {
       let told = JSON.parse(text)
       value = told && typeof told == 'object' && !Array.isArray(told)
-        ? { outputs: told.outputs }
+        ? {
+          outputs: binding ? lengthened(told.outputs, binding) : told.outputs,
+        }
         : { said: text }
     } catch {
       value = { said: text }

@@ -158,19 +158,24 @@ chosen. `.built.build=<build>&.references` reads every take's links; add
 `content.body` from the frozen binding (`$name` is a variable's value, or its
 distinct values inside a bracket; the variable a bracket binds its members to,
 `$p` in `[$p .note, doc.body=$body]`, says every member as a JSON list of the
-variables it binds, so a member's values stay together), opens an ordinary
-@yaks/session transcript with `using`, and adapts that transcript's reply to the
-same output value. Replaying a call reuses its existing session. The reply is
-the output of an ask that called no tools: prose beside a tool call is the model
-at work. It is read once its ask's `attempt` completes, since a streamed reply
-is written as it arrives. A session that fails for good records failure while
-keeping its attempt key, so automatic reconciliation does not spend again. A
-tool's refusal answered to the model and a request the runner retries do not
-fail the build. `sending.tools` names the tools the session is offered
-(@yaks/session), so a builder's model reads and writes the graph through exactly
-the tools its builder names. `builder.to` points at `modelToolEid()` for this
-adapter. The tool runner records the call and result; builders does not run a
-model itself.
+variables it binds, one member a line, so a member's values stay together).
+Every id the binding holds, its entities and the references its variables read,
+is shown to the model as a short handle (`@1`, `@2`, …) numbered in the
+binding's order, and every string of its answer that is a handle is read back as
+the id: an eid is some twenty tokens, so in a prompt over many rows the ids were
+most of what was sent, and what a small model copied wrong (`handles.ts`). It
+opens an ordinary @yaks/session transcript with `using`, and adapts that
+transcript's reply to the same output value. Replaying a call reuses its
+existing session. The reply is the output of an ask that called no tools: prose
+beside a tool call is the model at work. It is read once its ask's `attempt`
+completes, since a streamed reply is written as it arrives. A session that fails
+for good records failure while keeping its attempt key, so automatic
+reconciliation does not spend again. A tool's refusal answered to the model and
+a request the runner retries do not fail the build. `sending.tools` names the
+tools the session is offered (@yaks/session), so a builder's model reads and
+writes the graph through exactly the tools its builder names. `builder.to`
+points at `modelToolEid()` for this adapter. The tool runner records the call
+and result; builders does not run a model itself.
 
 ## Code answered in place
 
