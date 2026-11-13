@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from 'preact/hooks'
-import { awake, type Ent, idOf, kilo, type LogRow } from '../../types.ts'
+import { awake, EID, type Ent, idOf, kilo, type LogRow } from '../../types.ts'
 import { ent, findEid, mutate, retrySubscription, uuid } from '../../live.ts'
 import { graphLog } from '../../entry_log.ts'
 import { doing as running } from '@yaks/tools/title'
@@ -23,7 +23,8 @@ import { Dot } from '../Dot.tsx'
 import { Twig } from '@yaks/kernel/Comments'
 import { branches } from '@yaks/kernel/comments'
 import { Entity, resolve } from '../Entity.tsx'
-import { mdMentions, type Mention } from '../../md.ts'
+import { type Mention, mentions, parse } from '@yaks/markdown'
+import { commitUrl } from '../Markdown.tsx'
 import { useCitedComments, useCommentsOn, useQueryResult } from '../useQuery.ts'
 import { UrlVal } from '@yaks/ux'
 import { Ansi } from '../Ansi.tsx'
@@ -186,14 +187,27 @@ let mentionText = (x: MentionLine | Ent) => {
   return [x.doc?.body ?? '']
 }
 
-// The SCAN — the expensive half: mdMentions parses every text in the thread.
+// A hex word quoted in code is a commit: a link to it in its project's
+// repository, or nothing where the project names none. A whole SHA is the
+// commit's own entity.
+let commit = (m: Mention, repo?: string): Mention[] => {
+  if (m.kind != 'entity' || !/^[0-9a-f]+$/i.test(m.id) || EID.test(m.id)) {
+    return [m]
+  }
+  let href = commitUrl(repo, m.id)
+  return href ? [{ kind: 'link', href }] : []
+}
+
+// The SCAN — the expensive half: mentions parses every text in the thread.
 // On a large log this is milliseconds, so the render path memoizes it (keyed on
 // mentionSig) and never runs it per render.
 export let threadMentions = (
   thread: (MentionLine | Ent)[],
   repo?: string,
 ): Mention[] =>
-  thread.flatMap(mentionText).flatMap((text) => mdMentions(text, repo))
+  thread.flatMap(mentionText).flatMap((text) =>
+    mentions(parse(text)).flatMap((m) => commit(m, repo))
+  )
 
 // Resolve entity ids to eids and dedupe — the CHEAP half over the already-parsed
 // mentions, so it stays per render and an eid that loads in late still links.
@@ -648,7 +662,7 @@ export let Session = (
   )
   let windowed = start > 0 ? thread.slice(start) : thread
   let unsent = trees.filter((node) => !heard(ent(node.row.entity.eid)))
-  // The mention scan (mdMentions over the whole thread) is a per-render scan we
+  // The mention scan (mentions over the whole thread) is a per-render scan we
   // can't pay — a 14M-log session stalled first paint on it. Parse once,
   // memoized on the cheap content signature; resolve+dedup stays per render so a
   // late-loading eid still links.
@@ -699,7 +713,7 @@ export let Session = (
       </Head>
       <SessionRelated eid={e.eid} />
       <Panel>
-        {/* markdown, escaped of any markup by md.ts — as with a task body */}
+        {/* markdown, its markup kept as words by @yaks/markdown — as with a task body */}
         {fault && <Fault mod='error'>{fault}</Fault>}
         <Log>
           {entries.status == 'loading' && (

@@ -55,8 +55,6 @@ export let open = async (url: string, opts: {
   let { newPath } = await import('./navigation.ts')
   let { Ux } = await import('@yaks/ux')
   let { lone } = await import('@yaks/draft/input')
-  let { Md } = await import('./tui/md.tsx')
-  let { onMarkdown } = await import('./components/Markdown.tsx')
   live.config.host = at.host
   live.config.secure = at.protocol == 'https:'
   let sockets = new Set<WebSocket>()
@@ -80,9 +78,6 @@ export let open = async (url: string, opts: {
   }
   let facets = await opts.facets?.() ?? []
   await contribute(facets)
-  onMarkdown((text, repo, inline) =>
-    h(Md, { text, repo: repo ?? undefined, inline })
-  )
   try {
     port.restore(JSON.parse(io.readTextFileSync(state)))
   } catch { /* first run */ }
@@ -135,7 +130,7 @@ export let open = async (url: string, opts: {
     })
     return h(
       Ux,
-      { host: { ...ux, Float: undefined, markup: undefined } },
+      { host: { ...ux, Float: undefined } },
       h(App, {}),
     )
   }
@@ -152,13 +147,6 @@ export let open = async (url: string, opts: {
         Icon: { glyph: '◇' },
         'lucide-menu': { glyph: '≡' },
         'lucide-ellipsis-vertical': { glyph: '⋮' },
-        Md_B: { bold: true },
-        Md_I: { italic: true },
-        Md_S: { strike: true },
-        Md_Code: { fg: c.text, bg: c.card },
-        Md_H: { bold: true, fg: c.heading },
-        Md_Q: { fg: c.muted },
-        Md_Fence: { fg: c.dim },
         Entry_Speaker: { fg: c.dim, bold: true, block: true },
         Dependency_Gist: { fg: c.muted },
         // Debug as it painted in the terminal before this door: its rows'

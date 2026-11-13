@@ -29,7 +29,21 @@ let children = (v: VNode) =>
   (Array.isArray(v.props.children) ? v.props.children : [v.props.children])
     .filter((x) => x !== undefined && x !== false) as VNode[]
 
-let text = (v: VNode): ComponentChildren => v.props.children
+// The words a node reads as, its components drawn.
+let words = (c: ComponentChildren): string =>
+  c == null || typeof c == 'boolean'
+    ? ''
+    : typeof c != 'object'
+    ? String(c)
+    : Array.isArray(c)
+    ? c.map(words).join('')
+    : typeof (c as VNode).type == 'function'
+    ? words(((c as VNode).type as (p: unknown) => ComponentChildren)(
+      (c as VNode).props,
+    ))
+    : words((c as VNode<{ children?: ComponentChildren }>).props.children)
+
+let text = (v: VNode): string => words(v.props.children)
 
 test('memory owns its list tile', () => {
   assertEquals(resolve(memory, 'List.Tile').Render, MemoryTile)

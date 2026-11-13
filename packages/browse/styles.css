@@ -1787,7 +1787,7 @@ pre.Md {
   white-space: pre;
 }
 
-/* A graph id in rendered prose (md.ts data-ref anchors): said in the
+/* A graph id in rendered prose (@yaks/markdown data-ref anchors): said in the
    link blue, monospaced like the Id chip, underlined only under the
    pointer — a reference, not a shout. */
 a[data-ref] {

@@ -56,15 +56,31 @@ export let parse = (
 export let parseInline = (source: string): Token[] =>
   lexer.Lexer.lexInline(source, lexer.defaults)
 
-/** The entity ids a document names, in reading order: the same reading that
- * decides what becomes a link, so code stays literal and a link written to an
- * id counts as the id. */
-export let refs = (tokens: Token[]): string[] => {
-  let out: string[] = []
+/** Something a document points at: an entity, by the id it was written as,
+ * or an address. */
+export type Mention =
+  | { kind: 'entity'; id: string }
+  | { kind: 'link'; href: string }
+
+/** What a document points at, in reading order, read the way it is drawn: an
+ * id written bare, a link written to an id, and a hex word quoted in code
+ * (which the host may know as a commit) are entities; any other link or image
+ * is its address, unless the renderer would refuse it or it carries a quote
+ * or a backslash, the debris of prose around a bare URL. Code keeps its ids
+ * literal. */
+export let mentions = (tokens: Token[]): Mention[] => {
+  let out: Mention[] = []
   lexer.walkTokens(tokens, (t) => {
-    if (t.type == 'ref') out.push(String((t as Tokens.Generic).id))
-    else if (t.type == 'link' && named((t as Tokens.Link).href)) {
-      out.push((t as Tokens.Link).href)
+    if (t.type == 'ref') {
+      out.push({ kind: 'entity', id: String((t as Tokens.Generic).id) })
+    } else if (t.type == 'codespan' && HEX.test((t as Tokens.Codespan).text)) {
+      out.push({ kind: 'entity', id: (t as Tokens.Codespan).text })
+    } else if (t.type == 'link' || t.type == 'image') {
+      let href = (t as Tokens.Link).href.trim()
+      if (named(href)) out.push({ kind: 'entity', id: href })
+      else if (href && !/["'\\]/.test(href) && safeHref(href) != null) {
+        out.push({ kind: 'link', href })
+      }
     }
   })
   return out
@@ -162,6 +178,9 @@ let bodyClass = (tag: string) =>
 export type Options = {
   refs?: Refs
   code?: (text: string, language?: string) => Run[]
+  /** Links, images and ids drawn as their words, for a line that is itself
+   * the thing pressed, such as a title. */
+  flat?: boolean
 }
 
 /** A run of code text and the classes it is coloured with. */
@@ -175,13 +194,13 @@ export type Run = { text: string; classes: string[] }
 export let blocks = <Node>(
   tokens: Token[],
   host: H<Node>,
-  { refs, code }: Options = {},
+  { refs, code, flat }: Options = {},
 ): Child<Node>[] => {
   let name = slugs()
   // An id the host can open is an anchor carrying the id, so a host can give
   // it its own click; one it cannot open is the words it was written as.
   let ref = (id: string, ...words: Child<Node>[]): Child<Node>[] => {
-    let href = refs?.(id)
+    let href = flat ? undefined : refs?.(id)
     let link = href == null ? undefined : safeHref(href)
     return link == null ? words : [
       element(
@@ -294,6 +313,7 @@ export let blocks = <Node>(
       case 'link': {
         let v = t as Tokens.Link
         if (named(v.href)) return ref(v.href, ...children(v.tokens))
+        if (flat) return children(v.tokens)
         return [
           element(
             'a',
@@ -304,6 +324,7 @@ export let blocks = <Node>(
       }
       case 'image': {
         let v = t as Tokens.Image
+        if (flat) return [v.text]
         return [
           element(
             'a',

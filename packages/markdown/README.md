@@ -50,8 +50,10 @@ host says where each leads through `Refs`, `(id) => href | undefined`, passed as
 An id the host can open is an `a.Body_Ref` carrying `data-ref`; one it cannot
 open stays its words, and with no host every id is words. A code span holding a
 hex word (`` `1a2b3c4` ``) is asked about too, the way a commit is quoted. Code
-stays literal. `refs(tokens)` lists the ids a document names. The same options
-take `code(text, language)`, which colours a fenced block as runs of
+stays literal. `mentions(tokens)` lists what a document points at, entities and
+addresses, read as it is drawn. `flat` draws links, images and ids as words, for
+a title (`MarkdownInline` takes it too). The same options take
+`code(text, language)`, which colours a fenced block as runs of
 `{ text, classes }`; without it code is plain.
 
 Run `deno task test packages/markdown` from the repository root for parser,

@@ -4,7 +4,6 @@ import { composition, sheet as dress } from '@yaks/ui'
 let sheet = {
   ...dress(composition),
   Entry_Speaker: { block: true },
-  Md_B: { bold: true },
 }
 export let pane = (root: TElement) => ({
   lines: lay(root, {}, 120, null, { sheet, metrics: {}, spaced: true }),

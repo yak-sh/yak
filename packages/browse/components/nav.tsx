@@ -168,9 +168,8 @@ let openDemoted = demoted((href) =>
 )
 let navigateDemoted = demoted((href) => follow(href))
 
-// Markdown-rendered ids (md.ts data-ref anchors) come from innerHTML, so
-// no component owns their clicks — one delegated listener gives every
-// T-123 in any body the same in-app open as an Id chip. The id resolves
+// Ids in prose are data-ref anchors @yaks/markdown draws, so no component
+// owns their clicks: one delegated listener gives every T-123 in any body the same in-app open as an Id chip. The id resolves
 // against the live cache at click time; a ref the cache can't name (an
 // unloaded or dead entity) falls through to its href, the honest 404.
 let openRef = (ev: MouseEvent) => {

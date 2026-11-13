@@ -42,7 +42,7 @@ import { and, present } from '@yaks/query'
 import { type Ent, idOf, kindOf, statusOf, vocab } from '../types.ts'
 import { entityPath } from '../url.ts'
 import { archetypeTables, rememberArchetype } from '../live_archetypes.ts'
-import { mdInline } from '../md.ts'
+import { markup } from './Markdown.tsx'
 import { Dot } from './Dot.tsx'
 import { ago } from './Stamp.tsx'
 import { fields, front } from './fields.tsx'
@@ -301,7 +301,7 @@ export let ux: Host = {
   get fields() {
     return fields
   },
-  markup: mdInline,
+  markup: (text) => markup(text, null, true),
   wears: (comp, prop, v) =>
     comp == 'task' && prop == 'status' ? h(Dot, { status: v }) : null,
   Float,

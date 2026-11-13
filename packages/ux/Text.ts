@@ -130,6 +130,5 @@ export let Text = (
     onInput: (ev: InputEvent) =>
       edit.type((ev.currentTarget as HTMLElement).textContent ?? ''),
     onBlur: (ev: FocusEvent) => finish(ev.currentTarget as HTMLElement),
-    ...md ? { dangerouslySetInnerHTML: { __html: md(value) } } : {},
-  }, md ? null : value)
+  }, md && !open ? md(value) : value)
 }

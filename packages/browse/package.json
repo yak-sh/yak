@@ -33,6 +33,7 @@
     "@yaks/inspect": "0.2.30",
     "@yaks/kernel": "0.2.28",
     "@yaks/key": "0.2.24",
+    "@yaks/markdown": "0.2.30",
     "@yaks/match": "0.2.30",
     "@yaks/memory": "0.2.23",
     "@yaks/names": "0.2.23",
@@ -56,7 +57,6 @@
     "highlight.js": "11.11.1",
     "linkedom": "^0.18.12",
     "lucide": "1.31.0",
-    "marked": "18.0.6",
     "preact": "10.29.7"
   },
   "devDependencies": {

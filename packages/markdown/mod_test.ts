@@ -8,8 +8,8 @@ import {
   Host,
   Markdown,
   MarkdownInline,
+  mentions,
   parse,
-  refs,
   render,
   safeHref,
 } from './mod.ts'
@@ -142,11 +142,43 @@ test('an entity id in prose links where the host can open it', () => {
   assertEquals(seen('T-1 and [it](T-2)', {}), 'T-1 and it')
 })
 
-test('the ids a document names are read the way it links them', () => {
+test('what a document points at is read the way it is drawn', () => {
+  let entity = (id: string) => ({ kind: 'entity', id })
+  let link = (href: string) => ({ kind: 'link', href })
   assertEquals(
-    refs(parse('T-1, `T-2`, [plan](D-3), [web](https://x/T-4) and #abcdef')),
-    ['T-1', 'D-3', '#abcdef'],
+    mentions(parse(
+      'T-1, `T-2`, [plan](D-3), [web](https://x/T-4), `83f7b74`, #abcdef ' +
+        '![pic](/p.png) [bad](javascript:x) https://x.test/"quote ' +
+        'https://x.test/\\escape https://x.test/clean',
+    )),
+    [
+      entity('T-1'),
+      entity('D-3'),
+      link('https://x/T-4'),
+      entity('83f7b74'),
+      entity('#abcdef'),
+      link('/p.png'),
+      link('https://x.test/clean'),
+    ],
   )
+})
+
+test('a flat line draws its links, images and ids as their words', () => {
+  let ui = mount(
+    h(Host.Provider, { value: { refs: opens } }, [
+      h(MarkdownInline, {
+        source: '**Go** to [the site](https://x.test), T-1, ![a map](/m.png)',
+        flat: true,
+      }),
+    ]),
+  )
+  try {
+    assertEquals(ui.root.querySelector('a'), null)
+    assertEquals(ui.root.textContent, 'Go to the site, T-1, a map')
+    assertEquals(ui.root.querySelector('strong')?.textContent, 'Go')
+  } finally {
+    ui.free()
+  }
 })
 
 test('a host colours code as runs of classed text', () => {

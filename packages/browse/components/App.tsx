@@ -52,6 +52,7 @@ import { SubscriptionFailure } from './SubscriptionFailure.tsx'
 import { Configuration } from './Configuration.tsx'
 import { New } from './New.tsx'
 import { Peek } from './Peek.tsx'
+import { MarkdownHost } from './Markdown.tsx'
 import { Fault } from './Fault.tsx'
 
 tips() // mount the one delegated [data-tip] tooltip (idempotent)
@@ -385,45 +386,47 @@ export let App = () => {
     }
   }, [])
   return (
-    <Shell
-      elRef={shell}
-      mod={sidebarOpen() && 'open'}
-      onPointerDown={() => {
-        menu.value = null
-        run.value = null
-      }}
-    >
-      <Fault place='Navigation'>
-        <Navigation />
-      </Fault>
-      <Shell.Shade
-        type='button'
-        aria-label='Close navigation'
-        onClick={() => openSidebar(false)}
-      />
-      <Shell.Main>
-        <Fault key={route.value} place='Page'>
-          <Page at={route.value} />
+    <MarkdownHost>
+      <Shell
+        elRef={shell}
+        mod={sidebarOpen() && 'open'}
+        onPointerDown={() => {
+          menu.value = null
+          run.value = null
+        }}
+      >
+        <Fault place='Navigation'>
+          <Navigation />
         </Fault>
-        <Fault place='Status'>
-          <Status />
+        <Shell.Shade
+          type='button'
+          aria-label='Close navigation'
+          onClick={() => openSidebar(false)}
+        />
+        <Shell.Main>
+          <Fault key={route.value} place='Page'>
+            <Page at={route.value} />
+          </Fault>
+          <Fault place='Status'>
+            <Status />
+          </Fault>
+        </Shell.Main>
+        <Fault place='Peek'>
+          <Peek />
         </Fault>
-      </Shell.Main>
-      <Fault place='Peek'>
-        <Peek />
-      </Fault>
-      <Fault place='Menu'>
-        <Menu />
-      </Fault>
-      <Fault place='Run'>
-        <Run />
-      </Fault>
-      <Fault place='Search'>
-        <Search open={(eid) => navigate(entityPath(idOf(ent(eid))))} />
-      </Fault>
-      <Fault place='Keybindings'>
-        <Keybindings />
-      </Fault>
-    </Shell>
+        <Fault place='Menu'>
+          <Menu />
+        </Fault>
+        <Fault place='Run'>
+          <Run />
+        </Fault>
+        <Fault place='Search'>
+          <Search open={(eid) => navigate(entityPath(idOf(ent(eid))))} />
+        </Fault>
+        <Fault place='Keybindings'>
+          <Keybindings />
+        </Fault>
+      </Shell>
+    </MarkdownHost>
   )
 }

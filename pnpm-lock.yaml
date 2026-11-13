@@ -737,6 +737,9 @@ importers:
       '@yaks/key':
         specifier: 0.2.24
         version: link:../key
+      '@yaks/markdown':
+        specifier: 0.2.30
+        version: link:../markdown
       '@yaks/match':
         specifier: 0.2.30
         version: link:../match
@@ -806,9 +809,6 @@ importers:
       lucide:
         specifier: 1.31.0
         version: 1.31.0
-      marked:
-        specifier: 18.0.6
-        version: 18.0.6
       preact:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)

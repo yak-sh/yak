@@ -1,6 +1,7 @@
 import type {} from 'highlight.js'
-// Code highlighting is one tokenizer with two faces: safe HTML for marked and
-// plain segments for the terminal. Highlight.js emits only escaped text and
+// Code highlighting is one tokenizer with two faces: safe HTML for a raw
+// source view and classed runs for Markdown's code, in the browser and the
+// terminal alike. Highlight.js emits only escaped text and
 // spans; parsing that small vocabulary keeps the TUI independent of a DOM.
 import hljs from 'highlight.js/lib/core'
 import xml from 'highlight.js/lib/languages/xml'

@@ -72,7 +72,9 @@ export let Markdown = (
 
 /** A line of Markdown in the line it stands in, such as a label in a button:
  * its inline markup, in a `span`. Its ids stay words, since the line it
- * stands in is usually itself the thing pressed. */
+ * stands in is usually itself the thing pressed; `flat` makes its links and
+ * images words too, for a line that is itself a link, such as a title. */
 export let MarkdownInline = (
-  { source }: { source: string },
-): VNode => h('span', null, ...blocks(parseInline(source), h as H<VNode>))
+  { source, flat }: { source: string; flat?: boolean },
+): VNode =>
+  h('span', null, ...blocks(parseInline(source), h as H<VNode>, { flat }))

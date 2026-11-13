@@ -80,6 +80,8 @@ export let sheet = (c: Colors): Sheet => ({
   Body: { fg: c.text, wrap: true, gap: true },
   'Body-short': { fg: c.muted },
   'Body-source': { fg: c.text },
+  Body_Link: { fg: c.link, underline: true },
+  Body_Ref: { fg: c.link, underline: false },
 })
 
 /** A body of two paragraphs and a quote, and a short one. */

@@ -230,7 +230,9 @@ test('Escape puts a value back and emits nothing', async () => {
 })
 
 test('inline markdown shows at rest and its source is typed over', async () => {
-  using p = page({ markup: (t) => t.replace(/`(.*)`/, '<code>$1</code>') })
+  using p = page({
+    markup: (t) => t.split('`').map((w, i) => i % 2 ? h('code', null, w) : w),
+  })
   let e = { ...task(), doc: { title: 'a `map`' } }
   p.draw(h(Edit.Text, { e, comp: 'doc', prop: 'title', inline: true }))
   assertEquals(p.$('.Edit').innerHTML, 'a <code>map</code>')

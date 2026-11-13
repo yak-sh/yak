@@ -1,20 +1,17 @@
 /** @jsxImportSource preact */
 import { domainBundle } from '../domain-host.tsx'
 import '../domain-host.tsx'
-// A graph-native Session's durable bodies must PAINT in the terminal. The fake
-// DOM drops the shared Markdown door's dangerouslySetInnerHTML, so without the
-// terminal painter an agent's say body renders blank — the ordered rows show,
-// the words don't. This mounts the shared entry renderer through the fake DOM
-// (the very seam the web and TUI share) and asserts the bodies paint, while the
-// control-char boundary still neutralizes anything a body tries to speak.
+// A graph-native Session's durable bodies must PAINT in the terminal: Markdown
+// is drawn as nodes the fake DOM holds, the same ones the web holds. This
+// mounts the shared entry renderer through the fake DOM and asserts the bodies
+// paint, while the control-char boundary still neutralizes anything a body
+// tries to speak.
 import { test } from '@yaks/testing'
 import '../testing.ts' // learns the vocabulary
 import './doc.ts' // installs the fake document — before anything renders
 import { render } from 'preact'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { ansi, TElement } from '@yaks/tui'
-import { Md } from './md.tsx'
-import { onMarkdown } from '../components/Markdown.tsx'
 // Entity.tsx before Entry.tsx: the two form the registry's render cycle, and
 // entering it from Entity's side lets Entry finish initializing first (the same
 // order Session_test.tsx relies on).
@@ -23,12 +20,6 @@ import { EntryBody, type EntryLine } from '../components/views/Entry.tsx'
 import { pane } from './testing.ts'
 import { Branches } from '@yaks/kernel/Comments'
 import { cache, ent } from '../live.ts'
-
-// The same injection tui/main.tsx makes at boot: the one markdown door paints
-// through Md instead of the HTML the fake DOM can't honor.
-onMarkdown((text, repo, inline) => (
-  <Md text={text} repo={repo ?? undefined} inline={inline} />
-))
 
 // The whole tree as the terminal would receive it — every line, status
 // included, so a body sitting on the last line is never mistaken for chrome.

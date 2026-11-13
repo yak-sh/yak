@@ -94,8 +94,8 @@ export type Host = {
   /** the query fields (@yaks/filter) a saved query is typed in; without
    * them a query is typed as text */
   fields?: { Filter: FunctionComponent<FieldProps> }
-  /** inline markdown as HTML: a value shown `inline` at rest */
-  markup?: (text: string) => string
+  /** inline markdown, drawn: a value shown `inline` at rest */
+  markup?: (text: string) => ComponentChildren
   /** what a choice wears beside its word: a status's dot */
   wears?: (comp: string, prop: string, value: string) => ComponentChildren
   /** where a popout floats; without it, in the flow */

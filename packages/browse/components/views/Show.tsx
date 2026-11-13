@@ -283,9 +283,8 @@ export let Mail = ({ e }: { e: Ent }) => {
 
 // ---- the sections ----
 
-// The body is markdown: rendered as HTML (md.ts, which is where the
-// text stops being able to speak HTML — a body can come from anyone who
-// mails the fleet), double-click opens its Edit, which swaps in the raw
+// The body is markdown, drawn by @yaks/markdown, where markup a body wrote
+// stays words (a body can come from anyone who mails the fleet); double-click opens its Edit, which swaps in the raw
 // source, and the Edit closing on the blur that commits swaps the
 // rendered view back. An empty body keeps a line of height to give the
 // double-click somewhere to land.
