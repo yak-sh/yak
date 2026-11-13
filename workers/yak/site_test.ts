@@ -548,7 +548,7 @@ let directoryPage = await (await integrationsPage([
     hosts: ['api.esv.org'],
     instructions: 'Sign up at [api.esv.org](https://api.esv.org).',
     owner: 'ada',
-    listed: '2026-10-25T00:00:00.000Z',
+    published: '2026-10-25T00:00:00.000Z',
   },
 ])).text()
 
