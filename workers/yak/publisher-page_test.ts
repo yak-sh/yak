@@ -66,10 +66,14 @@ let held = (at: {
         (at.integrations ?? []).map((i) => ({ hosts: [], ...i })),
       ),
     hosts: () => Promise.resolve(at.hosts ?? []),
-    installCounts: (made: { of: string }[]) =>
-      Promise.resolve(new Map(made.map(({ of }) => [of, 2]))),
-    integrationInstalls: (all: { name: string }[]) =>
-      Promise.resolve(new Map(all.map(({ name }) => [name, 1]))),
+    uptakes: (made: { of: string }[]) =>
+      Promise.resolve(
+        new Map(made.map(({ of }) => [of, { installs: 2, rated: null }])),
+      ),
+    integrationUptakes: (all: { name: string }[]) =>
+      Promise.resolve(
+        new Map(all.map(({ name }) => [name, { installs: 1, rated: null }])),
+      ),
   } as unknown as Directory
 }
 

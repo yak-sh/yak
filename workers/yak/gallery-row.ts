@@ -2,7 +2,7 @@
 // is: what a space's page shows of the gallery, apart from gallery.ts so a page
 // that only serves a space never compiles the gallery's pages and letters
 // (T-148886).
-import type { Shared } from './directory.ts'
+import type { Rated, Shared, Uptake } from './directory.ts'
 import { type Host, url as siteUrl } from '@yaks/platform/host'
 import { h } from 'preact'
 
@@ -23,23 +23,32 @@ export let publisherAt = (slug: string, env: Host = {}) =>
 export let installedBy = (n: number) =>
   `Installed by ${n} other ${n == 1 ? 'space' : 'spaces'}`
 
+/** How the spaces that installed something rate it, as a line (T-160643). */
+/// ratedAs({ stars: 4.5, count: 2 }) -> 'Rated 4.5 of 5 by 2 spaces'
+/// ratedAs({ stars: 4, count: 1 }) -> 'Rated 4 of 5 by 1 space'
+export let ratedAs = ({ stars, count }: Rated) =>
+  `Rated ${Number(stars.toFixed(1))} of 5 by ${count} ${
+    count == 1 ? 'space' : 'spaces'
+  }`
+
 /** What yaks.app says of something shared, wherever it is listed, to a
  * person and to an agent alike (T-160642): when we reviewed it and which
- * version, how many other spaces installed it, and whether we feature it or
- * the space that shares it. Counted and read, never stored. */
-export type Reputation = {
+ * version, how many other spaces installed it and how they rate it
+ * (T-160643), and whether we feature it or the space that shares it. Counted
+ * and read, never stored. */
+export type Reputation = Uptake & {
   reviewed: { at: string; version?: number } | null
-  installs: number
   featured: boolean
 }
 
 export let reputation = (
   shared: Pick<Shared, 'gallery' | 'featured'>,
-  installs: number,
+  { installs, rated }: Uptake,
   publisher?: { featured?: boolean },
 ): Reputation => {
   let g = shared.gallery
   return {
+    rated,
     reviewed: g?.decision == 'approved' && g.listedAt && g.reviewedAt
       ? {
         at: g.reviewedAt,
@@ -53,9 +62,9 @@ export let reputation = (
 
 /** A reputation as the few short phrases a card, a page and a tool's answer
  * all say, in that order. */
-/// reputed({ reviewed: { at: '2026-11-13T10:00:00Z', version: 3 }, installs: 2, featured: true })
-///   -> ['Featured by yaks.app', 'Reviewed by yaks.app on 2026-11-13, version 3', 'Installed by 2 other spaces']
-/// reputed({ reviewed: null, installs: 1, featured: false }) -> ['Installed by 1 other space']
+/// reputed({ reviewed: { at: '2026-11-13T10:00:00Z', version: 3 }, installs: 2, rated: { stars: 5, count: 2 }, featured: true })
+///   -> ['Featured by yaks.app', 'Reviewed by yaks.app on 2026-11-13, version 3', 'Installed by 2 other spaces', 'Rated 5 of 5 by 2 spaces']
+/// reputed({ reviewed: null, installs: 1, rated: null, featured: false }) -> ['Installed by 1 other space']
 export let reputed = (r: Reputation): string[] => [
   ...r.featured ? ['Featured by yaks.app'] : [],
   ...r.reviewed
@@ -66,6 +75,7 @@ export let reputed = (r: Reputation): string[] => [
     ]
     : [],
   installedBy(r.installs),
+  ...r.rated ? [ratedAs(r.rated)] : [],
 ]
 
 /** What yaks.app says of something shared, as a card or a page shows it:

@@ -531,7 +531,7 @@ test('the gallery is a page of this site, drawn rather than filed', async () => 
 // The integration directory (T-132636) is drawn too, from what is listed: a
 // built service someone signs in to, and one a space added, its owner's words
 // drawn as theirs.
-let unrated = { reviewed: null, installs: 0, featured: false }
+let unrated = { reviewed: null, installs: 0, rated: null, featured: false }
 let directoryPage = await (await integrationsPage([
   {
     name: 'openrouter',

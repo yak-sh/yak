@@ -39,6 +39,7 @@ import { type Host as HostEnv, spaceHost } from '@yaks/platform/host'
 import { type Upstream, upstreamOf } from '@yaks/platform/upstream'
 import type { Actor, Bundle, Tx } from '@yaks/graph'
 import { type Listed, listing } from '@yaks/connections/integrations'
+import { integrationEid } from '@yaks/connections/identity'
 import { identityEid, minted } from '@yaks/graph/identity'
 import type { Rec } from './domains.ts'
 import {
@@ -691,6 +692,52 @@ export let installOf = (of: string, space: string): Bundle => ({
   install: { of, space },
 })
 
+/** What the spaces that installed something shared made of it, read and
+ * never stored (T-160642, T-160643): how many installed it, and how they
+ * rate it. */
+export type Uptake = { installs: number; rated: Rated | null }
+/** The mean of each counting space's latest stars, and how many spaces. */
+export type Rated = { stars: number; count: number }
+export let NO_UPTAKE: Uptake = { installs: 0, rated: null }
+
+/** That someone in `space` rated `of` (T-160643): a row of its own each
+ * time, so who rated is its `created.by` and an earlier rating is kept. */
+export let ratingOf = (
+  of: string,
+  space: string,
+  stars: number,
+  why?: string,
+): Bundle => ({
+  entity: { eid: '$rating' },
+  rating: { of, space, stars, ...why ? { why } : {} },
+})
+
+/** Each thing's rating from rating rows: the latest from each space in
+ * `installed` (by the thing's eid), counted once. */
+export let ratedBy = (
+  rows: Row[],
+  installed: Map<string, Set<string>>,
+): Map<string, Rated> => {
+  let latest = new Map<string, Map<string, { at: string; stars: number }>>()
+  for (let r of rows) {
+    let { of, space, stars } = r.rating ?? {}
+    if (!of || !space || typeof stars != 'number') continue
+    let thing = idOf(of), at = idOf(space)
+    if (!installed.get(thing)?.has(at)) continue
+    let by = latest.get(thing) ?? new Map()
+    latest.set(thing, by)
+    let when = r.created?.at ?? ''
+    if ((by.get(at)?.at ?? '') <= when) by.set(at, { at: when, stars })
+  }
+  return new Map([...latest].map(([thing, by]) => {
+    let all = [...by.values()].map((v) => v.stars)
+    return [thing, {
+      stars: all.reduce((a, b) => a + b, 0) / all.length,
+      count: all.length,
+    }]
+  }))
+}
+
 /** A space asked by a walk to it while its eid is still being read, and kept
  * to that eid once known (@yaks/connections `Path`): so a page's own rows are
  * asked beside the read that learns its space (`page`), and travel in its
@@ -766,6 +813,12 @@ export type Row = {
     sandboxed?: string | null
   }
   install?: { of?: Id | null; space?: Id | null }
+  rating?: {
+    of?: Id | null
+    space?: Id | null
+    stars?: number | null
+    why?: string | null
+  }
   gallery?: {
     asked_at?: string | null
     listed_at?: string | null
@@ -2959,18 +3012,26 @@ export let directoryRows = (rows: {
         return space && !space.trashed ? [{ space, skill }] : []
       })
     },
-    // How many spaces installed what `of` names (T-131912), credited to
-    // `maker`, the space that shared it, which is never counted itself: each
-    // space with an `install` row for it, and for an app each space holding a
-    // copy, which also answers for copies made before installs were recorded.
-    // A space counts once, however often it installs or deletes its copy.
-    installs: async (of: string, maker: string): Promise<number> =>
-      (await self.installCounts([{ of, maker }])).get(of) ?? 0,
-    // The same for many at once, in one read: each `of`'s count by its eid,
-    // as a listing shows them (T-160642).
-    installCounts: async (
+    // What the spaces that installed `of` made of it, credited to `maker`,
+    // the space that shared it ({@link Uptake}).
+    uptake: async (of: string, maker: string): Promise<Uptake> =>
+      (await self.uptakes([{ of, maker }])).get(of) ?? NO_UPTAKE,
+    // The same for many at once: each `of`'s uptake by its eid, as a listing
+    // shows them (T-160642).
+    uptakes: async (made: { of: string; maker: string }[]) =>
+      self.uptaken(
+        await self.installers(made),
+        (of) => of,
+        made.map((m) => m.of),
+      ),
+    // The spaces that installed each `of`, by its eid, never its maker's own
+    // (T-131912): those with an `install` row for it, and for an app those
+    // holding a copy, which also answers for copies made before installs
+    // were recorded. A space counts once, however often it installs or
+    // deletes its copy.
+    installers: async (
       made: { of: string; maker: string }[],
-    ): Promise<Map<string, number>> => {
+    ): Promise<Map<string, Set<string>>> => {
       let ofs = [...new Set(made.map((m) => m.of).filter((of) => EID.test(of)))]
       let spaces = new Map(ofs.map((of) => [of, new Set<string>()]))
       if (ofs.length) {
@@ -2985,16 +3046,24 @@ export let directoryRows = (rows: {
           if (of && at) spaces.get(idOf(of))?.add(idOf(at))
         }
       }
-      return new Map(made.map(({ of, maker }) => {
-        let all = spaces.get(of) ?? new Set()
-        return [of, all.size - (all.has(maker) ? 1 : 0)]
-      }))
+      for (let { of, maker } of made) spaces.get(of)?.delete(maker)
+      return spaces
     },
-    // How many spaces other than its owner's hold a connection through each
-    // integration named (T-160642): an integration's installs.
-    integrationInstalls: async (
+    // The uptake of each integration named (T-160642), by its name.
+    integrationUptakes: async (
       all: { name: string; owner?: string | null }[],
-    ): Promise<Map<string, number>> => {
+    ) =>
+      self.uptaken(
+        await self.integrationInstallers(all),
+        integrationEid,
+        all.map((i) => i.name),
+      ),
+    // The spaces other than its owner's that hold a connection through each
+    // integration named, by the integration's eid (`integrationEid`): an
+    // integration's installs.
+    integrationInstallers: async (
+      all: { name: string; owner?: string | null }[],
+    ): Promise<Map<string, Set<string>>> => {
       // A name is somebody's words, which a line would have to quote, so only
       // a plain name is asked by; the connections are compared after the read.
       let names = all.map((i) => i.name).filter((n) => /^[\w.-]+$/.test(n))
@@ -3020,12 +3089,49 @@ export let directoryRows = (rows: {
             .map((r) => r.entity.eid)
           : [],
       )
-      return new Map(all.map(({ name, owner }) => {
-        let held = [...spaces.get(name) ?? []]
-          .filter((at) => spaced.has(at) && at != owner)
-        return [name, held.length]
+      return new Map(all.map(({ name, owner }) => [
+        integrationEid(name),
+        new Set([...spaces.get(name) ?? []]
+          .filter((at) => spaced.has(at) && at != owner)),
+      ]))
+    },
+    // Each key's uptake, from the spaces that installed each thing (by its
+    // eid, which `eid` finds from a key) and how they rate it.
+    uptaken: async <K extends string>(
+      installed: Map<string, Set<string>>,
+      eid: (key: K) => string,
+      keys: K[],
+    ): Promise<Map<K, Uptake>> => {
+      let rated = await self.rated(installed)
+      return new Map(keys.map((key) => {
+        let at = eid(key)
+        return [key, {
+          installs: installed.get(at)?.size ?? 0,
+          rated: rated.get(at) ?? null,
+        }]
       }))
     },
+    // How each thing is rated by the spaces that installed it, given those
+    // spaces by its eid (T-160643): the latest `rating` from each counts
+    // once. A rating from any other space is kept, and not counted.
+    rated: async (
+      installed: Map<string, Set<string>>,
+    ): Promise<Map<string, Rated>> => {
+      let ofs = [...installed.keys()].filter((of) => EID.test(of))
+      if (!ofs.length) return new Map()
+      return ratedBy(
+        await query(`.rating.of=${ofs.join(',')}&?created`),
+        installed,
+      )
+    },
+    // That someone in `space` rated `of` ({@link ratingOf}), as them.
+    rate: (
+      of: string,
+      space: string,
+      stars: number,
+      why: string | undefined,
+      headers = {},
+    ) => self.stamp({ entities: [ratingOf(of, space, stars, why)] }, headers),
     // Record that `space` installed `of` ({@link installOf}).
     install: (of: string, space: string, headers = {}) =>
       self.stamp({ entities: [installOf(of, space)] }, headers),

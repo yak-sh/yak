@@ -23,7 +23,13 @@
 // a link to its source and holds none of its text. Either is reviewed before
 // it is listed.
 import type { Actor } from '@yaks/graph'
-import { type SkillOffer, type Space, stamp } from './directory.ts'
+import {
+  NO_UPTAKE,
+  type SkillOffer,
+  type Space,
+  stamp,
+  type Uptake,
+} from './directory.ts'
 import {
   credit,
   hostable,
@@ -291,11 +297,11 @@ export let changes = (was: SkillText, now: SkillText, most = 12): string[] => {
   return said
 }
 
-/** One skill offer, as `app_published` lists it, with how many other spaces
- * installed it. */
+/** One skill offer, as `app_published` lists it, with what the spaces that
+ * installed it made of it. */
 export let line = (
   { space, skill }: { space: Space; skill: SkillOffer },
-  installs = 0,
+  uptake: Uptake = NO_UPTAKE,
 ) =>
   `- ${skill.published.name} v${skill.published.version} — skill ` +
   `${skill.title}${
@@ -307,7 +313,7 @@ export let line = (
       ? 'a link: read it at its source'
       : `installs as ${skill.title}`
   }, published ${skill.published.at.slice(0, 10)}; ${
-    reputed(reputation(skill, installs, space)).join('; ')
+    reputed(reputation(skill, uptake, space)).join('; ')
   })`
 
 // A skill's instructions as an offer holds them: its text and the notice a
@@ -329,8 +335,11 @@ let instructions = (skill: SkillOffer) =>
         : '')
 
 /** One skill offer in full, for whoever reviews or installs it. */
-export let full = (at: { space: Space; skill: SkillOffer }, installs = 0) =>
-  `${line(at, installs)}\n\n${
+export let full = (
+  at: { space: Space; skill: SkillOffer },
+  uptake: Uptake = NO_UPTAKE,
+) =>
+  `${line(at, uptake)}\n\n${
     standing(at.skill) == 'listed' ? '' : 'awaiting review\n\n'
   }` +
   `description: ${at.skill.description}\n` +
@@ -524,7 +533,7 @@ export let installed = async (
   let said = reputed(
     reputation(
       offer,
-      await ctx.dir.installs(offer.eid, offer.space),
+      await ctx.dir.uptake(offer.eid, offer.space),
       await ctx.dir.at(offer.space) ?? undefined,
     ),
   )
@@ -678,10 +687,10 @@ export let listing = async (ctx: Ctx, words: string[]): Promise<string[]> => {
   let all = await admin(ctx)
   let shown = (await ctx.dir.skillOffers())
     .filter(({ skill }) => all || standing(skill) == 'listed')
-  let installs = await ctx.dir.installCounts(
+  let uptakes = await ctx.dir.uptakes(
     shown.map(({ skill }) => ({ of: skill.eid, maker: skill.space })),
   )
-  return shown.map((at) => line(at, installs.get(at.skill.eid) ?? 0))
+  return shown.map((at) => line(at, uptakes.get(at.skill.eid) ?? NO_UPTAKE))
     .filter((l) => words.every((w) => l.toLowerCase().includes(w)))
 }
 
@@ -689,5 +698,5 @@ export let listing = async (ctx: Ctx, words: string[]): Promise<string[]> => {
 export let reading = async (ctx: Ctx, name: string) => {
   let at = await ctx.dir.skillOffered({ name })
   if (!at || (standing(at.skill) != 'listed' && !await admin(ctx))) return null
-  return full(at, await ctx.dir.installs(at.skill.eid, at.skill.space))
+  return full(at, await ctx.dir.uptake(at.skill.eid, at.skill.space))
 }

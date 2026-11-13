@@ -24,8 +24,10 @@ let visit = async (
 ) => {
   let dir = {
     offers: () => Promise.resolve(offers),
-    installCounts: (made: { of: string }[]) =>
-      Promise.resolve(new Map(made.map(({ of }) => [of, 2]))),
+    uptakes: (made: { of: string }[]) =>
+      Promise.resolve(
+        new Map(made.map(({ of }) => [of, { installs: 2, rated: null }])),
+      ),
   } as unknown as Directory
   let res = await answer(
     new Request(`https://yaks.app${path}`, { method }),

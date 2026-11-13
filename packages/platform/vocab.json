@@ -283,6 +283,36 @@
       },
       "description": "a space's install of something another space shared, credited to that space: one a space, however often it installs again or deletes its copy"
     },
+    "rating": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "of": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "index": true,
+          "description": "what was rated: a shared app, skill or integration"
+        },
+        "space": {
+          "type": "string",
+          "ref": "space",
+          "death": "cascade",
+          "description": "the space it was rated for, counted while that space has installed it"
+        },
+        "stars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "description": "one to five"
+        },
+        "why": {
+          "type": "string",
+          "description": "the rater's own words, if any"
+        }
+      },
+      "description": "a person's rating of something their space installed; who rated is its created.by, and each space's latest counts once"
+    },
     "upstream": {
       "component": true,
       "type": "object",

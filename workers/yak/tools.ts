@@ -111,6 +111,7 @@ import {
   mailbox,
   META,
   MODES,
+  NO_UPTAKE,
   type Preview,
   RESERVED,
   type Role,
@@ -785,6 +786,51 @@ let reviewLetter = async (
 // the platform's owner by his address when he asked for this exact act, else
 // the agent's project, and `via` the session. Unsaid, the caller and its
 // credential.
+// What `app_rate` names (T-160643): a published app or skill by its
+// published name, or an integration in the directory, with the spaces that
+// installed it and its reputation as it reads now.
+let ratable = async (ctx: Ctx, args: Args) => {
+  if (args.integration != null) {
+    let name = text(args.integration, 'integration')
+    let i = (await ctx.dir.integrations()).find((i) => i.name == name)
+    if (!i) {
+      throw refuse('missing', `${name} is not in the integration directory`)
+    }
+    return {
+      name,
+      eid: integrationEid(name),
+      installers: () => ctx.dir.integrationInstallers([i]),
+      reputation: async () => ({
+        reviewed: null,
+        ...(await ctx.dir.integrationUptakes([i])).get(name) ?? NO_UPTAKE,
+        featured: !!i.featured,
+      }),
+    }
+  }
+  let name = slug(args.name, 'name')
+  let app = await ctx.dir.offered(name)
+  let skill = app ? null : await ctx.dir.skillOffered({ name })
+  let at = app?.app.published
+    ? { shared: app.app, eid: app.app.eid, maker: app.space }
+    : skill
+    ? { shared: skill.skill, eid: skill.skill.eid, maker: skill.space }
+    : null
+  if (!at) {
+    throw refuse(
+      'missing',
+      `nothing is published as ${name} — app_published lists what is on offer`,
+    )
+  }
+  let { shared: what, eid, maker } = at
+  return {
+    name,
+    eid,
+    installers: () => ctx.dir.installers([{ of: eid, maker: maker.eid }]),
+    reputation: async () =>
+      reputation(what, await ctx.dir.uptake(eid, maker.eid), maker),
+  }
+}
+
 let decider = async (ctx: Ctx, args: Args): Promise<Actor> => {
   let by = args.by == null ? ctx.person : text(args.by, 'by')
   if (by.includes('@')) {
@@ -5966,7 +6012,7 @@ let OURS: Row[] = [
         (s) => ctx.dir.owners(s),
       )
       // What yaks.app says of each, as its page and the gallery say it.
-      let installs = await ctx.dir.installCounts(
+      let uptakes = await ctx.dir.uptakes(
         offers.map(({ space, app }) => ({ of: app.eid, maker: space.eid })),
       )
       let line = ({ space, app }: (typeof offers)[number]) =>
@@ -5976,7 +6022,7 @@ let OURS: Row[] = [
         } (from ${space.slug}/${app.slug}, installs as ${app.slug}, ` +
         `published ${app.published!.at.slice(0, 10)}; ${
           reputed(
-            reputation(app, installs.get(app.eid) ?? 0, space),
+            reputation(app, uptakes.get(app.eid) ?? NO_UPTAKE, space),
           ).join('; ')
         })`
       // Every word said, anywhere in the line the reader is about to see:
@@ -6246,7 +6292,7 @@ let OURS: Row[] = [
             reputed(
               reputation(
                 offer.app,
-                await ctx.dir.installs(offer.app.eid, offer.space.eid),
+                await ctx.dir.uptake(offer.app.eid, offer.space.eid),
                 offer.space,
               ),
             ).join('; ')
@@ -7164,6 +7210,51 @@ let OURS: Row[] = [
         text: `the ${what} ${name} ${
           on ? 'is featured' : 'is no longer featured'
         } on yaks.app`,
+      }
+    },
+  },
+  {
+    name: 'app_rate',
+    idempotent: false,
+    destructive: false,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        name: str('a published app or skill, by its published name'),
+        integration: str('an integration in the directory, by its name'),
+        stars: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 5,
+          description: 'one to five',
+        },
+        why: str("a line or two of the person's own on why, if they gave one"),
+      },
+      required: ['stars'],
+    },
+    run: async (ctx, args) => {
+      let { space, who } = await inSpace(ctx, args, true)
+      let stars = Number(args.stars)
+      if (!Number.isInteger(stars) || stars < 1 || stars > 5) {
+        throw refuse('arguments', 'stars is a whole number from 1 to 5')
+      }
+      let why = args.why == null ? undefined : text(args.why, 'why')
+      if ((args.name == null) == (args.integration == null)) {
+        throw refuse('arguments', 'name one of name or integration to rate')
+      }
+      let rated = await ratable(ctx, args)
+      await ctx.dir.rate(rated.eid, space.eid, stars, why, vouched(who))
+      let installed = (await rated.installers()).get(rated.eid)?.has(space.eid)
+      return {
+        text: `rated ${rated.name} ${stars} of 5 for ${space.slug}` +
+          (installed
+            ? ''
+            : `; kept, and counted once ${space.slug} installs it`) +
+          `. What yaks.app says of it: ${
+            reputed(await rated.reputation()).join('; ')
+          }`,
+        space,
       }
     },
   },

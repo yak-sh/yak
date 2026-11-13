@@ -58,7 +58,7 @@ test('the two stamps distinguish unsubmitted, pending and listed apps', () => {
 test('the listing is the approved offers', async () => {
   let at = (over: Partial<App>) => ({ space: space(), app: app(over) })
   let dir = (offers: { space: Space; app: App }[]) => // deno-lint-ignore no-explicit-any
-  ({ offers: () => Promise.resolve(offers), installCounts: counted() } as any)
+  ({ offers: () => Promise.resolve(offers), uptakes: counted() } as any)
   let all = await listed(dir([
     at({ eid: 'never', gallery: null }),
     at({ eid: 'waiting', gallery: asked }),
@@ -82,7 +82,7 @@ test('a private listing visits its public demo and installs its private source',
   ]
   let dir = {
     offers: () => Promise.resolve(offers),
-    installCounts: counted(),
+    uptakes: counted(),
   } as unknown as Directory
   let shown = await listed(dir)
   assertEquals(shown.length, 1)
@@ -168,7 +168,9 @@ test('a private app the platform features, or whose space it features, shows its
 
 // Installs counted as a directory would: none, unless the test says.
 let counted = (n: Record<string, number> = {}) => (made: { of: string }[]) =>
-  Promise.resolve(new Map(made.map(({ of }) => [of, n[of] ?? 0])))
+  Promise.resolve(
+    new Map(made.map(({ of }) => [of, { installs: n[of] ?? 0, rated: null }])),
+  )
 
 test('a listing says our review, its installs and the featured mark, on its card and to an agent', async () => {
   let reviewed = {
@@ -182,7 +184,7 @@ test('a listing says our review, its installs and the featured mark, on its card
       Promise.resolve([
         { space: space(), app: app({ gallery: reviewed, featured: true }) },
       ]),
-    installCounts: counted({ 'app-eid': 3 }),
+    uptakes: counted({ 'app-eid': 3 }),
   } as unknown as Directory
   let [one] = await listed(dir)
   let lines = [
@@ -196,7 +198,7 @@ test('a listing says our review, its installs and the featured mark, on its card
   assertStringIncludes(said([one], ''), lines.join('; '))
   // A listing nobody reviewed says only what it has.
   let [plain] = await reputing(
-    { installCounts: counted() } as unknown as Directory,
+    { uptakes: counted() } as unknown as Directory,
     [shown()],
   )
   assertEquals(reputed(plain.reputation!), ['Installed by 0 other spaces'])
@@ -296,7 +298,7 @@ test('staging gallery listings, reviews and mail stay on its own host', async ()
   let dir = {
     offers: () =>
       Promise.resolve([{ space: space(), app: app({ gallery: live }) }]),
-    installCounts: counted(),
+    uptakes: counted(),
   } as unknown as Directory
   let all = await listed(dir, env)
   assertEquals(all[0].at, 'https://jeff.yaks.fyi/recipes/')

@@ -303,6 +303,47 @@ test('what yaks.app says of a skill, and its featured mark, shows to a person an
   ) assertStringIncludes(said, line)
 })
 
+test('a rating counts the latest from each space that installed it', async () => {
+  let rate = (ctx: Ctx, space: string, stars: number) =>
+    run(ctx, 'app_rate', { space, name: 'pitch-copy', stars })
+  let rated = async () => [
+    await run(taker, 'app_published', { name: 'pitch-copy' }),
+    (await page('pitch-copy')).html,
+  ]
+  assertStringIncludes(await rate(taker, 'shop', 3), 'Rated 3 of 5 by 1 space')
+  assertStringIncludes(await rate(taker, 'shop', 5), 'Rated 5 of 5 by 1 space')
+  // Its maker's, and a space's that never installed it, are kept and not
+  // counted.
+  assertStringIncludes(await rate(maker, 'kitchen', 1), 'Rated 5 of 5')
+  let stranger = as(crypto.randomUUID())
+  await owned(stranger, 'cafe')
+  assertStringIncludes(
+    await rate(stranger, 'cafe', 1),
+    'kept, and counted once cafe installs it',
+  )
+  for (let said of await rated()) {
+    assertStringIncludes(said, 'Rated 5 of 5 by 1 space')
+  }
+  await run(stranger, 'app_install', { space: 'cafe', name: 'pitch-copy' })
+  for (let said of await rated()) {
+    assertStringIncludes(said, 'Rated 3 of 5 by 2 spaces')
+  }
+  await refused(taker, 'app_rate', {
+    space: 'shop',
+    name: 'pitch-copy',
+    stars: 6,
+  }, 'from 1 to 5')
+  // An integration is installed by holding a connection through it.
+  assertStringIncludes(
+    await run(taker, 'app_rate', {
+      space: 'shop',
+      integration: 'openrouter',
+      stars: 4,
+    }),
+    'counted once shop installs it',
+  )
+})
+
 test('a new version waits for review, and an update names what changed', async () => {
   let [mine] = await storeOf(kitchen).g.read('.skill')
   await storeOf(kitchen).g.apply([{

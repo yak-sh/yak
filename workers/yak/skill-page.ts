@@ -292,11 +292,11 @@ export let answer = async (
     caught(e, { request: 'skill page results', space: found.space.eid })
     return null
   })
-  let installs = await dir.installs(found.skill.eid, found.skill.space)
+  let uptake = await dir.uptake(found.skill.eid, found.skill.space)
   return page(
     found,
     rounds,
     env,
-    reputation(found.skill, installs, found.space),
+    reputation(found.skill, uptake, found.space),
   )
 }

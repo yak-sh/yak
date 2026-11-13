@@ -723,6 +723,11 @@ export let WORDS: Record<string, Words> = {
     'description':
       "Move an installed app to whatever version its publisher offers now. The person's data stays: every row they saved is theirs and is not touched. Only the code is replaced, so anything you wrote into the copy yourself is replaced too. A vocab.json schema that only added properties is applied to their store; one that would retype a property their rows were written under is refused, and nothing moves. A connection the new version uses that the copy did not is asked for, as app_install asks. It reports what changed. To undo: app_rollback, since the update goes out as a version like any other and app_versions lists the one before it. Documentation: https://yaks.app/docs/sharing.",
   },
+  'app_rate': {
+    'title': 'Rate something your space installed',
+    'description':
+      "Rate a published app or skill (by its published name) or an integration in the directory (by its name) one to five stars for a space the person writes in, with why in their own words if they gave it. Ask the person for the stars; never rate on their behalf. Each space's latest rating counts once, and only while the space has installed it (an app or skill) or holds a connection through it (an integration); a rating from a space that has not is kept and counted once it does. The rating shows wherever the thing is listed, beside its review and installs. Rating again replaces the space's earlier rating in the count. Documentation: https://yaks.app/docs/sharing.",
+  },
   'member_add': {
     'title': 'Invite someone',
     'description':

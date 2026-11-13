@@ -13,7 +13,12 @@
 // (domains.ts), or else its own subdomain. The installs are counted when the
 // page is read, never stored, the way each listing counts its own
 // (gallery-row.ts `reputation`).
-import type { Directory, SkillOffer, Space } from './directory.ts'
+import {
+  type Directory,
+  NO_UPTAKE,
+  type SkillOffer,
+  type Space,
+} from './directory.ts'
 import type { Env } from './env.ts'
 import { card, listed, type Shown } from './gallery.ts'
 import {
@@ -72,7 +77,7 @@ export let publishedBy = async (
     ),
     dir.hosts(space),
   ])
-  let counted = await dir.installCounts(
+  let counted = await dir.uptakes(
     skills.map((s) => ({ of: s.skill.eid, maker: space.eid })),
   )
   return {
@@ -80,7 +85,11 @@ export let publishedBy = async (
     apps,
     skills: skills.map(({ skill }) => ({
       skill,
-      reputation: reputation(skill, counted.get(skill.eid) ?? 0, space),
+      reputation: reputation(
+        skill,
+        counted.get(skill.eid) ?? NO_UPTAKE,
+        space,
+      ),
     })),
     integrations,
     domains: hosts

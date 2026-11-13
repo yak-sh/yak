@@ -822,7 +822,7 @@ The complete list of reserved names:
     opened openrouter operator operator_alerts operator_reach order output
     output_of own_number parent pending person persona phone phone_line plan
     preview price product project provider provisional public_file published
-    push_subscription quarantined question questions reads recalled
+    push_subscription quarantined question questions rating reads recalled
     recipient ref referenced refund_failed refund_request refund_retry
     refund_sale refund_sent refusal refusal_report register_writes
     registration release_remake report report_refusals repository

@@ -506,6 +506,12 @@ integration directory (`/integrations`), and in what `app_published`,
 - **Installed by N other spaces**: the spaces that installed a copy, or for an
   integration connected it, other than the one that shares it. Counted when
   read, never stored.
+- **Rated S of 5 by N spaces**: the mean of the latest rating from each of those
+  spaces. A person rates something their space installed with
+  **`app_rate(space, name | integration, stars, why?)`**, one to five stars and
+  their own words if they have any. A rating from a space that has not installed
+  it is kept, and counts once the space installs it. Counted when read, never
+  stored.
 
 ## A publisher's page
 

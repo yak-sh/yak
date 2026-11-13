@@ -25,7 +25,7 @@ import { type Host, url } from '@yaks/platform/host'
 import { managePath } from '@yaks/platform/routes'
 import { drawn, head } from './shell.ts'
 import { drawn as theirs } from './theirs.ts'
-import type { Directory } from './directory.ts'
+import { type Directory, NO_UPTAKE } from './directory.ts'
 import { type Reputation, reputationOf, reputed } from './gallery-row.ts'
 
 /** The page's own words, read by seo.ts for the sitemap and llms.txt. */
@@ -45,15 +45,15 @@ export type Rated = Listed & { reputation: Reputation }
 
 /** Each entry, rated, its installs counted in one read. */
 export let rating = async (
-  dir: Pick<Directory, 'integrationInstalls'>,
+  dir: Pick<Directory, 'integrationUptakes'>,
   all: Listed[],
 ): Promise<Rated[]> => {
-  let n = await dir.integrationInstalls(all)
+  let n = await dir.integrationUptakes(all)
   return all.map((i) => ({
     ...i,
     reputation: {
       reviewed: null,
-      installs: n.get(i.name) ?? 0,
+      ...n.get(i.name) ?? NO_UPTAKE,
       featured: !!i.featured,
     },
   }))

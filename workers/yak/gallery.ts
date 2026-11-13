@@ -61,6 +61,7 @@ import { opened, seal } from './lib/token.ts'
 import {
   type App,
   type Directory,
+  NO_UPTAKE,
   type Shared,
   type Space,
   stamp,
@@ -217,12 +218,12 @@ export let reputing = async (
   dir: Directory,
   all: Shown[],
 ): Promise<Shown[]> => {
-  let n = await dir.installCounts(
+  let n = await dir.uptakes(
     all.map((a) => ({ of: a.app.eid, maker: a.space.eid })),
   )
   return all.map((a) => ({
     ...a,
-    reputation: reputation(a.app, n.get(a.app.eid) ?? 0, a.space),
+    reputation: reputation(a.app, n.get(a.app.eid) ?? NO_UPTAKE, a.space),
   }))
 }
 
