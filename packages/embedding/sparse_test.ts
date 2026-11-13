@@ -13,10 +13,11 @@ import { open } from '@yaks/sqlite/db'
 import { statements } from '@yaks/sqlite'
 import { bury, SPINE, TOMBSTONE } from '../sqlite/testing.ts'
 import { heal } from './coded.ts'
-import { schema, TABLE } from './ddl.ts'
+import { TABLE } from './ddl.ts'
 import { install, pool, prepare } from './native.ts'
 import { nearest } from './near.ts'
 import { pack } from './vector.ts'
+import { unjournaled } from './testing.ts'
 
 let query = Float32Array.of(1, 0)
 let within = render(select({
@@ -27,7 +28,7 @@ let within = render(select({
 let fixture = () => {
   let driver = open(':memory:')
   let db = statements(driver)
-  for (let s of [SPINE, TOMBSTONE, ...schema('shared')]) db.query(s)
+  for (let s of [SPINE, TOMBSTONE, ...unjournaled()]) db.query(s)
   db.atomic(() => {
     for (let id = 1; id <= 800; id++) {
       db.query(insert('entity', { id, eid: `v-${id}` }))

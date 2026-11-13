@@ -1,7 +1,8 @@
 // The copy held in memory answers what reading every vector answers: as it
-// loads, after any write behind its back, and after another driver clears the
-// dirty set it reads. The corpus is ten times what a search re-scores, so the
-// int8 scan decides which vectors reach the float rows.
+// loads, after any write behind its back, after another driver clears the
+// dirty set it reads, and on shared storage through the journal it follows.
+// The corpus is ten times what a search re-scores, so the int8 scan decides
+// which vectors reach the float rows.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
@@ -14,14 +15,16 @@ import {
   render,
   select,
   type Statements,
+  type Stmt,
   table,
   val,
 } from '@yaks/sql'
 import { open } from '@yaks/sqlite/db'
 import { statements } from '@yaks/sqlite'
 import { bury, SPINE, TOMBSTONE } from '../sqlite/testing.ts'
-import { BUILD, DIRTY, schema, TABLE } from './ddl.ts'
-import { absorb, hold, RESCORE } from './held.ts'
+import { BUILD, DIRTY, JOURNAL, schema, TABLE } from './ddl.ts'
+import { absorb, FOLLOW, hold, RESCORE } from './held.ts'
+import { heal } from './coded.ts'
 import { nearest, type NearOpts } from './near.ts'
 import { pack, unit, unpack } from './vector.ts'
 
@@ -40,15 +43,16 @@ let centres = Array.from(
   { length: 12 },
   () => Float32Array.from({ length: DIM }, () => next() - 0.5),
 )
-let point = (i: number) =>
-  unit(centres[i % 12].map((x) => x + (next() - 0.5) * 0.6))
+let point = (i: number, draw = next) =>
+  unit(centres[i % 12].map((x) => x + (draw() - 0.5) * 0.6))
 
 // Entities `v-<id>`, each with a vector around one of twelve centres, of
 // length 1, 4 or 16: its direction is what ranks.
 let N = 5 * RESCORE
-let corpus = () => {
+let corpus = (ownership: Statements['ownership'] = 'exclusive') => {
   let db = statements(open(':memory:'))
-  for (let s of [SPINE, TOMBSTONE, ...schema()]) db.query(s)
+  let draw = random(5)
+  for (let s of [SPINE, TOMBSTONE, ...schema(ownership)]) db.query(s)
   let ids = Array.from({ length: N }, (_, i) => i + 1)
   db.query(insert('entity', ...ids.map((id) => ({ id, eid: `v-${id}` }))))
   db.query(insert(
@@ -57,7 +61,7 @@ let corpus = () => {
       owner: id,
       model,
       hash: '',
-      vec: pack(point(id).map((x) => x * 4 ** (id % 3))),
+      vec: pack(point(id, draw).map((x) => x * 4 ** (id % 3))),
     })),
   ))
   return db
@@ -84,11 +88,15 @@ let screens = [
 ]
 
 // Every query, under every screen, answered alike by the copy and the rows.
-let alike = (db: Statements, opts: Partial<NearOpts> = {}) => {
+let alike = (
+  db: Statements,
+  opts: Partial<NearOpts> = {},
+  rows = read(db),
+) => {
   for (let q of queries) {
     for (let within of screens) {
       let o = { model, limit: 8, within, ...opts }
-      assertEquals(nearest(db, q, o), nearest(read(db), q, o))
+      assertEquals(nearest(db, q, o), nearest(rows, q, o))
     }
   }
 }
@@ -223,4 +231,87 @@ test('a buried entity, or one moved to another model, is no neighbour', () => {
   assert(!now.includes(first) && !now.includes(second), now.join())
   absorb(db)
   alike(db)
+})
+
+// The corpus on shared storage, coded as the sweep codes it, beside the same
+// vectors read row by row; each write goes to both.
+let filed = () => {
+  let db = corpus('shared')
+  heal(db, N)
+  let held: Statements = { ...db, ownership: 'shared' }
+  let rows = read(corpus())
+  let write = (s: Stmt) => {
+    held.query(s)
+    rows.query(s)
+  }
+  let same = () => alike(held, {}, rows)
+  return { held, write, same }
+}
+let changes = (db: Statements) =>
+  db.query(select({ cols: [col('seq')], from: table(JOURNAL) })).length
+
+test('a copy of shared storage answers what reading every vector answers, through every write', () => {
+  let { held, write, same } = filed()
+  same()
+  assertEquals(hold(held, model)?.size, N)
+  write(insert('entity', { id: N + 1, eid: `v-${N + 1}` }))
+  write(insert(TABLE, { owner: N + 1, model, hash: '', vec: pack(queries[0]) }))
+  write({ t: 'delete', from: TABLE, where: eq(col('owner'), val(12)) })
+  write({
+    t: 'update',
+    table: TABLE,
+    set: { vec: val(pack(queries[3])) },
+    where: eq(col('owner'), val(N)),
+  })
+  same()
+  assertEquals(top(held, queries[0])[0], `v-${N + 1}`)
+  assertEquals(hold(held, model)?.size, N)
+})
+
+test('a copy behind changes the journal no longer keeps loads again', () => {
+  let { held, write, same } = filed()
+  same()
+  write({
+    t: 'update',
+    table: TABLE,
+    set: { vec: val(pack(queries[1])) },
+    where: eq(col('owner'), val(7)),
+  })
+  held.query({ t: 'delete', from: JOURNAL })
+  write({
+    t: 'update',
+    table: TABLE,
+    set: { vec: val(pack(queries[2])) },
+    where: eq(col('owner'), val(9)),
+  })
+  heal(held, N)
+  same()
+  assertEquals(top(held, queries[1])[0], 'v-7')
+})
+
+test("trimming keeps the journal's newest changes, and a copy past them loads again", () => {
+  let { held, write, same } = filed()
+  same()
+  write({
+    t: 'update',
+    table: TABLE,
+    set: { vec: val(pack(queries[1])) },
+    where: eq(col('owner'), val(7)),
+  })
+  held.query(insert(
+    JOURNAL,
+    ...Array.from({ length: FOLLOW }, (_, i) => ({ owner: 1 + i % N })),
+  ))
+  absorb(held)
+  assertEquals(changes(held), FOLLOW)
+  heal(held, N)
+  same()
+  assertEquals(top(held, queries[1])[0], 'v-7')
+})
+
+test('shared storage holds no copy until every vector has its codes', () => {
+  let db: Statements = { ...corpus('shared'), ownership: 'shared' }
+  assertEquals(hold(db, model), null)
+  heal(db, N)
+  assertEquals(hold(db, model)?.size, N)
 })

@@ -1,8 +1,9 @@
 // The vectors held in this process's memory, so a search compares without
-// reading them all: one copy per statement capability, loaded the first time a search asks
-// for it, for a database only this process has open (a Durable Object's, or
-// one in memory; @yaks/sql `Statements.ownership` says which). Shared storage
-// other processes write is ranked by native exact scans (./native.ts).
+// reading them all: one copy per statement capability, loaded the first time a
+// search asks for it, or before where a process answers many (./graph.ts
+// `preload`, which a read worker runs). A database only this process has open
+// (a Durable Object's, or one in memory; @yaks/sql `Statements.ownership` says
+// which) keeps its copy current by a dirty set; shared storage, by a journal.
 //
 // The copy is int8. Each vector is held as one signed byte per coordinate, its
 // coordinates over its own largest in 127 steps, and one float that scales
@@ -17,8 +18,8 @@
 // wherever it is coded, and a copy kept current write by write codes exactly
 // what one loaded afresh would.
 //
-// The table stays the truth, and the copy is the table as of one build. It is
-// kept current by triggers on the table, which note
+// The table stays the truth, and the copy is the table as of one build. An
+// exclusive store's copy is kept current by triggers on the table, which note
 // every vector written or deleted, by anyone, in the same statement as the
 // write (./ddl.ts, the dirty set), and a search codes what the set names from
 // its rows beside the copy. After each sweep pass, the process that ran it
@@ -27,14 +28,28 @@
 // leave a copy behind: a write another driver made, a migration, a rollback
 // are all in the set or in the build number.
 //
+// Shared storage is a file on a box that other processes write too, and its
+// copy loads from the codes kept beside the floats (./coded.ts), a fifth of
+// their bytes, once every vector has them under one model. Triggers journal
+// every vector written, whoever writes it (./ddl.ts `JOURNAL`), and a search
+// first folds in what the journal names past the last change its copy read,
+// coding those vectors from their floats. A copy further behind than
+// {@link FOLLOW} changes, or behind what the sweep trimmed, loads again. So
+// once a copy is held, a search reads only the few vectors it rescores: the
+// native scan it replaces read every code, 7 s of them from disk when the
+// box's page cache had let the file go.
+//
 // Memory is the limit. A vector costs its width in bytes and ~40 bytes beside
 // it (1 KB at 1024 dimensions), and every object in a Worker's isolate shares
 // its 128 MB, so all copies together stay within {@link HELD}: the least
 // recently searched is dropped to make room, and a store whose vectors alone
 // would pass it is not held at all and is read row by row. Today's largest
-// store (24k vectors) holds 25 MB; ten times that would not fit.
+// store (24k vectors) holds 25 MB; ten times that would not fit. Shared
+// storage is never in a Worker, so its copies share {@link SHARED} instead: the
+// box's 314k vectors at 384 dimensions hold 133 MB.
 
 import {
+  among,
   and,
   as,
   at,
@@ -56,14 +71,23 @@ import {
   tally,
   val,
 } from '@yaks/sql'
-import { BUILD, DIRTY, TABLE } from './ddl.ts'
-import { admitted, current } from './native.ts'
+import { BUILD, CODE, DIRTY, JOURNAL, TABLE } from './ddl.ts'
+import { admitted, current, only } from './native.ts'
+import { complete } from './coded.ts'
 import type { Near } from './near.ts'
 import { code, cosine, floats } from './vector.ts'
 
 /** How many bytes of vectors this process holds across every copy: 48 MB of
  * a Worker isolate's 128 MB, which every object in it shares. */
 export let HELD = 48 * 2 ** 20
+
+/** How many bytes of shared storage's vectors this process holds across every
+ * copy: a box's process, which has the memory a Worker's isolate does not. */
+export let SHARED = 512 * 2 ** 20
+
+/** How many changes a copy of shared storage reads on through before it loads
+ * again instead, and how many the sweep keeps when it trims the journal. */
+export let FOLLOW = 4096
 
 /** How many of the scan's best a search reads from their rows and ranks by
  * their exact cosine (more where it asks for more neighbours). */
@@ -80,7 +104,10 @@ let cost = (dim: number) => dim + 4 + 4 + 32
 export type Held = {
   model: string
   dim: number
-  /** the build this copy is current at; -1 once dropped */
+  /** a copy of shared storage, current through the journal */
+  shared: boolean
+  /** the build this copy is current at, or for shared storage the last change
+   * it read; -1 once dropped */
   n: number
   size: number
   ids: Int32Array
@@ -165,19 +192,20 @@ let drop = (h: Held) => {
   })
 }
 
-// Room for `need` more bytes, dropping the least recently searched copies
-// other than `mine`; false when `need` could not fit even then.
+// Room for `need` more bytes, dropping the least recently searched copies of
+// its kind other than `mine`; false when `need` could not fit even then.
 let room = (need: number, mine: Held) => {
-  let held = listed()
+  let held = listed().filter((h) => h.shared == mine.shared)
+  let budget = mine.shared ? SHARED : HELD
   let used = 0
   for (let h of held) used += bytes(h)
   for (let h of held) {
-    if (used + need <= HELD) break
+    if (used + need <= budget) break
     if (h == mine) continue
     used -= bytes(h)
     drop(h)
   }
-  return used + need <= HELD
+  return used + need <= budget
 }
 
 // Room for `cap` vectors, keeping the ones held.
@@ -206,8 +234,22 @@ let lose = (h: Held, owner: number) => {
   h.slot.set(moved, i)
 }
 
-// Hold `owner`'s vector, in the slot it had or a new one; false when there is
-// no room for it.
+// The slot `owner`'s vector is held in, the one it had or a new one; null
+// when there is no room for it.
+let slot = (h: Held, owner: number): number | null => {
+  let i = h.slot.get(owner)
+  if (i != null) return i
+  if (h.size == h.ids.length && !grow(h, h.size + (h.size >> 3) + 64)) {
+    return null
+  }
+  i = h.size++
+  h.slot.set(owner, i)
+  h.ids[i] = owner
+  return i
+}
+
+// Hold `owner`'s vector, coded from its floats; false when there is no room
+// for it.
 let keep = (h: Held, owner: number, bytes: Uint8Array): boolean => {
   if (!h.dim) h.dim = bytes.byteLength / 4
   // A vector of another width is from another space; the model name says
@@ -216,16 +258,26 @@ let keep = (h: Held, owner: number, bytes: Uint8Array): boolean => {
     lose(h, owner)
     return true
   }
-  let i = h.slot.get(owner)
-  if (i == null) {
-    if (h.size == h.ids.length && !grow(h, h.size + (h.size >> 3) + 64)) {
-      return false
-    }
-    i = h.size++
-    h.slot.set(owner, i)
-    h.ids[i] = owner
-  }
+  let i = slot(h, owner)
+  if (i == null) return false
   h.scales[i] = code(floats(bytes), h.codes, i * h.dim)
+  return true
+}
+
+// Hold `owner`'s vector as the codes stored for it (./coded.ts), scaled by
+// their own length: their cosine is the vector's, give or take a step.
+let kept = (h: Held, owner: number, bytes: Uint8Array): boolean => {
+  if (bytes.byteLength != h.dim) {
+    lose(h, owner)
+    return true
+  }
+  let i = slot(h, owner)
+  if (i == null) return false
+  let codes = new Int8Array(bytes.buffer, bytes.byteOffset, h.dim)
+  h.codes.set(codes, i * h.dim)
+  let sum = 0
+  for (let x of codes) sum += x * x
+  h.scales[i] = sum ? 1 / Math.sqrt(sum) : 0
   return true
 }
 
@@ -273,6 +325,7 @@ let load = (db: Statements, model: string): Held | null => {
   let h: Held = {
     model,
     dim: 0,
+    shared: false,
     n: current(db).n,
     size: 0,
     ids: new Int32Array(0),
@@ -304,12 +357,7 @@ let load = (db: Statements, model: string): Held | null => {
       limit: lit(PAGE),
     }))
     for (let r of rows) {
-      if (!keep(h, Number(r.owner), r.vec as Uint8Array)) {
-        drop(h)
-        copies.delete(db)
-        over.add(db)
-        return null
-      }
+      if (!keep(h, Number(r.owner), r.vec as Uint8Array)) return refuse(db, h)
     }
     if (rows.length < PAGE) break
     after = Number(rows[rows.length - 1].owner)
@@ -319,17 +367,144 @@ let load = (db: Statements, model: string): Held | null => {
   return h
 }
 
+// A copy that will not fit: dropped, and `db` never held again.
+let refuse = (db: Statements, h: Held): null => {
+  drop(h)
+  copies.delete(db)
+  over.add(db)
+  return null
+}
+
+// Whether this database journals its vectors, asked again once its schema
+// changes: a file a process of an older schema opened has no journal yet.
+let journals = new WeakMap<Statements, { version: number; has: boolean }>()
+let journaled = (db: Statements): boolean => {
+  let version = db.revision('schema')
+  let had = journals.get(db)
+  if (had?.version == version) return had.has
+  let has = !!db.query(select({
+    cols: [col('name')],
+    from: table('sqlite_master'),
+    where: eq(col('name'), val(JOURNAL)),
+  }))[0]
+  journals.set(db, { version, has })
+  return has
+}
+
+// The last change the journal holds, 0 before the first.
+let newest = (db: Statements): number =>
+  Number(
+    db.query(select({
+      cols: [as(fn('max', col('seq')), 'n')],
+      from: table(JOURNAL),
+    }))[0]?.n ?? 0,
+  )
+
+// Shared storage's vectors under `model`, from their codes: the journal's
+// newest change read first, so whatever is written while the pages are read
+// is a change past it, which the next search folds in. Null where some vector
+// has no codes yet or there are two models' vectors, which the native scan
+// answers until the sweep has coded them.
+let loadCodes = (db: Statements, model: string): Held | null => {
+  if (!complete(db) || only(db) != model) return null
+  let was = copies.get(db)
+  if (was) drop(was)
+  let h: Held = {
+    model,
+    dim: 0,
+    shared: true,
+    n: newest(db),
+    size: 0,
+    ids: new Int32Array(0),
+    scales: new Float32Array(0),
+    codes: new Int8Array(0),
+    slot: new Map(),
+  }
+  touch(h)
+  copies.set(db, h)
+  let [first] = db.query(select({
+    cols: [as(fn('length', col('code')), 'bytes')],
+    from: table(CODE),
+    limit: lit(1),
+  }))
+  h.dim = Number(first?.bytes ?? 0)
+  if (!grow(h, tally(db, CODE))) return refuse(db, h)
+  for (let after = 0;;) {
+    let rows = db.query(select({
+      cols: [col('owner'), col('code')],
+      from: table(CODE),
+      where: gt(col('owner'), val(after)),
+      order: [col('owner')],
+      limit: lit(PAGE),
+    }))
+    for (let r of rows) {
+      if (!kept(h, Number(r.owner), r.code as Uint8Array)) return refuse(db, h)
+    }
+    if (rows.length < PAGE) break
+    after = Number(rows[rows.length - 1].owner)
+  }
+  return h
+}
+
+// A copy of shared storage brought to the journal's newest change: each owner
+// it names as its vector stands now, coded from its floats, or forgotten where
+// it has none under the copy's model. Null where the copy has to load again:
+// more changes than FOLLOW, or a first one past the next number, which says
+// the sweep trimmed changes this copy had not read.
+let follow = (db: Statements, h: Held): Held | null => {
+  let rows = db.query(select({
+    cols: [col('seq'), col('owner')],
+    from: table(JOURNAL),
+    where: gt(col('seq'), val(h.n)),
+    order: [col('seq')],
+    limit: lit(FOLLOW + 1),
+  }))
+  if (!rows.length) return h
+  if (rows.length > FOLLOW || Number(rows[0].seq) != h.n + 1) return null
+  let owners = [...new Set(rows.map((r) => Number(r.owner)))]
+  let now = new Map(
+    db.query(select({
+      cols: [col('owner'), col('model'), col('vec')],
+      from: table(TABLE),
+      where: among(col('owner'), owners.map((o) => val(o))),
+    })).map((r) => [Number(r.owner), r]),
+  )
+  for (let owner of owners) {
+    let r = now.get(owner)
+    if (r?.model != h.model) lose(h, owner)
+    else if (!keep(h, owner, r.vec as Uint8Array)) return refuse(db, h)
+  }
+  h.n = Number(rows[rows.length - 1].seq)
+  return h
+}
+
+// This process's copy of shared storage's vectors under `model`, brought up
+// to date, or loaded where it has none, it is another model's, or it fell
+// too far behind.
+let followed = (db: Statements, model: string): Held | null => {
+  if (!journaled(db)) return null
+  let had = copies.get(db)
+  let h = had?.model == model ? follow(db, had) : null
+  if (over.has(db)) return null
+  return h ?? loadCodes(db, model)
+}
+
 /**
  * This process's copy of `db`'s vectors under `model`, loaded if it has none
- * or its copy is from an older build; null where the vectors are not held:
- * a file other processes may write, or more than {@link HELD} of them.
+ * or its copy is from an older build, and brought up to date; null where the
+ * vectors are not held: more than {@link HELD} of them ({@link SHARED} on
+ * shared storage), or a shared file whose codes or journal are not there yet.
  */
 export let hold = (db: Statements, model: string): Held | null => {
-  if (db.ownership == 'shared' || over.has(db)) return null
-  let had = copies.get(db)
-  let h = had && had.model == model && had.n == current(db).n
-    ? had
-    : load(db, model)
+  if (over.has(db)) return null
+  let h: Held | null
+  if (db.ownership == 'shared') h = followed(db, model)
+  else {
+    let had = copies.get(db)
+    h = had && had.model == model && had.n == current(db).n
+      ? had
+      : load(db, model)
+  }
   if (!h) return null
   touch(h)
   return h
@@ -338,9 +513,11 @@ export let hold = (db: Statements, model: string): Held | null => {
 /**
  * Fold what the dirty set names into this process's copy and clear the set:
  * what a sweep pass wrote, from the process that wrote it (./sweep.ts
- * `drain`). Nothing where the set is not the copies' alone.
+ * `drain`). On shared storage, where each process's copy reads the journal
+ * itself, trim the journal to its newest {@link FOLLOW} changes instead.
  */
 export let absorb = (db: Statements): void => {
+  if (db.ownership == 'shared') return trim(db)
   if (!owned(db)) return
   let h = copies.get(db)
   // Until a search holds a copy, there are no codes to refresh. Settle the
@@ -366,6 +543,15 @@ export let absorb = (db: Statements): void => {
   }
   let n = clear(db)
   if (h.n == now) h.n = n
+}
+
+// The journal past its newest FOLLOW changes deleted: a copy further behind
+// than that loads again.
+let trim = (db: Statements): void => {
+  if (!journaled(db)) return
+  let cut = newest(db) - FOLLOW
+  if (cut <= 0) return
+  db.query({ t: 'delete', from: JOURNAL, where: not(gt(col('seq'), val(cut))) })
 }
 
 // The `m` best of the scored, best first: the highest score, and for equal
@@ -453,7 +639,10 @@ export let ranked = (
   query: Float32Array,
   opts: { limit: number; floor: number; without?: number; within?: Raw },
 ): Near[] => {
-  let fresh = dirty(db, h.model)
+  // A shared copy folded its changes in as it was held.
+  let fresh = h.shared
+    ? new Map<number, Uint8Array | null>()
+    : dirty(db, h.model)
   let all = query.length == h.dim
     ? scores(query, h.codes, h.scales, h.size)
     : new Float64Array(h.size)

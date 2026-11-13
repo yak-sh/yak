@@ -63,6 +63,10 @@ export type GraphFacet = {
   extend?: (host: Host, options: Options) => Extension[]
   /** Search a phrase by meaning through this plugin's own index. */
   meaning?: (host: Host, options: Options) => Meaning
+  /** Read into memory what this plugin's reads would otherwise read from
+   * disk each time, for a process that answers many reads
+   * ({@link Host.preload}): @yaks/embedding's vectors. */
+  preload?: (host: Host, options: Options) => () => void | Promise<void>
   /** The mail senders this plugin lends, by name ({@link Host.senders}): a
    * provider's, built from its options. One name has one sender. */
   senders?: (host: Host, options: Options) => Record<string, Sender>

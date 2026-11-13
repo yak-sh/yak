@@ -1,6 +1,7 @@
-// Cosine ranking over canonical vectors. The native engine selects exact
-// candidates for shared files; exclusive stores can hold int8 copies. Every
-// candidate is scored from its current float vector before the final cut.
+// Cosine ranking over canonical vectors. A copy held in memory (./held.ts)
+// selects the candidates where there is one; the native engine, on a shared
+// file whose copy is not held yet. Every candidate is scored from its current
+// float vector before the final cut.
 //
 // A {@link Screen} is the other half of "nearest": nearest among what. The
 // eight nearest entities of any kind are the wrong eight for `.near=X&.memory`
@@ -150,13 +151,7 @@ export let nearest = (
     from: table('entity'),
     where: eq(col('eid'), val(opts.without)),
   }))[0]?.id
-  let pool = candidates(db, query, {
-    model: opts.model,
-    need: limit + (without == null ? 0 : 1),
-    within: opts.within,
-  }) ?? undefined
-  if (pool && !pool.length) return []
-  let held = pool ? null : hold(db, opts.model)
+  let held = hold(db, opts.model)
   if (held) {
     return ranked(db, held, query, {
       limit,
@@ -165,6 +160,12 @@ export let nearest = (
       within: opts.within,
     })
   }
+  let pool = candidates(db, query, {
+    model: opts.model,
+    need: limit + (without == null ? 0 : 1),
+    within: opts.within,
+  }) ?? undefined
+  if (pool && !pool.length) return []
   let hits = scored(
     query,
     vectorRows(vectors(db, opts.model, opts.within, pool)),

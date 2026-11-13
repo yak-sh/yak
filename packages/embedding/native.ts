@@ -82,10 +82,11 @@ export let installed = (db: Statements): boolean => {
   return found
 }
 
-// One model means one vector width. Mixed spaces use the ordinary reader.
-// Separate aggregates each seek an edge of the model index. Together SQLite
-// scans every model, even when the answer has not changed.
-let only = (db: Statements): string | null => {
+/** The model every vector is under, or null while there are two (or none).
+ * One model means one vector width; mixed spaces use the ordinary reader.
+ * Separate aggregates each seek an edge of the model index; together SQLite
+ * scans every model, even when the answer has not changed. */
+export let only = (db: Statements): string | null => {
   let edge = (f: string) =>
     sub(select({ cols: [fn(f, col('model'))], from: table(TABLE) }))
   let row = db.query(select({

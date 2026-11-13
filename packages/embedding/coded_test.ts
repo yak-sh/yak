@@ -12,11 +12,12 @@ import { install, prepare } from './native.ts'
 import { nearest } from './near.ts'
 import { put } from './sweep.ts'
 import { pack, unit } from './vector.ts'
+import { unjournaled } from './testing.ts'
 
 let dir = Deno.makeTempDirSync({ prefix: 'embedding-coded-' })
 let driver = open(`${dir}/yak.db`), db = statements(driver)
 driver.query({ t: 'pragma', name: 'synchronous', value: 'off' })
-for (let s of [SPINE, TOMBSTONE, ...schema('shared')]) db.query(s)
+for (let s of [SPINE, TOMBSTONE, ...unjournaled()]) db.query(s)
 
 let model = 'coded', DIM = 32
 // A repeatable stream of numbers in [0, 1).

@@ -12,14 +12,20 @@ import { type Comp, type Graph, graph, identityEid } from '@yaks/graph'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { modelDoc } from '@yaks/model'
 import { ram } from '@yaks/ram'
-import { insert, type Statements } from '@yaks/sql'
+import { insert, type Statements, type Stmt } from '@yaks/sql'
 import { BOOKSHOP, entity } from '../sqlite/testing.ts'
 import { fields, schema, sweep } from './mod.ts'
 import { hashEmbedder } from './embedder.ts'
+import { JOURNAL } from './ddl.ts'
 import type { Rows } from './options.ts'
 
 /** Statements over a fresh in-memory database. */
 export let mem = (): Statements => statements(open(':memory:'))
+
+/** Shared storage's vector schema as a process from before the journal made
+ * it: no copy follows it (./held.ts), so a search scans natively. */
+export let unjournaled = (): Stmt[] =>
+  schema('shared').filter((s) => !('name' in s && s.name.startsWith(JOURNAL)))
 
 let doc: VocabDoc = {
   $defs: {

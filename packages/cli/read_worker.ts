@@ -41,6 +41,13 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
           process: false,
           readOnly: true,
         })
+        // A worker answers reads for the server's life, so what its plugins
+        // hold in memory is read now, before its first read waits on the
+        // disk. One that fails is reported, and reads go to the disk as before.
+        activity?.say('preloading what reads hold in memory')
+        await host.preload?.().catch((error) =>
+          host.report?.(error, { tags: { step: 'preload' } })
+        )
         activity?.say('idle; waiting for a read')
         return host
       } finally {

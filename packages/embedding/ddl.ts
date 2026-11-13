@@ -1,7 +1,8 @@
-// Canonical vectors, exclusive-reader cache generations, and the embedding
-// queue. Shared readers scan each vector's int8 codes natively, a fifth of the
-// bytes the floats take, and score the nearest few from their floats; only
-// exclusive stores track changes for their process-local HELD cache.
+// Canonical vectors, the changes copies held in memory follow, and the
+// embedding queue. An exclusive store notes each changed owner in a set its
+// one process clears; shared storage keeps each vector's int8 codes, which a
+// copy loads from (a fifth of the bytes the floats take), and a journal of
+// every vector written, which each process's copy reads on from (./held.ts).
 
 import {
   col,
@@ -40,6 +41,12 @@ export let CODE = 'embedding_code'
  * tables whoever writes them, so asking whether every vector has its codes
  * reads one row rather than counting both tables (./coded.ts). */
 export let UNCODED = 'embedding_uncoded'
+
+/** Every vector written or deleted on shared storage, in the order the writes
+ * committed: each process's copy reads on from the last change it folded in
+ * (./held.ts). Triggers append to it, whoever writes, and the sweep trims all
+ * but the newest. */
+export let JOURNAL = 'embedding_change'
 
 /** The queue's name: one row per entity owed a look, and how many writes have
  * queued it since it was last settled. */
@@ -83,6 +90,26 @@ let stale = (event: 'update' | 'delete'): CreateTrigger => ({
     where: eq(col('owner'), col('owner', 'old')),
   }],
 })
+
+// Each vector written, changed or deleted, journaled in the statement that
+// wrote it.
+let journaled = (['insert', 'update', 'delete'] as const).map((
+  event,
+): CreateTrigger => ({
+  t: 'create trigger',
+  name: `${JOURNAL}_a${event[0]}`,
+  ifNot: true,
+  timing: 'after',
+  event,
+  ...event == 'update' ? { of: ['model', 'vec'] } : {},
+  on: TABLE,
+  body: [{
+    t: 'insert',
+    into: JOURNAL,
+    cols: ['owner'],
+    rows: [[col('owner', event == 'delete' ? 'old' : 'new')]],
+  }],
+}))
 
 /**
  * Heal a store whose vector tables were made while their key was named
@@ -216,6 +243,19 @@ let coded = (): Stmt[] => [
   },
   seed,
   ...uncoded,
+  {
+    // Autoincrement, so a number is never handed out twice: a copy that has
+    // read to change n reads on from n + 1, and a first change past that says
+    // the trim took what it had not read.
+    t: 'create table',
+    name: JOURNAL,
+    ifNot: true,
+    cols: [
+      { name: 'seq', type: 'integer', pk: true, autoincrement: true },
+      { name: 'owner', type: 'integer', notNull: true },
+    ],
+  },
+  ...journaled,
 ]
 
 // An owner's codes, or its vector, stand.

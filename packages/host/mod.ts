@@ -189,6 +189,11 @@ export interface Host {
    * `search: true` and @yaks/fts indexed it — what the tier's `search` tool
    * answers with, and what a transport restating the tier asks for. */
   search?: Search
+  /** Read into memory what the plugins' reads would otherwise read from disk
+   * each time ({@link GraphFacet.preload}). A process that answers many reads
+   * (a read worker) runs it before its first; a command that reads once never
+   * does. Absent where no plugin preloads. */
+  preload?: () => Promise<void>
   /** words ranked by meaning over this graph's vectors, where it keeps them:
    * the index a plugin's graph facet offers (@yaks/embedding), or the one a
    * concrete host lends. Absent where nothing embeds this graph's text. */

@@ -391,13 +391,13 @@ results before reusing the same extension for another query.
 ## The ranking
 
 `nearest()` ranks by cosine similarity over current stored vectors, among the
-entities a screen admits, excluding tombstones immediately. A screen admitting
-at most 5000 entities, or an eighth of the corpus, reads only its admitted int8
-codes on shared storage. Broader local SQLite searches scan the corpus with
-sqlite-vector; an exclusive database can hold int8 vectors in memory (below).
-Candidates are rescored from their current float vectors before the final cut.
-Missing codes or mixed models use the ordinary float reader for a selective
-screen.
+entities a screen admits, excluding tombstones immediately. A copy of the
+vectors held in memory answers where the process holds one (below). Where it
+holds none, a screen admitting at most 5000 entities, or an eighth of the
+corpus, reads only its admitted int8 codes on shared storage, and broader local
+SQLite searches scan the corpus with sqlite-vector. Candidates are rescored from
+their current float vectors before the final cut. Missing codes or mixed models
+use the ordinary float reader for a selective screen.
 
 Supply `semantic(db, space, { rank })` with a `Rank` implementation to use
 another ranking; it receives the same screen.
@@ -440,9 +440,9 @@ exclusive store's held vectors.
 
 ## Held in memory
 
-A database only this process has open (a Durable Object's, or one in memory: the
-driver sets no `file`) keeps its vectors in the process's memory as int8, one
-copy per driver, loaded the first time a search asks for them. Each vector is
+A process keeps a database's vectors in its memory as int8, one copy per driver,
+loaded the first time a search asks for them, or before its first read where it
+answers many (a read worker runs the graph facet's `preload`). Each vector is
 one signed byte per coordinate, its coordinates over its own largest in 127
 steps, and one float scaling them back. A search scans every held vector's
 codes, then tests the best against the graph a few at a time until `RESCORE`
@@ -461,17 +461,30 @@ whenever it is coded. Over 1,000 queries among 1k, 10k and 25k Qwen3-Embedding
 vectors of real texts, the scan alone finds 99.4% of the exact float32 top 8,
 and the re-scored answer finds all of them.
 
-The copy stays exact to that scheme the way the index does. Whatever wrote a
+A database only this process has open (a Durable Object's, or one in memory: the
+driver sets no `file`) keeps its copy current by a dirty set. Whatever wrote a
 vector, the dirty set names it, and a search codes what the set names from its
 rows beside the copy. After each sweep pass, `absorb(db)` folds the set into
 that process's copy, clears it and numbers a new build; a copy that sees a build
 it did not make loads again. The answer is the one a copy loaded afresh gives,
 to the last bit.
 
+Shared storage, the file on a box other processes write too, loads its copy from
+`embedding_code` once every vector has codes under one model, scaling each
+vector's codes by their own length. Triggers append every vector written,
+changed or deleted to `embedding_change`, whoever writes it, and a search first
+folds in the changes past the last one its copy read, coding those vectors from
+their floats. A copy more than `FOLLOW` (4096) changes behind, or behind what
+the sweep trimmed (`absorb` keeps the newest `FOLLOW`), loads again. On the box,
+314k vectors at 384 dimensions load in about 2 s and hold 133 MB; a search over
+them takes 150–180 ms and reads only the rows it rescores, where the native scan
+read every code, 7 s of them from disk once the page cache had let them go.
+
 A vector costs its width in bytes and 40 beside it: 1,064 bytes at 1024
 dimensions, so 24,000 vectors hold 24 MB. Every copy in the process shares
-`HELD` (48 MB of a Worker isolate's 128 MB, which every object in it shares):
-the least recently searched copy is dropped to make room, and a database whose
+`HELD` (48 MB of a Worker isolate's 128 MB, which every object in it shares),
+and copies of shared storage share `SHARED` (512 MB of a box's process): the
+least recently searched copy is dropped to make room, and a database whose
 vectors alone would pass it is not held, and every search reads its vectors.
 
 ## Storage
@@ -512,9 +525,9 @@ not owe an index rebuild.
 The root exports field selection, `Embedder`, `hashEmbedder`, `remote`,
 `batched`, `retrying`, `halving`, `answered`, vector math/packing helpers, the
 schema, sweep operations, native scans (`installNative`, `prepare`, `state`),
-the vectors held in memory (`absorb`, `HELD`, `RESCORE`), `vectorOf`, `nearest`,
-`meaning`, `semantic` and supporting types such as `Rank`. The `Statements`
-capability it runs on is `@yaks/sql`'s.
+the vectors held in memory (`absorb`, `HELD`, `SHARED`, `FOLLOW`, `RESCORE`),
+`vectorOf`, `nearest`, `meaning`, `semantic` and supporting types such as
+`Rank`. The `Statements` capability it runs on is `@yaks/sql`'s.
 
 | Sub-module export         | Purpose                                                                                                                                                                                        |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

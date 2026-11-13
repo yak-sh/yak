@@ -97,7 +97,7 @@ export * from './sweep.ts'
 export * from './outage.ts'
 export * from './owed.ts'
 export * from './near.ts'
-export { absorb, HELD, RESCORE } from './held.ts'
+export { absorb, FOLLOW, HELD, RESCORE, SHARED } from './held.ts'
 export {
   type Build,
   install as installNative,

@@ -29,6 +29,7 @@ import { resolved } from './fields.ts'
 import { chosen, type Lent, type Options, ready, spaceOf } from './options.ts'
 import { type Hit, meaning as search, type MeaningOpts } from './search.ts'
 import { type Host, neighbours } from './neighbours.ts'
+import { hold } from './held.ts'
 
 /** The vector tables, which a writing host adds with the
  * rest of its composed schema. It contributes no rule to `apply()`: nothing a
@@ -125,6 +126,18 @@ export let meaning = (
       )
       : []
   }
+}
+
+/** Hold this graph's vectors in memory before the first search asks for them
+ * (./held.ts), so a process answering many searches reads its copy before it
+ * answers any, not during one. Nothing where no embedder names a space. */
+export let preload = (
+  host: { storage: { statements?: Statements }; embedders?: Lent },
+  options: Options = {},
+): () => void =>
+() => {
+  let model = spaceOf(options.embedder, host.embedders)
+  if (model) hold(statements(host.storage), model)
 }
 
 /** What a direct tool call's answer carries beside the tool's own: for each

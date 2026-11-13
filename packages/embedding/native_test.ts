@@ -113,11 +113,12 @@ let anchor = (db: Statements, id: number) =>
 let names = (db: Statements, q: Float32Array, opts: Partial<NearOpts> = {}) =>
   nearest(db, q, { model, limit: 8, ...opts }).map((n) => n.entity)
 
-let native = (n: number) => {
+// Shared storage holding no copy, so a search scans natively.
+let native = (n: number): Statements => {
   let db = corpus(fresh(), n)
   install(db)
   assert(prepare(db))
-  return db
+  return { ...db, ownership: 'shared' }
 }
 
 test(

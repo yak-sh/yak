@@ -399,6 +399,7 @@ export let assemble = (
       let made: Registry | undefined
       let ranked: Search | undefined
       let meant: Meaning | undefined = lent.meaning
+      let preloading: (() => Promise<void>) | undefined
       let replying: Reply | undefined
       let calls: Runner | undefined
       // What the binding's tools were made from, when they were made: one
@@ -510,6 +511,9 @@ export let assemble = (
         },
         get meaning() {
           return meant
+        },
+        get preload() {
+          return preloading
         },
         get reply() {
           return replying
@@ -640,6 +644,14 @@ export let assemble = (
       }
       // A host with a reader searches through it too, where it searches at all.
       meant = meanings[0] && (lent.reader?.meaning ?? meanings[0])
+      let loads = graphs.flatMap(([r, options]) =>
+        r.preload ? [r.preload(host, options)] : []
+      )
+      if (loads.length) {
+        preloading = async () => {
+          for (let load of loads) await load()
+        }
+      }
       ranked = binding.search?.(host)
       ranked = ranked && (lent.reader?.search ?? ranked)
       // The generic tools belong to this graph, not to any transport: they are
