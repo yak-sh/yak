@@ -439,7 +439,7 @@ already hold them (staging: the `[env.staging]` copies, `yak-*-staging` names).
 | what                                                                       | where                                                                                                                                                   | without it                                                       |
 | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `CF_ACCOUNT`, `APEX`, `WORKER_NAME`, `DISPATCH_NAMESPACE`, `VIEWS_DATASET` | `[vars]`; must name the same resources as the bindings                                                                                                  | REST calls (app uploads, analytics reads) aim at the wrong place |
-| `CF_ZONE`                                                                  | `[vars]`, the zone id of `yaks.app` (staging: `yaks.fyi`, empty until set)                                                                              | custom domains refuse provisioning                               |
+| `CF_ZONE`                                                                  | `[vars]`, the zone id of `yaks.app` (staging: `yaks.fyi`)                                                                                               | custom domains refuse provisioning                               |
 | `STRIPE_PRICE`                                                             | `[vars]`, the recurring Plus price id, which config.ts `payments` hands @yaks/stripe as `prices.plus.month` (staging: the sandbox price the probes buy) | checkout has nothing to sell                                     |
 | `STRIPE_PRICE_PRO`, `STRIPE_PRICE_PRO_YEAR`                                | `[vars]`, the Pro plan's $49 monthly and $490 yearly price ids, which config.ts `payments` hands @yaks/stripe as `prices.pro.month` and `.year`         | the Pro plan is not offered, and checkout refuses it             |
 | R2 bucket `yak-blobs`                                                      | `wrangler r2 bucket create <name>` once                                                                                                                 | no app files                                                     |
@@ -492,10 +492,10 @@ secret:
 
 The zone needs proxied `AAAA @ → 100::` and `AAAA * → 100::` records. Onboard
 `yaks.fyi` for Email Sending and Email Routing with Cloudflare’s issued mail DNS
-records; route its catch-all to `yak-staging`. Custom domains stay off until
-`CF_ZONE` names the `yaks.fyi` zone and its hostname token is set; enabling them
-also needs a SaaS fallback origin and a `*/*` route on that zone. Observability
-is on; staging has no tail consumer.
+records; route its catch-all to `yak-staging`. Custom domains attach through the
+`origin.saas.yaks.fyi` fallback origin and the `*/*` route on that zone once
+staging's `CF_HOSTNAMES_TOKEN` is set (SSL and Certificates Edit on `yaks.fyi`
+alone). Observability is on; staging has no tail consumer.
 
 ## Migration passes: expand, then contract
 

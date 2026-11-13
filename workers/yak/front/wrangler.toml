@@ -89,6 +89,7 @@ preview_urls = false
 routes = [
   { pattern = "yaks.fyi/*", zone_name = "yaks.fyi" },
   { pattern = "*.yaks.fyi/*", zone_name = "yaks.fyi" },
+  { pattern = "*/*", zone_name = "yaks.fyi" },
 ]
 
 [env.staging.assets]

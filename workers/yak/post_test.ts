@@ -3,7 +3,7 @@ import { assertEquals } from '@std/assert'
 import type { Env } from './env.ts'
 import { mail } from './mail.ts'
 import type { Binding } from '@yaks/cloudflare-mail'
-import { outgoing } from './post.ts'
+import { outgoing, sink } from './post.ts'
 
 test('the app mail transport sinks recipients and keeps threading intact', async () => {
   let sent: Parameters<Binding['send']>[0][] = []
@@ -34,6 +34,20 @@ test('the app mail transport sinks recipients and keeps threading intact', async
       headers: { 'In-Reply-To': '<previous>', References: '<previous>' },
     })
   }
+})
+
+// The fleet's own mailboxes land in the tasks graph, so a letter to them alone
+// is not held back: that is how a bot signs in on staging.
+test("the sink keeps a letter only when one recipient is not the fleet's", () => {
+  let env = { MAIL_SINK: 'owner@example.com' }
+  let held = (to: string | string[], cc?: string) =>
+    sink(env, to, 'Code', cc).to == env.MAIL_SINK
+  equal(held('pro-check@bot.yak.sh'), false)
+  equal(held(['a@bot.yak.sh', 'B@Bot.Yak.Sh']), false)
+  equal(held('a@bot.yak.sh', 'reader@example.com'), true)
+  equal(held(['a@bot.yak.sh', 'reader@example.com']), true)
+  equal(held('reader@example.com'), true)
+  equal(sink({}, 'reader@example.com', 'Code').to, 'reader@example.com')
 })
 
 test('platform letters sink every recipient, including feedback copies', async () => {

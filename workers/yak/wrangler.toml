@@ -168,7 +168,7 @@ PHONE_SENDER = { via = "telnyx", number = "+18663141594" }
 SPEECH_FLOOR = "195"
 
 # The Pro plan's live prices (billing.ts, T-135234): $49 a month and
-# $490 a year. Staging has none, so its checkout for the plan stays off.
+# $490 a year. Staging sells the sandbox's copies.
 STRIPE_PRICE_PRO = "price_1UXaBQITlUS6lUlgf2JQems1"
 STRIPE_PRICE_PRO_YEAR = "price_1UXaBRITlUS6lUlg1fWc2Bdv"
 
@@ -634,9 +634,9 @@ queue = "yak-errors"
 [env.staging.vars]
 APEX = "yaks.fyi"
 CF_ACCOUNT = "0f9613dfd3f0451df0bd0f12a1372ea3"
-# Set the yaks.fyi zone id before testing custom domains; an empty value
-# refuses provisioning instead of attaching a staging domain to production.
-CF_ZONE = ""
+# The yaks.fyi zone, whose fallback origin is origin.saas.yaks.fyi; a person's
+# domain attaches here once CF_HOSTNAMES_TOKEN is set for staging.
+CF_ZONE = "2f826236835325343b260ac21e6fb2b7"
 WORKER_NAME = "yak-staging"
 DISPATCH_NAMESPACE = "yak-apps-staging"
 VIEWS_DATASET = "yak_views_staging"
@@ -644,7 +644,13 @@ ENVIRONMENT = "staging"
 # The Stripe sandbox's recurring Plus price (acct_1UBa7vRMiIEYfSxg), the one
 # the probes buy.
 STRIPE_PRICE = "price_1UIXRMRMiIEYfSxgOgO7xBdP"
+# The sandbox's Pro prices, $49 a month and $490 a year, mirroring live's.
+STRIPE_PRICE_PRO = "price_1UbMvbRMiIEYfSxgVPtC8Hiw"
+STRIPE_PRICE_PRO_YEAR = "price_1UbMvcRMiIEYfSxgdOMn1GUf"
 # MAIL_SINK is the owner's address, set as a staging secret, never a var.
+# Staging's platform letters leave through the MAIL binding, which needs no
+# Email Sending token (post.ts `transport`, T-34980).
+MAIL_VIA = "binding"
 
 [env.staging.observability.logs]
 enabled = true

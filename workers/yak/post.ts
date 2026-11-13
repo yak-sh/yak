@@ -22,21 +22,31 @@ import { toBase64url } from '@yaks/fp'
 import { parts, post, type Sender, Unsent } from '@yaks/mail'
 import type { Built } from '@yaks/host/senders'
 import { SLUG } from '@yaks/platform/names'
+import { BOT } from '@yaks/platform/bots'
 import { apex, type Host } from '@yaks/platform/host'
 import type { Env } from './env.ts'
 import { type Post, posts } from './config.ts'
 
 // Apply at the transport so app effects and platform letters obey one rule.
+// A letter every recipient of which is the fleet's own (@yaks/platform/bots
+// `BOT`) goes where it is addressed: those mailboxes land in the tasks graph,
+// never a person's inbox, and a bot signs in on staging by reading its code
+// there.
 export let sink = <T extends string | string[]>(
   env: Pick<Env, 'MAIL_SINK'>,
   to: T,
   subject: string,
-): { to: string | T; subject: string } => ({
-  to: env.MAIL_SINK || to,
-  subject: env.MAIL_SINK
-    ? `[to: ${[to].flat().join(', ')}] ${subject}`
-    : subject,
-})
+  cc?: string | string[],
+): { to: string | T; subject: string } =>
+  sunk(env, [to, cc ?? []].flat())
+    ? {
+      to: env.MAIL_SINK!,
+      subject: `[to: ${[to].flat().join(', ')}] ${subject}`,
+    }
+    : { to, subject }
+
+let sunk = (env: Pick<Env, 'MAIL_SINK'>, to: string[]) =>
+  !!env.MAIL_SINK && !to.every((one) => one.toLowerCase().endsWith(BOT))
 
 /**
  * The address an app writes from: `<space>.<app>@yaks.app`, and
@@ -82,8 +92,8 @@ let diverted = (sender: Sender, env: Pick<Env, 'MAIL_SINK'>): Sender => ({
   send: (m) =>
     sender.send({
       ...m,
-      ...sink(env, m.to, m.subject),
-      ...(env.MAIL_SINK ? { cc: undefined } : {}),
+      ...sink(env, m.to, m.subject, m.cc),
+      ...(sunk(env, [m.to, m.cc ?? []].flat()) ? { cc: undefined } : {}),
     }),
 })
 
