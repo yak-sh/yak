@@ -37,7 +37,7 @@ import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
 import { esc, type Picked, script, shell } from './pages.ts'
 import { aboutPath, talkSide } from './talk-sidebar.ts'
-import { spaceHost, url } from './host.ts'
+import { spaceHost, url } from '@yaks/platform/host'
 import {
   backTo,
   chatPath,
@@ -45,7 +45,7 @@ import {
   MANAGE,
   managePath,
   manifestPath,
-} from './route.ts'
+} from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { PLATFORM_BACKGROUND } from './apps.ts'
 import {
@@ -1916,7 +1916,7 @@ let later = (at: string, here: string, waits: boolean): List => ({
 
 /**
  * One conversation with the Operator in its chat app, a page of its own
- * (route.ts `chatPath`): the product's side (`side`) with the person's chats
+ * (@yaks/platform/routes `chatPath`): the product's side (`side`) with the person's chats
  * in it, newest first, behind the menu; the conversation filling the page,
  * what it is doing now under it; the box to write in at the foot, with Stop
  * while it works; and beside it what needs the person (talk-beside.ts),

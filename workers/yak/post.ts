@@ -16,13 +16,13 @@
 // app that writes from an address nobody can write back to is worse than an
 // app with no address at all: this is what holds the outbound `from` (the
 // sending effect, graph.ts) and the inbound route (`email()`, index.ts) to the
-// same sentence. A slug carries no dot (route.ts `SLUG`), so the single dot in
+// same sentence. A slug carries no dot (@yaks/platform/routes `SLUG`), so the single dot in
 // a local part is unambiguously the seam between the space and the app.
 import { toBase64url } from '@yaks/fp'
 import { parts, post, type Sender, Unsent } from '@yaks/mail'
 import type { Built } from '@yaks/host/senders'
 import { SLUG } from '@yaks/platform/names'
-import { apex, type Host } from './host.ts'
+import { apex, type Host } from '@yaks/platform/host'
 import type { Env } from './env.ts'
 import { type Post, posts } from './config.ts'
 

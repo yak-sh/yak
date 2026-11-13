@@ -2,7 +2,7 @@
 // Store facets own the words; the generated loader resolves those facets once.
 import type { Derived } from '@yaks/sql'
 import { refuse } from './tool.ts'
-import { type Host, url } from './host.ts'
+import { type Host, url } from '@yaks/platform/host'
 import {
   changed,
   kept as durableValue,

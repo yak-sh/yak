@@ -2,7 +2,7 @@
 // another site, and so a later page asks for none of it again. The bundle
 // states the content-made names (sheet-assets.ts); without one, in a test or
 // under `wrangler dev`, the sources answer instead.
-import { type Host, url } from './host.ts'
+import { type Host, url } from '@yaks/platform/host'
 import { island, signedIn } from './signed.ts'
 
 declare const YAK_NAMED: Record<string, string> | undefined

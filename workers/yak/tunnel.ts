@@ -55,7 +55,7 @@
 // A tunnel's token is answered to the caller once and never kept or logged:
 // the machine's `yak` puts it straight into its own vault. A website session
 // or an OAuth token opens this door, never a pasted grant. Under `/api/`, the same-origin
-// guard (route.ts `guarded`) stands in front of it the way it stands in front
+// guard (@yaks/platform/routes `guarded`) stands in front of it the way it stands in front
 // of the fee.
 import {
   type Api,

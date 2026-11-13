@@ -91,12 +91,18 @@ import {
 } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { apex, url } from './host.ts'
+import { apex, url } from '@yaks/platform/host'
 import { cookieValue, opened, seal } from './lib/token.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import type { Answer } from './apps.ts'
-import type { Door } from './route.ts'
-import { enabling, MANAGE, manageAt, OURS, signInAt } from './route.ts'
+import type { Door } from '@yaks/platform/routes'
+import {
+  enabling,
+  MANAGE,
+  manageAt,
+  OURS,
+  signInAt,
+} from '@yaks/platform/routes'
 import { caught } from './defects.ts'
 import { domainOf, vouched, type Who, whoIs } from './session.ts'
 import { type Ctx as Asking, refuse } from './tool.ts'
@@ -1364,7 +1370,7 @@ let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 // The return from a service's sign-in page. The attempt must be this
 // person's, for their own connection or one of a space they still own;
 // anything else is sent back to their account to start again.
-export let callback: Door = async ({ env, req, path, space }) => {
+export let callback: Door<Env> = async ({ env, req, path, space }) => {
   if (space != null || path != CALLBACK) return null
   let gone = `${ATTEMPT}=; Path=${CALLBACK}; Max-Age=0; Secure; HttpOnly`
   let answer = (to: string) =>
@@ -1517,7 +1523,7 @@ let hookable = async (env: Env, space: Space, app: App, eid: string) => {
 }
 
 // A webhook, kept in the app's store as the request it was.
-export let hook: Door = async ({ env, req, path, space: slug }) => {
+export let hook: Door<Env> = async ({ env, req, path, space: slug }) => {
   if (slug == null || !path.startsWith(HOOKS)) return null
   let lost = () => new Response('not found', { status: 404 })
   if (req.method != 'POST') {

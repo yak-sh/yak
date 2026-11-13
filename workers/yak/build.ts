@@ -94,7 +94,7 @@ import * as log from './writes.ts'
 import { headed } from './timing.ts'
 import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
-import { managePath } from './route.ts'
+import { managePath } from '@yaks/platform/routes'
 import { WAKE } from './door.ts'
 import { COPY, copying } from './store-copy.ts'
 import {

@@ -1,7 +1,7 @@
 /** @jsxImportSource preact */
 import type { ComponentChildren } from 'preact'
 import { Button, Card, Field } from '@yaks/ui'
-import { GET_PLAN } from '../route.ts'
+import { GET_PLAN } from '@yaks/platform/routes'
 import { START } from '../newcomer.ts'
 import { Data, Page, Yours } from './frame.tsx'
 import { Idle } from '../mascot.ts'

@@ -8,7 +8,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { fresh, seed, unique } from './probe.ts'
-import { managePath } from './route.ts'
+import { managePath } from '@yaks/platform/routes'
 
 // Listing a person's grants waits, while `held`, for the test to let it go.
 let held = false

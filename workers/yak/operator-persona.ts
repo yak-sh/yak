@@ -23,8 +23,8 @@ import { stringify } from '@yaks/query'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
-import { url } from './host.ts'
-import { chatPath } from './route.ts'
+import { url } from '@yaks/platform/host'
+import { chatPath } from '@yaks/platform/routes'
 import { choices, type Speaking } from './speech.ts'
 
 /** The persona every Operator is worn on, kept in the directory. */

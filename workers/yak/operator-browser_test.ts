@@ -24,7 +24,7 @@ import {
   WAIT,
 } from './operator-browser.ts'
 import { bearerFor, connector, fresh, seed, unique } from './probe.ts'
-import { managePath } from './route.ts'
+import { managePath } from '@yaks/platform/routes'
 import { ai, modelPage, platform } from './testing.ts'
 import type { Env } from './env.ts'
 

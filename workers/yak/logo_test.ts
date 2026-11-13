@@ -12,7 +12,7 @@ import {
 import { encodeBase64 } from '@std/encoding/base64'
 import { parseHTML } from 'linkedom'
 import { connector, kernel, signIn } from './probe.ts'
-import { managePath } from './route.ts'
+import { managePath } from '@yaks/platform/routes'
 import { sha256 } from './versions.ts'
 
 let PNG = Uint8Array.from(

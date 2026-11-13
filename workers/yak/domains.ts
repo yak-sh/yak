@@ -26,7 +26,7 @@
 import { answered } from './dispatch.ts'
 import { resent } from '@yaks/cloudflare/api'
 import type { Env } from './env.ts'
-import { apex as hostApex, type Host } from './host.ts'
+import { apex as hostApex, type Host } from '@yaks/platform/host'
 import { type Host as Hostname, stamp } from './directory.ts'
 import { unveiled } from './newcomer.ts'
 import { token } from '@yaks/graph/sha256'
@@ -66,7 +66,7 @@ export let apex = (host: string) => {
     (l.length == 3 && SECOND.test(l[1]) && l[2].length == 2)
 }
 
-// The DNS a person adds: the hostname aimed at the fallback origin (route.ts
+// The DNS a person adds: the hostname aimed at the fallback origin (@yaks/platform/routes
 // origin), and this attachment's ownership TXT challenge at its separate name.
 export type Rec = { type: string; name: string; value: string }
 

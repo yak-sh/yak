@@ -27,7 +27,12 @@ import {
   updatesPage,
 } from './operator-page.ts'
 import { NAMES, pick } from './operator-name.ts'
-import { chatPath, managed, managePath, manifestPath } from './route.ts'
+import {
+  chatPath,
+  managed,
+  managePath,
+  manifestPath,
+} from '@yaks/platform/routes'
 
 let p = platform('operator-chat')
 let person = crypto.randomUUID(), eid = crypto.randomUUID()

@@ -1,6 +1,6 @@
 // Hosted HTML is already authorized for its reader. Preserve what that
 // document publishes; fill gaps without opening another file or store.
-import { type Host, url } from './host.ts'
+import { type Host, url } from '@yaks/platform/host'
 import { APP, fields, type Preview, tag } from './link-preview.ts'
 import { esc } from './escape.ts'
 import { decodeHTML } from 'entities'

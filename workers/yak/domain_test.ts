@@ -143,7 +143,7 @@ test('a hostname finds its app, and only one app', async () => {
     let menu = await k.at(herbusiness101, '/menu.html')
     assertEquals(menu.status, 200)
     assertStringIncludes(await menu.text(), 'The menu')
-    // A domain is the app's outright, `/.well-known/` included (route.ts
+    // A domain is the app's outright, `/.well-known/` included (@yaks/platform/routes
     // `platform`). Those files grant authority over the whole name — App
     // Links, Universal Links, Apple Pay's merchant association, control
     // proved to a certificate authority — and on her own domain the name is
@@ -157,7 +157,7 @@ test('a hostname finds its app, and only one app', async () => {
     }
     // Her own `acme-challenge` costs us nothing: our renewal of her custom
     // hostname is answered by Cloudflare's edge before this Worker route ever
-    // runs, which is measured rather than assumed (route.ts `platform`).
+    // runs, which is measured rather than assumed (@yaks/platform/routes `platform`).
     //
     // The claim is read at the root, so the same name under an app's own
     // prefix on a hostname of ours is that app's file, and stays it.
@@ -226,7 +226,7 @@ test('a hostname finds its app, and only one app', async () => {
 // A domain on the space (T-34596), which is the other form: it serves the
 // space exactly as `<space>.yaks.app` does — the front page at `/`, every app
 // at `/<app>/` — because the request is carried to that hostname and routed by
-// the same rungs, not by a second copy of them (route.ts `aimedAt`). An app of
+// the same rungs, not by a second copy of them (@yaks/platform/routes `aimedAt`). An app of
 // that space may still hold a custom domain, and there it is the root.
 test('a domain on the space opens the space, apps and all', async () => {
   let k = await kernel()

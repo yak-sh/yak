@@ -6,7 +6,7 @@
 //
 // It is a hostname's door (kernel.ts), because a
 // repository is not a page of the app: `<app>.git` is a sibling address of
-// `<app>/`, and route.ts admits no dot in a slug, so nothing an app can be
+// `<app>/`, and @yaks/platform/routes admits no dot in a slug, so nothing an app can be
 // called reaches here. Answering ahead of apps.ts is what keeps the home
 // app's worker — which answers every address no app claims — from being
 // handed a clone it cannot parse.
@@ -50,10 +50,10 @@ import { bound, type Env } from './env.ts'
 import { bodies, graphOf, held, MAIN, refAt } from './gitobj.ts'
 import { held as heldGrant, ledger, narrowed } from './grants.ts'
 import { meta } from './meta.ts'
-import { type Arrived, BARE, DOORS } from './route.ts'
+import { type Arrived, BARE, DOORS } from '@yaks/platform/routes'
 import { nobody, type Who, whoIs } from './session.ts'
 
-// route.ts names the two addresses smart HTTP knocks on, under a slug wearing
+// @yaks/platform/routes names the two addresses smart HTTP knocks on, under a slug wearing
 // `.git` (`DOORS`), and the advertisement asked for at the app's own address
 // (`BARE`), which is where a clone of the browser's URL begins. The slug may
 // hold no dot of its own, so the split is unambiguous.
@@ -137,7 +137,7 @@ let cloner = async (
  * repository's own address. It says nothing about the app — whether it is
  * there and whether it may be read is the door below's to tell, in the words
  * it already has. */
-let redirect = (at: Arrived): Response | null => {
+let redirect = (at: Arrived<Env>): Response | null => {
   if (at.req.method != 'GET') return null
   let bare = BARE.exec(at.path)
   if (!bare) return null
@@ -149,7 +149,7 @@ let redirect = (at: Arrived): Response | null => {
 
 /** The door itself: a `Response` for a repository address on a space's
  * hostname, `null` for anything else, which apps.ts then answers. */
-export let answer = async (at: Arrived): Promise<Response | null> => {
+export let answer = async (at: Arrived<Env>): Promise<Response | null> => {
   if (at.space == null) return null
   let sent = redirect(at)
   if (sent) return sent

@@ -1,6 +1,6 @@
 import { ctxOf } from './connections.ts'
 import { caught } from './defects.ts'
-import { url } from './host.ts'
+import { url } from '@yaks/platform/host'
 import { type Ask, type Offered, remoteCommands } from './mcp-remote.ts'
 import { asCaller, type Ctx, refuse, str } from './tool.ts'
 import type { Row } from './tool-words.ts'

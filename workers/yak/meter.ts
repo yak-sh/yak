@@ -4,8 +4,8 @@
 // facets/directory-effects.ts seeds the directory's recurring usage schedule.
 import { reached } from './lib/hops.ts'
 import { type ByDay, kept } from '@yaks/ui/chart'
-import type { Host } from './host.ts'
-import { planSettings } from './route.ts'
+import type { Host } from '@yaks/platform/host'
+import { planSettings } from '@yaks/platform/routes'
 import type { Sender } from '@yaks/mail'
 import {
   COMPED,

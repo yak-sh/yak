@@ -28,7 +28,7 @@
 // MCP resources both read them from the ASSETS binding, at the very URLs the
 // web serves them from.
 import { PAGES as CONTENT_PAGES } from './content.ts'
-import { apex, type Host, url } from './host.ts'
+import { apex, type Host, url } from '@yaks/platform/host'
 import { mailFrom } from './post.ts'
 
 export type Page = {

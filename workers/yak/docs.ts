@@ -31,7 +31,7 @@ import { type ComponentChildren, h } from 'preact'
 import type { H } from '@yaks/render'
 import type { Env } from './env.ts'
 import { type Page, PAGES } from './guide.ts'
-import { type Host, hosted, url } from './host.ts'
+import { type Host, hosted, url } from '@yaks/platform/host'
 import { publicPage } from './public-cache.ts'
 import { drawn, head } from './shell.ts'
 

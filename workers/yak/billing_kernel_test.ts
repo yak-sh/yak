@@ -25,7 +25,7 @@ import {
   WEBHOOK_SECRET,
 } from './probe.ts'
 import { delivered, fakeSub, signed } from '@yaks/stripe/testing'
-import { GET_PLAN } from './route.ts'
+import { GET_PLAN } from '@yaks/platform/routes'
 
 test(
   'the webhook flips a plan, once, whatever order it arrives in',
@@ -142,7 +142,7 @@ test('an unsigned webhook is refused, and so is a foreign Origin', async () => {
     })
     assertEquals((await old.json()).error.message, 'the signature is too old')
 
-    // This door is behind the Origin guard that separates spaces (route.ts
+    // This door is behind the Origin guard that separates spaces (@yaks/platform/routes
     // `sameOrigin`, `guarded`, T-33118). Stripe posts server to server with no
     // Origin at all, and an absent Origin is allowed deliberately — a browser
     // always sends one, and a webhook silently 403ing is a plan that never

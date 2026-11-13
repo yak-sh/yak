@@ -56,9 +56,9 @@ import { type Invitation, qr } from './referral.ts'
 
 export { esc } from './html.ts'
 
-import { chatPath, managePath, type ManageView } from './route.ts'
+import { chatPath, managePath, type ManageView } from '@yaks/platform/routes'
 
-import { apex, type Host, spaceHost, url } from './host.ts'
+import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 
 import { versionOf } from './running.ts'
 
@@ -810,7 +810,7 @@ export type Picked = {
   whose?: string
   // What its Operator is called.
   operator?: string
-  // Where its logo is drawn from (route.ts `logoPath`), where it has one.
+  // Where its logo is drawn from (@yaks/platform/routes `logoPath`), where it has one.
   logo?: string
 }
 

@@ -9,7 +9,7 @@
 import type { Funnel, FunnelSplit } from '@yaks/platform/funnel'
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
-import type { Host } from './host.ts'
+import type { Host } from '@yaks/platform/host'
 import { fromOurs } from './page-report.ts'
 import { isPerson } from './crawlers.ts'
 import { CHECK, isTestAddress } from '@yaks/platform/bots'

@@ -26,7 +26,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { chatPath, managePath } from './route.ts'
+import { chatPath, managePath } from '@yaks/platform/routes'
 import { accepted, connector, kernel, seed, signIn, unique } from './probe.ts'
 
 // What the cases read, made once for the file by the first that asks: one
@@ -301,7 +301,7 @@ test('the front page is served at the space root', async () => {
     assertEquals((await k.at(`${jeff23}.yaks.app`, path)).status, 200, path)
   }
   // Every path no app claims — except `/.well-known/`, which is the
-  // platform's on a hostname of ours (route.ts `platform`). That is where a
+  // platform's on a hostname of ours (@yaks/platform/routes `platform`). That is where a
   // site grants authority over its own name, and this name is not the
   // space's to grant on: `assetlinks.json` would hand a native Android app
   // the right to intercept URLs for `jeff.yaks.app`, and an

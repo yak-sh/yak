@@ -24,7 +24,7 @@ import {
 } from './probe.ts'
 import type { Env } from './env.ts'
 import { carrying } from './support-reply.ts'
-import { managePath } from './route.ts'
+import { managePath } from '@yaks/platform/routes'
 import { parseHTML } from 'linkedom'
 
 // ---- who reads a thread ----------------------------------------------------

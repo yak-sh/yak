@@ -27,7 +27,7 @@ import {
   size,
   YEARLY,
 } from './meter.ts'
-import { GET_PLAN } from './route.ts'
+import { GET_PLAN } from '@yaks/platform/routes'
 import { AWAKE } from './sandbox.ts'
 import { sheeted } from './sheets.ts'
 import { WORN } from './sheet-assets.ts'

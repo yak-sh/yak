@@ -1,7 +1,7 @@
 import { Empty } from '@yaks/ui/parts'
 // Updates from the Operator (T-140508): what happened in a space, as messages
 // from its Operator a person can reply to, at `/manage/<space>/updates`
-// (route.ts `managePath('updates', …)`), beside the chat app's side
+// (@yaks/platform/routes `managePath('updates', …)`), beside the chat app's side
 // (operator-page.ts `updatesPage`). They are @yaks/inbox's, read in the
 // Operator's store (operator-updates.ts): what needs the person first, with a
 // button for each choice, then what happened, newest first. A choice, or
@@ -14,8 +14,8 @@ import type { Who } from './session.ts'
 import { type ComponentChildren, Fragment, h } from 'preact'
 import { Button, Card, Field, More, State } from '@yaks/ui/parts'
 import { operatorDoor } from './build-door.ts'
-import { chatPath, managePath } from './route.ts'
-import { spaceHost } from './host.ts'
+import { chatPath, managePath } from '@yaks/platform/routes'
+import { spaceHost } from '@yaks/platform/host'
 import type { Update } from './operator-updates.ts'
 import { lastDay } from './views.ts'
 import { markdown } from './operator-draw.ts'

@@ -18,7 +18,7 @@ import { coreDocs, reserved, wordOf } from './vocab.ts'
 import { upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { INSTRUCTIONS, PAGES, uriOf } from './guide.ts'
-import { ORIGIN } from './route.ts'
+import { ORIGIN } from '@yaks/platform/routes'
 import { TOOLS } from './tools.ts'
 
 let guide = Deno.readTextFileSync(
@@ -300,7 +300,7 @@ test('the components page prints every property of every component it lists', ()
 })
 
 // The sixth list that can rot, and the one a person's own domain rides on
-// (T-33038): the name they are told to point a CNAME at. It is route.ts's
+// (T-33038): the name they are told to point a CNAME at. It is @yaks/platform/routes's
 // `ORIGIN` and nowhere else, because a guide teaching a target that is not
 // ours teaches a domain that never comes up — and the person has no way to
 // tell the difference between that and waiting. The three tools have to be

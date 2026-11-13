@@ -4,14 +4,14 @@
 // mint them are identity.ts's; this is what reads them, and it loads the OAuth
 // provider only for an agent's token, so a page served to a signed-in browser
 // does not compile the sign-in door (T-148770).
-import { type Host, url as hostUrl } from './host.ts'
+import { type Host, url as hostUrl } from '@yaks/platform/host'
 import { cookieValue, verify } from './lib/token.ts'
 import { directory, type Role } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { CLI_GRANT, GRANT, held, ledger } from './grants.ts'
 import { instrumentEid } from './instrument.ts'
 import { bound, type Env } from './env.ts'
-import { says } from './route.ts'
+import { says } from '@yaks/platform/routes'
 import type { Caller, Who } from './session.ts'
 import { sha256 } from '@yaks/graph/sha256'
 import { carried } from './protocol.ts'

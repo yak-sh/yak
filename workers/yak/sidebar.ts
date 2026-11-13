@@ -3,7 +3,7 @@ import { h } from 'preact'
 import { Badge, Button, Icon, SideNav } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
 import { Idle } from './mascot.ts'
-import { managePath } from './route.ts'
+import { managePath } from '@yaks/platform/routes'
 import { choice } from './space-picker.ts'
 
 export type Item = {

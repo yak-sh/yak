@@ -6,7 +6,7 @@ import { type Sender, Unsent } from '@yaks/mail'
 import { FROM } from './mail-config.ts'
 import { type Delivery, sink, transport } from './post.ts'
 import { posts } from './config.ts'
-import { type Host, replyTo } from './host.ts'
+import { type Host, replyTo } from '@yaks/platform/host'
 export { FROM, INTERNAL, REPLY_TO } from './mail-config.ts'
 
 export type Letter = {

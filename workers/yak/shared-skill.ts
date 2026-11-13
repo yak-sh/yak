@@ -15,7 +15,7 @@
 // `app_update` pulls the next reviewed one, naming what changed.
 import type { Actor } from '@yaks/graph'
 import { type SkillOffer, type Space, stamp } from './directory.ts'
-import { type Host, replyTo } from './host.ts'
+import { type Host, replyTo } from '@yaks/platform/host'
 import {
   ask,
   decide,

@@ -9,7 +9,7 @@
 // exactly as the files say them.
 import type { VNode } from 'preact'
 import { esc, markup } from './html.ts'
-import { type Host } from './host.ts'
+import { type Host } from '@yaks/platform/host'
 import { asset, links } from './sheets.ts'
 import { island, signedIn } from './signed.ts'
 import { idle } from './mascot.ts'

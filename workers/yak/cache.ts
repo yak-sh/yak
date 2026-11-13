@@ -49,7 +49,7 @@ let YEAR = 31536000
 // What the inner entrypoint says about the bytes it is answering. Only `Files`
 // sends this, and `Files` is reachable only through the service binding, so
 // nothing a person or an app can address ever wears it.
-import { type Host, url } from './host.ts'
+import { type Host, url } from '@yaks/platform/host'
 
 // Source-named files and content-addressed blobs cannot change under their
 // keys. Metadata and access are decided by the gateway, outside this cache.

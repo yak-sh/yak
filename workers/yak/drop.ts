@@ -22,12 +22,12 @@
 // nobody else — the same rule as the file door in apps.ts, which is not the
 // app's `access` bargain. An app's `access` says what a stranger may do with
 // its data; its bytes are always a member's.
-import { apex } from './host.ts'
+import { apex } from '@yaks/platform/host'
 import * as dirPart from './directory.ts'
 import { directory, url as addressOf } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { dropped, nothingHere } from './pages.ts'
-import { hostOf, route } from './route.ts'
+import { hostOf, route } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { whoIs } from './session.ts'
 import { call, inApp, pinning, wrotePinned } from './tools.ts'

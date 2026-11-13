@@ -11,10 +11,12 @@
     "./budget": "./budget.ts",
     "./funnel": "./funnel.ts",
     "./mover": "./mover.ts",
-    "./comp": "./comp.ts"
+    "./comp": "./comp.ts",
+    "./host": "./host.ts",
+    "./routes": "./routes.ts"
   },
   "license": "Apache-2.0",
-  "description": "What a hosting platform keeps about the apps it serves — spaces, apps, deploys, hostnames, plans and meters.",
+  "description": "What a hosting platform keeps about the apps it serves \u2014 spaces, apps, deploys, hostnames, plans and meters.",
   "dependencies": {
     "@yaks/vocab": "0.2.32"
   },

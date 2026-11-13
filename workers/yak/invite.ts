@@ -36,7 +36,7 @@ import {
 import { reachChanged } from './declared.ts'
 import { caught } from './defects.ts'
 import type { Env } from './env.ts'
-import { type Host, spaceHost, url as hostUrl } from './host.ts'
+import { type Host, spaceHost, url as hostUrl } from '@yaks/platform/host'
 import { type Mail, mail } from './mail.ts'
 import { closed, lost, sentence } from './pages.ts'
 import { invited } from './signin-pages.ts'

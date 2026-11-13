@@ -48,7 +48,7 @@ import { commandAt } from './app-command.ts'
 import { caught, within } from './defects.ts'
 import type { Env } from './env.ts'
 import { nobody, type Who } from './session.ts'
-import { ADDRESS, MOUNT } from './route.ts'
+import { ADDRESS, MOUNT } from '@yaks/platform/routes'
 
 let SECRET = 'a-probe-secret'
 

@@ -2,7 +2,7 @@
 // links it, and it draws their own code, the same on every visit.
 import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
-import { managePath } from './route.ts'
+import { managePath } from '@yaks/platform/routes'
 import { kernel, signIn } from './probe.ts'
 import { codeIn } from './referral.ts'
 

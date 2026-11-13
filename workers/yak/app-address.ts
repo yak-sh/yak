@@ -6,7 +6,7 @@ import * as dirPart from './directory.ts'
 import { picked, reachable } from './declared.ts'
 import { bound, type Env } from './env.ts'
 import { narrowed } from './grants.ts'
-import { spaceHost } from './host.ts'
+import { spaceHost } from '@yaks/platform/host'
 import { asking, challenge } from './asking.ts'
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {

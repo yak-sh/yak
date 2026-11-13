@@ -8,7 +8,7 @@
 // it (newcomer.ts `worded`, `rebuilding`). Words typed in the box are built as
 // an idea, as the home page's are.
 import { Button, Card, Field } from '@yaks/ui'
-import { GET_PLAN } from '../route.ts'
+import { GET_PLAN } from '@yaks/platform/routes'
 import { KEEPING, START } from '../newcomer.ts'
 import { FREE, PRICE, YEARLY } from '../meter.ts'
 import { Page, Yours } from './frame.tsx'

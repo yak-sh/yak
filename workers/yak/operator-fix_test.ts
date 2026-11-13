@@ -7,7 +7,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { connector, fresh, meta, seed, unique } from './probe.ts'
 import { ai, type Turn } from './testing.ts'
 import type { Env } from './env.ts'
-import { managePath } from './route.ts'
+import { managePath } from '@yaks/platform/routes'
 
 let vocab = (defs: Record<string, unknown>) => JSON.stringify({ $defs: defs })
 let recipe = { recipe: { properties: { serves: { type: 'number' } } } }

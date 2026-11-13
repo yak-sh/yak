@@ -24,7 +24,7 @@ import { mint } from './signin.ts'
 import { KERNEL, meta } from './meta.ts'
 import { derivedEid } from '@yaks/graph/identity'
 import { onceLink, relink } from './link.ts'
-import { apex } from './host.ts'
+import { apex } from '@yaks/platform/host'
 import { countedTexts } from './meter.ts'
 import { charged, costOf } from './text-spend.ts'
 

@@ -50,7 +50,7 @@ import type {
   Subscription,
   Tags,
 } from '@yaks/host/payments'
-import { planSettings } from './route.ts'
+import { planSettings } from '@yaks/platform/routes'
 import * as dirPart from './directory.ts'
 import {
   directory,
@@ -61,7 +61,7 @@ import {
   type Tier,
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { apex, type Host } from './host.ts'
+import { apex, type Host } from '@yaks/platform/host'
 import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import {

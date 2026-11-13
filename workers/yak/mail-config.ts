@@ -7,7 +7,7 @@
 // its login will want its own pair; that is a later leaf's.
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { replyTo } from './host.ts'
+import { replyTo } from '@yaks/platform/host'
 export let FROM = 'hello@bot.yak.sh'
 
 // REPLY_TO is the public address: what people write to the platform, and

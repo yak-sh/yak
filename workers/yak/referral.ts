@@ -10,7 +10,7 @@ import { identityEid } from '@yaks/graph/identity'
 import { caught } from './defects.ts'
 import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
-import { signupAddress } from './host.ts'
+import { signupAddress } from '@yaks/platform/host'
 import { phoneOf, textable } from './phones.ts'
 export { qr } from './qr.ts'
 

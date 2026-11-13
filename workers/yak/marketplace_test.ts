@@ -13,7 +13,7 @@
 //     rather than the manifest's own directory (core-plugins marketplace.rs
 //     `resolve_local_plugin_source_path`), so a rename that misses one of the
 //     three offers a plugin that is not there.
-//   - the address it hands out is the address (route.ts `MCP`). A package that
+//   - the address it hands out is the address (@yaks/platform/routes `MCP`). A package that
 //     drifted to another host would be this product wearing a stranger's door.
 //   - every asset the manifest names is a file in the package. OpenAI's own
 //     validator refuses a logo that points at nothing, and it refuses it after
@@ -27,7 +27,7 @@ import manifest from '../../plugins/yaks.app/.codex-plugin/plugin.json' with {
   type: 'json',
 }
 import servers from '../../plugins/yaks.app/.mcp.json' with { type: 'json' }
-import { MCP } from './route.ts'
+import { MCP } from '@yaks/platform/routes'
 import { PAGES } from './content.ts'
 
 let inPackage = (path: string) =>

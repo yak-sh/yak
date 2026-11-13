@@ -7,7 +7,7 @@
 export let WHO = '/login/who'
 
 /** The nav's link for a person signed in, where "Sign in" is: their space,
- * which opens on a chat with its Operator (route.ts `chatPath`). Said here
+ * which opens on a chat with its Operator (@yaks/platform/routes `chatPath`). Said here
  * once; a drawn page's nav wears it (shell.ts `top`), and a file page is
  * given it beside its Sign in as it leaves (sheets.ts `sheeted`). */
 export let signedIn =

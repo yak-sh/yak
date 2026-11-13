@@ -1,23 +1,39 @@
-// Where a request is going, read from its hostname and path and nothing else
-// (D-32318 §Routing). The apex `yaks.app` is the platform's own face;
-// `<space>.yaks.app/<app>/…` is an app in a space. On loopback, an explicit
-// LOCAL_DEV=1 lets `x-yak-host` stand in for a hostname a local test cannot
-// send (fetch refuses a Host header). Deployed hosts always ignore the header.
-// Pure: only the configured host, no store.
-import type { Env } from './env.ts'
+/**
+ * `@yaks/platform/routes` — where a request is going, read from its hostname
+ * and path and nothing else (D-32318 §Routing). The apex `yaks.app` is the
+ * platform's own face; `<space>.yaks.app/<app>/…` is an app in a space. On
+ * loopback, an explicit LOCAL_DEV=1 lets `x-yak-host` stand in for a hostname
+ * a local test cannot send (fetch refuses a Host header). Deployed hosts
+ * always ignore the header. Pure: only the configured host, no store.
+ *
+ * ```ts
+ * import { route } from '@yaks/platform/routes'
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(route('ada.yaks.app', '/menu/soup'), {
+ *   space: 'ada',
+ *   app: 'menu',
+ *   path: '/soup',
+ * })
+ * ```
+ *
+ * @module
+ */
 import { apex, type Host, spaceHost, url } from './host.ts'
-import { PLATFORM, SLUG } from '@yaks/platform/names'
+import { PLATFORM, SLUG } from './names.ts'
 
-/** A request before the router splits the hostname into an app path. */
-export type Arrived = {
-  env: Env
+/** A request before the router splits the hostname into an app path, in
+ * the env `E` of whatever serves it. */
+export type Arrived<E = unknown> = {
+  env: E
   req: Request
   path: string
   space: string | null
 }
 
 /** A hostname's door, or null when the path belongs elsewhere. */
-export type Door = (at: Arrived) => Promise<Response | null> | Response | null
+export type Door<E = unknown> = (
+  at: Arrived<E>,
+) => Promise<Response | null> | Response | null
 
 // The dashboard: a person's account and the spaces they work in, at the apex
 // rather than on any space's hostname, so no app sharing a space's origin can
@@ -75,7 +91,7 @@ let LEGACY: Record<string, ManageView> = {
 }
 /** A settings page's path. A space's page without a space names the one the
  * person opens first, whichever that is when they follow it. */
-export let managePath = (view: ManageView, space?: string) =>
+export let managePath = (view: ManageView, space?: string): string =>
   accountView(view)
     ? `${MANAGE}/${ACCOUNT}/${view}`
     : space
@@ -83,7 +99,7 @@ export let managePath = (view: ManageView, space?: string) =>
     : `${MANAGE}/${view}`
 /** Where a dashboard form lands back: the page under /manage it names, at
  * the apex, else `fallback`; a form never sends the person off yaks.app. */
-export let backTo = (env: Host, back: string, fallback: string) => {
+export let backTo = (env: Host, back: string, fallback: string): string => {
   let home = new URL(url(env))
   let to = new URL(back || fallback, home)
   return to.origin == home.origin &&
@@ -96,7 +112,7 @@ let OPEN = /^(new|[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12})$/
 /** An Operator conversation's own page, the chat app (operator-page.ts
  * `chatPage`): one opened by its task or request, or a new one, which is the
  * space's own address (`/manage/<space>/operator/new` opens it too). */
-export let chatPath = (space: string, open = 'new') =>
+export let chatPath = (space: string, open = 'new'): string =>
   open == 'new'
     ? `${MANAGE}/${encodeURIComponent(space)}`
     : `${managePath('operator', space)}/${open}`
@@ -105,7 +121,7 @@ export let chatPath = (space: string, open = 'new') =>
  * shown stale.
  *
  * ```ts
- * import { logoPath } from './route.ts'
+ * import { logoPath } from '@yaks/platform/routes'
  * import { assertEquals } from '@std/assert'
  * let sha = 'a'.repeat(64)
  * assertEquals(logoPath({ slug: 'ada', logo: { sha } }), `/manage/ada/logo/${sha}`)
@@ -114,7 +130,7 @@ export let chatPath = (space: string, open = 'new') =>
  */
 export let logoPath = (
   space: { slug: string; logo?: { sha: string } | null },
-) =>
+): string | undefined =>
   space.logo
     ? `${MANAGE}/${encodeURIComponent(space.slug)}/logo/${space.logo.sha}`
     : undefined
@@ -182,7 +198,7 @@ export let managed = (path: string): Managed | null => {
 export let landing = (
   at: { first: true } | { legacy: ManageView },
   space: string,
-) => 'first' in at ? chatPath(space) : managePath(at.legacy, space)
+): string => 'first' in at ? chatPath(space) : managePath(at.legacy, space)
 /** The path an address from before the dashboard named its space in the path
  * (`/_yaks/<page>`, `/manage/<page>`) stands for in `space`, or null. */
 export let movedFor = (path: string, space: string): string | null => {
@@ -191,12 +207,15 @@ export let movedFor = (path: string, space: string): string | null => {
 }
 /** One space's settings page, as an address to put in a letter or an
  * answer. */
-export let manageAt = (space: string, view: ManageView, env: Host = {}) =>
-  url(env, managePath(view, space))
+export let manageAt = (
+  space: string,
+  view: ManageView,
+  env: Host = {},
+): string => url(env, managePath(view, space))
 /** A connections page's address, still naming the testing integrations it
  * was opened for (connections.ts `enabled`), so its forms and a sign-in begun
  * there come back to the page as it was. */
-export let enabling = (to: string, enable: string[] = []) => {
+export let enabling = (to: string, enable: string[] = []): string => {
   if (!enable.length) return to
   let [path, hash] = to.split('#')
   return `${path}${path.includes('?') ? '&' : '?'}enable=${
@@ -227,15 +246,15 @@ export let LOGOUT = '/logout'
 // allows explaining that a feature needs a plan and linking to a page that
 // describes the plans. So a tool answer may name this and never a checkout
 // link — checkout is the signed-in web page's, and email's.
-export let PRICING = url({}, '/pricing')
+export let PRICING: string = url({}, '/pricing')
 
 /** Signed-in plan settings; login preserves this destination. Never checkout. */
-export let planSettings = (slug: string, env: Host = {}) =>
+export let planSettings = (slug: string, env: Host = {}): string =>
   manageAt(slug, 'billing', env)
 
 // One MCP resource, requiring sign-in by default. The explicit required URL
 // remains for existing connectors; mixed auth is opt-in at `?auth=mixed`.
-export let MCP = url({}, '/mcp')
+export let MCP: string = url({}, '/mcp')
 export let MCP_ASK = `${MCP}?auth=required`
 
 // Where signing in happens — one email address and a six-digit code, and the
@@ -244,12 +263,12 @@ export let MCP_ASK = `${MCP}?auth=required`
 // the same string, and the tools that name it in a refusal (tools.ts, anon.ts)
 // cannot import identity.ts, which re-exports it, without dragging the
 // runtime's own modules into a Deno test.
-export let SIGN_IN = url({}, '/login')
+export let SIGN_IN: string = url({}, '/login')
 
 /** Where someone who has not signed in is sent: the login page, already
  * carrying the page to hand them back to (T-32593). Whether that address is
  * one to follow is the login door's to decide. */
-export let signInAt = (page: string, env: Host) => {
+export let signInAt = (page: string, env: Host): string => {
   let to = new URL(`https://${apex(env)}/login`)
   to.searchParams.set('return', page)
   return to.href
@@ -265,10 +284,10 @@ export let GET_PLAN = `/login?return=${
  * beside the sign-in address, since a visitor's bar (visit.ts) sends a
  * stranger through the one to the other. */
 export let INSTALL = '/install'
-export let installAt = (name: string) =>
+export let installAt = (name: string): string =>
   `${INSTALL}?name=${encodeURIComponent(name)}`
 
-export let says = (env: Host = {}) =>
+export let says = (env: Host = {}): string =>
   `sign in at ${url(env, '/login')} to reach your apps from here`
 
 // And the sentence every refusal says about it: what a person's agent reads
@@ -276,7 +295,7 @@ export let says = (env: Host = {}) =>
 // the address rather than at one of the doors, because three of them say it —
 // the 401 and its challenge (identity.ts), and the tools a stranger is shown
 // but may not call (anon.ts `barred`).
-export let SAYS = says()
+export let SAYS: string = says()
 
 // And what an agent's connector form asks for when it will not go and find it
 // (T-34414): the authorization server's own addresses and the one scope.
@@ -326,14 +345,14 @@ export let MOUNT = 'x-yak-mount'
 export let GRANT = 'x-yak-grant'
 
 /** Whether a request carries one, valid or not: it is the kernel's to open. */
-export let bearing = (req: Request) => req.headers.has(GRANT)
+export let bearing = (req: Request): boolean => req.headers.has(GRANT)
 
 // The addresses on a space's hostname its apps never answer: a repository
 // (git_door.ts) and a service's webhooks (connections.ts). They come before
 // the apps and before the edge's kept pages.
 export let DOORS = /^\/([^/.]+)\.git\/(info\/refs|git-upload-pack)$/
 export let BARE = /^\/([^/.]+)\/info\/refs$/
-export let spaceDoor = (path: string) =>
+export let spaceDoor = (path: string): boolean =>
   DOORS.test(path) || BARE.test(path) || path.startsWith(`${OURS}/hooks/`)
 
 /** The browser-facing URL retained when the router aims a custom domain. */
@@ -370,7 +389,7 @@ export let aimedAt = (
   app: string | null,
   pathname: string,
   env: Host = {},
-) => ({
+): { host: string; pathname: string; mount: string | null } => ({
   host: spaceHost(env, space),
   pathname: app ? `/${app}${pathname}` : pathname,
   mount: app ? '/' : null,
@@ -393,7 +412,7 @@ export type Domain = {
 /** Whether a domain serves its place: provisioned, and shown to be its
  * owner's where Cloudflare asked for that. Anything else is answered the
  * page that says how far it has come (kernel.ts `settling`). */
-export let ready = (at: Domain | null) =>
+export let ready = (at: Domain | null): boolean =>
   at?.host.stage == 'active' &&
   (!!at.host.verified || at.host.verification == null)
 
@@ -402,7 +421,7 @@ export let ready = (at: Domain | null) =>
  * (`ADDRESS`) and, for an app's domain, the mount it answers at (`MOUNT`).
  *
  * ```ts
- * import { ADDRESS, aim, MOUNT } from './route.ts'
+ * import { ADDRESS, aim, MOUNT } from '@yaks/platform/routes'
  * import { assertEquals } from '@std/assert'
  * let host = { eid: 'h', stage: 'active', verified: null, verification: null, to: null }
  * let at = { space: { slug: 'ada' }, app: { slug: 'menu' }, host }
@@ -412,7 +431,12 @@ export let ready = (at: Domain | null) =>
  * assertEquals(req.headers.get(MOUNT), '/')
  * ```
  */
-export let aim = (req: Request, host: string, at: Domain, env: Host = {}) => {
+export let aim = (
+  req: Request,
+  host: string,
+  at: Domain,
+  env: Host = {},
+): Request => {
   let url = new URL(req.url)
   let address = new URL(req.url)
   address.host = host
@@ -434,15 +458,18 @@ export let HANDOFF = '/__yak/signin'
 
 /** Whether this is a custom domain's sign-in handoff, the one identity door
  * a customer's own hostname answers (identity.ts `handoff`). */
-export let handedOff = (host: string, pathname: string, env: Host = {}) =>
-  foreign(host, env) && pathname == HANDOFF
+export let handedOff = (
+  host: string,
+  pathname: string,
+  env: Host = {},
+): boolean => foreign(host, env) && pathname == HANDOFF
 
 /** Whether a hostname is this machine's: a local dev run's, never deployed. */
-export let loopback = (host: string) =>
+export let loopback = (host: string): boolean =>
   host == 'localhost' || host == '127.0.0.1' || host == '[::1]' ||
   host.endsWith('.localhost')
 
-export let hostOf = (req: Request, env: Host = {}) => {
+export let hostOf = (req: Request, env: Host = {}): string => {
   let host = new URL(req.url).hostname.toLowerCase()
   return env.LOCAL_DEV == '1' && loopback(host)
     ? (req.headers.get('x-yak-host') ?? host).toLowerCase()
@@ -454,7 +481,7 @@ export let hostOf = (req: Request, env: Host = {}) => {
 // platform already answers on is not foreign, so every route that exists
 // today is decided before this is ever asked: the apex, a space, a dev host,
 // and `x.y.yaks.app`, which was the apex before custom domains and still is.
-export let foreign = (host: string, env: Host = {}) =>
+export let foreign = (host: string, env: Host = {}): boolean =>
   !loopback(host) && host != apex(env) && !host.endsWith(`.${apex(env)}`)
 
 // An address on the platform's own zone: https, and the apex or a hostname
@@ -473,7 +500,7 @@ export let foreign = (host: string, env: Host = {}) =>
 // sign-in hands them back there, signed in. A domain that wants to keep
 // someone on their own hostname needs its own verified return, not a wider
 // `onZone`.
-export let onZone = (href: string, env: Host = {}) => {
+export let onZone = (href: string, env: Host = {}): string | null => {
   // A bare path is on the zone by construction, and it is what the platform's
   // own returns are made of (`/login?return=/connect`), so refusing one threw
   // away every address we minted ourselves. `//host` — and `/\host`, which a
@@ -559,8 +586,11 @@ export let route = (host: string, pathname: string, env: Host = {}): Route => {
 // That measurement is also why the platform can answer its own 404 on our
 // hostnames instead of passing a request through to a fallback origin that is
 // deliberately originless (`AAAA 100::`).
-export let platform = (host: string, pathname: string, env: Host = {}) =>
-  !foreign(host, env) && pathname.startsWith('/.well-known/')
+export let platform = (
+  host: string,
+  pathname: string,
+  env: Host = {},
+): boolean => !foreign(host, env) && pathname.startsWith('/.well-known/')
 
 // What a page at another address may not ask for here, read from the method
 // and the path (`sameOrigin` below is the check itself).
@@ -589,7 +619,7 @@ export let platform = (host: string, pathname: string, env: Host = {}) =>
 // over-reaches a little: a static asset at `/x/api/y` on the apex matches too,
 // which costs nothing, since nothing a browser fetches cross-origin without
 // CORS can read the answer either way.
-export let guarded = (method: string, pathname: string) =>
+export let guarded = (method: string, pathname: string): boolean =>
   (method != 'GET' && method != 'HEAD' && method != 'OPTIONS' &&
     pathname != OAUTH.token && pathname != OAUTH.register) ||
   pathname == '/mcp' || /^(?:\/[^/]+)?\/api\//.test(pathname)
@@ -620,7 +650,7 @@ export let sameOrigin = (
   host: string,
   origin: string | null,
   env: Host = {},
-) => {
+): boolean => {
   if (!origin) return true
   try {
     let from = new URL(origin).hostname.toLowerCase()
@@ -636,7 +666,7 @@ export let sameOrigin = (
 // answered as nobody — the router drops the request's credentials before it is
 // served and sends `Access-Control-Allow-Origin: *` with no
 // `Access-Control-Allow-Credentials` beside it, which is the browser's own
-// guarantee that no cookie was used and none can be read (index.ts `cors`).
+// guarantee that no cookie was used and none can be read (`cors`).
 //
 // It is safe because what `sameOrigin` closes is ambient credentials, not
 // secrecy: a public app's rows already answer to anyone with curl, and the
@@ -656,7 +686,7 @@ export let sameOrigin = (
 // headers is a CORS simple request, so the browser sends it and reads the
 // answer with no `OPTIONS` in between. A client that adds a header would need
 // one, and can ask for it when it exists.
-export let shared = (method: string, pathname: string) =>
+export let shared = (method: string, pathname: string): boolean =>
   (method == 'GET' || method == 'HEAD') &&
   /^(?:\/[^/]+)?\/api\/query$/.test(pathname)
 
@@ -666,7 +696,7 @@ export let shared = (method: string, pathname: string) =>
 export let ASKERS = ['yak.sh']
 
 // Whether a request's `Origin` is one of {@link ASKERS}.
-let asker = (origin: string | null) => {
+let asker = (origin: string | null): boolean => {
   try {
     return ASKERS.includes(new URL(origin ?? '').hostname.toLowerCase())
   } catch {
@@ -675,7 +705,7 @@ let asker = (origin: string | null) => {
 }
 
 // The second door a page elsewhere may reach, opened the way the first is,
-// with the credentials taken off (kernel.ts `uncredentialed`): asking for a
+// with the credentials taken off (`admitted`): asking for a
 // code reads no cookie, and answers a page exactly what it answers curl. Only
 // for {@link ASKERS}, so no other page can spread its asks over its visitors'
 // addresses.
@@ -683,7 +713,7 @@ export let askable = (
   method: string,
   pathname: string,
   origin: string | null,
-) => method == 'POST' && pathname == '/login' && asker(origin)
+): boolean => method == 'POST' && pathname == '/login' && asker(origin)
 
 // A sandboxed app's page asking its own doors (installed.ts, D-37901): the
 // path carries its page token as `/<app>/~<token>/…`, or `/~<token>/…` for a
@@ -691,9 +721,143 @@ export let askable = (
 // so it sends `Origin: null`, which `sameOrigin` refuses — and it should,
 // everywhere a cookie could ride along. Here none may: the router takes the
 // cookie off before the request is served and marks the answer readable by
-// any origin (index.ts), because the credential is the token in the URL,
+// any origin (`admitted`), because the credential is the token in the URL,
 // which no browser attaches on its own. What the token opens is the one app
 // it was sealed for; every other request on such a path is anonymous.
-export let paged = (pathname: string) =>
+export let paged = (pathname: string): boolean =>
   /^(?:\/[^/]+)?\/~[^/]+(?:\/|$)/.test(pathname) ||
   /^\/[^/]+\/_preview\/[^/]+(?:\/|$)/.test(pathname)
+
+// One page, one address: a doubled slash (`/printbound//refund`, from a typed
+// link or a crawler's join) names the page its single slash names. Collapsed
+// before anything routes on it, no part below and no app's code ever reads a
+// path that starts `//`, which `new URL` takes for a host and throws on
+// (T-153266, T-153429).
+export let collapsed = (req: Request): Request => {
+  let url = new URL(req.url)
+  let path = url.pathname.replace(/\/{2,}/g, '/')
+  if (path == url.pathname) return req
+  url.pathname = path
+  return new Request(url, req)
+}
+
+// Headers taken off a request before it is served.
+let without = (req: Request, names: string[]): Request => {
+  if (!names.some((n) => req.headers.has(n))) return req
+  let headers = new Headers(req.headers)
+  for (let n of names) headers.delete(n)
+  return new Request(req, { headers })
+}
+
+/** A request with the headers only the router writes ({@link MOUNT},
+ * {@link ADDRESS}) taken off: whatever a client sent under those names is
+ * gone before anything reads it. */
+export let unmounted = (req: Request): Request => without(req, [MOUNT, ADDRESS])
+
+// A page on somebody else's address, writing or at one of our graph doors
+// (`sameOrigin`, `guarded`). It is refused in the shape every other api
+// refusal has — a code the page's code reads, a sentence its person reads —
+// and it is a deliberate no, so nothing is filed about it.
+let stranger = () =>
+  Response.json({
+    error: {
+      code: 'foreign_origin',
+      message: 'that page is at another address and cannot use this door',
+    },
+  }, { status: 403 })
+
+// The question a browser asks before a sandboxed page's JSON write or its
+// upload: yes, from anywhere, with the headers it named. No credentials are
+// allowed and none are read, so there is nothing an origin could add.
+let preflight = (req: Request) =>
+  new Response(null, {
+    status: 204,
+    headers: {
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET, HEAD, POST, PUT, DELETE',
+      'access-control-allow-headers':
+        req.headers.get('access-control-request-headers') ?? '',
+      'access-control-max-age': '86400',
+    },
+  })
+
+/** How a request may be served, given the page that asked: the request to
+ * serve, and whether its answer is to be marked readable by any origin
+ * ({@link cors}), or the answer it gets instead. */
+export type Admitted = { req: Request; anyone: boolean } | { answer: Response }
+
+/**
+ * Space isolation, and the one place it holds (`sameOrigin`). It is asked
+ * before a custom domain's request is carried to its place on our zone
+ * (`aim`), because what must match is what the browser addressed: a page at
+ * `herbusiness.com` asking its own `/api/…` is same-origin even though the
+ * router is about to carry the request to `<space>.yaks.app/<app>/api/…`.
+ *
+ * One door is open to every page anyway: the app's read door, asked with
+ * GET, served with the credentials stripped off and marked readable by any
+ * origin (`shared`). So is asking for a sign-in code, to the pages of ours
+ * that ask for one (`askable`). And a sandboxed app's page, on the path that
+ * carries its token: its origin is opaque, so it is a stranger to every
+ * page, and its request is served with no cookie at all (`paged`).
+ *
+ * The credentials go together because neither half is safe alone: an answer
+ * marked readable by any origin must be an answer no session was used to
+ * compute. The cookie is the whole of the ambient credential an app's door
+ * reads, and `authorization` goes with it, so that the day a door reads one
+ * it cannot arrive through here.
+ *
+ * ```ts
+ * import { admitted } from '@yaks/platform/routes'
+ * import { assertEquals } from '@std/assert'
+ * let post = new Request('https://ada.yaks.app/menu/api/apply', {
+ *   method: 'POST',
+ *   headers: { origin: 'https://bob.yaks.app' },
+ * })
+ * let got = admitted(post, 'ada.yaks.app')
+ * assertEquals('answer' in got && got.answer.status, 403)
+ * ```
+ */
+export let admitted = (
+  req: Request,
+  host: string,
+  env: Host = {},
+): Admitted => {
+  let asked = new URL(req.url).pathname
+  let origin = req.headers.get('origin')
+  if (paged(asked)) {
+    return req.method == 'OPTIONS'
+      ? { answer: preflight(req) }
+      : { req: without(req, ['cookie']), anyone: true }
+  }
+  if (!guarded(req.method, asked) || sameOrigin(host, origin, env)) {
+    return { req, anyone: false }
+  }
+  if (!shared(req.method, asked) && !askable(req.method, asked, origin)) {
+    return { answer: stranger() }
+  }
+  return { req: without(req, ['cookie', 'authorization']), anyone: true }
+}
+
+/**
+ * The mark on an answer {@link admitted} served to any page. The wildcard,
+ * never the asking origin, and no `Access-Control-Allow-Credentials`: a
+ * browser refuses to send a credentialed request to `*`, so the pair is a
+ * promise the browser itself enforces, and echoing the origin back would let
+ * a future mistake add credentials to it.
+ *
+ * `Vary: Origin` because the same URL answers differently to the page that
+ * owns it. No shared cache may sit in front of such an answer: a Workers
+ * cache key holds the path and not the hostname, so
+ * `alice.yaks.app/recipes/api/query?x` and bob's would be one entry.
+ */
+export let cors = (res: Response): Response => {
+  if (res.status == 101) return res
+  let headers = new Headers(res.headers)
+  headers.set('access-control-allow-origin', '*')
+  headers.append('vary', 'origin')
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+  })
+}

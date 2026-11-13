@@ -65,7 +65,7 @@ import {
   WARN,
 } from './meter.ts'
 import { INTERNAL, mail } from './mail.ts'
-import type { Host } from './host.ts'
+import type { Host } from '@yaks/platform/host'
 import { KERNEL, meta } from './meta.ts'
 import { type Alerts, type Hour, type Usage, warning } from './usage-alert.ts'
 import { type Answer as Asked, ask, said } from '@yaks/cloudflare/analytics'

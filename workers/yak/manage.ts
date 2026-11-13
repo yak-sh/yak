@@ -3,7 +3,7 @@
 // first request to `/manage`, so an isolate that only serves pages never
 // compiles it (T-148886).
 import { copyOf } from './directory-copy.ts'
-import { spaceHost, url as hostUrl } from './host.ts'
+import { spaceHost, url as hostUrl } from '@yaks/platform/host'
 import { browserImmutable } from './cache.ts'
 import {
   type App,
@@ -65,7 +65,7 @@ import {
   type ManageView,
   signInAt,
   type SpaceView,
-} from './route.ts'
+} from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { vouched, type Who, whoIs } from './session.ts'
 import { asking, bearerIn } from './asking.ts'
@@ -869,7 +869,7 @@ let pressed = async (
 
 // A space's forms return to the page that submitted them. Every space's page
 // shares the cookie's site, so ownership alone is
-// insufficient: a page at another address never gets here (route.ts
+// insufficient: a page at another address never gets here (@yaks/platform/routes
 // `guarded`).
 let saved = async (
   req: Request,
@@ -1091,7 +1091,7 @@ let saved = async (
 }
 
 // The bytes of a space's logo, to anyone in the space, at the address only
-// these bytes have (route.ts `logoPath`), so a browser keeps them for good.
+// these bytes have (@yaks/platform/routes `logoPath`), so a browser keeps them for good.
 let logoOf = async (env: Env, space: Space, who: Owner, sha: string) => {
   let bytes = who.role ? await logoBytes(env, space, sha) : null
   if (!bytes) return nothingHere(env)

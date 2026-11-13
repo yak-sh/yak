@@ -14,7 +14,7 @@
 // the next page is the fixed one, and nobody recompiles anything by hand.
 import { toolkitOf, type Toolkits, toolkits } from '@yaks/esbuild'
 import type { Env } from './env.ts'
-import { url } from './host.ts'
+import { url } from '@yaks/platform/host'
 import { filesIn } from './release.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { BUILT } from './versions.ts'

@@ -14,7 +14,7 @@
 // support.ts; the numbers from meter.ts, versions.ts, recover.ts and directory.ts.
 import { Button, Card, Field, Form } from '@yaks/ui'
 import { html } from '@yaks/mail'
-import { GET_PLAN } from '../route.ts'
+import { GET_PLAN } from '@yaks/platform/routes'
 import { KEEPING, START } from '../newcomer.ts'
 import { BLOCK, LETTERS, PRICE, YEARLY } from '../meter.ts'
 import { KEEP } from '../versions.ts'

@@ -11,7 +11,7 @@
 // else leaves the container directly.
 import { env } from 'cloudflare:workers'
 import * as sdk from '@cloudflare/sandbox'
-import { apex, type Host } from '../host.ts'
+import { apex, type Host } from '@yaks/platform/host'
 
 type Env = Host & {
   KERNEL: { send(req: Request, container: string): Promise<Response> }

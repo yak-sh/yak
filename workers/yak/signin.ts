@@ -30,7 +30,7 @@ import { KERNEL, type Meta, minted } from './meta.ts'
 import { secretKey } from '@yaks/secrets/signed'
 import { mobile } from '@yaks/phone/mobile'
 import { chose, nameOf } from './names.ts'
-import { type Host, signupAddress } from './host.ts'
+import { type Host, signupAddress } from '@yaks/platform/host'
 import type { Letter } from './mail.ts'
 
 // Ten minutes, five guesses: long enough to switch to the mail app, short

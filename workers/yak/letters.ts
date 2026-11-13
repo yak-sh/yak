@@ -19,7 +19,7 @@ import type { Bundle, Tool } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import { mailbox } from './directory.ts'
 import { read } from './reach.ts'
-import { apex, type Host } from './host.ts'
+import { apex, type Host } from '@yaks/platform/host'
 import { type Ctx, inApp } from './tools.ts'
 import { refuse, SPACE } from './tool.ts'
 

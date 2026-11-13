@@ -39,7 +39,7 @@
 import type { Security } from '@yaks/mcp'
 import type { Env } from './env.ts'
 import { PAGES, uriOf, whole } from './guide.ts'
-import { apex, type Host, hosted, spaceHost, url } from './host.ts'
+import { apex, type Host, hosted, spaceHost, url } from '@yaks/platform/host'
 import { IDEAS } from './prompts.ts'
 import { connector } from './seo.ts'
 

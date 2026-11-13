@@ -777,7 +777,7 @@ test('the apex serves the OpenAI apps challenge token, exactly', async () => {
     assertEquals(body, token)
     assert(!body.endsWith('\n'), 'the token carries a trailing newline')
     // A space host never gets it. The path is the platform's at every
-    // hostname (route.ts `platform`), so no app can answer it — and the
+    // hostname (@yaks/platform/routes `platform`), so no app can answer it — and the
     // token is the apex's own, so it does not travel there either.
     let onSpace = await k.at(
       'nobody.yaks.app',

@@ -29,7 +29,7 @@
 // of its own (T-32983) can move this list and say so on the stream.
 import { fill } from '@yaks/yaml'
 import { SAYS } from './content.ts'
-import { type Host, url } from './host.ts'
+import { type Host, url } from '@yaks/platform/host'
 
 /** An argument as a client is offered it (MCP §Prompts). */
 export type Arg = {

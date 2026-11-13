@@ -77,7 +77,7 @@ import { linked } from './preview-route.ts'
 // only way that row is ever written: nothing serves the meta store at an
 // address (apps.ts), so no request can write the directory from outside.
 import { claimed } from './attribution.ts'
-import { apex, type Host, url as hostUrl } from './host.ts'
+import { apex, type Host, url as hostUrl } from '@yaks/platform/host'
 import {
   AuthorizationError,
   type AuthRequest,
@@ -174,7 +174,14 @@ import {
   connect,
   deleted,
 } from './signin-pages.ts'
-import { chatPath, hostOf, LOGOUT, MANAGE, OAUTH, onZone } from './route.ts'
+import {
+  chatPath,
+  hostOf,
+  LOGOUT,
+  MANAGE,
+  OAUTH,
+  onZone,
+} from '@yaks/platform/routes'
 import { woken } from './build-door.ts'
 import { INVITE, LINK, SLUG } from '@yaks/platform/names'
 import {
@@ -276,9 +283,9 @@ export let unheld = async (env: Env, person: string) => {
 // refusal is read by a person's agent, so it says a sentence beside its code
 // and names where signing in happens — the treatment every other door already
 // had, and the one this one missed (C-32607 item 1, apps.ts says). The address
-// itself lives in route.ts, with the platform's other addresses, and
+// itself lives in @yaks/platform/routes, with the platform's other addresses, and
 // is re-exported here because this is where the doors read it.
-export { SAYS, SIGN_IN } from './route.ts'
+export { SAYS, SIGN_IN } from '@yaks/platform/routes'
 
 let redirect = (to: string, set?: string, status = 302) =>
   new Response(null, {
@@ -288,7 +295,7 @@ let redirect = (to: string, set?: string, status = 302) =>
 
 // Where a signed-in person lands: the page they came from, when it is on our
 // own zone — an off-zone address is ignored and never followed, the field
-// being a stranger's to fill in (route.ts `onZone`). Sent nowhere in
+// being a stranger's to fill in (@yaks/platform/routes `onZone`). Sent nowhere in
 // particular, they land on their dashboard, which shows their own space
 // (apps.ts `manage`).
 //
@@ -383,7 +390,7 @@ let browser = async (env: Env, req: Request) => {
 // not exist answers: a stranger learns nothing about anybody's address here.
 //
 // The POST is a write, so a page at any other address is refused before it
-// gets here (route.ts `guarded`). `SameSite=Lax` is no help with that: every
+// gets here (@yaks/platform/routes `guarded`). `SameSite=Lax` is no help with that: every
 // space is same-site with the apex, so a form posted from a page in anybody's
 // space arrives carrying the cookie (T-37874).
 let closing = async (
@@ -1204,7 +1211,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   // A row's Disconnect button (connected_ui.ts): the person signed in on this
   // browser revokes the grants of the one agent they chose. Only the session
   // cookie is read, never a bearer, so no agent can be talked into
-  // disconnecting anyone; the Origin check every POST passes (route.ts
+  // disconnecting anyone; the Origin check every POST passes (@yaks/platform/routes
   // `guarded`) keeps a sibling space's page from posting it.
   if (path == '/oauth/agents/disconnect' && req.method == 'POST') {
     let person = await browser(env, req)

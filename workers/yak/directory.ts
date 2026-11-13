@@ -35,7 +35,7 @@ import {
 import { knownOptions } from '@yaks/graph/errors'
 import type { Reload } from '@yaks/platform'
 import type { Comp } from '@yaks/platform/comp'
-import { type Host as HostEnv, spaceHost } from './host.ts'
+import { type Host as HostEnv, spaceHost } from '@yaks/platform/host'
 import type { Actor, Bundle, Tx } from '@yaks/graph'
 import { type Listed, listing } from '@yaks/connections/integrations'
 import { identityEid, minted } from '@yaks/graph/identity'
@@ -84,7 +84,7 @@ import { instrumentEid } from './instrument.ts'
 // `security@yaks.app`. The doors that mint an address check it (tools.ts
 // `fresh`, `free` and `own` here, identity.ts `choose`); an address already
 // held keeps working. `yak` is the platform's own space (`META`), and
-// `origin` and `saas` its custom-hostname origin (route.ts `ORIGIN`).
+// `origin` and `saas` its custom-hostname origin (@yaks/platform/routes `ORIGIN`).
 // `sha` and `git` are the platform's own key prefixes in the files bucket
 // (versions.ts `SHA`, gitobj.ts `BODY`): a space's files are kept under its
 // slug, so a space by either name would share storage with the platform's.

@@ -30,7 +30,7 @@
 // which apps this session has opened, and it remembers nothing (mcp.ts).
 import { type App, type Directory, type Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { type Host, spaceHost } from './host.ts'
+import { type Host, spaceHost } from '@yaks/platform/host'
 import { acting, based } from './apps.ts'
 import { commandAt, toolsOf } from './app-command.ts'
 export { toolsOf } from './app-command.ts'

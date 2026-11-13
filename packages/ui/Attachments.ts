@@ -29,7 +29,7 @@ export let specimens = (): Specimen[] => [
     'Attachments, variants',
     h(
       Attachments,
-      {},
+      { mod: 'end' },
       h(
         Attachments.Picture,
         { href: '#' },

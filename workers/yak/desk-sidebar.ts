@@ -2,14 +2,14 @@
 import { h } from 'preact'
 import { type Item, Sidebar } from './sidebar.ts'
 import type { DeskPage } from './pages.ts'
-import { type Host, spaceHost, url } from './host.ts'
+import { type Host, spaceHost, url } from '@yaks/platform/host'
 import {
   accountView,
   chatPath,
   LOGOUT,
   managePath,
   type ManageView,
-} from './route.ts'
+} from '@yaks/platform/routes'
 
 let icons = {
   profile: 'user',

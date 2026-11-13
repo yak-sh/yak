@@ -8,9 +8,9 @@
 // name another person, nor used twice. No Cloudflare provider import lives here
 // (unlike identity.ts), so this contract is unit-testable on its own; the
 // handler there adds only the cookie and the redirect.
-import type { Host } from './host.ts'
+import type { Host } from '@yaks/platform/host'
 import { opened, seal } from './lib/token.ts'
-import { foreign, HANDOFF } from './route.ts'
+import { foreign, HANDOFF } from '@yaks/platform/routes'
 
 export { HANDOFF }
 export let HANDOFF_LIFE = 60

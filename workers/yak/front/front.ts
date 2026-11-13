@@ -15,7 +15,7 @@
 import { caught, origin, queue, type Sink } from '@yaks/tracker/report'
 import type { Fetcher } from '../env.ts'
 import { sealed } from '../cache.ts'
-import { apex, type Host } from '../host.ts'
+import { apex, type Host } from '@yaks/platform/host'
 import {
   asked,
   isListing,
@@ -48,7 +48,7 @@ import {
   platform,
   sameOrigin,
   spaceDoor,
-} from '../route.ts'
+} from '@yaks/platform/routes'
 import * as variant from '../variant.ts'
 import type { Clock } from '@yaks/fp'
 import { overdue, watch } from '../lib/watch.ts'
@@ -210,7 +210,7 @@ export let kept = (
       },
     )
   }
-  // `x.y.yaks.app` is the kernel's to say what it is (route.ts `route`). A
+  // `x.y.yaks.app` is the kernel's to say what it is (@yaks/platform/routes `route`). A
   // custom domain is asked of Site by its own hostname, as a space's is, and
   // Site reads whose it is (site.ts `atDomain`).
   if (

@@ -48,8 +48,8 @@ import {
   MANAGE,
   managePath,
   type ManageView,
-} from './route.ts'
-import { apex, type Host, spaceHost, url } from './host.ts'
+} from '@yaks/platform/routes'
+import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { type Ceiling, count, PRICE, share, size, WARN } from './meter.ts'
 import { columns } from '@yaks/ui/chart'
 

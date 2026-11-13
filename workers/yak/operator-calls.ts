@@ -50,7 +50,7 @@ import { directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { defect } from './defects.ts'
 import { opened, seal } from './lib/token.ts'
-import { apex } from './host.ts'
+import { apex } from '@yaks/platform/host'
 import { countedSpend } from './meter.ts'
 import { phoneAt } from './phones.ts'
 import {

@@ -5,15 +5,15 @@ import type { Env } from './env.ts'
 import { refusing } from './defects.ts'
 import { h } from 'preact'
 import { Button, Card, Field, Form, Notice } from '@yaks/ui/parts'
-import { url } from './host.ts'
-import { installAt, signInAt } from './route.ts'
+import { url } from '@yaks/platform/host'
+import { installAt, signInAt } from '@yaks/platform/routes'
 import { whoIs } from './session.ts'
 import { drawn, head } from './shell.ts'
 import { call } from './tools.ts'
 import { step } from './funnel.ts'
 import { visitOf } from './visit.ts'
 
-export { INSTALL as PATH, installAt as at } from './route.ts'
+export { INSTALL as PATH, installAt as at } from '@yaks/platform/routes'
 
 let page = (
   env: Env,

@@ -17,7 +17,7 @@ import {
   signIn,
 } from './probe.ts'
 import { HELLO } from './mcp-probe.ts'
-import { managePath } from './route.ts'
+import { managePath } from '@yaks/platform/routes'
 
 // What others shared with a person, as their browser opens it.
 let sharedPage = (k: Kernel, cookie: string) =>

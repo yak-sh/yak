@@ -61,7 +61,7 @@ import {
   UNKEPT_AT,
 } from './kept-page.ts'
 import { appTag, SITE_TAG, spaceTag } from './purge.ts'
-import { hostOf, MOUNT } from './route.ts'
+import { hostOf, MOUNT } from '@yaks/platform/routes'
 import type { Clock } from './timing.ts'
 import { scheduleUse, wake } from './used.ts'
 import { seen, viewed } from './views.ts'

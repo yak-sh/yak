@@ -58,7 +58,7 @@ import {
   type Space,
 } from './directory.ts'
 import { bound, type Env, type Inbound } from './env.ts'
-import { signupAddress, url } from './host.ts'
+import { signupAddress, url } from '@yaks/platform/host'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import { mailedTo, mailFrom } from './post.ts'
 import { counted } from './meter.ts'

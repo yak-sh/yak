@@ -56,14 +56,16 @@ ordinary client writes.
 The kernel (`workers/yak`) and `yak admin` (@yaks/admin) both import these, so
 neither restates the other's names. Each is pure.
 
-| export                  | holds                                                                                                                                                                                          |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/platform/names`  | `PLATFORM`, the platform's own host; `SLUG`, a space's or an app's slug; `PLATFORM_STORE`, the store the directory lives in; `LINK` and `INVITE`, the sign-in link's and an invitation's paths |
-| `@yaks/platform/cookie` | `COOKIE`, the cookie a platform session rides in, and `cookieValue(header, name?)`, one cookie out of a `Cookie` header                                                                        |
-| `@yaks/platform/bots`   | which accounts and visitors are nobody's: `BOT`, the fleet's bot domain, `ADMIN` and `DEMO`, its two addresses that are not throwaways, `isTestAddress` and `isVerifiedBot`                    |
-| `@yaks/platform/budget` | `SpaceBudget`, a space's monthly model and voice budget, and `budgetLines`, the lines a person reads it in                                                                                     |
-| `@yaks/platform/funnel` | `Funnel`, yaks.app's own funnel as its admin door answers it, and `funnelLines`, the lines a person reads it in                                                                                |
-| `@yaks/platform/mover`  | what the store mover answers: `Swept`, a store a sweep asks; `Mark`, a rule's name; `Stamp`, `Standing` and `Rehearsal`, where a rule stands in a store and what a rehearsal found             |
+| export                  | holds                                                                                                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/platform/names`  | `PLATFORM`, the platform's own host; `SLUG`, a space's or an app's slug; `PLATFORM_STORE`, the store the directory lives in; `LINK` and `INVITE`, the sign-in link's and an invitation's paths    |
+| `@yaks/platform/cookie` | `COOKIE`, the cookie a platform session rides in, and `cookieValue(header, name?)`, one cookie out of a `Cookie` header                                                                           |
+| `@yaks/platform/bots`   | which accounts and visitors are nobody's: `BOT`, the fleet's bot domain, `ADMIN` and `DEMO`, its two addresses that are not throwaways, `isTestAddress` and `isVerifiedBot`                       |
+| `@yaks/platform/budget` | `SpaceBudget`, a space's monthly model and voice budget, and `budgetLines`, the lines a person reads it in                                                                                        |
+| `@yaks/platform/funnel` | `Funnel`, yaks.app's own funnel as its admin door answers it, and `funnelLines`, the lines a person reads it in                                                                                   |
+| `@yaks/platform/mover`  | what the store mover answers: `Swept`, a store a sweep asks; `Mark`, a rule's name; `Stamp`, `Standing` and `Rehearsal`, where a rule stands in a store and what a rehearsal found                |
+| `@yaks/platform/host`   | `Host`, a deployment's addresses read from its bindings; `apex`, `spaceHost` and `url`, its hostnames and pages; `hosted`, the platform's text said at them                                       |
+| `@yaks/platform/routes` | where a request goes: `route(host, path)`, its space, app and path; `hostOf`, `foreign`, `platform`; `admitted`, space isolation by `Origin`, and `cors`; the dashboard's and sign-in's addresses |
 
 ## Compatibility
 

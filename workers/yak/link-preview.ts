@@ -2,8 +2,8 @@
 // files, drawn pages, sign-in cards and hosted apps.
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
-import { type Host, url } from './host.ts'
-import { managed, onZone, route } from './route.ts'
+import { type Host, url } from '@yaks/platform/host'
+import { managed, onZone, route } from '@yaks/platform/routes'
 
 export type Preview = {
   title: string

@@ -6,7 +6,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { spaceIndex } from './pages.ts'
 import { desk } from './desk-pages.ts'
-import { managePath } from './route.ts'
+import { managePath } from '@yaks/platform/routes'
 
 // The dashboard itself, drawn straight (pages.ts `desk` is pure): the order
 // it puts its blocks in, and what stands where the connect steps were. Every

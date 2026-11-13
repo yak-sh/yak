@@ -5,7 +5,7 @@ import type { App } from './directory.ts'
 import { markup } from './html.ts'
 import { fixing, operated } from './pages.ts'
 import { library } from './desk-pages.ts'
-import { chatPath } from './route.ts'
+import { chatPath } from '@yaks/platform/routes'
 import { folds, type Plain, plain, type Seen } from './unseen.ts'
 
 // Two reports of one throw, as the tracker holds them, are one break.

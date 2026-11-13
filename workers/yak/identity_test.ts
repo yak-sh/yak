@@ -36,7 +36,7 @@ import {
 } from './probe.ts'
 import { COOKIE, cookieValue, sign, verify } from './lib/token.ts'
 import { SENDS } from './signin.ts'
-import { managePath } from './route.ts'
+import { managePath } from '@yaks/platform/routes'
 import type { Agent } from './connected.ts'
 
 // Styling and attribute order do not change the sign-in form's contract.
@@ -1309,7 +1309,7 @@ test('Profile saves the name, and Settings the address', async () => {
     // And nor may their own cookie, carried by somebody else's page. Every
     // space is same-site with the apex, so `SameSite=Lax` lets the session
     // ride a form a space's page posts at the dashboard — the origin check is
-    // what does not (route.ts `guarded`).
+    // what does not (@yaks/platform/routes `guarded`).
     let forged = await k.at('yaks.app', managePath('settings', want), {
       method: 'POST',
       redirect: 'manual',

@@ -13,7 +13,7 @@ import {
   using,
 } from '@yaks/connections'
 import { edgeEid } from '@yaks/edge'
-import { url } from './host.ts'
+import { url } from '@yaks/platform/host'
 import { APP, inApp, inSpace, refuse, SPACE, str, text } from './tool.ts'
 import { type Row, worded } from './tool-words.ts'
 import { serviceOffer } from './app-services.ts'

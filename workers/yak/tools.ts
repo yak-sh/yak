@@ -256,8 +256,8 @@ import {
   replyTo,
   spaceHost,
   url as hostUrl,
-} from './host.ts'
-import { foreign, planSettings } from './route.ts'
+} from '@yaks/platform/host'
+import { foreign, planSettings } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { globs, platformPath } from './router.ts'
 import { vocabAt } from './reach.ts'
@@ -5495,7 +5495,7 @@ let OURS: Row[] = [
         ? { ...await owns(ctx, args), app: null }
         : await ownsApp(ctx, args)
       // A hostname on our own zone is not a domain anybody brought: every
-      // space already answers at one, and route.ts decides which without
+      // space already answers at one, and @yaks/platform/routes decides which without
       // reading anything.
       if (!foreign(host, ctx.env)) {
         throw refuse(

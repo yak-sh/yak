@@ -1,7 +1,7 @@
 // Only a route's public publication may refine a sign-in card's preview.
 // Private routes never read the directory.
 import type { Directory } from './directory.ts'
-import { type Host } from './host.ts'
+import { type Host } from '@yaks/platform/host'
 import { destination, type Preview } from './link-preview.ts'
 
 export let linked = async (

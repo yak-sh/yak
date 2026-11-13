@@ -1,6 +1,6 @@
 /** @jsxImportSource preact */
 import { Button, Card } from '@yaks/ui'
-import { GET_PLAN } from '../route.ts'
+import { GET_PLAN } from '@yaks/platform/routes'
 import { Page, Yours } from './frame.tsx'
 
 export let Pricing = () => (

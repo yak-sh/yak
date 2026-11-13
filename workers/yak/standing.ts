@@ -48,7 +48,7 @@ import {
   url,
 } from './directory.ts'
 import type { Env } from './env.ts'
-import type { Host } from './host.ts'
+import type { Host } from '@yaks/platform/host'
 import {
   at as commandAt,
   type Command,

@@ -44,9 +44,9 @@
 // defend a 256-bit mac.
 import { opened, seal } from './lib/token.ts'
 import { type Row, shelf } from './grants.ts'
-import { onZone } from './route.ts'
+import { onZone } from '@yaks/platform/routes'
 import { LINK, PLATFORM } from '@yaks/platform/names'
-import type { Host } from './host.ts'
+import type { Host } from '@yaks/platform/host'
 import { refuse } from './tool.ts'
 
 // A standing link's life: what a minter gets by asking for nothing, and the
@@ -90,7 +90,7 @@ export let onceLink = async (secret: string, once: Once, at = PLATFORM) =>
 let HREF = /https:\/\/[^\s<>"']*[^\s<>"'.,!?;:)\]]/g
 
 /**
- * `text` with each of its links on our zone (route.ts `onZone`) said as what
+ * `text` with each of its links on our zone (@yaks/platform/routes `onZone`) said as what
  * `to` makes of it, or as written where `to` makes nothing. Each link is asked
  * about once, in order.
  *

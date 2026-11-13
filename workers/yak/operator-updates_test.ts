@@ -12,7 +12,7 @@ import { notification, type Update, updating } from './operator-updates.ts'
 import { parseHTML } from 'linkedom'
 import { chatPage, updatesPage } from './operator-page.ts'
 import { updatesAnswer } from './updates.ts'
-import { chatPath, managePath } from './route.ts'
+import { chatPath, managePath } from '@yaks/platform/routes'
 
 let p = platform('operator-updates')
 let [ada, bo, eid] = [0, 1, 2].map(() => crypto.randomUUID())

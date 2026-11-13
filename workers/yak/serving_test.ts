@@ -1298,7 +1298,7 @@ test('DELETE / empties the app store and bears it again', async () => {
 // is no workerd implementation and `wrangler dev` leaves the binding undefined
 // (dispatch.ts) — so what the seam itself does with a grant is dispatch_test.ts
 // and what is proved here is that the kernel asks it, and where in the order.
-// The `/.well-known/` half of rung 1 is decided before this part (route.ts
+// The `/.well-known/` half of rung 1 is decided before this part (@yaks/platform/routes
 // `platform`, index.ts) and is held in route_test.ts and home_test.ts.
 
 // The space, `cookbook` as its home app, `garden` beside it, and a home worker

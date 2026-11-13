@@ -55,7 +55,7 @@ import type { Ask } from '@yaks/builders/tools'
 import { edgeEid } from '@yaks/edge'
 import { heard, LAST } from '@yaks/memory'
 import { invokePackage } from './package-tools.ts'
-import { apex } from './host.ts'
+import { apex } from '@yaks/platform/host'
 
 /** The Claude connector directory's listing: what `tools/list` answered when
  * it was submitted on 2026-09-22, with main at aa4e26e6. */

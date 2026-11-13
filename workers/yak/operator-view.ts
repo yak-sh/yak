@@ -17,7 +17,7 @@ import { renderToString } from 'preact-render-to-string'
 import { Host } from '@yaks/markdown'
 import { Button, Card, Rows } from '@yaks/ui/parts'
 import { moment } from './html.ts'
-import { chatPath } from './route.ts'
+import { chatPath } from '@yaks/platform/routes'
 import type { Declared } from './operator-persona.ts'
 import type { Doing } from './mascot.ts'
 import {

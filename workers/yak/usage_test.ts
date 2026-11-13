@@ -27,7 +27,7 @@ import * as dirPart from './directory.ts'
 import { platform } from './testing.ts'
 import { meta } from './meta.ts'
 import type { Env } from './env.ts'
-import type { Host } from './host.ts'
+import type { Host } from '@yaks/platform/host'
 import {
   atCeiling,
   atStored,

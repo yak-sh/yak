@@ -15,7 +15,7 @@ import { inputSource } from './operator-provenance.ts'
 import { canon, LIFE, mac, mint, TRIES } from './signin.ts'
 import { KERNEL, meta } from './meta.ts'
 import { type Mail, mail } from './mail.ts'
-import { managePath } from './route.ts'
+import { managePath } from '@yaks/platform/routes'
 import { CONSENT, REPLIES, tell, texts } from './operator-texts.ts'
 import { alert, alertsRow } from './operator-alerts.ts'
 

@@ -21,11 +21,11 @@ import { agentList, agentLive } from './connected_ui.ts'
 import { tile } from './render/mod.ts'
 import { shown } from '@yaks/phone'
 import { CODE_NOTE, texted } from './signin.ts'
-import { MANAGE, managePath, OAUTH } from './route.ts'
+import { MANAGE, managePath, OAUTH } from '@yaks/platform/routes'
 import { CONNECTOR } from './seo.ts'
 import { AGENT } from './docs.ts'
 import { destination, type Preview } from './link-preview.ts'
-import { apex, type Host, spaceHost, url } from './host.ts'
+import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { INVITE, REPO as PUBLIC } from '@yaks/platform/names'
 
 import {
@@ -621,7 +621,7 @@ let external = (href: string, label: string) =>
   h('a', { href, target: '_blank', rel: 'noopener' }, label)
 
 // What to write in an OAuth box, for the forms that have boxes (T-34414).
-// Every value is the authorization server's own — route.ts `OAUTH` is what
+// Every value is the authorization server's own — @yaks/platform/routes `OAUTH` is what
 // identity.ts configures the provider with and what both `/.well-known`
 // documents serve — so this page cannot come to teach an address the door
 // does not answer.

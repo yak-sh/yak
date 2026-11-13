@@ -162,7 +162,7 @@ test('a page at another address reaches no door here', async () => {
   }
 })
 
-// The one door that answers a stranger's page (index.ts, route.ts `shared`,
+// The one door that answers a stranger's page (index.ts, @yaks/platform/routes `shared`,
 // T-33408). The line above is about ambient credentials, not secrecy: a public
 // app's rows already answer anyone with curl, so a read with the cookie taken
 // off is curl with a referrer. This holds the two halves that make that safe —

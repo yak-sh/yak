@@ -1,7 +1,7 @@
 // The kernel and its network boundaries, driven in process. Each fixture
 // owns a synthetic origin; requests to it dispatch directly to its handler.
 import * as io from '@yaks/file/io'
-import { apex } from './host.ts'
+import { apex } from '@yaks/platform/host'
 import { challenge } from '@yaks/oauth'
 import { clock, until } from '@yaks/testing'
 import { COOKIE, sign, verify } from './lib/token.ts'

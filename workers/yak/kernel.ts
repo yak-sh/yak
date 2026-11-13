@@ -14,26 +14,16 @@
 // Deno over the in-memory platform (probe.ts `kernel`) exactly as the
 // kernel's `./worker` facet (facets/kernel-worker.ts) hands it to the runtime.
 //
-// One thing beyond routing happens here, and it is here because nowhere else
-// still knows it: a write, or a request at a graph door, whose `Origin` names
-// another address is refused before it is served (route.ts `guarded`,
-// `sameOrigin`). Sibling
-// spaces are subdomains of one registrable domain, so they are same-site and
-// the session cookie rides along to a door another space's page aims at; the
-// browser's own `Origin` is what tells them apart, and after `aimed` rewrites
-// a custom domain's address the hostname the browser addressed is gone.
-//
-// One door answers a stranger's page anyway (route.ts `shared`, T-33408): an
-// app's read door, asked with GET. The cookie is taken off the request before
-// it is served and the answer is marked readable by any origin, so anybody's
-// page may read a public app the way anybody's curl already can — the apex's
-// own front page is a client of exactly that door and gets nothing extra.
+// A write, or a request at a graph door, whose `Origin` names another
+// address is refused before it is served (@yaks/platform/routes `admitted`),
+// and asked before `aimed` rewrites a custom domain's address, while the
+// hostname the browser addressed is still there to compare.
 //
 // There is no heartbeat: every store owes its own wakes and arms its own
 // Durable Object alarm for them (graph.ts, D-37562).
 //
 // The route table. Above every line of it sits what the platform owns
-// (route.ts `platform`): the whole `/.well-known/` prefix on our own
+// (@yaks/platform/routes `platform`): the whole `/.well-known/` prefix on our own
 // hostnames, because that is where a site grants authority over its own name
 // and `<space>.yaks.app` is our name, not the space's. A customer's own
 // domain is their name, so there the prefix is the app's, all of it:
@@ -98,26 +88,23 @@ import { directory } from './directory.ts'
 import { customOf, reading, refresh, type Step } from './domains.ts'
 import { identity } from './doors.ts'
 import { bound, type Env, type Inbound } from './env.ts'
-import { apex } from './host.ts'
+import { apex } from '@yaks/platform/host'
 import { lost, oops, provisioning } from './pages.ts'
 import { hook } from './connections.ts'
 import {
-  ADDRESS,
+  admitted,
   aim,
-  askable,
+  collapsed,
+  cors,
   foreign,
-  guarded,
   handedOff,
   hostOf,
-  MOUNT,
-  paged,
   platform,
   ready,
   type Route,
   route,
-  sameOrigin,
-  shared,
-} from './route.ts'
+  unmounted,
+} from '@yaks/platform/routes'
 import { slid } from './session.ts'
 import { fault, refusal } from './unseen.ts'
 
@@ -151,7 +138,7 @@ let atSpace = async (req: Request, env: Env, space: string) => {
   return bound(env.APPS, apps.fetch, env).fetch(req)
 }
 
-// A foreign host that has reached the Worker (route.ts origin, T-33036) but
+// A foreign host that has reached the Worker (@yaks/platform/routes origin, T-33036) but
 // has nothing ready to answer with: a domain mid-provisioning, or one
 // Cloudflare has stopped serving. `aimed` below is what routes an active
 // host to its app; this is what stands in front of it, because `aimed`
@@ -199,18 +186,18 @@ let settling = async (env: Env, host: string): Promise<Response | null> => {
 // A hostname someone else owns, aimed at a place of ours (T-33037, T-34596).
 // Routing stays pure and synchronous; this is a directory read, so it happens
 // here, where the router already holds env — and only for a hostname that is
-// neither ours nor a dev host (route.ts `foreign`). A host the directory has
+// neither ours nor a dev host (@yaks/platform/routes `foreign`). A host the directory has
 // never been given answers null and keeps the route it already had, which is
 // the apex: every address that exists today is decided before this is asked.
 //
 // The request is carried to the address that place already has on our own zone
-// (route.ts `aimedAt`, which is the whole of the space/app difference), and
+// (@yaks/platform/routes `aimedAt`, which is the whole of the space/app difference), and
 // every part below routes it from the pure route table the way it routes
 // everything else — so a domain on a space is served by the same rungs as
 // `<space>.yaks.app` rather than by a second copy of them. The browser stays on
 // the person's domain; only the address the platform derives from the request
 // moves, which is what puts a sign-in return on our own zone, where the session
-// cookie is (route.ts `onZone`).
+// cookie is (@yaks/platform/routes `onZone`).
 //
 // An app's mount rides along as `x-yak-mount: /`, because that app is at the
 // domain's root while the address routed on names its prefix, and the parts
@@ -241,93 +228,6 @@ let forwarded = async (req: Request, env: Env, host: string) => {
   return apps.moved(req, `https://${at.host.to}${url.pathname}${url.search}`)
 }
 
-// A page on somebody else's address, writing or at one of our graph doors
-// (route.ts `sameOrigin`, `guarded`). It is refused in the shape every other api
-// refusal has (apps.ts `json`) — a code the page's code reads, a sentence its
-// person reads — and it is a deliberate no, so nothing is filed about it.
-let stranger = () =>
-  Response.json({
-    error: {
-      code: 'foreign_origin',
-      message: 'that page is at another address and cannot use this door',
-    },
-  }, { status: 403 })
-
-// The same door, opened to any page in the world by taking the credentials
-// off it first (route.ts `shared`, T-33408). Both halves are here because
-// neither is safe alone: an answer marked readable by any origin must be an
-// answer no session was used to compute.
-//
-// The cookie is the whole of the ambient credential an app's door reads
-// (session.ts `whoIs`) — `x-yak-person` and `x-yak-role` are written by the
-// kernel on internal requests and never trusted from outside — so dropping it
-// makes the request anonymous rather than merely expected-anonymous.
-// `authorization` goes with it: the app doors do not read one today, and the
-// day something does, it must not arrive through this one.
-let uncredentialed = (req: Request) => {
-  let headers = new Headers(req.headers)
-  headers.delete('cookie')
-  headers.delete('authorization')
-  return new Request(req, { headers })
-}
-
-// The mark on the answer. The wildcard, never the asking origin, and no
-// `Access-Control-Allow-Credentials`: a browser refuses to send a credentialed
-// request to `*`, so the pair is a promise the browser itself enforces, and
-// echoing the origin back would let a future mistake add credentials to it.
-//
-// `Vary: Origin` because the same URL answers differently to the page that
-// owns it — same-origin, this is not called, and the answer is that person's.
-// The Workers cache is not in front of this entrypoint and must not be
-// (wrangler.toml, cache.ts): its key holds the path and not the hostname, so
-// `alice.yaks.app/recipes/api/query?x` and bob's are one entry. The answer is
-// public but it is not shareable by US, which is why `sealed` still marks it
-// `private, no-store` and nothing here asks for more.
-let cors = (res: Response) => {
-  if (res.status == 101) return res
-  let headers = new Headers(res.headers)
-  headers.set('access-control-allow-origin', '*')
-  headers.append('vary', 'origin')
-  return new Response(res.body, {
-    status: res.status,
-    statusText: res.statusText,
-    headers,
-  })
-}
-
-// A sandboxed page's own request (route.ts `paged`, installed.ts): the
-// cookie off, since the token in the path is the whole of what it may carry.
-let uncookied = (req: Request) => {
-  let headers = new Headers(req.headers)
-  headers.delete('cookie')
-  return new Request(req, { headers })
-}
-
-// And the question a browser asks before a sandboxed page's JSON write or
-// its upload: yes, from anywhere, with the headers it named. No credentials
-// are allowed and none are read, so there is nothing an origin could add.
-let preflight = (req: Request) =>
-  new Response(null, {
-    status: 204,
-    headers: {
-      'access-control-allow-origin': '*',
-      'access-control-allow-methods': 'GET, HEAD, POST, PUT, DELETE',
-      'access-control-allow-headers':
-        req.headers.get('access-control-request-headers') ?? '',
-      'access-control-max-age': '86400',
-    },
-  })
-
-// A header only the router writes: whatever a client sent under that name is
-// gone before anything reads it.
-let unmounted = (req: Request) => {
-  if (!req.headers.has(MOUNT) && !req.headers.has(ADDRESS)) return req
-  let headers = new Headers(req.headers)
-  headers.delete(MOUNT)
-  headers.delete(ADDRESS)
-  return new Request(req, { headers })
-}
-
 // What our code threw, recorded where we read it: the platform tracker, always
 // (T-33234). Invocation retention queues the failure before the soft page
 // lands; the independent tracker drains that queue.
@@ -356,19 +256,6 @@ let unmounted = (req: Request) => {
 // export below).
 export type Lent = { waitUntil: (work: Promise<unknown>) => void }
 
-// One page, one address: a doubled slash (`/printbound//refund`, from a typed
-// link or a crawler's join) names the page its single slash names. Collapsed
-// before anything routes on it, no part below and no app's code ever reads a
-// path that starts `//`, which `new URL` takes for a host and throws on
-// (T-153266, T-153429).
-let collapsed = (req: Request) => {
-  let url = new URL(req.url)
-  let path = url.pathname.replace(/\/{2,}/g, '/')
-  if (path == url.pathname) return req
-  url.pathname = path
-  return new Request(url, req)
-}
-
 let router = {
   async fetch(req: Request, env: Env): Promise<Response> {
     req = collapsed(req)
@@ -376,7 +263,7 @@ let router = {
     let r = route(host, new URL(req.url).pathname, env)
     try {
       req = unmounted(req)
-      // What the platform owns rather than an app (route.ts `platform`),
+      // What the platform owns rather than an app (@yaks/platform/routes `platform`),
       // decided from the hostname the request arrived at: `/.well-known/` on
       // our own hostnames, where an app would otherwise grant authority over
       // a name that is ours. A customer's own domain is never in here — the
@@ -416,44 +303,19 @@ let router = {
       if (hold) return sealed(hold, env)
       let sent = await forwarded(req, env, host)
       if (sent) return sealed(sent, env)
-      // Space isolation, and the one place it holds (route.ts `sameOrigin`).
-      // Here, before `aimed` moves the address, because what must match is
-      // what the browser addressed: a page at `herbusiness.com` asking its
-      // own `/api/…` is same-origin even though the router is about to carry
-      // the request to `<space>.yaks.app/<app>/api/…`.
-      //
-      // One door is open to every page anyway, and this is where it opens:
-      // the app's read door, asked with GET, served with the credentials
-      // stripped off and marked readable by any origin (route.ts `shared`).
-      // So is asking for a sign-in code, to the pages of ours that ask for
-      // one (route.ts `askable`).
-      //
-      // And a sandboxed app's page, on the path that carries its token: its
-      // origin is opaque, so it is a stranger to every page, and its request
-      // is served with no cookie at all (route.ts `paged`).
-      let anyone = false
-      if (paged(asked)) {
-        if (req.method == 'OPTIONS') return sealed(preflight(req), env)
-        req = uncookied(req)
-        anyone = true
-      } else if (
-        guarded(req.method, asked) &&
-        !sameOrigin(host, req.headers.get('origin'), env)
-      ) {
-        if (
-          !shared(req.method, asked) &&
-          !askable(req.method, asked, req.headers.get('origin'))
-        ) return stranger()
-        req = uncredentialed(req)
-        anyone = true
-      }
+      // Space isolation (@yaks/platform/routes `admitted`), before `aimed`
+      // moves the address, since what must match is what the browser
+      // addressed.
+      let given = admitted(req, host, env)
+      if ('answer' in given) return sealed(given.answer, env)
+      req = given.req
       let at = r.space == null ? await aimed(req, env, host) : null
       if (at) {
         req = at
         r = route(hostOf(at, env), new URL(at.url).pathname, env)
       }
       let answer = await serve(req, env, r)
-      return sealed(anyone ? cors(answer) : answer, env)
+      return sealed(given.anyone ? cors(answer) : answer, env)
     } catch (e) {
       // A refusal is not a break (unseen.ts `refusal`, T-32655). A part that
       // relays a door's deliberate no by throwing what it was answered is

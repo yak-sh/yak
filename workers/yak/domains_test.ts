@@ -24,7 +24,7 @@ import {
   steps,
 } from './domains.ts'
 import type { Env } from './env.ts'
-import { ORIGIN } from './route.ts'
+import { ORIGIN } from '@yaks/platform/routes'
 
 let env = { CF_ZONE: 'zone', CF_HOSTNAMES_TOKEN: 'a-token' } as Env
 let AT = 'https://api.cloudflare.com/client/v4/zones/zone/custom_hostnames'

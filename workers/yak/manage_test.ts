@@ -14,7 +14,7 @@ import {
   owned,
   signIn,
 } from './probe.ts'
-import { chatPath, LOGOUT, MANAGE, managePath } from './route.ts'
+import { chatPath, LOGOUT, MANAGE, managePath } from '@yaks/platform/routes'
 import { WAKE } from './door.ts'
 import { parseHTML } from 'linkedom'
 

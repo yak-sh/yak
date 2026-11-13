@@ -23,7 +23,7 @@ import type { Stored } from './graph.ts'
 import { appStore } from './directory.ts'
 import { KERNEL } from './meta.ts'
 import { decodedPath } from './request-path.ts'
-import { ADDRESS } from './route.ts'
+import { ADDRESS } from '@yaks/platform/routes'
 import { recognized } from './recognized.ts'
 
 let NO_STORE = { 'cache-control': 'no-store' }

@@ -448,7 +448,7 @@ import {
 
 // A JSON answer's headers, for one the write log kept as text.
 let JSONED = { headers: { 'content-type': 'application/json' } }
-import { apex, url } from './host.ts'
+import { apex, url } from '@yaks/platform/host'
 import { install, retire, shed } from './migrate.ts'
 import {
   appDerived,

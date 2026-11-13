@@ -43,11 +43,11 @@ import {
 } from './directory.ts'
 import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
-import { type Host, url } from './host.ts'
+import { type Host, url } from '@yaks/platform/host'
 import { instrumentEid } from './instrument.ts'
 import { KERNEL, meta } from './meta.ts'
 import { COPY } from './relocate.ts'
-import { installAt, signInAt } from './route.ts'
+import { installAt, signInAt } from '@yaks/platform/routes'
 import { cleared, sampling } from './sample.ts'
 import { domainOf, newcomer, SESSION, type Who } from './session.ts'
 

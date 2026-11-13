@@ -3,7 +3,7 @@
 import type { Env } from './env.ts'
 import type { Hosting } from '../../packages/browse/hosting.ts'
 import { named } from './sheets.ts'
-import { ADDRESS } from './route.ts'
+import { ADDRESS } from '@yaks/platform/routes'
 
 export let webPath = (path: string) =>
   path == '/_web' || path.startsWith('/_web/')

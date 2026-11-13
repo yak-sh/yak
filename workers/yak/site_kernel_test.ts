@@ -13,7 +13,7 @@ import * as site from './site.ts'
 import { OPERATOR } from './variant.ts'
 
 // The generated addresses, through the kernel, at the apex and not on a space's
-// hostname — where robots.txt is the customer's own file (route.ts) and always
+// hostname — where robots.txt is the customer's own file (@yaks/platform/routes) and always
 // has been.
 test('the apex answers the crawler and the model', async () => {
   let k = await kernel()
@@ -188,7 +188,7 @@ test('the apex answers the crawler and the model', async () => {
     let theirs = await k.at('jeff.yaks.app', '/robots.txt')
     assert(!(await theirs.text()).includes('Sitemap: https://yaks.app'))
     // And `/.well-known/` on a space's hostname is the platform's, with
-    // nothing of ours to say there (route.ts `platform`).
+    // nothing of ours to say there (@yaks/platform/routes `platform`).
     let none = await k.at('jeff.yaks.app', '/.well-known/security.txt')
     await none.text()
     assertEquals(none.status, 404)

@@ -2,7 +2,7 @@
 // validator at the next revalidation; a conditional hit never reads or renders
 // those files. The gateway itself remains outside Cloudflare's shared cache.
 import type { Env } from './env.ts'
-import { apex } from './host.ts'
+import { apex } from '@yaks/platform/host'
 
 type Deploy = Pick<Env, 'APEX' | 'CF_VERSION_METADATA'>
 

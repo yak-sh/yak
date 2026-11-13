@@ -13,8 +13,8 @@ import {
   type Space,
   walkTo,
 } from './directory.ts'
-import type { Host } from './host.ts'
-import { manageAt } from './route.ts'
+import type { Host } from '@yaks/platform/host'
+import { manageAt } from '@yaks/platform/routes'
 
 /** One person here: where they stand, what to call them, and where
  * their letters go. */

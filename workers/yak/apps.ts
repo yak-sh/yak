@@ -8,7 +8,7 @@ import { APP, type Preview } from './link-preview.ts'
 import { previewed } from './preview-html.ts'
 // The app-serving part: `<space>.yaks.app/<app>/…` — the deploy seam's first
 // hosted implementation (D-32318 §v1 sequencing). One fetch handler: it
-// reads the hostname and path (route.ts), resolves the space and app through
+// reads the hostname and path (@yaks/platform/routes), resolves the space and app through
 // the directory part (directory.ts, in-process or across a binding), verifies
 // the session (session.ts), and serves the app's files out of its blob store
 // with the graph API for its (space, app) store beside them —
@@ -33,7 +33,7 @@ import { previewed } from './preview-html.ts'
 // per app: a page in a loop is a bug to see once, not a write flood. What the
 // door refused on purpose never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
-import { apex, type Host, url as hostUrl } from './host.ts'
+import { apex, type Host, url as hostUrl } from '@yaks/platform/host'
 import { r2Objects } from './lib/objects.ts'
 import { logoBytes, logoIcon } from './logo.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build-door.ts'
@@ -120,7 +120,7 @@ import {
   paged as pagePath,
   route,
   signInAt,
-} from './route.ts'
+} from '@yaks/platform/routes'
 import { covers, platformPath } from './router.ts'
 import {
   browsing,
@@ -173,7 +173,7 @@ import { noted, refusal, serving } from './unseen.ts'
 import { broken } from '@yaks/tracker/report'
 import { flood } from './lib/flood.ts'
 import { isVerifiedBot } from '@yaks/platform/bots'
-import { ADDRESS } from './route.ts'
+import { ADDRESS } from '@yaks/platform/routes'
 import { background, caught, defect, refusing, stopped } from './defects.ts'
 import {
   barOf,
@@ -490,7 +490,7 @@ let nothingAt = (pathname: string, env: Env) =>
     ? json(404, 'not_found', 'no app at that address')
     : nothingHere(env)
 
-// Where a refusal sends someone who has not signed in (route.ts `signInAt`).
+// Where a refusal sends someone who has not signed in (@yaks/platform/routes `signInAt`).
 // At the file door the page to return to is the request itself; at an `/api/`
 // door — nowhere to return to — it is the Referer, and the request's own
 // address when the browser sent none.
@@ -2655,7 +2655,7 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
 //
 //  1. Platform paths are the kernel's and no app routes them: `/.well-known/`
 //     on a hostname of ours, where a site grants authority over a name that
-//     is not the space's (route.ts `platform`, decided before this part), an
+//     is not the space's (@yaks/platform/routes `platform`, decided before this part), an
 //     app's `/<app>/api/…` store doors, and the directory's own space, which
 //     nothing is served at to anyone (T-32585).
 //  2. An app's slug owns the first path segment: `/<app>/…` is that app — its
@@ -2875,7 +2875,7 @@ let served = async (
     keepable(app, path) && !(dir.stale && app.access != 'public')
   if (!app) {
     // Which app is home is a directory read, so it was read above, where env
-    // is, and not in route.ts, which is pure (index.ts `aimed`, same reason).
+    // is, and not in @yaks/platform/routes, which is pure (index.ts `aimed`, same reason).
     // No front page at all — the ordinary state of a space, since being the
     // first app claims nothing (tools.ts `app_new`). Rung 4 at the bare
     // address, rung 5's 404 anywhere else: there is no home worker to be the
@@ -3445,7 +3445,7 @@ let served = async (
   // Rung 4, and it is last rather than fourth in the code because rungs 3 and
   // 5 are the one call above: the space's index answers `/` when the home app
   // has nothing there — its worker passed and its files have no front page.
-  // Only the home app can be at `/` (route.ts `route` names no app for it, so
+  // Only the home app can be at `/` (@yaks/platform/routes `route` names no app for it, so
   // this is the fall-through), which is why the home app is the whole of the
   // test. A path that is not `/` keeps the 404: an address inside a space that
   // nothing answers is nothing, not a listing.

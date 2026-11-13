@@ -3,7 +3,7 @@
 // that only serves a space never compiles the gallery's pages and letters
 // (T-148886).
 import type { Shared } from './directory.ts'
-import { type Host, url as siteUrl } from './host.ts'
+import { type Host, url as siteUrl } from '@yaks/platform/host'
 
 // Where each published app's own page lives (app-page.ts): one address per
 // platform-wide name, listed or not.

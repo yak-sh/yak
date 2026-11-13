@@ -84,11 +84,24 @@ export let specimens = (): Specimen[] => [
         {},
         h(
           Transcript.Entry,
-          {},
+          { mod: 'theirs' },
           h(Transcript.Bubble, {}, 'Can you help?'),
-          h(Transcript.Meta, {}, 'a moment ago'),
+          h(
+            Transcript.Meta,
+            {},
+            h(Transcript.When, {
+              at: '2026-11-06T15:42:00Z',
+              now: 1794238920000,
+            } as never),
+          ),
+        ),
+        h(
+          Transcript.Entry,
+          { mod: 'step' },
+          h(Transcript.Meta, {}, 'Read the recipes app'),
         ),
         h(Transcript.Reply, {}, 'Yes. What would you like to do?'),
+        h(Transcript.Error, {}, 'The recipes app did not answer.'),
       ),
     ),
   ],

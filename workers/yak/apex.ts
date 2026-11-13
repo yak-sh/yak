@@ -25,7 +25,7 @@ import { lost } from './pages.ts'
 import { callback } from './connections.ts'
 import { logoDoor } from './catalog.ts'
 import { answer as seo } from './seo.ts'
-import { LOGOUT, MANAGE } from './route.ts'
+import { LOGOUT, MANAGE } from '@yaks/platform/routes'
 import { START } from './newcomer.ts'
 import * as pageReport from './page-report.ts'
 import { paymentDoor } from './payment-doors.ts'
@@ -95,9 +95,9 @@ let atApex = async (req: Request, env: Env, path: string) => {
   }
   // The payment provider's webhook doors (payment-doors.ts), each its own
   // endpoint with its own signing secret. Not under `/api/` — that prefix is
-  // the graph's — and guarded all the same, as every write is (route.ts
+  // the graph's — and guarded all the same, as every write is (@yaks/platform/routes
   // `guarded`). It costs them nothing: a provider posts server to server with
-  // no Origin at all, and an absent Origin is allowed (route.ts `sameOrigin`).
+  // no Origin at all, and an absent Origin is allowed (@yaks/platform/routes `sameOrigin`).
   let paid = await paymentDoor(req, env)
   if (paid) return paid
   // A phone's doors, for any provider config.ts `phoneConfig` lends as `via`

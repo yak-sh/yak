@@ -43,7 +43,7 @@ import type { Env } from './env.ts'
 import type { Answer } from './apps.ts'
 import { background, caught, defect } from './defects.ts'
 import { directoryOf } from './directory.ts'
-import { manageAt } from './route.ts'
+import { manageAt } from '@yaks/platform/routes'
 
 // The outside service's own failure, carried past the catch below unchanged.
 class Wire extends Error {

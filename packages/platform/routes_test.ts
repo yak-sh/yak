@@ -15,7 +15,7 @@ import {
   route,
   sameOrigin,
   shared,
-} from './route.ts'
+} from './routes.ts'
 
 let cases: [string, string, ReturnType<typeof route>][] = [
   ['yaks.app', '/', { space: null, app: null, path: '/' }],
@@ -188,7 +188,7 @@ test('onZone: our own https hostnames, and nothing else', () => {
   for (let [href, want] of ours) assertEquals(onZone(href), want, href)
 })
 
-// Whose `/.well-known/` it is (route.ts `platform`): the place a site grants
+// Whose `/.well-known/` it is (routes.ts `platform`): the place a site grants
 // authority over its own name, so it belongs to whoever owns the name — us
 // on `<space>.yaks.app`, the app on a custom domain.
 test("platform: a grant on our name is not an app's to make", () => {
@@ -232,7 +232,7 @@ test("platform: a grant on our name is not an app's to make", () => {
   }
 })
 
-// What the origin check guards (route.ts `guarded`): every write but the
+// What the origin check guards (routes.ts `guarded`): every write but the
 // OAuth provider's two CORS doors, and every method where the graph answers.
 test('guarded: every write, and the graph doors, not the pages', () => {
   let doors: [string, string, boolean][] = [
@@ -273,7 +273,7 @@ test('guarded: every write, and the graph doors, not the pages', () => {
   }
 })
 
-// The line between spaces (route.ts `sameOrigin`). Sibling spaces are
+// The line between spaces (routes.ts `sameOrigin`). Sibling spaces are
 // same-site, so nothing but this tells them apart; an absent header is a
 // client with no page behind it and keeps its door.
 test('sameOrigin: the page that asked, at the host it asked', () => {
@@ -301,7 +301,7 @@ test('sameOrigin: the page that asked, at the host it asked', () => {
   }
 })
 
-// The one exception to it (route.ts `shared`): the read door, asked with GET.
+// The one exception to it (routes.ts `shared`): the read door, asked with GET.
 // Everything a write could ride on is outside — including `/ws`, which reads
 // but carries the write grant on the same socket.
 test('shared: the read door, and nothing a write could ride on', () => {
@@ -328,7 +328,7 @@ test('shared: the read door, and nothing a write could ride on', () => {
   }
 })
 
-// The sign-in door, asked from yak.sh (route.ts `askable`), and from nowhere
+// The sign-in door, asked from yak.sh (routes.ts `askable`), and from nowhere
 // else that is not the page itself.
 test('askable: asking for a code, from the pages of ours that ask', () => {
   let doors: [string, string, string | null, boolean][] = [

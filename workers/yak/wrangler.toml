@@ -91,7 +91,7 @@ enabled = true
 
 # Under `wrangler dev` a request's URL carries the first route's hostname
 # unless told otherwise. Loopback with --var LOCAL_DEV:1 enables x-yak-host
-# for local probes (route.ts); deno task dev:yak supplies that flag.
+# for local probes (@yaks/platform/routes); deno task dev:yak supplies that flag.
 [dev]
 host = "127.0.0.1"
 

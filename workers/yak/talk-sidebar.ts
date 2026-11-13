@@ -8,8 +8,8 @@ import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
 import type { Beside } from './operator-page.ts'
-import { spaceHost, url } from './host.ts'
-import { ADMIN, chatPath, logoPath, managePath } from './route.ts'
+import { spaceHost, url } from '@yaks/platform/host'
+import { ADMIN, chatPath, logoPath, managePath } from '@yaks/platform/routes'
 
 /** An app beside the conversation already open. */
 export let aboutPath = (space: string, app: string, open = 'new') =>

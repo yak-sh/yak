@@ -6,7 +6,7 @@
 // anything that happened on a seller's account is sell.ts's. Nothing here names a provider, and the paths are the
 // ones the provider was told, so nothing is registered with it again.
 //
-// It carries no `Origin` — this is server to server — and route.ts
+// It carries no `Origin` — this is server to server — and @yaks/platform/routes
 // `sameOrigin` allows an absent Origin deliberately, which is what lets an
 // event through the guard that separates spaces (index.ts, T-33118). A
 // silently 403'd event is a plan that never activates, so origin_test.ts

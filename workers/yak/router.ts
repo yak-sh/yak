@@ -14,7 +14,7 @@
 // store, no directory — so it is the same rule in a test, in `app_set`, and in
 // the router.
 
-import { OURS } from './route.ts'
+import { OURS } from '@yaks/platform/routes'
 import { refuse } from './tool.ts'
 
 // Everything between the wildcards, as itself: a glob's own `.` is a dot and

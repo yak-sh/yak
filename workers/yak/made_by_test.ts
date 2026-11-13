@@ -7,7 +7,7 @@ import { bearerFor, connector, kernel, meta, signIn, unique } from './probe.ts'
 import { HELLO } from './mcp-probe.ts'
 import { agentEid } from './instrument.ts'
 import { relative } from '@yaks/ui/relative'
-import { managePath } from './route.ts'
+import { managePath } from '@yaks/platform/routes'
 
 type Stamp = { at?: string; by?: unknown; via?: unknown }
 let idOf = (v: unknown) =>

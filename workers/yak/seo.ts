@@ -13,13 +13,13 @@
 // against the other.
 //
 // APEX ONLY. A space's hostname is the customer's face and its `robots.txt` is
-// its own (route.ts): what a person publishes there is theirs to say. The door
+// its own (@yaks/platform/routes): what a person publishes there is theirs to say. The door
 // in kernel.ts calls `answer` only at the apex.
 import { AGENT, DOCS, DRAWN, MARKDOWN, TECH } from './docs.ts'
 import { INTEGRATIONS } from './integrations.ts'
 import type { Env } from './env.ts'
 import { PAGES, uriOf, whole } from './guide.ts'
-import { type Host, hosted, replyTo, spaceHost, url } from './host.ts'
+import { type Host, hosted, replyTo, spaceHost, url } from '@yaks/platform/host'
 import { PLATFORM } from '@yaks/platform/names'
 import { VERSION } from './running.ts'
 import { publicPage } from './public-cache.ts'
@@ -173,7 +173,7 @@ export let robots = (env: Host = {}) =>
 // Where to report a security problem (RFC 9116). A researcher who finds one
 // looks for this file before looking for a page, and an agent directory's
 // terms ask a connector for an address vulnerabilities can be sent to. The
-// address is the one a person already writes to (host.ts `replyTo`) — a second
+// address is the one a person already writes to (@yaks/platform/host `replyTo`) — a second
 // inbox nobody watches is worse than no file at all.
 //
 // It is generated rather than a file under `public/` because `Expires` goes

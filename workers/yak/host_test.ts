@@ -2,10 +2,17 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { sealed } from './cache.ts'
 import { records } from './domains.ts'
-import { apex, hosted, spaceHost, url } from './host.ts'
+import { apex, hosted, spaceHost, url } from '@yaks/platform/host'
 import { mailedTo, mailFrom } from './post.ts'
-import { replyTo } from './host.ts'
-import { aimedAt, foreign, onZone, platform, route, says } from './route.ts'
+import { replyTo } from '@yaks/platform/host'
+import {
+  aimedAt,
+  foreign,
+  onZone,
+  platform,
+  route,
+  says,
+} from '@yaks/platform/routes'
 
 let env = { APEX: 'yaks.fyi' }
 

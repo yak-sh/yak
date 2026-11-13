@@ -58,7 +58,7 @@ import { scriptOf, storeName, url } from './directory.ts'
 import type { Env } from './env.ts'
 import { accountUrl, failure, resent } from '@yaks/cloudflare/api'
 import { oops } from './pages.ts'
-import { ADDRESS, bearing, GRANT, MOUNT } from './route.ts'
+import { ADDRESS, bearing, GRANT, MOUNT } from '@yaks/platform/routes'
 import type { Who } from './session.ts'
 import { browsersOf } from './attribution.ts'
 import type { Dispatch } from './door.ts'
@@ -132,7 +132,7 @@ type Grant = {
 // script name as alphanumerics and dashes; the separators the handle is built
 // out of — the slash between space and app, the dot before the key — are
 // neither, so both fold. A slug holds neither of them and neither an
-// underscore (route.ts slug) and the key is hex, so the fold is still one
+// underscore (@yaks/platform/routes slug) and the key is hex, so the fold is still one
 // script per app: `yourname/recipes.1f7c9a` is `yourname_recipes_1f7c9a`,
 // and the bare `yourname/recipes` an older app is named by is
 // `yourname_recipes` as it always was.
