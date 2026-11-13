@@ -410,6 +410,37 @@ test('a lazy image from an open page loads after another toolkit remake', () => 
   assertEquals(remadeAssets.body, remadeAssets.image)
 })
 
+// A remake whose compile pins other versions writes its own lock into the
+// release it makes, and nobody's draft holds anything unreleased for it.
+test('a remake that writes a new lock leaves nothing unreleased', async () => {
+  let n = 0
+  await using s = await scenario((ask) => ({
+    ...compiles(ask),
+    lock: `{"lockfileVersion": ${++n}}\n`,
+  }))
+  await s.write({
+    'index.html': PAGE,
+    'main.ts': 'let n: number = 1',
+    'package.json': '{"dependencies": {"three": "^0.186.0"}}',
+  })
+  await s.tool('app_deploy')
+  let space = (await s.dir.space('ada'))!
+  let app = (await s.dir.app(space, 'cookbook'))!
+  await remade(s.env, { app: app.eid, source: app.source! })
+  assertEquals(
+    await s.tool('app_files', { op: 'read', path: 'package-lock.json' }),
+    '{"lockfileVersion": 2}\n',
+  )
+  assertStringIncludes(
+    await s.tool('app_files', { op: 'list' }),
+    'live v1, with nothing unreleased',
+  )
+  assertStringIncludes(
+    await s.tool('app_deploy', { base: 0 }),
+    'Would replace: (none)',
+  )
+})
+
 // A page whose ask for a remake is refused (a Store still on the last
 // deploy's code does not know the remake's words) has the next page ask again,
 // and a remake that fired and left the release serving is woken again.

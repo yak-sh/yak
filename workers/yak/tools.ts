@@ -319,7 +319,6 @@ import {
   record,
   releaseOf,
   releases,
-  same,
   sha256,
   unfenced,
   type Version,
@@ -1790,12 +1789,11 @@ let released = async (
     // The fence holds both the serving pointer and the candidate's edits.
     // Inspect losses before compiling, planting a schema or deploying a worker.
     if (reviewing && base != null) {
-      let live = (await versions(ctx.dir, standing))
-        .find((v) => v.version == standing.version)
-      if (!live) throw refuse('missing', `no live v${standing.version}`)
+      // What serves, as app_files compares a draft with it.
+      let live = await served(blobs, standing)
       let candidate = files.manifest()
       if (!candidate) throw new Error('release has a file without a pinned sha')
-      let paths = Object.keys(live.files).sort()
+      let paths = own(Object.keys(live)).sort()
       return {
         version: standing.version!,
         said: '',
@@ -1804,7 +1802,7 @@ let released = async (
           version: standing.version!,
           removed: paths.filter((path) => !(path in candidate)),
           replaced: paths.filter((path) =>
-            path in candidate && candidate[path] != live.files[path]
+            path in candidate && candidate[path] != live[path]
           ),
         },
       }
@@ -3572,7 +3570,10 @@ let OURS: Row[] = [
           Object.entries(d.files).filter(([path]) => own([path]).length),
         )
         let paths = Object.keys(files).sort()
-        let unreleased = !live || !same(live.files, files)
+        // Against the release that serves, not the version's row: a remake
+        // writes its own lock into the release it makes (esbuild.ts), which
+        // the version it remade keeps naming the lock it replaced.
+        let unreleased = !live || d.unreleased
         let version = app.version ?? 0
         let { config } = await configured((p) =>
           p in files ? d.view.read(at(d, p)) : Promise.resolve(null)
