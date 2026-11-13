@@ -19,3 +19,12 @@ command and each property a title in the person's own words ("Address line 2",
 not street2), and mark a property the app keeps for itself, which nobody fills
 in (a slug, a sort position, a flag on sample rows), "readOnly": true: the
 column leaves it out.
+
+Write a new app's words, its headings, paragraphs, labels and placeholders, in a
+`copy.json` beside its `index.html`, a key per snippet, and mark each element
+with the key it shows (`<h1 data-copy="hero.title"></h1>`), as the guide's Copy
+and On-Page Editing page says. The person can then change any word on the page
+itself, with the pencil in its corner. An app written before keeps its words
+where they are: move them into `copy.json` only when its owner asks, page by
+page, marking each element, and check with app_preview that every page shows the
+same words it did.

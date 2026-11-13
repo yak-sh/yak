@@ -93,6 +93,33 @@ Deeper: <https://yaks.app/docs/files.md> — releases, `yak-release`,
 `app_deploy`'s `reload`, the app's icon, uploads, pictures, and a gallery that
 never shows one twice.
 
+## Copy and On-Page Editing
+
+An app's copy, the words its pages show, goes in `copy.json` at its root, a key
+per snippet, and each element names the snippet it shows with `data-copy`. The
+platform fills the element as it serves the page. Write every new app this way:
+the person can then change any word on the page itself, where a member who
+writes the app sees a pencil in the bottom-right corner, and Save releases the
+new `copy.json`.
+
+    { "cost": { "title": "What it costs",
+                "limits": "Tax is included. %{plans}.",
+                "plans": "Compare plans and limits" } }
+
+    <h2 data-copy="cost.title"></h2>
+    <p data-copy="cost.limits">
+      <a href="/pricing" data-copy-slot="plans" data-copy="cost.plans"></a>
+    </p>
+
+A value is plain text; a link or a bold word inside a sentence is a slot,
+`%{name}`, filled by the child marked `data-copy-slot`. A script that draws text
+reads `./copy.json` and marks what it draws the same way. An existing app moves
+its text into `copy.json` only when its owner asks.
+
+Deeper: <https://yaks.app/docs/copy.md> — the file, attributes such as
+`data-copy-placeholder`, slots, text a script draws, editing on the page, and
+moving an existing app's copy.
+
 ## Components and vocab.json
 
 A component is a named set of properties an entity carries. The platform's own,

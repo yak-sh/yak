@@ -135,6 +135,9 @@ app_new:
     allowed to write can change data. Returns the app's entity id, URL and
     access setting. The URL serves nothing until app_deploy releases a
     version, so hand the person the link app_deploy answers, not this one.
+    Write the new app's copy, the words its pages show, in a copy.json
+    beside index.html and mark each element with data-copy, so the person
+    can edit the words on the page (https://yaks.app/docs/copy).
     Documentation: https://yaks.app/docs.
 app_files:
   title: Read or write app files
@@ -186,7 +189,12 @@ app_files:
     `import { apply, query, search } from './api/client.js'`. Each page gets
     a `<base>` at its own folder under the app's address, so relative URLs
     still work in a copy installed elsewhere; a page in a folder reaches the
-    client at ../api/client.js. A write returns its byte count and SHA-256,
+    client at ../api/client.js. A page's words go in copy.json at the
+    app's root, a key per snippet, and an element names the one it shows,
+    <h1 data-copy="hero.title"></h1>, which the platform fills as it serves
+    the page; leave the text out of the element (https://yaks.app/docs/copy).
+    Move an existing app's text into copy.json only when its owner asks. A
+    write returns its byte count and SHA-256,
     and for a .json file whether it parses and where it does not; a picture
     that does not decode is refused. The app's icon, the picture beside its
     name wherever yaks.app lists it (the space's apps, the Operator's

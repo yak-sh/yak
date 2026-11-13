@@ -91,7 +91,12 @@ wrangler.jsonc, {"assets": {"directory": "dist"}}
    whole set in one call, as files: [{path, content}, ...]. Write an icon.svg
    beside index.html as well, as content: a square viewBox, a background that
    fills it, and shapes rather than <text>, which has no font. The platform
-   draws it as the icon.png a phone's home screen shows.
+   draws it as the icon.png a phone's home screen shows. Put the pages'
+   words in a copy.json beside index.html, a key per snippet
+   ({"hero": {"title": "..."}}), and mark each element with the key it
+   shows, <h1 data-copy="hero.title"></h1>: the platform fills it as it
+   serves the page, and the person can then edit the words on the page
+   itself (${url(env, '/docs/copy.md')}).
 3. app_preview — check the private draft before releasing it, at width: 390
    for a phone and width: 1280 for a desktop. It returns a screenshot image,
    console messages, JavaScript errors, WCAG 2.1 AA accessibility problems
@@ -490,6 +495,7 @@ export let PAGES: Page[] = [
   'entities',
   'wakes',
   'files',
+  'copy',
   'tools',
   'notes',
   'code',
