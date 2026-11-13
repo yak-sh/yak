@@ -278,7 +278,7 @@ export let Home = () => (
         <p class='Hello_Kicker'>Build, host and share web apps</p>
         <h1 class='Title Title-hero' id='hello'>
           <label for='say'>
-            Say what you need an app for, and watch it being built.
+            Build your ideas by asking
           </label>
         </h1>
         <form class='Hello_Ask' method='post' action={START}>
