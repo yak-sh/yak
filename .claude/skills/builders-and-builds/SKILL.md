@@ -136,6 +136,11 @@ of it does.
   fails the build. The README's "Wiring" paragraph gives its contract.
 - A tool's reference property may also name a nonedge sibling as `"$<slot>"`.
   Text keeps a `$` as written; a reference naming no sibling is refused.
+- One wrong reference in a model's answer never loses the draft. A reference
+  naming no sibling, nothing alive or the wrong kind is left out (the clerk's
+  "unsure") and `built.unresolved` on the take says what the model wrote; a
+  `cascade` reference (a vote's motion) leaves its output no components.
+  `.built.unresolved` finds them. A code tool's bad sibling is still refused.
 - An output wearing `edge{from, to}` and one relation is a link:
   `{"slot": "needs <item>", "inputs": [], "components": {"edge": {"from":
   "$tome", "to": "<item>"}, "needs": {"count": 2}}}`.

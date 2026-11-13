@@ -246,6 +246,14 @@
           "type": "string",
           "stamped": true,
           "description": "binding fingerprint that produced this take"
+        },
+        "unresolved": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "stamped": true,
+          "description": "comp.prop -> what a model's answer said in a reference that named nothing, or the wrong kind; it was left out of the output, and an output that reference owns keeps no components"
         }
       },
       "description": "one retained take in one named output slot; chosen marks the one in use"

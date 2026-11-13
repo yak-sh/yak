@@ -10,6 +10,13 @@
 // A model gets the contract wrong now and then, so its malformed answer is
 // only that; a code tool's is a bug in its code and is reported.
 //
+// A model also names a wrong thing now and then: a sibling it never wrote, a
+// voice where a member belongs. One bad reference never costs its whole
+// answer. The reference is left out of its output, as though the model had
+// left it unsaid, and the take records what it said in `built.unresolved`.
+// An output its reference owns (`death: cascade`, as a vote is its motion's)
+// keeps no components at all, since it means nothing without its owner.
+//
 // An output wearing `edge` is a link, and a link is identified by its ends and
 // its relation (@yaks/edge): it lands on that derived eid, which finds it again
 // and carries its slot and output key like any output. One of its ends is
@@ -24,7 +31,9 @@ import { and, eq, present } from '@yaks/query'
 import { EDGE, edgeEid, link, relations, unlink } from '@yaks/edge'
 import { held, keyed, keyEid, unkeyed } from '@yaks/key'
 import { verify } from '@yaks/kernel'
+import { alive } from '@yaks/graph'
 import { BUILD, BUILT, ids, OUTPUT_OF, outputOf } from './build.ts'
+import { modelToolEid } from './model.ts'
 import { inputKey } from './key.ts'
 import { step, steps } from './steps.ts'
 
@@ -45,6 +54,11 @@ export type Spec = {
   inputs: Eid[]
   components: Record<string, Comp | null>
   artifact?: Eid
+  /** `comp.prop` -> what a model's answer said there, for each reference it
+   * named wrong and that was left out */
+  unresolved?: Record<string, string>
+  /** `comp.prop` -> the `$<slot>` a reference said, before it was placed */
+  said?: Record<string, string>
 }
 
 /** Output slot -> component.property -> sibling output slot. */
@@ -76,18 +90,29 @@ let sibling = (vocab: Vocab, comp: string, prop: string, v: unknown) =>
     ? v.slice(1)
     : undefined
 
+// The entity ids an output's reference properties hold.
+let references = (vocab: Vocab, spec: Spec): string[] =>
+  Object.entries(spec.components).flatMap(([name, c]) =>
+    Object.entries(c ?? {}).flatMap(([prop, v]) =>
+      vocab.prop(name, prop)?.category == 'ref' && typeof v == 'string'
+        ? [v]
+        : []
+    )
+  )
+
 /** The one output contract for a model adapter and any registered code tool.
  * `place` says where an output in a slot lands. A reference naming a sibling
  * output by `$<slot>` comes back as that output's eid; one naming no sibling
- * is refused. An output wearing `edge` is a link: it carries one relation
- * beside its ends, and one of its ends is a sibling, so it lands on the eid
- * those derive. */
+ * is refused, or for a `model`'s answer left out as `unresolved`. An output
+ * wearing `edge` is a link: it carries one relation beside its ends, and one
+ * of its ends is a sibling, so it lands on the eid those derive. */
 export let parse = (
   value: unknown,
   selected: Eid[],
   vocab: Vocab,
   place: (slot: string) => Eid,
   wiring: Wiring = {},
+  model = false,
 ): Spec[] => {
   if (!object(value) || !Array.isArray(value.outputs)) {
     throw new Malformed('builder tool answer needs an outputs array')
@@ -185,10 +210,16 @@ export let parse = (
       for (let [prop, v] of Object.entries(c ?? {})) {
         let slot = sibling(vocab, name, prop, v)
         if (slot == null) continue
-        if (!made.has(slot)) {
+        let path = `${name}.${prop}`
+        if (made.has(slot)) {
+          c![prop] = place(slot)
+          if (model) spec.said = { ...spec.said, [path]: String(v) }
+        } else if (model && !spec.link) {
+          delete c![prop]
+          spec.unresolved = { ...spec.unresolved, [path]: String(v) }
+        } else {
           throw new Malformed(`${spec.slot} names no sibling output ${v}`)
         }
-        c![prop] = place(slot)
       }
     }
   }
@@ -201,6 +232,68 @@ export let parse = (
   let twice = specs.find((s, i) => specs.findIndex((t) => t.eid == s.eid) < i)
   if (twice) throw new Malformed(`an answer states ${twice.eid} twice`)
   return specs
+}
+
+/** A model's answer with each reference checked against what it names: an
+ * entity alive in `held` or a sibling the answer made, wearing the kind the
+ * property takes (any, for `entity`). One that names nothing, or the wrong
+ * kind, is left out and recorded in `unresolved`; one that owns its output
+ * (`death: cascade`) leaves the output no components, which may in turn leave
+ * a sibling's reference to it naming the wrong kind. Wired references are the
+ * design's, and a link's ends make its identity, so neither is checked. */
+export let resolve = (
+  specs: Spec[],
+  held: Bundle[],
+  vocab: Vocab,
+  wiring: Wiring = {},
+): Spec[] => {
+  let out = specs.map((spec) => ({
+    ...spec,
+    components: Object.fromEntries(
+      Object.entries(spec.components).map(([n, c]) => [n, c && { ...c }]),
+    ),
+  }))
+  let worn = (row: { components: Record<string, Comp | null> }) =>
+    new Set(Object.keys(row.components).filter((n) => row.components[n]))
+  let wears = new Map<Eid, Set<string>>(
+    held.filter(alive).map((row) => [
+      row.entity.eid,
+      new Set(Object.keys(row).filter((n) => row[n] != null)),
+    ]),
+  )
+  let owns = (path: string) =>
+    vocab.prop(...path.split('.') as [string, string])?.death == 'cascade'
+  let own = out.filter((spec) => !spec.link)
+  for (let spec of own) {
+    if (Object.keys(spec.unresolved ?? {}).some(owns)) spec.components = {}
+    wears.set(spec.eid, worn(spec))
+  }
+  for (let again = true; again;) {
+    again = false
+    outputs: for (let spec of own) {
+      let wired = new Set(Object.keys(wiring[spec.slot] ?? {}))
+      for (let [name, c] of Object.entries(spec.components)) {
+        for (let [prop, v] of Object.entries(c ?? {})) {
+          let path = `${name}.${prop}`
+          let info = vocab.prop(name, prop)
+          if (info?.category != 'ref' || wired.has(path)) continue
+          let kind = String(info.ref ?? 'entity')
+          let on = typeof v == 'string' ? wears.get(v) : undefined
+          if (on && (kind == 'entity' || on.has(kind))) continue
+          spec.unresolved = {
+            ...spec.unresolved,
+            [path]: spec.said?.[path] ?? str(v),
+          }
+          delete c![prop]
+          again = true
+          if (owns(path)) spec.components = {}
+          wears.set(spec.eid, worn(spec))
+          if (owns(path)) continue outputs
+        }
+      }
+    }
+  }
+  return out
 }
 
 // Where a link output lands: the eid its ends and its one relation derive.
@@ -325,7 +418,18 @@ export let outputs = (
       if (!at.has(slot)) at.set(slot, crypto.randomUUID())
       return at.get(slot)!
     }
-    let specs = parse(value, ids(args.binding), vocab, place, args.wiring ?? {})
+    let model = str(comp(call, 'call')?.to) == modelToolEid()
+    let wiring = args.wiring ?? {}
+    let specs = parse(value, ids(args.binding), vocab, place, wiring, model)
+    if (model) {
+      let named = specs.flatMap((s) => s.link ? [] : references(vocab, s))
+      specs = resolve(
+        specs,
+        yield* step(tx.get([...new Set(named)])),
+        vocab,
+        wiring,
+      )
+    }
     let eids = specs.map((s) => s.eid)
     let prior = yield* step(tx.get(eids))
     // The links an earlier answer of this build stated and this one does not.
@@ -366,6 +470,7 @@ export let outputs = (
           inputs: b.inputs ?? null,
           call: call.entity.eid,
           artifact: spec.artifact ?? null,
+          unresolved: spec.unresolved ?? null,
         },
         $was: { [BUILT]: { call: token(before?.call) } },
       })

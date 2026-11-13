@@ -766,19 +766,6 @@ test('a malformed output fails without spending automatically again', async () =
 for (
   let [name, reply] of [
     ['cut short', '{"outputs": [{"slot": "main", "inputs": ["a"]'],
-    [
-      'naming no sibling',
-      JSON.stringify({
-        outputs: [
-          { slot: 'motion 1', inputs: [], components: {} },
-          {
-            slot: 'vote 1',
-            inputs: [],
-            components: { note: { parent: '$part 1' } },
-          },
-        ],
-      }),
-    ],
   ]
 ) {
   test(`a model reply ${name} fails without spending automatically again`, async () => {
@@ -803,6 +790,42 @@ for (
     assertEquals((await calls(g, build)).length, 1)
   })
 }
+
+test("a model's reference to nothing is left out, and the rest of its answer kept", async () => {
+  let { g, runner, failed } = await shop({}, [notes])
+  await g.apply([source('a'), {
+    ...builder('$s .doc.title=Source', toolEid('builder_model')),
+    using: { model: ids.model },
+  }])
+  let build = await runOf(g, ['a'])
+  await drive(g, runner, build)
+  let [session] = await rows(g, '.session')
+  let s = session.entity.eid
+  await g.apply([
+    asked(s, 2, 'ask-1', 'completed'),
+    replied(
+      s,
+      3,
+      'ask-1',
+      JSON.stringify({
+        outputs: [
+          { slot: 'motion 1', inputs: [], components: { doc: { body: 'M' } } },
+          {
+            slot: 'vote 1',
+            inputs: [],
+            components: { note: { parent: '$part 1', text: 'yes' } },
+          },
+        ],
+      }),
+    ),
+  ])
+  assertEquals(failed, [])
+  assertEquals(comp(await one(g, build), 'failed'), undefined)
+  let vote = await one(g, await outOf(g, build, 'vote 1'))
+  assertEquals(comp(vote, 'note'), { text: 'yes' })
+  assertEquals(comp(vote, 'built')?.unresolved, { 'note.parent': '$part 1' })
+  assertEquals((await rows(g, '.built')).length, 2)
+})
 
 test('a model ask that completes saying nothing fails its build', async () => {
   let { g, runner } = await shop()

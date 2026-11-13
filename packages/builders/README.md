@@ -120,11 +120,22 @@ Editing wiring marks existing builds outdated without rebuilding them.
 
 A tool may also name a nonedge sibling in a reference property as `"$<slot>"`,
 which becomes that output's id; a `$` naming no sibling is refused, and text
-properties keep what they say. The package validates writable components, the
-artifact reference and citations before writing all outputs as one graph batch.
-`cites` edges record each output's used inputs. The artifact's
-`artifact{address,media_type,size}` holds byte metadata; `built.artifact` only
-points to it.
+properties keep what they say.
+
+The package validates writable components, the artifact reference and citations
+before writing all outputs as one graph batch. `cites` edges record each
+output's used inputs. The artifact's `artifact{address,media_type,size}` holds
+byte metadata; `built.artifact` only points to it.
+
+A model names a wrong thing now and then, so one bad reference in its answer
+never costs the rest. A reference that names no sibling, nothing alive, or an
+entity without the kind its property takes is left out of that output, as if the
+model had left it unsaid, and the take records what it said in
+`built.unresolved` (`{"vote.motion": "$motion 3"}`). A reference that owns its
+output (`death: cascade`, as a vote is its motion's) leaves that output no
+components, and a sibling naming it is checked again. Wired references and a
+link's ends are not checked this way, and a code tool's reference to no sibling
+is still refused: there it is a bug.
 
 A rejected answer, including a store admission refusal, writes `failed{reason}`
 on its build and retains the attempt key. No output from that answer is stored;
