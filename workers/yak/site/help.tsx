@@ -103,8 +103,7 @@ let data = {
 
 export let Help = () => (
   <Page
-    name='Help: building, sharing and exporting your apps'
-    description='Answers about building apps, connecting an assistant, sharing, access, exports, and support.'
+    copy='help'
     path='/help'
     head={<Data of={data} />}
   >

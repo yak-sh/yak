@@ -12,24 +12,45 @@
 import type { ComponentChildren } from 'preact'
 import { Address } from '@yaks/ui'
 import { Idle } from '../mascot.ts'
-import { fields, meta } from '../link-preview.ts'
+import { fields } from '../link-preview.ts'
+import { attr, said, text } from './copy.ts'
 
 let SITE = 'https://yaks.app'
-let ALT = 'yaks.app: build, host and share web apps'
 
 /** A space's address, the name in it a person's own:
  * <Yours /> is yourname.yaks.app. */
-export let Yours = ({ name = 'yourname', path = '' }) => (
-  <Address>
+export let Yours = (
+  { name = 'yourname', path = '', ...rest }: {
+    name?: string
+    path?: string
+    [x: string]: unknown
+  },
+) => (
+  <Address {...rest}>
     <Address.Name>{name}</Address.Name>.yaks.app{path}
   </Address>
 )
 
+// A meta tag by its name: Open Graph's are properties.
+let Meta = ({ name, ...rest }: { name: string; [x: string]: unknown }) => (
+  <meta
+    {...{ [name.startsWith('og:') ? 'property' : 'name']: name }}
+    {...rest}
+  />
+)
+
+// A preview field's content: a title says the page's name and a description
+// its description, each by its key; the rest are as given.
+let words = (field: string, page: string, value: string) =>
+  /title$/.test(field)
+    ? attr('content', `${page}.name`)
+    : /description$/.test(field)
+    ? attr('content', `${page}.description`)
+    : { content: value }
+
 let Head = (
-  { title, name, description, path, robots, children }: {
-    title: string
-    name: string
-    description: string
+  { page, path, robots, children }: {
+    page: string
     path: string
     robots?: string
     children?: ComponentChildren
@@ -38,17 +59,20 @@ let Head = (
   <head>
     <meta charset='utf-8' />
     <meta name='viewport' content='width=device-width, initial-scale=1' />
-    <title>{title}</title>
+    <title {...text(`${page}.title`)} />
     <meta name='color-scheme' content='light dark' />
     <link rel='canonical' href={SITE + path} />
     {robots && <meta name='robots' content={robots} />}
-    {Object.entries(fields({}, { title: name, description, at: SITE + path }))
-      .map(([k, v]) => meta(k, v))}
+    {Object.entries(fields({}, {
+      title: said(`${page}.name`),
+      description: said(`${page}.description`),
+      at: SITE + path,
+    })).map(([k, v]) => <Meta key={k} name={k} {...words(k, page, v)} />)}
     <meta property='og:image:width' content='1200' />
     <meta property='og:image:height' content='630' />
-    <meta property='og:image:alt' content={ALT} />
+    <meta property='og:image:alt' {...attr('content', 'frame.alt')} />
     <meta property='og:locale' content='en_US' />
-    <meta name='twitter:image:alt' content={ALT} />
+    <meta name='twitter:image:alt' {...attr('content', 'frame.alt')} />
     <link rel='apple-touch-icon' href='apple-touch-icon.png' />
     <link rel='stylesheet' href='style.css' />
     <script src='idle.js' defer />
@@ -57,10 +81,10 @@ let Head = (
 )
 
 let NAV = [
-  ['/#how', 'How it works'],
-  ['/gallery', 'Gallery'],
-  ['/pricing', 'Pricing'],
-  ['/docs', 'Documentation'],
+  ['/#how', 'how'],
+  ['/gallery', 'gallery'],
+  ['/pricing', 'pricing'],
+  ['/docs', 'docs'],
 ]
 
 let Top = ({ path }: { path: string }) => {
@@ -71,61 +95,67 @@ let Top = ({ path }: { path: string }) => {
         class='Top_Name'
         href='/'
         aria-current={home ? 'page' : undefined}
-        aria-label='yaks.app, home'
+        {...attr('aria-label', 'frame.top.home')}
       >
         {!home && <Idle class='Yak Yak-small' base='.' />}
-        <span>yaks.app</span>
+        <span {...text('frame.top.name')} />
       </a>
       <nav class='Nav' aria-label='Site'>
-        {NAV.map(([href, said]) => (
+        {NAV.map(([href, key]) => (
           <a
             class='Nav_Link'
             href={href}
             aria-current={href == path ? 'page' : undefined}
-          >
-            {home && href == '/#how' ? 'How yaks.app works' : said}
-          </a>
+            {...text(`frame.nav.${home && key == 'how' ? 'how-home' : key}`)}
+          />
         ))}
-        <a class='Nav_SignIn Nav_Link' href='/login'>Sign in</a>
+        <a
+          class='Nav_SignIn Nav_Link'
+          href='/login'
+          {...text('frame.nav.sign-in')}
+        />
       </nav>
     </header>
   )
 }
 
 let FOOT = [
-  ['/help', 'Help'],
-  ['/docs', 'Documentation'],
-  ['/pricing', 'Pricing'],
-  ['/terms', 'Terms'],
-  ['/privacy', 'Privacy'],
-  ['/acceptable-use', 'Acceptable use'],
-  ['/cookies', 'Cookies'],
+  'help',
+  'docs',
+  'pricing',
+  'terms',
+  'privacy',
+  'acceptable-use',
+  'cookies',
 ]
 
 let Foot = () => (
   <footer class='Foot'>
     <Idle class='Yak Yak-small' base='.' />
-    <p>yaks.app · Yak Shaving LLC</p>
+    <p {...text('frame.foot.by')} />
     <ul class='Foot_Links'>
-      {FOOT.map(([href, said]) => (
+      {FOOT.map((name) => (
         <li>
-          <a class='Foot_Link' href={href}>{said}</a>
+          <a
+            class='Foot_Link'
+            href={`/${name}`}
+            {...text(`frame.foot.${name}`)}
+          />
         </li>
       ))}
     </ul>
   </footer>
 )
 
-/** A page of the site: `name` is what it is called where it is linked,
- * `title` its tab's (the name and the site's by default), `path` its address,
- * `kind` the body class its frame is asked for by (style.css), and `head`
- * what its head carries besides (its scripts, its structured data). A page
- * that names no kind is prose in the reading column. */
+/** A page of the site: `copy` is the key its snippets are under in the copy
+ * (copy.ts), where `name` is what it is called where it is linked, `title`
+ * its tab's and `description` what a preview says of it. `path` is its
+ * address, `kind` the body class its frame is asked for by (style.css), and
+ * `head` what its head carries besides (its scripts, its structured data). A
+ * page that names no kind is prose in the reading column. */
 export let Page = (
   {
-    name,
-    title = `${name} · yaks.app`,
-    description,
+    copy,
     path,
     kind,
     robots,
@@ -133,9 +163,7 @@ export let Page = (
     after,
     children,
   }: {
-    name: string
-    title?: string
-    description: string
+    copy: string
     path: string
     kind?: string
     robots?: string
@@ -145,13 +173,7 @@ export let Page = (
   },
 ) => (
   <html lang='en'>
-    <Head
-      title={title}
-      name={name}
-      description={description}
-      path={path}
-      robots={robots}
-    >
+    <Head page={copy} path={path} robots={robots}>
       {head}
     </Head>
     <body class={kind}>

@@ -98,9 +98,7 @@ let Letter = (
 
 export let Organizations = () => (
   <Page
-    name={`yaks.app for organizations — like having a web person on staff, for $${PRICE.pro} a month`}
-    title={`yaks.app for organizations — like having a web person on staff, for $${PRICE.pro} a month`}
-    description={`An AI assistant looks after your organization's website. Email it what you need and it makes the change, and we fix what it gets wrong. Type your website's address for a free private preview, with no sign-up. $${PRICE.pro} a month for the whole organization.`}
+    copy='organizations'
     path={PATH}
     kind='Home'
     head={

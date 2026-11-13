@@ -236,9 +236,10 @@ export let said = (html: string) => {
   // spread over several lines in the file they are read from.
   let flat = html.replace(/\s+/g, ' ')
   return {
-    title: /<title>([^<]*)<\/title>/.exec(flat)?.[1]?.trim() ?? '',
-    description: /<meta name="description" content="([^"]*)"/.exec(flat)?.[1]
-      ?.trim() ?? '',
+    title: /<title\b[^>]*>([^<]*)<\/title>/.exec(flat)?.[1]?.trim() ?? '',
+    description:
+      /<meta name="description"[^>]* content="([^"]*)"/.exec(flat)?.[1]
+        ?.trim() ?? '',
   }
 }
 

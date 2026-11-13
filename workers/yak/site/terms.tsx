@@ -4,8 +4,7 @@ import { Page } from './frame.tsx'
 
 export let Terms = () => (
   <Page
-    name='Terms of service'
-    description='The terms for using yaks.app.'
+    copy='terms'
     path='/terms'
   >
     <div class='Prose_Head'>

@@ -1,14 +1,41 @@
 /** @jsxImportSource preact */
-import type { ComponentChildren } from 'preact'
+import { keys } from '@yaks/copy'
 import { Button, Card, Field } from '@yaks/ui'
 import { GET_PLAN } from '@yaks/platform/routes'
 import { START } from '../newcomer.ts'
 import { Data, Page, Yours } from './frame.tsx'
+import { attr, COPY, said, type Slots, text } from './copy.ts'
 import { Idle } from '../mascot.ts'
 import { type Example, HOME } from '../demos.ts'
 
-// What an engine reads of the page.
-let data = {
+// A plan's price in dollars, as its card says it: "Free" is none.
+let dollars = (plan: string) =>
+  /\$(\d+)/.exec(said(`home.cost.${plan}.price`))?.[1] ?? '0'
+
+// A plan's offer: its name, its card's price, and what it is for.
+let offer = (plan: string) => ({
+  '@type': 'Offer',
+  'name': said(`home.data.${plan}.name`),
+  'price': dollars(plan),
+  'priceCurrency': 'USD',
+  'url': 'https://yaks.app/pricing',
+  'availability': 'https://schema.org/InStock',
+  'description': said(`home.data.${plan}.offer`),
+  ...(plan == 'free' ? {} : {
+    'priceSpecification': {
+      '@type': 'UnitPriceSpecification',
+      'price': dollars(plan),
+      'priceCurrency': 'USD',
+      'valueAddedTaxIncluded': true,
+      'billingDuration': 1,
+      'billingIncrement': 1,
+      'unitCode': 'MON',
+    },
+  }),
+})
+
+/** What an engine reads of the page, in the page's own words. */
+export let data = () => ({
   '@context': 'https://schema.org',
   '@graph': [
     {
@@ -16,8 +43,8 @@ let data = {
       '@id': 'https://yaks.app/#website',
       'url': 'https://yaks.app/',
       'name': 'yaks.app',
-      'alternateName': 'Yak Shaving',
-      'description': 'Build, host and share web apps.',
+      'alternateName': said('home.data.alternate'),
+      'description': said('home.data.site'),
       'inLanguage': 'en-US',
       'publisher': {
         '@id': 'https://yaks.app/#organization',
@@ -26,7 +53,7 @@ let data = {
     {
       '@type': 'Organization',
       '@id': 'https://yaks.app/#organization',
-      'name': 'Yak Shaving LLC',
+      'name': said('home.data.organization'),
       'url': 'https://yaks.app/',
       'logo': 'https://yaks.app/icon-512.png',
       'email': 'hello@yaks.app',
@@ -38,84 +65,26 @@ let data = {
       'url': 'https://yaks.app/',
       'applicationCategory': 'DeveloperApplication',
       'operatingSystem': 'Web browser',
-      'description':
-        'Build, host and share web apps. Say what you need, from a menu for your side business to a recipe box for your family, and yaks.app builds the app and puts it online at yourname.yaks.app, with its own data, file uploads, email address and optional custom domain. Share it with the people it is for.',
-      'featureList': [
-        'Apps built from what you say you need',
-        'Changes and fixes made by your Operator',
-        'Apps built by your own AI assistant over MCP',
-        'A graph data store per app, shared across devices',
-        'File and photo uploads',
-        'Live updates for everyone using an app, and voice calls',
-        'AI models and server code for apps',
-        'An email address per app',
-        'Publish an app for other people to install',
-        'A custom domain',
-      ],
+      'description': said('home.data.app'),
+      'featureList': keys(COPY)
+        .filter((key) => key.startsWith('home.data.features.'))
+        .map(said),
       'publisher': {
         '@id': 'https://yaks.app/#organization',
       },
-      'offers': [
-        {
-          '@type': 'Offer',
-          'name': 'Free',
-          'price': '0',
-          'priceCurrency': 'USD',
-          'url': 'https://yaks.app/pricing',
-          'availability': 'https://schema.org/InStock',
-          'description':
-            "For one space: 5 apps, unlimited visitors, 1 GB of app data, 1 GB of photos and files, and 100 emails a month. A person's first space is free.",
-        },
-        {
-          '@type': 'Offer',
-          'name': 'Plus',
-          'price': '9',
-          'priceCurrency': 'USD',
-          'url': 'https://yaks.app/pricing',
-          'availability': 'https://schema.org/InStock',
-          'description':
-            'For one space: unlimited apps, unlimited visitors, 10 GB of app data, 50 GB of photos and files, 2,500 emails a month, and a custom domain.',
-          'priceSpecification': {
-            '@type': 'UnitPriceSpecification',
-            'price': '9',
-            'priceCurrency': 'USD',
-            'valueAddedTaxIncluded': true,
-            'billingDuration': 1,
-            'billingIncrement': 1,
-            'unitCode': 'MON',
-          },
-        },
-        {
-          '@type': 'Offer',
-          'name': 'Pro',
-          'price': '49',
-          'priceCurrency': 'USD',
-          'url': 'https://yaks.app/pricing',
-          'availability': 'https://schema.org/InStock',
-          'description':
-            'For one space: unlimited apps, where staff ask for a change by email or chat and yaks.app makes it, document search, notices by email, AI use included, email support, unlimited visitors, 10 GB of app data, 50 GB of photos and files, 2,500 emails a month, and a custom domain. Or $490 a year.',
-          'priceSpecification': {
-            '@type': 'UnitPriceSpecification',
-            'price': '49',
-            'priceCurrency': 'USD',
-            'valueAddedTaxIncluded': true,
-            'billingDuration': 1,
-            'billingIncrement': 1,
-            'unitCode': 'MON',
-          },
-        },
-      ],
+      'offers': ['free', 'plus', 'pro'].map(offer),
     },
   ],
-}
+})
 
 /** The examples, one card at a time (carousel.js): apps in yourname's space,
  * each named by its address there (`data-demo`), which the served page swaps
  * for the gallery's cards (gallery.ts `showcase`), and under them what a
- * visitor can do with one. */
+ * visitor can do with one, the snippet at `note` with its `slots`. */
 export let Examples = (
-  { children, apps = HOME }: {
-    children: ComponentChildren
+  { note, slots, apps = HOME }: {
+    note: string
+    slots?: Slots
     apps?: Example[]
   },
 ) => (
@@ -125,7 +94,7 @@ export let Examples = (
     aria-roledescription='carousel'
     data-carousel=''
   >
-    <h2 class='Demo_Title' id='examples'>Apps made with yaks.app</h2>
+    <h2 class='Demo_Title' id='examples' {...text('home.examples.title')} />
     <ul class='Demo_Slides'>
       {apps.map(([slug, title, sub]) => (
         <Card as='li' class='Make_Card' data-demo={slug}>
@@ -145,7 +114,7 @@ export let Examples = (
         class='Demo_Step'
         type='button'
         data-step='-1'
-        aria-label='Previous app'
+        {...attr('aria-label', 'home.examples.previous')}
       >
         ‹
       </Button>{' '}
@@ -154,111 +123,112 @@ export let Examples = (
         class='Demo_Step'
         type='button'
         data-step='1'
-        aria-label='Next app'
+        {...attr('aria-label', 'home.examples.next')}
       >
         ›
       </Button>{' '}
-      <Button class='Demo_Pause' type='button'>Pause</Button>
+      <Button
+        class='Demo_Pause'
+        type='button'
+        {...text('home.examples.pause')}
+      />
     </div>
-    <p class='Note Note-small'>{children}</p>
+    <p class='Note Note-small' {...text(note, slots)} />
   </section>
+)
+
+// A plan's card on the home page: its price, its note, its list and its
+// button, each a snippet under `home.cost.<plan>`.
+let Plan = (
+  { plan, items, mod, href, cta }: {
+    plan: string
+    items: Record<string, Slots>
+    mod?: string
+    href: string
+    cta?: string
+  },
+) => (
+  <Card as='div' class={mod ? `Plan ${mod}` : 'Plan'}>
+    <h3
+      class='Plan_Price'
+      {...text(`home.cost.${plan}.price`, {
+        per: <span class='Plan_Per' {...text('home.cost.per')} />,
+      })}
+    />
+    <p class='Note Note-small' {...text(`home.cost.${plan}.note`)} />
+    <ul class='Plan_List'>
+      {Object.entries(items).map(([item, slots]) => (
+        <li class='Plan_Item' {...text(`home.cost.${plan}.${item}`, slots)} />
+      ))}
+    </ul>{' '}
+    <Button
+      mod='go'
+      href={href}
+      data-cta={cta}
+      {...text(`home.cost.${plan}.go`)}
+    />
+  </Card>
 )
 
 /** What a space costs: what one is, a card for each plan, and where the
  * limits are. */
 export let Cost = () => (
   <section class='Cost' aria-labelledby='cost'>
-    <h2 class='Title' id='cost'>Free to start, a plan for more</h2>
-    <p class='Note'>
-      A space is your address, like{' '}
-      <Yours />, with its apps, their data and the people you invite. Your first
-      space is free.
-    </p>
+    <h2 class='Title' id='cost' {...text('home.cost.title')} />
+    <p class='Note' {...text('home.cost.note', { yours: <Yours /> })} />
     <div class='Plans'>
-      <Card as='div' class='Plan'>
-        <h3 class='Plan_Price'>Free</h3>
-        <p class='Note Note-small'>Your first space.</p>
-        <ul class='Plan_List'>
-          <li class='Plan_Item'>5 apps</li>
-          <li class='Plan_Item'>Unlimited visitors</li>
-          <li class='Plan_Item'>
-            1 GB of app data, 1 GB of photos and files
-          </li>
-          <li class='Plan_Item'>100 emails a month</li>
-          <li class='Plan_Item'>
-            An address like <Yours />
-          </li>
-        </ul>{' '}
-        <Button mod='go' href='/login'>Start Free</Button>
-      </Card>
-      <Card as='div' class='Plan Plan-plus'>
-        <h3 class='Plan_Price'>
-          $9
-          <span class='Plan_Per'>&#32;a month</span>
-        </h3>
-        <p class='Note Note-small'>
-          The Plus plan, for each space. Take payments with Stripe.
-        </p>
-        <ul class='Plan_List'>
-          <li class='Plan_Item'>Unlimited apps</li>
-          <li class='Plan_Item'>Unlimited visitors</li>
-          <li class='Plan_Item'>
-            10 GB of app data, 50 GB of photos and files
-          </li>
-          <li class='Plan_Item'>2,500 emails a month</li>
-          <li class='Plan_Item'>
-            Your own domain, like <b>ourbookclub.com</b>
-          </li>
-        </ul>{' '}
-        <Button
-          mod='go'
-          href={GET_PLAN}
-          data-cta='plus'
-        >
-          Get Started
-        </Button>
-      </Card>
-      <Card as='div' class='Plan Plan-pro'>
-        <h3 class='Plan_Price'>
-          $49
-          <span class='Plan_Per'>&#32;a month</span>
-        </h3>
-        <p class='Note Note-small'>
-          The Pro plan, or $490 a year. Your staff ask the Operator by email or
-          chat, and it makes the change.
-        </p>
-        <ul class='Plan_List'>
-          <li class='Plan_Item'>Unlimited apps</li>
-          <li class='Plan_Item'>Unlimited visitors</li>
-          <li class='Plan_Item'>
-            10 GB of app data, 50 GB of photos and files
-          </li>
-          <li class='Plan_Item'>2,500 emails a month</li>
-          <li class='Plan_Item'>
-            Your own domain, like <b>ourtownship.org</b>
-          </li>
-        </ul>{' '}
-        <Button
-          mod='go'
-          href={GET_PLAN}
-          data-cta='pro'
-        >
-          Get Started
-        </Button>
-      </Card>
+      <Plan
+        plan='free'
+        href='/login'
+        items={{
+          apps: {},
+          visitors: {},
+          storage: {},
+          emails: {},
+          address: { yours: <Yours /> },
+        }}
+      />
+      <Plan
+        plan='plus'
+        mod='Plan-plus'
+        href={GET_PLAN}
+        cta='plus'
+        items={{
+          apps: {},
+          visitors: {},
+          storage: {},
+          emails: {},
+          domain: { domain: <b {...text('home.cost.plus.example')} /> },
+        }}
+      />
+      <Plan
+        plan='pro'
+        mod='Plan-pro'
+        href={GET_PLAN}
+        cta='pro'
+        items={{
+          apps: {},
+          visitors: {},
+          storage: {},
+          emails: {},
+          domain: { domain: <b {...text('home.cost.pro.example')} /> },
+        }}
+      />
     </div>
-    <p class='Note Note-small'>
-      Tax is included. Going over a limit never deletes your apps or data.{' '}
-      <a href='/pricing'>Compare plans and limits</a>.
-    </p>
+    <p
+      class='Note Note-small'
+      {...text('home.cost.limits', {
+        plans: <a href='/pricing' {...text('home.cost.plans')} />,
+      })}
+    />
   </section>
 )
 
+let arrow = (glyph: string) => <span aria-hidden='true'>{glyph}</span>
+
 export let Home = () => (
   <Page
-    name='yaks.app — build, host and share web apps'
-    title='yaks.app — build, host and share web apps'
-    description='Build, host and share web apps. Say what you need, and yaks.app builds the app, puts it online at your own address and shares it with the people it is for.'
+    copy='home'
     path='/'
     kind='Home'
     head={
@@ -266,7 +236,7 @@ export let Home = () => (
         <script src='carousel.js' defer />
         <script src='wander.js' defer />
         <script src='cta.js' defer />
-        <Data of={data} />
+        <Data of={data()} />
       </>
     }
   >
@@ -275,11 +245,9 @@ export let Home = () => (
         <div class='Hello_Yak' data-wander=''>
           <Idle class='Wander_Image' base='.' />
         </div>
-        <p class='Hello_Kicker'>Build, host and share web apps</p>
+        <p class='Hello_Kicker' {...text('home.hello.kicker')} />
         <h1 class='Title Title-hero' id='hello'>
-          <label for='say'>
-            Build your ideas by asking
-          </label>
+          <label for='say' {...text('home.hello.title')} />
         </h1>
         <form class='Hello_Ask' method='post' action={START}>
           <Field
@@ -289,93 +257,87 @@ export let Home = () => (
             name='say'
             required
             maxLength={4000}
-            placeholder='What should it do, and who is it for?'
+            {...attr('placeholder', 'home.hello.hint')}
           />
-          <Button mod='go' type='submit' data-cta='start'>
-            Build it
-          </Button>
+          <Button
+            mod='go'
+            type='submit'
+            data-cta='start'
+            {...text('home.hello.go')}
+          />
         </form>
-        <p class='Note Note-small'>
-          Free to start. Your app goes online at your own address, for any phone
-          or computer. <a href='#cost'>$9 a month</a> for unlimited apps.{' '}
-          <a href='#examples' data-cta='examples'>
-            See examples <span aria-hidden='true'>↓</span>
-          </a>
-        </p>
+        <p
+          class='Note Note-small'
+          {...text('home.hello.note', {
+            price: <a href='#cost' {...text('home.hello.price')} />,
+            examples: (
+              <a
+                href='#examples'
+                data-cta='examples'
+                {...text('home.hello.examples', { arrow: arrow('↓') })}
+              />
+            ),
+          })}
+        />
       </div>
-      <Examples>
-        Each of these apps runs on yaks.app. Open one to try it, or get a copy
-        of your own and ask for the changes you want.{' '}
-        <a href='/gallery'>See more in the gallery</a>.
-      </Examples>
+      <Examples
+        note='home.examples.note'
+        slots={{
+          gallery: <a href='/gallery' {...text('home.examples.gallery')} />,
+        }}
+      />
     </section>
     <section class='Yours' aria-labelledby='does'>
-      <h2 class='Title' id='does'>Build it, host it and share it here</h2>
+      <h2 class='Title' id='does' {...text('home.does.title')} />
       <dl class='Yours_List'>
-        <div>
-          <dt class='Yours_Term'>Build an app by saying what you need</dt>
-          <dd class='Yours_Detail'>
-            Describe it in plain words, and yaks.app builds it. For a new
-            feature or a fix, ask your Operator, the AI assistant that comes
-            with your apps, and it makes the change.
-          </dd>
-        </div>
-        <div>
-          <dt class='Yours_Term'>It stays online and saves what people add</dt>
-          <dd class='Yours_Detail'>
-            Your app lives at your own address, like{' '}
-            <Yours />, on any phone or computer. Sign-ups, recipes, photos and
-            files are saved for everyone you share with.
-          </dd>
-        </div>
-        <div>
-          <dt class='Yours_Term'>Share it with the people it's for</dt>
-          <dd class='Yours_Detail'>
-            Keep an app to yourself, send its link, or invite as many people as
-            you like to view or edit it, free. Publish it, and others can get a
-            copy of their own.
-          </dd>
-        </div>
+        {Object.entries<Slots>({
+          build: {},
+          online: { yours: <Yours /> },
+          share: {},
+        }).map(([item, slots]) => (
+          <div>
+            <dt class='Yours_Term' {...text(`home.does.${item}.term`)} />
+            <dd
+              class='Yours_Detail'
+              {...text(`home.does.${item}.detail`, slots)}
+            />
+          </div>
+        ))}
       </dl>
     </section>
     <section class='How' aria-labelledby='how'>
-      <h2 class='Title' id='how'>How yaks.app works</h2>
+      <h2 class='Title' id='how' {...text('home.how.title')} />
       <ol class='Steps'>
-        <li class='Steps_Item'>
-          <h3 class='Step_Name'>Say what you need</h3>
-          <p class='Note'>
-            Type it in the box above, like a chore chart for your household.
-          </p>
-        </li>
-        <li class='Steps_Item'>
-          <h3 class='Step_Name'>Open it anywhere</h3>
-          <p class='Note'>
-            yaks.app builds it and puts it online. Open it on your phone or
-            computer, or send its link to the people it's for.
-          </p>
-        </li>
-        <li class='Steps_Item'>
-          <h3 class='Step_Name'>Sign up free to keep it</h3>
-          <p class='Note'>
-            Enter your email, and the app is yours, at your own address like
-            {' '}
-            <Yours />.
-          </p>
-        </li>
+        {Object.entries<Slots>({
+          say: {},
+          open: {},
+          keep: { yours: <Yours /> },
+        }).map(([step, slots]) => (
+          <li class='Steps_Item'>
+            <h3 class='Step_Name' {...text(`home.how.${step}.name`)} />
+            <p class='Note' {...text(`home.how.${step}.detail`, slots)} />
+          </li>
+        ))}
       </ol>
-      <p class='Note Note-small'>
-        Already use Claude or ChatGPT? Paste <a href='/agent'>yaks.app/agent</a>
-        {' '}
-        into it, and it can build your apps too.
-      </p>
+      <p
+        class='Note Note-small'
+        {...text('home.how.agent', {
+          agent: <a href='/agent' {...text('home.how.address')} />,
+        })}
+      />
     </section>
     <Cost />
     <Card class='Join' aria-labelledby='join'>
-      <h2 class='Title' id='join'>What app would you like to build?</h2>
+      <h2 class='Title' id='join' {...text('home.join.title')} />
       <p class='Join_Doors'>
-        <Button mod='go' href='#say' data-cta='join'>Build it</Button>
+        <Button
+          mod='go'
+          href='#say'
+          data-cta='join'
+          {...text('home.join.go')}
+        />
       </p>
-      <p class='Note Note-small'>Free to start.</p>
+      <p class='Note Note-small' {...text('home.join.note')} />
     </Card>
   </Page>
 )

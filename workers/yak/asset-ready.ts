@@ -62,7 +62,8 @@ export let materialized = async (
 /** Inputs to the browser bundles, compiler catalog and sandbox workspace. */
 export let assetInputs = (paths: string[]) =>
   paths.filter((path) =>
-    /^(?:packages\/|workers\/yak\/(?:public|site)\/)/.test(path) ||
+    /^(?:packages\/|workers\/yak\/(?:public|site)\/|apps\/home\/copy\.json$)/
+      .test(path) ||
     /^(?:deno\.(?:jsonc?|lock)|bin\/compiler-packages\.ts)$/.test(path) ||
     // `_talk.js` is built from operator-rows.ts and what it imports here.
     /^workers\/yak\/(?:wrangler\.ts|asset-ready\.ts|client-assets\.ts|sheet-assets\.ts|(?:chart|data-editor)\.js|dates(?:-browser)?\.ts|settings(?:-draft(?:-browser)?)?\.ts|operator-(?:rows|draw|aside|source|metadata|contact-card|consent|api-page)\.ts|icons\.ts|sandbox\/(?:cli-assets|launch)\.ts|package(?:-lock)?\.json|deno\.json)$/

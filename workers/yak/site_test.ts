@@ -5,8 +5,9 @@
 // `/robots.txt` and `/llms.txt` from (T-34288).
 //
 // Served pages hold no comments, since view-source shows them, so their notes
-// live here. The home page's JSON-LD prices are meter.ts PRICE: a price change
-// is that line, that block and the Stripe price id in wrangler.toml. It says no
+// live here. The home page's prices are meter.ts PRICE: a price change is that
+// line, the prices in apps/home/copy.json and the Stripe price id in
+// wrangler.toml. It says no
 // `sameAs` because yaks.app has no profile elsewhere to name. Each FAQ answer in
 // help.html's JSON-LD is the first paragraph of the section it names, verbatim.
 import { test } from '@yaks/testing'
@@ -46,6 +47,7 @@ import { INTEGRATIONS, page as integrationsPage } from './integrations.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { askEmail, connect } from './signin-pages.ts'
 import * as site from './site/mod.ts'
+import { said as copied } from './site/copy.ts'
 import {
   ADDRESSES,
   CLOSED,
@@ -385,17 +387,13 @@ test('the plan cards and every offer carry the meter allowances', () => {
       }
     }
   }
-  let [doc] = ld(read('index.html'))
-  let app = doc['@graph'].find((n: { '@type': string }) =>
-    n['@type'] == 'SoftwareApplication'
-  )
-  for (let name of ['Free', 'Plus', 'Pro']) {
-    let offer = app.offers.find((o: { name: string }) => o.name == name)
-    for (let text of Object.values(allowances[name.toLowerCase() as Tier])) {
+  // Each offer an engine reads is the copy's (site/home.tsx `data`).
+  for (let tier of TIERS) {
+    for (let text of Object.values(allowances[tier])) {
       assertStringIncludes(
-        offer.description.toLowerCase(),
+        copied(`home.data.${tier}.offer`).toLowerCase(),
         text.toLowerCase(),
-        name,
+        tier,
       )
     }
   }
@@ -894,6 +892,13 @@ test('the home page describes itself at the prices the code charges', () => {
     let { priceSpecification } = offers[tier]
     assertEquals(priceSpecification.price, String(PRICE[tier]), tier)
     assertEquals(priceSpecification.valueAddedTaxIncluded, true, tier)
+  }
+  // The offers' prices are the cards', and the copy prices each card at what
+  // the code charges.
+  for (let tier of TIERS) {
+    let card = copied(`home.cost.${tier}.price`)
+    if (PRICE[tier]) assertStringIncludes(card, `$${PRICE[tier]} `, tier)
+    else assertEquals(card, 'Free')
   }
 })
 

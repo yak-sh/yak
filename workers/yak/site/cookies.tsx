@@ -4,8 +4,7 @@ import { Page } from './frame.tsx'
 
 export let Cookies = () => (
   <Page
-    name='Cookies'
-    description='yaks.app sets a cookie so you stay signed in, and one more when a campaign link brought you.'
+    copy='cookies'
     path='/cookies'
   >
     <div class='Prose_Head'>

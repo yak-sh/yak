@@ -4,8 +4,7 @@ import { Page } from './frame.tsx'
 
 export let AcceptableUse = () => (
   <Page
-    name='Acceptable use policy'
-    description='What you may not do on yaks.app.'
+    copy='acceptable-use'
     path='/acceptable-use'
   >
     <div class='Prose_Head'>

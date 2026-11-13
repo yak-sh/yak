@@ -1,0 +1,221 @@
+{
+  "frame": {
+    "alt": "yaks.app: build, host and share web apps",
+    "top": {
+      "home": "yaks.app, home",
+      "name": "yaks.app"
+    },
+    "nav": {
+      "how": "How it works",
+      "how-home": "How yaks.app works",
+      "gallery": "Gallery",
+      "pricing": "Pricing",
+      "docs": "Documentation",
+      "sign-in": "Sign in"
+    },
+    "foot": {
+      "by": "yaks.app · Yak Shaving LLC",
+      "help": "Help",
+      "docs": "Documentation",
+      "pricing": "Pricing",
+      "terms": "Terms",
+      "privacy": "Privacy",
+      "acceptable-use": "Acceptable use",
+      "cookies": "Cookies"
+    }
+  },
+  "home": {
+    "name": "yaks.app — build, host and share web apps",
+    "title": "yaks.app — build, host and share web apps",
+    "description": "Build, host and share web apps. Say what you need, and yaks.app builds the app, puts it online at your own address and shares it with the people it is for.",
+    "hello": {
+      "kicker": "Build, host and share web apps",
+      "title": "Build your ideas by asking",
+      "hint": "What should it do, and who is it for?",
+      "go": "Build it",
+      "note": "Free to start. Your app goes online at your own address, for any phone or computer. %{price} for unlimited apps. %{examples}",
+      "price": "$9 a month",
+      "examples": "See examples %{arrow}"
+    },
+    "examples": {
+      "title": "Apps made with yaks.app",
+      "previous": "Previous app",
+      "next": "Next app",
+      "pause": "Pause",
+      "note": "Each of these apps runs on yaks.app. Open one to try it, or get a copy of your own and ask for the changes you want. %{gallery}.",
+      "gallery": "See more in the gallery"
+    },
+    "does": {
+      "title": "Build it, host it and share it here",
+      "build": {
+        "term": "Build an app by saying what you need",
+        "detail": "Describe it in plain words, and yaks.app builds it. For a new feature or a fix, ask your Operator, the AI assistant that comes with your apps, and it makes the change."
+      },
+      "online": {
+        "term": "It stays online and saves what people add",
+        "detail": "Your app lives at your own address, like %{yours}, on any phone or computer. Sign-ups, recipes, photos and files are saved for everyone you share with."
+      },
+      "share": {
+        "term": "Share it with the people it's for",
+        "detail": "Keep an app to yourself, send its link, or invite as many people as you like to view or edit it, free. Publish it, and others can get a copy of their own."
+      }
+    },
+    "how": {
+      "title": "How yaks.app works",
+      "say": {
+        "name": "Say what you need",
+        "detail": "Type it in the box above, like a chore chart for your household."
+      },
+      "open": {
+        "name": "Open it anywhere",
+        "detail": "yaks.app builds it and puts it online. Open it on your phone or computer, or send its link to the people it's for."
+      },
+      "keep": {
+        "name": "Sign up free to keep it",
+        "detail": "Enter your email, and the app is yours, at your own address like %{yours}."
+      },
+      "agent": "Already use Claude or ChatGPT? Paste %{agent} into it, and it can build your apps too.",
+      "address": "yaks.app/agent"
+    },
+    "cost": {
+      "title": "Free to start, a plan for more",
+      "note": "A space is your address, like %{yours}, with its apps, their data and the people you invite. Your first space is free.",
+      "per": "a month",
+      "free": {
+        "price": "Free",
+        "note": "Your first space.",
+        "apps": "5 apps",
+        "visitors": "Unlimited visitors",
+        "storage": "1 GB of app data, 1 GB of photos and files",
+        "emails": "100 emails a month",
+        "address": "An address like %{yours}",
+        "go": "Start Free"
+      },
+      "plus": {
+        "price": "$9 %{per}",
+        "note": "The Plus plan, for each space. Take payments with Stripe.",
+        "apps": "Unlimited apps",
+        "visitors": "Unlimited visitors",
+        "storage": "10 GB of app data, 50 GB of photos and files",
+        "emails": "2,500 emails a month",
+        "domain": "Your own domain, like %{domain}",
+        "example": "ourbookclub.com",
+        "go": "Get Started"
+      },
+      "pro": {
+        "price": "$49 %{per}",
+        "note": "The Pro plan, or $490 a year. Your staff ask the Operator by email or chat, and it makes the change.",
+        "apps": "Unlimited apps",
+        "visitors": "Unlimited visitors",
+        "storage": "10 GB of app data, 50 GB of photos and files",
+        "emails": "2,500 emails a month",
+        "domain": "Your own domain, like %{domain}",
+        "example": "ourtownship.org",
+        "go": "Get Started"
+      },
+      "limits": "Tax is included. Going over a limit never deletes your apps or data. %{plans}.",
+      "plans": "Compare plans and limits"
+    },
+    "join": {
+      "title": "What app would you like to build?",
+      "go": "Build it",
+      "note": "Free to start."
+    },
+    "data": {
+      "alternate": "Yak Shaving",
+      "site": "Build, host and share web apps.",
+      "organization": "Yak Shaving LLC",
+      "app": "Build, host and share web apps. Say what you need, from a menu for your side business to a recipe box for your family, and yaks.app builds the app and puts it online at yourname.yaks.app, with its own data, file uploads, email address and optional custom domain. Share it with the people it is for.",
+      "features": {
+        "build": "Apps built from what you say you need",
+        "changes": "Changes and fixes made by your Operator",
+        "assistant": "Apps built by your own AI assistant over MCP",
+        "store": "A graph data store per app, shared across devices",
+        "uploads": "File and photo uploads",
+        "live": "Live updates for everyone using an app, and voice calls",
+        "models": "AI models and server code for apps",
+        "email": "An email address per app",
+        "publish": "Publish an app for other people to install",
+        "domain": "A custom domain"
+      },
+      "free": {
+        "name": "Free",
+        "offer": "For one space: 5 apps, unlimited visitors, 1 GB of app data, 1 GB of photos and files, and 100 emails a month. A person's first space is free."
+      },
+      "plus": {
+        "name": "Plus",
+        "offer": "For one space: unlimited apps, unlimited visitors, 10 GB of app data, 50 GB of photos and files, 2,500 emails a month, and a custom domain."
+      },
+      "pro": {
+        "name": "Pro",
+        "offer": "For one space: unlimited apps, where staff ask for a change by email or chat and yaks.app makes it, document search, notices by email, AI use included, email support, unlimited visitors, 10 GB of app data, 50 GB of photos and files, 2,500 emails a month, and a custom domain. Or $490 a year."
+      }
+    }
+  },
+  "build": {
+    "name": "yaks.app — describe the app you need, and it is built for you",
+    "title": "yaks.app — describe the app you need, and it is built for you",
+    "description": "Describe the app you need, like a sign-up sheet, a price list or a member directory, and yaks.app builds it and puts it online at its own address. Free to start.",
+    "examples": {
+      "note": "Each of these apps runs on yaks.app. Open one to try it, or get a copy of your own and ask for changes. %{gallery}."
+    }
+  },
+  "operator": {
+    "name": "yaks.app — get an Operator that builds apps for you",
+    "title": "yaks.app — get an Operator that builds apps for you",
+    "description": "Get an Operator that builds apps for you. Tell it what you need, and it builds the app and puts it online at your own address.",
+    "examples": {
+      "note": "Your Operator can make apps like these. Open one to try it. %{gallery}."
+    }
+  },
+  "churches": {
+    "name": "yaks.app for churches — a new church website built from the one you have, and changed whenever you ask",
+    "title": "yaks.app for churches — a new church website built from the one you have, and changed whenever you ask",
+    "description": "Type your church's web address and watch yaks.app build your new site from it, free to try and with no sign-up. Then change it by asking, by email or chat, and add sign-up forms, a member directory and a calendar. $49 a month for your whole church."
+  },
+  "organizations": {
+    "name": "yaks.app for organizations — like having a web person on staff, for $49 a month",
+    "title": "yaks.app for organizations — like having a web person on staff, for $49 a month",
+    "description": "An AI assistant looks after your organization's website. Email it what you need and it makes the change, and we fix what it gets wrong. Type your website's address for a free private preview, with no sign-up. $49 a month for the whole organization."
+  },
+  "townships": {
+    "name": "AI for townships — a Michigan township website that drafts the board's minutes as it meets",
+    "title": "AI for townships — a Michigan township website that drafts the board's minutes as it meets",
+    "description": "A website for a Michigan township: meetings, documents and notices, proposed minutes drafted from the meeting as it happens, and the dates the Open Meetings Act makes them due. Work out any meeting's notice and minutes deadlines on the page."
+  },
+  "pricing": {
+    "name": "Pricing: your first space is free, and the Plus plan is $9 a month",
+    "title": "Pricing: your first space is free, and the Plus plan is $9 a month · yaks.app",
+    "description": "You pay for a space, not for people, and invite as many as you like on any plan. Your first space is free. The Plus plan is $9 a month for a space, and the Pro plan $49."
+  },
+  "help": {
+    "name": "Help: building, sharing and exporting your apps",
+    "title": "Help: building, sharing and exporting your apps · yaks.app",
+    "description": "Answers about building apps, connecting an assistant, sharing, access, exports, and support."
+  },
+  "terms": {
+    "name": "Terms of service",
+    "title": "Terms of service · yaks.app",
+    "description": "The terms for using yaks.app."
+  },
+  "privacy": {
+    "name": "Privacy policy",
+    "title": "Privacy policy · yaks.app",
+    "description": "What yaks.app stores about you, where it lives, and who can see it."
+  },
+  "cookies": {
+    "name": "Cookies",
+    "title": "Cookies · yaks.app",
+    "description": "yaks.app sets a cookie so you stay signed in, and one more when a campaign link brought you."
+  },
+  "acceptable-use": {
+    "name": "Acceptable use policy",
+    "title": "Acceptable use policy · yaks.app",
+    "description": "What you may not do on yaks.app."
+  },
+  "style-guide": {
+    "name": "Style guide",
+    "title": "Style guide · yaks.app",
+    "description": "Reference for the yaks.app design tokens, components, layout, and writing style."
+  }
+}

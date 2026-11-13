@@ -5,8 +5,7 @@ import { Page, Yours } from './frame.tsx'
 
 export let Pricing = () => (
   <Page
-    name='Pricing: your first space is free, and the Plus plan is $9 a month'
-    description='You pay for a space, not for people, and invite as many as you like on any plan. Your first space is free. The Plus plan is $9 a month for a space, and the Pro plan $49.'
+    copy='pricing'
     path='/pricing'
     kind='Pricing'
   >

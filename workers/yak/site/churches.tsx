@@ -25,9 +25,7 @@ export let MINUTES = 3
 
 export let Churches = () => (
   <Page
-    name='yaks.app for churches — a new church website built from the one you have, and changed whenever you ask'
-    title='yaks.app for churches — a new church website built from the one you have, and changed whenever you ask'
-    description={`Type your church's web address and watch yaks.app build your new site from it, free to try and with no sign-up. Then change it by asking, by email or chat, and add sign-up forms, a member directory and a calendar. $${PRICE.pro} a month for your whole church.`}
+    copy='churches'
     path={PATH}
     kind='Home'
     head={<script src='cta.js' defer />}

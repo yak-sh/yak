@@ -6,6 +6,7 @@
 import { Button, Card, Field } from '@yaks/ui'
 import { START } from '../newcomer.ts'
 import { FREE } from '../meter.ts'
+import { text } from './copy.ts'
 import { Page, Yours } from './frame.tsx'
 import { Cost, Examples } from './home.tsx'
 import { Idle } from '../mascot.ts'
@@ -13,9 +14,7 @@ import { BUILD } from '../demos.ts'
 
 export let Build = () => (
   <Page
-    name='yaks.app — describe the app you need, and it is built for you'
-    title='yaks.app — describe the app you need, and it is built for you'
-    description='Describe the app you need, like a sign-up sheet, a price list or a member directory, and yaks.app builds it and puts it online at its own address. Free to start.'
+    copy='build'
     path='/'
     kind='Home'
     head={
@@ -62,11 +61,13 @@ export let Build = () => (
           </a>
         </p>
       </div>
-      <Examples apps={BUILD}>
-        Each of these apps runs on yaks.app. Open one to try it, or get a copy
-        of your own and ask for changes.{' '}
-        <a href='/gallery'>See more in the gallery</a>.
-      </Examples>
+      <Examples
+        apps={BUILD}
+        note='build.examples.note'
+        slots={{
+          gallery: <a href='/gallery' {...text('home.examples.gallery')} />,
+        }}
+      />
     </section>
     <section class='Yours' aria-labelledby='does'>
       <h2 class='Title' id='does'>What every app can do</h2>

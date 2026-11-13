@@ -4,8 +4,7 @@ import { Page } from './frame.tsx'
 
 export let Privacy = () => (
   <Page
-    name='Privacy policy'
-    description='What yaks.app stores about you, where it lives, and who can see it.'
+    copy='privacy'
     path='/privacy'
   >
     <div class='Prose_Head'>

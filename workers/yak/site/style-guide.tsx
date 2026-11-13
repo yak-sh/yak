@@ -75,8 +75,7 @@ let PICK = `
 
 export let StyleGuide = () => (
   <Page
-    name='Style guide'
-    description='Reference for the yaks.app design tokens, components, layout, and writing style.'
+    copy='style-guide'
     path='/style-guide'
     kind='Guide'
     robots='noindex, follow'

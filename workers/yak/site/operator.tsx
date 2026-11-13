@@ -9,6 +9,7 @@
 // (`by='email'`). It is a home page of the split (variant.ts), served at `/`
 // as well as its own address, so its canonical address is the home page's.
 import { Button, Card, Field, Form } from '@yaks/ui'
+import { text } from './copy.ts'
 import { Page, Yours } from './frame.tsx'
 import { Examples } from './home.tsx'
 import { Idle } from '../mascot.ts'
@@ -70,9 +71,7 @@ export let Operator = ({ by }: { by: By }) => {
   let ask = ASK[by]
   return (
     <Page
-      name='yaks.app — get an Operator that builds apps for you'
-      title='yaks.app — get an Operator that builds apps for you'
-      description='Get an Operator that builds apps for you. Tell it what you need, and it builds the app and puts it online at your own address.'
+      copy='operator'
       path='/'
       kind='Home'
       head={
@@ -109,10 +108,12 @@ export let Operator = ({ by }: { by: By }) => {
             <a href='#cost'>${PRICE.plus} a month</a> for more.
           </p>
         </div>
-        <Examples>
-          Your Operator can make apps like these. Open one to try it.{' '}
-          <a href='/gallery'>See more in the gallery</a>.
-        </Examples>
+        <Examples
+          note='operator.examples.note'
+          slots={{
+            gallery: <a href='/gallery' {...text('home.examples.gallery')} />,
+          }}
+        />
       </section>
       <section class='How' aria-labelledby='how'>
         <h2 class='Title' id='how'>From your first step to your first app</h2>

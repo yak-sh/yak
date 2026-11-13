@@ -50,9 +50,7 @@ let Cite = ({ law, said }: { law: keyof typeof LAW; said: string }) => (
 
 export let Townships = () => (
   <Page
-    name="AI for townships — a Michigan township website that drafts the board's minutes as it meets"
-    title="AI for townships — a Michigan township website that drafts the board's minutes as it meets"
-    description="A website for a Michigan township: meetings, documents and notices, proposed minutes drafted from the meeting as it happens, and the dates the Open Meetings Act makes them due. Work out any meeting's notice and minutes deadlines on the page."
+    copy='townships'
     path={PATH}
     kind='Home'
     head={
