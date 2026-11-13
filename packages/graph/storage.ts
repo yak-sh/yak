@@ -378,6 +378,11 @@ export { seriesOf } from '@yaks/id'
 export let clash = (a: Pair, b: Pair): boolean =>
   a.num == b.num && (!a.prefix || !b.prefix || a.prefix == b.prefix)
 
+/** Whether two pairs name one id in a store: {@link clash}, or the same
+ * number alone where the store keeps a number unique on its own (`lone`). */
+export let meeting = (lone = false) => (a: Pair, b: Pair): boolean =>
+  lone ? a.num == b.num : clash(a, b)
+
 /**
  * The pair a bundle states for its entity, from what it held before (`now`):
  * `entity.num` and `entity.prefix`, either left out to keep what it had.
@@ -437,7 +442,7 @@ export let renumbering = (
   holders: ReadonlyMap<number, readonly ({ eid: Eid } & Pair)[]>,
   lone = false,
 ): Map<Eid, Pair | null> => {
-  let meets = (a: Pair, b: Pair) => lone ? a.num == b.num : clash(a, b)
+  let meets = meeting(lone)
   let same = (a: Pair | null, b: Pair | null) =>
     a == b || (!!a && !!b && a.num == b.num && a.prefix == b.prefix)
   let changes = new Map(

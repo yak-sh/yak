@@ -49,6 +49,7 @@ import { comps, TOMBSTONE } from '@yaks/graph/bundle'
 import { stood } from './raise.ts'
 import { Refused } from '@yaks/graph/errors'
 import {
+  meeting,
   type Pair,
   renumbering,
   type Series,
@@ -986,17 +987,34 @@ export let patch = (
     let pair = stating(b.entity, pairOf(b.entity.eid))
     if (pair !== undefined) stated.set(b.entity.eid, pair)
   }
+  let lone = stated.size > 0 && sole(driver)
   let renumbered = stated.size
     ? renumbering(
       stated,
       pairOf,
       holders(driver, [...stated.values()].flatMap((p) => p ? [p.num] : [])),
-      sole(driver),
+      lone,
     )
     : new Map<string, Pair | null>()
-  // An entity moving off its number lets go of it before any is given, so a
-  // number another entity of the batch leaves is free for this one.
-  let moving = [...renumbered.keys()].filter((eid) => known.get(eid)?.num)
+  // An entity stated to hold none lets go of its pair, as does one whose
+  // pair another entity of the batch takes, before any is given, so that one
+  // is free for it. Every other entity moves in its one update: a number
+  // taking its letter (yak/store/number-letter/1) writes its row and indexes
+  // once, not twice.
+  let meets = meeting(lone)
+  let taking = new Map<number, [string, Pair][]>()
+  for (let [eid, pair] of renumbered) {
+    if (pair) taking.set(pair.num, [...taking.get(pair.num) ?? [], [eid, pair]])
+  }
+  let moving = [...renumbered.keys()].filter((eid) => {
+    let held = known.get(eid)
+    if (held?.num == null) return false
+    if (renumbered.get(eid) == null) return true
+    let was = { num: held.num, prefix: held.prefix ?? null }
+    return (taking.get(was.num) ?? []).some(([other, pair]) =>
+      other != eid && meets(pair, was)
+    )
+  })
   for (let eid of moving) renumber(driver, eid, known.get(eid)!, null)
   // The eids a bundle of their own arrives for: one giving a component, or
   // one stating the number.
