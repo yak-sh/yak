@@ -119,7 +119,9 @@ let storage = (): Stash => {
 // until the page gives each up; 'deploying' answers the first read of each
 // address 502, and the store's first handshake as failed, as the edge does
 // while a deploy replaces the Worker; 'down' fails every handshake of the
-// store's socket. Under any, the page's waits run a thousand times faster.
+// store's socket, and gives the page a clock the test holds: its time passes
+// only by `pass`. Under the others, the page's waits run a thousand times
+// faster.
 let load = async (
   stash: Stash,
   cut = false,
@@ -164,14 +166,37 @@ let load = async (
   }
   let left = false
   let timers = new Set<ReturnType<typeof setTimeout>>()
+  // The page's waits on the held clock: each runs once `pass` reaches its
+  // moment, `now`, which the page reads as `performance.now()`.
+  let held = network == 'down'
+  let now = 0, n = 0
+  let waits = new Map<number, { at: number; fn: () => void }>()
   let after = (fn: () => void, ms: number) => {
     if (left) return 0
+    if (held) return waits.set(++n, { at: now + ms, fn }), n
     let t = setTimeout(
       () => (timers.delete(t), fn()),
       network || ms < 1000 ? ms / 1000 : ms,
     )
     timers.add(t)
     return t
+  }
+  // Lets `ms` of the held clock pass, the page's waits running in the order
+  // they fall due, each once what the last set going has landed; or less, once
+  // `done`, which it answers.
+  let pass = async (ms: number, done = () => false) => {
+    let end = now + ms
+    for (;;) {
+      await new Promise((go) => setTimeout(go))
+      if (done()) return true
+      let [id, wait] = [...waits].sort(([, a], [, b]) => a.at - b.at)[0] ?? []
+      if (!wait || wait.at > end) break
+      waits.delete(id!)
+      now = wait.at
+      wait.fn()
+    }
+    now = end
+    return done()
   }
   // The frames of drafts the page has heard on its store's socket, each taken
   // in before the next, and the reads of its drafts it asked by any other way.
@@ -303,7 +328,8 @@ let load = async (
       localStorage: stash,
       setInterval: () => 0,
       setTimeout: after,
-      clearTimeout,
+      clearTimeout: held ? (id: number) => void waits.delete(id) : clearTimeout,
+      ...held ? { performance: { now: () => now } } : {},
       FormData: FormOf,
       Event,
       scrollTo: () => {},
@@ -331,6 +357,7 @@ let load = async (
     asked: () => asked,
     // The handshakes its store's sockets made.
     handshakes: () => handshakes,
+    pass,
     talks: () => talks,
     // The Operator's socket opening, as after a deploy restarted it.
     open: () => (sockets[0] as { onopen: () => void }).onopen(),
@@ -379,6 +406,7 @@ let load = async (
     leave: () => {
       left = true
       for (let t of timers) clearTimeout(t)
+      waits.clear()
       for (let server of servers) p.builder(eid).webSocketClose(server)
     },
   }
@@ -1181,9 +1209,11 @@ test('the aside’s summary in the bar shows a dot for each, “+N” past four,
 // tried again, and a page is never asked to read them on a timer.
 test('a page whose store cannot be reached says its draft is kept, and asks for it no other way', async () => {
   let page = await load(storage(), false, 'new', {}, undefined, 'down')
-  // until the page says so, then a hundred seconds more, sped up
-  let said = await until(() => page.status() != '')
-  await new Promise((ok) => setTimeout(ok, 100))
+  // Only the store is out of reach: the Operator's socket opens.
+  page.open()
+  // until the page says so, within a minute, then a hundred seconds more
+  let said = await page.pass(60_000, () => page.status() != '')
+  await page.pass(100_000)
   page.leave()
   assertEquals(said, true)
   assertEquals(
