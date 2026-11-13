@@ -14,6 +14,7 @@ import { blocks, parse } from '@yaks/markdown/structural'
 import type { H } from '@yaks/render'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
+import { Host } from '@yaks/markdown'
 import { Button, Card, Rows } from '@yaks/ui/parts'
 import { moment } from './html.ts'
 import { chatPath } from './route.ts'
@@ -27,6 +28,7 @@ import {
   type Lines,
   lines,
   type Names,
+  opening,
   type Seen,
   spoken,
   theirs,
@@ -89,7 +91,7 @@ export let channelOf = (channel: string, framing = '') => ({
 
 /** Every line of a transcript worth showing, drawn, in order. */
 export let rows = (entries: Bundle[], names: Names, seen: Seen = {}): Row[] =>
-  lines(entries, names, seen).map(drawn)
+  lines(entries, names, seen).map((l) => drawn(l, seen.mentions))
 
 /**
  * A conversation's words as plain lines, for a reader that hears rather than
@@ -589,7 +591,9 @@ export let talk = (
 ) => {
   let working = now(entries, names)
   let first = comp(entries.find((b) => b.entry), 'entry')?.seq
-  return renderToString(
+  return renderToString(h(
+    Host.Provider,
+    { value: opening(seen.mentions) },
     h(
       Transcript,
       {
@@ -608,7 +612,7 @@ export let talk = (
       // the words a screen reader hears; the yak beside the box shows them
       h(Transcript.Status, {}, h('span', { 'data-now': '' }, working)),
     ),
-  )
+  ))
 }
 
 /** A piece of the Operator's work as its lists show it, in plain words. */

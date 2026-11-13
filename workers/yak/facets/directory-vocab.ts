@@ -212,7 +212,7 @@ export let directoryDoc: VocabDoc = {
     },
     // Where an id the same server's rows carry (T-123) opens, on its
     // `mcp_server` row: `url` with `{id}` where the id goes. The Operator page
-    // makes each such id in a reply a link there (operator-rows.ts `mention`).
+    // makes each such id in a reply a link there (operator-draw.ts `opening`).
     mentions: {
       component: true,
       type: 'object',

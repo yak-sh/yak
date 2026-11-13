@@ -59,7 +59,7 @@ let service = operatorService(
     Promise.resolve({
       id: crypto.randomUUID(),
       model: 'test-model',
-      items: [{ kind: 'assistant', text: 'Posted.' }],
+      items: [{ kind: 'assistant', text: 'Posted T-12, not `T-9`.' }],
       cost: 0.001,
     })
   ),
@@ -92,6 +92,19 @@ let get = async (path: string, person = root) => {
 let texts = (d: ParentNode, s: string) =>
   [...d.querySelectorAll(s)].map((e) => e.textContent?.trim())
 
+// The admin's own server says where an id it names opens.
+await dir.apply({
+  entities: [{
+    entity: { eid: crypto.randomUUID() },
+    mcp_server: {
+      owner: root,
+      name: 'tasks',
+      url: 'https://tasks.example/mcp',
+    },
+    mentions: { url: 'https://tasks.example/{id}' },
+  }],
+}, { ...as(root), 'x-yak-kernel': '1' })
+
 let at = `/admin/${eid}/operator`
 let space = await get(`/admin/${eid}`)
 let list = await get(at)
@@ -120,7 +133,9 @@ test('a conversation opens on what was said and everything its model was told an
   assertEquals(column.hasAttribute('data-conversation'), true)
   assertEquals(texts(column, '.Transcript_Bubble'), ['Post the meeting.'])
   assertEquals(column.querySelector('.Transcript_Via'), null)
-  assertEquals(texts(talk.document, '.Transcript_Reply'), ['Posted.'])
+  assertEquals(texts(talk.document, '.Transcript_Reply'), [
+    'Posted T-12, not T-9.',
+  ])
   let told = [...talk.document.querySelectorAll('.More_Framed')]
   let summaries = told.map((d) => d.querySelector('summary')!.textContent!)
   assertEquals(summaries[0], 'The context the Operator was given')
@@ -129,6 +144,16 @@ test('a conversation opens on what was said and everything its model was told an
   assertEquals(told.every((d) => !d.hasAttribute('open')), true)
   // Each tool by its name, opening on its description and its schema.
   assertEquals(tools.querySelectorAll('details > pre').length > 0, true)
+})
+
+test('an id in a reply opens where the admin’s own server says, and code keeps its ids words', () => {
+  let links = [...talk.document.querySelectorAll('.Transcript_Reply a')]
+  assertEquals(
+    links.map((
+      a,
+    ) => [a.textContent, a.getAttribute('href'), a.getAttribute('target')]),
+    [['T-12', 'https://tasks.example/T-12', '_blank']],
+  )
 })
 
 let missing = await get(`${at}/${crypto.randomUUID()}`)

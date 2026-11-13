@@ -314,3 +314,30 @@ test("words the platform wrote read as the system's in one closed line, never as
   ])
   assertStringIncludes(system[1].textContent!, 'It happened.')
 })
+
+// A reader whose server opens ids reads each as a link there; anyone else
+// reads the words.
+test('an id in a reply is a link only where its reader can open it', () => {
+  let said = [
+    entry('ask', 1, { ask: { to: 'm' } }),
+    entry('reply', 2, {
+      content: { body: 'Filed T-12 and #18bc9a78d1; see `T-9`.' },
+      output: { source: 'ask' },
+    }),
+  ]
+  let read = (mentions?: string) =>
+    [
+      ...parseHTML(`<main>${
+        rows(said, names, { mentions }).map((r) => r.html).join('')
+      }</main>`)
+        .document.querySelectorAll('.Transcript_Reply a'),
+    ]
+      .map((a) =>
+        a.getAttribute('href')
+      )
+  assertEquals(read('https://tasks.example/{id}'), [
+    'https://tasks.example/T-12',
+    'https://tasks.example/%2318bc9a78d1',
+  ])
+  assertEquals(read(), [])
+})

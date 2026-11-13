@@ -10,8 +10,9 @@ import { Attachments, Notice, Pairs, Transcript } from '@yaks/ui/parts'
 // browser and for the shell alike.
 import type { Bundle, Comp } from '@yaks/graph/bundle'
 import { type Step, stepOf, type Steps } from '@yaks/tools/title'
-import { blocks, parse } from '@yaks/markdown/structural'
+import { blocks, Host, type Options, parse } from '@yaks/markdown'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
+import { useContext } from 'preact/hooks'
 import { Body, Drop, Icon, Menu, More } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
 import { pretty } from '@yaks/ui/relative'
@@ -173,10 +174,33 @@ let input = (b: Bundle, body: string) => {
   )
 }
 
+/** Where the ids in a reader's Markdown open (@yaks/markdown `Host`): `url`,
+ * with `{id}` where the id goes, as the reader's own server says
+ * (`mentions{url}`); none, and ids stay words. */
+export let opening = (url?: string | null): Options =>
+  url ? { refs: (id) => url.replaceAll('{id}', encodeURIComponent(id)) } : {}
+
+// An id that opens on another site opens in a tab of its own, so the page
+// it was read on stays.
+let away =
+  ((tag: string, props: Record<string, unknown> | null, ...kids: Node[]) =>
+    h(
+      tag,
+      tag == 'a' && props?.['data-ref'] && /^https?:/.test(String(props.href))
+        ? { ...props, target: '_blank', rel: 'noopener' }
+        : props,
+      ...kids,
+    )) as typeof h
+
+// The words, under the Refs of the page they are drawn on.
+let Prose = ({ text }: { text: string }) =>
+  h(Fragment, null, ...blocks(parse(text), away, useContext(Host)))
+
 /** Markdown drawn as formatted text, the kit's Body: markup in it stays
- * words (@yaks/markdown). */
+ * words, and an id is a link where the page's `Host` opens it
+ * (@yaks/markdown). */
 export let markdown = (text: string) =>
-  h(Body, { mod: 'flow' }, ...blocks(parse(text), h))
+  h(Body, { mod: 'flow' }, h(Prose, { text }))
 
 /** A reply as the Operator wrote it, in Markdown. */
 export let reply = (text: string) => h(Transcript.Reply, {}, markdown(text))
@@ -591,6 +615,9 @@ export type Seen = {
   offers?: Offers
   called?: string
   opens?: string
+  /** where an id in the words opens for their reader, `{id}` where it goes
+   * (`opening`) */
+  mentions?: string
 } & Naming
 
 /** What the calls' steps are said from: each tool a call points at

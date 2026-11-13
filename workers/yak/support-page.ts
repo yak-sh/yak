@@ -16,7 +16,10 @@ import { directory } from './directory.ts'
 import { meta } from './meta.ts'
 import { sessionAt, titling, vouched } from './session.ts'
 import { lost, page, said as notice } from './pages.ts'
-import { markdown } from './operator-draw.ts'
+import { markdown, opening } from './operator-draw.ts'
+import { Host, type Options } from '@yaks/markdown'
+import { listingOf } from './operator-lists.ts'
+import { admin } from './tool.ts'
 import {
   adding,
   asking,
@@ -119,19 +122,42 @@ export let view = (t: Thread, me: string, say?: string, no?: boolean) =>
     ),
   )
 
-let drawn = (
+/** Where an id in a thread opens for `person`: for the platform's admin,
+ * where their own server opens it (operator-draw.ts `opening`), since the ids
+ * an answer names are the platform's work; for anyone else nowhere, and they
+ * stay words. */
+export let refsFor = async (
   env: Env,
+  dir: dirPart.Directory,
+  person: string,
+): Promise<Options> => {
+  if (!await admin({ dir, person })) return {}
+  let meta = await dir.space(dirPart.META.space)
+  return opening((await listingOf(env, person, meta?.eid ?? '')).mentions)
+}
+
+let drawn = async (
+  env: Env,
+  dir: dirPart.Directory,
   t: Thread,
   me: string,
   say?: string,
   status = 200,
 ) =>
-  page(env, {
-    title: t.title,
-    lead: standing(t),
-    status,
-    headers: { 'cache-control': 'no-store' },
-  }, view(t, me, say, status != 200))
+  page(
+    env,
+    {
+      title: t.title,
+      lead: standing(t),
+      status,
+      headers: { 'cache-control': 'no-store' },
+    },
+    h(
+      Host.Provider,
+      { value: await refsFor(env, dir, me) },
+      view(t, me, say, status != 200),
+    ),
+  )
 
 /** `/support/<thread>`: the thread to anybody it opens to, signed in; a
  * POST adds its words. */
@@ -155,13 +181,14 @@ export let answer = async (
   let store = meta(env)
   let t = await read(store, eid)
   if (!t || !await opens(t, asking(dir, person))) return lost(env)
-  if (req.method != 'POST') return drawn(env, t, person)
+  if (req.method != 'POST') return drawn(env, dir, t, person)
   let words = String((await req.formData()).get('text') ?? '').trim()
-  if (!words) return drawn(env, t, person, 'Say something to add.', 400)
+  if (!words) return drawn(env, dir, t, person, 'Say something to add.', 400)
   let held = await lately(store, person)
   if (held >= SAYS) {
     return drawn(
       env,
+      dir,
       t,
       person,
       `That is ${held} already this hour. Every one is kept and read; add the rest later.`,

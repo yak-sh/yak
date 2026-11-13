@@ -914,6 +914,7 @@ export let conversationOf = async (
   called?: string,
   opens = at,
   from?: number,
+  mentions?: string,
 ): Promise<{
   task: string
   begun: string
@@ -944,6 +945,7 @@ export let conversationOf = async (
       ...everyone ? { metadata: await metadataOf(store, entries) } : {},
       called,
       opens,
+      ...mentions ? { mentions } : {},
       ...await namingOf(store, withHelpers(entries, helped.helpers), named),
     }
     let names = namer(seen)
@@ -1012,6 +1014,7 @@ export let conversationOf = async (
     ...everyone ? { metadata: await metadataOf(store, entries) } : {},
     called,
     opens,
+    ...mentions ? { mentions } : {},
     ...await namingOf(store, withHelpers(entries, helped.helpers), named),
   }
   let names = namer(seen)
@@ -1714,6 +1717,7 @@ export let operatorRequest = async (
       typeof args.from == 'number' && Number.isFinite(args.from)
         ? args.from
         : undefined,
+      typeof args.mentions == 'string' ? args.mentions : undefined,
     )
     // Its lines as data only for a reader that draws them (the iOS shell).
     return Response.json({

@@ -1069,19 +1069,29 @@ let socketTo = (
  * titled by whose it is, `opens` is where its helpers' conversations open,
  * by their id (the chat app's unless the admin's), `lines` answers its lines
  * as data, and `updates` the person's Updates beside it, in the same
- * request. `from` keeps entries past the initial page's oldest sequence. */
+ * request. `from` keeps entries past the initial page's oldest sequence. An
+ * id in its words opens where the reader's own server says (`mentions`, read
+ * from their servers unless the caller has them). */
 export let conversationOf = async (
   env: Env,
   space: Space,
   who: Who,
   at: string,
   open: string,
-  { everyone = false, opens, lines: drawing = false, updates = false, from }: {
+  {
+    everyone = false,
+    opens,
+    lines: drawing = false,
+    updates = false,
+    from,
+    mentions,
+  }: {
     everyone?: boolean
     opens?: string
     lines?: boolean
     updates?: boolean
     from?: number
+    mentions?: string | null
   } = {},
 ) => {
   let none = {
@@ -1100,6 +1110,9 @@ export let conversationOf = async (
   let news = async (read?: Updates) =>
     !updates ? undefined : read ?? await updatesOf(env, space, who)
   if (open == 'new') return { ...none, updates: await news() }
+  let opening = mentions === undefined
+    ? (await listingOf(env, who.person, space.eid)).mentions
+    : mentions
   let {
     root,
     task,
@@ -1127,6 +1140,7 @@ export let conversationOf = async (
       ...drawing ? { lines: true } : {},
       ...updates ? { updates } : {},
       ...from != null ? { from } : {},
+      ...opening ? { mentions: opening } : {},
     },
   ).catch((e) => {
     if (e.status != 404) throw e
@@ -1919,9 +1933,12 @@ export let chatPage = async (
   let listing = listingOf(env, who.person, space.eid)
   let reading = listing.then((l) => l.read())
   let [talked, newcomer, { size, mentions }, alerting] = await Promise.all([
-    conversationOf(env, space, who, at, open == 'new' ? '' : open, {
-      updates: true,
-    }),
+    listing.then((l) =>
+      conversationOf(env, space, who, at, open == 'new' ? '' : open, {
+        updates: true,
+        mentions: l.mentions ?? null,
+      })
+    ),
     who.person ? directoryOf(env.STORE).newcomer(who.person) : false,
     listing,
     who.person ? directoryOf(env.STORE).alerts(who.person) : null,
@@ -2193,22 +2210,16 @@ import { browserDrafts } from '/_draft.js'
 import { follow } from '/follow.js'
 import { frames } from '/frames.js'
 import { redraw } from '/redraw.js'
-import { asideHtml, glanceHtml, helperHtml, lasted, mention, menus, ordered, relative, rowsOf, turnHtml } from '/_talk.js'
+import { asideHtml, glanceHtml, helperHtml, lasted, menus, ordered, relative, rowsOf, turnHtml } from '/_talk.js'
 import { voice } from '/voice.js'
 let open = ${JSON.stringify(open)}
 let root = ${JSON.stringify(root)}
 let chats = ${JSON.stringify(chatPath(space.slug, ''))}
 menus(document)
 let box = document.querySelector('[data-conversation]')
-// An id in a reply opens where the person's server says (\`mentions\`),
-// in the replies drawn now and in each one drawn after.
+// An id in a line drawn here opens where the person's server says
+// (\`mentions\`), as it does in the lines the page came drawn with.
 let mentions = ${JSON.stringify(mentions ?? '')}
-if (box && mentions) {
-  mention(box, mentions)
-  new MutationObserver((seen) => {
-    for (let r of seen) if (r.target.nodeType == 1) mention(r.target, mentions)
-  }).observe(box, { childList: true, subtree: true })
-}
 // Lists their servers had not answered when the page was drawn come in
 // now, each in its place, and the bar counts what waits in them.
 let later = [...document.querySelectorAll('[data-later]')]
@@ -2655,7 +2666,7 @@ let hear = (frame) => {
     return
   }
   typing?.remove()
-  for (let row of o.lines ? rowsOf(o.lines) : o.rows) {
+  for (let row of o.lines ? rowsOf(o.lines, mentions) : o.rows) {
     let at = document.getElementById('row-' + row.id)
     if (!at) {
       at = document.createElement('div')
