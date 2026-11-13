@@ -147,6 +147,38 @@ It is off by default because the paths come from the graph, not the database: a
 host opened on a copy of a graph would write into the checkouts the original
 names.
 
+## A persona a package ships
+
+The persona files go from the graph to a checkout. A package may also ship a
+persona as files, which a store keeps the other way round: the files own it.
+Each is a content file ([@yaks/yaml](../yaml)'s `front`): the frontmatter is the
+bundle and the document under it is the `doc` body. One file carries `persona`
+and lists under `contains` the names of the others, in the order it says them;
+each other file is a document it contains. A name is the file's name without
+`.md`.
+
+```md
+---
+persona: {}
+doc:
+  title: Helper
+contains: [tone]
+---
+
+Help.
+```
+
+`shipped(files, eid)` reads the texts, by file name, into the persona's rows:
+the persona, each document, and a `contains` edge to each in order. `eid` gives
+the row a name stands for, so the files name no entity. A set without exactly
+one persona, a document the persona does not contain, or a name no file holds is
+refused. `kept(storage, rows)` is what a store still needs written to keep them:
+each row it does not already hold as the files say it, and the removal of each
+`contains` edge the persona has there that the files no longer say. It writes
+nothing where the store already agrees. Both take texts rather than a directory,
+so a host without a filesystem is handed them when it is built. yaks.app's
+Operator is worn on one: `plugins/yaks.app/persona/`, kept in its directory.
+
 ## Repository skills
 
 Skills are reusable instructions, not tools. A skill has a stable minted id and
@@ -330,18 +362,18 @@ is drawn as its source, as written.
 
 ## Exports
 
-| subpath          | what it provides                                                                                                                       |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `.`              | `wear`, `voice`, `owed`, `unsaid`, `wearing`, `offer`, `common`, the [names](#names), the component names, and the vocabulary document |
-| `./vocab`        | the component declarations alone                                                                                                       |
-| `./part`         | `PART`, what stands between the parts of what an agent is told, importing nothing else                                                 |
-| `./tools`        | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes                                                              |
-| `./effects`      | `effects(host, {files, skills})` — independently enables persona files and skills                                                      |
-| `./skills`       | Graph skill reads and read-only checkout views                                                                                         |
-| `./skill-text`   | Portable skill parsing, frontmatter and rendering                                                                                      |
-| `./skill-mirror` | `syncSkills`, `skillRoots` — bidirectional landed repository mirror                                                                    |
-| `./views`        | `inspectViews()`, `tabs`, `destinations`, `icons` — the desk, as the browsing app draws it                                             |
-| `./ui`           | `NameCard` — where a persona's people change its name                                                                                  |
+| subpath          | what it provides                                                                                                                                          |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.`              | `wear`, `voice`, `owed`, `unsaid`, `wearing`, `offer`, `common`, `shipped`, `kept`, the [names](#names), the component names, and the vocabulary document |
+| `./vocab`        | the component declarations alone                                                                                                                          |
+| `./part`         | `PART`, what stands between the parts of what an agent is told, importing nothing else                                                                    |
+| `./tools`        | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes                                                                                 |
+| `./effects`      | `effects(host, {files, skills})` — independently enables persona files and skills                                                                         |
+| `./skills`       | Graph skill reads and read-only checkout views                                                                                                            |
+| `./skill-text`   | Portable skill parsing, frontmatter and rendering                                                                                                         |
+| `./skill-mirror` | `syncSkills`, `skillRoots` — bidirectional landed repository mirror                                                                                       |
+| `./views`        | `inspectViews()`, `tabs`, `destinations`, `icons` — the desk, as the browsing app draws it                                                                |
+| `./ui`           | `NameCard` — where a persona's people change its name                                                                                                     |
 
 The two edge relations are borrowed rather than invented here: `contains` is
 [@yaks/task](../task)'s and `reads` is [@yaks/kernel](../kernel)'s. A relation

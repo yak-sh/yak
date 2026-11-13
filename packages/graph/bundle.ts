@@ -131,6 +131,33 @@ export let comps = (b: Bundle): [string, Comp | null][] => {
   return out
 }
 
+/** The bundles of `wanted` that say something `held` does not: a component
+ * it lacks, a property with another value, or a component it holds that
+ * `wanted` removes. What writing `wanted` over `held` would change, so a
+ * writer that declares rows writes nothing where they already stand. A
+ * bundle that only deletes says nothing here; that is its caller's to write.
+ *
+ * ```ts
+ * let a = { entity: { eid: 'a' }, doc: { title: 'A' } }
+ * unheld([a], [a, { entity: { eid: 'b' }, doc: {} }]) // [{ entity: { eid: 'b' }, doc: {} }]
+ * unheld([a], [{ entity: { eid: 'a' }, doc: { title: 'B' } }]).length // 1
+ * ```
+ */
+export let unheld = (held: Bundle[], wanted: Bundle[]): Bundle[] => {
+  let by = new Map(held.map((b) => [b.entity.eid, b]))
+  return wanted.filter((w) => {
+    let was = by.get(w.entity.eid)
+    return comps(w).some(([name, comp]) => {
+      let had = was?.[name] as Comp | null | undefined
+      if (comp == null) return had != null
+      return !had ||
+        Object.entries(comp).some(([p, v]) =>
+          JSON.stringify(had[p]) != JSON.stringify(v)
+        )
+    })
+  })
+}
+
 /** Whether a bundle deletes its entity — written either way. */
 export let dead = (b: Bundle): boolean =>
   b.$delete === true || b[TOMBSTONE] != null

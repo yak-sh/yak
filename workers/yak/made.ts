@@ -8,22 +8,11 @@ import { Notice } from '@yaks/ui/parts'
 import { type ComponentChildren as Node, h } from 'preact'
 import { Button, Empty, Rows } from '@yaks/ui/parts'
 import { read } from '@yaks/yaml'
-import type { Declared } from './operator-persona.ts'
 import { readOnly, titleOf } from './data.ts'
 
-/** How the Operator writes a new app so the column beside the chat shows it
- * being made in order and in plain words, declared beside the code that
- * reads it; the base persona contains it (operator-persona.ts). One write
- * more than writing the whole app at once costs a build about a cent: the
- * step reads the conversation from the cache ($0.10 a million tokens on
- * Sonnet 5.5), against the $5 a newcomer's build may spend (newcomer.ts
- * PER_BUILD). */
-export let building: Declared = {
-  key: 'building',
-  title: 'Making a new app',
-  body:
-    'While you make an app, the column beside the chat shows it being made, read from its draft as each write lands: What it keeps (the components of its vocab.json), What it can do (its commands, and its pages by their <title>), and Screens once the draft holds a page, the newest open. So when you make a new app, write its vocab.json first, in an app_files call of its own, and its pages after it: the person sees what it will keep before its screens. Give each component, each command and each property a title in the person\'s own words ("Address line 2", not street2), and mark a property the app keeps for itself, which nobody fills in (a slug, a sort position, a flag on sample rows), "readOnly": true: the column leaves it out.',
-}
+// How the Operator writes a new app so this column shows it being made, in
+// order and in plain words, is the base persona's
+// plugins/yaks.app/persona/building.md.
 
 /** A kind of thing an app keeps: its name, and what it keeps of each. */
 export type Kind = { name: string; holds: string[] }

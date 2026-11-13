@@ -14,6 +14,7 @@ import { spaced } from './operator-persona.ts'
 import { link } from '@yaks/edge'
 import { KERNEL, meta } from './meta.ts'
 import { derivedEid } from '@yaks/graph/identity'
+import { PRICE } from './meter.ts'
 
 let owner = crypto.randomUUID()
 // The platform holds Anthropic's key, so the Operator is on Claude.
@@ -45,7 +46,7 @@ let said = async (say: string, task?: string) => {
   return asked.at(-1)!
 }
 
-// A doc an earlier deploy's code declared, which this one does not.
+// A doc an earlier deploy's files held, which this one's do not.
 let retired = derivedEid('operator-persona|retired')
 await meta(env).apply([
   { entity: { eid: retired }, doc: { title: 'Retired', body: 'Gone now.' } },
@@ -85,7 +86,15 @@ test('the base comes first, then the space persona worn on it, then where it is'
   assertEquals(persona.persona, { base: BASE, home: space.eid })
 })
 
-test('a doc the code no longer declares leaves the base', () => {
+test("the base's files say the platform's own numbers", () => {
+  assertStringIncludes(
+    String(first.instructions),
+    `$${PRICE.plus} a month`,
+  )
+  assert(!String(first.instructions).includes('{{'))
+})
+
+test('a doc the files no longer hold leaves the base', () => {
   assertEquals(String(first.instructions).includes('Gone now.'), false)
 })
 

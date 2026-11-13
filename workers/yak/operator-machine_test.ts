@@ -124,7 +124,7 @@ test('an admin’s turn in the space whose tunnel is theirs is answered by their
   assertEquals(callers, ['operator'])
   assertEquals(t.cost, 0)
   let [provider] = await store.g.get([identityEid('provider', ['machine'])])
-  assertEquals(provider.provider, { name: 'machine', transport: 'machine' })
+  assertEquals(provider.provider, { name: 'machine' })
 })
 
 test('a member’s turn in the same space is answered by the hosted model, which the space pays for', async () => {

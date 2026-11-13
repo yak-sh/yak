@@ -200,9 +200,21 @@ let words = () => {
   return out
 }
 
+/** The Operator's base persona, as plugins/yaks.app/persona/ holds it: each
+ * file's text by name, which @yaks/persona `shipped` reads into its rows
+ * (operator-persona.ts `based`). Read whole, so the check refuses a file that
+ * moved, and so is every refusal of a file's shape `shipped` makes. */
+let persona = () => {
+  let dir = new URL('persona/', PLUGIN)
+  return Object.fromEntries(
+    filesIn(dir, '.md').map((n) => [n, io.readTextFileSync(new URL(n, dir))]),
+  )
+}
+
 let HEAD = `// Generated — do not edit. The words live in the files:
-// public/docs/*.md (a page's frontmatter), prompts/*.md (a prompt's), and
-// tools.yml (what each tool says about itself). Change one of those and run
+// public/docs/*.md (a page's frontmatter), prompts/*.md (a prompt's),
+// tools.yml (what each tool says about itself), and the Operator's base
+// persona in plugins/yaks.app/persona/*.md. Change one of those and run
 // \`deno task content\`; \`deno task content --check\` refuses this file when it
 // has fallen behind (gen.ts, T-34606).
 //
@@ -228,6 +240,10 @@ let body = () =>
     '/** What every tool says about itself, by name. */',
     `export let WORDS: Record<string, Words> = ${
       JSON.stringify(words(), null, 2)
+    }\n`,
+    "/** The Operator's base persona's files, by name. */",
+    `export let PERSONA: Record<string, string> = ${
+      JSON.stringify(persona(), null, 2)
     }\n`,
   ].join('\n')
 
@@ -263,9 +279,9 @@ let formatted = async (text: string) => {
 // package — and they are the connector's own, so the plugin cannot come to
 // wear a different face than the connect page hands out.
 //
-// Everything else under the plugin root (.codex-plugin/plugin.json, .mcp.json)
-// is written by hand: it is the package's own words and address, not a
-// projection of anything.
+// Everything else under the plugin root (.codex-plugin/plugin.json, .mcp.json,
+// persona/) is written by hand: it is the package's own words and address,
+// and the persona its Operator wears, not a projection of anything.
 let OWNED = ['skills', 'assets']
 
 let bytes = new TextEncoder()

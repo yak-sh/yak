@@ -4263,6 +4263,7 @@
             "npm:@yaks/ui@0.2.30",
             "npm:@yaks/ux@0.2.23",
             "npm:@yaks/vocab@0.2.32",
+            "npm:@yaks/yaml@0.2.24",
             "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
             "npm:preact-render-to-string@6.7.0",

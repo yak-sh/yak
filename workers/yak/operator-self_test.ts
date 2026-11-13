@@ -187,8 +187,5 @@ test('what it was told is kept as a memory on the entry it was said in, and reca
 
 test('its persona carries its name', async () => {
   let [persona] = await store.g.get([personaFor(space.eid)])
-  assertEquals(
-    (persona.doc as Comp).title,
-    `${space.operator}, the Operator of home`,
-  )
+  assertEquals((persona.doc as Comp).title, space.operator)
 })

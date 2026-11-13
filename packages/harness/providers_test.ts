@@ -144,6 +144,43 @@ test('fork and spawn selecting an existing model are served by a provider that s
   }
 })
 
+test('helpers asking for a model nobody has answered yet each ask the provider in force', async () => {
+  const h = await harness()
+  const a = await local({
+    h,
+    name: 'gpt-6-astra',
+    provider: 'openai',
+    model: (req) => Promise.resolve({ id: 'r', model: req.model, items: [] }),
+  })
+  try {
+    const parent = await a.start('parent')
+    await a.idle(parent)
+    const spawn = a.tools.find((t) => t.name === 'spawn')!
+    const using = async () => {
+      const entries = await a.transcript(parent)
+      const eid = crypto.randomUUID()
+      await h.g.apply([{
+        entity: { eid },
+        entry: { session: parent },
+        call: { to: toolEid('spawn'), id: eid, args: {} },
+      }])
+      const child = String(
+        await spawn.run({ prompt: 'child', model: 'gpt-7-new' }, {
+          session: parent,
+          entries,
+          call: { entity: { eid } },
+        }),
+      )
+      const input = (await a.transcript(child)).find((b) => b.using)!
+      return (input.using as Comp).provider
+    }
+    // the first asks for the name, which stays pending until answered
+    assertEquals([await using(), await using()], [P('openai'), P('openai')])
+  } finally {
+    await a.close()
+  }
+})
+
 test('provider sign-ins are not MCP authorization targets', async () => {
   let h = await harness()
   await h.g.apply(seed({ provider: 'openrouter', model: 'vendor/model' }))

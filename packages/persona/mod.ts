@@ -56,3 +56,4 @@ export {
   unsaid,
   wearing,
 } from './owed.ts'
+export { kept, shipped } from './shipped.ts'

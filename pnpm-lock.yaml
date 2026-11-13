@@ -3611,6 +3611,9 @@ importers:
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab
+      '@yaks/yaml':
+        specifier: 0.2.24
+        version: link:../yaml
       lucide:
         specifier: 1.31.0
         version: 1.31.0

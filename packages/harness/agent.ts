@@ -24,7 +24,13 @@ import { dispatchStatus } from '@yaks/session/admission'
 // instead of creating a second set. That is what makes `using{model}` on an
 // entry mean the same thing across restarts.
 
-import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  type Eid,
+  type Graph,
+  unheld,
+} from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import type { Effects } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
@@ -123,15 +129,7 @@ let seedMissing = (g: Graph, rows: Bundle[]) =>
       'serves',
     ]),
     (held) => {
-      let byId = new Map(held.map((b) => [b.entity.eid, b]))
-      let changed = rows.filter((row) => {
-        let old = byId.get(row.entity.eid)
-        return Object.entries(row).some(([name, value]) =>
-          name != 'entity' && Object.entries(value as Comp).some(([key, v]) =>
-            (old?.[name] as Comp | undefined)?.[key] !== v
-          )
-        )
-      })
+      let changed = unheld(held, rows)
       return changed.length ? g.apply(changed, { trusted: true }) : []
     },
   )

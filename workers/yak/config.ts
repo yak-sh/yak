@@ -356,8 +356,9 @@ export let operatorConfig: Config = {
     { use: '@yaks/persona', facets: ['vocab'] },
     { use: '@yaks/session', facets: ['vocab', 'graph'] },
     // Its model calls, and the replies of the providers that answer them
-    // (`operatorProviders`).
-    { use: '@yaks/model', facets: ['vocab'] },
+    // (`operatorProviders`); a model an input names is a row from then on
+    // (`requesting`).
+    { use: '@yaks/model', facets: ['vocab', 'graph'] },
     // How its persona speaks on a call (operator-persona.ts).
     { use: '@yaks/speech', facets: ['vocab'] },
     { use: '@yaks/anthropic', facets: ['vocab'] },

@@ -433,18 +433,30 @@ export type Listed = {
 /** A requested name exists before dispatch, but is not offered until answered.
  * A model with no price, met for the first time or held since before the
  * table knew it, is weighed at its list price ({@link listPrice}) unless the
- * batch prices it; a price on a stored row stands. */
+ * batch prices it; a price on a stored row stands. A provider a `using` names
+ * that no row holds is a row of that name from then on: the host lent it is
+ * the one that answers it. */
 export let requesting: Hook = (bundles, tx) => {
   let names = new Map<string, string>()
+  let providers = new Map<string, string>()
+  // A name where an eid goes: `using.model` or `using.provider` naming a row
+  // by what it is called rather than by its id.
+  let called = (v: unknown): v is string =>
+    typeof v == 'string' && !minted(v) && !v.startsWith('$')
   let out: Bundle[] = bundles.map((b) => {
     let using = b.using as Comp | undefined
-    let name = using?.model
-    if (typeof name != 'string' || minted(name) || name.startsWith('$')) {
-      return b
+    let { model: name, provider: from } = using ?? {}
+    if (!called(name) && !called(from)) return b
+    let named = { ...using }
+    if (called(name)) {
+      named.model = identityEid(MODEL, [name])
+      names.set(named.model as string, name)
     }
-    let eid = identityEid(MODEL, [name])
-    names.set(eid, name)
-    return { ...b, using: { ...using, model: eid } }
+    if (called(from)) {
+      named.provider = identityEid(PROVIDER, [from])
+      providers.set(named.provider as string, from)
+    }
+    return { ...b, using: named }
   })
   for (let b of out) {
     let name = (b.model as Comp | undefined)?.name
@@ -459,11 +471,22 @@ export let requesting: Hook = (bundles, tx) => {
     ),
   )
   return after(
-    tx.get([...names.keys()], [MODEL, 'pending', 'price']),
+    tx.get([...names.keys(), ...providers.keys()], [
+      MODEL,
+      PROVIDER,
+      'pending',
+      'price',
+    ]),
     (rows) => {
       let held = new Map(rows.map((b) => [b.entity.eid, b]))
       return [
         ...out,
+        ...[...providers].flatMap(([eid, name]): Bundle[] =>
+          held.get(eid)?.[PROVIDER] ||
+            out.some((b) => b.entity.eid == eid && b[PROVIDER])
+            ? []
+            : [{ entity: { eid }, [PROVIDER]: { name } }]
+        ),
         ...[...names].flatMap(([eid, name]): Bundle[] => {
           let row = held.get(eid)
           let price = !priced.has(eid) && !row?.price && listPrice(name)

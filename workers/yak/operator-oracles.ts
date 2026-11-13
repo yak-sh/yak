@@ -1,7 +1,13 @@
 // Topics live beside the Operator's work, on the eids of the spaces and apps
 // they describe. Source documents are refreshed when consulted; the contents
 // an oracle keeps are never replaced by discovery.
-import { addressed, type Bundle, type Comp, type Graph } from '@yaks/graph'
+import {
+  addressed,
+  type Bundle,
+  type Comp,
+  type Graph,
+  unheld,
+} from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
 import { short } from '@yaks/id'
@@ -11,23 +17,17 @@ import { inReach } from './declared.ts'
 import { type App, type Space, url } from './directory.ts'
 import { instructions } from './guide.ts'
 import { told } from './memory.ts'
-import { type Declared, moved } from './operator-persona.ts'
 import { appEntry, holds, listed } from './standing.ts'
 import { type Ctx, refuse } from './tool.ts'
 
-export let oracular: Declared = {
-  key: 'platform',
-  title: 'yaks.app',
-  body:
-    "yaks.app builds, hosts and shares web apps. Each space and app is a topic with an oracle. The map below names the topics you can reach. In the person's conversation, fork for work and let the fork consult the oracles it needs; never consult one yourself. In a work fork or helper, read an app's notes before working there, and ask an oracle with spawn({topic: '<#id from the map>', prompt: '<question>'}) for what they don't answer, such as the space's preferences or how the app has been kept; its answer comes back to you automatically. An oracle wears its own persona and opens on that topic's context, using @yaks/topic. Report the result to the conversation in a few lines.",
-}
-
+// What yaks.app is to the Operator, and how it reaches the oracles, is the
+// base persona's plugins/yaks.app/persona/platform.md.
 let ORACULAR =
   "You are the oracle of the topic below. Answer questions from its cover, contents and sources. When they do not answer the question, read the app or space through your tools. Distinguish what you read from what you infer, and say when you do not know. Keep the topic accurate: when you learn something missing, rewrite its content.body through graph_apply with self true, the topic's #id and the $was token supplied below. Keep sources current; an app's notes and a space's memories outrank an older summary. Your final answer goes to the fork that asked you, which reports to the person. For another subject consult its oracle with spawn and topic. Your own graph is read or written with self true; app tools reach the apps as usual."
 
 let keep = async (g: Graph, wanted: Bundle[]) => {
   let held = await g.get(wanted.map((b) => b.entity.eid))
-  let writes = moved(held, wanted)
+  let writes = unheld(held, wanted)
   if (writes.length) await g.apply(writes, { trusted: true })
 }
 

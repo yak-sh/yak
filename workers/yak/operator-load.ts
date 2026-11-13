@@ -67,6 +67,7 @@ let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/draft/graph': () => import('@yaks/draft/graph'),
   '@yaks/id/graph': () => import('@yaks/id/graph'),
   '@yaks/key/graph': () => import('@yaks/key/graph'),
+  '@yaks/model/graph': () => import('@yaks/model/graph'),
   '@yaks/session/graph': () => import('@yaks/session/graph'),
   '@yaks/topic/graph': () => import('@yaks/topic/graph'),
   '@yaks/wake/graph': () => import('@yaks/wake/graph'),

@@ -208,17 +208,20 @@ let delegation = (
         // stays only while it serves the model; otherwise the resolver picks
         // one of the model's providers. A name nothing knows yet becomes a
         // requested model (@yaks/model `requesting`): the provider in force is
-        // asked for it, and only its answer records that it serves it.
+        // asked for it, and only its answer records that it serves it. Until
+        // then nobody serves it, so a helper started meanwhile asks the
+        // provider in force too.
         let said = String(args.model)
         let known = await row(g, said)
         let model = known?.model ? said : identityEid('model', [said])
         using.model = model
-        if (known?.model || await row(g, model)) {
+        let held = known?.model ? known : await row(g, model)
+        if (held && !held.pending) {
           let offers = await g.read(`.serves .edge.to=${model}`)
           if (!offers.some((o) => comp(o, 'edge')?.from == using.provider)) {
             delete using.provider
           }
-        } else {
+        } else if (!held) {
           models.push({
             entity: { eid: model },
             model: { name: said, offered: false },
