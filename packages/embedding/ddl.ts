@@ -7,10 +7,17 @@ import {
   col,
   type CreateTrigger,
   eq,
+  exists,
+  type Expr,
   lit,
+  not,
   NOW,
+  select,
   type Statements,
   type Stmt,
+  table,
+  val,
+  type Write,
 } from '@yaks/sql'
 
 /** The vector table's name. */
@@ -28,6 +35,11 @@ export let DIRTY = 'embedding_dirty'
  * goes, so the table only ever lacks codes, and a scan uses it once it has as
  * many rows as the vectors (./coded.ts). */
 export let CODE = 'embedding_code'
+
+/** The owners of the vectors that have no codes, kept by triggers on both
+ * tables whoever writes them, so asking whether every vector has its codes
+ * reads one row rather than counting both tables (./coded.ts). */
+export let UNCODED = 'embedding_uncoded'
 
 /** The queue's name: one row per entity owed a look, and how many writes have
  * queued it since it was last settled. */
@@ -196,4 +208,99 @@ let coded = (): Stmt[] => [
   },
   stale('update'),
   stale('delete'),
+  {
+    t: 'create table',
+    name: UNCODED,
+    ifNot: true,
+    cols: [{ name: 'owner', type: 'integer', pk: true }],
+  },
+  seed,
+  ...uncoded,
 ]
+
+// An owner's codes, or its vector, stand.
+let holds = (name: string, owner: Expr) =>
+  exists(select({
+    cols: [lit(1)],
+    from: table(name),
+    where: eq(col('owner'), owner),
+  }))
+
+// Note an owner as uncoded once, when `when` holds.
+let note = (owner: Expr, when: Expr): Write => ({
+  t: 'insert',
+  into: UNCODED,
+  cols: ['owner'],
+  q: select({ cols: [owner], where: when }),
+  upsert: [{ on: [col('owner')] }],
+})
+
+let forget = (owner: Expr): Write => ({
+  t: 'delete',
+  from: UNCODED,
+  where: eq(col('owner'), owner),
+})
+
+let keep = (
+  on: string,
+  event: 'insert' | 'delete',
+  body: Write,
+): CreateTrigger => ({
+  t: 'create trigger',
+  name: `${UNCODED}_${on == TABLE ? 'vector' : 'code'}_${event}`,
+  ifNot: true,
+  timing: 'after',
+  event,
+  on,
+  body: [body],
+})
+
+// A new vector is uncoded until its codes come, a vector that goes is
+// forgotten, and codes that go while their vector stands (the vector changed,
+// ./stale) leave it uncoded again.
+let uncoded = [
+  keep(
+    TABLE,
+    'insert',
+    note(col('owner', 'new'), not(holds(CODE, col('owner', 'new')))),
+  ),
+  keep(TABLE, 'delete', forget(col('owner', 'old'))),
+  keep(CODE, 'insert', forget(col('owner', 'new'))),
+  keep(
+    CODE,
+    'delete',
+    note(col('owner', 'old'), holds(TABLE, col('owner', 'old'))),
+  ),
+]
+
+// A store whose vectors predate the triggers notes every one that has no
+// codes, once: in the unit that makes the triggers, and only while they are
+// missing. The guard is the outer side of a cross join, so a store that has
+// them reads its catalogue, not its vectors.
+let seed: Write = {
+  t: 'insert',
+  into: UNCODED,
+  cols: ['owner'],
+  q: select({
+    cols: [col('owner', 'e')],
+    from: {
+      t: 'from',
+      as: 'g',
+      q: select({
+        cols: [lit(1)],
+        where: not(exists(select({
+          cols: [lit(1)],
+          from: table('sqlite_master'),
+          where: eq(col('name'), val(uncoded[0].name)),
+        }))),
+      }),
+    },
+    joins: [{ how: 'cross', src: table(TABLE, 'e') }],
+    where: not(exists(select({
+      cols: [lit(1)],
+      from: table(CODE, 'c'),
+      where: eq(col('owner', 'c'), col('owner', 'e')),
+    }))),
+  }),
+  upsert: [{ on: [col('owner')] }],
+}

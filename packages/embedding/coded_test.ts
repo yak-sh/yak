@@ -6,7 +6,7 @@ import { col, eq, insert, select, type Statements, table, val } from '@yaks/sql'
 import { open } from '@yaks/sqlite/db'
 import { statements } from '@yaks/sqlite'
 import { SPINE, TOMBSTONE } from '../sqlite/testing.ts'
-import { CODE, schema, TABLE } from './ddl.ts'
+import { CODE, schema, TABLE, UNCODED } from './ddl.ts'
 import { complete, heal } from './coded.ts'
 import { install, prepare } from './native.ts'
 import { nearest } from './near.ts'
@@ -108,43 +108,61 @@ test('the test database is removed', () => {
   Deno.removeSync(dir, { recursive: true })
 })
 
-let retryDriver = open(':memory:')
-let retryBase = statements(retryDriver)
-for (let s of [SPINE, TOMBSTONE, ...schema('shared')]) retryBase.query(s)
-for (let id of [1, 2, 3]) {
-  retryBase.query(insert('entity', { id, eid: `retry-${id}` }))
-  retryBase.query(insert(TABLE, {
-    owner: id,
-    model,
-    hash: '',
-    vec: pack(vecs.get(id)!),
-  }))
+// A store of three vectors, none coded, as an older writer left it.
+let small = () => {
+  let base = statements(open(':memory:'))
+  for (let s of [SPINE, TOMBSTONE, ...schema('shared')]) base.query(s)
+  for (let id of [1, 2, 3]) {
+    base.query(insert('entity', { id, eid: `small-${id}` }))
+    base.query(
+      insert(TABLE, { owner: id, model, hash: '', vec: pack(vecs.get(id)!) }),
+    )
+  }
+  return base
 }
-let refused = true
-let retryDb: Statements = {
-  ...retryBase,
-  atomic: (body) => {
-    if (refused) {
+let owners = (d: Statements, name: string) =>
+  d.query(
+    select({ cols: [col('owner')], from: table(name), order: [col('owner')] }),
+  )
+    .map((r) => Number(r.owner))
+
+test('a refused coding pass leaves its vectors to the next', () => {
+  let base = small(), refused = true
+  let d: Statements = {
+    ...base,
+    atomic: (body) => {
+      if (!refused) return base.atomic(body)
       refused = false
       throw new Error('entry refused')
-    }
-    return retryBase.atomic(body)
-  },
-}
-
-test('a refused coding pass leaves its source cursor at the uncommitted rows', () => {
-  try {
-    assertThrows(() => heal(retryDb, 2), Error, 'entry refused')
-    equal(heal(retryDb, 2), 2)
-    equal(
-      retryDb.query(select({
-        cols: [col('owner')],
-        from: table(CODE),
-        order: [col('owner')],
-      })),
-      [{ owner: 1 }, { owner: 2 }],
-    )
-  } finally {
-    retryDriver.close()
+    },
   }
+  assertThrows(() => heal(d, 2), Error, 'entry refused')
+  equal(heal(d, 2), 2)
+  equal(owners(d, CODE), [1, 2])
+  equal(heal(d, 2), 1)
+  ok(complete(d))
+})
+
+test('vectors stored before the uncoded set are noted once, in the unit that makes it', () => {
+  let d = small()
+  equal(owners(d, UNCODED), [1, 2, 3])
+  d.query({ t: 'delete', from: UNCODED, where: eq(col('owner'), val(3)) })
+  for (let s of schema('shared')) d.query(s)
+  equal(owners(d, UNCODED), [1, 2])
+  for (
+    let s of [
+      { t: 'drop', kind: 'trigger', name: `${UNCODED}_vector_insert` } as const,
+      ...schema('shared'),
+    ]
+  ) d.query(s)
+  equal(owners(d, UNCODED), [1, 2, 3])
+})
+
+test('an owner noted with no vector standing is forgotten', () => {
+  let d = small()
+  while (heal(d));
+  d.query(insert(UNCODED, { owner: 9 }))
+  ok(!complete(d))
+  equal(heal(d), 1)
+  ok(complete(d))
 })
