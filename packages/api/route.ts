@@ -154,6 +154,7 @@ export let api = (opts: Options): Handler => {
   return served(door, {
     graph: opts.activity ?? graph,
     report: opts.report,
+    tags: opts.tags,
     route: (request) => {
       let path = new URL(request.url).pathname
       return DOORS.includes(path) ? path : undefined

@@ -18,7 +18,7 @@ import { parse } from '@yaks/query'
 import { during, parent, peek, scope } from '@yaks/trace'
 import { type Authenticate, signed } from './actor.ts'
 import { readBody, receiveBody } from './body.ts'
-import { fault, json, refusal, refuse } from './refuse.ts'
+import { fault, json, refusal, refuse, type Tags } from './refuse.ts'
 import { published } from './publish.ts'
 import {
   binaryHeaders,
@@ -158,6 +158,7 @@ export let pour = (
   context?: WriteContext,
   opts?: ReadOpts,
   params: string[] = [],
+  tags?: Tags,
 ): Response => {
   let body = request.body
   if (!body) throw new Refused('/apply takes one bundle per line')
@@ -221,7 +222,7 @@ export let pour = (
       }
       if (held.length) await flush()
     } catch (err) {
-      fault(err, `${request.method} ${new URL(request.url).pathname}`)
+      fault(err, `${request.method} ${new URL(request.url).pathname}`, tags)
       await say({ ...refusal(err), line: blame, committed })
     }
   }
@@ -294,6 +295,9 @@ export type Applying = {
    * transaction that commits it (./receipts.ts `received`). A door with
    * neither refuses a keyed write. */
   db?: Driver
+  /** What the host adds to each failure this door reports (./refuse.ts
+   * `Tags`, `faults`), such as which of its stores it is: read as one is. */
+  tags?: () => Tags
 }
 
 /** A host's apply door ({@link applier}). */
@@ -383,6 +387,7 @@ export let applier = (o: Applying): Applier => {
           o.write,
           await view(request, who),
           params,
+          o.tags?.(),
         )
       }
       let { body: text } = await taken(request)
@@ -427,7 +432,7 @@ export let applier = (o: Applying): Applier => {
           : published(graph.vocab, applied),
       )
     } catch (e) {
-      return refuse(constrained(e), sent)
+      return refuse(constrained(e), sent, o.tags?.())
     }
   }
 

@@ -92,6 +92,8 @@ export {
   type Refusal,
   refusal,
   refuse,
+  type Reporter,
+  type Tags,
   Unauthorized,
   waits,
 } from './refuse.ts'

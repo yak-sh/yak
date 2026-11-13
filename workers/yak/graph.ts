@@ -182,6 +182,7 @@ import {
   signed,
   type Subs,
   subscriptions,
+  type Tags,
   type Timer,
   writeOptions,
 } from '@yaks/api'
@@ -998,6 +999,7 @@ export class Store extends Durable {
           actor: signer(vouchOf(request)),
         }
         : undefined,
+    tags: () => store.#tags(),
     authorize: (request) =>
       editing(
         policy(store.#graph.storage, { ignore: store.#staleGrant }),
@@ -4257,6 +4259,13 @@ export class Store extends Durable {
 
   #name = () => this.#said('name')
 
+  // What this store's doors add to each failure they report (@yaks/api
+  // `Tags`): which store it is, once it knows.
+  #tags = (): Tags => {
+    let name = this.#name()
+    return name ? { store: name } : {}
+  }
+
   #callerRead(request: Request): ReadOpts {
     let { person, level } = vouchOf(request)
     return {
@@ -4939,6 +4948,7 @@ export class Store extends Durable {
     return new Response(answer.body, { status: answer.status, headers })
   }, {
     route: () => '/query',
+    tags: () => this.#tags(),
   })
 
   #directoryRead = queryCache(

@@ -1,12 +1,14 @@
 /// <reference lib="deno.ns" />
 // What a host gives its apply door as data: whom it trusts and how, today's
-// authority to write, and a constraint the batch broke answered as its own.
+// authority to write, a constraint the batch broke answered as its own, and
+// the tags it adds to what the door reports.
 
 import { assertEquals } from '@std/assert'
 import type { ApplyOpts, Graph } from '@yaks/graph'
 import { test } from '@yaks/testing'
 import { applier, type Applying } from './doors.ts'
-import { Unauthorized } from './refuse.ts'
+import { faults, Unauthorized } from './refuse.ts'
+import { api } from './route.ts'
 import { post, shopGraph } from './testing.ts'
 
 let TRUSTED = { 'x-trusted': '1' }
@@ -89,4 +91,45 @@ test('a batch that breaks a constraint is refused, not a server failure', async 
     },
   })
   assertEquals((await d.apply(post('/apply', book))).status, 400)
+})
+
+// A write the graph fails, sent through a door built with the host's tags,
+// as the host's reporter hears it.
+let failed = async (
+  through: (o: Applying) => (r: Request) => Response | Promise<Response>,
+  request: Request,
+) => {
+  let told: [string, unknown][] = []
+  let off = faults((_e, where, tags) => told.push([where, tags]))
+  try {
+    let g = shopGraph()
+    let broken: Graph = {
+      ...g,
+      apply: () => {
+        throw new Error('disk gone')
+      },
+    }
+    await (await through({ graph: broken, tags: () => ({ store: 's' }) })(
+      request,
+    )).text()
+  } finally {
+    off()
+  }
+  return told.map(([where, tags]) => [where.replace(/ \(request .*/, ''), tags])
+}
+
+test("a failure the door reports carries its host's tags", async () => {
+  let ndjson = () =>
+    new Request('http://test/apply', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-ndjson' },
+      body: JSON.stringify(book[0]),
+    })
+  let said = [['POST /apply', { store: 's' }]]
+  assertEquals(
+    await failed((o) => applier(o).apply, post('/apply', book)),
+    said,
+  )
+  assertEquals(await failed(api, post('/apply', book)), said)
+  assertEquals(await failed((o) => applier(o).apply, ndjson()), said)
 })

@@ -48,20 +48,27 @@ export let refusal = (err: unknown): Refusal => {
   return out
 }
 
+/** What a host adds to the failures a door of its reports (`{store: 'x'}`):
+ * the door's own words for where they happened, beside `where`. */
+export type Tags = Record<string, string>
+
+/** A host's reporter ({@link faults}): a failure, where it was caught, and
+ * the tags the door that caught it was given (none: `{}`). */
+export type Reporter = (err: unknown, where: string, tags: Tags) => void
+
 // Where a server failure goes: the reporter its host installed last, else the
 // console, so a failure met before any host installs one is still said.
-let reporters: ((err: unknown, where: string) => void)[] = []
+let reporters: Reporter[] = []
 let said = (err: unknown, where: string) =>
   console.error(`${where} failed —`, err)
 
 /** Report every server failure this package catches to `report`, with where
- * it was caught: the host's own reporter, which tells its tracker. A failure
- * answered to its caller and one with no caller at all (a socket's message, a
- * subscription's refresh, a page body that did not build) go the same way.
- * The newest installed is the one told; the function returned removes it. */
-export let faults = (
-  report: (err: unknown, where: string) => void,
-): () => void => {
+ * it was caught and its door's tags: the host's own reporter, which tells its
+ * tracker. A failure answered to its caller and one with no caller at all (a
+ * socket's message, a subscription's refresh, a page body that did not build)
+ * go the same way. The newest installed is the one told; the function
+ * returned removes it. */
+export let faults = (report: Reporter): () => void => {
   reporters.push(report)
   return () => {
     let at = reporters.lastIndexOf(report)
@@ -76,14 +83,14 @@ export let FILED = 'x-yak-filed'
 /** Whether a host's reporter hears this package's failures ({@link faults}). */
 export let reporting = (): boolean => reporters.length > 0
 
-/** A server failure, reported with where it happened to the host's reporter
- * ({@link faults}), or said on the console while none is installed; a refusal
- * (below 500) is the caller's and says nothing. */
-export let fault = (err: unknown, where: string): void => {
+/** A server failure, reported with where it happened and its door's tags to
+ * the host's reporter ({@link faults}), or said on the console while none is
+ * installed; a refusal (below 500) is the caller's and says nothing. */
+export let fault = (err: unknown, where: string, tags: Tags = {}): void => {
   if (status(err) < 500) return
   let report = reporters.at(-1) ?? said
   try {
-    report(err, where)
+    report(err, where, tags)
   } catch (why) {
     said(err, where)
     said(why, `reporting ${where}`)
@@ -117,9 +124,14 @@ export let waits = (err: unknown): number | null => {
  * server failure is reported once: by the watch the request is answered under
  * (`served`), with its request, or else here ({@link fault}), with the method
  * and path when a request is supplied, never the query string, headers or
- * body, and its answer says so ({@link FILED}) while a host's reporter hears
- * it. An expected client refusal is not reported at all. */
-export let refuse = (err: unknown, request?: Request): Response => {
+ * body, and the `tags` of the door that answered it, and its answer says so
+ * ({@link FILED}) while a host's reporter hears it. An expected client
+ * refusal is not reported at all. */
+export let refuse = (
+  err: unknown,
+  request?: Request,
+  tags?: Tags,
+): Response => {
   let code = status(err)
   let answer = json(refusal(err), code)
   let wait = waits(err)
@@ -132,6 +144,7 @@ export let refuse = (err: unknown, request?: Request): Response => {
       request
         ? `${request.method} ${new URL(request.url).pathname}`
         : 'request',
+      tags,
     )
     if (code >= 500 && reporting()) answer.headers.set(FILED, '1')
   }

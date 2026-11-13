@@ -29,8 +29,9 @@ let clock = {
 
 // What @yaks/api catches and answers, or meets with nobody to answer (a
 // socket's message, a subscription's refresh, a store's answer at 500), is a
-// failure of ours, reported where it was caught in the invocation it ran in.
-faults((error, where) => caught(error, { request: where }))
+// failure of ours, reported where it was caught in the invocation it ran in,
+// with the tags its door was given (a store's name).
+faults((error, where, tags) => caught(error, { ...tags, request: where }))
 
 // A Durable Object's state, when the invocation is one of its own.
 let own = (state: unknown): state is { storage: Own } =>

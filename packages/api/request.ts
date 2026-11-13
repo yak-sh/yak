@@ -23,6 +23,7 @@ import {
   json,
   refusal,
   reporting,
+  type Tags,
   watch,
 } from './refuse.ts'
 import type { Handler } from './route.ts'
@@ -142,11 +143,12 @@ export let requested = (
 }
 
 // The report a host that supplied none gets: a fault, where it names the id
-// its caller holds. An answer at 500 that no error explains is one too.
-let said: Report = (b, err) => {
+// its caller holds, with the door's tags. An answer at 500 that no error
+// explains is one too.
+let saying = (tags: Tags = {}): Report => (b, err) => {
   let r = b.request as { method: string; url: string; status: number }
   let where = `${r.method} ${new URL(r.url).pathname} (request ${b.entity.eid})`
-  fault(err === undefined ? `answered ${r.status}` : err, where)
+  fault(err === undefined ? `answered ${r.status}` : err, where, tags)
 }
 
 /** What {@link served} is told by the host it serves: where a request that
@@ -156,6 +158,9 @@ export type Watch = {
   graph?: object
   report?: Report
   route?: (request: Request) => string | undefined
+  /** What the host adds to each failure reported without a `report`
+   * (./refuse.ts `Tags`), read as one is. */
+  tags?: () => Tags
 }
 
 /**
@@ -214,7 +219,7 @@ export let served =
       route: o.route?.(request),
     })
     try {
-      ;(o.report ?? said)(b, err ?? cause(request))
+      ;(o.report ?? saying(o.tags?.()))(b, err ?? cause(request))
     } catch (why) {
       fault(why, `report ${id}`)
     }

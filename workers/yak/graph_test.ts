@@ -726,39 +726,56 @@ test('a declared rule cannot write a value outside an app constraint', async () 
   assertEquals(await saved.json(), [])
 })
 
+// A store whose graph fails `method`, sent `send`, and what the newest
+// reporter installed heard: it is the one told, whatever else this runtime
+// loaded before (defects-runtime.ts installs the Worker's).
+let failed = async (
+  method: 'rows' | 'read' | 'apply',
+  send: (s: Store) => Promise<Response>,
+) => {
+  let store = await cookbook()
+  let error = new Error('storage failed')
+  using _broken = stub((await store.door).graph, method, () => {
+    throw error
+  })
+  let told: unknown[] = []
+  let unfault = faults((e, where, tags) => told.push([e, where, tags]))
+  try {
+    return { error, told, response: await send(store) }
+  } finally {
+    unfault()
+  }
+}
+let STORE = { store: 'ada/cookbook' }
+
 for (let aggregate of [false, true]) {
-  test(`store ${aggregate ? 'aggregate' : 'listing'} query failures log the door and the request id`, async () => {
-    let store = await cookbook()
-    let error = new Error('query storage failed')
-    using _broken = stub(
-      (await store.door).graph,
+  test(`store ${aggregate ? 'aggregate' : 'listing'} query failures log the door, the request id and the store`, async () => {
+    let { error, told, response } = await failed(
       aggregate ? 'rows' : 'read',
-      () => {
-        throw error
-      },
+      (s) => get(s, `/query?q=${aggregate ? '.count' : '.recipe'}`, owner),
     )
-    // The newest reporter installed is the one told, whatever else this
-    // runtime loaded before (defects-runtime.ts installs the Worker's).
-    let told: [unknown, string][] = []
-    let unfault = faults((e, where) => told.push([e, where]))
-    try {
-      let response = await get(
-        store,
-        `/query?q=${aggregate ? '.count' : '.recipe'}`,
-        owner,
-      )
-      assertEquals(response.status, 500)
-      assertEquals(await response.json(), {
-        error: 'Error',
-        message: error.message,
-      })
-      let id = response.headers.get('x-request-id')
-      assertEquals(told, [[error, `GET /query (request ${id})`]])
-    } finally {
-      unfault()
-    }
+    assertEquals(response.status, 500)
+    assertEquals(await response.json(), {
+      error: 'Error',
+      message: error.message,
+    })
+    let id = response.headers.get('x-request-id')
+    assertEquals(told, [[error, `GET /query (request ${id})`, STORE]])
   })
 }
+
+test('a write the graph fails is kept, and its failure logs the door and the store', async () => {
+  let { error, told, response } = await failed(
+    'apply',
+    (s) =>
+      post(s, '/apply', [{
+        entity: { eid: CAKE },
+        recipe: { serves: 3 },
+      }], owner),
+  )
+  assertEquals(response.status, 202)
+  assertEquals(told, [[error, 'POST /apply', STORE]])
+})
 
 // A line that does not parse, or names a property its component does not
 // declare, is the caller's mistake: a 400 in the store's own words, and
