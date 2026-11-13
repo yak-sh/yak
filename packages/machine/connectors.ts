@@ -147,7 +147,8 @@ export let pveRequest = (options: {
     if (!result.ok) {
       throw new Error(`PVE API refused control (${result.status})`)
     }
-    return (await result.json()).data
+    let { data } = await result.json() as { data: Record<string, unknown> }
+    return data
   }
 }
 
