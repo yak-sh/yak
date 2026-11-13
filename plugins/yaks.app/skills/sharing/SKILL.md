@@ -307,6 +307,10 @@ Read it before you build something somebody may already have made.
   anyone to vote on still accepts votes. `app_set` changes it afterwards.
 - The copy is not made the front page: `<space>.yaks.app/` lists the space's
   apps until somebody sets which app opens there (`app_set(app, home: true)`).
+- The install is credited to the space that published the app: `app_stats` there
+  says how many other spaces installed a copy. A space counts once, however many
+  copies it installs, and still counts after deleting them. A skill's installs
+  are counted the same way, and `app_published(name)` says them.
 - The install finishes by releasing the copy: its `vocab.json` is installed in
   its own store, its commands are listed under its own slug, and its `worker.js`
   is uploaded as its own script. So the answer includes the deploy's lines

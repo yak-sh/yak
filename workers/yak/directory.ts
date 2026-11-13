@@ -674,6 +674,14 @@ export type Host = {
 export type Id = string | { eid: string }
 export let idOf = (v: Id): string => typeof v == 'string' ? v : v.eid
 
+/** That `space` installed `of`, something another space shared (T-131912):
+ * one row a space and thing, which `install`'s declared identity finds again
+ * on every later install, so installing twice is counted once. */
+export let installOf = (of: string, space: string): Bundle => ({
+  entity: { eid: '$install' },
+  install: { of, space },
+})
+
 /** A space asked by a walk to it while its eid is still being read, and kept
  * to that eid once known (@yaks/connections `Path`): so a page's own rows are
  * asked beside the read that learns its space (`page`), and travel in its
@@ -748,6 +756,7 @@ export type Row = {
     version?: number | null
     sandboxed?: string | null
   }
+  install?: { of?: Id | null; space?: Id | null }
   gallery?: {
     asked_at?: string | null
     listed_at?: string | null
@@ -2927,6 +2936,26 @@ export let directoryRows = (rows: {
         return space && !space.trashed ? [{ space, skill }] : []
       })
     },
+    // How many spaces installed what `of` names (T-131912), credited to
+    // `maker`, the space that shared it, which is never counted itself: each
+    // space with an `install` row for it, and for an app each space holding a
+    // copy, which also answers for copies made before installs were recorded.
+    // A space counts once, however often it installs or deletes its copy.
+    installs: async (of: string, maker: string): Promise<number> => {
+      if (!EID.test(of)) return 0
+      let rows = await query(
+        `(.install.of=${of})|(.installed.of=${of}&.app)`,
+      )
+      let spaces = new Set(rows.flatMap((r) => {
+        let at = r.install?.space ?? r.app?.space
+        return at ? [idOf(at)] : []
+      }))
+      spaces.delete(maker)
+      return spaces.size
+    },
+    // Record that `space` installed `of` ({@link installOf}).
+    install: (of: string, space: string, headers = {}) =>
+      self.stamp({ entities: [installOf(of, space)] }, headers),
     // Every offer standing, newest first — what a person's agent browses. Its
     // spaces are found from their published apps, so it reads rows in
     // proportion to the offers, never to the directory (T-143237).

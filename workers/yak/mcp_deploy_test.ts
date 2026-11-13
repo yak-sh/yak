@@ -172,6 +172,12 @@ test('an app names no app, and the copy works at its own address', async () => {
     let copy = await k.at(host, `/${numbered}/`)
     assertEquals(copy.status, 200)
     assertStringIncludes(await copy.text(), '<h1>Chores</h1>')
+
+    // Her five copies are one install, credited to his space (T-131912).
+    assertStringIncludes(
+      await his.tool('app_stats', { app: 'chores' }),
+      'Installed by 1 other space',
+    )
   } finally {
     await k.stop()
   }

@@ -259,6 +259,30 @@
       },
       "description": "a copy of something somebody else shared (an app, a skill), at the version it was copied from"
     },
+    "install": {
+      "component": true,
+      "type": "object",
+      "identity": [
+        "of",
+        "space"
+      ],
+      "properties": {
+        "of": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "index": true,
+          "description": "what was installed: the shared app or skill"
+        },
+        "space": {
+          "type": "string",
+          "ref": "space",
+          "death": "cascade",
+          "description": "the space that installed a copy of it"
+        }
+      },
+      "description": "a space's install of something another space shared, credited to that space: one a space, however often it installs again or deletes its copy"
+    },
     "upstream": {
       "component": true,
       "type": "object",

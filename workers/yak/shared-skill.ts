@@ -44,7 +44,7 @@ import {
 import { ours } from './gallery-demo.ts'
 import { mail } from './mail.ts'
 import { SLUG } from '@yaks/platform/names'
-import { standing } from './gallery-row.ts'
+import { installedBy, standing } from './gallery-row.ts'
 import type { Letter } from './mail.ts'
 import { INTERNAL } from './mail-config.ts'
 import {
@@ -512,6 +512,8 @@ export let installed = async (
   let { space, who } = await inSpace(ctx, args, true)
   let title = args.as == null ? undefined : named(args.as, 'as')
   let kept = await installSkill(ctx, space, who, offer, title)
+  // Credited to the space that shared it (T-131912), once the copy is kept.
+  if (space.eid != offer.space) await ctx.dir.install(offer.eid, space.eid)
   let as = title ?? offer.title
   return {
     text: `installed the skill ${as} (${offer.published.name} ` +
@@ -669,7 +671,7 @@ export let listing = async (ctx: Ctx, words: string[]): Promise<string[]> => {
 /** One skill offer in full, as `listing` would show it to the caller. */
 export let reading = async (ctx: Ctx, name: string) => {
   let at = await ctx.dir.skillOffered({ name })
-  return at && (standing(at.skill) == 'listed' || await admin(ctx))
-    ? full(at)
-    : null
+  if (!at || (standing(at.skill) != 'listed' && !await admin(ctx))) return null
+  let n = await ctx.dir.installs(at.skill.eid, at.skill.space)
+  return `${full(at)}\n\n${installedBy(n)}`
 }

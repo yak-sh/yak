@@ -1176,7 +1176,8 @@ app_stats:
     Return page-view counts for an app: the total over the last 30 days by
     default, and counts by page, referring site and country. These count
     page loads, not distinct people. Pass days for a different window, up to
-    90 days; if analytics is not configured, returns that fact instead.
+    90 days; if analytics is not configured, returns that fact instead. For
+    a published app, it also says how many other spaces installed a copy.
     Aggregate counts and nothing else: no visitor is identified, no address
     and no session is kept, so this can never say who someone was or what
     one person did. Only the app's own members may ask. Documentation:

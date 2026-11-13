@@ -79,6 +79,10 @@ It returns, for the window of days:
 - **from**: the sites that linked to the app, most visits first
 - **countries**: the visitors' countries
 
+For a published app it also says how many other spaces installed a copy
+(**Installed by 2 other spaces**). A space counts once, however many copies it
+installs.
+
 `days` defaults to 30 and is capped at 90, which is how far back counts are
 kept. Only the app's own people may call it: permission to read a public app's
 pages does not include permission to read its visit counts.

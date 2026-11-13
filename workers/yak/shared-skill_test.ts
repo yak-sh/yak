@@ -246,6 +246,12 @@ test('an installed skill is a copy pinned to the version it took', async () => {
   let had = await copy()
   assertEquals(had?.body, 'Lead with what the reader gets.\n')
   assertEquals(had?.installed?.version, 1)
+  // Credited to kitchen once, however often shop installs it (T-131912).
+  await run(taker, 'app_install', { space: 'shop', name: 'pitch-copy' })
+  assertStringIncludes(
+    await run(taker, 'app_published', { name: 'pitch-copy' }),
+    'Installed by 1 other space',
+  )
   await refused(taker, 'app_publish', {
     space: 'shop',
     skill: 'pitch-copy',

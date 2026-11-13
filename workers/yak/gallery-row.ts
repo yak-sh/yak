@@ -11,6 +11,11 @@ export let PAGE = '/apps/'
 export let pageAt = (name: string, env: Host = {}) =>
   siteUrl(env, `${PAGE}${encodeURIComponent(name)}`)
 
+/** How many other spaces installed a copy of something shared, said as a
+ * line: what its maker is credited with (T-131912). */
+export let installedBy = (n: number) =>
+  `Installed by ${n} other ${n == 1 ? 'space' : 'spaces'}`
+
 export type Standing = 'listed' | 'asked' | 'no'
 
 export let standing = (shared: Pick<Shared, 'gallery'>): Standing =>

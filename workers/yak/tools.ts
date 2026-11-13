@@ -105,6 +105,7 @@ import {
   folded,
   handle,
   homing,
+  installOf,
   kept,
   type Listing,
   mailbox,
@@ -6143,7 +6144,12 @@ let OURS: Row[] = [
         offer.app.eid,
       )
       let maker = acting(who)
-      let entities = [...maker.rows, row, ...claims, ...asked.asks]
+      // The install is credited to the space that shared it, in the same
+      // write as the copy, so a copy is never left uncounted.
+      let took = space.eid == offer.space.eid
+        ? []
+        : [installOf(offer.app.eid, space.eid)]
+      let entities = [...maker.rows, row, ...claims, ...asked.asks, ...took]
       // The visit is taken before the row is written, so two installs never
       // share one store, and given back if the row could not be.
       if (kept) {
