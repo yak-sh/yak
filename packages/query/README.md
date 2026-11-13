@@ -342,7 +342,9 @@ equal(
 A component with no properties is a **marker**. A direct marker selection such
 as `.fields=doc.title,native` carries `native{}` where present, while keeping
 `doc` narrowed to `title`. Raw row readers receive `1` or `0` for marker
-presence. A component with properties still needs a property selection.
+presence. A read through a graph takes a component with properties
+(`.fields=form`) as every property it has (`projection` in @yaks/graph); a raw
+row reader still needs a property selection. `.fields=*` is `*`.
 
 ```ts
 import {

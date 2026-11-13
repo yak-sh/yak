@@ -284,8 +284,8 @@ export let runs = (seams: Seams = {}): Runs => {
     },
     // The one concession to typing by hand is the query line:
     // `.book.status=shelved` is the grammar @yaks/query owns, so this takes it as a string, and each
-    // of the optional `filters` narrows the whole of it (`conjoin`). It stays a
-    // line, because a graph may pass it on as one: the yaks.app reach reads its
+    // of the optional `filters` narrows the whole of it (`conjoin`); `limit`
+    // and `fields` are its `.limit=` and `.fields=`. It stays a line, because a graph may pass it on as one: the yaks.app reach reads its
     // riders off the text and asks each store over HTTP. A line that asks for
     // a reduction (`.count`, `.tally=`, `.distinct=`) asks about the selection,
     // not its members, and is answered as `/query` answers it: the value, said
@@ -298,10 +298,12 @@ export let runs = (seams: Seams = {}): Runs => {
     graph_query: async (call, graph) => {
       let args = argsOf(call)
       let n = num(args.limit)
+      let fields = str(args.fields)
       let q = conjoin(
         str(args.q),
         ...strings(args.filters),
         n == null ? '' : `.limit=${n}`,
+        fields ? `.fields=${fields}` : '',
       )
       if (!q) throw new Refused('graph_query needs a query line')
       let ast = parse(q)

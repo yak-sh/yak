@@ -146,6 +146,7 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.distinct=domain', and(distinct('domain'))],
   ['.tally=task.domain', and(tally('task.domain'))],
   ['.fields=pin.x,pin.z~', and(fields('pin.x', 'pin.z~'))],
+  ['.fields=*', and(every())],
   // `*` is the widest projection, and only as a whole token: a trailing star
   // on a word stays the full-text prefix term.
   ['*', and(every())],
@@ -432,7 +433,7 @@ test('refusals', () => {
 })
 
 // A path with no operator the grammar has is refused with the ones it has.
-for (let token of ['.web.url~cloudflare', '.individual?created']) {
+for (let token of ['.web.url~cloudflare', '.doc.title^cake']) {
   test(`${token} is refused with the operators`, () => {
     assertThrows(
       () => parse(token),
@@ -482,6 +483,7 @@ refused(
     ['.refs=', '!refs'],
     ['.app{name:"menu"}', '.app.name="menu"'],
     ['.doc{title}', '.doc.title'],
+    ['.meeting?doc', '.meeting&?doc'],
   ].map(([old, now]): [string, string] => [
     `.task ${old}`,
     `${old} is written ${now}`,

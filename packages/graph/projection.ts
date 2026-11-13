@@ -31,6 +31,7 @@ import {
   type And,
   type Clause,
   type Fields,
+  type FieldSel,
   map,
   parse,
 } from '@yaks/query/core'
@@ -91,6 +92,15 @@ let put = (b: Bundle, s: Hop, value: unknown) => {
   else ((b[s.comp] ??= {}) as Comp)[s.prop] = value
 }
 
+// A path that ends on a whole component (`.fields=form`,
+// `.fields=review.book.doc`) asks for every property it has, each its own
+// path; one with no properties stays, read as its presence.
+let whole = (vocab: Vocab) => (f: FieldSel): FieldSel[] => {
+  let leaf = vocab.aim(f.path.join('.')).at(-1)
+  let props = leaf && !leaf.prop ? vocab.props(leaf.comp) : []
+  return props.length ? props.map((p) => ({ ...f, path: [...f.path, p] })) : [f]
+}
+
 let cover = (into: Record<string, string[]>, s: Hop) => {
   if (s.comp == 'entity') return
   let props = into[s.comp] ??= []
@@ -137,8 +147,9 @@ let cover = (into: Record<string, string[]>, s: Hop) => {
  */
 export let projection = (vocab: Vocab, query: Query): Projection | null => {
   let ast = typeof query == 'string' ? parse(query) : query
-  let asked = ast.clauses.find((c): c is Fields => c.kind == 'fields')
-  if (!asked) return null
+  let given = ast.clauses.find((c): c is Fields => c.kind == 'fields')
+  if (!given) return null
+  let asked: Fields = { ...given, fields: given.fields.flatMap(whole(vocab)) }
   let paths = asked.fields.map((f) => {
     let col = f.path.join('.')
     let hops = vocab.aim(col)
@@ -159,10 +170,11 @@ export let projection = (vocab: Vocab, query: Query): Projection | null => {
   let fields: Fields = { ...asked, fields: [...asked.fields, ...refs] }
   let own: Record<string, string[]> = {}
   for (let { steps } of paths) cover(own, steps[0])
+  let same = fields.fields.length == given.fields.length
   return {
-    query: refs.length
-      ? { ...ast, clauses: ast.clauses.map((c) => c == asked ? fields : c) }
-      : ast,
+    query: same
+      ? ast
+      : { ...ast, clauses: ast.clauses.map((c) => c == given ? fields : c) },
     reaches: [
       ...new Set(paths.flatMap((p) => p.steps.flatMap((s) => s.on ?? []))),
     ],

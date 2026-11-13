@@ -213,6 +213,11 @@ test('a search that names no component says each row as its hit', async () => {
   })
 })
 
+test('fields says what each row carries, as .fields= does', async () => {
+  let rows = await found({ q: 'dragon 7', limit: 1, fields: 'entity.eid' })
+  assertEquals(rows, [{ entity: { eid: 'book-7' } }])
+})
+
 test('a search that names a component answers what it names', async () => {
   let [row] = await found({ q: 'dragon 7 ?book' })
   assertEquals(Object.keys(row).sort(), ['book', 'entity'])

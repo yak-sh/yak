@@ -176,7 +176,7 @@ let OPS = /^(!=|~=|<=|>=|->|<-|<|>|=)/
 let spelled = (token: string, one: string) =>
   new SyntaxError(`${token} is written ${one}`)
 
-// A path followed by something no operator begins (`.p~v`, `.p?created`): the
+// A path followed by something no operator begins (`.p~v`, `.p^2`): the
 // refusal names the operators there are, and the two ways to match text.
 let unknown = (token: string) =>
   new SyntaxError(
@@ -449,6 +449,10 @@ export let parseDot = (token: string): Clause[] | null => {
   if (!o) {
     if (!dotted && bracket == null) return null
     if (rest.startsWith('{')) throw braced(token, pathStr, rest)
+    // `.meeting?doc`: a second clause, `?doc`, with no `&` before it.
+    if (/^\?[A-Za-z_]/.test(rest)) {
+      throw spelled(token, `${head}&${rest}`)
+    }
     throw unknown(token)
   }
   let op: string = o[1]
@@ -507,6 +511,8 @@ export let parseDot = (token: string): Clause[] | null => {
   // `.fields=pin.x,pin.z~` — the projection; a trailing `~` keeps a property
   // from waking a subscription. Each property stays raw segments.
   if (pathStr == 'fields') {
+    // `.fields=*` asks for every component, as `*` alone does.
+    if (op == '=' && val.split(',').includes('*')) return [{ kind: 'every' }]
     let fields = val.split(',').map((seg) => {
       let wake = !seg.endsWith('~')
       return { path: path(wake ? seg : seg.slice(0, -1)), wake }

@@ -125,6 +125,17 @@ test('a projection answers what it names, and what its paths reach', () => {
       at('p1', { doc: { title: 'Ace' } }),
       at('b2'),
     ]],
+    // a whole component, here or where a path reaches, is all its properties
+    ['review', [
+      at('r1', { review: { stars: 5, book: 'b1' } }),
+      at('r2', { review: { stars: 2, book: 'b2' } }),
+    ]],
+    ['review.stars,review.book.book', [
+      at('r1', { review: { stars: 5, book: 'b1' } }),
+      at('r2', { review: { stars: 2, book: 'b2' } }),
+      at('b1', { book: { pages: 412, publisher: 'p1' } }),
+      at('b2', { book: { pages: 300 } }),
+    ]],
   ]
   for (let [fields, answer] of cases) {
     assertEquals(g.read(reviews + fields), answer, fields)
