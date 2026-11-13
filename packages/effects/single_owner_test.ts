@@ -149,6 +149,46 @@ test('single owner retries keep backoff and attempt limits without lease churn',
   noLeases(a)
 })
 
+// A run whose ending the store refused is still this attempt's: it waits and
+// runs again, under the store's refusal, rather than reading next pass as a
+// run whose process ended under it (T-165664).
+test('a run whose ending the store refuses waits and runs again, not cut off', async () => {
+  let t = 0
+  let a = proc(store(), {
+    clock: { ...system, now: () => t },
+    backoff: () => 10,
+  })
+  let refusing = true
+  let apply = a.g.apply
+  // Every run's ending refused: post_note's and post_swept's.
+  a.g.apply = (b, o) =>
+    refusing && b.some((x) => x.$delete && x.$was?.effect)
+      ? Promise.reject(Error('no such index'))
+      : apply(b, o)
+  await a.g.apply([post('p1')])
+  for (let i = 0; i < 3; i++) await a.fx.work(a.g)
+  let note = () =>
+    runs(a).then((rs) => rs.find((r) => r.handler == 'post_note'))
+  equal(a.ran.filter((r) => r == 'p1'), ['p1'])
+  let held = await note()
+  equal([held?.state, held?.attempts, held?.error, held?.next], [
+    'pending',
+    1,
+    'no such index',
+    new Date(10).toISOString(),
+  ])
+  // Each run's refusal reported once, as what it is; neither as a run cut off.
+  equal(a.errors.map((e) => (e as Error).message), [
+    'no such index',
+    'no such index',
+  ])
+  refusing = false
+  t = 10
+  await a.fx.work(a.g)
+  equal(a.ran.filter((r) => r == 'p1'), ['p1', 'p1'])
+  equal(await note(), undefined)
+})
+
 for (let legacy of [false, true]) {
   test(`single owner recovers interrupted runs without replaying unsafe work (legacy ${legacy})`, async () => {
     let a = proc()

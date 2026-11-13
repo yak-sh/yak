@@ -44,7 +44,8 @@ let g = readonly({ vocab, storage: reading(db, vocab) })
 g.use(personal(vocab, { note: 'by' }))
 
 // What a read answers, and the statements it ran of each kind.
-let SPINE = 'select "e"."id", "e"."eid", "e"."num", (select "t"."entity"'
+let SPINE =
+  'select "e"."id", "e"."eid", "e"."num", "e"."prefix", (select "t"."entity"'
 let read = async (q: string, person: string) => {
   let sql: string[] = []
   let off = channel(g).subscribe((e: Event) => {

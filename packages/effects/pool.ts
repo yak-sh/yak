@@ -630,6 +630,31 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           ? { before: { ...before, entity } }
           : {}),
       }
+      // An attempt that failed with `err`, written down: tried again after
+      // its wait, or failed once nothing will.
+      let failed = (err: unknown) => {
+        errors++
+        // A deferral gives its attempt back and is due after its wait.
+        let waits = deferral(err)
+        if (waits) tries = Math.max(0, tries - 1)
+        // An error that asks to be tried again is the handler waiting on
+        // something outside, expected and kept on the row; it is reported
+        // only once nothing will try it again.
+        let last = !waits && attempt.last()
+        if (last || !retried(err)) {
+          ctx.report(err, { handler: String(row.handler), event, slot: s })
+        }
+        let due = waits ? asked(err) : Math.max(wait(tries), asked(err))
+        let patch = last
+          ? { state: 'failed', error: said(err), next: null, ...free }
+          : {
+            state: 'pending',
+            error: said(err),
+            next: stamp(clock() + due),
+            ...free,
+          }
+        return () => settle(patch)
+      }
       // How the run ended, for its row.
       let ended: (() => unknown) | undefined
       try {
@@ -653,34 +678,19 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           ended = () => swap(g, eid, was, null)
         }
       } catch (err) {
-        errors++
         if (peek(g) && span?.active) {
           span.end({ outcome: outcome(err), counts: { runs: 1 } })
         }
-        // A deferral gives its attempt back and is due after its wait.
-        let waits = deferral(err)
-        if (waits) tries = Math.max(0, tries - 1)
-        // An error that asks to be tried again is the handler waiting on
-        // something outside, expected and kept on the row; it is reported
-        // only once nothing will try it again.
-        let last = !waits && attempt.last()
-        if (last || !retried(err)) {
-          ctx.report(err, { handler: String(row.handler), event, slot: s })
-        }
-        let due = waits ? asked(err) : Math.max(wait(tries), asked(err))
-        let patch = last
-          ? { state: 'failed', error: said(err), next: null, ...free }
-          : {
-            state: 'pending',
-            error: said(err),
-            next: stamp(clock() + due),
-            ...free,
-          }
-        ended = () => settle(patch)
+        ended = failed(err)
       }
       // Pool bookkeeping follows the completed handler, not its trace, and is
-      // made though its object refuses for a while (`freely`).
-      if (ended) await freely(async () => await scope(undefined, ended!))
+      // made though its object refuses for a while (`freely`). An ending the
+      // store refused would leave the run claimed, which the next pass reads
+      // as a run whose process ended under it, and starts again at once: it is
+      // this attempt's failure instead, and waits as a thrown one does.
+      let end = (write: () => unknown) =>
+        freely(async () => await scope(undefined, write))
+      if (ended) await end(ended).catch((err) => end(failed(err)))
     }
     // A host's task-local carrier retains this effect's ancestry across
     // asynchronous reads and handler work. Explicit write parents still work
