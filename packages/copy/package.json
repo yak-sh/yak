@@ -1,0 +1,11 @@
+{
+  "name": "@yaks/copy",
+  "version": "0.2.24",
+  "type": "module",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "An app's copy as a file of keyed snippets: read by key, filled by slot, set by key, one snippet per line.",
+  "devDependencies": {
+    "@yaks/testing": "0.2.30"
+  }
+}

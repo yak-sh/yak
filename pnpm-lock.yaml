@@ -1412,6 +1412,12 @@ importers:
         specifier: 0.2.30
         version: link:../testing
 
+  packages/copy:
+    devDependencies:
+      '@yaks/testing':
+        specifier: 0.2.30
+        version: link:../testing
+
   packages/d1:
     dependencies:
       '@yaks/graph':

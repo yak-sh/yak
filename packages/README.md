@@ -93,6 +93,12 @@ grouped approximately by function, **not** by dependency order.
   resolves a bare property from the rest of the line and completes a query at
   the caret.
 
+- **[@yaks/copy](./copy)** — An app's copy as `copy.json`, keyed snippets with
+  nested objects read as dotted keys, written one snippet per line. Elements
+  name their snippets with `data-copy` and `data-copy-<attr>`; a `%{name}` slot
+  is filled by the child marked `data-copy-slot`. Reads by key, fills slots,
+  sets keys in a file's text in place, and lists keys. Pure; no file I/O.
+
 - **[@yaks/yaml](./yaml)** — Parse YAML or JSON text and split Markdown
   frontmatter from its body. Frontmatter can contain a partial bundle. Its graph
   dependency is type-only; it uses the standard YAML parser. `fill()`

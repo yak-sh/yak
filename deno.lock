@@ -3261,6 +3261,13 @@
           ]
         }
       },
+      "packages/copy": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@yaks/testing@0.2.30"
+          ]
+        }
+      },
       "packages/d1": {
         "packageJson": {
           "dependencies": [
