@@ -33,13 +33,19 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
   if ('start' in data) {
     activity = readActivity(data.activity)
     activity.say('composing the read-only graph')
+    // Started, composed or not, before any read is answered: a read's time
+    // begins here (./read_thread.ts).
     host = Promise.resolve().then(async () => {
-      let host = await compose(read(data.start), ['graph'], facet, {
-        process: false,
-        readOnly: true,
-      })
-      activity?.say('idle; waiting for a read')
-      return host
+      try {
+        let host = await compose(read(data.start), ['graph'], facet, {
+          process: false,
+          readOnly: true,
+        })
+        activity?.say('idle; waiting for a read')
+        return host
+      } finally {
+        tell({ started: true })
+      }
     })
     host.catch(() => {})
     return

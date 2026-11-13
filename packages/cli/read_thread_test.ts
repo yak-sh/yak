@@ -106,7 +106,9 @@ test('reader readiness waits for a bounded read on both workers and propagates a
 
 // A fake worker: it records each read posted to it and answers the latest
 // when told, as a worker returning from synchronous SQL would.
-let fakes = () => {
+// Fake workers, started as soon as they are configured unless `starting`:
+// then each starts when its `start` is called.
+let fakes = ({ starting = false } = {}) => {
   let workers: Fake[] = []
   class Fake {
     onmessage: ((event: { data: unknown }) => void) | null = null
@@ -133,11 +135,17 @@ let fakes = () => {
     ) {
       if (data.activity) {
         readActivity(data.activity, () => 0).say('waiting in a read operation')
+        if (!starting) this.start()
       }
       if (data.id) this.jobs.push({ ...data, id: data.id })
     }
     terminate() {
       this.ended = true
+    }
+    // As a worker does: where its thread is, then that it composed.
+    start() {
+      this.onmessage?.({ data: { thread: '1/task/2' } })
+      this.onmessage?.({ data: { started: true } })
     }
     answer() {
       let job = this.jobs.at(-1)!
@@ -227,11 +235,16 @@ test('a cancelled read past its grace gives up its worker', async () => {
 // One read, `.memory.scope="secret"`, on a reader whose timers fire when its
 // clock passes them, asked for `who` when given. Each step is `<ms>` (the
 // clock moves there and the checks due run), `<ms> <cpu> <wait>` (the same,
-// with what the worker's thread has spent by then, in s), or `answer`. Says
-// what was told, and who asked when someone did.
+// with what the worker's thread has spent by then, in s), `answer`, or
+// `start`: a worker made `starting` starts then. Says what was told, and who
+// asked when someone did.
 let watched = (...steps: string[]) => watching(undefined, steps)
-let watching = async (who: Asker | undefined, steps: string[]) => {
-  let { workers, restore } = fakes()
+let watching = async (
+  who: Asker | undefined,
+  steps: string[],
+  { starting = false } = {},
+) => {
+  let { workers, restore } = fakes({ starting })
   let clock = 0, spent = { cpu: 0, wait: 0 }
   let due: { at: number; fn: () => void }[] = []
   let reader = readThread('unused.json', {
@@ -255,11 +268,14 @@ let watching = async (who: Asker | undefined, steps: string[]) => {
       asking(who, () => reader.read('.memory.scope="secret"')),
     )
     long.catch(() => {})
-    workers[0].onmessage?.({ data: { thread: '1/task/2' } })
     for (let step of steps) {
       if (step == 'answer') {
         workers[0].answer()
         await long
+        continue
+      }
+      if (step == 'start') {
+        workers[0].start()
         continue
       }
       let [ms, cpu, wait] = step.split(' ').map(Number)
@@ -306,6 +322,25 @@ test('a read is told when its own time passes slow', async () => {
     ]],
   ]
   for (let [steps, told] of cases) assertEquals(await watched(...steps), told)
+})
+
+// A read given to a worker still starting (loading its modules, composing its
+// graph) waits on the start, and its time begins when the worker has started.
+test('a read is timed from its worker starting', async () => {
+  let starting = (...steps: string[]) =>
+    watching(undefined, steps, { starting: true })
+  assertEquals(
+    await starting('10000 0.2 0', '11000 0.2 0', 'start', 'answer', '30000'),
+    [],
+  )
+  assertEquals(
+    await starting('11000 0.2 0', 'start', '21000 9 0', '22000 9.5 0'),
+    [
+      'a read has run 10 s and is still running: .memory.scope=? ' +
+      '(in 11.0 s its worker ran 9.3 s on a CPU, waited 0.0 s for one ' +
+      'and was off one 1.7 s; worker operation: waiting in a read operation, for 22.0 s; its worker had not answered a read yet)',
+    ],
+  )
 })
 
 // A slow read names who asked it, as its door said where the read began: the

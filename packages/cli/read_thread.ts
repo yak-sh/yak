@@ -74,6 +74,8 @@ export type Heard =
   | { closed: true }
   /** where the worker's thread is, for {@link spent} */
   | { thread: string }
+  /** its worker composed its graph, or failed to: a read it was given begins */
+  | { started: true }
 
 let later = (fn: () => void, ms: number) => {
   let id = setTimeout(fn, ms)
@@ -109,14 +111,17 @@ let blocked = (thread: string): string => {
 /** Independent reads share at most two workers, started when needed or by
  * `ready`, and kept for the reader's life. Each worker owns one read at a time. A read
  * cancelled while it runs is rejected at once and its answer dropped when it
- * comes; only one still running `grace` ms after its caller left (a runaway
- * query) ends its worker, so it cannot hold a lane for good. A read still
+ * comes; only one still running `grace` ms after its caller left and its
+ * worker began it (a runaway query) ends its worker, so it cannot hold a lane for good. A read still
  * running when its own time passes `slow` ms is told to whoever `overrun` was
  * given, once, with its masked query and who asked it (@yaks/graph/asker,
  * taken when the read was asked): one that runs on is a failure, and the
- * query and its door are what name it. Its own time is its wall clock less what the box
- * kept its worker waiting for a CPU (./stall.ts), so a busy box makes no read
- * slow. One the worker cuts off past its budget (@yaks/sqlite/budget) is a
+ * query and its door are what name it. A read's time begins when its worker
+ * has started: a read given to a worker still loading its modules and
+ * composing its graph waits on the start, as a queued read waits on its lane,
+ * and a start the disk held is not the query's. Its own time is its wall
+ * clock less what the box kept its worker waiting for a CPU (./stall.ts), so
+ * a busy box makes no read slow. One the worker cuts off past its budget (@yaks/sqlite/budget) is a
  * refusal its caller hears, not a failure. */
 export let readThread = (
   config: string,
@@ -153,8 +158,8 @@ export let readThread = (
     off: () => void
     /** its caller left; the answer goes nowhere */
     dropped?: boolean
-    /** when its worker was given it (`now`), and what the worker's thread
-     * had spent then */
+    /** when its worker began it (`now`): given it, once started, and what
+     * the worker's thread had spent then */
     sent?: number
     spent?: Spent
   }
@@ -163,7 +168,9 @@ export let readThread = (
     job?: Job
     overdue?: () => void
     long?: () => void
-    /** its worker has answered a read: it is started, not still loading */
+    /** its worker has composed its graph, or failed to */
+    started?: boolean
+    /** its worker has answered a read */
     heard?: boolean
     /** where its worker's thread is, once the worker has said */
     thread?: string
@@ -182,10 +189,10 @@ export let readThread = (
     lanes.delete(lane)
   }
   let finish = (lane: Lane, answer: Heard) => {
-    if ('thread' in answer) {
-      // A new worker says where it is after it was given its first read.
-      lane.thread = answer.thread
-      if (lane.job) lane.job.spent ??= spentBy(lane)
+    if ('thread' in answer) return void (lane.thread = answer.thread)
+    if ('started' in answer) {
+      lane.started = true
+      if (lane.job) begin(lane, lane.job)
       return
     }
     if ('closed' in answer || lane.job?.id != answer.id) return
@@ -262,13 +269,15 @@ export let readThread = (
       lane.thread ? blocked(lane.thread) : '',
       lane.heard ? '' : 'its worker had not answered a read yet',
       ...[...lanes].flatMap((l) =>
-        l != lane && l.job
-          ? [
+        l == lane || !l.job
+          ? []
+          : l.job.sent == undefined
+          ? [`the other lane's worker was starting for ${asked(l.job.call)}`]
+          : [
             `the other lane ran ${asked(l.job.call)} for ${
-              ((now() - l.job.sent!) / 1000).toFixed(1)
+              ((now() - l.job.sent) / 1000).toFixed(1)
             } s`,
           ]
-          : []
       ),
       waiting.length ? `${waiting.length} reads waited behind it` : '',
     ].filter(Boolean).join('; ')
@@ -301,6 +310,21 @@ export let readThread = (
       job.asker,
     )
   }
+  // A read its caller left that still runs `grace` ms on ends its worker.
+  let overdue = (lane: Lane, job: Job) =>
+    void (lane.overdue = timer(() => {
+      if (lane.job !== job) return
+      stop(lane)
+      drain()
+    }, grace))
+  // A read's clocks start once its worker has: `slow` for its report, and
+  // `grace` for one its caller already left.
+  let begin = (lane: Lane, job: Job) => {
+    job.sent = now()
+    job.spent = spentBy(lane)
+    lane.long = timer(check(lane, job, job.sent + slow), slow)
+    if (job.dropped) overdue(lane, job)
+  }
   let drain = () => {
     while (waiting.length && !closed) {
       let lane = [...lanes].find((l) => !l.job)
@@ -308,9 +332,7 @@ export let readThread = (
       if (!lane) return
       let job = waiting.shift()!
       lane.job = job
-      job.sent = now()
-      job.spent = spentBy(lane)
-      lane.long = timer(check(lane, job, job.sent + slow), slow)
+      if (lane.started) begin(lane, job)
       lane.worker.postMessage({
         ...job.call,
         id: job.id,
@@ -330,11 +352,7 @@ export let readThread = (
         let lane = [...lanes].find((l) => l.job === job)
         if (!lane) return
         job.dropped = true
-        lane.overdue = timer(() => {
-          if (lane.job !== job) return
-          stop(lane)
-          drain()
-        }, grace)
+        if (job.sent != undefined) overdue(lane, job)
       }
       let job: Job = {
         id: ++next,
