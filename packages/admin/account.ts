@@ -3,7 +3,7 @@
 import type { Comp } from '@yaks/graph'
 import type { Host } from '@yaks/host'
 import { person } from '@yaks/cli/host'
-import { accountCredential, AccountError } from '@yaks/connections'
+import { accountCredential } from '@yaks/connections'
 import { records } from '@yaks/secrets'
 import { renewing } from './api.ts'
 import { Refused } from './refusal.ts'
@@ -16,13 +16,7 @@ export let account = (
 async (as?: string): Promise<Account> => {
   let owner = await person(host)
   if (!owner) throw new Refused('A configured person is required')
-  let at
-  try {
-    at = await accountCredential(host, owner, 'yaks.app', as)
-  } catch (error) {
-    if (error instanceof AccountError) throw new Refused(error.message)
-    throw error
-  }
+  let at = await accountCredential(host, owner, 'yaks.app', as)
   if (!at) {
     throw new Refused(
       'No yaks.app connection; sign in with yak auth yaks.app',

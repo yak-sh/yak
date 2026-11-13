@@ -1405,7 +1405,7 @@ test('pick computes the own-address default then the oldest, and only explicit a
   assertEquals(await pick(g.read, 'space', 'absent'), undefined)
 })
 
-// A refusal is useful without exposing any of the connection's other fields.
+// A wrong account name refuses the caller's input, useful without exposing any of the connection's other fields.
 for (
   let [said, integration, accounts] of [
     ['missing', 'texts', ['ann@one.example', 'ann@two.example']],
@@ -1426,8 +1426,9 @@ for (
     }
     let error = await assertRejects(
       () => pick(g.read, 'space', integration, said),
-      AccountError,
+      CallError,
     )
+    assert(error instanceof AccountError)
     assertEquals(
       error.message.split('; available accounts: ')[1],
       accounts.join(', ') || '(none)',

@@ -98,8 +98,14 @@ import { type Broker, BrokerError, brokerOf, type Grant } from './brokers.ts'
 let SECRET = 'secret'
 let EDGE = 'edge'
 
-/** An explicit account name did not select one connection. */
-export class AccountError extends Error {}
+/** An explicit account name did not select one connection: a refusal of the
+ * caller's own input, not a fault. */
+export class AccountError extends CallError {
+  constructor(message: string) {
+    super('arguments', message)
+    this.name = 'AccountError'
+  }
+}
 
 /** needed: no credential yet; connected: one is kept; broken: the service
  * refused it. */
