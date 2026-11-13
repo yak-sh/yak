@@ -15,6 +15,7 @@
 
 import type { Eid, Tx } from './types.ts'
 import type { Vocab } from '@yaks/vocab'
+import { groupBy } from '@yaks/fp'
 import { idOf, prefixes } from './id.ts'
 
 /** A series with fewer entities than this is held whole. */
@@ -64,7 +65,7 @@ export let held = (
         if (num) first.set(eid, Math.min(first.get(eid) ?? place, place))
       }
     })
-    let by = Map.groupBy(first, ([, place]) => place)
+    let by = groupBy(first, ([, place]) => place)
     let named = await Promise.all(
       [...by].map(async ([place, held]) => {
         let eids = held.map(([eid]) => eid)
