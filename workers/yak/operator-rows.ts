@@ -54,3 +54,6 @@ export let helperHtml = (helper: HelperLine, now = Date.now()) =>
 export { dates } from './dates.ts'
 
 export { menus, tips } from '@yaks/ui/parts'
+
+// The page's store, read and written through @yaks/api (operator-api.ts).
+export { storeAt } from './operator-api-page.ts'

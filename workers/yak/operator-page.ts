@@ -811,6 +811,8 @@ export let operatorAnswer = async (
       return Response.json({ message: e.message }, { status: 400 })
     }
   }
+  // A page loaded before its store's door (operator-api.ts) reads and writes
+  // its drafts and archive marks here, until T-165931.
   if (q.has('draft')) {
     return Response.json(
       await operatorDoor(
@@ -2198,7 +2200,7 @@ import { browserDrafts } from '/_draft.js'
 import { follow } from '/follow.js'
 import { frames } from '/frames.js'
 import { redraw } from '/redraw.js'
-import { asideHtml, dates, glanceHtml, helperHtml, menus, ordered, rowsOf, showing, turnHtml } from '/_talk.js'
+import { asideHtml, dates, glanceHtml, helperHtml, menus, ordered, rowsOf, showing, storeAt, turnHtml } from '/_talk.js'
 import { voice } from '/voice.js'
 let open = ${JSON.stringify(open)}
 let root = ${JSON.stringify(root)}
@@ -2331,33 +2333,32 @@ document.addEventListener('submit', async (event) => {
     contact.querySelector('[type=submit]').disabled = true
   } catch (error) { said.textContent = error.message }
 })
-let draftAt = '${at}?draft=1'
 // How long the page waits on its door before giving up and asking again, so
-// a request the network holds unanswered fails in seconds rather than stopping
-// the draft from syncing until something else ends it.
+// a request the network holds unanswered fails in seconds.
 let WAIT = 10_000
+let said = (e) => { status.textContent = e.message }
+// The Operator's store as this person reads and writes it, through @yaks/api
+// (operator-api.ts): their drafts are its rows, heard on its socket as each
+// change lands, from this page or another, and read again whenever the socket
+// opens again. They are never read on a timer: what is typed here is kept on
+// the device and written whether or not a read answered.
+// While its socket cannot reach the store, the page says the draft is kept.
+let KEPT = 'Your draft is kept on this device until syncing returns.'
+let store = storeAt(location.origin + '${at}', '${who.person}', (e) => { status.textContent = e?.name == 'Dropped' ? KEPT : e.message })
+store.connected((open) => { if (open && status.textContent == KEPT) status.textContent = '' })
+// A draft sent with the words it holds is spent by the same request that
+// takes the words in.
 let submission
 let draftClient = {
-  me: async () => ({ person: '${who.person}' }),
+  ...store,
   apply: async (bundles) => {
-    let response
-    if (submission) {
-      let sent = submission; submission = undefined
-      sent.set('draft', JSON.stringify(bundles))
-      response = await fetch(form.action, { method: 'POST', body: sent })
-    } else response = await fetch(draftAt, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ bundles }), signal: AbortSignal.timeout(WAIT) })
+    if (!submission) return store.apply(bundles).catch(() => { throw new Error('Your draft could not sync. A recovery copy is kept on this device.') })
+    let sent = submission; submission = undefined
+    sent.set('draft', JSON.stringify(bundles))
+    let response = await fetch(form.action, { method: 'POST', body: sent })
     if (!response.ok) throw new Error('Your draft could not sync. A recovery copy is kept on this device.')
     return response.json()
   },
-  // Read once, then heard on the page's socket as each change lands, and read
-  // again whenever the socket opens, for what landed while it was closed. It
-  // is never read on a timer: what is typed here is kept on the device and
-  // written whether or not a read answered.
-  subscribe: (_q, hear) => {
-    hearing.add(hear)
-    readDrafts([hear])
-    return () => hearing.delete(hear)
-  }
 }
 // A read that had no answer in time, or one the platform failed, is asked
 // again after a second, then two, four and eight: a deploy is a moment in
@@ -2374,22 +2375,7 @@ let ask = async (url) => {
     await new Promise((on) => setTimeout(on, pause))
   }
 }
-let hearing = new Set()
-let KEPT = 'Your draft is kept on this device until syncing returns.'
-// A read failed through all of ask's tries is said, and asked again when the
-// socket next opens; a hearer that throws is the page's own fault, and goes to
-// the reporter.
-let readDrafts = async (hears = hearing) => {
-  let bundles
-  try {
-    let response = await ask(draftAt)
-    if (!response.ok) throw new Error(String(response.status))
-    bundles = (await response.json()).bundles
-  } catch (e) { return void (status.textContent = KEPT) }
-  if (status.textContent == KEPT) status.textContent = ''
-  for (let hear of hears) if (hearing.has(hear)) hear(bundles)
-}
-let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.person}', report: (e) => { status.textContent = e.message } })
+let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.person}', report: said })
 // Each conversation keeps its own draft, and the box is ready to type in.
 let place = ${JSON.stringify('operator:' + talk)}
 if (form) { drafts.bind(form.elements.say, place); form.elements.say.focus() }
@@ -2402,7 +2388,6 @@ if (form && typed) {
   clean.searchParams.delete('say')
   history.replaceState(history.state, '', clean)
 }
-let said = (e) => { status.textContent = e.message }
 let speech = form && voice({ button: form.querySelector('[data-voice]'), form, say: form.elements.say, at: '${at}', paid: ${paid}, said })
 let thread = () => box.querySelector('[data-task]')
 let working = () => !!box.querySelector('[data-pending]')
@@ -2536,8 +2521,9 @@ document.addEventListener('click', async (e) => {
   if (!button) return
   button.disabled = true
   try {
-    let response = await fetch('${at}?archive=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: button.dataset.archiveEntries.split(','), restore: button.dataset.restore == 'true' }) })
-    if (!response.ok) throw new Error('These entries could not be changed. Try again.')
+    let restore = button.dataset.restore == 'true'
+    await store.apply(button.dataset.archiveEntries.split(',').map((eid) => ({ entity: { eid }, archived: restore ? null : {} })))
+      .catch(() => { throw new Error('These entries could not be changed. Try again.') })
     await read()
   } catch (error) { said(error); button.disabled = false }
 })
@@ -2616,7 +2602,6 @@ let read = async () => {
 // one's step is not this page's.
 let live = false, opened = false
 let hear = (frame) => {
-  if (frame.drafts) for (let heard of hearing) heard(frame.drafts)
   if (frame.ready && (frame.standing == null || frame.standing !== standing)) read().catch(said)
   let o = frame.operator
   if (!o) return
@@ -2670,7 +2655,7 @@ let listen = () => {
   // A socket opening again may follow a deploy, which the page then moves onto
   // (public/deploy.js).
   socket.onopen = () => {
-    clearTimeout(opening); live = true; readDrafts()
+    clearTimeout(opening); live = true
     let app = canvas()
     if (app) remake(app.dataset.app)
     if (opened) dispatchEvent(new Event('yak-reconnect'))

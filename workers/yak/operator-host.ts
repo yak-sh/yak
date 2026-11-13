@@ -1502,6 +1502,8 @@ export let operatorRequest = async (
       ),
     )
   }
+  // A page's drafts and archive marks from before its store's door
+  // (operator-api.ts), until T-165931.
   if (path == '/operator/archive') {
     let ids = Array.isArray(args.ids) ? args.ids.map(String) : []
     if (!ids.length) {

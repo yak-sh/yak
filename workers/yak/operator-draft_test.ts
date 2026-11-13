@@ -12,7 +12,14 @@ import { imported } from '@yaks/fp/imports'
 import { parts } from './client-assets.ts'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
-import { type Beside, chatPage, operatorAnswer } from './operator-page.ts'
+import {
+  type Beside,
+  chatPage,
+  operatorAnswer,
+  storeAnswer,
+} from './operator-page.ts'
+import type { StoreDoor } from '@yaks/platform/routes'
+import type { Wire } from '@yaks/durable-object'
 import type { Who } from './session.ts'
 import { pageModule } from './page-module-probe.ts'
 import { released } from './operator-testing.ts'
@@ -46,13 +53,15 @@ await released(
   'Notes',
 )
 let base = 'https://yaks.app/manage/clerk/operator'
-let serve = async (url: string | URL, init?: RequestInit, as: Who = who) =>
-  (await operatorAnswer(
-    new Request(new URL(url, base), init),
-    p.env,
-    space,
-    as,
-  ))!
+// What the kernel answers the page at its address: a door of its store
+// (operator-api.ts), or the Operator's own.
+let serve = async (url: string | URL, init?: RequestInit, as: Who = who) => {
+  let req = new Request(new URL(url, base), init)
+  let door = /\/operator\/(apply|query|ws)$/.exec(new URL(req.url).pathname)
+  return door
+    ? await storeAnswer(req, p.env, space, as, door[1] as StoreDoor)
+    : (await operatorAnswer(req, p.env, space, as))!
+}
 
 // A browser that hears and speaks (public/voice.js), for the load that sets
 // it: what it is told it heard, and what it says.
@@ -105,11 +114,12 @@ let storage = (): Stash => {
 
 // A load of the page: its script run as served. `cut` holds every save that
 // leaves while the person is on it, as a page that is left before they land.
-// `network` 'held' holds its first draft read and its socket unanswered, as a
-// network can, until the page's time limit gives each up; 'deploying' answers
-// the first read of each address 502, as the edge does while a deploy replaces
-// the Worker; 'down' fails every draft read. Under any, the page's waits run a
-// thousand times faster.
+// `network` 'held' leaves the first handshake of its store's socket (where its
+// drafts are read) and of its Operator's socket unanswered, as a network can,
+// until the page gives each up; 'deploying' answers the first read of each
+// address 502, and the store's first handshake as failed, as the edge does
+// while a deploy replaces the Worker; 'down' fails every handshake of the
+// store's socket. Under any, the page's waits run a thousand times faster.
 let load = async (
   stash: Stash,
   cut = false,
@@ -163,13 +173,12 @@ let load = async (
     timers.add(t)
     return t
   }
-  // The draft reads the page has had answered, each taken in before the next.
-  let reads = 0
-  let holding = network == 'held'
+  // The frames of drafts the page has heard on its store's socket, each taken
+  // in before the next, and the reads of its drafts it asked by any other way.
+  let reads = 0, asked = 0
   let failed = new Set<string>()
-  // Each draft read the page asks, answered or not, and each read of the
-  // conversation.
-  let asked = 0, talks = 0
+  // Each read of the conversation.
+  let talks = 0
   let fetch = async (url: string, init?: RequestInit) => {
     if (url.includes('?talk=') && slow) {
       let answer = await serve(url, init, as)
@@ -179,27 +188,14 @@ let load = async (
       return answer
     }
     if (cut && init?.method == 'POST') return new Promise<Response>(() => {})
-    if (url.includes('draft=1') && !init?.method) asked++
+    if (/draft=1|\/query/.test(url)) asked++
     if (url.includes('?talk=')) talks++
-    if (network == 'down' && url.includes('draft=1') && !init?.method) {
-      throw new TypeError('Failed to fetch')
-    }
     if (network == 'deploying' && !init?.method && !failed.has(url)) {
       failed.add(url)
       return new Response('Bad Gateway', { status: 502 })
     }
-    if (holding && url.includes('draft=1') && init?.signal) {
-      holding = false
-      return new Promise<Response>((_, no) =>
-        // the time limit, passed
-        queueMicrotask(() => no(new DOMException('timed out', 'TimeoutError')))
-      )
-    }
     let answer = await serve(url, init, as)
     if (left) return new Promise<Response>(() => {})
-    if (url.includes('draft=1') && !init?.method) {
-      queueMicrotask(() => void reads++)
-    }
     return answer
   }
   // linkedom keeps no focus or selection: the box records being given it.
@@ -216,14 +212,63 @@ let load = async (
       set: () => void loads.app++,
     })
   }
-  // The page's socket, which a test speaks for, or carries to the Builder
-  // object as the edge does (`connect`).
-  type Page = {
-    url: string
+  // The page's socket onto its Operator, which a test speaks for, or carries
+  // to the Builder object as the edge does (`connect`), and its sockets onto
+  // its store, carried there as they open (`reach`).
+  let sockets: Page[] = [], stores: Page[] = []
+  // The Builder's halves of the store's sockets, closed as the page is left.
+  let servers: Wire[] = []
+  let handshakes = 0
+  let reach = async (page: Page) => {
+    handshakes++
+    let refused = network == 'down' ||
+      network == 'deploying' && !failed.has(page.url) && !!failed.add(page.url)
+    if (network == 'held' && handshakes == 1) return
+    if (refused) return page.emit('close')
+    let server = await upgrade(page.url, as, (data) => {
+      if (left || page.readyState != 1) return
+      page.emit('message', { data })
+      // A frame other than the time is the store's answer.
+      if (!('clock' in JSON.parse(data))) queueMicrotask(() => void reads++)
+    })
+    servers.push(server)
+    page.server = server
+    page.send = (data) => p.builder(eid).webSocketMessage(server, data)
+    page.emit('open')
+  }
+  class Page {
+    readyState = 0
+    server?: Wire
     onopen?: () => void
     onmessage?: (e: { data: string }) => void
+    onclose?: () => void
+    #heard: Record<string, ((e: unknown) => void)[]> = {}
+    constructor(public url: string) {
+      if (!new URL(url).pathname.endsWith('/operator/ws')) sockets.push(this)
+      else stores.push(this), queueMicrotask(() => void reach(this))
+    }
+    send(_data: string) {}
+    addEventListener(type: string, fn: (e: unknown) => void) {
+      ;(this.#heard[type] ??= []).push(fn)
+    }
+    emit(type: string, e: Record<string, unknown> = {}) {
+      if (type == 'open') this.readyState = 1
+      if (type == 'close') this.readyState = 3
+      let on = {
+        open: this.onopen,
+        message: this.onmessage,
+        close: this.onclose,
+      }
+      ;(on[type as keyof typeof on] as ((e: unknown) => void) | undefined)?.(e)
+      for (let fn of this.#heard[type] ?? []) fn(e)
+    }
+    close() {
+      if (this.readyState == 3) return
+      this.readyState = 3
+      if (this.server) p.builder(eid).webSocketClose(this.server)
+      queueMicrotask(() => this.emit('close'))
+    }
   }
-  let sockets: Page[] = []
   let source = document.querySelector('script[type=module]')!.textContent!
   // Generated bundles still depend on the source graph that builds them.
   imported(
@@ -270,17 +315,7 @@ let load = async (
           SpeechSynthesisUtterance: speaking.platform(Event).Utterance,
         }
         : {},
-      WebSocket: class {
-        onopen?: () => void
-        onmessage?: () => void
-        onclose?: () => void
-        constructor(public url: string) {
-          sockets.push(this)
-        }
-        close() {
-          queueMicrotask(() => this.onclose?.())
-        }
-      },
+      WebSocket: Page,
     },
   })
   return {
@@ -294,6 +329,8 @@ let load = async (
     status: () => document.querySelector('[data-send-status]')!.textContent,
     failed,
     asked: () => asked,
+    // The handshakes its store's sockets made.
+    handshakes: () => handshakes,
     talks: () => talks,
     // The Operator's socket opening, as after a deploy restarted it.
     open: () => (sockets[0] as { onopen: () => void }).onopen(),
@@ -301,29 +338,15 @@ let load = async (
     // speaks for it from then on.
     connect: async () => {
       let page = sockets.at(-1)!
-      let held: unknown = null, opened = false
+      let opened = false
       // What the Builder says before the page hears its socket open comes
       // after, as a browser delivers it.
       let early: string[] = []
-      let factory = globalThis as { WebSocketPair?: unknown }
-      factory.WebSocketPair = function () {
-        return {
-          0: {},
-          1: {
-            send: (data: string) =>
-              opened ? page.onmessage?.({ data }) : void early.push(data),
-            serializeAttachment: (v: unknown) =>
-              void (held = structuredClone(v)),
-            deserializeAttachment: () => held,
-          },
-        }
-      }
-      try {
-        let url = page.url.replace(/^ws/, 'http')
-        await serve(url, { headers: { upgrade: 'websocket' } }, as)
-      } finally {
-        delete factory.WebSocketPair
-      }
+      await upgrade(
+        page.url,
+        as,
+        (data) => opened ? page.onmessage?.({ data }) : void early.push(data),
+      )
       page.onopen?.()
       opened = true
       for (let data of early.splice(0)) page.onmessage?.({ data })
@@ -356,8 +379,37 @@ let load = async (
     leave: () => {
       left = true
       for (let t of timers) clearTimeout(t)
+      for (let server of servers) p.builder(eid).webSocketClose(server)
     },
   }
+}
+// The runtime's socket factory, one upgrade at a time: the Builder's half of
+// a socket a page opened, carried to it as the edge does, its frames sent on
+// to `hear`.
+let upgrading = Promise.resolve()
+let upgrade = (url: string, as: Who, hear: (data: string) => void) => {
+  let made = upgrading.then(async () => {
+    let held: unknown = null
+    let server: Wire = {
+      readyState: 1,
+      send: hear,
+      serializeAttachment: (v) => void (held = structuredClone(v)),
+      deserializeAttachment: () => held,
+    }
+    let factory = globalThis as { WebSocketPair?: unknown }
+    factory.WebSocketPair = function () {
+      return { 0: {}, 1: server }
+    }
+    try {
+      let to = url.replace(/^ws/, 'http')
+      await serve(to, { headers: { upgrade: 'websocket' } }, as)
+    } finally {
+      delete factory.WebSocketPair
+    }
+    return server
+  })
+  upgrading = made.then(() => {}, () => {})
+  return made
 }
 let settle = async () => {
   for (let i = 0; i < 20; i++) await new Promise((ok) => setTimeout(ok, 1))
@@ -366,7 +418,7 @@ let settle = async () => {
 // it was asked, but reaches the page only once this settles.
 let slow: Promise<void> | undefined
 let stored = async (place = 'operator:new') =>
-  ((await (await serve(`${base}?draft=1`)).json()).bundles as {
+  ((await (await serve(`${base}/query?q=.draft`)).json()) as {
     draft: { place: string; text: string }
   }[]).find((b) => b.draft.place == place)?.draft.text ?? ''
 
@@ -676,17 +728,17 @@ test('words typed on one page show on the person’s other open page as its sock
     there = await load(storage(), false, park)
   await Promise.all([here.heard(), there.heard()])
   here.type('Ask for the south shelter instead')
-  await settle()
-  let { bundles } = await (await serve(`${base}?draft=1`)).json()
-  there.hear({ drafts: bundles })
-  await settle()
-  assertEquals(there.say.value, 'Ask for the south shelter instead')
+  let shown = await until(() =>
+    there.say.value == 'Ask for the south shelter instead'
+  )
   here.leave()
   there.leave()
+  assertEquals(shown, true)
 })
 
-// A draft read and a socket the network never answers are given up and asked
-// again, so the draft still arrives and the socket opens anew.
+// A store's socket and an Operator's socket the network never answers are
+// given up and opened again, so the draft still arrives and the Operator's
+// socket opens anew.
 let hold = storage()
 let typed = await load(hold)
 await typed.heard()
@@ -706,7 +758,7 @@ await settle()
 let reopened = await until(() => waited.sockets.length > 1)
 waited.leave()
 
-test("the Operator's chat app reads its draft again when a read is never answered", () => {
+test("the Operator's chat app reads its draft again when its socket is never answered", () => {
   assertEquals([reread, reopened], [true, true])
   assertEquals(waited.say.value, 'Order salt for the township garage')
 })
@@ -1125,22 +1177,21 @@ test('the aside’s summary in the bar shows a dot for each, “+N” past four,
   assertStringIncludes(heard.label!, '2 failed')
 })
 
-test('a page reads its draft only as it opens and as its socket opens, never on a timer', async () => {
+// Drafts are read only as the store's socket answers: one it cannot open is
+// tried again, and a page is never asked to read them on a timer.
+test('a page whose store cannot be reached says its draft is kept, and asks for it no other way', async () => {
   let page = await load(storage(), false, 'new', {}, undefined, 'down')
-  let status = page.document.querySelector('[data-send-status]')!
-  // ask's five tries, until the page says they failed, then a hundred
-  // seconds more, sped up
-  let tried = async () => {
-    await until(() => page.status() != '')
-    await new Promise((ok) => setTimeout(ok, 100))
-    return page.asked()
-  }
-  let alone = await tried()
-  status.textContent = ''
-  page.open()
-  let opened = await tried()
+  // until the page says so, then a hundred seconds more, sped up
+  let said = await until(() => page.status() != '')
+  await new Promise((ok) => setTimeout(ok, 100))
   page.leave()
-  assertEquals([alone, opened], [5, 10])
+  assertEquals(said, true)
+  assertEquals(
+    page.status(),
+    'Your draft is kept on this device until syncing returns.',
+  )
+  assertEquals(page.asked(), 0)
+  assert(page.handshakes() > 2, 'its socket was tried again')
 })
 
 // Last, since it sends a message to the road conversation.

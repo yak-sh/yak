@@ -53,6 +53,7 @@ test('socket clock calibrates, refines, holds through reconnect, and stops on cl
   })
   equal(w.now(), 1000) // opens without a subscription
   sockets[0].client.emit('open')
+  due.shift()!() // its handshake's deadline, which it met
   equal(sockets[0].client.asked, [1000])
   time = 1060
   sockets[0].server.send(

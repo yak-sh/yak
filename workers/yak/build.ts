@@ -736,7 +736,18 @@ export class Builder extends Durable {
     }
     let read = await reading
     if (API.test(new URL(request.url).pathname)) {
-      return read.door.answer(request, { person, space: spaceId })
+      let asker = { person, space: spaceId }
+      let answer = await read.door.answer(request, asker)
+      // A page loaded before it read its drafts here hears them on the
+      // Operator's frames, as it did when they were written there, until
+      // T-165931.
+      if (request.method == 'POST' && answer.ok) {
+        this.#frames?.drafts(
+          asker,
+          await read.store.g.read(`.draft.by=${person}`),
+        )
+      }
+      return answer
     }
     if (new URL(request.url).pathname == '/operator/call') {
       let { answering } = await import('./operator-calls.ts')

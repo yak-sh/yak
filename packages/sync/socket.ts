@@ -144,8 +144,9 @@ export type WireOpts = {
   /** the longest reconnect delay in ms, and how long an outage may go
    * unresumed before it is reported (default: 30_000) */
   most?: number
-  /** how long in ms an open socket may say nothing after its clock probe
-   * before it is given up as dead and replaced (default: 10_000) */
+  /** how long in ms an open socket may say nothing after its clock probe,
+   * and a new one wait on its handshake, before it is given up as dead and
+   * replaced (default: 10_000) */
   quiet?: number
   /** whether this machine has a network (default: the browser's say, where
    * there is one) */
@@ -640,6 +641,13 @@ export let wire = (opts: WireOpts): Wire => {
       if (opened !== undefined) say(false)
     }
     s.addEventListener('close', (e) => lost((e as CloseEvent).code))
+    // A handshake the network holds unanswered can wait minutes before the
+    // socket says it failed: one still connecting `quiet` after it was made
+    // is given up as a failed attempt, and the next is made after its wait.
+    within(quiet, () => socket == s && s.readyState == 0, () => {
+      lost()
+      s.close()
+    }, later)
   }
 
   return {

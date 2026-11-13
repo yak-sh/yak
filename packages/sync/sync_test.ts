@@ -371,6 +371,42 @@ test('a reopened socket that never answers is replaced, and every query is answe
   cook.wire.close()
 })
 
+// A handshake the network holds unanswered, which a browser may wait minutes
+// on, is given up `quiet` after it was made, and the next one is made.
+test('a socket still connecting after quiet is given up, and another is opened', () => {
+  let made: ReturnType<typeof pair>['client'][] = []
+  let now = 0
+  let due: { at: number; fn: () => void }[] = []
+  let link = wire({
+    url: 'http://box.test',
+    connect: () => {
+      let { client } = pair()
+      made.push(client)
+      return client
+    },
+    timer: (fn, ms) => void due.push({ at: now + ms, fn }),
+    time: () => now,
+    land: () => {},
+    report: () => {},
+  })
+  let pass = (ms: number) => {
+    let until = now + ms
+    while (due.some((d) => d.at <= until)) {
+      due.sort((a, b) => a.at - b.at)
+      let next = due.shift()!
+      now = next.at
+      next.fn()
+    }
+    now = until
+  }
+  link.subscribe('.recipe')
+  pass(9_999)
+  assertEquals(made.length, 1)
+  pass(1 + 250)
+  assertEquals([made.length, made[0].readyState], [2, 3])
+  link.close()
+})
+
 test('a write answered as moved opens a new socket at once', async () => {
   let srv = server()
   let sent = srv.handler
@@ -563,7 +599,7 @@ for (
     ['drop:1006 away:120000', 'it has not reopened: 7 attempts'],
     [
       'drop:1006 offline pass:60000 online',
-      'it has not reopened: 1 attempt, the last still connecting',
+      'it has not reopened: 3 attempts, the last still connecting',
     ],
     [
       'drop:1001 back',
