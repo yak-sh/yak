@@ -403,9 +403,9 @@ export let operatorConfig: Config = {
     { use: '@yaks/key', facets: ['vocab', 'graph'] },
     { use: '@yaks/alias', facets: ['vocab', 'graph'] },
     { use: '@yaks/memory', facets: ['vocab'] },
-    // The wake-ups the Operator sets for the people it works for
-    // (operator-wakes.ts).
-    { use: '@yaks/wake', facets: ['vocab', 'graph'] },
+    // The wake-ups and subscriptions set for the people it works for, whose
+    // firings it runs (`wake_run`, operator-schedules.ts).
+    { use: '@yaks/wake', facets: ['vocab', 'graph'], with: { run: true } },
     { use: '@yaks/topic', facets: ['vocab', 'graph'] },
     // Bodies kept once by their address, in the store's own file.
     { use: '@yaks/blob', facets: ['vocab', 'graph'] },

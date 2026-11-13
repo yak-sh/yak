@@ -192,7 +192,7 @@ export let operatorService = (
     sockets,
     store,
     drain: async () => {
-      await drain(store)
+      await drain(store, undefined, operator.watching)
       await Promise.all(pending.splice(0))
     },
   }

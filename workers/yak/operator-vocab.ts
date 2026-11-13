@@ -325,71 +325,45 @@ export let operatorDoc: VocabDoc = {
         },
       },
     },
-    // What a row that fires asks the Operator, as the person who set it: a
-    // wake-up (operator-wakes.ts), and any other trigger that becomes a turn
-    // in their conversation (operator-channels.ts `fire`).
+    // Retired, kept until contraction: a person's wake-ups, subscriptions and
+    // their runs are @yaks/wake's `wake{for, note, brief}`,
+    // `watch{query, local, seen}` and `occurrence{wake, at, call, error}`
+    // (operator-schedules.ts). A store's rows keep these beside the new words
+    // the pass wrote (wake-move.ts), so a rollback still reads every schedule;
+    // nothing else reads or writes them.
     operator_ask: {
       component: true,
       description:
-        "What the space's Operator is asked each time this row fires, as the person who set it.",
+        "Retired: what the space's Operator was asked each time this row fired, now the wake's own for, note and brief.",
       properties: {
         space: { type: 'string', ref: 'entity', death: 'keep' },
         person: { type: 'string', ref: 'person', death: 'keep' },
         administrative: { type: 'boolean' },
-        say: {
-          type: 'string',
-          description: 'The words given to the Operator when it fires.',
-        },
-        helper: {
-          type: 'string',
-          description:
-            'The brief for a fresh helper after the scheduled call, including its result.',
-        },
+        say: { type: 'string' },
+        helper: { type: 'string' },
       },
     },
     operator_work: {
       component: true,
       description:
-        'One occurrence of scheduled Operator work, with its recorded call and helper.',
+        "Retired: one occurrence of scheduled Operator work, now @yaks/wake's occurrence.",
       properties: {
         schedule: { type: 'string', ref: 'entity', death: 'keep' },
         at: { type: 'string', format: 'date-time' },
         call: { type: 'string', ref: 'call', death: 'keep' },
         helper: { type: 'string', ref: 'session', death: 'keep' },
-        error: {
-          type: 'string',
-          description:
-            'A call failure retained while the helper checks its outcome.',
-        },
+        error: { type: 'string' },
       },
     },
-    // A query the Operator watches for the person who set it, beside the
-    // wake-up that looks at it again (operator-subscriptions.ts).
     operator_subscription: {
       component: true,
       description:
-        "A query the space's Operator watches for the person who set it: each time its wake fires the query is read again, and a change in its rows is a turn.",
+        "Retired: a query the space's Operator watched, now @yaks/wake's watch.",
       properties: {
         query: { type: 'string' },
-        mine: {
-          type: 'boolean',
-          description:
-            "Read over the Operator's own store rather than the space.",
-        },
-        seen: {
-          type: 'object',
-          description:
-            'Each row the query answered at the last look, by eid, and a digest of it.',
-        },
+        mine: { type: 'boolean' },
+        seen: { type: 'object' },
       },
-    },
-    operator_fired: {
-      effect: true,
-      created: ['fired'],
-      changed: ['fired'],
-      tries: 3,
-      description:
-        "Give a fired wake's words to the Operator as a request of the person who set it; for a subscription, only when its query's rows changed.",
     },
     operator_line_point: {
       effect: true,

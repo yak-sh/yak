@@ -45,8 +45,8 @@ export type Host = {
   runner: (occurrence: Eid) => Runner | Promise<Runner>
   /** what else the occurrence is written with */
   with?: Omit<Bundle, 'entity'>
-  /** the writer the call is made as */
-  actor?: Bundle['$actor']
+  /** whom the call is made by; it comes in through its occurrence */
+  by?: string
 }
 
 // A call that answered may still report a failure inside its answer: a
@@ -98,7 +98,7 @@ export let run = async (
     let answered = await (await host.runner(id)).call({
       entity: { eid: call },
       call: { ...asked, source: id },
-      ...host.actor ? { $actor: host.actor } : {},
+      $actor: { ...host.by ? { by: host.by } : {}, via: id },
     })
     let out = answerOf(answered, call)
     text = worded(out, SAID)

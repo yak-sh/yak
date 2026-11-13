@@ -252,41 +252,35 @@ export let receive = async (
   return id
 }
 
-/** What a row that fires asks the Operator (`operator_ask`). */
+/** Whom a scheduled run is for: the space, and the person it runs as. */
 export type Ask = {
   space: string
   person: string
   administrative?: boolean
-  say: string
-  helper?: string
 }
 
 /**
- * A row that fired, given to the Operator as the words of the person who set
- * it, on the channel that says what fired: a request like any other, taken in
- * once for each `occurrence`, which a replay or a second driver gives again
- * to no effect. A wake-up is one (`operator_fired`), and a subscription
- * whose rows changed another, which gives `what` changed after the words.
+ * A wake that fired (@yaks/wake), given to the Operator as the words of the
+ * person it is set for (`wake.for`, `wake.note`), on the channel that says
+ * what fired: a request like any other, taken in once for each `occurrence`,
+ * which a replay or a second driver gives again to no effect. A wake-up is
+ * one, and a subscription whose rows changed another, which gives `what`
+ * changed after the words.
  */
 export let fire = async (
   store: Store,
+  space: string,
   row: Bundle,
   channel: string,
   occurrence: string,
   what?: string,
 ): Promise<string | undefined> => {
-  let ask = part<Ask | undefined>(row, 'operator_ask')
-  if (!ask?.say?.trim()) return
+  let wake = part<{ for?: string; note?: string } | undefined>(row, 'wake')
+  if (!wake?.for || !wake.note?.trim()) return
   return await receive(
     store,
-    {
-      space: ask.space,
-      person: ask.person,
-      channel,
-      about: row.entity.eid,
-      ...ask.administrative ? { administrative: true } : {},
-    },
-    what ? `${ask.say}\n\n${what}` : ask.say,
+    { space, person: wake.for, channel, about: row.entity.eid },
+    what ? `${wake.note}\n\n${what}` : wake.note,
     { id: derivedEid(`operator-fired|${row.entity.eid}|${occurrence}`) },
   )
 }
@@ -785,19 +779,12 @@ export let handleChannels = (
       let { pointed } = await import('./operator-line.ts')
       await pointed(env, g, line.connection, row ? undefined : line.number)
     },
-    // A wake-up that fired is the words it was set with, once per firing; a
-    // subscription's firing is a look at its query, and words only for a
-    // change (operator-subscriptions.ts).
-    operator_fired: async (event) => {
+    // A wake set for a person that fired: what it asks, once per firing
+    // (operator-schedules.ts `fired`).
+    wake_run: async (event) => {
       let [row] = await g.get([event.entity.eid])
       let at = part<{ at?: string } | undefined>(row, 'fired')?.at
-      if (!row || !at) return
-      if (row.operator_subscription) {
-        let { looked } = await import('./operator-subscriptions.ts')
-        await looked(operator.store, row, at, operator.watching)
-      } else if (row.call || part<Ask>(row, 'operator_ask')?.helper) {
-        await operator.scheduled(row, at)
-      } else await fire(operator.store, row, 'wake', at)
+      if (row && at) await operator.scheduled(row, at)
     },
     operator_receive: async (event) => {
       let [row] = await g.get([event.entity.eid])

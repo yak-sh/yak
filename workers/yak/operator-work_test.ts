@@ -6,11 +6,11 @@ import { platform } from './directory-probe.ts'
 import { directoryOf } from './directory.ts'
 import { compiler } from './testing.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
-import { wakeTools } from './operator-wakes.ts'
+import { fired, helperInput, wakeTools } from './operator-schedules.ts'
 import { seenBy } from './operator-access.ts'
 import { within } from './defects.ts'
-import { occurrence, scheduled } from './operator-work.ts'
-import { toolEid } from '@yaks/tools'
+import { occurrenceOf } from '@yaks/wake/run'
+import { runner, toolEid } from '@yaks/tools'
 import { short } from '@yaks/id'
 import { remove } from './operator-remove.ts'
 
@@ -24,7 +24,6 @@ let eid = await dir.mint(person, 'work-home', 'Work home', {
   'x-yak-person': person,
   'x-yak-role': 'owner',
 })
-let space = (await dir.at(eid))!
 let reports: Bundle[] = []
 env.ERRORS = { send: (rows) => (reports.push(...rows), Promise.resolve()) }
 let models: Request[] = []
@@ -57,7 +56,7 @@ await store.g.apply([{
   session: {},
   operator_session: { space: eid, person },
 }], { trusted: true })
-let tools = wakeTools(store, space)
+let tools = wakeTools(store)
 let context = {
   session,
   call: { entity: { eid: crypto.randomUUID() } },
@@ -80,9 +79,7 @@ let ring = async (row: Bundle) => {
     wake: { at: new Date().toISOString() },
   }], { trusted: true })
   await within(env, { request: 'scheduled test' }, () => service.drain())
-  return (await store.g.read(`.operator_work.schedule=${row.entity.eid}&*`)).at(
-    -1,
-  )!
+  return (await store.g.read(`.occurrence.wake=${row.entity.eid}&*`)).at(-1)!
 }
 
 let script = await setting({
@@ -93,7 +90,7 @@ let before = models.length
 let scriptRun = await ring(script)
 let afterScript = models.length
 let scriptCall =
-  (await store.g.get([String((scriptRun.operator_work as Comp).call)]))[0]
+  (await store.g.get([String((scriptRun.occurrence as Comp).call)]))[0]
 let scriptOutputs = await store.g.read(
   `.output.source=${scriptCall.entity.eid}&*`,
 )
@@ -181,46 +178,50 @@ let revokedRun = await ring(revoked)
 let once = 0, outcomes: string[] = []
 let replay = {
   entity: { eid: crypto.randomUUID() },
-  operator_ask: { space: eid, person, say: '', helper: 'Check it.' },
+  wake: { for: person, brief: 'Check it.' },
   call: { to: toolEid('count_once'), args: {} },
 }
 await store.g.apply([replay], { trusted: true })
-let capabilities = {
-  owner: crypto.randomUUID(),
-  gone: () => true,
-  tools: () =>
-    Promise.resolve([{
+// A runner under an owner of its own, as each incarnation of the object is.
+let counting = (owner = crypto.randomUUID()) => () =>
+  Promise.resolve(runner(store.g, {
+    owner,
+    gone: () => true,
+    tools: [{
       name: 'count_once',
       description: 'Count once.',
-      parameters: { type: 'object', properties: {} },
-      run: () => {
+      run: (call: Bundle) => {
         once++
-        return Promise.resolve('counted once')
+        return [{
+          entity: { eid: '$said' },
+          content: { body: 'counted once' },
+          output: { source: call.entity.eid },
+        }]
       },
-    }]),
+    }],
+  }))
+let capabilities = {
+  runner: counting(),
   helper: (_: string, __: unknown, brief: string) => {
     outcomes.push(brief)
     return Promise.resolve()
   },
 }
 let at = new Date().toISOString()
-await scheduled(store, replay, at, capabilities)
-await scheduled(store, replay, at, {
-  ...capabilities,
-  owner: crypto.randomUUID(),
-})
+await fired(store, eid, replay, at, capabilities)
+await fired(store, eid, replay, at, { ...capabilities, runner: counting() })
 let cannotStart = { ...replay, entity: { eid: crypto.randomUUID() } }
 await store.g.apply([cannotStart], { trusted: true })
 await within(
   env,
   { request: 'helper startup test' },
   () =>
-    scheduled(store, cannotStart, at, {
+    fired(store, eid, cannotStart, at, {
       ...capabilities,
       helper: () => Promise.reject(new Error('helper model unavailable')),
     }),
 )
-let [startupRun] = await store.g.get([occurrence(cannotStart.entity.eid, at)])
+let [startupRun] = await store.g.get([occurrenceOf(cannotStart.entity.eid, at)])
 let startupRecovery = await store.g.read(
   `.operator_request.about=${cannotStart.entity.eid}&*`,
 )
@@ -247,7 +248,7 @@ test('a weekly code_mode call keeps its outcome without asking a model', () => {
 test('weekly helpers run fresh and a checking helper receives the call outcome', () => {
   ok(helperRun.completed)
   ok(checkedRun.completed)
-  equal((checkedRun.operator_work as Comp).helper, checkedRun.entity.eid)
+  ok(checkInput.some((b) => b.entity.eid == helperInput(checkedRun.entity.eid)))
   ok(JSON.stringify(checkInput).includes('upserted'))
   ok(JSON.stringify(checkInput).includes('Call outcome'))
   ok(models.length >= 3)

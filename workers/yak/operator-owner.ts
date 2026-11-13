@@ -29,6 +29,8 @@ import { after, each } from '@yaks/fp'
 export const OWNED: [string, string][] = [
   ['operator_session', 'person'],
   ['operator_request', 'person'],
+  ['wake', 'for'],
+  // Retired, kept on a wake until contraction (operator-vocab.ts).
   ['operator_ask', 'person'],
   ['operator_letter', 'person'],
   ['operator_text', 'person'],

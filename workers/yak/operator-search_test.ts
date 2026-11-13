@@ -36,7 +36,7 @@ await store.g.apply([
   one({ entry: { session: theirs }, content: { body: 'Pruning secret' } }),
   one({ memory: {}, doc: { title: 'Pruning memory' } }),
   ...[
-    ['operator_ask', 'person'],
+    ['wake', 'for'],
     ['operator_letter', 'person'],
     ['operator_text', 'person'],
     ['deliver', 'to'],

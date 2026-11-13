@@ -24,6 +24,8 @@ import { channeled } from './channel-move.ts'
 import { operatorDoc } from './operator-vocab.ts'
 import { OWNERS } from './operator-owner.ts'
 import { due, soonest, tick } from '@yaks/wake'
+import type { Watching } from './operator-schedules.ts'
+import { WAKES, wakesMoved } from './wake-move.ts'
 import { caught } from './defects.ts'
 import { RETRY, SLICE } from '@yaks/durable-object/alarm'
 import { adopt, indexed, schema as ftsSchema, search } from '@yaks/fts'
@@ -136,8 +138,10 @@ export let operatorStore = async (
       let left = store.install()
       adopt(sql, text, derived, { heal: false })
       if (!left.length) marks.set(FITTED, print)
-      // A new file holds nothing written before the rule that keeps owners.
+      // A new file holds nothing written before the rule that keeps owners,
+      // nor any wake in the Operator's old words.
       if (born) marks.set(OWNERS, 'done')
+      if (born) marks.set(WAKES, 'done')
       // Nor anything kept before it numbered what it keeps.
       if (born) marks.set(NUMBERED, 'done')
     },
@@ -242,12 +246,16 @@ let drawing = (vocab: Vocab, g: Graph) => {
  * then makes the Operator (`made`) and runs on its handler.
  */
 export let owing = (fx: Effects, made: () => Promise<unknown>) => {
-  // A trial round's run is the Operator's too (operator-trials.ts).
-  let own = [operatorDoc, trialDoc].flatMap((doc) =>
-    Object.entries(doc.$defs ?? {})
-      .filter(([, def]) => (def as { effect?: boolean }).effect)
-      .map(([id]) => id)
-  )
+  // A trial round's run is the Operator's too (operator-trials.ts), and so
+  // is what a wake set for a person asks (operator-schedules.ts).
+  let own = [
+    ...[operatorDoc, trialDoc].flatMap((doc) =>
+      Object.entries(doc.$defs ?? {})
+        .filter(([, def]) => (def as { effect?: boolean }).effect)
+        .map(([id]) => id)
+    ),
+    'wake_run',
+  ]
   fx.handle(Object.fromEntries(own.map((id) => {
     let stand: Handler = async (...args) => {
       await made()
@@ -261,9 +269,10 @@ export let owing = (fx: Effects, made: () => Promise<unknown>) => {
 
 /**
  * Work the store's pool until nothing is due or `until` passes, as the
- * object's alarm does: first each wake-up due fires (@yaks/wake `tick`), then
- * each session step is a run, and its commit owes the next; the steps going
- * at `until` finish. Answers when the next pending run it handles or the next
+ * object's alarm does: first each wake-up due fires (@yaks/wake `tick`), a
+ * subscription only when its query's rows changed (read through `watching`);
+ * then each session step is a run, and its commit owes the next; the steps
+ * going at `until` finish. Answers when the next pending run it handles or the next
  * wake-up is due (ms since the epoch), now when the slice ended with one due,
  * or null when neither is.
  */
@@ -276,6 +285,9 @@ export let drain = async (
   // `[limits]`, five minutes): a store whose sessions keep owing steps
   // (forks forking) is worked a slice an alarm.
   until = Date.now() + SLICE,
+  // How a subscription's query is read as its person (operator.ts
+  // `watching`); over this store where none is given.
+  watching?: Watching,
 ): Promise<number | null> => {
   let upkeepWait = upkeep?.()
   let upkeepAt = upkeepWait == null
@@ -284,11 +296,19 @@ export let drain = async (
   await phoneTexts(g)
   await channeled(g, marks)
   // A firing is the store's own write, as every other write the Operator
-  // keeps of itself is.
-  let { refused } = await tick({
-    read: (q, o) => g.read(q, o),
-    apply: (b, o) => g.apply(b, { ...o, trusted: true }),
-  }, Date.now())
+  // keeps of itself is. None fires until the store's wakes are in their
+  // package's words (wake-move.ts), so none fires in words nothing runs.
+  let moved = wakesMoved(marks)
+  let { refused } = moved
+    ? await tick(
+      {
+        read: (q, o) => g.read(q, o),
+        apply: (b, o) => g.apply(b, { ...o, trusted: true }),
+      },
+      Date.now(),
+      { watching },
+    )
+    : { refused: [] }
   for (let { wake, error } of refused) {
     caught(error, { request: 'operator wake', wake: wake.entity.eid })
   }
@@ -303,7 +323,7 @@ export let drain = async (
   // tick refused waits RETRY, rather than ringing the alarm at once again.
   let now = Date.now()
   let wake = (await due(g, now)).length
-    ? now + (refused.length ? RETRY : 1000)
+    ? now + (refused.length || !moved ? RETRY : 1000)
     : await soonest(g, now)
   let next = run == null ? wake : wake == null ? run : Math.min(run, wake)
   return upkeepAt == null

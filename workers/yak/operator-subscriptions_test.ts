@@ -15,9 +15,10 @@ import { receive } from './operator-channels.ts'
 import { operatorContext } from './operator.ts'
 
 // A person asks their Operator to tell them when something in the space
-// changes: it subscribes to a query, each look that finds the rows changed is
-// one turn in their conversation with what changed, and a look that finds
-// nothing new is no turn at all (T-145073).
+// changes: it subscribes to a query, a wake that watches it (@yaks/wake
+// `watch`), each look that finds the rows changed is one turn in their
+// conversation with what changed, and a look that finds nothing new is no
+// turn at all (T-145073, T-164109).
 let p = platform('operator-subscriptions')
 let { dir, env } = p
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
@@ -90,7 +91,7 @@ let service = operatorService(env, held, {
     let said = req.items.findLast((i) => i.kind == 'user')
     let words = said?.kind == 'user' ? said.text : ''
     let planned = Object.entries(script).find(([w]) => words.includes(w))?.[1]
-    let cancel = words.match(/Cancel (#\w+)/)?.[1]
+    let cancel = words.match(/Cancel (\S+)/)?.[1]
     let items = last?.kind == 'result'
       ? (results.push(last.output), reply('Done.'))
       : words.includes('Tell them which meetings changed.')
@@ -125,11 +126,8 @@ let look = async (sub: Bundle) => {
 }
 
 await ask('Tell me about meetings')
-let [sub] = await store.g.read(
-  '.operator_subscription.query=".meeting&*" &* ?wake',
-)
-let first = (sub.operator_subscription as { seen: Record<string, string> })
-  .seen
+let [sub] = await store.g.read('.watch.query=".meeting&*" &*')
+let first = (sub.watch as { seen: Record<string, string> }).seen
 // Nothing changed since it subscribed: a look is no turn.
 await look(sub)
 let quiet = (await fired()).length
@@ -150,18 +148,15 @@ await ask('What am I subscribed to?')
 let listed = JSON.parse(results.at(-1)!.split('\n')[1])
 await ask('What wake-ups do I have?')
 let wakes = JSON.parse(results.at(-1)!.split('\n')[1])
-let [mine] = await store.g.read('.operator_subscription.mine=true')
+let [mine] = await store.g.read('.watch.local=true')
 await ask(`Cancel ${short(mine.entity.eid)}`)
 let gone = await store.g.get([mine.entity.eid])
 
 test('subscription_set reads the query as the person, and what it answers now is no change', () => {
   assertEquals(Object.keys(first), [road])
   assertEquals((sub.wake as { every: string }).every, '1m')
-  assertEquals(sub.operator_ask, {
-    space: eid,
-    person,
-    say: 'Tell them which meetings changed.',
-  })
+  let { for: by, note } = sub.wake as { for: string; note: string }
+  assertEquals([by, note], [person, 'Tell them which meetings changed.'])
   assertEquals(quiet, 0)
 })
 

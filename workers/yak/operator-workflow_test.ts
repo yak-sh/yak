@@ -216,7 +216,7 @@ handleChannels(operator, env)
 await receive(store, { space: spaceId, person, channel: 'chat' }, message)
 await drain(store)
 let requested = await connectionsOf(env, space, person)
-let [schedule] = await store.g.read('.operator_ask&.wake')
+let [schedule] = await store.g.read(`.wake.for=${person}&*`)
 ok(schedule, 'The Operator did not create the weekly import schedule.')
 let app = (await dir.apps(space)).find((app) => app.slug == 'church')!
 let graph = appStore(env.STORE, space, app)
@@ -249,8 +249,8 @@ let now = Date.now()
 let first = await run(now - 60_000)
 feed.items[0].snippet.title = 'Hope for tomorrow — edited'
 let second = await run(now - 30_000)
-let runs = await store.g.read('.operator_work&*')
-let hidden = await seenBy(store, crypto.randomUUID()).read('.operator_work')
+let runs = await store.g.read('.occurrence&*')
+let hidden = await seenBy(store, crypto.randomUUID()).read('.occurrence')
 let checked = asked.filter((request) => {
   let last = request.items.findLast((item) => item.kind == 'user')
   return last?.kind == 'user' && last.text.includes(helper) &&
@@ -273,8 +273,7 @@ test('Jeff’s exact request builds against an unconnected requested catalog ser
   ok(youtube.apps.some((app) => app.slug == 'church'))
   equal(empty, [])
   equal((schedule.wake as Comp).every, '0 9 * * 6 America/Detroit')
-  equal((schedule.operator_ask as Comp).person, person)
-  equal((schedule.operator_ask as Comp).space, spaceId)
+  equal((schedule.wake as Comp).for, person)
   ok(
     asked.some((request) =>
       JSON.stringify(request.items).includes(
@@ -309,16 +308,14 @@ test('each weekly run reads fresh video data and upserts all sermon fields with 
     thumbnail: 'https://i.ytimg.com/vi/sermon-2026-11-14/hqdefault.jpg',
   })
   equal(second[0].created.by, spaceId)
-  ok(runs.every((run) => !(run.operator_work as Comp).error))
+  ok(runs.every((run) => !(run.occurrence as Comp).error))
 })
 
 test('each occurrence has a visible private run and a separate checking helper', () => {
   equal(runs.length, 2)
   equal(hidden, [])
   ok(
-    runs.every((run) =>
-      (run.operator_work as Comp).schedule == schedule.entity.eid
-    ),
+    runs.every((run) => (run.occurrence as Comp).wake == schedule.entity.eid),
   )
   ok(
     runs.every((run) =>

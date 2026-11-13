@@ -73,8 +73,8 @@ test('a cancelled subscription, named by its handle, is its owner to remove with
   await store.g.apply([
     {
       entity: { eid: sub },
-      operator_ask: { space, person, say: 'look' },
-      operator_subscription: { query: '.doc' },
+      wake: { for: person, note: 'look' },
+      watch: { query: '.doc' },
     },
     request(fired, { about: sub, channel: 'subscription' }),
     { entity: { eid: tells }, notification: {}, deliver: { to: person } },

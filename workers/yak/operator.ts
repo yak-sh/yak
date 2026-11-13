@@ -55,7 +55,7 @@ import { attachmentRows } from './operator-attachments.ts'
 import { attached, fileContext } from './operator-inputs.ts'
 import { agents, operatorProviders } from './config.ts'
 import { inputSchemaOf } from '@yaks/tools/schema'
-import { CallError, invoke } from '@yaks/tools'
+import { CallError, invoke, runner as toolRunner } from '@yaks/tools'
 import { loadTools, textSearch } from '@yaks/graph/tools'
 import { earlier } from '@yaks/memory/earlier'
 import { memoryDoc } from '@yaks/memory/vocab'
@@ -117,7 +117,7 @@ import {
   UNASKED,
 } from './operator-channels.ts'
 import { escalate, escalationAnswer, REPLIES } from './operator-escalate.ts'
-import { askedAt, inputOf, rootAt } from './operator-root.ts'
+import { askedAt, inputOf, rootAt, spaceOf } from './operator-root.ts'
 import { textSend } from './operator-texts.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
@@ -133,13 +133,14 @@ import {
   publicity,
   trialRunning,
 } from './operator-trials.ts'
-import { wakeTools } from './operator-wakes.ts'
 import {
   finished as workFinished,
-  recorded,
-  scheduled as workScheduled,
-} from './operator-work.ts'
-import { subscriptionTools, type Watching } from './operator-subscriptions.ts'
+  fired,
+  helperInput,
+  subscriptionTools,
+  wakeTools,
+  type Watching,
+} from './operator-schedules.ts'
 import { type Browsers, browserTools } from './operator-browser.ts'
 import { based, bases, personaFor, spaced } from './operator-persona.ts'
 import {
@@ -177,6 +178,20 @@ export type Options = {
   // person has one connected, their sessions are offered its tools.
   browsers?: Browsers
 }
+// Bookkeeping belongs to the invocation's agent and session as much as its
+// calls do. Direct provenance also keeps visibility independent of nesting.
+let recorded = (g: Graph, session: string, space: string): Graph => {
+  let owned = (bundles: Bundle[]) =>
+    bundles.map((b) =>
+      b.tool ? b : { ...b, $actor: b.$actor ?? { by: space, via: session } }
+    )
+  return {
+    ...g,
+    apply: (bundles, opts) => g.apply(owned(bundles), opts),
+    admit: (bundles, opts) => g.admit(owned(bundles), opts),
+  }
+}
+
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
@@ -1067,16 +1082,19 @@ export let operating = (
 ): Operator => {
   let { g, fx, vocab } = store
   let dir = () => options.directory?.() ?? directoryOf(env.STORE)
-  // What a subscription watches, read as the person who set it: over the
-  // space through their reach, as their graph_query reads it, or over this
-  // store (operator-subscriptions.ts).
-  let watching: Watching = async (ask, query, mine) => {
-    if (mine) return await seenBy(store, ask.person).read(query)
-    let space = await dir().at(ask.space)
+  // What a subscription watches, read as the person its wake is set for:
+  // over the space through their reach, as their graph_query reads it, or
+  // over this store (operator-schedules.ts).
+  let watching: Watching = async (wake, { query, local }) => {
+    let person = String((wake.wake as { for?: string } | undefined)?.for ?? '')
+    if (!person) throw refuse('missing', 'That subscription names nobody.')
+    if (local) return await seenBy(store, person).read(query)
+    let eid = await spaceOf(store)
+    let space = eid ? await dir().at(eid) : null
     if (!space || space.trashed) throw refuse('missing', 'That space is gone.')
     let ctx = await operatorContext(
       env,
-      ask,
+      { person },
       space,
       options.directory ?? opening(env),
     )
@@ -1130,20 +1148,20 @@ export let operating = (
   // Whether the turn a session takes was started without its person asking
   // at that moment: the newest words of its conversation are routine news
   // (operator-channels.ts `UNASKED`), or it is scheduled
-  // work's helper (operator-work.ts). Such a turn never falls to a hosted
+  // work's helper (operator-schedules.ts). Such a turn never falls to a hosted
   // model, which would spend the space's money nobody chose to spend: it
   // waits for its person's machine.
   let unasked = async (session?: string) => {
     if (!session) return false
     let top = await topOf(store, session)
     let [[work], [said]] = await Promise.all([
-      g.get([top], ['operator_work']),
+      g.get([top], ['occurrence']),
       g.read(
         `.entry.session=${top}&.content&.using&!ask&.order=-entry.seq&.limit=1&.fields=operator_channel.channel`,
       ),
     ])
     let channel = comp(said, 'operator_channel')?.channel
-    return !!work?.operator_work || UNASKED.has(String(channel ?? ''))
+    return !!work?.occurrence || UNASKED.has(String(channel ?? ''))
   }
   let machine: Model = async (req) => {
     let fetch = reached('machine', await machineOf(req.call))
@@ -1495,7 +1513,7 @@ export let operating = (
   let answered = async (session: string) => {
     let [row] = await g.get([session], [
       'spawned',
-      'operator_work',
+      'occurrence',
       'operator_session',
       'completed',
       'failed',
@@ -1505,7 +1523,7 @@ export let operating = (
       !!row?.spawned && comp(row, 'spawned')?.quiet == null,
     )
     let reply = replyOf(turnOf(entries))
-    if (row?.operator_work) {
+    if (row?.occurrence) {
       await workFinished(store, row, reply.text, reply.fault)
       return
     }
@@ -1715,8 +1733,8 @@ export let operating = (
           phoneNumbers(env, ctx, space, store),
           imageNew(env, space),
           ...pickTools(store, ctx.person!),
-          ...wakeTools(store, space),
-          ...subscriptionTools(store, space, watching),
+          ...wakeTools(store),
+          ...subscriptionTools(store, watching),
           ...google,
           escalationAnswer(store, ctx, space),
         ]
@@ -1738,13 +1756,62 @@ export let operating = (
   // (@yaks/tools `whose`), rather than left `running` with nobody to finish it.
   let me = mint()
   let gone = (holder: string) => holder != me
-  let scheduled: Operator['scheduled'] = (row, at) =>
-    workScheduled(store, row, at, {
-      tools: roster,
-      owner: me,
-      gone,
+  // What a wake set for a person asks when it fires (operator-schedules.ts
+  // `fired`): its call through a runner over the person's tools as they
+  // stand now, with this object's claims, and a helper in its occurrence.
+  let scheduled: Operator['scheduled'] = async (row, at) => {
+    let space = await spaceOf(store)
+    if (!space) throw new Error('This Operator store holds no space')
+    await fired(store, space, row, at, {
+      runner: async (occurrence, ask) => {
+        let offered = await roster(occurrence)
+        return toolRunner(recorded(g, occurrence, ask.space), {
+          tools: offered.map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+            inputSchema: tool.parameters,
+            run: async (asked: Bundle): Promise<Bundle[]> => {
+              let answer = await tool.run(
+                comp(asked, 'call')?.args as Comp ?? {},
+                {
+                  session: occurrence,
+                  call: asked,
+                  entries: await transcript(g, occurrence),
+                },
+              )
+              let call = asked.entity.eid
+              return [{
+                entity: { eid: '$answer' },
+                content: {
+                  body: typeof answer == 'string' ? answer : answer.text,
+                },
+                ...typeof answer == 'string' ? {} : answer.with,
+                output: {
+                  source: call,
+                  ...typeof answer == 'string'
+                    ? {}
+                    : comp(answer.with as Bundle, 'output'),
+                },
+              }]
+            },
+          })),
+          owner: me,
+          gone,
+          report: (e) =>
+            caught(e, { request: 'operator scheduled tool', run: occurrence }),
+          otherwise: {
+            name: 'unavailable',
+            description: 'A scheduled tool that is no longer available.',
+            run: () => {
+              throw new Error(
+                'Scheduled tool is no longer available to this person.',
+              )
+            },
+          },
+        })
+      },
       helper: async (session, ask, brief) => {
-        let input = derivedEid(`operator-work-helper|${session}`)
+        let input = helperInput(session)
         if ((await g.get([input]))[0]) return
         let space = await dir().at(ask.space)
         if (!space || space.trashed) {
@@ -1753,7 +1820,6 @@ export let operating = (
         let selected = await readying(ask, space)
         await started(session, ask.space, space)
         await g.apply([
-          { entity: { eid: session }, operator_work: { helper: session } },
           given(
             session,
             input,
@@ -1765,6 +1831,7 @@ export let operating = (
         options.tell?.(session)
       },
     })
+  }
   let runner = lend({
     h: { g, fx, vocab, me, gone },
     providers: models,
@@ -2211,7 +2278,7 @@ export let operating = (
     let work = (async () => {
       let entries = await transcript(g, session)
       while (!ENDED.includes(statusOf(entries))) {
-        let next = await drain(store)
+        let next = await drain(store, undefined, watching)
         entries = await transcript(g, session)
         if (ENDED.includes(statusOf(entries)) || next == null) break
         await new Promise<void>((ok) =>

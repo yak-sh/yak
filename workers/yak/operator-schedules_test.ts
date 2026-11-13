@@ -10,8 +10,9 @@ import { rootOf } from './operator-root.ts'
 import { drain } from './operator-store.ts'
 
 // A person asks their Operator to come back to something: it sets a wake-up
-// in its own store, the store's alarm fires it, and the firing is a turn in
-// their conversation whose answer reaches their Updates (T-145054).
+// in its own store, a wake set for them (@yaks/wake `wake.for`), the store's
+// alarm fires it, and the firing is a turn in their conversation whose answer
+// reaches their Updates (T-145054, T-164109).
 let { env } = platform('operator-wakes')
 let dir = directoryOf(env.STORE)
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
@@ -58,7 +59,7 @@ let service = operatorService(
     let said = req.items.findLast((i) => i.kind == 'user')
     let words = said?.kind == 'user' ? said.text : ''
     let planned = Object.entries(script).find(([w]) => words.includes(w))?.[1]
-    let cancel = words.match(/Cancel (#\w+)/)?.[1]
+    let cancel = words.match(/Cancel (\S+)/)?.[1]
     let items = last?.kind == 'result'
       ? (results.push(last.output), reply('Done.'))
       : words.includes('Remind them to call Mom.')
@@ -84,7 +85,7 @@ let ask = async (say: string) => {
 }
 
 await ask('Remind me in ten minutes to call Mom')
-let [set] = await store.g.read(`.operator_ask.person=${person}&*`)
+let [set] = await store.g.read(`.wake.for=${person}&*`)
 let wake = set.wake as { at: string }
 let inTen = Date.parse(wake.at) - Date.now()
 
@@ -102,23 +103,23 @@ let [request] = await store.g.read('.operator_request.channel=wake')
 let [told] = await store.g.read(`.deliver.to=${person}&*`)
 let [fired] = await store.g.get([set.entity.eid])
 // A second driver, or a replay, gives the same firing again to no effect.
-await fire(store, fired, 'wake', (fired.fired as { at: string }).at)
+await fire(store, eid, fired, 'wake', (fired.fired as { at: string }).at)
 await service.drain()
 let again = (await store.g.read('.operator_request.channel=wake')).length
 
 await ask('Check my mail every morning')
 await ask('What wake-ups do I have?')
 let listed = JSON.parse(results.at(-1)!.split('\n')[1])
-let [daily] = await store.g.read(`.operator_ask.person=${person} .wake.every`)
+let [daily] = await store.g.read(`.wake.for=${person} .wake.every`)
 await ask(`Cancel ${short(daily.entity.eid)}`)
 let gone = await store.g.get([daily.entity.eid])
 
 test('wake_set keeps a one-shot in ten minutes, as the person, and the alarm comes back for it', () => {
   assertEquals(Math.abs(inTen - 10 * 60_000) < 5000, true)
-  assertEquals(set.operator_ask, {
-    space: eid,
-    person,
-    say: 'Remind them to call Mom.',
+  assertEquals(set.wake, {
+    at: wake.at,
+    for: person,
+    note: 'Remind them to call Mom.',
   })
   assertEquals(early, 0)
   assertEquals(next, Date.parse(wake.at))

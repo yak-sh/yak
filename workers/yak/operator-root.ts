@@ -2,6 +2,7 @@
 // first, apart from the channels that take in what they send
 // (operator-channels.ts).
 import { derivedEid } from '@yaks/graph/identity'
+import type { ToolContext } from '@yaks/session'
 import type { OperatorStore } from './operator-store.ts'
 
 type Store = OperatorStore
@@ -21,6 +22,37 @@ export let inputOf = (request: string) =>
  * answer, that it waits, or that it failed. */
 export let outcomeOf = (request: string) =>
   derivedEid('operator-outcome|' + request)
+
+/** Whose a tool call is: the person the session it was made in works
+ * for. */
+export let whoseOf = async (
+  store: Pick<Store, 'g'>,
+  context?: ToolContext,
+) => {
+  let [row] = context ? await store.g.get([context.session]) : []
+  let o = row?.operator_session as
+    | { person: string; administrative?: boolean }
+    | undefined
+  if (!o) throw new Error('Operator session names no person')
+  return o
+}
+
+let spaces = new WeakMap<object, Promise<string | undefined>>()
+/** The space an Operator store is: one space's, named by every session in
+ * it. */
+export let spaceOf = (store: Pick<Store, 'g'>): Promise<string | undefined> => {
+  let held = spaces.get(store.g)
+  if (!held) {
+    held = Promise.resolve(
+      store.g.read('.operator_session.space&.limit=1'),
+    ).then(([row]) =>
+      (row?.operator_session as { space?: string } | undefined)?.space
+    )
+    spaces.set(store.g, held)
+    held.then((space) => space ?? spaces.delete(store.g))
+  }
+  return held
+}
 
 /** The person's one conversation in `store`: the one said to be theirs
  * (`operator_session.conversation`), as a conversation handed to them is

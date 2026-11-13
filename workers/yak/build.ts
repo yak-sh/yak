@@ -965,7 +965,8 @@ export class Builder extends Durable {
   // alarm comes back when its window ends.
   protected override specify = (): Spec => ({
     open: async () => {
-      let { store } = await this.#work()
+      let operator = await this.#work()
+      let { store } = operator
       let waiting = () => Date.now() + (store.waiting?.() ?? 0)
       let backfill = async (more: Promise<boolean>) =>
         await more ? waiting() : null
@@ -991,11 +992,21 @@ export class Builder extends Durable {
             let { numberBackfill } = await import('./number-move.ts')
             return backfill(numberBackfill(store))
           },
+          // A person's wakes and subscriptions in @yaks/wake's words, before
+          // `drain` fires any (wake-move.ts).
+          wakes: async () => {
+            let { wakeBackfill } = await import('./wake-move.ts')
+            return backfill(wakeBackfill(store))
+          },
           drain: async (until) => {
             let { drain } = await import('./operator-store.ts')
             this.#draining = true
             try {
-              return await drain(store, this.#until = until)
+              return await drain(
+                store,
+                this.#until = until,
+                operator.watching,
+              )
             } finally {
               this.#draining = false
             }

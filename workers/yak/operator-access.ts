@@ -4,6 +4,7 @@ import { absent, and, eq, or } from '@yaks/query/core'
 import { MADE, ON, OWNED, OWNERS } from './operator-owner.ts'
 import type { Held } from './build-door.ts'
 import type { OperatorStore } from './operator-store.ts'
+import { spaceOf } from './operator-root.ts'
 
 type Store = OperatorStore
 type Owner = Pick<Held, 'person' | 'space'>
@@ -15,7 +16,7 @@ const OWNING = [
   'entry',
   'operator_session',
   'operator_request',
-  'operator_ask',
+  'wake',
   'call',
   'result',
   'output',
@@ -23,9 +24,9 @@ const OWNING = [
   'tombstone',
 ]
 
-// Ownership comes from the stored request, session, wake-up or subscription,
-// including the parent a helper works for. An id, including a derived
-// conversation id, grants none.
+// Ownership comes from the stored request, session, or wake (a wake-up or a
+// subscription), including the parent a helper works for. An id, including a
+// derived conversation id, grants none.
 export let ownerOf = async (
   store: Store,
   open: string,
@@ -53,9 +54,14 @@ export let ownerOf = async (
     (row.result as { call?: string } | undefined)?.call ??
     (row.output as { source?: string } | undefined)?.source
   if (source) return ownerOf(store, source, seen)
-  let owner = (row.operator_session ?? row.operator_request ??
-    row.operator_ask) as Owner | undefined
+  let owner = (row.operator_session ?? row.operator_request) as
+    | Owner
+    | undefined
   if (owner?.person && owner.space) return owner
+  // A wake is the person's it is set for, in the store's one space.
+  let set = (row.wake as { for?: string } | undefined)?.for
+  let space = set && await spaceOf(store)
+  if (set && space) return { person: set, space }
   // A task is its sessions' owner's, and a deleted wake-up or subscription
   // the owner's of the requests it fired, when they all agree.
   let by = row.task

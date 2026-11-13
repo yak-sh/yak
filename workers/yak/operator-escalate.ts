@@ -14,9 +14,8 @@ import { short } from '@yaks/id'
 import type { Tool, ToolContext } from '@yaks/session'
 import type { Space } from './directory.ts'
 import type { Request } from './operator-channels.ts'
-import { rootAt } from './operator-root.ts'
 import type { OperatorStore } from './operator-store.ts'
-import { whoseOf } from './operator-wakes.ts'
+import { rootAt, whoseOf } from './operator-root.ts'
 import { type Ctx, refuse } from './tool.ts'
 
 type Store = OperatorStore
