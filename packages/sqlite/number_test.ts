@@ -151,7 +151,13 @@ test('sqlite: a store still holding unlettered numbers counts on past them', () 
 // it held before it numbered by series, and `keyed` whether its foreign keys
 // stay on through an install, as a Durable Object's do.
 let lone = (
-  { file = false, rows = [] as Bundle[], sizes = SIZES, keyed = false } = {},
+  {
+    file = false,
+    rows = [] as Bundle[],
+    sizes = SIZES,
+    keyed = false,
+    number = false,
+  } = {},
 ) => {
   let d = mem()
   d.query({
@@ -164,7 +170,7 @@ let lone = (
     ],
   })
   if (rows.length) {
-    open('sqlite', { number: false }, d).tx((tx) => tx.patch(rows))
+    open('sqlite', { number }, d).tx((tx) => tx.patch(rows))
   }
   let query = d.query
   let driver = {
@@ -197,6 +203,15 @@ for (let keyed of [false, true]) {
       assertEquals(tx.get(['old'])[0].task, { target: 'kept' })
     })
     assertEquals(paired(d), true)
+  })
+
+  test(`sqlite: a moved spine keeps each row's number and every reference to it${keyed ? ', its foreign keys on' : ''}`, () => {
+    let rows = [mk('kept'), mk('old', { task: { target: 'kept' } })]
+    let { s } = lone({ rows, keyed, number: true })
+    s.tx((tx) => {
+      assertEquals(idOf(tx, ['kept', 'old']), [1, 2])
+      assertEquals(tx.get(['old'])[0].task, { target: 'kept' })
+    })
   })
 }
 

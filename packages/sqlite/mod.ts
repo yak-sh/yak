@@ -1299,11 +1299,11 @@ export let storage = (
   let ready = false
   let prepare = () =>
     base.deferred ? upkeep.prepare() : backfill(driver, numbered)
-  // A store numbering by series rebuilds a spine that keeps a number unique
-  // on its own (./ddl.ts `respine`), before the indexes on it are raised,
-  // where the rebuild is one window's copy (./owe.ts `COPY`): it writes each
-  // row twice. A file's spine, or a larger one, is moved by its own
-  // migration, and until then counts once (./write.ts `unmoved`).
+  // A store numbering by series moves a spine that keeps a number unique on
+  // its own (./ddl.ts `respine`), before the indexes on it are raised, where
+  // the move is one window's copy (./owe.ts `COPY`): it writes each row once.
+  // A file's spine, or a larger one, is moved by its own migration, and until
+  // then counts once (./write.ts `unmoved`).
   let respining = () =>
     typeof base.number == 'object' && !driver.file && sole(driver) &&
     !holdsRows(driver, 'entity', (base.sizes ?? SIZES).copy)
