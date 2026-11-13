@@ -843,6 +843,26 @@ test('one-archetype paged reads use the compound ordering index', async () => {
   assert(!indexes(d, 'entity').includes('entity_archetype'))
 })
 
+test('a shape read over a file still owed its ordering index names no index', async () => {
+  let d = mem()
+  let numbered = loadVocab([...vocab.docs, {
+    $defs: {
+      entity: {
+        component: true,
+        properties: { num: { type: 'number', stamped: true } },
+      },
+    },
+  }])
+  let s = storage(d, numbered)
+  s.install()
+  let g = graph({ storage: s, vocab: numbered, plugins: [archetypes()] })
+  await g.apply([{ entity: { eid: 'one' }, doc: { title: 'One' } }])
+  await g.apply([{ entity: { eid: 'two' }, doc: { title: 'Two' }, task: {} }])
+  d.query({ t: 'drop', kind: 'index', name: 'entity_archetype_num' })
+  let read = await g.read(parse('.doc !task')) as Bundle[]
+  assertEquals(read.map((b) => b.entity.eid), ['one'])
+})
+
 test('archetype: reclassify classifies rows written past the graph, no triggers', async () => {
   let { driver, store, g, get } = setup()
   store.raise(['task'])

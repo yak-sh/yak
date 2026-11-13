@@ -28,7 +28,7 @@ import {
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { lacking } from './follow.ts'
-import { indexed } from './ddl.ts'
+import { built } from './ddl.ts'
 import { tables } from './layout.ts'
 import { meta, SURVEYED, surveyedAt } from './meta.ts'
 import { plan } from './plan.ts'
@@ -76,7 +76,7 @@ export let glance = (
   return {
     lacking: Object.keys(behind.derived),
     absent: behind.absent,
-    unindexed: indexed(vocab).flatMap((s) =>
+    unindexed: built(driver, vocab).flatMap((s) =>
       s.t == 'create index' && !objects.has(s.name) ? [s.name] : []
     ),
   }

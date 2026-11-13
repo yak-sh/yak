@@ -3719,15 +3719,24 @@ export let prepared = (
   if (vacant && !reads.length) {
     return { opts, lower: () => ({ ...vacant, from: raw(d.spine) }) }
   }
-  if (opts.missingIndexes?.length && d.indexed) {
+  // An index the file is still owed is never named: its table is read
+  // unhinted, and SQLite picks among the indexes the file has.
+  if (opts.missingIndexes?.length) {
     let original = d
     let missing = new Set(opts.missingIndexes)
     d = {
       ...d,
-      indexed: (comp, index) =>
-        missing.has(index)
-          ? original.table(comp)
-          : original.indexed!(comp, index),
+      indexed: original.indexed &&
+        ((comp, index) =>
+          missing.has(index)
+            ? original.table(comp)
+            : original.indexed!(comp, index)),
+      archetypeSource: original.archetypeSource &&
+        ((v, keyed) =>
+          original.archetypeSource!(
+            v,
+            keyed || missing.has(original.archetypeIndex?.(v) ?? ''),
+          )),
     }
   }
   d = absentDialect(d, vocab, opts.absent)

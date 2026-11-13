@@ -86,6 +86,8 @@ export type Dialect = {
   /** Physical owner selection by a held archetype set; `keyed` when the
    * owners are sought by their keys, so no archetype index is walked. */
   archetypeSource?: (v: Vocab, keyed?: boolean) => string
+  /** The index {@link archetypeSource} walks when its owners are not keyed. */
+  archetypeIndex?: (v: Vocab) => string
   // Value lowerings. Each returns a fragment, or null when it cannot be
   // expressed with exactly the semantics the JavaScript matcher has (the caller
   // then declines the whole compilation — exact or nothing).
@@ -449,6 +451,14 @@ let all = (parts: Frag[]): Frag =>
     params: parts.flatMap((p) => p.params),
   }
 
+// The spine's index of archetypes, in number order where entities keep one.
+let archetypeIndex = (v: Vocab): string =>
+  indexName(
+    v,
+    'entity',
+    v.prop('entity', 'num') ? ['archetype', 'num'] : ['archetype'],
+  )
+
 export let sqlite: Dialect = {
   project: (expr, tag) => tag == 'jsonb' ? `(json(${expr}) || '')` : expr,
   owned: (comp) => `${q(comp)} not indexed`,
@@ -475,13 +485,8 @@ export let sqlite: Dialect = {
   col,
   presence: (comp) => ({ sql: `"${comp}"."entity" is not null`, params: [] }),
   archetypeSource: (v, keyed) =>
-    keyed ? '"entity"' : `"entity" indexed by "${
-      indexName(
-        v,
-        'entity',
-        v.prop('entity', 'num') ? ['archetype', 'num'] : ['archetype'],
-      )
-    }"`,
+    keyed ? '"entity"' : `"entity" indexed by "${archetypeIndex(v)}"`,
+  archetypeIndex,
   archetype: (owner) =>
     owner == null
       ? '"entity"."archetype"'
