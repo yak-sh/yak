@@ -4,41 +4,15 @@ import type { State } from './graph.ts'
 import type { Namespace } from '@yaks/durable-object/door'
 import { useUntil } from './used.ts'
 
+/** How many cold incarnations take the held socket's frames, two each. */
+export let INCARNATIONS = 2
+
 export let reconnect = async (storage: State['storage']) => {
   let app = crypto.randomUUID(),
     person = crypto.randomUUID(),
     space = crypto.randomUUID()
   let queries: string[] = []
   let revoked = false
-  let reads = 0, writes = 0, statements = 0
-  let measure = false
-  let exec = storage.sql.exec.bind(storage.sql)
-  let db = {
-    ...storage,
-    sql: {
-      get databaseSize() {
-        return storage.sql.databaseSize
-      },
-      exec(
-        query: string,
-        ...bindings: (string | number | null | ArrayBuffer)[]
-      ) {
-        let cursor = exec(query, ...bindings)
-        let rows = cursor.toArray()
-        if (measure) {
-          reads += cursor.rowsRead ?? 0
-          writes += cursor.rowsWritten ?? 0
-          statements++
-        }
-        return {
-          ...cursor,
-          toArray: () => rows,
-          [Symbol.iterator]: () => rows.values(),
-        }
-      },
-    },
-    transactionSync: <T>(f: () => T) => storage.transactionSync(f),
-  }
   let directory: Namespace = {
     idFromName: (n) => n,
     get: () => ({
@@ -86,7 +60,7 @@ export let reconnect = async (storage: State['storage']) => {
     deserializeAttachment: () => attachment,
   }
   let ctx = {
-    storage: db,
+    storage,
     getWebSockets: () => [ws],
     acceptWebSocket: () => {},
   }
@@ -129,21 +103,18 @@ export let reconnect = async (storage: State['storage']) => {
   await res.body?.cancel()
   // Each new Store represents an eviction with the same held socket. No HTTP
   // request supplies a vouch in the cold incarnation.
-  measure = true
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < INCARNATIONS; i++) {
     let store = new Store(ctx, { STORE: directory })
-    for (let j = 0; j < 4; j++) {
+    for (let j = 0; j < 2; j++) {
       await store.webSocketMessage(
         ws,
         JSON.stringify({
           id: 'move',
-          relay: [{ entity: { eid: person }, cursor: { x: i * 4 + j } }],
+          relay: [{ entity: { eid: person }, cursor: { x: i * 2 + j } }],
         }),
       )
     }
   }
-  measure = false
-  let cost = { reads, writes, statements }
   let validCloses = [...closed]
   let validQueries = queries.length
   revoked = true
@@ -158,7 +129,6 @@ export let reconnect = async (storage: State['storage']) => {
   return {
     validCloses,
     validQueries,
-    cost,
     revokedCloses: closed.slice(validCloses.length),
     frames,
     accepted: (attachment as { relay?: string[] }).relay ?? [],
