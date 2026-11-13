@@ -3,7 +3,8 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, Refused, type Tx } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
-import { col, type Driver, eq, lit, val } from '@yaks/sql'
+import { col, compile, type Driver, eq, lit, val } from '@yaks/sql'
+import { parse } from '@yaks/query'
 import { entity, mem, stepping } from './testing.ts'
 import { mintSql, objects, respine, storage } from './mod.ts'
 import { population } from './population.ts'
@@ -490,3 +491,16 @@ for (let backend of ['sqlite', 'ram']) {
       assertEquals(nums(), [37574, null, 37575])
     }))
 }
+
+// A page in the default order, newest number first and then the owner, reads
+// an index in that order on a spine numbered by series: sorting the spine for
+// `.limit=1` took 11 s on the box.
+test('sqlite: a page in the default order sorts nothing on a spine numbered by series', () => {
+  let d = mem()
+  open('sqlite', { number: SERIES }, d)
+  let plan = d.query({
+    t: 'explain query plan',
+    of: compile(parse('.limit=1'), vocab),
+  }).map((r) => String(r.detail)).join('\n')
+  assert(!/TEMP B-TREE/.test(plan), plan)
+})

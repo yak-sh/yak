@@ -473,7 +473,11 @@ export let indexed = (
   let held = indexes.get(vocab)
   if (!held) indexes.set(vocab, held = indexing(vocab))
   return storage
-    ? [SERIES, ...vocab.comp('archetype') ? [] : [pointedIndex(vocab)], ...held]
+    ? [
+      ...SPINED_INDEXES,
+      ...vocab.comp('archetype') ? [] : [pointedIndex(vocab)],
+      ...held,
+    ]
     : held
 }
 // One entity to a number in each series, and the number's own lookup: a
@@ -488,16 +492,30 @@ let SERIES: CreateIndex = {
   unique: true,
   ifNot: true,
 }
+// The default order, newest number first and then the owner (@yaks/sql
+// `bind`), read off an index in that order: the series index puts the
+// letter before the owner, so a page of `.limit=1` sorted the whole spine,
+// 6.5 million rows on the box, to give one. An index on the number alone
+// ends in the owner, as every index does.
+let NUMBERED: CreateIndex = {
+  t: 'create index',
+  name: 'entity_num',
+  on: 'entity',
+  cols: [col('num')],
+  ifNot: true,
+}
+let SPINED_INDEXES = [SERIES, NUMBERED]
 
-/** Whether `index` is the series index over a spine that keeps `num` unique
- * on its own (./physical.ts `sole`). That spine's own index already holds one
- * entity to a number, so one to each pair, and finds a number without its
- * letter, and the spine counts once (./write.ts `unmoved`); building the
- * pair over it would only write a row per entity, in one statement past what
- * an object may write in a minute once a store holds 100,000. A spine rebuilt
- * without its own index needs it. */
+/** Whether `index` is one of the number's indexes over a spine that keeps
+ * `num` unique on its own (./physical.ts `sole`). That spine's own index
+ * already holds one entity to a number, so one to each pair, finds a number
+ * without its letter and reads the default order, and the spine counts once
+ * (./write.ts `unmoved`); building either over it would only write a row per
+ * entity, in one statement past what an object may write in a minute once a
+ * store holds 100,000. A spine rebuilt without its own index needs them. */
 export let needless = (driver: Driver, index: CreateIndex): boolean =>
-  index.name == SERIES.name && index.on == SERIES.on && sole(driver)
+  SPINED_INDEXES.some((i) => i.name == index.name && i.on == index.on) &&
+  sole(driver)
 
 /** The storage indexes an install builds over a file: every one of
  * {@link indexed} but a {@link needless} one. An index owed before it became
