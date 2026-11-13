@@ -76,11 +76,12 @@ type Kind = 'read' | 'written'
 let KINDS: Kind[] = ['read', 'written']
 
 // A window as it is counted: since when, what it spent and by which
-// statements, what each lane spent of it, whether it is past its rows, and at
-// which rows it is kept next.
+// statements, what an earlier instance spent of it, what each lane spent of
+// it, whether it is past its rows, and at which rows it is kept next.
 type Span = Window & {
   since: number
   all: Group
+  earlier: Record<Kind, number>
   lanes: Map<string, Record<Kind, number>>
   past: Record<Kind, boolean>
   mark: Record<Kind, number>
@@ -209,15 +210,16 @@ let rows = (n: number) =>
 // Rows of a kind a tally spent.
 let amount = (c: Cost, k: Kind) => k == 'read' ? c.rowsRead : c.rowsWritten
 
-// What the statements a runaway cannot name spent of its kind: those under
-// `NAMED` rows, and those past the shapes it keeps. Many small ones (a
-// mover's deletes, each a few rows with its indexes) can pass a window with no
-// named statement that spent any.
-let unnamed = (g: Group, k: Kind) => {
-  let named = [...g.shapes.values()].reduce((n, e) => n + amount(e, k), 0)
-  return `${rows(amount(g.total, k) - named)} rows ${k} by statements too ` +
-    `small or too many to name`
-}
+// What this instance's statements a runaway cannot name spent of its kind:
+// those under `NAMED` rows, and those past the shapes it keeps. Many small
+// ones (a mover's deletes, each a few rows with its indexes) can pass a window
+// with no named statement that spent any. What an earlier instance spent is
+// its own line, since only its total was kept.
+let unnamed = (s: Span, k: Kind) =>
+  `${rows(amount(s.all.other, k))} rows ${k} by statements too small or ` +
+  `too many to name`
+let earlier = (s: Span, k: Kind) =>
+  `${rows(s.earlier[k])} rows ${k} before this instance began`
 
 let span = (ms: number) => ms >= HOUR ? `${ms / HOUR} h` : `${ms / 60_000} min`
 
@@ -266,15 +268,14 @@ export let ceiling = (
       ...w,
       since,
       all: group(),
+      earlier: { read: was?.read ?? 0, written: was?.written ?? 0 },
       lanes: new Map(),
       past: { read: false, written: false },
       mark: { read: 0, written: 0 },
     }
     if (was) {
-      for (let to of [s.all.total, s.all.other]) {
-        to.rowsRead = was.read
-        to.rowsWritten = was.written
-      }
+      s.all.total.rowsRead = was.read
+      s.all.total.rowsWritten = was.written
       for (let [name, of] of Object.entries(was.lanes ?? {})) {
         s.lanes.set(name, { read: of.read, written: of.written })
       }
@@ -434,7 +435,8 @@ export let ceiling = (
                 rowsRead: e.rowsRead,
                 rowsWritten: e.rowsWritten,
               }))),
-              ...amount(s.all.other, k) ? { unnamed: unnamed(s.all, k) } : {},
+              ...amount(s.all.other, k) ? { unnamed: unnamed(s, k) } : {},
+              ...s.earlier[k] ? { earlier: earlier(s, k) } : {},
             },
           },
         ])

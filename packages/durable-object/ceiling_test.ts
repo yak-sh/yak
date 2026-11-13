@@ -227,21 +227,33 @@ test('an object that spent nothing takes every statement, whatever its clock rea
 // the object kept its windows.
 let lasting = () => {
   let held = durable(), clock = { at: 0 }, told: string[] = [], kept = 0
+  let tags: Record<string, string>[] = []
   let put = held.kv.put
   held.kv.put = (key, value) => (kept++, put(key, value))
   let instance = () => {
     let c = bounded(held, {
       windows: [{ ms: 60_000, read: 1_000, written: 10 }],
       now: () => clock.at,
-      report: (e, { fault }) => told.push(`${e.name} ${fault}`),
+      report: (e, t) => (told.push(`${e.name} ${t.fault}`), tags.push(t.tags)),
       refuse: true,
     })
     let ran = (rowsRead: number, rowsWritten = 0) =>
       c.count({ shape: () => 'spent', rowsRead, rowsWritten, returned: 0 })
     return { c, ran }
   }
-  return { held, clock, told, instance, kept: () => kept }
+  return { held, clock, told, tags, instance, kept: () => kept }
 }
+
+test("a restarted object's runaway tells what the earlier instance spent apart from what it cannot name", async () => {
+  let { instance, tags } = lasting()
+  instance().ran(0, 6)
+  await null
+  instance().ran(0, 5)
+  equal(tags.map((t) => [t.unnamed, t.earlier]), [[
+    '5 rows written by statements too small or too many to name',
+    '6 rows written before this instance began',
+  ]])
+})
 
 test('an object stopped before its instance ended is stopped after it', async () => {
   let { held, clock, told, instance } = lasting()
