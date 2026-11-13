@@ -1,10 +1,13 @@
 /** MCP tools over Streamable HTTP, with no dependency on a session or a UI. */
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import type { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+// The SDK maps a subpath's types to `<subpath>.d.ts`, so a type is imported
+// without `.js` (`sdk/types`, not `sdk/types.js`, which Deno types as any);
+// code is still loaded from the `.js` path.
+import type { Client } from '@modelcontextprotocol/sdk/client'
+import type { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp'
 import type {
   CallToolResult,
   Tool as RemoteTool,
-} from '@modelcontextprotocol/sdk/types.js'
+} from '@modelcontextprotocol/sdk/types'
 import type { Tool, ToolId } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import { errorsText, toolCheck } from '@yaks/vocab/tools'
@@ -17,10 +20,10 @@ let sdkModules: Promise<Sdk> | undefined
 type Sdk = {
   Client: typeof Client
   Transport: typeof StreamableHTTPClientTransport
-  listChanged: typeof import('@modelcontextprotocol/sdk/types.js')[
+  listChanged: typeof import('@modelcontextprotocol/sdk/types')[
     'ToolListChangedNotificationSchema'
   ]
-  challenge: typeof import('@modelcontextprotocol/sdk/client/auth.js')[
+  challenge: typeof import('@modelcontextprotocol/sdk/client/auth')[
     'extractWWWAuthenticateParams'
   ]
 }

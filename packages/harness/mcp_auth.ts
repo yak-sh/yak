@@ -8,7 +8,7 @@ import {
 } from '@yaks/mcp-client'
 import type { AuthorizationChallenge } from '@yaks/mcp-client/oauth'
 import type { Tool } from '@yaks/graph'
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types'
 
 /** A remote tool wearing the connection that listed it: `reply` is that
  * server's own endpoint, recorded, so an issued call never moves to a transport

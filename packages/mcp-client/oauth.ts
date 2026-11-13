@@ -7,7 +7,10 @@
 
 // The SDK's discovery and registration, imported when a sign-in is looked for
 // rather than when this module is (./mod.ts says why).
-let auth = () => import('@modelcontextprotocol/sdk/client/auth.js')
+let auth = () =>
+  import('@modelcontextprotocol/sdk/client/auth.js') as Promise<
+    typeof import('@modelcontextprotocol/sdk/client/auth')
+  >
 
 export type AuthorizationChallenge = {
   resourceMetadataUrl?: string

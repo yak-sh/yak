@@ -4,14 +4,15 @@
 // and a status, reviews about them, members who joined — so nothing here needs
 // knowledge from outside this file.
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { Client } from '@modelcontextprotocol/sdk/client'
+// @ts-types="@modelcontextprotocol/sdk/inMemory"
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
 import type {
   JsonSchemaType,
   JsonSchemaValidator,
   jsonSchemaValidator,
-} from '@modelcontextprotocol/sdk/validation/types.js'
+} from '@modelcontextprotocol/sdk/validation/types'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
