@@ -3801,6 +3801,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.30",

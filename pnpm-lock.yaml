@@ -2616,6 +2616,9 @@ importers:
 
   packages/id:
     dependencies:
+      '@yaks/fp':
+        specifier: 0.2.23
+        version: link:../fp
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab

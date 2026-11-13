@@ -40,6 +40,7 @@
 import type { Bundle, Eid, Plugin, Tx } from './types.ts'
 import { LETTERED, parse, type Parsed, SHORT } from './id.ts'
 import type { Vocab } from '@yaks/vocab'
+import { groupBy } from '@yaks/fp'
 
 /** A handle's hex with a uuid's dashes put back where they fall. */
 let dashed = (hex: string): string =>
@@ -116,7 +117,7 @@ export let ids = (vocab: Vocab): Plugin => ({
       : []
     let held = handles.map((id) => starting(tx, id.slice(1).toLowerCase()))
     let done = (found: Bundle[], starts: Eid[][]) => {
-      let by = Map.groupBy(found, (b) => Number(b.entity.num))
+      let by = groupBy(found, (b: Bundle) => Number(b.entity.num))
       for (let [num, asked] of want) {
         for (let p of asked) {
           let eids = holding(by.get(num) ?? [], p.prefix)
