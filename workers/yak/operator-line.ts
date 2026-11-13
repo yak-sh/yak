@@ -21,6 +21,11 @@
 // ways until the person chooses (`chosen`), and its numbers are listed the
 // first time the Operator reads them (`phoneNumbers`).
 //
+// A number's 10DLC campaign, once its provider approved the registration
+// that lets its texts to many people through, is recorded on its
+// `own_number` row (`phone_numbers`), where an app texting from it reads it
+// (`campaignOf`, app-texts.ts `lineAnswer`).
+//
 // voip.ms's API answers only addresses its allowlist names, and a Worker
 // calls from Cloudflare's, which change: the person enters 0.0.0.0 there,
 // which lets any address call with the API password.
@@ -107,6 +112,7 @@ export type Owned = {
   sms: boolean
   label?: string
   callback?: string
+  campaign?: string
 }
 /** How the Operator uses one of them: its own setting. */
 export type Used = {
@@ -121,6 +127,12 @@ let OWN = 'own_number', LINE = 'operator_line'
 export let numbersOf = async (env: Env, connection: string) =>
   (await meta(env).query(`.${OWN}.connection=${connection}&*`))
     .map((b) => comp(b, OWN) as Owned)
+
+/** The 10DLC campaign texts from `number` to many people are registered
+ * under, as recorded beside it (`phone_numbers`); null while none is. */
+export let campaignOf = async (env: Env, number: string) =>
+  (await meta(env).query(`.${OWN}.number=${JSON.stringify(number)}&*`))
+    .map((b) => String(comp(b, OWN).campaign ?? '')).find(Boolean) ?? null
 
 /** How the Operator whose store `g` reads uses each of a connection's
  * numbers. A connection saved before numbers were listed has none written,
@@ -496,7 +508,7 @@ export let phoneNumbers = (
   title: 'Their phone numbers',
   step: { doing: 'Reading their numbers…', done: 'Read their numbers' },
   description:
-    'List the numbers on the phone account the person you work for connected, and how you use each: outbound, your phone_send texts go from it; inbound, texts that reach it come to you. The two are independent. Give a number (or its label) to set either: set only what they asked for. "Text from the church line" is outbound on. When they have more than one number and have not said which, ask them. Inbound on points the number\'s SMS URL callback at yaks.app, in place of any it had (its email and forwarding stay as they are); off puts the callback back as it was. Turn inbound on only when they ask for texts to it to come to you.',
+    "List the numbers on the phone account the person you work for connected, and how you use each: outbound, your phone_send texts go from it; inbound, texts that reach it come to you. The two are independent. Give a number (or its label) to set either: set only what they asked for. \"Text from the church line\" is outbound on. When they have more than one number and have not said which, ask them. Inbound on points the number's SMS URL callback at yaks.app, in place of any it had (its email and forwarding stay as they are); off puts the callback back as it was. Turn inbound on only when they ask for texts to it to come to you. Once their provider approves the number's 10DLC registration, record the campaign id it gives as campaign: until then, carriers block the number's texts to many people.",
   parameters: {
     type: 'object',
     properties: {
@@ -514,6 +526,11 @@ export let phoneNumbers = (
         type: 'boolean',
         description:
           'Whether texts that reach it come to you. A number set for the first time is not inbound unless this says so.',
+      },
+      campaign: {
+        type: 'string',
+        description:
+          "The 10DLC campaign id their provider gave once it approved the number's registration; empty to take it away. Given alone, it changes nothing else about the number.",
       },
     },
   },
@@ -568,31 +585,43 @@ export let phoneNumbers = (
           } has no SMS. They turn it on at their provider, then save the connection again.`,
         )
       }
-      let was = used.find((u) => u.number == number.number)
-      let row = (u: Used): Bundle => ({
-        entity: { eid: identityEid(LINE, [connection, u.number]) },
-        [LINE]: u,
-      })
-      let written = (await store.g.read(`.${LINE}.connection=${connection}`))
-        .length
-      await store.g.apply([
-        // A connection saved before numbers were listed keeps using its
-        // number as it did, written out once a number is chosen.
-        ...written
-          ? []
-          : used.filter((u) => u.number != number.number).map(row),
-        row({
-          connection,
-          number: number.number,
-          outbound: typeof args.outbound == 'boolean'
-            ? args.outbound
-            : was?.outbound ?? true,
-          inbound: typeof args.inbound == 'boolean'
-            ? args.inbound
-            : was?.inbound ?? false,
-        }),
-      ], { trusted: true })
+      if (typeof args.campaign == 'string') {
+        await ctxOf(env).graph.apply([{
+          entity: { eid: identityEid(OWN, [connection, number.number]) },
+          [OWN]: { campaign: args.campaign.trim() || null },
+        }])
+      }
+      // A campaign given alone leaves how the Operator uses the number.
+      let using = typeof args.campaign != 'string' ||
+        typeof args.outbound == 'boolean' || typeof args.inbound == 'boolean'
+      if (using) {
+        let was = used.find((u) => u.number == number.number)
+        let row = (u: Used): Bundle => ({
+          entity: { eid: identityEid(LINE, [connection, u.number]) },
+          [LINE]: u,
+        })
+        let written =
+          (await store.g.read(`.${LINE}.connection=${connection}`)).length
+        await store.g.apply([
+          // A connection saved before numbers were listed keeps using its
+          // number as it did, written out once a number is chosen.
+          ...written
+            ? []
+            : used.filter((u) => u.number != number.number).map(row),
+          row({
+            connection,
+            number: number.number,
+            outbound: typeof args.outbound == 'boolean'
+              ? args.outbound
+              : was?.outbound ?? true,
+            inbound: typeof args.inbound == 'boolean'
+              ? args.inbound
+              : was?.inbound ?? false,
+          }),
+        ], { trusted: true })
+      }
       used = await chosen(store.g, held.line)
+      numbers = await numbersOf(env, connection)
     }
     return JSON.stringify(numbers.map((n) => {
       let u = used.find((u) => u.number == n.number)
@@ -602,6 +631,7 @@ export let phoneNumbers = (
         sms: n.sms,
         outbound: !!u?.outbound,
         inbound: !!u?.inbound,
+        ...n.campaign ? { campaign: n.campaign } : {},
       }
     }))
   },

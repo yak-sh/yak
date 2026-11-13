@@ -34,7 +34,10 @@ carry no name prefix. The platform's answer to HELP gives the office number kept
 as `help{contact}`, which the page copies from the directory. A message over 160
 characters goes as one picture message (MMS), up to 2,048; the line carries 100
 texts a day, so a send that passes it leaves the rest "not sent", to be sent
-again.
+again. Until the church's number has a 10DLC campaign, US carriers block its
+group texts: the page asks `./api/line` for the number and the campaign recorded
+beside it, and the Send dialog says so before a message goes, without stopping
+it.
 
 `model.js` holds all of it as pure functions over the store's rows, `views.js`
 the screens, and `app.js` the page that wires them to `./api/client.js`. Run

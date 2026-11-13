@@ -12,8 +12,16 @@
 // nothing reaches the people an app keeps before its owner's registration
 // stands, and nothing needs a flag to say so.
 //
+// A local number with no 10DLC campaign has its texts to many people
+// blocked by US carriers. The app's page asks `./api/line` (`lineAnswer`)
+// for its number and the campaign recorded beside it, and says so before a
+// group send; it never refuses one, since a reply to one person goes the
+// same way.
+//
 // Every text that leaves spends from the space's one budget (text-spend.ts).
 import type { Bundle } from '@yaks/graph'
+import { mode, reads } from '@yaks/member'
+import type { Answer } from './apps.ts'
 import type { Texter } from '@yaks/host/senders'
 import {
   type Arrival,
@@ -100,6 +108,26 @@ export let appTexter = (
     return { ...receipt, ...(from ? { from } : {}) }
   },
 })
+
+/**
+ * `GET ./api/line`: the number the app texts from, as the directory gives
+ * it, and the 10DLC campaign recorded beside it (operator-line.ts
+ * `campaignOf`); null for either it has none of. Anyone who reads the app
+ * may ask.
+ */
+export let lineAnswer: Answer = async (
+  { req, env, path, app, who, refuse, json },
+) => {
+  if (path != '/line') return null
+  if (req.method != 'GET') return json(405, 'method_not_allowed')
+  if (!reads(mode(app.access), who.role)) return await refuse('not_a_reader')
+  let number = app.phone || null
+  let { campaignOf } = await import('./operator-line.ts')
+  return Response.json({
+    number,
+    campaign: number ? await campaignOf(env, number) : null,
+  })
+}
 
 /**
  * Who to call or write to for help, as the app keeps it in its own store:

@@ -288,6 +288,7 @@ let DOORS = new Map<string, () => Promise<Answer>>([
   ['notices', async () => (await import('./notices.ts')).notices],
   ['operator', async () => (await import('./app-operator.ts')).tell],
   ['form', async () => (await import('./forms.ts')).forms],
+  ['line', async () => (await import('./app-texts.ts')).lineAnswer],
 ])
 // The form door's paths, whose forms are the app's own whoever asks.
 let formPath = (path: string, req: Request) =>

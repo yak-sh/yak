@@ -12,6 +12,7 @@ import {
   shown,
   signed,
   size,
+  unregistered,
   when,
 } from './model.js'
 
@@ -196,7 +197,7 @@ export let send = (m, who, ui) => {
       <textarea id="broadcast-text" name="body" rows="6" placeholder="Write the message…" required></textarea>
       <p class="hint" id="broadcast-count">${count(m, ui.body)}</p>
       ${
-      ui.confirm ? confirm(m, ui.confirm, ui.body, ui.now) : html`
+      ui.confirm ? confirm(m, ui.confirm, ui.body, ui) : html`
         <button class="btn primary big"
           type="submit">${icon('send')}Review and send</button>
       `
@@ -246,7 +247,17 @@ let limit = ({ used, go, over }, count) =>
     `
     : ''
 
-let confirm = (m, group, body, now) => {
+// What carriers do to a group text from a line not yet registered for them.
+// A warning, never a refusal: a reply to one person goes the same way.
+let carriers = (line) =>
+  unregistered(line)
+    ? html`
+      <p
+        class="bad">Phone carriers block group texts from the church’s number until its registration for them is approved, so this message may not reach anyone yet.</p>
+    `
+    : ''
+
+let confirm = (m, group, body, { now, line }) => {
   let g = m.groups.get(group)
   let { to, left } = recipients(m, group)
   let reasons = Object.entries(Object.groupBy(left, (l) => l.why))
@@ -264,6 +275,7 @@ let confirm = (m, group, body, now) => {
       } won't get it: ${reasons.join(', ')}.</p>`
       : ''
   }
+    ${carriers(line)}
     ${limit(room(m, to.length, now), to.length)}
     ${
     long

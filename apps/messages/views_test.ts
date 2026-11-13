@@ -174,3 +174,23 @@ test('a list shows each person and why one will not get texts', () => {
   )
   assertEquals(text(d, '.add .people li b'), [])
 })
+
+test('a group send from a number with no 10DLC campaign warns that carriers block it, and still sends', () => {
+  let ui = { group: 'prayer', confirm: 'prayer', body: 'Pray.' }
+  let warned = (line: object | null) =>
+    text(drawn([], 'send', { ...ui, line }), '.confirm .bad')
+      .some((t) => t.includes('carriers block group texts'))
+  assertEquals(warned({ number: '+12694890000', campaign: null }), true)
+  assertEquals(warned({ number: '+12694890000', campaign: 'CX7Y2ZQ' }), false)
+  assertEquals(warned({ number: '+18335550100', campaign: null }), false)
+  assertEquals(warned({ number: null, campaign: null }), false)
+  assertEquals(warned(null), false)
+  let d = drawn([], 'send', {
+    ...ui,
+    line: { number: '+12694890000', campaign: null },
+  })
+  assertEquals(
+    d.querySelector('[data-act=send]')?.hasAttribute('disabled'),
+    false,
+  )
+})

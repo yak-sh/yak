@@ -22,6 +22,7 @@ import { listed as listing } from './operator-view.ts'
 import { parseHTML } from 'linkedom'
 import {
   answerText,
+  campaignOf,
   chosen,
   lineDoor,
   numbersOf,
@@ -336,6 +337,18 @@ await local.apply([
   })),
 ])
 
+// The home number's 10DLC campaign, once voip.ms approved it.
+let home = (listed: Record<string, unknown>[]) =>
+  listed.find((n) => n.number == '+12695550100')
+let uncampaigned = home(await setting({}))
+let campaigned = home(
+  await setting({ number: '+12695550100', campaign: 'CX7Y2ZQ' }),
+)
+await page('jeff@example.com', 'pw')
+let campaignRelisted = await campaignOf(env, '+12695550100')
+await setting({ number: '+12695550100', campaign: '' })
+let campaignTaken = await campaignOf(env, '+12695550100')
+
 test('a voip.ms connection is checked and lists every number on the account, changing none', () => {
   assertEquals(unfilled, { say: 'Fill in API password first.', no: true })
   assertEquals(refused.no, true)
@@ -565,4 +578,10 @@ test("a member's text to the inbound number is their own Operator's, answered fr
   ok(!callable({ tools: memberOffered }).some((n) => n.startsWith('signup_')))
   assertEquals(memberBack.get('did'), '2695550111')
   assertEquals(memberBack.get('dst'), '2695550177')
+})
+
+test("a number's 10DLC campaign is recorded alone, kept when the account is listed again, and taken away", () => {
+  assertEquals(campaigned, { ...uncampaigned, campaign: 'CX7Y2ZQ' })
+  assertEquals(campaignRelisted, 'CX7Y2ZQ')
+  assertEquals(campaignTaken, null)
 })

@@ -21,7 +21,7 @@
     "own_number": {
       "component": true,
       "type": "object",
-      "description": "a number held by a person's own account at a phone provider, as it was listed when they connected it: what it is called there, whether it texts, and where its texts went before its host pointed them at itself. Its eid is derived from its connection and number",
+      "description": "a number held by a person's own account at a phone provider, as it was listed when they connected it: what it is called there, whether it texts, where its texts went before its host pointed them at itself, and the 10DLC campaign it texts many people under. Its eid is derived from its connection and number",
       "properties": {
         "connection": {
           "type": "string",
@@ -52,6 +52,13 @@
         "callback": {
           "type": "string",
           "description": "the URL its texts were sent to before its host pointed them at itself; absent when none was. They go back there when the number stops taking texts in"
+        },
+        "campaign": {
+          "type": "string",
+          "description": "the 10DLC campaign id its texts to many people are registered under, recorded once the provider approved it; absent until then, while carriers block those texts",
+          "examples": [
+            "CX7Y2ZQ"
+          ]
         }
       }
     },

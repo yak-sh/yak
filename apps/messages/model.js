@@ -125,6 +125,14 @@ export let room = (m, count, now = new Date()) => {
   }
 }
 
+/** Whether carriers block the group texts of `line`, as the platform answers
+ * it at `./api/line` ({number, campaign}): a local number with no 10DLC
+ * campaign recorded. A toll-free number registers another way, and an app
+ * with no number of its own texts from the platform's. */
+export let unregistered = (line) =>
+  !!line?.number && !line.campaign &&
+  !/^\+18(00|33|44|55|66|77|88)\d{7}$/.test(line.number)
+
 /**
  * The page's picture of the store. `rows` are the answers of the page's
  * subscriptions, together: the directory's `individual` and `congregation`

@@ -11,12 +11,14 @@ that keeps texts in memory.
 
 - `phone{number}` is a number in E.164 form (`+12695550142`) on the entity it
   reaches. On a person it is their mobile.
-- `own_number{connection, number, sms, label, callback}` is a number a person's
-  own account at a provider holds, as the host listed it when they connected it
-  (`Own`): whether it texts, what the account calls it, and the URL its texts
-  went to before the host pointed them at itself, which they go back to when it
-  stops. Its eid is derived from `connection` and `number`, and it goes with its
-  connection.
+- `own_number{connection, number, sms, label, callback, campaign}` is a number a
+  person's own account at a provider holds, as the host listed it when they
+  connected it (`Own`): whether it texts, what the account calls it, the URL its
+  texts went to before the host pointed them at itself, which they go back to
+  when it stops, and the 10DLC campaign id its texts to many people are
+  registered under. US carriers block those texts from a local number with no
+  campaign, so `campaign` is absent until the provider approves one. Its eid is
+  derived from `connection` and `number`, and it goes with its connection.
 - `sms_consent{person, consent, at, space}` records that `person` agreed to be
   texted at their `phone{number}`, in the words `consent` exactly as they were
   shown, at `at`, by the Operator of `space` when one is named. Its eid is

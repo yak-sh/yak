@@ -220,6 +220,15 @@ document.addEventListener('submit', (e) => {
 })
 addEventListener('popstate', () => draw(true))
 
+// The church's number, and whether it is registered for group texts yet.
+fetch(new URL('api/line', base))
+  .then((r) => (r.ok ? r.json() : null))
+  .then((line) => {
+    ui = { ...ui, line }
+    draw()
+  })
+  .catch((error) => globalThis.reportError?.(error))
+
 for (let [k, filter] of Object.entries(FILTERS)) {
   subscribe(filter, (got) => {
     answers[k] = got
