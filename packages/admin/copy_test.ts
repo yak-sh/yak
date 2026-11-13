@@ -28,7 +28,7 @@ let asking = (sql: typeof source) =>
   if (!asked.table) return Promise.resolve({ plan: made })
   let t = made.tables.find((t) => t.name == asked.table)!
   let { rows, last } = page(sql, t, asked.after ?? 0, raised(), 2)
-  return Promise.resolve({ rows, last })
+  return Promise.resolve({ rows, cols: t.cols, last })
 }
 
 test('a space’s store is copied table by table, and one with none says so', async () => {
@@ -94,4 +94,35 @@ test('a copy stopped during a page releases its file without writing that page',
   equal(closed, true)
   equal(made.query(select({ cols: [col('body')], from: table('note') })), [])
   made.close()
+})
+
+test('a store that migrates while it is copied is copied again under its new columns', async () => {
+  let sql = open(':memory:')
+  sql.query({ t: 'create table', name: 'wake', cols: [{ name: 'at' }] })
+  sql.query({ t: 'insert', into: 'wake', cols: ['at'], rows: [[val('1')]] })
+  let read = asking(sql), migrated = false
+  let made: ReturnType<typeof open>[] = []
+  await copy({
+    spaces: [{ eid: 'ada', slug: 'ada' }],
+    page: (space, asked) => {
+      if (asked.table && !migrated) {
+        migrated = true
+        sql.query({ t: 'alter table', table: 'wake', add: { name: 'for' } })
+      }
+      return read(space, asked)
+    },
+    open: () => {
+      made.push(open(':memory:'))
+      return { ...made.at(-1)!, close: () => {} }
+    },
+    out: () => {},
+    stopping: new AbortController().signal,
+  })
+  equal(made.length, 2)
+  equal(
+    made[1].query(
+      select({ cols: [col('at'), col('for')], from: table('wake') }),
+    ),
+    [{ at: '1', for: null }],
+  )
 })

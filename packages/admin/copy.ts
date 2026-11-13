@@ -17,17 +17,29 @@ import {
 import type { Driver } from '@yaks/sql'
 import { Interrupted } from '@yaks/tools/errors'
 
-/** One answer of the door: a space's plan, or a page of one of its tables. */
-export type Copying = { plan: Plan } | { rows: Cell[][]; last: number | null }
+/** One answer of the door: a space's plan, or a page of one of its tables
+ * and the columns its rows hold after their rowids. */
+export type Copying =
+  | { plan: Plan }
+  | { rows: Cell[][]; cols?: string[]; last: number | null }
 
 /** A private destination, published on close only after every table arrived. */
 export type Target = Driver & { close: (complete: boolean) => void }
+
+// A store migrated while it was copied: a page holds columns its plan did not
+// name, so the copy of that space starts over from a plan read again.
+class Reshaped extends Error {}
+
+// How many times one space is read from its plan before its copy fails: a
+// store migrates once a deploy, so one more is enough.
+const TRIES = 3
 
 /** Each space's store into the file `open` makes for its slug, a line said
  * for each: its tables and rows, or that it holds none. The file is one, to
  * be copied or opened anywhere: `open` makes it with a rollback journal. A
  * copy stops at the next page once `stopping` aborts, as its process drains,
- * which waits for it. */
+ * which waits for it. A space whose store migrates while it is read is
+ * copied again from its new plan. */
 export let copy = async (o: {
   spaces: { eid: string; slug: string }[]
   page: (
@@ -41,14 +53,11 @@ export let copy = async (o: {
   let going = () => {
     if (o.stopping.aborted) throw new Interrupted('the copy was interrupted')
   }
-  for (let space of o.spaces) {
+  let once = async (space: { eid: string; slug: string }) => {
     going()
     let { plan } = await o.page(space.eid, {}) as { plan: Plan }
     going()
-    if (!plan.tables.length) {
-      await o.out(`${space.slug}  no store`)
-      continue
-    }
+    if (!plan.tables.length) return `${space.slug}  no store`
     let sql = o.open(space.slug)
     let rows = 0, complete = false
     try {
@@ -58,9 +67,15 @@ export let copy = async (o: {
           going()
           let next = await o.page(space.eid, { table: t.name, after }) as {
             rows: Cell[][]
+            cols?: string[]
             last: number | null
           }
           going()
+          if (next.cols && next.cols.join() != t.cols.join()) {
+            throw new Reshaped(
+              `${space.slug}'s ${t.name} changed from (${t.cols}) to (${next.cols}) while it was copied`,
+            )
+          }
           if (next.last == null) break
           arrived(sql, t, next.rows)
           rows += next.rows.length
@@ -72,6 +87,16 @@ export let copy = async (o: {
     } finally {
       sql.close(complete)
     }
-    await o.out(`${space.slug}  ${plan.tables.length} tables, ${rows} rows`)
+    return `${space.slug}  ${plan.tables.length} tables, ${rows} rows`
+  }
+  for (let space of o.spaces) {
+    for (let tried = 1;; tried++) {
+      try {
+        await o.out(await once(space))
+        break
+      } catch (error) {
+        if (!(error instanceof Reshaped) || tried == TRIES) throw error
+      }
+    }
   }
 }

@@ -14,9 +14,13 @@ export let COPY = '/copy'
 /** What a copy asks: the file's plan, or a table's rows past a rowid. */
 export type Asked = { table?: string; after?: number }
 
-/** What it is answered: the plan, or a page and the rowid it ends at (null
- * once the table is read). */
-export type Copying = { plan: Plan } | { rows: Cell[][]; last: number | null }
+/** What it is answered: the plan, or a page, the columns its rows hold after
+ * their rowids, and the rowid it ends at (null once the table is read). A store
+ * that migrates while it is copied answers a page under columns its plan did
+ * not name. */
+export type Copying =
+  | { plan: Plan }
+  | { rows: Cell[][]; cols: string[]; last: number | null }
 
 // A page holds up to this many rows, or about this many bytes: each page is
 // one request through the kernel, whose gate asks the directory, so a copy
@@ -37,5 +41,5 @@ export let copying = (sql: Driver, asked: Asked): Response => {
     }, { status: 404 })
   }
   let { rows, last } = page(sql, t, asked.after ?? 0, raised(), ROWS, BYTES)
-  return Response.json({ rows, last } satisfies Copying)
+  return Response.json({ rows, cols: t.cols, last } satisfies Copying)
 }
