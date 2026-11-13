@@ -4374,9 +4374,14 @@ let OURS: Row[] = [
             String(b.switched?.at).localeCompare(String(a.switched?.at))
           ).slice(0, KEEP).map((row) => {
             let move = row.switched!
-            return `- moved ${
-              move.from ? `v${numbers.get(String(move.from))}` : 'undeployed'
-            } → v${numbers.get(String(move.to))}` +
+            let to = `v${numbers.get(String(move.to))}`
+            // A release made again where it stands (a recompile, a recovery)
+            // moved nothing; "moved v22 → v22" reads as a puzzle.
+            return (move.from == move.to
+              ? `- ${to} released again`
+              : `- moved ${
+                move.from ? `v${numbers.get(String(move.from))}` : 'undeployed'
+              } → ${to}`) +
               ` ${move.at}${
                 move.by ? ` by ${movers.get(move.by) ?? 'someone'}` : ''
               }`

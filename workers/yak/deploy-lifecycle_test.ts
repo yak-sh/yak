@@ -10,7 +10,7 @@ import { lifecycleStores } from './app-lifecycle-probe.ts'
 import { durable } from './store-state-probe.ts'
 import { slotsOf } from './store-schema.ts'
 import { platform } from './deploy-probe.ts'
-import { call, type Ctx, releaseNotice } from './tools.ts'
+import { call, type Ctx, recompileRelease, releaseNotice } from './tools.ts'
 import * as apps from './apps.ts'
 import { r2Objects } from './lib/objects.ts'
 import { pins, record, releaseOf, sha256 } from './versions.ts'
@@ -370,6 +370,19 @@ let restored = await (async () => {
   let cost = (await read.json())[0].cost
   return { before, after, restoredWords, words, write, cost }
 })()
+
+test('a release made again where it stands lists as released again, not a move', async () => {
+  await using scenario = platform('released-again')
+  let f = await fixture(scenario.env, scenario.dir)
+  await f.write('one')
+  await call(f.ctx, 'app_deploy', f.args)
+  let space = (await f.dir.space('ada'))!
+  await recompileRelease(f.ctx, space, (await f.dir.app(space, 'recipes'))!)
+  let list = (await call(f.ctx, 'app_versions', f.args)).text
+  assertEquals(list.includes('- v1 released again '), true)
+  assertEquals(list.includes('moved v1 → v1'), false)
+  assertEquals(list.includes('moved undeployed → v1'), true)
+})
 
 test('rollback admits a kept declaration again without changing its version or files', () => {
   assertEquals(restored.after, restored.before)
