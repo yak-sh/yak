@@ -4,6 +4,7 @@ import {
   assertEquals,
   assertNotEquals,
   assertRejects,
+  assertStringIncludes,
   assertThrows,
 } from '@std/assert'
 import type { Bundle, Comp, Graph, Tool } from '@yaks/graph'
@@ -775,6 +776,23 @@ test('a model reply cut short fails without spending automatically again', async
   assert(failed.length > 0)
   await asking(g, g.vocab)()
   assertEquals((await calls(g, build)).length, 1)
+})
+
+test('a model ask that completes saying nothing fails its build', async () => {
+  let { g, runner } = await shop()
+  await g.apply([source('a'), {
+    ...builder('$s .doc.title=Source', toolEid('builder_model')),
+    using: { model: ids.model },
+  }])
+  let build = await runOf(g, ['a'])
+  await drive(g, runner, build)
+  let [session] = await rows(g, '.session')
+  await g.apply([asked(session.entity.eid, 2, 'ask-1', 'completed')])
+  assertStringIncludes(
+    String(comp(await one(g, build), 'failed')?.reason),
+    'answered nothing',
+  )
+  assertEquals((await rows(g, '.built')).length, 0)
 })
 
 test('a model reads ids as short handles and answers through them', async () => {

@@ -1737,6 +1737,7 @@ export let react = async (
       : {},
     ...modalities ? { modalities } : {},
     ...questions ? { questions } : {},
+    ...sending?.tokens ? { tokens: Number(sending.tokens) } : {},
     effort: effort == null ? undefined : String(effort),
     instructions: cached ??
       (instructed

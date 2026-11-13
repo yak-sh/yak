@@ -1213,6 +1213,11 @@
           "type": "integer",
           "description": "how many of the transcript's newest entries a turn sends the model, reaching back to the input that began the turn they cut into; the whole transcript where absent"
         },
+        "tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "the most tokens a turn's reply may write, reasoning included; the provider's own limit where absent"
+        },
         "tools": {
           "type": "array",
           "items": {

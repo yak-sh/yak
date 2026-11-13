@@ -2356,6 +2356,14 @@ test('explicit native model input reaches the provider and the recorded ask', as
   assertEquals((entries.find((e) => e.ask)?.sending as Comp).input, input)
 })
 
+test('a reply length the transcript sends reaches the provider', async () => {
+  let g = world()
+  await g.apply([{ entity: { eid: 'e1' }, sending: { tokens: 24000 } }])
+  let { model, asked } = scripted([says('r1', 'done')])
+  await rest(g, ids.s, { model, tools: [], mint })
+  assertEquals(asked[0].tokens, 24000)
+})
+
 test('private media checkpoint records cost on the original ask before delivery fails', async () => {
   let g = world()
   let original = ''

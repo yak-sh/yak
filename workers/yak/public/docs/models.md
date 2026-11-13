@@ -72,13 +72,15 @@ the first entry with `using`, every new entry with `content` asks for another
 turn with the model and instructions in force, so a later entry carries `using`
 or `sending` only to change them.
 
-Two more properties limit what a turn costs. `sending.window` is how many of the
-transcript's newest lines the model reads, extended back to the line that began
-the turn the window would otherwise cut into; without it every turn reads the
-whole transcript, so each new line makes a long conversation more expensive.
+Three more properties limit what a turn costs. `sending.window` is how many of
+the transcript's newest lines the model reads, extended back to the line that
+began the turn the window would otherwise cut into; without it every turn reads
+the whole transcript, so each new line makes a long conversation more expensive.
 `using.effort` sets how much reasoning the model does before it answers: GLM
 Flash accepts `low`, `high` or `max` (its default), and every reasoning token is
-billed as output.
+billed as output. `sending.tokens` is the most a reply may write, reasoning
+included; a platform model writes at most 4,096 tokens without it, which a long
+answer (a builder's over many rows) needs more than.
 
     using: {
       provider: 'workers-ai',

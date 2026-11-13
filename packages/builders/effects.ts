@@ -98,6 +98,22 @@ export let ringing = (o: Options): Handler => async (event, tx, write) => {
 export let modeling = (): Handler => async (event, tx, write) => {
   let [said] = await tx.get([event.entity.eid])
   if (!said) return
+  // The build a model session answers, while that session's call is still
+  // the one it waits on: a session that ended without an answer fails it.
+  let ending = async (reason: string) => {
+    let [session] = await tx.get([str(comp(said, 'entry'), 'session')])
+    let call = str(comp(session, 'session'), 'source')
+    let [asked] = call ? await tx.get([call]) : []
+    let [build] = asked
+      ? await tx.get([str(comp(asked, 'call'), 'source')])
+      : []
+    if (!build || str(comp(build, BUILD), 'call') != call) return
+    await write([{
+      entity: build.entity,
+      failed: { reason },
+      $was: { [BUILD]: { call: token(call) } },
+    }])
+  }
   if (said.ask) {
     if (str(comp(said, 'attempt'), 'state') != 'completed') return
     let replies = await tx.read(
@@ -105,25 +121,27 @@ export let modeling = (): Handler => async (event, tx, write) => {
     )
     let result = await adapted(tx, replies)
     if (result) await write([result])
+    // An ask that completed saying nothing and calling nothing is an answer
+    // too: the model spent its reply's length before it wrote a word.
+    else if (
+      !replies.length &&
+      !(await tx.read(`.call.source=${said.entity.eid}&.limit=1`)).length
+    ) {
+      await ending(
+        'The model answered nothing: its reply ran out before it wrote any',
+      )
+    }
     return
   }
   if ((said.interrupted || said.failed || said.refusal) && said.entry) {
     let [session] = await tx.get([str(comp(said, 'entry'), 'session')])
-    let call = str(comp(session, 'session'), 'source')
     // Only a turn that failed for good ends the call: a tool's refusal is
     // answered to the model, and a failed request is asked again.
-    if (!call || str(comp(session, 'session'), 'status') != 'failed') return
-    let [asked] = await tx.get([call])
-    let [build] = await tx.get([str(comp(asked, 'call'), 'source')])
-    if (str(comp(build, BUILD), 'call') != call) return
-    await write([{
-      entity: build.entity,
-      failed: {
-        reason: str(comp(said, 'failed'), 'reason') ||
-          str(comp(said, 'refusal'), 'message') || 'Model session failed',
-      },
-      $was: { [BUILD]: { call: token(call) } },
-    }])
+    if (str(comp(session, 'session'), 'status') != 'failed') return
+    await ending(
+      str(comp(said, 'failed'), 'reason') ||
+        str(comp(said, 'refusal'), 'message') || 'Model session failed',
+    )
   }
 }
 
