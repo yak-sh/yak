@@ -2463,6 +2463,30 @@ export let api = async (
     }
     return Response.json({ ok: true, key: file })
   }
+  // Save in edit mode (save.ts): the person's drafted snippets set in the
+  // app's copy.json and released, and Undo taking that release back. Writing
+  // the app's files and releasing them is the file door's member's act, held
+  // as that door holds it.
+  if (path == '/save' || path == '/save/undo') {
+    if (req.method != 'POST') return json(405, 'method_not_allowed')
+    if (!writes(who.role) || who.guest || sandboxed(app)) return refused()
+    try {
+      let sent = await req.json().catch(() => ({}))
+      let { saved, snippets, undone } = await import('./save.ts')
+      let ctx = { env, dir, person: who.person!, clock: c }
+      return Response.json(
+        path == '/save'
+          ? await saved(ctx, space, app, who, store, snippets(sent?.copy))
+          : await undone(ctx, space, app, who, store, sent?.version),
+      )
+    } catch (e) {
+      return rejection(e, {
+        request: `POST /api${path}`,
+        space: space.slug,
+        app: app.slug,
+      })
+    }
+  }
   // Publishing a file to anyone (public-files.ts) is the same member's act as
   // writing the app's files, and listing them is too: what this app put on
   // the public web is its members' business.
@@ -3381,7 +3405,8 @@ let served = async (
         '/choose',
         '/pay/checkout',
       ].includes(apiPath) ||
-        apiPath.startsWith('/blob') || apiPath.startsWith('/files/'))
+        apiPath.startsWith('/blob') || apiPath.startsWith('/files/') ||
+        apiPath.startsWith('/save'))
     ) scheduleBy(env, who, app.eid)
     return wall(reporting(answer, req, at, app))
   }

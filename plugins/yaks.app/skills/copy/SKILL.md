@@ -143,6 +143,14 @@ sent it: not a visitor, not a guest.
    pencil's panel counts the changes, "3 changes", and Discard empties them.
    Typing a snippet back to its original words removes that change. Edit mode
    stays on across a reload until Done.
+4. Save writes the person's changed snippets into the live `copy.json` and
+   releases the app. It releases only `copy.json`: other unreleased edits to the
+   app stay in its draft, and two people saving different snippets each keep
+   theirs. The release's message names the snippets it changed, `app_versions`
+   lists it, and `app_rollback` takes it back. Once it is released the drafts
+   are spent; a save that is refused or fails keeps every one. The panel then
+   says which version it saved and offers Undo, which goes back to the version
+   before it while it is still live and makes the changes drafts again.
 
 A page with nothing marked says so, and offers to ask the Operator to move its
 copy into `copy.json`.

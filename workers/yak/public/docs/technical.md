@@ -148,8 +148,8 @@ removes it.
 A member who may change an app's files (an owner or editor of its space) also
 sees a small pencil in the bottom-right corner of its pages, above the badge
 where both show, for editing the words of every element marked `data-copy` where
-they stand (<https://yaks.app/docs/copy.md>). Visitors and guests are sent none
-of it.
+they stand and saving them as a release of the app's `copy.json`
+(<https://yaks.app/docs/copy.md>). Visitors and guests are sent none of it.
 
 The email limit counts incoming and outgoing messages, and only sending stops
 when the limit is reached. Incoming messages are still delivered. The count

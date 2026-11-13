@@ -1087,6 +1087,7 @@ let published = async (
   accepted: string[] = [],
   recompile = false,
   message?: string,
+  keep = false,
 ) => {
   let c = ctx.clock ?? clock()
   let blobs = files.files
@@ -1153,12 +1154,13 @@ let published = async (
   // the file and the reference rather than heard from a visitor's console.
   // Only plain pages and modules are read; what the compile bundles it
   // resolves itself. An app with a worker is left alone, since the worker may
-  // answer any address no file does, and a release put back or installed was
-  // already somebody's live release.
+  // answer any address no file does, and a release put back or installed, or
+  // made of the live files rather than the draft (`keep`), was already
+  // somebody's live release.
   let paths = own(keys)
   let present = new Set(paths)
   let scripted = present.has(sourceOf(parsed.config, (p) => present.has(p)))
-  let broken = target || preserve || scripted
+  let broken = target || keep || preserve || scripted
     ? Promise.resolve([])
     : c.time('references', () =>
       unfound(
@@ -1574,7 +1576,7 @@ let published = async (
             dirPart.storeName(space, app),
             appDoc(source ?? {}, vocabFile),
           ),
-          draft: recompile ? standing.draft ?? null : null,
+          draft: recompile || keep ? standing.draft ?? null : null,
           message,
         },
       ),
@@ -1725,7 +1727,7 @@ type DeployReview = {
   replaced: string[]
 }
 
-let released = async (
+export let released = async (
   ctx: Ctx,
   space: Space,
   app: App,
@@ -1742,6 +1744,8 @@ let released = async (
     recompile = false,
     fence: drew,
     message,
+    over,
+    keep = !!over,
   }: {
     target?: Version
     reload?: Reload
@@ -1758,6 +1762,13 @@ let released = async (
     fence?: string
     /** What the release changed and why (app_deploy `message`). */
     message?: string
+    /** The files to release made from the live ones while the fence holds
+     * them, in place of the draft's (save.ts): two callers each change what
+     * the one before them released. */
+    over?: (live: Files) => Promise<Files>
+    /** The draft stays as it is, its edits still unreleased: this release is
+     * not made of it. */
+    keep?: boolean
   } = {},
 ): Promise<
   { version: number; said: string; serves?: string; review?: DeployReview }
@@ -1833,10 +1844,14 @@ let released = async (
       }
       : staged(
         blobs,
-        target ? target.files : (await c.time(
-          'staged',
-          () => drafting(blobs, ctx.dir, standing),
-        )).files,
+        target
+          ? target.files
+          : over
+          ? await over(await served(blobs, standing))
+          : (await c.time(
+            'staged',
+            () => drafting(blobs, ctx.dir, standing),
+          )).files,
         release,
       )
     // The fence holds both the serving pointer and the candidate's edits.
@@ -1875,6 +1890,7 @@ let released = async (
       accepted,
       recompile,
       message,
+      keep,
     )
     released = true
     await c.time('purge', () => purged)

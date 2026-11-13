@@ -2,8 +2,8 @@
 // its pages (page-script.ts, only for a viewer the file door lets write:
 // apps.ts `editOf`). Pressed, it loads edit mode (edit-mode.ts, at the app's
 // `./api/_edit.js`) and the app's store client, and the panel beside it
-// counts the person's changes. Edit mode stays on across a reload of the tab
-// until Done.
+// counts the person's changes and saves them (`./api/save`, save.ts). Edit
+// mode stays on across a reload of the tab until Done.
 //
 // It is drawn as the badge is (badge.js): a closed shadow root on an element
 // of its own beside <body>, which the page's styles cannot reach and an app
@@ -136,6 +136,7 @@ svg { width: 18px; height: 18px }
       ])
       mode = edit.editMode(document, client.drafts(), {
         panel,
+        at,
         ask,
         done: close,
       })

@@ -100,7 +100,9 @@ per snippet, and each element names the snippet it shows with `data-copy`. The
 platform fills the element as it serves the page. Write every new app this way:
 the person can then change any word on the page itself, where a member who
 writes the app sees a pencil in the bottom-right corner that lets them type over
-each snippet, kept as their draft.
+each snippet, kept as their draft. Save writes their changed snippets into
+`copy.json` and releases only it: `app_versions` lists the release and
+`app_rollback` takes it back.
 
     { "cost": { "title": "What it costs",
                 "limits": "Tax is included. %{plans}.",

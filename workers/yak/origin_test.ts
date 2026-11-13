@@ -61,7 +61,8 @@ test('a page at another address reaches no door here', async () => {
     assertEquals(titles(await owner.get('.doc')), ['Lemon cake'])
 
     // Every other door in the same breath — the store's identity, the file
-    // door a deploy writes through, and the bytes door a page's uploads go to.
+    // door a deploy writes through, the bytes door a page's uploads go to, and
+    // edit mode's Save.
     // The read door is not among them any more: it answers a stranger's page
     // anonymously, which is the test below this one.
     for (
@@ -69,6 +70,7 @@ test('a page at another address reaches no door here', async () => {
         ['/recipes/api/graph', {}],
         ['/recipes/api/blob', { method: 'POST', body: 'a photo' }],
         ['/recipes/api/files/index.html', { method: 'PUT', body: 'hi' }],
+        ['/recipes/api/save', { method: 'POST', body: '{"copy":{"a":"b"}}' }],
       ] as [string, RequestInit][]
     ) {
       let r = await page('https://evil.yaks.app', path, init)

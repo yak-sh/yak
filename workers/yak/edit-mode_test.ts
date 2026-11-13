@@ -13,7 +13,11 @@ let BODY = `
 <button data-copy="cta">Start</button>
 <footer><span data-copy="hero.title">Build your ideas</span></footer>`
 
-let load = async (body = BODY) => {
+// What the app's save door answers, by path, and what it was sent.
+type Answer = { status: number; body: unknown }
+let OK = (body: unknown): Answer => ({ status: 200, body })
+
+let load = async (body = BODY, answers: Record<string, Answer> = {}) => {
   let win = parseHTML(
     `<html><head></head><body>${body}</body></html>`,
   ) as unknown as Window & typeof globalThis
@@ -52,8 +56,16 @@ let load = async (body = BODY) => {
   )
   let panel = doc.createElement('div')
   let done = 0
+  let sent: { url: string; body: unknown }[] = []
   let mode = editMode(doc, drafts, {
     panel,
+    at: '/cookbook/',
+    fetch: (url, init) => {
+      sent.push({ url: String(url), body: JSON.parse(String(init?.body)) })
+      let path = String(url).split('/api/')[1]
+      let { status, body } = answers[path] ?? { status: 404, body: null }
+      return Promise.resolve(Response.json(body, { status }))
+    },
     ask: 'https://yaks.app/manage/ada?app=cookbook',
     done: () => done++,
   })
@@ -70,7 +82,17 @@ let load = async (body = BODY) => {
     press(el, 'input')
   }
   let says = () => panel.textContent
+  let shown = () =>
+    [...panel.children].filter((el) => !(el as HTMLElement).hidden)
+      .map((el) => el.textContent).join(' · ')
+  let button = (name: string) =>
+    panel.querySelector(`[data-${name}]`) as HTMLButtonElement
+  let settled = () => new Promise((go) => setTimeout(go, 0))
   return {
+    shown,
+    button,
+    settled,
+    sent,
     doc,
     q,
     press,
@@ -92,7 +114,7 @@ let load = async (body = BODY) => {
 test('edit mode outlines the page, and Done takes the outlines off', async () => {
   let p = await load()
   ok(p.doc.documentElement.hasAttribute('data-yak-editing'))
-  equal(p.says(), 'Press any outlined words to change themDiscardDone')
+  equal(p.shown(), 'Press any outlined words to change them ·  · Done')
   p.mode.stop()
   ok(!p.doc.documentElement.hasAttribute('data-yak-editing'))
   equal(p.says(), '')
@@ -108,7 +130,7 @@ test('a press lets the person type over a snippet, kept as their draft at copy:<
   // The same snippet elsewhere on the page shows it too.
   equal(p.q('footer span').textContent, 'Build it by asking')
   ok(h1.hasAttribute('data-yak-changed'))
-  equal(p.says(), '1 changeDiscardDone')
+  equal(p.shown(), '1 change · Save · Discard ·  · Done')
   p.mode.stop()
 })
 
@@ -150,7 +172,7 @@ test('a draft typed on another device shows in place, and Discard empties every 
   p.heard(placeOf('cost.plans'), 'See the plans')
   equal(p.q('button').textContent, 'Start cooking')
   equal(p.q('a').textContent, 'See the plans')
-  equal(p.says(), '2 changesDiscardDone')
+  equal(p.shown(), '2 changes · Save · Discard ·  · Done')
   p.press(p.panel.querySelector('[data-discard]')!)
   await new Promise((go) => setTimeout(go, 0))
   equal(p.q('button').textContent, 'Start')
@@ -158,7 +180,7 @@ test('a draft typed on another device shows in place, and Discard empties every 
     p.applied.map((b) => (b.draft as { text: string }).text),
     ['', ''],
   )
-  equal(p.says(), 'Press any outlined words to change themDiscardDone')
+  equal(p.shown(), 'Press any outlined words to change them ·  · Done')
   p.mode.stop()
 })
 
@@ -196,4 +218,63 @@ test('a page with nothing marked says so and offers the Operator, the ask typed'
     to.searchParams.get('say')!.includes('https://ada.yaks.app/cookbook/about'),
   )
   p.mode.stop()
+})
+
+test('Save sends the drafts, and the page then shows the saved words as its own', async () => {
+  let p = await load(BODY, { save: OK({ version: 4, keys: ['hero.title'] }) })
+  p.heard(placeOf('hero.title'), 'Build it by asking')
+  p.press(p.button('save'))
+  await p.settled()
+  equal(p.sent, [{
+    url: 'https://ada.yaks.app/cookbook/api/save',
+    body: { copy: { 'hero.title': 'Build it by asking' } },
+  }])
+  equal(p.drafts.places(), [])
+  equal(p.q('h1').textContent, 'Build it by asking')
+  equal(
+    p.shown(),
+    'Press any outlined words to change them · Saved as version 4 · Undo · Done',
+  )
+  p.mode.stop()
+  equal(p.q('footer span').textContent, 'Build it by asking')
+})
+
+test('a refused save keeps every draft, and says why', async () => {
+  let p = await load(BODY, {
+    save: {
+      status: 400,
+      body: { error: { message: 'copy.json is not JSON' } },
+    },
+  })
+  p.heard(placeOf('cta'), 'Start cooking')
+  p.press(p.button('save'))
+  await p.settled()
+  equal(p.drafts.text(placeOf('cta')), 'Start cooking')
+  equal(
+    p.shown(),
+    '1 change · Save · Discard · Not saved: copy.json is not JSON. ' +
+      'Your changes are kept. · Done',
+  )
+  p.mode.stop()
+})
+
+test('Undo takes the save back, and its changes are drafts again', async () => {
+  let p = await load(BODY, {
+    save: OK({ version: 4, keys: ['cta'] }),
+    'save/undo': OK({ version: 3 }),
+  })
+  p.heard(placeOf('cta'), 'Start cooking')
+  p.press(p.button('save'))
+  await p.settled()
+  p.press(p.button('undo'))
+  await p.settled()
+  equal(p.sent[1].body, { version: 4 })
+  equal(p.drafts.text(placeOf('cta')), 'Start cooking')
+  equal(
+    p.shown(),
+    '1 change · Save · Discard · Version 4 is taken back. ' +
+      'Your changes are drafts again. · Done',
+  )
+  p.mode.stop()
+  equal(p.q('button').textContent, 'Start')
 })

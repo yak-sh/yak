@@ -13,6 +13,12 @@
 //
 // The panel beside the pencil counts the person's changes to this app and
 // discards them, which empties each draft (the journal keeps what it held).
+// Save sends them to the app's `api/save` (save.ts), which sets them in its
+// copy.json and releases it; once it answers, the page's own words are the
+// saved ones and the drafts are spent. A save refused or failed leaves every
+// draft as it was. The panel then says which version was saved and offers
+// Undo (`api/save/undo`), which takes that release back and makes the
+// changes drafts again, as they were before Save.
 // A page with nothing marked says so, and offers the Operator's chat with the
 // ask to mark this page already typed.
 import { fill, join, names } from '@yaks/copy'
@@ -31,6 +37,10 @@ export type Desk = {
 /** Where edit mode draws its panel, and the Operator's chat it offers. */
 export type Opts = {
   panel: HTMLElement
+  /** The app's address, whose `api/save` Save sends to (`/cookbook/`). */
+  at: string
+  /** How Save reaches it; the page's own fetch where left out. */
+  fetch?: typeof fetch
   /** The Operator's chat for this app (`/manage/<space>?app=<slug>`). */
   ask: string
   /** Edit mode is over: the person pressed Done. */
@@ -48,6 +58,9 @@ export let asking = (page: string) =>
 
 /** How many changes a count is, as the panel says it. */
 export let counted = (n: number) => n == 1 ? '1 change' : `${n} changes`
+
+/** What the panel says once Save has answered. */
+export let savedAs = (version: number) => `Saved as version ${version}`
 
 let EDITING = 'data-yak-editing'
 let CHANGED = 'data-yak-changed'
@@ -85,7 +98,9 @@ let PRESSES = [
 let STOPS = ['click', 'dblclick', 'auxclick', 'submit']
 let KEYS = ['keydown', 'keypress', 'keyup', 'beforeinput', 'input']
 
-type Held = { was: Node[]; value: string }
+// An element's own words: the nodes it came with, or once Save has set its
+// snippet, none, and it is drawn showing the value.
+type Held = { was: Node[] | null; value: string }
 
 /** The snippet an element shows, read from its nodes. */
 export let valueOf = (el: Element) =>
@@ -124,6 +139,12 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
   // The page's own words for a key: the first element showing it.
   let own = (key: string) =>
     held.get(marked.find((el) => keyOf(el) == key)!)?.value ?? ''
+  // A key's own words are now `value`: what Save released, or Undo put back.
+  let becomes = (key: string, value: string) => {
+    for (let [el, h] of held) {
+      if (keyOf(el) == key) Object.assign(h, { was: null, value })
+    }
+  }
   let shows = (key: string) => drafts.text(placeOf(key)) || own(key)
 
   let sheet = style(doc)
@@ -210,14 +231,91 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
     return b
   }
   let done = button('Done', () => opts.done())
+  let mine = () => drafts.places().filter((p) => p.startsWith(PLACE))
   let discard = button('Discard', () => {
-    for (let place of drafts.places()) {
-      if (place.startsWith(PLACE)) drafts.spend(place)
-    }
+    for (let place of mine()) drafts.spend(place)
   })
   discard.dataset.discard = ''
   let count = doc.createElement('span')
   count.setAttribute('aria-live', 'polite')
+  let said = doc.createElement('span')
+  said.setAttribute('aria-live', 'polite')
+  let post = async (path: string, body: unknown) => {
+    let to = new URL(`api/${path}`, new URL(opts.at, win.location.href))
+    let res = await (opts.fetch ?? win.fetch.bind(win))(to, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    let out = await res.json().catch(() => null)
+    if (!res.ok) {
+      throw new Error(out?.error?.message ?? `it answered ${res.status}`)
+    }
+    return out
+  }
+  // The last save, for Undo: its version, what it sent, and the words each
+  // key had before it.
+  let last: {
+    version: number
+    sent: Record<string, string>
+    before: Record<string, string>
+  } | null = null
+  let busy = false
+  let save = button('Save', async () => {
+    if (busy) return
+    finish()
+    let sent: Record<string, string> = {}
+    for (let place of mine()) {
+      let text = drafts.text(place)
+      if (text) sent[place.slice(PLACE.length)] = text
+    }
+    if (!Object.keys(sent).length) return
+    busy = save.disabled = true
+    said.textContent = 'Saving…'
+    undo.hidden = true
+    try {
+      let { version, keys } = await post('save', { copy: sent })
+      let before: Record<string, string> = {}
+      for (let [key, text] of Object.entries(sent)) {
+        before[key] = own(key)
+        becomes(key, text)
+        // A draft typed on since it was sent is still a change.
+        if (drafts.text(placeOf(key)) == text) drafts.spend(placeOf(key))
+      }
+      last = keys.length ? { version, sent, before } : null
+      said.textContent = savedAs(version)
+      undo.hidden = !last
+    } catch (e) {
+      said.textContent = `Not saved: ${(e as Error).message}. ` +
+        'Your changes are kept.'
+    } finally {
+      busy = save.disabled = false
+    }
+  })
+  save.dataset.save = ''
+  let undo = button('Undo', async () => {
+    let was = last
+    if (busy || !was) return
+    busy = undo.disabled = true
+    try {
+      await post('save/undo', { version: was.version })
+      for (let [key, text] of Object.entries(was.sent)) {
+        becomes(key, was.before[key])
+        drafts.type(placeOf(key), text)
+      }
+      last = null
+      undo.hidden = true
+      said.textContent = `Version ${was.version} is taken back. ` +
+        'Your changes are drafts again.'
+    } catch (e) {
+      said.textContent = `Not taken back: ${(e as Error).message}`
+    } finally {
+      busy = undo.disabled = false
+    }
+  })
+  undo.dataset.undo = ''
+  undo.hidden = true
   if (!marked.length) {
     let says = doc.createElement('p')
     says.textContent = 'Nothing on this page is editable yet.'
@@ -231,7 +329,7 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
     panel.replaceChildren(says, link, done)
   } else {
     count.textContent = 'Loading your changes…'
-    panel.replaceChildren(count, discard, done)
+    panel.replaceChildren(count, save, discard, said, undo, done)
   }
 
   // Every element shows its key's draft, or the page's words where it has
@@ -242,11 +340,11 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
     if (closed) return
     ready = true
     stop = drafts.follow(() => {
-      let changes = drafts.places().filter((p) => p.startsWith(PLACE)).length
+      let changes = mine().length
       count.textContent = changes
         ? counted(changes)
         : 'Press any outlined words to change them'
-      discard.hidden = !changes
+      save.hidden = discard.hidden = !changes
       for (let el of marked) {
         let key = keyOf(el), value = shows(key)
         el.toggleAttribute(CHANGED, !!drafts.text(placeOf(key)))
@@ -268,7 +366,8 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
       // The page goes back to its own words; the drafts stay drafts.
       for (let [el, h] of held) {
         el.removeAttribute(CHANGED)
-        el.replaceChildren(...h.was)
+        if (h.was) el.replaceChildren(...h.was)
+        else draw(el, h.value)
       }
       doc.documentElement.removeAttribute(EDITING)
       sheet()
