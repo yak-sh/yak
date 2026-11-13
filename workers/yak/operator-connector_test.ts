@@ -3,7 +3,7 @@ import { assertEquals } from '@std/assert'
 import type { Item, Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
-import { operatorMemory, operatorModel } from './operator-testing.ts'
+import { callable, operatorMemory, operatorModel } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
 import {
@@ -69,7 +69,7 @@ await receive(store, {
   address: '+12695550142',
 }, 'Call my space The Alvarez Home.')
 await drain(store)
-let names = (r: Request) => r.tools.map((t) => t.name)
+let names = callable
 let atRoot = names(asked[0])
 let atFork = names(
   asked.find((r) => JSON.stringify(r.items).includes('fork of the'))!,

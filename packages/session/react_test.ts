@@ -241,6 +241,46 @@ test('a turn whose using names tools is offered those alone, the runner’s by n
   assertEquals(textOf((await transcript(g, ids.s))[3]), 'HI')
 })
 
+test('a deferred tool is listed by tool_load and sent once a call loads it', async () => {
+  let g = world()
+  let shout = {
+    ...echo,
+    name: 'shout',
+    title: 'Shout words',
+    deferred: true,
+    run: (args: Record<string, unknown>) => String(args.text).toUpperCase(),
+  }
+  let { model, asked } = scripted([{
+    id: 'r1',
+    model: 'fake-1',
+    items: [{
+      kind: 'call',
+      id: 'c1',
+      name: 'tool_load',
+      args: '{"names":["shout"]}',
+    }],
+  }, {
+    id: 'r2',
+    model: 'fake-1',
+    items: [{ kind: 'call', id: 'c2', name: 'shout', args: '{"text":"hi"}' }],
+  }, says('r3', 'done')])
+  assertEquals(
+    await rest(g, ids.s, { model, tools: [echo, shout], mint }),
+    'settled',
+  )
+  assertEquals(asked.map((a) => a.tools?.map((t) => t.name)), [
+    ['echo', 'tool_load'],
+    ['echo', 'shout', 'tool_load'],
+    ['echo', 'shout', 'tool_load'],
+  ])
+  let load = asked[0].tools!.find((t) => t.name == 'tool_load')!
+  assertEquals(load.description.split('\n').at(-1), '- shout: Shout words')
+  assertEquals(
+    (await transcript(g, ids.s)).some((b) => textOf(b) == 'HI'),
+    true,
+  )
+})
+
 // The declaration is available before any process has registered its tool row.
 const freshTools = world()
 const freshCalls: unknown[] = []

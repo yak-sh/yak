@@ -1,4 +1,5 @@
 import { compactAsk } from './compact_ask.ts'
+import { loading, schemas } from './deferred.ts'
 import { answered, checkpointOf, pruning, replied } from './pruning.ts'
 import { absent, and, eq, or, present } from '@yaks/query'
 import { entryStatus, reach } from './reach.ts'
@@ -216,6 +217,9 @@ export type Tool = Declared & {
    * refusal of the call, and its answer is the result's words, not an entity
    * of their own (@yaks/tools `keeps`). */
   readOnly?: boolean
+  /** Its schema is sent only once a `tool_load` call names it; until then
+   * that tool lists it by name and title (./deferred.ts). */
+  deferred?: boolean
 }
 
 /** How long a background call (`tool_async`) runs before it is given a
@@ -1331,7 +1335,9 @@ export let react = async (
       { error, phase: 'tools' },
     )
   }
-  const tools = offered(assembled, deps.named ?? (() => []), sending?.tools)
+  const tools = loading(
+    offered(assembled, deps.named ?? (() => []), sending?.tools),
+  )
   // Legacy synchronous calls are run here. Native async calls are owned by
   // their separate session_tool effect; only that effect enters this branch
   // with runCall naming one invocation.
@@ -1769,7 +1775,7 @@ export let react = async (
         },
       ),
     ]),
-    tools: tools.map(({ name, description, parameters }) => ({
+    tools: schemas(tools, entries).map(({ name, description, parameters }) => ({
       name,
       description,
       parameters,
@@ -1934,7 +1940,9 @@ export let react = async (
         sending: {
           ...sending,
           instructions: req.instructions ?? null,
-          ...executor ? { tools: req.tools.map((tool) => tool.name) } : {},
+          // What it was offered, deferred tools too: a resumed ask sends
+          // again what these entries loaded of them.
+          ...executor ? { tools: tools.map((tool) => tool.name) } : {},
           ...offer ? { offer } : {},
         },
       }

@@ -9,7 +9,7 @@ import { directoryOf } from './directory.ts'
 import { CALLBACK, callback, connecting, connectionsOf } from './connections.ts'
 import { KERNEL, meta } from './meta.ts'
 import { minted } from './session.ts'
-import { operatorModel, operatorService } from './operator-testing.ts'
+import { callable, operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { operatorContext } from './operator.ts'
 import {
@@ -222,7 +222,7 @@ await receive(
   'Put the dentist on my calendar Tuesday at 3 to 4, and email the front desk at front@dentist.example that I will be there.',
 )
 await service.drain()
-let names = (r: Asked) => r.tools.map((t) => t.name)
+let names = callable
 
 test('before they connect, the Operator is told where to, and holds no Google tool', () => {
   let [first] = before

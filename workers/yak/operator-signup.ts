@@ -102,6 +102,8 @@ export let signupTools = (
     name: 'signup_' + name,
     description,
     parameters: { type: 'object', properties, required },
+    // A sign-up turn is about these, so they are sent whole.
+    deferred: false,
     run: (args) => ask(name, args),
   })
   return [

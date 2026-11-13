@@ -13,7 +13,7 @@ import { directoryOf } from './directory.ts'
 import { connecting, ctxOf } from './connections.ts'
 import { credential } from '@yaks/connections'
 import { reveal } from '@yaks/secrets'
-import { operatorModel, operatorService } from './operator-testing.ts'
+import { callable, operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { signupTools } from './operator-signup.ts'
 import { rootOf } from './operator-root.ts'
@@ -561,8 +561,8 @@ test('the Operator lists the numbers of a connection saved before numbers were l
 })
 
 test("a member's text to the inbound number is their own Operator's, answered from that number", () => {
-  ok(memberOffered.some((t) => t.name == 'phone_numbers'))
-  ok(!memberOffered.some((t) => t.name.startsWith('signup_')))
+  ok(callable({ tools: memberOffered }).includes('phone_numbers'))
+  ok(!callable({ tools: memberOffered }).some((n) => n.startsWith('signup_')))
   assertEquals(memberBack.get('did'), '2695550111')
   assertEquals(memberBack.get('dst'), '2695550177')
 })

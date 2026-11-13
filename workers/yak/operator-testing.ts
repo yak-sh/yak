@@ -10,7 +10,7 @@ import {
   operatorGraph,
   operatorVocab,
 } from './operator-store.ts'
-import type { Listed, Model } from '@yaks/model'
+import type { Listed, Model, Request as Ask } from '@yaks/model'
 import { assertEquals } from '@std/assert'
 import { refusing } from './defects.ts'
 import type { Held } from './build-door.ts'
@@ -25,6 +25,14 @@ import {
 import { attachmentTools, handleChannels } from './operator-channels.ts'
 import { drain } from './operator-store.ts'
 import { type Ctx, TOOLS } from './tools.ts'
+
+/** What an ask could call: the tools it was sent, and the ones `tool_load`
+ * lists for it to load (@yaks/session `tool_load`). */
+export let callable = (req: Pick<Ask, 'tools'>): string[] => [
+  ...req.tools.map((t) => t.name),
+  ...(req.tools.find((t) => t.name == 'tool_load')?.description ?? '')
+    .matchAll(/^- (\w+):/gm).map((m) => m[1]),
+]
 
 // A test's Operator model, answered by whatever `answer` is when it is asked:
 // one Operator per store, its script changed between requests.

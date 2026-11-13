@@ -347,6 +347,45 @@ export let remembering: Declared = {
     'Everything you have done is kept in your own store: each conversation and every entry in it, your forks and helpers, your memories and your tasks. When something said earlier is not in front of you, find it there: search, graph_query and graph_show with self true (`.entry` rows are what was said, each in a `.session`), and memory_around for what was said around an entry. When someone tells you something worth keeping, memory_save it with on naming the entry they said it in; memory_recall finds it again. What they want every agent working in the space to know, such as how they like their apps built, goes to the space with store_memory_save, and store_memory_recall finds it. When the person asks you to forget or prune part of the conversation, archive those entries in your own graph: graph_query with self true finds the entries by entry.session, entry.seq or created.at, and graph_apply with self true writes archived:{} on each entry in one bundles array. Work on the person’s conversation, not the helper’s. The archived words remain searchable and readable but leave the model context, together with summaries drawn from them. Restore them by writing archived:null. Never delete their entries to prune context.',
 }
 
+// The tools most turns use, sent whole with every ask. Every other tool the
+// Operator holds is sent once it loads it (@yaks/session `tool_load`), and
+// costs each ask until then a line of that tool's list, so the request does
+// not grow with the platform.
+let CORE = new Set([
+  'fork',
+  'spawn',
+  'search',
+  'guide',
+  'code_mode',
+  'graph_schema',
+  'graph_query',
+  'graph_show',
+  'graph_apply',
+  'app_list',
+  'app_new',
+  'app_files',
+  'app_deploy',
+  'app_preview',
+  'app_errors',
+  'commands',
+  'command',
+  'attachment_read',
+  'memory_save',
+  'memory_recall',
+  'memory_around',
+  'store_memory_save',
+  'store_memory_recall',
+  skillRead.name,
+  ...workNames,
+  'notification_send',
+  'escalate',
+])
+// A tool that says whether it is deferred keeps its word.
+let deferred = (tools: Tool[]): Tool[] =>
+  tools.map((t) =>
+    t.deferred != null || CORE.has(t.name) ? t : { ...t, deferred: true }
+  )
+
 // Large answers stay inside code_mode; focused direct calls remain useful.
 let BULK: Record<string, string> = {
   graph_schema:
@@ -1732,7 +1771,7 @@ export let operating = (
         )} .operator_request.channel=text,texted .order=-created.at .limit=1 .fields=operator_request.address`,
       ),
     ])
-    return [
+    return deferred([
       ...sessionTools(g).filter((t) => t.name == 'fork'),
       // A conversation and its forks hand coding and careful reasoning
       // to the stronger model in a fresh helper, which starts no other.
@@ -1780,7 +1819,7 @@ export let operating = (
       ...member && options.browsers
         ? browserTools(env, space, ctx.person, options.browsers)
         : [],
-    ]
+    ])
   }
 
   // This object's runner, a new one each time the object starts: a Durable

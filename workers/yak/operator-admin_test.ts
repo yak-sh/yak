@@ -4,7 +4,7 @@ import type { Item, Request } from '@yaks/model'
 import { directoryOf, META } from './directory.ts'
 import { platform } from './testing.ts'
 import type { Env } from './env.ts'
-import { operatorMemory, operatorModel } from './operator-testing.ts'
+import { callable, operatorMemory, operatorModel } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
 import { handleChannels, receive } from './operator-channels.ts'
@@ -53,7 +53,7 @@ let operator = operating(
   operatorModel((req) => {
     asked.push(req)
     let results = req.items.filter((i) => i.kind == 'result').length
-    let next = req.tools.some((t) => t.name == 'admin_budget')
+    let next = callable(req).includes('admin_budget')
       ? [['admin_budget', { space: 'adas' }], ['admin_errors', {}]][results]
       : undefined
     return Promise.resolve({
@@ -90,7 +90,7 @@ let ADMIN = [
 let offered = (requests: Request[]) =>
   [
     ...new Set(
-      requests.flatMap((r) => r.tools.map((t) => t.name))
+      requests.flatMap(callable)
         .filter((n) => ADMIN.includes(n) || n.startsWith('admin_')),
     ),
   ].sort()

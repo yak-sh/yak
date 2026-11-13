@@ -4,7 +4,7 @@ import type { Arrival } from '@yaks/phone'
 import { platform } from './directory-rows-probe.ts'
 import { operating } from './operator.ts'
 import { handleChannels } from './operator-channels.ts'
-import { operatorMemory, operatorModel } from './operator-testing.ts'
+import { callable, operatorMemory, operatorModel } from './operator-testing.ts'
 import { operatorReply, operatorRequest } from './operator-host.ts'
 import {
   signupArrived,
@@ -122,6 +122,7 @@ let asked = (person: string) =>
     (b.operator_request as { person: string }).person == person
   )
 let tools = (i: number) => seen[i].tools.map((t) => t.name).sort()
+let offered = (i: number) => callable(seen[i])
 let FORMS = signupTools(env, space, '', '').map((t) => t.name).sort()
 
 test('a text to a space is answered by keyword, kept quiet after STOP, and otherwise is a seated person’s own or a sign-up', () => {
@@ -149,7 +150,7 @@ test('a text from someone with no seat in the space runs as them, with only form
 
 test("a member's text to the space's number is theirs to their own Operator, with their reach", async () => {
   equal(memberTurns, 3)
-  ok(tools(2).includes('unrelated'))
+  ok(offered(2).includes('unrelated'))
   ok(!tools(2).some((t) => t.startsWith('signup_')))
   equal(asked(member).length, 1)
   ok((await store.g.get([rootOf(spaceId, member)]))[0]?.operator_session)
@@ -305,7 +306,7 @@ test("a viewer's text reads only their reach and offers sign-up without writer t
   ok(!transcript.includes('hidden (editor)'))
   for (let name of FORMS) ok(tools(3).includes(name))
   for (let name of ['graph_apply', 'unrelated', 'text_send', 'memory_recall']) {
-    ok(!tools(3).includes(name))
+    ok(!offered(3).includes(name))
   }
   equal(registrations[0].person, viewer)
   equal(registrations[0].phone, '+12695550144')

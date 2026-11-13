@@ -20,6 +20,7 @@ import { platform } from './directory-rows-probe.ts'
 import { stores } from './app-store-probe.ts'
 import { appDoc, appVocab } from './vocab.ts'
 import {
+  callable,
   operatorMemory,
   operatorModel,
   operatorService,
@@ -634,7 +635,7 @@ test('attachment contents reach the model and the original is retained for publi
     'The board approved the road millage.',
   )
   assertEquals(
-    attachmentRequests[0].tools.some((t) => t.name == 'operator_attachment'),
+    callable(attachmentRequests[0]).includes('operator_attachment'),
     true,
   )
   assertEquals(
@@ -844,7 +845,7 @@ await drain(attachmentStore)
 let originalRows = await graph.read('.attachment ?created *')
 test('a follow-up can publish an earlier request original without asking for it again', () => {
   assertEquals(
-    receivedTools[0].tools.some((t) => t.name == 'operator_attachment'),
+    callable(receivedTools[0]).includes('operator_attachment'),
     true,
   )
   assertEquals(originalRows.length, 1)
