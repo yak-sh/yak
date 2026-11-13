@@ -150,7 +150,7 @@ let printed = async (
   let [{ vocab }, { registry }, { shown }] = await Promise.all([
     import('./words.ts').then(({ words }) => words(config)),
     import('./answer.ts'),
-    import('./terminal.ts'),
+    import('./shown.ts'),
   ])
   let asked = (name: string, args: Record<string, unknown>) =>
     ask('tools/call', { name, arguments: args })

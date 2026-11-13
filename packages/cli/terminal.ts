@@ -22,12 +22,9 @@ import {
   referenced,
   type Source,
   standing,
-  terminal,
   type Tty,
   viewOf,
 } from './answer.ts'
-import { pluginTui, pluginViews } from './config.ts'
-import type { AnatomyObserver } from '@yaks/code/anatomy'
 
 // What an answer wears in a terminal: @yaks/ui's components and these views'
 // own classes, in its default theme. Loaded with the painter, so a printed
@@ -227,37 +224,3 @@ export let show = async (
     return
   }
 }
-
-/** An answer drawn as a command line shows one, with the views of `plugins`
- * ({@link show}): held or painted in their terminal components where `c`
- * holds or paints, printed otherwise. `from` is where the drawing reads what
- * it needs beside the answer. */
-export let shown = async (
-  c: {
-    tui: boolean
-    tty?: Tty
-    out: (line: string) => void
-    config?: string
-  },
-  plugins: string[],
-  views: Registry,
-  vocab: Vocab,
-  said: Bundle[],
-  from: Source,
-  tool: Drawn,
-  observe?: AnatomyObserver,
-): Promise<void> =>
-  show(
-    c,
-    views,
-    vocab,
-    said,
-    c.tui || c.tty
-      ? {
-        views: await terminal(plugins, pluginViews, pluginTui, observe),
-        config: c.config,
-      }
-      : {},
-    from,
-    tool,
-  )
