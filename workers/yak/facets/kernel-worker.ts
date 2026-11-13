@@ -141,6 +141,17 @@ export let PUBLIC_DIRECTORY = [
   'settle',
   'put',
   'get',
+  // @yaks/durable-object `Durable`'s own.
+  'fetch',
+  'alarm',
+  'webSocketMessage',
+  'webSocketClose',
+  'webSocketError',
+  'specify',
+  'open',
+  'accept',
+  'enter',
+  'behind',
 ] as const
 
 // An entrypoint or object whose every call enters the tracker's boundary as
