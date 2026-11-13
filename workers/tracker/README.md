@@ -118,8 +118,12 @@ change to one bug costs each reader that bug, not every bug.
 `GET /ceiling` with an admin ticket reads the scope's row counters and remaining
 wait without booting its graph. After repairing a runaway, `POST /resume` with
 admin and `mark: true` and `{reason}` starts fresh windows at the same limits
-and arms the alarm. It preserves every report and queued run, and keeps each
-recovery's previous counters, caller and reason in object storage.
+and arms the alarm. It opens each window once: a window an earlier resume opened
+stands until it ends, and the answer's `wait` says how long, so resuming again
+and again spends at most two windows' rows in one (2026-11-12: 41 resumes in 41
+minutes wrote 3.5 million rows in an hour, seven windows' worth). It preserves
+every report and queued run, and keeps each recovery's previous counters, caller
+and reason in object storage.
 
 `POST /regroup` requires an admin ticket with `mark: true`. It repairs existing
 bundle-hash fault keys in that scope, merging equivalent groups atomically. The

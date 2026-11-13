@@ -235,6 +235,9 @@ test('signed recovery opens fresh windows without losing reports or disabling th
   ok(await fourth.kept(preserved[0].entity.eid))
   fourth.spend('read')
   equal((await recover('bugs')).status, 429)
+  let again = await recover('resume', true, 'Still repairing')
+  equal((await again.json()).wait > 0, true)
+  equal((await recover('bugs')).status, 429)
 })
 
 // Rows spent as a lane's work, as intake's deliveries or the alarm's drain.

@@ -34,5 +34,6 @@ export let recovery = async (
   await keep(`ceiling:resumed:${record.eid}`, record)
   ceiling.resume()
   console.log('tracker resumed', JSON.stringify(record))
-  return json(record)
+  // A window an earlier resume opened still stands: its wait says so.
+  return json({ ...record, wait: ceiling.stopped() })
 }

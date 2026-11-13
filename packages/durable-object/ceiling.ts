@@ -48,6 +48,8 @@ export type Spent = {
   written: number
   /** What each lane's work spent of it ({@link Ceiling.lane}). */
   lanes?: Record<string, { read: number; written: number }>
+  /** The window was opened by {@link Ceiling.resume}. */
+  resumed?: boolean
 }
 
 /** A minute and an hour. At Cloudflare's prices ($0.001 a million rows read,
@@ -85,6 +87,7 @@ type Span = Window & {
   lanes: Map<string, Record<Kind, number>>
   past: Record<Kind, boolean>
   mark: Record<Kind, number>
+  resumed: boolean
 }
 
 /** One statement read far more rows than its answer represents. */
@@ -197,7 +200,9 @@ export type Ceiling = {
   spare: () => void
   /** Current window counters, including those kept by an earlier instance. */
   spent: () => Spent[]
-  /** Start fresh windows after an operator repairs a runaway; return the old counters. */
+  /** Start fresh windows after an operator repairs a runaway, except one an
+   * earlier resume opened, which stands until it ends; return the old
+   * counters. */
   resume: () => Spent[]
 }
 
@@ -263,10 +268,18 @@ export let ceiling = (
     s.past[k] = n > s[k]
     s.mark[k] = s.past[k] ? Infinity : n > s[k] / 2 ? s[k] : s[k] / 2
   }
-  let turned = (w: Window, since: number, was?: Spent): Span => {
+  let turned = (
+    { ms, read, written }: Window,
+    since: number,
+    was?: Spent,
+    resumed = was?.resumed ?? false,
+  ): Span => {
     let s = {
-      ...w,
+      ms,
+      read,
+      written,
       since,
+      resumed,
       all: group(),
       earlier: { read: was?.read ?? 0, written: was?.written ?? 0 },
       lanes: new Map(),
@@ -491,6 +504,7 @@ export let ceiling = (
       since: s.since,
       read: s.all.total.rowsRead,
       written: s.all.total.rowsWritten,
+      ...s.resumed ? { resumed: true } : {},
       ...s.lanes.size
         ? {
           lanes: Object.fromEntries(
@@ -521,9 +535,16 @@ export let ceiling = (
       refuse = false
     },
     spent: snapshot,
+    // A resume opens each window once: a window an earlier resume opened
+    // keeps its count until it ends, so resuming again and again spends at
+    // most two windows' rows in one, never a fresh window a call.
     resume: () => {
-      let before = snapshot()
-      spans = windows.map((w) => turned(w, now()))
+      let before = snapshot(), at = now()
+      spans = live().map((s, i) =>
+        s.resumed && at - s.since < s.ms
+          ? s
+          : turned(windows[i], at, undefined, true)
+      )
       keep?.(snapshot())
       return before
     },
