@@ -120,30 +120,30 @@ let denied = await operatorRequest(
 let deniedBody = JSON.stringify(await denied!.json())
 let documentOf = (html: string) => parseHTML(html).document
 let foldOf = (html: string) =>
-  documentOf(html).getElementById(`thread-${chat}`)!
+  documentOf(html).querySelector(`#row-${notice} details`)!
 
-test('a sub-thread appears once at its closing notice, with who, when and its summary', () => {
+test('a sub-thread appears once at its closing notice, a step named for whom it was with, holding the chat', () => {
   assertEquals(before.html.includes('Check the calendar'), false)
   assertEquals(privateFrames.some((f) => f.operator.task == root), false)
   let document = documentOf(first.html)
-  assertEquals(document.querySelectorAll(`#thread-${chat}`).length, 1)
-  let fold = document.getElementById(`thread-${chat}`)!
+  assertEquals(document.querySelectorAll(`#row-${notice}`).length, 1)
+  let fold = foldOf(first.html)
   assertEquals(fold.hasAttribute('open'), false)
-  assertStringIncludes(
-    fold.querySelector('.More_Summary')!.textContent!,
-    'An outside agent for Ada',
+  assertEquals(
+    fold.querySelector('.More_Toggle')!.textContent,
+    'Chatted with an outside agent for Ada',
+  )
+  assertEquals(fold.textContent!.includes(closed), false)
+  assertEquals(
+    !!document.querySelector(`#row-${notice} .Transcript_Meta time[datetime]`),
+    true,
   )
   assertStringIncludes(
-    fold.querySelector('.More_Summary')!.textContent!,
-    closed,
-  )
-  assertEquals(!!fold.querySelector('.More_Summary time[datetime]'), true)
-  assertStringIncludes(
-    fold.querySelector('.More_Body')!.textContent!,
+    fold.querySelector('.More_Inset')!.textContent!,
     'Check the calendar.',
   )
   assertStringIncludes(
-    fold.querySelector('.More_Body')!.textContent!,
+    fold.querySelector('.More_Inset')!.textContent!,
     'Tuesday is free.',
   )
   assertEquals(
@@ -158,24 +158,19 @@ let socket = delivered.find((f) => f.operator.task == root && f.operator.lines)!
 let row = rowsOf(JSON.parse(JSON.stringify(socket.operator.lines))).find((r) =>
   r.id == notice
 )!
-let socketFold = foldOf(row.html).outerHTML
+let socketFold = documentOf(row.html).querySelector('details')!.outerHTML
 let pageFold = foldOf(first.html).outerHTML
 let document = documentOf(first.html)
 let kept = document.querySelector('[data-rows]')!
-document.getElementById(`thread-${chat}`)!.setAttribute('open', '')
+document.querySelector(`#row-${notice} details`)!.setAttribute('open', '')
 let next = documentOf(updated.html).querySelector('[data-rows]')!
 redraw(kept, next.innerHTML)
 
 test('page and socket render the same sub-thread entries and preserve its open state on refresh', () => {
   assertEquals(socketFold, pageFold)
-  assertEquals(
-    document.getElementById(`thread-${chat}`)!.hasAttribute('open'),
-    true,
-  )
-  assertStringIncludes(
-    document.getElementById(`thread-${chat}`)!.textContent!,
-    latest,
-  )
+  let fold = document.querySelector(`#row-${notice} details`)!
+  assertEquals(fold.hasAttribute('open'), true)
+  assertStringIncludes(fold.textContent!, 'Tuesday is free.')
   assertEquals(
     refresh.some((f) => f.operator.task == root && f.operator.refresh),
     true,

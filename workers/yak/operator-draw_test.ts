@@ -215,6 +215,53 @@ test('a contact request stays inline in the person’s conversation through conf
   )
 })
 
+test('an outside agent’s chat is a step named for whom it was with, holding the chat and never the model’s recap', () => {
+  let note = sourceReference('b'.repeat(64))
+  let asked = 'Timing check 24 for T-155323: reply with the single word "ok".'
+  let chat = [
+    entry('said', 1, {
+      content: { body: asked + note },
+      entry: { session: 'chat', from: 'an outside agent' },
+    }, 'chat'),
+    entry('answer', 2, { output: {}, content: { body: 'ok' } }, 'chat'),
+  ]
+  let recap = `Chat chat closed (quiet).\n\nAsked:\n${
+    asked + note
+  }\n\nDone / open:\nok`
+  let notice = entry('closed', 3, {
+    notice: { child: 'chat' },
+    delivery: { child: 'chat', outcome: 'settled', through: 'answer' },
+    content: { body: recap },
+  })
+  let threads = {
+    closed: {
+      session: 'chat',
+      who: 'An outside agent for Jeff',
+      lines: wire(lines(chat, namer({})), chat, { opens: '/operator' }),
+    },
+  }
+  let [row] = rows([notice], namer({}), { threads })
+  let fold = parseHTML(row.html).document.querySelector('details')!
+  assertEquals(fold.className, 'More_Inline')
+  assertEquals(
+    fold.querySelector('.More_Toggle')!.textContent,
+    'Chatted with an outside agent for Jeff',
+  )
+  let inset = fold.querySelector('.More_Inset')!
+  assertEquals(
+    inset.querySelector('a')!.getAttribute('href'),
+    '/operator/chat',
+  )
+  assertEquals(
+    [...inset.querySelectorAll('.Transcript_Bubble, .Transcript_Reply')].map(
+      (e) => e.textContent,
+    ),
+    [asked, 'ok'],
+  )
+  assertEquals(row.html.includes('attachment_read'), false)
+  assertEquals(row.html.includes('Asked:'), false)
+})
+
 // What a painted node says, its boxes' parts joined by `|`.
 let said = (n: Node): string =>
   n.kind == 'text'

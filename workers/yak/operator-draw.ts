@@ -12,7 +12,7 @@ import type { Bundle, Comp } from '@yaks/graph/bundle'
 import { type Step, stepOf, type Steps } from '@yaks/tools/title'
 import { blocks, parse } from '@yaks/markdown/structural'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
-import { Body, Button, Drop, Icon, Menu, More } from '@yaks/ui/parts'
+import { Body, Drop, Icon, Menu, More } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
 import { pretty } from '@yaks/ui/relative'
 import { PART } from '@yaks/persona/part'
@@ -709,7 +709,7 @@ export let lines = (
       let helping = b.call && helpers.some((one) => one.call == id)
       let thread = threads[id]
       let drawn: Line[] = thread
-        ? [{ id, uses: [id], node: threaded(b, thread), text: body }]
+        ? [{ id, uses: [id], ...threaded(thread) }]
         : told
         ? [{ id, uses: told.uses, node: told.draw() }]
         : b.call
@@ -890,40 +890,35 @@ let system = (b: Bundle, body: string) => {
   )
 }
 
-/** A closed outside conversation, drawn at its single delivery notice. */
+/** A closed outside conversation, drawn at its single delivery notice: who
+ * chatted (`who`, "An outside agent for Ada") and the chat's own lines. */
 export type Thread = { session: string; who: string; lines: Lines }
 
-let threaded = (notice: Bundle, thread: Thread) =>
-  h(
-    More,
-    { id: `thread-${thread.session}` },
-    h(
-      More.Summary,
-      null,
-      thread.who,
-      ' · ',
-      stamp(notice),
-      ' · ',
-      String(comp(notice, 'content')?.body ?? '').replace(
-        /^Chat [\da-f-]+ closed \([^)]*\)\.\n\n/,
-        '',
-      ),
-    ),
-    h(
-      More.Body,
-      null,
-      thread.lines.opens
-        ? h(
-          Button,
+// A step like any other, named for whom the Operator chatted with, opening
+// on the chat itself. The notice's body is the model's recap of the chat,
+// never drawn: the chat's lines say it in the person's words.
+let threaded = (thread: Thread) => {
+  let name = 'Chatted with ' + thread.who.replace(/^./, (c) => c.toLowerCase())
+  let node = step(
+    name,
+    '',
+    thread.lines.opens
+      ? h(
+        'p',
+        null,
+        h(
+          'a',
           { href: `${thread.lines.opens}/${thread.session}` },
           'Open the conversation',
-        )
-        : null,
-      drawLines(thread.lines).map(({ id, node }) =>
-        h('div', { id: `row-${id}` }, node)
-      ),
+        ),
+      )
+      : null,
+    ...drawLines(thread.lines).map(({ id, node }) =>
+      h('div', { id: `row-${id}` }, node)
     ),
   )
+  return { node, text: name }
+}
 
 /**
  * Lines as a page's socket sends them: each line by the id it is put by and
