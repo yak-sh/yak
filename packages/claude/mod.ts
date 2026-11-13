@@ -60,8 +60,13 @@ export let input = (req: Request): string =>
     },
   }) + '\n'
 
-/** The public text and tool requests of one completed assistant frame. */
-export let items = (message: Record<string, unknown>, req: Request): Item[] => {
+/** The public text and tool requests of one completed assistant frame. The
+ * CLI lists the harness's tools as `mcp__harness__<name>`, while the
+ * transcript it replays names each call by its own name, so Claude asks for a
+ * tool by either; both are that tool. A call to anything else goes to the
+ * harness as asked, which answers it with a refusal the model reads, as it
+ * does every provider's. */
+export let items = (message: Record<string, unknown>): Item[] => {
   if (!Array.isArray(message.content)) {
     throw new ModelError('claude_protocol', 'Missing assistant content')
   }
@@ -72,15 +77,6 @@ export let items = (message: Record<string, unknown>, req: Request): Item[] => {
     if (p.type == 'thinking' || p.type == 'redacted_thinking') return []
     if (p.type == 'tool_use') {
       let name = String(p.name).replace(/^mcp__harness__/, '')
-      if (
-        p.name != 'mcp__harness__' + name ||
-        !req.tools.some((t) => t.name == name)
-      ) {
-        throw new ModelError(
-          'claude_tool',
-          `Claude requested an unoffered tool: ${p.name}`,
-        )
-      }
       return [{ kind: 'call', id: p.id, name, args: JSON.stringify(p.input) }]
     }
     throw new ModelError(
@@ -193,7 +189,7 @@ export let read = async (
       let message = frame.message
       id = String(message.id)
       let prior = turn.reply?.items ?? []
-      let output = items(message, req)
+      let output = items(message)
       // The frame's count is the message's start: never below a later one.
       usage = { ...message.usage, ...usage }
       turn.reply = {

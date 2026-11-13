@@ -307,3 +307,29 @@ test("a tool named as one of the platform's fails the conversation at once, and 
   assertEquals(out.status, 'failed')
   assertStringIncludes(out.reports, 'Two tools share a name: guide')
 })
+
+test('a call to a tool the Operator was not offered is refused to the model, and the conversation goes on to its answer', async () => {
+  let refused = ''
+  answer = (body) => {
+    let result = body.messages.at(-1).content.find((c: Event) =>
+      c.type == 'tool_result'
+    )
+    if (!result) {
+      return reply('tool_use', {
+        type: 'tool_use',
+        id: 'tu_' + crypto.randomUUID().slice(0, 8),
+        name: 'nope',
+        input: {},
+      })
+    }
+    refused = JSON.stringify(result.content)
+    return text('That tool is not mine; done another way.')
+  }
+  let out = await ask('Use the nope tool')
+  assertEquals([out.status, out.text, out.reports], [
+    'settled',
+    'That tool is not mine; done another way.',
+    '[]',
+  ])
+  assertStringIncludes(refused, 'no such tool: nope')
+})

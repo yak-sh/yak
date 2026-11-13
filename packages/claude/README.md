@@ -29,12 +29,16 @@ hooks, slash commands, auto-memory and nonessential traffic are disabled.
 and it advertises exactly the request's tool definitions. It **never executes a
 tool**: a `tools/call` is never answered. On the completed assistant tool-use
 frame the adapter kills the child, returning neutral calls to the harness, whose
-ordinary loop persists and executes them. `--max-turns 1` also bounds the CLI's
-loop. Text-only completion must end in a successful result.
-`--include-partial-messages` makes the CLI send text as it is written, and each
-piece reaches the request's `onText` as it arrives; the completed frame tells
-only what no piece carried. There are no retries within this adapter; durable
-submission/acknowledgement uses the same model callbacks as the HTTP providers.
+ordinary loop persists and executes them. A call names its tool bare
+(`graph_query`) or as the CLI lists it (`mcp__harness__graph_query`); a call to
+a tool the step did not offer reaches the harness as asked, and the harness
+answers it with a refusal the model can read and recover from. `--max-turns 1`
+also bounds the CLI's loop. Text-only completion must end in a successful
+result. `--include-partial-messages` makes the CLI send text as it is written,
+and each piece reaches the request's `onText` as it arrives; the completed frame
+tells only what no piece carried. There are no retries within this adapter;
+durable submission/acknowledgement uses the same model callbacks as the HTTP
+providers.
 
 The graph records each ask, assistant text, requested call, harness result, CLI
 session/message ids and reported token usage: input, output, what was read from

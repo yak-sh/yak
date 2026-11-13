@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects, assertThrows } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import { test } from '@yaks/testing'
 import { ModelError } from '@yaks/model'
 import type { Reply, Request, TextDelta } from '@yaks/model'
@@ -28,7 +28,7 @@ test('assistant frames expose text and offered harness calls', () => {
           input: { q: 'hello' },
         },
       ],
-    }, req),
+    }),
     [{
       kind: 'assistant',
       text: 'checking',
@@ -67,14 +67,22 @@ test("a step's message begins with the last step's, which the cache holds", () =
   assertEquals(blocks({ ...req, items: later }).slice(0, before.length), before)
 })
 
-test('unknown built-ins fail closed and unsupported requests never submit', async () => {
-  assertThrows(
-    () =>
-      items({
-        content: [{ type: 'tool_use', name: 'Bash', id: 'x', input: {} }],
-      }, req),
-    ModelError,
-  )
+test('a call names its tool bare or as the CLI lists it, and an unoffered one goes to the harness as asked', () => {
+  let called = (name: string) =>
+    items({ content: [{ type: 'tool_use', name, id: 'x', input: {} }] })
+  for (
+    let [asked, name] of [
+      ['mcp__harness__graph_query', 'graph_query'],
+      ['graph_query', 'graph_query'],
+      ['app_files', 'app_files'],
+      ['Bash', 'Bash'],
+    ]
+  ) {
+    assertEquals(called(asked), [{ kind: 'call', id: 'x', name, args: '{}' }])
+  }
+})
+
+test('unsupported requests never submit', async () => {
   let submitted = false
   await assertRejects(
     () =>
