@@ -186,3 +186,24 @@ test('a host without a maintenance lifecycle completes its ordinary installation
   )
   equal(reopenedOrdinary.upkeep(), null)
 })
+
+// A reference added to a component that already has rows: its index is owed.
+let referred = durable(), maker = storage(referred, shop, { deferred: false })
+maker.install()
+await maker.tx((tx) =>
+  tx.patch([
+    { entity: { eid: 'maker' }, product: { price: 1 } },
+    { entity: { eid: 'made' }, product: { price: 2, maker: 'maker' } },
+  ])
+)
+referred.sql.exec('drop index product_maker')
+referred.sql.exec("delete from server_meta where k='schema'")
+let owing = storage(referred, shop, { deferred: true })
+owing.install()
+
+test('a read does not force a reference index the object still owes, and uses it once built', () => {
+  let made = () => owing.read('.product.maker=maker').map((r) => r.entity.eid)
+  equal(made(), ['made'])
+  while (owing.upkeep() != null) { /* build what is owed */ }
+  equal(made(), ['made'])
+})

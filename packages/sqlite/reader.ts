@@ -20,7 +20,7 @@ import { raisedOnly, unraised } from './raise.ts'
 /** Read against the physical schema of this snapshot, not the one that was
  * standing when the command started. Never repair an older vocabulary's
  * dropped columns or indices: another process may have retired them. */
-export let options = <T extends BindOpts>(
+export let options = <T extends BindOpts & { deferred?: boolean }>(
   driver: Driver,
   vocab: Vocab,
   base: T,
@@ -67,7 +67,10 @@ export let options = <T extends BindOpts>(
     if (found && schema !== undefined && raisedOnly(driver, schema, current)) {
       return seen(bound({ ...found, absent: [] }, unwritten))
     }
-    let inspect = !!driver.file || schema !== undefined
+    // A file may be changed by another process, and a deferred store owes
+    // the indexes its populated tables lack (./owe.ts `build`): neither holds
+    // all its installation declares.
+    let inspect = !!driver.file || !!base.deferred || schema !== undefined
     if (!inspect && !base.backed) {
       return seen(unwritten.length ? absented(vocab, base, unwritten) : base)
     }
