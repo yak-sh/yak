@@ -68,11 +68,19 @@ let held = (at: {
     hosts: () => Promise.resolve(at.hosts ?? []),
     uptakes: (made: { of: string }[]) =>
       Promise.resolve(
-        new Map(made.map(({ of }) => [of, { installs: 2, rated: null }])),
+        new Map(
+          made.map((
+            { of },
+          ) => [of, { installs: 2, rated: { stars: 5, count: 2 } }]),
+        ),
       ),
     integrationUptakes: (all: { name: string }[]) =>
       Promise.resolve(
-        new Map(all.map(({ name }) => [name, { installs: 1, rated: null }])),
+        new Map(
+          all.map((
+            { name },
+          ) => [name, { installs: 1, rated: { stars: 2, count: 1 } }]),
+        ),
       ),
   } as unknown as Directory
 }
@@ -116,6 +124,9 @@ test('a publisher page shows what the space shares, with its installs and its ow
   assertStringIncludes(html, 'Featured by yaks.app')
   // Two for the app, two for the skill, one for the integration.
   assertStringIncludes(html, 'Installed 5 times by other spaces')
+  // Each thing's rating, and across them all, each weighted by its raters.
+  assertStringIncludes(html, 'Rated 5 of 5 by 2 spaces')
+  assertStringIncludes(html, 'Rated 4.4 of 5 in 5 ratings')
   assertEquals(
     [...document.querySelectorAll('h3 a')].map((a) => a.getAttribute('href')),
     [

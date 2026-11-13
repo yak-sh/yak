@@ -54,10 +54,22 @@ export type Published = {
 export let shares = (p: Published) =>
   p.apps.length + p.skills.length + p.integrations.length > 0
 
+let everything = (p: Published) => [...p.apps, ...p.skills, ...p.integrations]
+
 /** How many other spaces installed anything the space shared. */
 export let installed = (p: Published) =>
-  [...p.apps, ...p.skills, ...p.integrations]
-    .reduce((n, s) => n + (s.reputation?.installs ?? 0), 0)
+  everything(p).reduce((n, s) => n + (s.reputation?.installs ?? 0), 0)
+
+/** How everything the space shared is rated (T-160643), as a line: the mean
+ * of every counted rating, each thing's weighted by how many spaces rated it,
+ * or null when nothing is rated. */
+export let ratedAcross = (p: Published) => {
+  let all = everything(p).flatMap((s) => s.reputation?.rated ?? [])
+  let count = all.reduce((n, r) => n + r.count, 0)
+  if (!count) return null
+  let stars = all.reduce((n, r) => n + r.stars * r.count, 0) / count
+  return `Rated ${Number(stars.toFixed(1))} of 5 in ${times(count, 'rating')}`
+}
 
 /** The space's own web address: a domain it attached, or its subdomain. */
 export let addressOf = (p: Published, env: Host = {}) =>
@@ -201,6 +213,9 @@ export let page = (p: Published, env: Host = {}) => {
               { class: 'Reputation_Item' },
               `Installed ${times(installed(p), 'time')} by other spaces`,
             ),
+            ratedAcross(p)
+              ? h('li', { class: 'Reputation_Item' }, ratedAcross(p))
+              : null,
           ),
         ),
         p.apps.length
