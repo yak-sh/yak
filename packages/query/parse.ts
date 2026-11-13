@@ -447,7 +447,9 @@ export let parseDot = (token: string): Clause[] | null => {
   }
   let o = rest.match(OPS)
   if (!o) {
-    if (!dotted && bracket == null) return null
+    // `doc.title~copy` is a clause short of its `~=`, not a word: searched,
+    // it matched the words doc, title and copy, and nothing it meant.
+    if (!dotted && bracket == null && !rest.startsWith('~')) return null
     if (rest.startsWith('{')) throw braced(token, pathStr, rest)
     // `.meeting?doc`: a second clause, `?doc`, with no `&` before it.
     if (/^\?[A-Za-z_]/.test(rest)) {

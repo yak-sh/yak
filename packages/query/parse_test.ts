@@ -433,7 +433,9 @@ test('refusals', () => {
 })
 
 // A path with no operator the grammar has is refused with the ones it has.
-for (let token of ['.web.url~cloudflare', '.doc.title^cake']) {
+for (
+  let token of ['.web.url~cloudflare', '.doc.title^cake', 'doc.title~copy']
+) {
   test(`${token} is refused with the operators`, () => {
     assertThrows(
       () => parse(token),

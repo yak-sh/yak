@@ -268,6 +268,11 @@ export let search = (
             if (!allowed) shared.set(screen, allowed = site.share(within))
           }
         }
+        // The owner is a row the query already admits through entity
+        // visibility, so a posting is asked only what its component's own
+        // visibility says. Asking each posting the entity's too sought the
+        // entity table once for every row holding the word: `task` beside a
+        // project's tasks read millions of transcript rows' entities cold.
         return or(
           ...indexes(worded(live)).map(({ name, not }) => {
             let fts = indexName(name)
@@ -278,7 +283,7 @@ export let search = (
                 from: table(fts),
                 where: and(
                   op('match', col(fts), val(t)),
-                  permitted(name, col('rowid', fts), sources),
+                  permitted(name, col('rowid', fts), aspects),
                   ...unworn(not, col('rowid', fts)),
                   ...allowed
                     ? [among(

@@ -111,7 +111,8 @@ a value compared with a component is refused with the properties that hold one:
 operator written with spaces around it (`.doc.title ~= cake`) is refused with
 the clause it meant. A path followed by no operator the grammar has
 (`.web.url~cloudflare`, `.individual?created`) is refused with the operators
-it has: part of a value is `~=`, and there is no bare `~`. A path through a
+it has: part of a value is `~=`, and there is no bare `~`, with or without
+the dot (`doc.title~copy` is refused, not searched as words). A path through a
 reference goes on with the target's own `comp.prop`
 (`.filed.project.doc.title~=yak`), and the entity's id is `.entity.eid`.
 Completion offers the qualified forms of a name as it is typed: `.ti` offers

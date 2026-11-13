@@ -83,11 +83,16 @@ let prices = loadVocab({
 let matching = driver(new Database(':memory:'))
 for (
   let [name, columns] of [
-    ['entity', [{ name: 'id', type: 'integer', pk: true }, {
-      name: 'eid',
-      type: 'text',
-      unique: true,
-    }, { name: 'num', type: 'integer' }]],
+    ['entity', [
+      { name: 'id', type: 'integer', pk: true },
+      {
+        name: 'eid',
+        type: 'text',
+        unique: true,
+      },
+      { name: 'num', type: 'integer' },
+      { name: 'prefix', type: 'text' },
+    ]],
     ['book', [{ name: 'entity', type: 'integer', pk: true }, {
       name: 'price',
       type: 'real',

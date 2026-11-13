@@ -36,3 +36,33 @@ test('a finite owner screen bounds membership despite unrelated matching history
     prepared.finalize()
   }
 })
+
+// A word in many visible rows, beside a filter of more owners than a text
+// clause seeks one by one, which drives the read: the
+// visibility the outer query already gave each owner is not asked again of
+// every row holding the word. On the box that was an entity seek for each of
+// millions of transcript rows holding `task`, read cold off disk.
+let stepped = (count: number, visibility?: { entity: string }) => {
+  let db = new Database(':memory:'), sql = driver(db)
+  seed(sql, count)
+  let s = compile(parse('dragon .entity.eid=near,far,a,b,c'), vocab, {
+    visibility,
+    extend: [search(text, sql)],
+  })
+  let prepared = db.prepare(s.sql)
+  try {
+    assertEquals(prepared.all(...s.params).map((r) => r.eid), ['near', 'far'])
+    return counters.symbols.sqlite3_stmt_status(prepared.unsafeHandle, 4, 0)
+  } finally {
+    prepared.finalize()
+  }
+}
+test('visibility costs a text clause per owner, not per row holding the word', () => {
+  let cost = (count: number) =>
+    stepped(count, { entity: '.prose' }) - stepped(count)
+  let few = cost(history), many = cost(8 * history)
+  assert(
+    many - few < history,
+    `${few} steps over ${history} rows, ${many} over ${8 * history}`,
+  )
+})
