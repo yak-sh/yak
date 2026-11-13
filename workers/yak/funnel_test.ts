@@ -402,6 +402,7 @@ test('a landing page visited at its own address is a home page visit, and the bu
     let [path, kicker, name] of [
       ['/churches', 'For church offices', 'church'],
       ['/organizations', 'For churches, clubs, town offices', 'organization'],
+      ['/townships', 'For Michigan townships', 'township'],
     ]
   ) {
     let before = k.views.points.length

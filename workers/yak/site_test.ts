@@ -14,6 +14,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { REPLY_TO } from './mail.ts'
 import {
+  BUDGET,
   BUILDS,
   count,
   CURRENCY,
@@ -27,7 +28,9 @@ import {
   size,
   YEARLY,
 } from './meter.ts'
-import { GET_PLAN } from '@yaks/platform/routes'
+import { GET_PLAN, installAt } from '@yaks/platform/routes'
+import { DEEPGRAM } from '@yaks/speech'
+import * as townships from './site/townships.tsx'
 import { AWAKE } from './sandbox.ts'
 import { sheeted } from './sheets.ts'
 import { WORN } from './sheet-assets.ts'
@@ -89,6 +92,7 @@ let pages = [
   'index.html',
   'churches.html',
   'organizations.html',
+  'townships.html',
   'help.html',
   'pricing.html',
   'terms.html',
@@ -725,6 +729,10 @@ test('the pages beside the home page say where they live and count their buttons
     canonical: 'https://yaks.app/organizations',
     ctas: ['start', 'examples', 'examples', 'pro', 'join'],
   })
+  assertEquals(at('townships.html'), {
+    canonical: 'https://yaks.app/townships',
+    ctas: ['start', 'examples', 'examples', 'join'],
+  })
 })
 
 // An ad visitor on a phone meets the ask first: each home page's heading is
@@ -889,6 +897,33 @@ test('the home page describes itself at the prices the code charges', () => {
   }
 })
 
+// The townships page promises the township app: its buttons install the app
+// published under that name and open the sample township's copy, its
+// calculator counts with that copy's own function, and what it says a
+// meeting's recording costs is no less than hearing two hours of it costs.
+test('the townships page installs the township app and counts with its own function', () => {
+  let document = parsed('townships.html')
+  let href = (cta: string) =>
+    [...document.querySelectorAll(`[data-cta="${cta}"]`)]
+      .map((a) => a.getAttribute('href'))
+  assertEquals(href('start'), [installAt(townships.APP)])
+  assertEquals(href('join'), [installAt(townships.APP)])
+  assertEquals(href('examples'), [townships.SAMPLE, townships.SAMPLE])
+  assertEquals(
+    document.querySelector('[data-dues]')?.getAttribute('data-dues'),
+    `${townships.SAMPLE}deadlines.js`,
+  )
+  let hearing = DEEPGRAM.turns!.find((t) => t.speakers)!.perMinute * 120
+  assert(townships.MEETING >= hearing, `${townships.MEETING} < ${hearing}`)
+  let text = flat(document.body.textContent!)
+  for (
+    let said of [
+      `about $${townships.MEETING.toFixed(2)} of AI`,
+      `$${BUDGET.free} on the free plan and $${BUDGET.pro} on the Pro plan`,
+    ]
+  ) assertStringIncludes(text, said)
+})
+
 test('the plan pages quote the prices the offers name, and no other', () => {
   let charged = new Set([...Object.values(PRICE), ...Object.values(YEARLY)])
   for (
@@ -897,6 +932,7 @@ test('the plan pages quote the prices the offers name, and no other', () => {
       'pricing.html',
       'churches.html',
       'organizations.html',
+      'townships.html',
     ]
   ) {
     let html = flat(parseHTML(read(page)).document.body.textContent!)

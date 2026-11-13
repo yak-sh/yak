@@ -234,8 +234,13 @@ the assistants' connector directories for those who already use one.
   is one `/` is split with (today's page, and site/build.tsx, which leads with
   the app a visitor gets). A page with none is a landing page for one audience,
   shown only at its own address, where an ad for that audience points:
-  site/churches.tsx at /churches, site/organizations.tsx at /organizations, and
-  the Operator page at /operator. /organizations sells the Pro plan to any
+  site/churches.tsx at /churches, site/organizations.tsx at /organizations,
+  site/townships.tsx at /townships, and the Operator page at /operator.
+  /townships says what the township app does (published as `township-office`,
+  its sample at yourname.yaks.app/township) and holds no box: its button
+  installs that app, and its calculator of Open Meetings Act dates imports the
+  sample's own deadlines.js, so the page and every township's meeting pages
+  count alike. /organizations sells the Pro plan to any
   organization's office as a web person on staff, and says who is behind
   yaks.app and who fixes mistakes, each promise read from where it is done; it
   never says "Operator" until the plans. /churches keeps the rebuild in a

@@ -778,6 +778,27 @@
     display: none;
   }
 
+  /* When a meeting's notice and minutes are due (township-dues.js): its
+     fields side by side where they fit, and the dates listed under them. It
+     is hidden until its script has loaded the function it counts with. */
+  .Dues[hidden] {
+    display: none;
+  }
+
+  .Dues_Fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+    gap: var(--gap);
+  }
+
+  .Dues_Said {
+    font-weight: 700;
+  }
+
+  .Dues_Said:empty {
+    display: none;
+  }
+
   .Demo {
     display: grid;
     gap: var(--gap);

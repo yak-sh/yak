@@ -81,6 +81,7 @@ export let SITE = [
   '/',
   '/churches',
   '/organizations',
+  '/townships',
   '/pricing',
   '/help',
   '/terms',

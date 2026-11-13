@@ -19,6 +19,7 @@ import { Pricing } from './pricing.tsx'
 import { Privacy } from './privacy.tsx'
 import { StyleGuide } from './style-guide.tsx'
 import { Terms } from './terms.tsx'
+import { Townships } from './townships.tsx'
 
 /** Each page by the file it is served from. */
 export let PAGES: Record<string, FunctionComponent> = {
@@ -28,10 +29,12 @@ export let PAGES: Record<string, FunctionComponent> = {
   'operator.html': () => h(Operator, { by: 'text' }),
   'operator-email.html': () => h(Operator, { by: 'email' }),
   // The home page that leads with the app a visitor gets, and the landing
-  // pages for a church office and for any organization's (variant.ts).
+  // pages for a church office, a township and any organization's
+  // (variant.ts).
   'build.html': Build,
   'churches.html': Churches,
   'organizations.html': Organizations,
+  'townships.html': Townships,
   'pricing.html': Pricing,
   'help.html': Help,
   'terms.html': Terms,
