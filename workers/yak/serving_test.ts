@@ -2416,10 +2416,12 @@ test("an app worker's own request is woven no scripts, and no badge", () => {
   assertEquals(apps.worn(asked, space(null), app, {}, who), null)
   assertEquals(apps.worn(visit, space(null), app, {}, who), {
     badge: 'https://yaks.app/',
+    edit: null,
     bar: null,
   })
   assertEquals(apps.worn(visit, space('plus'), app, {}, who), {
     badge: null,
+    edit: null,
     bar: null,
   })
 })

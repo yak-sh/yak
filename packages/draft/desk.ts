@@ -59,6 +59,8 @@ export type Stash = Pick<
 export type Drafts = {
   /** Whether this place has been held, including an intentionally empty edit. */
   has: (place: string) => boolean
+  /** Every place holding text, in the order first held, read reactively. */
+  places: () => string[]
   /** what is typed in `place` and not yet sent ('' for nothing), read
    * reactively */
   text: (place: string) => string
@@ -174,6 +176,8 @@ export let desk = (
   let pace = opts.pace ?? 500
   let held = new Map<string, Held>()
   let shown = new Map<string, Signal<string>>()
+  // Counts the places held, so a reader of `places` hears a new one.
+  let grown = signal(0)
   let timers = new Map<string, ReturnType<typeof setTimeout>>()
   // Visible text can be emptied, or replaced by more typing, while a send
   // waits. Each send keeps its own recovery copy until its answer arrives.
@@ -209,8 +213,11 @@ export let desk = (
   }
 
   let hold = (place: string, h: Held) => {
-    held.set(place, h)
-    seen(place).value = h.local
+    batch(() => {
+      if (!held.has(place)) grown.value++
+      held.set(place, h)
+      seen(place).value = h.local
+    })
     keep(place, h)
   }
 
@@ -371,6 +378,10 @@ export let desk = (
 
   return {
     has: (place) => held.has(place),
+    places: () => {
+      grown.value
+      return [...held.keys()].filter((place) => seen(place).value)
+    },
     text: (place) => seen(place).value,
     type: (place, text) =>
       step(place, (h) => ({ ...h, local: text, stuck: false })),

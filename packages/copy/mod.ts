@@ -173,6 +173,27 @@ export let fill = <T>(
 }
 
 /** The slots a snippet names, in order. */
+/**
+ * A snippet from its parts in order, as `fill` gives them: text, which reads
+ * as itself (a `%{name}` in it is escaped), and each slot by its name. A page
+ * edited where it stands reads its snippet back this way.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { fill, join } from '@yaks/copy'
+ *
+ * let value = 'Tax is included. %{plans}.'
+ * assertEquals(join(['Tax is included. ', { slot: 'plans' }, '.']), value)
+ * assertEquals(fill(join(['100%{x}'])), ['100%{x}'])
+ * ```
+ */
+export let join = (parts: Array<string | { slot: string }>): string =>
+  parts.map((part) =>
+    typeof part == 'string'
+      ? part.replace(/%\{([\w-]+)\}/g, '%%{$1}')
+      : `%{${part.slot}}`
+  ).join('')
+
 export let slots = (value: string): string[] =>
   [...value.matchAll(SLOT)].filter(([, escape]) => !escape).map(([, , name]) =>
     name

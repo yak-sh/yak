@@ -2343,6 +2343,15 @@ let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.pe
 // Each conversation keeps its own draft, and the box is ready to type in.
 let place = ${JSON.stringify('operator:' + talk)}
 if (form) { drafts.bind(form.elements.say, place); form.elements.say.focus() }
+// An ask another page typed for the person (public/edit.js: \`?say=\`) joins
+// what they had typed here, and leaves the address so a reload adds nothing.
+let typed = new URL(location.href).searchParams.get('say')
+if (form && typed) {
+  drafts.ready.then(() => drafts.restore(place, typed))
+  let clean = new URL(location.href)
+  clean.searchParams.delete('say')
+  history.replaceState(history.state, '', clean)
+}
 let said = (e) => { status.textContent = e.message }
 let speech = form && voice({ button: form.querySelector('[data-voice]'), form, say: form.elements.say, at: '${at}', paid: ${paid}, said })
 let thread = () => box.querySelector('[data-task]')

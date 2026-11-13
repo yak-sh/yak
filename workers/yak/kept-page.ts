@@ -110,6 +110,7 @@ export let CLIENT = [
   '/_draft.js',
   '/_outbox.js',
   '/_wire.js',
+  '/_edit.js',
 ]
 
 /** The store client under a name of its bytes (sheets.ts `client`), the

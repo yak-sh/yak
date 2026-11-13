@@ -375,6 +375,40 @@ test("directory serving: Site keeps a person's index only while they hold no sea
   ])
 })
 
+// An app's page is kept the same way: as a stranger sees it, and at a
+// signed-in person's key only while they hold no seat. A member's is theirs
+// (a writer's wears the pencil, public/edit.js), so it is never kept.
+let appSeated = []
+for (let key of [undefined, outsider, owner]) {
+  let f = fixture('public')
+  f.env.SESSION_SECRET = SECRET
+  f.rows.push({
+    entity: { eid: 'm' },
+    member: { space: 's', person: 'o', role: 'owner' },
+  })
+  let answer = await siteFetch(
+    new Request(pageAt('ada.yaks.app', '/cookbook/', null, key), {
+      headers: key ? { cookie: `yak_session=${key}` } : {},
+    }),
+    f.env,
+  )
+  await answer.body?.cancel()
+  appSeated.push([
+    answer.status,
+    JSON.parse(answer.headers.get(SEEN) ?? 'null'),
+  ])
+}
+test("directory serving: Site keeps an app's page for strangers and outsiders, never a member's", () => {
+  equal(
+    appSeated.map(([status, seen]) => [status, seen?.stranger, seen?.outsider]),
+    [
+      [200, true, undefined],
+      [200, undefined, true],
+      [204, undefined, undefined],
+    ],
+  )
+})
+
 // The gateway's own forward, a private app's, takes the visitor's query with
 // it, so a shared link's `ref` or an ad's `utm_*` reaches the page.
 let carried = await appFetch(

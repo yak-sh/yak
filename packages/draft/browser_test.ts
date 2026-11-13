@@ -230,3 +230,35 @@ test('guest handoff preserves an empty edit through another customer using the s
     again.close()
   }
 })
+
+test('follow hears the places holding text, typed here or heard from another device', () => {
+  let hear: (rows: never[]) => void = () => {}
+  let desk = browserDrafts(
+    {
+      ...offline,
+      subscribe: (_query, fn) => {
+        hear = fn as typeof hear
+        return () => {}
+      },
+    },
+    'copy',
+    { by: 'jo', stash: false },
+  )
+  let heard: string[] = []
+  let stop = desk.follow(() => heard.push(desk.places().join(',')))
+  desk.type('copy:hero.title', 'Hello')
+  hear([{
+    entity: { eid: 'd' },
+    draft: { by: 'jo', place: 'copy:hero.lede', text: 'Hi', rev: 1 },
+  }] as never[])
+  desk.type('copy:hero.title', '')
+  stop()
+  desk.type('copy:hero.title', 'Again')
+  equal(heard, [
+    '',
+    'copy:hero.title',
+    'copy:hero.title,copy:hero.lede',
+    'copy:hero.lede',
+  ])
+  desk.close()
+})

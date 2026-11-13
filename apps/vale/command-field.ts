@@ -76,6 +76,7 @@ export let commandField = (
   let closed = false
   let drafts: Drafts = {
     has: (place) => active.value?.has(place) ?? false,
+    places: () => active.value?.places() ?? [],
     text: (place) => active.value?.text(place) ?? '',
     type: (place, text) => {
       if (!closed) active.value?.type(place, text)

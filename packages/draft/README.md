@@ -125,15 +125,19 @@ the same field is separate, so another person cannot inherit it.
 
 `has(place)` distinguishes an existing empty edit from a place never held.
 `text(place)`, `type(place, text)` and `restore(place, text, over)` are the
-desk's same methods. `spend(place, bundles)` clears a draft in the same write as
-the thing made from it, and resolves to a boolean: a refusal restores the text.
-The public client retries pending receipts with the same write identity; a watch
-never substitutes for durable acceptance. Pass `drafts({report(error) {
-… }})`
-to show a persistence refusal; without one it is raised for the page's error
-reporter. `by`, `stash` (or `false`) and `pace` may be supplied when a host
-already knows identity, supplies its own recovery storage, or needs a different
-write pace. The ordinary app needs none of them.
+desk's same methods, and `places()` lists every place holding text. A page that
+draws drafts itself rather than into a field calls `follow(fn)`: `fn` runs now
+and again whenever a text or place it read changes, here or on another device,
+until the function it returns is called. `ready` settles once the person is
+known and typing is kept. `spend(place, bundles)` clears a draft in the same
+write as the thing made from it, and resolves to a boolean: a refusal restores
+the text. The public client retries pending receipts with the same write
+identity; a watch never substitutes for durable acceptance. Pass
+`drafts({report(error) {
+… }})` to show a persistence refusal; without one it is
+raised for the page's error reporter. `by`, `stash` (or `false`) and `pace` may
+be supplied when a host already knows identity, supplies its own recovery
+storage, or needs a different write pace. The ordinary app needs none of them.
 
 A host that vouches an earlier principal may pass `recover: [principal]`, for
 example the same browser's guest instrument after sign-in. Each pending field

@@ -67,6 +67,13 @@ export let settingsDrafts = (
   let place = (key: string) => `settings:${opts.scope}:${key}`
   return {
     has: (key) => desk.has(place(key)),
+    // Its keys, as its callers name them.
+    places: () =>
+      desk.places().filter((p) => p.startsWith(place(''))).map((p) =>
+        p.slice(place('').length)
+      ),
+    ready: desk.ready,
+    follow: desk.follow,
     text: (key) => desk.text(place(key)),
     type: (key, text) => desk.type(place(key), text),
     restore: (key, text, over) => desk.restore(place(key), text, over),

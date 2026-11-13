@@ -1,5 +1,15 @@
 import { equal, suite, throws } from '@yaks/testing'
-import { fill, keys, marks, merge, parse, read, set, slots } from './mod.ts'
+import {
+  fill,
+  join,
+  keys,
+  marks,
+  merge,
+  parse,
+  read,
+  set,
+  slots,
+} from './mod.ts'
 
 let file = `{
   "cost": {
@@ -63,6 +73,26 @@ suite('a slot', ({ it }) => {
 
   it('is listed by name', () =>
     equal(slots('%{a}, %%{b} and %{c}'), ['a', 'c']))
+
+  it('joins back from the parts fill gives', () => {
+    let link = { slot: 'plans' }
+    for (
+      let value of [
+        read(copy, 'cost.limits')!,
+        '%%{yours} is %{yours}',
+        '50% off',
+        '%%%{a}',
+      ]
+    ) {
+      let filled = fill(
+        value,
+        Object.fromEntries(
+          slots(value).map((slot) => [slot, { slot }]),
+        ),
+      )
+      equal(fill(join(filled), { plans: link }), fill(value, { plans: link }))
+    }
+  })
 })
 
 suite('setting keys', ({ it }) => {

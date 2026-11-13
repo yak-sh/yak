@@ -18,6 +18,8 @@ export let parts = {
   '_draft.js': '../../packages/draft/browser.ts',
   '_outbox.js': '../../packages/sync/outbox.ts',
   '_wire.js': '../../packages/vocab/wire.ts',
+  // Edit mode on an app's page, loaded by its pencil (public/edit.js).
+  '_edit.js': './edit-mode.ts',
   // The Operator chat's line drawing (operator-rows.ts), for its page alone.
   '_talk.js': './operator-rows.ts',
   '_settings.js': './settings.ts',

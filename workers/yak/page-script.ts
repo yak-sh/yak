@@ -1,7 +1,8 @@
 // The platform's own script in every page an app serves: the reporter
 // (public/report.js), the release listener (public/release.js), the framed
 // address reporter (public/location.js), the
-// badge (public/badge.js) in a page of a space on the free plan, and the
+// badge (public/badge.js) in a page of a space on the free plan, the pencil
+// (public/edit.js) in a page served to a member who may write the app, and the
 // visitor's bar (public/visit.js) in a page served to a stranger from a
 // published app's sample or their own store of it (visit.ts), woven into
 // the page's text rather than named by a `src`. Both must run before the
@@ -13,7 +14,8 @@
 // which release the page is (`data-yak-version`): the scripts read their doors
 // off the first, and client.js sends the second with every request. The
 // badge's also says what it opens (`data-yak-badge`): the app's own page on
-// yaks.app, or yaks.app itself. The bar's says where keeping it goes and what
+// yaks.app, or yaks.app itself. The pencil's says where the Operator's chat
+// for the app is (`data-yak-edit`). The bar's says where keeping it goes and what
 // its button says (`data-yak-keep`, `data-yak-keep-says`). Attributes are not
 // hashed, so the scripts'
 // text and a policy's hashes are the same on every page.
@@ -34,17 +36,20 @@ let FILES = [
   '/badge.js',
   '/visit.js',
   '/location.js',
+  '/edit.js',
 ]
 
 /** The platform's scripts a page wears beyond the reporter and the release
  * listener: the badge, opening `badge` unless it is null; a draft's preview
- * link it follows, which wears the release and address listeners; the visitor's bar. */
+ * link it follows, which wears the release and address listeners; the pencil,
+ * offering the Operator's chat at `edit`; the visitor's bar. */
 export type Scripts = {
   badge: string | null
   /** The host of the site a preview was rebuilt from, which its badge says
    * this page is not (newcomer.ts `previewing`). */
   preview?: string | null
   draft?: string
+  edit?: string | null
   bar?: Bar | null
 }
 
@@ -89,10 +94,12 @@ export let pageScript = async (
   assets: Assets,
   at: string,
   version: number,
-  { badge, draft, bar, preview }: Scripts,
+  { badge, draft, bar, preview, edit }: Scripts,
 ) => {
   try {
-    let [report, release, badged, barred, location] = await scripts(assets)
+    let [report, release, badged, barred, location, pencil] = await scripts(
+      assets,
+    )
     let tag = ({ text }: Script, more = '') =>
       `<script data-yak-at="${at}" data-yak-version="${version}"${more}>${text}</script>`
     if (draft) {
@@ -109,6 +116,7 @@ export let pageScript = async (
         (preview ? ` data-yak-preview="${esc(preview)}"` : ''),
       ])
     }
+    if (edit) worn.push([pencil, ` data-yak-edit="${esc(edit)}"`])
     if (bar) {
       worn.push([
         barred,

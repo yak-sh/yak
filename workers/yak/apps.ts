@@ -1052,8 +1052,26 @@ export let wearing = (
   who: Who,
 ): Scripts => ({
   ...badged(space, app, env),
+  edit: editOf(space, app, env, who),
   bar: barOf(env, app, who),
 })
+
+/** The Operator's chat for this app, which the pencil on its pages offers
+ * (public/edit.js), or null where it wears no pencil: for whoever the file
+ * door would not let write the app's files (`api`'s `/files/`). */
+export let editOf = (space: Space, app: App, env: Host, who: Who) =>
+  writes(who.role) && !who.guest && !sandboxed(app)
+    ? `${hostUrl(env, chatPath(space.slug))}?app=${
+      encodeURIComponent(app.slug)
+    }`
+    : null
+
+/** Whom a page is the same for, where it is not everyone (page-cache.ts
+ * `keep`): every stranger, or every person signed in with no seat here, who
+ * are shown only what a stranger is. A member's page is theirs alone (a
+ * writer's wears the pencil), so it is never kept. */
+export let aloneOf = (who: Pick<Who, 'person' | 'role'>): Alone | null =>
+  !who.person ? 'stranger' : !who.role ? 'outsider' : null
 
 // A page served from a release compiled by a toolkit this platform has moved
 // on from asks for that release to be made again as itself (toolkit.ts,
@@ -2505,11 +2523,7 @@ export let index = async (
   let who = await whoIs(req, env.SESSION_SECRET, seatOf, space.eid)
   let { all, mine } = shelf(apps, space, who)
   let owner = who.role == 'owner'
-  let alone: Alone | null = !who.person
-    ? 'stranger'
-    : !who.role
-    ? 'outsider'
-    : null
+  let alone = aloneOf(who)
   let page = spaceIndex({
     space: space.slug,
     title: space.title,
@@ -3152,7 +3166,10 @@ let served = async (
           '/',
           filled(page, await copyFor(env, space, early.app)),
           early.app.version ?? 0,
-          badged(space, early.app, env),
+          {
+            ...badged(space, early.app, env),
+            edit: editOf(space, early.app, env, who),
+          },
           appPreview(early.app, '/'),
           req.headers.get(ADDRESS) ?? req.url,
         )
@@ -3486,8 +3503,19 @@ let served = async (
       ? passed()
       : (await index(req, env, space, (await routing).roster!, seatOf)).page
   }
-  // Site's page is counted by the gateway that sends it (page-cache.ts).
-  if (edge) return marked(keep(reporting(page, req, at, app), space, app))
+  // Site's page is counted by the gateway that sends it (page-cache.ts). A
+  // member's is never kept: it is woven for them (`wearing`).
+  if (edge) {
+    return marked(
+      keep(
+        reporting(page, req, at, app),
+        space,
+        app,
+        undefined,
+        aloneOf(who) ?? undefined,
+      ),
+    )
+  }
   // Count the page served (views.ts, T-34496). Last, once, and only for
   // what an app answered: the `/api/` doors returned above, a file that is not
   // HTML is not a page, and the platform's own pages — the space index, the

@@ -136,6 +136,11 @@ export type BrowserDrafts = Drafts & {
     field: HTMLInputElement | HTMLTextAreaElement,
     place: string,
   ) => () => void
+  /** Settles once the person is known and their drafts may be typed. */
+  ready: Promise<void>
+  /** Run `fn` now and again whenever a text, place or identity it read
+   * changes, until the returned function is called. */
+  follow: (fn: () => void) => () => void
   close: () => void
 }
 
@@ -217,6 +222,8 @@ export let browserDrafts = (
   let bindings = new Set<() => void>()
   return {
     has: (place: string) => current.value?.has(place) ?? false,
+    places: () => current.value?.places() ?? [],
+    ready,
     text: (place: string) => current.value?.text(place) ?? '',
     type: (place: string, text: string) => drafts().type(place, text),
     restore: (place: string, text: string, over?: string) =>
@@ -266,6 +273,14 @@ export let browserDrafts = (
       }
       bindings.add(unbind)
       return unbind
+    },
+    follow: (fn: () => void) => {
+      let stop = effect(fn)
+      bindings.add(stop)
+      return () => {
+        stop()
+        bindings.delete(stop)
+      }
     },
     close: () => {
       closed = true

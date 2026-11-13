@@ -59,6 +59,7 @@ is the text `%{name}`, and a lone `%` is just a percent sign.
 | `keys(copy)`                 | every snippet's key, in the file's order                         |
 | `fill(value, values)`        | the snippet's parts in order: text, and each slot's given value  |
 | `slots(value)`               | the slots a snippet names                                        |
+| `join(parts)`                | a snippet from `fill`'s parts: text escaped, each slot by name   |
 | `set(text, changes)`         | the file's text with keys set, its order and indentation kept    |
 | `format(copy, indent?)`      | a value as file text, one snippet per line                       |
 | `merge(ours, theirs, base?)` | the file with each key `theirs` changed from `base` laid over it |
