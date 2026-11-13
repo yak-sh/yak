@@ -2471,7 +2471,10 @@ export let api = async (
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!writes(who.role) || who.guest || sandboxed(app)) return refused()
     try {
-      let sent = await req.json().catch(() => ({}))
+      let sent = await req.json().catch(() => ({})) as {
+        copy?: unknown
+        version?: unknown
+      }
       let { saved, snippets, undone } = await import('./save.ts')
       let ctx = { env, dir, person: who.person!, clock: c }
       return Response.json(

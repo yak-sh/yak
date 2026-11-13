@@ -1,5 +1,6 @@
 // Read requests can be cancelled; admitted writes finish before their graph
 // closes. These lifetimes belong to the HTTP server, not its storage adapter.
+import { resolvers } from '@yaks/fp'
 import { Refused } from '@yaks/graph/errors'
 import type { Handler } from './route.ts'
 
@@ -188,7 +189,7 @@ export let requests = (handler: Handler) => {
       // both have happened, whichever comes first; an answer it gives after
       // is nobody's.
       let read = false, left = false
-      let gone = Promise.withResolvers<Response>()
+      let gone = resolvers<Response>()
       let leave = () => {
         if (left || !read || !cut.signal.aborted) return
         left = true

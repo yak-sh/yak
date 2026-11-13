@@ -49,7 +49,8 @@ export let storeAt = (
       let answer = await response.json().catch(() => null)
       if (!response.ok) {
         throw new Error(
-          answer?.message ?? `The store answered ${response.status}`,
+          (answer as { message?: string } | null)?.message ??
+            `The store answered ${response.status}`,
         )
       }
       return { bundles: answer as Bundle[] }
