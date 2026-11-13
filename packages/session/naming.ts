@@ -7,13 +7,6 @@
 // message, and works on a store with no foreign keys (@yaks/ram, a browser
 // tab). A target minted in the same batch counts: the check is against the
 // graph as the batch will leave it.
-//
-// `session.rewind` — when a claimed task settles, mint the forks that continue
-// on the parent task and on each open unclaimed child — belongs here as a
-// Rule, in-transaction, but it reads `claim` and the task tree, which this
-// package does not know. It is registered where @yaks/task and @yaks/session
-// meet (TODO T-35021: graph.ts `rewind`, once `session.status` can be read
-// in a rule's match).
 
 import type { Bundle, Comp, Hook } from '@yaks/graph'
 import { attemptState } from './attempt.ts'
