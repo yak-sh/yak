@@ -1,13 +1,22 @@
 // Speech through an app's ./api/speech/ door (speech.ts), with Deepgram stood
 // in for: text spoken and a recording heard for a member, each charged to the
 // space's model budget, and refused once the pilot has spent its share or the
-// space its budget.
+// space its budget; an Operator's setup on a call, and what its settings page
+// offers for it.
 import { equal, test } from '@yaks/testing'
+import { assertThrows } from '@std/assert'
 import { platform } from './directory-rows-probe.ts'
 import { stamp } from './directory.ts'
 import { endpoints } from './endpoints.ts'
 import { budget } from './meter.ts'
-import { sampled, setupOf, speechDoor, unread } from './speech.ts'
+import {
+  modelOf,
+  offered,
+  sampled,
+  setupOf,
+  speechDoor,
+  unread,
+} from './speech.ts'
 import type { Asked } from './apps.ts'
 
 let left = 199.5
@@ -237,4 +246,84 @@ test('an Operator’s setup: its voice names the provider, its pace how fast it 
   // larger model on its provider's side was picked.
   equal(setupOf(on, { voice_backend: 'gpt-6-sol' }).backend, 'gpt-6-sol')
   equal(setupOf(on, { voice_backend: 'gpt-2' }).backend, 'operator')
+})
+
+// What the settings page offers, by the names a person reads.
+let offer = (
+  voice?: string,
+  voice_model?: string,
+  env: object = { DEEPGRAM_API_KEY: 'a', OPENAI_VOICE_KEY: 'b' },
+  voice_speed?: string,
+) => offered(env, { voice, voice_model, voice_speed })
+let names = (xs: { name: string }[]) => xs.map((x) => x.name)
+let onlyDeepgram = { DEEPGRAM_API_KEY: 'a' }
+
+test('a few voices are offered, the butler-like first, with the one picked', () => {
+  equal(names(offer().voices), [
+    'Draco',
+    'Pandora',
+    'Cedar',
+    'Marin',
+    'Ash',
+    'Coral',
+  ])
+  equal(offer().setup.voice, 'cedar')
+  equal(
+    offer(undefined, undefined, onlyDeepgram).setup.voice,
+    'aura-2-draco-en',
+  )
+  let [draco] = offer().voices
+  equal([draco.ways, draco.like], [
+    ['claude-haiku-5-5', 'claude-sonnet-5-5'],
+    'a butler',
+  ])
+  // A voice picked before and not offered is still offered, picked.
+  let zeus = offer('aura-2-zeus-en')
+  equal(zeus.setup.voice, 'aura-2-zeus-en')
+  equal(zeus.voices.some((v) => v.id == 'aura-2-zeus-en'), true)
+  equal(names(offer(undefined, undefined, onlyDeepgram).voices), [
+    'Draco',
+    'Pandora',
+  ])
+})
+
+test('each way of answering is said plainly, the realtime one only where its provider is on', () => {
+  equal(names(offer().ways), [
+    'Quickest',
+    'Conversational',
+    'Quick',
+    'Thorough',
+  ])
+  equal(names(offer(undefined, undefined, onlyDeepgram).ways), [
+    'Quick',
+    'Thorough',
+  ])
+  equal(offer().setup.model, 'gpt-realtime-2.1-mini')
+  equal(offer('aura-2-draco-en').setup.model, 'claude-haiku-5-5')
+  equal(names(offer('cedar', 'gpt-realtime-2.1').ways).at(-1), 'As set before')
+})
+
+test('a few speeds are offered, Normal until another is picked', () => {
+  equal(names(offer().paces), ['Relaxed', 'Normal', 'Brisk'])
+  equal(offer().setup.pace, 'normal')
+  equal(offer(undefined, undefined, undefined, 'relaxed').setup.pace, 'relaxed')
+})
+
+test('a talking model is picked only with one of its own voices', () => {
+  equal(modelOf('gpt-realtime-2.1', 'cedar'), 'gpt-realtime-2.1')
+  equal(
+    modelOf('claude-haiku-5-5', 'aura-2-draco-en'),
+    'claude-haiku-5-5',
+  )
+  assertThrows(
+    () => modelOf('gpt-realtime-2.1', 'aura-2-draco-en'),
+    Error,
+    'can’t speak in this voice',
+  )
+  assertThrows(
+    () => modelOf('gpt-realtime-2.1', 'fable'),
+    Error,
+    'can’t speak in this voice',
+  )
+  assertThrows(() => modelOf('gpt-9', 'cedar'), Error, 'ways listed')
 })

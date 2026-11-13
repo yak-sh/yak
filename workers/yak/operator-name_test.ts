@@ -6,7 +6,8 @@ import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel'
-import { NAMES, operatorNameRule, pick } from './operator-name.ts'
+import { NAMES, pick } from '@yaks/persona'
+import { operatorNameRule } from './operator-name.ts'
 
 let vocab = loadVocab([kernelDoc, {
   $defs: {

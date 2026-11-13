@@ -76,10 +76,11 @@ import {
   vapidOf,
 } from './operator-alerts.ts'
 import { publicKey, type Subscription } from '@yaks/push'
-import { given } from './operator-name.ts'
+import { given } from '@yaks/persona'
+import { NameCard } from '@yaks/persona/ui'
+import { type Offer, VoiceCard } from '@yaks/speech/ui'
 import {
   backendOf,
-  BUTLERS,
   hearing,
   modelOf,
   offered,
@@ -87,7 +88,6 @@ import {
   sampled,
   setupOf,
   speaking,
-  speaks,
   speechOf,
   voiceOf,
 } from './speech.ts'
@@ -150,17 +150,10 @@ let shown = (number: string) =>
   number.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')
 
 // One of the Operator's settings, the way the dashboard draws one (pages.ts):
-// a form around its card, the card's head naming it, and under the card its
-// actions, with what pressing one said beside them (`settingsScript`). `id`
-// names the form and the answer it posts to (`operatorAnswer`). Changed
-// fields join the page's Save bar.
-let acting = (
-  at: string,
-  id: string,
-  title: string,
-  actions: Node,
-  ...inside: Node[]
-) =>
+// a form around its card, and under the card its actions, with what pressing
+// one said beside them (`settingsScript`). `id` names the form and the answer
+// it posts to (`operatorAnswer`). Changed fields join the page's Save bar.
+let setting = (at: string, id: string, card: Node, actions: Node = null) =>
   h(
     Form,
     {
@@ -170,7 +163,7 @@ let acting = (
       action: `${at}?${id}=1`,
       'data-save': id,
     },
-    h(Card, null, h(Card.Head, null, h(Card.Title, null, title)), ...inside),
+    card,
     h(
       Form.Actions,
       null,
@@ -179,9 +172,9 @@ let acting = (
     ),
   )
 
-// A setting saved with the page's other changed fields.
-let setting = (at: string, id: string, title: string, ...inside: Node[]) =>
-  acting(at, id, title, null, ...inside)
+// A card of this page's own, its head naming it.
+let titled = (title: string, ...inside: Node[]) =>
+  h(Card, null, h(Card.Head, null, h(Card.Title, null, title)), ...inside)
 
 // A field under its label.
 let field = (id: string, label: string, control: Node) =>
@@ -225,7 +218,7 @@ export let keepCard = (back: string) =>
 
 // One of a few to pick, as a radio: its name in bold, what it means beside
 // it, `also` on its input.
-type Offer = {
+type Option = {
   id: string
   name: string
   about: string
@@ -234,7 +227,7 @@ type Offer = {
 }
 let choice = (
   name: string,
-  o: Offer,
+  o: Option,
   also: Record<string, unknown> = {},
   more = '',
 ) =>
@@ -254,12 +247,12 @@ let choice = (
       h('b', null, o.name),
       more,
       ' ',
-      h('span', { class: 'Note Note-small' }, o.about),
+      h(Check.Note, null, o.about),
     ),
   )
 
 // A field of few to pick one from, its label over them.
-let choices = (id: string, label: string, name: string, offers: Offer[]) =>
+let choices = (id: string, label: string, name: string, offers: Option[]) =>
   h(
     Form.Field,
     { role: 'radiogroup', 'aria-labelledby': id },
@@ -288,54 +281,57 @@ export let textsCard = (
   h(
     Fragment,
     null,
-    acting(
+    setting(
       at,
       'texts',
-      'Texts and calls',
-      consent
-        ? h(Button, {
-          type: 'submit',
-          form: 'texts-stop',
-        }, 'Stop texts')
-        : null,
-      h(
-        'p',
-        null,
-        'Text your Operator about anything, and it answers by text; call it, and it answers by voice. It also texts you its alerts, unless you choose another way for them above, and apps you build can text you reminders. You can still use chat and email.',
-      ),
-      from || call
-        ? h(
+      titled(
+        'Texts and calls',
+        h(
           'p',
           null,
-          from === call
-            ? [h('a', { href: `sms:${from}` }, 'Text'), ' or call ']
-            : from
-            ? ['Text ', h('a', { href: `sms:${from}` }, shown(from))]
-            : null,
-          from && call && from !== call ? ' or call ' : !from ? 'Call ' : null,
-          call ? h('a', { href: `tel:${call}` }, shown(call)) : null,
-          consent
-            ? ' to reach your Operator.'
-            : ' from the mobile number you agree to texts at below to reach your Operator.',
-        )
-        : null,
-      consent
-        ? h(
-          'p',
-          null,
-          'Texts go to ',
-          h('b', null, shown(consent.number)),
-          from
-            ? ''
-            : '; to text your Operator, reply to the number your welcome text came from',
-          '. You agreed ',
-          h(Time, { at: consent.at }),
-          '.',
-        )
-        : null,
-      consent ? changing(agreeing('Change your mobile number')) : agreeing(
-        'Mobile number',
+          'Text your Operator about anything, and it answers by text; call it, and it answers by voice. It also texts you its alerts, unless you choose another way for them above, and apps you build can text you reminders. You can still use chat and email.',
+        ),
+        from || call
+          ? h(
+            'p',
+            null,
+            from === call
+              ? [h('a', { href: `sms:${from}` }, 'Text'), ' or call ']
+              : from
+              ? ['Text ', h('a', { href: `sms:${from}` }, shown(from))]
+              : null,
+            from && call && from !== call
+              ? ' or call '
+              : !from
+              ? 'Call '
+              : null,
+            call ? h('a', { href: `tel:${call}` }, shown(call)) : null,
+            consent
+              ? ' to reach your Operator.'
+              : ' from the mobile number you agree to texts at below to reach your Operator.',
+          )
+          : null,
+        consent
+          ? h(
+            'p',
+            null,
+            'Texts go to ',
+            h('b', null, shown(consent.number)),
+            from
+              ? ''
+              : '; to text your Operator, reply to the number your welcome text came from',
+            '. You agreed ',
+            h(Time, { at: consent.at }),
+            '.',
+          )
+          : null,
+        consent ? changing(agreeing('Change your mobile number')) : agreeing(
+          'Mobile number',
+        ),
       ),
+      consent
+        ? h(Button, { type: 'submit', form: 'texts-stop' }, 'Stop texts')
+        : null,
     ),
     consent
       ? h('form', {
@@ -397,7 +393,7 @@ export let alertsCard = (
   let route = routeOf(chosen, consent, email, browsers)
   let current = chosen ?? route?.by ?? 'updates'
   let n = browsers.length
-  let offers: Omit<Offer, 'checked'>[] = [
+  let offers: Omit<Option, 'checked'>[] = [
     ...key
       ? [{
         id: 'push',
@@ -429,17 +425,19 @@ export let alertsCard = (
   return setting(
     at,
     'alerts',
-    'Alerts',
-    h(
-      'p',
-      null,
-      'How your Operator tells you something when you are not here: work you are waiting on finished, something needs you, or you asked to be told. It is always in your Updates too.',
-    ),
-    choices(
-      'alerts-channel',
-      'Tell me by',
-      'channel',
-      offers.map((o) => ({ ...o, checked: o.id == current })),
+    titled(
+      'Alerts',
+      h(
+        'p',
+        null,
+        'How your Operator tells you something when you are not here: work you are waiting on finished, something needs you, or you asked to be told. It is always in your Updates too.',
+      ),
+      choices(
+        'alerts-channel',
+        'Tell me by',
+        'channel',
+        offers.map((o) => ({ ...o, checked: o.id == current })),
+      ),
     ),
   )
 }
@@ -495,99 +493,23 @@ export let alertsOffer = (
     )
     : null
 
-// Where a space's people change what its Operator is called.
+// Where a space's people change what its Operator is called, its persona's
+// name (@yaks/persona's card).
 export let nameCard = (at: string, name: string) =>
-  setting(
-    at,
-    'name',
-    'Name',
-    h(
-      'p',
-      null,
-      'What this Operator goes by. It introduces itself by this name and signs its letters with it.',
-    ),
-    field(
-      'operator-name',
-      'Name',
-      h(Field, {
-        id: 'operator-name',
-        name: 'name',
-        value: name,
-        maxlength: 40,
-        required: true,
-        autocomplete: 'off',
-      }),
-    ),
-  )
+  setting(at, 'name', h(NameCard, { name }))
 
 // Where a space's people hear a few voices its Operator may speak in on a
-// call, pick one, how fast it speaks, and how its calls are answered, each
-// said in a line (speech.ts `offered`). Play speaks a sample at the speed
-// picked (speech.ts `sampled`); a voice the chosen way cannot speak is
-// greyed (`settingsScript`).
-export let voiceCard = (
-  at: string,
-  space: Pick<Space, 'operator'>,
-  { setup, voices, ways, paces, backends }: ReturnType<typeof offered>,
-) =>
+// call, pick one, how fast it speaks, and how its calls are answered
+// (@yaks/speech's card), from what speech.ts `offered`s. Play speaks a sample
+// at the speed picked (speech.ts `sampled`); a voice the chosen way cannot
+// speak is greyed (`settingsScript`).
+export let voiceCard = (at: string, name: string, offer: Offer) =>
   setting(
     at,
     'voice',
-    'Voice',
-    h(
-      'p',
-      null,
-      `How ${space.operator} sounds and answers when you call. Play a few voices, pick one, and save.`,
-    ),
-    h(
-      'div',
-      { class: 'Voices' },
-      voices.map((v) =>
-        h(
-          'div',
-          { class: 'Voices_Row' },
-          choice(
-            'voice',
-            { ...v, checked: v.id == setup.voice },
-            {
-              'data-ways': ways.filter((w) => speaks(w.model, v.id))
-                .map((w) => w.model).join(' '),
-            },
-            BUTLERS.includes(v.id) ? ' (like a butler)' : '',
-          ),
-          h(Button, {
-            type: 'button',
-            'data-sample': `${at}?sample=${v.id}`,
-            'aria-label': `Play ${v.name}`,
-            'data-tip': `Play ${v.name}`,
-          }, h(Icon, { of: icons.play })),
-        )
-      ),
-    ),
-    choices(
-      'voice-speed',
-      'Speed',
-      'voice_speed',
-      paces.map((p) => ({ ...p, checked: p.id == setup.pace })),
-    ),
-    choices(
-      'voice-answers',
-      'Answers',
-      'voice_model',
-      ways.map((w) => ({
-        id: w.model,
-        name: w.name,
-        about: w.about,
-        checked: w.model == setup.model,
-      })),
-    ),
-    choices(
-      'voice-backend',
-      'Hard requests',
-      'voice_backend',
-      backends.map((b) => ({ ...b, checked: b.id == setup.backend })),
-    ),
+    h(VoiceCard, { name, offer, sample: (id) => `${at}?sample=${id}` }),
   )
+
 /** A request no session has taken yet, as its conversation draws it, with
  * the lines a settled one is drawn with: what was asked with the files sent
  * with it, under the id its line will have once taken, and what became of it
@@ -1249,7 +1171,7 @@ export let operatorBody = async (env: Env, seen: Space, who: Who) => {
     ),
     talks(space.slug),
     nameCard(at, operator),
-    voiceCard(at, space, offered(env, space)),
+    voiceCard(at, operator, offered(env, space)),
     alertsCard(at, chosen, consent, email, browsers, pushKey(env)),
     textsCard(at, consent, from, call),
   ]) + settingsScript

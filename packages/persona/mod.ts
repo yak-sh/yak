@@ -46,6 +46,7 @@ export {
   TOOL,
   wear,
 } from './worn.ts'
+export { christened, given, LONGEST, NAMES, pick } from './name.ts'
 export {
   type As,
   carried,

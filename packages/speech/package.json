@@ -3,17 +3,23 @@
   "version": "0.2.33",
   "exports": {
     ".": "./mod.ts",
-    "./vocab": "./vocab.ts"
+    "./vocab": "./vocab.ts",
+    "./ui": "./ui.ts"
   },
   "license": "Apache-2.0",
   "description": "Speech to text, text to speech and speech to speech, each provider given as data: Deepgram and OpenAI, their endpoints, models, voices and prices.",
   "type": "module",
   "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/testing": "0.2.30",
-    "@std/assert": "npm:@jsr/std__assert@^1.0.0"
+    "linkedom": "^0.18.12",
+    "preact-render-to-string": "6.7.0"
   },
   "dependencies": {
     "@yaks/model": "0.2.32",
-    "@yaks/vocab": "0.2.32"
+    "@yaks/ui": "0.2.30",
+    "@yaks/vocab": "0.2.32",
+    "lucide": "1.31.0",
+    "preact": "10.29.7"
   }
 }

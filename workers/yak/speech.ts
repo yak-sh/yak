@@ -28,6 +28,7 @@ import {
   talkerOf,
   type Voice,
 } from '@yaks/speech'
+import type { Offer } from '@yaks/speech/ui'
 import type { Answer } from './apps.ts'
 import { bound, caught } from './defects.ts'
 import type { Space } from './directory.ts'
@@ -182,19 +183,15 @@ export let speaks = (model: string, id: string) =>
   )
 
 /** What the settings page offers for `space`'s calls on the providers on
- * here: a few voices and the ways to answer, each with the one picked now
- * even where it is not among them, so a save never changes it unasked. */
+ * here (@yaks/speech's `VoiceCard`): a few voices, each with the ways of
+ * answering that speak in it, and the ways to answer, each with the one
+ * picked now even where it is not among them, so a save never changes it
+ * unasked. */
 export let offered = (
   env: Speaking,
   space: Pick<Space, 'voice' | 'voice_model' | 'voice_speed' | 'voice_backend'>,
-) => {
+): Offer & { setup: ReturnType<typeof setupOf> } => {
   let setup = setupOf(env, space)
-  let on = (v: Voiced) => speechOf(env, v.provider)
-  let voices = VOICES.filter((v) =>
-    on(v) && (OFFERED.includes(v.id) || v.id == setup.voice)
-  ).toSorted((a, b) =>
-    (OFFERED.indexOf(a.id) + 1 || 99) - (OFFERED.indexOf(b.id) + 1 || 99)
-  )
   let ways = WAYS.filter((w) => answers(env, w.model))
   if (!ways.some((w) => w.model == setup.model)) {
     ways.push({
@@ -203,6 +200,16 @@ export let offered = (
       about: 'Kept until you pick one of the others.',
     })
   }
+  let on = (v: Voiced) => speechOf(env, v.provider)
+  let voices = VOICES.filter((v) =>
+    on(v) && (OFFERED.includes(v.id) || v.id == setup.voice)
+  ).toSorted((a, b) =>
+    (OFFERED.indexOf(a.id) + 1 || 99) - (OFFERED.indexOf(b.id) + 1 || 99)
+  ).map((v) => ({
+    ...v,
+    ways: ways.filter((w) => speaks(w.model, v.id)).map((w) => w.model),
+    ...BUTLERS.includes(v.id) ? { like: 'a butler' } : {},
+  }))
   // A larger model on OpenAI's side only where OpenAI is on.
   let backends = BACKENDS.filter((b) =>
     b.id == 'operator' || !!speechOf(env, OPENAI)

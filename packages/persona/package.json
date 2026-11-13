@@ -12,7 +12,8 @@
     "./skill-checkout": "./skill-checkout.ts",
     "./skill-mirror": "./skill-mirror.ts",
     "./skill-text": "./skill-text.ts",
-    "./views": "./views.ts"
+    "./views": "./views.ts",
+    "./ui": "./ui.ts"
   },
   "license": "Apache-2.0",
   "description": "Who is acting and with what instructions — the people a graph knows, the personas an agent runs with, the skills it loads on demand, and a persona rendered as one markdown document.",
@@ -31,6 +32,7 @@
     "@yaks/project": "0.2.28",
     "@yaks/query": "0.2.32",
     "@yaks/text": "0.2.24",
+    "@yaks/tools": "0.2.30",
     "@yaks/tracker": "0.2.33",
     "@yaks/ui": "0.2.30",
     "@yaks/ux": "0.2.23",
@@ -50,7 +52,6 @@
     "@yaks/render": "0.2.24",
     "@yaks/task": "0.2.23",
     "@yaks/testing": "0.2.30",
-    "@yaks/tools": "0.2.30",
     "linkedom": "^0.18.12",
     "preact-render-to-string": "6.7.0"
   }

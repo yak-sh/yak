@@ -3581,6 +3581,9 @@ importers:
       '@yaks/text':
         specifier: 0.2.24
         version: link:../text
+      '@yaks/tools':
+        specifier: 0.2.30
+        version: link:../tools
       '@yaks/tracker':
         specifier: 0.2.33
         version: link:../tracker
@@ -3633,9 +3636,6 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
-      '@yaks/tools':
-        specifier: 0.2.30
-        version: link:../tools
       linkedom:
         specifier: ^0.18.12
         version: 0.18.15
@@ -4352,9 +4352,18 @@ importers:
       '@yaks/model':
         specifier: 0.2.32
         version: link:../model
+      '@yaks/ui':
+        specifier: 0.2.30
+        version: link:../ui
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab
+      lucide:
+        specifier: 1.31.0
+        version: 1.31.0
+      preact:
+        specifier: 10.29.7
+        version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
@@ -4362,6 +4371,12 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
+      linkedom:
+        specifier: ^0.18.12
+        version: 0.18.15
+      preact-render-to-string:
+        specifier: 6.7.0
+        version: 6.7.0(preact@10.29.7)
 
   packages/spend:
     dependencies:

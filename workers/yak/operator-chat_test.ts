@@ -26,7 +26,7 @@ import {
   operatorBody,
   updatesPage,
 } from './operator-page.ts'
-import { NAMES, pick } from './operator-name.ts'
+import { NAMES, pick } from '@yaks/persona'
 import {
   chatPath,
   managed,

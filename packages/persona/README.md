@@ -269,6 +269,20 @@ checkout, so its personas, its common one included, are written there as
 specialists, each saying its home's common persona beside the checkout's
 `AGENTS.md`.
 
+## Names
+
+A persona's name is its `doc{title}`, the name alone. `NAMES` are the ones a new
+persona is given, short, warm and plain to say aloud. `pick(eid, taken)` is the
+first from the entity's own place in them that `taken` lacks, and
+`christened(eid, others)` one clear of the names `others` go by (those its
+people already reach), so personas named in one pass, which cannot read each
+other's, still choose apart. `given(said)` is a name a person typed, its spaces
+closed up, refused when it is empty or longer than `LONGEST` (40) characters.
+
+`@yaks/persona/ui`'s `NameCard` is where its people change it: a card of the
+kit's parts holding one field, `name`. The host's form holds the card, so where
+the name is sent is the host's (yaks.app's Operator page posts it to `?name`).
+
 ## The desk
 
 `@yaks/persona/views` draws what agents are given wherever the browsing app
@@ -316,17 +330,18 @@ is drawn as its source, as written.
 
 ## Exports
 
-| subpath          | what it provides                                                                                                  |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `.`              | `wear`, `voice`, `owed`, `unsaid`, `wearing`, `offer`, `common`, the component names, and the vocabulary document |
-| `./vocab`        | the component declarations alone                                                                                  |
-| `./part`         | `PART`, what stands between the parts of what an agent is told, importing nothing else                            |
-| `./tools`        | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes                                         |
-| `./effects`      | `effects(host, {files, skills})` — independently enables persona files and skills                                 |
-| `./skills`       | Graph skill reads and read-only checkout views                                                                    |
-| `./skill-text`   | Portable skill parsing, frontmatter and rendering                                                                 |
-| `./skill-mirror` | `syncSkills`, `skillRoots` — bidirectional landed repository mirror                                               |
-| `./views`        | `inspectViews()`, `tabs`, `destinations`, `icons` — the desk, as the browsing app draws it                        |
+| subpath          | what it provides                                                                                                                       |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `.`              | `wear`, `voice`, `owed`, `unsaid`, `wearing`, `offer`, `common`, the [names](#names), the component names, and the vocabulary document |
+| `./vocab`        | the component declarations alone                                                                                                       |
+| `./part`         | `PART`, what stands between the parts of what an agent is told, importing nothing else                                                 |
+| `./tools`        | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes                                                              |
+| `./effects`      | `effects(host, {files, skills})` — independently enables persona files and skills                                                      |
+| `./skills`       | Graph skill reads and read-only checkout views                                                                                         |
+| `./skill-text`   | Portable skill parsing, frontmatter and rendering                                                                                      |
+| `./skill-mirror` | `syncSkills`, `skillRoots` — bidirectional landed repository mirror                                                                    |
+| `./views`        | `inspectViews()`, `tabs`, `destinations`, `icons` — the desk, as the browsing app draws it                                             |
+| `./ui`           | `NameCard` — where a persona's people change its name                                                                                  |
 
 The two edge relations are borrowed rather than invented here: `contains` is
 [@yaks/task](../task)'s and `reads` is [@yaks/kernel](../kernel)'s. A relation
@@ -341,5 +356,6 @@ graph separately.
 ## Compatibility
 
 `.` and `./vocab` run in Deno, Node and the browser — they call no platform API.
-`./views` are Preact components a host mounts through @yaks/inspect's contract.
-`./tools` and `./effects` write files through @yaks/file.
+`./views` are Preact components a host mounts through @yaks/inspect's contract,
+and `./ui`'s card is one a host draws in its own form. `./tools` and `./effects`
+write files through @yaks/file.

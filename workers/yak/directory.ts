@@ -1,5 +1,6 @@
 import type { ByDay } from '@yaks/ui/chart'
-import { calledOf, christened, pick } from './operator-name.ts'
+import { christened, pick } from '@yaks/persona'
+import { calledOf } from './operator-name.ts'
 import {
   EPOCH,
   MEND,

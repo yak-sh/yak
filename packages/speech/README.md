@@ -139,3 +139,12 @@ knows. `speechFrom(persona, base, …)` reads it: each property is the first row
 in the chain that holds it, so a persona without one takes its base persona's,
 and one none of them holds is absent, for the host to choose. yaks.app's
 Operator keeps its voice this way (workers/yak/operator-persona.ts).
+
+`@yaks/speech/ui` draws where a persona's people pick it: `VoiceCard`, a card of
+the kit's parts. Its host says what is offered (`Offer`): the voice picked now
+and each voice it may pick, with the ways of answering that speak in it and what
+it is like; the ways to answer; the paces; and who takes a hard request, each
+list holding the one picked. `sample(id)` is where a voice's sample plays from.
+The card posts `voice`, `voice_speed`, `voice_model` and `voice_backend`, and
+the host's form holds it, so where they go is the host's. yaks.app's Operator
+page offers what its keys reach (workers/yak/speech.ts `offered`).

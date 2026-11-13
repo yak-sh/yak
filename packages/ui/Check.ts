@@ -1,7 +1,8 @@
 /**
  * A check box or a radio and the words it answers to, the label around
  * both, so pressing the words presses the box:
- * `<Check><Check.Input type="checkbox" />Send reminders</Check>`. Which are
+ * `<Check><Check.Input type="checkbox" />Send reminders</Check>`. A
+ * `Check.Note` among the words says what choosing it means, muted. Which are
  * checked, and what checking one does, are the caller's.
  *
  * @module
@@ -13,16 +14,19 @@ import { block, type Part } from './el.ts'
 import type { Colors, Native, Specimen } from './theme.ts'
 
 /** A box or a radio and its words. */
-export let Check: Part & Record<'Input', Part> = block('label', 'Check', {
-  Input: 'input',
-})
+export let Check: Part & Record<'Input' | 'Note', Part> = block(
+  'label',
+  'Check',
+  { Input: 'input', Note: 'span' },
+)
 
 /** What it is, in a line. */
 export let description = 'A check box or a radio, and its words.'
 
 /** Its box and its words stay apart, as in a browser. */
-export let sheet = (_c: Colors): Sheet => ({
+export let sheet = (c: Colors): Sheet => ({
   Check: { spaced: true },
+  Check_Note: { fg: c.muted },
 })
 
 /** A check on a phone is a row tall enough to press. */
@@ -73,6 +77,33 @@ export let specimens = (): Specimen[] => [
         },
       ),
       check('Team', { type: 'radio', name: 'check-who', disabled: true }),
+    ),
+  ],
+  [
+    'Check, Note',
+    h(
+      'div',
+      {},
+      check(
+        h(
+          'span',
+          {},
+          h('b', {}, 'Text'),
+          ' ',
+          h(Check.Note, {}, 'to 269-555-0142'),
+        ),
+        { type: 'radio', name: 'check-by', checked: true },
+      ),
+      check(
+        h(
+          'span',
+          {},
+          h('b', {}, 'Email'),
+          ' ',
+          h(Check.Note, {}, 'once you give an address'),
+        ),
+        { type: 'radio', name: 'check-by' },
+      ),
     ),
   ],
 ]

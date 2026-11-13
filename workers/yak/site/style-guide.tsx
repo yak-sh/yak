@@ -3,7 +3,6 @@ import { day } from '@yaks/ui/relative'
 import {
   Button,
   Card,
-  Check,
   Chip,
   Chips,
   type Composition,
@@ -546,35 +545,6 @@ export let StyleGuide = () => (
         <p class='Note Note-lead'>Introductory copy below a page title.</p>
         <p class='Note'>Supporting copy at the page's body size.</p>
         <p class='Note Note-small'>A caption, a footnote, a date.</p>
-      </Card>
-      <Card as='div' class='Guide_Demo'>
-        <p class='Guide_Name'>.Voices · .Voices_Row</p>
-        <div class='Voices'>
-          <div class='Voices_Row'>
-            <Check>
-              <Check.Input type='radio' name='demo-voice' checked />
-              <span>
-                <b>Draco</b>{' '}
-                <span class='Note Note-small'>Calm and measured</span>
-              </span>
-            </Check>
-            <Button type='button'>Play</Button>
-          </div>
-          <div class='Voices_Row'>
-            <Check>
-              <Check.Input type='radio' name='demo-voice' />
-              <span>
-                <b>Thalia</b>{' '}
-                <span class='Note Note-small'>Bright and quick</span>
-              </span>
-            </Check>
-            <Button type='button'>Play</Button>
-          </div>
-        </div>
-        <p class='Note Note-small'>
-          Rows to pick one from, each with something to try beside it; a long
-          list scrolls in place.
-        </p>
       </Card>
       <Card as='div' class='Guide_Demo'>
         <p class='Guide_Name'>

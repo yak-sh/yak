@@ -20,3 +20,8 @@
   opacity: .55;
   cursor: not-allowed;
 }
+/* What choosing it means, beside its words. */
+.Check_Note {
+  color: var(--muted);
+  font-size: var(--small);
+}
