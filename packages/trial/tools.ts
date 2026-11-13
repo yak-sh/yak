@@ -11,7 +11,7 @@
  *
  * @module
  */
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Eid, Graph } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import { actorOf, signed } from '@yaks/graph/provenance'
@@ -22,8 +22,21 @@ import { type Asking, owes, owing, spent } from './run.ts'
 import { hold, type RoundFile, tally } from './skill.ts'
 
 /** What a host gives the tools: who would answer a round's calls, which
- * prices what `trial_cap` says a round will cost where no earlier row does. */
-export type Options = { asking?: (round: Bundle) => Asking | Promise<Asking> }
+ * prices what `trial_cap` says a round will cost where no earlier row does,
+ * and what whoever brings a round's cases hears before it runs, which a
+ * plan's answer and a quote's carry: where the host shows them, say. */
+export type Options = {
+  asking?: (round: Bundle) => Asking | Promise<Asking>
+  notice?: (round: Bundle) => string | undefined | Promise<string | undefined>
+}
+
+// The host's notice, after an answer that comes before a round runs.
+let noticed = async (o: Options, graph: Graph, eid: Eid, line: string) => {
+  if (!o.notice) return line
+  let [row] = await graph.get([eid])
+  let words = await o.notice(row)
+  return words ? `${line} ${words}` : line
+}
 
 let usd = (n: number) => `$${n.toFixed(2)}`
 
@@ -64,16 +77,12 @@ export let runs = (o: Options = {}): Runs => ({
     let { round, removed } = await load(graph, file, actorOf([call]))
     let all = await gather(graph, round, true)
     let count = (name: string) => all.filter((b) => b[name]).length
-    return [
-      said(
-        call,
-        `${file.key} is planned: ${count('writing')} attempts, ${
-          count('guess')
-        } guesses and ${count('pair')} pairs${
-          removed ? `, ${removed} rows of the last plan removed` : ''
-        }. trial_cap says what it will cost.`,
-      ),
-    ]
+    let line = `${file.key} is planned: ${count('writing')} attempts, ${
+      count('guess')
+    } guesses and ${count('pair')} pairs${
+      removed ? `, ${removed} rows of the last plan removed` : ''
+    }. trial_cap says what it will cost.`
+    return [said(call, await noticed(o, graph, round, line))]
   },
   trial_cap: async (call, graph) => {
     let { round, cap } = argsOf(call)
@@ -86,7 +95,14 @@ export let runs = (o: Options = {}): Runs => ({
       spent(graph, eid),
     ])
     let line = `${owes(owed)}; its calls have cost ${usd(paid)} so far`
-    if (!n) return [said(call, `${line}. Give a cap to run it.`)]
+    if (!n) {
+      return [
+        said(
+          call,
+          await noticed(o, graph, eid, `${line}. Give a cap to run it.`),
+        ),
+      ]
+    }
     if (n <= paid) {
       throw new Refused(
         `${line}, so a cap of ${usd(n)} asks nothing more: give one above it`,

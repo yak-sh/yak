@@ -14,6 +14,11 @@
 //
 // Only members are offered the tools, so a visitor runs no trial and picks
 // nothing.
+//
+// A published skill's page shows every measured round's cases and outputs
+// (skill-page.ts), so whoever brings a round's cases hears that before it
+// runs: the answers of `trial_plan` and of `trial_cap`'s quote carry it,
+// naming the page where the skill has one (`publicity`).
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Model, Price } from '@yaks/model'
@@ -22,7 +27,9 @@ import { find, gather } from '@yaks/trial/round'
 import { type Answering, asking, type Ran } from '@yaks/trial/run'
 import { type Card, deck } from '@yaks/trial/skill'
 import { running } from '@yaks/trial/effects'
+import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
+import { skillAt } from './skill-page.ts'
 import { accounted } from './meter.ts'
 import { MACHINE } from './operator-machine.ts'
 import { notification } from './operator-updates.ts'
@@ -42,6 +49,18 @@ export type Lending = {
 
 let comp = (b: Bundle | undefined, name: string) =>
   (b?.[name] ?? {}) as Record<string, unknown>
+
+/** What whoever brings a round's cases hears before it runs: once a member
+ * picks in it, its cases and outputs are on the page of the skill it
+ * develops, now where the skill is published, or once it is. */
+export let publicity = async (dir: Directory, env: Env, round: Bundle) => {
+  let skill = String(comp(round, 'round').skill ?? '')
+  let at = skill ? await dir.skillOffered({ eid: skill }) : null
+  let where = at
+    ? `on the skill's public page, ${skillAt(at.skill.published.name, env)}`
+    : "on the skill's public page if it is ever published"
+  return `Before setting a cap, tell whoever brought these cases: once a member picks in this round, its cases and every output show ${where}, for anyone to read. Leave out anything private.`
+}
 
 /** Who answers a round's calls: the model it names (else the Operator's),
  * charged to the space that set its cap (`capped.by`). */

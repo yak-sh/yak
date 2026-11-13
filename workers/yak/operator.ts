@@ -134,6 +134,7 @@ import {
   answering,
   type Lending,
   pickTools,
+  publicity,
   trialRunning,
 } from './operator-trials.ts'
 import { wakeTools } from './operator-wakes.ts'
@@ -1181,6 +1182,7 @@ export let operating = (
   trialRunning(store, env, lending)
   let trials: Trials = {
     asking: (round) => asking(g, answering(env, lending, round)),
+    notice: (round) => publicity(dir(), env, round),
   }
   let catalogue = async <T>(
     from: string,

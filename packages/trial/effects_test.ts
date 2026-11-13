@@ -133,6 +133,7 @@ let open = async (model = fake()) => {
     // The runner applies what a tool answers, less its words, as the caller.
     let out: Bundle[] = await runs({
       asking: () => asking(g, model.answering),
+      notice: (round) => `Cases of ${(round.round as Any).skill} go public.`,
     })[name]!(
       { entity: { eid: crypto.randomUUID() }, call: { args }, $actor: space },
       g,
@@ -165,6 +166,13 @@ test('a plan writes no results, and plans its pairs on the skill kept under its 
   ok(refused.includes('only a run writes'), refused)
   let said = await t.tool('trial_plan', { round: file })
   ok(said.startsWith('w1 is planned: 4 attempts, 0 guesses and 2 pairs'), said)
+  // Whoever brings the cases hears the host's notice before the round runs.
+  ok(
+    said.endsWith(
+      'trial_cap says what it will cost. Cases of skill go public.',
+    ),
+    said,
+  )
   let [round] = await t.comps('round')
   equal(round.round.skill, 'skill')
   // A plan is the space's, which a skill's page counts as its own run.
@@ -177,7 +185,10 @@ test('a run says its cost first, stops at its cap, and the cap counts what was s
   let quote = await t.tool('trial_cap', { round: 'w1', cap: 0 })
   // Priced at the model's price, at most the reply's tokens: 4 writers.
   ok(quote.startsWith('4 writers and 0 judges to ask, about $0.03'), quote)
-  ok(quote.endsWith('$0.00 so far. Give a cap to run it.'), quote)
+  ok(
+    quote.endsWith('so far. Give a cap to run it. Cases of skill go public.'),
+    quote,
+  )
   equal(t.model.asked.length, 0)
 
   await t.tool('trial_cap', { round: 'w1', cap: 0.025 })

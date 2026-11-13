@@ -676,10 +676,12 @@ A member asks their Operator to improve one of the space's skills, and brings a
 few cases: work the skill is for. The Operator writes candidate texts of the
 skill beside the one it has and plans a round with them. Before it asks any
 model, it says what the round will cost, and the round runs only with the cap
-the member gives, spent from the space's budget like every other model call.
-Each candidate is asked to write each case, with no tools, and any judges the
-round names score what came back. Judges count only once they get enough of the
-answers already settled right.
+the member gives, spent from the space's budget like every other model call. It
+also tells the member that once someone picks in the round, its cases and every
+output show on the skill's public page if the skill is published, so cases
+should leave out anything private. Each candidate is asked to write each case,
+with no tools, and any judges the round names score what came back. Judges count
+only once they get enough of the answers already settled right.
 
 The member then picks between pairs of outputs, never told which candidate wrote
 which. The candidate people preferred becomes the skill's next version when the

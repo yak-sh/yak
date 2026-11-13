@@ -242,6 +242,11 @@ yaks.app gives a space's Operator store one that asks the space's providers,
 charged to the space that set the cap. `yak trial run` is the same run in the
 foreground, with a cap on that run alone.
 
+A host may also give the tools a `notice`: what whoever brings a round's cases
+hears before it runs, which `trial_plan`'s answer and `trial_cap`'s quote carry.
+yaks.app says there that once a member picks in the round, its cases and outputs
+show on the skill's public page.
+
 | tool          | what it does                                                                                               |
 | ------------- | ---------------------------------------------------------------------------------------------------------- |
 | `trial_plan`  | plans a round from its file, refusing any attempt or guess with results: only a run writes those           |

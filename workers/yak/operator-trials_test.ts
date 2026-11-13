@@ -11,7 +11,7 @@ import { directoryOf, stamp } from './directory.ts'
 import { monthOf } from './meter.ts'
 import { operatorMemory } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
-import { pickTools, trialRunning } from './operator-trials.ts'
+import { pickTools, publicity, trialRunning } from './operator-trials.ts'
 import { platform } from './testing.ts'
 
 let p = platform('operator trials')
@@ -138,5 +138,26 @@ test('a pick is the member’s own, and picking again changes it', async () => {
   assertStringIncludes(
     String((await pairs.run({ round }, undefined) as { text: string }).text),
     'every pair',
+  )
+})
+
+test("whoever brings a round's cases hears they go public, on the skill's page once it has one", async () => {
+  let { store, eid, round } = await ran(1)
+  let [row] = await store.g.get([round])
+  let skill = String((row.round as { skill: string }).skill)
+  let before = await publicity(dir, p.env, row)
+  assertStringIncludes(before, 'once a member picks in this round')
+  assertStringIncludes(before, 'if it is ever published')
+  await stamp(p.env, {
+    entities: [{
+      entity: { eid: skill },
+      skill: {},
+      doc: { title: 'pitching', body: 'Use for pitches.' },
+      published: { name: 'pitching-' + eid, version: 1, space: eid },
+    }],
+  })
+  assertStringIncludes(
+    await publicity(dir, p.env, row),
+    `show on the skill's public page, https://yaks.app/skills/pitching-${eid}`,
   )
 })
