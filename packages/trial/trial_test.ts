@@ -416,6 +416,21 @@ test('trial: carried is what the session kept of the person before its compactio
   assertEquals(await carried('jeff')(stand([], '2026-11-10T11:12:00.000Z')), [])
 })
 
+test('trial: carried with anyone lists every memory the session saved in the day, whoever wrote the row', async () => {
+  await g.apply([{
+    entity: { eid: 'theirs-saved' },
+    doc: { title: 'his words, saved by the project' },
+    created: { at: '2026-11-10T10:00:00.000Z', by: 'project' },
+    memory: { at: '2026-11-10T10:00:00.000Z', via: 's' },
+  }], { trusted: true })
+  let summary = entry(2, 'summary', { checkpoint: {} }) as Bundle
+  let moment = stand([summary], '2026-11-10T11:12:00.000Z')
+  let [only] = await carried('jeff')(moment)
+  let [all] = await carried('jeff', { anyone: true })(moment)
+  assertEquals(only.eids.includes('theirs-saved'), false)
+  assertEquals(all.eids, ['kept', 'theirs-saved', 'filed'])
+})
+
 test('trial: standing is the person and the notices that came more than once to the session or its parent', async () => {
   let notice = (eid: string, session: string, when: string, body: string) => ({
     entity: { eid },

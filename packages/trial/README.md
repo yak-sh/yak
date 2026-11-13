@@ -71,6 +71,7 @@ names, whose text says what the doors add and which no session wears:
 | `reply`    | the same, keyed on the agent's last reply or reasoning before the entry: what a hook at the next prompt sees                                                                                             |
 | `theirs`   | the person's comments of the day on rows the session's window names (by eid, number or short handle), and the named decisions they answered, with the choice: links, not meaning                         |
 | `carried`  | after a compaction, what the session kept of the person's words in the day before it: the memories it saved of them, and the tasks it filed quoting them                                                 |
+| `kept`     | `carried`, listing every memory the session saved in the day, whoever wrote the row                                                                                                                      |
 | `standing` | at the window's start, the person's own row, and each notice that came more than once in the day before to the session or the session that spawned it                                                    |
 
 ```sh

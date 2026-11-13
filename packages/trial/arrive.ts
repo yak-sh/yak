@@ -19,7 +19,8 @@
  *   what the session's window names, by link rather than by meaning.
  * - {@link carried}: after a compaction, what the session kept of the
  *   person's words in the day before it: the memories it saved of them and
- *   the tasks it filed quoting them.
+ *   the tasks it filed quoting them. With `anyone`, every memory it saved in
+ *   the day, whoever wrote the row.
  * - {@link standing}: at the session's start and after each compaction, who
  *   the person is, and each notice that came to the session, or to the session
  *   that spawned it, more than once in the day before.
@@ -359,40 +360,45 @@ let quotes = (text: string, words: string): boolean => {
 /** After a compaction, what the session kept of the person's words in the
  * day before it: each of their words it saved as a memory, and each task it
  * filed that quotes words they wrote to it. The words themselves are not
- * listed: a day of them runs to thousands of tokens. Nothing when the window
- * begins at the session's start. */
-export let carried =
-  (person: Eid): Arrival => async ({ storage, vocab, m, had, since }) => {
-    if (!had[0]?.checkpoint) return []
-    let day = dayBefore(since)
-    let id = human(vocab)
-    let span = (prop: string) => [gt(prop, day), lt(prop, since)]
-    let words = (await storage.read(and(
-      eq('entry.session', m.session),
-      eq('created.by', person),
-      ...span('created.at'),
-    ))).filter((b) => prompt(b) && !b.notice)
-    let saved = await storage.read(and(
-      eq('memory.via', m.session),
-      eq('created.by', person),
-      ...span('memory.at'),
-    ))
-    let filed = (await storage.read(and(
-      eq('created.via', m.session),
-      present('task'),
-      ...span('created.at'),
-    ))).filter((b) => {
-      let text = flat(`${str(comp(b, 'doc').title)} ${body(b)}`)
-      return words.some((w) => quotes(text, body(w)))
-    })
-    return lines(
-      'compaction',
-      [...saved, ...filed].map((b) => [
-        b,
-        `${id(b)} · ${titleOf(b)}`,
-      ]),
-    )
-  }
+ * listed: a day of them runs to thousands of tokens. With `anyone`, every
+ * memory the session saved in the day is listed, whoever wrote the row: an
+ * operator saves the person's words as rows written by its project. Nothing
+ * when the window begins at the session's start. */
+export let carried = (
+  person: Eid,
+  { anyone = false }: { anyone?: boolean } = {},
+): Arrival =>
+async ({ storage, vocab, m, had, since }) => {
+  if (!had[0]?.checkpoint) return []
+  let day = dayBefore(since)
+  let id = human(vocab)
+  let span = (prop: string) => [gt(prop, day), lt(prop, since)]
+  let words = (await storage.read(and(
+    eq('entry.session', m.session),
+    eq('created.by', person),
+    ...span('created.at'),
+  ))).filter((b) => prompt(b) && !b.notice)
+  let saved = await storage.read(and(
+    eq('memory.via', m.session),
+    ...anyone ? [] : [eq('created.by', person)],
+    ...span('memory.at'),
+  ))
+  let filed = (await storage.read(and(
+    eq('created.via', m.session),
+    present('task'),
+    ...span('created.at'),
+  ))).filter((b) => {
+    let text = flat(`${str(comp(b, 'doc').title)} ${body(b)}`)
+    return words.some((w) => quotes(text, body(w)))
+  })
+  return lines(
+    'compaction',
+    [...saved, ...filed].map((b) => [
+      b,
+      `${id(b)} · ${titleOf(b)}`,
+    ]),
+  )
+}
 
 /** At the window's start (the session's start or a compaction): who the
  * person is, and each notice that came more than once in the day before to

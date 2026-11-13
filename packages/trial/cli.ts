@@ -40,11 +40,12 @@ export let commands: CliCommand[] = [{
             'reply',
             'theirs',
             'carried',
+            'kept',
             'standing',
           ],
         },
         description:
-          "doors that add to the persona: beside (the prompt recall beside the person's words), related (the related list beside a write's hits), said (the person's earlier words and answered decisions beside each thing the session wrote), open (what is open with the person at start), or the resources nearest the agent's own words once: entry (its erring entry), call (its last tool call), reply (its last reply or reasoning); or by link: theirs (the person's comments and answers of the day on what the window names), carried (after a compaction, the person's words to the session in the day before it and the tasks it filed quoting them), standing (at start, who the person is and the notices that came more than once in the day to the session or its parent)",
+          "doors that add to the persona: beside (the prompt recall beside the person's words), related (the related list beside a write's hits), said (the person's earlier words and answered decisions beside each thing the session wrote), open (what is open with the person at start), or the resources nearest the agent's own words once: entry (its erring entry), call (its last tool call), reply (its last reply or reasoning); or by link: theirs (the person's comments and answers of the day on what the window names), carried (after a compaction, the person's words to the session in the day before it and the tasks it filed quoting them), kept (carried, listing every memory the session saved in the day, whoever wrote the row), standing (at start, who the person is and the notices that came more than once in the day to the session or its parent)",
       },
       floor: {
         type: 'number',
@@ -81,12 +82,12 @@ export let commands: CliCommand[] = [{
         : undefined
       if (
         doors.some((d) =>
-          ['beside', 'said', 'open', 'theirs', 'carried', 'standing']
+          ['beside', 'said', 'open', 'theirs', 'carried', 'kept', 'standing']
             .includes(d)
         ) && !person
       ) {
         throw new Error(
-          'beside, said, open, theirs, carried and standing need the config to name its person',
+          'beside, said, open, theirs, carried, kept and standing need the config to name its person',
         )
       }
       let floor = typeof args.floor == 'number' ? args.floor : undefined
@@ -117,6 +118,7 @@ export let commands: CliCommand[] = [{
         reply: drafted('reply'),
         theirs: () => arrive.theirs(person!),
         carried: () => arrive.carried(person!),
+        kept: () => arrive.carried(person!, { anyone: true }),
         standing: () => arrive.standing(person!),
       }
       let [as] = [...(await host.graph.address([args.under])).values()]
