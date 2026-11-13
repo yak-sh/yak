@@ -310,6 +310,14 @@ nobody else's.
   attempts, and both must be attempts at a `riddle` case.
 - Neither, or the same score for both, is a verdict that agrees with no answer.
 
+A judge of the `pair` form compares: it sees two attempts as A and B and answers
+`{"chose": "A", "why": "..."}`, or `"neither"`. A round's file lists
+`compared: [{judge, pairs?}]`, and each pair of the file (or the `pairs` named)
+is planned in both orders, so a judge that leans to the first or second it is
+shown splits and agrees with no answer. Each verdict is a `preference` naming
+the judge, planned until it has a `chose` or a `why`; `yak trial run` asks it
+like any other judgement.
+
 A judge **passes** a round when its pick is the winner on at least the round's
 `passing{share}` of the known answers it sat. That share is a person's to set
 (`yak trial pass <round> 0.8`), and the tally says who set it. With no share
@@ -323,7 +331,9 @@ true}`), so those taps cannot test it.
 `held_out`, choosing among pairs nobody has tapped yet, so the split is rows
 written before the taps and is the same on every run. `examples(all, person)` is
 what a selector is handed: that person's taps less every held-out pair's. A
-taught judge is scored only on planted pairs and on taps of held-out pairs.
+judge handed known answers as examples (`judge{taught}`) may be handed any that
+is not held out, a planted one as well as a tap, and is scored only on the known
+answers held out.
 
 ### What a skill's page shows
 

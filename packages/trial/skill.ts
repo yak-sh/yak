@@ -125,6 +125,10 @@ export type RoundFile = {
     cap?: number
   }[]
   pairs?: [string, string][]
+  /** judges that compare two attempts (form `pair`), each asked about every
+   * pair of the file, known answers included, or only the `pairs` it names,
+   * in each order */
+  compared?: { judge: string; pairs?: [string, string][] }[]
   /** planted known answers: pairs whose winner is settled, the winner first.
    * Each is a pair of the deck besides `pairs`, placed among them */
   known?: [string, string][]
@@ -405,6 +409,20 @@ export let rows = (file: RoundFile): Bundle[] => {
         known: { winner: attempt(winner) },
       }
     }),
+    ...(file.compared ?? []).flatMap(({ judge: key, pairs }) =>
+      (pairs ?? [...file.pairs ?? [], ...file.known ?? []]).flatMap((
+        [a, b],
+      ) =>
+        [[a, b], [b, a]].map(([first, second]): Bundle => ({
+          entity: { eid: loaded('preference', file.key, key, first, second) },
+          preference: {
+            first: attempt(first),
+            second: attempt(second),
+            judge: judge(key),
+          },
+        }))
+      )
+    ),
     ...(file.guesses ?? []).map((g): Bundle => {
       // A judge guesses once at an attempt; guesses that name none are told
       // apart by their form, their model and their place among the like.
@@ -621,7 +639,7 @@ export type Answer = {
  * card: a judge cannot tell these pairs from the rest.
  */
 export let answers = (all: Bundle[]): Map<string, Answer> => {
-  let out = new Map<string, Answer>()
+  let out = new Map<string, Answer>(), held = heldOut(all)
   for (let p of wearing(all, 'pair')) {
     let { a, b } = comp(p, 'pair'), winner = str(comp(p, 'known').winner)
     if (winner && (winner == a || winner == b)) {
@@ -629,11 +647,11 @@ export let answers = (all: Bundle[]): Map<string, Answer> => {
         winner,
         other: str(winner == a ? b : a),
         tapped: false,
-        held: false,
+        held: held.has(between(a, b)),
       })
     }
   }
-  let held = heldOut(all), said = new Map<string, Row[]>()
+  let said = new Map<string, Row[]>()
   for (let t of taps(all)) {
     let key = between(t.first, t.second)
     said.set(key, [...said.get(key) ?? [], t])
@@ -742,7 +760,7 @@ export type Standing = {
 }
 
 /** Every automated judge that gave a round a verdict, and where it stands.
- * A taught judge sits only planted pairs and held-out taps. */
+ * A taught judge sits only the known answers held out. */
 export let standings = (all: Bundle[]): Standing[] => {
   let named = byEid(all), known = answers(all)
   let verdicts = wearing(all, 'preference').map((p) => comp(p, 'preference'))
@@ -758,7 +776,7 @@ export let standings = (all: Bundle[]): Standing[] => {
     let compared = verdicts.filter(mine), guessed = guesses.filter(mine)
     let pick = picker(compared, guessed)
     let picks = [...known.values()]
-      .filter((k) => !taught || !k.tapped || k.held)
+      .filter((k) => !taught || k.held)
       .map((k) => [pick(k.winner, k.other), k.winner])
       .filter(([p]) => p !== undefined)
     let sat = picks.length, agreed = picks.filter(([p, w]) => p == w).length
@@ -877,7 +895,8 @@ let GUESSED: Column[] = [
  * Then the judges. The round's known answers ({@link answers}) are counted,
  * and each automated judge is scored on those it sat: its pick of the pair
  * ({@link picker}) was the winner, or was not. A judge taught from a
- * person's taps sits only planted pairs and held-out taps. A judge passes
+ * person's taps, or from known answers, sits only the known answers held
+ * out. A judge passes
  * when it agreed on at least the round's `passing{share}` of what it sat;
  * with no share set, or nothing sat, none has. Each judge's verdicts on the
  * pairs with no known answer follow, the judges that passed first and every
@@ -1103,7 +1122,7 @@ export let tally = (
       }.`,
     ...judges.length
       ? [
-        'sat: the known answers the judge gave a verdict on; a taught judge sits only planted pairs and held-out taps. agreed: its pick was the winner; neither, or a tie, is not agreeing.',
+        'sat: the known answers the judge gave a verdict on; a taught judge sits only the known answers held out. agreed: its pick was the winner; neither, or a tie, is not agreeing.',
         ...guesses.length
           ? [
             'guesses: mean guesses until right in the open form, a miss counted as its cap plus one. among: how often the pick among the group was right.',

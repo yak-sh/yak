@@ -155,11 +155,11 @@
       "properties": {
         "taught": {
           "type": "boolean",
-          "description": "it was handed a person's taps as examples (a selector), so those taps cannot test it: it is scored only on planted answers and on taps whose pair is `held_out`"
+          "description": "it was handed known answers as examples (a selector), a person's taps among them, so those taps cannot test it: it is scored only on known answers whose pair is `held_out`. A selector may be handed any known answer that is not held out, a planted one as well as a tap"
         },
         "form": {
           "type": "string",
-          "description": "how it guesses. `open`: it lists guesses in order, as `{\"guesses\": [names]}`; `among`: it also sees the texts of every case in the riddle's group, labelled by letter, and ranks the letters, as `{\"ranking\": [letters]}`"
+          "description": "how it guesses. `open`: it lists guesses in order, as `{\"guesses\": [names]}`; `among`: it also sees the texts of every case in the riddle's group, labelled by letter, and ranks the letters, as `{\"ranking\": [letters]}`. `pair`: it sees two attempts as A and B and answers `{\"chose\": \"A\" | \"B\" | \"neither\", \"why\": \"...\"}`, asked once in each order so a lean to the first or the second shows as a split"
         },
         "shown": {
           "type": "array",
@@ -170,7 +170,7 @@
         },
         "question": {
           "type": "string",
-          "description": "what it is asked: `$output` is the parts shown, and in the `among` form `$n` is how many cases it chooses among and `$sheets` their texts"
+          "description": "what it is asked: `$output` is the parts shown, and in the `among` form `$n` is how many cases it chooses among and `$sheets` their texts. In the `pair` form `$a` and `$b` are the parts shown of the first and second attempt"
         },
         "cap": {
           "type": "integer",
@@ -480,7 +480,19 @@
         },
         "why": {
           "type": "string",
-          "description": "a few words of why, when the judge gave any"
+          "description": "a few words of why. A judge's row always has one, so a row naming a judge with neither a `chose` nor a `why` is planned and not yet returned"
+        },
+        "model": {
+          "type": "string",
+          "ref": "model",
+          "death": "keep",
+          "description": "the model that judged"
+        },
+        "session": {
+          "type": "string",
+          "ref": "session",
+          "death": "detach",
+          "description": "the session asked, on a judge's row: planned and not yet asked where it names none, and not yet returned where it does"
         }
       }
     },

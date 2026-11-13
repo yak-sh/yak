@@ -24,11 +24,16 @@ export let find = async (g: Graph, word: string): Promise<Eid> => {
 }
 
 /** Whether a row is still to be returned (./run.ts): an attempt a model is to
- * write that has no `output`, or a guess with no `guesses`. */
-export let unreturned = (b: Bundle): boolean =>
-  b.writing
+ * write that has no `output`, a guess with no `guesses`, or a judge's
+ * comparison with neither a `chose` nor a `why`. */
+export let unreturned = (b: Bundle): boolean => {
+  let said = (b.guess ?? b.preference ?? {}) as Record<string, unknown>
+  return b.writing
     ? !!attempt(b).variant && !attempt(b).output
-    : !!b.guess && !(b.guess as Record<string, unknown>).guesses
+    : b.preference
+    ? !!said.judge && !said.chose && !said.why
+    : !!b.guess && !said.guesses
+}
 
 /** Everything a round's deck and tally read: the round, its attempts, their
  * variants and cases, its pairs, each preference, mark and guess aimed at
@@ -140,7 +145,9 @@ export let load = async (
     await find(g, file.key)
   let now = new Set(made.map((b) => b.entity.eid))
   let stale = (await gather(g, round, true)).filter((b) =>
-    !now.has(b.entity.eid) && (b.pair || b.guess || attempt(b).variant)
+    !now.has(b.entity.eid) &&
+    (b.pair || b.guess || attempt(b).variant ||
+      (b.preference && unreturned(b)))
   )
   // An attempt nobody wrote has nothing resting on it, and goes with the plan.
   let gone = stale.filter((b) => !b.writing || unreturned(b))
