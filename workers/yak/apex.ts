@@ -11,8 +11,7 @@ import * as comp from './comp.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { copyOf } from './directory-copy.ts'
-import { identity, mcp } from './doors.ts'
-import { bound, type Env } from './env.ts'
+import { bound, type Env, type Handler } from './env.ts'
 import * as gallery from './gallery.ts'
 import * as skillPage from './skill-page.ts'
 import { PAGE } from './gallery-row.ts'
@@ -40,6 +39,14 @@ import { isHome, isPage } from './view-point.ts'
 import { keep } from './arrival.ts'
 import * as variant from './variant.ts'
 import * as ads from './ads.ts'
+
+// Doors loaded when a request first reaches one (T-37977). What they import,
+// the MCP SDK and zod, the OAuth provider, is evaluated only by an isolate
+// that serves one of them, not by every cold start.
+export let identity: Handler = async (req, env) =>
+  (await import('./identity.ts')).fetch(req, env)
+let mcp: Handler = async (req, env) =>
+  (await import('./mcp.ts')).fetch(req, env)
 
 // The apex: the platform's own pages and doors.
 let atApex = async (req: Request, env: Env, path: string) => {

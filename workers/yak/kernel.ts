@@ -86,7 +86,6 @@ import { sealed } from './cache.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { customOf, reading, refresh, type Step } from './domains.ts'
-import { identity } from './doors.ts'
 import { bound, type Env, type Inbound } from './env.ts'
 import { apex } from '@yaks/platform/host'
 import { lost, oops, provisioning } from './pages.ts'
@@ -291,7 +290,11 @@ let router = {
       // hostname already carries the platform cookie and never needs it.
       if (handedOff(host, asked, env)) {
         return sealed(
-          await bound(env.IDENTITY, identity, env).fetch(req),
+          await bound(
+            env.IDENTITY,
+            (await import('./apex.ts')).identity,
+            env,
+          ).fetch(req),
           env,
         )
       }
