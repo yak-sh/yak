@@ -4,7 +4,8 @@ import { api } from '@yaks/api'
 import { apiDoc } from '@yaks/api/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { graph, signed } from '@yaks/graph'
-import { ram } from '@yaks/ram'
+import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
 import { pair } from '../../packages/sync/testing.ts'
 import { appVocab } from '../../workers/yak/vocab.ts'
 import words from './vocab.json' with { type: 'json' }
@@ -19,7 +20,12 @@ test('two heroes invite and accept through their pages into one party', async ()
   seedDesigns()
   let app = appVocab(words)
   let vocab = loadVocab([...app.docs, apiDoc], app.keywords)
-  let store = graph({ vocab, storage: ram(vocab) })
+  // SQLite in memory, whose connection keeps the write log a keyed write's
+  // receipt is kept in.
+  let db = open(':memory:')
+  let rows = storage(db, vocab)
+  rows.install()
+  let store = graph({ vocab, storage: rows })
   let heroes = { a: crypto.randomUUID(), b: crypto.randomUUID() }
   let owners = { a: crypto.randomUUID(), b: crypto.randomUUID() }
   for (let id of ['a', 'b'] as const) {
@@ -42,6 +48,7 @@ test('two heroes invite and accept through their pages into one party', async ()
       let socket = pair()
       let handler = api({
         graph: store,
+        db,
         authenticate: () => ({ by: owners[id] }),
         socketTimer: () => {},
         upgrade: () => ({

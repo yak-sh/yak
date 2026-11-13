@@ -281,7 +281,8 @@ import { placeOf } from './area.ts'
 import { comp } from './bundle.ts'
 import { api } from '@yaks/api'
 import { graph } from '@yaks/graph'
-import { ram } from '@yaks/ram'
+import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
 import type { ClientOpts } from '@yaks/client'
 import type { Trouble } from '@yaks/sync'
 import type { Bundle } from './net.ts'
@@ -370,10 +371,16 @@ test('a gathering refused locally or by the store does not break later writes', 
   seedDesigns()
   for (let where of ['page', 'store'] as const) {
     let vocab = loadVocab([words, core, provenance, apiDoc])
-    let store = graph({ storage: ram(vocab), vocab })
+    // SQLite in memory, whose connection keeps the write log a keyed write's
+    // receipt is kept in.
+    let db = open(':memory:')
+    let rows = storage(db, vocab)
+    rows.install()
+    let store = graph({ storage: rows, vocab })
     store.apply([{ entity: { eid: 'hero' }, player: {} }, harvest('first')])
     let serve = api({
       graph: store,
+      db,
       authenticate: () => ({ by: '11111111-1111-4111-8111-111111111111' }),
     })
     let trouble: Trouble[] = [], sent: Request[] = []
@@ -392,8 +399,8 @@ test('a gathering refused locally or by the store does not break later writes', 
     await tick()
     assertEquals(trouble.length, 1, where)
     assert(
-      String(trouble[0].error ?? trouble[0].refused?.message).includes(
-        'unique constraint failed',
+      /unique constraint failed/i.test(
+        String(trouble[0].error ?? trouble[0].refused?.message),
       ),
       where,
     )
