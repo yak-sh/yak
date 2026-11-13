@@ -211,7 +211,7 @@ let ending = async (
 
 test('a run somebody stopped says how it ended, and is not told', async () => {
   assertEquals(await ending(143, '', true), [
-    'the provider was ended by SIGTERM (exit 143)',
+    'asked to stop, the provider was ended by SIGTERM (exit 143)',
     [],
   ])
 })

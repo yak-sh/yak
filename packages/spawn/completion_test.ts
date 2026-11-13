@@ -63,6 +63,11 @@ let finished = bare(rows)
 let failure = bare(
   rows.map((b) => b.entity.eid == 'child' ? { ...b, exit: { code: 9 } } : b),
 )
+let asked = bare(
+  rows.map((b) =>
+    b.entity.eid == 'child' ? { ...b, exit: { code: 143 }, stop: {} } : b
+  ),
+)
 let quiet = bare(
   rows.filter((b) => !['report', 'thinking', 'result'].includes(b.entity.eid)),
 )
@@ -166,6 +171,17 @@ test('a failed run reports its exit and preserves the last account of its work',
   equal(
     (report.doc as { body: string }).body,
     `${await name(failure)} — exited 9\n\nFixed it; checks pass.`,
+  )
+})
+
+test('a run somebody asked to stop says so before its exit', async () => {
+  await complete(asked, 'child')
+  let [report] = await asked.read('.comment.target=work&*')
+  equal(
+    (report.doc as { body: string }).body,
+    `${await name(
+      asked,
+    )} — asked to stop, exited 143\n\nFixed it; checks pass.`,
   )
 })
 

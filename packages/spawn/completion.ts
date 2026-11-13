@@ -75,7 +75,11 @@ export let complete = async (g: Graph, session: string): Promise<void> => {
   if (!tasks.length && !notify) return
   let name = human(g.vocab)
   let cut = await unfinished(g, session)
-  let title = `${name(row)} — exited ${str(comp(row, 'exit')?.code)}` +
+  // A run somebody stopped ended as they asked: the title says so first, so
+  // its reader does not take the signal's exit code for a crash.
+  let exited = `exited ${str(comp(row, 'exit')?.code)}`
+  let title =
+    `${name(row)} — ${row.stop ? `asked to stop, ${exited}` : exited}` +
     (cut.length ? `, ${cut.length} unfinished subagent${s(cut.length)}` : '')
   let line = ({ row, status }: { row: Bundle; status: string }) =>
     `- ${name(row)} ${str(comp(row, 'doc')?.title)} (${status})`

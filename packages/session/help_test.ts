@@ -397,13 +397,14 @@ test('taking `helper` off a project gives what waits back to its operator', asyn
 })
 
 // A run the operator started on task `t` ended with `code`, its report a
-// comment on the task that knocks the operator; then the helper took it,
-// `finish` did what it did, and it exited.
-let ran = async (code: number, finish: Bundle[] = []) => {
+// comment on the task that knocks the operator, `stopped` when somebody asked
+// it to stop; then the helper took it, `finish` did what it did, and it exited.
+let ran = async (code: number, finish: Bundle[] = [], stopped = false) => {
   let o = await office()
   await o.write([
     { entity: { eid: 't' }, task: {}, doc: { title: 'Fix the gate' } },
     { entity: { eid: 'run' }, session: { id: 'run' }, process: { pid: 2 } },
+    ...stopped ? [{ entity: { eid: 'run' }, stop: {} }] : [],
     { entity: { eid: 'run' }, exit: { code } },
     {
       entity: { eid: 'report' },
@@ -426,6 +427,7 @@ test('a run the operator started reaches it as one line once its helper ends', a
   equal(await ran(0, done), ['# done: Fix the gate (report #)'])
   equal(await ran(0), ['# not ready: Fix the gate (report #)'])
   equal(await ran(1), ['# ended early: Fix the gate (report #)'])
+  equal(await ran(143, [], true), ['# stopped: Fix the gate (report #)'])
 })
 
 test('a mark on a task the operator watches reaches it as one line, and talk about it does not', async () => {

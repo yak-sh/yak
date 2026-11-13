@@ -920,7 +920,12 @@ let ended = async (
     ? ''
     : limit
     ? `the provider's plan limit ended the run: ${said!.body}`
-    : await cause(session, row, o, said?.body)
+    : `${row?.stop ? 'asked to stop, ' : ''}${await cause(
+      session,
+      row,
+      o,
+      said?.body,
+    )}`
   await g.apply([{
     entity: {
       eid: (o.mint ?? (() =>
@@ -933,6 +938,8 @@ let ended = async (
       failed: {
         reason: limit
           ? 'Plan limit reached'
+          : row?.stop
+          ? 'Asked to stop'
           : code == null
           ? 'Provider exit was not observed'
           : `Provider exited ${code}`,

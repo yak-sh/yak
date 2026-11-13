@@ -28,8 +28,9 @@
 // A run's ending and a task's mark are not routine to the session that
 // started the run or watches the task, only their reading is. When a helper
 // exits, each task it took one for reaches that session as one line: the
-// task, its verdict as the helper leaves it (done, cancelled, not ready, or
-// ended early for a run that did not end cleanly), and the report's id.
+// task, its verdict as the helper leaves it (done, cancelled, stopped for a
+// run somebody asked to stop, ended early for one that otherwise did not end
+// cleanly, or not ready), and the report's id.
 //
 // The helpers' trail is `.helping.project=<project>`: each session, with what
 // it wrote under `.created.via=<session>` and the knocks it took under
@@ -320,11 +321,13 @@ let hearer = async (g: G, item: Bundle): Promise<Eid | undefined> => {
   return row?.[SESSION] && !(await over(g, [row])).has(to) ? to : undefined
 }
 
-// The verdict on a task as a helper leaves it: settled, or for a run that did
-// not end cleanly, ended early, and otherwise not ready.
+// The verdict on a task as a helper leaves it: settled; for a run somebody
+// asked to stop, stopped; for one that did not end cleanly otherwise, ended
+// early; and otherwise not ready.
 let verdict = (g: G, task: Bundle, run?: Bundle): string => {
   let status = statusOf(g.vocab, task) ?? ''
   if (status == 'done' || status == 'cancelled') return status
+  if (run?.[STOP_ENTRY]) return 'stopped'
   return run && !cleanEnd(run) ? 'ended early' : 'not ready'
 }
 
