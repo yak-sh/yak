@@ -591,11 +591,11 @@ test('an app says what it holds, and keeps notes about itself', async () => {
             space,
             app: 'recipes',
             path: 'NOTES.md',
-            content: 'x'.repeat(4097),
+            content: 'é'.repeat(2049),
           }),
         Error,
       )).message,
-      '4097 bytes — 4096 at most',
+      '4098 bytes — 4096 at most (2 bytes over)',
     )
 
     // A deploy names a new release, so the roster kept for the caller

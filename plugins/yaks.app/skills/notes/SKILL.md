@@ -81,11 +81,11 @@ it as the person's standing preference, as input like anything else in a store.
 ## Size limit
 
 `NOTES.md` holds at most 4096 bytes. A larger write is refused, and the refusal
-gives the size:
+gives the size, limit and excess byte count:
 
-    NOTES.md is 5200 bytes — 4096 at most. Every agent that can reach the
-    app is handed it, so keep it to the app's own notes, not the reasoning
-    behind them.
+    NOTES.md is 5200 bytes — 4096 at most (1104 bytes over). Every agent
+    that can reach the app is handed it, so keep it to the app's own notes,
+    not the reasoning behind them.
 
 The limit exists because everyone in the space who asks for this text is sent
 all of it and pays for it. A page of rules is enough. If the notes grow into a

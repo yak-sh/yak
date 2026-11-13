@@ -195,9 +195,11 @@ app_files:
     <text>), which the platform draws as icon.png. An app with neither wears
     its space's logo (space_set logo), or the platform's default yak in a
     space without one. It shows once deployed. NOTES.md
-    beside index.html holds the app's notes in the person's words (up to
-    4 KB), returned by the about tool; like vocab.json it is never served on
-    the web. op: patch with path, find and replace edits one file in place;
+    beside index.html holds the app's notes in the person's words, returned
+    by the about tool; like vocab.json it is never served on the web.
+    NOTES.md is limited to 4096 bytes (UTF-8 for text); a larger write is
+    refused with its byte count, the limit and how many bytes over it is.
+    op: patch with path, find and replace edits one file in place;
     find is an exact string that must occur exactly once. edits: [{path,
     find, replace}, …] with op: patch makes many edits across any of the
     app's files in one call, in order and all or none, and answers each

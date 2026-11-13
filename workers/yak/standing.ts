@@ -81,12 +81,14 @@ let root = (path: string) => path.replace(/^\/+/, '')
  * number, so an agent that wrote too much knows by how much.
  *
  * ```ts
- * tooLong('NOTES.md', 5000) // 'NOTES.md is 5000 bytes — 4096 at most. …'
+ * tooLong('NOTES.md', 5000) // 'NOTES.md is 5000 bytes — 4096 at most (904 bytes over). …'
  * ```
  */
 export let tooLong = (path: string, n: number): string =>
   root(path) == NOTES && n > CAP
-    ? `${root(path)} is ${n} bytes — ${CAP} at most. Every agent that can ` +
+    ? `${root(path)} is ${n} bytes — ${CAP} at most (${n - CAP} byte${
+      n == CAP + 1 ? '' : 's'
+    } over). Every agent that can ` +
       "reach the app is handed it, so keep it to the app's own notes, not " +
       'the reasoning behind them.'
     : ''

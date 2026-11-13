@@ -54,7 +54,7 @@ let entry = (slug: string, over: Partial<Entry> = {}): Entry => ({
   noted: !!over.said,
 })
 
-test('the notes are refused over the cap, with the number', () => {
+test('the notes refusal reports the size, limit and excess bytes', () => {
   assertEquals(tooLong('NOTES.md', CAP), '')
   assertEquals(tooLong('/NOTES.md', CAP), '')
   // Every other file keeps the platform's own ceiling and no more.
@@ -62,6 +62,8 @@ test('the notes are refused over the cap, with the number', () => {
   let no = tooLong('NOTES.md', CAP + 1)
   assert(no.includes(String(CAP + 1)), no)
   assert(no.includes(String(CAP)), no)
+  assert(no.includes('(1 byte over)'), no)
+  assert(tooLong('NOTES.md', CAP + 904).includes('(904 bytes over)'))
   // The same file named the other way is the same file.
   assertEquals(tooLong('/NOTES.md', CAP + 1), no)
   // And the name the file had before T-34632 is only a file now.
