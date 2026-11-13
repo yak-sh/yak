@@ -409,6 +409,15 @@
       "noun": "admin",
       "verb": "query",
       "title": "Query an app’s store",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "array",
+            "description": "the rows the store answered"
+          }
+        }
+      },
       "description": "An app’s store as this account reads it, through the filter grammar. `yak/platform` is the platform’s own store (people, spaces, seats), answered only to a seat in `yak`.\n\n  yak admin query jeff/recipes .doc\n  yak admin query jeff .kind=note\n  yak admin query yak/platform '.person&.email.address=jeff@yak.sh' --as admin@bot.yak.sh",
       "input": {
         "where": {
@@ -445,6 +454,15 @@
       "noun": "admin",
       "verb": "apply",
       "title": "Apply bundles to an app’s store",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "array",
+            "description": "the bundles as the store applied them"
+          }
+        }
+      },
       "description": "Create, patch or delete rows in an app’s store as this account, through the connector’s graph_apply: the store’s rules and journal hold, and the write is recorded as the account. The space’s owner and the platform’s admin write any app’s rows; --check rehearses the batch and keeps nothing.\n\n  yak admin apply yourname/vale '[{\"entity\": {\"eid\": \"<eid>\"}, \"sfx\": {\"notes\": \"chime\"}}]' --as admin@bot.yak.sh\n  yak admin apply jeff/recipes @fix.json --check --as admin@bot.yak.sh",
       "input": {
         "where": {

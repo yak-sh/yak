@@ -17,6 +17,9 @@ import {
   vocab as trackerVocab,
 } from '../../workers/tracker/core.ts'
 import { ended, Refused, review, runs } from './tools.ts'
+import { adminDoc } from './vocab.ts'
+import { readable } from '@yaks/tools/readable'
+import { structured, worded } from '@yaks/tools'
 
 let box = async () => {
   let host = await compose({
@@ -277,6 +280,33 @@ test('a gallery decision goes to the hosted tool as the caller, or whoever it na
   )
 })
 
+test("a store's rows are answered as data, their eids whole wherever the answer is read", async () => {
+  let { host, kept, ask } = await box()
+  try {
+    await kept('own@example.com', 'own-bearer')
+    let eid = '97d31ac6-ffce-46ef-b88f-f31868df02a6'
+    let rows = [{ entity: { eid }, counted: { report: eid } }]
+    await answering(
+      () => Response.json({ result: { structuredContent: { result: rows } } }),
+      async () => {
+        for (let tool of ['admin_query', 'admin_apply']) {
+          let answer = await ask(tool, {
+            where: 'jeff/recipes',
+            filters: ['.counted'],
+            bundles: rows,
+          })
+          let read = readable(host.vocab)(answer)
+          let declared = adminDoc.$defs![tool] as { outputSchema?: Comp }
+          equal(structured(declared, read), { result: rows })
+          ok(worded(read).includes(eid))
+        }
+      },
+    )
+  } finally {
+    await host.close()
+  }
+})
+
 test('an unknown --as account is a refusal, not an exception', async () => {
   let { host, ask } = await box()
   try {
@@ -355,7 +385,10 @@ test('delete walks website pages and keeps a renewed cookie only inside the OAut
     await kept('probe@bot.yak.sh', 'oauth-bearer', 'old-website')
     let hits = 0
     await answering((_url, init) => {
-      equal(new Headers(init?.headers).get('cookie'), 'yak_session=old-website')
+      equal(
+        new Headers(init?.headers).get('cookie'),
+        'yak_session=old-website',
+      )
       equal(new Headers(init?.headers).get('authorization'), null)
       hits++
       return new Response('<h1>Deleted</h1><p>Done</p>', {

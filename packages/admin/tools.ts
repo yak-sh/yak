@@ -12,6 +12,7 @@ import { reveal, sealed, type Vault } from '@yaks/secrets'
 import { CallError } from '@yaks/tools/errors'
 import { Interrupted } from '@yaks/tools/errors'
 import { said } from '@yaks/tools/result'
+import { valued } from '@yaks/tools/value'
 import type { Host } from '@yaks/host'
 import { person } from '@yaks/cli/host'
 import { given, read as configAt, used } from '@yaks/cli/config'
@@ -78,8 +79,6 @@ let TUNNEL_TOKEN = 'TUNNEL_TOKEN'
 
 let word = (a: Args, name: string): string | undefined =>
   typeof a[name] == 'string' ? a[name] as string : undefined
-
-let json = (v: unknown) => JSON.stringify(v, null, 2)
 
 let out = (line: string) => console.log(line)
 // A sweep's lines, printed as they come and kept for its answer, which is all a
@@ -505,7 +504,7 @@ export let runs = (
         String(argsOf(call).where),
         (argsOf(call).filters ?? []) as string[],
       )
-      return [said(call, json(rows))]
+      return [valued(call, { result: rows })]
     }),
 
     admin_apply: verb(async (call) => {
@@ -517,7 +516,7 @@ export let runs = (
         a.bundles as Bundle[],
         a.check === true,
       )
-      return [said(call, json(applied))]
+      return [valued(call, { result: applied })]
     }),
 
     admin_upload: verb(async (call) => {

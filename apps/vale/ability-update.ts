@@ -86,15 +86,13 @@ export let cleaned = (live: Bundle[]): Bundle[] =>
       : []
   })
 
-/** Reads an admin query response (whose content contains rows), or plain rows. */
+/** Reads an admin query answer (`{ result: rows }`, as `--json` prints it), or
+ * plain rows. */
 export let unpacked = (value: unknown): Bundle[] => {
   if (Array.isArray(value)) return value
   if (
     value && typeof value == 'object' && 'result' in value &&
     Array.isArray(value.result)
-  ) {
-    let said = value.result.find((r) => r?.content?.body)
-    if (said) return JSON.parse(said.content.body)
-  }
+  ) return value.result
   throw new Error('Expected graph query rows or an admin query response')
 }
