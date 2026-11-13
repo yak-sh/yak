@@ -507,6 +507,17 @@ integration directory (`/integrations`), and in what `app_published`,
   integration connected it, other than the one that shares it. Counted when
   read, never stored.
 
+## A publisher's page
+
+A space that shares anything in public has a page at
+`https://yaks.app/spaces/<slug>`, in the sitemap: the apps the gallery listed,
+the skills yaks.app listed, and the integrations it listed, each with what
+yaks.app says of it. The page also shows how many times other spaces installed
+any of it, the featured mark where the platform features the space, and its web
+address: a domain it attached to the space and verified (`domain_attach`), or
+else `<slug>.yaks.app`. An app's and a skill's own page link to it. A space that
+shares nothing in public has no page.
+
 ## What an installed copy shares
 
 An installed copy is an ordinary app in the installer's space, with its own

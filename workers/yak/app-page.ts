@@ -18,8 +18,8 @@ import { type Directory, url as appUrl } from './directory.ts'
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
 import { pictureOf, reputing, type Shown, shown } from './gallery.ts'
-import { PAGE, pageAt, reputationOf } from './gallery-row.ts'
-import { h } from 'preact'
+import { PAGE, pageAt, publisherAt, reputationOf } from './gallery-row.ts'
+import { type ComponentChildren, h } from 'preact'
 import { Button, Card } from '@yaks/ui/parts'
 import { type Host, spaceHost } from '@yaks/platform/host'
 import { at as installAt } from './install.ts'
@@ -33,7 +33,8 @@ export let page = (a: Shown, env: Host = {}) => {
   let opened = opens(a.app) || a.at != appUrl(a.space, a.app, env)
   let listed = !!a.app.gallery?.listedAt
   let shot = a.shot && (a.app.access != 'private' || listed) ? a.shot : ''
-  let small = (said: string) => h('p', { class: 'Note Note-small' }, said)
+  let small = (...said: ComponentChildren[]) =>
+    h('p', { class: 'Note Note-small' }, ...said)
   return drawn(
     head(
       env,
@@ -54,7 +55,18 @@ export let page = (a: Shown, env: Host = {}) => {
           { class: 'Listing_Head' },
           h('h1', { id: 'app', class: 'Title' }, a.title),
           a.about ? h('p', { class: 'Note Note-lead' }, a.about) : null,
-          small(`Made at ${spaceHost(env, a.space.slug)}`),
+          // A listed app's space shares it in public, so it has a page
+          // (publisher-page.ts); an unlisted one's may not.
+          small(
+            'Made at ',
+            listed
+              ? h(
+                'a',
+                { href: publisherAt(a.space.slug, env) },
+                spaceHost(env, a.space.slug),
+              )
+              : spaceHost(env, a.space.slug),
+          ),
           a.reputation ? reputationOf(a.reputation) : null,
         ),
         shot

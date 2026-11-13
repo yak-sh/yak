@@ -23,6 +23,7 @@ import type { Directory, SkillOffer, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
 import {
+  publisherAt,
   type Reputation,
   reputation,
   reputationOf,
@@ -46,10 +47,6 @@ export let skillAt = (name: string, env: Host = {}) =>
 /** The skills that have a page: every one listed, newest first. */
 export let paged = async (dir: Directory) =>
   (await dir.skillOffers()).filter((s) => standing(s.skill) == 'listed')
-
-/** Every skill page's address, for the sitemap (seo.ts). */
-export let addresses = async (dir: Directory, env: Host = {}) =>
-  (await paged(dir)).map((s) => skillAt(s.skill.published.name, env))
 
 /** What the rounds of a skill measured, asked of its space's Operator. */
 export let measuredOf = async (
@@ -217,9 +214,13 @@ export let page = (
           ),
           skill.upstream ? written(skill) : null,
           small(
-            `Shared from ${
-              spaceHost(env, space.slug)
-            }, version ${skill.published.version}.`,
+            'Shared from ',
+            h(
+              'a',
+              { href: publisherAt(space.slug, env) },
+              spaceHost(env, space.slug),
+            ),
+            `, version ${skill.published.version}.`,
             linked(skill)
               ? ''
               : ` To use it, ask your Operator to install the skill ${skill.published.name}.`,

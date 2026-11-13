@@ -114,7 +114,8 @@ export let RENDERED = [GALLERY, INTEGRATIONS, DOCS, TECH, AGENT]
 // own address plus `.md` (docs.ts `MARKDOWN`), which is what the connector
 // hands an agent (guide.ts). They are markdown rather than HTML and they are
 // indexed anyway, which is the point of publishing them at a URL. Last, the
-// pages read from the directory: each listed skill's (skill-page.ts).
+// pages read from the directory: each listed app's, each listed skill's and
+// each publisher's (publisher-page.ts `addresses`).
 export let addresses = (env: Host = {}, listed: string[] = []) => [
   ...SITE.map((path) => at(path, env)),
   ...RENDERED.map((p) => at(p.path, env)),
@@ -326,7 +327,7 @@ export let answer = async (
   }
   if (path == '/sitemap.xml') {
     // The pages read from the directory are part of what the etag stands
-    // for, so a newly listed skill is a new sitemap.
+    // for, so a newly listed app, skill or publisher is a new sitemap.
     let listed = await drawnFrom()
     return await publicPage(
       req,

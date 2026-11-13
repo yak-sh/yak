@@ -1057,6 +1057,21 @@
     font-weight: 600;
   }
 
+  /* A publisher's page (publisher-page.ts): what a space shares, a part
+     each for its apps, skills and integrations. */
+  .Publisher_Part {
+    display: grid;
+    gap: var(--half-gap);
+  }
+
+  .Publisher_List {
+    display: grid;
+    gap: var(--half-gap);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
   /* A published skill's page (skill-page.ts): its instructions, then each
      round it was measured in, a case at a time with every output under it. */
   .Measured {

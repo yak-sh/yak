@@ -12,6 +12,12 @@ export let PAGE = '/apps/'
 export let pageAt = (name: string, env: Host = {}) =>
   siteUrl(env, `${PAGE}${encodeURIComponent(name)}`)
 
+// Where the page of a space that shares anything in public lives
+// (publisher-page.ts): one address per space slug.
+export let PUBLISHER = '/spaces/'
+export let publisherAt = (slug: string, env: Host = {}) =>
+  siteUrl(env, `${PUBLISHER}${encodeURIComponent(slug)}`)
+
 /** How many other spaces installed a copy of something shared, said as a
  * line: what its maker is credited with (T-131912). */
 export let installedBy = (n: number) =>

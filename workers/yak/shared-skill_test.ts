@@ -11,6 +11,8 @@ import { operatorMemory } from './operator-testing.ts'
 import { operatorRequest } from './operator-host.ts'
 import { RESULTS, results, skillText } from './operator-skills.ts'
 import * as skillPage from './skill-page.ts'
+import * as publisherPage from './publisher-page.ts'
+import { publisherAt } from './gallery-row.ts'
 import { SPACE } from './build-door.ts'
 import { replyTo } from '@yaks/platform/host'
 import { INTERNAL } from './mail-config.ts'
@@ -232,9 +234,10 @@ test("a listed skill's page shows its text, and what a person picked in the plat
     'Lead with the reader</strong>, which won Round one',
   )
 
-  // Every listed skill's page is in the sitemap.
-  assertEquals(await skillPage.addresses(dir, env), [
+  // Every listed skill's page is in the sitemap, and so is its publisher's.
+  assertEquals(await publisherPage.addresses(dir, env), [
     skillPage.skillAt('pitch-copy', env),
+    publisherAt('kitchen', env),
   ])
 })
 

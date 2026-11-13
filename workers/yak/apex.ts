@@ -14,9 +14,10 @@ import { copyOf } from './directory-copy.ts'
 import { bound, type Env, type Handler } from './env.ts'
 import * as gallery from './gallery.ts'
 import * as skillPage from './skill-page.ts'
-import { PAGE } from './gallery-row.ts'
+import { PAGE, PUBLISHER } from './gallery-row.ts'
 import * as install from './install.ts'
 import * as appPage from './app-page.ts'
+import * as publisherPage from './publisher-page.ts'
 import { call } from './tools.ts'
 import { isListing, listed } from './kept-page.ts'
 import { sprite } from './icons.ts'
@@ -189,7 +190,7 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // Crawlers, connection callbacks and the catalog's logos are the apex's
   // own doors.
   let said = await seo(req, path, env, () =>
-    skillPage.addresses(
+    publisherPage.addresses(
       directory(bound(env.DIRECTORY, dirPart.fetch, env), {
         copy: copyOf(env),
         time: env.CLOCK,
@@ -221,6 +222,10 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // A listed skill's page (skill-page.ts), read the same way.
   if (path.startsWith(skillPage.PATH)) {
     return skillPage.answer(req, env, path, dir)
+  }
+  // A publisher's page (publisher-page.ts): what a space shares in public.
+  if (path.startsWith(PUBLISHER)) {
+    return publisherPage.answer(req, env, path, dir)
   }
   if (path == gallery.REVIEW) {
     let shown = await gallery.answer(req, env, path, dir, call)
