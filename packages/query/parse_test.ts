@@ -231,6 +231,7 @@ let refused = (rows: [string, string][]) => {
 }
 
 refused([
+  ['.app{name:', 'a property is queried as .app.<prop>=<value>'],
   ['.a=1|', 'empty alternative'],
   ['(.a=1', 'unclosed group'],
   // a directive's property path takes no stray dot, and says what it takes
@@ -479,6 +480,8 @@ refused(
     ['+!.created', '+!created'],
     ['+.doc.title=$x', '+doc.title=$x'],
     ['.refs=', '!refs'],
+    ['.app{name:"menu"}', '.app.name="menu"'],
+    ['.doc{title}', '.doc.title'],
   ].map(([old, now]): [string, string] => [
     `.task ${old}`,
     `${old} is written ${now}`,

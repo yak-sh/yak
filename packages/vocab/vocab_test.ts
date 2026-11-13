@@ -11,6 +11,7 @@ import {
   loadVocab,
   metaSchema,
   Unknown,
+  unknownProps,
   valueless,
 } from './mod.ts'
 import type { PropSchema, VocabDoc } from './types.ts'
@@ -932,4 +933,33 @@ test('a value compared with a component names the properties that hold one', () 
       ],
     ]
   ) assert(valueless(w, path, op, value).includes(said), `${path}${op}${value}`)
+})
+
+// A property no component declares is refused with the component's shape; one
+// with no properties at all is explained by its own description.
+test('an unknown property is refused with what its component holds', () => {
+  let w = loadVocab({
+    $defs: {
+      book: {
+        component: true,
+        type: 'object',
+        properties: { title: { type: 'string' } },
+      },
+      alias: {
+        component: true,
+        type: 'object',
+        description: 'a stable name for an entity',
+        properties: {},
+      },
+    },
+  })
+  assertEquals(
+    unknownProps(w, 'book', ['name']),
+    'unknown property: book.name — book has title (string)',
+  )
+  assertEquals(
+    unknownProps(w, 'alias', ['name']),
+    'unknown property: alias.name — alias has no properties, so it is ' +
+      'present (.alias) or absent (!alias); alias: a stable name for an entity',
+  )
 })

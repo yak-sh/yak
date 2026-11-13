@@ -185,6 +185,21 @@ let unknown = (token: string) =>
       `a bare word searches all indexed text, and .near=T-42 ranks by meaning`,
   )
 
+// A component written as prose and bundles write it, `.app{name:"menu"}` or
+// `.doc{title}`: the refusal is the clause the property is queried by. A
+// comma splits the line before a token reaches here, so it holds one.
+let braced = (token: string, comp: string, rest: string) => {
+  let [, prop, value] =
+    rest.match(/^\{\s*([\w$]+)(?:\s*[:=]\s*(.+?))?\s*\}$/s) ??
+      []
+  if (!prop) {
+    return new SyntaxError(
+      `not a clause: ${token}; a property is queried as .${comp}.<prop>=<value>`,
+    )
+  }
+  return spelled(token, `.${comp}.${prop}${value == null ? '' : `=${value}`}`)
+}
+
 // ---- qualifiers ----
 
 // One argument of a bracket: `<=3` (an operator and a value), `key=v`, or a
@@ -435,6 +450,7 @@ export let parseDot = (token: string): Clause[] | null => {
   let o = rest.match(OPS)
   if (!o) {
     if (!dotted && bracket == null) return null
+    if (rest.startsWith('{')) throw braced(token, pathStr, rest)
     throw unknown(token)
   }
   let op: string = o[1]

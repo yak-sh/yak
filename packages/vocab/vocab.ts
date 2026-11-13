@@ -592,7 +592,10 @@ let declared = (c: Prop): string => {
  * to parse teaches nothing. */
 export let shapeOf = (v: Vocab, comp: string): string => {
   let props = v.props(comp)
-  if (!props.length) return `${comp} has no properties`
+  if (!props.length) {
+    return `${comp} has no properties, so it is present (.${comp}) or absent ` +
+      `(!${comp})`
+  }
   let said = props.map((p) => `${p} (${declared(v.prop(comp, p)!)})`)
   return `${comp} has ${said.join(', ')}`
 }
@@ -680,11 +683,14 @@ export let unknownName = (word: string, names: string[]): string => {
 }
 
 /** The refusal for properties a component does not declare: one wording,
- * whether a query or a write named them. */
-export let unknownProps = (v: Vocab, comp: string, props: string[]): string =>
-  `unknown ${props.length > 1 ? 'properties' : 'property'}: ${
+ * whether a query or a write named them. A component with no properties is
+ * explained by its description, the one place what it means is said. */
+export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
+  let about = v.props(comp).length ? '' : v.comp(comp)?.description
+  return `unknown ${props.length > 1 ? 'properties' : 'property'}: ${
     props.map((p) => `${comp}.${p}`).join(', ')
-  } — ${shapeOf(v, comp)}`
+  } — ${shapeOf(v, comp)}${about ? `; ${comp}: ${about}` : ''}`
+}
 
 /**
  * The refusal for components this vocabulary does not declare. A component is

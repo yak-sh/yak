@@ -823,7 +823,7 @@ domain_attach:
     done: 'Attached %{hostname} to %{app}'
   description: >-
     Serve a domain the person already owns, example.com instead of
-    yourname.yaks.app. Name an app and that app answers at the root of the
+    yourname.yaks.app, named as hostname. Name an app and that app answers at the root of the
     domain; leave app out and the whole space answers there, exactly as it
     does at <space>.yaks.app: the front page at /, every app at /<app>/. A
     space and each of its apps can have their own domain at the same time.
