@@ -269,14 +269,7 @@ for (
     assertEquals((build.build as Comp).for, SOURCE)
     assertEquals((await v.read('.built')).length, 0)
     assertEquals((await v.read('.sfx')).length, 0)
-    await until(async () => {
-      let effects = await v.read('.effect.handler=builder_answer&*')
-      return rejected.step
-        ? effects.length == 0
-        : effects.some((row) =>
-          String((row.effect as Comp).error).includes('step')
-        )
-    }, { label: 'settled output refusal' })
+    assertEquals(await v.read('.effect.handler=builder_answer&*'), [])
     let before = await v.read('.call.source.build&*')
     assertEquals(
       (await v.call('builder_build', {

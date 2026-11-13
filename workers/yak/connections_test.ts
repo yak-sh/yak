@@ -1071,8 +1071,8 @@ test('the catalog offers what its broker lists, a search finds it, and Connect m
         docs: 'https://hubspot.com/docs',
         broker: { name: 'nango', integration: 'hubspot' },
         image: 'https://logos.test/hubspot.svg',
-        featured: true,
       },
+      featured: { at: '2026-11-13T10:00:00.000Z' },
       unchecked: {},
     }, {
       entity: { eid: integrationEid('account-host') },

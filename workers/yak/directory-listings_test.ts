@@ -204,8 +204,7 @@ for (let path of ['/', '/gallery']) {
     equal(observed.staleEtag, null)
     ok(observed.fills > 0, 'the prior read must warm the real directory rows')
     equal(observed.refills, 0)
-    if (path == '/gallery') equal(observed.reads, 1)
-    else ok(observed.reads > 1, 'the home page survives later directory reads')
+    ok(observed.reads > 1, 'the page survives later directory reads')
     equal(observed.assets, path == '/' ? 1 : 0)
     if (path == '/') {
       for (let slug of DEMOS) ok(observed.got.includes(`Demo ${slug}`))
