@@ -236,6 +236,12 @@ is the door's to accept, through `accept(request)`, after whatever the door
 checks. The first entry on a new `version` arms the alarm, which takes up what
 the object owes: a deploy restarts it idle.
 
+A request whose caller runs a later deploy restarts the object first, as the
+spec's `behind(request)` says, but only an idle one: no other entry or alarm
+slice in flight, and nothing `busy()`, by default a socket, that the restart
+would cut. A door of the subclass's own, in place of `fetch`'s, asks
+`this.behind(request)` first.
+
 A socket's frame or close is the object's to `admit` first: one it does not is
 let go unanswered. A clock probe is answered next, before the sockets are asked.
 An object that makes its own sockets, over subscriptions it remakes, answers

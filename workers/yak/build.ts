@@ -79,7 +79,7 @@ import {
 } from '@yaks/sql'
 import type { Beat, Line } from './builder.ts'
 import { directory, type Space } from './directory.ts'
-import { behind, onceRead, type Restartable } from './running.ts'
+import { onceRead, owed, type Restartable } from './running.ts'
 import * as dirPart from './directory.ts'
 import type { Settings } from './operator-persona.ts'
 import type { Env } from './env.ts'
@@ -561,15 +561,9 @@ export class Builder extends Durable {
   }
 
   async #answer(request: Request): Promise<Response> {
-    // A caller on a later deploy restarts this object first, but only an idle
-    // one: a build in flight (a model call can take minutes), an Operator's
-    // step under way or a page's socket is never cut for it, and keeps the
-    // code it started on.
-    if (
-      !this.#building && !this.#builds().length && !this.#fx?.running().length
-    ) {
-      await behind(request.headers, this.#env.CF_VERSION_METADATA, this.#ctx)
-    }
+    // A caller on a later deploy restarts this object first, when it is idle
+    // (`busy`).
+    await this.behind(request)
     let url = new URL(request.url)
     if (url.pathname == WAKE) {
       if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
@@ -1010,6 +1004,14 @@ export class Builder extends Durable {
       }
     },
     report: (e, entry) => caught(e, { request: `operator ${entry}` }),
+    behind: (request) =>
+      owed(request.headers, this.#env.CF_VERSION_METADATA, this.#ctx),
+    // A build in flight (a model call can take minutes), an Operator's step
+    // under way or a page's socket is never cut by a restart, and keeps the
+    // code it started on.
+    busy: () =>
+      !!this.#building || !!this.#builds().length ||
+      !!this.#fx?.running().length,
     alarm: {
       keep: this.#ctx.waitUntil && ((work) => this.#ctx.waitUntil!(work)),
     },

@@ -132,6 +132,50 @@ test('an entry of its own opens first, and throws on a failure, reporting all bu
   assertEquals(await ctx.storage.getAlarm(), 2000)
 })
 
+test('a newer caller restarts an idle object first, and none with work under way', async () => {
+  let restarts = 0, sockets: unknown[] = [], busy = false
+  let held = Promise.withResolvers<Response>(), inside = Promise.withResolvers()
+  let ctx = {
+    storage: durable(),
+    acceptWebSocket() {},
+    getWebSockets: () => sockets as never[],
+  }
+  let made = new Durable(ctx, {
+    open: () =>
+      Promise.resolve({
+        serve: (r) =>
+          r.url.endsWith('/held')
+            ? (inside.resolve(null), held.promise)
+            : new Response(),
+      }),
+    report: () => {},
+    behind: (r) =>
+      r.headers.has('newer') ? () => Promise.resolve(void restarts++) : null,
+    busy: () => busy || sockets.length > 0,
+  })
+  let ask = (path = '/', newer = true) =>
+    made.fetch(
+      new Request(
+        `https://do${path}`,
+        newer ? { headers: { newer: '1' } } : {},
+      ),
+    )
+  await ask('/', false)
+  await ask()
+  assertEquals(restarts, 1)
+  let going = ask('/held', false)
+  await inside.promise
+  await ask()
+  held.resolve(new Response())
+  await going
+  sockets.push({})
+  await ask()
+  sockets.pop()
+  busy = true
+  await ask()
+  assertEquals(restarts, 1)
+})
+
 // A socket at the object, with what it was sent and how it was closed.
 let socket = () => {
   let sent: string[] = [], closed: number[] = []

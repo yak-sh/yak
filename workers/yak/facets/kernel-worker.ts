@@ -69,6 +69,7 @@ export let STORE = [
   'open',
   'accept',
   'enter',
+  'behind',
 ] as const
 export let WIRE = [
   'log',
@@ -102,6 +103,7 @@ export let BUILDER = [
   'open',
   'accept',
   'enter',
+  'behind',
 ] as const
 export let WORKSPACES = ['fork', 'retire', 'destroy'] as const
 export let PUBLIC_DIRECTORY = [
