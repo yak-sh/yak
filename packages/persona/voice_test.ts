@@ -54,6 +54,15 @@ test('what it only names is one line under its heading', () => {
   assert(!out.includes('body'), 'a named doc said its body')
 })
 
+test('an eid a body holds reads as an id, never a uuid', () => {
+  let task = '0e513227-de00-4000-8000-000000000001'
+  let memory = '352e9920-08ae-436c-94e2-14bd02a37b2d'
+  let out = told({
+    contains: [says(memory, 3, 'style', `see ${memory} and ${task}`)],
+  })
+  assert(out.includes('see M-3 and #0e513227de'), out)
+})
+
 test('a numberless entity still has an id to show', () => {
   let out = told({ names: [says('m1-2-3-4-5', null, 'unnumbered', '')] })
   assert(/- #\w+ unnumbered/.test(out), out)

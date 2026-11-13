@@ -14,6 +14,8 @@ import {
   parse,
   render,
   safeHref,
+  stored,
+  typed,
 } from './mod.ts'
 import type { H } from '@yaks/render'
 
@@ -182,6 +184,38 @@ test('prose drawn as text holds no whole uuid outside code', () => {
       [`x${PROJECT} ${PROJECT}y`, `x${PROJECT} ${PROJECT}y`],
     ]
   ) assertEquals(drawn(source, ids), want, source)
+})
+
+let eids = (id: string) =>
+  ({ 'P-1': PROJECT, 'T-12': TASK, '#0e513227de': TASK })[id]
+
+test('prose is stored with each id it names as that eid, and the rest as typed', () => {
+  for (
+    let [source, want] of [
+      ['P-1 and T-12.', `${PROJECT} and ${TASK}.`],
+      [
+        '#0e513227de, drawn and written back',
+        `${TASK}, drawn and written back`,
+      ],
+      ['[the plan](P-1) by T-12', `[the plan](${PROJECT}) by ${TASK}`],
+      ['[P-1](P-1)', `[${PROJECT}](${PROJECT})`],
+      ['`T-12` and\n\n```\nP-1\n```', '`T-12` and\n\n```\nP-1\n```'],
+      [
+        'T-99, GPT-5, COVID-19, xT-12, T-12a',
+        'T-99, GPT-5, COVID-19, xT-12, T-12a',
+      ],
+      ['#ffcc00 is a colour', '#ffcc00 is a colour'],
+      [`${TASK} stays`, `${TASK} stays`],
+    ]
+  ) assertEquals(stored(source, eids), want, source)
+})
+
+test('the ids typed in prose are listed once each, never from code', () => {
+  assertEquals(
+    typed('T-12, [plan](P-1), `T-7`, T-12 and #0e513227de; #ffcc00'),
+    ['T-12', 'P-1', '#0e513227de'],
+  )
+  assertEquals(typed(`no ids but ${TASK}`), [])
 })
 
 test('what a document points at is read the way it is drawn', () => {

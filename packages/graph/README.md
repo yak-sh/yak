@@ -692,6 +692,16 @@ several eids start with is refused the same way. Addressing also runs on writes
 and on queries that name an eid or reference. Persistent names belong to
 [@yaks/alias](../alias/README.md) and [@yaks/key](../key/README.md).
 
+`g.named(ids)` answers the same, but leaves out an id that names nothing or
+several rather than refusing it: what prose asks. A plugin's `prose` (`Prose`,
+such as [@yaks/markdown](../markdown/README.md)'s) finds the ids typed in text
+and swaps those it is sure of for their eids, and `g.prose(texts)` runs it. A
+write runs it over every property declaring `prose`
+([@yaks/vocab](../vocab/README.md)) on an entity it is prose for, except a
+replica's copy. An edit's `find` is swapped first, so `find: 'T-12'` matches the
+eid stored, and a search's words that type an id find it either way, as stored
+and as typed.
+
 ```ts
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'

@@ -107,15 +107,15 @@ export let mentions = (tokens: Token[]): Mention[] => {
   return out
 }
 
-/** Prose as its reader reads it, still as text: each eid it holds, written
- * bare or as a link's target, drawn as {@link shown} draws it, so a model or a
- * printout never reads a whole uuid. Code keeps its ids literal, and a link
- * keeps its own words. What the renderer does to the same text, for a reader
- * of text rather than nodes. */
-export let drawn = (source: string, ids?: Ids): string => {
-  if (!EIDS.test(source)) return source
-  // Marked keeps no offsets, but every leaf's raw text stands in the source
-  // in reading order, so each is found from where the last one ended.
+// Prose rewritten id by id, still as text: each id written bare or as a link's
+// target is given to `f`, and replaced by what it answers. Code keeps its ids
+// literal, and a link keeps its own words. Marked keeps no offsets, but every
+// leaf's raw text stands in the source in reading order, so each is found
+// from where the last one ended.
+let rewritten = (
+  source: string,
+  f: (id: string) => string | undefined,
+): string => {
   let edits: [number, number, string][] = []
   let at = 0
   let found = (raw: string) => {
@@ -126,17 +126,23 @@ export let drawn = (source: string, ids?: Ids): string => {
     if (t.type == 'code' || t.type == 'codespan') {
       let i = found(t.raw)
       if (i != null) at = i + t.raw.length
-    } else if (t.type == 'ref' && EID.test(t.raw)) {
+    } else if (t.type == 'ref') {
       let i = found(t.raw)
       if (i == null) return
-      edits.push([i, i + t.raw.length, shown(t.raw, ids)])
+      let word = f(t.raw)
+      if (word != null && word != t.raw) {
+        edits.push([i, i + t.raw.length, word])
+      }
       at = i + t.raw.length
-    } else if (t.type == 'link' && EID.test((t as Tokens.Link).href)) {
+    } else if (t.type == 'link' && named((t as Tokens.Link).href)) {
       let { href } = t as Tokens.Link
       let i = found(t.raw)
       if (i == null) return
-      let j = i + t.raw.lastIndexOf(href)
-      edits.push([j, j + href.length, shown(href, ids)])
+      let word = f(href)
+      if (word != null && word != href) {
+        let j = i + t.raw.lastIndexOf(href)
+        edits.push([j, j + href.length, word])
+      }
       // The link's words come next, and may hold ids of their own.
       at = i + 1
     }
@@ -146,6 +152,48 @@ export let drawn = (source: string, ids?: Ids): string => {
     source,
   )
 }
+
+/** Prose as its reader reads it, still as text: each eid it holds, written
+ * bare or as a link's target, drawn as {@link shown} draws it, so a model or a
+ * printout never reads a whole uuid. Code keeps its ids literal, and a link
+ * keeps its own words. What the renderer does to the same text, for a reader
+ * of text rather than nodes. */
+export let drawn = (source: string, ids?: Ids): string =>
+  EIDS.test(source)
+    ? rewritten(source, (id) => EID.test(id) ? shown(id, ids) : undefined)
+    : source
+
+// An id a person types for an entity, as prose holds it before it is stored:
+// a human id or a short handle. An eid is already what is stored, and a SHA
+// names its content.
+let TYPED = new RegExp(`^(?:${WRITTEN}|#[0-9a-fA-F]{10,64})$`)
+let TYPES = new RegExp(`(?:${WRITTEN}|#[0-9a-fA-F]{10})`)
+
+/** The ids typed in prose that a store would name an entity by: each human id
+ * (`T-12`) and short handle (`#a3f19c024b`) written bare or as a link's
+ * target, in reading order, once each. Code keeps its ids literal, so none in
+ * it is listed. What {@link stored} is asked to swap. */
+export let typed = (source: string): string[] => {
+  if (!TYPES.test(source)) return []
+  let out = new Set<string>()
+  rewritten(source, (id) => {
+    if (TYPED.test(id)) out.add(id)
+    return undefined
+  })
+  return [...out]
+}
+
+/** Prose as a store keeps it: each id {@link typed} lists that `eids` names
+ * replaced by that eid, bare or as a link's target, so the text names the
+ * entity in any store and under any number. An id it does not name stays as
+ * typed, and so does everything in code and a link's own words. */
+export let stored = (
+  source: string,
+  eids: (id: string) => string | undefined,
+): string =>
+  TYPES.test(source)
+    ? rewritten(source, (id) => TYPED.test(id) ? eids(id) : undefined)
+    : source
 
 /** The words a heading is made of, with the markup dropped: a reader sees
  * these words, so the anchor is named after them. */

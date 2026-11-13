@@ -16,7 +16,7 @@
     "./ui": "./ui.ts"
   },
   "license": "Apache-2.0",
-  "description": "Who is acting and with what instructions — the people a graph knows, the personas an agent runs with, the skills it loads on demand, and a persona rendered as one markdown document.",
+  "description": "Who is acting and with what instructions \u2014 the people a graph knows, the personas an agent runs with, the skills it loads on demand, and a persona rendered as one markdown document.",
   "dependencies": {
     "@yaks/doc": "0.2.24",
     "@yaks/edge": "0.2.24",
@@ -27,6 +27,7 @@
     "@yaks/graph": "0.2.33",
     "@yaks/id": "0.2.23",
     "@yaks/inspect": "0.2.30",
+    "@yaks/markdown": "0.2.30",
     "@yaks/mirror": "0.2.23",
     "@yaks/process": "0.2.28",
     "@yaks/project": "0.2.28",

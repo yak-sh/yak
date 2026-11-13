@@ -4,18 +4,23 @@
   "type": "module",
   "exports": {
     ".": "./mod.ts",
-    "./structural": "./structural.ts"
+    "./structural": "./structural.ts",
+    "./graph": "./graph.ts"
   },
   "license": "Apache-2.0",
   "description": "Parses GitHub Flavored Markdown into structural renderer nodes rather than HTML strings or terminal escape sequences.",
   "dependencies": {
+    "@yaks/fp": "0.2.23",
+    "@yaks/graph": "0.2.33",
     "@yaks/id": "0.2.23",
     "@yaks/render": "0.2.24",
+    "@yaks/vocab": "0.2.32",
     "marked": "18.0.6",
     "preact": "10.29.7"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.30"
   }
 }

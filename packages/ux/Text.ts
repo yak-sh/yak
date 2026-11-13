@@ -44,7 +44,12 @@ export let Text = (
 ): JSX.Element => {
   let host = useHost()
   let { vocab, markup } = host
-  let held = valueOf(e, comp, prop)
+  // Prose is typed over as it is read, its eids drawn as ids.
+  let stored = valueOf(e, comp, prop)
+  let held = typeof stored == 'string' && host.prose &&
+      vocab.prop(comp, prop)?.prose
+    ? host.prose(stored)
+    : stored
   let edit = useEdit(e.entity.eid, comp, prop, { at, value: held })
   // A body a bundle does not carry is one the page has not loaded, not an
   // empty one: typing over it would write a fragment over the stored text.

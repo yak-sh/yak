@@ -129,7 +129,7 @@ let searched = (comp: string, prop: string, s: PropSchema): string[] => {
     prose: 'prose',
   }
   return prose ? [] : (['search', 'contains', 'prose'] as const)
-    .filter((k) => s[k] === true)
+    .filter((k) => s[k] === true || Array.isArray(s[k]))
     .map((k) =>
       `${comp}.${prop} is ${
         said[k]

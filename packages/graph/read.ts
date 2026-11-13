@@ -1,6 +1,16 @@
 // Query projection, name resolution and caller views over committed storage.
 // A read-only graph and the writable graph use the same read pipeline.
-import { and, eq, list, mask, parse, want } from '@yaks/query/core'
+import {
+  and,
+  type Clause,
+  eq,
+  list,
+  map,
+  mask,
+  parse,
+  want,
+  words,
+} from '@yaks/query/core'
 import { matcher, rows as matchRows } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
 import { BARE } from '@yaks/id'
@@ -33,6 +43,8 @@ export type Reader =
     | 'rows'
     | 'get'
     | 'address'
+    | 'named'
+    | 'prose'
     | 'ask'
     | 'answer'
     | 'view'
@@ -161,26 +173,31 @@ export let reader = (opts: {
   // hundred in a hundred reads. A store that proves no revision is asked
   // every time.
   let answered: { at: unknown; ids: Map<string, Eid> } | undefined
+  // Prose asks `loose`ly (`named`): an id typed in a sentence that names
+  // nothing, or several, is words, and is left out rather than refused.
   let address = (
     ids: string[],
     kind?: string,
     readOpts?: ReadOpts,
+    loose = false,
   ): Map<string, Eid> | Promise<Map<string, Eid>> => {
     if (!ids.length || !plugins.some((p) => p.address) && !ids.some(handled)) {
       return new Map<string, Eid>()
     }
     return continuing(storage.revision?.(), (at) => {
-      if (at === undefined) return resolve(ids, kind, readOpts)
+      if (at === undefined) return resolve(ids, kind, readOpts, loose)
       if (answered?.at !== at || answered.ids.size > ANSWERED) {
         answered = { at, ids: new Map() }
       }
       let held = answered.ids
       // The call's own cancellation and trace parent change no answer.
       let { signal: _signal, parent: _parent, ...asking } = readOpts ?? {}
-      let as = JSON.stringify([kind ?? null, asking]) + '\n'
+      let as = JSON.stringify([kind ?? null, asking, loose]) + '\n'
       let fresh = [...new Set(ids.filter((id) => !held.has(as + id)))]
       return continuing(
-        fresh.length ? resolve(fresh, kind, readOpts) : new Map<string, Eid>(),
+        fresh.length
+          ? resolve(fresh, kind, readOpts, loose)
+          : new Map<string, Eid>(),
         (found) => {
           for (let id of fresh) held.set(as + id, found.get(id) ?? id)
           let out = new Map<string, Eid>()
@@ -198,6 +215,7 @@ export let reader = (opts: {
     ids: string[],
     kind?: string,
     readOpts?: ReadOpts,
+    loose = false,
   ): Map<string, Eid> | Promise<Map<string, Eid>> => {
     let asks = plugins.flatMap((p) => p.address ?? [])
     let outside = outsideRead()
@@ -242,14 +260,53 @@ export let reader = (opts: {
             'nothing',
         )
       }
-      if (refusals.length) throw new Refused(refusals.join('; '))
+      if (refusals.length && !loose) throw new Refused(refusals.join('; '))
       return found
     })
   }
 
-  // A query with its ids addressed as its reader may (`address`).
+  // Texts as prose is stored (Graph.prose): the ids the store's Prose finds
+  // in them asked in one loose read, and the texts handed back with those it
+  // is sure of swapped for their eids.
+  let prose = (texts: string[]): string[] | Promise<string[]> => {
+    let p = plugins.find((p) => p.prose)?.prose
+    let ids = p ? [...new Set(texts.flatMap(p.typed))] : []
+    if (!p || !ids.length) return texts
+    return continuing(
+      address(ids, undefined, undefined, true),
+      (at) => at.size ? p.stored(texts, at, outsideRead()) : texts,
+    )
+  }
+
+  // A query with its ids addressed as its reader may (`address`), and its
+  // words searched for as prose is stored (`worded`).
   let aimed = (query: Query, readOpts?: ReadOpts) =>
-    aim(query, (ids: string[]) => address(ids, undefined, readOpts))
+    continuing(
+      aim(query, (ids: string[]) => address(ids, undefined, readOpts)),
+      worded,
+    )
+
+  // Words that type an id prose stores as an eid (`T-12`) are searched for
+  // either way: as stored, which a body holds, and as typed, which a
+  // transcript, a commit and a body written before keep.
+  let worded = (query: Query): Query | Promise<Query> => {
+    let p = plugins.find((p) => p.prose)?.prose
+    if (!p || typeof query == 'string' && !p.typed(query).length) return query
+    let ast: Clause = typeof query == 'string' ? parse(query) : query
+    let said = words(ast).filter((w) => p.typed(w).length)
+    if (!said.length) return query
+    return continuing(prose(said), (stored) => {
+      let as = new Map(said.map((w, i) => [w, stored[i]]))
+      let out = map(ast, (c) => {
+        if (c.kind != 'text') return c
+        let to = as.get(c.value)
+        return to && to != c.value
+          ? { kind: 'or', clauses: [c, { ...c, value: to }] }
+          : c
+      })
+      return out === ast ? query : out as Query
+    })
+  }
 
   // A handle as a person copies it is often its hex without the `#`
   // (`e854bf7dc0`): a shell reads a leading `#` as a comment, and a handle
@@ -550,6 +607,8 @@ export let reader = (opts: {
 
   return {
     address: (ids, kind, o) => address(ids, kind, o && scoped(o)),
+    named: (ids) => address(ids, undefined, undefined, true),
+    prose,
     scope: scoped,
     ask: (q, o) => ask(q, scoped(o)),
     answer,

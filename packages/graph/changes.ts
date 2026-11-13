@@ -6,6 +6,7 @@ import { Refused } from './errors.ts'
 import { token } from './sha256.ts'
 import { patchText } from './edit.ts'
 import { merged } from './gather.ts'
+import { isProse } from './prose.ts'
 
 /** A literal text change, in the order replace, prepend, append. */
 export type TextEdit = {
@@ -56,6 +57,12 @@ let pathOf = (path: string): string[] => {
   return parts
 }
 
+// Whether a text change's path is prose on the entity as stored.
+let proseAt = (graph: Graph, b: Bundle | undefined, path: string): boolean => {
+  let [comp, prop] = path.split('.')
+  return !!prop && isProse(graph.vocab, comp, prop, b)
+}
+
 let valueAt = (b: Bundle | undefined, comp: string, prop: string): unknown =>
   (b?.[comp] as Comp | undefined)?.[prop]
 
@@ -87,6 +94,18 @@ export let edited = async (graph: Graph, edits: Edit[]): Promise<Bundle[]> => {
       b,
     ) => [b.entity.eid, b]),
   )
+  // A find in prose is matched against the text as stored, which holds the
+  // eid where the caller typed `T-12` or was shown `#a3f19c024b`: the find is
+  // stored the same way first (Graph.prose).
+  let finds = edits.flatMap((edit) =>
+    (edit.text ?? []).filter((change) =>
+      change.find && proseAt(graph, stored.get(idOf(edit.id)), change.path)
+    )
+  )
+  let swapped = finds.length
+    ? await graph.prose(finds.map((change) => change.find!))
+    : []
+  let found = new Map(finds.map((change, i) => [change, swapped[i]]))
   let patches: Bundle[] = []
   let pending = new Map<string, Bundle>()
   let explicit = new Map<string, string | null>()
@@ -133,7 +152,14 @@ export let edited = async (graph: Graph, edits: Edit[]): Promise<Bundle[]> => {
       if (patch[comp] === null) {
         patches.push({ entity: { eid: id }, [comp]: null })
       }
-      patch = put(patch, change.path, textEdited(String(current ?? ''), change))
+      patch = put(
+        patch,
+        change.path,
+        textEdited(String(current ?? ''), {
+          ...change,
+          find: found.get(change) ?? change.find,
+        }),
+      )
       let guards = patch.$was?.[comp] ?? {}
       if (change.was !== undefined) guard(id, change.path, change.was)
       let key = `${id}\0${change.path}`

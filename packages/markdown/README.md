@@ -66,5 +66,17 @@ a title (`MarkdownInline` takes it too). The same options take
 `code(text, language)`, which colours a fenced block as runs of
 `{ text, classes }`; without it code is plain.
 
+The other way round, `typed(source)` lists the ids typed in prose that a store
+would name an entity by, outside code: a human id (`T-12`) or a short handle of
+ten or more hex characters, bare or as a link's target. `stored(source, eids)`
+replaces each one `eids` answers with that eid, and leaves the rest as typed.
+
+`@yaks/markdown/graph` is the graph plugin built on them (@yaks/graph `Prose`):
+a store composing it keeps each id typed in a property declaring `prose`
+(@yaks/vocab) as the eid it names, so the text names the entity in any store and
+under any number. A human id is swapped only where its letter is one the entity
+prints with or carries, so `K-12` is not taken for whatever holds the number 12.
+An id naming nothing stays as typed, and nothing is refused.
+
 Run `deno task test packages/markdown` from the repository root for parser,
 structural rendering and URL-safety tests.

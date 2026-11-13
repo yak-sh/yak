@@ -129,33 +129,33 @@ keywords under `CORE_URI`, `https://yak.sh/vocab/core`. A **meta-schema** is a
 JSON Schema for vocabulary documents; `metaSchema` is the bundled meta-schema.
 Use a JSON Schema validator with it for full document validation.
 
-| Keyword                               | On                    | Meaning                                                                                                        |
-| ------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `component`, `tool`, `rule`, `effect` | entry                 | The entry's declaration marker                                                                                 |
-| `extends`                             | component             | Adds properties, required properties or status rungs to another document's component                           |
-| `ref`, `death`                        | property              | Reference target and deletion behavior                                                                         |
-| `computed`                            | component or property | Derived and never stored; a computed component uses another package's backing                                  |
-| `reads`                               | computed property     | Components on other entities it reads; `[]` means its own entity; `comp.ref` identifies a reference back to it |
-| `stamped`                             | property              | Server-owned: clients read it and cannot write it                                                              |
-| `status`                              | component             | Ordered components and the statuses they give, with a default                                                  |
-| `kind`, `before`                      | component             | Display kind and the kinds it sorts before                                                                     |
-| `search`                              | property or component | Stored text to index, or another component's text property names                                               |
-| `contains`                            | property              | Stored text a substring index answers `~=` on                                                                  |
-| `prose`                               | property              | Stored text a person reads as Markdown; its eids are drawn as ids or short handles for the reader              |
-| `embed`                               | component             | `false` excludes entities carrying it from embedding                                                           |
-| `found`                               | component             | `false` keeps entities carrying it out of every search, by words and by meaning                                |
-| `journal`                             | component             | `false` keeps its writes, and deletions of entities holding nothing else, out of the journal's history         |
-| `aliases`                             | enum property         | Input forms mapped to enum members                                                                             |
-| `unique`, `index`                     | property or component | An individual property flag or composite index declarations                                                    |
-| `required`                            | component             | Properties every stored component must hold                                                                    |
-| `default`                             | property              | A scalar fallback, or `{ now: true }` on a `date-time` property                                                |
-| `identity`                            | property or component | Properties from which an eid is derived                                                                        |
-| `wire`                                | component             | `false` allows clients to read but not write it                                                                |
-| `sync`, `durable`, `pace`             | component             | Who receives writes, how long values live, how often a writer's values are taken                               |
-| `expire`                              | component             | The query selecting rows of this component to remove in a generic daily sweep                                  |
-| `save`                                | component             | The query allowing the server to store a permanent peer-relayed value                                          |
-| `validate`, `tree`                    | property              | Full JSON Schema checking and flat-tree checking by a schema plugin                                            |
-| `constraints`                         | component             | Numeric bounds over the complete component                                                                     |
+| Keyword                               | On                    | Meaning                                                                                                                                                           |
+| ------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `component`, `tool`, `rule`, `effect` | entry                 | The entry's declaration marker                                                                                                                                    |
+| `extends`                             | component             | Adds properties, required properties or status rungs to another document's component                                                                              |
+| `ref`, `death`                        | property              | Reference target and deletion behavior                                                                                                                            |
+| `computed`                            | component or property | Derived and never stored; a computed component uses another package's backing                                                                                     |
+| `reads`                               | computed property     | Components on other entities it reads; `[]` means its own entity; `comp.ref` identifies a reference back to it                                                    |
+| `stamped`                             | property              | Server-owned: clients read it and cannot write it                                                                                                                 |
+| `status`                              | component             | Ordered components and the statuses they give, with a default                                                                                                     |
+| `kind`, `before`                      | component             | Display kind and the kinds it sorts before                                                                                                                        |
+| `search`                              | property or component | Stored text to index, or another component's text property names                                                                                                  |
+| `contains`                            | property              | Stored text a substring index answers `~=` on                                                                                                                     |
+| `prose`                               | property              | Stored text a person reads as Markdown: ids typed in it are stored as eids, drawn as ids or short handles; a list names the components an entity carries for that |
+| `embed`                               | component             | `false` excludes entities carrying it from embedding                                                                                                              |
+| `found`                               | component             | `false` keeps entities carrying it out of every search, by words and by meaning                                                                                   |
+| `journal`                             | component             | `false` keeps its writes, and deletions of entities holding nothing else, out of the journal's history                                                            |
+| `aliases`                             | enum property         | Input forms mapped to enum members                                                                                                                                |
+| `unique`, `index`                     | property or component | An individual property flag or composite index declarations                                                                                                       |
+| `required`                            | component             | Properties every stored component must hold                                                                                                                       |
+| `default`                             | property              | A scalar fallback, or `{ now: true }` on a `date-time` property                                                                                                   |
+| `identity`                            | property or component | Properties from which an eid is derived                                                                                                                           |
+| `wire`                                | component             | `false` allows clients to read but not write it                                                                                                                   |
+| `sync`, `durable`, `pace`             | component             | Who receives writes, how long values live, how often a writer's values are taken                                                                                  |
+| `expire`                              | component             | The query selecting rows of this component to remove in a generic daily sweep                                                                                     |
+| `save`                                | component             | The query allowing the server to store a permanent peer-relayed value                                                                                             |
+| `validate`, `tree`                    | property              | Full JSON Schema checking and flat-tree checking by a schema plugin                                                                                               |
+| `constraints`                         | component             | Numeric bounds over the complete component                                                                                                                        |
 
 The vocabulary reports declarations; the consuming packages implement storage,
 search, embedding, synchronization and write behavior.

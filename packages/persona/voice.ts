@@ -35,6 +35,7 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import { BODY, DOC, TITLE } from '@yaks/doc'
 import { human } from '@yaks/id'
+import { drawn } from '@yaks/markdown/structural'
 import { safe } from '@yaks/text'
 import type { Vocab } from '@yaks/vocab'
 import { PART } from './part.ts'
@@ -107,10 +108,17 @@ let prop = (b: Bundle, name: string): string => {
 export let voice = (vocab: Vocab): (worn: Worn) => string => {
   let id = human(vocab)
   let head = (b: Bundle): string => safe(`${id(b)} ${prop(b, TITLE)}`).trim()
-  let part = (b: Bundle): string =>
-    [`# ${head(b)}`, prop(b, BODY).trim()].filter(Boolean).join('\n\n')
-  return ({ persona, contains, names }) =>
-    [
+  return ({ persona, contains, names }) => {
+    // A body's eids are drawn as the ids of what the persona carries, or as
+    // short handles (@yaks/markdown `drawn`): an agent never reads a uuid.
+    let own = new Map(
+      [persona, ...contains, ...names].filter((b) => b.entity.num)
+        .map((b) => [b.entity.eid, id(b)]),
+    )
+    let part = (b: Bundle): string =>
+      [`# ${head(b)}`, drawn(prop(b, BODY).trim(), (eid) => own.get(eid))]
+        .filter(Boolean).join('\n\n')
+    return [
       part(persona),
       ...contains.map(part),
       ...names.length
@@ -121,4 +129,5 @@ export let voice = (vocab: Vocab): (worn: Worn) => string => {
         ]
         : [],
     ].join(PART) + '\n'
+  }
 }

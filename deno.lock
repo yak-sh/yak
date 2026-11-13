@@ -3993,9 +3993,13 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@yaks/fp@0.2.23",
+            "npm:@yaks/graph@0.2.33",
             "npm:@yaks/id@0.2.23",
+            "npm:@yaks/ram@0.2.24",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.30",
+            "npm:@yaks/vocab@0.2.32",
             "npm:marked@18.0.6",
             "npm:preact@10.29.7"
           ]
@@ -4242,6 +4246,7 @@
             "npm:@yaks/inspect@0.2.30",
             "npm:@yaks/kernel@0.2.28",
             "npm:@yaks/machine@0.2.24",
+            "npm:@yaks/markdown@0.2.30",
             "npm:@yaks/memory@0.2.23",
             "npm:@yaks/mirror@0.2.23",
             "npm:@yaks/process@0.2.28",

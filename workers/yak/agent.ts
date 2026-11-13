@@ -716,6 +716,9 @@ export let reaching = async (
     // store: `get` fans across the reach, and a name held in whichever store
     // this caller can see answers.
     address: (ids) => addressed(detached(storage), ids),
+    named: (ids) => addressed(detached(storage), ids),
+    // Each reached store keeps its prose as it composes it to.
+    prose: (texts) => texts,
     apply: writing,
     admit: (bundles, opts) => writing(bundles, { ...opts, check: true }, true),
   }

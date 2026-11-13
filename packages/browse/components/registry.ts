@@ -31,6 +31,7 @@ import {
   capable,
   ent,
   findEid,
+  heldId,
   mutate,
   parents,
   problem,
@@ -43,6 +44,7 @@ import { type Ent, idOf, kindOf, statusOf, vocab } from '../types.ts'
 import { entityPath } from '../url.ts'
 import { archetypeTables, rememberArchetype } from '../live_archetypes.ts'
 import { markup } from './Markdown.tsx'
+import { drawn } from '@yaks/markdown/structural'
 import { Dot } from './Dot.tsx'
 import { ago } from './Stamp.tsx'
 import { fields, front } from './fields.tsx'
@@ -302,6 +304,7 @@ export let ux: Host = {
     return fields
   },
   markup: (text) => markup(text, null, true),
+  prose: (text) => drawn(text, heldId),
   wears: (comp, prop, v) =>
     comp == 'task' && prop == 'status' ? h(Dot, { status: v }) : null,
   Float,

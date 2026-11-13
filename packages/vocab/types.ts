@@ -75,8 +75,12 @@ export type Prop = {
   contains: boolean
   /** this text property is prose a person reads, as Markdown: an eid it holds
    * is drawn for its reader as the entity's id or short handle
-   * (@yaks/markdown `drawn`), never as a whole uuid */
-  prose: boolean
+   * (@yaks/markdown `drawn`), never as a whole uuid, and an id typed in it is
+   * stored as the eid it names (@yaks/graph `Graph.prose`). A list names the
+   * components an entity carries for its text to be stored so: on any other,
+   * the text is a record kept as written (a transcript, a mirrored file), and
+   * is only drawn */
+  prose: boolean | string[]
   /** derived, never stored: no column holds it and nobody writes it, but a
    * reader still sees it (a query-only rank, an aggregate, a derived status) */
   computed: boolean
@@ -302,8 +306,9 @@ export type PropSchema = {
   search?: boolean | string[]
   // On a property, true = a substring index answers `~=` on it (@yaks/fts).
   contains?: boolean
-  // On a property, true = its text is prose a person reads, as Markdown.
-  prose?: boolean
+  // On a property, true = its text is prose a person reads, as Markdown; a
+  // list = only on an entity carrying one of these components.
+  prose?: boolean | string[]
   kind?: boolean
   before?: string[]
   // On a component reported out of a vocabulary of several packages: the one

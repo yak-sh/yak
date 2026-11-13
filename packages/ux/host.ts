@@ -96,6 +96,11 @@ export type Host = {
   fields?: { Filter: FunctionComponent<FieldProps> }
   /** inline markdown, drawn: a value shown `inline` at rest */
   markup?: (text: string) => ComponentChildren
+  /** prose as its reader reads it (@yaks/markdown `drawn`): what a property
+   * declaring `prose` (@yaks/vocab) is typed over, so a person edits `T-12`
+   * where the store holds its eid, and the store swaps it back on the write;
+   * without it, the text as stored */
+  prose?: (text: string) => string
   /** what a choice wears beside its word: a status's dot */
   wears?: (comp: string, prop: string, value: string) => ComponentChildren
   /** where a popout floats; without it, in the flow */

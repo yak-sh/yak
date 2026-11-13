@@ -625,7 +625,18 @@
           "type": "boolean"
         },
         "prose": {
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          ]
         },
         "unique": {
           "type": "boolean"
@@ -727,7 +738,18 @@
           "type": "boolean"
         },
         "prose": {
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          ]
         },
         "unique": {
           "type": "boolean"

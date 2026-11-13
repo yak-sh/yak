@@ -164,8 +164,18 @@
       "type": "boolean"
     },
     "prose": {
-      "description": "On a property, true = this text property is prose a person reads, as Markdown: an eid it holds is drawn for its reader as the entity's id or short handle (@yaks/markdown `drawn`), never as a whole uuid.",
-      "type": "boolean"
+      "description": "On a property, true = this text property is prose a person reads, as Markdown: an eid it holds is drawn for its reader as the entity's id or short handle (@yaks/markdown `drawn`), never as a whole uuid, and an id typed in it that names an entity is stored as that entity's eid (@yaks/graph `Graph.prose`). A list of components = the text is stored so only on an entity carrying one of them: `content` says [\"topic\"], so a topic's contents hold eids, and a transcript's entries and a tool's results are kept as written, and only drawn.",
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
     },
     "kind": {
       "description": "true = this component names a display kind (feeds kindOf / kindOrder).",

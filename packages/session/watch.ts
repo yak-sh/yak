@@ -67,7 +67,9 @@ let fold = (text: string, max = 200): string => {
 
 /** The sessions and actors that mention the task `id` names: the sessions
  * whose own entries do, and the writer of each other entity whose `doc.body`
- * does, by the session it came through or else the actor. */
+ * does, by the session it came through or else the actor. An entry keeps the
+ * id as it was typed; a body stores the task's eid (@yaks/graph `prose`), or
+ * the id where it was written before, and a search for the id finds both. */
 let mentioners = async (g: G, task: Eid, id: string): Promise<Eid[]> => {
   // A human id, a prefix and a number: a bare hash is not how anyone
   // mentions a task.
@@ -86,9 +88,11 @@ let mentioners = async (g: G, task: Eid, id: string): Promise<Eid[]> => {
   return [
     ...said.filter((b) => mentions(str(comp(b, 'content').body), id))
       .map((b) => str(comp(b, 'entry').session)),
-    ...written.filter((b) =>
-      b.entity.eid != task && mentions(str(comp(b, 'doc').body), id)
-    ).map((b) => str(comp(b, 'created').via) || str(comp(b, 'created').by)),
+    ...written.filter((b) => {
+      let body = str(comp(b, 'doc').body)
+      return b.entity.eid != task &&
+        (mentions(body, task) || mentions(body, id))
+    }).map((b) => str(comp(b, 'created').via) || str(comp(b, 'created').by)),
   ].filter(Boolean)
 }
 

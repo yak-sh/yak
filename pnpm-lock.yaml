@@ -3066,12 +3066,21 @@ importers:
 
   packages/markdown:
     dependencies:
+      '@yaks/fp':
+        specifier: 0.2.23
+        version: link:../fp
+      '@yaks/graph':
+        specifier: 0.2.33
+        version: link:../graph
       '@yaks/id':
         specifier: 0.2.23
         version: link:../id
       '@yaks/render':
         specifier: 0.2.24
         version: link:../render
+      '@yaks/vocab':
+        specifier: 0.2.32
+        version: link:../vocab
       marked:
         specifier: 18.0.6
         version: 18.0.6
@@ -3082,6 +3091,9 @@ importers:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
+      '@yaks/ram':
+        specifier: 0.2.24
+        version: link:../ram
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
@@ -3566,6 +3578,9 @@ importers:
       '@yaks/inspect':
         specifier: 0.2.30
         version: link:../inspect
+      '@yaks/markdown':
+        specifier: 0.2.30
+        version: link:../markdown
       '@yaks/mirror':
         specifier: 0.2.23
         version: link:../mirror

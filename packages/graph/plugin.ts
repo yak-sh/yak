@@ -437,6 +437,31 @@ export type Plugin = {
   ) =>
     | Map<string, Eid | Eid[] | null>
     | Promise<Map<string, Eid | Eid[] | null>>
+  /** how prose names entities ({@link Prose}): what a write stores for text a
+   * property declares `prose` (@yaks/vocab), and what a caller matching such
+   * text asks first. Called through {@link Graph.prose}; the first plugin
+   * that brings one is the store's. It belongs to a
+   * plugin because finding ids in text is a grammar's (@yaks/markdown), and a
+   * store composes it or does not: an app's code reads its own text as it
+   * wrote it. */
+  prose?: Prose
+}
+
+/** How prose names entities, in the two halves a graph asks between its one
+ * read of the ids ({@link Graph.named}). A text is stored with each id typed
+ * in it that names an entity replaced by its eid, so it names the entity in
+ * any store and under any number; one naming nothing comes back as it was. */
+export type Prose = {
+  /** the ids typed in this text that may name an entity, outside code */
+  typed: (text: string) => string[]
+  /** the texts with each id that `at` resolved replaced by its eid, where the
+   * plugin is sure the id was meant: `tx` reads what it must see to be sure
+   * (an id's letter is one the entity it names prints with) */
+  stored: (
+    texts: string[],
+    at: Map<string, Eid>,
+    tx: ReadTx,
+  ) => string[] | Promise<string[]>
 }
 
 /** Every vocabulary document a set of plugins contributes, in plugin order —

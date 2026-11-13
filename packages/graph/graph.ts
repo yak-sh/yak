@@ -77,6 +77,7 @@ import {
   gives,
 } from './bundle.ts'
 import type { ReadTx, Row, Storage, Tx } from './storage.ts'
+import { isProse, proseOn } from './prose.ts'
 import {
   type Committed,
   detached,
@@ -401,6 +402,17 @@ export type Graph = {
     kind?: string,
     opts?: ReadOpts,
   ) => Map<string, Eid> | Promise<Map<string, Eid>>
+  /** the ids a caller passed → the eids they name, as {@link address} answers,
+   * except that one naming nothing, or several, is left out rather than
+   * refused: what prose asks about the ids typed in it, where an id that
+   * names nothing is only words. */
+  named: (ids: string[]) => Map<string, Eid> | Promise<Map<string, Eid>>
+  /** these texts as a write stores prose (@yaks/vocab `prose`), through the
+   * composed plugins' {@link Plugin.prose}: each id typed in them that names
+   * an entity replaced by its eid. With no plugin, the texts as they are. A
+   * caller matching text against stored prose (an edit's `find`, a search's
+   * words) asks this first, so the id it types matches the eid stored. */
+  prose: (texts: string[]) => string[] | Promise<string[]>
   /** apply bundles in one transaction → the bundles as applied, one per
    * entity, plus everything the pipeline generated */
   apply: (bundles: Bundle[], opts?: ApplyOpts) => Bundle[] | Promise<Bundle[]>
@@ -1492,6 +1504,8 @@ export let graph = (opts: Options): Graph => {
         // resolved the way a read and a tool's arguments resolve theirs, so a
         // name or a `T-7` lands on the entity it names and one that names
         // nothing is refused before anything is minted under it.
+        // Its prose is then stored as it names entities (`prosed`), unless
+        // the batch is a replica's copy of what its server already stored.
         phase(
           'normalize',
           outside,
@@ -1501,12 +1515,14 @@ export let graph = (opts: Options): Graph => {
                 b.filter((row) => !row.$prune).map((row) => row.entity.eid)
                   .filter((id) => !isAlias(id)),
               ),
-              (at) =>
-                at.size
+              (at) => {
+                let named = at.size
                   ? b.map((row) =>
                     row.$prune ? row : substitute([row], vocab, at)[0]
                   )
-                  : b,
+                  : b
+                return o.replica ? named : prosed(named, outside)
+              },
             ),
         ),
         // Accepted data is copied, never admitted again. Like accepted release
@@ -1586,6 +1602,57 @@ export let graph = (opts: Options): Graph => {
   let reads = reading({ storage, vocab, plugins, outside: outsideRead })
   let { address, ask, answer, view, rewrites } = reads
 
+  // A write's prose, stored as it names entities: the text of every property
+  // declaring `prose` (@yaks/vocab) that has an id typed in it, on an entity
+  // it is prose for. A property listing components is prose only on an entity
+  // carrying one of them, which the write says or the store does. Nothing is
+  // refused: an id naming nothing stays as typed.
+  let prosed = (
+    bundles: Bundle[],
+    tx: ReadTx,
+  ): Bundle[] | Promise<Bundle[]> => {
+    let p = plugins.find((p) => p.prose)?.prose
+    if (!p) return bundles
+    let said: { i: number; comp: string; prop: string; text: string }[] = []
+    let asks = new Map<Eid, string[]>()
+    bundles.forEach((b, i) => {
+      if (b.$prune || dead(b)) return
+      for (let [comp, held] of comps(b)) {
+        for (let [prop, text] of Object.entries(held ?? {})) {
+          let on = proseOn(vocab, comp, prop)
+          if (!on || typeof text != 'string' || !p.typed(text).length) continue
+          said.push({ i, comp, prop, text })
+          if (!isProse(vocab, comp, prop, b)) asks.set(b.entity.eid, on)
+        }
+      }
+    })
+    if (!said.length) return bundles
+    let eids = [...asks.keys()]
+    return after(
+      eids.length ? tx.get(eids, [...new Set([...asks.values()].flat())]) : [],
+      (rows) => {
+        let carrying = new Map(rows.map((b) => [b.entity.eid, b]))
+        let mine = said.filter(({ i }) => {
+          let on = asks.get(bundles[i].entity.eid)
+          let held = carrying.get(bundles[i].entity.eid)
+          return !on || !!held && !dead(held) && on.some((c) => held[c] != null)
+        })
+        if (!mine.length) return bundles
+        return after(reads.prose(mine.map((s) => s.text)), (texts) => {
+          let out = [...bundles]
+          mine.forEach(({ i, comp, prop, text }, n) => {
+            if (texts[n] == text) return
+            out[i] = {
+              ...out[i],
+              [comp]: { ...out[i][comp] as Comp, [prop]: texts[n] },
+            }
+          })
+          return out
+        })
+      },
+    )
+  }
+
   let g: Graph = {
     get vocab() {
       return vocab
@@ -1618,6 +1685,8 @@ export let graph = (opts: Options): Graph => {
     outside: committed,
     plugins,
     address: (ids, kind, o) => address(ids, kind, o),
+    named: (ids) => reads.named(ids),
+    prose: (texts) => reads.prose(texts),
     rewrites: (o) => rewrites(o),
     scope: (o) => reads.scope(o),
     ask: (q, o) => ask(q, o),

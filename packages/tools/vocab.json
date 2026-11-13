@@ -76,7 +76,7 @@
           "type": "string",
           "store": "blob",
           "contains": true,
-          "prose": true
+          "prose": ["topic"]
         }
       }
     },
