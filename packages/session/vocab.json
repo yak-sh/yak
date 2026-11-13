@@ -610,6 +610,7 @@
         },
         "notice": {
           "type": "boolean",
+          "index": true,
           "description": "Report passively, without waking the parent, in one notice per child; later turns update that same notice."
         },
         "quiet": {
