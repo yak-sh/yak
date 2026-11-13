@@ -171,12 +171,206 @@
   "churches": {
     "name": "yaks.app for churches — a new church website built from the one you have, and changed whenever you ask",
     "title": "yaks.app for churches — a new church website built from the one you have, and changed whenever you ask",
-    "description": "Type your church's web address and watch yaks.app build your new site from it, free to try and with no sign-up. Then change it by asking, by email or chat, and add sign-up forms, a member directory and a calendar. $49 a month for your whole church."
+    "description": "Type your church's web address and watch yaks.app build your new site from it, free to try and with no sign-up. Then change it by asking, by email or chat, and add sign-up forms, a member directory and a calendar. $49 a month for your whole church.",
+    "hello": {
+      "kicker": "For church offices",
+      "title": "Type your church's web address, and watch yaks.app build your new site.",
+      "note": "Your church's name, service times and what's on this week, read from the site you have now. To change anything, you ask it by email or chat.",
+      "hint": "yourchurch.org",
+      "go": "Build my site free",
+      "try": "Free to try. yaks.app reads the site at that address and builds a preview of it that only you can open, marked on every page as a preview. It takes about 3 minutes, and the site you have now isn't changed. It goes online only once you sign up and connect your church's web address, which shows the site is yours. No website yet? Type what your church needs instead."
+    },
+    "how": {
+      "title": "It starts from your site, and you change it by asking",
+      "watch": {
+        "name": "You watch your new site being built",
+        "detail": "A chat opens and says what it is doing. Your new site shows as it is made, the page itself after a minute or two, and it is ready to open in about 3 minutes. The site you have now is only read. Nothing on it changes."
+      },
+      "keep": {
+        "name": "Keep it, and put it online",
+        "detail": "If you like what you see, give your email and it is yours, free. If you don't, it is deleted after 7 days. To put it online, connect your church's web address to it: a record you add where that address is registered shows the site is yours, and only then can anyone else open it."
+      },
+      "ask": {
+        "name": "Ask for changes by email or chat",
+        "detail": "Your church gets an Operator, an AI helper that does the building. Ask it the way you would ask a volunteer who is good with computers: “Put the Christmas Eve service times on the home page.” It makes the change and writes back."
+      },
+      "private": {
+        "name": "Only the people you invite see what is private",
+        "detail": "Members sign in with their email to open the directory, and nobody else can. What is in it stays yours, to take with you or delete whenever you like."
+      }
+    },
+    "built": {
+      "title": "What else yaks.app has built for a church",
+      "forms": {
+        "term": "Sign-up forms on the website",
+        "detail": "For kids' club, youth group and the things on the calendar, beside the church's sermons and events."
+      },
+      "directory": {
+        "term": "A members-only directory",
+        "detail": "Families, photos, birthdays and anniversaries. %{sample}",
+        "sample": "Try the sample directory %{arrow}"
+      },
+      "calendar": {
+        "term": "A calendar for everyone's phone",
+        "detail": "Members add the church calendar to their own phones, and it stays up to date."
+      }
+    },
+    "cost": {
+      "title": "One plan in place of several subscriptions",
+      "note": "A website builder, a forms tool, a directory and a calendar are often paid for one by one. On yaks.app they live together at one address, like %{yours}, or at your own domain, like %{domain}.",
+      "example": "yourchurch.org",
+      "free": {
+        "note": "To try it, for as long as you like."
+      },
+      "pro": {
+        "invited": "Everyone you invite is free",
+        "ai": "AI use included"
+      },
+      "limits": "Tax is included. %{plans}. %{behind}.",
+      "behind": "Who is behind yaks.app, and who fixes its mistakes"
+    },
+    "join": {
+      "title": "Start with the website you have now",
+      "go": "Type its address",
+      "note": "Free to try."
+    }
   },
   "organizations": {
     "name": "yaks.app for organizations — like having a web person on staff, for $49 a month",
     "title": "yaks.app for organizations — like having a web person on staff, for $49 a month",
-    "description": "An AI assistant looks after your organization's website. Email it what you need and it makes the change, and we fix what it gets wrong. Type your website's address for a free private preview, with no sign-up. $49 a month for the whole organization."
+    "description": "An AI assistant looks after your organization's website. Email it what you need and it makes the change, and we fix what it gets wrong. Type your website's address for a free private preview, with no sign-up. $49 a month for the whole organization.",
+    "example": "yourorganization.org",
+    "hello": {
+      "kicker": "For churches, clubs, town offices and small businesses",
+      "title": "Like having a web person on staff, for $49 a month.",
+      "note": "An AI assistant looks after your website. You email it what you need, it makes the change, and our small company fixes what it gets wrong.",
+      "label": "Type your website's address for a free preview: a copy of your site, built new, that only you can open",
+      "hint": "yourorganization.org",
+      "go": "Build a free preview",
+      "try": "No sign-up. It takes about 3 minutes, and the site you have now is not changed."
+    },
+    "letters": {
+      "title": "An email to the assistant, and its answer 39 seconds later",
+      "asked": {
+        "by": "The office writes",
+        "subject": "Visitor cards",
+        "head": "%{subject}%{line}From admin@bot.yak.sh to yourname@yaks.app",
+        "body": "Pastor Dan called Tom Reyes this morning. Can you tick him off the visitor card list, and tell me who is still waiting for a call?"
+      },
+      "answered": {
+        "by": "The assistant writes back",
+        "subject": "Re: Visitor cards",
+        "head": "%{subject}%{line}From yourname@yaks.app to admin@bot.yak.sh",
+        "done": "Tom Reyes is ticked off as called. There was only one Tom Reyes, and I checked that the saved row shows it.",
+        "waiting": "One visitor is still waiting for a call:",
+        "visitor": {
+          "name": "Grace Lindqvist",
+          "phone": "Phone: 555-0109",
+          "email": "Email: grace.lindqvist@bot.yak.sh",
+          "note": "Note: \"My husband is having surgery on Thursday. Please pray for him.\""
+        },
+        "sign": "Cove%{line}yourname’s Operator"
+      }
+    },
+    "missing": {
+      "title": "Sign-up forms, a member directory and a calendar, added to your website",
+      "forms": {
+        "term": "Sign-up forms",
+        "detail": "For an event, a class or volunteers. What people enter is saved, and you see who signed up. %{sample}",
+        "sample": "Try a sample sign-up sheet %{arrow}"
+      },
+      "directory": {
+        "term": "A members-only directory",
+        "detail": "Families, photos and birthdays. Only the people you invite can open it, signing in with a code sent to their email. %{sample}",
+        "sample": "Try the sample directory %{arrow}"
+      },
+      "calendar": {
+        "term": "A calendar people add to their phones",
+        "detail": "Members add your calendar to the calendar on their own phone, and it stays up to date as you change it."
+      },
+      "note": "These three were first built for a church office. Ask for what your office needs, such as a calendar for the park pavilion that emails you each request and reminds you of one that has waited two days."
+    },
+    "together": {
+      "title": "People type their details once",
+      "note": "A forms tool, a directory and a calendar bought separately each keep their own list of people. Here they are parts of one website:",
+      "form": "A member who is signed in and signs up for the picnic doesn't type their name and phone number again. The form already has them from the directory.",
+      "added": "A detail the directory didn't have yet, such as a phone number, is added from what they type on the form. What it already has is left alone.",
+      "calendar": "What a member signs up for shows on the calendar on their own phone."
+    },
+    "saving": {
+      "title": "One plan in place of several subscriptions",
+      "note": "The website, the forms, the directory and the calendar are $49 a month together, or $490 a year, with no charge per person.",
+      "paying": "Type what you pay each month now, to compare",
+      "paid": {
+        "website": "Your website",
+        "forms": "Forms and sign-ups",
+        "directory": "Member directory",
+        "calendar": "Calendar"
+      },
+      "hint": "$ a month",
+      "private": "Nothing you type here is sent to us. Don't count accounting, online giving or a newsletter service: yaks.app doesn't do those."
+    },
+    "how": {
+      "title": "The office asks, and the change is made",
+      "start": {
+        "name": "It starts from the site you have",
+        "detail": "Type your website's address above. The preview has what your site says: who you are, where and when, and what's coming up. It has the words but not the pictures, and you send those to the assistant afterward. A preview you don't keep is deleted after 7 days."
+      },
+      "ask": {
+        "name": "You ask for changes by email or chat",
+        "detail": "Write the way you would to a person on staff: “Here are Tuesday's minutes. Please post them.” The assistant makes the change and writes back to say what it did."
+      },
+      "online": {
+        "name": "It goes online at your own web address",
+        "detail": "Until then only you can see the preview. When you are ready you choose a plan, and the assistant walks you through pointing your web address, like %{domain}, at the new site. It is the one technical step. Then the new site takes the old one's place there."
+      }
+    },
+    "behind": {
+      "title": "We watch for mistakes and fix them",
+      "note": "The assistant is AI, and AI gets things wrong. This is what happens when it does.",
+      "broken": {
+        "term": "A broken page or form is recorded as it happens",
+        "detail": "When a page fails on a visitor's phone, or a form doesn't save, it is written down that moment. The assistant starts on it right away: it finds the cause, fixes it and puts the fix online. When you sign in, you see each one and what was done about it."
+      },
+      "ours": {
+        "term": "When the fault is ours, we fix it",
+        "detail": "Sometimes the cause is our own software and not your site. We are told as it happens, and we fix it. The assistant can also report a problem to us on your behalf, and our answer comes back to you."
+      },
+      "wrong": {
+        "term": "A wrong fact is put right by asking",
+        "detail": "No software can know that a meeting date is wrong. Each time it changes something, the assistant tells you what it changed, so you can check it. Reply that it is wrong, and it is corrected."
+      },
+      "back": {
+        "term": "Any change can be put back",
+        "detail": "The last 20 versions of your site are kept, so you can ask for it as it was before a change. Sign-ups or directory entries changed or lost by mistake can be restored as they stood at any time in the last 30 days, and anything deleted stays in the trash for 30 days."
+      },
+      "yours": {
+        "term": "The site and what is in it are yours",
+        "detail": "Ask for everything in it as a file or a spreadsheet whenever you like, or delete it. We never sell what is in it or share it with advertisers, as %{privacy} says. There is no contract. If you stop paying, the plan runs to the end of the month you paid for. After that nothing is deleted, and the site has the Free plan's limits, which don't include your own web address.",
+        "privacy": "the privacy page"
+      },
+      "write": {
+        "term": "You can write to us",
+        "detail": "yaks.app is made by Yak Shaving LLC, a small company in Sturgis, Michigan. Write to %{mail} and we answer. Support is by email."
+      }
+    },
+    "cost": {
+      "title": "$49 a month for the whole organization",
+      "note": "This is the Pro plan. Paid by the year it is $490 a year. One price, however many people you have.",
+      "asks": "Your office asks by email or chat, and the change is made",
+      "people": "No charge per person: staff, members and visitors cost nothing extra",
+      "domain": "Your own web address, like %{domain}",
+      "ai": "The AI assistant's work is included",
+      "emails": "2,500 emails a month sent or received by your site, such as the list each Friday of who is coming to Saturday's food pantry shift",
+      "support": "Support from us, by email",
+      "limits": "Tax is included, and the bill never grows by itself. If a very busy month uses up the AI work the plan includes, the assistant waits until the 1st, unless you choose to buy more, $10 at a time and paid in advance. Your site stays online either way. There are two smaller plans, Free and $9 a month, for a site that needs less. %{plans}, where the assistant is called your Operator.",
+      "plans": "Compare the plans"
+    },
+    "join": {
+      "title": "Start with the website you have now",
+      "go": "Type its address",
+      "note": "Free to try."
+    }
   },
   "townships": {
     "name": "AI for townships — a Michigan township website that drafts the board's minutes as it meets",
