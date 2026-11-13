@@ -4617,7 +4617,10 @@ let lower = (
   let owner = ctx.d.ownerKey('entity')
   if (!unordered) ordered.push(`${owner}${down}`)
   let windowed = after
-    ? and(where, cond(keyset(ctx, sort, after, numbered, physical)))
+    ? and(
+      where,
+      cond(keyset(ctx, sort, after, numbered, physical, seekOf(ctx, cs, sort))),
+    )
     : where
   // The joins the selection itself reads, taken before a projection adds its
   // own.
@@ -5956,6 +5959,8 @@ type Sort = {
   desc: boolean
   last: boolean
   ranked?: boolean
+  // The property it orders by, as `comp.prop`, where a ranking claims none.
+  field?: string
 }
 let sortOf = (ctx: Ctx, { value, last }: Order): Sort => {
   let desc = value.startsWith('-')
@@ -5971,11 +5976,14 @@ let sortOf = (ctx: Ctx, { value, last }: Order): Sort => {
     }
   }
   let row = resolveField(ctx, field).expr
+  let hops = ctx.v.aim(field)
+  let leaf = hops[hops.length - 1]
   return {
     row,
     at: (o) => resolveField(ctx, field, o).expr,
     desc,
     last: desc || !!last,
+    field: hops.length == 1 ? `${leaf.comp}.${leaf.prop}` : undefined,
   }
 }
 
@@ -6042,8 +6050,11 @@ let keyset = (
   after: After,
   numbered: boolean,
   physical = false,
+  seek: Seek | null = null,
 ): Frag => {
-  if (ctx.spine && 'eid' in after) return backedKeyset(ctx, sort, after.eid)
+  if (ctx.spine && 'eid' in after) {
+    return backedKeyset(ctx, sort, after.eid, seek)
+  }
   let owner = anchor(ctx, after)
   if (physical) return spliced(`${ctx.d.ownerKey('entity')} > `, owner)
   let exists = spliced(
@@ -6068,19 +6079,77 @@ let keyset = (
     )
     : spliced('"entity"."id" < ', owner)
   if (!sort) {
-    return 'n' in after ? tie : spliced('(not ', exists, ' or ', tie, ')')
+    if ('n' in after) return tie
+    let open = spliced('(not ', exists, ' or ', tie, ')')
+    return seek && numbered
+      ? spliced(seekFrom(seek, '"entity"."num"', true, num()), ' and ', open)
+      : open
   }
-  return past(sort, atAnchor(sort, owner), exists, tie)
+  return past(sort, atAnchor(sort, owner), exists, tie, seek)
 }
 
+// The order's column, where every row the query admits holds a value in it:
+// a test of the property beside the rest that no row without one passes
+// (`.entity.num`, `.created.at>…`). Only then can the keyset say where the
+// page starts in a way SQLite seeks to, below. A column read through an
+// expression has no index to seek, and asks nothing.
+type Seek = { affinity: string }
+let seekOf = (ctx: Ctx, cs: Clause[], sort: Sort | null): Seek | null => {
+  let field = sort ? sort.field : 'entity.num'
+  if (!field || (sort && !/^"[^"]+"\."[^"]+"$/.test(sort.row))) return null
+  let [comp, prop] = field.split('.')
+  let p = ctx.v.prop(comp, prop)
+  if (
+    !p || p.computed || ctx.derived[field] || p.category == 'ref' ||
+    !['text', 'integer', 'real'].includes(p.affinity)
+  ) return null
+  let tests = flattened(cs).some((c) => {
+    if (
+      c.kind != 'pred' || c.not || c.where || c.path.length != 2 ||
+      !needs(opOf(c), c.value)
+    ) return false
+    try {
+      let hops = ctx.v.aim(c.path.join('.'), bare(c))
+      let leaf = hops[hops.length - 1]
+      return hops.length == 1 && `${leaf.comp}.${leaf.prop}` == field
+    } catch {
+      return false // a name that does not route: clause() owns the refusal
+    }
+  })
+  return tests ? { affinity: p.affinity } : null
+}
+
+// The keyset's own condition is an OR of null cases, which SQLite reads by
+// walking the order's index from its start, past every row the cursor has
+// already passed: a store mover's 50-row page on yak/git read one row for
+// every row its rule had moved (T-166061). Where the query holds a value in
+// the order's column, no row past the anchor lies beyond the anchor's own
+// value, and that bound, beside the rest, is a range SQLite starts the walk
+// at. An anchor with no value, or none at all, bounds nothing: the value past
+// every other stands in (a blob sorts above any number or text, and nothing
+// sorts below the empty text in a text column or below -Infinity in a
+// numeric one).
+let seekFrom = (seek: Seek, v: string, desc: boolean, a: Frag): Frag =>
+  desc ? spliced(`${v} <= coalesce(`, a, `, x'ff')`) : spliced(
+    `${v} >= coalesce(`,
+    a,
+    seek.affinity == 'text' ? `, '')` : ', -9e999)',
+  )
+
 // Past the anchor in an explicit order: its value first, the tie after.
-let past = (sort: Sort, a: Frag, exists: Frag, tie: Frag): Frag => {
+let past = (
+  sort: Sort,
+  a: Frag,
+  exists: Frag,
+  tie: Frag,
+  seek: Seek | null = null,
+): Frag => {
   let v = sort.row
   let to = sort.desc ? '<' : '>'
   let beyond = sort.last
     ? spliced(`(${v} is null and `, a, ` is not null) or ${v} ${to} `, a)
     : spliced('(', a, ` is null and ${v} is not null) or ${v} ${to} `, a)
-  return spliced(
+  let open = spliced(
     '(not ',
     exists,
     ' or ',
@@ -6091,12 +6160,18 @@ let past = (sort: Sort, a: Frag, exists: Frag, tie: Frag): Frag => {
     tie,
     '))',
   )
+  return seek ? spliced(seekFrom(seek, v, sort.desc, a), ' and ', open) : open
 }
 
 // The same keyset on a backed spine, whose eid is its id written out: the
 // anchor is that id, and there is no number to page by. An eid that is not
 // one of the spine's names nothing, which is the first page.
-let backedKeyset = (ctx: Ctx, sort: Sort | null, eid: string): Frag => {
+let backedKeyset = (
+  ctx: Ctx,
+  sort: Sort | null,
+  eid: string,
+  seek: Seek | null,
+): Frag => {
   let id = idOf(backingOf(ctx.backed, ctx.tags, ctx.spine!).tag, eid)
   if (id == null) return { sql: '1', params: [] }
   let key = ctx.d.ownerKey('entity')
@@ -6109,7 +6184,7 @@ let backedKeyset = (ctx: Ctx, sort: Sort | null, eid: string): Frag => {
   let owner: Frag = { sql: 'cast(? as integer)', params: [id] }
   let tie = spliced(`${key} < `, owner)
   return sort
-    ? past(sort, atAnchor(sort, owner), exists, tie)
+    ? past(sort, atAnchor(sort, owner), exists, tie, seek)
     : spliced('(not ', exists, ' or ', tie, ')')
 }
 
