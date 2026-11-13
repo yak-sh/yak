@@ -137,20 +137,25 @@ export let service = async (
   // The tag of the remote standing the last reconciliation applied in full.
   let seen: { tag?: string } = {}
 
-  // A failed intake pass is reported. A sync's failure is its watch's to
+  // A failed intake pass is reported, each record's failure for itself, so a
+  // refused capture files under its refusal and a locked database under its
+  // lock, never together under a count. A sync's failure is its watch's to
   // tell (./sync_health.ts), so a failed retry never reports into its own
   // outbox.
-  let unadmitted = async (error: unknown) => {
-    try {
-      if (options.report) {
-        options.report(error, { tags: { handler: 'tracker_intake' } })
-      } else if (dir) {
-        await caught(error, {
-          sink: spool(files(dir).append),
-          tags: { handler: 'tracker_intake' },
-        })
-      } else console.error(error)
-    } catch { /* keep the spool */ }
+  let unadmitted = async (failure: unknown) => {
+    let each = failure instanceof AggregateError ? failure.errors : [failure]
+    for (let error of each) {
+      try {
+        if (options.report) {
+          options.report(error, { tags: { handler: 'tracker_intake' } })
+        } else if (dir) {
+          await caught(error, {
+            sink: spool(files(dir).append),
+            tags: { handler: 'tracker_intake' },
+          })
+        } else console.error(error)
+      } catch { /* keep the spool */ }
+    }
   }
   let run = async (
     pass: () => Promise<void>,

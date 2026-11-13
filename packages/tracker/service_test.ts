@@ -187,6 +187,38 @@ test('a locally refused record is never sent or acknowledged', async () => {
   equal(spool.admitted(), [false])
 })
 
+// A capture the graph refuses is set aside, and each one is told by its own
+// refusal: a pass of them is never one bug titled by their count.
+let refusals = await (async () => {
+  let refused: string[] = [], told: string[] = []
+  let bad = (eid: string): Record => ({
+    rows: capture(Error('x'), {
+      eid,
+      sink: () => {},
+      during: { kind: 'check', process: 'flood-check' },
+    }),
+    ack: () => {},
+    refuse: () => void refused.push(eid),
+  })
+  await service({ graph: fixture() }, {
+    source: async function* () {
+      yield* [bad('one'), bad('two')]
+    },
+    report: (error) =>
+      told.push(`${(error as Error).name}: ${(error as Error).message}`),
+  }).catch(() => {})
+  return { refused, told: [...new Set(told)], reports: told.length }
+})()
+test('refused captures are set aside and each is told by its refusal', () => {
+  equal(refusals, {
+    refused: ['one', 'two'],
+    told: [
+      "Refused: during.process takes an entity's id or name: flood-check names nothing",
+    ],
+    reports: 2,
+  })
+})
+
 // A lock can clear on the next pass; it must neither quarantine the oldest
 // record nor delay the later record's local receipt and remote delivery.
 let locked = await (async () => {

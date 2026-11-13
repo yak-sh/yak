@@ -146,18 +146,26 @@ let below = (): string => {
   return ''
 }
 
-// What an Error was wrapped around, down its `cause` chain: each link's stack
-// (which opens with its name and message), else the value itself. A wrapper
-// says what it was doing; the chain says why it failed.
+// What an Error was wrapped around, down its `cause` chain and into each of
+// an AggregateError's `errors`: each link's stack (which opens with its name
+// and message), else the value itself, once however many links repeat it. A
+// wrapper says what it was doing; the chain says why it failed.
 let causes = (error: Error): string => {
   let out: string[] = []
   let seen = new Set<unknown>([error])
-  for (let c = error.cause; c != null && !seen.has(c) && out.length < 5;) {
+  let inner = (e: unknown): unknown[] =>
+    e instanceof Error
+      ? [e.cause, ...e instanceof AggregateError ? e.errors : []]
+      : []
+  for (let queue = inner(error); queue.length && out.length < 5;) {
+    let c = queue.shift()
+    if (c == null || seen.has(c)) continue
     seen.add(c)
-    out.push(
-      c instanceof Error ? c.stack || `${c.name}: ${c.message}` : json1(c),
-    )
-    c = c instanceof Error ? c.cause : undefined
+    let text = c instanceof Error
+      ? c.stack || `${c.name}: ${c.message}`
+      : json1(c)
+    if (!out.includes(text)) out.push(text)
+    queue.unshift(...inner(c))
   }
   return out.join('\nCaused by: ')
 }
@@ -187,6 +195,12 @@ let json1 = (v: unknown): string =>
  * equal(described('broken'), undefined)
  * let wrapped = new Error('could not take', { cause: new Error('refused') })
  * ok(described(wrapped)?.cause?.startsWith('Error: refused'))
+ * let locked = Array.from({ length: 2 }, () => new Error('database is locked'))
+ * let many = new AggregateError([...locked, new Error('no such table')], '3 failed')
+ * equal(described(many)?.cause?.split('\nCaused by: ').map((c) => c.split('\n')[0]), [
+ *   'Error: database is locked',
+ *   'Error: no such table',
+ * ])
  * let failed = Object.assign(new Error('no such table: t'), { statement: 'select 1 from t' })
  * equal(described(failed)?.cause, 'Details: {"statement":"select 1 from t"}')
  * ```
