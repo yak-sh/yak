@@ -25,7 +25,7 @@
 
 import type { Bundle, Comp, Entity, Storage } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { FIRED, WAKE, type Wake } from './comp.ts'
+import { FIRED, WAKE, type Wake, WATCH } from './comp.ts'
 import { recur } from './every.ts'
 
 /** How a schedule is read: the time zone a cron line is interpreted in. */
@@ -42,11 +42,11 @@ export let wakeOf = (b: Bundle): Wake | undefined =>
 
 /**
  * The wakes due at `now`, oldest first — every entity whose `wake.at` has
- * passed, as whole bundles.
+ * passed, with the query it watches where it watches one.
  *
  * This is the only read the package makes, and it is an ordinary query, so an
  * application that would rather run its own (a narrower filter, a page at a
- * time) can: `.wake.at<=<instant>`.
+ * time) can: `.wake.at<=<instant>&?watch`.
  *
  * ```ts
  * import { due, ring } from '@yaks/wake'
@@ -63,7 +63,7 @@ export let due = (
   storage: Pick<Storage, 'read'>,
   now: number = Date.now(),
 ): Bundle[] | Promise<Bundle[]> =>
-  storage.read(`.${WAKE}.at<=${iso(now)}&.order=${WAKE}.at`, { now })
+  storage.read(`.${WAKE}.at<=${iso(now)}&?${WATCH}&.order=${WAKE}.at`, { now })
 
 /**
  * The next ISO instant after `now`, computed from a recurrence string or from a

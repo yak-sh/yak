@@ -45,8 +45,21 @@
                 "description": "the cadence while it holds, written as wake.every is"
               }
             },
-            "required": ["match", "every"]
+            "required": [
+              "match",
+              "every"
+            ]
           }
+        },
+        "for": {
+          "type": "string",
+          "ref": "person",
+          "death": "keep",
+          "description": "the person it was set for: it runs as them, with their permissions as they stand when it fires, and it is theirs to list and cancel"
+        },
+        "brief": {
+          "type": "string",
+          "description": "words for a fresh session started at each firing, given the outcome of the call it carries: a helper that checks the work and tells whom it is for only when they should hear"
         }
       }
     },
@@ -69,8 +82,7 @@
         },
         "at": {
           "type": "string",
-          "format": "date-time",
-          "description": "When it is next due; with every, the first firing. Without every, it fires once."
+          "description": "When it is next due: an instant (2026-01-02T09:00Z), or a delay from now (10m, 2h, 1d). With every, the first firing. Without every, it fires once."
         },
         "note": {
           "type": "string",
@@ -85,6 +97,36 @@
         "target"
       ]
     },
+    "wake_list": {
+      "tool": true,
+      "readOnly": true,
+      "noun": "wake",
+      "verb": "list",
+      "title": "List your wakes",
+      "description": "The wakes set for you that will fire again, soonest first: each one's id, when it next fires, how it recurs, its note, the query it watches, the call it makes and when it last fired.",
+      "input": {}
+    },
+    "wake_cancel": {
+      "tool": true,
+      "destructive": true,
+      "noun": "wake",
+      "verb": "cancel",
+      "title": "Cancel a wake",
+      "description": "Cancel a wake set for you, by its id, so it never fires again. Returns the wake cancelled.",
+      "input": {
+        "wake": {
+          "type": "string",
+          "ref": "wake",
+          "description": "The wake's id, as wake_new or wake_list gave it."
+        }
+      },
+      "required": [
+        "wake"
+      ],
+      "positional": [
+        "wake"
+      ]
+    },
     "fired": {
       "component": true,
       "journal": false,
@@ -97,6 +139,71 @@
           "description": "the instant it fired"
         }
       }
+    },
+    "watch": {
+      "component": true,
+      "type": "object",
+      "description": "a query a wake watches: each time the wake comes due its rows are read again, and it fires only when they changed since it last looked; a look that finds nothing new moves it on without firing",
+      "properties": {
+        "query": {
+          "type": "string",
+          "format": "query",
+          "description": "the query whose rows it watches, written as for graph_query"
+        },
+        "local": {
+          "type": "boolean",
+          "description": "read over the store the wake is kept in, rather than everything its person reaches (on yaks.app, the space's apps)"
+        },
+        "seen": {
+          "type": "object",
+          "description": "each row the query answered at the last look, by eid, and a digest of what it held"
+        },
+        "changes": {
+          "type": "string",
+          "description": "what changed at the look the wake last fired for, in words: rows new, changed and gone"
+        }
+      }
+    },
+    "occurrence": {
+      "component": true,
+      "type": "object",
+      "description": "one firing of a wake that did work; completed or failed says how it ended",
+      "properties": {
+        "wake": {
+          "type": "string",
+          "ref": "wake",
+          "death": "keep",
+          "description": "the wake that fired, kept when it is cancelled"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "the instant it fired"
+        },
+        "call": {
+          "type": "string",
+          "ref": "call",
+          "death": "keep",
+          "description": "the call it made, whose answer is that call's own record (@yaks/tools)"
+        },
+        "error": {
+          "type": "string",
+          "description": "the call's failure, kept while a session given the wake's brief checks its outcome"
+        }
+      }
+    },
+    "wake_run": {
+      "effect": true,
+      "created": [
+        "fired"
+      ],
+      "changed": [
+        "fired.at"
+      ],
+      "target": ".wake.for",
+      "option": "run",
+      "tries": 3,
+      "description": "Do what a wake set for a person asks each time it fires: its call with no model turn (an occurrence records it), its note in their conversation, and its brief to a fresh session. The host that runs sessions handles it; owed only where @yaks/wake is given run: true"
     }
   }
 }

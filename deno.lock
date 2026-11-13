@@ -5121,6 +5121,7 @@
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.30",
+            "npm:@yaks/tools@0.2.30",
             "npm:@yaks/vocab@0.2.32",
             "npm:croner@10.0.1"
           ]

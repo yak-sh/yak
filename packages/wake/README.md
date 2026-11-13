@@ -20,13 +20,17 @@ Entry points:
 - `@yaks/wake/cloudflare`: Cron Trigger and Durable Object alarm helpers.
 - `@yaks/wake/graph`: the `plugins()` plugin list.
 - `@yaks/wake/service`: a Deno background service wrapper.
-- `@yaks/wake/tools`: the code behind the `wake_new` tool.
+- `@yaks/wake/run`: running a wake's tool call at a firing, with
+  [@yaks/tools](../tools).
+- `@yaks/wake/tools`: the code behind the `wake_new`, `wake_list` and
+  `wake_cancel` tools.
 - `@yaks/wake/vocab`: the vocabulary document without scheduler behavior.
 
 ## The rows
 
-`wake{at, every, while, target, note}` stores the next ISO instant, optional
-recurrence, the conditions it recurs under, related entity, and a reason.
+`wake{at, every, while, target, note, for, brief}` stores the next ISO instant,
+optional recurrence, the conditions it recurs under, related entity, a reason,
+the person it was set for, and words for a fresh session each firing.
 `fired{at}` stores the most recent firing. A one-shot clears `wake.at` after
 firing. A recurring wake advances `wake.at` to its next occurrence.
 
@@ -66,8 +70,10 @@ const g = graph({ storage, vocab, plugins: [wakes()] })
 
 `wake_new` is the tool that writes a wake aimed at something (`yak wake new` at
 a terminal). It takes a `target`, a `note` for whoever is woken, and a time:
-`every` to recur, `at` to fire once, or both, where `at` is the first firing. A
-cadence or an instant it cannot read is refused.
+`every` to recur, `at` to fire once, or both, where `at` is the first firing.
+`at` is an instant or a delay from now (`10m`, `2h`, `1d`; `when(at, now)`). A
+cadence or an instant it cannot read is refused. A wake is set for its caller
+(`wake.for`) where the caller is a person the graph knows.
 
 ```sh
 yak wake new V-12 --every '0 7 * * * America/Detroit' \
@@ -77,6 +83,39 @@ yak wake new V-12 --every '0 7 * * * America/Detroit' \
 The tool writes the row and nothing more. Who hears a firing is a rule's answer:
 [@yaks/session](../session) knocks a persona's operator, or the session opened
 on a topic.
+
+`wake_list` answers the wakes set for the caller that will fire again, soonest
+first, and `wake_cancel` deletes one of them by its id; another person's wake is
+refused as none. `held(graph, person)` and `cancel(graph, person, id)` are the
+same for a host that serves several people from one graph.
+
+## Firing when a query's rows change
+
+A wake carrying `watch{query, local, seen, changes}` fires only when the query
+answers rows that differ from `seen`, the rows its last look saw (by eid, with a
+digest of each, up to `ROWS`, 200). Each time it comes due, `tick` reads the
+query again. A change writes `fired`, the new `seen`, and `changes`, what
+changed in words; a look that finds nothing new moves `at` on and writes no
+`fired`, so a rule matching `*fired` runs only for a change. `look(seen, rows)`
+is the comparison. The query is read over the graph unless the host says
+otherwise: `tick(graph, now, { watching })` reads a wake's query the host's way,
+as yaks.app reads one that is not `local` over everything the wake's person
+reaches.
+
+## Running a tool call at each firing
+
+A wake that carries a `call{to, args}` ([@yaks/tools](../tools)) is a schedule
+for that call, which @yaks/tools' `call_woken` runs once a firing as whoever
+wrote it. A wake set for a person (`wake.for`) owes `wake_run` at each firing,
+where its plugin is given `run: true`: the host that runs work for people does
+what it asks as that person, and handles no `call_woken`. The call is run by
+`run(graph, wake, at, host)` from `@yaks/wake/run`: one
+`occurrence{wake, at, call, error}` a firing, its eid derived from the wake and
+the instant, and the call derived from that, through the runner the host lends
+over the person's tools as they stand when it fires. A replay of the same firing
+finds the occurrence and recalls the call's answer, so nothing runs twice. The
+host marks how it ended (`completed`, `failed`), since a session given the
+wake's `brief` may still be checking its outcome.
 
 ## Firing is a write
 
@@ -255,6 +294,7 @@ loop as a host service and logs refused wakes.
 - `due(storage, now)` returns overdue wake bundles, oldest first.
 - `ring(bundle, now)` creates the firing bundles without applying them.
 - `soonest(storage, now)` returns the earliest future instant.
+- `when(at, now)` reads an instant or a delay as epoch milliseconds.
 - `cadence(graph, wake, now)` returns the cadence of the first `while` condition
   that holds, or `null`.
 - `starting(options)` returns the transaction-aware `beforeWrite` hook used by

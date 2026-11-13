@@ -1,8 +1,12 @@
 // The two components this package ships, as one vocabulary document to load
 // beside your own.
 //
-//   wake{at, every, while, target, note}   when to come back, and to what
+//   wake{at, every, while, target, note, for, brief}
+//                                          when to come back, to what, and for
+//                                          whom
 //   fired{at}                              the last time it fired
+//   watch{query, local, seen, changes}     a query whose change it fires on
+//   occurrence{wake, at, call, error}      one firing that did work
 //
 // One entity, one alarm. `at` is the whole schedule for a one-shot — a
 // reminder on a calendar entry, a retry in ten minutes. Add `every` and the
@@ -31,7 +35,13 @@
 // run detectable.
 //
 // The components themselves are declared in `./vocab.json` — plain JSON Schema,
-// readable by anything that reads JSON. This file re-exports it under the name
+// readable by anything that reads JSON.
+//
+// `for` is whom a wake was set for, which a host that runs work for people
+// reads as the identity it runs as (./run.ts); `brief` is the words for a
+// fresh session each firing. `watch` makes a wake fire only when a query's
+// rows changed (./watch.ts), and `occurrence` is the record of one firing that
+// ran a call (./run.ts). This file re-exports it under the name
 // callers import and keeps the explanation of why it is shaped this way.
 
 import type { Eid, Entity } from '@yaks/graph'
@@ -63,6 +73,40 @@ export type Wake = {
   target?: Eid | null
   /** a line for whoever is woken: why the wake was set */
   note?: string | null
+  /** the person it was set for, as whom it runs */
+  for?: Eid | null
+  /** words for a fresh session each firing, given its call's outcome */
+  brief?: string | null
+}
+
+/** The component holding the query a wake watches. */
+export let WATCH = 'watch'
+
+/** A query a wake watches: it fires only when its rows changed. */
+export type Watch = {
+  /** the query, as graph_query takes it */
+  query: string
+  /** read over the store the wake is kept in, not all its person reaches */
+  local?: boolean | null
+  /** each row the last look saw, by eid, with a digest of it */
+  seen?: Record<string, string> | null
+  /** what changed at the look the wake last fired for, in words */
+  changes?: string | null
+}
+
+/** The component recording one firing that did work. */
+export let OCCURRENCE = 'occurrence'
+
+/** One firing of a wake that did work. */
+export type Occurrence = {
+  /** the wake that fired */
+  wake: Eid
+  /** the instant it fired, ISO */
+  at: string
+  /** the call it made */
+  call?: Eid | null
+  /** the call's failure, kept while a helper checks it */
+  error?: string | null
 }
 
 /** What a fired wake records: when it last fired. */

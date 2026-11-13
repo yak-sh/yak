@@ -91,6 +91,27 @@ export let span = (every: string): number | null => {
   return ms > 0 && Number.isFinite(ms) ? ms : null
 }
 
+/**
+ * The instant a wake written `at` comes due, in epoch milliseconds: an
+ * instant as written, or a delay counted from `now` (`10m`, `2h`, `1d`), as a
+ * person says "in ten minutes". `null` for anything else.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { when } from './every.ts'
+ *
+ * let now = Date.parse('2026-01-01T09:00:00Z')
+ * assertEquals(when('10m', now), Date.parse('2026-01-01T09:10:00Z'))
+ * assertEquals(when('2026-01-02T09:00Z', now), Date.parse('2026-01-02T09:00Z'))
+ * assertEquals(when('soon', now), null)
+ * ```
+ */
+export let when = (at: string, now: number): number | null => {
+  let delay = span(at)
+  let t = delay == null ? Date.parse(at) : now + delay
+  return Number.isFinite(t) ? t : null
+}
+
 // Five calendar fields (or an `@` shorthand), optionally followed by a time
 // zone. Croner also accepts seconds, years and ISO instants; those are not
 // valid in `every`. In particular, a sixth numeric field must never be read as

@@ -1,8 +1,9 @@
 // A standing duty is a wake aimed at who is to do it (@yaks/wake's
 // `wake{every, target, note}`, read by name). Each time the box's clock fires
 // it, `session_woken` knocks once with the wake's note, the way a text that
-// arrived does (./texted.ts). Nothing starts a session, and what the duty asks
-// for is the woken session's to do.
+// arrived does (./texted.ts); one that watches a query (`watch`) fires only
+// when its rows changed, and says what changed. Nothing starts a session, and
+// what the duty asks for is the woken session's to do.
 //
 // Aimed at a persona, it knocks the persona's operator: TaskMaster's morning
 // standup is `0 7 * * * America/Detroit`, the owner's morning in his time
@@ -66,7 +67,10 @@ export let awaited = async (g: G): Promise<Set<Eid>> => {
  * either, it has not fired, or that firing was knocked for already. */
 export let woken = async (g: G, eid: Eid): Promise<Bundle[]> => {
   if (!g.vocab.comp('knock') || !g.vocab.comp('wake')) return []
-  let [row] = await g.get([eid], ['wake', 'fired'])
+  let [row] = await g.get(
+    [eid],
+    ['wake', 'fired', ...g.vocab.comp('watch') ? ['watch'] : []],
+  )
   let target = str(comp(row, 'wake').target)
   let at = str(comp(row, 'fired').at)
   if (!target || !at) return []
@@ -81,7 +85,14 @@ export let woken = async (g: G, eid: Eid): Promise<Bundle[]> => {
   return [{
     entity: { eid: knock },
     knock: { target: to },
-    doc: { body: str(comp(row, 'wake').note) || `a wake fired at ${at}` },
+    // A wake that watches a query fired because its rows changed: the knock
+    // says what changed after the note.
+    doc: {
+      body: [
+        str(comp(row, 'wake').note) || `a wake fired at ${at}`,
+        str(comp(row, 'watch').changes),
+      ].filter(Boolean).join('\n\n'),
+    },
   }]
 }
 

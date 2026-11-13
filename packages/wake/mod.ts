@@ -6,6 +6,12 @@
  * - `wake{at, every, while, target, note}` — the next instant, optional
  *   recurrence, the conditions it recurs under, what it is about, and why.
  * - `fired{at}` — the most recent firing.
+ * - `watch{query, local, seen, changes}` — a query whose change it fires on.
+ * - `occurrence{wake, at, call, error}` — one firing that ran a call
+ *   (`@yaks/wake/run`).
+ *
+ * `wake.for` is whom a wake was set for: it runs as them, and `held` and
+ * `cancel` are their own wakes.
  *
  * ```ts
  * import { next, tick } from '@yaks/wake'
@@ -30,6 +36,9 @@
  * calendar positions. An optional trailing IANA time zone is stored in the same
  * property; with none, UTC is used. Croner uses Intl, with no build step.
  *
+ * A wake that watches a query (`watch`) fires only when the query's rows
+ * changed since it last looked; a look that finds nothing new moves it on.
+ *
  * `while` makes a recurrence conditional: `{match, every}` in order, the first
  * whose query finds anything setting the cadence at each firing. A wake none
  * holds sleeps, and `rouse` arms it again once a write makes one hold.
@@ -44,6 +53,8 @@
 export * from './comp.ts'
 export * from './every.ts'
 export * from './due.ts'
+export * from './held.ts'
 export * from './plugin.ts'
 export * from './tick.ts'
+export * from './watch.ts'
 export * from './while.ts'

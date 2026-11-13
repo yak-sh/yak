@@ -5561,6 +5561,9 @@ importers:
       '@yaks/query':
         specifier: 0.2.32
         version: link:../query
+      '@yaks/tools':
+        specifier: 0.2.30
+        version: link:../tools
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab

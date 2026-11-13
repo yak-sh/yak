@@ -184,3 +184,19 @@ test('each morning knocks once, however often the clock ticks', async () => {
     note: NOTE,
   })
 })
+
+test('a wake that watches a query knocks only for a change, with what changed', async () => {
+  let g = await box(['operator', { operator: true }])
+  await g.apply([{
+    entity: { eid: 'standup' },
+    watch: { query: '.goal', seen: {} },
+  }], { trusted: true })
+  let heard = async (now: number) =>
+    (await fire(g, now)).filter((k) => k.target == 'operator')
+  let [first] = await heard(SAT)
+  equal(first.body.split('\n\n').map((p) => p.split('\n')[0]), [
+    NOTE,
+    'What changed (1 new):',
+  ])
+  equal((await heard(SUN)).length, 1)
+})

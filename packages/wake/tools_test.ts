@@ -9,7 +9,10 @@ import { wakes } from './plugin.ts'
 import { runs } from './tools.ts'
 
 let vocab = loadVocab([wakeDoc, {
-  $defs: { goal: { component: true, type: 'object' } },
+  $defs: {
+    goal: { component: true, type: 'object' },
+    person: { component: true, type: 'object' },
+  },
 }])
 let NOW = Date.parse('2026-11-07T09:17:00Z')
 let MORNING = '0 7 * * * America/Detroit'
@@ -24,7 +27,9 @@ let made = async (args: Record<string, unknown>) => {
   await g.apply([{ entity: { eid: 'funnel' }, goal: {} }])
   try {
     let call = { entity: { eid: 'c1' }, call: { args } }
-    let [b] = await g.apply(await runs().wake_new!(call, g) as Bundle[])
+    let [b] = await g.apply(
+      await runs({ now: () => NOW }).wake_new!(call, g) as Bundle[],
+    )
     return b.wake
   } catch (e) {
     if (e instanceof Refused) return e.message.split(':')[0]
@@ -53,6 +58,10 @@ let cases: [string, Record<string, unknown>, unknown][] = [
     { every: 'sometimes' },
     'sometimes is no cadence',
   ],
+  ['a delay counts from now', { at: '10m' }, {
+    target: 'funnel',
+    at: '2026-11-07T09:27:00.000Z',
+  }],
   ['an unreadable instant is refused', { at: 'soon' }, 'soon is no instant'],
 ]
 for (let [name, args, wake] of cases) {
@@ -60,3 +69,34 @@ for (let [name, args, wake] of cases) {
     equal(await made({ target: 'funnel', ...args }), wake)
   })
 }
+
+// Each person lists and cancels the wakes set for them, and no one else's.
+test('wake_list and wake_cancel are the caller’s own wakes', async () => {
+  let g = graph({ storage: ram(vocab), vocab, plugins: [wakes()] })
+  await g.apply([
+    { entity: { eid: 'funnel' }, goal: {} },
+    ...['ada', 'bea'].map((eid) => ({ entity: { eid }, person: {} })),
+  ])
+  let tools = runs()
+  let as = (by: string, args: Record<string, unknown> = {}) => ({
+    entity: { eid: crypto.randomUUID() },
+    call: { args },
+    $actor: { by },
+  })
+  let set = async (by: string, at: string) =>
+    (await g.apply(
+      await tools.wake_new!(as(by, { target: 'funnel', at }), g) as Bundle[],
+    ))[0].entity.eid
+  let later = await set('ada', '2h'), sooner = await set('ada', '1h')
+  let bea = await set('bea', '1h')
+  let listed = async (by: string) =>
+    (await tools.wake_list!(as(by), g) as Bundle[]).map((b) => b.entity.eid)
+  let refused = await Promise.resolve()
+    .then(() => tools.wake_cancel!(as('ada', { wake: bea }), g))
+    .then(() => '', (e: Error) => e.message)
+  await tools.wake_cancel!(as('ada', { wake: later }), g)
+  equal(
+    [await listed('ada'), await listed('bea'), refused],
+    [[sooner], [bea], `there is no wake ${bea} of yours to cancel`],
+  )
+})
