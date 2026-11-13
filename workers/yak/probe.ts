@@ -162,7 +162,7 @@ let boot = async (
   load?: Load,
 ) => {
   let [
-    { handler },
+    { handler, email },
     { ai, dataset, emailed, limiter, lasting, modelPage },
     { within },
   ] = await Promise
@@ -230,7 +230,7 @@ let boot = async (
       {},
       () =>
         new URL(req.url).pathname == '/cdn-cgi/handler/email'
-          ? emailed(req, handler.email, p.env)
+          ? emailed(req, email, p.env)
           : handler.fetch(req, p.env),
       reportClock,
       { retain },

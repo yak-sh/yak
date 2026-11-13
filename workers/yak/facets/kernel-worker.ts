@@ -1,7 +1,8 @@
 // The kernel's `./worker` facet (config.ts `worker`, @yaks/workerd
-// `compose`): the classes wrangler.toml binds, the router, the letter door,
-// the build queue and the tracker's boundary. It is code still in
-// workers/yak, named by path until each part moves to its package.
+// `compose`): the classes wrangler.toml binds, the kernel's routes and the
+// pipeline around them, the letter door, the build queue and the tracker's
+// boundary. It is code still in workers/yak, named by path until each part
+// moves to its package.
 //
 // Nothing here imports the code it runs (T-148770). Each class loads its own
 // module when the runtime first calls it, and a module is evaluated when it is
@@ -304,21 +305,36 @@ export let classes: Record<string, Deferred> = {
   ),
 }
 
-// The router (kernel.ts), which answers every path, and the letter door.
-let handler = async () => (await import('../kernel.ts')).handler
+// The kernel (kernel.ts `kernel`): its hostname pipeline around the apex's
+// routes and a space's, and the letter door, loaded on the first request.
+// Each env is given the agents' code evaluator once.
+let agented = new WeakMap<object, Env>()
+let kernel = async (env: Env) => {
+  let [k, agent] = await Promise.all([import('../kernel.ts'), agentEnv()])
+  if (!agented.has(env)) agented.set(env, agent(env))
+  return { k, env: agented.get(env)! }
+}
 
-export let routes: WorkerFacet['routes'] = (_options, env) => [{
-  method: '*',
-  path: '*',
-  handle: async (req) => {
-    let [route, agent] = await Promise.all([handler(), agentEnv()])
-    return route.fetch(req, agent(env as Env))
-  },
-}]
+export let wrap: WorkerFacet['wrap'] = (_options, env) => async (req, next) => {
+  let { k, env: e } = await kernel(env as Env)
+  return k.wrap(req, e, next)
+}
+
+export let routes: WorkerFacet['routes'] = (_options, env) =>
+  (['atApex', 'atSpace'] as const).map((part) => ({
+    method: '*',
+    path: '*',
+    handle: async (req: Request) => {
+      let { k, env: e } = await kernel(env as Env)
+      return k[part](req, e)
+    },
+  }))
 
 export let email: WorkerFacet['email'] =
-  (_options, env) => async (message: Inbound, ctx: Lent) =>
-    (await handler()).email(message, env as Env, ctx)
+  (_options, env) => async (message: Inbound, ctx: Lent) => {
+    let { k, env: e } = await kernel(env as Env)
+    return k.email(message, e, ctx)
+  }
 
 // Workers Builds telling us a build of this Worker failed (builds.ts).
 export let queue: WorkerFacet['queue'] =

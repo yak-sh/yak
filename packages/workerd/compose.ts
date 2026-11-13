@@ -52,6 +52,21 @@ export type Deferred = {
   entered?: boolean
 }
 
+/** A route a plugin adds to a Worker. Its answer may be `null`: the request
+ * is not its after all (a hostname it does not serve, a door it does not
+ * know), and the router asks the next route. */
+export type WorkerRoute = Omit<Route, 'handle'> & {
+  handle: (request: Request) => Response | null | Promise<Response | null>
+}
+
+/** What a plugin puts around the routes from its own on: it is handed each
+ * request and `next`, which asks those routes, and answers what it decides.
+ * A wrap may hand `next` another request, or answer without asking it. */
+export type Wrap = (
+  request: Request,
+  next: (request: Request) => Promise<Response>,
+) => Promise<Response>
+
 /** A handler of the Worker's default export other than `fetch`: one letter
  * Email Routing handed it, or one batch a queue delivered. */
 export type Handling = (given: never, ctx: Context) => Promise<void>
@@ -63,8 +78,10 @@ export type WorkerFacet = {
   /** the classes it defines, by the name wrangler.toml binds */
   classes?: Record<string, Deferred>
   /** the paths it answers. The router asks each plugin in the config's
-   * order, and a request takes the first route that matches it. */
-  routes?: (options: Options, env: Env) => Route[]
+   * order, and a request takes the first route that matches it and answers. */
+  routes?: (options: Options, env: Env) => WorkerRoute[]
+  /** what it puts around its own routes and every later plugin's */
+  wrap?: (options: Options, env: Env) => Wrap
   /** the letters handed to the Worker; at most one plugin answers them */
   email?: (options: Options, env: Env) => Handling
   /** the batches a queue delivers; at most one plugin answers them */
@@ -175,17 +192,30 @@ export let compose = (
     }
   }
 
-  let routes = per((env) =>
-    named.flatMap(([plugin, f]) => f.routes?.(options(plugin, env), env) ?? [])
+  // Each plugin's routes and wrap, from the last plugin's to the first, so
+  // that a request asks the plugins in the config's order and a wrap is
+  // around its own routes and every later plugin's.
+  let answer = per((env) =>
+    named.reduceRight<(request: Request) => Promise<Response>>(
+      (next, [plugin, f]) => {
+        let routes = f.routes?.(options(plugin, env), env) ?? []
+        let ask = async (request: Request) => {
+          let path = new URL(request.url).pathname
+          for (let route of routes) {
+            if (!routed(route as Route, request.method, path)) continue
+            let answered = await route.handle(request)
+            if (answered) return answered
+          }
+          return await next(request)
+        }
+        let wrap = f.wrap?.(options(plugin, env), env)
+        return wrap ? (request) => wrap(request, ask) : ask
+      },
+      () => Promise.resolve(new Response('Not found', { status: 404 })),
+    )
   )
   let fetch = (request: Request, env: Env) =>
-    entry(env, 'gateway fetch', async () => {
-      let path = new URL(request.url).pathname
-      let route = routes(env).find((r) => routed(r, request.method, path))
-      return route
-        ? await route.handle(request)
-        : new Response('Not found', { status: 404 })
-    }, request)
+    entry(env, 'gateway fetch', () => answer(env)(request), request)
 
   let handling = (key: 'email' | 'queue') => {
     let one = single(named, key)

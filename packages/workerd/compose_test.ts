@@ -41,6 +41,35 @@ test('a request takes the first route of the plugins in config order', async () 
   equal((await none.default.fetch(at('/a'), env)).status, 404)
 })
 
+test('a route that answers null passes the request on, and a wrap is around its own and later routes', async () => {
+  let heard: string[] = []
+  let yak = compose({ plugins: ['first', 'kernel', 'last'] }, {
+    first: { routes: () => [says('GET', '/v', 'version')] },
+    kernel: {
+      wrap: () => async (req, next) => {
+        heard.push(new URL(req.url).pathname)
+        let res = await next(new Request(new URL('/moved', req.url), req))
+        return new Response(`[${await res.text()}]`)
+      },
+      routes: () => [
+        { method: '*', path: '*', handle: () => null },
+        says('GET', '/moved', 'kernel'),
+      ],
+    },
+    last: { routes: () => [says('*', '*', 'last')] },
+  })
+  let env = {}
+  equal(await text(yak.default.fetch(at('/v'), env)), 'version')
+  equal(await text(yak.default.fetch(at('/x'), env)), '[kernel]')
+  equal(heard, ['/x'])
+  let passing = compose({ plugins: ['a', 'b'] }, {
+    a: { routes: () => [{ method: '*', path: '*', handle: () => null }] },
+    b: { routes: () => [says('GET', '/b', 'b')] },
+  })
+  equal(await text(passing.default.fetch(at('/b'), env)), 'b')
+  equal((await passing.default.fetch(at('/c'), env)).status, 404)
+})
+
 test("a plugin's routes are given its options, read from the env, once per env", async () => {
   let built = 0
   let yak = compose(

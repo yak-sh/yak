@@ -62,6 +62,8 @@ export {
   type Entry,
   type Handling,
   type WorkerFacet,
+  type WorkerRoute,
+  type Wrap,
 } from './compose.ts'
 export { type Around, deferred, type Made } from './deferred.ts'
 export { VERSION } from './version.ts'

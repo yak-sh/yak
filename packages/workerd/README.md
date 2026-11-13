@@ -50,8 +50,13 @@ A Worker's config is the shape `yak` reads from `yak.json`: a list of plugins,
 each with options. Each plugin contributes a `./worker` facet (`WorkerFacet`):
 
 - `routes(options, env)`: the paths it answers. The router asks the plugins in
-  the config's order, and a request takes the first route that matches it. A
-  request no route matches is answered 404.
+  the config's order, and a request takes the first route that matches it and
+  answers. A route that answers `null` passes the request to the next one, so a
+  route can serve one hostname and leave the others. A request no route answers
+  is answered 404.
+- `wrap(options, env)`: what stands around the plugin's own routes and every
+  later plugin's. It is handed the request and `next`, which asks those routes,
+  and may hand `next` another request or answer without asking.
 - `email(options, env)` and `queue(options, env)`: what handles a letter Email
   Routing hands the Worker, and a batch a queue delivers. At most one plugin
   gives each.

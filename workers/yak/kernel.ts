@@ -78,6 +78,7 @@
 //                             that path: the space's apps own the first path
 //                             segment, the front page answers what is left
 import { origin } from '@yaks/tracker/report'
+import { compose, type WorkerFacet } from '@yaks/workerd/compose'
 import { caught, within } from './defects.ts'
 import { CallError, refused as toolRefusal } from '@yaks/tools/errors'
 import { Stale } from '@yaks/graph/errors'
@@ -107,16 +108,29 @@ import {
 import { slid } from './session.ts'
 import { fault, refusal } from './unseen.ts'
 
-// Every answer at the apex leaves through `seen`, so whichever page a link
-// lands a person on keeps its arrival and tells its view: /login and the
-// docs as well as the cached listings.
-let serve = async (req: Request, env: Env, r: Route) =>
-  r.space == null
+// Where a request is, once `hosting` below has carried it to its address on
+// our own zone.
+let at = (req: Request, env: Env): Route =>
+  route(hostOf(req, env), new URL(req.url).pathname, env)
+
+/** The apex's pages and doors (apex.ts), and nothing on a space's hostname.
+ * Every answer there leaves through apex.ts `seen`, so whichever page a link
+ * lands a person on keeps its arrival and tells its view. */
+export let atApex = async (req: Request, env: Env) => {
+  let r = at(req, env)
+  return r.space == null
     ? (await import('./apex.ts')).answer(req, env, r.path)
-    : atSpace(req, env, r.space)
+    : null
+}
+
+/** A space's hostname, and nothing at the apex. */
+export let atSpace = (req: Request, env: Env) => {
+  let { space } = at(req, env)
+  return space == null ? null : inSpace(req, env, space)
+}
 
 // A space's hostname: its previews, its drops, its hooks and its apps.
-let atSpace = async (req: Request, env: Env, space: string) => {
+let inSpace = async (req: Request, env: Env, space: string) => {
   let asked = new URL(req.url).pathname
   if (/^\/[^/]+\/_preview(?:\/|$)/.test(asked)) {
     return (await import('./preview.ts')).fetch(req, env)
@@ -251,225 +265,253 @@ let forwarded = async (req: Request, env: Env, host: string) => {
 // The platform tracker receives it, tagged with the space and app the route
 // named (unseen.ts `fault`), and no member stream is told about our failure.
 
-// The slice of a handler's context the letter door needs (see the default
-// export below).
+// The slice of a handler's context the letter door needs (`email` below).
 export type Lent = { waitUntil: (work: Promise<unknown>) => void }
 
-let router = {
-  async fetch(req: Request, env: Env): Promise<Response> {
-    req = collapsed(req)
-    let host = hostOf(req, env)
-    let r = route(host, new URL(req.url).pathname, env)
-    try {
-      req = unmounted(req)
-      // What the platform owns rather than an app (@yaks/platform/routes `platform`),
-      // decided from the hostname the request arrived at: `/.well-known/` on
-      // our own hostnames, where an app would otherwise grant authority over
-      // a name that is ours. A customer's own domain is never in here — the
-      // name is theirs, so the grant is theirs to make.
-      //
-      // At the apex the platform answers: `serve` hands the oauth metadata to
-      // identity.ts and the apps-directory token to its own line, and
-      // everything else under the prefix is a soft 404, since nothing else
-      // there is ours to publish. On a space's hostname the platform owns the
-      // address and has nothing to say at it — an app must not get it.
-      let asked = new URL(req.url).pathname
-      if (platform(host, asked, env)) {
-        return sealed(
-          r.space != null
-            ? lost(env)
-            : await serve(req, env, { space: null, app: null, path: asked }),
+// What stands before the routes on every hostname: what the platform owns,
+// a custom domain's sign-in, settling and forwarding, space isolation and the
+// address a custom domain is carried to. `next` asks the routes (`atApex`,
+// `atSpace`) with the request as it was carried.
+let hosting = async (
+  req: Request,
+  env: Env,
+  next: (req: Request) => Promise<Response>,
+): Promise<Response> => {
+  req = collapsed(req)
+  let host = hostOf(req, env)
+  let r = route(host, new URL(req.url).pathname, env)
+  try {
+    req = unmounted(req)
+    // What the platform owns rather than an app (@yaks/platform/routes `platform`),
+    // decided from the hostname the request arrived at: `/.well-known/` on
+    // our own hostnames, where an app would otherwise grant authority over
+    // a name that is ours. A customer's own domain is never in here — the
+    // name is theirs, so the grant is theirs to make.
+    //
+    // At the apex the platform answers: `serve` hands the oauth metadata to
+    // identity.ts and the apps-directory token to its own line, and
+    // everything else under the prefix is a soft 404, since nothing else
+    // there is ours to publish. On a space's hostname the platform owns the
+    // address and has nothing to say at it — an app must not get it.
+    let asked = new URL(req.url).pathname
+    if (platform(host, asked, env)) {
+      return sealed(
+        r.space != null ? lost(env) : await next(req),
+        env,
+      )
+    }
+    // Custom-domain sign-in lands here (identity.ts `handoff`): the one
+    // identity door a customer's own hostname answers, caught before `aimed`
+    // carries the request off to the app, so this hostname sets its own
+    // host-only session cookie rather than the app store answering a sign-in
+    // path. It is a foreign host by construction — a space's `.yaks.app`
+    // hostname already carries the platform cookie and never needs it.
+    if (handedOff(host, asked, env)) {
+      return sealed(
+        await bound(
+          env.IDENTITY,
+          (await import('./apex.ts')).identity,
           env,
-        )
-      }
-      // Custom-domain sign-in lands here (identity.ts `handoff`): the one
-      // identity door a customer's own hostname answers, caught before `aimed`
-      // carries the request off to the app, so this hostname sets its own
-      // host-only session cookie rather than the app store answering a sign-in
-      // path. It is a foreign host by construction — a space's `.yaks.app`
-      // hostname already carries the platform cookie and never needs it.
-      if (handedOff(host, asked, env)) {
-        return sealed(
-          await bound(
-            env.IDENTITY,
-            (await import('./apex.ts')).identity,
-            env,
-          ).fetch(req),
-          env,
-        )
-      }
-      // A domain mid-provisioning, or one Cloudflare has stopped serving
-      // (`settling` above): answered before space isolation and `aimed`,
-      // because there is nothing yet to isolate or route to — every path on
-      // a host like this gets the same branded page, not just `/`.
-      let hold = await settling(env, host)
-      if (hold) return sealed(hold, env)
-      let sent = await forwarded(req, env, host)
-      if (sent) return sealed(sent, env)
-      // Space isolation (@yaks/platform/routes `admitted`), before `aimed`
-      // moves the address, since what must match is what the browser
-      // addressed.
-      let given = admitted(req, host, env)
-      if ('answer' in given) return sealed(given.answer, env)
-      req = given.req
-      let at = r.space == null ? await aimed(req, env, host) : null
-      if (at) {
-        req = at
-        r = route(hostOf(at, env), new URL(at.url).pathname, env)
-      }
-      let answer = await serve(req, env, r)
-      return sealed(given.anyone ? cors(answer) : answer, env)
-    } catch (e) {
-      // A refusal is not a break (unseen.ts `refusal`, T-32655). A part that
-      // relays a door's deliberate no by throwing what it was answered is
-      // carrying an answer out, not a failure: it files nothing. Log one
-      // line for the tail, and preserve its body and 4xx at JSON doors.
-      // Typed tool refusals use the tools package's JSON and HTTP status.
-      // A shaped refusal without a status is a bad request (400). Pages
-      // keep a page, with the refusal's status.
-      let said = e instanceof Error ? e.message : String(e)
-      let carried = e as { status?: number; body?: string } | null
-      let tool = e instanceof CallError ? toolRefusal(e) : null
-      let body = tool
-        ? await tool.text()
-        : typeof carried?.body == 'string'
-        ? carried.body
-        : said
-      let status = tool?.status ?? carried?.status
-      if (refusal(body, status)) {
-        status ??= 400
-        let path = new URL(req.url).pathname
-        console.log(
-          `yak: ${req.method} ${hostOf(req, env)}${path} refused ${status}: ${
-            JSON.stringify(body)
-          }`,
-        )
-        if (path == '/mcp' || /^(?:\/[^/]+)?\/api\//.test(path)) {
-          let answer: unknown
-          try {
-            answer = JSON.parse(body)
-          } catch {
-            answer = { error: { code: 'refused', message: said } }
-          }
-          return sealed(
-            Response.json(answer, { status, headers: apps.waited(e) }),
-            env,
-          )
-        }
-        let page = oops(env)
-        return sealed(
-          new Response(page.body, {
-            status,
-            headers: page.headers,
-          }),
-          env,
-        )
-      }
-      // The host the router routed by, not the one the socket arrived on: it
-      // is what names the space and the app this was on its way to, and after
-      // `aimed` it is the address the platform derived rather than the
-      // customer's own domain.
-      let where = `${hostOf(req, env)}${new URL(req.url).pathname}`
-      let requestId = crypto.randomUUID()
+        ).fetch(req),
+        env,
+      )
+    }
+    // A domain mid-provisioning, or one Cloudflare has stopped serving
+    // (`settling` above): answered before space isolation and `aimed`,
+    // because there is nothing yet to isolate or route to — every path on
+    // a host like this gets the same branded page, not just `/`.
+    let hold = await settling(env, host)
+    if (hold) return sealed(hold, env)
+    let sent = await forwarded(req, env, host)
+    if (sent) return sealed(sent, env)
+    // Space isolation (@yaks/platform/routes `admitted`), before `aimed`
+    // moves the address, since what must match is what the browser
+    // addressed.
+    let given = admitted(req, host, env)
+    if ('answer' in given) return sealed(given.answer, env)
+    req = given.req
+    let carried = r.space == null ? await aimed(req, env, host) : null
+    if (carried) {
+      req = carried
+      r = at(carried, env)
+    }
+    let answer = await next(req)
+    return sealed(given.anyone ? cors(answer) : answer, env)
+  } catch (e) {
+    // A refusal is not a break (unseen.ts `refusal`, T-32655). A part that
+    // relays a door's deliberate no by throwing what it was answered is
+    // carrying an answer out, not a failure: it files nothing. Log one
+    // line for the tail, and preserve its body and 4xx at JSON doors.
+    // Typed tool refusals use the tools package's JSON and HTTP status.
+    // A shaped refusal without a status is a bad request (400). Pages
+    // keep a page, with the refusal's status.
+    let said = e instanceof Error ? e.message : String(e)
+    let carried = e as { status?: number; body?: string } | null
+    let tool = e instanceof CallError ? toolRefusal(e) : null
+    let body = tool
+      ? await tool.text()
+      : typeof carried?.body == 'string'
+      ? carried.body
+      : said
+    let status = tool?.status ?? carried?.status
+    if (refusal(body, status)) {
+      status ??= 400
+      let path = new URL(req.url).pathname
       console.log(
-        `yak: ${req.method} ${where} failed ${requestId}: ${
-          JSON.stringify(said)
+        `yak: ${req.method} ${hostOf(req, env)}${path} refused ${status}: ${
+          JSON.stringify(body)
         }`,
       )
-      await fault(env, `${req.method} ${where}`, e, {
-        space: r.space,
-        app: r.app,
-      }, requestId)
-      return oops(env, requestId)
-    }
-  },
-
-  // The third entry point, and the one no URL names: a letter (T-33684,
-  // T-33687). Email Routing's catch-all on the yaks.app zone points every
-  // address the specific rules did not claim at this Worker, and inbox.ts
-  // files it in the store its local part named.
-  //
-  // Three outcomes, and they are not interchangeable. A letter that lands is
-  // an entity in an app's store. An address that is nobody's is refused — a
-  // bounce the sender reads, since a drop is silence and silence is the one
-  // answer that cannot be corrected later. And a failure of ours is neither:
-  // it is written where every other break is, and the message is left
-  // unanswered so the sending server tries again — refusing there would turn
-  // our outage into somebody's lost mail.
-  //
-  // The log carries the recipient's domain and nothing else: not the local
-  // part, not the sender, never the body. A letter is somebody's, and the
-  // question this line answers is only which of our names people write to.
-  async email(message: Inbound, env: Env, _ctx?: Lent): Promise<void> {
-    let { arrived, Refused } = await import('./inbox.ts')
-    try {
-      await arrived(message, env)
-    } catch (e) {
-      if (!(e instanceof Refused)) {
-        await fault(env, `EMAIL ${message.to.split('@').pop()}`, e)
-        throw e
+      if (path == '/mcp' || /^(?:\/[^/]+)?\/api\//.test(path)) {
+        let answer: unknown
+        try {
+          answer = JSON.parse(body)
+        } catch {
+          answer = { error: { code: 'refused', message: said } }
+        }
+        return sealed(
+          Response.json(answer, { status, headers: apps.waited(e) }),
+          env,
+        )
       }
-      console.log(`yak: mail refused for ${message.to.split('@').pop()}`)
-      await message.setReject(e.message)
+      let page = oops(env)
+      return sealed(
+        new Response(page.body, {
+          status,
+          headers: page.headers,
+        }),
+        env,
+      )
     }
-  },
+    // The host the router routed by, not the one the socket arrived on: it
+    // is what names the space and the app this was on its way to, and after
+    // `aimed` it is the address the platform derived rather than the
+    // customer's own domain.
+    let where = `${hostOf(req, env)}${new URL(req.url).pathname}`
+    let requestId = crypto.randomUUID()
+    console.log(
+      `yak: ${req.method} ${where} failed ${requestId}: ${
+        JSON.stringify(said)
+      }`,
+    )
+    await fault(env, `${req.method} ${where}`, e, {
+      space: r.space,
+      app: r.app,
+    }, requestId)
+    return oops(env, requestId)
+  }
 }
 
-// The router as the runtime serves it, with every answer leaving past the
-// sliding session (session.ts `slid`, T-35380). A request whose cookie is
-// more than half way through its life is answered with a fresh one, so an
-// account that keeps asking never signs out. It is wrapped around the whole
-// router rather than written into a route, because every door has to slide
-// and the request is the same one at all of them — `fetch` below reads the
-// cookie the browser sent, whatever the router made of the request inside.
+// The third entry point, and the one no URL names: a letter (T-33684,
+// T-33687). Email Routing's catch-all on the yaks.app zone points every
+// address the specific rules did not claim at this Worker, and inbox.ts
+// files it in the store its local part named.
 //
-// Its answer on our zone also says how long the whole router took
+// Three outcomes, and they are not interchangeable. A letter that lands is
+// an entity in an app's store. An address that is nobody's is refused — a
+// bounce the sender reads, since a drop is silence and silence is the one
+// answer that cannot be corrected later. And a failure of ours is neither:
+// it is written where every other break is, and the message is left
+// unanswered so the sending server tries again — refusing there would turn
+// our outage into somebody's lost mail.
+//
+// The log carries the recipient's domain and nothing else: not the local
+// part, not the sender, never the body. A letter is somebody's, and the
+// question this line answers is only which of our names people write to.
+export let email = async (
+  message: Inbound,
+  env: Env,
+  _ctx?: Lent,
+): Promise<void> => {
+  let { arrived, Refused } = await import('./inbox.ts')
+  try {
+    await arrived(message, env)
+  } catch (e) {
+    if (!(e instanceof Refused)) {
+      await fault(env, `EMAIL ${message.to.split('@').pop()}`, e)
+      throw e
+    }
+    console.log(`yak: mail refused for ${message.to.split('@').pop()}`)
+    await message.setReject(e.message)
+  }
+}
+
+// The kernel's wrap (@yaks/workerd `Wrap`): `hosting` and the routes inside
+// it, with every answer leaving past the sliding session (session.ts `slid`,
+// T-35380). A request whose cookie is more than half way through its life is
+// answered with a fresh one, so an account that keeps asking never signs out.
+// It is wrapped around every route rather than written into one, because
+// every door has to slide and the request is the same one at all of them —
+// this reads the cookie the browser sent, whatever `hosting` made of the
+// request inside.
+//
+// Its answer on our zone also says how long the kernel took
 // (`gateway`, timing.ts), and `cold` on the first request an isolate serves:
 // a request's time that is in neither is the runtime's, before our code ran.
 let served = 0
-export let handler = {
-  ...router,
-  fetch: (req: Request, env: Env): Promise<Response> =>
-    within(
-      env,
-      {},
-      async () => {
-        let at = Date.now(), cold = served++ == 0
-        let res = await slid(req, env, await router.fetch(req, env))
-        let host = hostOf(req, env)
-        if (host != apex(env) && !host.endsWith(`.${apex(env)}`)) return res
-        // Every answer on our zone, including refusals and failures, carries
-        // the transport policy. A customer's domain keeps its own policy.
-        // Rebuilding handles immutable asset headers; an upgrade keeps the
-        // runtime's socket, just as dispatch.ts does.
-        let headers = new Headers(res.headers)
-        headers.set(
-          'strict-transport-security',
-          'max-age=31536000; includeSubDomains',
-        )
-        headers.set(
-          'server-timing',
-          [
-            headers.get('server-timing'),
-            `gateway;dur=${Date.now() - at}`,
-            cold ? 'cold;dur=1' : null,
-          ].filter(Boolean).join(', '),
-        )
-        return new Response(res.body, {
-          status: res.status,
-          statusText: res.statusText,
-          headers,
-          webSocket: (res as { webSocket?: unknown }).webSocket,
-        } as ResponseInit)
-      },
-      undefined,
-      {
-        origin: origin(
-          env.WORKER_NAME ?? 'yak',
-          env.CF_VERSION_METADATA?.id,
-          'gateway fetch',
-          req,
-        ),
-      },
-    ),
+export let wrap = (
+  req: Request,
+  env: Env,
+  next: (req: Request) => Promise<Response>,
+): Promise<Response> =>
+  within(
+    env,
+    {},
+    async () => {
+      let started = Date.now(), cold = served++ == 0
+      let res = await slid(req, env, await hosting(req, env, next))
+      let host = hostOf(req, env)
+      if (host != apex(env) && !host.endsWith(`.${apex(env)}`)) return res
+      // Every answer on our zone, including refusals and failures, carries
+      // the transport policy. A customer's domain keeps its own policy.
+      // Rebuilding handles immutable asset headers; an upgrade keeps the
+      // runtime's socket, just as dispatch.ts does.
+      let headers = new Headers(res.headers)
+      headers.set(
+        'strict-transport-security',
+        'max-age=31536000; includeSubDomains',
+      )
+      headers.set(
+        'server-timing',
+        [
+          headers.get('server-timing'),
+          `gateway;dur=${Date.now() - started}`,
+          cold ? 'cold;dur=1' : null,
+        ].filter(Boolean).join(', '),
+      )
+      return new Response(res.body, {
+        status: res.status,
+        statusText: res.statusText,
+        headers,
+        webSocket: (res as { webSocket?: unknown }).webSocket,
+      } as ResponseInit)
+    },
+    undefined,
+    {
+      origin: origin(
+        env.WORKER_NAME ?? 'yak',
+        env.CF_VERSION_METADATA?.id,
+        'gateway fetch',
+        req,
+      ),
+    },
+  )
+
+/** The kernel as a Worker's plugin gives it (@yaks/workerd `compose`): the
+ * hostname pipeline around the apex's routes and a space's, and the letter
+ * door. facets/kernel-worker.ts hands the runtime the same, loaded on the
+ * first call. */
+export let kernel: WorkerFacet = {
+  wrap: (_options, env) => (req, next) => wrap(req, env as Env, next),
+  routes: (_options, env) => [
+    { method: '*', path: '*', handle: (req) => atApex(req, env as Env) },
+    { method: '*', path: '*', handle: (req) => atSpace(req, env as Env) },
+  ],
+  email: (_options, env) => (message: Inbound, ctx: Lent) =>
+    email(message, env as Env, ctx),
 }
+
+/** The kernel alone, served in process (probe.ts). */
+export let handler = compose({ plugins: ['yak/kernel'] }, {
+  'yak/kernel': kernel,
+}).default
