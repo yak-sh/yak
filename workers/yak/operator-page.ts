@@ -93,12 +93,16 @@ import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
 import { type Changed, talks, type Underway } from './operator-view.ts'
 import type { HelperPage } from './operator-host.ts'
+import { inputOf, outcomeOf } from './operator-root.ts'
 import { Aside, type Aside as Asided, going, Stands } from './operator-aside.ts'
 import {
-  attached,
+  framed,
+  input,
+  type Line,
   type Lines,
   PICTURES,
   reply,
+  row,
   trouble,
 } from './operator-draw.ts'
 import { does, keeps, type Made, madeOf, type Page, pagesOf } from './made.ts'
@@ -582,44 +586,54 @@ export let voiceCard = (
       backends.map((b) => ({ ...b, checked: b.id == setup.backend })),
     ),
   )
-/** A request no session has taken yet, as its conversation draws it: what
- * was asked with the files sent with it, and what became of it in plain
- * words, never the error. */
+/** A request no session has taken yet, as its conversation draws it, with
+ * the lines a settled one is drawn with: what was asked with the files sent
+ * with it, under the id its line will have once taken, and what became of it
+ * in plain words, never the error. */
 export let conversation = (rows: Bundle[]) =>
-  html(rows.map((row) => {
-    let request = row.operator_request as Intake
-    let doc = row.doc as { title?: string; body?: string }
-    let answer = row.operator_answer as { text?: string } | undefined
-    let failed = row.failed ?? row.bounced
+  html(rows.map((asked) => {
+    let request = asked.operator_request as Intake
+    let doc = asked.doc as { title?: string; body?: string }
+    let answer = asked.operator_answer as { text?: string } | undefined
+    let failed = asked.failed ?? asked.bounced
     let files = request.files ?? []
+    let id = inputOf(asked.entity.eid)
+    let words: Bundle = {
+      entity: { eid: id },
+      content: { body: doc.body ?? '' },
+      created: asked.created,
+      ...files.length
+        ? { operator_files: { request: asked.entity.eid, files } }
+        : {},
+    }
+    let kept =
+      'Your request is kept, but the Operator could not finish it. Send it again to try once more.'
+    let unsent = 'The answer could not be sent to you. It is kept here.'
+    let saved = 'Your request is saved. The Operator will start on it soon.'
+    let [node, text] = answer?.text
+      ? [
+        h(
+          Fragment,
+          null,
+          reply(answer.text),
+          failed ? trouble(unsent, failed) : null,
+        ),
+        answer.text,
+      ]
+      : failed
+      ? [trouble(kept, failed), kept]
+      : [h(Notice, {}, saved), saved]
+    let lines: Line[] = [
+      { id, uses: [id], node: input(words, doc.body ?? ''), is: 'theirs' },
+      { id: outcomeOf(asked.entity.eid), uses: [id], node, text },
+    ]
     return h(
       Transcript,
       { 'data-pending': answer || failed ? undefined : '' },
       h(
         Transcript.Lines,
-        {},
-        h(
-          'div',
-          null,
-          doc.body ? h(Transcript.Bubble, {}, doc.body) : null,
-          attached(row.entity.eid, files, 'end'),
-        ),
-        answer?.text ? reply(answer.text) : failed
-          ? trouble(
-            'Your request is kept, but the Operator could not finish it. Send it again to try once more.',
-            failed,
-          )
-          : h(
-            Notice,
-            {},
-            'Your request is saved. The Operator will start on it soon.',
-          ),
-        failed && answer
-          ? trouble(
-            'The answer could not be sent to you. It is kept here.',
-            failed,
-          )
-          : null,
+        { 'data-rows': '' },
+        lines.map((l) => row(framed(l, [words]))),
       ),
     )
   }))

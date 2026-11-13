@@ -17,6 +17,11 @@ export let rootOf = (space: string, person: string) =>
 export let inputOf = (request: string) =>
   derivedEid('operator-input|' + request)
 
+/** The line saying what became of a request no session has taken yet: its
+ * answer, that it waits, or that it failed. */
+export let outcomeOf = (request: string) =>
+  derivedEid('operator-outcome|' + request)
+
 /** The person's one conversation in `store`: the one said to be theirs
  * (`operator_session.conversation`), as a conversation handed to them is
  * (operator-channels.ts `handOver`), else the one `rootOf` begins for them. */

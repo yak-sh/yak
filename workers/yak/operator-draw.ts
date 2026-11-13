@@ -165,8 +165,8 @@ export let attached = (row: string, files: Sent[], mod?: 'end') =>
     )
     : null
 
-// A person's input: their words, and the files that came with them.
-let input = (b: Bundle, body: string) => {
+/** A person's input: their words, and the files that came with them. */
+export let input = (b: Bundle, body: string) => {
   let sent = comp(b, 'operator_files')
   let files = (sent?.files ?? []) as Sent[]
   let said = spoken(b, body)
@@ -661,11 +661,11 @@ export let row = (line: { id: string; node: Node }) =>
 let rows = (lines: { id: string; node: Node }[]) =>
   lines.length ? h(Transcript.Lines, { 'data-rows': '' }, lines.map(row)) : null
 
-// The frame every line is drawn in, wherever it is drawn: what it says, then
-// its time, which opens its menu. Copy, Quote and Copy link need only the
-// line; Hide and Restore need the entries it draws, so a line of none (words
-// no session has taken yet) goes without them.
-let framed = (line: Line, entries: Bundle[]): Line => {
+/** The frame every line is drawn in, wherever it is drawn: what it says,
+ * then its time, which opens its menu. Copy, Quote and Copy link need only
+ * the line; Hide and Restore need the entries it draws, so a line of none
+ * (words no session has taken yet) goes without them. */
+export let framed = (line: Line, entries: Bundle[]): Line => {
   let used = entries.filter((b) => line.uses.includes(b.entity.eid))
   let entered = used.filter((b) => b.entry)
   let first = entered[0] ?? used.find((b) => comp(b, 'created')?.at)
