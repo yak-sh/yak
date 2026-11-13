@@ -1,7 +1,8 @@
-// A selective screen stays selective after it grows beyond 5,000 owners.
+// A selective screen stays selective after it grows beyond 5,000 owners, and a
+// broad one is asked only of the nearest the scan draws.
 import '../sqlite/sqlitepath.ts'
 import { Database } from '@yaks/sqlite/testing'
-import { col, insert, le, render, select, table, val } from '@yaks/sql'
+import { col, gt, insert, le, render, select, table, val } from '@yaks/sql'
 import { driver } from '../sqlite/native.ts'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
 import { statements } from '../sqlite/statements.ts'
@@ -68,10 +69,6 @@ let within = render(select({
 }))
 
 test('nearest among a growing minority avoids visiting the unrelated corpus', () => {
-  cleanup(() => {
-    api.close()
-    native.close()
-  })
   steps = 0
   let hits = nearest(db, vector, { model: 'one', limit: 4, within })
   equal(hits.map((h) => h.entity), ['v-1', 'v-2', 'v-3', 'v-4'])
@@ -79,4 +76,26 @@ test('nearest among a growing minority avoids visiting the unrelated corpus', ()
     steps < total * 5,
     `${steps} instructions for ${chosen} of ${total} owners`,
   )
+})
+
+test('nearest among a broad majority asks the screen of the nearest only', () => {
+  cleanup(() => {
+    api.close()
+    native.close()
+  })
+  steps = 0
+  let rest = render(select({
+    cols: [col('id')],
+    from: table('entity'),
+    where: gt(col('id'), val(chosen)),
+  }))
+  let hits = nearest(db, Float32Array.of(0, 1), {
+    model: 'one',
+    limit: 4,
+    within: rest,
+  })
+  let next = chosen + 1
+  equal(hits.map((h) => h.entity), [0, 1, 2, 3].map((n) => `v-${next + n}`))
+  // The scan's own rows cost about 8 each; a screen asked of every one, 24.
+  ok(steps < total * 12, `${steps} instructions for ${total} owners`)
 })

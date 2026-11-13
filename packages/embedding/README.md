@@ -404,9 +404,12 @@ another ranking; it receives the same screen.
 
 The native `vector_full_scan` reads each vector's int8 codes on shared storage,
 and the float vectors where some vector has none yet. The screen and exclusion
-of deleted entities apply before candidates are limited, and the pool is ranked
-by its float vectors. Writes are visible immediately, including those made by
-another connection. There is no quantized index or rebuild on the write path.
+of deleted entities are asked of the nearest the scan draws (eight times the
+pool under a screen), not of every stored vector; too few admitted draws eight
+times as many, up to the whole corpus, so the pool is the one a screened scan
+would give. The pool is ranked by its float vectors. Writes are visible
+immediately, including those made by another connection. There is no quantized
+index or rebuild on the write path.
 
 The codes live in `embedding_code`, one row per vector: each coordinate over the
 vector's largest in 127 steps, whose cosine is the vector's within a step. A row

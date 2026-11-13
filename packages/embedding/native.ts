@@ -211,9 +211,13 @@ let few = (db: Statements, within: Raw): boolean => {
   ) <= limit
 }
 
-/** Native candidates, screened before the result is limited: the exact
- * nearest pool, or the nearest by codes, which the floats then rank. Small
- * screens use the ordinary vector reader to avoid scanning the whole corpus. */
+/** How many more of the nearest a native search draws when a screen is asked
+ * of them: about one in eight of the drawn has to be admitted. */
+export let WIDEN = 8
+
+/** Native candidates: the nearest pool the screen admits, by the floats or by
+ * the codes, which the floats then rank. Small screens use the ordinary vector
+ * reader to avoid scanning the whole corpus. */
 export let candidates = (
   db: Statements,
   query: Float32Array,
@@ -227,39 +231,40 @@ export let candidates = (
     ? [CODE, 'code', coded(query)]
     : [TABLE, 'vec', pack(query)]
   let v = (name: string) => col(name, 'v')
-  let scan = {
-    cols: [as(v('id'), 'owner'), as(v('distance'), 'distance')],
-    from: call('vector_full_scan', [
-      lit(name),
-      lit(column),
-      val(probe),
-    ], 'v'),
-    where: opts.within ? admitted(opts.within, v('id')) : undefined,
-    order: [v('distance'), v('id')],
-    limit: val(pool(opts.need)),
+  let r = (name: string) => col(name, 'r')
+  let nearest = (draw: number) =>
+    select({
+      cols: [as(v('id'), 'owner'), as(v('distance'), 'distance')],
+      from: call('vector_full_scan', [lit(name), lit(column), val(probe)], 'v'),
+      order: [v('distance'), v('id')],
+      limit: val(draw),
+    })
+  let alive = not(exists(select({
+    cols: [lit(1)],
+    from: table('tombstone', 't'),
+    where: eq(col('entity', 't'), r('owner')),
+  })))
+  // The screen and the tombstones are probed after the scan's cut, on the
+  // nearest few hundred rather than on every stored vector: a screen asked of
+  // each of 310k vectors spent 2.7 s on a CPU and 7.6 s reading the pages its
+  // probes touched. Filtering keeps the scan's order, so the first `cut`
+  // admitted are the screened scan's own. Too few admitted (a thin screen, a
+  // deleted neighbour) draws WIDEN times as many, up to the whole corpus.
+  let cut = pool(opts.need)
+  let corpus = tally(db, TABLE)
+  for (let draw = opts.within ? cut * WIDEN : cut;; draw *= WIDEN) {
+    let rows = db.query(select({
+      cols: [r('owner')],
+      from: from(nearest(Math.min(draw, corpus)), 'r'),
+      where: and(
+        alive,
+        ...opts.within ? [admitted(opts.within, r('owner'))] : [],
+      ),
+      order: [r('distance'), r('owner')],
+      limit: val(cut),
+    }))
+    if (rows.length == cut || draw >= corpus) {
+      return rows.map((row) => Number(row.owner))
+    }
   }
-  let alive = (owner: ReturnType<typeof col>) =>
-    not(exists(select({
-      cols: [lit(1)],
-      from: table('tombstone', 't'),
-      where: eq(col('entity', 't'), owner),
-    })))
-  // Most nearest pools contain no deleted entity. Probe their tombstones
-  // after the cut, instead of seeking a tombstone for every stored vector.
-  let first = db.query(select({
-    cols: [col('owner', 'r')],
-    from: from(select(scan), 'r'),
-    where: alive(col('owner', 'r')),
-    order: [col('distance', 'r'), col('owner', 'r')],
-  }))
-  if (first.length == pool(opts.need)) {
-    return first.map((r) => Number(r.owner))
-  }
-  // A deleted neighbour (or a short corpus) takes the complete screened
-  // scan, so deletion never changes recall, the final cut or tie ordering.
-  return db.query(select({
-    ...scan,
-    cols: [as(v('id'), 'owner')],
-    where: and(alive(v('id')), ...scan.where ? [scan.where] : []),
-  })).map((r) => Number(r.owner))
 }
