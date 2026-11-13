@@ -33,7 +33,7 @@ export let rowsOf = (sent: Lines, mentions?: string): Row[] =>
   drawLines(sent).map((line) => drawn(line, mentions))
 
 // The aside beside the lines, drawn the same way (operator-aside.ts).
-export { ordered } from './operator-aside.ts'
+export { ordered, showing } from './operator-aside.ts'
 
 /** The aside as HTML, its list shown or not. */
 export let asideHtml = (aside: Aside, open = false, now = Date.now()) =>

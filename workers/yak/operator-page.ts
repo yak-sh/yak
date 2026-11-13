@@ -2094,7 +2094,8 @@ export let updatesPage = async (
 // public/drop.js: picked, pasted or dropped anywhere on the box, each a
 // preview or a chip to take back), Send, and Stop while the Operator works.
 // The yak sits in the margin beside it (mascot.ts `Idle`), taking no room
-// from the conversation, and shows what the Operator is doing (`MOVES`). It
+// from the conversation, and shows what the Operator and its helpers are
+// doing (`MOVES`, operator-aside.ts `showing`). It
 // asks for a message to the Operator by
 // name, or with an app open beside it, what should change there, and the
 // words say the page they were written on and the app (`onPage`).
@@ -2225,7 +2226,7 @@ import { browserDrafts } from '/_draft.js'
 import { follow } from '/follow.js'
 import { frames } from '/frames.js'
 import { redraw } from '/redraw.js'
-import { asideHtml, dates, glanceHtml, helperHtml, menus, ordered, rowsOf, turnHtml } from '/_talk.js'
+import { asideHtml, dates, glanceHtml, helperHtml, menus, ordered, rowsOf, showing, turnHtml } from '/_talk.js'
 import { voice } from '/voice.js'
 let open = ${JSON.stringify(open)}
 let root = ${JSON.stringify(root)}
@@ -2468,6 +2469,7 @@ let helped = (helper) => {
   for (let row of document.querySelectorAll(at)) row.replaceWith(drawn(helperHtml(helper)))
   if (helper.session == thread()?.dataset.task) return
   happening.helpers = ordered([helper, ...happening.helpers.filter((h) => h.session != helper.session)])
+  show()
   let list = aside()?.querySelector('[data-helping]')
   if (!list) return
   if (!list.querySelector(at)) list.prepend(drawn(helperHtml(helper)))
@@ -2488,20 +2490,27 @@ document.addEventListener('keydown', (e) => {
 // clock and zone each second, so a duration counts up, and at once after
 // anything is drawn here.
 setInterval(() => dates(document), 1000)
-// The yak beside the box shows what the Operator is doing (mascot.ts
-// \`MOVES\`): a loop over and over while it lasts, one played once as the
-// work ends, and his waiting otherwise (idle.js).
+// The yak beside the box shows what the Operator is doing, and once the
+// conversation rests, what its helpers are (operator-aside.ts \`showing\`,
+// over the helpers the aside lists): a loop over and over while it lasts
+// (mascot.ts \`MOVES\`), one played once as the work ends, and his waiting
+// otherwise (idle.js).
 let moves = ${JSON.stringify(MOVES)}
 let yak = form?.querySelector('[data-idle]')
-let last = 'idle'
-let doing = (now = 'idle') => {
-  form?.querySelector('.Composer')?.toggleAttribute('data-busy', working())
+let talking = 'idle', last = 'idle'
+let show = () => {
+  let now = showing(talking, happening.helpers)
   if (!yak || now == last) return
   last = now
   let move = moves[now]
   if (move && !move.once) return void (yak.dataset.doing = move.loop)
   delete yak.dataset.doing
   if (move) yak.dispatchEvent(new CustomEvent('idle', { detail: move.loop }))
+}
+let doing = (now = 'idle') => {
+  form?.querySelector('.Composer')?.toggleAttribute('data-busy', working())
+  talking = now
+  show()
 }
 let redrawn = () => doing(thread()?.dataset.doing)
 redrawn()
@@ -2596,7 +2605,7 @@ let read = async () => {
       standing = got.standing
       if (got.html) redraw(box, got.html), redrawn()
       from ??= thread()?.dataset.from
-      if (got.aside && aside()) happening = got.aside, aside().replaceWith(drawn(asideHtml(happening, unfolded()))), shown()
+      if (got.aside && aside()) happening = got.aside, aside().replaceWith(drawn(asideHtml(happening, unfolded()))), shown(), show()
       if (got.title) heading.textContent = got.title
       if (follows && !canvas() && got.making && (follows == 'worked' || got.started)) remake(got.making)
       dates(document)

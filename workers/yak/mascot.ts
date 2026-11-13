@@ -16,7 +16,8 @@
 // every page, the dashboard's and the Operator's corner, and, drawn from the
 // same frame, the icons, the link preview (og.svg) and the connector's tile
 // (connector.svg). Beside the Operator's message box he shows what it is
-// doing (T-144829, `MOVES`).
+// doing (T-144829, `MOVES`), and once it rests, what its helpers are
+// (operator-aside.ts `showing`).
 
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'

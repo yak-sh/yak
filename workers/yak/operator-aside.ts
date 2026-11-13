@@ -15,6 +15,7 @@
 // it, the band on its own page, and the admin's list of the Operator's work.
 import { type ComponentChildren as Node, h } from 'preact'
 import { Card, Dot, Popover, Rows, State } from '@yaks/ui/parts'
+import type { Doing } from './mascot.ts'
 
 /** What a conversation's turn is doing while it runs, and since when. */
 export type Turn = { what: string; since: string }
@@ -47,6 +48,41 @@ export type Aside = { turn: Turn | null; helpers: HelperLine[] }
 /** Whether a piece of work is still at it. */
 export let going = ({ standing }: { standing?: Standing }) =>
   standing == 'running' || standing == 'waiting'
+
+// What a conversation is doing while it works, each a loop the yak plays
+// over and over (mascot.ts `MOVES`).
+let AT_WORK: Doing[] = ['thinking', 'tool', 'writing']
+
+/**
+ * What the yak beside the box shows, for what the conversation is `doing`
+ * and its helpers (mascot.ts `MOVES`). While the conversation works, that.
+ * Once it rests, he shows its helpers: at work while any of them runs, as
+ * when the conversation uses a tool, and thinking while they only wait to
+ * run. He is one yak for however many there are; the summary's dots count
+ * them. With none of them going, how the conversation ended.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { showing, type HelperLine } from './operator-aside.ts'
+ * let helpers = (...standings: HelperLine['standing'][]): HelperLine[] =>
+ *   standings.map((standing) =>
+ *     ({ session: standing, title: '', standing, step: '', since: '' }))
+ * equal(showing('writing', helpers('running')), 'writing')
+ * equal(showing('idle', helpers('done', 'running', 'waiting')), 'tool')
+ * equal(showing('done', helpers('running')), 'tool')
+ * equal(showing('idle', helpers('waiting', 'failed')), 'thinking')
+ * equal(showing('done', helpers('done', 'failed', 'stopped')), 'done')
+ * equal(showing('idle', []), 'idle')
+ * ```
+ */
+export let showing = (doing: Doing, helpers: HelperLine[]): Doing =>
+  AT_WORK.includes(doing)
+    ? doing
+    : helpers.some((x) => x.standing == 'running')
+    ? 'tool'
+    : helpers.some(going)
+    ? 'thinking'
+    : doing
 
 let WORD: Record<Standing, [string, string?]> = {
   running: ['Running', 'active'],
