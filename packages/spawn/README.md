@@ -290,6 +290,8 @@ points are:
 - `@yaks/spawn/effects`: `effects`, `spawning()`, and effect configuration;
 - `@yaks/spawn/service`: `service` and `adopting()`, the duty that resumes runs
   after a restart;
-- `@yaks/spawn/tools`: `runs()`, duration parsing, and brief formatting.
+- `@yaks/spawn/tools`: `runs()`, duration parsing, and brief formatting;
+- `@yaks/spawn/over`: `over()`, whether a session's run is over, read from the
+  graph alone, so a Worker can import it.
 
 The launcher requires Linux, `setsid`, and a systemd user manager.

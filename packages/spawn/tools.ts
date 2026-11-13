@@ -34,12 +34,9 @@ import {
   ENTRY,
   entryStatus,
   handing,
-  latestRequest,
   ordered,
   OUTPUT,
   parkedLine,
-  receiptOf,
-  seqOf,
   SESSION,
   sessionFor,
   sessionViews,
@@ -50,6 +47,7 @@ import { CallError } from '@yaks/tools/errors'
 import { changes } from '@yaks/session/wait'
 import { spelling } from './run.ts'
 import { reportOf } from './completion.ts'
+import { ENDED, over } from './over.ts'
 
 /** What config can set for these tools. */
 export type Options = {
@@ -78,10 +76,6 @@ let PREVIEW = {
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
-
-// A transcript-only wait ends when its current turn settles, stops or fails.
-// A managed run is instead judged by the process exit (see `over`).
-let ENDED = new Set(['settled', 'stopped', 'failed'])
 
 /**
  * A duration written the way a person writes one: `45m`, `2h`, or bare
@@ -141,25 +135,6 @@ let said = (call: Bundle, body: string): Bundle => ({
 /** A session's own account of itself: the brief it wrote if there is one,
  * otherwise the last thing it said. */
 export let briefOf = reportOf
-
-/** Whether a session's run is over, given the status its entries leave
- * (@yaks/session `entryStatus`): whatever is behind it is over. A provider
- * that prints its final event and then lingers has a `stop` entry and is
- * still running, so a managed request also waits for the final import
- * receipt; a transcript with no process is over once its turn settles, stops
- * or fails. */
-export let over = async (
-  graph: Graph,
-  row: Bundle,
-  status: string,
-): Promise<boolean> => {
-  if (!row[PROCESS]) return ENDED.has(status)
-  if (comp(row, EXIT) == null) return false
-  let request = await latestRequest(graph, row.entity.eid)
-  if (!request) return true
-  let receipt = await receiptOf(graph, row.entity.eid, request.entity.eid)
-  return !!receipt && seqOf(receipt) > seqOf(request)
-}
 
 // Before final import receipts existed, an ended run's log was removed only
 // after import. Those historical transcripts remain waitable after cleanup.

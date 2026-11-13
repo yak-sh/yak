@@ -6,6 +6,7 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./tools": "./tools.ts",
+    "./over": "./over.ts",
     "./effects": "./effects.ts",
     "./service": "./service.ts"
   },

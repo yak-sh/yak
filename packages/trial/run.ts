@@ -38,7 +38,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { type Model, ModelError, type Price, weigh } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
 import { entryStatus, saidOf, textOf } from '@yaks/session'
-import { over } from '@yaks/spawn/tools'
+import { over } from '@yaks/spawn/over'
 import { unreturned } from './round.ts'
 
 type Row = Record<string, unknown>
