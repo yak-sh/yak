@@ -256,6 +256,20 @@ test('a module is reported, naming its entry, when an import is refused', async 
   )
 })
 
+test('a module importing what no browser loads is reported, naming the import', async () => {
+  let p = page({
+    [entry]: `import'./repl.js';import"node:fs"`,
+    [dep('repl.js')]: 'import{x}from"node:module"',
+  })
+  await p.heard.get('error')!({
+    target: { tagName: 'SCRIPT', type: 'module', src: entry },
+  })
+  equal(
+    (await p.bodies()).map(({ message, url }) => ({ message, url })),
+    [{ message: `failed to load script ${entry}`, url: 'node:module' }],
+  )
+})
+
 test('a module whose entry is refused is reported', async () =>
   equal(await module({ [entry]: 404 }), {
     asked: [entry],

@@ -168,10 +168,21 @@
   // file it imports. So the graph is asked for again, the entry and then each
   // file of this origin it imports by address, and the answer is the first
   // file the server refuses, or null when every one answers. A bare name
-  // resolves through the page's import map, which only the browser reads.
+  // resolves through the page's import map, which only the browser reads. An
+  // address on a scheme no browser loads a module from, as `node:fs` is, is
+  // refused without asking: a bundle that kept one is dead in every browser.
   let IMPORTS =
     /(?:^|[;\s}])(?:import|export)\s*(?:[\w$*{}\s,]+from\s*)?['"]([^'"\n]+)['"]/g
   let GRAPH = 32
+  let LOADABLE = ['http:', 'https:', 'data:', 'blob:']
+  let unloadable = (name) => {
+    try {
+      let url = new URL(name)
+      return LOADABLE.includes(url.protocol) ? null : url
+    } catch {
+      return null
+    }
+  }
   let refused = async (url, seen = new Set()) => {
     if (seen.has(url.href) || seen.size >= GRAPH) return null
     seen.add(url.href)
@@ -181,6 +192,8 @@
       return url
     }
     for (let [, name] of (await r.text()).matchAll(IMPORTS)) {
+      let dead = unloadable(name)
+      if (dead) return dead
       if (!/^\.{0,2}\//.test(name)) continue
       let next
       try {
