@@ -2,10 +2,11 @@
 // container's monitor can hold its Durable Object on the preceding Worker
 // version; migration therefore uses only the SDK RPCs that version already
 // serves. The coordinator keeps the copy receipts and complete erase census.
-import { DurableObject } from 'cloudflare:workers'
 import { cloudflareProvider } from '@yaks/sandbox/cloudflare'
-import { afterCompiles, copies, type Storage } from './sandbox-copies.ts'
+import { afterCompiles, copies } from './sandbox-copies.ts'
 import { retried } from '@yaks/durable-object/resets'
+import { Durable, type State } from '@yaks/durable-object/object'
+import { caught } from './defects.ts'
 import type { Env } from './env.ts'
 import { TIMEOUT } from './sandbox.ts'
 import { r2RawObjects } from './lib/objects.ts'
@@ -26,21 +27,17 @@ export type Workspaces = {
   get(id: unknown): Workspace
 }
 
-export class WorkspaceStore extends DurableObject<Env> {
+// An object that holds no graph: its source and copy receipts are its keys,
+// and its archives are in R2. Each RPC method is an entry of its own.
+export class WorkspaceStore extends Durable {
   #copies: ReturnType<typeof copies>
   #prefix: string
-  #storage: Storage
   #bucket: Env['BLOBS']
-  constructor(
-    // The runtime's state (unknown where `cloudflare:workers` is untyped), and
-    // the slice of it this object reads.
-    ctx:
-      & ConstructorParameters<typeof DurableObject>[0]
-      & { id: { toString(): string }; storage: Storage },
-    env: Env,
-  ) {
-    super(ctx, env)
-    this.#storage = ctx.storage
+  constructor(ctx: State & { id: { toString(): string } }, env: Env) {
+    super(ctx, {
+      report: (e, entry) => caught(e, { request: `workspaces ${entry}` }),
+    })
+    let storage = this.keys
     this.#bucket = env.BLOBS
     this.#prefix = `workspaces/${ctx.id.toString()}/`
     let provider = cloudflareProvider(env.WORKBENCH!, {
@@ -48,9 +45,9 @@ export class WorkspaceStore extends DurableObject<Env> {
       retry: retried,
     })
     this.#copies = copies(
-      ctx.storage,
+      storage,
       async () => {
-        let ref = { id: (await ctx.storage.get<string>('source'))! }
+        let ref = { id: (await storage.get<string>('source'))! }
         if (!await provider.active(ref)) return { processes: [] }
         let processes = await provider.processes(ref)
         let machine = (await provider.connect(ref)).workspace
@@ -106,16 +103,21 @@ export class WorkspaceStore extends DurableObject<Env> {
       (name) => provider.active({ id: name }),
     )
   }
-  async fork(source: string, target: string) {
-    let was = await this.#storage.get<string>('source')
-    if (was && was != source) throw new Error('a workspace has one source')
-    if (!was) await this.#storage.put('source', source)
-    return await this.#copies.fork(target)
+  fork(source: string, target: string): Promise<string[]> {
+    return this.enter('fork', async () => {
+      let was = await this.keys.get<string>('source')
+      if (was && was != source) throw new Error('a workspace has one source')
+      if (!was) await this.keys.put('source', source)
+      return await this.#copies.fork(target)
+    })
   }
-  retire() {
-    return this.#copies.retire()
+  retire(): Promise<string[]> {
+    return this.enter('retire', () => this.#copies.retire())
   }
-  async destroy() {
+  destroy(): Promise<void> {
+    return this.enter('destroy', () => this.#destroy())
+  }
+  async #destroy() {
     await this.#copies.retire()
     await this.#copies.discard()
     // A crash after upload and before its receipt still leaves bytes under
@@ -128,6 +130,6 @@ export class WorkspaceStore extends DurableObject<Env> {
       await r2RawObjects(this.#bucket).delete(key)
     }
     await this.#copies.clear()
-    await this.#storage.delete('source')
+    await this.keys.delete('source')
   }
 }

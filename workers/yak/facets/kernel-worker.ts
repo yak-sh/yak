@@ -114,7 +114,22 @@ export let BUILDER = [
   'enter',
   'behind',
 ] as const
-export let WORKSPACES = ['fork', 'retire', 'destroy'] as const
+export let WORKSPACES = [
+  'fork',
+  'retire',
+  'destroy',
+  // @yaks/durable-object `Durable`'s own.
+  'fetch',
+  'alarm',
+  'webSocketMessage',
+  'webSocketClose',
+  'webSocketError',
+  'specify',
+  'open',
+  'accept',
+  'enter',
+  'behind',
+] as const
 export let PUBLIC_DIRECTORY = [
   'valid',
   'publish',
@@ -180,7 +195,11 @@ export let classes: Record<string, Deferred> = {
     base: DurableObject,
     methods: WORKSPACES,
     load: async () =>
-      made((await import('../workspaces.ts')).WorkspaceStore as Class),
+      made(
+        await instrumented(
+          import('../workspaces.ts').then((m) => m.WorkspaceStore),
+        ),
+      ),
   },
   // Independent of yak/platform: only a missed directory deadline reads here
   // (public-directory.ts).
