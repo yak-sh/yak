@@ -85,7 +85,7 @@ test('only a space owner can inspect and retry held store writes', async () => {
       await owner.narrow(
         'store_inspect',
         { space: slug, app: 'notes' },
-        '.result[0].content.body | fromjson | has("physical")',
+        '.result[0].output.value | has("physical")',
       ),
       true,
     )

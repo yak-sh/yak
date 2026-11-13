@@ -201,7 +201,7 @@ let { tasks } = JSON.parse(
 let steps = await agent.narrow(
   'operator_read',
   { space: slug, task: tasks[0].entity.eid },
-  '.result[0].content.body | fromjson | .entries | map(select(.result) | {result, refusal, content, operator_files})',
+  '.result[0].output.value | .entries | map(select(.result) | {result, refusal, content, operator_files})',
 )
 await k.stop()
 
