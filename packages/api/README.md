@@ -89,9 +89,10 @@ writer's presence after that writer disconnects.
 A **receipt** is the canonical applied answer kept atomically with a successful
 JSON `POST /apply` carrying `Idempotency-Key`. Resend the same key and exact
 body after a lost answer: aliases and `$was` are accepted once, and a replay
-returns the original answer without another mutation. Keys are scoped to the
-authenticated actor (`by` and `via`). Reusing a key with a different body is
-refused.
+returns the original answer without another mutation. A key is its writer's:
+every door keeps a receipt under the writer (`by` and `via`) and key as one name
+(`@yaks/api/log` `receiptKey`), so two writers' same key are two writes. Reusing
+an `outbox:` key with a different body is refused.
 
 ```sh
 curl -X POST http://localhost:3000/apply \
@@ -100,10 +101,12 @@ curl -X POST http://localhost:3000/apply \
   -d '[{"entity":{"eid":"$note"},"doc":{"title":"Remember"}}]'
 ```
 
-Receipts have no expiry, including `outbox:` keys: durable outboxes may replay
-after any offline interval. Only a SHA-256 digest binds the request body; the
-body itself is not retained. The canonical answer is retained before caller
-answer projection and projected again when replayed.
+A receipt under an `outbox:` key, as `@yaks/sync` and `@yaks/client` send, has
+no expiry: durable outboxes may replay after any offline interval. One under any
+other key is kept for ten minutes, the resend window of a server retrying a call
+(`@yaks/durable-object`). Only a SHA-256 digest binds the request body; the body
+itself is not retained. The canonical answer is retained before caller answer
+projection and projected again when replayed.
 
 Receipts are kept in the host's write log (`@yaks/api/log`): plain SQLite tables
 beside the graph, never graph rows, inserted in the transaction that commits the

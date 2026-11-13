@@ -132,6 +132,10 @@ export let signer = (v: Vouch): Actor | null =>
     }
     : null
 
+/** Who a request's write is signed as, by its vouch alone ({@link signer}):
+ * also whose key a keyed write is (@yaks/api/log `receiptKey`). */
+export let writer = (req: Request): Actor | null => signer(vouchOf(req))
+
 /**
  * Today's authority to write the app: the caller {@link authenticating}
  * admits, who also holds the level the app's mode asks of an editor. Asked of

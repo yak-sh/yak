@@ -14,15 +14,16 @@
  *   caller answered as its write lands. Failed writes wait for another incarnation;
  *   interrupted and legacy unreviewed attempts need explicit review. Reviewed
  *   retries keep their input and complete outcome forever.
- * - Ordinary receipts expire after the resend window; browser outbox receipts
- *   and held input never expire.
+ * - Every keyed write is kept under its writer's name for its key
+ *   ({@link receiptKey}), whichever door it came in at. Ordinary receipts
+ *   expire after the resend window; browser outbox receipts and held input
+ *   never expire.
  *
  * The tables belong to no vocabulary or app migration. Their place beside
  * the graph makes the receipt and the mutation atomic even when the graph
  * above storage cannot stand. A Store keeps its batches here, a space's
  * Builder the lines a person said while it could not answer them, and every
- * door of @yaks/api its keyed writes' receipts, each named by its writer
- * (`./receipts.ts` `received`).
+ * door of @yaks/api its keyed writes' receipts (`./receipts.ts` `received`).
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -39,8 +40,9 @@
  *
  * @module
  */
-import { type Bundle, sha256 } from '@yaks/graph'
+import { type Actor, type Bundle, sha256, token } from '@yaks/graph'
 import { composed } from '@yaks/graph/bundle'
+import { derivedEid } from '@yaks/graph/identity'
 import { Refused } from '@yaks/graph/errors'
 import { fromBase64, toBase64 } from '@yaks/fp'
 import {
@@ -52,6 +54,7 @@ import {
   type Driver,
   eq,
   type Expr,
+  ge,
   gt,
   isNull,
   lit,
@@ -526,13 +529,103 @@ export let fingerprinted = (request: Request, body: string): Request => {
   return new Request(request, { headers, body: opened(headers, body) })
 }
 
+/**
+ * The key the log keeps a write under: its writer's and its sender's key as
+ * one name, so one writer's key never reads another's receipt. An outbox
+ * key's name is an outbox key too, kept for good ({@link durable}); any
+ * other expires after the resend window.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { durable, receiptKey } from './log.ts'
+ * let ada = { by: 'ada' }
+ * equal(receiptKey(ada, 'k') == receiptKey({ by: 'bob' }, 'k'), false)
+ * equal(receiptKey(ada, 'k') == receiptKey(ada, 'k'), true)
+ * equal([durable(receiptKey(ada, 'outbox:k')), durable(receiptKey(ada, 'k'))],
+ *   [true, false])
+ * ```
+ */
+export let receiptKey = (writer: Actor | null, key: string): string => {
+  let id = derivedEid(
+    `api receipt|${token([writer?.by ?? null, writer?.via ?? null, key])}`,
+  )
+  return `${durable(key) ? 'outbox:' : ''}receipt:${id}`
+}
+
+// The keys a log names (`receiptKey`) sort in two runs, `outbox:receipt:…`
+// and `receipt:…`; a key kept as its sender said it sorts outside both, so
+// the key's index finds those alone. A row with no key compares as neither.
+let UNNAMED: Expr = or(
+  lt(col(KEY), lit('outbox:receipt:')),
+  and(ge(col(KEY), lit('outbox:receipt;')), lt(col(KEY), lit('receipt:'))),
+  ge(col(KEY), lit('receipt;')),
+)
+
+/** A request with its key named by its writer ({@link receiptKey}), as the
+ * log keeps it; one with no key as it is. Its body is taken along unread. */
+export let owned = (request: Request, writer: Actor | null): Request => {
+  let key = request.headers.get(IDEMPOTENCY)
+  if (!key) return request
+  let headers = new Headers(request.headers)
+  headers.set(IDEMPOTENCY, receiptKey(writer, key))
+  return new Request(request, { headers })
+}
+
+/**
+ * Every key the log holds as its sender said it, named by its writer
+ * ({@link receiptKey}), in its column and in the headers its write is
+ * replayed with: a log kept by code that took a key as it came. `writer` says
+ * who sent each, from its request's headers. How many it named; a log named
+ * already costs one look at the key's index.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { open } from '@yaks/sqlite/db'
+ * import { first, keep, raise, receiptKey, rekey } from './log.ts'
+ * let db = open(':memory:')
+ * raise(db)
+ * let sent = new Request('http://store/apply', {
+ *   method: 'POST', headers: { 'idempotency-key': 'k', 'x-by': 'ada' },
+ * })
+ * keep(db, sent, '[]')
+ * let writer = (r: Request) => ({ by: r.headers.get('x-by')! })
+ * equal([rekey(db, writer), rekey(db, writer)], [1, 0])
+ * equal(first(db, receiptKey({ by: 'ada' }, 'k'))?.seq, 1)
+ * ```
+ */
+export let rekey = (
+  db: Driver,
+  writer: (request: Request) => Actor | null,
+): number => {
+  let rows = db.query(select({
+    cols: [col('seq'), col(KEY), col('headers')],
+    from: table(LOG),
+    where: UNNAMED,
+  }))
+  for (let row of rows) {
+    let headers = new Headers(JSON.parse(String(row.headers)))
+    let key = receiptKey(
+      writer(new Request('http://log/', { headers })),
+      String(row[KEY]),
+    )
+    headers.set(IDEMPOTENCY, key)
+    db.query({
+      t: 'update',
+      table: LOG,
+      set: { [KEY]: val(key), headers: val(JSON.stringify([...headers])) },
+      where: at(Number(row.seq)),
+    })
+  }
+  return rows.length
+}
+
 /** The request a door that names its writes itself keeps a receipt under
- * (`./receipts.ts` `received`): its `name` for the write, kept for good and
- * bound to the body `digest` names, as an outbox key's is. */
-export let named = (name: string, digest: string): Request =>
+ * (`./receipts.ts` `received`): its `key` for the write ({@link
+ * receiptKey}), bound to the body `digest` names. */
+export let named = (key: string, digest: string): Request =>
   new Request('http://receipt/apply', {
     method: 'POST',
-    headers: { [IDEMPOTENCY]: `outbox:receipt:${name}`, [FINGERPRINT]: digest },
+    headers: { [IDEMPOTENCY]: key, [FINGERPRINT]: digest },
   })
 
 /** A write the log already holds under an idempotency key. */

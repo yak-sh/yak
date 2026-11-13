@@ -2,13 +2,14 @@
 // A keyed write's receipt, kept in the host's write log on the graph's own
 // connection (./receipts.ts).
 import { equal, test } from '@yaks/testing'
-import { graph, token } from '@yaks/graph'
+import { type Bundle, graph, token } from '@yaks/graph'
 import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import type { Driver } from '@yaks/sql'
 import { api } from './route.ts'
 import { shop } from './testing.ts'
-import { writes } from './log.ts'
+import { named, raise, received, writes } from './log.ts'
+import { derivedEid } from '@yaks/graph/identity'
 import { receipts } from './receipts.ts'
 
 let vocab = shop
@@ -151,4 +152,26 @@ test('receipt keys are actor-scoped and dry runs do not consume them', () => {
     afterCheckAnswer.status,
   ], [200, 200, 200, 200])
   equal(scopedAnswers[0][0].entity.eid == scopedAnswers[1][0].entity.eid, false)
+})
+
+// The box's receipts, as the log kept them before every door named a key one
+// way: an outbox key's, by its writer and key, under `outbox:receipt:`.
+let before = await opened()
+raise(before.db)
+await before.g.apply([{ entity: { eid: 'ada' }, doc: { title: 'Ada' } }])
+let said = [{ entity: { eid: 'kept' }, doc: { title: 'Kept' } }]
+received(before.db, {
+  request: named(
+    `outbox:receipt:${
+      derivedEid(`api receipt|${token(['ada', null, 'outbox:old'])}`)
+    }`,
+    token(simple)!,
+  ),
+}, () => said)
+let resent = await before.as('ada')(request('outbox:old', simple))
+test('a receipt kept before every door named keys alike answers its resend', async () => {
+  // Told what was kept, and nothing applied again.
+  let told = (await resent.json()).map((b: Bundle) => b.entity.eid)
+  let docs = (await before.g.read('.doc')).length
+  equal([resent.status, told, docs], [200, ['kept'], 1])
 })

@@ -6,7 +6,7 @@ import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { open } from '@yaks/sqlite/db'
-import { IDEMPOTENCY, raise } from './log.ts'
+import { IDEMPOTENCY, keep, raise, rekey } from './log.ts'
 import { type Door, door } from './receipts.ts'
 
 let vocab = loadVocab({
@@ -56,21 +56,22 @@ let host = () => {
     keeps: () => true,
     answer: (_request, answer) => Promise.resolve(answer),
     refused: () => null,
+    writer: (r) => ({ by: r.headers.get('x-by') ?? 'ada' }),
     arm: (t) => void armed.push(t),
     report: (e) => console.error(e),
   })
   g.use(log.plugin)
-  let write = (title: string, key?: string) =>
-    log.write(
-      new Request('http://store/apply', {
-        method: 'POST',
-        headers: key ? { [IDEMPOTENCY]: key } : {},
-        body: JSON.stringify([{ entity: { eid: title }, doc: { title } }]),
-      }),
-    )
+  let sent = (title: string, key?: string, by = 'ada') =>
+    new Request('http://store/apply', {
+      method: 'POST',
+      headers: { 'x-by': by, ...key ? { [IDEMPOTENCY]: key } : {} },
+      body: JSON.stringify([{ entity: { eid: title }, doc: { title } }]),
+    })
+  let write = (title: string, key?: string, by?: string) =>
+    log.write(sent(title, key, by))
   let titles = async () =>
     (await g.read('.doc')).map((b) => (b.doc as { title: string }).title)
-  return { at, armed, applied, log, write, titles }
+  return { db, at, armed, applied, log, sent, write, titles }
 }
 
 let told = async (r: Response) => [r.status, (await r.json()).pending]
@@ -108,4 +109,35 @@ test('a live keyed write commits once and a resend hears the same answer', async
   let first = await (await h.write('b', 'live')).text()
   let second = await (await h.write('b', 'live')).text()
   equal([second, await h.titles()], [first, ['b']])
+})
+
+test("two writers' same key are two writes, each resend told its own", async () => {
+  let h = host()
+  let ada = await (await h.write('a', 'k')).json()
+  let bob = await (await h.write('b', 'k', 'bob')).json()
+  equal([ada[0].doc.title, bob[0].doc.title], ['a', 'b'])
+  equal((await (await h.write('b', 'k', 'bob')).json())[0].doc.title, 'b')
+  equal(h.applied, ['a', 'b'])
+})
+
+test('a receipt under an outbox key is kept for good, any other for the resend window', async () => {
+  let h = host()
+  for (let key of ['k', 'outbox:k']) await h.write(key, key)
+  h.at.t = 11 * 60_000
+  // A later write expires what the window let go.
+  await h.write('later', 'later')
+  for (let key of ['k', 'outbox:k']) await (await h.write(key, key)).text()
+  equal(h.applied, ['k', 'outbox:k', 'later', 'k'])
+})
+
+test('a key kept as its sender said it is named by its writer, and its resend is the write it repeats', async () => {
+  let h = host()
+  h.at.until = 1_000
+  // Kept by code that took a key as it came.
+  let seq = keep(h.db, h.sent('a', 'k'), '[]')
+  equal([
+    rekey(h.db, (r) => ({ by: r.headers.get('x-by')! })),
+    rekey(h.db, () => null),
+  ], [1, 0])
+  equal(await told(await h.write('a', 'k')), [202, seq])
 })

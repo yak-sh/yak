@@ -18,6 +18,7 @@ import {
   keep as keepWrite,
   landed,
   Pending,
+  receiptKey,
   received,
   remembered,
   retry as retryWrite,
@@ -448,7 +449,12 @@ test('a reviewed 307-bundle answer is retained across storage rows', async () =>
     200,
   ])
   assertEquals(JSON.parse(write.answer), answer)
-  assertEquals(JSON.parse(first(d, 'large-answer')!.answer), answer)
+  // Kept under its sender's key by the log, it is its writer's once the
+  // store wakes: nobody's, since nobody vouched for it.
+  assertEquals(
+    JSON.parse(first(d, receiptKey(null, 'large-answer'))!.answer),
+    answer,
+  )
 })
 
 test('a reviewed write keeps the composed caller answer', async () => {
@@ -855,20 +861,21 @@ let offlineIntent = await (async () => {
     }),
     body,
   )
-  return { graph, request, log: db(o.ctx), answer, alias, query }
+  let key = receiptKey(null, 'outbox:replay')
+  return { graph, request, key, log: db(o.ctx), answer, alias, query }
 })()
 
 test('an outbox intent replays its minted alias and guarded answer hours later', async () => {
-  let { request, log, answer } = offlineIntent
-  let replay = remembered(log, 'outbox:replay', request)
+  let { request, key, log, answer } = offlineIntent
+  let replay = remembered(log, key, request)
   assert(replay)
   assertEquals(replay.status, 200)
   assertEquals(await replay.text(), answer)
 })
 
 test('replaying an outbox intent does not mint a second entity', async () => {
-  let { graph, request, log, alias, query } = offlineIntent
-  assert(remembered(log, 'outbox:replay', request))
+  let { graph, request, key, log, alias, query } = offlineIntent
+  assert(remembered(log, key, request))
   assertEquals(
     (await graph.read(query)).map((b) => b.entity.eid),
     [alias.entity.eid],
@@ -876,8 +883,8 @@ test('replaying an outbox intent does not mint a second entity', async () => {
 })
 
 test('replaying an outbox intent does not apply its guarded edit again', async () => {
-  let { graph, request, log } = offlineIntent
-  assert(remembered(log, 'outbox:replay', request))
+  let { graph, request, key, log } = offlineIntent
+  assert(remembered(log, key, request))
   assertEquals(
     ((await graph.get(['edited'], ['doc']))[0]?.doc as { title?: string })
       ?.title,

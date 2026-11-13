@@ -355,6 +355,9 @@ export let BOUNDARIES = [
   // The directory's and the git store's numbers hold their letters
   // (letter-move.ts, T-164365).
   'yak/store/number-letter/1',
+  // Every keyed write a store's log holds is kept under its writer's name for
+  // its key (@yaks/api/log `rekey`, at a store's wake, T-166122).
+  'yak/store/write-receipt-keys/1',
 ]
 
 /** The column the interruption contract emptied before `attempt.state` and

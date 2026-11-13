@@ -6,9 +6,11 @@
  * plain SQLite tables on the graph's own connection, and inserts each in the
  * transaction that commits its write.
  *
- * - At @yaks/api's own door a receipt is named by its writer and key, and
- *   bound to its body ({@link receipts}, {@link received}). The request token
- *   is an in-process capability, not client input.
+ * - Every receipt is named by its writer and key (`./log.ts` `receiptKey`),
+ *   so two writers' same key never meet, and an outbox key's is bound to its
+ *   body. @yaks/api's own door keeps one with its graph's hooks
+ *   ({@link receipts}, {@link received}); the request token is an in-process
+ *   capability, not client input.
  * - A host's door over the log ({@link door}) also keeps the input it could
  *   not commit yet: while its row ceiling stopped it, while it could not
  *   start, or while it failed, and replays it in order once the object may
@@ -26,7 +28,6 @@ import {
   token,
 } from '@yaks/graph'
 import type { Driver } from '@yaks/sql'
-import { derivedEid } from '@yaks/graph/identity'
 import { Refused } from '@yaks/graph/errors'
 import { published } from './publish.ts'
 import { json, refuse } from './refuse.ts'
@@ -46,9 +47,11 @@ import {
   named,
   next,
   opened,
+  owned,
   parked,
   raise,
   type Receipt,
+  receiptKey,
   received as logged,
   remembered,
   replayed,
@@ -126,19 +129,13 @@ export let receipts = (db: Driver): Plugin => {
   }
 }
 
-/** The name a writer's keyed write is kept under: the writer and its key as
- * one id, so one writer's key never reads another's receipt. */
-let nameOf = (actor: Actor | null, key: string): string =>
-  derivedEid(
-    `api receipt|${token([actor?.by ?? null, actor?.via ?? null, key])}`,
-  )
-
-/** Apply with an indefinite, exact-body-bound receipt scoped to the writer,
+/** Apply with a receipt named by its writer and key (log.ts `receiptKey`),
  * kept in the host's write log (`db`) in the write's own transaction, so the
- * log must be the graph's own connection. No time expiry: a durable browser
- * outbox may replay after an arbitrary delay. A host with no log refuses a
- * keyed write rather than apply it without the receipt that makes a resend
- * safe. */
+ * log must be the graph's own connection. It is kept as every receipt under
+ * that key is: an outbox key's for good and bound to its exact body, since a
+ * durable browser outbox may replay after an arbitrary delay, and any other's
+ * for the resend window. A host with no log refuses a keyed write
+ * rather than apply it without the receipt that makes a resend safe. */
 export let received = async (
   graph: Graph,
   db: Driver | undefined,
@@ -158,7 +155,7 @@ export let received = async (
   }
   let capability = crypto.randomUUID()
   pending.set(capability, {
-    receipt: named(nameOf(actor, key), token(body)!),
+    receipt: named(receiptKey(actor, key), token(body)!),
     empty: !bundles.length,
   })
   try {
@@ -310,6 +307,10 @@ export type Host = Beside & Replayer & {
   answer: (request: Request, response: Response) => Promise<Response>
   /** Why the object could not start, once it could not. */
   refused: () => string | null
+  /** Who sent a request, said by its headers alone: the log names a keyed
+   * write by its writer (`./log.ts` `receiptKey`) before the host may have
+   * started to ask anything more. */
+  writer: (request: Request) => Actor | null
 }
 
 /** The replay of a host's write log ({@link replays}). */
@@ -585,8 +586,9 @@ export let door = (host: Host): Door => {
     return waits(seq, stop.retry.after)
   }
 
-  /** A write in at `/apply`. */
-  let write = async (request: Request): Promise<Response> => {
+  /** A write in at `/apply`, its key named by its writer from here on. */
+  let write = async (came: Request): Promise<Response> => {
+    let request = owned(came, host.writer(came))
     // A binary write is kept as it came, since decoding it needs a start
     // that may not run, and is decoded as it lands.
     let { body, told } = await taken(request)
@@ -720,7 +722,10 @@ export let door = (host: Host): Door => {
       if (!durable(key)) return request
       await host.authorize(request)
       request = fingerprinted(request, text)
-      let answer = check ? remembered(host.db, key!, request) : null
+      // A rehearsal never comes in at `write`: its key is named here.
+      let answer = check
+        ? remembered(host.db, receiptKey(host.writer(request), key!), request)
+        : null
       return answer ? host.answer(request, answer) : request
     },
     applying<T>(request: Request, mark: Mark, apply: () => T): T | Response {

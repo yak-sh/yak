@@ -48,9 +48,9 @@ import {
   appGuard,
   authenticating,
   editing,
-  signer,
   type Vouch,
   vouchOf,
+  writer,
 } from './app-authority.ts'
 export {
   appGuard,
@@ -417,6 +417,7 @@ import {
   kept,
   logged,
   raise,
+  rekey,
   replayed,
   retry,
   revived,
@@ -972,6 +973,7 @@ export class Store extends Durable {
       keeps: (told) => !keyed(told),
       answer: (request, response) => store.#apply.answer(request, response),
       refused: () => store.#refused,
+      writer,
       arm: (at, why) => store.#arm(at, why),
       report: (e, request) => defect(e, { request, store: store.#name() }),
       stage: (name, work) => store.#stage(name, work, name != 'settle'),
@@ -996,7 +998,7 @@ export class Store extends Durable {
       request.headers.get('x-yak-kernel') == '1'
         ? {
           graph: store.#kernelGraph(store.#graph),
-          actor: signer(vouchOf(request)),
+          actor: writer(request),
         }
         : undefined,
     tags: () => store.#tags(),
@@ -1197,6 +1199,9 @@ export class Store extends Durable {
     if (!this.#dormant) {
       interrupted(this.#sql)
       revived(this.#sql)
+      // A key kept as its sender said it, by code before the log named each
+      // by its writer (T-166122), is named so before anything reads it.
+      rekey(this.#sql, writer)
     }
     this.#reshaping()
     let remembered = this.#get('name')
