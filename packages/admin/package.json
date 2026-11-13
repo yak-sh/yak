@@ -16,6 +16,7 @@
     "@yaks/cli": "0.2.33",
     "@yaks/cloudflare": "0.2.0",
     "@yaks/connections": "0.2.28",
+    "@yaks/copy": "0.2.24",
     "@yaks/durable-object": "0.2.28",
     "@yaks/file": "0.2.28",
     "@yaks/fp": "0.2.23",

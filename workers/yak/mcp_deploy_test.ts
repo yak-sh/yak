@@ -286,14 +286,31 @@ test('a deploy is a version, and one word puts it back', async () => {
     // A size down from a deploy: every write keeps what it replaced
     // (written.ts, T-34508). The page has been written three times by now, so
     // the path can already answer its own past.
-    let past = await agent.tool('app_files', {
+    let past = await agent.answer('app_files', {
       ...app,
       op: 'history',
       path: 'index.html',
     })
-    assertStringIncludes(past, `index.html in ${space}/recipes:`)
-    assertMatch(past, /now — 13 B, sha256 [0-9a-f]{64}/)
-    assertMatch(past, /- until 20\d\d-\d\d-\d\dT[\d:.]+Z — 19 B, sha256 /)
+    assertStringIncludes(past.text, `index.html in ${space}/recipes:`)
+    assertMatch(past.text, /now — 13 B, sha256 [0-9a-f]{64}/)
+    assertMatch(past.text, /- until 20\d\d-\d\d-\d\dT[\d:.]+Z — 19 B, sha256 /)
+    // The same facts as data: what is there now and each sha a write took away.
+    let held = past.value as { now: string; replaced: { sha: string }[] }
+    assertEquals(held.now, await digest('<h1>OOPS</h1>'))
+    assert(held.replaced.length > 0)
+    assertEquals(
+      (await agent.answer('app_files', {
+        ...app,
+        op: 'read',
+        path: 'index.html',
+      }))
+        .value,
+      {
+        version: 2,
+        sha: await digest('<h1>OOPS</h1>'),
+        content: '<h1>OOPS</h1>',
+      },
+    )
     // Undo the last write, with nothing to remember: the newest entry.
     assertStringIncludes(
       await agent.tool('app_files', {
@@ -320,7 +337,7 @@ test('a deploy is a version, and one word puts it back', async () => {
         op: 'history',
         path: 'index.html',
       })).split('\n').length >
-        past.split('\n').length,
+        past.text.split('\n').length,
     )
     // A file deleted is kept the same way, and comes back by the same word.
     await agent.tool('app_files', {

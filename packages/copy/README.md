@@ -52,17 +52,18 @@ is the text `%{name}`, and a lone `%` is just a percent sign.
 
 ## Calls
 
-| call                    | what it does                                                    |
-| ----------------------- | --------------------------------------------------------------- |
-| `parse(text, file?)`    | a file's text as its value; blank text is an empty file         |
-| `read(copy, key)`       | the snippet at a key, or `undefined`                            |
-| `keys(copy)`            | every snippet's key, in the file's order                        |
-| `fill(value, values)`   | the snippet's parts in order: text, and each slot's given value |
-| `slots(value)`          | the slots a snippet names                                       |
-| `set(text, changes)`    | the file's text with keys set, its order and indentation kept   |
-| `format(copy, indent?)` | a value as file text, one snippet per line                      |
-| `marks(attributes)`     | the keys and slot an element's attributes name                  |
-| `names`                 | the attribute names themselves                                  |
+| call                         | what it does                                                     |
+| ---------------------------- | ---------------------------------------------------------------- |
+| `parse(text, file?)`         | a file's text as its value; blank text is an empty file          |
+| `read(copy, key)`            | the snippet at a key, or `undefined`                             |
+| `keys(copy)`                 | every snippet's key, in the file's order                         |
+| `fill(value, values)`        | the snippet's parts in order: text, and each slot's given value  |
+| `slots(value)`               | the slots a snippet names                                        |
+| `set(text, changes)`         | the file's text with keys set, its order and indentation kept    |
+| `format(copy, indent?)`      | a value as file text, one snippet per line                       |
+| `merge(ours, theirs, base?)` | the file with each key `theirs` changed from `base` laid over it |
+| `marks(attributes)`          | the keys and slot an element's attributes name                   |
+| `names`                      | the attribute names themselves                                   |
 
 ```ts
 import { fill, parse, read, set } from '@yaks/copy'
@@ -78,6 +79,11 @@ set(text, { 'cost.free': 'Your first space is free.' })
 `fill` takes any value for a slot, so a page passes its own child (a DOM node, a
 JSX element) and places the parts it gets back. A slot given no value stays as
 its `%{name}`, so a missing part shows by name rather than as a gap.
+
+`merge` is how `yak admin push` keeps an edit made on an app's page: `ours` is
+the checkout's file, `theirs` the live one, and `base` the newest version both
+have held. A key `theirs` left as `base` had it keeps `ours`'s text; any other
+key takes `theirs`'s. With no base, every key `theirs` holds is its own.
 
 `set` keeps a key where it is. A new key goes at the end of the deepest object a
 leading part of it names (`cost.free` into `cost`), or at the end of the file

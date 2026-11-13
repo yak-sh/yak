@@ -1,5 +1,5 @@
 import { equal, suite, throws } from '@yaks/testing'
-import { fill, keys, marks, parse, read, set, slots } from './mod.ts'
+import { fill, keys, marks, merge, parse, read, set, slots } from './mod.ts'
 
 let file = `{
   "cost": {
@@ -123,4 +123,57 @@ suite('an element’s marks', ({ it }) => {
     equal(marks([{ name: 'data-copy-alt', value: 'hero.image' }]), {
       attrs: { alt: 'hero.image' },
     }))
+})
+
+suite('a merge', ({ it }) => {
+  let text = (copy: Record<string, string>) =>
+    JSON.stringify(copy, null, 2) + '\n'
+  let base = { a: 'one', b: 'two', c: 'three' }
+  // What merging `theirs` over `ours` from `base` leaves, as a value.
+  let merged = (
+    ours: Record<string, string>,
+    theirs: Record<string, string>,
+    from: Record<string, string> | null = base,
+  ) => parse(merge(text(ours), text(theirs), from ? text(from) : ''))
+
+  it('keeps an edit made only on our side', () =>
+    equal(merged({ ...base, a: 'uno' }, base), { ...base, a: 'uno' }))
+
+  it('takes an edit made only on theirs', () =>
+    equal(merged(base, { ...base, b: 'dos' }), { ...base, b: 'dos' }))
+
+  it('takes theirs where both edited a key', () =>
+    equal(merged({ ...base, b: 'zwei' }, { ...base, b: 'dos' }), {
+      ...base,
+      b: 'dos',
+    }))
+
+  it('keeps a key only ours added, and one only theirs added', () =>
+    equal(merged({ ...base, d: 'four' }, { ...base, e: 'five' }), {
+      ...base,
+      d: 'four',
+      e: 'five',
+    }))
+
+  it('leaves out a key we removed that theirs left alone', () =>
+    equal(merged({ a: 'one', b: 'two' }, base), { a: 'one', b: 'two' }))
+
+  it('keeps a key we removed that theirs edited', () =>
+    equal(merged({ a: 'one', b: 'two' }, { ...base, c: 'tres' }), {
+      a: 'one',
+      b: 'two',
+      c: 'tres',
+    }))
+
+  it('takes every key of theirs without a base', () =>
+    equal(merged({ a: 'uno', d: 'four' }, { a: 'one', b: 'two' }, null), {
+      a: 'one',
+      d: 'four',
+      b: 'two',
+    }))
+
+  it('answers our text itself when theirs changed nothing', () => {
+    let ours = '{\n    "a": "uno"\n}\n'
+    equal(merge(ours, text(base), text(base)), ours)
+  })
 })

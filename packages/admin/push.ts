@@ -4,6 +4,14 @@
 // source of code, so a file the directory no longer has is deleted from the
 // app too, and an app pushed from here is never edited on the platform.
 //
+// Its copy is the exception: `copy.json` is edited on the app's page
+// (@yaks/copy), so a push never undoes that. Before it writes, it reads the
+// live copy.json and merges it by key over the checkout's (@yaks/copy
+// `merge`): a key edited on the page keeps the page's text, and a key new in
+// the checkout is added. The base is the newest version git has of the file
+// that the app has held too. The merged file is written into the checkout, so
+// the page's edits show in `git diff` and are committed with the change.
+//
 // A file is sent as text when its bytes are UTF-8 and as base64 when they are
 // not (an icon, a .wasm). Dotfiles are left out: nothing the platform serves
 // starts with a dot, and `.DS_Store` is not part of an app.
@@ -21,6 +29,7 @@
 
 import * as fs from '@yaks/file/io'
 
+import { merge } from '@yaks/copy'
 import { CallError } from '@yaks/tools/errors'
 import { type Reply, saidBy, valueOf } from './api.ts'
 
@@ -66,9 +75,17 @@ export type PushProgress =
     path: string
   }
 
-/** A push's base version, confirmation and progress, and its bounded wait
- * for the connector's file data contract. */
+/** The checkout a push reads from: each earlier text git has of a file,
+ * newest first, and writing a file back into it. */
+export type Checkout = {
+  earlier: (path: string) => AsyncIterable<string>
+  write: (path: string, content: string) => Promise<void>
+}
+
+/** A push's base version, confirmation and progress, its bounded wait for
+ * the connector's file data contract, and the checkout its copy merges into. */
 export type PushOptions = {
+  checkout?: Checkout
   base?: number
   confirm?: boolean
   remember?: (version: number) => void | Promise<void>
@@ -249,6 +266,47 @@ let listed = async (
   }
 }
 
+let COPY = 'copy.json'
+
+// The live copy.json merged over the checkout's, or the checkout's own when
+// the page changed nothing since they last agreed. The base is the newest
+// text the checkout has of it, git's or its own, that the app held too.
+let copied = async (
+  ask: Ask,
+  at: Record<string, string>,
+  ours: string,
+  checkout?: Checkout,
+) => {
+  let live = valueOf(
+    await reply(ask, 'app_files', { ...at, op: 'read', path: COPY }),
+  )
+  if (typeof live?.content != 'string' || typeof live.sha != 'string') {
+    throw new Error('app_files answered no copy.json content')
+  }
+  let past = valueOf(
+    await reply(ask, 'app_files', { ...at, op: 'history', path: COPY }),
+  )
+  if (!Array.isArray(past?.replaced)) {
+    throw new Error('app_files answered no copy.json history')
+  }
+  let held = new Set([
+    live.sha,
+    ...past.replaced.map((w) => (w as { sha?: unknown }).sha),
+  ])
+  let base = ''
+  let candidates = async function* () {
+    yield ours
+    if (checkout) yield* checkout.earlier(COPY)
+  }
+  for await (let text of candidates()) {
+    if (held.has(await shaOf({ path: COPY, content: text }))) {
+      base = text
+      break
+    }
+  }
+  return merge(ours, live.content, base)
+}
+
 /**
  * Make the app hold exactly `local`, released as a version, along with each
  * picture, PDF, font or sound it holds that `local` lacks. An app
@@ -306,6 +364,20 @@ export let push = async (
   if (base != opts.base) await opts.remember?.(base)
   opts.progress?.({ phase: 'hash', state: 'start', count: local.length })
   let hashes = await Promise.all(local.map(shaOf))
+  let copyAt = local.findIndex((f) => f.path == COPY)
+  let ours = local[copyAt]
+  if (
+    ours && 'content' in ours && held.held.has(COPY) &&
+    held.held.get(COPY) != hashes[copyAt]
+  ) {
+    let content = await copied(ask, at, ours.content, opts.checkout)
+    if (content != ours.content) {
+      await opts.checkout?.write(COPY, content)
+      local = local.with(copyAt, { path: COPY, content })
+      hashes[copyAt] = await shaOf(local[copyAt])
+      said.push(`${COPY}: kept the edits made on the page, in the checkout too`)
+    }
+  }
   let changed = local.filter((f, i) => held.held.get(f.path) != hashes[i])
   let keep = new Set(local.map((f) => f.path))
   let gone = [...held.held.keys()].filter((p) =>

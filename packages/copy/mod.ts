@@ -214,3 +214,35 @@ export let set = (
   }
   return format(copy, /\n([ \t]+)"/.exec(text)?.[1])
 }
+
+/**
+ * A copy file's text with each snippet another copy of it changed laid over
+ * it by key: `ours` is the file, `theirs` the other copy (an app's live
+ * file, edited on its page), and `base` what both last agreed on. A key
+ * `theirs` holds as `base` did is left as `ours` has it, so an edit or removal
+ * made only in `ours` stands; any other key `theirs` holds is set to its
+ * text, so an edit made in `theirs` wins, even where `ours` changed it too.
+ * With no base, every key `theirs` holds is its own.
+ *
+ * ```ts
+ * let base = '{\n  "a": "one",\n  "b": "two"\n}\n'
+ * let ours = '{\n  "a": "uno",\n  "b": "two",\n  "c": "three"\n}\n'
+ * merge(ours, '{\n  "a": "one",\n  "b": "dos"\n}\n', base)
+ * // '{\n  "a": "uno",\n  "b": "dos",\n  "c": "three"\n}\n'
+ * ```
+ */
+export let merge = (
+  ours: string,
+  theirs: string,
+  base = '',
+  file = 'copy.json',
+): string => {
+  let [o, t, b] = [ours, theirs, base].map((text) => parse(text, file))
+  let changes = Object.fromEntries(
+    keys(t).flatMap((key) => {
+      let text = read(t, key)!
+      return text == read(b, key) || text == read(o, key) ? [] : [[key, text]]
+    }),
+  )
+  return Object.keys(changes).length ? set(ours, changes, file) : ours
+}

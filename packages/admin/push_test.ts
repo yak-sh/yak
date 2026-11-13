@@ -31,6 +31,7 @@ let platform = (
   let lists = 0
   let versions = new Map(Object.keys(apps).map((app) => [app, 1]))
   let bases: unknown[] = []
+  let past = new Map<string, string[]>()
   let ok = (text: string, value?: Record<string, unknown>) => ({
     content: [{ type: 'text', text: text + more }],
     structuredContent: {
@@ -97,13 +98,32 @@ let platform = (
             files: paths.map((path) => ({ path })),
           },
       )
+    } else if (a.op == 'read') {
+      let f = files.get(String(a.path))
+      if (!f || !('content' in f)) return no(`no file ${a.path}`)
+      return ok(f.content, {
+        version: versions.get(app) ?? 0,
+        sha: await hash(f),
+        content: f.content,
+      })
+    } else if (a.op == 'history') {
+      let f = files.get(String(a.path))
+      return ok('history', {
+        now: f ? await hash(f) : null,
+        replaced: (past.get(`${app}/${a.path}`) ?? []).map((sha) => ({ sha })),
+      })
     } else if (a.op == 'delete') {
       if (!files.delete(String(a.path))) {
         return no(`no file ${a.path}`)
       }
     } else if (a.files) {
       writes.push(a.files.map((f) => f.path))
-      for (let f of a.files) files.set(f.path, f)
+      for (let f of a.files) {
+        let was = files.get(f.path)
+        let key = `${app}/${f.path}`
+        if (was) past.set(key, [await hash(was), ...past.get(key) ?? []])
+        files.set(f.path, f)
+      }
     }
     return ok('done')
   }
@@ -597,4 +617,81 @@ test('a checkout without the icon deletes it', async () => {
   let p = platform({ mail: held('index.html', 'icon.png') })
   await push(p.ask, [file('index.html')], { app: 'mail' })
   assertEquals(p.held('mail'), ['index.html'])
+})
+
+// The app's copy as the checkout's git, the page and the push each leave it.
+let text = (snippets: Record<string, string>) =>
+  JSON.stringify(snippets, null, 2) + '\n'
+let copy = (snippets: Record<string, string>): File => ({
+  path: 'copy.json',
+  content: text(snippets),
+})
+let pushed = { title: 'Mail', send: 'Send', hint: 'Write here' }
+let copied = async (
+  page: Record<string, string>,
+  ours: Record<string, string>,
+  earlier: Record<string, string>[] = [pushed],
+) => {
+  let p = platform({ mail: new Map([['copy.json', copy(pushed)]]) })
+  // Save on the page: copy.json written over what the last push left.
+  await p.ask('tools/call', {
+    name: 'app_files',
+    arguments: { app: 'mail', files: [copy(page)] },
+  })
+  let wrote: string[] = []
+  let said = await push(p.ask, [copy(ours)], { app: 'mail' }, {
+    checkout: {
+      earlier: async function* () {
+        for (let e of earlier) yield text(e)
+      },
+      write: (_path, content) => Promise.resolve(void wrote.push(content)),
+    },
+  })
+  let live = (await p.ask('tools/call', {
+    name: 'app_files',
+    arguments: { app: 'mail', op: 'read', path: 'copy.json' },
+  })) as { content: { text: string }[] }
+  return {
+    live: JSON.parse(live.content[0].text),
+    wrote: wrote.map((text) => JSON.parse(text)),
+    kept: said.some((line) => line.includes('edits made on the page')),
+  }
+}
+
+test('a push keeps copy edited on the page, and writes it into the checkout', async () => {
+  let merged = { title: 'Mail', send: 'Send it', hint: 'Type here', cc: 'Cc' }
+  assertEquals(
+    await copied(
+      { ...pushed, send: 'Send it' },
+      { ...pushed, hint: 'Type here', cc: 'Cc' },
+    ),
+    { live: merged, wrote: [merged], kept: true },
+  )
+})
+
+test('a push takes the page’s text over the checkout’s for a key both changed', async () => {
+  let page = { ...pushed, send: 'Send it' }
+  assertEquals(await copied(page, { ...pushed, send: 'Post' }), {
+    live: page,
+    wrote: [page],
+    kept: true,
+  })
+})
+
+test('a push with no version in common with the app takes every page key', async () => {
+  let page = { ...pushed, send: 'Send it' }
+  assertEquals(await copied(page, { ...pushed, title: 'Post' }, []), {
+    live: page,
+    wrote: [page],
+    kept: true,
+  })
+})
+
+test('a push of copy the page never touched sends the checkout’s as it is', async () => {
+  let ours = { ...pushed, title: 'Post' }
+  assertEquals(await copied(pushed, ours), {
+    live: ours,
+    wrote: [],
+    kept: false,
+  })
 })

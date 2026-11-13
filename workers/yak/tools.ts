@@ -3610,15 +3610,19 @@ let OURS: Row[] = [
       }
       // One path is that file whole, as its text. Several, or none, is the
       // app read back in one call (files_read.ts): what an assistant coming
-      // back to an app needs before it changes anything (T-124200).
+      // back to an app needs before it changes anything (T-124200). The text
+      // rides in the value too, for a program: the words can carry more than
+      // the file (the unseen block), and `yak admin push` merges copy.json.
       if (op == 'read' && args.path != null && args.paths == null) {
         let d = await draft()
-        let bytes = await d.view.read(at(d, named(text(args.path, 'path'))))
+        let path = named(text(args.path, 'path'))
+        let bytes = await d.view.read(at(d, path))
         if (!bytes) throw refuse('missing', `no file ${args.path}`)
+        let content = decoded(bytes)
         return {
-          text: decoded(bytes),
+          text: content,
           space,
-          value: { version: app.version ?? 0 },
+          value: { version: app.version ?? 0, sha: d.files[path], content },
         }
       }
       // The releases' own words come with it: what the agents before this one
@@ -3702,6 +3706,7 @@ let OURS: Row[] = [
               : 'Nothing has replaced it, so there is nothing to put back.',
           ].join('\n'),
           space,
+          value: { now, replaced: gone },
         }
       }
       // And putting one back, as a new write naming the sha it held, so what

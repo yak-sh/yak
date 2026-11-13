@@ -60,7 +60,7 @@ import {
   unlink,
   zone,
 } from './api.ts'
-import { deploys, rollback, table } from './deploys.ts'
+import { deploys, git, rollback, table } from './deploys.ts'
 import type { Copying } from './copy.ts'
 import { copyThread } from './copy_thread.ts'
 import { gateway } from './gateway.ts'
@@ -572,6 +572,25 @@ export let runs = (
       )
       let lines = await push(rpc(at.bearer), files, to, {
         ...known,
+        checkout: {
+          // Each text git has of the file, newest first; none outside git.
+          earlier: async function* (path) {
+            let log = await git(
+              dir,
+              ['log', '--format=%H', '--', path],
+              host.stopping,
+            )
+            for (let sha of log.ok ? log.out.split('\n').filter(Boolean) : []) {
+              let shown = await git(
+                dir,
+                ['show', `${sha}:./${path}`],
+                host.stopping,
+              )
+              if (shown.ok) yield shown.out
+            }
+          },
+          write: (path, content) => fs.writeTextFile(`${dir}/${path}`, content),
+        },
         confirm: a.confirm === true,
         progress: pushNote,
       })

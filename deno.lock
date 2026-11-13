@@ -2845,6 +2845,7 @@
             "npm:@yaks/cli@0.2.33",
             "npm:@yaks/cloudflare@0.2.0",
             "npm:@yaks/connections@0.2.28",
+            "npm:@yaks/copy@0.2.24",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/durable-object@0.2.28",
             "npm:@yaks/effects@0.2.33",

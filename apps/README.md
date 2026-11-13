@@ -16,8 +16,13 @@ It creates the app when it does not exist yet (`app_new`), writes every file
 version (`app_deploy`). The app's slug is the directory's name unless `--app`
 names another, and `--space` picks the space when the account has several.
 
-An app kept here is never edited on the platform: the next push would undo the
-edit.
+An app kept here is never edited on the platform, since the next push would undo
+the edit. Its copy is the exception. `copy.json` (@yaks/copy) is edited on the
+app's page, and a push never undoes that edit. Before it writes, the push reads
+the live `copy.json` and merges it into the checkout's by key: a key edited on
+the page keeps the page's text, and a key new in the checkout is added. The
+merged file is written into the checkout, so the page's edits show in
+`git diff`. Commit them with the change you pushed.
 
 An app with a `package.json` of its own is formatted with the repository's
 settings only when they are named: `deno fmt --config deno.json apps/<name>`.
