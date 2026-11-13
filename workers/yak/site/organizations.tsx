@@ -191,7 +191,14 @@ export let Organizations = () => (
     <section class='Cost' aria-labelledby='saving'>
       <h2 class='Title' id='saving' {...text('organizations.saving.title')} />
       <p class='Note' {...text('organizations.saving.note')} />
-      <Form as='div' class='Saving' data-saving={PRICE.pro} hidden>
+      <Form
+        as='div'
+        class='Saving'
+        data-saving={PRICE.pro}
+        {...attr('data-less', 'organizations.saving.less')}
+        {...attr('data-same', 'organizations.saving.same')}
+        hidden
+      >
         <p
           class='Form_Label'
           id='paying'

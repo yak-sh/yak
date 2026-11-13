@@ -100,7 +100,7 @@ let Top = ({ path }: { path: string }) => {
         {!home && <Idle class='Yak Yak-small' base='.' />}
         <span {...text('frame.top.name')} />
       </a>
-      <nav class='Nav' aria-label='Site'>
+      <nav class='Nav' {...attr('aria-label', 'frame.nav.label')}>
         {NAV.map(([href, key]) => (
           <a
             class='Nav_Link'

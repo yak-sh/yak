@@ -11,7 +11,8 @@
       "gallery": "Gallery",
       "pricing": "Pricing",
       "docs": "Documentation",
-      "sign-in": "Sign in"
+      "sign-in": "Sign in",
+      "label": "Site"
     },
     "foot": {
       "by": "yaks.app · Yak Shaving LLC",
@@ -410,7 +411,9 @@
         "calendar": "Calendar"
       },
       "hint": "$ a month",
-      "private": "Nothing you type here is sent to us. Don't count accounting, online giving or a newsletter service: yaks.app doesn't do those."
+      "private": "Nothing you type here is sent to us. Don't count accounting, online giving or a newsletter service: yaks.app doesn't do those.",
+      "less": "You pay %{paid} a month for these. They are %{plan} a month here, which is %{month} less each month and %{year} less each year.",
+      "same": "You pay %{paid} a month for these, which is no more than the %{plan} plan. It would not save you money."
     },
     "how": {
       "title": "The office asks, and the change is made",
@@ -1141,7 +1144,7 @@
     "head": {
       "title": "Cookies",
       "updated": "Last updated %{date}",
-      "lead": "yaks.app sets one cookie, a second one when an ad or a campaign link brought you, and a third when you open our home page. This page explains what they do."
+      "intro": "yaks.app sets one cookie, a second one when an ad or a campaign link brought you, and a third when you open our home page. This page explains what they do."
     },
     "privacy": "privacy policy",
     "session": {
@@ -1177,7 +1180,7 @@
     "head": {
       "title": "Acceptable use policy",
       "updated": "Last updated %{date}",
-      "lead": "This policy lists what you may not do on yaks.app."
+      "intro": "This policy lists what you may not do on yaks.app."
     },
     "prohibited": {
       "title": "Prohibited uses",
