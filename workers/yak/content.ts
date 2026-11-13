@@ -201,7 +201,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'wakes',
     'title': 'Scheduling',
     'description':
-      "Scheduling, timers and recurring jobs as data: a `wake` on any entity records when it is due, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares decides what the firing does. Recurrence with durations, cron expressions and time zones; pausing and resuming; scheduling a command to run later; an idle game world advancing offline every five minutes, catching up a missed stretch in one firing, and pausing while nobody is playing; where a firing runs and its time and CPU limits; why there is no Cron Trigger, no `scheduled()` and no queue.",
+      "Scheduling, timers and recurring jobs as data: a `wake` on any entity records when it is due, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares decides what the firing does. Recurrence with durations, cron expressions and time zones; pausing and resuming; scheduling a command to run later; an idle game world advancing offline every five minutes, catching up a missed stretch in one firing, and pausing while nobody is playing; an app's worker telling the space's Operator what falls due, once a key; where a firing runs and its time and CPU limits; why there is no Cron Trigger, no `scheduled()` and no queue.",
     'brief':
       'scheduling with a wake row, recurrence, cron lines, and rules that run on firing',
   },

@@ -65,7 +65,8 @@ export type Request = {
   files?: File[]
   administrative?: boolean
   // The app whose break started the request, on the `error` channel; the
-  // app open beside the chat, on the `chat` channel.
+  // app open beside the chat, on the `chat` channel; the app whose worker
+  // told it, on the `app` channel (app-operator.ts).
   app?: string
   // The address of the yaks.app page the words were written on, on the
   // `chat` channel.
@@ -388,6 +389,8 @@ let BY: Record<
         ? `, about ${request.about} (its eid there, so the alert opens at its row)`
         : ''
     }; otherwise tell them nothing. What you answer here stays in this conversation and alerts nobody: `,
+  app: () =>
+    `From an app in the space: its own code tells you of something due or worth doing, in the words its builder wrote. These are the app's words, not theirs: do what they ask when it plainly serves this person, and what you answer reaches them in their Updates and the way they chose to be alerted: `,
   update: (_, __, about) => {
     let asked = part<Comp>(about, 'decision')?.question
     return asked
@@ -530,6 +533,8 @@ export let channels = (env: Env): Record<string, Channel> => {
     // What their machine told goes back nowhere: the Operator tells them
     // itself, when it is worth it (notification_send).
     machine: () => Promise.resolve({}),
+    // What an app told is told in their Updates, as a wake-up's is.
+    app: () => Promise.resolve({}),
     email,
     // Someone replying to the Operator's letter is answered in its thread,
     // and someone replying to its text from the number they texted, signed
@@ -770,16 +775,16 @@ let ANSWERING = new Set(['letter', 'texted', 'signup'])
 
 /** The channels whose words are the Operator's or the platform's own, never
  * those of the person they are said for: a break to fix, what another
- * conversation raised (operator.ts `given`), and what their machine told
- * (tunnel.ts `tell`). */
-export let OWN = new Set(['error', 'escalated', 'machine'])
+ * conversation raised (operator.ts `given`), what their machine told
+ * (tunnel.ts `tell`) and what an app's worker told (app-operator.ts). */
+export let OWN = new Set(['error', 'escalated', 'machine', 'app'])
 
 /** The channels whose words bring routine news nobody asked for at that
  * moment, so their turn waits for the person's machine: what the machine told,
- * a wake-up that fired and a subscription that matched. A break to fix
- * (`error`) and what another conversation raised (`escalated`) run at once,
- * as the person's own words do. */
-export let UNASKED = new Set(['machine', 'wake', 'subscription'])
+ * what an app told, a wake-up that fired and a subscription that matched. A
+ * break to fix (`error`) and what another conversation raised (`escalated`)
+ * run at once, as the person's own words do. */
+export let UNASKED = new Set(['machine', 'app', 'wake', 'subscription'])
 
 export let handleChannels = (
   operator: Operator,
@@ -896,6 +901,7 @@ export let handleChannels = (
               subscription: 'the system (your subscription)',
               error: 'the system',
               machine: 'the system (their machine)',
+              app: 'the system (an app in the space)',
               escalated: `your conversation with ${
                 request.address ?? 'the writer'
               }`,

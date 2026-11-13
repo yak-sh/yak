@@ -1594,12 +1594,13 @@ export let operating = (
     let fixes = space && task
       ? requests.filter((r) => comp(r, 'operator_request')?.channel == 'error')
       : []
-    // A wake-up that fired, a subscription that saw a change, or what
-    // another conversation raised, is told to the person it is for, in their
-    // Updates, as what came of it: the quick word when the conversation
-    // forks, and the outcome in its place when the fork comes back.
+    // A wake-up that fired, a subscription that saw a change, what an app
+    // told, or what another conversation raised, is told to the person it is
+    // for, in their Updates, as what came of it: the quick word when the
+    // conversation forks, and the outcome in its place when the fork comes
+    // back.
     let woken = requests.filter((r) =>
-      ['wake', 'subscription', 'escalated'].includes(
+      ['wake', 'subscription', 'app', 'escalated'].includes(
         String(comp(r, 'operator_request')?.channel),
       )
     )

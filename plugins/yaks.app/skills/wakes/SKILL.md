@@ -1,6 +1,6 @@
 ---
 name: wakes
-description: "Scheduling (yaks.app). Scheduling, timers and recurring jobs as data: a `wake` on any entity records when it is due, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares decides what the firing does. Recurrence with durations, cron expressions and time zones; pausing and resuming; scheduling a command to run later; an idle game world advancing offline every five minutes, catching up a missed stretch in one firing, and pausing while nobody is playing; where a firing runs and its time and CPU limits; why there is no Cron Trigger, no `scheduled()` and no queue."
+description: "Scheduling (yaks.app). Scheduling, timers and recurring jobs as data: a `wake` on any entity records when it is due, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares decides what the firing does. Recurrence with durations, cron expressions and time zones; pausing and resuming; scheduling a command to run later; an idle game world advancing offline every five minutes, catching up a missed stretch in one firing, and pausing while nobody is playing; an app's worker telling the space's Operator what falls due, once a key; where a firing runs and its time and CPU limits; why there is no Cron Trigger, no `scheduled()` and no queue."
 ---
 
 # Scheduling
@@ -299,6 +299,54 @@ rows differ (a row arrives, changes or leaves the answer), the change is a turn
 in their conversation with what changed after the words, paid from the space's
 budget, and the Operator's answer reaches them in their Updates. A look that
 finds nothing new costs no turn. It watches at most 200 rows.
+
+## An app telling the Operator
+
+An app's own code can tell its space's Operator something: that a deadline is
+three days off, that a form came in that needs someone. Its worker posts the
+words to `./api/operator/tell`, through `env.APP`:
+
+    let r = await env.APP.fetch('/operator/tell', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        say: 'Proposed minutes of the November 9 meeting are due Friday, Nov 20. Email the clerk.',
+        key: 'proposed-minutes|' + meeting.entity.eid,
+      }),
+    })
+    let { request } = await r.json()
+
+- **`say`** is what the Operator is told, up to 4,000 characters. It arrives in
+  the conversation of the space's owner, said by the app and not by them, as
+  `The app <slug> says: …`, and the Operator acts on it with that owner's
+  permissions: it can email someone with `mail_send`, write a row, or decide
+  nothing needs doing. What it answers reaches the owner in their Updates.
+- **`key`** names what is told, up to 200 characters. The same key from the same
+  app is one request however often it is told, so a schedule that runs again, or
+  a retried call, tells the Operator once. Answered `202` with `{request}` the
+  first time, and `200` with the same `request` after.
+- **Only the app's own worker tells it.** A page's request, a visitor's or a
+  member's, is refused `403 not_the_app`, since each tell is an Operator turn
+  paid from the space's budget. A page that should tell the Operator asks a
+  route of the worker, which decides.
+
+When to tell is the app's to decide, with the scheduling above. A command
+declared `"worker": "/remind"` and a schedule row that calls it each weekday
+morning:
+
+    { "remind": { "tool": true, "discoverable": false, "worker": "/remind",
+        "description": "Tell the Operator what falls due in three days" } }
+
+    await apply({
+      entity: { eid: '$reminders' },
+      call: { to: remindCommand.entity.eid, args: {} },
+      wake: { every: '0 9 * * 1-5 America/Detroit' },
+    })
+
+The worker's `/remind` route reads what is due, computes from the rows which
+deadline is three days off, and tells the Operator about each, keyed by the
+deadline, so nothing derived is stored and a deadline whose rows changed is told
+as it now stands. A route that tells nothing costs no Operator turn.
 
 ## Where a firing runs, and its limits
 
